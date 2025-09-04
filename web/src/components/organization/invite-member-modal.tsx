@@ -100,7 +100,7 @@ export function InviteMemberModal({ trigger, onSuccess }: InviteMemberModalProps
       // TODO: Implement API call to generate invite link
       await new Promise(resolve => setTimeout(resolve, 500)) // Simulate API call
       
-      const mockLink = `https://app.brokle.ai/invite/${currentOrganization.slug}?token=abc123def456&role=${role}`
+      const mockLink = `https://app.brokle.com/invite/${currentOrganization.slug}?token=abc123def456&role=${role}`
       setInviteLink(mockLink)
       toast.success('Invite link generated successfully')
     } catch (error) {

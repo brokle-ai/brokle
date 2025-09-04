@@ -146,8 +146,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🔗 Links
 
-- **Website**: [https://brokle.ai](https://brokle.ai)
-- **Documentation**: [https://docs.brokle.ai](https://docs.brokle.ai)
+- **Website**: [https://brokle.com](https://brokle.com)
+- **Documentation**: [https://docs.brokle.com](https://docs.brokle.com)
 - **Community**: [Discord Server](https://discord.gg/brokle)
 - **Twitter**: [@BrokleAI](https://twitter.com/BrokleAI)
 

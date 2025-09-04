@@ -707,7 +707,7 @@ curl -X GET /api/v1/compliance/gdpr/data-request/dsr_123456789 \
   "created_at": "2024-09-02T15:30:00Z",
   "completed_at": "2024-09-04T10:15:00Z",
   "data_package": {
-    "download_url": "https://secure.brokle.ai/exports/dsr_123456789.zip",
+    "download_url": "https://secure.brokle.com/exports/dsr_123456789.zip",
     "expires_at": "2024-09-11T10:15:00Z",
     "file_size": "2.3 MB",
     "records_included": 1247
@@ -834,7 +834,7 @@ curl -X GET /api/v1/compliance/anonymization/anon_555666777 \
     "l_diversity": 3.2,
     "t_closeness": 0.15
   },
-  "download_url": "https://secure.brokle.ai/anonymized/anon_555666777.csv",
+  "download_url": "https://secure.brokle.com/anonymized/anon_555666777.csv",
   "expires_at": "2024-09-09T16:30:00Z"
 }
 ```

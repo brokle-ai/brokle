@@ -660,9 +660,9 @@ grep "user provisioning" /var/log/brokle.log
 
 ### Support Resources
 
-- **Documentation**: https://docs.brokle.ai/enterprise/sso
-- **Community**: https://community.brokle.ai/sso
-- **Enterprise Support**: support@brokle.ai
+- **Documentation**: https://docs.brokle.com/enterprise/sso
+- **Community**: https://community.brokle.com/sso
+- **Enterprise Support**: support@brokle.com
 - **Professional Services**: Contact your account manager for SSO implementation assistance
 
 ---

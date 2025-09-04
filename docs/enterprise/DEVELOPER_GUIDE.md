@@ -548,20 +548,20 @@ type ActionSuggestion struct {
       {
         "type": "upgrade",
         "label": "Upgrade to Business",
-        "url": "https://brokle.ai/pricing?tier=business&utm_source=api&utm_campaign=feature_upgrade&utm_content=sso_integration",
+        "url": "https://brokle.com/pricing?tier=business&utm_source=api&utm_campaign=feature_upgrade&utm_content=sso_integration",
         "primary": true
       },
       {
         "type": "trial",
         "label": "Start Free Trial",
-        "url": "https://brokle.ai/trial?utm_source=api&utm_campaign=feature_trial&utm_content=sso_integration",
+        "url": "https://brokle.com/trial?utm_source=api&utm_campaign=feature_trial&utm_content=sso_integration",
         "primary": false
       }
     ],
     "support": {
-      "email": "support@brokle.ai",
-      "chat_url": "https://brokle.ai/chat",
-      "docs_url": "https://docs.brokle.ai"
+      "email": "support@brokle.com",
+      "chat_url": "https://brokle.com/chat",
+      "docs_url": "https://docs.brokle.com"
     }
   }
 }

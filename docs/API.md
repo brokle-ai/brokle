@@ -7,21 +7,21 @@ The Brokle API provides comprehensive access to AI infrastructure management, ob
 ## Base URLs
 
 - **Development**: `http://localhost:8080/api`
-- **Production**: `https://api.brokle.ai/api`
-- **WebSocket**: `ws://localhost:8080/ws` (dev) / `wss://api.brokle.ai/ws` (prod)
+- **Production**: `https://api.brokle.com/api`
+- **WebSocket**: `ws://localhost:8080/ws` (dev) / `wss://api.brokle.com/ws` (prod)
 
 ## Authentication
 
 ### API Key Authentication
 
 ```bash
-curl -H "X-API-Key: bk_live_..." https://api.brokle.ai/api/users/me
+curl -H "X-API-Key: bk_live_..." https://api.brokle.com/api/users/me
 ```
 
 ### JWT Token Authentication
 
 ```bash
-curl -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIs..." https://api.brokle.ai/api/users/me
+curl -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIs..." https://api.brokle.com/api/users/me
 ```
 
 ### Authentication Flow
@@ -799,7 +799,7 @@ Brokle is compatible with existing OpenAI SDKs:
 // JavaScript - just change the base URL
 const openai = new OpenAI({
   apiKey: 'your-brokle-api-key',
-  baseURL: 'https://api.brokle.ai/v1'
+  baseURL: 'https://api.brokle.com/v1'
 })
 ```
 
@@ -807,7 +807,7 @@ const openai = new OpenAI({
 # Python
 import openai
 
-openai.api_base = "https://api.brokle.ai/v1"
+openai.api_base = "https://api.brokle.com/v1"
 openai.api_key = "your-brokle-api-key"
 ```
 
@@ -861,4 +861,4 @@ function verifyWebhook(payload, signature, secret) {
 
 ---
 
-This API documentation provides comprehensive coverage of all Brokle platform endpoints, real-time features, and integration patterns. For additional examples and SDKs, visit our [developer portal](https://developers.brokle.ai).
+This API documentation provides comprehensive coverage of all Brokle platform endpoints, real-time features, and integration patterns. For additional examples and SDKs, visit our [developer portal](https://developers.brokle.com).

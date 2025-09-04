@@ -119,7 +119,7 @@ const MOCK_AUDIT_LOGS: AuditLog[] = [
     actor: {
       id: 'system',
       name: 'System',
-      email: 'system@brokle.ai',
+      email: 'system@brokle.com',
       type: 'system'
     },
     action: 'api_key.expired',

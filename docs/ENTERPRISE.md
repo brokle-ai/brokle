@@ -248,7 +248,7 @@ Professional error responses include:
       {
         "type": "upgrade",
         "label": "Upgrade to Business",
-        "url": "https://brokle.ai/pricing?tier=business&utm_source=api&utm_campaign=feature_upgrade&utm_content=advanced_rbac",
+        "url": "https://brokle.com/pricing?tier=business&utm_source=api&utm_campaign=feature_upgrade&utm_content=advanced_rbac",
         "primary": true
       }
     ]
@@ -657,7 +657,7 @@ spec:
 ### Getting Help
 
 #### Business Tier Support
-- **Email**: support@brokle.ai
+- **Email**: support@brokle.com
 - **Response Time**: 24 hours
 - **Hours**: Business hours (9 AM - 5 PM EST)
 - **Channels**: Email, documentation, community
@@ -680,13 +680,13 @@ Contact our professional services team for:
 
 ### Resources
 
-- **Documentation**: https://docs.brokle.ai/enterprise
-- **API Reference**: https://docs.brokle.ai/api
-- **Status Page**: https://status.brokle.ai
-- **Community**: https://community.brokle.ai
-- **Security**: https://brokle.ai/security
-- **Compliance**: https://brokle.ai/compliance
+- **Documentation**: https://docs.brokle.com/enterprise
+- **API Reference**: https://docs.brokle.com/api
+- **Status Page**: https://status.brokle.com
+- **Community**: https://community.brokle.com
+- **Security**: https://brokle.com/security
+- **Compliance**: https://brokle.com/compliance
 
 ---
 
-For additional information or to discuss enterprise requirements, contact our sales team at sales@brokle.ai or visit https://brokle.ai/contact.
+For additional information or to discuss enterprise requirements, contact our sales team at sales@brokle.com or visit https://brokle.com/contact.

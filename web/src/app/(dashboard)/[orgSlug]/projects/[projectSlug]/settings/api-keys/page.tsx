@@ -393,7 +393,7 @@ export default function ProjectAPIKeysPage() {
             <div className="bg-muted p-4 rounded-lg">
               <code className="text-sm">
                 curl -H "Authorization: Bearer YOUR_API_KEY" \<br />
-                &nbsp;&nbsp;&nbsp;&nbsp; https://api.brokle.ai/v1/chat/completions
+                &nbsp;&nbsp;&nbsp;&nbsp; https://api.brokle.com/v1/chat/completions
               </code>
             </div>
           </div>

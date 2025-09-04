@@ -18,7 +18,7 @@ server:
   cors_origins:
     - "http://localhost:3000"
     - "http://localhost:3001"
-    - "https://dashboard.brokle.ai"
+    - "https://dashboard.brokle.com"
   trusted_proxies:
     - "127.0.0.1"
     - "10.0.0.0/8"
@@ -126,9 +126,9 @@ external:
     smtp_port: 1025
     username: ""
     password: ""
-    from_email: noreply@brokle.ai
+    from_email: noreply@brokle.com
     from_name: Brokle Platform
-    reply_email: support@brokle.ai
+    reply_email: support@brokle.com
 
 # Feature Flags
 features:

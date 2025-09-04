@@ -42,10 +42,10 @@ type LicenseInfo struct {
 
 // UsageInfo represents current usage statistics
 type UsageInfo struct {
-	Requests     int64 `json:"requests"`
-	Users        int   `json:"users"`
-	Projects     int   `json:"projects"`
-	LastUpdated  time.Time `json:"last_updated"`
+	Requests    int64     `json:"requests"`
+	Users       int       `json:"users"`
+	Projects    int       `json:"projects"`
+	LastUpdated time.Time `json:"last_updated"`
 }
 
 // LicenseStatus represents the overall license status
@@ -57,7 +57,7 @@ type LicenseStatus struct {
 }
 
 const (
-	licenseValidationURL = "https://api.brokle.ai/v1/licenses/validate"
+	licenseValidationURL = "https://api.brokle.com/v1/licenses/validate"
 	licenseCacheKey      = "brokle:license:info"
 	licenseCacheTTL      = 1 * time.Hour
 	offlineGracePeriod   = 24 * time.Hour
@@ -110,7 +110,7 @@ func (ls *LicenseService) ValidateLicense(ctx context.Context) (*LicenseStatus, 
 	licenseInfo, err := ls.performLicenseValidation(ctx)
 	if err != nil {
 		ls.logger.WithError(err).Warn("License validation failed")
-		
+
 		// Check if we can use offline validation
 		if cachedLicense, cacheErr := ls.getCachedLicense(ctx); cacheErr == nil && cachedLicense != nil {
 			if time.Since(cachedLicense.LastValidated) < offlineGracePeriod {
@@ -195,7 +195,7 @@ func (ls *LicenseService) CheckUsageLimit(ctx context.Context, limitType string)
 // UpdateUsage updates the current usage statistics
 func (ls *LicenseService) UpdateUsage(ctx context.Context, usageType string, increment int64) error {
 	key := fmt.Sprintf("brokle:usage:%s", usageType)
-	
+
 	// Use Redis to track usage with expiration
 	_, err := ls.redis.IncrBy(ctx, key, increment).Result()
 	if err != nil {
@@ -204,7 +204,7 @@ func (ls *LicenseService) UpdateUsage(ctx context.Context, usageType string, inc
 
 	// Set expiration to reset monthly
 	ls.redis.Expire(ctx, key, 30*24*time.Hour)
-	
+
 	return nil
 }
 
@@ -273,15 +273,15 @@ func (ls *LicenseService) validateLicenseOnline(ctx context.Context, license *co
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
-	
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", licenseValidationURL, 
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", licenseValidationURL,
 		strings.NewReader(string(reqBody)))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create validation request: %w", err)
 	}
-	
+
 	httpReq.Header.Set("Content-Type", "application/json")
-	
+
 	resp, err := ls.httpClient.Do(httpReq)
 	if err != nil {
 		return nil, fmt.Errorf("license validation request failed: %w", err)
@@ -297,7 +297,7 @@ func (ls *LicenseService) validateLicenseOnline(ctx context.Context, license *co
 		License *LicenseInfo `json:"license"`
 		Error   string       `json:"error,omitempty"`
 	}
-	
+
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return nil, fmt.Errorf("failed to decode validation response: %w", err)
 	}
@@ -335,18 +335,18 @@ func (ls *LicenseService) parseLicenseClaims(claims jwt.MapClaims) (*LicenseInfo
 	if typ, ok := claims["type"].(string); ok {
 		info.Type = typ
 	}
-	
+
 	if validUntil, ok := claims["valid_until"].(float64); ok {
 		info.ValidUntil = time.Unix(int64(validUntil), 0)
 		if time.Now().After(info.ValidUntil) {
 			info.IsValid = false
 		}
 	}
-	
+
 	if maxReq, ok := claims["max_requests"].(float64); ok {
 		info.MaxRequests = int64(maxReq)
 	}
-	
+
 	if features, ok := claims["features"].([]interface{}); ok {
 		for _, f := range features {
 			if feature, ok := f.(string); ok {
@@ -390,11 +390,11 @@ func (ls *LicenseService) getCurrentUsage(ctx context.Context) (*UsageInfo, erro
 	if requests, err := ls.redis.Get(ctx, "brokle:usage:requests").Int64(); err == nil {
 		usage.Requests = requests
 	}
-	
+
 	if users, err := ls.redis.Get(ctx, "brokle:usage:users").Int(); err == nil {
 		usage.Users = users
 	}
-	
+
 	if projects, err := ls.redis.Get(ctx, "brokle:usage:projects").Int(); err == nil {
 		usage.Projects = projects
 	}
@@ -405,7 +405,7 @@ func (ls *LicenseService) getCurrentUsage(ctx context.Context) (*UsageInfo, erro
 func (ls *LicenseService) getFreetierStatus(ctx context.Context) *LicenseStatus {
 	license := ls.createFreeTierLicense()
 	usage, _ := ls.getCurrentUsage(ctx)
-	
+
 	return &LicenseStatus{
 		License: license,
 		Usage:   usage,

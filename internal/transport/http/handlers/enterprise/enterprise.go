@@ -8,12 +8,12 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"brokle/internal/config"
-	"brokle/internal/services"
-	"brokle/internal/ee/compliance"
-	"brokle/internal/ee/sso"
-	"brokle/internal/ee/rbac" 
 	"brokle/internal/ee/analytics"
+	"brokle/internal/ee/compliance"
+	"brokle/internal/ee/rbac"
+	"brokle/internal/ee/sso"
 	"brokle/internal/middleware"
+	"brokle/internal/services"
 )
 
 // Handler handles enterprise-specific endpoints
@@ -119,62 +119,62 @@ func (h *Handler) GetLicenseStatus(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"license": status,
-		"tier": h.config.GetLicenseTier(),
+		"tier":    h.config.GetLicenseTier(),
 	})
 }
 
 func (h *Handler) GetAvailableFeatures(c *gin.Context) {
 	tier := h.config.GetLicenseTier()
-	
+
 	allFeatures := map[string]interface{}{
 		"advanced_rbac": map[string]interface{}{
-			"name": "Advanced Role-Based Access Control",
-			"description": "Custom roles and fine-grained permissions",
+			"name":          "Advanced Role-Based Access Control",
+			"description":   "Custom roles and fine-grained permissions",
 			"required_tier": "business",
-			"available": h.config.IsEnterpriseFeatureEnabled("advanced_rbac"),
+			"available":     h.config.IsEnterpriseFeatureEnabled("advanced_rbac"),
 		},
 		"sso_integration": map[string]interface{}{
-			"name": "Single Sign-On Integration", 
-			"description": "SAML, OIDC, and OAuth2 integration",
+			"name":          "Single Sign-On Integration",
+			"description":   "SAML, OIDC, and OAuth2 integration",
 			"required_tier": "business",
-			"available": h.config.IsEnterpriseFeatureEnabled("sso_integration"),
+			"available":     h.config.IsEnterpriseFeatureEnabled("sso_integration"),
 		},
 		"custom_compliance": map[string]interface{}{
-			"name": "Custom Compliance Controls",
-			"description": "SOC2, HIPAA, GDPR compliance features",
+			"name":          "Custom Compliance Controls",
+			"description":   "SOC2, HIPAA, GDPR compliance features",
 			"required_tier": "business",
-			"available": h.config.IsEnterpriseFeatureEnabled("custom_compliance"),
+			"available":     h.config.IsEnterpriseFeatureEnabled("custom_compliance"),
 		},
 		"predictive_insights": map[string]interface{}{
-			"name": "Predictive Analytics",
-			"description": "ML-powered insights and forecasting",
-			"required_tier": "business", 
-			"available": h.config.IsEnterpriseFeatureEnabled("predictive_insights"),
+			"name":          "Predictive Analytics",
+			"description":   "ML-powered insights and forecasting",
+			"required_tier": "business",
+			"available":     h.config.IsEnterpriseFeatureEnabled("predictive_insights"),
 		},
 		"custom_dashboards": map[string]interface{}{
-			"name": "Custom Dashboard Builder",
-			"description": "Create custom analytics dashboards",
+			"name":          "Custom Dashboard Builder",
+			"description":   "Create custom analytics dashboards",
 			"required_tier": "business",
-			"available": h.config.IsEnterpriseFeatureEnabled("custom_dashboards"),
+			"available":     h.config.IsEnterpriseFeatureEnabled("custom_dashboards"),
 		},
 		"on_premise_deployment": map[string]interface{}{
-			"name": "On-Premise Deployment",
-			"description": "Deploy in your own infrastructure",
+			"name":          "On-Premise Deployment",
+			"description":   "Deploy in your own infrastructure",
 			"required_tier": "enterprise",
-			"available": h.config.IsEnterpriseFeatureEnabled("on_premise_deployment"),
+			"available":     h.config.IsEnterpriseFeatureEnabled("on_premise_deployment"),
 		},
 		"dedicated_support": map[string]interface{}{
-			"name": "Dedicated Support",
-			"description": "Priority support and dedicated success manager",
+			"name":          "Dedicated Support",
+			"description":   "Priority support and dedicated success manager",
 			"required_tier": "enterprise",
-			"available": h.config.IsEnterpriseFeatureEnabled("dedicated_support"),
+			"available":     h.config.IsEnterpriseFeatureEnabled("dedicated_support"),
 		},
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"current_tier": tier,
-		"features": allFeatures,
-		"upgrade_url": "https://brokle.ai/pricing",
+		"features":     allFeatures,
+		"upgrade_url":  "https://brokle.com/pricing",
 	})
 }
 
@@ -184,8 +184,8 @@ func (h *Handler) GetSSOProviders(c *gin.Context) {
 	providers, err := h.ssoService.GetSupportedProviders(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusPaymentRequired, gin.H{
-			"error": err.Error(),
-			"upgrade_url": "https://brokle.ai/pricing",
+			"error":       err.Error(),
+			"upgrade_url": "https://brokle.com/pricing",
 		})
 		return
 	}
@@ -208,8 +208,8 @@ func (h *Handler) ConfigureSSO(c *gin.Context) {
 	if err != nil {
 		if strings.Contains(err.Error(), "Enterprise license") {
 			c.JSON(http.StatusPaymentRequired, gin.H{
-				"error": err.Error(),
-				"upgrade_url": "https://brokle.ai/pricing",
+				"error":       err.Error(),
+				"upgrade_url": "https://brokle.com/pricing",
 			})
 			return
 		}
@@ -225,8 +225,8 @@ func (h *Handler) GetSSOLoginURL(c *gin.Context) {
 	if err != nil {
 		if strings.Contains(err.Error(), "Enterprise license") {
 			c.JSON(http.StatusPaymentRequired, gin.H{
-				"error": err.Error(),
-				"upgrade_url": "https://brokle.ai/pricing",
+				"error":       err.Error(),
+				"upgrade_url": "https://brokle.com/pricing",
 			})
 			return
 		}
@@ -248,8 +248,8 @@ func (h *Handler) HandleSSOCallback(c *gin.Context) {
 	if err != nil {
 		if strings.Contains(err.Error(), "Enterprise license") {
 			c.JSON(http.StatusPaymentRequired, gin.H{
-				"error": err.Error(),
-				"upgrade_url": "https://brokle.ai/pricing",
+				"error":       err.Error(),
+				"upgrade_url": "https://brokle.com/pricing",
 			})
 			return
 		}
@@ -259,7 +259,7 @@ func (h *Handler) HandleSSOCallback(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "SSO authentication successful",
-		"user": user,
+		"user":    user,
 	})
 }
 
@@ -286,8 +286,8 @@ func (h *Handler) CreateRole(c *gin.Context) {
 	if err != nil {
 		if strings.Contains(err.Error(), "Enterprise license") {
 			c.JSON(http.StatusPaymentRequired, gin.H{
-				"error": err.Error(),
-				"upgrade_url": "https://brokle.ai/pricing",
+				"error":       err.Error(),
+				"upgrade_url": "https://brokle.com/pricing",
 			})
 			return
 		}
@@ -300,7 +300,7 @@ func (h *Handler) CreateRole(c *gin.Context) {
 
 func (h *Handler) UpdateRole(c *gin.Context) {
 	roleID := c.Param("id")
-	
+
 	var role rbac.Role
 	if err := c.ShouldBindJSON(&role); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -311,8 +311,8 @@ func (h *Handler) UpdateRole(c *gin.Context) {
 	if err != nil {
 		if strings.Contains(err.Error(), "Enterprise license") {
 			c.JSON(http.StatusPaymentRequired, gin.H{
-				"error": err.Error(),
-				"upgrade_url": "https://brokle.ai/pricing",
+				"error":       err.Error(),
+				"upgrade_url": "https://brokle.com/pricing",
 			})
 			return
 		}
@@ -330,8 +330,8 @@ func (h *Handler) DeleteRole(c *gin.Context) {
 	if err != nil {
 		if strings.Contains(err.Error(), "Enterprise license") {
 			c.JSON(http.StatusPaymentRequired, gin.H{
-				"error": err.Error(),
-				"upgrade_url": "https://brokle.ai/pricing",
+				"error":       err.Error(),
+				"upgrade_url": "https://brokle.com/pricing",
 			})
 			return
 		}
@@ -350,8 +350,8 @@ func (h *Handler) AssignRole(c *gin.Context) {
 	if err != nil {
 		if strings.Contains(err.Error(), "Enterprise license") {
 			c.JSON(http.StatusPaymentRequired, gin.H{
-				"error": err.Error(),
-				"upgrade_url": "https://brokle.ai/pricing",
+				"error":       err.Error(),
+				"upgrade_url": "https://brokle.com/pricing",
 			})
 			return
 		}
@@ -443,8 +443,8 @@ func (h *Handler) CheckSOC2Compliance(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"soc2_compliant": compliant,
 		"status": map[string]interface{}{
-			"compliant": compliant,
-			"framework": "SOC 2 Type II",
+			"compliant":    compliant,
+			"framework":    "SOC 2 Type II",
 			"last_checked": "2024-01-01T00:00:00Z",
 		},
 	})
@@ -460,8 +460,8 @@ func (h *Handler) CheckHIPAACompliance(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"hipaa_compliant": compliant,
 		"status": map[string]interface{}{
-			"compliant": compliant,
-			"framework": "HIPAA",
+			"compliant":    compliant,
+			"framework":    "HIPAA",
 			"last_checked": "2024-01-01T00:00:00Z",
 		},
 	})
@@ -477,8 +477,8 @@ func (h *Handler) CheckGDPRCompliance(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"gdpr_compliant": compliant,
 		"status": map[string]interface{}{
-			"compliant": compliant,
-			"framework": "GDPR",
+			"compliant":    compliant,
+			"framework":    "GDPR",
 			"last_checked": "2024-01-01T00:00:00Z",
 		},
 	})
@@ -488,13 +488,13 @@ func (h *Handler) CheckGDPRCompliance(c *gin.Context) {
 
 func (h *Handler) GetPredictiveInsights(c *gin.Context) {
 	timeRange := c.DefaultQuery("time_range", "30d")
-	
+
 	insights, err := h.enterpriseAnalytics.GeneratePredictiveInsights(c.Request.Context(), timeRange)
 	if err != nil {
 		if strings.Contains(err.Error(), "Enterprise license") {
 			c.JSON(http.StatusPaymentRequired, gin.H{
-				"error": err.Error(),
-				"upgrade_url": "https://brokle.ai/pricing",
+				"error":       err.Error(),
+				"upgrade_url": "https://brokle.com/pricing",
 			})
 			return
 		}
@@ -510,8 +510,8 @@ func (h *Handler) ListCustomDashboards(c *gin.Context) {
 	if err != nil {
 		if strings.Contains(err.Error(), "Enterprise license") {
 			c.JSON(http.StatusPaymentRequired, gin.H{
-				"error": err.Error(),
-				"upgrade_url": "https://brokle.ai/pricing",
+				"error":       err.Error(),
+				"upgrade_url": "https://brokle.com/pricing",
 			})
 			return
 		}
@@ -533,8 +533,8 @@ func (h *Handler) CreateCustomDashboard(c *gin.Context) {
 	if err != nil {
 		if strings.Contains(err.Error(), "Enterprise license") {
 			c.JSON(http.StatusPaymentRequired, gin.H{
-				"error": err.Error(),
-				"upgrade_url": "https://brokle.ai/pricing",
+				"error":       err.Error(),
+				"upgrade_url": "https://brokle.com/pricing",
 			})
 			return
 		}
@@ -547,7 +547,7 @@ func (h *Handler) CreateCustomDashboard(c *gin.Context) {
 
 func (h *Handler) UpdateCustomDashboard(c *gin.Context) {
 	dashboardID := c.Param("id")
-	
+
 	var dashboard analytics.Dashboard
 	if err := c.ShouldBindJSON(&dashboard); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -558,8 +558,8 @@ func (h *Handler) UpdateCustomDashboard(c *gin.Context) {
 	if err != nil {
 		if strings.Contains(err.Error(), "Enterprise license") {
 			c.JSON(http.StatusPaymentRequired, gin.H{
-				"error": err.Error(),
-				"upgrade_url": "https://brokle.ai/pricing",
+				"error":       err.Error(),
+				"upgrade_url": "https://brokle.com/pricing",
 			})
 			return
 		}
@@ -577,8 +577,8 @@ func (h *Handler) DeleteCustomDashboard(c *gin.Context) {
 	if err != nil {
 		if strings.Contains(err.Error(), "Enterprise license") {
 			c.JSON(http.StatusPaymentRequired, gin.H{
-				"error": err.Error(),
-				"upgrade_url": "https://brokle.ai/pricing",
+				"error":       err.Error(),
+				"upgrade_url": "https://brokle.com/pricing",
 			})
 			return
 		}
@@ -600,8 +600,8 @@ func (h *Handler) GenerateAdvancedReport(c *gin.Context) {
 	if err != nil {
 		if strings.Contains(err.Error(), "Enterprise license") {
 			c.JSON(http.StatusPaymentRequired, gin.H{
-				"error": err.Error(),
-				"upgrade_url": "https://brokle.ai/pricing",
+				"error":       err.Error(),
+				"upgrade_url": "https://brokle.com/pricing",
 			})
 			return
 		}
@@ -614,7 +614,7 @@ func (h *Handler) GenerateAdvancedReport(c *gin.Context) {
 
 func (h *Handler) ExportData(c *gin.Context) {
 	format := c.DefaultQuery("format", "json")
-	
+
 	var query analytics.ExportQuery
 	if err := c.ShouldBindJSON(&query); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -625,8 +625,8 @@ func (h *Handler) ExportData(c *gin.Context) {
 	if err != nil {
 		if strings.Contains(err.Error(), "Enterprise license") {
 			c.JSON(http.StatusPaymentRequired, gin.H{
-				"error": err.Error(),
-				"upgrade_url": "https://brokle.ai/pricing",
+				"error":       err.Error(),
+				"upgrade_url": "https://brokle.com/pricing",
 			})
 			return
 		}
@@ -650,7 +650,7 @@ func (h *Handler) RunMLModel(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Model name is required"})
 		return
 	}
-	
+
 	var data interface{}
 	if err := c.ShouldBindJSON(&data); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -661,8 +661,8 @@ func (h *Handler) RunMLModel(c *gin.Context) {
 	if err != nil {
 		if strings.Contains(err.Error(), "Enterprise license") {
 			c.JSON(http.StatusPaymentRequired, gin.H{
-				"error": err.Error(),
-				"upgrade_url": "https://brokle.ai/pricing",
+				"error":       err.Error(),
+				"upgrade_url": "https://brokle.com/pricing",
 			})
 			return
 		}
@@ -671,7 +671,7 @@ func (h *Handler) RunMLModel(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"model": modelName,
+		"model":  modelName,
 		"result": result,
 	})
 }

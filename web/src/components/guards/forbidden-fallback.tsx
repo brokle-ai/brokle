@@ -70,7 +70,7 @@ export function ForbiddenFallback({
                 className="flex-1"
                 asChild
               >
-                <Link href="mailto:support@brokle.ai">
+                <Link href="mailto:support@brokle.com">
                   <Mail className="mr-2 h-4 w-4" />
                   Contact Support
                 </Link>
