@@ -1,0 +1,56 @@
+# Multi-stage build for Brokle API
+FROM golang:1.21-alpine AS builder
+
+# Install dependencies
+RUN apk add --no-cache git ca-certificates tzdata
+
+# Set working directory
+WORKDIR /app
+
+# Copy go mod files first for better caching
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source code
+COPY . .
+
+# Build the application
+# Development build - faster compilation
+RUN CGO_ENABLED=0 GOOS=linux go build \
+    -ldflags='-w -s' \
+    -o bin/brokle \
+    ./cmd/server
+
+# Final stage
+FROM alpine:latest
+
+# Install ca-certificates for HTTPS calls
+RUN apk --no-cache add ca-certificates
+
+# Create non-root user
+RUN adduser -D -s /bin/sh brokle
+
+# Set working directory
+WORKDIR /app
+
+# Copy binary from builder stage
+COPY --from=builder /app/bin/brokle .
+
+# Copy configuration files
+COPY --from=builder /app/configs ./configs
+
+# Create necessary directories
+RUN mkdir -p logs tmp && chown -R brokle:brokle /app
+
+# Switch to non-root user
+USER brokle
+
+# Expose port
+EXPOSE 8080
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
+
+# Run the binary
+CMD ["./brokle"]

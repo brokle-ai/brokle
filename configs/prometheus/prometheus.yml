@@ -1,0 +1,173 @@
+# Prometheus configuration for Brokle Platform
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'brokle-platform'
+    region: 'local'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+# Load rules once and periodically evaluate them
+rule_files:
+  - "alert.rules"
+
+# Scrape configurations
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    metrics_path: /metrics
+    scrape_interval: 15s
+
+  # Brokle API Gateway
+  - job_name: 'brokle-api'
+    static_configs:
+      - targets: ['api:8080']
+    metrics_path: /metrics
+    scrape_interval: 10s
+    scrape_timeout: 5s
+    honor_labels: true
+    params:
+      format: ['prometheus']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'brokle-api'
+      - source_labels: [__address__]
+        target_label: service
+        replacement: 'api-gateway'
+
+  # Brokle Dashboard (if metrics exposed)
+  - job_name: 'brokle-dashboard'
+    static_configs:
+      - targets: ['dashboard:3000']
+    metrics_path: /api/metrics
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    honor_labels: true
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'brokle-dashboard'
+      - source_labels: [__address__]
+        target_label: service
+        replacement: 'dashboard'
+
+  # PostgreSQL Exporter
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+    metrics_path: /metrics
+    scrape_interval: 30s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'postgres'
+      - source_labels: [__address__]
+        target_label: service
+        replacement: 'database'
+
+  # Redis Exporter
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+    metrics_path: /metrics
+    scrape_interval: 30s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'redis'
+      - source_labels: [__address__]
+        target_label: service
+        replacement: 'cache'
+
+  # ClickHouse metrics (if available)
+  - job_name: 'clickhouse'
+    static_configs:
+      - targets: ['clickhouse:9363']
+    metrics_path: /metrics
+    scrape_interval: 30s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'clickhouse'
+      - source_labels: [__address__]
+        target_label: service
+        replacement: 'analytics'
+
+  # Node Exporter (system metrics)
+  - job_name: 'node'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    metrics_path: /metrics
+    scrape_interval: 30s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'host'
+      - source_labels: [__address__]
+        target_label: service
+        replacement: 'system'
+
+  # cAdvisor (container metrics)
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    metrics_path: /metrics
+    scrape_interval: 30s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'docker'
+      - source_labels: [__address__]
+        target_label: service
+        replacement: 'containers'
+
+  # Nginx metrics (if nginx_exporter is used)
+  - job_name: 'nginx'
+    static_configs:
+      - targets: ['nginx-exporter:9113']
+    metrics_path: /metrics
+    scrape_interval: 30s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'nginx'
+      - source_labels: [__address__]
+        target_label: service
+        replacement: 'proxy'
+
+# Custom metric relabeling for Brokle-specific metrics
+metric_relabel_configs:
+  # Add environment label to all Brokle metrics
+  - source_labels: [__name__]
+    regex: '(brokle_.*|http_.*|ai_.*)'
+    target_label: environment
+    replacement: 'development'
+  
+  # Add product label
+  - source_labels: [__name__]
+    regex: '(brokle_.*|http_.*|ai_.*)'
+    target_label: product
+    replacement: 'brokle-platform'
+
+# Remote write configuration (for external storage)
+# remote_write:
+#   - url: "https://prometheus-remote-write.example.com/api/v1/write"
+#     basic_auth:
+#       username: "username"
+#       password: "password"
+
+# Remote read configuration (for external storage)
+# remote_read:
+#   - url: "https://prometheus-remote-read.example.com/api/v1/read"
+#     basic_auth:
+#       username: "username"
+#       password: "password"

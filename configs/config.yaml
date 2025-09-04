@@ -1,0 +1,151 @@
+# Brokle AI Infrastructure Platform Configuration
+# 
+# This is the main configuration file for the Brokle platform.
+# Environment-specific values can be overridden using environment variables
+# with the BROKLE_ prefix (e.g., BROKLE_DATABASE_PASSWORD=secret)
+
+environment: development
+
+# HTTP Server Configuration
+server:
+  host: 0.0.0.0
+  port: 8080
+  read_timeout: 30s
+  write_timeout: 30s
+  shutdown_timeout: 30s
+  max_request_size: 33554432  # 32MB
+  enable_cors: true
+  cors_origins:
+    - "http://localhost:3000"
+    - "http://localhost:3001"
+    - "https://dashboard.brokle.ai"
+  trusted_proxies:
+    - "127.0.0.1"
+    - "10.0.0.0/8"
+    - "172.16.0.0/12"
+    - "192.168.0.0/16"
+
+# PostgreSQL Database Configuration
+database:
+  host: localhost
+  port: 5432
+  user: brokle
+  password: brokle_password
+  database: brokle
+  ssl_mode: disable
+  max_open_conns: 100
+  max_idle_conns: 10
+  conn_max_lifetime: 1h
+  conn_max_idle_time: 15m
+
+# ClickHouse Analytics Database Configuration
+clickhouse:
+  host: localhost
+  port: 9000
+  user: default
+  password: ""
+  database: brokle_analytics
+  max_open_conns: 50
+  max_idle_conns: 5
+  conn_max_lifetime: 1h
+  read_timeout: 30s
+  write_timeout: 30s
+
+# Redis Configuration
+redis:
+  host: localhost
+  port: 6379
+  password: ""
+  database: 0
+  pool_size: 20
+  min_idle_conns: 5
+  idle_timeout: 5m
+  max_retries: 3
+
+# JWT Token Configuration
+jwt:
+  # These should be set via environment variables in production
+  private_key: |
+    -----BEGIN PRIVATE KEY-----
+    # Your RSA private key here (use environment variable in production)
+    -----END PRIVATE KEY-----
+  public_key: |
+    -----BEGIN PUBLIC KEY-----
+    # Your RSA public key here (use environment variable in production)
+    -----END PUBLIC KEY-----
+  issuer: brokle-platform
+  access_token_ttl: 15m
+  refresh_token_ttl: 7d
+  api_key_token_ttl: 1y
+  algorithm: RS256
+
+# Logging Configuration
+logging:
+  level: info
+  format: json
+  output: stdout
+  file: ""
+  max_size: 100    # megabytes
+  max_backups: 3
+  max_age: 28      # days
+
+# External Service Configuration
+external:
+  # OpenAI Configuration
+  openai:
+    api_key: ""      # Set via BROKLE_EXTERNAL_OPENAI_API_KEY
+    base_url: https://api.openai.com/v1
+    timeout: 60s
+    max_retries: 3
+
+  # Anthropic Configuration
+  anthropic:
+    api_key: ""      # Set via BROKLE_EXTERNAL_ANTHROPIC_API_KEY
+    base_url: https://api.anthropic.com
+    timeout: 60s
+    max_retries: 3
+
+  # Cohere Configuration
+  cohere:
+    api_key: ""      # Set via BROKLE_EXTERNAL_COHERE_API_KEY
+    base_url: https://api.cohere.ai/v1
+    timeout: 60s
+    max_retries: 3
+
+  # Stripe Configuration
+  stripe:
+    secret_key: ""   # Set via BROKLE_EXTERNAL_STRIPE_SECRET_KEY
+    publishable_key: ""  # Set via BROKLE_EXTERNAL_STRIPE_PUBLISHABLE_KEY
+    webhook_secret: ""   # Set via BROKLE_EXTERNAL_STRIPE_WEBHOOK_SECRET
+    environment: test
+
+  # Email Configuration
+  email:
+    provider: smtp   # smtp, sendgrid, mailgun
+    smtp_host: localhost
+    smtp_port: 1025
+    username: ""
+    password: ""
+    from_email: noreply@brokle.ai
+    from_name: Brokle Platform
+    reply_email: support@brokle.ai
+
+# Feature Flags
+features:
+  semantic_caching: true
+  real_time_metrics: true
+  ml_routing: true
+  custom_models: false
+  multi_modal: false
+  background_jobs: true
+  rate_limiting: true
+  audit_logging: true
+
+# Monitoring Configuration
+monitoring:
+  enabled: true
+  prometheus_port: 9090
+  metrics_path: /metrics
+  jaeger_endpoint: http://localhost:14268/api/traces
+  sample_rate: 0.1
+  flush_interval: 10s

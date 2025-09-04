@@ -1,0 +1,272 @@
+# Prometheus Alert Rules for Brokle Platform
+groups:
+  # System Health Alerts
+  - name: system_health
+    rules:
+      - alert: HighMemoryUsage
+        expr: (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) < 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is above 90% for more than 5 minutes"
+
+      - alert: HighCPUUsage
+        expr: 100 - (avg(irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 10m
+        labels:
+          severity: warning
+          service: system
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage is above 80% for more than 10 minutes"
+
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes / node_filesystem_size_bytes) < 0.1
+        for: 5m
+        labels:
+          severity: critical
+          service: system
+        annotations:
+          summary: "Disk space running low"
+          description: "Disk space is below 10% on {{ $labels.mountpoint }}"
+
+  # Application Health Alerts
+  - name: application_health
+    rules:
+      - alert: BrokleAPIDown
+        expr: up{job="brokle-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: api
+        annotations:
+          summary: "Brokle API is down"
+          description: "Brokle API has been down for more than 1 minute"
+
+      - alert: BrokleDashboardDown
+        expr: up{job="brokle-dashboard"} == 0
+        for: 2m
+        labels:
+          severity: warning
+          service: dashboard
+        annotations:
+          summary: "Brokle Dashboard is down"
+          description: "Brokle Dashboard has been down for more than 2 minutes"
+
+      - alert: HighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: api
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is above 10% for more than 5 minutes"
+
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          service: api
+        annotations:
+          summary: "High response time detected"
+          description: "95th percentile response time is above 2s for more than 5 minutes"
+
+  # Database Health Alerts
+  - name: database_health
+    rules:
+      - alert: PostgreSQLDown
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: database
+        annotations:
+          summary: "PostgreSQL is down"
+          description: "PostgreSQL has been down for more than 1 minute"
+
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: cache
+        annotations:
+          summary: "Redis is down"
+          description: "Redis has been down for more than 1 minute"
+
+      - alert: ClickHouseDown
+        expr: up{job="clickhouse"} == 0
+        for: 2m
+        labels:
+          severity: warning
+          service: analytics
+        annotations:
+          summary: "ClickHouse is down"
+          description: "ClickHouse has been down for more than 2 minutes"
+
+      - alert: HighDatabaseConnections
+        expr: pg_stat_activity_count > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: database
+        annotations:
+          summary: "High number of database connections"
+          description: "PostgreSQL has more than 80 active connections for more than 5 minutes"
+
+  # AI/LLM Specific Alerts
+  - name: ai_metrics
+    rules:
+      - alert: HighAICost
+        expr: increase(brokle_ai_cost_total[1h]) > 100
+        for: 0m
+        labels:
+          severity: warning
+          service: ai
+        annotations:
+          summary: "High AI costs detected"
+          description: "AI costs have increased by more than $100 in the last hour"
+
+      - alert: LowCacheHitRate
+        expr: rate(brokle_ai_cache_hits[5m]) / rate(brokle_ai_requests_total[5m]) < 0.1
+        for: 10m
+        labels:
+          severity: warning
+          service: ai
+        annotations:
+          summary: "Low AI cache hit rate"
+          description: "AI cache hit rate is below 10% for more than 10 minutes"
+
+      - alert: HighAILatency
+        expr: histogram_quantile(0.95, rate(brokle_ai_request_duration_seconds_bucket[5m])) > 30
+        for: 5m
+        labels:
+          severity: warning
+          service: ai
+        annotations:
+          summary: "High AI request latency"
+          description: "95th percentile AI request latency is above 30s for more than 5 minutes"
+
+      - alert: AIProviderDown
+        expr: rate(brokle_ai_provider_errors_total[5m]) / rate(brokle_ai_requests_total[5m]) > 0.5
+        for: 5m
+        labels:
+          severity: critical
+          service: ai
+        annotations:
+          summary: "AI provider experiencing high error rates"
+          description: "AI provider {{ $labels.provider }} has error rate above 50% for more than 5 minutes"
+
+      - alert: LowQualityScore
+        expr: avg(brokle_ai_quality_score) < 0.7
+        for: 10m
+        labels:
+          severity: warning
+          service: ai
+        annotations:
+          summary: "Low AI response quality score"
+          description: "Average AI response quality score is below 0.7 for more than 10 minutes"
+
+  # Business Logic Alerts
+  - name: business_alerts
+    rules:
+      - alert: HighRequestVolume
+        expr: rate(http_requests_total[5m]) > 1000
+        for: 5m
+        labels:
+          severity: warning
+          service: api
+        annotations:
+          summary: "High request volume detected"
+          description: "Request rate is above 1000 req/sec for more than 5 minutes"
+
+      - alert: RateLimitExceeded
+        expr: increase(brokle_rate_limit_exceeded_total[5m]) > 100
+        for: 0m
+        labels:
+          severity: warning
+          service: api
+        annotations:
+          summary: "Rate limit frequently exceeded"
+          description: "Rate limit has been exceeded more than 100 times in the last 5 minutes"
+
+      - alert: UnauthorizedAccessAttempts
+        expr: increase(http_requests_total{status="401"}[5m]) > 50
+        for: 0m
+        labels:
+          severity: warning
+          service: security
+        annotations:
+          summary: "High number of unauthorized access attempts"
+          description: "More than 50 unauthorized access attempts in the last 5 minutes"
+
+      - alert: WebSocketConnectionsHigh
+        expr: brokle_websocket_connections > 1000
+        for: 5m
+        labels:
+          severity: warning
+          service: websocket
+        annotations:
+          summary: "High number of WebSocket connections"
+          description: "WebSocket connections are above 1000 for more than 5 minutes"
+
+  # Storage Alerts
+  - name: storage_alerts
+    rules:
+      - alert: HighStorageUsage
+        expr: (node_filesystem_size_bytes - node_filesystem_avail_bytes) / node_filesystem_size_bytes > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          service: storage
+        annotations:
+          summary: "High storage usage"
+          description: "Storage usage is above 85% on {{ $labels.mountpoint }}"
+
+      - alert: LogVolumeHigh
+        expr: increase(brokle_log_entries_total[1h]) > 100000
+        for: 0m
+        labels:
+          severity: warning
+          service: logging
+        annotations:
+          summary: "High log volume detected"
+          description: "More than 100,000 log entries generated in the last hour"
+
+  # Container Health Alerts
+  - name: container_health
+    rules:
+      - alert: ContainerHighMemory
+        expr: container_memory_usage_bytes / container_spec_memory_limit_bytes > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          service: containers
+        annotations:
+          summary: "Container high memory usage"
+          description: "Container {{ $labels.name }} memory usage is above 90%"
+
+      - alert: ContainerHighCPU
+        expr: rate(container_cpu_usage_seconds_total[5m]) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          service: containers
+        annotations:
+          summary: "Container high CPU usage"
+          description: "Container {{ $labels.name }} CPU usage is above 80%"
+
+      - alert: ContainerRestarting
+        expr: increase(container_last_seen{name!=""}[10m]) > 1
+        for: 0m
+        labels:
+          severity: warning
+          service: containers
+        annotations:
+          summary: "Container is restarting frequently"
+          description: "Container {{ $labels.name }} has restarted more than once in the last 10 minutes"

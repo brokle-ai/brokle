@@ -1,0 +1,98 @@
+version: '3.8'
+
+# Test environment configuration
+services:
+  # Test database
+  postgres-test:
+    image: postgres:15-alpine
+    container_name: brokle-postgres-test
+    environment:
+      POSTGRES_DB: brokle_test
+      POSTGRES_USER: brokle_test
+      POSTGRES_PASSWORD: brokle_test_password
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U brokle_test -d brokle_test"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - brokle-test-network
+
+  # Test ClickHouse
+  clickhouse-test:
+    image: clickhouse/clickhouse-server:23.8-alpine
+    container_name: brokle-clickhouse-test
+    environment:
+      CLICKHOUSE_DB: brokle_analytics_test
+      CLICKHOUSE_USER: brokle_test
+      CLICKHOUSE_PASSWORD: brokle_test_password
+    ports:
+      - "8124:8123"
+    volumes:
+      - clickhouse_test_data:/var/lib/clickhouse
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8123/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - brokle-test-network
+
+  # Test Redis
+  redis-test:
+    image: redis:7-alpine
+    container_name: brokle-redis-test
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_test_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - brokle-test-network
+
+  # Test API service
+  api-test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: brokle-api-test
+    ports:
+      - "8081:8080"
+    environment:
+      - ENV=test
+      - LOG_LEVEL=debug
+      - DATABASE_URL=postgres://brokle_test:brokle_test_password@postgres-test:5432/brokle_test?sslmode=disable
+      - CLICKHOUSE_URL=http://brokle_test:brokle_test_password@clickhouse-test:8123/brokle_analytics_test
+      - REDIS_URL=redis://redis-test:6379/0
+      - JWT_SECRET=test-jwt-secret-key
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+      redis-test:
+        condition: service_healthy
+      clickhouse-test:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - brokle-test-network
+
+volumes:
+  postgres_test_data:
+  clickhouse_test_data:
+  redis_test_data:
+
+networks:
+  brokle-test-network:
+    driver: bridge
