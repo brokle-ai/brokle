@@ -116,14 +116,6 @@ make docker-dev      # Start with Docker Compose
 - **Security** - Enterprise-grade authentication and authorization
 - **Compliance** - SOC 2, GDPR, HIPAA ready
 
-## 💡 Business Model
-
-### Subscription Tiers
-- **Free Hosted ($0)** - 10K requests/month, full platform access
-- **Pro ($29/month)** - 100K requests, advanced observability  
-- **Business ($99/month)** - 1M requests, predictive analytics
-- **Enterprise (Custom)** - Unlimited scale, custom integrations
-
 ### Competitive Advantage
 - **70% cheaper** than alternatives (Portkey $99+ vs Brokle $29)
 - **Complete platform** vs point solutions
