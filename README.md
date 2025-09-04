@@ -1,13 +1,25 @@
-# 🚀 Brokle - Complete AI Infrastructure Platform
+# 📊🚀 Brokle - AI Observability & Gateway Platform
 
-**Brokle** is the unified platform for AI teams to build, deploy, and scale production AI applications. Position as "The Stripe for AI Infrastructure" - handling all complexity so developers can focus on building great AI applications.
+**Production-grade observability and routing for LLM apps** – Your first step toward complete AI infrastructure.
 
-## 🎯 Core Capabilities
-- **AI Gateway** - Intelligent routing across 250+ LLM providers
-- **Advanced Observability** - 40+ AI-specific metrics with sub-100ms quality scoring  
-- **Semantic Caching** - Vector-based caching for 95% cost reduction potential
-- **Cost Optimization** - Real-time cost tracking with 30-50% savings
-- **Multi-Modal Support** - Future-ready for image, audio, video AI processing
+*Built for transparency, extensibility, and control — with the flexibility of open source.*
+
+## 🎯 Current Capabilities
+- **Advanced Observability** - 40+ AI-specific metrics with real-time insights  
+- **Intelligent Gateway** - OpenAI-compatible proxy with multi-provider smart routing
+- **Request Tracing** - End-to-end visibility with correlation IDs
+- **Cost Analytics** - Real-time cost tracking and optimization insights
+
+## 🗺️ Our Vision
+
+Brokle is starting with **observability and gateway** as the foundation.  
+Here's what we're exploring next (no strict timeline):
+
+- 🔄 **Semantic Caching & Advanced Optimization** – Reduce latency and costs
+- 🚀 **Model Hosting & Multi-modal APIs** – Expand beyond text LLMs  
+- 🌐 **Unified AI Infrastructure Platform** – Bring it all together
+
+Our long-term goal is the unified AI infrastructure platform — starting with what production teams need most: visibility and control.
 
 ## 🏗️ Architecture
 
@@ -49,7 +61,7 @@ make dev
 This will start:
 - Go API server on `http://localhost:8080`
 - Next.js dashboard on `http://localhost:3000`
-- All required databases
+- Databases initialized automatically for local dev
 
 ### Production Deployment
 
@@ -98,29 +110,29 @@ make docker-dev      # Start with Docker Compose
 
 ## 🌟 Key Features
 
-### AI Gateway & Routing
-- **Intelligent Provider Selection** - ML-powered routing decisions
-- **Load Balancing** - Distribute requests across providers
-- **Health Monitoring** - Automatic failover and recovery
-- **OpenAI Compatibility** - Drop-in replacement for existing code
-
 ### Advanced Observability
 - **Real-time Metrics** - 40+ AI-specific performance indicators
 - **Request Tracing** - End-to-end visibility into AI requests
 - **Quality Scoring** - Automated response quality assessment
 - **Cost Analytics** - Detailed cost breakdown and optimization
 
+### AI Gateway & Routing
+- **Intelligent Provider Selection** - ML-powered routing decisions
+- **Multi-provider Smart Routing** - Seamless switching between providers
+- **Health Monitoring** - Automatic failover and recovery
+- **OpenAI Compatibility** - Drop-in replacement for existing code
+
 ### Production Scale
 - **High Availability** - Multi-region deployment support
 - **Auto-scaling** - Handle millions of requests per minute
 - **Security** - Enterprise-grade authentication and authorization
-- **Compliance** - SOC 2, GDPR, HIPAA ready
+- **Enterprise-ready foundations** - HA, scaling, security with compliance readiness in roadmap
 
-### Competitive Advantage
-- **70% cheaper** than alternatives (Portkey $99+ vs Brokle $29)
-- **Complete platform** vs point solutions
-- **Superior architecture** - Microservices-ready monolith
-- **Open source** - Full transparency and customization
+### Why Brokle
+- **Built for transparency, extensibility, and control** — with the flexibility of open source
+- **Production-ready architecture** - Scalable monolith with microservices patterns
+- **Complete visibility** - Comprehensive monitoring from day one  
+- **Developer-first** - OpenAI-compatible with extensive customization
 
 ## 🤝 Contributing
 
