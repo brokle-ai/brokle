@@ -1,8 +1,9 @@
 # Brokle AI Infrastructure Platform Configuration
 # 
 # This is the main configuration file for the Brokle platform.
-# Environment-specific values can be overridden using environment variables
-# with the BROKLE_ prefix (e.g., BROKLE_DATABASE_PASSWORD=secret)
+# Environment-specific values can be overridden using environment variables:
+# - Standard infrastructure: DATABASE_URL, OPENAI_API_KEY, STRIPE_SECRET_KEY, etc.
+# - Brokle-specific features: BROKLE_ENTERPRISE_*, BROKLE_API_KEY, etc.
 
 environment: development
 
@@ -105,30 +106,30 @@ logging:
 external:
   # OpenAI Configuration
   openai:
-    api_key: ""      # Set via BROKLE_EXTERNAL_OPENAI_API_KEY
+    api_key: ""      # Set via OPENAI_API_KEY
     base_url: https://api.openai.com/v1
     timeout: 60s
     max_retries: 3
 
   # Anthropic Configuration
   anthropic:
-    api_key: ""      # Set via BROKLE_EXTERNAL_ANTHROPIC_API_KEY
+    api_key: ""      # Set via ANTHROPIC_API_KEY
     base_url: https://api.anthropic.com
     timeout: 60s
     max_retries: 3
 
   # Cohere Configuration
   cohere:
-    api_key: ""      # Set via BROKLE_EXTERNAL_COHERE_API_KEY
+    api_key: ""      # Set via COHERE_API_KEY
     base_url: https://api.cohere.ai/v1
     timeout: 60s
     max_retries: 3
 
   # Stripe Configuration
   stripe:
-    secret_key: ""   # Set via BROKLE_EXTERNAL_STRIPE_SECRET_KEY
-    publishable_key: ""  # Set via BROKLE_EXTERNAL_STRIPE_PUBLISHABLE_KEY
-    webhook_secret: ""   # Set via BROKLE_EXTERNAL_STRIPE_WEBHOOK_SECRET
+    secret_key: ""   # Set via STRIPE_SECRET_KEY
+    publishable_key: ""  # Set via STRIPE_PUBLISHABLE_KEY
+    webhook_secret: ""   # Set via STRIPE_WEBHOOK_SECRET
     environment: test
 
   # Email Configuration

@@ -602,8 +602,38 @@ func Load() (*Config, error) {
 
 	// Set environment variable support
 	viper.AutomaticEnv()
-	viper.SetEnvPrefix("BROKLE")
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	
+	// Bind standard infrastructure variables (no BROKLE_ prefix)
+	viper.BindEnv("database.url", "DATABASE_URL")
+	viper.BindEnv("clickhouse.url", "CLICKHOUSE_URL") 
+	viper.BindEnv("redis.url", "REDIS_URL")
+	viper.BindEnv("server.port", "PORT")
+	viper.BindEnv("environment", "ENV") 
+	viper.BindEnv("logging.level", "LOG_LEVEL")
+	
+	// External API keys (standard names)
+	viper.BindEnv("external.openai.api_key", "OPENAI_API_KEY")
+	viper.BindEnv("external.anthropic.api_key", "ANTHROPIC_API_KEY")
+	viper.BindEnv("external.cohere.api_key", "COHERE_API_KEY")
+	viper.BindEnv("external.stripe.secret_key", "STRIPE_SECRET_KEY")
+	viper.BindEnv("external.stripe.publishable_key", "STRIPE_PUBLISHABLE_KEY")
+	viper.BindEnv("external.stripe.webhook_secret", "STRIPE_WEBHOOK_SECRET")
+	
+	// JWT keys (standard names)
+	viper.BindEnv("jwt.private_key", "JWT_PRIVATE_KEY")
+	viper.BindEnv("jwt.public_key", "JWT_PUBLIC_KEY")
+	viper.BindEnv("jwt.secret", "JWT_SECRET")
+	
+	// Keep BROKLE_ prefix for Brokle-specific variables
+	viper.BindEnv("enterprise.license.key", "BROKLE_ENTERPRISE_LICENSE_KEY")
+	viper.BindEnv("enterprise.license.type", "BROKLE_ENTERPRISE_LICENSE_TYPE")
+	viper.BindEnv("enterprise.license.offline_mode", "BROKLE_ENTERPRISE_LICENSE_OFFLINE_MODE")
+	viper.BindEnv("enterprise.sso.enabled", "BROKLE_ENTERPRISE_SSO_ENABLED")
+	viper.BindEnv("enterprise.sso.provider", "BROKLE_ENTERPRISE_SSO_PROVIDER")
+	viper.BindEnv("enterprise.rbac.enabled", "BROKLE_ENTERPRISE_RBAC_ENABLED")
+	viper.BindEnv("enterprise.compliance.enabled", "BROKLE_ENTERPRISE_COMPLIANCE_ENABLED")
+	viper.BindEnv("enterprise.analytics.enabled", "BROKLE_ENTERPRISE_ANALYTICS_ENABLED")
 
 	// Set default values
 	setDefaults()
