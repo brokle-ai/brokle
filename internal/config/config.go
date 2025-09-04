@@ -272,22 +272,35 @@ func (sc *ServerConfig) Validate() error {
 
 // Validate validates database configuration.
 func (dc *DatabaseConfig) Validate() error {
-	if dc.URL == "" && dc.Host == "" {
+	// If URL is provided, minimal validation
+	if dc.URL != "" {
+		// URL takes precedence, minimal validation
+		if dc.MaxOpenConns < 0 {
+			return fmt.Errorf("max_open_conns cannot be negative")
+		}
+		
+		if dc.MaxIdleConns < 0 {
+			return fmt.Errorf("max_idle_conns cannot be negative")
+		}
+		
+		return nil
+	}
+	
+	// If no URL, validate individual fields
+	if dc.Host == "" {
 		return fmt.Errorf("either url or host must be provided")
 	}
 	
-	if dc.Host != "" {
-		if dc.Port <= 0 || dc.Port > 65535 {
-			return fmt.Errorf("invalid port: %d", dc.Port)
-		}
-		
-		if dc.User == "" {
-			return fmt.Errorf("user cannot be empty")
-		}
-		
-		if dc.Database == "" {
-			return fmt.Errorf("database name cannot be empty")
-		}
+	if dc.Port <= 0 || dc.Port > 65535 {
+		return fmt.Errorf("invalid port: %d (must be 1-65535)", dc.Port)
+	}
+	
+	if dc.User == "" {
+		return fmt.Errorf("user cannot be empty when using individual fields")
+	}
+	
+	if dc.Database == "" {
+		return fmt.Errorf("database name cannot be empty when using individual fields")
 	}
 	
 	if dc.MaxOpenConns < 0 {
@@ -303,18 +316,22 @@ func (dc *DatabaseConfig) Validate() error {
 
 // Validate validates ClickHouse configuration.
 func (cc *ClickHouseConfig) Validate() error {
-	if cc.URL == "" && cc.Host == "" {
-		return fmt.Errorf("either url or host must be provided")
+	// If URL is provided, minimal validation
+	if cc.URL != "" {
+		return nil // URL takes precedence
 	}
 	
-	if cc.Host != "" {
-		if cc.Port <= 0 || cc.Port > 65535 {
-			return fmt.Errorf("invalid port: %d", cc.Port)
-		}
-		
-		if cc.Database == "" {
-			return fmt.Errorf("database name cannot be empty")
-		}
+	// If no URL, validate individual fields
+	if cc.Host == "" {
+		return fmt.Errorf("either url or host must be provided for clickhouse")
+	}
+	
+	if cc.Port <= 0 || cc.Port > 65535 {
+		return fmt.Errorf("invalid clickhouse port: %d (must be 1-65535)", cc.Port)
+	}
+	
+	if cc.Database == "" {
+		return fmt.Errorf("clickhouse database name cannot be empty when using individual fields")
 	}
 	
 	return nil
@@ -322,18 +339,27 @@ func (cc *ClickHouseConfig) Validate() error {
 
 // Validate validates Redis configuration.
 func (rc *RedisConfig) Validate() error {
-	if rc.URL == "" && rc.Host == "" {
-		return fmt.Errorf("either url or host must be provided")
-	}
-	
-	if rc.Host != "" {
-		if rc.Port <= 0 || rc.Port > 65535 {
-			return fmt.Errorf("invalid port: %d", rc.Port)
+	// If URL is provided, minimal validation
+	if rc.URL != "" {
+		// URL takes precedence, minimal validation
+		if rc.PoolSize < 0 {
+			return fmt.Errorf("pool_size cannot be negative")
 		}
 		
-		if rc.Database < 0 || rc.Database > 15 {
-			return fmt.Errorf("invalid database number: %d (must be 0-15)", rc.Database)
-		}
+		return nil
+	}
+	
+	// If no URL, validate individual fields
+	if rc.Host == "" {
+		return fmt.Errorf("either url or host must be provided for redis")
+	}
+	
+	if rc.Port <= 0 || rc.Port > 65535 {
+		return fmt.Errorf("invalid redis port: %d (must be 1-65535)", rc.Port)
+	}
+	
+	if rc.Database < 0 || rc.Database > 15 {
+		return fmt.Errorf("invalid redis database number: %d (must be 0-15)", rc.Database)
 	}
 	
 	if rc.PoolSize < 0 {
@@ -628,7 +654,8 @@ func setDefaults() {
 	viper.SetDefault("server.max_request_size", 32<<20) // 32MB
 	viper.SetDefault("server.enable_cors", true)
 
-	// Database defaults
+	// Database defaults (URL-first, individual fields as fallback)
+	viper.SetDefault("database.url", "")  // Preferred: Set via DATABASE_URL env var
 	viper.SetDefault("database.host", "localhost")
 	viper.SetDefault("database.port", 5432)
 	viper.SetDefault("database.user", "brokle")
@@ -637,21 +664,29 @@ func setDefaults() {
 	viper.SetDefault("database.max_open_conns", 100)
 	viper.SetDefault("database.max_idle_conns", 10)
 	viper.SetDefault("database.conn_max_lifetime", "1h")
+	viper.SetDefault("database.conn_max_idle_time", "15m")
 
-	// ClickHouse defaults
+	// ClickHouse defaults (URL-first, individual fields as fallback)
+	viper.SetDefault("clickhouse.url", "")  // Preferred: Set via CLICKHOUSE_URL env var
 	viper.SetDefault("clickhouse.host", "localhost")
 	viper.SetDefault("clickhouse.port", 9000)
 	viper.SetDefault("clickhouse.user", "default")
 	viper.SetDefault("clickhouse.database", "brokle_analytics")
 	viper.SetDefault("clickhouse.max_open_conns", 50)
 	viper.SetDefault("clickhouse.max_idle_conns", 5)
+	viper.SetDefault("clickhouse.conn_max_lifetime", "1h")
+	viper.SetDefault("clickhouse.read_timeout", "30s")
+	viper.SetDefault("clickhouse.write_timeout", "30s")
 
-	// Redis defaults
+	// Redis defaults (URL-first, individual fields as fallback)
+	viper.SetDefault("redis.url", "")  // Preferred: Set via REDIS_URL env var
 	viper.SetDefault("redis.host", "localhost")
 	viper.SetDefault("redis.port", 6379)
 	viper.SetDefault("redis.database", 0)
 	viper.SetDefault("redis.pool_size", 20)
 	viper.SetDefault("redis.min_idle_conns", 5)
+	viper.SetDefault("redis.idle_timeout", "5m")
+	viper.SetDefault("redis.max_retries", 3)
 
 	// JWT defaults
 	viper.SetDefault("jwt.issuer", "brokle-platform")
@@ -730,6 +765,12 @@ func (c *Config) GetServerAddress() string {
 
 // GetDatabaseURL returns the PostgreSQL connection URL.
 func (c *Config) GetDatabaseURL() string {
+	// Priority 1: Use URL if provided
+	if c.Database.URL != "" {
+		return c.Database.URL
+	}
+	
+	// Priority 2: Construct from individual fields
 	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s",
 		c.Database.User, c.Database.Password, c.Database.Host,
 		c.Database.Port, c.Database.Database, c.Database.SSLMode)
@@ -737,6 +778,12 @@ func (c *Config) GetDatabaseURL() string {
 
 // GetClickHouseURL returns the ClickHouse connection URL.
 func (c *Config) GetClickHouseURL() string {
+	// Priority 1: Use URL if provided
+	if c.ClickHouse.URL != "" {
+		return c.ClickHouse.URL
+	}
+	
+	// Priority 2: Construct from individual fields
 	return fmt.Sprintf("clickhouse://%s:%s@%s:%d/%s",
 		c.ClickHouse.User, c.ClickHouse.Password, c.ClickHouse.Host,
 		c.ClickHouse.Port, c.ClickHouse.Database)
@@ -744,6 +791,12 @@ func (c *Config) GetClickHouseURL() string {
 
 // GetRedisURL returns the Redis connection URL.
 func (c *Config) GetRedisURL() string {
+	// Priority 1: Use URL if provided
+	if c.Redis.URL != "" {
+		return c.Redis.URL
+	}
+	
+	// Priority 2: Construct from individual fields
 	if c.Redis.Password != "" {
 		return fmt.Sprintf("redis://:%s@%s:%d/%d",
 			c.Redis.Password, c.Redis.Host, c.Redis.Port, c.Redis.Database)

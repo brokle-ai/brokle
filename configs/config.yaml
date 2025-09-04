@@ -26,25 +26,33 @@ server:
     - "192.168.0.0/16"
 
 # PostgreSQL Database Configuration
+# RECOMMENDED: Use DATABASE_URL environment variable
 database:
+  url: ""  # Preferred: Set via DATABASE_URL environment variable
+  # Alternative: Individual fields for Docker/K8s/CI
   host: localhost
   port: 5432
   user: brokle
   password: brokle_password
   database: brokle
   ssl_mode: disable
+  # Connection pool settings
   max_open_conns: 100
   max_idle_conns: 10
   conn_max_lifetime: 1h
   conn_max_idle_time: 15m
 
 # ClickHouse Analytics Database Configuration
+# RECOMMENDED: Use CLICKHOUSE_URL environment variable
 clickhouse:
+  url: ""  # Preferred: Set via CLICKHOUSE_URL environment variable
+  # Alternative: Individual fields for Docker/K8s/CI
   host: localhost
   port: 9000
   user: default
   password: ""
   database: brokle_analytics
+  # Connection pool settings
   max_open_conns: 50
   max_idle_conns: 5
   conn_max_lifetime: 1h
@@ -52,11 +60,15 @@ clickhouse:
   write_timeout: 30s
 
 # Redis Configuration
+# RECOMMENDED: Use REDIS_URL environment variable
 redis:
+  url: ""  # Preferred: Set via REDIS_URL environment variable
+  # Alternative: Individual fields for Docker/K8s/CI
   host: localhost
   port: 6379
   password: ""
   database: 0
+  # Connection pool settings
   pool_size: 20
   min_idle_conns: 5
   idle_timeout: 5m

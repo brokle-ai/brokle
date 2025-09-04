@@ -21,7 +21,7 @@ type RedisDB struct {
 // NewRedisDB creates a new Redis database connection
 func NewRedisDB(cfg *config.Config, logger *logrus.Logger) (*RedisDB, error) {
 	// Parse Redis URL
-	opt, err := redis.ParseURL(cfg.Redis.URL)
+	opt, err := redis.ParseURL(cfg.GetRedisURL())
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse Redis URL: %w", err)
 	}

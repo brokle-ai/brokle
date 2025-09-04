@@ -22,7 +22,7 @@ type ClickHouseDB struct {
 // NewClickHouseDB creates a new ClickHouse database connection
 func NewClickHouseDB(cfg *config.Config, logger *logrus.Logger) (*ClickHouseDB, error) {
 	// Parse connection options from URL
-	options, err := clickhouse.ParseDSN(cfg.ClickHouse.URL)
+	options, err := clickhouse.ParseDSN(cfg.GetClickHouseURL())
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse ClickHouse DSN: %w", err)
 	}

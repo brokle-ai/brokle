@@ -27,7 +27,7 @@ func NewPostgresDB(cfg *config.Config, logger *logrus.Logger) (*PostgresDB, erro
 	glogger := gormLogger.Default
 
 	// Open database connection
-	db, err := gorm.Open(postgres.Open(cfg.Database.URL), &gorm.Config{
+	db, err := gorm.Open(postgres.Open(cfg.GetDatabaseURL()), &gorm.Config{
 		Logger:                 glogger,
 		SkipDefaultTransaction: true,
 		PrepareStmt:           true,
