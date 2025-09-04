@@ -1,0 +1,6 @@
+[submodule "sdk/python"]
+	path = sdk/python
+	url = https://github.com/brokle-ai/brokle-python.git
+[submodule "sdk/javascript"]
+	path = sdk/javascript
+	url = https://github.com/brokle-ai/brokle-js.git

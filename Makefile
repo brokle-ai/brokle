@@ -20,6 +20,7 @@ help: ## Show this help message
 setup: ## Setup development environment
 	@echo "🚀 Setting up development environment..."
 	@$(MAKE) install-deps
+	@$(MAKE) submodule-init
 	@$(MAKE) setup-databases
 	@$(MAKE) migrate-up
 	@$(MAKE) seed-dev
@@ -262,6 +263,29 @@ helm-install: ## Install with Helm
 helm-upgrade: ## Upgrade with Helm
 	@echo "⛵ Upgrading with Helm..."
 	helm upgrade brokle deployments/helm/brokle/
+
+##@ SDK Management
+
+submodule-init: ## Initialize all submodules (included in setup)
+	@echo "📦 Initializing SDK submodules..."
+	git submodule update --init --recursive
+
+submodule-update: ## Update submodules to latest commits
+	@echo "🔄 Updating SDK submodules..."
+	git submodule update --recursive --remote
+
+submodule-sync: ## Sync submodule URLs after remote changes
+	@echo "🔄 Syncing submodule URLs..."
+	git submodule sync --recursive
+
+submodule-status: ## Show status of all submodules
+	@echo "📊 SDK Submodule Status:"
+	@git submodule status --recursive
+
+submodule-clean: ## Clean submodule working directories
+	@echo "🧹 Cleaning SDK submodules..."
+	git submodule foreach --recursive git clean -fd
+	git submodule foreach --recursive git reset --hard
 
 ##@ Utilities
 
