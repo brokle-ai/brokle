@@ -65,7 +65,7 @@ We welcome contributions! See our [Contributing Guide](docs/CONTRIBUTING.md) to 
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This repository is MIT licensed, except for the `ee/` folders. See [LICENSE](LICENSE) and [docs](https://docs.brokle.com) for more details.
 
 ## 🔗 Links
 
