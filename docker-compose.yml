@@ -1,9 +1,7 @@
-version: '3.8'
-
 services:
   # Database Services
   postgres:
-    image: postgres:15-alpine
+    image: postgres:17-alpine
     container_name: brokle-postgres
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-brokle_prod}
@@ -23,7 +21,7 @@ services:
       - brokle-network
 
   clickhouse:
-    image: clickhouse/clickhouse-server:23.8-alpine
+    image: clickhouse/clickhouse-server:24.12-alpine
     container_name: brokle-clickhouse
     environment:
       CLICKHOUSE_DB: ${CLICKHOUSE_DB:-brokle_analytics}
@@ -38,7 +36,7 @@ services:
       - ./configs/clickhouse/config.xml:/etc/clickhouse-server/config.xml
       - ./configs/clickhouse/users.xml:/etc/clickhouse-server/users.xml
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8123/ping"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8123/ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -46,7 +44,7 @@ services:
       - brokle-network
 
   redis:
-    image: redis:7-alpine
+    image: redis:7.4-alpine
     container_name: brokle-redis
     ports:
       - "6379:6379"
@@ -64,7 +62,7 @@ services:
 
   # Message Queue
   kafka:
-    image: confluentinc/cp-kafka:latest
+    image: confluentinc/cp-kafka:7.7.1
     container_name: brokle-kafka
     environment:
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
@@ -81,7 +79,7 @@ services:
       - brokle-network
 
   zookeeper:
-    image: confluentinc/cp-zookeeper:latest
+    image: confluentinc/cp-zookeeper:7.7.1
     container_name: brokle-zookeeper
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
@@ -147,7 +145,7 @@ services:
 
   # Monitoring Services
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v2.55.1
     container_name: brokle-prometheus
     ports:
       - "9090:9090"
@@ -167,7 +165,7 @@ services:
       - brokle-network
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:11.3.0
     container_name: brokle-grafana
     ports:
       - "3001:3000"
@@ -184,7 +182,7 @@ services:
       - brokle-network
 
   alertmanager:
-    image: prom/alertmanager:latest
+    image: prom/alertmanager:v0.27.0
     container_name: brokle-alertmanager
     ports:
       - "9093:9093"
@@ -200,11 +198,11 @@ services:
 
   # Reverse Proxy & Load Balancer
   nginx:
-    image: nginx:alpine
+    image: nginx:1.27-alpine
     container_name: brokle-nginx
     ports:
-      - "80:80"
-      - "443:443"
+      - "8000:80"
+      - "8443:443"
     volumes:
       - ./configs/nginx/nginx.conf:/etc/nginx/nginx.conf
       - ./configs/nginx/ssl:/etc/nginx/ssl

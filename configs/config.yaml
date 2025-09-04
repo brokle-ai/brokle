@@ -75,8 +75,8 @@ jwt:
     -----END PUBLIC KEY-----
   issuer: brokle-platform
   access_token_ttl: 15m
-  refresh_token_ttl: 7d
-  api_key_token_ttl: 1y
+  refresh_token_ttl: 168h
+  api_key_token_ttl: 8760h
   algorithm: RS256
 
 # Logging Configuration

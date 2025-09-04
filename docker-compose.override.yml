@@ -1,5 +1,3 @@
-version: '3.8'
-
 # Development overrides - automatically loaded by docker-compose up
 # Overrides base configuration in docker-compose.yml with development-specific settings
 
@@ -41,7 +39,7 @@ services:
 
   # Optional monitoring for development
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v2.55.1
     container_name: brokle-prometheus
     ports:
       - "9090:9090"
@@ -61,7 +59,7 @@ services:
       - brokle-network
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:11.3.0
     container_name: brokle-grafana
     ports:
       - "3001:3000"

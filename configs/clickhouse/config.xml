@@ -1,8 +1,11 @@
 <?xml version="1.0"?>
-<yandex>
+<clickhouse>
     <logger>
         <level>information</level>
-        <console>true</console>
+        <log>/var/log/clickhouse-server/clickhouse-server.log</log>
+        <errorlog>/var/log/clickhouse-server/clickhouse-server.err.log</errorlog>
+        <size>1000M</size>
+        <count>10</count>
     </logger>
 
     <http_port>8123</http_port>
@@ -44,8 +47,13 @@
     <path>/var/lib/clickhouse/</path>
     <tmp_path>/var/lib/clickhouse/tmp/</tmp_path>
     <user_files_path>/var/lib/clickhouse/user_files/</user_files_path>
+    <format_schema_path>/var/lib/clickhouse/format_schemas/</format_schema_path>
 
-    <users_config>users.xml</users_config>
+    <user_directories>
+        <users_xml>
+            <path>users.xml</path>
+        </users_xml>
+    </user_directories>
 
     <default_profile>default</default_profile>
     <default_database>default</default_database>
@@ -90,4 +98,4 @@
     </query_thread_log>
 
     <dictionaries_config>*_dictionary.xml</dictionaries_config>
-</yandex>
+</clickhouse>
