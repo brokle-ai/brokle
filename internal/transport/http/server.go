@@ -52,9 +52,16 @@ func (s *Server) Start() error {
 
 	// Setup CORS
 	corsConfig := cors.DefaultConfig()
-	corsConfig.AllowOrigins = s.config.CORS.AllowedOrigins
-	corsConfig.AllowMethods = s.config.CORS.AllowedMethods
-	corsConfig.AllowHeaders = s.config.CORS.AllowedHeaders
+	
+	// Handle wildcard origins gracefully
+	if len(s.config.Server.CORSAllowedOrigins) == 1 && s.config.Server.CORSAllowedOrigins[0] == "*" {
+		corsConfig.AllowAllOrigins = true
+	} else {
+		corsConfig.AllowOrigins = s.config.Server.CORSAllowedOrigins
+	}
+	
+	corsConfig.AllowMethods = s.config.Server.CORSAllowedMethods
+	corsConfig.AllowHeaders = s.config.Server.CORSAllowedHeaders
 	corsConfig.AllowCredentials = true
 	corsConfig.MaxAge = 5 * time.Minute
 	s.engine.Use(cors.New(corsConfig))

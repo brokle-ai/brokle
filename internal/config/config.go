@@ -19,7 +19,6 @@ type Config struct {
 	Environment string         `mapstructure:"environment"`
 	App         AppConfig      `mapstructure:"app"`
 	Server      ServerConfig   `mapstructure:"server"`
-	CORS        CORSConfig     `mapstructure:"cors"`
 	Database    DatabaseConfig `mapstructure:"database"`
 	ClickHouse  ClickHouseConfig `mapstructure:"clickhouse"`
 	Redis       RedisConfig    `mapstructure:"redis"`
@@ -37,26 +36,21 @@ type AppConfig struct {
 	Name    string `mapstructure:"name"`
 }
 
-// CORSConfig contains CORS configuration.
-type CORSConfig struct {
-	AllowedOrigins []string `mapstructure:"allowed_origins"`
-	AllowedMethods []string `mapstructure:"allowed_methods"`
-	AllowedHeaders []string `mapstructure:"allowed_headers"`
-}
-
 // ServerConfig contains HTTP and WebSocket server configuration.
 type ServerConfig struct {
-	Host            string        `mapstructure:"host"`
-	Port            int           `mapstructure:"port"`
-	Environment     string        `mapstructure:"environment"`
-	ReadTimeout     time.Duration `mapstructure:"read_timeout"`
-	WriteTimeout    time.Duration `mapstructure:"write_timeout"`
-	IdleTimeout     time.Duration `mapstructure:"idle_timeout"`
-	ShutdownTimeout time.Duration `mapstructure:"shutdown_timeout"`
-	MaxRequestSize  int64         `mapstructure:"max_request_size"`
-	EnableCORS      bool          `mapstructure:"enable_cors"`
-	CORSOrigins     []string      `mapstructure:"cors_origins"`
-	TrustedProxies  []string      `mapstructure:"trusted_proxies"`
+	Host                string        `mapstructure:"host"`
+	Port                int           `mapstructure:"port"`
+	Environment         string        `mapstructure:"environment"`
+	ReadTimeout         time.Duration `mapstructure:"read_timeout"`
+	WriteTimeout        time.Duration `mapstructure:"write_timeout"`
+	IdleTimeout         time.Duration `mapstructure:"idle_timeout"`
+	ShutdownTimeout     time.Duration `mapstructure:"shutdown_timeout"`
+	MaxRequestSize      int64         `mapstructure:"max_request_size"`
+	EnableCORS          bool          `mapstructure:"enable_cors"`
+	CORSAllowedOrigins  []string      `mapstructure:"cors_allowed_origins"`
+	CORSAllowedMethods  []string      `mapstructure:"cors_allowed_methods"`
+	CORSAllowedHeaders  []string      `mapstructure:"cors_allowed_headers"`
+	TrustedProxies      []string      `mapstructure:"trusted_proxies"`
 }
 
 // DatabaseConfig contains PostgreSQL database configuration.
@@ -612,6 +606,11 @@ func Load() (*Config, error) {
 	viper.BindEnv("environment", "ENV") 
 	viper.BindEnv("logging.level", "LOG_LEVEL")
 	
+	// CORS configuration (OSS-standard naming)
+	viper.BindEnv("server.cors_allowed_origins", "CORS_ALLOWED_ORIGINS")
+	viper.BindEnv("server.cors_allowed_methods", "CORS_ALLOWED_METHODS")
+	viper.BindEnv("server.cors_allowed_headers", "CORS_ALLOWED_HEADERS")
+	
 	// External API keys (standard names)
 	viper.BindEnv("external.openai.api_key", "OPENAI_API_KEY")
 	viper.BindEnv("external.anthropic.api_key", "ANTHROPIC_API_KEY")
@@ -683,6 +682,11 @@ func setDefaults() {
 	viper.SetDefault("server.shutdown_timeout", "30s")
 	viper.SetDefault("server.max_request_size", 32<<20) // 32MB
 	viper.SetDefault("server.enable_cors", true)
+	
+	// CORS defaults (dev-friendly)
+	viper.SetDefault("server.cors_allowed_origins", []string{"http://localhost:3000", "http://localhost:3001"})
+	viper.SetDefault("server.cors_allowed_methods", []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"})
+	viper.SetDefault("server.cors_allowed_headers", []string{"Content-Type", "Authorization", "X-API-Key"})
 
 	// Database defaults (URL-first, individual fields as fallback)
 	viper.SetDefault("database.url", "")  // Preferred: Set via DATABASE_URL env var
