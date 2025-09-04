@@ -13,7 +13,7 @@ make dev
 ```
 
 ### Prerequisites
-- Go 1.21+
+- Go 1.24+
 - Node.js 18+
 - Docker & Docker Compose
 

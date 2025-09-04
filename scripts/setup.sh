@@ -53,7 +53,7 @@ fi
 
 # Check Go
 if ! command -v go &> /dev/null; then
-    print_error "Go is not installed. Please install Go 1.21+."
+    print_error "Go is not installed. Please install Go 1.24+."
     exit 1
 fi
 

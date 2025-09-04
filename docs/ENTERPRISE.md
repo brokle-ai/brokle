@@ -533,7 +533,7 @@ curl -X GET /api/v1/enterprise/usage \
 #### Enterprise Docker Build
 ```dockerfile
 # Dockerfile.enterprise
-FROM golang:1.21-alpine AS builder
+FROM golang:1.24-alpine AS builder
 
 WORKDIR /app
 COPY . .

@@ -6,7 +6,7 @@
 
 Ensure you have these tools installed:
 
-- **Go 1.21+** - Backend development
+- **Go 1.24+** - Backend development
 - **Node.js 18+** & **npm/yarn** - Frontend development  
 - **PostgreSQL 16+** - Primary database
 - **ClickHouse 24+** - Analytics database

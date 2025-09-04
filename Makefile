@@ -6,7 +6,7 @@
 .PHONY: help setup dev build test lint clean docker
 .PHONY: dev-backend dev-frontend build-backend build-frontend
 .PHONY: migrate-up migrate-down migrate-status seed db-reset
-.PHONY: docker-build docker-dev docker-prod
+.PHONY: docker-build docker-build-dev docker-dev docker-prod
 
 # Default target
 help: ## Show this help message
@@ -185,18 +185,23 @@ security-scan: ## Run security scans
 
 ##@ Docker
 
-docker-build: ## Build Docker images
-	@echo "🐳 Building Docker images..."
-	docker build -f deployments/docker/Dockerfile.server -t brokle/api:latest .
-	docker build -f deployments/docker/Dockerfile.dashboard -t brokle/dashboard:latest ./web
+docker-build: ## Build production Docker images
+	@echo "🐳 Building production Docker images..."
+	docker build -f Dockerfile -t brokle/api:latest .
+	docker build -f web/Dockerfile -t brokle/dashboard:latest ./web
 
-docker-dev: ## Start development environment with Docker
+docker-build-dev: ## Build development Docker images
+	@echo "🔧 Building development Docker images..."
+	docker build -f Dockerfile.dev -t brokle/api:dev .
+	docker build -f web/Dockerfile.dev -t brokle/dashboard:dev ./web
+
+docker-dev: ## Start development environment with Docker (auto-loads override.yml)
 	@echo "🐳 Starting development environment with Docker..."
-	docker-compose -f docker-compose.dev.yml up -d --build
+	docker-compose up -d --build
 
 docker-prod: ## Start production environment with Docker
 	@echo "🐳 Starting production environment with Docker..."
-	docker-compose -f docker-compose.yml up -d --build
+	docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 
 docker-stop: ## Stop all Docker containers
 	@echo "🐳 Stopping Docker containers..."

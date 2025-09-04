@@ -1,8 +1,8 @@
-# Multi-stage build for Brokle API
-FROM golang:1.21-alpine AS builder
+# Production Dockerfile for Brokle API
+FROM golang:1.24-alpine AS builder
 
-# Install dependencies
-RUN apk add --no-cache git ca-certificates tzdata
+# Install build dependencies
+RUN apk add --no-cache git ca-certificates tzdata gcc musl-dev
 
 # Set working directory
 WORKDIR /app
@@ -14,43 +14,38 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Build the application
-# Development build - faster compilation
-RUN CGO_ENABLED=0 GOOS=linux go build \
-    -ldflags='-w -s' \
+# Build the application with full optimization
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+    -a -installsuffix cgo -trimpath \
+    -ldflags='-w -s -extldflags "-static"' \
     -o bin/brokle \
     ./cmd/server
 
-# Final stage
-FROM alpine:latest
+# Build migration tool
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+    -a -installsuffix cgo -trimpath \
+    -ldflags='-w -s -extldflags "-static"' \
+    -o bin/migrate \
+    ./cmd/migrate
 
-# Install ca-certificates for HTTPS calls
-RUN apk --no-cache add ca-certificates
+# Final stage - minimal image
+FROM scratch
 
-# Create non-root user
-RUN adduser -D -s /bin/sh brokle
+# Copy CA certificates for HTTPS
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
-# Set working directory
-WORKDIR /app
+# Copy timezone data
+COPY --from=builder /usr/share/zoneinfo /usr/share/zoneinfo
 
-# Copy binary from builder stage
-COPY --from=builder /app/bin/brokle .
+# Copy binaries
+COPY --from=builder /app/bin/brokle /brokle
+COPY --from=builder /app/bin/migrate /migrate
 
 # Copy configuration files
-COPY --from=builder /app/configs ./configs
-
-# Create necessary directories
-RUN mkdir -p logs tmp && chown -R brokle:brokle /app
-
-# Switch to non-root user
-USER brokle
+COPY --from=builder /app/configs /configs
 
 # Expose port
 EXPOSE 8080
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
-
 # Run the binary
-CMD ["./brokle"]
+ENTRYPOINT ["/brokle"]

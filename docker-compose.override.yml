@@ -1,0 +1,82 @@
+version: '3.8'
+
+# Development overrides - automatically loaded by docker-compose up
+# Overrides base configuration in docker-compose.yml with development-specific settings
+
+services:
+  # Development database overrides
+  postgres:
+    environment:
+      POSTGRES_DB: brokle_dev
+      POSTGRES_USER: brokle
+      POSTGRES_PASSWORD: brokle_password
+
+  clickhouse:
+    environment:
+      CLICKHOUSE_DB: brokle_analytics
+      CLICKHOUSE_USER: brokle
+      CLICKHOUSE_PASSWORD: brokle_password
+
+  # Development API overrides
+  api:
+    build:
+      dockerfile: Dockerfile.dev  # Use fast development build
+    environment:
+      - ENV=development
+      - DATABASE_URL=postgres://brokle:brokle_password@postgres:5432/brokle_dev?sslmode=disable
+      - LOG_LEVEL=debug
+      - JWT_SECRET=development-jwt-secret-not-for-production
+
+  # Development dashboard overrides  
+  dashboard:
+    build:
+      dockerfile: Dockerfile.dev  # Use development build with hot reload
+    environment:
+      - NODE_ENV=development
+    volumes:
+      # Enable hot reload in development
+      - ./web:/app
+      - /app/node_modules
+      - /app/.next
+
+  # Optional monitoring for development
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: brokle-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./configs/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./configs/prometheus/alert.rules:/etc/prometheus/alert.rules
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+    networks:
+      - brokle-network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: brokle-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./configs/grafana/provisioning:/etc/grafana/provisioning
+      - ./configs/grafana/dashboards:/var/lib/grafana/dashboards
+    depends_on:
+      - prometheus
+    networks:
+      - brokle-network
+
+volumes:
+  prometheus_data:
+  grafana_data:

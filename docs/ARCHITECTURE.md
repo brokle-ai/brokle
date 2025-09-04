@@ -59,7 +59,7 @@ graph TB
 - **Multi-Database Support** - PostgreSQL + ClickHouse + Redis
 
 **Technology Stack**:
-- Go 1.21+ with net/http + Gorilla Mux
+- Go 1.24+ with net/http + Gorilla Mux
 - Gorilla WebSocket for real-time features
 - GORM for PostgreSQL operations
 - ClickHouse Go client for analytics

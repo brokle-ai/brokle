@@ -1,14 +1,15 @@
 version: '3.8'
 
-# Production override for docker-compose.yml
+# Production overrides for docker-compose.yml
 # Usage: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# Adds production-specific optimizations: resource limits, secrets, restart policies
 
 services:
   # Production API build
   api:
     build:
       context: .
-      dockerfile: Dockerfile.prod
+      dockerfile: Dockerfile
     environment:
       - ENV=production
       - LOG_LEVEL=info

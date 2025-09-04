@@ -26,7 +26,7 @@
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Go 1.21+
+- Go 1.24+
 - Node.js 18+
 - PostgreSQL 16+
 - ClickHouse 24+
