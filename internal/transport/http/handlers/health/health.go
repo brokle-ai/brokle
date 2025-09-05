@@ -27,28 +27,30 @@ func NewHandler(config *config.Config, logger *logrus.Logger) *Handler {
 }
 
 // HealthResponse represents the health check response
+// @Description Health check response containing service status
 type HealthResponse struct {
-	Status    string                 `json:"status"`
-	Timestamp string                 `json:"timestamp"`
-	Version   string                 `json:"version,omitempty"`
-	Uptime    string                 `json:"uptime"`
-	Checks    map[string]HealthCheck `json:"checks,omitempty"`
+	Status    string                 `json:"status" example:"healthy" description:"Overall service status (healthy, unhealthy, alive)"`
+	Timestamp string                 `json:"timestamp" example:"2023-12-01T10:30:00Z" description:"Health check timestamp in ISO 8601 format"`
+	Version   string                 `json:"version,omitempty" example:"1.0.0" description:"Application version"`
+	Uptime    string                 `json:"uptime" example:"2h30m15s" description:"Service uptime duration"`
+	Checks    map[string]HealthCheck `json:"checks,omitempty" description:"Individual component health checks"`
 }
 
 // HealthCheck represents an individual health check
+// @Description Individual component health check result
 type HealthCheck struct {
-	Status      string `json:"status"`
-	Message     string `json:"message,omitempty"`
-	LastChecked string `json:"last_checked"`
-	Duration    string `json:"duration,omitempty"`
+	Status      string `json:"status" example:"healthy" description:"Component status (healthy, unhealthy)"`
+	Message     string `json:"message,omitempty" example:"Database connection is healthy" description:"Status message"`
+	LastChecked string `json:"last_checked" example:"2023-12-01T10:30:00Z" description:"Last check timestamp"`
+	Duration    string `json:"duration,omitempty" example:"5ms" description:"Check execution duration"`
 }
 
 // Check handles basic health check
-// @Summary Health check
-// @Description Basic health check endpoint
-// @Tags health
+// @Summary Basic health check
+// @Description Get basic health status of the service
+// @Tags Health
 // @Produce json
-// @Success 200 {object} HealthResponse
+// @Success 200 {object} HealthResponse "Service is healthy"
 // @Router /health [get]
 func (h *Handler) Check(c *gin.Context) {
 	response := HealthResponse{
@@ -63,11 +65,11 @@ func (h *Handler) Check(c *gin.Context) {
 
 // Ready handles readiness check with dependencies
 // @Summary Readiness check
-// @Description Check if service is ready to handle requests
-// @Tags health
+// @Description Check if service and all dependencies are ready to handle requests
+// @Tags Health
 // @Produce json
-// @Success 200 {object} HealthResponse
-// @Success 503 {object} HealthResponse
+// @Success 200 {object} HealthResponse "Service and all dependencies are ready"
+// @Failure 503 {object} HealthResponse "Service or dependencies are not ready"
 // @Router /health/ready [get]
 func (h *Handler) Ready(c *gin.Context) {
 	checks := make(map[string]HealthCheck)
@@ -111,10 +113,10 @@ func (h *Handler) Ready(c *gin.Context) {
 
 // Live handles liveness check
 // @Summary Liveness check
-// @Description Check if service is alive
-// @Tags health
+// @Description Check if service is alive and responsive
+// @Tags Health
 // @Produce json
-// @Success 200 {object} HealthResponse
+// @Success 200 {object} HealthResponse "Service is alive and responsive"
 // @Router /health/live [get]
 func (h *Handler) Live(c *gin.Context) {
 	response := HealthResponse{

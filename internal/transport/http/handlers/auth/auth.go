@@ -34,12 +34,24 @@ func NewHandler(config *config.Config, logger *logrus.Logger, authService auth.A
 }
 
 // LoginRequest represents the login request payload
+// @Description User login credentials
 type LoginRequest struct {
-	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required"`
+	Email    string `json:"email" binding:"required,email" example:"user@example.com" description:"User email address"`
+	Password string `json:"password" binding:"required" example:"password123" description:"User password (minimum 8 characters)"`
 }
 
 // Login handles user login
+// @Summary User login
+// @Description Authenticate user with email and password
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Param request body LoginRequest true "Login credentials"
+// @Success 200 {object} response.SuccessResponse "Login successful"
+// @Failure 400 {object} response.ErrorResponse "Invalid request payload"
+// @Failure 401 {object} response.ErrorResponse "Invalid credentials"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /api/v1/auth/login [post]
 func (h *Handler) Login(c *gin.Context) {
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -67,16 +79,28 @@ func (h *Handler) Login(c *gin.Context) {
 }
 
 // RegisterRequest represents the registration request payload
+// @Description User registration information
 type RegisterRequest struct {
-	Email     string `json:"email" binding:"required,email"`
-	FirstName string `json:"first_name" binding:"required,min=1,max=100"`
-	LastName  string `json:"last_name" binding:"required,min=1,max=100"`
-	Password  string `json:"password" binding:"required,min=8"`
-	Timezone  string `json:"timezone,omitempty"`
-	Language  string `json:"language,omitempty"`
+	Email     string `json:"email" binding:"required,email" example:"user@example.com" description:"User email address"`
+	FirstName string `json:"first_name" binding:"required,min=1,max=100" example:"John" description:"User first name"`
+	LastName  string `json:"last_name" binding:"required,min=1,max=100" example:"Doe" description:"User last name"`
+	Password  string `json:"password" binding:"required,min=8" example:"password123" description:"User password (minimum 8 characters)"`
+	Timezone  string `json:"timezone,omitempty" example:"UTC" description:"User timezone (optional)"`
+	Language  string `json:"language,omitempty" example:"en" description:"User language preference (optional)"`
 }
 
-// Signup handles user registration  
+// Signup handles user registration
+// @Summary User registration
+// @Description Register a new user account
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Param request body RegisterRequest true "Registration information"
+// @Success 200 {object} response.SuccessResponse "Registration successful"
+// @Failure 400 {object} response.ErrorResponse "Invalid request payload"
+// @Failure 409 {object} response.ErrorResponse "Email already exists"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /api/v1/auth/signup [post]
 func (h *Handler) Signup(c *gin.Context) {
 	var req RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -120,11 +144,23 @@ func (h *Handler) Signup(c *gin.Context) {
 }
 
 // RefreshTokenRequest represents the refresh token request payload
+// @Description Refresh token credentials
 type RefreshTokenRequest struct {
-	RefreshToken string `json:"refresh_token" binding:"required"`
+	RefreshToken string `json:"refresh_token" binding:"required" example:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." description:"Valid refresh token"`
 }
 
 // RefreshToken handles token refresh
+// @Summary Refresh access token
+// @Description Get a new access token using a valid refresh token
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Param request body RefreshTokenRequest true "Refresh token"
+// @Success 200 {object} response.SuccessResponse "Token refresh successful"
+// @Failure 400 {object} response.ErrorResponse "Invalid request payload"
+// @Failure 401 {object} response.ErrorResponse "Invalid refresh token"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /api/v1/auth/refresh [post]
 func (h *Handler) RefreshToken(c *gin.Context) {
 	var req RefreshTokenRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -151,11 +187,22 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 }
 
 // ForgotPasswordRequest represents the forgot password request payload
+// @Description Email for password reset
 type ForgotPasswordRequest struct {
-	Email string `json:"email" binding:"required,email"`
+	Email string `json:"email" binding:"required,email" example:"user@example.com" description:"Email address for password reset"`
 }
 
 // ForgotPassword handles forgot password
+// @Summary Request password reset
+// @Description Initiate password reset process by sending reset email
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Param request body ForgotPasswordRequest true "Email for password reset"
+// @Success 200 {object} response.MessageResponse "Reset email sent if account exists"
+// @Failure 400 {object} response.ErrorResponse "Invalid request payload"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /api/v1/auth/forgot-password [post]
 func (h *Handler) ForgotPassword(c *gin.Context) {
 	var req ForgotPasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -178,12 +225,23 @@ func (h *Handler) ForgotPassword(c *gin.Context) {
 }
 
 // ResetPasswordRequest represents the reset password request payload
+// @Description Reset password with token
 type ResetPasswordRequest struct {
-	Token       string `json:"token" binding:"required"`
-	NewPassword string `json:"new_password" binding:"required,min=8"`
+	Token       string `json:"token" binding:"required" example:"reset_token_123" description:"Password reset token from email"`
+	NewPassword string `json:"new_password" binding:"required,min=8" example:"newpassword123" description:"New password (minimum 8 characters)"`
 }
 
 // ResetPassword handles reset password
+// @Summary Reset password
+// @Description Complete password reset using token from email
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Param request body ResetPasswordRequest true "Reset password information"
+// @Success 200 {object} response.MessageResponse "Password reset successful"
+// @Failure 400 {object} response.ErrorResponse "Invalid request payload or expired token"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /api/v1/auth/reset-password [post]
 func (h *Handler) ResetPassword(c *gin.Context) {
 	var req ResetPasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -207,6 +265,16 @@ func (h *Handler) ResetPassword(c *gin.Context) {
 }
 
 // Logout handles user logout
+// @Summary User logout
+// @Description Logout user and invalidate session
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.MessageResponse "Logout successful"
+// @Failure 401 {object} response.ErrorResponse "Invalid session"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /api/v1/auth/logout [post]
 func (h *Handler) Logout(c *gin.Context) {
 	// Get session ID from context (set by auth middleware)
 	sessionIDValue, exists := c.Get("session_id")
@@ -266,13 +334,14 @@ func (h *Handler) GetProfile(c *gin.Context) {
 }
 
 // UpdateProfileRequest represents the update profile request payload
+// @Description User profile update information
 type UpdateProfileRequest struct {
-	FirstName *string `json:"first_name,omitempty" validate:"omitempty,min=1,max=100"`
-	LastName  *string `json:"last_name,omitempty" validate:"omitempty,min=1,max=100"`
-	AvatarURL *string `json:"avatar_url,omitempty" validate:"omitempty,url"`
-	Phone     *string `json:"phone,omitempty" validate:"omitempty,max=50"`
-	Timezone  *string `json:"timezone,omitempty"`
-	Language  *string `json:"language,omitempty" validate:"omitempty,len=2"`
+	FirstName *string `json:"first_name,omitempty" validate:"omitempty,min=1,max=100" example:"John" description:"User first name"`
+	LastName  *string `json:"last_name,omitempty" validate:"omitempty,min=1,max=100" example:"Doe" description:"User last name"`
+	AvatarURL *string `json:"avatar_url,omitempty" validate:"omitempty,url" example:"https://example.com/avatar.jpg" description:"Profile avatar URL"`
+	Phone     *string `json:"phone,omitempty" validate:"omitempty,max=50" example:"+1234567890" description:"User phone number"`
+	Timezone  *string `json:"timezone,omitempty" example:"UTC" description:"User timezone"`
+	Language  *string `json:"language,omitempty" validate:"omitempty,len=2" example:"en" description:"User language preference (ISO 639-1 code)"`
 }
 
 // UpdateProfile updates user profile
@@ -322,12 +391,25 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 }
 
 // ChangePasswordRequest represents the change password request payload
+// @Description Password change information
 type ChangePasswordRequest struct {
-	CurrentPassword string `json:"current_password" binding:"required"`
-	NewPassword     string `json:"new_password" binding:"required,min=8"`
+	CurrentPassword string `json:"current_password" binding:"required" example:"currentpass123" description:"Current password"`
+	NewPassword     string `json:"new_password" binding:"required,min=8" example:"newpass123" description:"New password (minimum 8 characters)"`
 }
 
 // ChangePassword changes user password
+// @Summary Change password
+// @Description Change user password with current password verification
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body ChangePasswordRequest true "Password change information"
+// @Success 200 {object} response.MessageResponse "Password changed successfully"
+// @Failure 400 {object} response.ErrorResponse "Invalid request or wrong current password"
+// @Failure 401 {object} response.ErrorResponse "Unauthorized"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /api/v1/auth/change-password [post]
 func (h *Handler) ChangePassword(c *gin.Context) {
 	var req ChangePasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

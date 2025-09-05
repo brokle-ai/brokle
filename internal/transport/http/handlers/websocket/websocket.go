@@ -45,6 +45,18 @@ func NewHandler(config *config.Config, logger *logrus.Logger) *Handler {
 }
 
 // Handle handles WebSocket connection requests
+// @Summary Establish WebSocket connection
+// @Description Upgrade HTTP connection to WebSocket for real-time updates and notifications
+// @Tags WebSocket
+// @Accept json
+// @Produce json
+// @Success 101 {string} string "WebSocket connection established"
+// @Failure 400 {object} response.ErrorResponse "Bad request - WebSocket upgrade failed"
+// @Failure 401 {object} response.ErrorResponse "Unauthorized - authentication required"
+// @Failure 403 {object} response.ErrorResponse "Forbidden - insufficient permissions"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Security BearerAuth
+// @Router /ws [get]
 func (h *Handler) Handle(c *gin.Context) {
 	w := c.Writer
 	r := c.Request

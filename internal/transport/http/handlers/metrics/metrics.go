@@ -23,6 +23,13 @@ func NewHandler(config *config.Config, logger *logrus.Logger) *Handler {
 }
 
 // Handler handles Prometheus metrics endpoint
+// @Summary Get Prometheus metrics
+// @Description Retrieve Prometheus-compatible metrics for monitoring and observability
+// @Tags Monitoring
+// @Produce text/plain
+// @Success 200 {string} string "Prometheus metrics in text format"
+// @Failure 500 {string} string "Internal server error"
+// @Router /metrics [get]
 func (h *Handler) Handler(c *gin.Context) {
 	promhttp.Handler().ServeHTTP(c.Writer, c.Request)
 }

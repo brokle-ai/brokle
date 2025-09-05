@@ -1,0 +1,4391 @@
+definitions:
+  ai.ChatCompletionRequest:
+    description: OpenAI-compatible chat completion request
+    properties:
+      frequency_penalty:
+        example: 0
+        type: number
+      logit_bias:
+        additionalProperties:
+          format: float64
+          type: number
+        type: object
+      max_tokens:
+        example: 150
+        type: integer
+      messages:
+        items:
+          $ref: '#/definitions/ai.ChatMessage'
+        type: array
+      model:
+        example: gpt-3.5-turbo
+        type: string
+      "n":
+        example: 1
+        type: integer
+      presence_penalty:
+        example: 0
+        type: number
+      stop: {}
+      stream:
+        example: false
+        type: boolean
+      temperature:
+        example: 0.7
+        type: number
+      top_p:
+        example: 1
+        type: number
+      user:
+        example: user-123
+        type: string
+    type: object
+  ai.ChatMessage:
+    description: Single message in a chat conversation
+    properties:
+      content:
+        example: Hello, how are you?
+        type: string
+      name:
+        example: John
+        type: string
+      role:
+        example: user
+        type: string
+    type: object
+  ai.CompletionRequest:
+    type: object
+  ai.EmbeddingRequest:
+    type: object
+  ai.Model:
+    description: Available AI model information
+    properties:
+      created:
+        example: 1677610602
+        type: integer
+      id:
+        example: gpt-3.5-turbo
+        type: string
+      object:
+        example: model
+        type: string
+      owned_by:
+        example: openai
+        type: string
+    type: object
+  analytics.AnalyticsOverview:
+    properties:
+      avg_latency_ms:
+        example: 850.5
+        type: number
+      cost_today:
+        example: 54.2
+        type: number
+      period:
+        example: 30d
+        type: string
+      requests_today:
+        example: 5420
+        type: integer
+      success_rate:
+        example: 0.987
+        type: number
+      top_model:
+        example: gpt-4
+        type: string
+      top_provider:
+        example: openai
+        type: string
+      total_cost:
+        example: 1250.75
+        type: number
+      total_requests:
+        example: 125000
+        type: integer
+      total_tokens:
+        example: 2500000
+        type: integer
+    type: object
+  analytics.BudgetStatus:
+    properties:
+      budget:
+        example: 1000
+        type: number
+      percent:
+        example: 0.75
+        type: number
+      projected:
+        example: 950.3
+        type: number
+      remaining:
+        example: 249.75
+        type: number
+      spent:
+        example: 750.25
+        type: number
+      status:
+        example: on_track
+        type: string
+    type: object
+  analytics.CostAnalytics:
+    properties:
+      budget_status:
+        $ref: '#/definitions/analytics.BudgetStatus'
+      cost_by_model:
+        items:
+          $ref: '#/definitions/analytics.ModelCostAnalytics'
+        type: array
+      cost_by_provider:
+        items:
+          $ref: '#/definitions/analytics.ProviderCostAnalytics'
+        type: array
+      cost_trend:
+        items:
+          $ref: '#/definitions/analytics.TimeSeriesDataPoint'
+        type: array
+      optimizations:
+        items:
+          $ref: '#/definitions/analytics.CostOptimizationSuggestion'
+        type: array
+      time_range:
+        example: 30d
+        type: string
+      total_cost:
+        example: 1250.75
+        type: number
+    type: object
+  analytics.CostOptimizationSuggestion:
+    properties:
+      description:
+        example: Switch from gpt-4 to gpt-3.5-turbo for 70% of requests
+        type: string
+      impact:
+        example: low
+        type: string
+      potential_savings:
+        example: 125.5
+        type: number
+      type:
+        example: model_switch
+        type: string
+    type: object
+  analytics.HourlyAnalytics:
+    properties:
+      cost:
+        example: 54.2
+        type: number
+      hour:
+        example: 14
+        type: integer
+      requests:
+        example: 5420
+        type: integer
+    type: object
+  analytics.ModelAnalytics:
+    properties:
+      avg_latency_ms:
+        example: 850.5
+        type: number
+      cost:
+        example: 250
+        type: number
+      model:
+        example: gpt-4
+        type: string
+      provider:
+        example: openai
+        type: string
+      quality_score:
+        example: 0.92
+        type: number
+      requests:
+        example: 25000
+        type: integer
+      success_rate:
+        example: 0.987
+        type: number
+      tokens:
+        example: 500000
+        type: integer
+    type: object
+  analytics.ModelCostAnalytics:
+    properties:
+      cost:
+        example: 250
+        type: number
+      cost_per_token:
+        example: 0.0005
+        type: number
+      model:
+        example: gpt-4
+        type: string
+      percent:
+        example: 0.2
+        type: number
+      provider:
+        example: openai
+        type: string
+    type: object
+  analytics.ProviderAnalytics:
+    properties:
+      avg_latency_ms:
+        example: 750.2
+        type: number
+      cost:
+        example: 450
+        type: number
+      health_score:
+        example: 0.98
+        type: number
+      provider:
+        example: openai
+        type: string
+      requests:
+        example: 45000
+        type: integer
+      success_rate:
+        example: 0.995
+        type: number
+      tokens:
+        example: 900000
+        type: integer
+    type: object
+  analytics.ProviderCostAnalytics:
+    properties:
+      cost:
+        example: 450
+        type: number
+      percent:
+        example: 0.36
+        type: number
+      provider:
+        example: openai
+        type: string
+      trend:
+        example: increasing
+        type: string
+    type: object
+  analytics.RequestAnalytics:
+    properties:
+      by_model:
+        items:
+          $ref: '#/definitions/analytics.ModelAnalytics'
+        type: array
+      by_provider:
+        items:
+          $ref: '#/definitions/analytics.ProviderAnalytics'
+        type: array
+      by_status:
+        items:
+          $ref: '#/definitions/analytics.StatusAnalytics'
+        type: array
+      hourly_pattern:
+        items:
+          $ref: '#/definitions/analytics.HourlyAnalytics'
+        type: array
+      request_counts:
+        items:
+          $ref: '#/definitions/analytics.TimeSeriesDataPoint'
+        type: array
+      time_range:
+        example: 30d
+        type: string
+    type: object
+  analytics.StatusAnalytics:
+    properties:
+      percent:
+        example: 0.96
+        type: number
+      requests:
+        example: 120000
+        type: integer
+      status:
+        example: success
+        type: string
+    type: object
+  analytics.TimeSeriesDataPoint:
+    properties:
+      label:
+        example: "2024-01-01"
+        type: string
+      timestamp:
+        example: "2024-01-01T00:00:00Z"
+        type: string
+      value:
+        example: 1250.5
+        type: number
+    type: object
+  apikey.APIKey:
+    properties:
+      created_at:
+        example: "2024-01-01T00:00:00Z"
+        type: string
+      created_by:
+        example: usr_1234567890
+        type: string
+      environment_id:
+        example: env_1234567890
+        type: string
+      expires_at:
+        example: "2024-12-31T23:59:59Z"
+        type: string
+      id:
+        example: key_1234567890
+        type: string
+      key:
+        example: bk_live_1234567890abcdef
+        type: string
+      key_preview:
+        example: bk_live_...cdef
+        type: string
+      last_used:
+        example: "2024-01-01T00:00:00Z"
+        type: string
+      name:
+        example: Production API Key
+        type: string
+      scopes:
+        example:
+        - '["read"'
+        - ' "write"]'
+        items:
+          type: string
+        type: array
+      status:
+        example: active
+        type: string
+    type: object
+  apikey.CreateAPIKeyRequest:
+    properties:
+      environment_id:
+        example: env_1234567890
+        type: string
+      expires_at:
+        example: "2024-12-31T23:59:59Z"
+        type: string
+      name:
+        example: Production API Key
+        maxLength: 100
+        minLength: 2
+        type: string
+      scopes:
+        example:
+        - '["read"'
+        - ' "write"]'
+        items:
+          type: string
+        minItems: 1
+        type: array
+    required:
+    - environment_id
+    - name
+    - scopes
+    type: object
+  apikey.ListAPIKeysResponse:
+    properties:
+      api_keys:
+        items:
+          $ref: '#/definitions/apikey.APIKey'
+        type: array
+      limit:
+        example: 20
+        type: integer
+      page:
+        example: 1
+        type: integer
+      total:
+        example: 5
+        type: integer
+    type: object
+  auth.ChangePasswordRequest:
+    description: Password change information
+    properties:
+      current_password:
+        example: currentpass123
+        type: string
+      new_password:
+        example: newpass123
+        minLength: 8
+        type: string
+    required:
+    - current_password
+    - new_password
+    type: object
+  auth.ForgotPasswordRequest:
+    description: Email for password reset
+    properties:
+      email:
+        example: user@example.com
+        type: string
+    required:
+    - email
+    type: object
+  auth.ResetPasswordRequest:
+    description: Reset password with token
+    properties:
+      new_password:
+        example: newpassword123
+        minLength: 8
+        type: string
+      token:
+        example: reset_token_123
+        type: string
+    required:
+    - new_password
+    - token
+    type: object
+  billing.BillingAlert:
+    properties:
+      current_value:
+        example: 750.25
+        type: number
+      id:
+        example: alert_1234567890
+        type: string
+      message:
+        example: Monthly cost has reached 80% of limit
+        type: string
+      severity:
+        example: warning
+        type: string
+      status:
+        example: active
+        type: string
+      threshold:
+        example: 800
+        type: number
+      triggered_at:
+        example: "2024-01-15T10:30:00Z"
+        type: string
+      type:
+        example: cost_threshold
+        type: string
+    type: object
+  billing.BillingPeriod:
+    properties:
+      end_date:
+        example: "2024-01-31T23:59:59Z"
+        type: string
+      start_date:
+        example: "2024-01-01T00:00:00Z"
+        type: string
+      status:
+        example: current
+        type: string
+    type: object
+  billing.DailyUsage:
+    properties:
+      cost:
+        example: 42.15
+        type: number
+      date:
+        example: "2024-01-15T00:00:00Z"
+        type: string
+      requests:
+        example: 4200
+        type: integer
+      tokens:
+        example: 84000
+        type: integer
+    type: object
+  billing.Discount:
+    properties:
+      id:
+        example: discount_1234567890
+        type: string
+      name:
+        example: New Customer 20% Off
+        type: string
+      type:
+        example: percentage
+        type: string
+      valid_until:
+        example: "2024-06-01T00:00:00Z"
+        type: string
+      value:
+        example: 20
+        type: number
+    type: object
+  billing.EnvironmentUsage:
+    properties:
+      cost:
+        example: 1000.5
+        type: number
+      environment_id:
+        example: env_1234567890
+        type: string
+      environment_name:
+        example: Production
+        type: string
+      percent:
+        example: 0.8
+        type: number
+      requests:
+        example: 100000
+        type: integer
+      tokens:
+        example: 2000000
+        type: integer
+      type:
+        example: production
+        type: string
+    type: object
+  billing.Invoice:
+    properties:
+      billing_period:
+        $ref: '#/definitions/billing.BillingPeriod'
+      currency:
+        example: USD
+        type: string
+      download_url:
+        example: https://invoices.brokle.ai/inv_1234567890.pdf
+        type: string
+      due_date:
+        example: "2024-02-15T23:59:59Z"
+        type: string
+      id:
+        example: inv_1234567890
+        type: string
+      invoice_number:
+        example: INV-2024-001
+        type: string
+      issue_date:
+        example: "2024-02-01T00:00:00Z"
+        type: string
+      line_items:
+        items:
+          $ref: '#/definitions/billing.InvoiceLineItem'
+        type: array
+      organization_id:
+        example: org_1234567890
+        type: string
+      paid_date:
+        example: "2024-02-10T14:30:00Z"
+        type: string
+      payment_method:
+        example: credit_card
+        type: string
+      status:
+        example: paid
+        type: string
+      subtotal:
+        example: 1250.75
+        type: number
+      tax_amount:
+        example: 125.08
+        type: number
+      total:
+        example: 1375.83
+        type: number
+    type: object
+  billing.InvoiceLineItem:
+    properties:
+      amount:
+        example: 1250
+        type: number
+      description:
+        example: OpenAI GPT-4 Usage
+        type: string
+      model:
+        example: gpt-4
+        type: string
+      provider:
+        example: openai
+        type: string
+      quantity:
+        example: 50000
+        type: integer
+      unit_price:
+        example: 0.025
+        type: number
+    type: object
+  billing.ListInvoicesResponse:
+    properties:
+      invoices:
+        items:
+          $ref: '#/definitions/billing.Invoice'
+        type: array
+      limit:
+        example: 20
+        type: integer
+      page:
+        example: 1
+        type: integer
+      total:
+        example: 12
+        type: integer
+    type: object
+  billing.PaymentMethod:
+    properties:
+      brand:
+        example: visa
+        type: string
+      default:
+        example: true
+        type: boolean
+      expiry:
+        example: 12/2025
+        type: string
+      id:
+        example: pm_1234567890
+        type: string
+      last4:
+        example: "1234"
+        type: string
+      type:
+        example: credit_card
+        type: string
+    type: object
+  billing.ProjectUsage:
+    properties:
+      cost:
+        example: 450.25
+        type: number
+      percent:
+        example: 0.36
+        type: number
+      project_id:
+        example: proj_1234567890
+        type: string
+      project_name:
+        example: AI Chatbot
+        type: string
+      requests:
+        example: 45000
+        type: integer
+      tokens:
+        example: 900000
+        type: integer
+    type: object
+  billing.ProviderUsage:
+    properties:
+      cost:
+        example: 750.5
+        type: number
+      percent:
+        example: 0.6
+        type: number
+      provider:
+        example: openai
+        type: string
+      requests:
+        example: 75000
+        type: integer
+      tokens:
+        example: 1500000
+        type: integer
+    type: object
+  billing.QuotaLimits:
+    properties:
+      cost_limit:
+        example: 1000
+        type: number
+      cost_percent:
+        example: 0.75
+        type: number
+      cost_used:
+        example: 750.25
+        type: number
+      overage_allowed:
+        example: true
+        type: boolean
+      requests_limit:
+        example: 100000
+        type: integer
+      requests_percent:
+        example: 0.75
+        type: number
+      requests_used:
+        example: 75000
+        type: integer
+      tokens_limit:
+        example: 2000000
+        type: integer
+      tokens_percent:
+        example: 0.75
+        type: number
+      tokens_used:
+        example: 1500000
+        type: integer
+    type: object
+  billing.Subscription:
+    properties:
+      add_ons:
+        items:
+          $ref: '#/definitions/billing.SubscriptionAddOn'
+        type: array
+      cancel_at:
+        example: "2024-12-31T23:59:59Z"
+        type: string
+      created_at:
+        example: "2024-01-01T00:00:00Z"
+        type: string
+      current_period:
+        $ref: '#/definitions/billing.BillingPeriod'
+      discounts:
+        items:
+          $ref: '#/definitions/billing.Discount'
+        type: array
+      id:
+        example: sub_1234567890
+        type: string
+      next_billing_date:
+        example: "2024-02-01T00:00:00Z"
+        type: string
+      organization_id:
+        example: org_1234567890
+        type: string
+      payment_method:
+        $ref: '#/definitions/billing.PaymentMethod'
+      plan:
+        $ref: '#/definitions/billing.SubscriptionPlan'
+      status:
+        example: active
+        type: string
+      updated_at:
+        example: "2024-01-15T10:30:00Z"
+        type: string
+    type: object
+  billing.SubscriptionAddOn:
+    properties:
+      id:
+        example: addon_extra_requests
+        type: string
+      name:
+        example: Extra Requests
+        type: string
+      price:
+        example: 10
+        type: number
+      quantity:
+        example: 2
+        type: integer
+    type: object
+  billing.SubscriptionPlan:
+    properties:
+      currency:
+        example: USD
+        type: string
+      features_included:
+        example:
+        - '["advanced_analytics"'
+        - ' "semantic_caching"]'
+        items:
+          type: string
+        type: array
+      id:
+        example: plan_pro
+        type: string
+      interval:
+        example: month
+        type: string
+      name:
+        example: Pro Plan
+        type: string
+      price:
+        example: 29
+        type: number
+      requests_limit:
+        example: 100000
+        type: integer
+    type: object
+  billing.UpdateSubscriptionRequest:
+    properties:
+      add_ons:
+        items:
+          $ref: '#/definitions/billing.SubscriptionAddOn'
+        type: array
+      cancel_at:
+        example: "2024-12-31T23:59:59Z"
+        type: string
+      payment_method_id:
+        example: pm_0987654321
+        type: string
+      plan_id:
+        example: plan_business
+        type: string
+    type: object
+  billing.UsageMetrics:
+    properties:
+      billing_alerts:
+        items:
+          $ref: '#/definitions/billing.BillingAlert'
+        type: array
+      billing_period:
+        $ref: '#/definitions/billing.BillingPeriod'
+      daily_usage:
+        items:
+          $ref: '#/definitions/billing.DailyUsage'
+        type: array
+      organization_id:
+        example: org_1234567890
+        type: string
+      quota_limits:
+        $ref: '#/definitions/billing.QuotaLimits'
+      total_cost:
+        example: 1250.75
+        type: number
+      total_requests:
+        example: 125000
+        type: integer
+      total_tokens:
+        example: 2500000
+        type: integer
+      usage_by_environment:
+        items:
+          $ref: '#/definitions/billing.EnvironmentUsage'
+        type: array
+      usage_by_project:
+        items:
+          $ref: '#/definitions/billing.ProjectUsage'
+        type: array
+      usage_by_provider:
+        items:
+          $ref: '#/definitions/billing.ProviderUsage'
+        type: array
+    type: object
+  environment.CreateEnvironmentRequest:
+    properties:
+      description:
+        example: Production environment for live traffic
+        maxLength: 500
+        type: string
+      name:
+        example: Production
+        maxLength: 100
+        minLength: 2
+        type: string
+      project_id:
+        example: proj_1234567890
+        type: string
+      slug:
+        example: production
+        maxLength: 50
+        minLength: 2
+        type: string
+      type:
+        enum:
+        - development
+        - staging
+        - production
+        example: production
+        type: string
+    required:
+    - name
+    - project_id
+    - type
+    type: object
+  environment.Environment:
+    properties:
+      api_keys_count:
+        example: 2
+        type: integer
+      created_at:
+        example: "2024-01-01T00:00:00Z"
+        type: string
+      description:
+        example: Production environment for live traffic
+        type: string
+      id:
+        example: env_1234567890
+        type: string
+      name:
+        example: Production
+        type: string
+      project_id:
+        example: proj_1234567890
+        type: string
+      slug:
+        example: production
+        type: string
+      status:
+        example: active
+        type: string
+      type:
+        example: production
+        type: string
+      updated_at:
+        example: "2024-01-01T00:00:00Z"
+        type: string
+    type: object
+  environment.ListEnvironmentsResponse:
+    properties:
+      environments:
+        items:
+          $ref: '#/definitions/environment.Environment'
+        type: array
+      limit:
+        example: 20
+        type: integer
+      page:
+        example: 1
+        type: integer
+      total:
+        example: 3
+        type: integer
+    type: object
+  environment.UpdateEnvironmentRequest:
+    properties:
+      description:
+        example: Production environment for live traffic
+        maxLength: 500
+        type: string
+      name:
+        example: Production
+        maxLength: 100
+        minLength: 2
+        type: string
+      status:
+        enum:
+        - active
+        - paused
+        - archived
+        example: active
+        type: string
+    type: object
+  health.HealthCheck:
+    description: Individual component health check result
+    properties:
+      duration:
+        example: 5ms
+        type: string
+      last_checked:
+        example: "2023-12-01T10:30:00Z"
+        type: string
+      message:
+        example: Database connection is healthy
+        type: string
+      status:
+        example: healthy
+        type: string
+    type: object
+  health.HealthResponse:
+    description: Health check response containing service status
+    properties:
+      checks:
+        additionalProperties:
+          $ref: '#/definitions/health.HealthCheck'
+        type: object
+      status:
+        example: healthy
+        type: string
+      timestamp:
+        example: "2023-12-01T10:30:00Z"
+        type: string
+      uptime:
+        example: 2h30m15s
+        type: string
+      version:
+        example: 1.0.0
+        type: string
+    type: object
+  internal_transport_http_handlers_auth.LoginRequest:
+    description: User login credentials
+    properties:
+      email:
+        example: user@example.com
+        type: string
+      password:
+        example: password123
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  internal_transport_http_handlers_auth.RefreshTokenRequest:
+    description: Refresh token credentials
+    properties:
+      refresh_token:
+        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        type: string
+    required:
+    - refresh_token
+    type: object
+  internal_transport_http_handlers_auth.RegisterRequest:
+    description: User registration information
+    properties:
+      email:
+        example: user@example.com
+        type: string
+      first_name:
+        example: John
+        maxLength: 100
+        minLength: 1
+        type: string
+      language:
+        example: en
+        type: string
+      last_name:
+        example: Doe
+        maxLength: 100
+        minLength: 1
+        type: string
+      password:
+        example: password123
+        minLength: 8
+        type: string
+      timezone:
+        example: UTC
+        type: string
+    required:
+    - email
+    - first_name
+    - last_name
+    - password
+    type: object
+  internal_transport_http_handlers_organization.CreateOrganizationRequest:
+    properties:
+      description:
+        example: Leading AI solutions provider
+        maxLength: 500
+        type: string
+      name:
+        example: Acme Corporation
+        maxLength: 100
+        minLength: 2
+        type: string
+      slug:
+        example: acme-corp
+        maxLength: 50
+        minLength: 2
+        type: string
+    required:
+    - name
+    type: object
+  internal_transport_http_handlers_organization.Organization:
+    properties:
+      created_at:
+        example: "2024-01-01T00:00:00Z"
+        type: string
+      description:
+        example: Leading AI solutions provider
+        type: string
+      id:
+        example: org_1234567890
+        type: string
+      name:
+        example: Acme Corporation
+        type: string
+      owner_id:
+        example: usr_1234567890
+        type: string
+      plan:
+        example: pro
+        type: string
+      slug:
+        example: acme-corp
+        type: string
+      status:
+        example: active
+        type: string
+      updated_at:
+        example: "2024-01-01T00:00:00Z"
+        type: string
+    type: object
+  internal_transport_http_handlers_organization.UpdateOrganizationRequest:
+    properties:
+      description:
+        example: Leading AI solutions provider
+        maxLength: 500
+        type: string
+      name:
+        example: Acme Corporation
+        maxLength: 100
+        minLength: 2
+        type: string
+    type: object
+  internal_transport_http_handlers_user.UpdatePreferencesRequest:
+    description: User preferences update information
+    properties:
+      dashboard_settings:
+        additionalProperties: true
+        type: object
+      email_notifications:
+        example: true
+        type: boolean
+      language:
+        example: en
+        type: string
+      theme:
+        example: dark
+        type: string
+      timezone:
+        example: UTC
+        type: string
+      webhook_notifications:
+        example: false
+        type: boolean
+    type: object
+  internal_transport_http_handlers_user.UpdateProfileRequest:
+    description: User profile update information
+    properties:
+      avatar_url:
+        example: https://example.com/avatar.jpg
+        type: string
+      first_name:
+        example: John
+        type: string
+      language:
+        example: en
+        type: string
+      last_name:
+        example: Doe
+        type: string
+      phone:
+        example: "+1234567890"
+        type: string
+      timezone:
+        example: UTC
+        type: string
+    type: object
+  logs.AIRequest:
+    properties:
+      api_key_id:
+        example: key_1234567890
+        type: string
+      cache_hit:
+        example: false
+        type: boolean
+      cost:
+        example: 0.0425
+        type: number
+      environment_id:
+        example: env_1234567890
+        type: string
+      error_message:
+        example: Rate limit exceeded
+        type: string
+      id:
+        example: req_1234567890
+        type: string
+      ip_address:
+        example: 192.168.1.100
+        type: string
+      latency_ms:
+        example: 850
+        type: integer
+      metadata:
+        additionalProperties: true
+        type: object
+      method:
+        example: POST
+        type: string
+      model:
+        example: gpt-4
+        type: string
+      organization_id:
+        example: org_1234567890
+        type: string
+      path:
+        example: /v1/chat/completions
+        type: string
+      project_id:
+        example: proj_1234567890
+        type: string
+      provider:
+        example: openai
+        type: string
+      quality_score:
+        example: 0.92
+        type: number
+      request_id:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+      status:
+        example: 200
+        type: integer
+      timestamp:
+        example: "2024-01-01T00:00:00Z"
+        type: string
+      tokens_in:
+        example: 150
+        type: integer
+      tokens_out:
+        example: 75
+        type: integer
+      user_agent:
+        example: MyApp/1.0
+        type: string
+      user_id:
+        example: usr_1234567890
+        type: string
+    type: object
+  logs.AIRequestDetail:
+    properties:
+      api_key_id:
+        example: key_1234567890
+        type: string
+      cache_hit:
+        example: false
+        type: boolean
+      cost:
+        example: 0.0425
+        type: number
+      environment_id:
+        example: env_1234567890
+        type: string
+      error_message:
+        example: Rate limit exceeded
+        type: string
+      headers:
+        additionalProperties:
+          type: string
+        type: object
+      id:
+        example: req_1234567890
+        type: string
+      ip_address:
+        example: 192.168.1.100
+        type: string
+      latency_ms:
+        example: 850
+        type: integer
+      metadata:
+        additionalProperties: true
+        type: object
+      method:
+        example: POST
+        type: string
+      model:
+        example: gpt-4
+        type: string
+      organization_id:
+        example: org_1234567890
+        type: string
+      path:
+        example: /v1/chat/completions
+        type: string
+      project_id:
+        example: proj_1234567890
+        type: string
+      provider:
+        example: openai
+        type: string
+      quality_score:
+        example: 0.92
+        type: number
+      request_body: {}
+      request_id:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+      response_body: {}
+      routing_info:
+        $ref: '#/definitions/logs.RoutingInfo'
+      status:
+        example: 200
+        type: integer
+      timestamp:
+        example: "2024-01-01T00:00:00Z"
+        type: string
+      tokens_in:
+        example: 150
+        type: integer
+      tokens_out:
+        example: 75
+        type: integer
+      trace:
+        items:
+          $ref: '#/definitions/logs.TraceEvent'
+        type: array
+      user_agent:
+        example: MyApp/1.0
+        type: string
+      user_id:
+        example: usr_1234567890
+        type: string
+    type: object
+  logs.AlternativeProvider:
+    properties:
+      provider:
+        example: anthropic
+        type: string
+      reason:
+        example: Higher latency
+        type: string
+      score:
+        example: 0.85
+        type: number
+    type: object
+  logs.ExportResponse:
+    properties:
+      created_at:
+        example: "2024-01-01T00:00:00Z"
+        type: string
+      download_url:
+        example: https://exports.brokle.ai/export_1234567890.json
+        type: string
+      expected_at:
+        example: "2024-01-01T00:05:00Z"
+        type: string
+      expires_at:
+        example: "2024-01-08T00:00:00Z"
+        type: string
+      job_id:
+        example: export_1234567890
+        type: string
+      status:
+        example: pending
+        type: string
+    type: object
+  logs.ListRequestsResponse:
+    properties:
+      has_more:
+        example: true
+        type: boolean
+      limit:
+        example: 50
+        type: integer
+      page:
+        example: 1
+        type: integer
+      requests:
+        items:
+          $ref: '#/definitions/logs.AIRequest'
+        type: array
+      total:
+        example: 25000
+        type: integer
+    type: object
+  logs.RoutingInfo:
+    properties:
+      alternatives:
+        items:
+          $ref: '#/definitions/logs.AlternativeProvider'
+        type: array
+      failovers:
+        example: 0
+        type: integer
+      reason:
+        example: Provider has lowest latency
+        type: string
+      routing_time_ms:
+        example: 5
+        type: integer
+      strategy:
+        example: performance
+        type: string
+    type: object
+  logs.TraceEvent:
+    properties:
+      description:
+        example: Starting request to OpenAI
+        type: string
+      duration_ms:
+        example: 25
+        type: integer
+      event:
+        example: provider_request_start
+        type: string
+      metadata:
+        additionalProperties: true
+        type: object
+      timestamp:
+        example: "2024-01-01T00:00:00Z"
+        type: string
+    type: object
+  organization.InviteMemberRequest:
+    properties:
+      email:
+        example: john@acme.com
+        type: string
+      role:
+        enum:
+        - admin
+        - developer
+        - viewer
+        example: developer
+        type: string
+    required:
+    - email
+    - role
+    type: object
+  organization.ListMembersResponse:
+    properties:
+      members:
+        items:
+          $ref: '#/definitions/organization.OrganizationMember'
+        type: array
+      total:
+        example: 10
+        type: integer
+    type: object
+  organization.ListOrganizationsResponse:
+    properties:
+      limit:
+        example: 20
+        type: integer
+      organizations:
+        items:
+          $ref: '#/definitions/internal_transport_http_handlers_organization.Organization'
+        type: array
+      page:
+        example: 1
+        type: integer
+      total:
+        example: 5
+        type: integer
+    type: object
+  organization.OrganizationMember:
+    properties:
+      email:
+        example: john@acme.com
+        type: string
+      first_name:
+        example: John
+        type: string
+      id:
+        example: usr_1234567890
+        type: string
+      invited_at:
+        example: "2024-01-01T00:00:00Z"
+        type: string
+      invited_by:
+        example: usr_0987654321
+        type: string
+      joined_at:
+        example: "2024-01-01T00:00:00Z"
+        type: string
+      last_name:
+        example: Doe
+        type: string
+      role:
+        example: admin
+        type: string
+      status:
+        example: active
+        type: string
+    type: object
+  project.CreateProjectRequest:
+    properties:
+      description:
+        example: Customer support AI chatbot
+        maxLength: 500
+        type: string
+      name:
+        example: AI Chatbot
+        maxLength: 100
+        minLength: 2
+        type: string
+      organization_id:
+        example: org_1234567890
+        type: string
+      slug:
+        example: ai-chatbot
+        maxLength: 50
+        minLength: 2
+        type: string
+    required:
+    - name
+    - organization_id
+    type: object
+  project.ListProjectsResponse:
+    properties:
+      limit:
+        example: 20
+        type: integer
+      page:
+        example: 1
+        type: integer
+      projects:
+        items:
+          $ref: '#/definitions/project.Project'
+        type: array
+      total:
+        example: 15
+        type: integer
+    type: object
+  project.Project:
+    properties:
+      created_at:
+        example: "2024-01-01T00:00:00Z"
+        type: string
+      description:
+        example: Customer support AI chatbot
+        type: string
+      environments_count:
+        example: 3
+        type: integer
+      id:
+        example: proj_1234567890
+        type: string
+      name:
+        example: AI Chatbot
+        type: string
+      organization_id:
+        example: org_1234567890
+        type: string
+      owner_id:
+        example: usr_1234567890
+        type: string
+      slug:
+        example: ai-chatbot
+        type: string
+      status:
+        example: active
+        type: string
+      updated_at:
+        example: "2024-01-01T00:00:00Z"
+        type: string
+    type: object
+  project.UpdateProjectRequest:
+    properties:
+      description:
+        example: Customer support AI chatbot
+        maxLength: 500
+        type: string
+      name:
+        example: AI Chatbot
+        maxLength: 100
+        minLength: 2
+        type: string
+      status:
+        enum:
+        - active
+        - paused
+        - archived
+        example: active
+        type: string
+    type: object
+  response.APIError:
+    description: Error details for failed API requests
+    properties:
+      code:
+        example: validation_error
+        type: string
+      details:
+        example: Field 'email' is required
+        type: string
+      message:
+        example: Invalid request data
+        type: string
+      type:
+        example: validation_error
+        type: string
+    type: object
+  response.ErrorResponse:
+    description: Standard error response
+    properties:
+      error:
+        $ref: '#/definitions/response.APIError'
+      meta:
+        $ref: '#/definitions/response.Meta'
+      success:
+        example: false
+        type: boolean
+    type: object
+  response.MessageResponse:
+    description: Simple message response for actions
+    properties:
+      message:
+        example: Operation completed successfully
+        type: string
+    type: object
+  response.Meta:
+    description: Response metadata including request tracking and pagination
+    properties:
+      pagination:
+        $ref: '#/definitions/response.Pagination'
+      request_id:
+        example: req_01h2x3y4z5
+        type: string
+      timestamp:
+        example: "2023-12-01T10:30:00Z"
+        type: string
+      total:
+        example: 150
+        type: integer
+      version:
+        example: v1
+        type: string
+    type: object
+  response.Pagination:
+    description: Pagination metadata for paginated API responses
+    properties:
+      has_next:
+        example: true
+        type: boolean
+      has_prev:
+        example: false
+        type: boolean
+      page:
+        example: 1
+        type: integer
+      page_size:
+        example: 20
+        type: integer
+      total:
+        example: 150
+        type: integer
+      total_page:
+        example: 8
+        type: integer
+    type: object
+  response.SuccessResponse:
+    description: Standard successful response
+    properties:
+      data: {}
+      meta:
+        $ref: '#/definitions/response.Meta'
+      success:
+        example: true
+        type: boolean
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@brokle.ai
+    name: Brokle Platform Team
+    url: https://brokle.ai/support
+  description: Complete AI infrastructure platform providing gateway, observability,
+    caching, and optimization services.
+  license:
+    name: MIT License
+    url: https://opensource.org/licenses/MIT
+  termsOfService: https://brokle.ai/terms
+  title: Brokle AI Infrastructure Platform API
+  version: 1.0.0
+paths:
+  /api/v1/analytics/costs:
+    get:
+      consumes:
+      - application/json
+      description: Get detailed cost analytics including trends, breakdowns by provider/model,
+        and optimization suggestions
+      parameters:
+      - default: '"30d"'
+        description: Time period for analytics
+        enum:
+        - 1d
+        - 7d
+        - 30d
+        - 90d
+        - 1y
+        in: query
+        name: period
+        type: string
+      - description: Filter by organization ID
+        example: '"org_1234567890"'
+        in: query
+        name: organization_id
+        type: string
+      - description: Filter by project ID
+        example: '"proj_1234567890"'
+        in: query
+        name: project_id
+        type: string
+      - description: Filter by environment ID
+        example: '"env_1234567890"'
+        in: query
+        name: environment_id
+        type: string
+      - default: '"USD"'
+        description: Currency for cost display
+        enum:
+        - USD
+        - EUR
+        - GBP
+        in: query
+        name: currency
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Cost analytics and optimization insights
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/analytics.CostAnalytics'
+              type: object
+        "400":
+          description: Bad request - invalid query parameters
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Forbidden - insufficient permissions
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get cost analytics
+      tags:
+      - Analytics
+  /api/v1/analytics/models:
+    get:
+      consumes:
+      - application/json
+      description: Get performance and usage analytics for AI models including quality
+        scores and cost efficiency
+      parameters:
+      - default: '"30d"'
+        description: Time period for analytics
+        enum:
+        - 1d
+        - 7d
+        - 30d
+        - 90d
+        - 1y
+        in: query
+        name: period
+        type: string
+      - description: Filter by organization ID
+        example: '"org_1234567890"'
+        in: query
+        name: organization_id
+        type: string
+      - description: Filter by project ID
+        example: '"proj_1234567890"'
+        in: query
+        name: project_id
+        type: string
+      - description: Filter by environment ID
+        example: '"env_1234567890"'
+        in: query
+        name: environment_id
+        type: string
+      - description: Filter by AI provider
+        example: '"openai"'
+        in: query
+        name: provider
+        type: string
+      - description: Filter by specific model
+        example: '"gpt-4"'
+        in: query
+        name: model
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: AI model performance analytics
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/analytics.ModelAnalytics'
+                  type: array
+              type: object
+        "400":
+          description: Bad request - invalid query parameters
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Forbidden - insufficient permissions
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get model analytics
+      tags:
+      - Analytics
+  /api/v1/analytics/overview:
+    get:
+      consumes:
+      - application/json
+      description: Get high-level analytics overview including total requests, costs,
+        and performance metrics
+      parameters:
+      - default: '"30d"'
+        description: Time period for analytics
+        enum:
+        - 1d
+        - 7d
+        - 30d
+        - 90d
+        - 1y
+        in: query
+        name: period
+        type: string
+      - description: Filter by organization ID
+        example: '"org_1234567890"'
+        in: query
+        name: organization_id
+        type: string
+      - description: Filter by project ID
+        example: '"proj_1234567890"'
+        in: query
+        name: project_id
+        type: string
+      - description: Filter by environment ID
+        example: '"env_1234567890"'
+        in: query
+        name: environment_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Analytics overview
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/analytics.AnalyticsOverview'
+              type: object
+        "400":
+          description: Bad request - invalid query parameters
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Forbidden - insufficient permissions
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get analytics overview
+      tags:
+      - Analytics
+  /api/v1/analytics/providers:
+    get:
+      consumes:
+      - application/json
+      description: Get performance analytics for AI providers including latency, success
+        rates, and health scores
+      parameters:
+      - default: '"30d"'
+        description: Time period for analytics
+        enum:
+        - 1d
+        - 7d
+        - 30d
+        - 90d
+        - 1y
+        in: query
+        name: period
+        type: string
+      - description: Filter by organization ID
+        example: '"org_1234567890"'
+        in: query
+        name: organization_id
+        type: string
+      - description: Filter by project ID
+        example: '"proj_1234567890"'
+        in: query
+        name: project_id
+        type: string
+      - description: Filter by environment ID
+        example: '"env_1234567890"'
+        in: query
+        name: environment_id
+        type: string
+      - description: Filter by specific provider
+        example: '"openai"'
+        in: query
+        name: provider
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Provider performance analytics
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/analytics.ProviderAnalytics'
+                  type: array
+              type: object
+        "400":
+          description: Bad request - invalid query parameters
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Forbidden - insufficient permissions
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get provider analytics
+      tags:
+      - Analytics
+  /api/v1/analytics/requests:
+    get:
+      consumes:
+      - application/json
+      description: Get detailed analytics about AI requests including patterns, providers,
+        models, and success rates
+      parameters:
+      - default: '"30d"'
+        description: Time period for analytics
+        enum:
+        - 1d
+        - 7d
+        - 30d
+        - 90d
+        - 1y
+        in: query
+        name: period
+        type: string
+      - description: Filter by organization ID
+        example: '"org_1234567890"'
+        in: query
+        name: organization_id
+        type: string
+      - description: Filter by project ID
+        example: '"proj_1234567890"'
+        in: query
+        name: project_id
+        type: string
+      - description: Filter by environment ID
+        example: '"env_1234567890"'
+        in: query
+        name: environment_id
+        type: string
+      - description: Filter by AI provider
+        example: '"openai"'
+        in: query
+        name: provider
+        type: string
+      - description: Filter by AI model
+        example: '"gpt-4"'
+        in: query
+        name: model
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Request analytics
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/analytics.RequestAnalytics'
+              type: object
+        "400":
+          description: Bad request - invalid query parameters
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Forbidden - insufficient permissions
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get request analytics
+      tags:
+      - Analytics
+  /api/v1/auth/change-password:
+    post:
+      consumes:
+      - application/json
+      description: Change user password with current password verification
+      parameters:
+      - description: Password change information
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.ChangePasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Password changed successfully
+          schema:
+            $ref: '#/definitions/response.MessageResponse'
+        "400":
+          description: Invalid request or wrong current password
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Change password
+      tags:
+      - Authentication
+  /api/v1/auth/forgot-password:
+    post:
+      consumes:
+      - application/json
+      description: Initiate password reset process by sending reset email
+      parameters:
+      - description: Email for password reset
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.ForgotPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Reset email sent if account exists
+          schema:
+            $ref: '#/definitions/response.MessageResponse'
+        "400":
+          description: Invalid request payload
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Request password reset
+      tags:
+      - Authentication
+  /api/v1/auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticate user with email and password
+      parameters:
+      - description: Login credentials
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_transport_http_handlers_auth.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Login successful
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "400":
+          description: Invalid request payload
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Invalid credentials
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: User login
+      tags:
+      - Authentication
+  /api/v1/auth/logout:
+    post:
+      consumes:
+      - application/json
+      description: Logout user and invalidate session
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Logout successful
+          schema:
+            $ref: '#/definitions/response.MessageResponse'
+        "401":
+          description: Invalid session
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: User logout
+      tags:
+      - Authentication
+  /api/v1/auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: Get a new access token using a valid refresh token
+      parameters:
+      - description: Refresh token
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_transport_http_handlers_auth.RefreshTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Token refresh successful
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "400":
+          description: Invalid request payload
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Invalid refresh token
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Refresh access token
+      tags:
+      - Authentication
+  /api/v1/auth/reset-password:
+    post:
+      consumes:
+      - application/json
+      description: Complete password reset using token from email
+      parameters:
+      - description: Reset password information
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.ResetPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Password reset successful
+          schema:
+            $ref: '#/definitions/response.MessageResponse'
+        "400":
+          description: Invalid request payload or expired token
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Reset password
+      tags:
+      - Authentication
+  /api/v1/auth/signup:
+    post:
+      consumes:
+      - application/json
+      description: Register a new user account
+      parameters:
+      - description: Registration information
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_transport_http_handlers_auth.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Registration successful
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "400":
+          description: Invalid request payload
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "409":
+          description: Email already exists
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: User registration
+      tags:
+      - Authentication
+  /api/v1/billing/{orgId}/invoices:
+    get:
+      consumes:
+      - application/json
+      description: Get a paginated list of invoices for an organization
+      parameters:
+      - description: Organization ID
+        example: '"org_1234567890"'
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Filter by invoice status
+        enum:
+        - draft
+        - sent
+        - paid
+        - overdue
+        - void
+        in: query
+        name: status
+        type: string
+      - description: Filter invoices from date (RFC3339)
+        example: '"2024-01-01T00:00:00Z"'
+        in: query
+        name: start_date
+        type: string
+      - description: Filter invoices until date (RFC3339)
+        example: '"2024-01-31T23:59:59Z"'
+        in: query
+        name: end_date
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        minimum: 1
+        name: page
+        type: integer
+      - default: 20
+        description: Items per page
+        in: query
+        maximum: 100
+        minimum: 1
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of organization invoices
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/billing.ListInvoicesResponse'
+              type: object
+        "400":
+          description: Bad request - invalid organization ID or parameters
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Forbidden - insufficient permissions to view billing information
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Organization not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List organization invoices
+      tags:
+      - Billing
+  /api/v1/billing/{orgId}/subscription:
+    get:
+      consumes:
+      - application/json
+      description: Get current subscription details for an organization
+      parameters:
+      - description: Organization ID
+        example: '"org_1234567890"'
+        in: path
+        name: orgId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Organization subscription details
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/billing.Subscription'
+              type: object
+        "400":
+          description: Bad request - invalid organization ID
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Forbidden - insufficient permissions to view billing information
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Organization or subscription not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get organization subscription
+      tags:
+      - Billing
+    post:
+      consumes:
+      - application/json
+      description: Update subscription plan, add-ons, or payment method for an organization
+      parameters:
+      - description: Organization ID
+        example: '"org_1234567890"'
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Subscription update details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/billing.UpdateSubscriptionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Updated subscription details
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/billing.Subscription'
+              type: object
+        "400":
+          description: Bad request - invalid parameters or subscription update not
+            allowed
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Forbidden - insufficient permissions to modify billing information
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Organization or subscription not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "422":
+          description: Unprocessable entity - payment method declined or plan change
+            not allowed
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update organization subscription
+      tags:
+      - Billing
+  /api/v1/billing/{orgId}/usage:
+    get:
+      consumes:
+      - application/json
+      description: Get detailed usage metrics and billing information for an organization
+      parameters:
+      - description: Organization ID
+        example: '"org_1234567890"'
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - default: '"current"'
+        description: Billing period
+        enum:
+        - current
+        - previous
+        - custom
+        in: query
+        name: period
+        type: string
+      - description: Custom period start date (RFC3339)
+        example: '"2024-01-01T00:00:00Z"'
+        in: query
+        name: start_date
+        type: string
+      - description: Custom period end date (RFC3339)
+        example: '"2024-01-31T23:59:59Z"'
+        in: query
+        name: end_date
+        type: string
+      - default: '"all"'
+        description: Include usage breakdown
+        enum:
+        - all
+        - provider
+        - project
+        - environment
+        - none
+        in: query
+        name: breakdown
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Organization usage metrics
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/billing.UsageMetrics'
+              type: object
+        "400":
+          description: Bad request - invalid organization ID or parameters
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Forbidden - insufficient permissions to view billing information
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Organization not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get organization usage metrics
+      tags:
+      - Billing
+  /api/v1/environments:
+    get:
+      consumes:
+      - application/json
+      description: Get a paginated list of environments accessible to the authenticated
+        user
+      parameters:
+      - description: Filter by project ID
+        example: '"proj_1234567890"'
+        in: query
+        name: project_id
+        type: string
+      - description: Filter by environment type
+        enum:
+        - development
+        - staging
+        - production
+        in: query
+        name: type
+        type: string
+      - description: Filter by environment status
+        enum:
+        - active
+        - paused
+        - archived
+        in: query
+        name: status
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        minimum: 1
+        name: page
+        type: integer
+      - default: 20
+        description: Items per page
+        in: query
+        maximum: 100
+        minimum: 1
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of environments
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/environment.ListEnvironmentsResponse'
+              type: object
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List environments
+      tags:
+      - Environments
+    post:
+      consumes:
+      - application/json
+      description: Create a new environment within a project. User must have appropriate
+        permissions in the project.
+      parameters:
+      - description: Environment details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/environment.CreateEnvironmentRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Environment created successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/environment.Environment'
+              type: object
+        "400":
+          description: Bad request - invalid input or validation errors
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Forbidden - insufficient permissions in project
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Project not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "409":
+          description: Conflict - environment slug already exists in project
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create environment
+      tags:
+      - Environments
+  /api/v1/environments/{envId}:
+    delete:
+      consumes:
+      - application/json
+      description: Permanently delete an environment and all associated API keys and
+        data. This action cannot be undone.
+      parameters:
+      - description: Environment ID
+        example: '"env_1234567890"'
+        in: path
+        name: envId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Environment deleted successfully
+        "400":
+          description: Bad request - invalid environment ID
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Forbidden - insufficient permissions (requires admin or owner
+            role)
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Environment not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "409":
+          description: Conflict - cannot delete environment with active API keys or
+            recent usage
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete environment
+      tags:
+      - Environments
+    get:
+      consumes:
+      - application/json
+      description: Get detailed information about a specific environment
+      parameters:
+      - description: Environment ID
+        example: '"env_1234567890"'
+        in: path
+        name: envId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Environment details
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/environment.Environment'
+              type: object
+        "400":
+          description: Bad request - invalid environment ID
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Forbidden - insufficient permissions
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Environment not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get environment details
+      tags:
+      - Environments
+    put:
+      consumes:
+      - application/json
+      description: Update environment details. Requires appropriate permissions within
+        the project.
+      parameters:
+      - description: Environment ID
+        example: '"env_1234567890"'
+        in: path
+        name: envId
+        required: true
+        type: string
+      - description: Updated environment details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/environment.UpdateEnvironmentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Environment updated successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/environment.Environment'
+              type: object
+        "400":
+          description: Bad request - invalid input or validation errors
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Forbidden - insufficient permissions
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Environment not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update environment
+      tags:
+      - Environments
+  /api/v1/environments/{envId}/api-keys:
+    get:
+      consumes:
+      - application/json
+      description: Get a paginated list of API keys for a specific environment
+      parameters:
+      - description: Environment ID
+        example: '"env_1234567890"'
+        in: path
+        name: envId
+        required: true
+        type: string
+      - description: Filter by API key status
+        enum:
+        - active
+        - inactive
+        - revoked
+        in: query
+        name: status
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        minimum: 1
+        name: page
+        type: integer
+      - default: 20
+        description: Items per page
+        in: query
+        maximum: 100
+        minimum: 1
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of API keys
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/apikey.ListAPIKeysResponse'
+              type: object
+        "400":
+          description: Bad request - invalid environment ID
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Forbidden - insufficient permissions to view API keys
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Environment not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List API keys
+      tags:
+      - API Keys
+    post:
+      consumes:
+      - application/json
+      description: Create a new API key for an environment. The key will only be displayed
+        once upon creation.
+      parameters:
+      - description: Environment ID
+        example: '"env_1234567890"'
+        in: path
+        name: envId
+        required: true
+        type: string
+      - description: API key details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/apikey.CreateAPIKeyRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: API key created successfully (key only shown once)
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/apikey.APIKey'
+              type: object
+        "400":
+          description: Bad request - invalid input or validation errors
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Forbidden - insufficient permissions to create API keys
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Environment not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "409":
+          description: Conflict - API key name already exists in environment
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create API key
+      tags:
+      - API Keys
+  /api/v1/environments/{envId}/api-keys/{keyId}:
+    delete:
+      consumes:
+      - application/json
+      description: Permanently revoke and delete an API key. This action cannot be
+        undone and will immediately invalidate the key.
+      parameters:
+      - description: Environment ID
+        example: '"env_1234567890"'
+        in: path
+        name: envId
+        required: true
+        type: string
+      - description: API Key ID
+        example: '"key_1234567890"'
+        in: path
+        name: keyId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: API key deleted successfully
+        "400":
+          description: Bad request - invalid environment ID or key ID
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Forbidden - insufficient permissions to delete API keys
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Environment or API key not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete API key
+      tags:
+      - API Keys
+  /api/v1/logs/export:
+    get:
+      consumes:
+      - application/json
+      description: Initiate an export job for AI request logs in various formats (JSON,
+        CSV, Excel)
+      parameters:
+      - description: Export format
+        enum:
+        - json
+        - csv
+        - xlsx
+        example: '"json"'
+        in: query
+        name: format
+        required: true
+        type: string
+      - description: Start time for export (RFC3339)
+        example: '"2024-01-01T00:00:00Z"'
+        in: query
+        name: start_time
+        required: true
+        type: string
+      - description: End time for export (RFC3339)
+        example: '"2024-01-01T23:59:59Z"'
+        in: query
+        name: end_time
+        required: true
+        type: string
+      - description: Filter by organization ID
+        example: '"org_1234567890"'
+        in: query
+        name: organization_id
+        type: string
+      - description: Filter by project ID
+        example: '"proj_1234567890"'
+        in: query
+        name: project_id
+        type: string
+      - description: Filter by environment ID
+        example: '"env_1234567890"'
+        in: query
+        name: environment_id
+        type: string
+      - description: Filter by AI provider
+        example: '"openai"'
+        in: query
+        name: provider
+        type: string
+      - description: Filter by AI model
+        example: '"gpt-4"'
+        in: query
+        name: model
+        type: string
+      - description: Filter by HTTP status code
+        in: query
+        name: status
+        type: integer
+      - default: false
+        description: Include request/response bodies in export
+        in: query
+        name: include_body
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "202":
+          description: Export job initiated
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/logs.ExportResponse'
+              type: object
+        "400":
+          description: Bad request - invalid parameters or date range too large
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Forbidden - insufficient permissions or export quota exceeded
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "422":
+          description: Unprocessable entity - date range exceeds maximum allowed
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Export AI request logs
+      tags:
+      - Logs
+  /api/v1/logs/requests:
+    get:
+      consumes:
+      - application/json
+      description: Get a paginated list of AI requests with filtering and search capabilities
+      parameters:
+      - description: Filter by organization ID
+        example: '"org_1234567890"'
+        in: query
+        name: organization_id
+        type: string
+      - description: Filter by project ID
+        example: '"proj_1234567890"'
+        in: query
+        name: project_id
+        type: string
+      - description: Filter by environment ID
+        example: '"env_1234567890"'
+        in: query
+        name: environment_id
+        type: string
+      - description: Filter by AI provider
+        example: '"openai"'
+        in: query
+        name: provider
+        type: string
+      - description: Filter by AI model
+        example: '"gpt-4"'
+        in: query
+        name: model
+        type: string
+      - description: Filter by HTTP status code
+        in: query
+        name: status
+        type: integer
+      - description: Start time filter (RFC3339)
+        example: '"2024-01-01T00:00:00Z"'
+        in: query
+        name: start_time
+        type: string
+      - description: End time filter (RFC3339)
+        example: '"2024-01-01T23:59:59Z"'
+        in: query
+        name: end_time
+        type: string
+      - description: Minimum latency filter (ms)
+        in: query
+        name: min_latency
+        type: integer
+      - description: Maximum latency filter (ms)
+        in: query
+        name: max_latency
+        type: integer
+      - description: Filter by cache hit status
+        in: query
+        name: cache_hit
+        type: boolean
+      - description: Search in request content
+        example: '"error"'
+        in: query
+        name: search
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        minimum: 1
+        name: page
+        type: integer
+      - default: 50
+        description: Items per page
+        in: query
+        maximum: 1000
+        minimum: 1
+        name: limit
+        type: integer
+      - default: '"-timestamp"'
+        description: Sort order
+        enum:
+        - timestamp
+        - -timestamp
+        - latency
+        - -latency
+        - cost
+        - -cost
+        in: query
+        name: sort
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of AI requests
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/logs.ListRequestsResponse'
+              type: object
+        "400":
+          description: Bad request - invalid query parameters
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Forbidden - insufficient permissions
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List AI requests
+      tags:
+      - Logs
+  /api/v1/logs/requests/{requestId}:
+    get:
+      consumes:
+      - application/json
+      description: Get comprehensive details about a specific AI request including
+        full trace and routing information
+      parameters:
+      - description: Request ID
+        example: '"req_1234567890"'
+        in: path
+        name: requestId
+        required: true
+        type: string
+      - default: false
+        description: Include request/response bodies
+        in: query
+        name: include_body
+        type: boolean
+      - default: false
+        description: Include detailed execution trace
+        in: query
+        name: include_trace
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Detailed request information
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/logs.AIRequestDetail'
+              type: object
+        "400":
+          description: Bad request - invalid request ID
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Forbidden - insufficient permissions to view this request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Request not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get detailed request information
+      tags:
+      - Logs
+  /api/v1/organizations:
+    get:
+      consumes:
+      - application/json
+      description: Get a paginated list of organizations for the authenticated user
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        minimum: 1
+        name: page
+        type: integer
+      - default: 20
+        description: Items per page
+        in: query
+        maximum: 100
+        minimum: 1
+        name: limit
+        type: integer
+      - description: Search organizations by name or slug
+        in: query
+        name: search
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of organizations
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/organization.ListOrganizationsResponse'
+              type: object
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List organizations
+      tags:
+      - Organizations
+    post:
+      consumes:
+      - application/json
+      description: Create a new organization. The authenticated user becomes the organization
+        owner.
+      parameters:
+      - description: Organization details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_transport_http_handlers_organization.CreateOrganizationRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Organization created successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/internal_transport_http_handlers_organization.Organization'
+              type: object
+        "400":
+          description: Bad request - invalid input or validation errors
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "409":
+          description: Conflict - organization slug already exists
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create organization
+      tags:
+      - Organizations
+  /api/v1/organizations/{orgId}:
+    delete:
+      consumes:
+      - application/json
+      description: Permanently delete an organization. Only organization owners can
+        delete organizations. This action cannot be undone.
+      parameters:
+      - description: Organization ID
+        example: '"org_1234567890"'
+        in: path
+        name: orgId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Organization deleted successfully
+        "400":
+          description: Bad request - invalid organization ID
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Forbidden - only organization owners can delete organizations
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Organization not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "409":
+          description: Conflict - cannot delete organization with active projects
+            or subscriptions
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete organization
+      tags:
+      - Organizations
+    get:
+      consumes:
+      - application/json
+      description: Get detailed information about a specific organization
+      parameters:
+      - description: Organization ID
+        example: '"org_1234567890"'
+        in: path
+        name: orgId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Organization details
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/internal_transport_http_handlers_organization.Organization'
+              type: object
+        "400":
+          description: Bad request - invalid organization ID
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Forbidden - insufficient permissions
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Organization not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get organization details
+      tags:
+      - Organizations
+    put:
+      consumes:
+      - application/json
+      description: Update organization details. Only owners and admins can update
+        organization settings.
+      parameters:
+      - description: Organization ID
+        example: '"org_1234567890"'
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Updated organization details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_transport_http_handlers_organization.UpdateOrganizationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Organization updated successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/internal_transport_http_handlers_organization.Organization'
+              type: object
+        "400":
+          description: Bad request - invalid input or validation errors
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Forbidden - insufficient permissions (requires owner or admin
+            role)
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Organization not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update organization
+      tags:
+      - Organizations
+  /api/v1/organizations/{orgId}/members:
+    get:
+      consumes:
+      - application/json
+      description: Get a list of all members in an organization, including their roles
+        and status
+      parameters:
+      - description: Organization ID
+        example: '"org_1234567890"'
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Filter by member status
+        enum:
+        - active
+        - invited
+        - suspended
+        in: query
+        name: status
+        type: string
+      - description: Filter by member role
+        enum:
+        - owner
+        - admin
+        - developer
+        - viewer
+        in: query
+        name: role
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of organization members
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/organization.ListMembersResponse'
+              type: object
+        "400":
+          description: Bad request - invalid organization ID or query parameters
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Forbidden - insufficient permissions to view members
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Organization not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List organization members
+      tags:
+      - Organizations
+    post:
+      consumes:
+      - application/json
+      description: Send an invitation to join the organization. Only owners and admins
+        can invite new members.
+      parameters:
+      - description: Organization ID
+        example: '"org_1234567890"'
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Member invitation details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/organization.InviteMemberRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Member invitation sent successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/organization.OrganizationMember'
+              type: object
+        "400":
+          description: Bad request - invalid input or validation errors
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Forbidden - insufficient permissions (requires owner or admin
+            role)
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Organization not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "409":
+          description: Conflict - user is already a member or has pending invitation
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Invite member to organization
+      tags:
+      - Organizations
+  /api/v1/organizations/{orgId}/members/{userId}:
+    delete:
+      consumes:
+      - application/json
+      description: Remove a member from the organization or revoke their invitation.
+        Owners and admins can remove members.
+      parameters:
+      - description: Organization ID
+        example: '"org_1234567890"'
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: User ID to remove
+        example: '"usr_1234567890"'
+        in: path
+        name: userId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Member removed successfully
+        "400":
+          description: Bad request - invalid organization ID or user ID
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Forbidden - insufficient permissions or cannot remove organization
+            owner
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Organization or member not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Remove member from organization
+      tags:
+      - Organizations
+  /api/v1/projects:
+    get:
+      consumes:
+      - application/json
+      description: Get a paginated list of projects accessible to the authenticated
+        user
+      parameters:
+      - description: Filter by organization ID
+        example: '"org_1234567890"'
+        in: query
+        name: organization_id
+        type: string
+      - description: Filter by project status
+        enum:
+        - active
+        - paused
+        - archived
+        in: query
+        name: status
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        minimum: 1
+        name: page
+        type: integer
+      - default: 20
+        description: Items per page
+        in: query
+        maximum: 100
+        minimum: 1
+        name: limit
+        type: integer
+      - description: Search projects by name or slug
+        in: query
+        name: search
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of projects
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/project.ListProjectsResponse'
+              type: object
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List projects
+      tags:
+      - Projects
+    post:
+      consumes:
+      - application/json
+      description: Create a new project within an organization. User must have appropriate
+        permissions in the organization.
+      parameters:
+      - description: Project details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/project.CreateProjectRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Project created successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/project.Project'
+              type: object
+        "400":
+          description: Bad request - invalid input or validation errors
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Forbidden - insufficient permissions in organization
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Organization not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "409":
+          description: Conflict - project slug already exists in organization
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create project
+      tags:
+      - Projects
+  /api/v1/projects/{projectId}:
+    delete:
+      consumes:
+      - application/json
+      description: Permanently delete a project and all associated environments and
+        data. This action cannot be undone.
+      parameters:
+      - description: Project ID
+        example: '"proj_1234567890"'
+        in: path
+        name: projectId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Project deleted successfully
+        "400":
+          description: Bad request - invalid project ID
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Forbidden - insufficient permissions (requires admin or owner
+            role)
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Project not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "409":
+          description: Conflict - cannot delete project with active environments or
+            API usage
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete project
+      tags:
+      - Projects
+    get:
+      consumes:
+      - application/json
+      description: Get detailed information about a specific project
+      parameters:
+      - description: Project ID
+        example: '"proj_1234567890"'
+        in: path
+        name: projectId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Project details
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/project.Project'
+              type: object
+        "400":
+          description: Bad request - invalid project ID
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Forbidden - insufficient permissions
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Project not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get project details
+      tags:
+      - Projects
+    put:
+      consumes:
+      - application/json
+      description: Update project details. Requires appropriate permissions within
+        the project organization.
+      parameters:
+      - description: Project ID
+        example: '"proj_1234567890"'
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Updated project details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/project.UpdateProjectRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Project updated successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/project.Project'
+              type: object
+        "400":
+          description: Bad request - invalid input or validation errors
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Forbidden - insufficient permissions
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Project not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update project
+      tags:
+      - Projects
+  /api/v1/projects/{projectId}/environments:
+    get:
+      consumes:
+      - application/json
+      description: Get all environments that belong to a specific project
+      parameters:
+      - description: Project ID
+        example: '"proj_1234567890"'
+        in: path
+        name: projectId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of project environments
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "400":
+          description: Bad request - invalid project ID
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Forbidden - insufficient permissions
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Project not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List project environments
+      tags:
+      - Projects
+  /api/v1/users/me:
+    get:
+      description: Get the profile information of the currently authenticated user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User profile retrieved successfully
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get current user profile
+      tags:
+      - User
+    put:
+      consumes:
+      - application/json
+      description: Update the profile information of the currently authenticated user
+      parameters:
+      - description: Profile update information
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_transport_http_handlers_user.UpdateProfileRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Profile updated successfully
+          schema:
+            $ref: '#/definitions/response.MessageResponse'
+        "400":
+          description: Invalid request payload
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update current user profile
+      tags:
+      - User
+  /api/v1/users/me/preferences:
+    get:
+      description: Get the preferences settings of the currently authenticated user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User preferences retrieved successfully
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get user preferences
+      tags:
+      - User
+    put:
+      consumes:
+      - application/json
+      description: Update the preferences settings of the currently authenticated
+        user
+      parameters:
+      - description: Preferences update information
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_transport_http_handlers_user.UpdatePreferencesRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Preferences updated successfully
+          schema:
+            $ref: '#/definitions/response.MessageResponse'
+        "400":
+          description: Invalid request payload
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update user preferences
+      tags:
+      - User
+  /health:
+    get:
+      description: Get basic health status of the service
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Service is healthy
+          schema:
+            $ref: '#/definitions/health.HealthResponse'
+      summary: Basic health check
+      tags:
+      - Health
+  /health/live:
+    get:
+      description: Check if service is alive and responsive
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Service is alive and responsive
+          schema:
+            $ref: '#/definitions/health.HealthResponse'
+      summary: Liveness check
+      tags:
+      - Health
+  /health/ready:
+    get:
+      description: Check if service and all dependencies are ready to handle requests
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Service and all dependencies are ready
+          schema:
+            $ref: '#/definitions/health.HealthResponse'
+        "503":
+          description: Service or dependencies are not ready
+          schema:
+            $ref: '#/definitions/health.HealthResponse'
+      summary: Readiness check
+      tags:
+      - Health
+  /metrics:
+    get:
+      description: Retrieve Prometheus-compatible metrics for monitoring and observability
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: Prometheus metrics in text format
+          schema:
+            type: string
+        "500":
+          description: Internal server error
+          schema:
+            type: string
+      summary: Get Prometheus metrics
+      tags:
+      - Monitoring
+  /v1/chat/completions:
+    post:
+      consumes:
+      - application/json
+      description: Generate AI chat completions using OpenAI-compatible API
+      parameters:
+      - description: Chat completion request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/ai.ChatCompletionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Chat completion generated successfully
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "400":
+          description: Invalid request payload
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Invalid API key
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "429":
+          description: Rate limit exceeded
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Create chat completion
+      tags:
+      - AI Gateway
+  /v1/completions:
+    post:
+      consumes:
+      - application/json
+      description: Generate AI text completions using OpenAI-compatible API
+      parameters:
+      - description: Text completion request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/ai.CompletionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Text completion generated successfully
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "400":
+          description: Invalid request payload
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Invalid API key
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "429":
+          description: Rate limit exceeded
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Create text completion
+      tags:
+      - AI Gateway
+  /v1/embeddings:
+    post:
+      consumes:
+      - application/json
+      description: Generate text embeddings using OpenAI-compatible API
+      parameters:
+      - description: Embedding request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/ai.EmbeddingRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Embeddings generated successfully
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "400":
+          description: Invalid request payload
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Invalid API key
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "429":
+          description: Rate limit exceeded
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Create embeddings
+      tags:
+      - AI Gateway
+  /v1/models:
+    get:
+      description: Get list of available AI models
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of available models
+          schema:
+            items:
+              $ref: '#/definitions/ai.Model'
+            type: array
+        "401":
+          description: Invalid API key
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List available models
+      tags:
+      - AI Gateway
+  /v1/models/{model}:
+    get:
+      description: Get detailed information about a specific AI model
+      parameters:
+      - description: Model ID
+        example: '"gpt-3.5-turbo"'
+        in: path
+        name: model
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Model information
+          schema:
+            $ref: '#/definitions/ai.Model'
+        "401":
+          description: Invalid API key
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Model not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get model information
+      tags:
+      - AI Gateway
+  /ws:
+    get:
+      consumes:
+      - application/json
+      description: Upgrade HTTP connection to WebSocket for real-time updates and
+        notifications
+      produces:
+      - application/json
+      responses:
+        "101":
+          description: WebSocket connection established
+          schema:
+            type: string
+        "400":
+          description: Bad request - WebSocket upgrade failed
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized - authentication required
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Forbidden - insufficient permissions
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Establish WebSocket connection
+      tags:
+      - WebSocket
+schemes:
+- http
+- https
+securityDefinitions:
+  ApiKeyAuth:
+    description: 'API key for authentication. Format: X-API-Key: bk_live_...'
+    in: header
+    name: X-API-Key
+    type: apiKey
+  BearerAuth:
+    description: 'JWT token for authentication. Format: Authorization: Bearer <token>'
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

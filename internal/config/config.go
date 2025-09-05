@@ -603,7 +603,7 @@ func Load() (*Config, error) {
 	viper.BindEnv("clickhouse.url", "CLICKHOUSE_URL") 
 	viper.BindEnv("redis.url", "REDIS_URL")
 	viper.BindEnv("server.port", "PORT")
-	viper.BindEnv("environment", "ENV") 
+	viper.BindEnv("server.environment", "ENV") 
 	viper.BindEnv("logging.level", "LOG_LEVEL")
 	
 	// CORS configuration (OSS-standard naming)
@@ -677,6 +677,7 @@ func setDefaults() {
 	// Server defaults
 	viper.SetDefault("server.host", "0.0.0.0")
 	viper.SetDefault("server.port", 8080)
+	viper.SetDefault("server.environment", "development")
 	viper.SetDefault("server.read_timeout", "30s")
 	viper.SetDefault("server.write_timeout", "30s")
 	viper.SetDefault("server.shutdown_timeout", "30s")

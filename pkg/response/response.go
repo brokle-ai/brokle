@@ -9,35 +9,43 @@ import (
 	appErrors "brokle/pkg/errors"
 )
 
+// APIResponse represents the standard API response format
+// @Description Standard API response wrapper
 type APIResponse struct {
-	Success bool        `json:"success"`
-	Data    interface{} `json:"data,omitempty"`
-	Error   *APIError   `json:"error,omitempty"`
-	Meta    *Meta       `json:"meta,omitempty"`
+	Success bool        `json:"success" example:"true" description:"Indicates if the request was successful"`
+	Data    interface{} `json:"data,omitempty" description:"Response data payload"`
+	Error   *APIError   `json:"error,omitempty" description:"Error information if request failed"`
+	Meta    *Meta       `json:"meta,omitempty" description:"Response metadata"`
 }
 
+// APIError represents error information in API responses
+// @Description Error details for failed API requests
 type APIError struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
-	Details string `json:"details,omitempty"`
-	Type    string `json:"type,omitempty"`
+	Code    string `json:"code" example:"validation_error" description:"Error code identifier"`
+	Message string `json:"message" example:"Invalid request data" description:"Human-readable error message"`
+	Details string `json:"details,omitempty" example:"Field 'email' is required" description:"Additional error details"`
+	Type    string `json:"type,omitempty" example:"validation_error" description:"Error type category"`
 }
 
+// Meta contains metadata about the API response
+// @Description Response metadata including request tracking and pagination
 type Meta struct {
-	RequestID  string      `json:"request_id,omitempty"`
-	Timestamp  string      `json:"timestamp,omitempty"`
-	Version    string      `json:"version,omitempty"`
-	Pagination *Pagination `json:"pagination,omitempty"`
-	Total      int64       `json:"total,omitempty"`
+	RequestID  string      `json:"request_id,omitempty" example:"req_01h2x3y4z5" description:"Unique request identifier"`
+	Timestamp  string      `json:"timestamp,omitempty" example:"2023-12-01T10:30:00Z" description:"Response timestamp in ISO 8601 format"`
+	Version    string      `json:"version,omitempty" example:"v1" description:"API version"`
+	Pagination *Pagination `json:"pagination,omitempty" description:"Pagination information for list responses"`
+	Total      int64       `json:"total,omitempty" example:"150" description:"Total count of items"`
 }
 
+// Pagination contains pagination information for list responses
+// @Description Pagination metadata for paginated API responses
 type Pagination struct {
-	Page      int   `json:"page"`
-	PageSize  int   `json:"page_size"`
-	Total     int64 `json:"total"`
-	TotalPage int   `json:"total_page"`
-	HasNext   bool  `json:"has_next"`
-	HasPrev   bool  `json:"has_prev"`
+	Page      int   `json:"page" example:"1" description:"Current page number (1-based)"`
+	PageSize  int   `json:"page_size" example:"20" description:"Number of items per page"`
+	Total     int64 `json:"total" example:"150" description:"Total number of items"`
+	TotalPage int   `json:"total_page" example:"8" description:"Total number of pages"`
+	HasNext   bool  `json:"has_next" example:"true" description:"Whether there are more pages"`
+	HasPrev   bool  `json:"has_prev" example:"false" description:"Whether there are previous pages"`
 }
 
 func Success(c *gin.Context, data interface{}) {
