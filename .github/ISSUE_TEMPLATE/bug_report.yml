@@ -48,8 +48,7 @@ body:
     attributes:
       label: SDK and integration versions
       description: If you're experiencing an issue with an integration or SDK, please share all package versions you're using. Include client libraries, API versions, etc.
-      placeholder: |
-        - Leave a comment
+      placeholder: Leave a comment
     validations:
       required: false
   - type: textarea
