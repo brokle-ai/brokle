@@ -72,12 +72,13 @@ type UserRepositories struct {
 
 // AuthRepositories contains all auth-related repositories
 type AuthRepositories struct {
-	Session        auth.SessionRepository
-	APIKey         auth.APIKeyRepository
-	Role           auth.RoleRepository
-	Permission     auth.PermissionRepository
-	RolePermission auth.RolePermissionRepository
-	AuditLog       auth.AuditLogRepository
+	UserSession       auth.UserSessionRepository
+	PasswordResetToken auth.PasswordResetTokenRepository
+	APIKey            auth.APIKeyRepository
+	Role              auth.RoleRepository
+	Permission        auth.PermissionRepository
+	RolePermission    auth.RolePermissionRepository
+	AuditLog          auth.AuditLogRepository
 }
 
 // OrganizationRepositories contains all organization-related repositories
@@ -87,6 +88,7 @@ type OrganizationRepositories struct {
 	Project      organization.ProjectRepository
 	Environment  organization.EnvironmentRepository
 	Invitation   organization.InvitationRepository
+	Settings     organization.OrganizationSettingsRepository
 }
 
 // Domain-specific service containers
@@ -105,8 +107,21 @@ type AuthServices struct {
 
 // OrganizationServices contains all organization-related services
 type OrganizationServices struct {
-	Organization organization.OrganizationService
+	OrganizationSvc organization.OrganizationService
+	MemberSvc       organization.MemberService
+	ProjectSvc      organization.ProjectService
+	EnvironmentSvc  organization.EnvironmentService
+	InvitationSvc   organization.InvitationService
+	SettingsSvc     organization.OrganizationSettingsService
 }
+
+// Implement the composite interface methods
+func (o *OrganizationServices) Organizations() organization.OrganizationService { return o.OrganizationSvc }
+func (o *OrganizationServices) Members() organization.MemberService             { return o.MemberSvc }
+func (o *OrganizationServices) Projects() organization.ProjectService           { return o.ProjectSvc }
+func (o *OrganizationServices) Environments() organization.EnvironmentService  { return o.EnvironmentSvc }
+func (o *OrganizationServices) Invitations() organization.InvitationService    { return o.InvitationSvc }
+func (o *OrganizationServices) Settings() organization.OrganizationSettingsService { return o.SettingsSvc }
 
 // Provider functions for modular DI
 
@@ -147,12 +162,13 @@ func ProvideUserRepositories(db *gorm.DB) *UserRepositories {
 // ProvideAuthRepositories creates all auth-related repositories
 func ProvideAuthRepositories(db *gorm.DB) *AuthRepositories {
 	return &AuthRepositories{
-		Session:        authRepo.NewSessionRepository(db),
-		APIKey:         authRepo.NewAPIKeyRepository(db),
-		Role:           authRepo.NewRoleRepository(db),
-		Permission:     authRepo.NewPermissionRepository(db),
-		RolePermission: authRepo.NewRolePermissionRepository(db),
-		AuditLog:       authRepo.NewAuditLogRepository(db),
+		UserSession:       authRepo.NewUserSessionRepository(db),
+		PasswordResetToken: authRepo.NewPasswordResetTokenRepository(db),
+		APIKey:            authRepo.NewAPIKeyRepository(db),
+		Role:              authRepo.NewRoleRepository(db),
+		Permission:        authRepo.NewPermissionRepository(db),
+		RolePermission:    authRepo.NewRolePermissionRepository(db),
+		AuditLog:          authRepo.NewAuditLogRepository(db),
 	}
 }
 
@@ -164,6 +180,7 @@ func ProvideOrganizationRepositories(db *gorm.DB) *OrganizationRepositories {
 		Project:      orgRepo.NewProjectRepository(db),
 		Environment:  orgRepo.NewEnvironmentRepository(db),
 		Invitation:   orgRepo.NewInvitationRepository(db),
+		Settings:     orgRepo.NewOrganizationSettingsRepository(db),
 	}
 }
 
@@ -224,10 +241,11 @@ func ProvideAuthServices(
 	// Create auth service with all dependencies
 	authSvc := authService.NewAuthService(
 		userRepos.User,
-		authRepos.Session,
+		authRepos.UserSession,
 		authRepos.AuditLog,
 		jwtService,
 		roleService,
+		authRepos.PasswordResetToken,
 	)
 
 	return &AuthServices{
@@ -257,8 +275,20 @@ func ProvideOrganizationServices(
 		authRepos.AuditLog,
 	)
 
+	// Create organization settings service
+	settingsSvc := orgService.NewOrganizationSettingsService(
+		orgRepos.Settings,
+		orgRepos.Member,
+		authRepos.AuditLog,
+	)
+
 	return &OrganizationServices{
-		Organization: orgSvc,
+		OrganizationSvc: orgSvc,
+		MemberSvc:       nil, // TODO: Implement when needed
+		ProjectSvc:      nil, // TODO: Implement when needed
+		EnvironmentSvc:  nil, // TODO: Implement when needed
+		InvitationSvc:   nil, // TODO: Implement when needed
+		SettingsSvc:     settingsSvc,
 	}
 }
 
@@ -357,28 +387,31 @@ func ProvideAll(cfg *config.Config, logger *logrus.Logger) (*ProviderContainer, 
 
 // Repositories provides a flattened view of all repositories
 type Repositories struct {
-	UserRepository           user.Repository
-	OrganizationRepository   organization.OrganizationRepository
-	MemberRepository         organization.MemberRepository
-	ProjectRepository        organization.ProjectRepository
-	EnvironmentRepository    organization.EnvironmentRepository
-	InvitationRepository     organization.InvitationRepository
-	SessionRepository        auth.SessionRepository
-	APIKeyRepository         auth.APIKeyRepository
-	RoleRepository           auth.RoleRepository
-	PermissionRepository     auth.PermissionRepository
-	RolePermissionRepository auth.RolePermissionRepository
-	AuditLogRepository       auth.AuditLogRepository
+	UserRepository              user.Repository
+	OrganizationRepository      organization.OrganizationRepository
+	MemberRepository            organization.MemberRepository
+	ProjectRepository           organization.ProjectRepository
+	EnvironmentRepository       organization.EnvironmentRepository
+	InvitationRepository        organization.InvitationRepository
+	OrganizationSettingsRepository organization.OrganizationSettingsRepository
+	UserSessionRepository       auth.UserSessionRepository
+	PasswordResetTokenRepository auth.PasswordResetTokenRepository
+	APIKeyRepository            auth.APIKeyRepository
+	RoleRepository              auth.RoleRepository
+	PermissionRepository        auth.PermissionRepository
+	RolePermissionRepository    auth.RolePermissionRepository
+	AuditLogRepository          auth.AuditLogRepository
 }
 
 // Services provides a flattened view of all services
 type Services struct {
-	AuthService         auth.AuthService
-	OrganizationService organization.OrganizationService
-	ComplianceService   compliance.Compliance
-	SSOService          sso.SSOProvider
-	RBACService         rbac.RBACManager
-	EnterpriseAnalytics analytics.EnterpriseAnalytics
+	AuthService                   auth.AuthService
+	OrganizationService          organization.OrganizationService
+	OrganizationSettingsService  organization.OrganizationSettingsService
+	ComplianceService            compliance.Compliance
+	SSOService                   sso.SSOProvider
+	RBACService                  rbac.RBACManager
+	EnterpriseAnalytics          analytics.EnterpriseAnalytics
 }
 
 // Convenience accessors for backward compatibility
@@ -386,30 +419,33 @@ type Services struct {
 // GetAllRepositories returns a flattened view of all repositories (for backward compatibility)
 func (pc *ProviderContainer) GetAllRepositories() *Repositories {
 	return &Repositories{
-		UserRepository:           pc.Repos.User.User,
-		OrganizationRepository:   pc.Repos.Organization.Organization,
-		MemberRepository:         pc.Repos.Organization.Member,
-		ProjectRepository:        pc.Repos.Organization.Project,
-		EnvironmentRepository:    pc.Repos.Organization.Environment,
-		InvitationRepository:     pc.Repos.Organization.Invitation,
-		SessionRepository:        pc.Repos.Auth.Session,
-		APIKeyRepository:         pc.Repos.Auth.APIKey,
-		RoleRepository:           pc.Repos.Auth.Role,
-		PermissionRepository:     pc.Repos.Auth.Permission,
-		RolePermissionRepository: pc.Repos.Auth.RolePermission,
-		AuditLogRepository:       pc.Repos.Auth.AuditLog,
+		UserRepository:                 pc.Repos.User.User,
+		OrganizationRepository:         pc.Repos.Organization.Organization,
+		MemberRepository:               pc.Repos.Organization.Member,
+		ProjectRepository:              pc.Repos.Organization.Project,
+		EnvironmentRepository:          pc.Repos.Organization.Environment,
+		InvitationRepository:           pc.Repos.Organization.Invitation,
+		OrganizationSettingsRepository: pc.Repos.Organization.Settings,
+		UserSessionRepository:          pc.Repos.Auth.UserSession,
+		PasswordResetTokenRepository:   pc.Repos.Auth.PasswordResetToken,
+		APIKeyRepository:               pc.Repos.Auth.APIKey,
+		RoleRepository:                 pc.Repos.Auth.Role,
+		PermissionRepository:           pc.Repos.Auth.Permission,
+		RolePermissionRepository:       pc.Repos.Auth.RolePermission,
+		AuditLogRepository:             pc.Repos.Auth.AuditLog,
 	}
 }
 
 // GetAllServices returns a flattened view of all services (for backward compatibility)
 func (pc *ProviderContainer) GetAllServices() *Services {
 	return &Services{
-		AuthService:         pc.Services.Auth.Auth,
-		OrganizationService: pc.Services.Organization.Organization,
-		ComplianceService:   pc.Enterprise.Compliance,
-		SSOService:          pc.Enterprise.SSO,
-		RBACService:         pc.Enterprise.RBAC,
-		EnterpriseAnalytics: pc.Enterprise.Analytics,
+		AuthService:                 pc.Services.Auth.Auth,
+		OrganizationService:        pc.Services.Organization.Organizations(),
+		OrganizationSettingsService: pc.Services.Organization.Settings(),
+		ComplianceService:          pc.Enterprise.Compliance,
+		SSOService:                 pc.Enterprise.SSO,
+		RBACService:                pc.Enterprise.RBAC,
+		EnterpriseAnalytics:        pc.Enterprise.Analytics,
 	}
 }
 

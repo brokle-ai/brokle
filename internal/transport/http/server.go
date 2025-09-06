@@ -149,6 +149,15 @@ func (s *Server) setupV1Routes(router *gin.RouterGroup) {
 		users.GET("/me/preferences", s.handlers.User.GetPreferences)
 		users.PUT("/me/preferences", s.handlers.User.UpdatePreferences)
 	}
+	
+	// Auth session management routes (protected)
+	authSessions := protected.Group("/auth")
+	{
+		authSessions.GET("/sessions", s.handlers.Auth.ListSessions)
+		authSessions.GET("/sessions/:session_id", s.handlers.Auth.GetSession)
+		authSessions.POST("/sessions/:session_id/revoke", s.handlers.Auth.RevokeSession)
+		authSessions.POST("/sessions/revoke-all", s.handlers.Auth.RevokeAllSessions)
+	}
 
 	// Organization routes
 	orgs := protected.Group("/organizations")
@@ -161,6 +170,17 @@ func (s *Server) setupV1Routes(router *gin.RouterGroup) {
 		orgs.GET("/:orgId/members", s.handlers.Organization.ListMembers)
 		orgs.POST("/:orgId/members", s.handlers.Organization.InviteMember)
 		orgs.DELETE("/:orgId/members/:userId", s.handlers.Organization.RemoveMember)
+		
+		// Organization settings routes
+		orgs.GET("/:orgId/settings", s.handlers.Organization.GetSettings)
+		orgs.POST("/:orgId/settings", s.handlers.Organization.CreateSetting)
+		orgs.GET("/:orgId/settings/:key", s.handlers.Organization.GetSetting)
+		orgs.PUT("/:orgId/settings/:key", s.handlers.Organization.UpdateSetting)
+		orgs.DELETE("/:orgId/settings/:key", s.handlers.Organization.DeleteSetting)
+		orgs.POST("/:orgId/settings/bulk", s.handlers.Organization.BulkCreateSettings)
+		orgs.GET("/:orgId/settings/export", s.handlers.Organization.ExportSettings)
+		orgs.POST("/:orgId/settings/import", s.handlers.Organization.ImportSettings)
+		orgs.POST("/:orgId/settings/reset", s.handlers.Organization.ResetToDefaults)
 	}
 
 	// Project routes

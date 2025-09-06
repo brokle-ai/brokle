@@ -104,6 +104,31 @@ type InvitationService interface {
 	CleanupExpiredInvitations(ctx context.Context) error
 }
 
+// OrganizationSettingsService defines the organization settings management service interface.
+type OrganizationSettingsService interface {
+	// Settings CRUD operations
+	CreateSetting(ctx context.Context, orgID ulid.ULID, userID ulid.ULID, req *CreateOrganizationSettingRequest) (*OrganizationSettings, error)
+	GetSetting(ctx context.Context, orgID ulid.ULID, key string) (*OrganizationSettings, error)
+	GetAllSettings(ctx context.Context, orgID ulid.ULID) (map[string]interface{}, error)
+	UpdateSetting(ctx context.Context, orgID ulid.ULID, key string, userID ulid.ULID, req *UpdateOrganizationSettingRequest) error
+	DeleteSetting(ctx context.Context, orgID ulid.ULID, key string, userID ulid.ULID) error
+	
+	// Bulk operations
+	UpsertSetting(ctx context.Context, orgID ulid.ULID, key string, value interface{}, userID ulid.ULID) (*OrganizationSettings, error)
+	CreateMultipleSettings(ctx context.Context, orgID ulid.ULID, userID ulid.ULID, settings map[string]interface{}) error
+	GetSettingsByKeys(ctx context.Context, orgID ulid.ULID, keys []string) (map[string]interface{}, error)
+	DeleteMultipleSettings(ctx context.Context, orgID ulid.ULID, keys []string, userID ulid.ULID) error
+	
+	// Access validation
+	ValidateSettingsAccess(ctx context.Context, userID, orgID ulid.ULID, operation string) error
+	CanUserManageSettings(ctx context.Context, userID, orgID ulid.ULID) (bool, error)
+	
+	// Settings management
+	ResetToDefaults(ctx context.Context, orgID ulid.ULID, userID ulid.ULID) error
+	ExportSettings(ctx context.Context, orgID ulid.ULID, userID ulid.ULID) (map[string]interface{}, error)
+	ImportSettings(ctx context.Context, orgID ulid.ULID, userID ulid.ULID, settings map[string]interface{}) error
+}
+
 // OrganizationServices is a composite interface that includes all organization-related services.
 type OrganizationServices interface {
 	Organizations() OrganizationService
@@ -111,4 +136,5 @@ type OrganizationServices interface {
 	Projects() ProjectService
 	Environments() EnvironmentService
 	Invitations() InvitationService
+	Settings() OrganizationSettingsService
 }

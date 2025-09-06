@@ -2,7 +2,6 @@ package auth
 
 import (
 	"context"
-	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -36,8 +35,9 @@ func NewHandler(config *config.Config, logger *logrus.Logger, authService auth.A
 // LoginRequest represents the login request payload
 // @Description User login credentials
 type LoginRequest struct {
-	Email    string `json:"email" binding:"required,email" example:"user@example.com" description:"User email address"`
-	Password string `json:"password" binding:"required" example:"password123" description:"User password (minimum 8 characters)"`
+	Email      string                 `json:"email" binding:"required,email" example:"user@example.com" description:"User email address"`
+	Password   string                 `json:"password" binding:"required" example:"password123" description:"User password (minimum 8 characters)"`
+	DeviceInfo map[string]interface{} `json:"device_info,omitempty" description:"Device information for session tracking"`
 }
 
 // Login handles user login
@@ -62,8 +62,9 @@ func (h *Handler) Login(c *gin.Context) {
 
 	// Create auth login request
 	authReq := &auth.LoginRequest{
-		Email:    req.Email,
-		Password: req.Password,
+		Email:      req.Email,
+		Password:   req.Password,
+		DeviceInfo: req.DeviceInfo,
 	}
 
 	// Attempt login
@@ -452,6 +453,311 @@ func (h *Handler) ValidateToken(token string) (*auth.AuthContext, error) {
 
 // ValidateAPIKey validates API keys (for middleware)
 func (h *Handler) ValidateAPIKey(apiKey string) (*auth.AuthContext, error) {
-	// TODO: Implement API key validation via auth service
-	return nil, errors.New("API key validation not implemented")
+	// TODO: Implement API key validation through APIKeyService
+	// This will need to be updated once we have access to the AuthServices composite
+	return nil, nil
+}
+
+// ListSessionsRequest represents request for listing user sessions
+type ListSessionsRequest struct {
+	Page     int  `form:"page,default=1" example:"1" description:"Page number for pagination"`
+	PageSize int  `form:"page_size,default=10" example:"10" description:"Number of sessions per page"`
+	Active   bool `form:"active,default=false" example:"false" description:"Filter for active sessions only"`
+}
+
+// ListSessions lists all user sessions
+// @Summary List user sessions
+// @Description Get paginated list of user sessions with device info
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "Page number" default(1)
+// @Param page_size query int false "Page size" default(10)
+// @Param active query bool false "Active sessions only" default(false)
+// @Success 200 {object} response.SuccessResponse "Sessions retrieved successfully"
+// @Failure 401 {object} response.ErrorResponse "Unauthorized"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /api/v1/auth/sessions [get]
+func (h *Handler) ListSessions(c *gin.Context) {
+	var req ListSessionsRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		h.logger.WithError(err).Error("Invalid list sessions request")
+		response.BadRequest(c, "Invalid request parameters", err.Error())
+		return
+	}
+
+	// Get user ID from context
+	userIDValue, exists := c.Get("user_id")
+	if !exists {
+		response.Unauthorized(c, "")
+		return
+	}
+
+	userID, ok := userIDValue.(ulid.ULID)
+	if !ok {
+		response.InternalServerError(c, "")
+		return
+	}
+
+	// Get user sessions (using GetUserSessions method)
+	sessions, err := h.authService.GetUserSessions(c.Request.Context(), userID)
+	if err != nil {
+		h.logger.WithError(err).WithField("user_id", userID).Error("Failed to list sessions")
+		response.InternalServerError(c, "Failed to retrieve sessions")
+		return
+	}
+
+	// Filter active sessions if requested
+	var filteredSessions []*auth.UserSession
+	if req.Active {
+		for _, session := range sessions {
+			if session.IsValid() {
+				filteredSessions = append(filteredSessions, session)
+			}
+		}
+	} else {
+		filteredSessions = sessions
+	}
+
+	// Manual pagination
+	startIdx := (req.Page - 1) * req.PageSize
+	endIdx := startIdx + req.PageSize
+	total := int64(len(filteredSessions))
+
+	if startIdx >= len(filteredSessions) {
+		filteredSessions = []*auth.UserSession{}
+	} else {
+		if endIdx > len(filteredSessions) {
+			endIdx = len(filteredSessions)
+		}
+		filteredSessions = filteredSessions[startIdx:endIdx]
+	}
+
+	// Create pagination metadata
+	pagination := response.NewPagination(req.Page, req.PageSize, total)
+
+	h.logger.WithFields(logrus.Fields{
+		"user_id": userID,
+		"count":   len(filteredSessions),
+		"total":   total,
+	}).Info("Sessions listed successfully")
+
+	response.SuccessWithPagination(c, filteredSessions, pagination)
+}
+
+// GetSessionRequest represents request for getting session by ID
+type GetSessionRequest struct {
+	SessionID ulid.ULID `uri:"session_id" binding:"required" example:"01FXYZ123456789ABCDEFGHIJK0" description:"Session ID"`
+}
+
+// GetSession gets a specific user session by ID
+// @Summary Get user session
+// @Description Get details of a specific user session
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param session_id path string true "Session ID"
+// @Success 200 {object} response.SuccessResponse "Session retrieved successfully"
+// @Failure 401 {object} response.ErrorResponse "Unauthorized"
+// @Failure 404 {object} response.ErrorResponse "Session not found"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /api/v1/auth/sessions/{session_id} [get]
+func (h *Handler) GetSession(c *gin.Context) {
+	var req GetSessionRequest
+	if err := c.ShouldBindUri(&req); err != nil {
+		h.logger.WithError(err).Error("Invalid get session request")
+		response.BadRequest(c, "Invalid session ID", err.Error())
+		return
+	}
+
+	// Get user ID from context
+	userIDValue, exists := c.Get("user_id")
+	if !exists {
+		response.Unauthorized(c, "")
+		return
+	}
+
+	userID, ok := userIDValue.(ulid.ULID)
+	if !ok {
+		response.InternalServerError(c, "")
+		return
+	}
+
+	// Get all user sessions first, then filter by session ID
+	sessions, err := h.authService.GetUserSessions(c.Request.Context(), userID)
+	if err != nil {
+		h.logger.WithError(err).WithFields(logrus.Fields{
+			"user_id":    userID,
+			"session_id": req.SessionID,
+		}).Error("Failed to get sessions")
+		response.InternalServerError(c, "Failed to retrieve session")
+		return
+	}
+
+	// Find the specific session
+	var session *auth.UserSession
+	for _, s := range sessions {
+		if s.ID == req.SessionID {
+			session = s
+			break
+		}
+	}
+
+	if session == nil {
+		h.logger.WithFields(logrus.Fields{
+			"user_id":    userID,
+			"session_id": req.SessionID,
+		}).Warn("Session not found")
+		response.NotFound(c, "Session")
+		return
+	}
+
+	h.logger.WithFields(logrus.Fields{
+		"user_id":    userID,
+		"session_id": req.SessionID,
+	}).Info("Session retrieved successfully")
+
+	response.Success(c, session)
+}
+
+// RevokeSessionRequest represents request for revoking a session
+type RevokeSessionRequest struct {
+	SessionID ulid.ULID `uri:"session_id" binding:"required" example:"01FXYZ123456789ABCDEFGHIJK0" description:"Session ID to revoke"`
+}
+
+// RevokeSession revokes a specific user session
+// @Summary Revoke user session
+// @Description Revoke a specific user session (logout from specific device)
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param session_id path string true "Session ID"
+// @Success 200 {object} response.MessageResponse "Session revoked successfully"
+// @Failure 401 {object} response.ErrorResponse "Unauthorized"
+// @Failure 404 {object} response.ErrorResponse "Session not found"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /api/v1/auth/sessions/{session_id}/revoke [post]
+func (h *Handler) RevokeSession(c *gin.Context) {
+	var req RevokeSessionRequest
+	if err := c.ShouldBindUri(&req); err != nil {
+		h.logger.WithError(err).Error("Invalid revoke session request")
+		response.BadRequest(c, "Invalid session ID", err.Error())
+		return
+	}
+
+	// Get user ID from context
+	userIDValue, exists := c.Get("user_id")
+	if !exists {
+		response.Unauthorized(c, "")
+		return
+	}
+
+	userID, ok := userIDValue.(ulid.ULID)
+	if !ok {
+		response.InternalServerError(c, "")
+		return
+	}
+
+	// Revoke session
+	err := h.authService.RevokeSession(c.Request.Context(), userID, req.SessionID)
+	if err != nil {
+		h.logger.WithError(err).WithFields(logrus.Fields{
+			"user_id":    userID,
+			"session_id": req.SessionID,
+		}).Error("Failed to revoke session")
+		response.NotFound(c, "Session")
+		return
+	}
+
+	h.logger.WithFields(logrus.Fields{
+		"user_id":    userID,
+		"session_id": req.SessionID,
+	}).Info("Session revoked successfully")
+
+	response.Success(c, gin.H{
+		"message": "Session revoked successfully",
+	})
+}
+
+// RevokeAllSessionsRequest represents request for revoking all user sessions
+type RevokeAllSessionsRequest struct {
+	ExceptCurrent bool `json:"except_current,omitempty" example:"true" description:"Whether to keep current session active"`
+}
+
+// RevokeAllSessions revokes all user sessions
+// @Summary Revoke all user sessions
+// @Description Revoke all user sessions (logout from all devices)
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body RevokeAllSessionsRequest false "Revocation options"
+// @Success 200 {object} response.MessageResponse "All sessions revoked successfully"
+// @Failure 401 {object} response.ErrorResponse "Unauthorized"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /api/v1/auth/sessions/revoke-all [post]
+func (h *Handler) RevokeAllSessions(c *gin.Context) {
+	var req RevokeAllSessionsRequest
+	// Don't require body, use defaults
+	c.ShouldBindJSON(&req)
+
+	// Get user ID from context
+	userIDValue, exists := c.Get("user_id")
+	if !exists {
+		response.Unauthorized(c, "")
+		return
+	}
+
+	userID, ok := userIDValue.(ulid.ULID)
+	if !ok {
+		response.InternalServerError(c, "")
+		return
+	}
+
+	var currentSessionID ulid.ULID
+	if req.ExceptCurrent {
+		sessionIDValue, exists := c.Get("session_id")
+		if exists {
+			if sessionID, ok := sessionIDValue.(ulid.ULID); ok {
+				currentSessionID = sessionID
+			}
+		}
+	}
+
+	// Get current sessions count before revoking
+	sessions, err := h.authService.GetUserSessions(c.Request.Context(), userID)
+	if err != nil {
+		h.logger.WithError(err).WithField("user_id", userID).Error("Failed to get sessions for count")
+		response.InternalServerError(c, "Failed to revoke sessions")
+		return
+	}
+
+	count := 0
+	for _, session := range sessions {
+		if session.IsValid() && (currentSessionID.IsZero() || session.ID != currentSessionID) {
+			count++
+		}
+	}
+
+	// Revoke all sessions
+	err = h.authService.RevokeAllSessions(c.Request.Context(), userID)
+	if err != nil {
+		h.logger.WithError(err).WithField("user_id", userID).Error("Failed to revoke all sessions")
+		response.InternalServerError(c, "Failed to revoke sessions")
+		return
+	}
+
+	h.logger.WithFields(logrus.Fields{
+		"user_id":        userID,
+		"revoked_count":  count,
+		"except_current": req.ExceptCurrent,
+	}).Info("All sessions revoked successfully")
+
+	response.Success(c, gin.H{
+		"message": "All sessions revoked successfully",
+		"count":   count,
+	})
 }

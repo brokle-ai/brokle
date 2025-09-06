@@ -12,21 +12,22 @@ import (
 	"gorm.io/gorm"
 )
 
-// Session represents an active user session.
-type Session struct {
-	ID               ulid.ULID  `json:"id" gorm:"type:char(26);primaryKey"`
-	UserID           ulid.ULID  `json:"user_id" gorm:"type:char(26);not null"`
-	Token            string     `json:"token" gorm:"size:255;not null;uniqueIndex"`
-	RefreshToken     string     `json:"refresh_token,omitempty" gorm:"size:255;not null;uniqueIndex"`
-	ExpiresAt        time.Time  `json:"expires_at"`
-	RefreshExpiresAt time.Time  `json:"refresh_expires_at"`
-	IPAddress        *string    `json:"ip_address,omitempty" gorm:"size:45"`
-	UserAgent        *string    `json:"user_agent,omitempty" gorm:"type:text"`
-	IsActive         bool       `json:"is_active" gorm:"default:true"`
-	LastUsedAt       *time.Time `json:"last_used_at,omitempty"`
-	CreatedAt        time.Time  `json:"created_at"`
-	UpdatedAt        time.Time  `json:"updated_at"`
-	DeletedAt        gorm.DeletedAt `json:"deleted_at,omitempty" gorm:"index"`
+// UserSession represents an active user session.
+type UserSession struct {
+	ID               ulid.ULID   `json:"id" gorm:"type:char(26);primaryKey"`
+	UserID           ulid.ULID   `json:"user_id" gorm:"type:char(26);not null"`
+	Token            string      `json:"token" gorm:"size:255;not null;uniqueIndex"`
+	RefreshToken     string      `json:"refresh_token,omitempty" gorm:"size:255;not null;uniqueIndex"`
+	ExpiresAt        time.Time   `json:"expires_at"`
+	RefreshExpiresAt time.Time   `json:"refresh_expires_at"`
+	IPAddress        *string     `json:"ip_address,omitempty" gorm:"size:45"`
+	UserAgent        *string     `json:"user_agent,omitempty" gorm:"type:text"`
+	DeviceInfo       interface{} `json:"device_info,omitempty" gorm:"type:jsonb"` // Device information JSON
+	IsActive         bool        `json:"is_active" gorm:"default:true"`
+	LastUsedAt       *time.Time  `json:"last_used_at,omitempty"`
+	RevokedAt        *time.Time  `json:"revoked_at,omitempty"` // Replaced deleted_at with revoked_at
+	CreatedAt        time.Time   `json:"created_at"`
+	UpdatedAt        time.Time   `json:"updated_at"`
 }
 
 // SessionStats represents session statistics and metrics
@@ -64,10 +65,11 @@ type APIKey struct {
 	EnvironmentID  *ulid.ULID `json:"environment_id,omitempty" gorm:"type:char(26)"`
 	Name           string     `json:"name" gorm:"size:255;not null"`
 	KeyPrefix      string     `json:"key_prefix" gorm:"size:8;not null"`       // First 8 chars for display
-	KeyHash        string     `json:"-" gorm:"size:255;not null"`                  // Hashed key for storage
-	Scopes         []string   `json:"scopes" gorm:"type:json"`               // JSON array of permissions
-	RateLimitRPM   int        `json:"rate_limit_rpm" gorm:"default:1000"` // Requests per minute
-	IsActive       bool       `json:"is_active" gorm:"default:true"`
+	KeyHash        string      `json:"-" gorm:"size:255;not null"`                  // Hashed key for storage
+	Scopes         []string    `json:"scopes" gorm:"type:json"`               // JSON array of permissions
+	RateLimitRPM   int         `json:"rate_limit_rpm" gorm:"default:1000"` // Requests per minute
+	Metadata       interface{} `json:"metadata,omitempty" gorm:"type:jsonb"`   // Flexible metadata storage
+	IsActive       bool        `json:"is_active" gorm:"default:true"`
 	ExpiresAt      *time.Time `json:"expires_at,omitempty"`
 	LastUsedAt     *time.Time `json:"last_used_at,omitempty"`
 	CreatedAt      time.Time  `json:"created_at"`
@@ -136,9 +138,10 @@ type AuditLog struct {
 
 // Request/Response DTOs
 type LoginRequest struct {
-	Email    string `json:"email" validate:"required,email"`
-	Password string `json:"password" validate:"required"`
-	Remember bool   `json:"remember"` // Extend session duration
+	Email      string                 `json:"email" validate:"required,email"`
+	Password   string                 `json:"password" validate:"required"`
+	Remember   bool                   `json:"remember"` // Extend session duration
+	DeviceInfo map[string]interface{} `json:"device_info,omitempty"` // Device information for session tracking
 }
 
 type LoginResponse struct {
@@ -264,8 +267,8 @@ var SystemRoles = map[string][]string{
 }
 
 // Constructor functions
-func NewSession(userID ulid.ULID, token, refreshToken string, expiresAt, refreshExpiresAt time.Time, ipAddress, userAgent *string) *Session {
-	return &Session{
+func NewUserSession(userID ulid.ULID, token, refreshToken string, expiresAt, refreshExpiresAt time.Time, ipAddress, userAgent *string, deviceInfo interface{}) *UserSession {
+	return &UserSession{
 		ID:               ulid.New(),
 		UserID:           userID,
 		Token:            token,
@@ -274,6 +277,7 @@ func NewSession(userID ulid.ULID, token, refreshToken string, expiresAt, refresh
 		RefreshExpiresAt: refreshExpiresAt,
 		IPAddress:        ipAddress,
 		UserAgent:        userAgent,
+		DeviceInfo:       deviceInfo,
 		IsActive:         true,
 		CreatedAt:        time.Now(),
 		UpdatedAt:        time.Now(),
@@ -338,25 +342,32 @@ func NewAuditLog(userID, orgID *ulid.ULID, action, resource, resourceID, metadat
 }
 
 // Utility methods
-func (s *Session) IsExpired() bool {
+func (s *UserSession) IsExpired() bool {
 	return time.Now().After(s.ExpiresAt)
 }
 
-func (s *Session) IsRefreshExpired() bool {
+func (s *UserSession) IsRefreshExpired() bool {
 	return time.Now().After(s.RefreshExpiresAt)
 }
 
-func (s *Session) IsValid() bool {
-	return s.IsActive && !s.IsExpired()
+func (s *UserSession) IsValid() bool {
+	return s.IsActive && !s.IsExpired() && s.RevokedAt == nil
 }
 
-func (s *Session) MarkAsUsed() {
+func (s *UserSession) MarkAsUsed() {
 	now := time.Now()
 	s.LastUsedAt = &now
 	s.UpdatedAt = now
 }
 
-func (s *Session) Deactivate() {
+func (s *UserSession) Revoke() {
+	now := time.Now()
+	s.RevokedAt = &now
+	s.IsActive = false
+	s.UpdatedAt = now
+}
+
+func (s *UserSession) Deactivate() {
 	s.IsActive = false
 	s.UpdatedAt = time.Now()
 }
@@ -389,7 +400,7 @@ func (r *Role) AddPermission(permissionID ulid.ULID) *RolePermission {
 }
 
 // Table name methods for GORM
-func (Session) TableName() string       { return "sessions" }
+func (UserSession) TableName() string   { return "user_sessions" }
 func (APIKey) TableName() string        { return "api_keys" }
 func (Role) TableName() string          { return "roles" }
 func (Permission) TableName() string    { return "permissions" }

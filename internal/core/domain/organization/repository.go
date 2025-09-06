@@ -140,6 +140,27 @@ type InvitationFilters struct {
 	Offset         int
 }
 
+// OrganizationSettingsRepository defines the interface for organization settings data access.
+type OrganizationSettingsRepository interface {
+	// Basic CRUD operations
+	Create(ctx context.Context, setting *OrganizationSettings) error
+	GetByID(ctx context.Context, id ulid.ULID) (*OrganizationSettings, error)
+	GetByKey(ctx context.Context, orgID ulid.ULID, key string) (*OrganizationSettings, error)
+	Update(ctx context.Context, setting *OrganizationSettings) error
+	Delete(ctx context.Context, id ulid.ULID) error
+	
+	// Organization scoped operations
+	GetAllByOrganizationID(ctx context.Context, orgID ulid.ULID) ([]*OrganizationSettings, error)
+	GetSettingsMap(ctx context.Context, orgID ulid.ULID) (map[string]interface{}, error)
+	DeleteByKey(ctx context.Context, orgID ulid.ULID, key string) error
+	UpsertSetting(ctx context.Context, orgID ulid.ULID, key string, value interface{}) (*OrganizationSettings, error)
+	
+	// Bulk operations
+	CreateMultiple(ctx context.Context, settings []*OrganizationSettings) error
+	GetByKeys(ctx context.Context, orgID ulid.ULID, keys []string) ([]*OrganizationSettings, error)
+	DeleteMultiple(ctx context.Context, orgID ulid.ULID, keys []string) error
+}
+
 // Repository aggregates all organization-related repositories.
 type Repository interface {
 	Organizations() OrganizationRepository
@@ -147,4 +168,5 @@ type Repository interface {
 	Projects() ProjectRepository
 	Environments() EnvironmentRepository
 	Invitations() InvitationRepository
+	Settings() OrganizationSettingsRepository
 }

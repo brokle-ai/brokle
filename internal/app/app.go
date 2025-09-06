@@ -60,6 +60,7 @@ func (a *App) Start() error {
 		a.logger,
 		providers.Services.Auth.Auth, // Auth service from modular DI
 		providers.Services.User.User, // User service from modular DI
+		providers.Services.Organization, // Organization services from modular DI
 		// All enterprise services available through providers.Enterprise
 	)
 
@@ -96,6 +97,7 @@ func (a *App) Run() error {
 		a.logger,
 		providers.Services.Auth.Auth, // Auth service from modular DI
 		providers.Services.User.User, // User service from modular DI
+		providers.Services.Organization, // Organization services from modular DI
 		// All enterprise services available through providers.Enterprise
 	)
 

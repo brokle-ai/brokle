@@ -21,7 +21,7 @@ func ptrToString(s *string) string {
 
 // sessionService implements the auth.SessionService interface
 type sessionService struct {
-	sessionRepo auth.SessionRepository
+	sessionRepo auth.UserSessionRepository
 	userRepo    user.Repository
 	jwtService  auth.JWTService
 	auditRepo   auth.AuditLogRepository
@@ -29,7 +29,7 @@ type sessionService struct {
 
 // NewSessionService creates a new session service instance
 func NewSessionService(
-	sessionRepo auth.SessionRepository,
+	sessionRepo auth.UserSessionRepository,
 	userRepo user.Repository,
 	jwtService auth.JWTService,
 	auditRepo auth.AuditLogRepository,
@@ -43,7 +43,7 @@ func NewSessionService(
 }
 
 // CreateSession creates a new user session
-func (s *sessionService) CreateSession(ctx context.Context, userID ulid.ULID, req *auth.CreateSessionRequest) (*auth.Session, error) {
+func (s *sessionService) CreateSession(ctx context.Context, userID ulid.ULID, req *auth.CreateSessionRequest) (*auth.UserSession, error) {
 	// Verify user exists and is active
 	user, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
@@ -85,19 +85,7 @@ func (s *sessionService) CreateSession(ctx context.Context, userID ulid.ULID, re
 	}
 
 	// Create session
-	session := &auth.Session{
-		ID:               ulid.New(),
-		UserID:           userID,
-		Token:            accessToken,
-		RefreshToken:     refreshToken,
-		ExpiresAt:        expiresAt,
-		RefreshExpiresAt: refreshExpiresAt,
-		IPAddress:        req.IPAddress,
-		UserAgent:        req.UserAgent,
-		IsActive:         true,
-		CreatedAt:        time.Now(),
-		UpdatedAt:        time.Now(),
-	}
+	session := auth.NewUserSession(userID, accessToken, refreshToken, expiresAt, refreshExpiresAt, req.IPAddress, req.UserAgent, nil)
 
 	err = s.sessionRepo.Create(ctx, session)
 	if err != nil {
@@ -105,34 +93,24 @@ func (s *sessionService) CreateSession(ctx context.Context, userID ulid.ULID, re
 	}
 
 	// Log session creation
-	s.auditRepo.Create(ctx, &auth.AuditLog{
-		ID:             ulid.New(),
-		UserID:         &userID,
-		OrganizationID: user.DefaultOrganizationID,
-		Action:         "session.created",
-		Resource:       "session",
-		ResourceID:     session.ID.String(),
-		IPAddress:      ptrToString(req.IPAddress),
-		UserAgent:      ptrToString(req.UserAgent),
-		Metadata:       fmt.Sprintf(`{"remember": %t}`, req.Remember),
-		CreatedAt:      time.Now(),
-	})
+	auditLog := auth.NewAuditLog(&userID, user.DefaultOrganizationID, "session.created", "session", session.ID.String(), fmt.Sprintf(`{"remember": %t}`, req.Remember), ptrToString(req.IPAddress), ptrToString(req.UserAgent))
+	s.auditRepo.Create(ctx, auditLog)
 
 	return session, nil
 }
 
 // GetSession retrieves a session by ID
-func (s *sessionService) GetSession(ctx context.Context, sessionID ulid.ULID) (*auth.Session, error) {
+func (s *sessionService) GetSession(ctx context.Context, sessionID ulid.ULID) (*auth.UserSession, error) {
 	return s.sessionRepo.GetByID(ctx, sessionID)
 }
 
 // GetSessionByToken retrieves a session by access token
-func (s *sessionService) GetSessionByToken(ctx context.Context, token string) (*auth.Session, error) {
+func (s *sessionService) GetSessionByToken(ctx context.Context, token string) (*auth.UserSession, error) {
 	return s.sessionRepo.GetByToken(ctx, token)
 }
 
 // ValidateSession validates a session token and returns the session if valid
-func (s *sessionService) ValidateSession(ctx context.Context, token string) (*auth.Session, error) {
+func (s *sessionService) ValidateSession(ctx context.Context, token string) (*auth.UserSession, error) {
 	// First validate the JWT token
 	claims, err := s.jwtService.ValidateAccessToken(ctx, token)
 	if err != nil {
@@ -164,9 +142,7 @@ func (s *sessionService) ValidateSession(ctx context.Context, token string) (*au
 	}
 
 	// Update last used timestamp
-	session.LastUsedAt = &time.Time{}
-	*session.LastUsedAt = time.Now()
-	session.UpdatedAt = time.Now()
+	session.MarkAsUsed()
 	
 	// Update session (don't fail if this fails)
 	s.sessionRepo.Update(ctx, session)
@@ -175,7 +151,7 @@ func (s *sessionService) ValidateSession(ctx context.Context, token string) (*au
 }
 
 // RefreshSession generates a new access token using refresh token
-func (s *sessionService) RefreshSession(ctx context.Context, refreshToken string) (*auth.Session, error) {
+func (s *sessionService) RefreshSession(ctx context.Context, refreshToken string) (*auth.UserSession, error) {
 	// Validate refresh token
 	claims, err := s.jwtService.ValidateRefreshToken(ctx, refreshToken)
 	if err != nil {
@@ -237,15 +213,8 @@ func (s *sessionService) RefreshSession(ctx context.Context, refreshToken string
 	}
 
 	// Log token refresh
-	s.auditRepo.Create(ctx, &auth.AuditLog{
-		ID:             ulid.New(),
-		UserID:         &user.ID,
-		OrganizationID: user.DefaultOrganizationID,
-		Action:         "session.refreshed",
-		Resource:       "session",
-		ResourceID:     session.ID.String(),
-		CreatedAt:      time.Now(),
-	})
+	auditLog := auth.NewAuditLog(&user.ID, user.DefaultOrganizationID, "session.refreshed", "session", session.ID.String(), "", "", "")
+	s.auditRepo.Create(ctx, auditLog)
 
 	return session, nil
 }
@@ -257,45 +226,33 @@ func (s *sessionService) RevokeSession(ctx context.Context, sessionID ulid.ULID)
 		return fmt.Errorf("session not found: %w", err)
 	}
 
-	err = s.sessionRepo.DeactivateSession(ctx, sessionID)
+	err = s.sessionRepo.RevokeSession(ctx, sessionID)
 	if err != nil {
 		return fmt.Errorf("failed to revoke session: %w", err)
 	}
 
 	// Log session revocation
-	s.auditRepo.Create(ctx, &auth.AuditLog{
-		ID:        ulid.New(),
-		UserID:    &session.UserID,
-		Action:    "session.revoked",
-		Resource:  "session",
-		ResourceID: sessionID.String(),
-		CreatedAt: time.Now(),
-	})
+	auditLog := auth.NewAuditLog(&session.UserID, nil, "session.revoked", "session", sessionID.String(), "", "", "")
+	s.auditRepo.Create(ctx, auditLog)
 
 	return nil
 }
 
 // GetUserSessions retrieves all sessions for a user
-func (s *sessionService) GetUserSessions(ctx context.Context, userID ulid.ULID) ([]*auth.Session, error) {
+func (s *sessionService) GetUserSessions(ctx context.Context, userID ulid.ULID) ([]*auth.UserSession, error) {
 	return s.sessionRepo.GetByUserID(ctx, userID)
 }
 
 // RevokeUserSessions revokes all sessions for a user
 func (s *sessionService) RevokeUserSessions(ctx context.Context, userID ulid.ULID) error {
-	err := s.sessionRepo.DeactivateUserSessions(ctx, userID)
+	err := s.sessionRepo.RevokeUserSessions(ctx, userID)
 	if err != nil {
 		return fmt.Errorf("failed to revoke user sessions: %w", err)
 	}
 
 	// Log mass session revocation
-	s.auditRepo.Create(ctx, &auth.AuditLog{
-		ID:        ulid.New(),
-		UserID:    &userID,
-		Action:    "session.revoked_all",
-		Resource:  "user",
-		ResourceID: userID.String(),
-		CreatedAt: time.Now(),
-	})
+	auditLog := auth.NewAuditLog(&userID, nil, "session.revoked_all", "user", userID.String(), "", "", "")
+	s.auditRepo.Create(ctx, auditLog)
 
 	return nil
 }
@@ -306,7 +263,7 @@ func (s *sessionService) CleanupExpiredSessions(ctx context.Context) error {
 }
 
 // GetActiveSessions retrieves only active sessions for a user
-func (s *sessionService) GetActiveSessions(ctx context.Context, userID ulid.ULID) ([]*auth.Session, error) {
+func (s *sessionService) GetActiveSessions(ctx context.Context, userID ulid.ULID) ([]*auth.UserSession, error) {
 	return s.sessionRepo.GetActiveSessionsByUserID(ctx, userID)
 }
 

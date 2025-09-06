@@ -212,11 +212,11 @@ func (c *JWTClaims) HasPermission(permission string) bool {
 
 // PasswordResetToken represents a password reset token
 type PasswordResetToken struct {
-	ID        ulid.ULID `json:"id" gorm:"type:char(26);primaryKey"`
-	UserID    ulid.ULID `json:"user_id" gorm:"type:char(26);not null"`
-	Token     string    `json:"token" gorm:"size:255;not null;uniqueIndex"`
-	ExpiresAt time.Time `json:"expires_at"`
-	Used      bool      `json:"used" gorm:"default:false"`
+	ID        ulid.ULID  `json:"id" gorm:"type:char(26);primaryKey"`
+	UserID    ulid.ULID  `json:"user_id" gorm:"type:char(26);not null"`
+	Token     string     `json:"token" gorm:"size:255;not null;uniqueIndex"`
+	ExpiresAt time.Time  `json:"expires_at"`
+	UsedAt    *time.Time `json:"used_at,omitempty"` // Replaced Used bool with UsedAt timestamp
 	
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -247,7 +247,7 @@ func NewPasswordResetToken(userID ulid.ULID, token string, expiresAt time.Time) 
 		UserID:    userID,
 		Token:     token,
 		ExpiresAt: expiresAt,
-		Used:      false,
+		UsedAt:    nil, // Not used initially
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
@@ -271,7 +271,17 @@ func (t *PasswordResetToken) IsExpired() bool {
 }
 
 func (t *PasswordResetToken) IsValid() bool {
-	return !t.Used && !t.IsExpired()
+	return t.UsedAt == nil && !t.IsExpired()
+}
+
+func (t *PasswordResetToken) MarkAsUsed() {
+	now := time.Now()
+	t.UsedAt = &now
+	t.UpdatedAt = now
+}
+
+func (t *PasswordResetToken) IsUsed() bool {
+	return t.UsedAt != nil
 }
 
 func (t *EmailVerificationToken) IsExpired() bool {

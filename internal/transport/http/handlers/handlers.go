@@ -5,6 +5,7 @@ import (
 	
 	"brokle/internal/config"
 	"brokle/internal/core/domain/auth"
+	"brokle/internal/core/domain/organization"
 	"brokle/internal/core/domain/user"
 	"brokle/internal/transport/http/handlers/ai"
 	"brokle/internal/transport/http/handlers/analytics"
@@ -15,7 +16,7 @@ import (
 	"brokle/internal/transport/http/handlers/health"
 	"brokle/internal/transport/http/handlers/logs"
 	"brokle/internal/transport/http/handlers/metrics"
-	"brokle/internal/transport/http/handlers/organization"
+	organizationHandler "brokle/internal/transport/http/handlers/organization"
 	"brokle/internal/transport/http/handlers/project"
 	userHandler "brokle/internal/transport/http/handlers/user"
 	"brokle/internal/transport/http/handlers/websocket"
@@ -27,7 +28,7 @@ type Handlers struct {
 	Metrics      *metrics.Handler
 	Auth         *authHandler.Handler
 	User         *userHandler.Handler
-	Organization *organization.Handler
+	Organization *organizationHandler.Handler
 	Project      *project.Handler
 	Environment  *environment.Handler
 	APIKey       *apikey.Handler
@@ -44,6 +45,7 @@ func NewHandlers(
 	logger *logrus.Logger,
 	authService auth.AuthService,
 	userService user.Service,
+	orgServices organization.OrganizationServices,
 	// Add other service dependencies as they're implemented
 ) *Handlers {
 	return &Handlers{
@@ -51,7 +53,7 @@ func NewHandlers(
 		Metrics:      metrics.NewHandler(cfg, logger),
 		Auth:         authHandler.NewHandler(cfg, logger, authService, userService),
 		User:         userHandler.NewHandler(cfg, logger, userService),
-		Organization: organization.NewHandler(cfg, logger),
+		Organization: organizationHandler.NewHandler(cfg, logger, orgServices),
 		Project:      project.NewHandler(cfg, logger),
 		Environment:  environment.NewHandler(cfg, logger),
 		APIKey:       apikey.NewHandler(cfg, logger),

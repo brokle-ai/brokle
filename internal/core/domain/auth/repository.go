@@ -7,25 +7,32 @@ import (
 	"brokle/pkg/ulid"
 )
 
-// SessionRepository defines the interface for session data access.
-type SessionRepository interface {
+// UserSessionRepository defines the interface for user session data access.
+type UserSessionRepository interface {
 	// Basic CRUD operations
-	Create(ctx context.Context, session *Session) error
-	GetByID(ctx context.Context, id ulid.ULID) (*Session, error)
-	GetByToken(ctx context.Context, token string) (*Session, error)
-	GetByRefreshToken(ctx context.Context, refreshToken string) (*Session, error)
-	Update(ctx context.Context, session *Session) error
+	Create(ctx context.Context, session *UserSession) error
+	GetByID(ctx context.Context, id ulid.ULID) (*UserSession, error)
+	GetByToken(ctx context.Context, token string) (*UserSession, error)
+	GetByRefreshToken(ctx context.Context, refreshToken string) (*UserSession, error)
+	Update(ctx context.Context, session *UserSession) error
 	Delete(ctx context.Context, id ulid.ULID) error
 	
 	// User sessions
-	GetByUserID(ctx context.Context, userID ulid.ULID) ([]*Session, error)
-	GetActiveSessionsByUserID(ctx context.Context, userID ulid.ULID) ([]*Session, error)
+	GetByUserID(ctx context.Context, userID ulid.ULID) ([]*UserSession, error)
+	GetActiveSessionsByUserID(ctx context.Context, userID ulid.ULID) ([]*UserSession, error)
 	
 	// Session management
 	DeactivateSession(ctx context.Context, id ulid.ULID) error
 	DeactivateUserSessions(ctx context.Context, userID ulid.ULID) error
+	RevokeSession(ctx context.Context, id ulid.ULID) error
+	RevokeUserSessions(ctx context.Context, userID ulid.ULID) error
 	CleanupExpiredSessions(ctx context.Context) error
+	CleanupRevokedSessions(ctx context.Context) error
 	MarkAsUsed(ctx context.Context, id ulid.ULID) error
+	
+	// Device-specific queries
+	GetByDeviceInfo(ctx context.Context, userID ulid.ULID, deviceInfo interface{}) ([]*UserSession, error)
+	GetActiveSessionsCount(ctx context.Context, userID ulid.ULID) (int, error)
 }
 
 // APIKeyRepository defines the interface for API key data access.
@@ -158,12 +165,35 @@ type AuditLogFilters struct {
 	SortOrder string `json:"sort_order"` // asc, desc
 }
 
+// PasswordResetTokenRepository defines the interface for password reset token data access.
+type PasswordResetTokenRepository interface {
+	// Basic CRUD operations
+	Create(ctx context.Context, token *PasswordResetToken) error
+	GetByID(ctx context.Context, id ulid.ULID) (*PasswordResetToken, error)
+	GetByToken(ctx context.Context, token string) (*PasswordResetToken, error)
+	GetByUserID(ctx context.Context, userID ulid.ULID) ([]*PasswordResetToken, error)
+	Update(ctx context.Context, token *PasswordResetToken) error
+	Delete(ctx context.Context, id ulid.ULID) error
+	
+	// Token management
+	MarkAsUsed(ctx context.Context, id ulid.ULID) error
+	IsUsed(ctx context.Context, id ulid.ULID) (bool, error)
+	IsValid(ctx context.Context, id ulid.ULID) (bool, error)
+	GetValidTokenByUserID(ctx context.Context, userID ulid.ULID) (*PasswordResetToken, error)
+	
+	// Cleanup operations
+	CleanupExpiredTokens(ctx context.Context) error
+	CleanupUsedTokens(ctx context.Context, olderThan time.Time) error
+	InvalidateAllUserTokens(ctx context.Context, userID ulid.ULID) error
+}
+
 // Repository aggregates all auth-related repositories.
 type Repository interface {
-	Sessions() SessionRepository
+	UserSessions() UserSessionRepository
 	APIKeys() APIKeyRepository
 	Roles() RoleRepository
 	Permissions() PermissionRepository
 	RolePermissions() RolePermissionRepository
 	AuditLogs() AuditLogRepository
+	PasswordResetTokens() PasswordResetTokenRepository
 }

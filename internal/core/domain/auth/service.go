@@ -24,7 +24,7 @@ type AuthService interface {
 	VerifyEmail(ctx context.Context, token string) error
 	
 	// Session management
-	GetUserSessions(ctx context.Context, userID ulid.ULID) ([]*Session, error)
+	GetUserSessions(ctx context.Context, userID ulid.ULID) ([]*UserSession, error)
 	RevokeSession(ctx context.Context, userID, sessionID ulid.ULID) error
 	RevokeAllSessions(ctx context.Context, userID ulid.ULID) error
 	
@@ -36,20 +36,20 @@ type AuthService interface {
 // SessionService defines the session management service interface.
 type SessionService interface {
 	// Session management
-	CreateSession(ctx context.Context, userID ulid.ULID, req *CreateSessionRequest) (*Session, error)
-	GetSession(ctx context.Context, sessionID ulid.ULID) (*Session, error)
-	GetSessionByToken(ctx context.Context, token string) (*Session, error)
-	ValidateSession(ctx context.Context, token string) (*Session, error)
-	RefreshSession(ctx context.Context, refreshToken string) (*Session, error)
+	CreateSession(ctx context.Context, userID ulid.ULID, req *CreateSessionRequest) (*UserSession, error)
+	GetSession(ctx context.Context, sessionID ulid.ULID) (*UserSession, error)
+	GetSessionByToken(ctx context.Context, token string) (*UserSession, error)
+	ValidateSession(ctx context.Context, token string) (*UserSession, error)
+	RefreshSession(ctx context.Context, refreshToken string) (*UserSession, error)
 	RevokeSession(ctx context.Context, sessionID ulid.ULID) error
 	
 	// User session management
-	GetUserSessions(ctx context.Context, userID ulid.ULID) ([]*Session, error)
+	GetUserSessions(ctx context.Context, userID ulid.ULID) ([]*UserSession, error)
 	RevokeUserSessions(ctx context.Context, userID ulid.ULID) error
 	
 	// Session cleanup and maintenance
 	CleanupExpiredSessions(ctx context.Context) error
-	GetActiveSessions(ctx context.Context, userID ulid.ULID) ([]*Session, error)
+	GetActiveSessions(ctx context.Context, userID ulid.ULID) ([]*UserSession, error)
 	MarkSessionAsUsed(ctx context.Context, sessionID ulid.ULID) error
 }
 

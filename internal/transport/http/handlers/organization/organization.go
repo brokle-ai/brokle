@@ -7,13 +7,16 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"brokle/internal/config"
+	"brokle/internal/core/domain/organization"
 	"brokle/pkg/response"
 )
 
 // Handler handles organization endpoints
 type Handler struct {
-	config *config.Config
-	logger *logrus.Logger
+	config       *config.Config
+	logger       *logrus.Logger
+	orgServices  organization.OrganizationServices
+	Settings     *SettingsHandler // Embedded settings handler
 }
 
 // Request/Response Models
@@ -78,10 +81,12 @@ type ListMembersResponse struct {
 }
 
 // NewHandler creates a new organization handler
-func NewHandler(config *config.Config, logger *logrus.Logger) *Handler {
+func NewHandler(config *config.Config, logger *logrus.Logger, orgServices organization.OrganizationServices) *Handler {
 	return &Handler{
-		config: config,
-		logger: logger,
+		config:      config,
+		logger:      logger,
+		orgServices: orgServices,
+		Settings:    NewSettingsHandler(config, logger, orgServices.Settings()),
 	}
 }
 
@@ -242,3 +247,14 @@ func (h *Handler) InviteMember(c *gin.Context) {
 func (h *Handler) RemoveMember(c *gin.Context) {
 	response.Success(c, gin.H{"message": "Remove organization member - TODO"})
 }
+
+// Settings delegation methods
+func (h *Handler) GetSettings(c *gin.Context)        { h.Settings.GetAllSettings(c) }
+func (h *Handler) CreateSetting(c *gin.Context)      { h.Settings.CreateSetting(c) }
+func (h *Handler) GetSetting(c *gin.Context)         { h.Settings.GetSetting(c) }
+func (h *Handler) UpdateSetting(c *gin.Context)      { h.Settings.UpdateSetting(c) }
+func (h *Handler) DeleteSetting(c *gin.Context)      { h.Settings.DeleteSetting(c) }
+func (h *Handler) BulkCreateSettings(c *gin.Context) { h.Settings.BulkCreateSettings(c) }
+func (h *Handler) ExportSettings(c *gin.Context)     { h.Settings.ExportSettings(c) }
+func (h *Handler) ImportSettings(c *gin.Context)     { h.Settings.ImportSettings(c) }
+func (h *Handler) ResetToDefaults(c *gin.Context)    { h.Settings.ResetToDefaults(c) }
