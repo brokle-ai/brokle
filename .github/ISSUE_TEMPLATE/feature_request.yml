@@ -1,6 +1,6 @@
 name: Feature Request
 description: Suggest an idea for this project
-title: "[Feature]: "
+title: "feat: <short description>"
 labels: ["enhancement", "triage"]
 body:
   - type: markdown
@@ -10,44 +10,60 @@ body:
   - type: textarea
     id: problem
     attributes:
-      label: Is your feature request related to a problem? Please describe.
-      description: A clear and concise description of what the problem is.
-      placeholder: I'm always frustrated when [...]
+      label: What problem does this solve?
+      description: A clear and concise description of the problem or limitation you're experiencing.
+      placeholder: I'm always frustrated when... / Currently there's no way to...
     validations:
       required: true
   - type: textarea
-    id: solution
+    id: use-case
     attributes:
-      label: Describe the solution you'd like
-      description: A clear and concise description of what you want to happen.
-      placeholder: I would like to see [...]
+      label: Use case
+      description: Describe the specific use case and how this feature would benefit users or improve the platform.
+      placeholder: |
+        - Who would use this feature?
+        - How would it improve their workflow?
+        - What business value does it provide?
     validations:
       required: true
   - type: textarea
-    id: alternatives
+    id: proposed-solution
     attributes:
-      label: Describe alternatives you've considered
-      description: A clear and concise description of any alternative solutions or features you've considered.
-      placeholder: I've considered [...]
+      label: Proposed solution
+      description: A clear and concise description of what you want to happen. Include technical details if applicable.
+      placeholder: |
+        Describe your proposed solution:
+        - API endpoints
+        - UI changes
+        - Configuration options
+        - Integration points
     validations:
-      required: false
+      required: true
   - type: dropdown
     id: priority
     attributes:
       label: Priority
       description: How important is this feature to you?
       options:
-        - Low
-        - Medium
-        - High
-        - Critical
+        - Low - Nice to have
+        - Medium - Would be helpful
+        - High - Important for my use case
+        - Critical - Blocking my adoption
     validations:
       required: true
+  - type: textarea
+    id: alternative-approaches
+    attributes:
+      label: Alternative approaches
+      description: Describe any alternative solutions or workarounds you've considered.
+      placeholder: I've considered using... / Alternative approaches could be...
+    validations:
+      required: false
   - type: textarea
     id: additional-context
     attributes:
       label: Additional context
-      description: Add any other context or screenshots about the feature request here.
-      placeholder: Any additional information...
+      description: Add any other context, examples, mockups, or references about the feature request here.
+      placeholder: Any additional information, links to similar features, mockups, etc.
     validations:
       required: false
