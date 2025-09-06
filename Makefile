@@ -41,9 +41,9 @@ dev: ## Start full stack development (Go API + Next.js)
 	@echo "🔥 Starting full stack development..."
 	@$(MAKE) -j2 dev-backend dev-frontend
 
-dev-backend: ## Start Go API server only
-	@echo "🐹 Starting Go API server..."
-	go run cmd/server/main.go
+dev-backend: ## Start Go API server with hot reload
+	@echo "🔥 Starting Go API server with hot reload..."
+	air -c .air.toml
 
 dev-frontend: ## Start Next.js development server only
 	@echo "⚛️ Starting Next.js development server..."
@@ -377,7 +377,7 @@ hot-reload: watch ## Alias for watch
 
 install-tools: ## Install development tools
 	@echo "🔧 Installing development tools..."
-	go install github.com/cosmtrek/air@latest
+	go install github.com/air-verse/air@latest
 	go install github.com/swaggo/swag/cmd/swag@latest
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 	go install golang.org/x/tools/cmd/goimports@latest
