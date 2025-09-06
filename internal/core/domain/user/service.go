@@ -9,7 +9,6 @@ import (
 // UserService defines the interface for core user management operations.
 type UserService interface {
 	// User lifecycle management
-	Register(ctx context.Context, req *CreateUserRequest) (*User, error)
 	GetUser(ctx context.Context, userID ulid.ULID) (*User, error)
 	GetUserByEmail(ctx context.Context, email string) (*User, error)
 	GetUserByEmailWithPassword(ctx context.Context, email string) (*User, error)

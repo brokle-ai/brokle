@@ -145,11 +145,10 @@ type LoginRequest struct {
 }
 
 type LoginResponse struct {
-	AccessToken  string    `json:"access_token"`
-	RefreshToken string    `json:"refresh_token"`
-	TokenType    string    `json:"token_type"` // Always "Bearer"
-	ExpiresIn    int64     `json:"expires_in"` // Seconds until expiration
-	User         *AuthUser `json:"user"`
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	TokenType    string `json:"token_type"` // Always "Bearer"
+	ExpiresIn    int64  `json:"expires_in"` // Seconds until expiration
 }
 
 type AuthUser struct {

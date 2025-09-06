@@ -115,28 +115,16 @@ func (s *authService) Login(ctx context.Context, req *auth.LoginRequest) (*auth.
 	auditLog := auth.NewAuditLog(&user.ID, user.DefaultOrganizationID, "auth.login.success", "user", user.ID.String(), fmt.Sprintf(`{"session_id": "%s"}`, session.ID.String()), "", "")
 	s.auditRepo.Create(ctx, auditLog)
 
-	// Prepare response
-	authUser := &auth.AuthUser{
-		ID:         user.ID,
-		Email:      user.Email,
-		Name:                  user.GetFullName(),
-		AvatarURL:  &user.AvatarURL,
-		IsEmailVerified:       user.IsEmailVerified,
-		OnboardingCompleted:   user.OnboardingCompleted,
-		DefaultOrganizationID: user.DefaultOrganizationID,
-	}
-
 	return &auth.LoginResponse{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 		TokenType:    "Bearer",
 		ExpiresIn:    int64(accessTokenTTL.Seconds()),
-		User:         authUser,
 	}, nil
 }
 
-// Register creates a new user account
-func (s *authService) Register(ctx context.Context, req *auth.RegisterRequest) (*user.User, error) {
+// Register creates a new user account and auto-login (returns login tokens)
+func (s *authService) Register(ctx context.Context, req *auth.RegisterRequest) (*auth.LoginResponse, error) {
 	// Check if user already exists
 	existingUser, _ := s.userRepo.GetByEmail(ctx, req.Email)
 	if existingUser != nil {
@@ -162,7 +150,58 @@ func (s *authService) Register(ctx context.Context, req *auth.RegisterRequest) (
 	auditLog := auth.NewAuditLog(&user.ID, nil, "auth.register.success", "user", user.ID.String(), fmt.Sprintf(`{"email": "%s"}`, user.Email), "", "")
 	s.auditRepo.Create(ctx, auditLog)
 
-	return user, nil
+	// Auto-login: Generate tokens for the new user
+	var permissions []string
+	if user.DefaultOrganizationID != nil {
+		permissions, _ = s.roleService.GetUserPermissions(ctx, user.ID, *user.DefaultOrganizationID)
+	}
+
+	// Generate access token
+	accessToken, err := s.jwtService.GenerateAccessToken(ctx, user.ID, map[string]interface{}{
+		"email":          user.Email,
+		"organization_id": user.DefaultOrganizationID,
+		"permissions":     permissions,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate access token: %w", err)
+	}
+
+	refreshToken, err := s.jwtService.GenerateRefreshToken(ctx, user.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate refresh token: %w", err)
+	}
+
+	// Calculate token expiration
+	accessTokenTTL := 24 * time.Hour
+	refreshTokenTTL := 7 * 24 * time.Hour
+	expiresAt := time.Now().Add(accessTokenTTL)
+	refreshExpiresAt := time.Now().Add(refreshTokenTTL)
+
+	// Create session for auto-login
+	session := auth.NewUserSession(user.ID, accessToken, refreshToken, expiresAt, refreshExpiresAt, nil, nil, nil)
+	err = s.sessionRepo.Create(ctx, session)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create session: %w", err)
+	}
+
+	// Update last login (for the auto-login)
+	err = s.userRepo.UpdateLastLogin(ctx, user.ID)
+	if err != nil {
+		// Log but don't fail registration
+		fmt.Printf("Failed to update last login after registration: %v\n", err)
+	}
+
+	// Log auto-login after registration
+	auditLog = auth.NewAuditLog(&user.ID, user.DefaultOrganizationID, "auth.register.auto_login", "user", user.ID.String(), fmt.Sprintf(`{"session_id": "%s"}`, session.ID.String()), "", "")
+	s.auditRepo.Create(ctx, auditLog)
+
+	// Return login tokens (same as login response)
+	return &auth.LoginResponse{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		TokenType:    "Bearer",
+		ExpiresIn:    int64(accessTokenTTL.Seconds()),
+	}, nil
 }
 
 // Logout invalidates a user session
@@ -239,23 +278,11 @@ func (s *authService) RefreshToken(ctx context.Context, req *auth.RefreshTokenRe
 		return nil, fmt.Errorf("failed to update session: %w", err)
 	}
 
-	// Prepare response
-	authUser := &auth.AuthUser{
-		ID:         user.ID,
-		Email:      user.Email,
-		Name:                  user.GetFullName(),
-		AvatarURL:  &user.AvatarURL,
-		IsEmailVerified:       user.IsEmailVerified,
-		OnboardingCompleted:   user.OnboardingCompleted,
-		DefaultOrganizationID: user.DefaultOrganizationID,
-	}
-
 	return &auth.LoginResponse{
 		AccessToken:  accessToken,
 		RefreshToken: req.RefreshToken, // Keep same refresh token
 		TokenType:    "Bearer",
 		ExpiresIn:    int64(accessTokenTTL.Seconds()),
-		User:         authUser,
 	}, nil
 }
 

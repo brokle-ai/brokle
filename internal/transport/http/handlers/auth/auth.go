@@ -75,7 +75,7 @@ func (h *Handler) Login(c *gin.Context) {
 		return
 	}
 
-	h.logger.WithField("user_id", loginResp.User.ID).Info("User logged in successfully")
+	h.logger.Info("User logged in successfully")
 	response.Success(c, loginResp)
 }
 
@@ -120,28 +120,16 @@ func (h *Handler) Signup(c *gin.Context) {
 		Language:  req.Language,
 	}
 
-	// Register user
-	createUserReq := &user.CreateUserRequest{
-		Email:     authReq.Email,
-		FirstName: authReq.FirstName,
-		LastName:  authReq.LastName,
-		Password:  authReq.Password,
-		Timezone:  authReq.Timezone,
-		Language:  authReq.Language,
-	}
-	
-	newUser, err := h.userService.Register(c.Request.Context(), createUserReq)
+	// Register user and auto-login (returns tokens)
+	loginResp, err := h.authService.Register(c.Request.Context(), authReq)
 	if err != nil {
 		h.logger.WithError(err).WithField("email", req.Email).Error("Registration failed")
 		response.Conflict(c, "Registration failed")
 		return
 	}
 
-	h.logger.WithField("user_id", newUser.ID).Info("User registered successfully")
-	response.Success(c, gin.H{
-		"message": "Registration successful",
-		"user_id": newUser.ID,
-	})
+	h.logger.WithField("email", req.Email).Info("User registered and logged in successfully")
+	response.Success(c, loginResp)
 }
 
 // RefreshTokenRequest represents the refresh token request payload
@@ -183,7 +171,7 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 		return
 	}
 
-	h.logger.WithField("user_id", loginResp.User.ID).Info("Token refreshed successfully")
+	h.logger.Info("Token refreshed successfully")
 	response.Success(c, loginResp)
 }
 

@@ -34,44 +34,6 @@ func NewUserService(
 	}
 }
 
-// Register creates a new user account
-func (s *userService) Register(ctx context.Context, req *user.CreateUserRequest) (*user.User, error) {
-	// Check if user already exists
-	existingUser, _ := s.userRepo.GetByEmail(ctx, req.Email)
-	if existingUser != nil {
-		return nil, errors.New("user with this email already exists")
-	}
-
-	// Hash password
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
-	if err != nil {
-		return nil, fmt.Errorf("failed to hash password: %w", err)
-	}
-
-	// Create user entity
-	newUser := user.NewUser(req.Email, req.FirstName, req.LastName)
-	newUser.Password = string(hashedPassword)
-	newUser.IsEmailVerified = false // Email verification required
-
-	// Save user
-	err = s.userRepo.Create(ctx, newUser)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create user: %w", err)
-	}
-
-	// Send verification email
-	err = s.SendVerificationEmail(ctx, newUser.ID)
-	if err != nil {
-		// Log but don't fail registration
-		fmt.Printf("Failed to send verification email: %v\n", err)
-	}
-
-	// Audit log
-	s.auditRepo.Create(ctx, auth.NewAuditLog(&newUser.ID, nil, "user.registered", "user", newUser.ID.String(),
-		fmt.Sprintf(`{"email": "%s", "name": "%s %s"}`, newUser.Email, newUser.FirstName, newUser.LastName), "", ""))
-
-	return newUser, nil
-}
 
 // GetUser retrieves user by ID
 func (s *userService) GetUser(ctx context.Context, userID ulid.ULID) (*user.User, error) {
