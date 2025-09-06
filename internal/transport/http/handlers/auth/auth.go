@@ -19,11 +19,11 @@ type Handler struct {
 	config      *config.Config
 	logger      *logrus.Logger
 	authService auth.AuthService
-	userService user.Service
+	userService user.UserService
 }
 
 // NewHandler creates a new auth handler
-func NewHandler(config *config.Config, logger *logrus.Logger, authService auth.AuthService, userService user.Service) *Handler {
+func NewHandler(config *config.Config, logger *logrus.Logger, authService auth.AuthService, userService user.UserService) *Handler {
 	return &Handler{
 		config:      config,
 		logger:      logger,

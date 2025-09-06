@@ -13,6 +13,7 @@ import (
 	"brokle/internal/core/domain/user"
 	authService "brokle/internal/core/services/auth"
 	orgService "brokle/internal/core/services/organization"
+	userService "brokle/internal/core/services/user"
 	"brokle/internal/ee/analytics"
 	"brokle/internal/ee/compliance"
 	"brokle/internal/ee/rbac"
@@ -101,7 +102,10 @@ type OrganizationRepositories struct {
 
 // UserServices contains all user-related services
 type UserServices struct {
-	User user.Service
+	User        user.UserService
+	Profile     user.ProfileService
+	Preferences user.PreferenceService
+	Onboarding  user.OnboardingService
 }
 
 // AuthServices contains all auth-related services
@@ -188,16 +192,33 @@ func ProvideUserServices(
 	authRepos *AuthRepositories,
 	logger *logrus.Logger,
 ) *UserServices {
-	// TODO: Implement user service once created
-	// userSvc := userService.NewUserService(
-	//     userRepos.User,
-	//     authRepos.AuditLog,
-	//     logger,
-	// )
+	// Import the actual user service implementations
+	userSvc := userService.NewUserService(
+		userRepos.User,
+		nil, // AuthService - would need to be injected if needed
+		authRepos.AuditLog,
+	)
+	
+	profileSvc := userService.NewProfileService(
+		userRepos.User,
+		authRepos.AuditLog,
+	)
+	
+	preferencesSvc := userService.NewPreferenceService(
+		userRepos.User,
+		authRepos.AuditLog,
+	)
+	
+	onboardingSvc := userService.NewOnboardingService(
+		userRepos.User,
+		authRepos.AuditLog,
+	)
 
 	return &UserServices{
-		// User: userSvc,
-		User: nil, // Placeholder until user service is implemented
+		User:        userSvc,
+		Profile:     profileSvc,
+		Preferences: preferencesSvc,
+		Onboarding:  onboardingSvc,
 	}
 }
 

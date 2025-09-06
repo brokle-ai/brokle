@@ -11,17 +11,19 @@ import (
 
 // Handler handles user endpoints
 type Handler struct {
-	config      *config.Config
-	logger      *logrus.Logger
-	userService user.Service
+	config         *config.Config
+	logger         *logrus.Logger
+	userService    user.UserService
+	profileService user.ProfileService
 }
 
 // NewHandler creates a new user handler
-func NewHandler(config *config.Config, logger *logrus.Logger, userService user.Service) *Handler {
+func NewHandler(config *config.Config, logger *logrus.Logger, userService user.UserService, profileService user.ProfileService) *Handler {
 	return &Handler{
-		config:      config,
-		logger:      logger,
-		userService: userService,
+		config:         config,
+		logger:         logger,
+		userService:    userService,
+		profileService: profileService,
 	}
 }
 

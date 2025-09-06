@@ -59,7 +59,8 @@ func (a *App) Start() error {
 		a.config,
 		a.logger,
 		providers.Services.Auth.Auth,           // Auth service from modular DI
-		providers.Services.User.User,           // User service from modular DI  
+		providers.Services.User.User,           // User service from modular DI
+		providers.Services.User.Profile,        // Profile service from modular DI
 		providers.Services.OrganizationService, // Direct organization service
 		providers.Services.MemberService,       // Direct member service
 		providers.Services.ProjectService,      // Direct project service
@@ -101,7 +102,8 @@ func (a *App) Run() error {
 		a.config,
 		a.logger,
 		providers.Services.Auth.Auth,           // Auth service from modular DI
-		providers.Services.User.User,           // User service from modular DI  
+		providers.Services.User.User,           // User service from modular DI
+		providers.Services.User.Profile,        // Profile service from modular DI
 		providers.Services.OrganizationService, // Direct organization service
 		providers.Services.MemberService,       // Direct member service
 		providers.Services.ProjectService,      // Direct project service
