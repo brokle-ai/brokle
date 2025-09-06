@@ -41,7 +41,6 @@ body:
     attributes:
       label: Version (if self-hosted)
       description: What version are you running? We may ask you to upgrade to the latest version, as many issues are continuously being fixed.
-      placeholder: v1.2.3
     validations:
       required: false
   - type: textarea
@@ -50,9 +49,7 @@ body:
       label: SDK and integration versions
       description: If you're experiencing an issue with an integration or SDK, please share all package versions you're using. Include client libraries, API versions, etc.
       placeholder: |
-        - Brokle Go SDK: v1.x.x
-        - OpenAI client: v1.x.x
-        - other relevant packages...
+        - Leave a comment
     validations:
       required: false
   - type: textarea
