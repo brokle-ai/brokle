@@ -26,14 +26,24 @@ body:
         3. Observe error...
     validations:
       required: true
-  - type: textarea
-    id: deployment-info
+  - type: dropdown
+    id: deployment-type
     attributes:
       label: Brokle Cloud or self-hosted?
-      description: If self-hosted, what version are you running? We may ask you to upgrade to the latest version, as many issues are continuously being fixed.
-      placeholder: Cloud / Self-hosted version X.X.X
+      description: Select your deployment type
+      options:
+        - Brokle Cloud
+        - Self-hosted
     validations:
       required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version (if self-hosted)
+      description: What version are you running? We may ask you to upgrade to the latest version, as many issues are continuously being fixed.
+      placeholder: v1.2.3
+    validations:
+      required: false
   - type: textarea
     id: integration-versions
     attributes:
