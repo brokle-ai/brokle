@@ -422,7 +422,6 @@ func (c *Client) handleMessage(message []byte) {
 
 	c.logger.WithFields(logrus.Fields{
 		"client_id": c.ID,
-		"user_id":   c.UserID,
 		"type":      msg.Type,
 	}).Debug("Received WebSocket message")
 
