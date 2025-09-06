@@ -28,8 +28,8 @@ DROP TABLE IF EXISTS api_keys CASCADE;
 -- Drop sessions table
 DROP TABLE IF EXISTS sessions CASCADE;
 
--- Drop invitations table
-DROP TABLE IF EXISTS invitations CASCADE;
+-- Drop user_invitations table
+DROP TABLE IF EXISTS user_invitations CASCADE;
 
 -- Drop environments table
 DROP TABLE IF EXISTS environments CASCADE;

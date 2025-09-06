@@ -80,8 +80,8 @@ CREATE TABLE environments (
     UNIQUE(project_id, slug)
 );
 
--- Create invitations table (ORGANIZATION DOMAIN)
-CREATE TABLE invitations (
+-- Create user_invitations table (ORGANIZATION DOMAIN)
+CREATE TABLE user_invitations (
     id CHAR(26) PRIMARY KEY,
     organization_id CHAR(26) NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     role_id CHAR(26) NOT NULL,
@@ -125,7 +125,6 @@ CREATE TABLE api_keys (
     scopes JSON,
     is_active BOOLEAN DEFAULT TRUE,
     rate_limit_rpm INTEGER DEFAULT 1000,
-    allowed_ips INET[],
     expires_at TIMESTAMP WITH TIME ZONE,
     last_used_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -140,7 +139,7 @@ CREATE TABLE roles (
     name VARCHAR(100) NOT NULL,
     display_name VARCHAR(255) NOT NULL,
     description TEXT,
-    is_system BOOLEAN DEFAULT FALSE,
+    is_system_role BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     deleted_at TIMESTAMP WITH TIME ZONE,
@@ -152,7 +151,7 @@ ALTER TABLE organization_members ADD CONSTRAINT fk_organization_members_role_id
     FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE RESTRICT;
 
 -- Add foreign key constraint for invitations role
-ALTER TABLE invitations ADD CONSTRAINT fk_invitations_role_id 
+ALTER TABLE user_invitations ADD CONSTRAINT fk_user_invitations_role_id 
     FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE RESTRICT;
 
 -- Create permissions table (AUTH DOMAIN)
@@ -162,16 +161,17 @@ CREATE TABLE permissions (
     display_name VARCHAR(255) NOT NULL,
     description TEXT,
     category VARCHAR(100) NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    deleted_at TIMESTAMP WITH TIME ZONE
 );
 
 -- Create role_permissions table (AUTH DOMAIN)
 CREATE TABLE role_permissions (
-    id CHAR(26) PRIMARY KEY,
     role_id CHAR(26) NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
     permission_id CHAR(26) NOT NULL REFERENCES permissions(id) ON DELETE CASCADE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    UNIQUE(role_id, permission_id)
+    PRIMARY KEY (role_id, permission_id)
 );
 
 -- Create audit_logs table (AUTH DOMAIN)
@@ -181,9 +181,9 @@ CREATE TABLE audit_logs (
     organization_id CHAR(26) REFERENCES organizations(id) ON DELETE SET NULL,
     action VARCHAR(255) NOT NULL,
     resource VARCHAR(100) NOT NULL,
-    resource_id VARCHAR(100),
-    metadata TEXT,
-    ip_address INET,
+    resource_id VARCHAR(255),
+    metadata JSONB,
+    ip_address VARCHAR(45),
     user_agent TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -194,8 +194,9 @@ CREATE TABLE password_reset_tokens (
     user_id CHAR(26) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     token VARCHAR(255) NOT NULL UNIQUE,
     expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
-    used_at TIMESTAMP WITH TIME ZONE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    used BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Create email_verification_tokens table (AUTH DOMAIN)
@@ -204,8 +205,9 @@ CREATE TABLE email_verification_tokens (
     user_id CHAR(26) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     token VARCHAR(255) NOT NULL UNIQUE,
     expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
-    used_at TIMESTAMP WITH TIME ZONE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    used BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Create user_profiles table (USER DOMAIN)
@@ -271,12 +273,12 @@ CREATE INDEX idx_environments_slug ON environments(slug);
 CREATE INDEX idx_environments_deleted_at ON environments(deleted_at);
 
 -- Invitations table indexes
-CREATE INDEX idx_invitations_organization_id ON invitations(organization_id);
-CREATE INDEX idx_invitations_email ON invitations(email);
-CREATE INDEX idx_invitations_user_id ON invitations(user_id);
-CREATE INDEX idx_invitations_token ON invitations(token);
-CREATE INDEX idx_invitations_status ON invitations(status);
-CREATE INDEX idx_invitations_expires_at ON invitations(expires_at);
+CREATE INDEX idx_user_invitations_organization_id ON user_invitations(organization_id);
+CREATE INDEX idx_user_invitations_email ON user_invitations(email);
+CREATE INDEX idx_user_invitations_user_id ON user_invitations(user_id);
+CREATE INDEX idx_user_invitations_token ON user_invitations(token);
+CREATE INDEX idx_user_invitations_status ON user_invitations(status);
+CREATE INDEX idx_user_invitations_expires_at ON user_invitations(expires_at);
 
 -- Sessions table indexes
 CREATE INDEX idx_sessions_user_id ON sessions(user_id);
@@ -298,12 +300,13 @@ CREATE INDEX idx_api_keys_deleted_at ON api_keys(deleted_at);
 -- Roles table indexes
 CREATE INDEX idx_roles_organization_id ON roles(organization_id);
 CREATE INDEX idx_roles_name ON roles(name);
-CREATE INDEX idx_roles_is_system ON roles(is_system);
+CREATE INDEX idx_roles_is_system_role ON roles(is_system_role);
 CREATE INDEX idx_roles_deleted_at ON roles(deleted_at);
 
 -- Permissions table indexes
 CREATE INDEX idx_permissions_name ON permissions(name);
 CREATE INDEX idx_permissions_category ON permissions(category);
+CREATE INDEX idx_permissions_deleted_at ON permissions(deleted_at);
 
 -- Role permissions table indexes
 CREATE INDEX idx_role_permissions_role_id ON role_permissions(role_id);
@@ -356,140 +359,12 @@ CREATE TRIGGER update_organizations_updated_at BEFORE UPDATE ON organizations FO
 CREATE TRIGGER update_organization_members_updated_at BEFORE UPDATE ON organization_members FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_projects_updated_at BEFORE UPDATE ON projects FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_environments_updated_at BEFORE UPDATE ON environments FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-CREATE TRIGGER update_invitations_updated_at BEFORE UPDATE ON invitations FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_user_invitations_updated_at BEFORE UPDATE ON user_invitations FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_sessions_updated_at BEFORE UPDATE ON sessions FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_api_keys_updated_at BEFORE UPDATE ON api_keys FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_roles_updated_at BEFORE UPDATE ON roles FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_permissions_updated_at BEFORE UPDATE ON permissions FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_user_profiles_updated_at BEFORE UPDATE ON user_profiles FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_user_preferences_updated_at BEFORE UPDATE ON user_preferences FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
--- ===================================
--- SEED DEFAULT PERMISSIONS
--- ===================================
-
--- Insert system permissions
-INSERT INTO permissions (id, name, display_name, description, category) VALUES
--- User Management
-('01HZQV8XYZA9ABCDEF123456', 'users.read', 'Read Users', 'View user profiles and information', 'user_management'),
-('01HZQV8XYZB9ABCDEF123457', 'users.write', 'Write Users', 'Create and update user profiles', 'user_management'),
-('01HZQV8XYZC9ABCDEF123458', 'users.delete', 'Delete Users', 'Delete user accounts', 'user_management'),
-('01HZQV8XYZD9ABCDEF123459', 'users.invite', 'Invite Users', 'Send invitations to new users', 'user_management'),
-
--- Organization Management
-('01HZQV8XYZE9ABCDEF12345A', 'organizations.read', 'Read Organizations', 'View organization details', 'organization_management'),
-('01HZQV8XYZF9ABCDEF12345B', 'organizations.write', 'Write Organizations', 'Create and update organizations', 'organization_management'),
-('01HZQV8XYZG9ABCDEF12345C', 'organizations.delete', 'Delete Organizations', 'Delete organizations', 'organization_management'),
-('01HZQV8XYZH9ABCDEF12345D', 'organizations.members', 'Manage Members', 'Add, remove, and modify organization members', 'organization_management'),
-
--- Project Management
-('01HZQV8XYZI9ABCDEF12345E', 'projects.read', 'Read Projects', 'View project details', 'project_management'),
-('01HZQV8XYZJ9ABCDEF12345F', 'projects.write', 'Write Projects', 'Create and update projects', 'project_management'),
-('01HZQV8XYZK9ABCDEF123460', 'projects.delete', 'Delete Projects', 'Delete projects', 'project_management'),
-
--- Environment Management
-('01HZQV8XYZL9ABCDEF123461', 'environments.read', 'Read Environments', 'View environment details', 'environment_management'),
-('01HZQV8XYZM9ABCDEF123462', 'environments.write', 'Write Environments', 'Create and update environments', 'environment_management'),
-('01HZQV8XYZN9ABCDEF123463', 'environments.delete', 'Delete Environments', 'Delete environments', 'environment_management'),
-
--- API Key Management
-('01HZQV8XYZO9ABCDEF123464', 'api_keys.read', 'Read API Keys', 'View API keys', 'api_key_management'),
-('01HZQV8XYZP9ABCDEF123465', 'api_keys.write', 'Write API Keys', 'Create and update API keys', 'api_key_management'),
-('01HZQV8XYZQ9ABCDEF123466', 'api_keys.delete', 'Delete API Keys', 'Delete API keys', 'api_key_management'),
-
--- Role & Permission Management
-('01HZQV8XYZR9ABCDEF123467', 'roles.read', 'Read Roles', 'View roles and permissions', 'rbac_management'),
-('01HZQV8XYZS9ABCDEF123468', 'roles.write', 'Write Roles', 'Create and update roles', 'rbac_management'),
-('01HZQV8XYZT9ABCDEF123469', 'roles.delete', 'Delete Roles', 'Delete roles', 'rbac_management'),
-('01HZQV8XYZU9ABCDEF12346A', 'permissions.manage', 'Manage Permissions', 'Assign permissions to roles', 'rbac_management'),
-
--- Audit & Security
-('01HZQV8XYZV9ABCDEF12346B', 'audit.read', 'Read Audit Logs', 'View audit logs and security events', 'security'),
-('01HZQV8XYZW9ABCDEF12346C', 'security.manage', 'Manage Security', 'Manage security settings and configurations', 'security');
-
--- ===================================
--- SEED DEFAULT SYSTEM ROLES
--- ===================================
-
--- Insert system roles (organization_id is NULL for system roles)
-INSERT INTO roles (id, organization_id, name, display_name, description, is_system) VALUES
-('01HZQV8XYZX9ABCDEF12346D', NULL, 'super_admin', 'Super Administrator', 'System-wide administrator with all permissions', true),
-('01HZQV8XYZY9ABCDEF12346E', NULL, 'owner', 'Owner', 'Organization owner with full control', true),
-('01HZQV8XYZZ9ABCDEF12346F', NULL, 'admin', 'Administrator', 'Organization administrator with most permissions', true),
-('01HZQV8XYZ19ABCDEF123470', NULL, 'developer', 'Developer', 'Developer with project and environment access', true),
-('01HZQV8XYZ29ABCDEF123471', NULL, 'viewer', 'Viewer', 'Read-only access to organization resources', true);
-
--- ===================================
--- ASSIGN PERMISSIONS TO SYSTEM ROLES
--- ===================================
-
--- Super Admin gets all permissions
-INSERT INTO role_permissions (id, role_id, permission_id)
-SELECT 
-    '01HZQV8XYZ3' || LPAD((ROW_NUMBER() OVER())::text, 13, '0'),
-    '01HZQV8XYZX9ABCDEF12346D',
-    id
-FROM permissions;
-
--- Owner gets most permissions (excluding super admin specific ones)
-INSERT INTO role_permissions (id, role_id, permission_id) VALUES
-('01HZQV8XYZ49ABCDEF123480', '01HZQV8XYZY9ABCDEF12346E', '01HZQV8XYZA9ABCDEF123456'), -- users.read
-('01HZQV8XYZ59ABCDEF123481', '01HZQV8XYZY9ABCDEF12346E', '01HZQV8XYZB9ABCDEF123457'), -- users.write
-('01HZQV8XYZ69ABCDEF123482', '01HZQV8XYZY9ABCDEF12346E', '01HZQV8XYZC9ABCDEF123458'), -- users.delete
-('01HZQV8XYZ79ABCDEF123483', '01HZQV8XYZY9ABCDEF12346E', '01HZQV8XYZD9ABCDEF123459'), -- users.invite
-('01HZQV8XYZ89ABCDEF123484', '01HZQV8XYZY9ABCDEF12346E', '01HZQV8XYZE9ABCDEF12345A'), -- organizations.read
-('01HZQV8XYZ99ABCDEF123485', '01HZQV8XYZY9ABCDEF12346E', '01HZQV8XYZF9ABCDEF12345B'), -- organizations.write
-('01HZQV8XYZA9ABCDEF123486', '01HZQV8XYZY9ABCDEF12346E', '01HZQV8XYZG9ABCDEF12345C'), -- organizations.delete
-('01HZQV8XYZB9ABCDEF123487', '01HZQV8XYZY9ABCDEF12346E', '01HZQV8XYZH9ABCDEF12345D'), -- organizations.members
-('01HZQV8XYZC9ABCDEF123488', '01HZQV8XYZY9ABCDEF12346E', '01HZQV8XYZI9ABCDEF12345E'), -- projects.read
-('01HZQV8XYZD9ABCDEF123489', '01HZQV8XYZY9ABCDEF12346E', '01HZQV8XYZJ9ABCDEF12345F'), -- projects.write
-('01HZQV8XYZE9ABCDEF12348A', '01HZQV8XYZY9ABCDEF12346E', '01HZQV8XYZK9ABCDEF123460'), -- projects.delete
-('01HZQV8XYZF9ABCDEF12348B', '01HZQV8XYZY9ABCDEF12346E', '01HZQV8XYZL9ABCDEF123461'), -- environments.read
-('01HZQV8XYZG9ABCDEF12348C', '01HZQV8XYZY9ABCDEF12346E', '01HZQV8XYZM9ABCDEF123462'), -- environments.write
-('01HZQV8XYZH9ABCDEF12348D', '01HZQV8XYZY9ABCDEF12346E', '01HZQV8XYZN9ABCDEF123463'), -- environments.delete
-('01HZQV8XYZI9ABCDEF12348E', '01HZQV8XYZY9ABCDEF12346E', '01HZQV8XYZO9ABCDEF123464'), -- api_keys.read
-('01HZQV8XYZJ9ABCDEF12348F', '01HZQV8XYZY9ABCDEF12346E', '01HZQV8XYZP9ABCDEF123465'), -- api_keys.write
-('01HZQV8XYZK9ABCDEF123490', '01HZQV8XYZY9ABCDEF12346E', '01HZQV8XYZQ9ABCDEF123466'), -- api_keys.delete
-('01HZQV8XYZL9ABCDEF123491', '01HZQV8XYZY9ABCDEF12346E', '01HZQV8XYZR9ABCDEF123467'), -- roles.read
-('01HZQV8XYZM9ABCDEF123492', '01HZQV8XYZY9ABCDEF12346E', '01HZQV8XYZS9ABCDEF123468'), -- roles.write
-('01HZQV8XYZN9ABCDEF123493', '01HZQV8XYZY9ABCDEF12346E', '01HZQV8XYZT9ABCDEF123469'), -- roles.delete
-('01HZQV8XYZO9ABCDEF123494', '01HZQV8XYZY9ABCDEF12346E', '01HZQV8XYZU9ABCDEF12346A'), -- permissions.manage
-('01HZQV8XYZP9ABCDEF123495', '01HZQV8XYZY9ABCDEF12346E', '01HZQV8XYZV9ABCDEF12346B'); -- audit.read
-
--- Admin gets management permissions (excluding delete organization and security.manage)
-INSERT INTO role_permissions (id, role_id, permission_id) VALUES
-('01HZQV8XYZQ9ABCDEF123496', '01HZQV8XYZZ9ABCDEF12346F', '01HZQV8XYZA9ABCDEF123456'), -- users.read
-('01HZQV8XYZR9ABCDEF123497', '01HZQV8XYZZ9ABCDEF12346F', '01HZQV8XYZB9ABCDEF123457'), -- users.write
-('01HZQV8XYZS9ABCDEF123498', '01HZQV8XYZZ9ABCDEF12346F', '01HZQV8XYZD9ABCDEF123459'), -- users.invite
-('01HZQV8XYZT9ABCDEF123499', '01HZQV8XYZZ9ABCDEF12346F', '01HZQV8XYZE9ABCDEF12345A'), -- organizations.read
-('01HZQV8XYZU9ABCDEF12349A', '01HZQV8XYZZ9ABCDEF12346F', '01HZQV8XYZF9ABCDEF12345B'), -- organizations.write
-('01HZQV8XYZV9ABCDEF12349B', '01HZQV8XYZZ9ABCDEF12346F', '01HZQV8XYZH9ABCDEF12345D'), -- organizations.members
-('01HZQV8XYZW9ABCDEF12349C', '01HZQV8XYZZ9ABCDEF12346F', '01HZQV8XYZI9ABCDEF12345E'), -- projects.read
-('01HZQV8XYZX9ABCDEF12349D', '01HZQV8XYZZ9ABCDEF12346F', '01HZQV8XYZJ9ABCDEF12345F'), -- projects.write
-('01HZQV8XYZY9ABCDEF12349E', '01HZQV8XYZZ9ABCDEF12346F', '01HZQV8XYZK9ABCDEF123460'), -- projects.delete
-('01HZQV8XYZZ9ABCDEF12349F', '01HZQV8XYZZ9ABCDEF12346F', '01HZQV8XYZL9ABCDEF123461'), -- environments.read
-('01HZQV8XYZ19ABCDEF1234A0', '01HZQV8XYZZ9ABCDEF12346F', '01HZQV8XYZM9ABCDEF123462'), -- environments.write
-('01HZQV8XYZ29ABCDEF1234A1', '01HZQV8XYZZ9ABCDEF12346F', '01HZQV8XYZN9ABCDEF123463'), -- environments.delete
-('01HZQV8XYZ39ABCDEF1234A2', '01HZQV8XYZZ9ABCDEF12346F', '01HZQV8XYZO9ABCDEF123464'), -- api_keys.read
-('01HZQV8XYZ49ABCDEF1234A3', '01HZQV8XYZZ9ABCDEF12346F', '01HZQV8XYZP9ABCDEF123465'), -- api_keys.write
-('01HZQV8XYZ59ABCDEF1234A4', '01HZQV8XYZZ9ABCDEF12346F', '01HZQV8XYZQ9ABCDEF123466'), -- api_keys.delete
-('01HZQV8XYZ69ABCDEF1234A5', '01HZQV8XYZZ9ABCDEF12346F', '01HZQV8XYZV9ABCDEF12346B'); -- audit.read
-
--- Developer gets project and environment permissions
-INSERT INTO role_permissions (id, role_id, permission_id) VALUES
-('01HZQV8XYZ79ABCDEF1234A6', '01HZQV8XYZ19ABCDEF123470', '01HZQV8XYZA9ABCDEF123456'), -- users.read
-('01HZQV8XYZ89ABCDEF1234A7', '01HZQV8XYZ19ABCDEF123470', '01HZQV8XYZE9ABCDEF12345A'), -- organizations.read
-('01HZQV8XYZ99ABCDEF1234A8', '01HZQV8XYZ19ABCDEF123470', '01HZQV8XYZI9ABCDEF12345E'), -- projects.read
-('01HZQV8XYZA9ABCDEF1234A9', '01HZQV8XYZ19ABCDEF123470', '01HZQV8XYZJ9ABCDEF12345F'), -- projects.write
-('01HZQV8XYZB9ABCDEF1234AA', '01HZQV8XYZ19ABCDEF123470', '01HZQV8XYZL9ABCDEF123461'), -- environments.read
-('01HZQV8XYZC9ABCDEF1234AB', '01HZQV8XYZ19ABCDEF123470', '01HZQV8XYZM9ABCDEF123462'), -- environments.write
-('01HZQV8XYZD9ABCDEF1234AC', '01HZQV8XYZ19ABCDEF123470', '01HZQV8XYZO9ABCDEF123464'), -- api_keys.read
-('01HZQV8XYZE9ABCDEF1234AD', '01HZQV8XYZ19ABCDEF123470', '01HZQV8XYZP9ABCDEF123465'), -- api_keys.write
-('01HZQV8XYZF9ABCDEF1234AE', '01HZQV8XYZ19ABCDEF123470', '01HZQV8XYZQ9ABCDEF123466'); -- api_keys.delete
-
--- Viewer gets read-only permissions
-INSERT INTO role_permissions (id, role_id, permission_id) VALUES
-('01HZQV8XYZG9ABCDEF1234AF', '01HZQV8XYZ29ABCDEF123471', '01HZQV8XYZA9ABCDEF123456'), -- users.read
-('01HZQV8XYZH9ABCDEF1234B0', '01HZQV8XYZ29ABCDEF123471', '01HZQV8XYZE9ABCDEF12345A'), -- organizations.read
-('01HZQV8XYZI9ABCDEF1234B1', '01HZQV8XYZ29ABCDEF123471', '01HZQV8XYZI9ABCDEF12345E'), -- projects.read
-('01HZQV8XYZJ9ABCDEF1234B2', '01HZQV8XYZ29ABCDEF123471', '01HZQV8XYZL9ABCDEF123461'), -- environments.read
-('01HZQV8XYZK9ABCDEF1234B3', '01HZQV8XYZ29ABCDEF123471', '01HZQV8XYZO9ABCDEF123464'); -- api_keys.read
+CREATE TRIGGER update_password_reset_tokens_updated_at BEFORE UPDATE ON password_reset_tokens FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_email_verification_tokens_updated_at BEFORE UPDATE ON email_verification_tokens FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

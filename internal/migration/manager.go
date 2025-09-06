@@ -3,24 +3,28 @@ package migration
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/clickhouse"
+	"github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/sirupsen/logrus"
 
 	"brokle/internal/config"
 	"brokle/internal/infrastructure/database"
-	sharedDB "github.com/brokle-ai/brokle-platform/shared/go/common/database"
-	sharedLogger "github.com/brokle-ai/brokle-platform/shared/go/pkg/logger"
 )
 
 // Manager coordinates migrations across multiple databases
 type Manager struct {
 	config           *config.Config
 	logger           *logrus.Logger
-	postgresRunner   *sharedDB.MigrationRunner
-	clickhouseRunner *sharedDB.ClickHouseMigrationRunner
+	postgresRunner   *migrate.Migrate
+	clickhouseRunner *migrate.Migrate
 	postgresDB       *database.PostgresDB
 	clickhouseDB     *database.ClickHouseDB
 }
@@ -35,7 +39,7 @@ func NewManagerWithDatabases(cfg *config.Config, databases []DatabaseType) (*Man
 	// Initialize logger
 	logger := logrus.New()
 	logger.SetFormatter(&logrus.JSONFormatter{})
-	
+
 	level, err := logrus.ParseLevel(cfg.Logging.Level)
 	if err != nil {
 		level = logrus.InfoLevel
@@ -99,12 +103,27 @@ func (m *Manager) initPostgresRunner() error {
 
 	// Get migrations path
 	migrationsPath := m.getMigrationsPath(PostgresDB)
-	
-	// Create migration runner using shared library
-	runner, err := sharedDB.NewMigrationRunner(
-		&sharedDB.Database{DB: m.postgresDB.DB},
-		"brokle-monolith",
-		migrationsPath,
+
+	// Get underlying *sql.DB from GORM
+	sqlDB, err := m.postgresDB.DB.DB()
+	if err != nil {
+		return fmt.Errorf("failed to get underlying *sql.DB: %w", err)
+	}
+
+	// Create postgres database driver instance
+	driver, err := postgres.WithInstance(sqlDB, &postgres.Config{
+		MigrationsTable: "schema_migrations",
+		DatabaseName:    m.config.Database.Database,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create postgres driver: %w", err)
+	}
+
+	// Create migration runner using golang-migrate
+	runner, err := migrate.NewWithDatabaseInstance(
+		fmt.Sprintf("file://%s", migrationsPath),
+		"postgres",
+		driver,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create postgres migration runner: %w", err)
@@ -123,26 +142,12 @@ func (m *Manager) initClickHouseRunner() error {
 
 	// Get migrations path
 	migrationsPath := m.getMigrationsPath(ClickHouseDB)
-	
-	// Create ClickHouse migration configuration
-	clickhouseConfig := &sharedDB.ClickHouseMigrationConfig{
-		Host:             m.config.ClickHouse.Host,
-		Port:             fmt.Sprintf("%d", m.config.ClickHouse.Port),
-		Database:         m.config.ClickHouse.Database,
-		Username:         m.config.ClickHouse.User,
-		Password:         m.config.ClickHouse.Password,
-		MigrationsTable:  m.config.ClickHouse.MigrationsTable,
-		MigrationsEngine: m.config.ClickHouse.MigrationsEngine,
-		SourcePath:       migrationsPath,
-	}
 
-	// Create shared logger for ClickHouse runner
-	sharedLog := sharedLogger.New("info", "json")
-	
-	// Create ClickHouse migration runner using shared library
-	runner, err := sharedDB.NewClickHouseMigrationRunner(
-		clickhouseConfig,
-		sharedLog,
+	// Create migration runner using golang-migrate with URL-based approach
+	// since ClickHouse uses driver.Conn not sql.DB
+	runner, err := migrate.New(
+		fmt.Sprintf("file://%s", migrationsPath),
+		m.config.GetClickHouseURL(),
 	)
 	if err != nil {
 		return fmt.Errorf("failed to create clickhouse migration runner: %w", err)
@@ -156,7 +161,7 @@ func (m *Manager) initClickHouseRunner() error {
 // getMigrationsPath returns the migrations path for a specific database type
 func (m *Manager) getMigrationsPath(dbType DatabaseType) string {
 	basePath := "migrations"
-	
+
 	switch dbType {
 	case PostgresDB:
 		if m.config.Database.MigrationsPath != "" {
@@ -185,7 +190,7 @@ func (m *Manager) MigratePostgresUp(ctx context.Context, steps int, dryRun bool)
 	}
 
 	m.logger.WithField("steps", steps).Info("Running PostgreSQL migrations up")
-	
+
 	if steps == 0 {
 		return m.postgresRunner.Up()
 	}
@@ -204,7 +209,7 @@ func (m *Manager) MigratePostgresDown(ctx context.Context, steps int, dryRun boo
 	}
 
 	m.logger.WithField("steps", steps).Info("Running PostgreSQL migrations down")
-	
+
 	if steps == 0 {
 		return m.postgresRunner.Down()
 	}
@@ -223,7 +228,7 @@ func (m *Manager) MigrateClickHouseUp(ctx context.Context, steps int, dryRun boo
 	}
 
 	m.logger.WithField("steps", steps).Info("Running ClickHouse migrations up")
-	
+
 	if steps == 0 {
 		return m.clickhouseRunner.Up()
 	}
@@ -242,7 +247,7 @@ func (m *Manager) MigrateClickHouseDown(ctx context.Context, steps int, dryRun b
 	}
 
 	m.logger.WithField("steps", steps).Info("Running ClickHouse migrations down")
-	
+
 	if steps == 0 {
 		return m.clickhouseRunner.Down()
 	}
@@ -270,17 +275,16 @@ func (m *Manager) ShowPostgresStatus(ctx context.Context) error {
 	}
 
 	migrationsPath := m.getMigrationsPath(PostgresDB)
-	
+
 	fmt.Printf("PostgreSQL Migration Status:\n")
 	fmt.Printf("  %s Current Version: %d (%s)\n", statusIcon, version, status)
 	fmt.Printf("  📁 Migrations Path: %s\n", migrationsPath)
-	
-	if info, err := m.postgresRunner.GetMigrationInfo(); err == nil {
-		if count, ok := info["migration_count"].(int); ok {
-			fmt.Printf("  📊 Total Migrations: %d\n", count)
-		}
+
+	// Get migration count from filesystem
+	if count := m.countMigrations(m.getMigrationsPath(PostgresDB)); count > 0 {
+		fmt.Printf("  📊 Total Migrations: %d\n", count)
 	}
-	
+
 	return nil
 }
 
@@ -305,24 +309,23 @@ func (m *Manager) ShowClickHouseStatus(ctx context.Context) error {
 	}
 
 	migrationsPath := m.getMigrationsPath(ClickHouseDB)
-	
+
 	fmt.Printf("ClickHouse Migration Status:\n")
 	fmt.Printf("  %s Current Version: %d (%s)\n", statusIcon, version, status)
 	fmt.Printf("  📁 Migrations Path: %s\n", migrationsPath)
-	
-	if info, err := m.clickhouseRunner.GetMigrationInfo(); err == nil {
-		if sourceType, ok := info["type"].(string); ok && sourceType != "" {
-			fmt.Printf("  📊 Database Type: %s\n", sourceType)
-		}
+
+	// Get migration count from filesystem
+	if count := m.countMigrations(m.getMigrationsPath(ClickHouseDB)); count > 0 {
+		fmt.Printf("  📊 Total Migrations: %d\n", count)
 	}
-	
+
 	return nil
 }
 
 // GetMigrationInfo returns detailed migration information for both databases
 func (m *Manager) GetMigrationInfo() (*MigrationInfo, error) {
 	info := &MigrationInfo{}
-	
+
 	// Get PostgreSQL info
 	if m.postgresRunner == nil {
 		info.Postgres.Status = "not_initialized"
@@ -339,6 +342,7 @@ func (m *Manager) GetMigrationInfo() (*MigrationInfo, error) {
 			info.Postgres.CurrentVersion = pgVersion
 			info.Postgres.IsDirty = pgDirty
 			info.Postgres.MigrationsPath = m.getMigrationsPath(PostgresDB)
+			info.Postgres.TotalMigrations = m.countMigrations(m.getMigrationsPath(PostgresDB))
 			if pgDirty {
 				info.Postgres.Status = "dirty"
 			} else {
@@ -346,7 +350,7 @@ func (m *Manager) GetMigrationInfo() (*MigrationInfo, error) {
 			}
 		}
 	}
-	
+
 	// Get ClickHouse info
 	if m.clickhouseRunner == nil {
 		info.ClickHouse.Status = "not_initialized"
@@ -363,6 +367,7 @@ func (m *Manager) GetMigrationInfo() (*MigrationInfo, error) {
 			info.ClickHouse.CurrentVersion = chVersion
 			info.ClickHouse.IsDirty = chDirty
 			info.ClickHouse.MigrationsPath = m.getMigrationsPath(ClickHouseDB)
+			info.ClickHouse.TotalMigrations = m.countMigrations(m.getMigrationsPath(ClickHouseDB))
 			if chDirty {
 				info.ClickHouse.Status = "dirty"
 			} else {
@@ -370,7 +375,7 @@ func (m *Manager) GetMigrationInfo() (*MigrationInfo, error) {
 			}
 		}
 	}
-	
+
 	// Determine overall status
 	if info.Postgres.Status == "error" || info.ClickHouse.Status == "error" {
 		info.Overall = "error"
@@ -383,18 +388,18 @@ func (m *Manager) GetMigrationInfo() (*MigrationInfo, error) {
 	} else {
 		info.Overall = "healthy"
 	}
-	
+
 	return info, nil
 }
 
 // HealthCheck returns health status for monitoring endpoints
 func (m *Manager) HealthCheck() map[string]interface{} {
 	health := make(map[string]interface{})
-	
+
 	var pgErr, chErr error
 	var pgDirty, chDirty bool
 	var pgVersion, chVersion uint
-	
+
 	// Check PostgreSQL
 	if m.postgresRunner == nil {
 		health["postgres"] = map[string]interface{}{
@@ -407,13 +412,13 @@ func (m *Manager) HealthCheck() map[string]interface{} {
 		health["postgres"] = map[string]interface{}{
 			"status":          m.getHealthStatus(pgErr, pgDirty),
 			"current_version": pgVersion,
-			"dirty":          pgDirty,
+			"dirty":           pgDirty,
 		}
 		if pgErr != nil {
 			health["postgres"].(map[string]interface{})["error"] = pgErr.Error()
 		}
 	}
-	
+
 	// Check ClickHouse
 	if m.clickhouseRunner == nil {
 		health["clickhouse"] = map[string]interface{}{
@@ -426,13 +431,13 @@ func (m *Manager) HealthCheck() map[string]interface{} {
 		health["clickhouse"] = map[string]interface{}{
 			"status":          m.getHealthStatus(chErr, chDirty),
 			"current_version": chVersion,
-			"dirty":          chDirty,
+			"dirty":           chDirty,
 		}
 		if chErr != nil {
 			health["clickhouse"].(map[string]interface{})["error"] = chErr.Error()
 		}
 	}
-	
+
 	// Overall status
 	overallHealthy := pgErr == nil && chErr == nil && !pgDirty && !chDirty
 	if overallHealthy {
@@ -440,7 +445,7 @@ func (m *Manager) HealthCheck() map[string]interface{} {
 	} else {
 		health["overall_status"] = "unhealthy"
 	}
-	
+
 	return health
 }
 
@@ -459,14 +464,14 @@ func (m *Manager) getHealthStatus(err error, dirty bool) string {
 func (m *Manager) GetStatus() MigrationStatus {
 	// Return overall status - in practice, this might return the most critical status
 	pgVersion, pgDirty, pgErr := m.postgresRunner.Version()
-	
+
 	status := MigrationStatus{
-		Database:        PostgresDB, // Primary database
-		CurrentVersion:  pgVersion,
+		Database:       PostgresDB, // Primary database
+		CurrentVersion: pgVersion,
 		IsDirty:        pgDirty,
 		MigrationsPath: m.getMigrationsPath(PostgresDB),
 	}
-	
+
 	if pgErr != nil {
 		status.Status = "error"
 		status.Error = pgErr.Error()
@@ -475,7 +480,7 @@ func (m *Manager) GetStatus() MigrationStatus {
 	} else {
 		status.Status = "healthy"
 	}
-	
+
 	return status
 }
 
@@ -486,17 +491,17 @@ func (m *Manager) AutoMigrate(ctx context.Context) error {
 	}
 
 	m.logger.Info("Starting auto-migration")
-	
+
 	// Run PostgreSQL migrations
 	if err := m.MigratePostgresUp(ctx, 0, false); err != nil {
 		return fmt.Errorf("postgres auto-migration failed: %w", err)
 	}
-	
+
 	// Run ClickHouse migrations
 	if err := m.MigrateClickHouseUp(ctx, 0, false); err != nil {
 		return fmt.Errorf("clickhouse auto-migration failed: %w", err)
 	}
-	
+
 	m.logger.Info("Auto-migration completed successfully")
 	return nil
 }
@@ -513,7 +518,16 @@ func (m *Manager) GotoPostgres(version uint) error {
 	if m.postgresRunner == nil {
 		return fmt.Errorf("PostgreSQL not initialized - run with -db postgres or -db all")
 	}
-	return m.postgresRunner.Goto(version)
+	// golang-migrate uses different method - use Steps to get to specific version
+	current, _, err := m.postgresRunner.Version()
+	if err != nil {
+		return err
+	}
+	steps := int(version) - int(current)
+	if steps == 0 {
+		return nil // already at target version
+	}
+	return m.postgresRunner.Steps(steps)
 }
 
 // GotoClickHouse migrates ClickHouse to a specific version
@@ -521,7 +535,16 @@ func (m *Manager) GotoClickHouse(version uint) error {
 	if m.clickhouseRunner == nil {
 		return fmt.Errorf("ClickHouse not initialized - run with -db clickhouse or -db all")
 	}
-	return m.clickhouseRunner.Goto(version)
+	// golang-migrate uses different method - use Steps to get to specific version
+	current, _, err := m.clickhouseRunner.Version()
+	if err != nil {
+		return err
+	}
+	steps := int(version) - int(current)
+	if steps == 0 {
+		return nil // already at target version
+	}
+	return m.clickhouseRunner.Steps(steps)
 }
 
 // ForcePostgres forces PostgreSQL to a specific version
@@ -575,81 +598,81 @@ func (m *Manager) StepsClickHouse(n int) error {
 // CreatePostgresMigration creates a new PostgreSQL migration file
 func (m *Manager) CreatePostgresMigration(name string) error {
 	migrationsPath := m.getMigrationsPath(PostgresDB)
-	
+
 	// Create migrations directory if it doesn't exist
 	if err := os.MkdirAll(migrationsPath, 0755); err != nil {
 		return fmt.Errorf("failed to create migrations directory: %w", err)
 	}
-	
+
 	timestamp := time.Now().Format("20060102150405")
-	
+
 	// Create up migration file
 	upFile := filepath.Join(migrationsPath, fmt.Sprintf("%s_%s.up.sql", timestamp, name))
 	if err := os.WriteFile(upFile, []byte("-- Migration: "+name+"\n-- Created: "+time.Now().Format(time.RFC3339)+"\n\n"), 0644); err != nil {
 		return fmt.Errorf("failed to create up migration file: %w", err)
 	}
-	
+
 	// Create down migration file
 	downFile := filepath.Join(migrationsPath, fmt.Sprintf("%s_%s.down.sql", timestamp, name))
 	if err := os.WriteFile(downFile, []byte("-- Rollback: "+name+"\n-- Created: "+time.Now().Format(time.RFC3339)+"\n\n"), 0644); err != nil {
 		return fmt.Errorf("failed to create down migration file: %w", err)
 	}
-	
+
 	m.logger.WithFields(logrus.Fields{
 		"name":      name,
 		"up_file":   upFile,
 		"down_file": downFile,
 	}).Info("PostgreSQL migration files created")
-	
+
 	fmt.Printf("PostgreSQL migration files created:\n")
 	fmt.Printf("  Up:   %s\n", upFile)
 	fmt.Printf("  Down: %s\n", downFile)
-	
+
 	return nil
 }
 
 // CreateClickHouseMigration creates a new ClickHouse migration file
 func (m *Manager) CreateClickHouseMigration(name string) error {
 	migrationsPath := m.getMigrationsPath(ClickHouseDB)
-	
+
 	// Create migrations directory if it doesn't exist
 	if err := os.MkdirAll(migrationsPath, 0755); err != nil {
 		return fmt.Errorf("failed to create migrations directory: %w", err)
 	}
-	
+
 	timestamp := time.Now().Format("20060102150405")
-	
+
 	// Create up migration file
 	upFile := filepath.Join(migrationsPath, fmt.Sprintf("%s_%s.up.sql", timestamp, name))
 	if err := os.WriteFile(upFile, []byte("-- ClickHouse Migration: "+name+"\n-- Created: "+time.Now().Format(time.RFC3339)+"\n\n"), 0644); err != nil {
 		return fmt.Errorf("failed to create up migration file: %w", err)
 	}
-	
+
 	// Create down migration file
 	downFile := filepath.Join(migrationsPath, fmt.Sprintf("%s_%s.down.sql", timestamp, name))
 	if err := os.WriteFile(downFile, []byte("-- ClickHouse Rollback: "+name+"\n-- Created: "+time.Now().Format(time.RFC3339)+"\n\n"), 0644); err != nil {
 		return fmt.Errorf("failed to create down migration file: %w", err)
 	}
-	
+
 	m.logger.WithFields(logrus.Fields{
 		"name":      name,
 		"up_file":   upFile,
 		"down_file": downFile,
 	}).Info("ClickHouse migration files created")
-	
+
 	fmt.Printf("ClickHouse migration files created:\n")
 	fmt.Printf("  Up:   %s\n", upFile)
 	fmt.Printf("  Down: %s\n", downFile)
-	
+
 	return nil
 }
 
 // Shutdown gracefully shuts down the migration manager
 func (m *Manager) Shutdown() error {
 	m.logger.Info("Shutting down migration manager")
-	
+
 	var lastErr error
-	
+
 	// Close PostgreSQL runner
 	if m.postgresRunner != nil {
 		if _, err := m.postgresRunner.Close(); err != nil {
@@ -657,7 +680,7 @@ func (m *Manager) Shutdown() error {
 			lastErr = err
 		}
 	}
-	
+
 	// Close ClickHouse runner
 	if m.clickhouseRunner != nil {
 		if _, err := m.clickhouseRunner.Close(); err != nil {
@@ -665,7 +688,7 @@ func (m *Manager) Shutdown() error {
 			lastErr = err
 		}
 	}
-	
+
 	// Close databases
 	// Close PostgreSQL
 	if m.postgresDB != nil {
@@ -674,8 +697,7 @@ func (m *Manager) Shutdown() error {
 			lastErr = err
 		}
 	}
-	
-	
+
 	// Close ClickHouse
 	if m.clickhouseDB != nil {
 		if err := m.clickhouseDB.Close(); err != nil {
@@ -683,7 +705,27 @@ func (m *Manager) Shutdown() error {
 			lastErr = err
 		}
 	}
-	
+
 	m.logger.Info("Migration manager shutdown completed")
 	return lastErr
+}
+
+// countMigrations counts the number of migration files in the given directory
+func (m *Manager) countMigrations(migrationsPath string) int {
+	if _, err := os.Stat(migrationsPath); os.IsNotExist(err) {
+		return 0
+	}
+
+	count := 0
+	filepath.WalkDir(migrationsPath, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil // skip errors
+		}
+		if !d.IsDir() && strings.HasSuffix(d.Name(), ".up.sql") {
+			count++
+		}
+		return nil
+	})
+
+	return count
 }
