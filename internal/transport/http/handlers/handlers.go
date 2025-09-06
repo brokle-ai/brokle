@@ -45,7 +45,12 @@ func NewHandlers(
 	logger *logrus.Logger,
 	authService auth.AuthService,
 	userService user.Service,
-	orgServices organization.OrganizationServices,
+	organizationService organization.OrganizationService,
+	memberService organization.MemberService,
+	projectService organization.ProjectService,
+	environmentService organization.EnvironmentService,
+	invitationService organization.InvitationService,
+	settingsService organization.OrganizationSettingsService,
 	// Add other service dependencies as they're implemented
 ) *Handlers {
 	return &Handlers{
@@ -53,7 +58,7 @@ func NewHandlers(
 		Metrics:      metrics.NewHandler(cfg, logger),
 		Auth:         authHandler.NewHandler(cfg, logger, authService, userService),
 		User:         userHandler.NewHandler(cfg, logger, userService),
-		Organization: organizationHandler.NewHandler(cfg, logger, orgServices),
+		Organization: organizationHandler.NewHandler(cfg, logger, organizationService, memberService, projectService, environmentService, invitationService, settingsService),
 		Project:      project.NewHandler(cfg, logger),
 		Environment:  environment.NewHandler(cfg, logger),
 		APIKey:       apikey.NewHandler(cfg, logger),

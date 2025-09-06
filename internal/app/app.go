@@ -54,13 +54,18 @@ func (a *App) Start() error {
 	}
 	a.providers = providers
 
-	// Initialize HTTP handlers with properly structured services
+	// Initialize HTTP handlers with direct service injection
 	httpHandlers := handlers.NewHandlers(
 		a.config,
 		a.logger,
-		providers.Services.Auth.Auth, // Auth service from modular DI
-		providers.Services.User.User, // User service from modular DI
-		providers.Services.Organization, // Organization services from modular DI
+		providers.Services.Auth.Auth,           // Auth service from modular DI
+		providers.Services.User.User,           // User service from modular DI  
+		providers.Services.OrganizationService, // Direct organization service
+		providers.Services.MemberService,       // Direct member service
+		providers.Services.ProjectService,      // Direct project service
+		providers.Services.EnvironmentService,  // Direct environment service
+		providers.Services.InvitationService,   // Direct invitation service
+		providers.Services.SettingsService,     // Direct settings service
 		// All enterprise services available through providers.Enterprise
 	)
 
@@ -91,13 +96,18 @@ func (a *App) Run() error {
 	}
 	a.providers = providers
 
-	// Initialize HTTP handlers with properly structured services
+	// Initialize HTTP handlers with direct service injection
 	httpHandlers := handlers.NewHandlers(
 		a.config,
 		a.logger,
-		providers.Services.Auth.Auth, // Auth service from modular DI
-		providers.Services.User.User, // User service from modular DI
-		providers.Services.Organization, // Organization services from modular DI
+		providers.Services.Auth.Auth,           // Auth service from modular DI
+		providers.Services.User.User,           // User service from modular DI  
+		providers.Services.OrganizationService, // Direct organization service
+		providers.Services.MemberService,       // Direct member service
+		providers.Services.ProjectService,      // Direct project service
+		providers.Services.EnvironmentService,  // Direct environment service
+		providers.Services.InvitationService,   // Direct invitation service
+		providers.Services.SettingsService,     // Direct settings service
 		// All enterprise services available through providers.Enterprise
 	)
 

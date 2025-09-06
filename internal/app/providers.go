@@ -50,9 +50,15 @@ type RepositoryContainer struct {
 
 // ServiceContainer holds all service instances organized by domain
 type ServiceContainer struct {
-	User         *UserServices
-	Auth         *AuthServices
-	Organization *OrganizationServices
+	User               *UserServices
+	Auth               *AuthServices
+	// Direct organization services - no wrapper
+	OrganizationService    organization.OrganizationService
+	MemberService         organization.MemberService
+	ProjectService        organization.ProjectService
+	EnvironmentService    organization.EnvironmentService
+	InvitationService     organization.InvitationService
+	SettingsService       organization.OrganizationSettingsService
 }
 
 // EnterpriseContainer holds all enterprise service instances
@@ -105,23 +111,6 @@ type AuthServices struct {
 	Role auth.RoleService
 }
 
-// OrganizationServices contains all organization-related services
-type OrganizationServices struct {
-	OrganizationSvc organization.OrganizationService
-	MemberSvc       organization.MemberService
-	ProjectSvc      organization.ProjectService
-	EnvironmentSvc  organization.EnvironmentService
-	InvitationSvc   organization.InvitationService
-	SettingsSvc     organization.OrganizationSettingsService
-}
-
-// Implement the composite interface methods
-func (o *OrganizationServices) Organizations() organization.OrganizationService { return o.OrganizationSvc }
-func (o *OrganizationServices) Members() organization.MemberService             { return o.MemberSvc }
-func (o *OrganizationServices) Projects() organization.ProjectService           { return o.ProjectSvc }
-func (o *OrganizationServices) Environments() organization.EnvironmentService  { return o.EnvironmentSvc }
-func (o *OrganizationServices) Invitations() organization.InvitationService    { return o.InvitationSvc }
-func (o *OrganizationServices) Settings() organization.OrganizationSettingsService { return o.SettingsSvc }
 
 // Provider functions for modular DI
 
@@ -262,34 +251,65 @@ func ProvideOrganizationServices(
 	orgRepos *OrganizationRepositories,
 	authServices *AuthServices,
 	logger *logrus.Logger,
-) *OrganizationServices {
-	// Create organization service with all dependencies
-	orgSvc := orgService.NewOrganizationService(
-		orgRepos.Organization,
+) (
+	organization.OrganizationService,
+	organization.MemberService,
+	organization.ProjectService,
+	organization.EnvironmentService,
+	organization.InvitationService,
+	organization.OrganizationSettingsService,
+) {
+	// Create individual services
+	memberSvc := orgService.NewMemberService(
 		orgRepos.Member,
-		orgRepos.Project,
-		orgRepos.Environment,
-		orgRepos.Invitation,
+		orgRepos.Organization,
 		userRepos.User,
 		authServices.Role,
 		authRepos.AuditLog,
 	)
 
-	// Create organization settings service
+	projectSvc := orgService.NewProjectService(
+		orgRepos.Project,
+		orgRepos.Organization,
+		orgRepos.Member,
+		authRepos.AuditLog,
+	)
+
+	environmentSvc := orgService.NewEnvironmentService(
+		orgRepos.Environment,
+		orgRepos.Project,
+		orgRepos.Member,
+		authRepos.AuditLog,
+	)
+
+	invitationSvc := orgService.NewInvitationService(
+		orgRepos.Invitation,
+		orgRepos.Organization,
+		orgRepos.Member,
+		userRepos.User,
+		authServices.Role,
+		authRepos.AuditLog,
+	)
+
+	// Create organization service with dependencies on other services
+	orgSvc := orgService.NewOrganizationService(
+		orgRepos.Organization,
+		userRepos.User,
+		memberSvc,
+		projectSvc,
+		environmentSvc,
+		authServices.Role,
+		authRepos.AuditLog,
+	)
+
+	// Create settings service
 	settingsSvc := orgService.NewOrganizationSettingsService(
 		orgRepos.Settings,
 		orgRepos.Member,
 		authRepos.AuditLog,
 	)
 
-	return &OrganizationServices{
-		OrganizationSvc: orgSvc,
-		MemberSvc:       nil, // TODO: Implement when needed
-		ProjectSvc:      nil, // TODO: Implement when needed
-		EnvironmentSvc:  nil, // TODO: Implement when needed
-		InvitationSvc:   nil, // TODO: Implement when needed
-		SettingsSvc:     settingsSvc,
-	}
+	return orgSvc, memberSvc, projectSvc, environmentSvc, invitationSvc, settingsSvc
 }
 
 // ProvideServices creates all service containers with proper dependency resolution
@@ -305,7 +325,7 @@ func ProvideServices(
 	userServices := ProvideUserServices(repos.User, repos.Auth, logger)
 
 	// Create organization services (depends on auth services)
-	orgServices := ProvideOrganizationServices(
+	orgService, memberService, projectService, environmentService, invitationService, settingsService := ProvideOrganizationServices(
 		repos.User,
 		repos.Auth,
 		repos.Organization,
@@ -314,9 +334,14 @@ func ProvideServices(
 	)
 
 	return &ServiceContainer{
-		User:         userServices,
-		Auth:         authServices,
-		Organization: orgServices,
+		User:               userServices,
+		Auth:               authServices,
+		OrganizationService: orgService,
+		MemberService:      memberService,
+		ProjectService:     projectService,
+		EnvironmentService: environmentService,
+		InvitationService:  invitationService,
+		SettingsService:    settingsService,
 	}
 }
 
@@ -440,8 +465,8 @@ func (pc *ProviderContainer) GetAllRepositories() *Repositories {
 func (pc *ProviderContainer) GetAllServices() *Services {
 	return &Services{
 		AuthService:                 pc.Services.Auth.Auth,
-		OrganizationService:        pc.Services.Organization.Organizations(),
-		OrganizationSettingsService: pc.Services.Organization.Settings(),
+		OrganizationService:        pc.Services.OrganizationService,
+		OrganizationSettingsService: pc.Services.SettingsService,
 		ComplianceService:          pc.Enterprise.Compliance,
 		SSOService:                 pc.Enterprise.SSO,
 		RBACService:                pc.Enterprise.RBAC,

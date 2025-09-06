@@ -13,10 +13,14 @@ import (
 
 // Handler handles organization endpoints
 type Handler struct {
-	config       *config.Config
-	logger       *logrus.Logger
-	orgServices  organization.OrganizationServices
-	Settings     *SettingsHandler // Embedded settings handler
+	config              *config.Config
+	logger              *logrus.Logger
+	organizationService organization.OrganizationService
+	memberService       organization.MemberService
+	projectService      organization.ProjectService
+	environmentService  organization.EnvironmentService
+	invitationService   organization.InvitationService
+	Settings            *SettingsHandler // Embedded settings handler
 }
 
 // Request/Response Models
@@ -81,12 +85,25 @@ type ListMembersResponse struct {
 }
 
 // NewHandler creates a new organization handler
-func NewHandler(config *config.Config, logger *logrus.Logger, orgServices organization.OrganizationServices) *Handler {
+func NewHandler(
+	config *config.Config,
+	logger *logrus.Logger,
+	organizationService organization.OrganizationService,
+	memberService organization.MemberService,
+	projectService organization.ProjectService,
+	environmentService organization.EnvironmentService,
+	invitationService organization.InvitationService,
+	settingsService organization.OrganizationSettingsService,
+) *Handler {
 	return &Handler{
-		config:      config,
-		logger:      logger,
-		orgServices: orgServices,
-		Settings:    NewSettingsHandler(config, logger, orgServices.Settings()),
+		config:              config,
+		logger:              logger,
+		organizationService: organizationService,
+		memberService:       memberService,
+		projectService:      projectService,
+		environmentService:  environmentService,
+		invitationService:   invitationService,
+		Settings:            NewSettingsHandler(config, logger, settingsService),
 	}
 }
 

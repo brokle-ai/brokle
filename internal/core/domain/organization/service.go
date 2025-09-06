@@ -129,12 +129,3 @@ type OrganizationSettingsService interface {
 	ImportSettings(ctx context.Context, orgID ulid.ULID, userID ulid.ULID, settings map[string]interface{}) error
 }
 
-// OrganizationServices is a composite interface that includes all organization-related services.
-type OrganizationServices interface {
-	Organizations() OrganizationService
-	Members() MemberService
-	Projects() ProjectService
-	Environments() EnvironmentService
-	Invitations() InvitationService
-	Settings() OrganizationSettingsService
-}
