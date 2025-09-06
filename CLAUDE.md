@@ -95,8 +95,10 @@ make build-enterprise  # Enterprise build with all features
 ```
 
 ### Database Operations
+
+#### Quick Commands (Make)
 ```bash
-# Run database migrations
+# Run all database migrations
 make migrate-up
 
 # Rollback one migration
@@ -105,9 +107,6 @@ make migrate-down
 # Check migration status
 make migrate-status
 
-# Seed with development data
-make seed-dev
-
 # Create new migration
 make create-migration DB=postgres NAME=add_users_table
 make create-migration DB=clickhouse NAME=add_metrics_table
@@ -115,11 +114,71 @@ make create-migration DB=clickhouse NAME=add_metrics_table
 # Reset all databases (WARNING: destroys data)
 make migrate-reset
 
+# Seed with development data
+make seed-dev
+
 # Database shell access
 make shell-db          # PostgreSQL
 make shell-redis       # Redis CLI
 make shell-clickhouse  # ClickHouse client
 ```
+
+#### Advanced Migration CLI
+The platform includes a comprehensive migration CLI with granular database control:
+
+```bash
+# Run migrations for specific databases
+go run cmd/migrate/main.go -db postgres up      # PostgreSQL only
+go run cmd/migrate/main.go -db clickhouse up    # ClickHouse only  
+go run cmd/migrate/main.go up                    # All databases (default)
+
+# Check detailed migration status
+go run cmd/migrate/main.go -db postgres status
+go run cmd/migrate/main.go -db clickhouse status
+go run cmd/migrate/main.go status               # Both databases with health check
+
+# Rollback migrations (requires confirmation)
+go run cmd/migrate/main.go -db postgres down
+go run cmd/migrate/main.go -db clickhouse down
+go run cmd/migrate/main.go down                 # Both databases
+
+# Create new migrations
+go run cmd/migrate/main.go -db postgres -name create_users_table create
+go run cmd/migrate/main.go -db clickhouse -name create_metrics_table create
+
+# Advanced operations (DESTRUCTIVE - requires 'yes' confirmation)
+go run cmd/migrate/main.go -db postgres drop    # Drop all PostgreSQL tables
+go run cmd/migrate/main.go -db clickhouse drop  # Drop all ClickHouse tables
+go run cmd/migrate/main.go drop                 # Drop all tables
+
+# Granular step control
+go run cmd/migrate/main.go -db postgres -steps 2 up      # Run 2 migrations forward
+go run cmd/migrate/main.go -db postgres -steps -1 down   # Rollback 1 migration
+
+# Force operations (DANGEROUS - use only when dirty)
+go run cmd/migrate/main.go -db postgres -version 0 force  # Force clean state
+go run cmd/migrate/main.go -db clickhouse -version 5 force # Force to version 5
+
+# Information and debugging
+go run cmd/migrate/main.go info                  # Detailed migration information
+go run cmd/migrate/main.go -dry-run up          # Preview migrations without executing
+```
+
+#### Migration Safety Features
+- **✅ Confirmation Prompts**: All destructive operations require explicit 'yes' confirmation
+- **✅ Dry Run Mode**: Preview changes with `-dry-run` flag
+- **✅ Granular Control**: Target specific databases with `-db postgres|clickhouse|all`
+- **✅ Health Monitoring**: Comprehensive status reporting with dirty state detection
+- **✅ Rollback Support**: Safe rollback with proper down migration support
+
+#### Migration Architecture
+- **PostgreSQL**: Single comprehensive schema migration (user management, auth, organizations)
+- **ClickHouse**: 5 separate table migrations for better granularity:
+  - `metrics` - Real-time platform metrics (90 day TTL)
+  - `events` - Business/system events (180 day TTL)  
+  - `traces` - Distributed tracing (30 day TTL)
+  - `request_logs` - API request logging (60 day TTL)
+  - `ai_routing_metrics` - AI provider routing decisions (365 day TTL)
 
 ### Testing & Quality
 ```bash
@@ -646,6 +705,7 @@ make docker-clean
 
 ### Common Issues
 - **Port conflicts**: Check with `lsof -ti:8080` and kill processes
-- **Database migrations**: Run `make migrate-status` to check state
+- **Database migrations**: Run `go run cmd/migrate/main.go status` for detailed health check
+- **Migration dirty state**: Use `go run cmd/migrate/main.go -db <database> drop` then re-run migrations
 - **Enterprise build errors**: Ensure proper build tags usage
 - **WebSocket connection issues**: Check CORS and proxy settings
