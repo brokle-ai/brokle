@@ -11,21 +11,22 @@ import (
 	"strings"
 	"time"
 
+	"github.com/joho/godotenv"
 	"github.com/spf13/viper"
 )
 
 // Config represents the complete application configuration.
 type Config struct {
-	Environment string         `mapstructure:"environment"`
-	App         AppConfig      `mapstructure:"app"`
-	Server      ServerConfig   `mapstructure:"server"`
-	Database    DatabaseConfig `mapstructure:"database"`
+	Environment string           `mapstructure:"environment"`
+	App         AppConfig        `mapstructure:"app"`
+	Server      ServerConfig     `mapstructure:"server"`
+	Database    DatabaseConfig   `mapstructure:"database"`
 	ClickHouse  ClickHouseConfig `mapstructure:"clickhouse"`
-	Redis       RedisConfig    `mapstructure:"redis"`
-	JWT         JWTConfig      `mapstructure:"jwt"`
-	Logging     LoggingConfig  `mapstructure:"logging"`
-	External    ExternalConfig `mapstructure:"external"`
-	Features    FeatureConfig  `mapstructure:"features"`
+	Redis       RedisConfig      `mapstructure:"redis"`
+	JWT         JWTConfig        `mapstructure:"jwt"`
+	Logging     LoggingConfig    `mapstructure:"logging"`
+	External    ExternalConfig   `mapstructure:"external"`
+	Features    FeatureConfig    `mapstructure:"features"`
 	Monitoring  MonitoringConfig `mapstructure:"monitoring"`
 	Enterprise  EnterpriseConfig `mapstructure:"enterprise"`
 }
@@ -38,19 +39,19 @@ type AppConfig struct {
 
 // ServerConfig contains HTTP and WebSocket server configuration.
 type ServerConfig struct {
-	Host                string        `mapstructure:"host"`
-	Port                int           `mapstructure:"port"`
-	Environment         string        `mapstructure:"environment"`
-	ReadTimeout         time.Duration `mapstructure:"read_timeout"`
-	WriteTimeout        time.Duration `mapstructure:"write_timeout"`
-	IdleTimeout         time.Duration `mapstructure:"idle_timeout"`
-	ShutdownTimeout     time.Duration `mapstructure:"shutdown_timeout"`
-	MaxRequestSize      int64         `mapstructure:"max_request_size"`
-	EnableCORS          bool          `mapstructure:"enable_cors"`
-	CORSAllowedOrigins  []string      `mapstructure:"cors_allowed_origins"`
-	CORSAllowedMethods  []string      `mapstructure:"cors_allowed_methods"`
-	CORSAllowedHeaders  []string      `mapstructure:"cors_allowed_headers"`
-	TrustedProxies      []string      `mapstructure:"trusted_proxies"`
+	Host               string        `mapstructure:"host"`
+	Port               int           `mapstructure:"port"`
+	Environment        string        `mapstructure:"environment"`
+	ReadTimeout        time.Duration `mapstructure:"read_timeout"`
+	WriteTimeout       time.Duration `mapstructure:"write_timeout"`
+	IdleTimeout        time.Duration `mapstructure:"idle_timeout"`
+	ShutdownTimeout    time.Duration `mapstructure:"shutdown_timeout"`
+	MaxRequestSize     int64         `mapstructure:"max_request_size"`
+	EnableCORS         bool          `mapstructure:"enable_cors"`
+	CORSAllowedOrigins []string      `mapstructure:"cors_allowed_origins"`
+	CORSAllowedMethods []string      `mapstructure:"cors_allowed_methods"`
+	CORSAllowedHeaders []string      `mapstructure:"cors_allowed_headers"`
+	TrustedProxies     []string      `mapstructure:"trusted_proxies"`
 }
 
 // DatabaseConfig contains PostgreSQL database configuration.
@@ -66,6 +67,9 @@ type DatabaseConfig struct {
 	MaxIdleConns    int           `mapstructure:"max_idle_conns"`
 	ConnMaxLifetime time.Duration `mapstructure:"conn_max_lifetime"`
 	ConnMaxIdleTime time.Duration `mapstructure:"conn_max_idle_time"`
+	// Migration settings
+	AutoMigrate    bool   `mapstructure:"auto_migrate"`
+	MigrationsPath string `mapstructure:"migrations_path"`
 }
 
 // ClickHouseConfig contains ClickHouse database configuration.
@@ -81,6 +85,10 @@ type ClickHouseConfig struct {
 	ConnMaxLifetime time.Duration `mapstructure:"conn_max_lifetime"`
 	ReadTimeout     time.Duration `mapstructure:"read_timeout"`
 	WriteTimeout    time.Duration `mapstructure:"write_timeout"`
+	// Migration settings
+	MigrationsPath   string `mapstructure:"migrations_path"`
+	MigrationsTable  string `mapstructure:"migrations_table"`
+	MigrationsEngine string `mapstructure:"migrations_engine"`
 }
 
 // RedisConfig contains Redis configuration.
@@ -98,24 +106,24 @@ type RedisConfig struct {
 
 // JWTConfig contains JWT token configuration.
 type JWTConfig struct {
-	PrivateKey       string        `mapstructure:"private_key"`
-	PublicKey        string        `mapstructure:"public_key"`
-	Issuer           string        `mapstructure:"issuer"`
-	AccessTokenTTL   time.Duration `mapstructure:"access_token_ttl"`
-	RefreshTokenTTL  time.Duration `mapstructure:"refresh_token_ttl"`
-	APIKeyTokenTTL   time.Duration `mapstructure:"api_key_token_ttl"`
-	Algorithm        string        `mapstructure:"algorithm"`
+	PrivateKey      string        `mapstructure:"private_key"`
+	PublicKey       string        `mapstructure:"public_key"`
+	Issuer          string        `mapstructure:"issuer"`
+	AccessTokenTTL  time.Duration `mapstructure:"access_token_ttl"`
+	RefreshTokenTTL time.Duration `mapstructure:"refresh_token_ttl"`
+	APIKeyTokenTTL  time.Duration `mapstructure:"api_key_token_ttl"`
+	Algorithm       string        `mapstructure:"algorithm"`
 }
 
 // LoggingConfig contains logging configuration.
 type LoggingConfig struct {
-	Level      string `mapstructure:"level"`      // debug, info, warn, error
-	Format     string `mapstructure:"format"`     // json, text
-	Output     string `mapstructure:"output"`     // stdout, stderr, file
-	File       string `mapstructure:"file"`       // file path if output=file
-	MaxSize    int    `mapstructure:"max_size"`   // megabytes
+	Level      string `mapstructure:"level"`    // debug, info, warn, error
+	Format     string `mapstructure:"format"`   // json, text
+	Output     string `mapstructure:"output"`   // stdout, stderr, file
+	File       string `mapstructure:"file"`     // file path if output=file
+	MaxSize    int    `mapstructure:"max_size"` // megabytes
 	MaxBackups int    `mapstructure:"max_backups"`
-	MaxAge     int    `mapstructure:"max_age"`    // days
+	MaxAge     int    `mapstructure:"max_age"` // days
 }
 
 // ExternalConfig contains external service configurations.
@@ -161,7 +169,7 @@ type StripeConfig struct {
 
 // EmailConfig contains email service configuration.
 type EmailConfig struct {
-	Provider   string `mapstructure:"provider"`   // smtp, sendgrid, mailgun
+	Provider   string `mapstructure:"provider"` // smtp, sendgrid, mailgun
 	SMTPHost   string `mapstructure:"smtp_host"`
 	SMTPPort   int    `mapstructure:"smtp_port"`
 	Username   string `mapstructure:"username"`
@@ -173,14 +181,14 @@ type EmailConfig struct {
 
 // FeatureConfig contains feature flag configuration.
 type FeatureConfig struct {
-	SemanticCaching   bool `mapstructure:"semantic_caching"`
-	RealTimeMetrics   bool `mapstructure:"real_time_metrics"`
-	MLRouting         bool `mapstructure:"ml_routing"`
-	CustomModels      bool `mapstructure:"custom_models"`
-	MultiModal        bool `mapstructure:"multi_modal"`
-	BackgroundJobs    bool `mapstructure:"background_jobs"`
-	RateLimiting      bool `mapstructure:"rate_limiting"`
-	AuditLogging      bool `mapstructure:"audit_logging"`
+	SemanticCaching bool `mapstructure:"semantic_caching"`
+	RealTimeMetrics bool `mapstructure:"real_time_metrics"`
+	MLRouting       bool `mapstructure:"ml_routing"`
+	CustomModels    bool `mapstructure:"custom_models"`
+	MultiModal      bool `mapstructure:"multi_modal"`
+	BackgroundJobs  bool `mapstructure:"background_jobs"`
+	RateLimiting    bool `mapstructure:"rate_limiting"`
+	AuditLogging    bool `mapstructure:"audit_logging"`
 }
 
 // MonitoringConfig contains monitoring and observability configuration.
@@ -193,49 +201,48 @@ type MonitoringConfig struct {
 	FlushInterval  time.Duration `mapstructure:"flush_interval"`
 }
 
-
 // Validate validates the main configuration and all sub-configurations.
 func (c *Config) Validate() error {
 	if err := c.Server.Validate(); err != nil {
 		return fmt.Errorf("server config validation failed: %w", err)
 	}
-	
+
 	if err := c.Database.Validate(); err != nil {
 		return fmt.Errorf("database config validation failed: %w", err)
 	}
-	
+
 	if err := c.ClickHouse.Validate(); err != nil {
 		return fmt.Errorf("clickhouse config validation failed: %w", err)
 	}
-	
+
 	if err := c.Redis.Validate(); err != nil {
 		return fmt.Errorf("redis config validation failed: %w", err)
 	}
-	
+
 	if err := c.JWT.Validate(); err != nil {
 		return fmt.Errorf("jwt config validation failed: %w", err)
 	}
-	
+
 	if err := c.Logging.Validate(); err != nil {
 		return fmt.Errorf("logging config validation failed: %w", err)
 	}
-	
+
 	if err := c.External.Validate(); err != nil {
 		return fmt.Errorf("external config validation failed: %w", err)
 	}
-	
+
 	if err := c.Features.Validate(); err != nil {
 		return fmt.Errorf("features config validation failed: %w", err)
 	}
-	
+
 	if err := c.Monitoring.Validate(); err != nil {
 		return fmt.Errorf("monitoring config validation failed: %w", err)
 	}
-	
+
 	if err := c.Enterprise.Validate(); err != nil {
 		return fmt.Errorf("enterprise config validation failed: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -244,23 +251,23 @@ func (sc *ServerConfig) Validate() error {
 	if sc.Port <= 0 || sc.Port > 65535 {
 		return fmt.Errorf("invalid port: %d (must be 1-65535)", sc.Port)
 	}
-	
+
 	if sc.Host == "" {
 		return fmt.Errorf("host cannot be empty")
 	}
-	
+
 	if sc.ReadTimeout < 0 {
 		return fmt.Errorf("read_timeout cannot be negative")
 	}
-	
+
 	if sc.WriteTimeout < 0 {
 		return fmt.Errorf("write_timeout cannot be negative")
 	}
-	
+
 	if sc.MaxRequestSize <= 0 {
 		return fmt.Errorf("max_request_size must be positive")
 	}
-	
+
 	return nil
 }
 
@@ -272,39 +279,39 @@ func (dc *DatabaseConfig) Validate() error {
 		if dc.MaxOpenConns < 0 {
 			return fmt.Errorf("max_open_conns cannot be negative")
 		}
-		
+
 		if dc.MaxIdleConns < 0 {
 			return fmt.Errorf("max_idle_conns cannot be negative")
 		}
-		
+
 		return nil
 	}
-	
+
 	// If no URL, validate individual fields
 	if dc.Host == "" {
 		return fmt.Errorf("either url or host must be provided")
 	}
-	
+
 	if dc.Port <= 0 || dc.Port > 65535 {
 		return fmt.Errorf("invalid port: %d (must be 1-65535)", dc.Port)
 	}
-	
+
 	if dc.User == "" {
 		return fmt.Errorf("user cannot be empty when using individual fields")
 	}
-	
+
 	if dc.Database == "" {
 		return fmt.Errorf("database name cannot be empty when using individual fields")
 	}
-	
+
 	if dc.MaxOpenConns < 0 {
 		return fmt.Errorf("max_open_conns cannot be negative")
 	}
-	
+
 	if dc.MaxIdleConns < 0 {
 		return fmt.Errorf("max_idle_conns cannot be negative")
 	}
-	
+
 	return nil
 }
 
@@ -314,20 +321,20 @@ func (cc *ClickHouseConfig) Validate() error {
 	if cc.URL != "" {
 		return nil // URL takes precedence
 	}
-	
+
 	// If no URL, validate individual fields
 	if cc.Host == "" {
 		return fmt.Errorf("either url or host must be provided for clickhouse")
 	}
-	
+
 	if cc.Port <= 0 || cc.Port > 65535 {
 		return fmt.Errorf("invalid clickhouse port: %d (must be 1-65535)", cc.Port)
 	}
-	
+
 	if cc.Database == "" {
 		return fmt.Errorf("clickhouse database name cannot be empty when using individual fields")
 	}
-	
+
 	return nil
 }
 
@@ -339,27 +346,27 @@ func (rc *RedisConfig) Validate() error {
 		if rc.PoolSize < 0 {
 			return fmt.Errorf("pool_size cannot be negative")
 		}
-		
+
 		return nil
 	}
-	
+
 	// If no URL, validate individual fields
 	if rc.Host == "" {
 		return fmt.Errorf("either url or host must be provided for redis")
 	}
-	
+
 	if rc.Port <= 0 || rc.Port > 65535 {
 		return fmt.Errorf("invalid redis port: %d (must be 1-65535)", rc.Port)
 	}
-	
+
 	if rc.Database < 0 || rc.Database > 15 {
 		return fmt.Errorf("invalid redis database number: %d (must be 0-15)", rc.Database)
 	}
-	
+
 	if rc.PoolSize < 0 {
 		return fmt.Errorf("pool_size cannot be negative")
 	}
-	
+
 	return nil
 }
 
@@ -368,23 +375,23 @@ func (jc *JWTConfig) Validate() error {
 	if jc.PrivateKey == "" {
 		return fmt.Errorf("private_key is required")
 	}
-	
+
 	if jc.PublicKey == "" {
 		return fmt.Errorf("public_key is required")
 	}
-	
+
 	if jc.Issuer == "" {
 		return fmt.Errorf("issuer is required")
 	}
-	
+
 	if jc.AccessTokenTTL <= 0 {
 		return fmt.Errorf("access_token_ttl must be positive")
 	}
-	
+
 	if jc.RefreshTokenTTL <= 0 {
 		return fmt.Errorf("refresh_token_ttl must be positive")
 	}
-	
+
 	validAlgorithms := []string{"RS256", "RS384", "RS512", "HS256", "HS384", "HS512"}
 	isValid := false
 	for _, alg := range validAlgorithms {
@@ -396,7 +403,7 @@ func (jc *JWTConfig) Validate() error {
 	if !isValid {
 		return fmt.Errorf("invalid algorithm: %s (must be one of %v)", jc.Algorithm, validAlgorithms)
 	}
-	
+
 	return nil
 }
 
@@ -413,7 +420,7 @@ func (lc *LoggingConfig) Validate() error {
 	if !isValid {
 		return fmt.Errorf("invalid log level: %s (must be one of %v)", lc.Level, validLevels)
 	}
-	
+
 	validFormats := []string{"json", "text"}
 	isValid = false
 	for _, format := range validFormats {
@@ -425,7 +432,7 @@ func (lc *LoggingConfig) Validate() error {
 	if !isValid {
 		return fmt.Errorf("invalid log format: %s (must be one of %v)", lc.Format, validFormats)
 	}
-	
+
 	validOutputs := []string{"stdout", "stderr", "file"}
 	isValid = false
 	for _, output := range validOutputs {
@@ -437,11 +444,11 @@ func (lc *LoggingConfig) Validate() error {
 	if !isValid {
 		return fmt.Errorf("invalid log output: %s (must be one of %v)", lc.Output, validOutputs)
 	}
-	
+
 	if lc.Output == "file" && lc.File == "" {
 		return fmt.Errorf("file path is required when output is 'file'")
 	}
-	
+
 	return nil
 }
 
@@ -450,23 +457,23 @@ func (ec *ExternalConfig) Validate() error {
 	if err := ec.OpenAI.Validate(); err != nil {
 		return fmt.Errorf("openai config: %w", err)
 	}
-	
+
 	if err := ec.Anthropic.Validate(); err != nil {
 		return fmt.Errorf("anthropic config: %w", err)
 	}
-	
+
 	if err := ec.Cohere.Validate(); err != nil {
 		return fmt.Errorf("cohere config: %w", err)
 	}
-	
+
 	if err := ec.Stripe.Validate(); err != nil {
 		return fmt.Errorf("stripe config: %w", err)
 	}
-	
+
 	if err := ec.Email.Validate(); err != nil {
 		return fmt.Errorf("email config: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -475,11 +482,11 @@ func (oc *OpenAIConfig) Validate() error {
 	if oc.APIKey != "" && oc.BaseURL == "" {
 		return fmt.Errorf("base_url is required when api_key is provided")
 	}
-	
+
 	if oc.MaxRetries < 0 {
 		return fmt.Errorf("max_retries cannot be negative")
 	}
-	
+
 	return nil
 }
 
@@ -488,11 +495,11 @@ func (ac *AnthropicConfig) Validate() error {
 	if ac.APIKey != "" && ac.BaseURL == "" {
 		return fmt.Errorf("base_url is required when api_key is provided")
 	}
-	
+
 	if ac.MaxRetries < 0 {
 		return fmt.Errorf("max_retries cannot be negative")
 	}
-	
+
 	return nil
 }
 
@@ -501,11 +508,11 @@ func (cc *CohereConfig) Validate() error {
 	if cc.APIKey != "" && cc.BaseURL == "" {
 		return fmt.Errorf("base_url is required when api_key is provided")
 	}
-	
+
 	if cc.MaxRetries < 0 {
 		return fmt.Errorf("max_retries cannot be negative")
 	}
-	
+
 	return nil
 }
 
@@ -524,7 +531,7 @@ func (sc *StripeConfig) Validate() error {
 			return fmt.Errorf("invalid stripe environment: %s (must be 'test' or 'live')", sc.Environment)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -542,7 +549,7 @@ func (ec *EmailConfig) Validate() error {
 		if !isValid {
 			return fmt.Errorf("invalid email provider: %s (must be one of %v)", ec.Provider, validProviders)
 		}
-		
+
 		if ec.Provider == "smtp" {
 			if ec.SMTPHost == "" {
 				return fmt.Errorf("smtp_host is required for SMTP provider")
@@ -551,12 +558,12 @@ func (ec *EmailConfig) Validate() error {
 				return fmt.Errorf("invalid smtp_port: %d", ec.SMTPPort)
 			}
 		}
-		
+
 		if ec.FromEmail == "" {
 			return fmt.Errorf("from_email is required")
 		}
 	}
-	
+
 	return nil
 }
 
@@ -572,45 +579,56 @@ func (mc *MonitoringConfig) Validate() error {
 		if mc.PrometheusPort <= 0 || mc.PrometheusPort > 65535 {
 			return fmt.Errorf("invalid prometheus_port: %d", mc.PrometheusPort)
 		}
-		
+
 		if mc.MetricsPath == "" {
 			return fmt.Errorf("metrics_path is required when monitoring is enabled")
 		}
-		
+
 		if mc.SampleRate < 0 || mc.SampleRate > 1 {
 			return fmt.Errorf("sample_rate must be between 0 and 1, got %f", mc.SampleRate)
 		}
 	}
-	
+
 	return nil
 }
 
-
 // Load loads configuration from files and environment variables.
 func Load() (*Config, error) {
+	// Load .env file if it exists (optional, for local development)
+	// This sets environment variables that Viper can then read
+	_ = godotenv.Load(".env")
+
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
 	viper.AddConfigPath("./configs")
 	viper.AddConfigPath(".")
 	viper.AddConfigPath("/etc/brokle")
 
-	// Set environment variable support
+	// Read config file (optional)
+	if err := viper.ReadInConfig(); err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+			return nil, fmt.Errorf("failed to read config file: %w", err)
+		}
+		// Config file not found - continue with defaults and env vars
+	}
+
+	// Set environment variable support (takes precedence over config files)
 	viper.AutomaticEnv()
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-	
+
 	// Bind standard infrastructure variables (no BROKLE_ prefix)
 	viper.BindEnv("database.url", "DATABASE_URL")
-	viper.BindEnv("clickhouse.url", "CLICKHOUSE_URL") 
+	viper.BindEnv("clickhouse.url", "CLICKHOUSE_URL")
 	viper.BindEnv("redis.url", "REDIS_URL")
 	viper.BindEnv("server.port", "PORT")
-	viper.BindEnv("server.environment", "ENV") 
+	viper.BindEnv("server.environment", "ENV")
 	viper.BindEnv("logging.level", "LOG_LEVEL")
-	
+
 	// CORS configuration (OSS-standard naming)
 	viper.BindEnv("server.cors_allowed_origins", "CORS_ALLOWED_ORIGINS")
 	viper.BindEnv("server.cors_allowed_methods", "CORS_ALLOWED_METHODS")
 	viper.BindEnv("server.cors_allowed_headers", "CORS_ALLOWED_HEADERS")
-	
+
 	// External API keys (standard names)
 	viper.BindEnv("external.openai.api_key", "OPENAI_API_KEY")
 	viper.BindEnv("external.anthropic.api_key", "ANTHROPIC_API_KEY")
@@ -618,12 +636,27 @@ func Load() (*Config, error) {
 	viper.BindEnv("external.stripe.secret_key", "STRIPE_SECRET_KEY")
 	viper.BindEnv("external.stripe.publishable_key", "STRIPE_PUBLISHABLE_KEY")
 	viper.BindEnv("external.stripe.webhook_secret", "STRIPE_WEBHOOK_SECRET")
-	
+
 	// JWT keys (standard names)
 	viper.BindEnv("jwt.private_key", "JWT_PRIVATE_KEY")
 	viper.BindEnv("jwt.public_key", "JWT_PUBLIC_KEY")
 	viper.BindEnv("jwt.secret", "JWT_SECRET")
-	
+
+	// Database configuration (granular environment variables)
+	viper.BindEnv("database.host", "DB_HOST")
+	viper.BindEnv("database.port", "DB_PORT")
+	viper.BindEnv("database.user", "DB_USER")
+	viper.BindEnv("database.password", "DB_PASSWORD")
+	viper.BindEnv("database.database", "DB_NAME")
+	viper.BindEnv("database.ssl_mode", "DB_SSLMODE")
+
+	// Database migration configuration
+	viper.BindEnv("database.auto_migrate", "DB_AUTO_MIGRATE")
+	viper.BindEnv("database.migrations_path", "DB_MIGRATIONS_PATH")
+	viper.BindEnv("database.username", "DB_USERNAME")
+	viper.BindEnv("database.migrations_table", "DB_MIGRATIONS_TABLE")
+	viper.BindEnv("clickhouse.migrations_engine", "CLICKHOUSE_MIGRATIONS_ENGINE")
+
 	// Keep BROKLE_ prefix for Brokle-specific variables
 	viper.BindEnv("enterprise.license.key", "BROKLE_ENTERPRISE_LICENSE_KEY")
 	viper.BindEnv("enterprise.license.type", "BROKLE_ENTERPRISE_LICENSE_TYPE")
@@ -659,7 +692,7 @@ func Load() (*Config, error) {
 	if err := licenseWrapper.ValidateLicense(); err != nil {
 		return nil, fmt.Errorf("license validation failed: %w", err)
 	}
-	
+
 	return &cfg, nil
 }
 
@@ -673,7 +706,7 @@ func setDefaults() {
 	// App defaults
 	viper.SetDefault("app.name", "Brokle Platform")
 	viper.SetDefault("app.version", "1.0.0")
-	
+
 	// Server defaults
 	viper.SetDefault("server.host", "0.0.0.0")
 	viper.SetDefault("server.port", 8080)
@@ -683,26 +716,32 @@ func setDefaults() {
 	viper.SetDefault("server.shutdown_timeout", "30s")
 	viper.SetDefault("server.max_request_size", 32<<20) // 32MB
 	viper.SetDefault("server.enable_cors", true)
-	
+
 	// CORS defaults (dev-friendly)
 	viper.SetDefault("server.cors_allowed_origins", []string{"http://localhost:3000", "http://localhost:3001"})
 	viper.SetDefault("server.cors_allowed_methods", []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"})
 	viper.SetDefault("server.cors_allowed_headers", []string{"Content-Type", "Authorization", "X-API-Key"})
 
 	// Database defaults (URL-first, individual fields as fallback)
-	viper.SetDefault("database.url", "")  // Preferred: Set via DATABASE_URL env var
+	viper.SetDefault("database.url", "") // Preferred: Set via DATABASE_URL env var
 	viper.SetDefault("database.host", "localhost")
 	viper.SetDefault("database.port", 5432)
 	viper.SetDefault("database.user", "brokle")
-	viper.SetDefault("database.database", "brokle")
+	viper.SetDefault("database.database", "") // Empty default - will be populated from URL if present
 	viper.SetDefault("database.ssl_mode", "disable")
 	viper.SetDefault("database.max_open_conns", 100)
 	viper.SetDefault("database.max_idle_conns", 10)
 	viper.SetDefault("database.conn_max_lifetime", "1h")
 	viper.SetDefault("database.conn_max_idle_time", "15m")
 
+	// Database migration defaults
+	viper.SetDefault("database.auto_migrate", false)
+	viper.SetDefault("database.migrations_path", "migrations")
+	viper.SetDefault("database.username", "")
+	viper.SetDefault("database.migrations_table", "schema_migrations")
+
 	// ClickHouse defaults (URL-first, individual fields as fallback)
-	viper.SetDefault("clickhouse.url", "")  // Preferred: Set via CLICKHOUSE_URL env var
+	viper.SetDefault("clickhouse.url", "") // Preferred: Set via CLICKHOUSE_URL env var
 	viper.SetDefault("clickhouse.host", "localhost")
 	viper.SetDefault("clickhouse.port", 9000)
 	viper.SetDefault("clickhouse.user", "default")
@@ -712,9 +751,10 @@ func setDefaults() {
 	viper.SetDefault("clickhouse.conn_max_lifetime", "1h")
 	viper.SetDefault("clickhouse.read_timeout", "30s")
 	viper.SetDefault("clickhouse.write_timeout", "30s")
+	viper.SetDefault("clickhouse.migrations_engine", "MergeTree")
 
 	// Redis defaults (URL-first, individual fields as fallback)
-	viper.SetDefault("redis.url", "")  // Preferred: Set via REDIS_URL env var
+	viper.SetDefault("redis.url", "") // Preferred: Set via REDIS_URL env var
 	viper.SetDefault("redis.host", "localhost")
 	viper.SetDefault("redis.port", 6379)
 	viper.SetDefault("redis.database", 0)
@@ -729,8 +769,8 @@ func setDefaults() {
 	viper.SetDefault("jwt.refresh_token_ttl", "168h")  // 7 days
 	viper.SetDefault("jwt.api_key_token_ttl", "8760h") // 1 year
 	viper.SetDefault("jwt.algorithm", "RS256")
-	viper.SetDefault("jwt.private_key", "")  // Must be set in environment
-	viper.SetDefault("jwt.public_key", "")   // Must be set in environment
+	viper.SetDefault("jwt.private_key", "") // Must be set in environment
+	viper.SetDefault("jwt.public_key", "")  // Must be set in environment
 
 	// Logging defaults
 	viper.SetDefault("logging.level", "info")
@@ -767,13 +807,13 @@ func setDefaults() {
 	viper.SetDefault("enterprise.sso.enabled", false)
 	viper.SetDefault("enterprise.sso.provider", "")
 
-	// RBAC defaults (disabled by default) 
+	// RBAC defaults (disabled by default)
 	viper.SetDefault("enterprise.rbac.enabled", false)
 
 	// Compliance defaults (disabled by default)
 	viper.SetDefault("enterprise.compliance.enabled", false)
-	viper.SetDefault("enterprise.compliance.audit_retention", "168h")  // Basic: 7 days
-	viper.SetDefault("enterprise.compliance.data_retention", "720h")   // Basic: 30 days
+	viper.SetDefault("enterprise.compliance.audit_retention", "168h") // Basic: 7 days
+	viper.SetDefault("enterprise.compliance.data_retention", "720h")  // Basic: 30 days
 	viper.SetDefault("enterprise.compliance.pii_anonymization", false)
 	viper.SetDefault("enterprise.compliance.soc2_compliance", false)
 	viper.SetDefault("enterprise.compliance.hipaa_compliance", false)
@@ -792,7 +832,6 @@ func setDefaults() {
 	viper.SetDefault("enterprise.support.on_call_support", false)
 }
 
-
 // GetServerAddress returns the server address string.
 func (c *Config) GetServerAddress() string {
 	return fmt.Sprintf("%s:%d", c.Server.Host, c.Server.Port)
@@ -804,7 +843,7 @@ func (c *Config) GetDatabaseURL() string {
 	if c.Database.URL != "" {
 		return c.Database.URL
 	}
-	
+
 	// Priority 2: Construct from individual fields
 	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s",
 		c.Database.User, c.Database.Password, c.Database.Host,
@@ -817,7 +856,7 @@ func (c *Config) GetClickHouseURL() string {
 	if c.ClickHouse.URL != "" {
 		return c.ClickHouse.URL
 	}
-	
+
 	// Priority 2: Construct from individual fields
 	return fmt.Sprintf("clickhouse://%s:%s@%s:%d/%s",
 		c.ClickHouse.User, c.ClickHouse.Password, c.ClickHouse.Host,
@@ -830,7 +869,7 @@ func (c *Config) GetRedisURL() string {
 	if c.Redis.URL != "" {
 		return c.Redis.URL
 	}
-	
+
 	// Priority 2: Construct from individual fields
 	if c.Redis.Password != "" {
 		return fmt.Sprintf("redis://:%s@%s:%d/%d",
@@ -855,7 +894,7 @@ func (c *Config) IsEnterpriseFeatureEnabled(feature string) bool {
 	if !c.IsEnterpriseLicense() {
 		return false
 	}
-	
+
 	for _, f := range c.Enterprise.License.Features {
 		if f == feature {
 			return true
@@ -867,8 +906,8 @@ func (c *Config) IsEnterpriseFeatureEnabled(feature string) bool {
 // IsEnterpriseLicense returns true if the license supports enterprise features
 func (c *Config) IsEnterpriseLicense() bool {
 	return c.Enterprise.License.Type == "pro" ||
-		   c.Enterprise.License.Type == "business" || 
-		   c.Enterprise.License.Type == "enterprise"
+		c.Enterprise.License.Type == "business" ||
+		c.Enterprise.License.Type == "enterprise"
 }
 
 // GetLicenseTier returns the current license tier
@@ -885,20 +924,20 @@ func (c *Config) CanUseFeature(feature string) bool {
 	if c.IsDevelopment() {
 		return true
 	}
-	
+
 	// Check if it's an enterprise feature
 	enterpriseFeatures := []string{
 		"advanced_rbac", "sso_integration", "custom_compliance",
 		"predictive_insights", "custom_dashboards", "on_premise_deployment",
 		"dedicated_support", "advanced_integrations", "cross_org_analytics",
 	}
-	
+
 	for _, ef := range enterpriseFeatures {
 		if ef == feature {
 			return c.IsEnterpriseFeatureEnabled(feature)
 		}
 	}
-	
+
 	// Non-enterprise features are always available
 	return true
 }

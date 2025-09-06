@@ -172,3 +172,4 @@ func (h *Handler) checkClickHouse() HealthCheck {
 		Duration:    time.Since(start).String(),
 	}
 }
+

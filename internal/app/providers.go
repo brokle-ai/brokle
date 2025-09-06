@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -20,6 +21,7 @@ import (
 	authRepo "brokle/internal/infrastructure/repository/auth"
 	orgRepo "brokle/internal/infrastructure/repository/organization"
 	userRepo "brokle/internal/infrastructure/repository/user"
+	"brokle/internal/migration"
 )
 
 // ProviderContainer holds all provider instances for dependency injection
@@ -55,10 +57,10 @@ type ServiceContainer struct {
 
 // EnterpriseContainer holds all enterprise service instances
 type EnterpriseContainer struct {
-	SSO         sso.SSOProvider
-	RBAC        rbac.RBACManager
-	Compliance  compliance.Compliance
-	Analytics   analytics.EnterpriseAnalytics
+	SSO        sso.SSOProvider
+	RBAC       rbac.RBACManager
+	Compliance compliance.Compliance
+	Analytics  analytics.EnterpriseAnalytics
 }
 
 // Domain-specific repository containers
@@ -314,6 +316,32 @@ func ProvideAll(cfg *config.Config, logger *logrus.Logger) (*ProviderContainer, 
 
 	// Initialize enterprise services
 	enterprise := ProvideEnterpriseServices(cfg, logger)
+
+	// Initialize and run auto-migration if enabled
+	if cfg.Database.AutoMigrate {
+		logger.Info("Auto-migration is enabled, running database migrations...")
+
+		migrationManager, err := migration.NewManager(cfg)
+		if err != nil {
+			logger.WithError(err).Error("Failed to initialize migration manager for auto-migration")
+		} else {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
+
+			if err := migrationManager.AutoMigrate(ctx); err != nil {
+				logger.WithError(err).Error("Auto-migration failed - continuing with startup")
+			} else {
+				logger.Info("Auto-migration completed successfully")
+			}
+
+			// Close migration manager after use
+			if err := migrationManager.Shutdown(); err != nil {
+				logger.WithError(err).Warn("Failed to shutdown migration manager after auto-migration")
+			}
+		}
+	} else {
+		logger.Debug("Auto-migration is disabled")
+	}
 
 	return &ProviderContainer{
 		Config:     cfg,
