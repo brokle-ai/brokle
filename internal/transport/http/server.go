@@ -164,7 +164,6 @@ func (s *Server) setupV1Routes(router *gin.RouterGroup) {
 		auth.POST("/refresh", s.handlers.Auth.RefreshToken)
 		auth.POST("/forgot-password", s.handlers.Auth.ForgotPassword)
 		auth.POST("/reset-password", s.handlers.Auth.ResetPassword)
-		auth.POST("/logout", s.handlers.Auth.Logout)
 	}
 
 	// Protected routes (require JWT auth)
@@ -184,6 +183,7 @@ func (s *Server) setupV1Routes(router *gin.RouterGroup) {
 	// Auth session management routes (protected)
 	authSessions := protected.Group("/auth")
 	{
+		authSessions.POST("/logout", s.handlers.Auth.Logout)
 		authSessions.GET("/sessions", s.handlers.Auth.ListSessions)
 		authSessions.GET("/sessions/:session_id", s.handlers.Auth.GetSession)
 		authSessions.POST("/sessions/:session_id/revoke", s.handlers.Auth.RevokeSession)

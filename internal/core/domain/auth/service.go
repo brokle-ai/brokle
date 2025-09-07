@@ -42,11 +42,7 @@ type AuthService interface {
 // SessionService defines the session management service interface.
 type SessionService interface {
 	// Session management
-	CreateSession(ctx context.Context, userID ulid.ULID, req *CreateSessionRequest) (*UserSession, error)
 	GetSession(ctx context.Context, sessionID ulid.ULID) (*UserSession, error)
-	GetSessionByToken(ctx context.Context, token string) (*UserSession, error)
-	ValidateSession(ctx context.Context, token string) (*UserSession, error)
-	RefreshSession(ctx context.Context, refreshToken string) (*UserSession, error)
 	RevokeSession(ctx context.Context, sessionID ulid.ULID) error
 	
 	// User session management
@@ -56,7 +52,6 @@ type SessionService interface {
 	// Session cleanup and maintenance
 	CleanupExpiredSessions(ctx context.Context) error
 	GetActiveSessions(ctx context.Context, userID ulid.ULID) ([]*UserSession, error)
-	MarkSessionAsUsed(ctx context.Context, sessionID ulid.ULID) error
 }
 
 // APIKeyService defines the API key management service interface.
@@ -150,7 +145,6 @@ type JWTService interface {
 	ValidateAPIKeyToken(ctx context.Context, token string) (*JWTClaims, error)
 	
 	// Token utilities
-	ParseTokenClaims(ctx context.Context, token string) (*JWTClaims, error)
 	GetTokenExpiry(ctx context.Context, token string) (time.Time, error)
 	IsTokenExpired(ctx context.Context, token string) (bool, error)
 }

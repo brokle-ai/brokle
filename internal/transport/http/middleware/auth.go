@@ -37,7 +37,6 @@ const (
 	UserIDKey         = "user_id"
 	OrganizationIDKey = "organization_id"
 	PermissionsKey    = "permissions"
-	SessionIDKey      = "session_id"
 	TokenClaimsKey    = "token_claims"
 )
 

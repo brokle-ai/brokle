@@ -678,17 +678,17 @@ func (h *Handler) RevokeSession(c *gin.Context) {
 
 // RevokeAllSessionsRequest represents request for revoking all user sessions
 type RevokeAllSessionsRequest struct {
-	ExceptCurrent bool `json:"except_current,omitempty" example:"true" description:"Whether to keep current session active"`
+	// Note: This struct is kept for future extensibility but currently has no fields
 }
 
 // RevokeAllSessions revokes all user sessions
 // @Summary Revoke all user sessions
-// @Description Revoke all user sessions (logout from all devices)
+// @Description Revoke all user sessions (logout from all devices). This will invalidate ALL active sessions for the user.
 // @Tags Authentication
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param request body RevokeAllSessionsRequest false "Revocation options"
+// @Param request body RevokeAllSessionsRequest false "Request body (currently unused but kept for future extensibility)"
 // @Success 200 {object} response.MessageResponse "All sessions revoked successfully"
 // @Failure 401 {object} response.ErrorResponse "Unauthorized"
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
@@ -711,16 +711,6 @@ func (h *Handler) RevokeAllSessions(c *gin.Context) {
 		return
 	}
 
-	var currentSessionID ulid.ULID
-	if req.ExceptCurrent {
-		sessionIDValue, exists := c.Get("session_id")
-		if exists {
-			if sessionID, ok := sessionIDValue.(ulid.ULID); ok {
-				currentSessionID = sessionID
-			}
-		}
-	}
-
 	// Get current sessions count before revoking
 	sessions, err := h.authService.GetUserSessions(c.Request.Context(), userID)
 	if err != nil {
@@ -731,7 +721,7 @@ func (h *Handler) RevokeAllSessions(c *gin.Context) {
 
 	count := 0
 	for _, session := range sessions {
-		if session.IsValid() && (currentSessionID.IsZero() || session.ID != currentSessionID) {
+		if session.IsValid() {
 			count++
 		}
 	}
@@ -745,9 +735,8 @@ func (h *Handler) RevokeAllSessions(c *gin.Context) {
 	}
 
 	h.logger.WithFields(logrus.Fields{
-		"user_id":        userID,
-		"revoked_count":  count,
-		"except_current": req.ExceptCurrent,
+		"user_id":       userID,
+		"revoked_count": count,
 	}).Info("All sessions revoked successfully")
 
 	response.Success(c, gin.H{

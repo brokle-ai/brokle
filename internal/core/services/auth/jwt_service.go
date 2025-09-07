@@ -394,11 +394,6 @@ func (s *jwtService) GetTokenExpiry(ctx context.Context, token string) (time.Tim
 	return time.Unix(claims.ExpiresAt, 0), nil
 }
 
-// ParseTokenClaims extracts token claims without validation (used for inspection)
-func (s *jwtService) ParseTokenClaims(ctx context.Context, tokenString string) (*auth.JWTClaims, error) {
-	return s.ExtractClaims(ctx, tokenString)
-}
-
 // GetTokenTTL returns remaining time until token expires
 func (s *jwtService) GetTokenTTL(ctx context.Context, tokenString string) (time.Duration, error) {
 	claims, err := s.ExtractClaims(ctx, tokenString)
