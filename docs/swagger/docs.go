@@ -4629,7 +4629,19 @@ const docTemplate = `{
                     "200": {
                         "description": "List of project environments",
                         "schema": {
-                            "$ref": "#/definitions/response.SuccessResponse"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/project.ListEnvironmentsResponse"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -7405,6 +7417,58 @@ const docTemplate = `{
                     "maxLength": 50,
                     "minLength": 2,
                     "example": "ai-chatbot"
+                }
+            }
+        },
+        "project.Environment": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string",
+                    "example": "2024-01-01T00:00:00Z"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "env_1234567890"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Production"
+                },
+                "project_id": {
+                    "type": "string",
+                    "example": "proj_1234567890"
+                },
+                "slug": {
+                    "type": "string",
+                    "example": "prod"
+                },
+                "updated_at": {
+                    "type": "string",
+                    "example": "2024-01-01T00:00:00Z"
+                }
+            }
+        },
+        "project.ListEnvironmentsResponse": {
+            "type": "object",
+            "properties": {
+                "environments": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/project.Environment"
+                    }
+                },
+                "project_id": {
+                    "type": "string",
+                    "example": "proj_1234567890"
+                },
+                "project_name": {
+                    "type": "string",
+                    "example": "AI Chatbot"
+                },
+                "total": {
+                    "type": "integer",
+                    "example": 3
                 }
             }
         },

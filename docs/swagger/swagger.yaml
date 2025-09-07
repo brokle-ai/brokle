@@ -1602,6 +1602,43 @@ definitions:
     - name
     - organization_id
     type: object
+  project.Environment:
+    properties:
+      created_at:
+        example: "2024-01-01T00:00:00Z"
+        type: string
+      id:
+        example: env_1234567890
+        type: string
+      name:
+        example: Production
+        type: string
+      project_id:
+        example: proj_1234567890
+        type: string
+      slug:
+        example: prod
+        type: string
+      updated_at:
+        example: "2024-01-01T00:00:00Z"
+        type: string
+    type: object
+  project.ListEnvironmentsResponse:
+    properties:
+      environments:
+        items:
+          $ref: '#/definitions/project.Environment'
+        type: array
+      project_id:
+        example: proj_1234567890
+        type: string
+      project_name:
+        example: AI Chatbot
+        type: string
+      total:
+        example: 3
+        type: integer
+    type: object
   project.ListProjectsResponse:
     properties:
       limit:
@@ -4832,7 +4869,12 @@ paths:
         "200":
           description: List of project environments
           schema:
-            $ref: '#/definitions/response.SuccessResponse'
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/project.ListEnvironmentsResponse'
+              type: object
         "400":
           description: Bad request - invalid project ID
           schema:
