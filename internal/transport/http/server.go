@@ -199,39 +199,39 @@ func (s *Server) setupV1Routes(router *gin.RouterGroup) {
 		authSessions.POST("/sessions/revoke-all", s.handlers.Auth.RevokeAllSessions)
 	}
 
-	// Organization routes
+	// Organization routes with clean RBAC permissions
 	orgs := protected.Group("/organizations")
 	{
-		orgs.GET("", s.handlers.Organization.List)
-		orgs.POST("", s.handlers.Organization.Create)
-		orgs.GET("/:orgId", s.handlers.Organization.Get)
-		orgs.PUT("/:orgId", s.handlers.Organization.Update)
-		orgs.DELETE("/:orgId", s.handlers.Organization.Delete)
-		orgs.GET("/:orgId/members", s.handlers.Organization.ListMembers)
-		orgs.POST("/:orgId/members", s.handlers.Organization.InviteMember)
-		orgs.DELETE("/:orgId/members/:userId", s.handlers.Organization.RemoveMember)
+		orgs.GET("", s.handlers.Organization.List) // No org context required for listing user's orgs
+		orgs.POST("", s.authMiddleware.RequirePermission("organizations:create"), s.handlers.Organization.Create)
+		orgs.GET("/:orgId", s.authMiddleware.RequirePermission("organizations:read"), s.handlers.Organization.Get)
+		orgs.PUT("/:orgId", s.authMiddleware.RequirePermission("organizations:update"), s.handlers.Organization.Update)
+		orgs.DELETE("/:orgId", s.authMiddleware.RequirePermission("organizations:delete"), s.handlers.Organization.Delete)
+		orgs.GET("/:orgId/members", s.authMiddleware.RequirePermission("members:read"), s.handlers.Organization.ListMembers)
+		orgs.POST("/:orgId/members", s.authMiddleware.RequirePermission("members:invite"), s.handlers.Organization.InviteMember)
+		orgs.DELETE("/:orgId/members/:userId", s.authMiddleware.RequirePermission("members:remove"), s.handlers.Organization.RemoveMember)
 		
-		// Organization settings routes
-		orgs.GET("/:orgId/settings", s.handlers.Organization.GetSettings)
-		orgs.POST("/:orgId/settings", s.handlers.Organization.CreateSetting)
-		orgs.GET("/:orgId/settings/:key", s.handlers.Organization.GetSetting)
-		orgs.PUT("/:orgId/settings/:key", s.handlers.Organization.UpdateSetting)
-		orgs.DELETE("/:orgId/settings/:key", s.handlers.Organization.DeleteSetting)
-		orgs.POST("/:orgId/settings/bulk", s.handlers.Organization.BulkCreateSettings)
-		orgs.GET("/:orgId/settings/export", s.handlers.Organization.ExportSettings)
-		orgs.POST("/:orgId/settings/import", s.handlers.Organization.ImportSettings)
-		orgs.POST("/:orgId/settings/reset", s.handlers.Organization.ResetToDefaults)
+		// Organization settings routes with permission middleware
+		orgs.GET("/:orgId/settings", s.authMiddleware.RequirePermission("settings:read"), s.handlers.Organization.GetSettings)
+		orgs.POST("/:orgId/settings", s.authMiddleware.RequirePermission("settings:write"), s.handlers.Organization.CreateSetting)
+		orgs.GET("/:orgId/settings/:key", s.authMiddleware.RequirePermission("settings:read"), s.handlers.Organization.GetSetting)
+		orgs.PUT("/:orgId/settings/:key", s.authMiddleware.RequirePermission("settings:write"), s.handlers.Organization.UpdateSetting)
+		orgs.DELETE("/:orgId/settings/:key", s.authMiddleware.RequirePermission("settings:write"), s.handlers.Organization.DeleteSetting)
+		orgs.POST("/:orgId/settings/bulk", s.authMiddleware.RequirePermission("settings:write"), s.handlers.Organization.BulkCreateSettings)
+		orgs.GET("/:orgId/settings/export", s.authMiddleware.RequirePermission("settings:export"), s.handlers.Organization.ExportSettings)
+		orgs.POST("/:orgId/settings/import", s.authMiddleware.RequireAllPermissions([]string{"settings:write", "settings:import"}), s.handlers.Organization.ImportSettings)
+		orgs.POST("/:orgId/settings/reset", s.authMiddleware.RequireAnyPermission([]string{"settings:admin", "organizations:admin"}), s.handlers.Organization.ResetToDefaults)
 	}
 
-	// Project routes
+	// Project routes with clean RBAC permissions
 	projects := protected.Group("/projects")
 	{
-		projects.GET("", s.handlers.Project.List)
-		projects.POST("", s.handlers.Project.Create)
-		projects.GET("/:projectId", s.handlers.Project.Get)
-		projects.PUT("/:projectId", s.handlers.Project.Update)
-		projects.DELETE("/:projectId", s.handlers.Project.Delete)
-		projects.GET("/:projectId/environments", s.handlers.Environment.List)
+		projects.GET("", s.handlers.Project.List) // Lists projects for authenticated user
+		projects.POST("", s.authMiddleware.RequirePermission("projects:create"), s.handlers.Project.Create)
+		projects.GET("/:projectId", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Project.Get)
+		projects.PUT("/:projectId", s.authMiddleware.RequirePermission("projects:update"), s.handlers.Project.Update)
+		projects.DELETE("/:projectId", s.authMiddleware.RequirePermission("projects:delete"), s.handlers.Project.Delete)
+		projects.GET("/:projectId/environments", s.authMiddleware.RequirePermission("environments:read"), s.handlers.Environment.List)
 	}
 
 	// Environment routes
