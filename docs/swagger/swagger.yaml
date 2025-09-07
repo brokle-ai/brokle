@@ -520,10 +520,6 @@ definitions:
     - token
     type: object
   auth.RevokeAllSessionsRequest:
-    properties:
-      except_current:
-        example: true
-        type: boolean
     type: object
   billing.BillingAlert:
     properties:
@@ -1187,28 +1183,6 @@ definitions:
         maxLength: 100
         minLength: 2
         type: string
-    type: object
-  internal_transport_http_handlers_user.UpdatePreferencesRequest:
-    description: User preferences update information
-    properties:
-      dashboard_settings:
-        additionalProperties: true
-        type: object
-      email_notifications:
-        example: true
-        type: boolean
-      language:
-        example: en
-        type: string
-      theme:
-        example: dark
-        type: string
-      timezone:
-        example: UTC
-        type: string
-      webhook_notifications:
-        example: false
-        type: boolean
     type: object
   internal_transport_http_handlers_user.UpdateProfileRequest:
     description: User profile update information
@@ -2705,9 +2679,10 @@ paths:
     post:
       consumes:
       - application/json
-      description: Revoke all user sessions (logout from all devices)
+      description: Revoke all user sessions (logout from all devices). This will invalidate
+        ALL active sessions for the user.
       parameters:
-      - description: Revocation options
+      - description: Request body (currently unused but kept for future extensibility)
         in: body
         name: request
         schema:
@@ -5012,65 +4987,6 @@ paths:
       security:
       - BearerAuth: []
       summary: Update current user profile
-      tags:
-      - User
-  /api/v1/users/me/preferences:
-    get:
-      description: Get the preferences settings of the currently authenticated user
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: User preferences retrieved successfully
-          schema:
-            $ref: '#/definitions/response.SuccessResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Get user preferences
-      tags:
-      - User
-    put:
-      consumes:
-      - application/json
-      description: Update the preferences settings of the currently authenticated
-        user
-      parameters:
-      - description: Preferences update information
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/internal_transport_http_handlers_user.UpdatePreferencesRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Preferences updated successfully
-          schema:
-            $ref: '#/definitions/response.MessageResponse'
-        "400":
-          description: Invalid request payload
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Update user preferences
       tags:
       - User
   /health:

@@ -151,35 +151,64 @@ func (s *authService) Register(ctx context.Context, req *auth.RegisterRequest) (
 	}
 
 	// Create user using constructor
-	user := user.NewUser(req.Email, req.FirstName, req.LastName)
-	user.SetPassword(string(hashedPassword))
+	newUser := user.NewUser(req.Email, req.FirstName, req.LastName)
+	newUser.SetPassword(string(hashedPassword))
 
-	err = s.userRepo.Create(ctx, user)
+	// Set timezone and language from request if provided
+	if req.Timezone != "" {
+		newUser.Timezone = req.Timezone
+	}
+	if req.Language != "" {
+		newUser.Language = req.Language
+	}
+
+	// Create user and profile in a transaction to ensure atomicity
+	err = s.userRepo.Transaction(func(tx user.Repository) error {
+		// Create user
+		if err := tx.Create(ctx, newUser); err != nil {
+			return fmt.Errorf("failed to create user: %w", err)
+		}
+
+		// Create user profile with default values (fixes registration bug)
+		profile := user.NewUserProfile(newUser.ID)
+		if req.Timezone != "" {
+			profile.Timezone = req.Timezone
+		}
+		if req.Language != "" {
+			profile.Language = req.Language
+		}
+		
+		if err := tx.CreateProfile(ctx, profile); err != nil {
+			return fmt.Errorf("failed to create user profile: %w", err)
+		}
+		
+		return nil
+	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create user: %w", err)
+		return nil, err
 	}
 
 	// Log registration
-	auditLog := auth.NewAuditLog(&user.ID, nil, "auth.register.success", "user", user.ID.String(), fmt.Sprintf(`{"email": "%s"}`, user.Email), "", "")
+	auditLog := auth.NewAuditLog(&newUser.ID, nil, "auth.register.success", "user", newUser.ID.String(), fmt.Sprintf(`{"email": "%s"}`, newUser.Email), "", "")
 	s.auditRepo.Create(ctx, auditLog)
 
 	// Auto-login: Generate tokens for the new user
 	var permissions []string
-	if user.DefaultOrganizationID != nil {
-		permissions, _ = s.roleService.GetUserPermissions(ctx, user.ID, *user.DefaultOrganizationID)
+	if newUser.DefaultOrganizationID != nil {
+		permissions, _ = s.roleService.GetUserPermissions(ctx, newUser.ID, *newUser.DefaultOrganizationID)
 	}
 
 	// Generate access token with JTI for session tracking
-	accessToken, jti, err := s.jwtService.GenerateAccessTokenWithJTI(ctx, user.ID, map[string]interface{}{
-		"email":          user.Email,
-		"organization_id": user.DefaultOrganizationID,
+	accessToken, jti, err := s.jwtService.GenerateAccessTokenWithJTI(ctx, newUser.ID, map[string]interface{}{
+		"email":          newUser.Email,
+		"organization_id": newUser.DefaultOrganizationID,
 		"permissions":     permissions,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate access token: %w", err)
 	}
 
-	refreshToken, err := s.jwtService.GenerateRefreshToken(ctx, user.ID)
+	refreshToken, err := s.jwtService.GenerateRefreshToken(ctx, newUser.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate refresh token: %w", err)
 	}
@@ -192,21 +221,21 @@ func (s *authService) Register(ctx context.Context, req *auth.RegisterRequest) (
 	refreshTokenHash := s.hashToken(refreshToken)
 
 	// Create secure session (NO ACCESS TOKEN STORED)
-	session := auth.NewUserSession(user.ID, refreshTokenHash, jti, expiresAt, refreshExpiresAt, nil, nil, nil)
+	session := auth.NewUserSession(newUser.ID, refreshTokenHash, jti, expiresAt, refreshExpiresAt, nil, nil, nil)
 	err = s.sessionRepo.Create(ctx, session)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create session: %w", err)
 	}
 
 	// Update last login (for the auto-login)
-	err = s.userRepo.UpdateLastLogin(ctx, user.ID)
+	err = s.userRepo.UpdateLastLogin(ctx, newUser.ID)
 	if err != nil {
 		// Log but don't fail registration
 		fmt.Printf("Failed to update last login after registration: %v\n", err)
 	}
 
 	// Log auto-login after registration
-	auditLog = auth.NewAuditLog(&user.ID, user.DefaultOrganizationID, "auth.register.auto_login", "user", user.ID.String(), fmt.Sprintf(`{"session_id": "%s"}`, session.ID.String()), "", "")
+	auditLog = auth.NewAuditLog(&newUser.ID, newUser.DefaultOrganizationID, "auth.register.auto_login", "user", newUser.ID.String(), fmt.Sprintf(`{"session_id": "%s"}`, session.ID.String()), "", "")
 	s.auditRepo.Create(ctx, auditLog)
 
 	// Return login tokens (same as login response)
@@ -510,12 +539,6 @@ func (s *authService) UpdateProfile(ctx context.Context, userID ulid.ULID, req *
 	}
 	if req.LastName != nil && *req.LastName != "" {
 		user.LastName = *req.LastName
-	}
-	if req.AvatarURL != nil {
-		user.AvatarURL = *req.AvatarURL
-	}
-	if req.Phone != nil {
-		user.Phone = *req.Phone
 	}
 	if req.Timezone != nil {
 		user.Timezone = *req.Timezone

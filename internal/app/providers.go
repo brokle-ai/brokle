@@ -105,7 +105,6 @@ type OrganizationRepositories struct {
 type UserServices struct {
 	User        user.UserService
 	Profile     user.ProfileService
-	Preferences user.PreferenceService
 	Onboarding  user.OnboardingService
 }
 
@@ -208,11 +207,6 @@ func ProvideUserServices(
 		authRepos.AuditLog,
 	)
 	
-	preferencesSvc := userService.NewPreferenceService(
-		userRepos.User,
-		authRepos.AuditLog,
-	)
-	
 	onboardingSvc := userService.NewOnboardingService(
 		userRepos.User,
 		authRepos.AuditLog,
@@ -221,7 +215,6 @@ func ProvideUserServices(
 	return &UserServices{
 		User:        userSvc,
 		Profile:     profileSvc,
-		Preferences: preferencesSvc,
 		Onboarding:  onboardingSvc,
 	}
 }

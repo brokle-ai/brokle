@@ -120,7 +120,7 @@ func (h *Handler) GetProfile(c *gin.Context) {
 		Name:                  userData.GetFullName(),
 		FirstName:             userData.FirstName,
 		LastName:              userData.LastName,
-		AvatarURL:             userData.AvatarURL,
+		AvatarURL:             "", // Now stored in profile
 		IsEmailVerified:       userData.IsEmailVerified,
 		OnboardingCompleted:   userData.OnboardingCompleted,
 		IsActive:              userData.IsActive,
@@ -202,13 +202,11 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 		return
 	}
 
-	// Update basic user information (name, avatar, phone) via user service
-	if req.FirstName != nil || req.LastName != nil || req.AvatarURL != nil || req.Phone != nil {
+	// Update basic user information (name) via user service
+	if req.FirstName != nil || req.LastName != nil {
 		userUpdateReq := &user.UpdateUserRequest{
 			FirstName: req.FirstName,
 			LastName:  req.LastName,
-			AvatarURL: req.AvatarURL,
-			Phone:     req.Phone,
 		}
 
 		_, err := h.userService.UpdateUser(c.Request.Context(), userID, userUpdateReq)
@@ -242,44 +240,3 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 	h.GetProfile(c)
 }
 
-// GetPreferences handles GET /users/me/preferences
-// @Summary Get user preferences
-// @Description Get the preferences settings of the currently authenticated user
-// @Tags User
-// @Produce json
-// @Security BearerAuth
-// @Success 200 {object} response.SuccessResponse "User preferences retrieved successfully"
-// @Failure 401 {object} response.ErrorResponse "Unauthorized"
-// @Failure 500 {object} response.ErrorResponse "Internal server error"
-// @Router /api/v1/users/me/preferences [get]
-func (h *Handler) GetPreferences(c *gin.Context) {
-	response.Success(c, gin.H{"message": "Get user preferences - TODO"})
-}
-
-// UpdatePreferencesRequest represents the update preferences request payload
-// @Description User preferences update information
-type UpdatePreferencesRequest struct {
-	Theme                string                 `json:"theme,omitempty" example:"dark" description:"UI theme preference (light, dark, auto)"`
-	Language             string                 `json:"language,omitempty" example:"en" description:"Language preference (ISO 639-1 code)"`
-	Timezone             string                 `json:"timezone,omitempty" example:"UTC" description:"Timezone preference"`
-	EmailNotifications   *bool                  `json:"email_notifications,omitempty" example:"true" description:"Enable email notifications"`
-	WebhookNotifications *bool                  `json:"webhook_notifications,omitempty" example:"false" description:"Enable webhook notifications"`
-	DashboardSettings    map[string]interface{} `json:"dashboard_settings,omitempty" description:"Custom dashboard configuration"`
-}
-
-// UpdatePreferences handles PUT /users/me/preferences
-// @Summary Update user preferences
-// @Description Update the preferences settings of the currently authenticated user
-// @Tags User
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param request body UpdatePreferencesRequest true "Preferences update information"
-// @Success 200 {object} response.MessageResponse "Preferences updated successfully"
-// @Failure 400 {object} response.ErrorResponse "Invalid request payload"
-// @Failure 401 {object} response.ErrorResponse "Unauthorized"
-// @Failure 500 {object} response.ErrorResponse "Internal server error"
-// @Router /api/v1/users/me/preferences [put]
-func (h *Handler) UpdatePreferences(c *gin.Context) {
-	response.Success(c, gin.H{"message": "Update user preferences - TODO"})
-}

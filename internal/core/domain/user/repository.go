@@ -26,10 +26,6 @@ type Repository interface {
 	GetProfile(ctx context.Context, userID ulid.ULID) (*UserProfile, error)
 	UpdateProfile(ctx context.Context, profile *UserProfile) error
 	
-	// Preferences operations
-	CreatePreferences(ctx context.Context, preferences *UserPreferences) error
-	GetPreferences(ctx context.Context, userID ulid.ULID) (*UserPreferences, error)
-	UpdatePreferences(ctx context.Context, preferences *UserPreferences) error
 	
 	// Authentication operations
 	UpdatePassword(ctx context.Context, userID ulid.ULID, hashedPassword string) error
@@ -55,6 +51,9 @@ type Repository interface {
 	// User statistics
 	GetUserStats(ctx context.Context) (*UserStats, error)
 	GetNewUsersCount(ctx context.Context, since time.Time) (int64, error)
+	
+	// Transaction support
+	Transaction(fn func(Repository) error) error
 }
 
 // Filter defines a generic filter type for compatibility

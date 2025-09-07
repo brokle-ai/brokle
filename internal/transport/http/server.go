@@ -176,8 +176,6 @@ func (s *Server) setupV1Routes(router *gin.RouterGroup) {
 	{
 		users.GET("/me", s.handlers.User.GetProfile)
 		users.PUT("/me", s.handlers.User.UpdateProfile)
-		users.GET("/me/preferences", s.handlers.User.GetPreferences)
-		users.PUT("/me/preferences", s.handlers.User.UpdatePreferences)
 	}
 	
 	// Auth session management routes (protected)
