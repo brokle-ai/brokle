@@ -1,4 +1,28 @@
 definitions:
+  admin.RevokeTokenRequest:
+    description: Request to revoke a specific access token
+    properties:
+      jti:
+        example: 01K4FHGHT3XX9WFM293QPZ5G9V
+        type: string
+      reason:
+        example: security_incident
+        maxLength: 100
+        type: string
+    required:
+    - jti
+    - reason
+    type: object
+  admin.RevokeUserTokensRequest:
+    description: Request to revoke all access tokens for a user
+    properties:
+      reason:
+        example: account_compromise
+        maxLength: 100
+        type: string
+    required:
+    - reason
+    type: object
   ai.ChatCompletionRequest:
     description: OpenAI-compatible chat completion request
     properties:
@@ -54,8 +78,69 @@ definitions:
         type: string
     type: object
   ai.CompletionRequest:
+    description: OpenAI-compatible text completion request
+    properties:
+      best_of:
+        example: 1
+        type: integer
+      echo:
+        example: false
+        type: boolean
+      frequency_penalty:
+        example: 0
+        type: number
+      logit_bias:
+        additionalProperties:
+          format: float64
+          type: number
+        type: object
+      logprobs:
+        example: 0
+        type: integer
+      max_tokens:
+        example: 150
+        type: integer
+      model:
+        example: gpt-3.5-turbo-instruct
+        type: string
+      "n":
+        example: 1
+        type: integer
+      presence_penalty:
+        example: 0
+        type: number
+      prompt:
+        example: Once upon a time
+        type: string
+      stop: {}
+      stream:
+        example: false
+        type: boolean
+      temperature:
+        example: 0.7
+        type: number
+      top_p:
+        example: 1
+        type: number
+      user:
+        example: user-123
+        type: string
     type: object
   ai.EmbeddingRequest:
+    description: OpenAI-compatible embedding request
+    properties:
+      encoding_format:
+        example: float
+        type: string
+      input:
+        example: The food was delicious and the waiter...
+        type: string
+      model:
+        example: text-embedding-ada-002
+        type: string
+      user:
+        example: user-123
+        type: string
     type: object
   ai.Model:
     description: Available AI model information
@@ -1691,6 +1776,83 @@ definitions:
         example: true
         type: boolean
     type: object
+  user.UserProfileData:
+    description: Extended user profile data including bio, location, and social links
+    properties:
+      bio:
+        example: Software engineer passionate about AI
+        type: string
+      github_url:
+        example: https://github.com/johndoe
+        type: string
+      language:
+        example: en
+        type: string
+      linkedin_url:
+        example: https://linkedin.com/in/johndoe
+        type: string
+      location:
+        example: San Francisco, CA
+        type: string
+      theme:
+        example: dark
+        type: string
+      timezone:
+        example: UTC
+        type: string
+      twitter_url:
+        example: https://twitter.com/johndoe
+        type: string
+      website:
+        example: https://johndoe.com
+        type: string
+    type: object
+  user.UserProfileResponse:
+    description: Complete user profile information including basic info and extended
+      profile
+    properties:
+      avatar_url:
+        example: https://example.com/avatar.jpg
+        type: string
+      completeness:
+        example: 85
+        type: integer
+      created_at:
+        example: "2025-01-01T00:00:00Z"
+        type: string
+      default_organization_id:
+        example: 01K4FHGHT3XX9WFM293QPZ5G9V
+        type: string
+      email:
+        example: user@example.com
+        type: string
+      first_name:
+        example: John
+        type: string
+      id:
+        example: 01K4FHGHT3XX9WFM293QPZ5G9V
+        type: string
+      is_active:
+        example: true
+        type: boolean
+      is_email_verified:
+        example: true
+        type: boolean
+      last_login_at:
+        example: "2025-01-02T10:30:00Z"
+        type: string
+      last_name:
+        example: Doe
+        type: string
+      name:
+        example: John Doe
+        type: string
+      onboarding_completed:
+        example: true
+        type: boolean
+      profile:
+        $ref: '#/definitions/user.UserProfileData'
+    type: object
 host: localhost:8080
 info:
   contact:
@@ -1706,6 +1868,171 @@ info:
   title: Brokle AI Infrastructure Platform API
   version: 1.0.0
 paths:
+  /api/v1/admin/tokens/blacklisted:
+    get:
+      description: Get a paginated list of blacklisted tokens with filtering options
+      parameters:
+      - description: 'Number of tokens to return (default: 50, max: 200)'
+        example: 50
+        in: query
+        name: limit
+        type: integer
+      - description: 'Number of tokens to skip (default: 0)'
+        example: 0
+        in: query
+        name: offset
+        type: integer
+      - description: Filter by user ID
+        example: '"01K4FHGHT3XX9WFM293QPZ5G9V"'
+        in: query
+        name: user_id
+        type: string
+      - description: Filter by revocation reason
+        example: '"security_incident"'
+        in: query
+        name: reason
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Blacklisted tokens list
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "400":
+          description: Invalid query parameters
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Insufficient permissions
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: List blacklisted tokens
+      tags:
+      - Admin
+      - Token Management
+  /api/v1/admin/tokens/revoke:
+    post:
+      consumes:
+      - application/json
+      description: Immediately revoke a specific access token by JTI
+      parameters:
+      - description: Token revocation request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/admin.RevokeTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Token revoked successfully
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Insufficient permissions
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Revoke specific token
+      tags:
+      - Admin
+      - Token Management
+  /api/v1/admin/tokens/stats:
+    get:
+      description: Get comprehensive statistics about token usage and revocation
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Token statistics
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Insufficient permissions
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Get token statistics
+      tags:
+      - Admin
+      - Token Management
+  /api/v1/admin/users/{userID}/tokens/revoke:
+    post:
+      consumes:
+      - application/json
+      description: Immediately revoke all active access tokens for a specific user
+      parameters:
+      - description: User ID
+        example: '"01K4FHGHT3XX9WFM293QPZ5G9V"'
+        in: path
+        name: userID
+        required: true
+        type: string
+      - description: User token revocation request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/admin.RevokeUserTokensRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User tokens revoked successfully
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Insufficient permissions
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Revoke all user tokens
+      tags:
+      - Admin
+      - Token Management
   /api/v1/analytics/costs:
     get:
       consumes:
@@ -4634,7 +4961,7 @@ paths:
         "200":
           description: User profile retrieved successfully
           schema:
-            $ref: '#/definitions/response.SuccessResponse'
+            $ref: '#/definitions/user.UserProfileResponse'
         "401":
           description: Unauthorized
           schema:
@@ -4669,7 +4996,7 @@ paths:
         "200":
           description: Profile updated successfully
           schema:
-            $ref: '#/definitions/response.MessageResponse'
+            $ref: '#/definitions/user.UserProfileResponse'
         "400":
           description: Invalid request payload
           schema:
@@ -5028,6 +5355,9 @@ securityDefinitions:
     in: header
     name: X-API-Key
     type: apiKey
+    x-extension-openapi: '{"definitions": {"ULID": {"type": "string", "description":
+      "ULID (Universally Unique Lexicographically Sortable Identifier)", "example":
+      "01ARZ3NDEKTSV4RRFFQ69G5FAV", "pattern": "^[0-9A-Z]{26}$"}}}'
   BearerAuth:
     description: 'JWT token for authentication. Format: Authorization: Bearer <token>'
     in: header

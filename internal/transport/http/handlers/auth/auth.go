@@ -265,30 +265,36 @@ func (h *Handler) ResetPassword(c *gin.Context) {
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /api/v1/auth/logout [post]
 func (h *Handler) Logout(c *gin.Context) {
-	// Get session ID from context (set by auth middleware)
-	sessionIDValue, exists := c.Get("session_id")
+	// Get token claims from context (set by auth middleware)
+	claimsValue, exists := c.Get("token_claims")
 	if !exists {
-		h.logger.Error("Session ID not found in context")
-		response.Unauthorized(c, "Invalid session")
+		h.logger.Error("Token claims not found in context")
+		response.Unauthorized(c, "Authentication required")
 		return
 	}
 
-	sessionID, ok := sessionIDValue.(ulid.ULID)
+	claims, ok := claimsValue.(*auth.JWTClaims)
 	if !ok {
-		h.logger.Error("Invalid session ID type in context")
+		h.logger.Error("Invalid token claims type in context")
 		response.InternalServerError(c, "Internal error")
 		return
 	}
 
-	// Logout user
-	err := h.authService.Logout(c.Request.Context(), sessionID)
+	// Logout user by blacklisting current access token JTI
+	err := h.authService.Logout(c.Request.Context(), claims.JWTID, claims.UserID)
 	if err != nil {
-		h.logger.WithError(err).WithField("session_id", sessionID).Error("Logout failed")
+		h.logger.WithError(err).WithFields(logrus.Fields{
+			"jti":     claims.JWTID,
+			"user_id": claims.UserID,
+		}).Error("Logout failed")
 		response.ErrorWithStatus(c, http.StatusInternalServerError, "logout_failed", "Logout failed", err.Error())
 		return
 	}
 
-	h.logger.WithField("session_id", sessionID).Info("User logged out successfully")
+	h.logger.WithFields(logrus.Fields{
+		"jti":     claims.JWTID,
+		"user_id": claims.UserID,
+	}).Info("User logged out successfully")
 	response.Success(c, gin.H{
 		"message": "Logged out successfully",
 	})
@@ -536,7 +542,7 @@ func (h *Handler) ListSessions(c *gin.Context) {
 
 // GetSessionRequest represents request for getting session by ID
 type GetSessionRequest struct {
-	SessionID ulid.ULID `uri:"session_id" binding:"required" example:"01FXYZ123456789ABCDEFGHIJK0" description:"Session ID"`
+	SessionID ulid.ULID `uri:"session_id" binding:"required" example:"01FXYZ123456789ABCDEFGHIJK0" description:"Session ID" swaggertype:"string"`
 }
 
 // GetSession gets a specific user session by ID
@@ -612,7 +618,7 @@ func (h *Handler) GetSession(c *gin.Context) {
 
 // RevokeSessionRequest represents request for revoking a session
 type RevokeSessionRequest struct {
-	SessionID ulid.ULID `uri:"session_id" binding:"required" example:"01FXYZ123456789ABCDEFGHIJK0" description:"Session ID to revoke"`
+	SessionID ulid.ULID `uri:"session_id" binding:"required" example:"01FXYZ123456789ABCDEFGHIJK0" description:"Session ID to revoke" swaggertype:"string"`
 }
 
 // RevokeSession revokes a specific user session
@@ -672,17 +678,17 @@ func (h *Handler) RevokeSession(c *gin.Context) {
 
 // RevokeAllSessionsRequest represents request for revoking all user sessions
 type RevokeAllSessionsRequest struct {
-	ExceptCurrent bool `json:"except_current,omitempty" example:"true" description:"Whether to keep current session active"`
+	// Note: This struct is kept for future extensibility but currently has no fields
 }
 
 // RevokeAllSessions revokes all user sessions
 // @Summary Revoke all user sessions
-// @Description Revoke all user sessions (logout from all devices)
+// @Description Revoke all user sessions (logout from all devices). This will invalidate ALL active sessions for the user.
 // @Tags Authentication
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param request body RevokeAllSessionsRequest false "Revocation options"
+// @Param request body RevokeAllSessionsRequest false "Request body (currently unused but kept for future extensibility)"
 // @Success 200 {object} response.MessageResponse "All sessions revoked successfully"
 // @Failure 401 {object} response.ErrorResponse "Unauthorized"
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
@@ -705,16 +711,6 @@ func (h *Handler) RevokeAllSessions(c *gin.Context) {
 		return
 	}
 
-	var currentSessionID ulid.ULID
-	if req.ExceptCurrent {
-		sessionIDValue, exists := c.Get("session_id")
-		if exists {
-			if sessionID, ok := sessionIDValue.(ulid.ULID); ok {
-				currentSessionID = sessionID
-			}
-		}
-	}
-
 	// Get current sessions count before revoking
 	sessions, err := h.authService.GetUserSessions(c.Request.Context(), userID)
 	if err != nil {
@@ -725,7 +721,7 @@ func (h *Handler) RevokeAllSessions(c *gin.Context) {
 
 	count := 0
 	for _, session := range sessions {
-		if session.IsValid() && (currentSessionID.IsZero() || session.ID != currentSessionID) {
+		if session.IsValid() {
 			count++
 		}
 	}
@@ -738,11 +734,19 @@ func (h *Handler) RevokeAllSessions(c *gin.Context) {
 		return
 	}
 
+	// GDPR/SOC2 Compliance: Create user-wide timestamp blacklist to immediately block ALL tokens
+	// This ensures complete compliance - any token issued before this timestamp is immediately invalid
+	err = h.authService.RevokeUserAccessTokens(c.Request.Context(), userID, "user_requested_revoke_all_sessions")
+	if err != nil {
+		h.logger.WithError(err).WithField("user_id", userID).Error("Failed to create user-wide token blacklist")
+		// Log error but don't fail the request since sessions were already revoked
+		// This maintains partial security even if timestamp blacklisting fails
+	}
+
 	h.logger.WithFields(logrus.Fields{
-		"user_id":        userID,
-		"revoked_count":  count,
-		"except_current": req.ExceptCurrent,
-	}).Info("All sessions revoked successfully")
+		"user_id":       userID,
+		"revoked_count": count,
+	}).Info("All sessions and access tokens revoked successfully")
 
 	response.Success(c, gin.H{
 		"message": "All sessions revoked successfully",

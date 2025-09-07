@@ -12,22 +12,46 @@ import (
 	"gorm.io/gorm"
 )
 
-// UserSession represents an active user session.
+// UserSession represents an active user session with secure token management.
+// SECURITY: Access tokens are NOT stored - only session metadata and hashed refresh tokens.
 type UserSession struct {
-	ID               ulid.ULID   `json:"id" gorm:"type:char(26);primaryKey"`
-	UserID           ulid.ULID   `json:"user_id" gorm:"type:char(26);not null"`
-	Token            string      `json:"token" gorm:"size:255;not null;uniqueIndex"`
-	RefreshToken     string      `json:"refresh_token,omitempty" gorm:"size:255;not null;uniqueIndex"`
-	ExpiresAt        time.Time   `json:"expires_at"`
-	RefreshExpiresAt time.Time   `json:"refresh_expires_at"`
-	IPAddress        *string     `json:"ip_address,omitempty" gorm:"size:45"`
-	UserAgent        *string     `json:"user_agent,omitempty" gorm:"type:text"`
-	DeviceInfo       interface{} `json:"device_info,omitempty" gorm:"type:jsonb"` // Device information JSON
-	IsActive         bool        `json:"is_active" gorm:"default:true"`
-	LastUsedAt       *time.Time  `json:"last_used_at,omitempty"`
-	RevokedAt        *time.Time  `json:"revoked_at,omitempty"` // Replaced deleted_at with revoked_at
-	CreatedAt        time.Time   `json:"created_at"`
-	UpdatedAt        time.Time   `json:"updated_at"`
+	ID                   ulid.ULID   `json:"id" gorm:"type:char(26);primaryKey"`
+	UserID               ulid.ULID   `json:"user_id" gorm:"type:char(26);not null;index:idx_user_sessions_user_active,priority:1"`
+	
+	// Secure Token Management (NO ACCESS TOKENS STORED)
+	RefreshTokenHash     string      `json:"-" gorm:"type:char(64);not null;uniqueIndex"`             // SHA-256 hash = 64 hex chars
+	RefreshTokenVersion  int         `json:"refresh_token_version" gorm:"default:1;not null"`         // For rotation tracking
+	CurrentJTI           string      `json:"-" gorm:"type:char(26);not null;index"`                  // Current access token JTI for blacklisting
+	
+	// Session Metadata
+	ExpiresAt            time.Time   `json:"expires_at" gorm:"not null;index"`                        // Access token expiry
+	RefreshExpiresAt     time.Time   `json:"refresh_expires_at" gorm:"not null;index"`               // Refresh token expiry
+	IPAddress            *string     `json:"ip_address,omitempty" gorm:"type:inet;index"`             // PostgreSQL inet type
+	UserAgent            *string     `json:"user_agent,omitempty" gorm:"type:text"`
+	DeviceInfo           interface{} `json:"device_info,omitempty" gorm:"type:jsonb"`                 // Device information JSON
+	
+	// Session State
+	IsActive             bool        `json:"is_active" gorm:"default:true;not null;index:idx_user_sessions_user_active,priority:2"`
+	LastUsedAt           *time.Time  `json:"last_used_at,omitempty" gorm:"index"`
+	RevokedAt            *time.Time  `json:"revoked_at,omitempty" gorm:"index"`
+	
+	CreatedAt            time.Time   `json:"created_at" gorm:"not null"`
+	UpdatedAt            time.Time   `json:"updated_at" gorm:"not null"`
+}
+
+// BlacklistedToken represents a revoked access token for immediate revocation capability.
+type BlacklistedToken struct {
+	JTI       string    `json:"jti" gorm:"type:char(26);primaryKey"`                     // JWT ID (ULID format)
+	UserID    ulid.ULID `json:"user_id" gorm:"type:char(26);not null;index"`            // Owner user
+	ExpiresAt time.Time `json:"expires_at" gorm:"not null;index"`                       // Token expiry for cleanup
+	RevokedAt time.Time `json:"revoked_at" gorm:"not null;default:CURRENT_TIMESTAMP"`   // When revoked
+	Reason    string    `json:"reason" gorm:"type:varchar(100);not null"`               // logout, suspicious_activity, etc.
+	
+	// New fields for user-wide timestamp blacklisting (GDPR/SOC2 compliance)
+	TokenType          string `json:"token_type" gorm:"type:varchar(50);not null;default:'individual';index"`  // individual, user_wide_timestamp
+	BlacklistTimestamp *int64 `json:"blacklist_timestamp,omitempty" gorm:"index"`                             // Unix timestamp for user-wide blacklisting
+	
+	CreatedAt time.Time `json:"created_at" gorm:"not null"`
 }
 
 // SessionStats represents session statistics and metrics
@@ -244,6 +268,12 @@ var StandardPermissions = []string{
 	"audit_logs.read",
 }
 
+// Blacklisted token types
+const (
+	TokenTypeIndividual      = "individual"        // Individual JTI-based blacklisting (default)
+	TokenTypeUserTimestamp   = "user_wide_timestamp" // User-wide timestamp blacklisting (GDPR/SOC2)
+)
+
 // System roles that are pre-defined
 var SystemRoles = map[string][]string{
 	"owner": {
@@ -266,20 +296,54 @@ var SystemRoles = map[string][]string{
 }
 
 // Constructor functions
-func NewUserSession(userID ulid.ULID, token, refreshToken string, expiresAt, refreshExpiresAt time.Time, ipAddress, userAgent *string, deviceInfo interface{}) *UserSession {
+func NewUserSession(userID ulid.ULID, refreshTokenHash string, currentJTI string, expiresAt, refreshExpiresAt time.Time, ipAddress, userAgent *string, deviceInfo interface{}) *UserSession {
 	return &UserSession{
-		ID:               ulid.New(),
-		UserID:           userID,
-		Token:            token,
-		RefreshToken:     refreshToken,
-		ExpiresAt:        expiresAt,
-		RefreshExpiresAt: refreshExpiresAt,
-		IPAddress:        ipAddress,
-		UserAgent:        userAgent,
-		DeviceInfo:       deviceInfo,
-		IsActive:         true,
-		CreatedAt:        time.Now(),
-		UpdatedAt:        time.Now(),
+		ID:                   ulid.New(),
+		UserID:               userID,
+		RefreshTokenHash:     refreshTokenHash,
+		RefreshTokenVersion:  1,
+		CurrentJTI:           currentJTI,
+		ExpiresAt:            expiresAt,
+		RefreshExpiresAt:     refreshExpiresAt,
+		IPAddress:            ipAddress,
+		UserAgent:            userAgent,
+		DeviceInfo:           deviceInfo,
+		IsActive:             true,
+		CreatedAt:            time.Now(),
+		UpdatedAt:            time.Now(),
+	}
+}
+
+func NewBlacklistedToken(jti string, userID ulid.ULID, expiresAt time.Time, reason string) *BlacklistedToken {
+	return &BlacklistedToken{
+		JTI:       jti,
+		UserID:    userID,
+		ExpiresAt: expiresAt,
+		RevokedAt: time.Now(),
+		Reason:    reason,
+		TokenType: TokenTypeIndividual, // Default to individual JTI blacklisting
+		CreatedAt: time.Now(),
+	}
+}
+
+// NewUserTimestampBlacklistedToken creates a user-wide timestamp blacklist entry for GDPR/SOC2 compliance
+func NewUserTimestampBlacklistedToken(userID ulid.ULID, blacklistTimestamp int64, reason string) *BlacklistedToken {
+	// Generate a proper ULID for this user-wide blacklist entry
+	userWideJTI := ulid.New()
+	
+	// Set expiry far in the future to cover all possible access token lifetimes
+	// We use the blacklist timestamp + reasonable buffer (24 hours) to ensure cleanup
+	farFutureExpiry := time.Unix(blacklistTimestamp, 0).Add(24 * time.Hour)
+	
+	return &BlacklistedToken{
+		JTI:                userWideJTI.String(),
+		UserID:             userID,
+		ExpiresAt:          farFutureExpiry,
+		RevokedAt:          time.Now(),
+		Reason:             reason,
+		TokenType:          TokenTypeUserTimestamp,
+		BlacklistTimestamp: &blacklistTimestamp,
+		CreatedAt:          time.Now(),
 	}
 }
 
@@ -399,9 +463,10 @@ func (r *Role) AddPermission(permissionID ulid.ULID) *RolePermission {
 }
 
 // Table name methods for GORM
-func (UserSession) TableName() string   { return "user_sessions" }
-func (APIKey) TableName() string        { return "api_keys" }
-func (Role) TableName() string          { return "roles" }
-func (Permission) TableName() string    { return "permissions" }
-func (RolePermission) TableName() string { return "role_permissions" }
-func (AuditLog) TableName() string      { return "audit_logs" }
+func (UserSession) TableName() string     { return "user_sessions" }
+func (BlacklistedToken) TableName() string { return "blacklisted_tokens" }
+func (APIKey) TableName() string          { return "api_keys" }
+func (Role) TableName() string            { return "roles" }
+func (Permission) TableName() string      { return "permissions" }
+func (RolePermission) TableName() string  { return "role_permissions" }
+func (AuditLog) TableName() string        { return "audit_logs" }

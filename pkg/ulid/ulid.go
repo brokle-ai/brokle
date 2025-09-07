@@ -10,8 +10,10 @@ import (
 )
 
 // ULID represents a ULID type that can be used in domain models with full database support
+// @Description ULID (Universally Unique Lexicographically Sortable Identifier)
+// @Example "01ARZ3NDEKTSV4RRFFQ69G5FAV"
 type ULID struct {
-	ulid.ULID
+	ulid.ULID `json:"-" swaggerignore:"true"`
 }
 
 // New generates a new ULID with the current timestamp

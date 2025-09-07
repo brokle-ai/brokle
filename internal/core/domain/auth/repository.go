@@ -12,8 +12,8 @@ type UserSessionRepository interface {
 	// Basic CRUD operations
 	Create(ctx context.Context, session *UserSession) error
 	GetByID(ctx context.Context, id ulid.ULID) (*UserSession, error)
-	GetByToken(ctx context.Context, token string) (*UserSession, error)
-	GetByRefreshToken(ctx context.Context, refreshToken string) (*UserSession, error)
+	GetByJTI(ctx context.Context, jti string) (*UserSession, error)              // Get session by JWT ID (current access token)
+	GetByRefreshTokenHash(ctx context.Context, refreshTokenHash string) (*UserSession, error) // Get session by refresh token hash
 	Update(ctx context.Context, session *UserSession) error
 	Delete(ctx context.Context, id ulid.ULID) error
 	
@@ -33,6 +33,31 @@ type UserSessionRepository interface {
 	// Device-specific queries
 	GetByDeviceInfo(ctx context.Context, userID ulid.ULID, deviceInfo interface{}) ([]*UserSession, error)
 	GetActiveSessionsCount(ctx context.Context, userID ulid.ULID) (int, error)
+}
+
+// BlacklistedTokenRepository defines the interface for blacklisted token data access.
+type BlacklistedTokenRepository interface {
+	// Basic operations
+	Create(ctx context.Context, blacklistedToken *BlacklistedToken) error
+	GetByJTI(ctx context.Context, jti string) (*BlacklistedToken, error)
+	IsTokenBlacklisted(ctx context.Context, jti string) (bool, error)
+	
+	// User-wide timestamp blacklisting (GDPR/SOC2 compliance)
+	CreateUserTimestampBlacklist(ctx context.Context, userID ulid.ULID, blacklistTimestamp int64, reason string) error
+	IsUserBlacklistedAfterTimestamp(ctx context.Context, userID ulid.ULID, tokenIssuedAt int64) (bool, error)
+	GetUserBlacklistTimestamp(ctx context.Context, userID ulid.ULID) (*int64, error)
+	
+	// Cleanup operations
+	CleanupExpiredTokens(ctx context.Context) error
+	CleanupTokensOlderThan(ctx context.Context, olderThan time.Time) error
+	
+	// Bulk operations
+	BlacklistUserTokens(ctx context.Context, userID ulid.ULID, reason string) error
+	GetBlacklistedTokensByUser(ctx context.Context, userID ulid.ULID, limit, offset int) ([]*BlacklistedToken, error)
+	
+	// Statistics
+	GetBlacklistedTokensCount(ctx context.Context) (int64, error)
+	GetBlacklistedTokensByReason(ctx context.Context, reason string) ([]*BlacklistedToken, error)
 }
 
 // APIKeyRepository defines the interface for API key data access.
@@ -190,6 +215,7 @@ type PasswordResetTokenRepository interface {
 // Repository aggregates all auth-related repositories.
 type Repository interface {
 	UserSessions() UserSessionRepository
+	BlacklistedTokens() BlacklistedTokenRepository // NEW: Added blacklisted tokens repository
 	APIKeys() APIKeyRepository
 	Roles() RoleRepository
 	Permissions() PermissionRepository

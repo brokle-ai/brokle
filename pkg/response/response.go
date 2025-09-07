@@ -195,6 +195,11 @@ func RateLimit(c *gin.Context, message string) {
 	ErrorWithStatus(c, http.StatusTooManyRequests, string(appErrors.RateLimitError), message, "")
 }
 
+// TooManyRequests is an alias for RateLimit for better readability
+func TooManyRequests(c *gin.Context, message string) {
+	RateLimit(c, message)
+}
+
 func PaymentRequired(c *gin.Context, message string) {
 	if message == "" {
 		message = "Payment required"

@@ -7,6 +7,7 @@ import (
 	"brokle/internal/core/domain/auth"
 	"brokle/internal/core/domain/organization"
 	"brokle/internal/core/domain/user"
+	"brokle/internal/transport/http/handlers/admin"
 	"brokle/internal/transport/http/handlers/ai"
 	"brokle/internal/transport/http/handlers/analytics"
 	"brokle/internal/transport/http/handlers/apikey"
@@ -37,6 +38,7 @@ type Handlers struct {
 	Billing      *billing.Handler
 	AI           *ai.Handler
 	WebSocket    *websocket.Handler
+	Admin        *admin.TokenAdminHandler
 }
 
 // NewHandlers creates a new handlers instance with all dependencies
@@ -44,6 +46,7 @@ func NewHandlers(
 	cfg *config.Config,
 	logger *logrus.Logger,
 	authService auth.AuthService,
+	blacklistedTokens auth.BlacklistedTokenService,
 	userService user.UserService,
 	profileService user.ProfileService,
 	organizationService organization.OrganizationService,
@@ -68,5 +71,6 @@ func NewHandlers(
 		Billing:      billing.NewHandler(cfg, logger),
 		AI:           ai.NewHandler(cfg, logger),
 		WebSocket:    websocket.NewHandler(cfg, logger),
+		Admin:        admin.NewTokenAdminHandler(authService, blacklistedTokens, logger),
 	}
 }

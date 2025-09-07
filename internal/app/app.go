@@ -58,9 +58,10 @@ func (a *App) Start() error {
 	httpHandlers := handlers.NewHandlers(
 		a.config,
 		a.logger,
-		providers.Services.Auth.Auth,           // Auth service from modular DI
-		providers.Services.User.User,           // User service from modular DI
-		providers.Services.User.Profile,        // Profile service from modular DI
+		providers.Services.Auth.Auth,               // Auth service from modular DI
+		providers.Services.Auth.BlacklistedTokens, // Blacklisted tokens service
+		providers.Services.User.User,               // User service from modular DI
+		providers.Services.User.Profile,            // Profile service from modular DI
 		providers.Services.OrganizationService, // Direct organization service
 		providers.Services.MemberService,       // Direct member service
 		providers.Services.ProjectService,      // Direct project service
@@ -70,8 +71,15 @@ func (a *App) Start() error {
 		// All enterprise services available through providers.Enterprise
 	)
 
-	// Initialize HTTP server
-	a.httpServer = http.NewServer(a.config, a.logger, httpHandlers)
+	// Initialize HTTP server with auth services
+	a.httpServer = http.NewServer(
+		a.config, 
+		a.logger, 
+		httpHandlers,
+		providers.Services.Auth.JWT,
+		providers.Services.Auth.BlacklistedTokens,
+		providers.Databases.Redis.Client,
+	)
 
 	// Start HTTP server in goroutine
 	go func() {
@@ -101,9 +109,10 @@ func (a *App) Run() error {
 	httpHandlers := handlers.NewHandlers(
 		a.config,
 		a.logger,
-		providers.Services.Auth.Auth,           // Auth service from modular DI
-		providers.Services.User.User,           // User service from modular DI
-		providers.Services.User.Profile,        // Profile service from modular DI
+		providers.Services.Auth.Auth,               // Auth service from modular DI
+		providers.Services.Auth.BlacklistedTokens, // Blacklisted tokens service
+		providers.Services.User.User,               // User service from modular DI
+		providers.Services.User.Profile,            // Profile service from modular DI
 		providers.Services.OrganizationService, // Direct organization service
 		providers.Services.MemberService,       // Direct member service
 		providers.Services.ProjectService,      // Direct project service
@@ -113,8 +122,15 @@ func (a *App) Run() error {
 		// All enterprise services available through providers.Enterprise
 	)
 
-	// Initialize HTTP server
-	a.httpServer = http.NewServer(a.config, a.logger, httpHandlers)
+	// Initialize HTTP server with auth services
+	a.httpServer = http.NewServer(
+		a.config, 
+		a.logger, 
+		httpHandlers,
+		providers.Services.Auth.JWT,
+		providers.Services.Auth.BlacklistedTokens,
+		providers.Databases.Redis.Client,
+	)
 
 	// Start HTTP server in goroutine
 	go func() {

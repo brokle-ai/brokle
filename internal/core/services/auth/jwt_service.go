@@ -2,42 +2,159 @@ package auth
 
 import (
 	"context"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/pem"
 	"fmt"
+	"io/ioutil"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 
+	"brokle/internal/config"
 	"brokle/internal/core/domain/auth"
 	"brokle/pkg/ulid"
 )
 
-// jwtService implements the auth.JWTService interface
+// jwtService implements the auth.JWTService interface with flexible signing methods
 type jwtService struct {
-	config *auth.TokenConfig
+	config     *config.AuthConfig
+	privateKey interface{} // RSA private key for RS256 or []byte for HS256
+	publicKey  interface{} // RSA public key for RS256 or []byte for HS256
 }
 
-// NewJWTService creates a new JWT service instance
-func NewJWTService(config *auth.TokenConfig) auth.JWTService {
-	if config == nil {
-		config = auth.DefaultTokenConfig()
+// NewJWTService creates a new JWT service instance with flexible configuration
+func NewJWTService(authConfig *config.AuthConfig) (auth.JWTService, error) {
+	if authConfig == nil {
+		return nil, fmt.Errorf("auth config is required")
 	}
-	return &jwtService{
-		config: config,
+
+	// Validate configuration
+	if err := authConfig.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid auth config: %w", err)
 	}
+
+	service := &jwtService{
+		config: authConfig,
+	}
+
+	// Load keys based on signing method
+	if err := service.loadKeys(); err != nil {
+		return nil, fmt.Errorf("failed to load JWT keys: %w", err)
+	}
+
+	return service, nil
+}
+
+// loadKeys loads the appropriate keys based on the signing method
+func (s *jwtService) loadKeys() error {
+	switch s.config.JWTSigningMethod {
+	case "HS256":
+		// For HMAC, use the secret as both signing and verification key
+		s.privateKey = []byte(s.config.JWTSecret)
+		s.publicKey = []byte(s.config.JWTSecret)
+		return nil
+
+	case "RS256":
+		return s.loadRSAKeys()
+
+	default:
+		return fmt.Errorf("unsupported signing method: %s", s.config.JWTSigningMethod)
+	}
+}
+
+// loadRSAKeys loads RSA keys for RS256 signing
+func (s *jwtService) loadRSAKeys() error {
+	var privateKeyData, publicKeyData []byte
+	var err error
+
+	// Load private key (file path takes precedence over base64)
+	if s.config.HasKeyPaths() {
+		privateKeyData, err = ioutil.ReadFile(s.config.JWTPrivateKeyPath)
+		if err != nil {
+			return fmt.Errorf("failed to read private key file: %w", err)
+		}
+		publicKeyData, err = ioutil.ReadFile(s.config.JWTPublicKeyPath)
+		if err != nil {
+			return fmt.Errorf("failed to read public key file: %w", err)
+		}
+	} else if s.config.HasKeyBase64() {
+		privateKeyData, err = base64.StdEncoding.DecodeString(s.config.JWTPrivateKeyBase64)
+		if err != nil {
+			return fmt.Errorf("failed to decode base64 private key: %w", err)
+		}
+		publicKeyData, err = base64.StdEncoding.DecodeString(s.config.JWTPublicKeyBase64)
+		if err != nil {
+			return fmt.Errorf("failed to decode base64 public key: %w", err)
+		}
+	} else {
+		return fmt.Errorf("RS256 requires either key paths or base64 encoded keys")
+	}
+
+	// Parse private key
+	privateBlock, _ := pem.Decode(privateKeyData)
+	if privateBlock == nil {
+		return fmt.Errorf("failed to decode PEM private key")
+	}
+
+	privateKey, err := x509.ParsePKCS8PrivateKey(privateBlock.Bytes)
+	if err != nil {
+		// Try PKCS1 format
+		privateKey, err = x509.ParsePKCS1PrivateKey(privateBlock.Bytes)
+		if err != nil {
+			return fmt.Errorf("failed to parse private key: %w", err)
+		}
+	}
+
+	rsaPrivateKey, ok := privateKey.(*rsa.PrivateKey)
+	if !ok {
+		return fmt.Errorf("private key is not an RSA key")
+	}
+
+	// Parse public key
+	publicBlock, _ := pem.Decode(publicKeyData)
+	if publicBlock == nil {
+		return fmt.Errorf("failed to decode PEM public key")
+	}
+
+	publicKey, err := x509.ParsePKIXPublicKey(publicBlock.Bytes)
+	if err != nil {
+		return fmt.Errorf("failed to parse public key: %w", err)
+	}
+
+	rsaPublicKey, ok := publicKey.(*rsa.PublicKey)
+	if !ok {
+		return fmt.Errorf("public key is not an RSA key")
+	}
+
+	s.privateKey = rsaPrivateKey
+	s.publicKey = rsaPublicKey
+
+	return nil
 }
 
 // GenerateAccessToken generates an access token with custom claims
 func (s *jwtService) GenerateAccessToken(ctx context.Context, userID ulid.ULID, customClaims map[string]interface{}) (string, error) {
+	token, _, err := s.GenerateAccessTokenWithJTI(ctx, userID, customClaims)
+	return token, err
+}
+
+// GenerateAccessTokenWithJTI generates an access token and returns both token and JTI for session tracking
+func (s *jwtService) GenerateAccessTokenWithJTI(ctx context.Context, userID ulid.ULID, customClaims map[string]interface{}) (string, string, error) {
 	now := time.Now()
+	
+	// Generate JTI for this token
+	jti := ulid.New().String()
 	
 	// Create JWT claims
 	claims := jwt.MapClaims{
-		"iss":        s.config.Issuer,
+		"iss":        s.config.JWTIssuer,
 		"sub":        userID.String(),
 		"iat":        now.Unix(),
 		"nbf":        now.Unix(),
 		"exp":        now.Add(s.config.AccessTokenTTL).Unix(),
-		"jti":        ulid.New().String(),
+		"jti":        jti,
 		"token_type": string(auth.TokenTypeAccess),
 		"user_id":    userID.String(),
 	}
@@ -47,14 +164,24 @@ func (s *jwtService) GenerateAccessToken(ctx context.Context, userID ulid.ULID, 
 		claims[key] = value
 	}
 
-	// Create and sign token
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString([]byte(s.config.SigningKey))
-	if err != nil {
-		return "", fmt.Errorf("failed to sign access token: %w", err)
+	// Create token with appropriate signing method
+	var signingMethod jwt.SigningMethod
+	switch s.config.JWTSigningMethod {
+	case "HS256":
+		signingMethod = jwt.SigningMethodHS256
+	case "RS256":
+		signingMethod = jwt.SigningMethodRS256
+	default:
+		return "", "", fmt.Errorf("unsupported signing method: %s", s.config.JWTSigningMethod)
 	}
 
-	return tokenString, nil
+	token := jwt.NewWithClaims(signingMethod, claims)
+	tokenString, err := token.SignedString(s.privateKey)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to sign access token: %w", err)
+	}
+
+	return tokenString, jti, nil
 }
 
 // GenerateRefreshToken generates a refresh token
@@ -63,7 +190,7 @@ func (s *jwtService) GenerateRefreshToken(ctx context.Context, userID ulid.ULID)
 	
 	// Create JWT claims for refresh token
 	claims := jwt.MapClaims{
-		"iss":        s.config.Issuer,
+		"iss":        s.config.JWTIssuer,
 		"sub":        userID.String(),
 		"iat":        now.Unix(),
 		"nbf":        now.Unix(),
@@ -73,9 +200,19 @@ func (s *jwtService) GenerateRefreshToken(ctx context.Context, userID ulid.ULID)
 		"user_id":    userID.String(),
 	}
 
-	// Create and sign token
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString([]byte(s.config.SigningKey))
+	// Create token with appropriate signing method
+	var signingMethod jwt.SigningMethod
+	switch s.config.JWTSigningMethod {
+	case "HS256":
+		signingMethod = jwt.SigningMethodHS256
+	case "RS256":
+		signingMethod = jwt.SigningMethodRS256
+	default:
+		return "", fmt.Errorf("unsupported signing method: %s", s.config.JWTSigningMethod)
+	}
+
+	token := jwt.NewWithClaims(signingMethod, claims)
+	tokenString, err := token.SignedString(s.privateKey)
 	if err != nil {
 		return "", fmt.Errorf("failed to sign refresh token: %w", err)
 	}
@@ -87,22 +224,35 @@ func (s *jwtService) GenerateRefreshToken(ctx context.Context, userID ulid.ULID)
 func (s *jwtService) GenerateAPIKeyToken(ctx context.Context, keyID ulid.ULID, scopes []string) (string, error) {
 	now := time.Now()
 	
+	// API key tokens use access token TTL for short-lived access
+	ttl := s.config.AccessTokenTTL
+	
 	// Create JWT claims for API key token
 	claims := jwt.MapClaims{
-		"iss":        s.config.Issuer,
+		"iss":        s.config.JWTIssuer,
 		"sub":        keyID.String(),
 		"iat":        now.Unix(),
 		"nbf":        now.Unix(),
-		"exp":        now.Add(s.config.APIKeyTokenTTL).Unix(),
+		"exp":        now.Add(ttl).Unix(),
 		"jti":        ulid.New().String(),
 		"token_type": string(auth.TokenTypeAPIKey),
 		"api_key_id": keyID.String(),
 		"scopes":     scopes,
 	}
 
-	// Create and sign token
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err := token.SignedString([]byte(s.config.SigningKey))
+	// Create token with appropriate signing method
+	var signingMethod jwt.SigningMethod
+	switch s.config.JWTSigningMethod {
+	case "HS256":
+		signingMethod = jwt.SigningMethodHS256
+	case "RS256":
+		signingMethod = jwt.SigningMethodRS256
+	default:
+		return "", fmt.Errorf("unsupported signing method: %s", s.config.JWTSigningMethod)
+	}
+
+	token := jwt.NewWithClaims(signingMethod, claims)
+	tokenString, err := token.SignedString(s.privateKey)
 	if err != nil {
 		return "", fmt.Errorf("failed to sign API key token: %w", err)
 	}
@@ -113,11 +263,21 @@ func (s *jwtService) GenerateAPIKeyToken(ctx context.Context, keyID ulid.ULID, s
 // ValidateToken validates any JWT token and returns claims
 func (s *jwtService) ValidateToken(ctx context.Context, tokenString string) (*auth.JWTClaims, error) {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-		// Verify signing method
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		// Verify signing method matches configuration
+		switch s.config.JWTSigningMethod {
+		case "HS256":
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v (expected HMAC)", token.Header["alg"])
+			}
+			return s.publicKey, nil
+		case "RS256":
+			if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v (expected RSA)", token.Header["alg"])
+			}
+			return s.publicKey, nil
+		default:
+			return nil, fmt.Errorf("unsupported signing method in config: %s", s.config.JWTSigningMethod)
 		}
-		return []byte(s.config.SigningKey), nil
 	})
 
 	if err != nil {
@@ -140,7 +300,7 @@ func (s *jwtService) ValidateToken(ctx context.Context, tokenString string) (*au
 	}
 
 	// Verify issuer
-	if tokenClaims.Issuer != s.config.Issuer {
+	if tokenClaims.Issuer != s.config.JWTIssuer {
 		return nil, fmt.Errorf("invalid token issuer")
 	}
 
@@ -232,11 +392,6 @@ func (s *jwtService) GetTokenExpiry(ctx context.Context, token string) (time.Tim
 	}
 	
 	return time.Unix(claims.ExpiresAt, 0), nil
-}
-
-// ParseTokenClaims extracts token claims without validation (used for inspection)
-func (s *jwtService) ParseTokenClaims(ctx context.Context, tokenString string) (*auth.JWTClaims, error) {
-	return s.ExtractClaims(ctx, tokenString)
 }
 
 // GetTokenTTL returns remaining time until token expires

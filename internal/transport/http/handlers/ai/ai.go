@@ -47,7 +47,7 @@ type ChatMessage struct {
 // @Description OpenAI-compatible text completion request
 type CompletionRequest struct {
 	Model            string             `json:"model" example:"gpt-3.5-turbo-instruct" description:"Model to use for completion"`
-	Prompt           interface{}        `json:"prompt" example:"Once upon a time" description:"Prompt text or array of prompts"`
+	Prompt           interface{}        `json:"prompt" description:"Prompt text or array of prompts" swaggertype:"string" example:"Once upon a time"`
 	MaxTokens        *int               `json:"max_tokens,omitempty" example:"150" description:"Maximum number of tokens to generate"`
 	Temperature      *float64           `json:"temperature,omitempty" example:"0.7" description:"Controls randomness (0.0 to 2.0)"`
 	TopP             *float64           `json:"top_p,omitempty" example:"1.0" description:"Nucleus sampling parameter"`
@@ -67,7 +67,7 @@ type CompletionRequest struct {
 // @Description OpenAI-compatible embedding request
 type EmbeddingRequest struct {
 	Model          string      `json:"model" example:"text-embedding-ada-002" description:"Model to use for embeddings"`
-	Input          interface{} `json:"input" example:"The food was delicious and the waiter..." description:"Input text or array of texts"`
+	Input          interface{} `json:"input" description:"Input text or array of texts" swaggertype:"string" example:"The food was delicious and the waiter..."`
 	User           *string     `json:"user,omitempty" example:"user-123" description:"Unique identifier for the end-user"`
 	EncodingFormat *string     `json:"encoding_format,omitempty" example:"float" description:"Format of returned embeddings (float or base64)"`
 }

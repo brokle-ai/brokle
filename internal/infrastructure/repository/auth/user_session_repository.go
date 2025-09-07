@@ -42,10 +42,10 @@ func (r *userSessionRepository) GetByID(ctx context.Context, id ulid.ULID) (*aut
 	return &session, nil
 }
 
-// GetByToken retrieves a user session by access token
-func (r *userSessionRepository) GetByToken(ctx context.Context, token string) (*auth.UserSession, error) {
+// GetByJTI retrieves a user session by JWT ID (current access token JTI)
+func (r *userSessionRepository) GetByJTI(ctx context.Context, jti string) (*auth.UserSession, error) {
 	var session auth.UserSession
-	err := r.db.WithContext(ctx).Where("token = ? AND revoked_at IS NULL", token).First(&session).Error
+	err := r.db.WithContext(ctx).Where("current_jti = ? AND is_active = ? AND revoked_at IS NULL", jti, true).First(&session).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("user session not found")
@@ -55,10 +55,10 @@ func (r *userSessionRepository) GetByToken(ctx context.Context, token string) (*
 	return &session, nil
 }
 
-// GetByRefreshToken retrieves a user session by refresh token
-func (r *userSessionRepository) GetByRefreshToken(ctx context.Context, refreshToken string) (*auth.UserSession, error) {
+// GetByRefreshTokenHash retrieves a user session by refresh token hash
+func (r *userSessionRepository) GetByRefreshTokenHash(ctx context.Context, refreshTokenHash string) (*auth.UserSession, error) {
 	var session auth.UserSession
-	err := r.db.WithContext(ctx).Where("refresh_token = ? AND revoked_at IS NULL", refreshToken).First(&session).Error
+	err := r.db.WithContext(ctx).Where("refresh_token_hash = ? AND is_active = ? AND revoked_at IS NULL", refreshTokenHash, true).First(&session).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("user session not found")

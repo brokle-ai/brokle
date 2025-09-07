@@ -7,7 +7,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"brokle/internal/config"
-	"brokle/internal/core/domain/auth"
 	"brokle/internal/core/domain/user"
 	"brokle/pkg/response"
 	"brokle/pkg/ulid"
@@ -34,20 +33,20 @@ func NewHandler(config *config.Config, logger *logrus.Logger, userService user.U
 // UserProfileResponse represents the complete user profile response
 // @Description Complete user profile information including basic info and extended profile
 type UserProfileResponse struct {
-	ID                    ulid.ULID  `json:"id" example:"01K4FHGHT3XX9WFM293QPZ5G9V" description:"User unique identifier"`
-	Email                 string     `json:"email" example:"user@example.com" description:"User email address"`
-	Name                  string     `json:"name" example:"John Doe" description:"User full name"`
-	FirstName             string     `json:"first_name" example:"John" description:"User first name"`
-	LastName              string     `json:"last_name" example:"Doe" description:"User last name"`
-	AvatarURL             string     `json:"avatar_url" example:"https://example.com/avatar.jpg" description:"Profile avatar URL"`
-	IsEmailVerified       bool       `json:"is_email_verified" example:"true" description:"Email verification status"`
-	OnboardingCompleted   bool       `json:"onboarding_completed" example:"true" description:"Onboarding completion status"`
-	IsActive              bool       `json:"is_active" example:"true" description:"Account active status"`
-	CreatedAt             time.Time  `json:"created_at" example:"2025-01-01T00:00:00Z" description:"Account creation timestamp"`
-	LastLoginAt           *time.Time `json:"last_login_at,omitempty" example:"2025-01-02T10:30:00Z" description:"Last login timestamp"`
-	DefaultOrganizationID *ulid.ULID `json:"default_organization_id,omitempty" example:"01K4FHGHT3XX9WFM293QPZ5G9V" description:"Default organization ID"`
+	ID                    ulid.ULID        `json:"id" example:"01K4FHGHT3XX9WFM293QPZ5G9V" description:"User unique identifier" swaggertype:"string"`
+	Email                 string           `json:"email" example:"user@example.com" description:"User email address"`
+	Name                  string           `json:"name" example:"John Doe" description:"User full name"`
+	FirstName             string           `json:"first_name" example:"John" description:"User first name"`
+	LastName              string           `json:"last_name" example:"Doe" description:"User last name"`
+	AvatarURL             string           `json:"avatar_url" example:"https://example.com/avatar.jpg" description:"Profile avatar URL"`
+	IsEmailVerified       bool             `json:"is_email_verified" example:"true" description:"Email verification status"`
+	OnboardingCompleted   bool             `json:"onboarding_completed" example:"true" description:"Onboarding completion status"`
+	IsActive              bool             `json:"is_active" example:"true" description:"Account active status"`
+	CreatedAt             time.Time        `json:"created_at" example:"2025-01-01T00:00:00Z" description:"Account creation timestamp"`
+	LastLoginAt           *time.Time       `json:"last_login_at,omitempty" example:"2025-01-02T10:30:00Z" description:"Last login timestamp"`
+	DefaultOrganizationID *ulid.ULID       `json:"default_organization_id,omitempty" example:"01K4FHGHT3XX9WFM293QPZ5G9V" description:"Default organization ID" swaggertype:"string"`
 	Profile               *UserProfileData `json:"profile,omitempty" description:"Extended profile information"`
-	Completeness          int        `json:"completeness" example:"85" description:"Profile completeness percentage"`
+	Completeness          int              `json:"completeness" example:"85" description:"Profile completeness percentage"`
 }
 
 // UserProfileData represents extended profile information
@@ -76,41 +75,41 @@ type UserProfileData struct {
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /api/v1/users/me [get]
 func (h *Handler) GetProfile(c *gin.Context) {
-	// Get auth context from middleware (set by JWTAuth middleware)
-	authCtxInterface, exists := c.Get("user")
+	// Get user ID from middleware (set by auth middleware)
+	userIDInterface, exists := c.Get("user_id")
 	if !exists {
-		h.logger.Error("Auth context not found in request")
+		h.logger.Error("User ID not found in request")
 		response.Unauthorized(c, "Authentication required")
 		return
 	}
 
-	authCtx, ok := authCtxInterface.(*auth.AuthContext)
+	userID, ok := userIDInterface.(ulid.ULID)
 	if !ok {
-		h.logger.Error("Invalid auth context type")
+		h.logger.Error("Invalid user ID type")
 		response.InternalServerError(c, "Authentication error")
 		return
 	}
 
 	// Get basic user information
-	userData, err := h.userService.GetUser(c.Request.Context(), authCtx.UserID)
+	userData, err := h.userService.GetUser(c.Request.Context(), userID)
 	if err != nil {
-		h.logger.WithError(err).WithField("user_id", authCtx.UserID).Error("Failed to get user")
+		h.logger.WithError(err).WithField("user_id", userID).Error("Failed to get user")
 		response.NotFound(c, "User not found")
 		return
 	}
 
 	// Get extended profile information (this might not exist for all users)
-	profileData, err := h.profileService.GetProfile(c.Request.Context(), authCtx.UserID)
+	profileData, err := h.profileService.GetProfile(c.Request.Context(), userID)
 	if err != nil {
 		// Profile might not exist yet, which is okay
-		h.logger.WithError(err).WithField("user_id", authCtx.UserID).Debug("Profile not found, using defaults")
+		h.logger.WithError(err).WithField("user_id", userID).Debug("Profile not found, using defaults")
 		profileData = nil
 	}
 
 	// Get profile completeness
-	completeness, err := h.profileService.GetProfileCompleteness(c.Request.Context(), authCtx.UserID)
+	completeness, err := h.profileService.GetProfileCompleteness(c.Request.Context(), userID)
 	if err != nil {
-		h.logger.WithError(err).WithField("user_id", authCtx.UserID).Error("Failed to get profile completeness")
+		h.logger.WithError(err).WithField("user_id", userID).Error("Failed to get profile completeness")
 		// Continue with 0% completeness
 	}
 
@@ -151,7 +150,7 @@ func (h *Handler) GetProfile(c *gin.Context) {
 		profileResponse.Completeness = completeness.OverallScore
 	}
 
-	h.logger.WithField("user_id", authCtx.UserID).Info("User profile retrieved successfully")
+	h.logger.WithField("user_id", userID).Info("User profile retrieved successfully")
 	response.Success(c, profileResponse)
 }
 
@@ -180,17 +179,17 @@ type UpdateProfileRequest struct {
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /api/v1/users/me [put]
 func (h *Handler) UpdateProfile(c *gin.Context) {
-	// Get auth context from middleware
-	authCtxInterface, exists := c.Get("user")
+	// Get user ID from middleware (set by auth middleware)
+	userIDInterface, exists := c.Get("user_id")
 	if !exists {
-		h.logger.Error("Auth context not found in request")
+		h.logger.Error("User ID not found in request")
 		response.Unauthorized(c, "Authentication required")
 		return
 	}
 
-	authCtx, ok := authCtxInterface.(*auth.AuthContext)
+	userID, ok := userIDInterface.(ulid.ULID)
 	if !ok {
-		h.logger.Error("Invalid auth context type")
+		h.logger.Error("Invalid user ID type")
 		response.InternalServerError(c, "Authentication error")
 		return
 	}
@@ -212,9 +211,9 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 			Phone:     req.Phone,
 		}
 
-		_, err := h.userService.UpdateUser(c.Request.Context(), authCtx.UserID, userUpdateReq)
+		_, err := h.userService.UpdateUser(c.Request.Context(), userID, userUpdateReq)
 		if err != nil {
-			h.logger.WithError(err).WithField("user_id", authCtx.UserID).Error("Failed to update user")
+			h.logger.WithError(err).WithField("user_id", userID).Error("Failed to update user")
 			response.InternalServerError(c, "Failed to update user information")
 			return
 		}
@@ -227,18 +226,18 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 			Language: req.Language,
 		}
 
-		_, err := h.profileService.UpdateProfile(c.Request.Context(), authCtx.UserID, profileUpdateReq)
+		_, err := h.profileService.UpdateProfile(c.Request.Context(), userID, profileUpdateReq)
 		if err != nil {
 			// Profile might not exist yet - log but don't fail the entire operation
-			h.logger.WithError(err).WithField("user_id", authCtx.UserID).Debug("Profile update failed, profile may not exist yet")
+			h.logger.WithError(err).WithField("user_id", userID).Debug("Profile update failed, profile may not exist yet")
 			// For now, we'll skip profile updates if the profile doesn't exist
 			// In a future iteration, we could create the profile automatically
 		}
 	}
 
 	// Return updated profile (call GetProfile internally to get consistent response)
-	h.logger.WithField("user_id", authCtx.UserID).Info("Profile updated successfully")
-	
+	h.logger.WithField("user_id", userID).Info("Profile updated successfully")
+
 	// Re-fetch and return updated profile
 	h.GetProfile(c)
 }
@@ -260,11 +259,11 @@ func (h *Handler) GetPreferences(c *gin.Context) {
 // UpdatePreferencesRequest represents the update preferences request payload
 // @Description User preferences update information
 type UpdatePreferencesRequest struct {
-	Theme                string            `json:"theme,omitempty" example:"dark" description:"UI theme preference (light, dark, auto)"`
-	Language             string            `json:"language,omitempty" example:"en" description:"Language preference (ISO 639-1 code)"`
-	Timezone             string            `json:"timezone,omitempty" example:"UTC" description:"Timezone preference"`
-	EmailNotifications   *bool             `json:"email_notifications,omitempty" example:"true" description:"Enable email notifications"`
-	WebhookNotifications *bool             `json:"webhook_notifications,omitempty" example:"false" description:"Enable webhook notifications"`
+	Theme                string                 `json:"theme,omitempty" example:"dark" description:"UI theme preference (light, dark, auto)"`
+	Language             string                 `json:"language,omitempty" example:"en" description:"Language preference (ISO 639-1 code)"`
+	Timezone             string                 `json:"timezone,omitempty" example:"UTC" description:"Timezone preference"`
+	EmailNotifications   *bool                  `json:"email_notifications,omitempty" example:"true" description:"Enable email notifications"`
+	WebhookNotifications *bool                  `json:"webhook_notifications,omitempty" example:"false" description:"Enable webhook notifications"`
 	DashboardSettings    map[string]interface{} `json:"dashboard_settings,omitempty" description:"Custom dashboard configuration"`
 }
 

@@ -79,13 +79,14 @@ type UserRepositories struct {
 
 // AuthRepositories contains all auth-related repositories
 type AuthRepositories struct {
-	UserSession       auth.UserSessionRepository
+	UserSession        auth.UserSessionRepository
+	BlacklistedToken   auth.BlacklistedTokenRepository
 	PasswordResetToken auth.PasswordResetTokenRepository
-	APIKey            auth.APIKeyRepository
-	Role              auth.RoleRepository
-	Permission        auth.PermissionRepository
-	RolePermission    auth.RolePermissionRepository
-	AuditLog          auth.AuditLogRepository
+	APIKey             auth.APIKeyRepository
+	Role               auth.RoleRepository
+	Permission         auth.PermissionRepository
+	RolePermission     auth.RolePermissionRepository
+	AuditLog           auth.AuditLogRepository
 }
 
 // OrganizationRepositories contains all organization-related repositories
@@ -110,9 +111,11 @@ type UserServices struct {
 
 // AuthServices contains all auth-related services
 type AuthServices struct {
-	Auth auth.AuthService
-	JWT  auth.JWTService
-	Role auth.RoleService
+	Auth              auth.AuthService
+	JWT               auth.JWTService
+	Sessions          auth.SessionService
+	Role              auth.RoleService
+	BlacklistedTokens auth.BlacklistedTokenService
 }
 
 
@@ -155,13 +158,14 @@ func ProvideUserRepositories(db *gorm.DB) *UserRepositories {
 // ProvideAuthRepositories creates all auth-related repositories
 func ProvideAuthRepositories(db *gorm.DB) *AuthRepositories {
 	return &AuthRepositories{
-		UserSession:       authRepo.NewUserSessionRepository(db),
+		UserSession:        authRepo.NewUserSessionRepository(db),
+		BlacklistedToken:   authRepo.NewBlacklistedTokenRepository(db),
 		PasswordResetToken: authRepo.NewPasswordResetTokenRepository(db),
-		APIKey:            authRepo.NewAPIKeyRepository(db),
-		Role:              authRepo.NewRoleRepository(db),
-		Permission:        authRepo.NewPermissionRepository(db),
-		RolePermission:    authRepo.NewRolePermissionRepository(db),
-		AuditLog:          authRepo.NewAuditLogRepository(db),
+		APIKey:             authRepo.NewAPIKeyRepository(db),
+		Role:               authRepo.NewRoleRepository(db),
+		Permission:         authRepo.NewPermissionRepository(db),
+		RolePermission:     authRepo.NewRolePermissionRepository(db),
+		AuditLog:           authRepo.NewAuditLogRepository(db),
 	}
 }
 
@@ -229,17 +233,11 @@ func ProvideAuthServices(
 	authRepos *AuthRepositories,
 	logger *logrus.Logger,
 ) *AuthServices {
-	// Create JWT service with config
-	jwtService := authService.NewJWTService(&auth.TokenConfig{
-		SigningKey:      cfg.JWT.PrivateKey,
-		SigningMethod:   cfg.JWT.Algorithm,
-		Issuer:          cfg.JWT.Issuer,
-		AccessTokenTTL:  cfg.JWT.AccessTokenTTL,
-		RefreshTokenTTL: cfg.JWT.RefreshTokenTTL,
-		APIKeyTokenTTL:  cfg.JWT.APIKeyTokenTTL,
-		ClockSkew:       5 * time.Minute,
-		RequireAudience: false,
-	})
+	// Create JWT service with auth config
+	jwtService, err := authService.NewJWTService(&cfg.Auth)
+	if err != nil {
+		logger.WithError(err).Fatal("Failed to create JWT service")
+	}
 
 	// Create role service with comprehensive RBAC
 	roleService := authService.NewRoleService(
@@ -248,20 +246,39 @@ func ProvideAuthServices(
 		authRepos.RolePermission,
 	)
 
+	// Create blacklisted token service for immediate revocation
+	blacklistedTokenService := authService.NewBlacklistedTokenService(
+		authRepos.BlacklistedToken,
+		authRepos.AuditLog,
+	)
+
+	// Create session service for session management
+	sessionService := authService.NewSessionService(
+		&cfg.Auth,
+		authRepos.UserSession,
+		userRepos.User,
+		jwtService,
+		authRepos.AuditLog,
+	)
+
 	// Create auth service with all dependencies
 	authSvc := authService.NewAuthService(
+		&cfg.Auth,
 		userRepos.User,
 		authRepos.UserSession,
 		authRepos.AuditLog,
 		jwtService,
 		roleService,
 		authRepos.PasswordResetToken,
+		blacklistedTokenService,
 	)
 
 	return &AuthServices{
-		Auth: authSvc,
-		JWT:  jwtService,
-		Role: roleService,
+		Auth:              authSvc,
+		JWT:               jwtService,
+		Sessions:          sessionService,
+		Role:              roleService,
+		BlacklistedTokens: blacklistedTokenService,
 	}
 }
 
