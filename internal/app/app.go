@@ -81,6 +81,7 @@ func (a *App) Start() error {
 		httpHandlers,
 		providers.Services.Auth.JWT,
 		providers.Services.Auth.BlacklistedTokens,
+		providers.Services.Auth.Role,
 		providers.Databases.Redis.Client,
 	)
 
@@ -135,6 +136,7 @@ func (a *App) Run() error {
 		httpHandlers,
 		providers.Services.Auth.JWT,
 		providers.Services.Auth.BlacklistedTokens,
+		providers.Services.Auth.Role,
 		providers.Databases.Redis.Client,
 	)
 

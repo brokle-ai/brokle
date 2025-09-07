@@ -594,18 +594,8 @@ func (s *authService) GetAuthContext(ctx context.Context, token string) (*auth.A
 		return nil, fmt.Errorf("invalid token: %w", err)
 	}
 
-	// Get user permissions if organization is specified
-	var permissions []string
-	if claims.OrganizationID != nil {
-		permissions, _ = s.roleService.GetUserPermissionStrings(ctx, claims.UserID, *claims.OrganizationID)
-	}
-
-	return &auth.AuthContext{
-		UserID:         claims.UserID,
-		OrganizationID: claims.OrganizationID,
-		Permissions:    permissions,
-		SessionID:      nil, // Will be set by session validation
-	}, nil
+	// Return clean auth context - permissions resolved dynamically when needed
+	return claims.GetUserContext(), nil
 }
 
 // ValidateAuthToken validates token and returns auth context

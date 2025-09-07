@@ -287,13 +287,11 @@ type RefreshTokenRequest struct {
 
 
 // AuthContext represents the authenticated context for a request.
+// AuthContext represents clean user identity context (permissions resolved dynamically)
 type AuthContext struct {
-	UserID         ulid.ULID  `json:"user_id"`
-	OrganizationID *ulid.ULID `json:"organization_id,omitempty"`
-	Role           *string    `json:"role,omitempty"`
-	Permissions    []string   `json:"permissions"`
-	APIKeyID       *ulid.ULID `json:"api_key_id,omitempty"` // Set if authenticated via API key
-	SessionID      *ulid.ULID `json:"session_id,omitempty"` // Set if authenticated via session
+	UserID    ulid.ULID  `json:"user_id"`
+	APIKeyID  *ulid.ULID `json:"api_key_id,omitempty"`  // Set if authenticated via API key
+	SessionID *ulid.ULID `json:"session_id,omitempty"`  // Set if authenticated via session
 }
 
 // Standard permission scopes for the platform

@@ -40,12 +40,14 @@ func NewServer(
 	handlers *handlers.Handlers,
 	jwtService auth.JWTService,
 	blacklistedTokens auth.BlacklistedTokenService,
+	roleService auth.RoleService,
 	redisClient *redis.Client,
 ) *Server {
 	// Create stateless auth middleware
 	authMiddleware := middleware.NewAuthMiddleware(
 		jwtService,
 		blacklistedTokens,
+		roleService,
 		logger,
 	)
 
@@ -298,9 +300,9 @@ func (s *Server) setupV1Routes(router *gin.RouterGroup) {
 		rbac.POST("/users/:userId/organizations/:orgId/permissions/check", s.handlers.RBAC.CheckUserPermissions)
 	}
 
-	// Admin routes (require admin role)
+	// Admin routes (require admin permissions)
 	adminRoutes := protected.Group("/admin")
-	adminRoutes.Use(middleware.RequireRole("admin")) // Admin role middleware
+	adminRoutes.Use(s.authMiddleware.RequirePermission("admin:manage")) // Admin permission middleware
 	{
 		// Token management endpoints
 		adminRoutes.POST("/tokens/revoke", s.handlers.Admin.RevokeToken)

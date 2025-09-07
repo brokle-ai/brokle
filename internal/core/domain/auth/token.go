@@ -19,7 +19,7 @@ const (
 	TokenTypeVerify  TokenType = "verify"
 )
 
-// JWTClaims represents the standard JWT claims structure used across the platform
+// JWTClaims represents the clean JWT claims structure for user identity only
 type JWTClaims struct {
 	// Standard JWT claims
 	Issuer    string `json:"iss"`
@@ -30,30 +30,16 @@ type JWTClaims struct {
 	IssuedAt  int64  `json:"iat"`
 	JWTID     string `json:"jti"`
 
-	// Custom claims
-	TokenType TokenType  `json:"token_type"`
-	UserID    ulid.ULID  `json:"user_id"`
-	Email     string     `json:"email"`
+	// Essential identity claims only
+	TokenType TokenType `json:"token_type"`
+	UserID    ulid.ULID `json:"user_id"`
+	Email     string    `json:"email"`
 	
-	// Context claims
-	OrganizationID *ulid.ULID `json:"organization_id,omitempty"`
-	ProjectID      *ulid.ULID `json:"project_id,omitempty"`
-	EnvironmentID  *ulid.ULID `json:"environment_id,omitempty"`
-	
-	// Permission claims
-	Scopes      []string `json:"scopes,omitempty"`      // For API keys
-	Permissions []string `json:"permissions,omitempty"` // User permissions in org
-	Role        *string  `json:"role,omitempty"`        // User role name
-	
-	// API Key specific claims
+	// API Key specific claims (for API key tokens only)
 	APIKeyID *ulid.ULID `json:"api_key_id,omitempty"`
 	
-	// Session specific claims
+	// Session specific claims (for user session tokens only)
 	SessionID *ulid.ULID `json:"session_id,omitempty"`
-	
-	// Security claims
-	IPAddress *string `json:"ip_address,omitempty"` // For IP-bound tokens
-	UserAgent *string `json:"user_agent,omitempty"` // For device-bound tokens
 }
 
 // TokenConfig represents configuration for JWT tokens
@@ -105,21 +91,12 @@ type TokenValidationResult struct {
 
 // TokenGenerationRequest represents a request to generate a new token
 type TokenGenerationRequest struct {
-	TokenType      TokenType              `json:"token_type"`
-	UserID         ulid.ULID              `json:"user_id"`
-	Email          string                 `json:"email"`
-	OrganizationID *ulid.ULID             `json:"organization_id,omitempty"`
-	ProjectID      *ulid.ULID             `json:"project_id,omitempty"`
-	EnvironmentID  *ulid.ULID             `json:"environment_id,omitempty"`
-	Scopes         []string               `json:"scopes,omitempty"`
-	Permissions    []string               `json:"permissions,omitempty"`
-	Role           *string                `json:"role,omitempty"`
-	APIKeyID       *ulid.ULID             `json:"api_key_id,omitempty"`
-	SessionID      *ulid.ULID             `json:"session_id,omitempty"`
-	IPAddress      *string                `json:"ip_address,omitempty"`
-	UserAgent      *string                `json:"user_agent,omitempty"`
-	CustomClaims   map[string]interface{} `json:"custom_claims,omitempty"`
-	TTL            *time.Duration         `json:"ttl,omitempty"` // Override default TTL
+	TokenType TokenType  `json:"token_type"`
+	UserID    ulid.ULID  `json:"user_id"`
+	Email     string     `json:"email"`
+	APIKeyID  *ulid.ULID `json:"api_key_id,omitempty"`
+	SessionID *ulid.ULID `json:"session_id,omitempty"`
+	TTL       *time.Duration `json:"ttl,omitempty"` // Override default TTL
 }
 
 // NewJWTClaims creates a new JWT claims structure with default values
@@ -127,24 +104,16 @@ func NewJWTClaims(req *TokenGenerationRequest) *JWTClaims {
 	now := time.Now()
 	
 	return &JWTClaims{
-		Issuer:         "brokle-platform",
-		Subject:        req.UserID.String(),
-		JWTID:          ulid.New().String(),
-		IssuedAt:       now.Unix(),
-		NotBefore:      now.Unix(),
-		TokenType:      req.TokenType,
-		UserID:         req.UserID,
-		Email:          req.Email,
-		OrganizationID: req.OrganizationID,
-		ProjectID:      req.ProjectID,
-		EnvironmentID:  req.EnvironmentID,
-		Scopes:         req.Scopes,
-		Permissions:    req.Permissions,
-		Role:           req.Role,
-		APIKeyID:       req.APIKeyID,
-		SessionID:      req.SessionID,
-		IPAddress:      req.IPAddress,
-		UserAgent:      req.UserAgent,
+		Issuer:    "brokle-platform",
+		Subject:   req.UserID.String(),
+		JWTID:     ulid.New().String(),
+		IssuedAt:  now.Unix(),
+		NotBefore: now.Unix(),
+		TokenType: req.TokenType,
+		UserID:    req.UserID,
+		Email:     req.Email,
+		APIKeyID:  req.APIKeyID,
+		SessionID: req.SessionID,
 	}
 }
 
@@ -167,47 +136,10 @@ func (c *JWTClaims) TimeUntilExpiry() time.Duration {
 // GetUserContext returns the user context from the token claims
 func (c *JWTClaims) GetUserContext() *AuthContext {
 	return &AuthContext{
-		UserID:         c.UserID,
-		OrganizationID: c.OrganizationID,
-		Role:           c.Role,
-		Permissions:    c.Permissions,
-		APIKeyID:       c.APIKeyID,
-		SessionID:      c.SessionID,
+		UserID:    c.UserID,
+		APIKeyID:  c.APIKeyID,
+		SessionID: c.SessionID,
 	}
-}
-
-// HasScope checks if the token has a specific scope (for API keys)
-func (c *JWTClaims) HasScope(scope string) bool {
-	for _, s := range c.Scopes {
-		if s == scope || s == "*" {
-			return true
-		}
-		// Check wildcard scopes (e.g., "users.*" matches "users.read")
-		if len(s) > 0 && s[len(s)-1] == '*' {
-			prefix := s[:len(s)-1]
-			if len(scope) > len(prefix) && scope[:len(prefix)] == prefix {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// HasPermission checks if the token has a specific permission
-func (c *JWTClaims) HasPermission(permission string) bool {
-	for _, p := range c.Permissions {
-		if p == permission || p == "*" {
-			return true
-		}
-		// Check wildcard permissions
-		if len(p) > 0 && p[len(p)-1] == '*' {
-			prefix := p[:len(p)-1]
-			if len(permission) > len(prefix) && permission[:len(prefix)] == prefix {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 // PasswordResetToken represents a password reset token
