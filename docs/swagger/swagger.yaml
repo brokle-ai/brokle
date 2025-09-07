@@ -1476,6 +1476,9 @@ definitions:
       email:
         example: john@acme.com
         type: string
+      orgID:
+        example: 01FXYZ123456789ABCDEFGHIJK0
+        type: string
       role:
         enum:
         - admin
@@ -1485,6 +1488,7 @@ definitions:
         type: string
     required:
     - email
+    - orgID
     - role
     type: object
   organization.ListMembersResponse:
@@ -1598,6 +1602,43 @@ definitions:
     - name
     - organization_id
     type: object
+  project.Environment:
+    properties:
+      created_at:
+        example: "2024-01-01T00:00:00Z"
+        type: string
+      id:
+        example: env_1234567890
+        type: string
+      name:
+        example: Production
+        type: string
+      project_id:
+        example: proj_1234567890
+        type: string
+      slug:
+        example: prod
+        type: string
+      updated_at:
+        example: "2024-01-01T00:00:00Z"
+        type: string
+    type: object
+  project.ListEnvironmentsResponse:
+    properties:
+      environments:
+        items:
+          $ref: '#/definitions/project.Environment'
+        type: array
+      project_id:
+        example: proj_1234567890
+        type: string
+      project_name:
+        example: AI Chatbot
+        type: string
+      total:
+        example: 3
+        type: integer
+    type: object
   project.ListProjectsResponse:
     properties:
       limit:
@@ -1682,6 +1723,18 @@ definitions:
         example: validation_error
         type: string
     type: object
+  response.APIResponse:
+    description: Standard API response wrapper
+    properties:
+      data: {}
+      error:
+        $ref: '#/definitions/response.APIError'
+      meta:
+        $ref: '#/definitions/response.Meta'
+      success:
+        example: true
+        type: boolean
+    type: object
   response.ErrorResponse:
     description: Standard error response
     properties:
@@ -1749,6 +1802,90 @@ definitions:
       success:
         example: true
         type: boolean
+    type: object
+  user.OnboardingQuestionsResponse:
+    description: Complete onboarding question information including user's current
+      response
+    properties:
+      description:
+        example: This helps us customize your experience
+        type: string
+      id:
+        example: 01K4FHGHT3XX9WFM293QPZ5G9V
+        type: string
+      is_required:
+        example: true
+        type: boolean
+      is_skipped:
+        example: false
+        type: boolean
+      options:
+        example:
+        - '["Developer"'
+        - ' "Manager"'
+        - ' "Analyst"]'
+        items:
+          type: string
+        type: array
+      question_type:
+        example: single_choice
+        type: string
+      step:
+        example: 1
+        type: integer
+      title:
+        example: What is your primary role?
+        type: string
+      user_answer:
+        example: Developer
+        type: string
+    type: object
+  user.OnboardingStatusResponse:
+    description: User's current onboarding progress and completion status
+    properties:
+      completed_questions:
+        example: 3
+        type: integer
+      current_step:
+        example: 2
+        type: integer
+      onboarding_completed:
+        example: false
+        type: boolean
+      remaining_questions:
+        example: 1
+        type: integer
+      skipped_questions:
+        example: 1
+        type: integer
+      total_questions:
+        example: 5
+        type: integer
+    type: object
+  user.SubmitResponseRequest:
+    description: Request body for submitting a response to an onboarding question
+    properties:
+      question_id:
+        example: 01K4FHGHT3XX9WFM293QPZ5G9V
+        type: string
+      response_value:
+        example: Developer
+        type: string
+      skipped:
+        example: false
+        type: boolean
+    required:
+    - question_id
+    type: object
+  user.SubmitResponsesRequest:
+    description: Request body for submitting multiple onboarding responses at once
+    properties:
+      responses:
+        items:
+          $ref: '#/definitions/user.SubmitResponseRequest'
+        type: array
+    required:
+    - responses
     type: object
   user.UserProfileData:
     description: Extended user profile data including bio, location, and social links
@@ -3744,6 +3881,139 @@ paths:
       summary: Get detailed request information
       tags:
       - Logs
+  /api/v1/onboarding/questions:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves all active onboarding questions with user's current responses
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Questions retrieved successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/user.OnboardingQuestionsResponse'
+                  type: array
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get onboarding questions
+      tags:
+      - Onboarding
+  /api/v1/onboarding/responses:
+    post:
+      consumes:
+      - application/json
+      description: Submit answers to one or more onboarding questions
+      parameters:
+      - description: Responses to submit
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/user.SubmitResponsesRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Responses submitted successfully
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Submit onboarding responses
+      tags:
+      - Onboarding
+  /api/v1/onboarding/skip/{id}:
+    post:
+      consumes:
+      - application/json
+      description: Skip a specific onboarding question
+      parameters:
+      - description: Question ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Question skipped successfully
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "400":
+          description: Invalid question ID
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Skip onboarding question
+      tags:
+      - Onboarding
+  /api/v1/onboarding/status:
+    get:
+      consumes:
+      - application/json
+      description: Get the user's current onboarding progress
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Status retrieved successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/user.OnboardingStatusResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get onboarding status
+      tags:
+      - Onboarding
   /api/v1/organizations:
     get:
       consumes:
@@ -4451,24 +4721,8 @@ paths:
       produces:
       - application/json
       responses:
-        "201":
-          description: Settings created successfully
-          schema:
-            $ref: '#/definitions/response.SuccessResponse'
-        "400":
-          description: Bad request - invalid input or validation errors
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "403":
-          description: Forbidden - insufficient permissions
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
+        "501":
+          description: Not implemented
           schema:
             $ref: '#/definitions/response.ErrorResponse'
       security:
@@ -4491,33 +4745,8 @@ paths:
       produces:
       - application/json
       responses:
-        "200":
-          description: Settings exported successfully
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.SuccessResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/organization.SettingsListResponse'
-              type: object
-        "400":
-          description: Bad request - invalid organization ID
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "403":
-          description: Forbidden - insufficient permissions
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "404":
-          description: Organization not found
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
+        "501":
+          description: Not implemented
           schema:
             $ref: '#/definitions/response.ErrorResponse'
       security:
@@ -4546,24 +4775,8 @@ paths:
       produces:
       - application/json
       responses:
-        "200":
-          description: Settings imported successfully
-          schema:
-            $ref: '#/definitions/response.SuccessResponse'
-        "400":
-          description: Bad request - invalid input or validation errors
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "403":
-          description: Forbidden - insufficient permissions
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
+        "501":
+          description: Not implemented
           schema:
             $ref: '#/definitions/response.ErrorResponse'
       security:
@@ -4587,24 +4800,8 @@ paths:
       produces:
       - application/json
       responses:
-        "200":
-          description: Settings reset successfully
-          schema:
-            $ref: '#/definitions/response.SuccessResponse'
-        "400":
-          description: Bad request - invalid organization ID
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "403":
-          description: Forbidden - insufficient permissions
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
+        "501":
+          description: Not implemented
           schema:
             $ref: '#/definitions/response.ErrorResponse'
       security:
@@ -4901,7 +5098,12 @@ paths:
         "200":
           description: List of project environments
           schema:
-            $ref: '#/definitions/response.SuccessResponse'
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/project.ListEnvironmentsResponse'
+              type: object
         "400":
           description: Bad request - invalid project ID
           schema:

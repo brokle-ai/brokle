@@ -1,6 +1,8 @@
 package organization
 
 import (
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -9,6 +11,7 @@ import (
 	"brokle/internal/config"
 	"brokle/internal/core/domain/organization"
 	"brokle/pkg/response"
+	"brokle/pkg/ulid"
 )
 
 // Handler handles organization endpoints
@@ -53,21 +56,47 @@ type UpdateOrganizationRequest struct {
 
 // OrganizationMember represents a member of an organization
 type OrganizationMember struct {
-	ID         string    `json:"id" example:"usr_1234567890" description:"User ID"`
-	Email      string    `json:"email" example:"john@acme.com" description:"User email address"`
-	FirstName  string    `json:"first_name" example:"John" description:"User first name"`
-	LastName   string    `json:"last_name" example:"Doe" description:"User last name"`
-	Role       string    `json:"role" example:"admin" description:"Role in organization (owner, admin, developer, viewer)"`
-	Status     string    `json:"status" example:"active" description:"Member status (active, invited, suspended)"`
-	JoinedAt   time.Time `json:"joined_at" example:"2024-01-01T00:00:00Z" description:"When user joined organization"`
-	InvitedAt  time.Time `json:"invited_at,omitempty" example:"2024-01-01T00:00:00Z" description:"When user was invited (if not yet accepted)"`
-	InvitedBy  string    `json:"invited_by,omitempty" example:"usr_0987654321" description:"ID of user who sent invitation"`
+	ID        string    `json:"id" example:"usr_1234567890" description:"User ID"`
+	Email     string    `json:"email" example:"john@acme.com" description:"User email address"`
+	FirstName string    `json:"first_name" example:"John" description:"User first name"`
+	LastName  string    `json:"last_name" example:"Doe" description:"User last name"`
+	Role      string    `json:"role" example:"admin" description:"Role in organization (owner, admin, developer, viewer)"`
+	Status    string    `json:"status" example:"active" description:"Member status (active, invited, suspended)"`
+	JoinedAt  time.Time `json:"joined_at" example:"2024-01-01T00:00:00Z" description:"When user joined organization"`
+	InvitedAt time.Time `json:"invited_at,omitempty" example:"2024-01-01T00:00:00Z" description:"When user was invited (if not yet accepted)"`
+	InvitedBy string    `json:"invited_by,omitempty" example:"usr_0987654321" description:"ID of user who sent invitation"`
+}
+
+// ListMembersRequest represents request parameters for listing members
+type ListMembersRequest struct {
+	OrgID  string `uri:"orgId" binding:"required" example:"01FXYZ123456789ABCDEFGHIJK0" description:"Organization ID"`
+	Status string `form:"status" example:"active" description:"Filter by member status"`
+	Role   string `form:"role" example:"admin" description:"Filter by member role"`
 }
 
 // InviteMemberRequest represents the request to invite a member to an organization
 type InviteMemberRequest struct {
+	OrgID string `uri:"orgId" binding:"required" example:"01FXYZ123456789ABCDEFGHIJK0" description:"Organization ID"`
 	Email string `json:"email" binding:"required,email" example:"john@acme.com" description:"Email address of user to invite"`
 	Role  string `json:"role" binding:"required,oneof=admin developer viewer" example:"developer" description:"Role to assign (admin, developer, viewer)"`
+}
+
+// RemoveMemberRequest represents the request to remove a member from an organization
+type RemoveMemberRequest struct {
+	OrgID  string `uri:"orgId" binding:"required" example:"01FXYZ123456789ABCDEFGHIJK0" description:"Organization ID"`
+	UserID string `uri:"userId" binding:"required" example:"01FXYZ123456789ABCDEFGHIJK0" description:"User ID to remove"`
+}
+
+// ListRequest represents request parameters for listing organizations
+type ListRequest struct {
+	Page   int    `form:"page,default=1" binding:"min=1" example:"1" description:"Page number"`
+	Limit  int    `form:"limit,default=20" binding:"min=1,max=100" example:"20" description:"Items per page"`
+	Search string `form:"search" example:"acme" description:"Search organizations by name or slug"`
+}
+
+// GetRequest represents request parameters for getting an organization
+type GetRequest struct {
+	OrgID string `uri:"orgId" binding:"required" example:"01FXYZ123456789ABCDEFGHIJK0" description:"Organization ID"`
 }
 
 // ListOrganizationsResponse represents the response when listing organizations
@@ -123,7 +152,88 @@ func NewHandler(
 // @Security BearerAuth
 // @Router /api/v1/organizations [get]
 func (h *Handler) List(c *gin.Context) {
-	response.Success(c, gin.H{"message": "List organizations - TODO"})
+	var req ListRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		h.logger.WithError(err).Error("Invalid list organizations request")
+		response.BadRequest(c, "Invalid request parameters", err.Error())
+		return
+	}
+
+	// Get user ID from context
+	userIDValue, exists := c.Get("user_id")
+	if !exists {
+		h.logger.Error("User ID not found in context")
+		response.Unauthorized(c, "Authentication required")
+		return
+	}
+
+	userID, ok := userIDValue.(ulid.ULID)
+	if !ok {
+		h.logger.Error("Invalid user ID type in context")
+		response.InternalServerError(c, "Internal error")
+		return
+	}
+
+	// Get user organizations
+	organizations, err := h.organizationService.GetUserOrganizations(c.Request.Context(), userID)
+	if err != nil {
+		h.logger.WithError(err).WithField("user_id", userID).Error("Failed to get user organizations")
+		response.InternalServerError(c, "Failed to retrieve organizations")
+		return
+	}
+
+	// Convert to response format and apply filtering/pagination
+	var filteredOrgs []Organization
+	for _, org := range organizations {
+		// Apply search filter if provided
+		if req.Search != "" {
+			if !strings.Contains(strings.ToLower(org.Name), strings.ToLower(req.Search)) &&
+				!strings.Contains(strings.ToLower(org.Slug), strings.ToLower(req.Search)) {
+				continue
+			}
+		}
+
+		filteredOrgs = append(filteredOrgs, Organization{
+			ID:        org.ID.String(),
+			Name:      org.Name,
+			Slug:      org.Slug,
+			Plan:      org.Plan,
+			Status:    org.SubscriptionStatus,
+			CreatedAt: org.CreatedAt,
+			UpdatedAt: org.UpdatedAt,
+		})
+	}
+
+	// Apply pagination
+	total := len(filteredOrgs)
+	startIdx := (req.Page - 1) * req.Limit
+	endIdx := startIdx + req.Limit
+
+	if startIdx >= total {
+		filteredOrgs = []Organization{}
+	} else {
+		if endIdx > total {
+			endIdx = total
+		}
+		filteredOrgs = filteredOrgs[startIdx:endIdx]
+	}
+
+	// Create response
+	responseData := ListOrganizationsResponse{
+		Organizations: filteredOrgs,
+		Total:         total,
+		Page:          req.Page,
+		Limit:         req.Limit,
+	}
+
+	h.logger.WithFields(logrus.Fields{
+		"user_id": userID,
+		"count":   len(filteredOrgs),
+		"total":   total,
+		"page":    req.Page,
+	}).Info("Organizations listed successfully")
+
+	response.Success(c, responseData)
 }
 
 // Create handles POST /organizations
@@ -141,7 +251,76 @@ func (h *Handler) List(c *gin.Context) {
 // @Security BearerAuth
 // @Router /api/v1/organizations [post]
 func (h *Handler) Create(c *gin.Context) {
-	response.Success(c, gin.H{"message": "Create organization - TODO"})
+	var req CreateOrganizationRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.WithError(err).Error("Invalid create organization request")
+		response.BadRequest(c, "Invalid request payload", err.Error())
+		return
+	}
+
+	// Get user ID from context
+	userIDValue, exists := c.Get("user_id")
+	if !exists {
+		h.logger.Error("User ID not found in context")
+		response.Unauthorized(c, "Authentication required")
+		return
+	}
+
+	userID, ok := userIDValue.(ulid.ULID)
+	if !ok {
+		h.logger.Error("Invalid user ID type in context")
+		response.InternalServerError(c, "Internal error")
+		return
+	}
+
+	// Create organization request
+	createReq := &organization.CreateOrganizationRequest{
+		Name:         req.Name,
+		Slug:         req.Slug,
+		BillingEmail: "", // Will be set from user email or provided
+	}
+
+	// Create organization
+	org, err := h.organizationService.CreateOrganization(c.Request.Context(), userID, createReq)
+	if err != nil {
+		h.logger.WithError(err).WithFields(logrus.Fields{
+			"user_id": userID,
+			"name":    req.Name,
+			"slug":    req.Slug,
+		}).Error("Failed to create organization")
+
+		// Handle specific errors
+		if strings.Contains(err.Error(), "already exists") || strings.Contains(err.Error(), "duplicate") {
+			response.Conflict(c, "Organization slug already exists")
+			return
+		}
+
+		response.InternalServerError(c, "Failed to create organization")
+		return
+	}
+
+	// Convert to response format
+	responseData := Organization{
+		ID:        org.ID.String(),
+		Name:      org.Name,
+		Slug:      org.Slug,
+		Plan:      org.Plan,
+		Status:    org.SubscriptionStatus,
+		CreatedAt: org.CreatedAt,
+		UpdatedAt: org.UpdatedAt,
+		OwnerID:   userID.String(),
+	}
+
+	h.logger.WithFields(logrus.Fields{
+		"user_id":         userID,
+		"organization_id": org.ID,
+		"name":            org.Name,
+		"slug":            org.Slug,
+	}).Info("Organization created successfully")
+
+	c.Header("Location", fmt.Sprintf("/api/v1/organizations/%s", org.ID))
+	response.Success(c, responseData)
+	c.Status(201) // Created
 }
 
 // Get handles GET /organizations/:orgId
@@ -160,7 +339,85 @@ func (h *Handler) Create(c *gin.Context) {
 // @Security BearerAuth
 // @Router /api/v1/organizations/{orgId} [get]
 func (h *Handler) Get(c *gin.Context) {
-	response.Success(c, gin.H{"message": "Get organization - TODO"})
+	var req GetRequest
+	if err := c.ShouldBindUri(&req); err != nil {
+		h.logger.WithError(err).Error("Invalid get organization request")
+		response.BadRequest(c, "Invalid organization ID", err.Error())
+		return
+	}
+
+	// Get user ID from context
+	userIDValue, exists := c.Get("user_id")
+	if !exists {
+		h.logger.Error("User ID not found in context")
+		response.Unauthorized(c, "Authentication required")
+		return
+	}
+
+	userID, ok := userIDValue.(ulid.ULID)
+	if !ok {
+		h.logger.Error("Invalid user ID type in context")
+		response.InternalServerError(c, "Internal error")
+		return
+	}
+
+	// Parse organization ID
+	orgID, err := ulid.Parse(req.OrgID)
+	if err != nil {
+		h.logger.WithError(err).WithField("org_id", req.OrgID).Error("Invalid organization ID format")
+		response.BadRequest(c, "Invalid organization ID format", err.Error())
+		return
+	}
+
+	// Check if user can access this organization
+	canAccess, err := h.memberService.CanUserAccessOrganization(c.Request.Context(), userID, orgID)
+	if err != nil {
+		h.logger.WithError(err).WithFields(logrus.Fields{
+			"user_id": userID,
+			"org_id":  orgID,
+		}).Error("Failed to check organization access")
+		response.InternalServerError(c, "Failed to check organization access")
+		return
+	}
+
+	if !canAccess {
+		h.logger.WithFields(logrus.Fields{
+			"user_id": userID,
+			"org_id":  orgID,
+		}).Warn("User attempted to access organization without permission")
+		response.Forbidden(c, "Insufficient permissions to access this organization")
+		return
+	}
+
+	// Get organization
+	org, err := h.organizationService.GetOrganization(c.Request.Context(), orgID)
+	if err != nil {
+		h.logger.WithError(err).WithField("org_id", orgID).Error("Failed to get organization")
+		if strings.Contains(err.Error(), "not found") {
+			response.NotFound(c, "Organization")
+			return
+		}
+		response.InternalServerError(c, "Failed to retrieve organization")
+		return
+	}
+
+	// Convert to response format
+	responseData := Organization{
+		ID:        org.ID.String(),
+		Name:      org.Name,
+		Slug:      org.Slug,
+		Plan:      org.Plan,
+		Status:    org.SubscriptionStatus,
+		CreatedAt: org.CreatedAt,
+		UpdatedAt: org.UpdatedAt,
+	}
+
+	h.logger.WithFields(logrus.Fields{
+		"user_id": userID,
+		"org_id":  orgID,
+	}).Info("Organization retrieved successfully")
+
+	response.Success(c, responseData)
 }
 
 // Update handles PUT /organizations/:orgId
@@ -180,7 +437,105 @@ func (h *Handler) Get(c *gin.Context) {
 // @Security BearerAuth
 // @Router /api/v1/organizations/{orgId} [put]
 func (h *Handler) Update(c *gin.Context) {
-	response.Success(c, gin.H{"message": "Update organization - TODO"})
+	var uriReq GetRequest
+	if err := c.ShouldBindUri(&uriReq); err != nil {
+		h.logger.WithError(err).Error("Invalid update organization URI request")
+		response.BadRequest(c, "Invalid organization ID", err.Error())
+		return
+	}
+
+	var req UpdateOrganizationRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.WithError(err).Error("Invalid update organization request")
+		response.BadRequest(c, "Invalid request payload", err.Error())
+		return
+	}
+
+	// Get user ID from context
+	userIDValue, exists := c.Get("user_id")
+	if !exists {
+		h.logger.Error("User ID not found in context")
+		response.Unauthorized(c, "Authentication required")
+		return
+	}
+
+	userID, ok := userIDValue.(ulid.ULID)
+	if !ok {
+		h.logger.Error("Invalid user ID type in context")
+		response.InternalServerError(c, "Internal error")
+		return
+	}
+
+	// Parse organization ID
+	orgID, err := ulid.Parse(uriReq.OrgID)
+	if err != nil {
+		h.logger.WithError(err).WithField("org_id", uriReq.OrgID).Error("Invalid organization ID format")
+		response.BadRequest(c, "Invalid organization ID format", err.Error())
+		return
+	}
+
+	// Check if user can access this organization
+	canAccess, err := h.memberService.CanUserAccessOrganization(c.Request.Context(), userID, orgID)
+	if err != nil {
+		h.logger.WithError(err).WithFields(logrus.Fields{
+			"user_id": userID,
+			"org_id":  orgID,
+		}).Error("Failed to check organization access")
+		response.InternalServerError(c, "Failed to check organization access")
+		return
+	}
+
+	if !canAccess {
+		h.logger.WithFields(logrus.Fields{
+			"user_id": userID,
+			"org_id":  orgID,
+		}).Warn("User attempted to update organization without permission")
+		response.Forbidden(c, "Insufficient permissions to update this organization")
+		return
+	}
+
+	// Create update request
+	updateReq := &organization.UpdateOrganizationRequest{
+		Name:         &req.Name,
+		BillingEmail: &req.Description, // Using description field temporarily
+	}
+
+	// Update organization
+	err = h.organizationService.UpdateOrganization(c.Request.Context(), orgID, updateReq)
+	if err != nil {
+		h.logger.WithError(err).WithFields(logrus.Fields{
+			"user_id": userID,
+			"org_id":  orgID,
+		}).Error("Failed to update organization")
+		response.InternalServerError(c, "Failed to update organization")
+		return
+	}
+
+	// Get updated organization
+	org, err := h.organizationService.GetOrganization(c.Request.Context(), orgID)
+	if err != nil {
+		h.logger.WithError(err).WithField("org_id", orgID).Error("Failed to get updated organization")
+		response.InternalServerError(c, "Failed to retrieve updated organization")
+		return
+	}
+
+	// Convert to response format
+	responseData := Organization{
+		ID:        org.ID.String(),
+		Name:      org.Name,
+		Slug:      org.Slug,
+		Plan:      org.Plan,
+		Status:    org.SubscriptionStatus,
+		CreatedAt: org.CreatedAt,
+		UpdatedAt: org.UpdatedAt,
+	}
+
+	h.logger.WithFields(logrus.Fields{
+		"user_id": userID,
+		"org_id":  orgID,
+	}).Info("Organization updated successfully")
+
+	response.Success(c, responseData)
 }
 
 // Delete handles DELETE /organizations/:orgId
@@ -200,7 +555,79 @@ func (h *Handler) Update(c *gin.Context) {
 // @Security BearerAuth
 // @Router /api/v1/organizations/{orgId} [delete]
 func (h *Handler) Delete(c *gin.Context) {
-	response.Success(c, gin.H{"message": "Delete organization - TODO"})
+	var req GetRequest
+	if err := c.ShouldBindUri(&req); err != nil {
+		h.logger.WithError(err).Error("Invalid delete organization request")
+		response.BadRequest(c, "Invalid organization ID", err.Error())
+		return
+	}
+
+	// Get user ID from context
+	userIDValue, exists := c.Get("user_id")
+	if !exists {
+		h.logger.Error("User ID not found in context")
+		response.Unauthorized(c, "Authentication required")
+		return
+	}
+
+	userID, ok := userIDValue.(ulid.ULID)
+	if !ok {
+		h.logger.Error("Invalid user ID type in context")
+		response.InternalServerError(c, "Internal error")
+		return
+	}
+
+	// Parse organization ID
+	orgID, err := ulid.Parse(req.OrgID)
+	if err != nil {
+		h.logger.WithError(err).WithField("org_id", req.OrgID).Error("Invalid organization ID format")
+		response.BadRequest(c, "Invalid organization ID format", err.Error())
+		return
+	}
+
+	// Check if user can access this organization
+	canAccess, err := h.memberService.CanUserAccessOrganization(c.Request.Context(), userID, orgID)
+	if err != nil {
+		h.logger.WithError(err).WithFields(logrus.Fields{
+			"user_id": userID,
+			"org_id":  orgID,
+		}).Error("Failed to check organization access")
+		response.InternalServerError(c, "Failed to check organization access")
+		return
+	}
+
+	if !canAccess {
+		h.logger.WithFields(logrus.Fields{
+			"user_id": userID,
+			"org_id":  orgID,
+		}).Warn("User attempted to delete organization without permission")
+		response.Forbidden(c, "Insufficient permissions to delete this organization")
+		return
+	}
+
+	// Delete organization
+	err = h.organizationService.DeleteOrganization(c.Request.Context(), orgID)
+	if err != nil {
+		h.logger.WithError(err).WithFields(logrus.Fields{
+			"user_id": userID,
+			"org_id":  orgID,
+		}).Error("Failed to delete organization")
+
+		if strings.Contains(err.Error(), "not found") {
+			response.NotFound(c, "Organization")
+			return
+		}
+
+		response.InternalServerError(c, "Failed to delete organization")
+		return
+	}
+
+	h.logger.WithFields(logrus.Fields{
+		"user_id": userID,
+		"org_id":  orgID,
+	}).Info("Organization deleted successfully")
+
+	c.Status(204) // No Content
 }
 
 // ListMembers handles GET /organizations/:orgId/members
@@ -221,7 +648,94 @@ func (h *Handler) Delete(c *gin.Context) {
 // @Security BearerAuth
 // @Router /api/v1/organizations/{orgId}/members [get]
 func (h *Handler) ListMembers(c *gin.Context) {
-	response.Success(c, gin.H{"message": "List organization members - TODO"})
+	var req ListMembersRequest
+	if err := c.ShouldBindUri(&req); err != nil {
+		h.logger.WithError(err).Error("Invalid list members URI request")
+		response.BadRequest(c, "Invalid organization ID", err.Error())
+		return
+	}
+
+	if err := c.ShouldBindQuery(&req); err != nil {
+		h.logger.WithError(err).Error("Invalid list members query request")
+		response.BadRequest(c, "Invalid query parameters", err.Error())
+		return
+	}
+
+	// Get user ID from context
+	userIDValue, exists := c.Get("user_id")
+	if !exists {
+		h.logger.Error("User ID not found in context")
+		response.Unauthorized(c, "Authentication required")
+		return
+	}
+
+	userID, ok := userIDValue.(ulid.ULID)
+	if !ok {
+		h.logger.Error("Invalid user ID type in context")
+		response.InternalServerError(c, "Internal error")
+		return
+	}
+
+	// Parse organization ID
+	orgID, err := ulid.Parse(req.OrgID)
+	if err != nil {
+		h.logger.WithError(err).WithField("org_id", req.OrgID).Error("Invalid organization ID format")
+		response.BadRequest(c, "Invalid organization ID format", err.Error())
+		return
+	}
+
+	// Check if user can access this organization
+	canAccess, err := h.memberService.CanUserAccessOrganization(c.Request.Context(), userID, orgID)
+	if err != nil {
+		h.logger.WithError(err).WithFields(logrus.Fields{
+			"user_id": userID,
+			"org_id":  orgID,
+		}).Error("Failed to check organization access")
+		response.InternalServerError(c, "Failed to check organization access")
+		return
+	}
+
+	if !canAccess {
+		h.logger.WithFields(logrus.Fields{
+			"user_id": userID,
+			"org_id":  orgID,
+		}).Warn("User attempted to list members without permission")
+		response.Forbidden(c, "Insufficient permissions to view organization members")
+		return
+	}
+
+	// Get organization members
+	members, err := h.memberService.GetMembers(c.Request.Context(), orgID)
+	if err != nil {
+		h.logger.WithError(err).WithField("org_id", orgID).Error("Failed to get organization members")
+		response.InternalServerError(c, "Failed to retrieve organization members")
+		return
+	}
+
+	// Convert to response format
+	var memberList []OrganizationMember
+	for _, member := range members {
+		memberList = append(memberList, OrganizationMember{
+			ID:       member.UserID.String(),
+			Role:     member.RoleID.String(), // This should be resolved to role name in a real implementation
+			Status:   "active",               // This should come from member status
+			JoinedAt: member.CreatedAt,
+		})
+	}
+
+	// Create response
+	responseData := ListMembersResponse{
+		Members: memberList,
+		Total:   len(memberList),
+	}
+
+	h.logger.WithFields(logrus.Fields{
+		"user_id": userID,
+		"org_id":  orgID,
+		"count":   len(memberList),
+	}).Info("Organization members listed successfully")
+
+	response.Success(c, responseData)
 }
 
 // InviteMember handles POST /organizations/:orgId/members
@@ -242,7 +756,112 @@ func (h *Handler) ListMembers(c *gin.Context) {
 // @Security BearerAuth
 // @Router /api/v1/organizations/{orgId}/members [post]
 func (h *Handler) InviteMember(c *gin.Context) {
-	response.Success(c, gin.H{"message": "Invite organization member - TODO"})
+	var uriReq InviteMemberRequest
+	if err := c.ShouldBindUri(&uriReq); err != nil {
+		h.logger.WithError(err).Error("Invalid invite member URI request")
+		response.BadRequest(c, "Invalid organization ID", err.Error())
+		return
+	}
+
+	var req InviteMemberRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.WithError(err).Error("Invalid invite member request")
+		response.BadRequest(c, "Invalid request payload", err.Error())
+		return
+	}
+
+	// Copy org ID from URI
+	req.OrgID = uriReq.OrgID
+
+	// Get user ID from context
+	userIDValue, exists := c.Get("user_id")
+	if !exists {
+		h.logger.Error("User ID not found in context")
+		response.Unauthorized(c, "Authentication required")
+		return
+	}
+
+	userID, ok := userIDValue.(ulid.ULID)
+	if !ok {
+		h.logger.Error("Invalid user ID type in context")
+		response.InternalServerError(c, "Internal error")
+		return
+	}
+
+	// Parse organization ID
+	orgID, err := ulid.Parse(req.OrgID)
+	if err != nil {
+		h.logger.WithError(err).WithField("org_id", req.OrgID).Error("Invalid organization ID format")
+		response.BadRequest(c, "Invalid organization ID format", err.Error())
+		return
+	}
+
+	// Check if user can access this organization
+	canAccess, err := h.memberService.CanUserAccessOrganization(c.Request.Context(), userID, orgID)
+	if err != nil {
+		h.logger.WithError(err).WithFields(logrus.Fields{
+			"user_id": userID,
+			"org_id":  orgID,
+		}).Error("Failed to check organization access")
+		response.InternalServerError(c, "Failed to check organization access")
+		return
+	}
+
+	if !canAccess {
+		h.logger.WithFields(logrus.Fields{
+			"user_id": userID,
+			"org_id":  orgID,
+		}).Warn("User attempted to invite member without permission")
+		response.Forbidden(c, "Insufficient permissions to invite members to this organization")
+		return
+	}
+
+	// For now, we'll create a basic invitation request
+	// TODO: Need to get actual role ID based on role name
+	roleID := ulid.New() // This should be resolved from role name
+
+	inviteReq := &organization.InviteUserRequest{
+		Email:  req.Email,
+		RoleID: roleID,
+	}
+
+	// Send invitation
+	invitation, err := h.invitationService.InviteUser(c.Request.Context(), orgID, userID, inviteReq)
+	if err != nil {
+		h.logger.WithError(err).WithFields(logrus.Fields{
+			"user_id":      userID,
+			"org_id":       orgID,
+			"invite_email": req.Email,
+		}).Error("Failed to invite user")
+
+		if strings.Contains(err.Error(), "already exists") || strings.Contains(err.Error(), "already member") {
+			response.Conflict(c, "User is already a member or has pending invitation")
+			return
+		}
+
+		response.InternalServerError(c, "Failed to invite user")
+		return
+	}
+
+	// Convert to response format
+	responseData := OrganizationMember{
+		Email:     req.Email,
+		Role:      req.Role,
+		Status:    "invited",
+		InvitedAt: invitation.CreatedAt,
+		InvitedBy: userID.String(),
+	}
+
+	h.logger.WithFields(logrus.Fields{
+		"user_id":       userID,
+		"org_id":        orgID,
+		"invite_email":  req.Email,
+		"invitation_id": invitation.ID,
+	}).Info("User invited successfully")
+
+	c.Header("Location", fmt.Sprintf("/api/v1/organizations/%s/members", orgID))
+	response.Success(c, responseData)
+	c.Status(201) // Created
 }
 
 // RemoveMember handles DELETE /organizations/:orgId/members/:userId
@@ -262,7 +881,89 @@ func (h *Handler) InviteMember(c *gin.Context) {
 // @Security BearerAuth
 // @Router /api/v1/organizations/{orgId}/members/{userId} [delete]
 func (h *Handler) RemoveMember(c *gin.Context) {
-	response.Success(c, gin.H{"message": "Remove organization member - TODO"})
+	var req RemoveMemberRequest
+	if err := c.ShouldBindUri(&req); err != nil {
+		h.logger.WithError(err).Error("Invalid remove member request")
+		response.BadRequest(c, "Invalid organization ID or user ID", err.Error())
+		return
+	}
+
+	// Get user ID from context (the user making the request)
+	currentUserIDValue, exists := c.Get("user_id")
+	if !exists {
+		h.logger.Error("User ID not found in context")
+		response.Unauthorized(c, "Authentication required")
+		return
+	}
+
+	currentUserID, ok := currentUserIDValue.(ulid.ULID)
+	if !ok {
+		h.logger.Error("Invalid user ID type in context")
+		response.InternalServerError(c, "Internal error")
+		return
+	}
+
+	// Parse organization ID
+	orgID, err := ulid.Parse(req.OrgID)
+	if err != nil {
+		h.logger.WithError(err).WithField("org_id", req.OrgID).Error("Invalid organization ID format")
+		response.BadRequest(c, "Invalid organization ID format", err.Error())
+		return
+	}
+
+	// Parse user ID to remove
+	userToRemoveID, err := ulid.Parse(req.UserID)
+	if err != nil {
+		h.logger.WithError(err).WithField("user_id", req.UserID).Error("Invalid user ID format")
+		response.BadRequest(c, "Invalid user ID format", err.Error())
+		return
+	}
+
+	// Check if current user can access this organization
+	canAccess, err := h.memberService.CanUserAccessOrganization(c.Request.Context(), currentUserID, orgID)
+	if err != nil {
+		h.logger.WithError(err).WithFields(logrus.Fields{
+			"current_user_id": currentUserID,
+			"org_id":          orgID,
+		}).Error("Failed to check organization access")
+		response.InternalServerError(c, "Failed to check organization access")
+		return
+	}
+
+	if !canAccess {
+		h.logger.WithFields(logrus.Fields{
+			"current_user_id": currentUserID,
+			"org_id":          orgID,
+		}).Warn("User attempted to remove member without permission")
+		response.Forbidden(c, "Insufficient permissions to remove members from this organization")
+		return
+	}
+
+	// Remove member
+	err = h.memberService.RemoveMember(c.Request.Context(), orgID, userToRemoveID, currentUserID)
+	if err != nil {
+		h.logger.WithError(err).WithFields(logrus.Fields{
+			"current_user_id":   currentUserID,
+			"user_to_remove_id": userToRemoveID,
+			"org_id":            orgID,
+		}).Error("Failed to remove member")
+
+		if strings.Contains(err.Error(), "not found") {
+			response.NotFound(c, "Member")
+			return
+		}
+
+		response.InternalServerError(c, "Failed to remove member")
+		return
+	}
+
+	h.logger.WithFields(logrus.Fields{
+		"current_user_id":   currentUserID,
+		"user_to_remove_id": userToRemoveID,
+		"org_id":            orgID,
+	}).Info("Member removed successfully")
+
+	c.Status(204) // No Content
 }
 
 // Settings delegation methods

@@ -2,21 +2,21 @@ package user
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"time"
 
 	"brokle/internal/core/domain/auth"
 	"brokle/internal/core/domain/user"
 	"brokle/pkg/ulid"
 )
 
-// onboardingService implements the user.OnboardingService interface
+// onboardingService implements the user.OnboardingService interface for dynamic onboarding
 type onboardingService struct {
 	userRepo  user.Repository
 	auditRepo auth.AuditLogRepository
 }
 
-// NewOnboardingService creates a new onboarding service instance
+// NewOnboardingService creates a new dynamic onboarding service instance
 func NewOnboardingService(
 	userRepo user.Repository,
 	auditRepo auth.AuditLogRepository,
@@ -27,115 +27,190 @@ func NewOnboardingService(
 	}
 }
 
-// GetOnboardingStatus retrieves user's onboarding progress
-func (s *onboardingService) GetOnboardingStatus(ctx context.Context, userID ulid.ULID) (*user.OnboardingStatus, error) {
-	existingUser, err := s.userRepo.GetByID(ctx, userID)
-	if err != nil {
-		return nil, fmt.Errorf("user not found: %w", err)
-	}
-
-	// Define the standard onboarding flow
-	allSteps := []user.OnboardingStep{
-		user.OnboardingStepProfile,
-		user.OnboardingStepPreferences,
-		user.OnboardingStepOrganization,
-		user.OnboardingStepProject,
-		user.OnboardingStepComplete,
-	}
-
-	// Determine completed steps based on user data
-	completedSteps := []user.OnboardingStep{}
-	stepProgress := make(map[user.OnboardingStep]bool)
-
-	// Check profile completion
-	if existingUser.FirstName != "" && existingUser.LastName != "" {
-		completedSteps = append(completedSteps, user.OnboardingStepProfile)
-		stepProgress[user.OnboardingStepProfile] = true
-	}
-
-	// Check preferences (assume completed if user exists for now)
-	completedSteps = append(completedSteps, user.OnboardingStepPreferences)
-	stepProgress[user.OnboardingStepPreferences] = true
-
-	// Check if onboarding is fully completed
-	isCompleted := existingUser.OnboardingCompleted
-	if isCompleted {
-		completedSteps = allSteps
-		for _, step := range allSteps {
-			stepProgress[step] = true
-		}
-	}
-
-	// Determine current step
-	var currentStep user.OnboardingStep
-	if !isCompleted {
-		if len(completedSteps) < len(allSteps) {
-			currentStep = allSteps[len(completedSteps)]
-		} else {
-			currentStep = user.OnboardingStepComplete
-		}
-	} else {
-		currentStep = user.OnboardingStepComplete
-	}
-
-	// Calculate completion rate
-	completionRate := (len(completedSteps) * 100) / len(allSteps)
-
-	status := &user.OnboardingStatus{
-		UserID:          userID,
-		IsCompleted:     isCompleted,
-		CompletedSteps:  completedSteps,
-		CurrentStep:     currentStep,
-		TotalSteps:      len(allSteps),
-		CompletionRate:  completionRate,
-		StepProgress:    stepProgress,
-		StartedAt:       nil, // Would be set if we tracked start time
-		CompletedAt:     nil, // Would be set if we tracked completion time
-	}
-
-	if isCompleted {
-		completedAt := existingUser.CreatedAt.Format(time.RFC3339)
-		status.CompletedAt = &completedAt
-	}
-
-	return status, nil
+// GetActiveQuestions retrieves all active onboarding questions
+func (s *onboardingService) GetActiveQuestions(ctx context.Context) ([]*user.OnboardingQuestion, error) {
+	return s.userRepo.GetActiveOnboardingQuestions(ctx)
 }
 
-// CompleteOnboardingStep marks a specific onboarding step as completed
-func (s *onboardingService) CompleteOnboardingStep(ctx context.Context, userID ulid.ULID, step user.OnboardingStep) error {
+// GetQuestionByID retrieves a specific onboarding question by ID
+func (s *onboardingService) GetQuestionByID(ctx context.Context, id ulid.ULID) (*user.OnboardingQuestion, error) {
+	return s.userRepo.GetOnboardingQuestionByID(ctx, id)
+}
+
+// CreateQuestion creates a new onboarding question
+func (s *onboardingService) CreateQuestion(ctx context.Context, req *user.CreateOnboardingQuestionRequest) (*user.OnboardingQuestion, error) {
+	// Validate request
+	if req.Title == "" {
+		return nil, fmt.Errorf("question title is required")
+	}
+
+	if req.QuestionType != "single_choice" && req.QuestionType != "multiple_choice" && 
+	   req.QuestionType != "text" && req.QuestionType != "skip_optional" {
+		return nil, fmt.Errorf("invalid question type")
+	}
+
+	if req.Step <= 0 {
+		return nil, fmt.Errorf("step must be greater than 0")
+	}
+
+	// Create question
+	question := user.NewOnboardingQuestion(req)
+	
+	err := s.userRepo.CreateOnboardingQuestion(ctx, question)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create onboarding question: %w", err)
+	}
+
+	// Audit log
+	s.auditRepo.Create(ctx, auth.NewAuditLog(nil, nil, "onboarding.question_created", "onboarding", question.ID.String(),
+		fmt.Sprintf(`{"title": "%s", "type": "%s", "step": %d}`, req.Title, req.QuestionType, req.Step), "", ""))
+
+	return question, nil
+}
+
+// GetUserResponses retrieves all user responses with parsed values
+func (s *onboardingService) GetUserResponses(ctx context.Context, userID ulid.ULID) ([]*user.UserOnboardingResponseData, error) {
+	responses, err := s.userRepo.GetUserOnboardingResponses(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user responses: %w", err)
+	}
+
+	var result []*user.UserOnboardingResponseData
+	for _, response := range responses {
+		// Parse the JSON response value
+		var responseValue interface{}
+		if response.ResponseValue != nil {
+			err := json.Unmarshal(response.ResponseValue, &responseValue)
+			if err != nil {
+				responseValue = string(response.ResponseValue) // Fallback to raw string
+			}
+		}
+
+		result = append(result, &user.UserOnboardingResponseData{
+			ID:            response.ID,
+			UserID:        response.UserID,
+			QuestionID:    response.QuestionID,
+			ResponseValue: responseValue,
+			Skipped:       response.Skipped,
+		})
+	}
+
+	return result, nil
+}
+
+// SubmitResponse submits a single response to an onboarding question
+func (s *onboardingService) SubmitResponse(ctx context.Context, userID, questionID ulid.ULID, responseValue interface{}, skipped bool) error {
+	// Verify question exists
+	question, err := s.userRepo.GetOnboardingQuestionByID(ctx, questionID)
+	if err != nil {
+		return fmt.Errorf("question not found: %w", err)
+	}
+
+	// Verify user exists
+	_, err = s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("user not found: %w", err)
+	}
+
+	// Validate response if not skipped
+	if !skipped {
+		err = s.validateResponse(question, responseValue)
+		if err != nil {
+			return fmt.Errorf("invalid response: %w", err)
+		}
+	}
+
+	// Create or update response
+	response := user.NewUserOnboardingResponse(userID, questionID, responseValue, skipped)
+	
+	err = s.userRepo.UpsertUserOnboardingResponse(ctx, response)
+	if err != nil {
+		return fmt.Errorf("failed to save response: %w", err)
+	}
+
+	// Audit log
+	actionType := "onboarding.response_submitted"
+	if skipped {
+		actionType = "onboarding.question_skipped"
+	}
+	
+	metadata := fmt.Sprintf(`{"question_id": "%s", "skipped": %t}`, questionID.String(), skipped)
+	s.auditRepo.Create(ctx, auth.NewAuditLog(&userID, nil, actionType, "onboarding", questionID.String(), metadata, "", ""))
+
+	return nil
+}
+
+// SubmitMultipleResponses submits multiple responses at once
+func (s *onboardingService) SubmitMultipleResponses(ctx context.Context, userID ulid.ULID, responses []*user.SubmitOnboardingResponseRequest) error {
 	// Verify user exists
 	_, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
 		return fmt.Errorf("user not found: %w", err)
 	}
 
-	// For now, just create audit log since we don't store individual step progress
-	s.auditRepo.Create(ctx, auth.NewAuditLog(&userID, nil, "user.onboarding_step_completed", "onboarding", userID.String(),
-		fmt.Sprintf(`{"step": "%s"}`, string(step)), "", ""))
-
-	// Check if this is the final step
-	if step == user.OnboardingStepComplete {
-		return s.CompleteOnboarding(ctx, userID)
+	// Process each response
+	for _, resp := range responses {
+		err = s.SubmitResponse(ctx, userID, resp.QuestionID, resp.ResponseValue, resp.Skipped)
+		if err != nil {
+			return fmt.Errorf("failed to submit response for question %s: %w", resp.QuestionID.String(), err)
+		}
 	}
 
 	return nil
 }
 
-// CompleteOnboarding marks the entire onboarding process as completed
-func (s *onboardingService) CompleteOnboarding(ctx context.Context, userID ulid.ULID) error {
-	existingUser, err := s.userRepo.GetByID(ctx, userID)
+// GetOnboardingStatus retrieves the user's current onboarding progress
+func (s *onboardingService) GetOnboardingStatus(ctx context.Context, userID ulid.ULID) (*user.OnboardingProgressStatus, error) {
+	// Get total questions
+	totalQuestions, err := s.userRepo.GetActiveOnboardingQuestionCount(ctx)
 	if err != nil {
-		return fmt.Errorf("user not found: %w", err)
+		return nil, fmt.Errorf("failed to get question count: %w", err)
 	}
 
-	if existingUser.OnboardingCompleted {
-		return nil // Already completed
+	// Get user responses
+	responses, err := s.userRepo.GetUserOnboardingResponses(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user responses: %w", err)
 	}
 
-	existingUser.OnboardingCompleted = true
-	existingUser.UpdatedAt = time.Now()
+	// Calculate status
+	completedQuestions := 0
+	skippedQuestions := 0
+	currentStep := 1
 
-	err = s.userRepo.Update(ctx, existingUser)
+	for _, response := range responses {
+		if response.Skipped {
+			skippedQuestions++
+		} else {
+			completedQuestions++
+		}
+	}
+
+	answeredQuestions := len(responses)
+	remainingQuestions := totalQuestions - answeredQuestions
+	isComplete := answeredQuestions >= totalQuestions
+
+	// Calculate current step (next unanswered question step)
+	if !isComplete {
+		nextQuestion, err := s.userRepo.GetNextUnansweredQuestion(ctx, userID)
+		if err == nil && nextQuestion != nil {
+			currentStep = nextQuestion.Step
+		}
+	}
+
+	return &user.OnboardingProgressStatus{
+		TotalQuestions:      totalQuestions,
+		CompletedQuestions:  completedQuestions,
+		SkippedQuestions:    skippedQuestions,
+		RemainingQuestions:  remainingQuestions,
+		IsComplete:          isComplete,
+		CurrentStep:         currentStep,
+	}, nil
+}
+
+// CompleteOnboarding marks the user's onboarding as completed
+func (s *onboardingService) CompleteOnboarding(ctx context.Context, userID ulid.ULID) error {
+	err := s.userRepo.CompleteOnboarding(ctx, userID)
 	if err != nil {
 		return fmt.Errorf("failed to complete onboarding: %w", err)
 	}
@@ -146,102 +221,80 @@ func (s *onboardingService) CompleteOnboarding(ctx context.Context, userID ulid.
 	return nil
 }
 
-// IsOnboardingCompleted checks if onboarding is completed
-func (s *onboardingService) IsOnboardingCompleted(ctx context.Context, userID ulid.ULID) (bool, error) {
-	existingUser, err := s.userRepo.GetByID(ctx, userID)
-	if err != nil {
-		return false, fmt.Errorf("user not found: %w", err)
+// validateResponse validates a response against the question requirements
+func (s *onboardingService) validateResponse(question *user.OnboardingQuestion, responseValue interface{}) error {
+	if question.IsRequired && responseValue == nil {
+		return fmt.Errorf("response is required for this question")
 	}
 
-	return existingUser.OnboardingCompleted, nil
-}
-
-// RestartOnboarding restarts the onboarding process
-func (s *onboardingService) RestartOnboarding(ctx context.Context, userID ulid.ULID) error {
-	existingUser, err := s.userRepo.GetByID(ctx, userID)
-	if err != nil {
-		return fmt.Errorf("user not found: %w", err)
+	if responseValue == nil {
+		return nil // Optional question with no response is valid
 	}
 
-	existingUser.OnboardingCompleted = false
-	existingUser.UpdatedAt = time.Now()
+	switch question.QuestionType {
+	case "single_choice", "multiple_choice":
+		// Validate against available options
+		options, err := question.GetOptionsAsStrings()
+		if err != nil {
+			return fmt.Errorf("failed to parse question options: %w", err)
+		}
 
-	err = s.userRepo.Update(ctx, existingUser)
-	if err != nil {
-		return fmt.Errorf("failed to restart onboarding: %w", err)
+		if len(options) == 0 {
+			return fmt.Errorf("question has no valid options")
+		}
+
+		if question.QuestionType == "single_choice" {
+			// Single choice should be a string
+			responseStr, ok := responseValue.(string)
+			if !ok {
+				return fmt.Errorf("single choice response must be a string")
+			}
+			
+			// Check if response is in options
+			for _, option := range options {
+				if option == responseStr {
+					return nil
+				}
+			}
+			return fmt.Errorf("response is not a valid option")
+		} else {
+			// Multiple choice should be an array
+			responseArray, ok := responseValue.([]interface{})
+			if !ok {
+				return fmt.Errorf("multiple choice response must be an array")
+			}
+			
+			// Check if all responses are valid options
+			for _, resp := range responseArray {
+				respStr, ok := resp.(string)
+				if !ok {
+					return fmt.Errorf("all multiple choice responses must be strings")
+				}
+				
+				found := false
+				for _, option := range options {
+					if option == respStr {
+						found = true
+						break
+					}
+				}
+				if !found {
+					return fmt.Errorf("response '%s' is not a valid option", respStr)
+				}
+			}
+		}
+
+	case "text":
+		// Text response should be a string
+		_, ok := responseValue.(string)
+		if !ok {
+			return fmt.Errorf("text response must be a string")
+		}
+
+	case "skip_optional":
+		// Skip optional questions can have any response or be skipped
+		break
 	}
-
-	// Audit log
-	s.auditRepo.Create(ctx, auth.NewAuditLog(&userID, nil, "user.onboarding_restarted", "onboarding", userID.String(), "", "", ""))
-
-	return nil
-}
-
-// GetOnboardingFlow returns the onboarding flow for a specific user type
-func (s *onboardingService) GetOnboardingFlow(ctx context.Context, userType user.UserType) (*user.OnboardingFlow, error) {
-	// Define flows based on user type
-	var steps []user.OnboardingStep
-	var optional []user.OnboardingStep
-
-	switch userType {
-	case user.UserTypeDeveloper:
-		steps = []user.OnboardingStep{
-			user.OnboardingStepProfile,
-			user.OnboardingStepPreferences,
-			user.OnboardingStepProject,
-			user.OnboardingStepIntegration,
-			user.OnboardingStepComplete,
-		}
-		optional = []user.OnboardingStep{
-			user.OnboardingStepOrganization,
-		}
-	case user.UserTypeManager:
-		steps = []user.OnboardingStep{
-			user.OnboardingStepProfile,
-			user.OnboardingStepOrganization,
-			user.OnboardingStepProject,
-			user.OnboardingStepComplete,
-		}
-		optional = []user.OnboardingStep{
-			user.OnboardingStepPreferences,
-			user.OnboardingStepIntegration,
-		}
-	case user.UserTypeAdmin:
-		steps = []user.OnboardingStep{
-			user.OnboardingStepProfile,
-			user.OnboardingStepOrganization,
-			user.OnboardingStepProject,
-			user.OnboardingStepIntegration,
-			user.OnboardingStepComplete,
-		}
-		optional = []user.OnboardingStep{
-			user.OnboardingStepPreferences,
-		}
-	default:
-		// Default flow for UserTypeAnalyst and others
-		steps = []user.OnboardingStep{
-			user.OnboardingStepProfile,
-			user.OnboardingStepPreferences,
-			user.OnboardingStepOrganization,
-			user.OnboardingStepProject,
-			user.OnboardingStepComplete,
-		}
-		optional = []user.OnboardingStep{
-			user.OnboardingStepIntegration,
-		}
-	}
-
-	return &user.OnboardingFlow{
-		UserType: userType,
-		Steps:    steps,
-		Optional: optional,
-	}, nil
-}
-
-// UpdateOnboardingPreferences updates user's onboarding preferences
-func (s *onboardingService) UpdateOnboardingPreferences(ctx context.Context, userID ulid.ULID, req *user.UpdateOnboardingPreferencesRequest) error {
-	// For now, just create audit log since onboarding preferences aren't fully implemented
-	s.auditRepo.Create(ctx, auth.NewAuditLog(&userID, nil, "user.onboarding_preferences_updated", "onboarding", userID.String(), "", "", ""))
 
 	return nil
 }

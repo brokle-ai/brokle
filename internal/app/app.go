@@ -62,6 +62,7 @@ func (a *App) Start() error {
 		providers.Services.Auth.BlacklistedTokens, // Blacklisted tokens service
 		providers.Services.User.User,               // User service from modular DI
 		providers.Services.User.Profile,            // Profile service from modular DI
+		providers.Services.User.Onboarding,         // Onboarding service from modular DI
 		providers.Services.OrganizationService, // Direct organization service
 		providers.Services.MemberService,       // Direct member service
 		providers.Services.ProjectService,      // Direct project service
@@ -113,6 +114,7 @@ func (a *App) Run() error {
 		providers.Services.Auth.BlacklistedTokens, // Blacklisted tokens service
 		providers.Services.User.User,               // User service from modular DI
 		providers.Services.User.Profile,            // Profile service from modular DI
+		providers.Services.User.Onboarding,         // Onboarding service from modular DI
 		providers.Services.OrganizationService, // Direct organization service
 		providers.Services.MemberService,       // Direct member service
 		providers.Services.ProjectService,      // Direct project service

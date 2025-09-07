@@ -89,8 +89,23 @@ func (h *SettingsHandler) GetAllSettings(c *gin.Context) {
 		return
 	}
 
-	// TODO: Get user ID from authentication context
-	// userID := auth.GetUserIDFromContext(c)
+	// Get user ID from context for access validation
+	userIDValue, exists := c.Get("user_id")
+	if !exists {
+		h.logger.Error("User ID not found in context")
+		response.ErrorWithStatus(c, http.StatusUnauthorized, "unauthorized", "Authentication required", "")
+		return
+	}
+
+	_, ok := userIDValue.(ulid.ULID)
+	if !ok {
+		h.logger.Error("Invalid user ID type in context")
+		response.ErrorWithStatus(c, http.StatusInternalServerError, "internal_error", "Internal error", "")
+		return
+	}
+
+	// TODO: Add access control validation here
+	// For now, just proceed if user is authenticated
 
 	settings, err := h.settingsService.GetAllSettings(c.Request.Context(), orgID)
 	if err != nil {
@@ -189,8 +204,20 @@ func (h *SettingsHandler) CreateSetting(c *gin.Context) {
 		return
 	}
 
-	// TODO: Get user ID from authentication context
-	userID := ulid.New() // Placeholder
+	// Get user ID from context
+	userIDValue, exists := c.Get("user_id")
+	if !exists {
+		h.logger.Error("User ID not found in context")
+		response.ErrorWithStatus(c, http.StatusUnauthorized, "unauthorized", "Authentication required", "")
+		return
+	}
+
+	userID, ok := userIDValue.(ulid.ULID)
+	if !ok {
+		h.logger.Error("Invalid user ID type in context")
+		response.ErrorWithStatus(c, http.StatusInternalServerError, "internal_error", "Internal error", "")
+		return
+	}
 
 	domainReq := &organization.CreateOrganizationSettingRequest{
 		Key:   req.Key,
@@ -258,8 +285,20 @@ func (h *SettingsHandler) UpdateSetting(c *gin.Context) {
 		return
 	}
 
-	// TODO: Get user ID from authentication context
-	userID := ulid.New() // Placeholder
+	// Get user ID from context
+	userIDValue, exists := c.Get("user_id")
+	if !exists {
+		h.logger.Error("User ID not found in context")
+		response.ErrorWithStatus(c, http.StatusUnauthorized, "unauthorized", "Authentication required", "")
+		return
+	}
+
+	userID, ok := userIDValue.(ulid.ULID)
+	if !ok {
+		h.logger.Error("Invalid user ID type in context")
+		response.ErrorWithStatus(c, http.StatusInternalServerError, "internal_error", "Internal error", "")
+		return
+	}
 
 	domainReq := &organization.UpdateOrganizationSettingRequest{
 		Value: req.Value,
@@ -310,8 +349,20 @@ func (h *SettingsHandler) DeleteSetting(c *gin.Context) {
 		return
 	}
 
-	// TODO: Get user ID from authentication context
-	userID := ulid.New() // Placeholder
+	// Get user ID from context
+	userIDValue, exists := c.Get("user_id")
+	if !exists {
+		h.logger.Error("User ID not found in context")
+		response.ErrorWithStatus(c, http.StatusUnauthorized, "unauthorized", "Authentication required", "")
+		return
+	}
+
+	userID, ok := userIDValue.(ulid.ULID)
+	if !ok {
+		h.logger.Error("Invalid user ID type in context")
+		response.ErrorWithStatus(c, http.StatusInternalServerError, "internal_error", "Internal error", "")
+		return
+	}
 
 	err = h.settingsService.DeleteSetting(c.Request.Context(), orgID, key, userID)
 	if err != nil {
@@ -335,48 +386,11 @@ func (h *SettingsHandler) DeleteSetting(c *gin.Context) {
 // @Produce json
 // @Param orgId path string true "Organization ID" example("org_1234567890")
 // @Param request body BulkSettingsRequest true "Settings to create"
-// @Success 201 {object} response.SuccessResponse "Settings created successfully"
-// @Failure 400 {object} response.ErrorResponse "Bad request - invalid input or validation errors"
-// @Failure 401 {object} response.ErrorResponse "Unauthorized"
-// @Failure 403 {object} response.ErrorResponse "Forbidden - insufficient permissions"
-// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Success 501 {object} response.ErrorResponse "Not implemented"
 // @Security BearerAuth
 // @Router /api/v1/organizations/{orgId}/settings/bulk [post]
 func (h *SettingsHandler) BulkCreateSettings(c *gin.Context) {
-	orgIDStr := c.Param("orgId")
-	orgID, err := ulid.Parse(orgIDStr)
-	if err != nil {
-		h.logger.WithError(err).Error("Invalid organization ID")
-		response.ErrorWithStatus(c, http.StatusBadRequest, "invalid_id", "Invalid organization ID", "")
-		return
-	}
-
-	var req BulkSettingsRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.WithError(err).Error("Invalid request body")
-		response.ErrorWithStatus(c, http.StatusBadRequest, "validation_error", "Invalid request body", err.Error())
-		return
-	}
-
-	if len(req.Settings) == 0 {
-		response.ErrorWithStatus(c, http.StatusBadRequest, "validation_error", "At least one setting is required", "")
-		return
-	}
-
-	// TODO: Get user ID from authentication context
-	userID := ulid.New() // Placeholder
-
-	err = h.settingsService.CreateMultipleSettings(c.Request.Context(), orgID, userID, req.Settings)
-	if err != nil {
-		h.logger.WithError(err).Error("Failed to create multiple organization settings")
-		response.ErrorWithStatus(c, http.StatusInternalServerError, "internal_error", "Failed to create settings", err.Error())
-		return
-	}
-
-	response.SuccessWithStatus(c, http.StatusCreated, gin.H{
-		"message": "Settings created successfully",
-		"count":   len(req.Settings),
-	})
+	response.ErrorWithStatus(c, http.StatusNotImplemented, "not_implemented", "Bulk operations are not implemented", "")
 }
 
 // ExportSettings handles GET /organizations/:orgId/settings/export
@@ -386,36 +400,11 @@ func (h *SettingsHandler) BulkCreateSettings(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param orgId path string true "Organization ID" example("org_1234567890")
-// @Success 200 {object} response.SuccessResponse{data=SettingsListResponse} "Settings exported successfully"
-// @Failure 400 {object} response.ErrorResponse "Bad request - invalid organization ID"
-// @Failure 401 {object} response.ErrorResponse "Unauthorized"
-// @Failure 403 {object} response.ErrorResponse "Forbidden - insufficient permissions"
-// @Failure 404 {object} response.ErrorResponse "Organization not found"
-// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Success 501 {object} response.ErrorResponse "Not implemented"
 // @Security BearerAuth
 // @Router /api/v1/organizations/{orgId}/settings/export [get]
 func (h *SettingsHandler) ExportSettings(c *gin.Context) {
-	orgIDStr := c.Param("orgId")
-	orgID, err := ulid.Parse(orgIDStr)
-	if err != nil {
-		h.logger.WithError(err).Error("Invalid organization ID")
-		response.ErrorWithStatus(c, http.StatusBadRequest, "invalid_id", "Invalid organization ID", "")
-		return
-	}
-
-	// TODO: Get user ID from authentication context
-	userID := ulid.New() // Placeholder
-
-	settings, err := h.settingsService.ExportSettings(c.Request.Context(), orgID, userID)
-	if err != nil {
-		h.logger.WithError(err).Error("Failed to export organization settings")
-		response.ErrorWithStatus(c, http.StatusInternalServerError, "internal_error", "Failed to export settings", err.Error())
-		return
-	}
-
-	response.Success(c, SettingsListResponse{
-		Settings: settings,
-	})
+	response.ErrorWithStatus(c, http.StatusNotImplemented, "not_implemented", "Export/import operations are not implemented", "")
 }
 
 // ImportSettings handles POST /organizations/:orgId/settings/import
@@ -426,48 +415,11 @@ func (h *SettingsHandler) ExportSettings(c *gin.Context) {
 // @Produce json
 // @Param orgId path string true "Organization ID" example("org_1234567890")
 // @Param request body BulkSettingsRequest true "Settings to import"
-// @Success 200 {object} response.SuccessResponse "Settings imported successfully"
-// @Failure 400 {object} response.ErrorResponse "Bad request - invalid input or validation errors"
-// @Failure 401 {object} response.ErrorResponse "Unauthorized"
-// @Failure 403 {object} response.ErrorResponse "Forbidden - insufficient permissions"
-// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Success 501 {object} response.ErrorResponse "Not implemented"
 // @Security BearerAuth
 // @Router /api/v1/organizations/{orgId}/settings/import [post]
 func (h *SettingsHandler) ImportSettings(c *gin.Context) {
-	orgIDStr := c.Param("orgId")
-	orgID, err := ulid.Parse(orgIDStr)
-	if err != nil {
-		h.logger.WithError(err).Error("Invalid organization ID")
-		response.ErrorWithStatus(c, http.StatusBadRequest, "invalid_id", "Invalid organization ID", "")
-		return
-	}
-
-	var req BulkSettingsRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.WithError(err).Error("Invalid request body")
-		response.ErrorWithStatus(c, http.StatusBadRequest, "validation_error", "Invalid request body", err.Error())
-		return
-	}
-
-	if len(req.Settings) == 0 {
-		response.ErrorWithStatus(c, http.StatusBadRequest, "validation_error", "At least one setting is required", "")
-		return
-	}
-
-	// TODO: Get user ID from authentication context
-	userID := ulid.New() // Placeholder
-
-	err = h.settingsService.ImportSettings(c.Request.Context(), orgID, userID, req.Settings)
-	if err != nil {
-		h.logger.WithError(err).Error("Failed to import organization settings")
-		response.ErrorWithStatus(c, http.StatusInternalServerError, "internal_error", "Failed to import settings", err.Error())
-		return
-	}
-
-	response.Success(c, gin.H{
-		"message": "Settings imported successfully",
-		"count":   len(req.Settings),
-	})
+	response.ErrorWithStatus(c, http.StatusNotImplemented, "not_implemented", "Export/import operations are not implemented", "")
 }
 
 // ResetToDefaults handles POST /organizations/:orgId/settings/reset
@@ -477,31 +429,9 @@ func (h *SettingsHandler) ImportSettings(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param orgId path string true "Organization ID" example("org_1234567890")
-// @Success 200 {object} response.SuccessResponse "Settings reset successfully"
-// @Failure 400 {object} response.ErrorResponse "Bad request - invalid organization ID"
-// @Failure 401 {object} response.ErrorResponse "Unauthorized"
-// @Failure 403 {object} response.ErrorResponse "Forbidden - insufficient permissions"
-// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Success 501 {object} response.ErrorResponse "Not implemented"
 // @Security BearerAuth
 // @Router /api/v1/organizations/{orgId}/settings/reset [post]
 func (h *SettingsHandler) ResetToDefaults(c *gin.Context) {
-	orgIDStr := c.Param("orgId")
-	orgID, err := ulid.Parse(orgIDStr)
-	if err != nil {
-		h.logger.WithError(err).Error("Invalid organization ID")
-		response.ErrorWithStatus(c, http.StatusBadRequest, "invalid_id", "Invalid organization ID", "")
-		return
-	}
-
-	// TODO: Get user ID from authentication context
-	userID := ulid.New() // Placeholder
-
-	err = h.settingsService.ResetToDefaults(c.Request.Context(), orgID, userID)
-	if err != nil {
-		h.logger.WithError(err).Error("Failed to reset organization settings")
-		response.ErrorWithStatus(c, http.StatusInternalServerError, "internal_error", "Failed to reset settings", err.Error())
-		return
-	}
-
-	response.Success(c, gin.H{"message": "Settings reset to defaults successfully"})
+	response.ErrorWithStatus(c, http.StatusNotImplemented, "not_implemented", "Reset operations are not implemented", "")
 }
