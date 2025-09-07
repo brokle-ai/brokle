@@ -2,10 +2,13 @@ package auth
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
 
+	"brokle/internal/config"
 	"brokle/internal/core/domain/auth"
 	"brokle/internal/core/domain/user"
 	"brokle/pkg/ulid"
@@ -21,6 +24,7 @@ func ptrToString(s *string) string {
 
 // sessionService implements the auth.SessionService interface
 type sessionService struct {
+	authConfig  *config.AuthConfig
 	sessionRepo auth.UserSessionRepository
 	userRepo    user.Repository
 	jwtService  auth.JWTService
@@ -29,12 +33,14 @@ type sessionService struct {
 
 // NewSessionService creates a new session service instance
 func NewSessionService(
+	authConfig *config.AuthConfig,
 	sessionRepo auth.UserSessionRepository,
 	userRepo user.Repository,
 	jwtService auth.JWTService,
 	auditRepo auth.AuditLogRepository,
 ) auth.SessionService {
 	return &sessionService{
+		authConfig:  authConfig,
 		sessionRepo: sessionRepo,
 		userRepo:    userRepo,
 		jwtService:  jwtService,
@@ -57,8 +63,8 @@ func (s *sessionService) CreateSession(ctx context.Context, userID ulid.ULID, re
 	// Get user permissions for token generation (placeholder - would be handled by role service)
 	var permissions []string
 
-	// Generate access and refresh tokens
-	accessToken, err := s.jwtService.GenerateAccessToken(ctx, userID, map[string]interface{}{
+	// Generate access token with JTI for session tracking
+	_, jti, err := s.jwtService.GenerateAccessTokenWithJTI(ctx, userID, map[string]interface{}{
 		"email":          user.Email,
 		"organization_id": user.DefaultOrganizationID,
 		"permissions":     permissions,
@@ -74,18 +80,20 @@ func (s *sessionService) CreateSession(ctx context.Context, userID ulid.ULID, re
 		return nil, fmt.Errorf("failed to generate refresh token: %w", err)
 	}
 
-	// Calculate expiration times
-	config := auth.DefaultTokenConfig()
-	expiresAt := time.Now().Add(config.AccessTokenTTL)
-	refreshExpiresAt := time.Now().Add(config.RefreshTokenTTL)
+	// Calculate expiration times using configurable TTLs
+	expiresAt := time.Now().Add(s.authConfig.AccessTokenTTL)
+	refreshExpiresAt := time.Now().Add(s.authConfig.RefreshTokenTTL)
 	
 	// Extend refresh token if "remember me" is checked
 	if req.Remember {
 		refreshExpiresAt = time.Now().Add(30 * 24 * time.Hour) // 30 days
 	}
 
-	// Create session
-	session := auth.NewUserSession(userID, accessToken, refreshToken, expiresAt, refreshExpiresAt, req.IPAddress, req.UserAgent, nil)
+	// Hash the refresh token for secure storage
+	refreshTokenHash := s.hashToken(refreshToken)
+
+	// Create secure session (NO ACCESS TOKEN STORED)
+	session := auth.NewUserSession(userID, refreshTokenHash, jti, expiresAt, refreshExpiresAt, req.IPAddress, req.UserAgent, nil)
 
 	err = s.sessionRepo.Create(ctx, session)
 	if err != nil {
@@ -104,9 +112,16 @@ func (s *sessionService) GetSession(ctx context.Context, sessionID ulid.ULID) (*
 	return s.sessionRepo.GetByID(ctx, sessionID)
 }
 
-// GetSessionByToken retrieves a session by access token
+// GetSessionByToken retrieves a session by JTI (token ID) from JWT token
 func (s *sessionService) GetSessionByToken(ctx context.Context, token string) (*auth.UserSession, error) {
-	return s.sessionRepo.GetByToken(ctx, token)
+	// Parse JWT to extract JTI
+	claims, err := s.jwtService.ParseTokenClaims(ctx, token)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse token: %w", err)
+	}
+
+	// Get session by JTI (JWTID field)
+	return s.sessionRepo.GetByJTI(ctx, claims.JWTID)
 }
 
 // ValidateSession validates a session token and returns the session if valid
@@ -117,8 +132,8 @@ func (s *sessionService) ValidateSession(ctx context.Context, token string) (*au
 		return nil, fmt.Errorf("invalid token: %w", err)
 	}
 
-	// Get session from database
-	session, err := s.sessionRepo.GetByToken(ctx, token)
+	// Get session by JTI from token claims
+	session, err := s.sessionRepo.GetByJTI(ctx, claims.JWTID)
 	if err != nil {
 		return nil, fmt.Errorf("session not found: %w", err)
 	}
@@ -158,8 +173,9 @@ func (s *sessionService) RefreshSession(ctx context.Context, refreshToken string
 		return nil, fmt.Errorf("invalid refresh token: %w", err)
 	}
 
-	// Get session by refresh token
-	session, err := s.sessionRepo.GetByRefreshToken(ctx, refreshToken)
+	// Get session by refresh token hash
+	refreshTokenHash := s.hashToken(refreshToken)
+	session, err := s.sessionRepo.GetByRefreshTokenHash(ctx, refreshTokenHash)
 	if err != nil {
 		return nil, fmt.Errorf("session not found: %w", err)
 	}
@@ -190,8 +206,8 @@ func (s *sessionService) RefreshSession(ctx context.Context, refreshToken string
 	// Get user permissions
 	var permissions []string
 
-	// Generate new access token
-	accessToken, err := s.jwtService.GenerateAccessToken(ctx, user.ID, map[string]interface{}{
+	// Generate new access token with JTI
+	_, jti, err := s.jwtService.GenerateAccessTokenWithJTI(ctx, user.ID, map[string]interface{}{
 		"email":          user.Email,
 		"organization_id": user.DefaultOrganizationID,
 		"permissions":     permissions,
@@ -201,11 +217,11 @@ func (s *sessionService) RefreshSession(ctx context.Context, refreshToken string
 		return nil, fmt.Errorf("failed to generate access token: %w", err)
 	}
 
-	// Update session with new access token
-	config := auth.DefaultTokenConfig()
-	session.Token = accessToken
-	session.ExpiresAt = time.Now().Add(config.AccessTokenTTL)
+	// Update session with new JTI and expiry (NO ACCESS TOKEN STORED)
+	session.CurrentJTI = jti
+	session.ExpiresAt = time.Now().Add(s.authConfig.AccessTokenTTL)
 	session.UpdatedAt = time.Now()
+	session.MarkAsUsed()
 
 	err = s.sessionRepo.Update(ctx, session)
 	if err != nil {
@@ -270,4 +286,10 @@ func (s *sessionService) GetActiveSessions(ctx context.Context, userID ulid.ULID
 // MarkSessionAsUsed updates the session's last used timestamp
 func (s *sessionService) MarkSessionAsUsed(ctx context.Context, sessionID ulid.ULID) error {
 	return s.sessionRepo.MarkAsUsed(ctx, sessionID)
+}
+
+// hashToken creates a SHA-256 hash of a token for secure storage
+func (s *sessionService) hashToken(token string) string {
+	hash := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(hash[:])
 }

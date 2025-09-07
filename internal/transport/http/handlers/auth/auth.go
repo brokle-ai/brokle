@@ -536,7 +536,7 @@ func (h *Handler) ListSessions(c *gin.Context) {
 
 // GetSessionRequest represents request for getting session by ID
 type GetSessionRequest struct {
-	SessionID ulid.ULID `uri:"session_id" binding:"required" example:"01FXYZ123456789ABCDEFGHIJK0" description:"Session ID"`
+	SessionID ulid.ULID `uri:"session_id" binding:"required" example:"01FXYZ123456789ABCDEFGHIJK0" description:"Session ID" swaggertype:"string"`
 }
 
 // GetSession gets a specific user session by ID
@@ -612,7 +612,7 @@ func (h *Handler) GetSession(c *gin.Context) {
 
 // RevokeSessionRequest represents request for revoking a session
 type RevokeSessionRequest struct {
-	SessionID ulid.ULID `uri:"session_id" binding:"required" example:"01FXYZ123456789ABCDEFGHIJK0" description:"Session ID to revoke"`
+	SessionID ulid.ULID `uri:"session_id" binding:"required" example:"01FXYZ123456789ABCDEFGHIJK0" description:"Session ID to revoke" swaggertype:"string"`
 }
 
 // RevokeSession revokes a specific user session

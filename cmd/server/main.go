@@ -41,6 +41,9 @@ import (
 // @name X-API-Key
 // @description API key for authentication. Format: X-API-Key: bk_live_...
 //
+// Custom type definitions for Swagger
+// @x-extension-openapi {"definitions": {"ULID": {"type": "string", "description": "ULID (Universally Unique Lexicographically Sortable Identifier)", "example": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "pattern": "^[0-9A-Z]{26}$"}}}
+//
 // @securityDefinitions.apikey BearerAuth
 // @in header
 // @name Authorization

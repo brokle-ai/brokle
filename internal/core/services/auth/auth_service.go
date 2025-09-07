@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
+	"brokle/internal/config"
 	"brokle/internal/core/domain/auth"
 	"brokle/internal/core/domain/user"
 	"brokle/pkg/ulid"
@@ -17,30 +19,36 @@ import (
 
 // authService implements the auth.AuthService interface
 type authService struct {
-	userRepo         user.Repository
-	sessionRepo      auth.UserSessionRepository
-	auditRepo        auth.AuditLogRepository
-	jwtService       auth.JWTService
-	roleService      auth.RoleService
+	authConfig        *config.AuthConfig
+	userRepo          user.Repository
+	sessionRepo       auth.UserSessionRepository
+	auditRepo         auth.AuditLogRepository
+	jwtService        auth.JWTService
+	roleService       auth.RoleService
 	passwordResetRepo auth.PasswordResetTokenRepository
+	blacklistedTokens auth.BlacklistedTokenService
 }
 
 // NewAuthService creates a new auth service instance
 func NewAuthService(
+	authConfig *config.AuthConfig,
 	userRepo user.Repository,
 	sessionRepo auth.UserSessionRepository,
 	auditRepo auth.AuditLogRepository,
 	jwtService auth.JWTService,
 	roleService auth.RoleService,
 	passwordResetRepo auth.PasswordResetTokenRepository,
+	blacklistedTokens auth.BlacklistedTokenService,
 ) auth.AuthService {
 	return &authService{
-		userRepo:         userRepo,
-		sessionRepo:      sessionRepo,
-		auditRepo:        auditRepo,
-		jwtService:       jwtService,
-		roleService:      roleService,
+		authConfig:        authConfig,
+		userRepo:          userRepo,
+		sessionRepo:       sessionRepo,
+		auditRepo:         auditRepo,
+		jwtService:        jwtService,
+		roleService:       roleService,
 		passwordResetRepo: passwordResetRepo,
+		blacklistedTokens: blacklistedTokens,
 	}
 }
 
@@ -76,8 +84,8 @@ func (s *authService) Login(ctx context.Context, req *auth.LoginRequest) (*auth.
 		permissions, _ = s.roleService.GetUserPermissions(ctx, user.ID, *user.DefaultOrganizationID)
 	}
 
-	// Generate access token
-	accessToken, err := s.jwtService.GenerateAccessToken(ctx, user.ID, map[string]interface{}{
+	// Generate access token with JTI for session tracking
+	accessToken, jti, err := s.jwtService.GenerateAccessTokenWithJTI(ctx, user.ID, map[string]interface{}{
 		"email":          user.Email,
 		"organization_id": user.DefaultOrganizationID,
 		"permissions":     permissions,
@@ -91,14 +99,19 @@ func (s *authService) Login(ctx context.Context, req *auth.LoginRequest) (*auth.
 		return nil, fmt.Errorf("failed to generate refresh token: %w", err)
 	}
 
-	// Calculate token expiration - use default 24h for access, 7d for refresh
-	accessTokenTTL := 24 * time.Hour
-	refreshTokenTTL := 7 * 24 * time.Hour
-	expiresAt := time.Now().Add(accessTokenTTL)
-	refreshExpiresAt := time.Now().Add(refreshTokenTTL)
+	// Use configurable token TTLs from AuthConfig
+	expiresAt := time.Now().Add(s.authConfig.AccessTokenTTL)
+	refreshExpiresAt := time.Now().Add(s.authConfig.RefreshTokenTTL)
 
-	// Create session
-	session := auth.NewUserSession(user.ID, accessToken, refreshToken, expiresAt, refreshExpiresAt, nil, nil, nil)
+	// Hash the refresh token for secure storage
+	refreshTokenHash := s.hashToken(refreshToken)
+
+	// Extract IP address and user agent from request context (if available)
+	var ipAddress, userAgent *string
+	// TODO: Extract from request context when available
+	
+	// Create secure session (NO ACCESS TOKEN STORED)
+	session := auth.NewUserSession(user.ID, refreshTokenHash, jti, expiresAt, refreshExpiresAt, ipAddress, userAgent, req.DeviceInfo)
 	err = s.sessionRepo.Create(ctx, session)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create session: %w", err)
@@ -119,7 +132,7 @@ func (s *authService) Login(ctx context.Context, req *auth.LoginRequest) (*auth.
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 		TokenType:    "Bearer",
-		ExpiresIn:    int64(accessTokenTTL.Seconds()),
+		ExpiresIn:    int64(s.authConfig.AccessTokenTTL.Seconds()),
 	}, nil
 }
 
@@ -156,8 +169,8 @@ func (s *authService) Register(ctx context.Context, req *auth.RegisterRequest) (
 		permissions, _ = s.roleService.GetUserPermissions(ctx, user.ID, *user.DefaultOrganizationID)
 	}
 
-	// Generate access token
-	accessToken, err := s.jwtService.GenerateAccessToken(ctx, user.ID, map[string]interface{}{
+	// Generate access token with JTI for session tracking
+	accessToken, jti, err := s.jwtService.GenerateAccessTokenWithJTI(ctx, user.ID, map[string]interface{}{
 		"email":          user.Email,
 		"organization_id": user.DefaultOrganizationID,
 		"permissions":     permissions,
@@ -171,14 +184,15 @@ func (s *authService) Register(ctx context.Context, req *auth.RegisterRequest) (
 		return nil, fmt.Errorf("failed to generate refresh token: %w", err)
 	}
 
-	// Calculate token expiration
-	accessTokenTTL := 24 * time.Hour
-	refreshTokenTTL := 7 * 24 * time.Hour
-	expiresAt := time.Now().Add(accessTokenTTL)
-	refreshExpiresAt := time.Now().Add(refreshTokenTTL)
+	// Use configurable token TTLs from AuthConfig
+	expiresAt := time.Now().Add(s.authConfig.AccessTokenTTL)
+	refreshExpiresAt := time.Now().Add(s.authConfig.RefreshTokenTTL)
 
-	// Create session for auto-login
-	session := auth.NewUserSession(user.ID, accessToken, refreshToken, expiresAt, refreshExpiresAt, nil, nil, nil)
+	// Hash the refresh token for secure storage
+	refreshTokenHash := s.hashToken(refreshToken)
+
+	// Create secure session (NO ACCESS TOKEN STORED)
+	session := auth.NewUserSession(user.ID, refreshTokenHash, jti, expiresAt, refreshExpiresAt, nil, nil, nil)
 	err = s.sessionRepo.Create(ctx, session)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create session: %w", err)
@@ -200,7 +214,7 @@ func (s *authService) Register(ctx context.Context, req *auth.RegisterRequest) (
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 		TokenType:    "Bearer",
-		ExpiresIn:    int64(accessTokenTTL.Seconds()),
+		ExpiresIn:    int64(s.authConfig.AccessTokenTTL.Seconds()),
 	}, nil
 }
 
@@ -231,8 +245,9 @@ func (s *authService) RefreshToken(ctx context.Context, req *auth.RefreshTokenRe
 		return nil, fmt.Errorf("invalid refresh token: %w", err)
 	}
 
-	// Get session by refresh token
-	session, err := s.sessionRepo.GetByRefreshToken(ctx, req.RefreshToken)
+	// Get session by refresh token hash
+	refreshTokenHash := s.hashToken(req.RefreshToken)
+	session, err := s.sessionRepo.GetByRefreshTokenHash(ctx, refreshTokenHash)
 	if err != nil {
 		return nil, fmt.Errorf("session not found: %w", err)
 	}
@@ -257,8 +272,8 @@ func (s *authService) RefreshToken(ctx context.Context, req *auth.RefreshTokenRe
 		permissions, _ = s.roleService.GetUserPermissions(ctx, user.ID, *user.DefaultOrganizationID)
 	}
 
-	// Generate new access token
-	accessToken, err := s.jwtService.GenerateAccessToken(ctx, user.ID, map[string]interface{}{
+	// Generate new access token with JTI for session tracking
+	accessToken, jti, err := s.jwtService.GenerateAccessTokenWithJTI(ctx, user.ID, map[string]interface{}{
 		"email":          user.Email,
 		"organization_id": user.DefaultOrganizationID,
 		"permissions":     permissions,
@@ -267,22 +282,62 @@ func (s *authService) RefreshToken(ctx context.Context, req *auth.RefreshTokenRe
 		return nil, fmt.Errorf("failed to generate access token: %w", err)
 	}
 
-	// Update session with new access token
-	accessTokenTTL := 24 * time.Hour
-	session.Token = accessToken
-	session.ExpiresAt = time.Now().Add(accessTokenTTL)
+	// Implement token rotation if enabled
+	var newRefreshToken string
+	if s.authConfig.TokenRotationEnabled {
+		// Generate new refresh token
+		newRefreshToken, err = s.jwtService.GenerateRefreshToken(ctx, user.ID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate new refresh token: %w", err)
+		}
+
+		// Blacklist the old refresh token to prevent reuse
+		oldRefreshClaims, err := s.jwtService.ValidateRefreshToken(ctx, req.RefreshToken)
+		if err == nil && oldRefreshClaims.JWTID != "" {
+			// Add old refresh token to blacklist
+			err = s.blacklistedTokens.BlacklistToken(
+				ctx,
+				oldRefreshClaims.JWTID,
+				user.ID,
+				time.Now().Add(s.authConfig.RefreshTokenTTL), // Keep in blacklist until natural expiry
+				"token_rotation",
+			)
+			if err != nil {
+				// Log error but don't fail the rotation
+				fmt.Printf("Warning: Failed to blacklist old refresh token: %v\n", err)
+			}
+		}
+
+		// Update session with new refresh token hash
+		session.RefreshTokenHash = s.hashToken(newRefreshToken)
+	} else {
+		newRefreshToken = req.RefreshToken // Keep same refresh token
+	}
+
+	// Update session with new JTI and expiry (NO ACCESS TOKEN STORED)
+	session.CurrentJTI = jti
+	session.ExpiresAt = time.Now().Add(s.authConfig.AccessTokenTTL)
 	session.UpdatedAt = time.Now()
+	session.MarkAsUsed() // Update last used timestamp
 
 	err = s.sessionRepo.Update(ctx, session)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update session: %w", err)
 	}
 
+	// Log token refresh (with rotation info)
+	rotationInfo := ""
+	if s.authConfig.TokenRotationEnabled {
+		rotationInfo = "with_rotation"
+	}
+	auditLog := auth.NewAuditLog(&user.ID, user.DefaultOrganizationID, "auth.token.refresh", "session", session.ID.String(), fmt.Sprintf(`{"jti": "%s", "rotation": "%s"}`, jti, rotationInfo), "", "")
+	s.auditRepo.Create(ctx, auditLog)
+
 	return &auth.LoginResponse{
 		AccessToken:  accessToken,
-		RefreshToken: req.RefreshToken, // Keep same refresh token
+		RefreshToken: newRefreshToken,
 		TokenType:    "Bearer",
-		ExpiresIn:    int64(accessTokenTTL.Seconds()),
+		ExpiresIn:    int64(s.authConfig.AccessTokenTTL.Seconds()),
 	}, nil
 }
 
@@ -536,4 +591,52 @@ func (s *authService) GetAuthContext(ctx context.Context, token string) (*auth.A
 // ValidateAuthToken validates token and returns auth context
 func (s *authService) ValidateAuthToken(ctx context.Context, token string) (*auth.AuthContext, error) {
 	return s.GetAuthContext(ctx, token)
+}
+
+// RevokeAccessToken immediately revokes an access token by adding it to blacklist
+func (s *authService) RevokeAccessToken(ctx context.Context, jti string, userID ulid.ULID, reason string) error {
+	// Parse JTI to get token expiration time
+	// We need the expiration time to know when to cleanup the blacklisted token
+	// For now, we'll use a default expiration time based on config
+	expiresAt := time.Now().Add(s.authConfig.AccessTokenTTL)
+	
+	// Add token to blacklist
+	err := s.blacklistedTokens.BlacklistToken(ctx, jti, userID, expiresAt, reason)
+	if err != nil {
+		return fmt.Errorf("failed to revoke access token: %w", err)
+	}
+
+	// Log the revocation
+	auditLog := auth.NewAuditLog(&userID, nil, "auth.access_token.revoked", "token", jti, 
+		fmt.Sprintf(`{"reason": "%s"}`, reason), "", "")
+	s.auditRepo.Create(ctx, auditLog)
+
+	return nil
+}
+
+// RevokeUserAccessTokens revokes all active access tokens for a user
+func (s *authService) RevokeUserAccessTokens(ctx context.Context, userID ulid.ULID, reason string) error {
+	// Blacklist all user tokens
+	err := s.blacklistedTokens.BlacklistUserTokens(ctx, userID, reason)
+	if err != nil {
+		return fmt.Errorf("failed to revoke user access tokens: %w", err)
+	}
+
+	// Log the bulk revocation
+	auditLog := auth.NewAuditLog(&userID, nil, "auth.user_tokens.revoked", "user", userID.String(), 
+		fmt.Sprintf(`{"reason": "%s", "action": "bulk_revocation"}`, reason), "", "")
+	s.auditRepo.Create(ctx, auditLog)
+
+	return nil
+}
+
+// IsTokenRevoked checks if an access token has been revoked
+func (s *authService) IsTokenRevoked(ctx context.Context, jti string) (bool, error) {
+	return s.blacklistedTokens.IsTokenBlacklisted(ctx, jti)
+}
+
+// hashToken creates a SHA-256 hash of a token for secure storage
+func (s *authService) hashToken(token string) string {
+	hash := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(hash[:])
 }

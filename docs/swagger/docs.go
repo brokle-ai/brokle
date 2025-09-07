@@ -24,6 +24,252 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/api/v1/admin/tokens/blacklisted": {
+            "get": {
+                "description": "Get a paginated list of blacklisted tokens with filtering options",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin",
+                    "Token Management"
+                ],
+                "summary": "List blacklisted tokens",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "example": 50,
+                        "description": "Number of tokens to return (default: 50, max: 200)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "example": 0,
+                        "description": "Number of tokens to skip (default: 0)",
+                        "name": "offset",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "example": "\"01K4FHGHT3XX9WFM293QPZ5G9V\"",
+                        "description": "Filter by user ID",
+                        "name": "user_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "example": "\"security_incident\"",
+                        "description": "Filter by revocation reason",
+                        "name": "reason",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Blacklisted tokens list",
+                        "schema": {
+                            "$ref": "#/definitions/response.SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid query parameters",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Insufficient permissions",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/tokens/revoke": {
+            "post": {
+                "description": "Immediately revoke a specific access token by JTI",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin",
+                    "Token Management"
+                ],
+                "summary": "Revoke specific token",
+                "parameters": [
+                    {
+                        "description": "Token revocation request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/admin.RevokeTokenRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Token revoked successfully",
+                        "schema": {
+                            "$ref": "#/definitions/response.SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Insufficient permissions",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/tokens/stats": {
+            "get": {
+                "description": "Get comprehensive statistics about token usage and revocation",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin",
+                    "Token Management"
+                ],
+                "summary": "Get token statistics",
+                "responses": {
+                    "200": {
+                        "description": "Token statistics",
+                        "schema": {
+                            "$ref": "#/definitions/response.SuccessResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Insufficient permissions",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/admin/users/{userID}/tokens/revoke": {
+            "post": {
+                "description": "Immediately revoke all active access tokens for a specific user",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Admin",
+                    "Token Management"
+                ],
+                "summary": "Revoke all user tokens",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "example": "\"01K4FHGHT3XX9WFM293QPZ5G9V\"",
+                        "description": "User ID",
+                        "name": "userID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "User token revocation request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/admin.RevokeUserTokensRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "User tokens revoked successfully",
+                        "schema": {
+                            "$ref": "#/definitions/response.SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Insufficient permissions",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "User not found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/analytics/costs": {
             "get": {
                 "security": [
@@ -4552,7 +4798,7 @@ const docTemplate = `{
                     "200": {
                         "description": "User profile retrieved successfully",
                         "schema": {
-                            "$ref": "#/definitions/response.SuccessResponse"
+                            "$ref": "#/definitions/user.UserProfileResponse"
                         }
                     },
                     "401": {
@@ -4607,7 +4853,7 @@ const docTemplate = `{
                     "200": {
                         "description": "Profile updated successfully",
                         "schema": {
-                            "$ref": "#/definitions/response.MessageResponse"
+                            "$ref": "#/definitions/user.UserProfileResponse"
                         }
                     },
                     "400": {
@@ -5151,6 +5397,39 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "admin.RevokeTokenRequest": {
+            "description": "Request to revoke a specific access token",
+            "type": "object",
+            "required": [
+                "jti",
+                "reason"
+            ],
+            "properties": {
+                "jti": {
+                    "type": "string",
+                    "example": "01K4FHGHT3XX9WFM293QPZ5G9V"
+                },
+                "reason": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "example": "security_incident"
+                }
+            }
+        },
+        "admin.RevokeUserTokensRequest": {
+            "description": "Request to revoke all access tokens for a user",
+            "type": "object",
+            "required": [
+                "reason"
+            ],
+            "properties": {
+                "reason": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "example": "account_compromise"
+                }
+            }
+        },
         "ai.ChatCompletionRequest": {
             "description": "OpenAI-compatible chat completion request",
             "type": "object",
@@ -5226,10 +5505,92 @@ const docTemplate = `{
             }
         },
         "ai.CompletionRequest": {
-            "type": "object"
+            "description": "OpenAI-compatible text completion request",
+            "type": "object",
+            "properties": {
+                "best_of": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "echo": {
+                    "type": "boolean",
+                    "example": false
+                },
+                "frequency_penalty": {
+                    "type": "number",
+                    "example": 0
+                },
+                "logit_bias": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "number",
+                        "format": "float64"
+                    }
+                },
+                "logprobs": {
+                    "type": "integer",
+                    "example": 0
+                },
+                "max_tokens": {
+                    "type": "integer",
+                    "example": 150
+                },
+                "model": {
+                    "type": "string",
+                    "example": "gpt-3.5-turbo-instruct"
+                },
+                "n": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "presence_penalty": {
+                    "type": "number",
+                    "example": 0
+                },
+                "prompt": {
+                    "type": "string",
+                    "example": "Once upon a time"
+                },
+                "stop": {},
+                "stream": {
+                    "type": "boolean",
+                    "example": false
+                },
+                "temperature": {
+                    "type": "number",
+                    "example": 0.7
+                },
+                "top_p": {
+                    "type": "number",
+                    "example": 1
+                },
+                "user": {
+                    "type": "string",
+                    "example": "user-123"
+                }
+            }
         },
         "ai.EmbeddingRequest": {
-            "type": "object"
+            "description": "OpenAI-compatible embedding request",
+            "type": "object",
+            "properties": {
+                "encoding_format": {
+                    "type": "string",
+                    "example": "float"
+                },
+                "input": {
+                    "type": "string",
+                    "example": "The food was delicious and the waiter..."
+                },
+                "model": {
+                    "type": "string",
+                    "example": "text-embedding-ada-002"
+                },
+                "user": {
+                    "type": "string",
+                    "example": "user-123"
+                }
+            }
         },
         "ai.Model": {
             "description": "Available AI model information",
@@ -7493,6 +7854,109 @@ const docTemplate = `{
                     "example": true
                 }
             }
+        },
+        "user.UserProfileData": {
+            "description": "Extended user profile data including bio, location, and social links",
+            "type": "object",
+            "properties": {
+                "bio": {
+                    "type": "string",
+                    "example": "Software engineer passionate about AI"
+                },
+                "github_url": {
+                    "type": "string",
+                    "example": "https://github.com/johndoe"
+                },
+                "language": {
+                    "type": "string",
+                    "example": "en"
+                },
+                "linkedin_url": {
+                    "type": "string",
+                    "example": "https://linkedin.com/in/johndoe"
+                },
+                "location": {
+                    "type": "string",
+                    "example": "San Francisco, CA"
+                },
+                "theme": {
+                    "type": "string",
+                    "example": "dark"
+                },
+                "timezone": {
+                    "type": "string",
+                    "example": "UTC"
+                },
+                "twitter_url": {
+                    "type": "string",
+                    "example": "https://twitter.com/johndoe"
+                },
+                "website": {
+                    "type": "string",
+                    "example": "https://johndoe.com"
+                }
+            }
+        },
+        "user.UserProfileResponse": {
+            "description": "Complete user profile information including basic info and extended profile",
+            "type": "object",
+            "properties": {
+                "avatar_url": {
+                    "type": "string",
+                    "example": "https://example.com/avatar.jpg"
+                },
+                "completeness": {
+                    "type": "integer",
+                    "example": 85
+                },
+                "created_at": {
+                    "type": "string",
+                    "example": "2025-01-01T00:00:00Z"
+                },
+                "default_organization_id": {
+                    "type": "string",
+                    "example": "01K4FHGHT3XX9WFM293QPZ5G9V"
+                },
+                "email": {
+                    "type": "string",
+                    "example": "user@example.com"
+                },
+                "first_name": {
+                    "type": "string",
+                    "example": "John"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "01K4FHGHT3XX9WFM293QPZ5G9V"
+                },
+                "is_active": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "is_email_verified": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "last_login_at": {
+                    "type": "string",
+                    "example": "2025-01-02T10:30:00Z"
+                },
+                "last_name": {
+                    "type": "string",
+                    "example": "Doe"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "John Doe"
+                },
+                "onboarding_completed": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "profile": {
+                    "$ref": "#/definitions/user.UserProfileData"
+                }
+            }
         }
     },
     "securityDefinitions": {
@@ -7500,7 +7964,8 @@ const docTemplate = `{
             "description": "API key for authentication. Format: X-API-Key: bk_live_...",
             "type": "apiKey",
             "name": "X-API-Key",
-            "in": "header"
+            "in": "header",
+            "x-extension-openapi": "{\"definitions\": {\"ULID\": {\"type\": \"string\", \"description\": \"ULID (Universally Unique Lexicographically Sortable Identifier)\", \"example\": \"01ARZ3NDEKTSV4RRFFQ69G5FAV\", \"pattern\": \"^[0-9A-Z]{26}$\"}}}"
         },
         "BearerAuth": {
             "description": "JWT token for authentication. Format: Authorization: Bearer \u003ctoken\u003e",

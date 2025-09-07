@@ -24,6 +24,7 @@ type Config struct {
 	ClickHouse  ClickHouseConfig `mapstructure:"clickhouse"`
 	Redis       RedisConfig      `mapstructure:"redis"`
 	JWT         JWTConfig        `mapstructure:"jwt"`
+	Auth        AuthConfig       `mapstructure:"auth"`
 	Logging     LoggingConfig    `mapstructure:"logging"`
 	External    ExternalConfig   `mapstructure:"external"`
 	Features    FeatureConfig    `mapstructure:"features"`
@@ -221,6 +222,10 @@ func (c *Config) Validate() error {
 
 	if err := c.JWT.Validate(); err != nil {
 		return fmt.Errorf("jwt config validation failed: %w", err)
+	}
+
+	if err := c.Auth.Validate(); err != nil {
+		return fmt.Errorf("auth config validation failed: %w", err)
 	}
 
 	if err := c.Logging.Validate(); err != nil {
@@ -642,6 +647,22 @@ func Load() (*Config, error) {
 	viper.BindEnv("jwt.public_key", "JWT_PUBLIC_KEY")
 	viper.BindEnv("jwt.secret", "JWT_SECRET")
 
+	// Auth configuration (new flexible JWT configuration)
+	viper.BindEnv("auth.access_token_ttl", "ACCESS_TOKEN_TTL")
+	viper.BindEnv("auth.refresh_token_ttl", "REFRESH_TOKEN_TTL")
+	viper.BindEnv("auth.token_rotation_enabled", "TOKEN_ROTATION_ENABLED")
+	viper.BindEnv("auth.rate_limit_enabled", "RATE_LIMIT_ENABLED")
+	viper.BindEnv("auth.rate_limit_per_ip", "RATE_LIMIT_PER_IP")
+	viper.BindEnv("auth.rate_limit_per_user", "RATE_LIMIT_PER_USER")
+	viper.BindEnv("auth.rate_limit_window", "RATE_LIMIT_WINDOW")
+	viper.BindEnv("auth.jwt_signing_method", "JWT_SIGNING_METHOD")
+	viper.BindEnv("auth.jwt_issuer", "JWT_ISSUER")
+	viper.BindEnv("auth.jwt_secret", "JWT_SECRET")
+	viper.BindEnv("auth.jwt_private_key_path", "JWT_PRIVATE_KEY_PATH")
+	viper.BindEnv("auth.jwt_public_key_path", "JWT_PUBLIC_KEY_PATH")
+	viper.BindEnv("auth.jwt_private_key_base64", "JWT_PRIVATE_KEY_BASE64")
+	viper.BindEnv("auth.jwt_public_key_base64", "JWT_PUBLIC_KEY_BASE64")
+
 	// Database configuration (granular environment variables)
 	viper.BindEnv("database.host", "DB_HOST")
 	viper.BindEnv("database.port", "DB_PORT")
@@ -771,6 +792,22 @@ func setDefaults() {
 	viper.SetDefault("jwt.algorithm", "RS256")
 	viper.SetDefault("jwt.private_key", "") // Must be set in environment
 	viper.SetDefault("jwt.public_key", "")  // Must be set in environment
+
+	// Auth defaults (new flexible JWT and rate limiting configuration)
+	viper.SetDefault("auth.access_token_ttl", "15m")
+	viper.SetDefault("auth.refresh_token_ttl", "168h") // 7 days
+	viper.SetDefault("auth.token_rotation_enabled", true)
+	viper.SetDefault("auth.rate_limit_enabled", false) // Disabled by default for development
+	viper.SetDefault("auth.rate_limit_per_ip", 100)
+	viper.SetDefault("auth.rate_limit_per_user", 1000)
+	viper.SetDefault("auth.rate_limit_window", "1h")
+	viper.SetDefault("auth.jwt_signing_method", "HS256") // HS256 for development ease
+	viper.SetDefault("auth.jwt_issuer", "brokle")
+	viper.SetDefault("auth.jwt_secret", "") // Must be set in environment for HS256
+	viper.SetDefault("auth.jwt_private_key_path", "")
+	viper.SetDefault("auth.jwt_public_key_path", "")
+	viper.SetDefault("auth.jwt_private_key_base64", "")
+	viper.SetDefault("auth.jwt_public_key_base64", "")
 
 	// Logging defaults
 	viper.SetDefault("logging.level", "info")

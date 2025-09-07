@@ -16,25 +16,54 @@ import (
 	swaggerfiles "github.com/swaggo/files"
 
 	"brokle/internal/config"
+	"brokle/internal/core/domain/auth"
 	"brokle/internal/transport/http/handlers"
 	"brokle/internal/transport/http/middleware"
+	"github.com/redis/go-redis/v9"
 )
 
 // Server represents the HTTP server
 type Server struct {
-	config     *config.Config
-	logger     *logrus.Logger
-	server     *http.Server
-	handlers   *handlers.Handlers
-	engine     *gin.Engine
+	config             *config.Config
+	logger             *logrus.Logger
+	server             *http.Server
+	handlers           *handlers.Handlers
+	engine             *gin.Engine
+	authMiddleware     *middleware.AuthMiddleware
+	rateLimitMiddleware *middleware.RateLimitMiddleware
 }
 
 // NewServer creates a new HTTP server instance
-func NewServer(cfg *config.Config, logger *logrus.Logger, handlers *handlers.Handlers) *Server {
+func NewServer(
+	cfg *config.Config, 
+	logger *logrus.Logger, 
+	handlers *handlers.Handlers,
+	jwtService auth.JWTService,
+	blacklistedTokens auth.BlacklistedTokenService,
+	sessionService auth.SessionService,
+	redisClient *redis.Client,
+) *Server {
+	// Create auth middleware with all dependencies
+	authMiddleware := middleware.NewAuthMiddleware(
+		jwtService,
+		blacklistedTokens,
+		sessionService,
+		logger,
+	)
+
+	// Create rate limiting middleware
+	rateLimitMiddleware := middleware.NewRateLimitMiddleware(
+		redisClient,
+		&cfg.Auth,
+		logger,
+	)
+
 	return &Server{
-		config:   cfg,
-		logger:   logger,
-		handlers: handlers,
+		config:              cfg,
+		logger:              logger,
+		handlers:            handlers,
+		authMiddleware:      authMiddleware,
+		rateLimitMiddleware: rateLimitMiddleware,
 	}
 }
 
@@ -126,7 +155,10 @@ func (s *Server) setupRoutes() {
 
 // setupV1Routes configures API v1 routes
 func (s *Server) setupV1Routes(router *gin.RouterGroup) {
-	// Auth routes (no auth required)
+	// Apply IP-based rate limiting to all API routes
+	router.Use(s.rateLimitMiddleware.RateLimitByIP())
+
+	// Auth routes (no auth required but rate limited)
 	auth := router.Group("/auth")
 	{
 		auth.POST("/login", s.handlers.Auth.Login)
@@ -139,7 +171,8 @@ func (s *Server) setupV1Routes(router *gin.RouterGroup) {
 
 	// Protected routes (require JWT auth)
 	protected := router.Group("")
-	protected.Use(middleware.JWTAuth(s.handlers.Auth))
+	protected.Use(s.authMiddleware.RequireAuth())
+	protected.Use(s.rateLimitMiddleware.RateLimitByUser()) // User-based rate limiting after auth
 
 	// User routes
 	users := protected.Group("/users")
@@ -232,10 +265,24 @@ func (s *Server) setupV1Routes(router *gin.RouterGroup) {
 		billing.GET("/:orgId/subscription", s.handlers.Billing.GetSubscription)
 		billing.POST("/:orgId/subscription", s.handlers.Billing.UpdateSubscription)
 	}
+
+	// Admin routes (require admin role)
+	adminRoutes := protected.Group("/admin")
+	adminRoutes.Use(middleware.RequireRole("admin")) // Admin role middleware
+	{
+		// Token management endpoints
+		adminRoutes.POST("/tokens/revoke", s.handlers.Admin.RevokeToken)
+		adminRoutes.POST("/users/:userID/tokens/revoke", s.handlers.Admin.RevokeUserTokens)
+		adminRoutes.GET("/tokens/blacklisted", s.handlers.Admin.ListBlacklistedTokens)
+		adminRoutes.GET("/tokens/stats", s.handlers.Admin.GetTokenStats)
+	}
 }
 
 // setupOpenAIRoutes configures OpenAI-compatible routes
 func (s *Server) setupOpenAIRoutes(router *gin.RouterGroup) {
+	// Apply API key-based rate limiting for OpenAI routes
+	router.Use(s.rateLimitMiddleware.RateLimitByAPIKey())
+
 	// Chat completions
 	router.POST("/chat/completions", s.handlers.AI.ChatCompletions)
 	

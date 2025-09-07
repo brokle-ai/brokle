@@ -29,6 +29,11 @@ type AuthService interface {
 	RevokeSession(ctx context.Context, userID, sessionID ulid.ULID) error
 	RevokeAllSessions(ctx context.Context, userID ulid.ULID) error
 	
+	// Token revocation (immediate)
+	RevokeAccessToken(ctx context.Context, jti string, userID ulid.ULID, reason string) error
+	RevokeUserAccessTokens(ctx context.Context, userID ulid.ULID, reason string) error
+	IsTokenRevoked(ctx context.Context, jti string) (bool, error)
+	
 	// Authentication context
 	GetAuthContext(ctx context.Context, token string) (*AuthContext, error)
 	ValidateAuthToken(ctx context.Context, token string) (*AuthContext, error)
@@ -135,6 +140,7 @@ type PermissionService interface {
 type JWTService interface {
 	// Token generation
 	GenerateAccessToken(ctx context.Context, userID ulid.ULID, claims map[string]interface{}) (string, error)
+	GenerateAccessTokenWithJTI(ctx context.Context, userID ulid.ULID, claims map[string]interface{}) (string, string, error)
 	GenerateRefreshToken(ctx context.Context, userID ulid.ULID) (string, error)
 	GenerateAPIKeyToken(ctx context.Context, keyID ulid.ULID, scopes []string) (string, error)
 	
@@ -147,6 +153,26 @@ type JWTService interface {
 	ParseTokenClaims(ctx context.Context, token string) (*JWTClaims, error)
 	GetTokenExpiry(ctx context.Context, token string) (time.Time, error)
 	IsTokenExpired(ctx context.Context, token string) (bool, error)
+}
+
+// BlacklistedTokenService defines the token blacklisting service interface.
+type BlacklistedTokenService interface {
+	// Token blacklisting
+	BlacklistToken(ctx context.Context, jti string, userID ulid.ULID, expiresAt time.Time, reason string) error
+	IsTokenBlacklisted(ctx context.Context, jti string) (bool, error)
+	GetBlacklistedToken(ctx context.Context, jti string) (*BlacklistedToken, error)
+	
+	// Bulk operations
+	BlacklistUserTokens(ctx context.Context, userID ulid.ULID, reason string) error
+	GetUserBlacklistedTokens(ctx context.Context, userID ulid.ULID, limit, offset int) ([]*BlacklistedToken, error)
+	
+	// Maintenance
+	CleanupExpiredTokens(ctx context.Context) error
+	CleanupOldTokens(ctx context.Context, olderThan time.Time) error
+	
+	// Statistics
+	GetBlacklistedTokensCount(ctx context.Context) (int64, error)
+	GetTokensByReason(ctx context.Context, reason string) ([]*BlacklistedToken, error)
 }
 
 // AuditLogService defines the audit logging service interface.
@@ -278,5 +304,6 @@ type AuthServices interface {
 	Roles() RoleService
 	Permissions() PermissionService
 	JWT() JWTService
+	BlacklistedTokens() BlacklistedTokenService
 	AuditLogs() AuditLogService
 }
