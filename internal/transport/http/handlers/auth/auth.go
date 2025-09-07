@@ -265,30 +265,36 @@ func (h *Handler) ResetPassword(c *gin.Context) {
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /api/v1/auth/logout [post]
 func (h *Handler) Logout(c *gin.Context) {
-	// Get session ID from context (set by auth middleware)
-	sessionIDValue, exists := c.Get("session_id")
+	// Get token claims from context (set by auth middleware)
+	claimsValue, exists := c.Get("token_claims")
 	if !exists {
-		h.logger.Error("Session ID not found in context")
-		response.Unauthorized(c, "Invalid session")
+		h.logger.Error("Token claims not found in context")
+		response.Unauthorized(c, "Authentication required")
 		return
 	}
 
-	sessionID, ok := sessionIDValue.(ulid.ULID)
+	claims, ok := claimsValue.(*auth.JWTClaims)
 	if !ok {
-		h.logger.Error("Invalid session ID type in context")
+		h.logger.Error("Invalid token claims type in context")
 		response.InternalServerError(c, "Internal error")
 		return
 	}
 
-	// Logout user
-	err := h.authService.Logout(c.Request.Context(), sessionID)
+	// Logout user by blacklisting current access token JTI
+	err := h.authService.Logout(c.Request.Context(), claims.JWTID, claims.UserID)
 	if err != nil {
-		h.logger.WithError(err).WithField("session_id", sessionID).Error("Logout failed")
+		h.logger.WithError(err).WithFields(logrus.Fields{
+			"jti":     claims.JWTID,
+			"user_id": claims.UserID,
+		}).Error("Logout failed")
 		response.ErrorWithStatus(c, http.StatusInternalServerError, "logout_failed", "Logout failed", err.Error())
 		return
 	}
 
-	h.logger.WithField("session_id", sessionID).Info("User logged out successfully")
+	h.logger.WithFields(logrus.Fields{
+		"jti":     claims.JWTID,
+		"user_id": claims.UserID,
+	}).Info("User logged out successfully")
 	response.Success(c, gin.H{
 		"message": "Logged out successfully",
 	})

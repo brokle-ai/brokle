@@ -9,57 +9,39 @@ import (
 
 	"brokle/internal/core/domain/auth"
 	"brokle/pkg/response"
-	"brokle/pkg/ulid"
 )
 
 // AuthMiddleware handles JWT token authentication and authorization
 type AuthMiddleware struct {
-	jwtService            auth.JWTService
-	blacklistedTokens     auth.BlacklistedTokenService
-	sessionService        auth.SessionService
-	logger                *logrus.Logger
+	jwtService        auth.JWTService
+	blacklistedTokens auth.BlacklistedTokenService
+	logger            *logrus.Logger
 }
 
-// NewAuthMiddleware creates a new authentication middleware
+// NewAuthMiddleware creates a new stateless authentication middleware
 func NewAuthMiddleware(
 	jwtService auth.JWTService,
 	blacklistedTokens auth.BlacklistedTokenService,
-	sessionService auth.SessionService,
 	logger *logrus.Logger,
 ) *AuthMiddleware {
 	return &AuthMiddleware{
 		jwtService:        jwtService,
 		blacklistedTokens: blacklistedTokens,
-		sessionService:    sessionService,
-		logger:           logger,
+		logger:            logger,
 	}
 }
 
-// NewAuthMiddlewareSimple creates a new authentication middleware without session service
-func NewAuthMiddlewareSimple(
-	jwtService auth.JWTService,
-	blacklistedTokens auth.BlacklistedTokenService,
-	logger *logrus.Logger,
-) *AuthMiddleware {
-	return &AuthMiddleware{
-		jwtService:        jwtService,
-		blacklistedTokens: blacklistedTokens,
-		sessionService:    nil, // Optional session service
-		logger:           logger,
-	}
-}
-
-// AuthContext keys for storing authentication data in Gin context
+// Context keys for storing authentication data in Gin context
 const (
-	AuthContextKey     = "auth_context"
-	UserIDKey          = "user_id"
-	OrganizationIDKey  = "organization_id"
-	PermissionsKey     = "permissions"
-	SessionIDKey       = "session_id"
-	TokenClaimsKey     = "token_claims"
+	AuthContextKey    = "auth_context"
+	UserIDKey         = "user_id"
+	OrganizationIDKey = "organization_id"
+	PermissionsKey    = "permissions"
+	SessionIDKey      = "session_id"
+	TokenClaimsKey    = "token_claims"
 )
 
-// RequireAuth middleware ensures valid JWT token and active session
+// RequireAuth middleware ensures valid JWT token with stateless authentication
 func (m *AuthMiddleware) RequireAuth() gin.HandlerFunc {
 	return gin.HandlerFunc(func(c *gin.Context) {
 		// Extract token from Authorization header
@@ -99,62 +81,23 @@ func (m *AuthMiddleware) RequireAuth() gin.HandlerFunc {
 			return
 		}
 
-		// Validate session if JTI is present and session service is available (optional but recommended)
-		var sessionID *string
-		if claims.JWTID != "" && m.sessionService != nil {
-			session, err := m.sessionService.GetSessionByToken(c.Request.Context(), token)
-			if err != nil {
-				m.logger.WithError(err).WithField("jti", claims.JWTID).
-					Debug("Session validation failed - token may be valid but session inactive")
-				// Don't block access for session validation failure - token is still valid
-			} else {
-				sessionIDStr := session.ID.String()
-				sessionID = &sessionIDStr
-				
-				// Mark session as used (update last_used_at)
-				m.sessionService.MarkSessionAsUsed(c.Request.Context(), session.ID)
-			}
-		}
-
-		// Convert sessionID string to ULID if present
-		var sessionULID *ulid.ULID
-		if sessionID != nil {
-			if parsedID, err := ulid.Parse(*sessionID); err == nil {
-				sessionULID = &parsedID
-			}
-		}
-
-		// Create authentication context
-		authContext := &auth.AuthContext{
-			UserID:         claims.UserID,
-			OrganizationID: claims.OrganizationID,
-			Permissions:    claims.Permissions,
-			SessionID:      sessionULID,
-		}
-
-		// Store authentication data in Gin context
-		c.Set(AuthContextKey, authContext)
+		// Store authentication data in Gin context (stateless JWT approach)
 		c.Set(UserIDKey, claims.UserID)
 		c.Set(TokenClaimsKey, claims)
-		
+
 		if claims.OrganizationID != nil {
 			c.Set(OrganizationIDKey, *claims.OrganizationID)
 		}
-		
+
 		if len(claims.Permissions) > 0 {
 			c.Set(PermissionsKey, claims.Permissions)
-		}
-		
-		if sessionID != nil {
-			c.Set(SessionIDKey, *sessionID)
 		}
 
 		// Log successful authentication
 		m.logger.WithFields(logrus.Fields{
 			"user_id":         claims.UserID,
 			"organization_id": claims.OrganizationID,
-			"jti":            claims.JWTID,
-			"session_id":     sessionID,
+			"jti":             claims.JWTID,
 		}).Debug("Authentication successful")
 
 		c.Next()
@@ -192,9 +135,9 @@ func (m *AuthMiddleware) RequirePermission(permission string) gin.HandlerFunc {
 
 		if !hasPermission {
 			m.logger.WithFields(logrus.Fields{
-				"user_id":            ctx.UserID,
+				"user_id":             ctx.UserID,
 				"required_permission": permission,
-				"user_permissions":   ctx.Permissions,
+				"user_permissions":    ctx.Permissions,
 			}).Warn("Insufficient permissions")
 			response.Forbidden(c, "Insufficient permissions")
 			c.Abort()
@@ -239,9 +182,9 @@ func (m *AuthMiddleware) RequireAnyPermission(permissions []string) gin.HandlerF
 
 		if !hasPermission {
 			m.logger.WithFields(logrus.Fields{
-				"user_id":             ctx.UserID,
+				"user_id":              ctx.UserID,
 				"required_permissions": permissions,
-				"user_permissions":    ctx.Permissions,
+				"user_permissions":     ctx.Permissions,
 			}).Warn("Insufficient permissions")
 			response.Forbidden(c, "Insufficient permissions")
 			c.Abort()

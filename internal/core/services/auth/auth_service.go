@@ -218,20 +218,17 @@ func (s *authService) Register(ctx context.Context, req *auth.RegisterRequest) (
 	}, nil
 }
 
-// Logout invalidates a user session
-func (s *authService) Logout(ctx context.Context, sessionID ulid.ULID) error {
-	session, err := s.sessionRepo.GetByID(ctx, sessionID)
+// Logout invalidates a user access token via JTI blacklisting
+func (s *authService) Logout(ctx context.Context, jti string, userID ulid.ULID) error {
+	// Blacklist the current access token immediately
+	expiry := time.Now().Add(s.authConfig.AccessTokenTTL) // Blacklist until token would expire
+	err := s.blacklistedTokens.BlacklistToken(ctx, jti, userID, expiry, "user_logout")
 	if err != nil {
-		return fmt.Errorf("session not found: %w", err)
+		return fmt.Errorf("failed to blacklist token: %w", err)
 	}
-
-	err = s.sessionRepo.RevokeSession(ctx, sessionID)
-	if err != nil {
-		return fmt.Errorf("failed to revoke session: %w", err)
-	}
-
+	
 	// Log logout
-	auditLog := auth.NewAuditLog(&session.UserID, nil, "auth.logout.success", "session", sessionID.String(), "", "", "")
+	auditLog := auth.NewAuditLog(&userID, nil, "auth.logout.success", "token", jti, "", "", "")
 	s.auditRepo.Create(ctx, auditLog)
 
 	return nil

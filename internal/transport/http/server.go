@@ -40,14 +40,12 @@ func NewServer(
 	handlers *handlers.Handlers,
 	jwtService auth.JWTService,
 	blacklistedTokens auth.BlacklistedTokenService,
-	sessionService auth.SessionService,
 	redisClient *redis.Client,
 ) *Server {
-	// Create auth middleware with all dependencies
+	// Create stateless auth middleware
 	authMiddleware := middleware.NewAuthMiddleware(
 		jwtService,
 		blacklistedTokens,
-		sessionService,
 		logger,
 	)
 

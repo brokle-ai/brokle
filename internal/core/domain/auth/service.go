@@ -12,7 +12,7 @@ type AuthService interface {
 	// Authentication
 	Login(ctx context.Context, req *LoginRequest) (*LoginResponse, error)
 	Register(ctx context.Context, req *RegisterRequest) (*LoginResponse, error)
-	Logout(ctx context.Context, sessionID ulid.ULID) error
+	Logout(ctx context.Context, jti string, userID ulid.ULID) error
 	RefreshToken(ctx context.Context, req *RefreshTokenRequest) (*LoginResponse, error)
 	
 	// Password management
