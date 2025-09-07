@@ -1,0 +1,425 @@
+# Development Seed Data
+# This file contains comprehensive test data for development and testing
+
+organizations:
+  - name: "Brokle Technologies"
+    slug: "brokle-tech"
+    billing_email: "billing@brokle.ai"
+    plan: "enterprise"
+    subscription_status: "active"
+  
+  - name: "Demo Organization"
+    slug: "demo-org"
+    billing_email: "demo@example.com"
+    plan: "pro"
+    subscription_status: "active"
+  
+  - name: "Test Startup"
+    slug: "test-startup"
+    billing_email: "test@startup.com"
+    plan: "free"
+    subscription_status: "active"
+
+users:
+  - email: "admin@brokle.ai"
+    first_name: "Admin"
+    last_name: "User"
+    password: "admin123"
+    email_verified: true
+    is_active: true
+    timezone: "UTC"
+    language: "en"
+  
+  - email: "developer@brokle.ai"
+    first_name: "Developer"
+    last_name: "User"
+    password: "dev123"
+    email_verified: true
+    is_active: true
+    timezone: "America/New_York"
+    language: "en"
+  
+  - email: "demo@example.com"
+    first_name: "Demo"
+    last_name: "User"
+    password: "demo123"
+    email_verified: true
+    is_active: true
+    timezone: "UTC"
+    language: "en"
+
+  - email: "test@startup.com"
+    first_name: "Test"
+    last_name: "User"
+    password: "test123"
+    email_verified: false
+    is_active: true
+    timezone: "UTC"
+    language: "en"
+
+rbac:
+  permissions:
+    # Organization permissions
+    - name: "organizations:read"
+      display_name: "Read Organizations"
+      description: "View organization details and settings"
+      category: "organization"
+    
+    - name: "organizations:write"
+      display_name: "Write Organizations"
+      description: "Create and modify organizations"
+      category: "organization"
+    
+    - name: "organizations:delete"
+      display_name: "Delete Organizations"
+      description: "Delete organizations"
+      category: "organization"
+    
+    # Project permissions
+    - name: "projects:read"
+      display_name: "Read Projects"
+      description: "View projects and their details"
+      category: "project"
+    
+    - name: "projects:write"
+      display_name: "Write Projects"
+      description: "Create and modify projects"
+      category: "project"
+    
+    - name: "projects:delete"
+      display_name: "Delete Projects"
+      description: "Delete projects"
+      category: "project"
+    
+    # API Key permissions
+    - name: "api_keys:read"
+      display_name: "Read API Keys"
+      description: "View API keys (excluding full values)"
+      category: "api_key"
+    
+    - name: "api_keys:write"
+      display_name: "Write API Keys"
+      description: "Create and modify API keys"
+      category: "api_key"
+    
+    - name: "api_keys:delete"
+      display_name: "Delete API Keys"
+      description: "Delete API keys"
+      category: "api_key"
+    
+    # Analytics permissions
+    - name: "analytics:read"
+      display_name: "Read Analytics"
+      description: "View analytics and metrics"
+      category: "analytics"
+    
+    # Member permissions
+    - name: "members:read"
+      display_name: "Read Members"
+      description: "View organization members"
+      category: "member"
+    
+    - name: "members:write"
+      display_name: "Write Members"
+      description: "Invite and manage members"
+      category: "member"
+    
+    - name: "members:delete"
+      display_name: "Delete Members"
+      description: "Remove members from organization"
+      category: "member"
+
+  roles:
+    # System roles (global)
+    - name: "super_admin"
+      display_name: "Super Administrator"
+      description: "Full system access across all organizations"
+      is_system_role: true
+      permissions:
+        - "organizations:read"
+        - "organizations:write"
+        - "organizations:delete"
+        - "projects:read"
+        - "projects:write"
+        - "projects:delete"
+        - "api_keys:read"
+        - "api_keys:write"
+        - "api_keys:delete"
+        - "analytics:read"
+        - "members:read"
+        - "members:write"
+        - "members:delete"
+    
+    # Organization-specific roles
+    - name: "owner"
+      display_name: "Organization Owner"
+      description: "Full access to organization and all its resources"
+      is_system_role: false
+      organization_slug: "brokle-tech"
+      permissions:
+        - "organizations:read"
+        - "organizations:write"
+        - "projects:read"
+        - "projects:write"
+        - "projects:delete"
+        - "api_keys:read"
+        - "api_keys:write"
+        - "api_keys:delete"
+        - "analytics:read"
+        - "members:read"
+        - "members:write"
+        - "members:delete"
+    
+    - name: "admin"
+      display_name: "Administrator"
+      description: "Administrative access to organization resources"
+      is_system_role: false
+      organization_slug: "brokle-tech"
+      permissions:
+        - "organizations:read"
+        - "projects:read"
+        - "projects:write"
+        - "api_keys:read"
+        - "api_keys:write"
+        - "analytics:read"
+        - "members:read"
+        - "members:write"
+    
+    - name: "developer"
+      display_name: "Developer"
+      description: "Development access to projects and API keys"
+      is_system_role: false
+      organization_slug: "brokle-tech"
+      permissions:
+        - "organizations:read"
+        - "projects:read"
+        - "projects:write"
+        - "api_keys:read"
+        - "api_keys:write"
+        - "analytics:read"
+    
+    - name: "viewer"
+      display_name: "Viewer"
+      description: "Read-only access to organization resources"
+      is_system_role: false
+      organization_slug: "brokle-tech"
+      permissions:
+        - "organizations:read"
+        - "projects:read"
+        - "api_keys:read"
+        - "analytics:read"
+    
+    # Demo organization roles
+    - name: "owner"
+      display_name: "Organization Owner"
+      description: "Full access to organization and all its resources"
+      is_system_role: false
+      organization_slug: "demo-org"
+      permissions:
+        - "organizations:read"
+        - "organizations:write"
+        - "projects:read"
+        - "projects:write"
+        - "projects:delete"
+        - "api_keys:read"
+        - "api_keys:write"
+        - "api_keys:delete"
+        - "analytics:read"
+        - "members:read"
+        - "members:write"
+        - "members:delete"
+
+    # Test startup roles
+    - name: "owner"
+      display_name: "Organization Owner"
+      description: "Full access to organization and all its resources"
+      is_system_role: false
+      organization_slug: "test-startup"
+      permissions:
+        - "organizations:read"
+        - "organizations:write"
+        - "projects:read"
+        - "projects:write"
+        - "projects:delete"
+        - "api_keys:read"
+        - "api_keys:write"
+        - "api_keys:delete"
+        - "analytics:read"
+        - "members:read"
+        - "members:write"
+        - "members:delete"
+
+  memberships:
+    - user_email: "admin@brokle.ai"
+      organization_slug: "brokle-tech"
+      role_name: "super_admin"
+    
+    - user_email: "developer@brokle.ai"
+      organization_slug: "brokle-tech"
+      role_name: "developer"
+    
+    - user_email: "demo@example.com"
+      organization_slug: "demo-org"
+      role_name: "owner"
+    
+    - user_email: "test@startup.com"
+      organization_slug: "test-startup"
+      role_name: "owner"
+
+projects:
+  - name: "AI Gateway"
+    description: "Primary AI gateway and routing service"
+    organization_slug: "brokle-tech"
+    environments:
+      - name: "Development"
+        slug: "dev"
+      - name: "Staging"
+        slug: "staging"
+      - name: "Production"
+        slug: "prod"
+  
+  - name: "Analytics Platform"
+    description: "AI analytics and observability platform"
+    organization_slug: "brokle-tech"
+    environments:
+      - name: "Development"
+        slug: "dev"
+      - name: "Production"
+        slug: "prod"
+  
+  - name: "Demo Application"
+    description: "Demo application showcasing Brokle capabilities"
+    organization_slug: "demo-org"
+    environments:
+      - name: "Demo"
+        slug: "demo"
+      - name: "Production"
+        slug: "prod"
+
+  - name: "Test Project"
+    description: "Simple test project for validation"
+    organization_slug: "test-startup"
+    environments:
+      - name: "Test"
+        slug: "test"
+
+api_keys:
+  - name: "Development API Key"
+    organization_slug: "brokle-tech"
+    project_name: "AI Gateway"
+    environment_name: "Development"
+    rate_limit_per_minute: 1000
+    rate_limit_per_hour: 10000
+    rate_limit_per_day: 100000
+    scopes:
+      - "ai:completions"
+      - "ai:embeddings"
+      - "analytics:read"
+    allowed_ips: []
+  
+  - name: "Production API Key"
+    organization_slug: "brokle-tech"
+    project_name: "AI Gateway"
+    environment_name: "Production"
+    rate_limit_per_minute: 5000
+    rate_limit_per_hour: 50000
+    rate_limit_per_day: 1000000
+    scopes:
+      - "ai:completions"
+      - "ai:embeddings"
+      - "analytics:read"
+    allowed_ips: ["203.0.113.0/24", "198.51.100.0/24"]
+  
+  - name: "Demo API Key"
+    organization_slug: "demo-org"
+    project_name: "Demo Application"
+    environment_name: "Demo"
+    rate_limit_per_minute: 100
+    rate_limit_per_hour: 1000
+    rate_limit_per_day: 10000
+    scopes:
+      - "ai:completions"
+    allowed_ips: []
+
+  - name: "Test API Key"
+    organization_slug: "test-startup"
+    project_name: "Test Project"
+    environment_name: "Test"
+    rate_limit_per_minute: 60
+    rate_limit_per_hour: 500
+    rate_limit_per_day: 5000
+    scopes:
+      - "ai:completions"
+    allowed_ips: []
+
+onboarding_questions:
+  - step: 1
+    question_type: "single_choice"
+    title: "What's your primary role?"
+    description: "This helps us customize your experience"
+    is_required: true
+    options:
+      - "Developer"
+      - "Product Manager"
+      - "Data Scientist"
+      - "DevOps Engineer"
+      - "CEO/Founder"
+      - "Other"
+    display_order: 1
+    is_active: true
+  
+  - step: 2
+    question_type: "multiple_choice"
+    title: "Which AI providers do you currently use?"
+    description: "Select all that apply"
+    is_required: true
+    options:
+      - "OpenAI"
+      - "Anthropic"
+      - "Google AI"
+      - "Cohere"
+      - "Hugging Face"
+      - "Azure OpenAI"
+      - "AWS Bedrock"
+      - "None yet"
+    display_order: 2
+    is_active: true
+  
+  - step: 3
+    question_type: "single_choice"
+    title: "What's your organization size?"
+    description: "Help us understand your team"
+    is_required: true
+    options:
+      - "Just me"
+      - "2-10 people"
+      - "11-50 people"
+      - "51-200 people"
+      - "200+ people"
+    display_order: 3
+    is_active: true
+  
+  - step: 4
+    question_type: "text"
+    title: "What's your primary use case for AI?"
+    description: "Tell us about your main AI application (optional)"
+    is_required: false
+    options: []
+    display_order: 4
+    is_active: true
+  
+  - step: 5
+    question_type: "single_choice"
+    title: "How did you hear about Brokle?"
+    description: "Help us improve our outreach"
+    is_required: false
+    options:
+      - "Search engine"
+      - "Social media"
+      - "Word of mouth"
+      - "Conference/Event"
+      - "Blog/Article"
+      - "GitHub"
+      - "Other"
+    display_order: 5
+    is_active: true

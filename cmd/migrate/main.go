@@ -30,15 +30,19 @@ import (
 
 	"brokle/internal/config"
 	"brokle/internal/migration"
+	"brokle/internal/seeder"
 )
 
 func main() {
 	var (
-		database = flag.String("db", "all", "Database to migrate: all, postgres, clickhouse")
-		steps    = flag.Int("steps", 0, "Number of migration steps (0 = all)")
-		version  = flag.Int("version", 0, "Target version for goto/force commands")
-		name     = flag.String("name", "", "Migration name for create command")
-		dryRun   = flag.Bool("dry-run", false, "Show what would be migrated without executing")
+		database    = flag.String("db", "all", "Database to migrate: all, postgres, clickhouse")
+		steps       = flag.Int("steps", 0, "Number of migration steps (0 = all)")
+		version     = flag.Int("version", 0, "Target version for goto/force commands")
+		name        = flag.String("name", "", "Migration name for create command")
+		dryRun      = flag.Bool("dry-run", false, "Show what would be migrated without executing")
+		environment = flag.String("env", "development", "Environment for seeding: development, demo, test")
+		reset       = flag.Bool("reset", false, "Reset existing data before seeding")
+		verbose     = flag.Bool("verbose", false, "Verbose output for seeding")
 	)
 	flag.Parse()
 
@@ -154,6 +158,12 @@ func main() {
 		if err := createMigration(manager, *database, *name); err != nil {
 			log.Fatalf("Failed to create migration: %v", err)
 		}
+
+	case "seed":
+		if err := runSeeding(ctx, cfg, *environment, *reset, *dryRun, *verbose); err != nil {
+			log.Fatalf("Seeding failed: %v", err)
+		}
+		fmt.Printf("✅ Seeding completed successfully with environment: %s\n", *environment)
 
 	default:
 		fmt.Printf("❌ Unknown command: %s\n", command)
@@ -397,7 +407,7 @@ func parseDatabaseSelection(database string) ([]migration.DatabaseType, error) {
 }
 
 func printUsage() {
-	fmt.Println("🚀 Brokle Migration Tool - Production Database Migration CLI")
+	fmt.Println("🚀 Brokle Migration Tool - Production Database Migration & Seeding CLI")
 	fmt.Println()
 	fmt.Println("USAGE:")
 	fmt.Println("  migrate <command> [flags]")
@@ -412,6 +422,7 @@ func printUsage() {
 	fmt.Println("  steps -steps N        Run N migration steps (negative for rollback)")
 	fmt.Println("  info                  Show detailed migration information")
 	fmt.Println("  create -name NAME     Create new migration files")
+	fmt.Println("  seed                  Seed database with test data")
 	fmt.Println()
 	fmt.Println("FLAGS:")
 	fmt.Println("  -db string           Database to target: all, postgres, clickhouse (default: all)")
@@ -419,6 +430,9 @@ func printUsage() {
 	fmt.Println("  -version int         Target version for goto/force commands")
 	fmt.Println("  -name string         Migration name for create command")
 	fmt.Println("  -dry-run             Show what would happen without executing")
+	fmt.Println("  -env string          Seeding environment: development, demo, test (default: development)")
+	fmt.Println("  -reset               Reset existing data before seeding (DANGEROUS)")
+	fmt.Println("  -verbose             Verbose output for seeding operations")
 	fmt.Println()
 	fmt.Println("EXAMPLES:")
 	fmt.Println("  migrate up                              # Run all pending migrations")
@@ -431,9 +445,58 @@ func printUsage() {
 	fmt.Println("  migrate status                          # Show migration status")
 	fmt.Println("  migrate info                            # Show detailed information")
 	fmt.Println("  migrate -dry-run up                     # Preview migrations")
+	fmt.Println("  migrate seed                            # Seed with development data")
+	fmt.Println("  migrate seed -env demo                  # Seed with demo data")
+	fmt.Println("  migrate seed -env test                  # Seed with test data")
+	fmt.Println("  migrate seed -reset -verbose            # Reset and seed with verbose output")
+	fmt.Println("  migrate seed -dry-run                   # Preview seeding plan")
 	fmt.Println()
 	fmt.Println("SAFETY:")
 	fmt.Println("  🛡️  Destructive operations require explicit 'yes' confirmation")
 	fmt.Println("  🔍 Use -dry-run to preview changes safely")
 	fmt.Println("  📊 Check 'status' and 'info' before running migrations")
+	fmt.Println("  🌱 Use 'seed' to populate database with test data")
+}
+
+// runSeeding handles database seeding operations
+func runSeeding(ctx context.Context, cfg *config.Config, environment string, reset, dryRun, verbose bool) error {
+	// Initialize seeder manager
+	manager, err := seeder.NewManager(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to initialize seeder manager: %w", err)
+	}
+	defer manager.Close()
+
+	// Configure seeder options
+	options := &seeder.Options{
+		Environment: environment,
+		Reset:       reset,
+		DryRun:      dryRun,
+		Verbose:     verbose,
+	}
+
+	// Confirm reset operation if requested
+	if reset && !dryRun {
+		if !confirmDestructiveOperation(fmt.Sprintf("RESET ALL DATA and seed with %s environment", environment)) {
+			return fmt.Errorf("seeding cancelled by user")
+		}
+	}
+
+	// Show seed plan in dry-run mode
+	if dryRun {
+		fmt.Printf("🔍 DRY RUN: Seeding plan for environment '%s':\n", environment)
+		
+		// Load seed data to show plan
+		dataLoader := seeder.NewDataLoader()
+		seedData, err := dataLoader.LoadSeedData(environment)
+		if err != nil {
+			return fmt.Errorf("failed to load seed data for preview: %w", err)
+		}
+		
+		manager.PrintSeedPlan(seedData)
+		return nil
+	}
+
+	// Run actual seeding (PostgreSQL only for now)
+	return manager.SeedPostgres(ctx, options)
 }

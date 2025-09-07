@@ -1,22 +1,33 @@
-# 🚀 Brokle Migration Tool
+# 🚀 Brokle Database CLI
 
-Production-ready database migration CLI for the Brokle AI Infrastructure Platform. Handles multi-database migrations with comprehensive safety features and enterprise-grade reliability.
+Production-ready database migration and seeding CLI for the Brokle AI Infrastructure Platform. Handles multi-database migrations and data seeding with comprehensive safety features and enterprise-grade reliability.
 
 ## Overview
 
-The Brokle Migration Tool manages database schema changes across multiple databases:
+The Brokle Database CLI manages database operations across multiple databases:
+
+### 🔄 **Schema Migrations**
 - **PostgreSQL** - Primary transactional data
 - **ClickHouse** - Analytics and time-series data
 - **Multi-database coordination** - Ensures consistency across all databases
 
+### 🌱 **Data Seeding**
+- **Development data** - Complete setup with users, organizations, RBAC
+- **Demo data** - Minimal showcase data
+- **Test data** - Basic fixtures for testing
+- **Environment-aware** - Different data for dev, demo, test environments
+
 ## Quick Start
 
 ```bash
-# Build the migration tool
+# Build the database CLI
 go build -o migrate ./cmd/migrate/main.go
 
 # Run all pending migrations
 ./migrate up
+
+# Seed database with development data
+./migrate seed
 
 # Check migration status
 ./migrate status
@@ -27,7 +38,7 @@ go build -o migrate ./cmd/migrate/main.go
 
 ## Commands
 
-### Core Migration Commands
+### 🔄 Schema Migration Commands
 
 #### `migrate up`
 Run all pending migrations for all databases.
@@ -83,6 +94,26 @@ Show detailed migration information and health status.
 ./migrate info                  # Comprehensive system information
 ```
 
+### 🌱 Data Seeding Commands
+
+#### `migrate seed`
+Populate database with environment-specific test data.
+```bash
+./migrate seed                  # Seed with development data (default)
+./migrate seed -env demo        # Seed with demo data
+./migrate seed -env test        # Seed with test data
+./migrate seed -reset -verbose  # Reset existing data and seed with verbose output
+./migrate seed -dry-run         # Preview seeding plan without executing
+```
+
+**Seeding includes:**
+- **Users** - Sample users with proper authentication
+- **Organizations** - Multi-tenant organization structure  
+- **RBAC** - Roles, permissions, and memberships
+- **Projects & Environments** - Complete project hierarchy
+- **Onboarding Questions** - User onboarding workflow setup
+- **⚠️ API Keys Skipped** - Create manually via web interface (JSON serialization issue)
+
 ### Dangerous Operations (Use with Caution)
 
 #### `migrate force -version N`
@@ -99,6 +130,7 @@ Drop all database tables (requires confirmation).
 
 ## Flags
 
+### Migration Flags
 | Flag | Description | Default | Example |
 |------|-------------|---------|---------|
 | `-db` | Database to target: `all`, `postgres`, `clickhouse` | `all` | `-db postgres` |
@@ -106,6 +138,14 @@ Drop all database tables (requires confirmation).
 | `-version` | Target version for goto/force commands | `0` | `-version 5` |
 | `-name` | Migration name for create command | Required | `-name "add_users"` |
 | `-dry-run` | Preview changes without executing | `false` | `-dry-run` |
+
+### Seeding Flags
+| Flag | Description | Default | Example |
+|------|-------------|---------|---------|
+| `-env` | Seeding environment: `development`, `demo`, `test` | `development` | `-env demo` |
+| `-reset` | Reset existing data before seeding (DANGEROUS) | `false` | `-reset` |
+| `-verbose` | Show detailed seeding output | `false` | `-verbose` |
+| `-dry-run` | Preview seeding plan without executing | `false` | `-dry-run` |
 
 ## Safety Features
 
@@ -115,12 +155,14 @@ Destructive operations require explicit confirmation:
 - `migrate drop` - Table drop confirmation  
 - `migrate goto` - Version change confirmation
 - `migrate force` - Force version confirmation
+- `migrate seed -reset` - Data reset confirmation
 
 ### 🔍 Dry Run Mode
-Preview migrations without executing:
+Preview operations without executing:
 ```bash
 ./migrate -dry-run up           # See what migrations would run
 ./migrate -dry-run down         # See what would be rolled back
+./migrate seed -dry-run         # See what data would be seeded
 ```
 
 ### 📊 Status Monitoring
@@ -136,9 +178,11 @@ Ensures consistency across PostgreSQL and ClickHouse:
 - Comprehensive error reporting
 - Rollback capabilities for failed migrations
 
-## Migration File Structure
+## File Structure
 
-### PostgreSQL Migrations
+### Migration Files
+
+#### PostgreSQL Migrations
 Located in `migrations/postgres/`
 ```
 migrations/postgres/
@@ -148,7 +192,7 @@ migrations/postgres/
 └── 002_add_users.down.sql
 ```
 
-### ClickHouse Migrations  
+#### ClickHouse Migrations  
 Located in `migrations/clickhouse/`
 ```
 migrations/clickhouse/
@@ -158,9 +202,32 @@ migrations/clickhouse/
 └── 002_add_events.down.sql
 ```
 
+### Seed Data Files
+Located in `seeds/` directory with YAML format:
+```
+seeds/
+├── dev.yaml          # Development environment (full dataset)
+├── demo.yaml         # Demo environment (showcase data)
+└── test.yaml         # Test environment (minimal fixtures)
+```
+
+#### Seed Data Structure
+Each YAML file contains:
+```yaml
+organizations:          # Multi-tenant organizations
+users:                 # Sample users with authentication
+rbac:                  # Roles, permissions, memberships
+  permissions:         # System permissions (13 default)
+  roles:               # User roles (7 default)
+  memberships:         # User-organization-role assignments
+projects:              # Projects and environments
+api_keys:              # API keys (skipped due to JSON issue)
+onboarding_questions:  # User onboarding workflow
+```
+
 ## Usage Examples
 
-### Development Workflow
+### Development Workflow - Migrations
 ```bash
 # 1. Create new migration
 ./migrate create -name "add_api_keys_table"
@@ -174,6 +241,21 @@ migrations/clickhouse/
 
 # 5. Verify status
 ./migrate status
+```
+
+### Development Workflow - Seeding
+```bash
+# 1. Set up fresh database
+./migrate up
+
+# 2. Preview what will be seeded
+./migrate seed -dry-run
+
+# 3. Seed with development data
+./migrate seed
+
+# 4. Or seed with reset for clean state
+./migrate seed -reset -verbose
 ```
 
 ### Production Deployment
@@ -213,6 +295,21 @@ migrations/clickhouse/
 
 # 3. Re-run from correct state
 ./migrate up
+```
+
+### Seeding Different Environments
+```bash
+# Demo environment (minimal data)
+./migrate seed -env demo
+
+# Test environment (basic fixtures)
+./migrate seed -env test
+
+# Reset and seed development data
+./migrate seed -env development -reset
+
+# Preview seeding plan for any environment
+./migrate seed -env demo -dry-run
 ```
 
 ## Configuration
@@ -343,41 +440,70 @@ The migration tool provides detailed logging for troubleshooting. Check applicat
 - **Permission denied**: Verify database user permissions
 - **Lock timeout**: Another migration process may be running
 - **Version conflict**: Check migration file consistency
+- **Seeding fails**: Check YAML syntax and referenced entities exist
+- **API keys skipped**: Known PostgreSQL JSON serialization issue
 
 ## Architecture
 
-The migration tool is built on:
-- **golang-migrate** library for PostgreSQL
-- **Custom ClickHouse implementation** for analytics
+The database CLI is built on:
+- **golang-migrate** library for PostgreSQL migrations
+- **Custom ClickHouse implementation** for analytics migrations
 - **Multi-database coordination** logic
-- **Production safety features**
+- **YAML-based seeding system** for data population
+- **Production safety features** and confirmations
 - **Health monitoring system**
 
 Key components:
 - `internal/migration/manager.go` - Core migration coordinator
 - `internal/migration/health.go` - Health monitoring system
-- `cmd/migrate/main.go` - CLI interface
+- `internal/seeder/manager.go` - Data seeding coordinator
+- `internal/seeder/` - Component seeders (users, orgs, RBAC, etc.)
+- `cmd/migrate/main.go` - Unified CLI interface
 - `migrations/` - Migration file storage
+- `seeds/` - YAML seed data files
 
 ## Contributing
 
-When adding new migration capabilities:
+When adding new database capabilities:
+
+### For Migrations:
 1. Update both PostgreSQL and ClickHouse implementations
 2. Add comprehensive error handling
 3. Include safety confirmations for destructive operations
-4. Update this documentation
-5. Test with both databases
+4. Test with both databases
+
+### For Seeding:
+1. Add new seeder components to `internal/seeder/`
+2. Update YAML seed data files as needed
+3. Follow entity dependency ordering
+4. Add validation and error handling
+
+**Always:**
+- Update this documentation
+- Test thoroughly in development environment
+- Follow existing CLI patterns and safety features
 
 ## Security
 
+### For Migrations:
 - Migration files should not contain sensitive data
 - Use environment variables for credentials
 - Limit database permissions to minimum required
 - Audit migration files before production deployment
+
+### For Seeding:
+- Seed data uses bcrypt for password hashing
+- Avoid sensitive data in YAML seed files
+- Use environment-specific configurations
+- Test data should be safe for development sharing
+
+**General Security:**
 - Consider using encrypted connections for production
+- Regularly audit database access and permissions
+- Monitor migration and seeding operations in production
 
 ---
 
 **🚀 Built for Brokle - Complete AI Infrastructure Platform**
 
-For more information about the Brokle platform, see the main project documentation.
+This unified database CLI handles both schema migrations and data seeding for the Brokle AI Infrastructure Platform. For more information about the platform, see the main project documentation.
