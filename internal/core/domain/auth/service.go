@@ -156,6 +156,11 @@ type BlacklistedTokenService interface {
 	IsTokenBlacklisted(ctx context.Context, jti string) (bool, error)
 	GetBlacklistedToken(ctx context.Context, jti string) (*BlacklistedToken, error)
 	
+	// User-wide timestamp blacklisting (GDPR/SOC2 compliance)
+	CreateUserTimestampBlacklist(ctx context.Context, userID ulid.ULID, reason string) error
+	IsUserBlacklistedAfterTimestamp(ctx context.Context, userID ulid.ULID, tokenIssuedAt int64) (bool, error)
+	GetUserBlacklistTimestamp(ctx context.Context, userID ulid.ULID) (*int64, error)
+	
 	// Bulk operations
 	BlacklistUserTokens(ctx context.Context, userID ulid.ULID, reason string) error
 	GetUserBlacklistedTokens(ctx context.Context, userID ulid.ULID, limit, offset int) ([]*BlacklistedToken, error)

@@ -47,6 +47,10 @@ type BlacklistedToken struct {
 	RevokedAt time.Time `json:"revoked_at" gorm:"not null;default:CURRENT_TIMESTAMP"`   // When revoked
 	Reason    string    `json:"reason" gorm:"type:varchar(100);not null"`               // logout, suspicious_activity, etc.
 	
+	// New fields for user-wide timestamp blacklisting (GDPR/SOC2 compliance)
+	TokenType          string `json:"token_type" gorm:"type:varchar(50);not null;default:'individual';index"`  // individual, user_wide_timestamp
+	BlacklistTimestamp *int64 `json:"blacklist_timestamp,omitempty" gorm:"index"`                             // Unix timestamp for user-wide blacklisting
+	
 	CreatedAt time.Time `json:"created_at" gorm:"not null"`
 }
 
@@ -264,6 +268,12 @@ var StandardPermissions = []string{
 	"audit_logs.read",
 }
 
+// Blacklisted token types
+const (
+	TokenTypeIndividual      = "individual"        // Individual JTI-based blacklisting (default)
+	TokenTypeUserTimestamp   = "user_wide_timestamp" // User-wide timestamp blacklisting (GDPR/SOC2)
+)
+
 // System roles that are pre-defined
 var SystemRoles = map[string][]string{
 	"owner": {
@@ -311,7 +321,29 @@ func NewBlacklistedToken(jti string, userID ulid.ULID, expiresAt time.Time, reas
 		ExpiresAt: expiresAt,
 		RevokedAt: time.Now(),
 		Reason:    reason,
+		TokenType: TokenTypeIndividual, // Default to individual JTI blacklisting
 		CreatedAt: time.Now(),
+	}
+}
+
+// NewUserTimestampBlacklistedToken creates a user-wide timestamp blacklist entry for GDPR/SOC2 compliance
+func NewUserTimestampBlacklistedToken(userID ulid.ULID, blacklistTimestamp int64, reason string) *BlacklistedToken {
+	// Generate a proper ULID for this user-wide blacklist entry
+	userWideJTI := ulid.New()
+	
+	// Set expiry far in the future to cover all possible access token lifetimes
+	// We use the blacklist timestamp + reasonable buffer (24 hours) to ensure cleanup
+	farFutureExpiry := time.Unix(blacklistTimestamp, 0).Add(24 * time.Hour)
+	
+	return &BlacklistedToken{
+		JTI:                userWideJTI.String(),
+		UserID:             userID,
+		ExpiresAt:          farFutureExpiry,
+		RevokedAt:          time.Now(),
+		Reason:             reason,
+		TokenType:          TokenTypeUserTimestamp,
+		BlacklistTimestamp: &blacklistTimestamp,
+		CreatedAt:          time.Now(),
 	}
 }
 

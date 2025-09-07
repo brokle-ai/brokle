@@ -80,6 +80,31 @@ func (m *AuthMiddleware) RequireAuth() gin.HandlerFunc {
 			return
 		}
 
+		// GDPR/SOC2 Compliance: Check user-wide timestamp blacklisting
+		// This ensures ALL tokens issued before user revocation are blocked
+		isUserBlacklisted, err := m.blacklistedTokens.IsUserBlacklistedAfterTimestamp(
+			c.Request.Context(), claims.UserID, claims.IssuedAt)
+		if err != nil {
+			m.logger.WithError(err).WithFields(logrus.Fields{
+				"user_id": claims.UserID,
+				"iat":     claims.IssuedAt,
+			}).Error("Failed to check user timestamp blacklist status")
+			response.InternalServerError(c, "Authentication verification failed")
+			c.Abort()
+			return
+		}
+
+		if isUserBlacklisted {
+			m.logger.WithFields(logrus.Fields{
+				"user_id": claims.UserID,
+				"jti":     claims.JWTID,
+				"iat":     claims.IssuedAt,
+			}).Warn("User token revoked - all sessions were revoked")
+			response.Unauthorized(c, "All user sessions have been revoked")
+			c.Abort()
+			return
+		}
+
 		// Store authentication data in Gin context (stateless JWT approach)
 		c.Set(UserIDKey, claims.UserID)
 		c.Set(TokenClaimsKey, claims)

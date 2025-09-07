@@ -42,6 +42,11 @@ type BlacklistedTokenRepository interface {
 	GetByJTI(ctx context.Context, jti string) (*BlacklistedToken, error)
 	IsTokenBlacklisted(ctx context.Context, jti string) (bool, error)
 	
+	// User-wide timestamp blacklisting (GDPR/SOC2 compliance)
+	CreateUserTimestampBlacklist(ctx context.Context, userID ulid.ULID, blacklistTimestamp int64, reason string) error
+	IsUserBlacklistedAfterTimestamp(ctx context.Context, userID ulid.ULID, tokenIssuedAt int64) (bool, error)
+	GetUserBlacklistTimestamp(ctx context.Context, userID ulid.ULID) (*int64, error)
+	
 	// Cleanup operations
 	CleanupExpiredTokens(ctx context.Context) error
 	CleanupTokensOlderThan(ctx context.Context, olderThan time.Time) error

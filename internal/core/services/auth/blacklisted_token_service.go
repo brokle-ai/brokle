@@ -74,28 +74,45 @@ func (s *blacklistedTokenService) GetBlacklistedToken(ctx context.Context, jti s
 	return s.blacklistedTokenRepo.GetByJTI(ctx, jti)
 }
 
-// BlacklistUserTokens blacklists all active tokens for a user (emergency revocation)
-func (s *blacklistedTokenService) BlacklistUserTokens(ctx context.Context, userID ulid.ULID, reason string) error {
-	// Use repository method to blacklist all user tokens
-	err := s.blacklistedTokenRepo.BlacklistUserTokens(ctx, userID, reason)
+// CreateUserTimestampBlacklist creates a user-wide timestamp blacklist for GDPR/SOC2 compliance
+func (s *blacklistedTokenService) CreateUserTimestampBlacklist(ctx context.Context, userID ulid.ULID, reason string) error {
+	blacklistTimestamp := time.Now().Unix()
+	
+	err := s.blacklistedTokenRepo.CreateUserTimestampBlacklist(ctx, userID, blacklistTimestamp, reason)
 	if err != nil {
-		return fmt.Errorf("failed to blacklist user tokens: %w", err)
+		return fmt.Errorf("failed to create user timestamp blacklist: %w", err)
 	}
 
-	// Log the bulk blacklisting action
+	// Log the user-wide blacklisting action
 	auditLog := auth.NewAuditLog(
 		&userID, 
 		nil, 
-		"token.bulk_blacklisted", 
+		"token.user_wide_blacklisted", 
 		"user", 
 		userID.String(), 
-		fmt.Sprintf(`{"reason": "%s", "action": "bulk_revocation"}`, reason),
+		fmt.Sprintf(`{"reason": "%s", "action": "user_wide_blacklist", "timestamp": %d}`, reason, blacklistTimestamp),
 		"", 
 		"",
 	)
 	s.auditRepo.Create(ctx, auditLog) // Don't fail if audit logging fails
 
 	return nil
+}
+
+// IsUserBlacklistedAfterTimestamp checks if a user is blacklisted after a specific timestamp
+func (s *blacklistedTokenService) IsUserBlacklistedAfterTimestamp(ctx context.Context, userID ulid.ULID, tokenIssuedAt int64) (bool, error) {
+	return s.blacklistedTokenRepo.IsUserBlacklistedAfterTimestamp(ctx, userID, tokenIssuedAt)
+}
+
+// GetUserBlacklistTimestamp gets the latest blacklist timestamp for a user
+func (s *blacklistedTokenService) GetUserBlacklistTimestamp(ctx context.Context, userID ulid.ULID) (*int64, error) {
+	return s.blacklistedTokenRepo.GetUserBlacklistTimestamp(ctx, userID)
+}
+
+// BlacklistUserTokens blacklists all active tokens for a user (now uses timestamp approach for GDPR/SOC2 compliance)
+func (s *blacklistedTokenService) BlacklistUserTokens(ctx context.Context, userID ulid.ULID, reason string) error {
+	// Use the new timestamp approach for comprehensive GDPR/SOC2 compliance
+	return s.CreateUserTimestampBlacklist(ctx, userID, reason)
 }
 
 // GetUserBlacklistedTokens retrieves blacklisted tokens for a specific user

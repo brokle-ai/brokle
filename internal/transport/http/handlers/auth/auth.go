@@ -734,10 +734,19 @@ func (h *Handler) RevokeAllSessions(c *gin.Context) {
 		return
 	}
 
+	// GDPR/SOC2 Compliance: Create user-wide timestamp blacklist to immediately block ALL tokens
+	// This ensures complete compliance - any token issued before this timestamp is immediately invalid
+	err = h.authService.RevokeUserAccessTokens(c.Request.Context(), userID, "user_requested_revoke_all_sessions")
+	if err != nil {
+		h.logger.WithError(err).WithField("user_id", userID).Error("Failed to create user-wide token blacklist")
+		// Log error but don't fail the request since sessions were already revoked
+		// This maintains partial security even if timestamp blacklisting fails
+	}
+
 	h.logger.WithFields(logrus.Fields{
 		"user_id":       userID,
 		"revoked_count": count,
-	}).Info("All sessions revoked successfully")
+	}).Info("All sessions and access tokens revoked successfully")
 
 	response.Success(c, gin.H{
 		"message": "All sessions revoked successfully",

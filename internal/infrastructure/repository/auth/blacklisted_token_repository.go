@@ -69,45 +69,52 @@ func (r *blacklistedTokenRepository) CleanupTokensOlderThan(ctx context.Context,
 		Error
 }
 
-// BlacklistUserTokens adds all active tokens for a user to blacklist
-func (r *blacklistedTokenRepository) BlacklistUserTokens(ctx context.Context, userID ulid.ULID, reason string) error {
-	// This is a complex operation that requires coordination with user sessions
-	// We'll get all active sessions for the user and blacklist their current JTIs
-	
-	// Get all active sessions for the user
-	var sessions []*auth.UserSession
-	err := r.db.WithContext(ctx).
-		Where("user_id = ? AND is_active = ? AND revoked_at IS NULL AND expires_at > ?", 
-			userID, true, time.Now()).
-		Find(&sessions).Error
+// CreateUserTimestampBlacklist creates a user-wide timestamp blacklist entry for GDPR/SOC2 compliance
+func (r *blacklistedTokenRepository) CreateUserTimestampBlacklist(ctx context.Context, userID ulid.ULID, blacklistTimestamp int64, reason string) error {
+	blacklistedToken := auth.NewUserTimestampBlacklistedToken(userID, blacklistTimestamp, reason)
+	return r.db.WithContext(ctx).Create(blacklistedToken).Error
+}
+
+// IsUserBlacklistedAfterTimestamp checks if a user is blacklisted after a specific timestamp
+func (r *blacklistedTokenRepository) IsUserBlacklistedAfterTimestamp(ctx context.Context, userID ulid.ULID, tokenIssuedAt int64) (bool, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&auth.BlacklistedToken{}).
+		Where("user_id = ? AND token_type = ? AND blacklist_timestamp IS NOT NULL AND ? < blacklist_timestamp AND expires_at > ?", 
+			userID, auth.TokenTypeUserTimestamp, tokenIssuedAt, time.Now()).
+		Count(&count).Error
 	
 	if err != nil {
-		return err
+		return false, err
 	}
-
-	// Create blacklist entries for all active JTIs
-	now := time.Now()
-	var blacklistedTokens []*auth.BlacklistedToken
 	
-	for _, session := range sessions {
-		if session.CurrentJTI != "" {
-			blacklistedToken := auth.NewBlacklistedToken(
-				session.CurrentJTI,
-				userID,
-				session.ExpiresAt,
-				reason,
-			)
-			blacklistedToken.CreatedAt = now
-			blacklistedTokens = append(blacklistedTokens, blacklistedToken)
+	return count > 0, nil
+}
+
+// GetUserBlacklistTimestamp gets the latest blacklist timestamp for a user
+func (r *blacklistedTokenRepository) GetUserBlacklistTimestamp(ctx context.Context, userID ulid.ULID) (*int64, error) {
+	var token auth.BlacklistedToken
+	err := r.db.WithContext(ctx).
+		Where("user_id = ? AND token_type = ? AND blacklist_timestamp IS NOT NULL AND expires_at > ?", 
+			userID, auth.TokenTypeUserTimestamp, time.Now()).
+		Order("blacklist_timestamp DESC").
+		First(&token).Error
+	
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil // No user-wide blacklist found
 		}
-	}
-
-	// Batch insert all blacklisted tokens
-	if len(blacklistedTokens) > 0 {
-		return r.db.WithContext(ctx).Create(&blacklistedTokens).Error
+		return nil, err
 	}
 	
-	return nil
+	return token.BlacklistTimestamp, nil
+}
+
+// BlacklistUserTokens adds all active tokens for a user to blacklist (legacy method, now replaced by timestamp approach)
+func (r *blacklistedTokenRepository) BlacklistUserTokens(ctx context.Context, userID ulid.ULID, reason string) error {
+	// DEPRECATED: This method is now replaced by CreateUserTimestampBlacklist for GDPR/SOC2 compliance
+	// Create a user-wide timestamp blacklist instead of trying to track individual JTIs
+	blacklistTimestamp := time.Now().Unix()
+	return r.CreateUserTimestampBlacklist(ctx, userID, blacklistTimestamp, reason)
 }
 
 // GetBlacklistedTokensByUser retrieves blacklisted tokens for a specific user
