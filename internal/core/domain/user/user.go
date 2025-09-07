@@ -20,9 +20,7 @@ type User struct {
 	Password  string    `json:"-" gorm:"size:255;not null"`
 	IsActive  bool      `json:"is_active" gorm:"default:true"`
 
-	// Profile fields
-	AvatarURL string `json:"avatar_url,omitempty" gorm:"size:500"`
-	Phone     string `json:"phone,omitempty" gorm:"size:50"`
+	// Basic user settings (kept in users table)
 	Timezone  string `json:"timezone" gorm:"size:50;default:'UTC'"`
 	Language  string `json:"language" gorm:"size:10;default:'en'"`
 
@@ -45,37 +43,41 @@ type User struct {
 	DeletedAt gorm.DeletedAt `json:"deleted_at,omitempty" gorm:"index"`
 }
 
-// UserProfile represents extended user profile information.
+// UserProfile represents extended user profile information and preferences.
 type UserProfile struct {
-	UserID      ulid.ULID `json:"user_id" db:"user_id"`
-	Bio         *string   `json:"bio,omitempty" db:"bio"`
-	Location    *string   `json:"location,omitempty" db:"location"`
-	Website     *string   `json:"website,omitempty" db:"website"`
-	TwitterURL  *string   `json:"twitter_url,omitempty" db:"twitter_url"`
-	LinkedInURL *string   `json:"linkedin_url,omitempty" db:"linkedin_url"`
-	GitHubURL   *string   `json:"github_url,omitempty" db:"github_url"`
-	Timezone    string    `json:"timezone" db:"timezone"`
-	Language    string    `json:"language" db:"language"`
-	Theme       string    `json:"theme" db:"theme"` // light, dark, auto
-	CreatedAt   time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at" db:"updated_at"`
+	UserID      ulid.ULID `json:"user_id" gorm:"type:char(26);primaryKey"`
+	
+	// Profile information
+	Bio         *string   `json:"bio,omitempty" gorm:"type:text"`
+	Location    *string   `json:"location,omitempty" gorm:"size:100"`
+	Website     *string   `json:"website,omitempty" gorm:"size:500"`
+	TwitterURL  *string   `json:"twitter_url,omitempty" gorm:"column:twitter_url;size:500"`
+	LinkedInURL *string   `json:"linkedin_url,omitempty" gorm:"column:linkedin_url;size:500"`
+	GitHubURL   *string   `json:"github_url,omitempty" gorm:"column:github_url;size:500"`
+	
+	// Contact information (moved from users table)
+	AvatarURL   *string   `json:"avatar_url,omitempty" gorm:"column:avatar_url;size:500"`
+	Phone       *string   `json:"phone,omitempty" gorm:"size:50"`
+	
+	// Display preferences
+	Timezone    string    `json:"timezone" gorm:"size:50;default:'UTC'"`
+	Language    string    `json:"language" gorm:"size:10;default:'en'"`
+	Theme       string    `json:"theme" gorm:"size:20;default:'light'"` // light, dark, auto
+	
+	// Notification preferences (moved from user_preferences table)
+	EmailNotifications    bool      `json:"email_notifications" gorm:"default:true"`
+	PushNotifications     bool      `json:"push_notifications" gorm:"default:true"`
+	MarketingEmails       bool      `json:"marketing_emails" gorm:"default:false"`
+	WeeklyReports         bool      `json:"weekly_reports" gorm:"default:true"`
+	MonthlyReports        bool      `json:"monthly_reports" gorm:"default:true"`
+	SecurityAlerts        bool      `json:"security_alerts" gorm:"default:true"`
+	BillingAlerts         bool      `json:"billing_alerts" gorm:"default:true"`
+	UsageThresholdPercent int       `json:"usage_threshold_percent" gorm:"default:80"` // 0-100
+	
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }
 
-// UserPreferences represents user application preferences.
-type UserPreferences struct {
-	UserID                ulid.ULID `json:"user_id" db:"user_id"`
-	EmailNotifications    bool      `json:"email_notifications" db:"email_notifications"`
-	PushNotifications     bool      `json:"push_notifications" db:"push_notifications"`
-	MarketingEmails       bool      `json:"marketing_emails" db:"marketing_emails"`
-	WeeklyReports         bool      `json:"weekly_reports" db:"weekly_reports"`
-	MonthlyReports        bool      `json:"monthly_reports" db:"monthly_reports"`
-	SecurityAlerts        bool      `json:"security_alerts" db:"security_alerts"`
-	BillingAlerts         bool      `json:"billing_alerts" db:"billing_alerts"`
-	UsageThresholdPercent int       `json:"usage_threshold_percent" db:"usage_threshold_percent"` // 0-100
-	Theme                 string    `json:"theme" db:"theme"`                                     // light, dark, system
-	CreatedAt             time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt             time.Time `json:"updated_at" db:"updated_at"`
-}
 
 // CreateUserRequest represents the data needed to create a new user.
 type CreateUserRequest struct {
@@ -91,27 +93,30 @@ type CreateUserRequest struct {
 type UpdateUserRequest struct {
 	FirstName *string `json:"first_name,omitempty" validate:"omitempty,min=1,max=100"`
 	LastName  *string `json:"last_name,omitempty" validate:"omitempty,min=1,max=100"`
-	AvatarURL *string `json:"avatar_url,omitempty" validate:"omitempty,url"`
-	Phone     *string `json:"phone,omitempty" validate:"omitempty,max=50"`
 	Timezone  *string `json:"timezone,omitempty" validate:"omitempty"`
 	Language  *string `json:"language,omitempty" validate:"omitempty,len=2"`
 }
 
 // UpdateProfileRequest represents the data that can be updated for a user profile.
 type UpdateProfileRequest struct {
+	// Profile information
 	Bio         *string `json:"bio,omitempty" validate:"omitempty,max=500"`
 	Location    *string `json:"location,omitempty" validate:"omitempty,max=100"`
 	Website     *string `json:"website,omitempty" validate:"omitempty,url"`
 	TwitterURL  *string `json:"twitter_url,omitempty" validate:"omitempty,url"`
 	LinkedInURL *string `json:"linkedin_url,omitempty" validate:"omitempty,url"`
 	GitHubURL   *string `json:"github_url,omitempty" validate:"omitempty,url"`
+	
+	// Contact information
+	AvatarURL   *string `json:"avatar_url,omitempty" validate:"omitempty,url"`
+	Phone       *string `json:"phone,omitempty" validate:"omitempty,max=50"`
+	
+	// Display preferences
 	Timezone    *string `json:"timezone,omitempty" validate:"omitempty"`
 	Language    *string `json:"language,omitempty" validate:"omitempty,len=2"`
 	Theme       *string `json:"theme,omitempty" validate:"omitempty,oneof=light dark auto"`
-}
-
-// UpdatePreferencesRequest represents the data that can be updated for user preferences.
-type UpdatePreferencesRequest struct {
+	
+	// Notification preferences
 	EmailNotifications    *bool `json:"email_notifications,omitempty"`
 	PushNotifications     *bool `json:"push_notifications,omitempty"`
 	MarketingEmails       *bool `json:"marketing_emails,omitempty"`
@@ -122,11 +127,11 @@ type UpdatePreferencesRequest struct {
 	UsageThresholdPercent *int  `json:"usage_threshold_percent,omitempty" validate:"omitempty,min=0,max=100"`
 }
 
+
 // PublicUser represents a user without sensitive information.
 type PublicUser struct {
 	ID                 ulid.ULID  `json:"id"`
 	Name               string     `json:"name"`
-	AvatarURL          *string    `json:"avatar_url,omitempty"`
 	IsEmailVerified    bool       `json:"is_email_verified"`
 	OnboardingCompleted bool      `json:"onboarding_completed"`
 	CreatedAt          time.Time  `json:"created_at"`
@@ -135,10 +140,11 @@ type PublicUser struct {
 // ToPublic converts a User to PublicUser, removing sensitive information.
 func (u *User) ToPublic() *PublicUser {
 	return &PublicUser{
-		ID:        u.ID,
-		Name:      u.GetFullName(),
-		AvatarURL: &u.AvatarURL,
-		CreatedAt: u.CreatedAt,
+		ID:                 u.ID,
+		Name:               u.GetFullName(),
+		IsEmailVerified:    u.IsEmailVerified,
+		OnboardingCompleted: u.OnboardingCompleted,
+		CreatedAt:          u.CreatedAt,
 	}
 }
 
@@ -219,19 +225,12 @@ func NewUser(email, firstName, lastName string) *User {
 // NewUserProfile creates a new user profile with default values.
 func NewUserProfile(userID ulid.ULID) *UserProfile {
 	return &UserProfile{
-		UserID:    userID,
-		Timezone:  "UTC",
-		Language:  "en",
-		Theme:     "light",
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}
-}
-
-// NewUserPreferences creates new user preferences with default values.
-func NewUserPreferences(userID ulid.ULID) *UserPreferences {
-	return &UserPreferences{
 		UserID:                userID,
+		Timezone:              "UTC",
+		Language:              "en", 
+		Theme:                 "light",
+		
+		// Default notification preferences
 		EmailNotifications:    true,
 		PushNotifications:     true,
 		MarketingEmails:       false,
@@ -240,10 +239,13 @@ func NewUserPreferences(userID ulid.ULID) *UserPreferences {
 		SecurityAlerts:        true,
 		BillingAlerts:         true,
 		UsageThresholdPercent: 80,
-		CreatedAt:             time.Now(),
-		UpdatedAt:             time.Now(),
+		
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
 }
 
-// Table name method for GORM
+
+// Table name methods for GORM
 func (User) TableName() string { return "users" }
+func (UserProfile) TableName() string { return "user_profiles" }

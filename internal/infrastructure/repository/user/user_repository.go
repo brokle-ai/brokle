@@ -354,26 +354,6 @@ func (r *userRepository) UpdateProfile(ctx context.Context, profile *user.UserPr
 	return r.db.WithContext(ctx).Save(profile).Error
 }
 
-// Preferences operations  
-func (r *userRepository) CreatePreferences(ctx context.Context, preferences *user.UserPreferences) error {
-	return r.db.WithContext(ctx).Create(preferences).Error
-}
-
-func (r *userRepository) GetPreferences(ctx context.Context, userID ulid.ULID) (*user.UserPreferences, error) {
-	var preferences user.UserPreferences
-	err := r.db.WithContext(ctx).Where("user_id = ?", userID).First(&preferences).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("preferences not found")
-		}
-		return nil, err
-	}
-	return &preferences, nil
-}
-
-func (r *userRepository) UpdatePreferences(ctx context.Context, preferences *user.UserPreferences) error {
-	return r.db.WithContext(ctx).Save(preferences).Error
-}
 
 // Additional missing interface methods
 func (r *userRepository) VerifyEmail(ctx context.Context, userID ulid.ULID, token string) error {
@@ -454,4 +434,12 @@ func (r *userRepository) Search(ctx context.Context, query string, limit, offset
 
 func (r *userRepository) GetByIDs(ctx context.Context, ids []ulid.ULID) ([]*user.User, error) {
 	return r.GetUsersByIDs(ctx, ids)
+}
+
+// Transaction executes a function within a database transaction
+func (r *userRepository) Transaction(fn func(user.Repository) error) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		txRepo := &userRepository{db: tx}
+		return fn(txRepo)
+	})
 }

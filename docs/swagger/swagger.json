@@ -1188,7 +1188,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Revoke all user sessions (logout from all devices)",
+                "description": "Revoke all user sessions (logout from all devices). This will invalidate ALL active sessions for the user.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1201,7 +1201,7 @@
                 "summary": "Revoke all user sessions",
                 "parameters": [
                     {
-                        "description": "Revocation options",
+                        "description": "Request body (currently unused but kept for future extensibility)",
                         "name": "request",
                         "in": "body",
                         "schema": {
@@ -4874,98 +4874,6 @@
                 }
             }
         },
-        "/api/v1/users/me/preferences": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Get the preferences settings of the currently authenticated user",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "User"
-                ],
-                "summary": "Get user preferences",
-                "responses": {
-                    "200": {
-                        "description": "User preferences retrieved successfully",
-                        "schema": {
-                            "$ref": "#/definitions/response.SuccessResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Update the preferences settings of the currently authenticated user",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "User"
-                ],
-                "summary": "Update user preferences",
-                "parameters": [
-                    {
-                        "description": "Preferences update information",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/internal_transport_http_handlers_user.UpdatePreferencesRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Preferences updated successfully",
-                        "schema": {
-                            "$ref": "#/definitions/response.MessageResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request payload",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/health": {
             "get": {
                 "description": "Get basic health status of the service",
@@ -6117,13 +6025,7 @@
             }
         },
         "auth.RevokeAllSessionsRequest": {
-            "type": "object",
-            "properties": {
-                "except_current": {
-                    "type": "boolean",
-                    "example": true
-                }
-            }
+            "type": "object"
         },
         "billing.BillingAlert": {
             "type": "object",
@@ -7036,36 +6938,6 @@
                     "maxLength": 100,
                     "minLength": 2,
                     "example": "Acme Corporation"
-                }
-            }
-        },
-        "internal_transport_http_handlers_user.UpdatePreferencesRequest": {
-            "description": "User preferences update information",
-            "type": "object",
-            "properties": {
-                "dashboard_settings": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "email_notifications": {
-                    "type": "boolean",
-                    "example": true
-                },
-                "language": {
-                    "type": "string",
-                    "example": "en"
-                },
-                "theme": {
-                    "type": "string",
-                    "example": "dark"
-                },
-                "timezone": {
-                    "type": "string",
-                    "example": "UTC"
-                },
-                "webhook_notifications": {
-                    "type": "boolean",
-                    "example": false
                 }
             }
         },

@@ -365,8 +365,6 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 	updateReq := &user.UpdateUserRequest{
 		FirstName: req.FirstName,
 		LastName:  req.LastName,
-		AvatarURL: req.AvatarURL,
-		Phone:     req.Phone,
 		Timezone:  req.Timezone,
 		Language:  req.Language,
 	}

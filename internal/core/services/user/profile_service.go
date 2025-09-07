@@ -88,19 +88,19 @@ func (s *profileService) UpdateProfile(ctx context.Context, userID ulid.ULID, re
 
 // UploadAvatar uploads and sets user avatar
 func (s *profileService) UploadAvatar(ctx context.Context, userID ulid.ULID, imageData []byte, contentType string) (*user.UserProfile, error) {
-	existingUser, err := s.userRepo.GetByID(ctx, userID)
+	profile, err := s.userRepo.GetProfile(ctx, userID)
 	if err != nil {
-		return nil, fmt.Errorf("user not found: %w", err)
+		return nil, fmt.Errorf("profile not found: %w", err)
 	}
 
 	// TODO: Implement actual image upload to storage service
 	// For now, just simulate with a placeholder URL
 	avatarURL := fmt.Sprintf("https://api.example.com/avatars/%s.jpg", userID.String())
 	
-	existingUser.AvatarURL = avatarURL
-	existingUser.UpdatedAt = time.Now()
+	profile.AvatarURL = &avatarURL
+	profile.UpdatedAt = time.Now()
 
-	err = s.userRepo.Update(ctx, existingUser)
+	err = s.userRepo.UpdateProfile(ctx, profile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to update avatar: %w", err)
 	}
@@ -114,16 +114,16 @@ func (s *profileService) UploadAvatar(ctx context.Context, userID ulid.ULID, ima
 
 // RemoveAvatar removes user avatar
 func (s *profileService) RemoveAvatar(ctx context.Context, userID ulid.ULID) error {
-	existingUser, err := s.userRepo.GetByID(ctx, userID)
+	profile, err := s.userRepo.GetProfile(ctx, userID)
 	if err != nil {
-		return fmt.Errorf("user not found: %w", err)
+		return fmt.Errorf("profile not found: %w", err)
 	}
 
 	// TODO: Delete avatar from storage service
-	existingUser.AvatarURL = ""
-	existingUser.UpdatedAt = time.Now()
+	profile.AvatarURL = nil
+	profile.UpdatedAt = time.Now()
 
-	err = s.userRepo.Update(ctx, existingUser)
+	err = s.userRepo.UpdateProfile(ctx, profile)
 	if err != nil {
 		return fmt.Errorf("failed to remove avatar: %w", err)
 	}
@@ -158,20 +158,16 @@ func (s *profileService) GetPublicProfile(ctx context.Context, userID ulid.ULID)
 		UserID:    existingUser.ID,
 		FirstName: existingUser.FirstName,
 		LastName:  existingUser.LastName,
-		AvatarURL: existingUser.AvatarURL,
-		Title:     "", // Not available in current model
-		Bio:       "", // Would get from profile if needed
-		Location:  "", // Would get from profile if needed
+		AvatarURL: nil, // Will be set from profile if available
+		Bio:       nil, // Will be set from profile if available
+		Location:  nil, // Will be set from profile if available
 	}
 
 	// Set profile fields if available
 	if profile != nil {
-		if profile.Bio != nil {
-			publicProfile.Bio = *profile.Bio
-		}
-		if profile.Location != nil {
-			publicProfile.Location = *profile.Location
-		}
+		publicProfile.AvatarURL = profile.AvatarURL
+		publicProfile.Bio = profile.Bio
+		publicProfile.Location = profile.Location
 	}
 
 	return publicProfile, nil
@@ -190,6 +186,9 @@ func (s *profileService) GetProfileCompleteness(ctx context.Context, userID ulid
 		Recommendations: []string{},
 		Sections:        make(map[string]int),
 	}
+
+	// Get profile data for avatar check
+	profile, _ := s.userRepo.GetProfile(ctx, userID)
 
 	// Check basic info
 	basicFields := 0
@@ -210,7 +209,8 @@ func (s *profileService) GetProfileCompleteness(ctx context.Context, userID ulid
 		completeness.CompletedFields = append(completeness.CompletedFields, "email")
 		basicFields++
 	}
-	if existingUser.AvatarURL != "" {
+	// Check avatar from profile
+	if profile != nil && profile.AvatarURL != nil && *profile.AvatarURL != "" {
 		completeness.CompletedFields = append(completeness.CompletedFields, "avatar")
 		basicFields++
 	} else {
@@ -219,8 +219,7 @@ func (s *profileService) GetProfileCompleteness(ctx context.Context, userID ulid
 	}
 	completeness.Sections["basic"] = (basicFields * 100) / totalBasicFields
 
-	// Check extended info from profile
-	profile, _ := s.userRepo.GetProfile(ctx, userID)
+	// Check extended info from profile (already fetched above)
 	extendedFields := 0
 	totalExtendedFields := 3
 	
@@ -302,4 +301,153 @@ func (s *profileService) ValidateProfile(ctx context.Context, userID ulid.ULID) 
 	}
 
 	return validation, nil
+}
+
+// GetNotificationPreferences retrieves user notification preferences from profile
+func (s *profileService) GetNotificationPreferences(ctx context.Context, userID ulid.ULID) (*user.NotificationPreferences, error) {
+	profile, err := s.userRepo.GetProfile(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("profile not found: %w", err)
+	}
+
+	return &user.NotificationPreferences{
+		EmailNotifications:      profile.EmailNotifications,
+		PushNotifications:       profile.PushNotifications,
+		SMSNotifications:        false, // Not stored in profile
+		MarketingEmails:         profile.MarketingEmails,
+		SecurityAlerts:          profile.SecurityAlerts,
+		ProductUpdates:          false, // Not stored in profile
+		WeeklyDigest:            profile.WeeklyReports,
+		InvitationNotifications: true, // Default value
+	}, nil
+}
+
+// UpdateNotificationPreferences updates user notification preferences in profile
+func (s *profileService) UpdateNotificationPreferences(ctx context.Context, userID ulid.ULID, req *user.UpdateNotificationPreferencesRequest) (*user.NotificationPreferences, error) {
+	profile, err := s.userRepo.GetProfile(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("profile not found: %w", err)
+	}
+
+	// Update notification fields if provided
+	if req.EmailNotifications != nil {
+		profile.EmailNotifications = *req.EmailNotifications
+	}
+	if req.PushNotifications != nil {
+		profile.PushNotifications = *req.PushNotifications
+	}
+	if req.MarketingEmails != nil {
+		profile.MarketingEmails = *req.MarketingEmails
+	}
+	if req.SecurityAlerts != nil {
+		profile.SecurityAlerts = *req.SecurityAlerts
+	}
+	if req.WeeklyDigest != nil {
+		profile.WeeklyReports = *req.WeeklyDigest
+	}
+
+	err = s.userRepo.UpdateProfile(ctx, profile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update profile: %w", err)
+	}
+
+	// Audit log
+	s.auditRepo.Create(ctx, auth.NewAuditLog(&userID, nil, "user.notification_preferences_updated", "profile", userID.String(), "", "", ""))
+
+	return s.GetNotificationPreferences(ctx, userID)
+}
+
+// GetThemePreferences retrieves user theme preferences from profile and user
+func (s *profileService) GetThemePreferences(ctx context.Context, userID ulid.ULID) (*user.ThemePreferences, error) {
+	existingUser, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("user not found: %w", err)
+	}
+
+	profile, err := s.userRepo.GetProfile(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("profile not found: %w", err)
+	}
+
+	return &user.ThemePreferences{
+		Theme:          profile.Theme,
+		PrimaryColor:   "#007bff",             // Default blue
+		Language:       existingUser.Language,
+		TimeFormat:     "12h",                 // Default
+		DateFormat:     "MM/dd/yyyy",          // Default
+		Timezone:       existingUser.Timezone,
+		CompactMode:    false,                 // Default
+		ShowAnimations: true,                  // Default
+		HighContrast:   false,                 // Default
+	}, nil
+}
+
+// UpdateThemePreferences updates user theme preferences in both user and profile
+func (s *profileService) UpdateThemePreferences(ctx context.Context, userID ulid.ULID, req *user.UpdateThemePreferencesRequest) (*user.ThemePreferences, error) {
+	existingUser, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("user not found: %w", err)
+	}
+
+	profile, err := s.userRepo.GetProfile(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("profile not found: %w", err)
+	}
+
+	// Update user fields if provided
+	updated := false
+	if req.Language != nil {
+		existingUser.Language = *req.Language
+		updated = true
+	}
+	if req.Timezone != nil {
+		existingUser.Timezone = *req.Timezone
+		updated = true
+	}
+
+	if updated {
+		existingUser.UpdatedAt = time.Now()
+		err = s.userRepo.Update(ctx, existingUser)
+		if err != nil {
+			return nil, fmt.Errorf("failed to update user: %w", err)
+		}
+	}
+
+	// Update profile theme if provided
+	if req.Theme != nil {
+		profile.Theme = *req.Theme
+		profile.UpdatedAt = time.Now()
+		err = s.userRepo.UpdateProfile(ctx, profile)
+		if err != nil {
+			return nil, fmt.Errorf("failed to update profile: %w", err)
+		}
+	}
+
+	// Audit log
+	s.auditRepo.Create(ctx, auth.NewAuditLog(&userID, nil, "user.theme_updated", "profile", userID.String(), "", "", ""))
+
+	return s.GetThemePreferences(ctx, userID)
+}
+
+// GetPrivacyPreferences retrieves user privacy preferences (stub implementation)
+func (s *profileService) GetPrivacyPreferences(ctx context.Context, userID ulid.ULID) (*user.PrivacyPreferences, error) {
+	// Return default privacy preferences since they're not in the current model
+	return &user.PrivacyPreferences{
+		ProfileVisibility:      user.ProfileVisibilityPublic, // Default
+		ShowEmail:              false,                         // Default private
+		ShowLastSeen:           true,                          // Default
+		AllowDirectMessages:    true,                          // Default
+		DataProcessingConsent:  true,                          // Required
+		AnalyticsConsent:       true,                          // Default
+		ThirdPartyIntegrations: false,                         // Default private
+	}, nil
+}
+
+// UpdatePrivacyPreferences updates user privacy preferences (stub implementation)
+func (s *profileService) UpdatePrivacyPreferences(ctx context.Context, userID ulid.ULID, req *user.UpdatePrivacyPreferencesRequest) (*user.PrivacyPreferences, error) {
+	// For now, just create audit log since privacy preferences aren't fully implemented
+	s.auditRepo.Create(ctx, auth.NewAuditLog(&userID, nil, "user.privacy_updated", "profile", userID.String(), "", "", ""))
+
+	// Return current preferences (would be updated if fully implemented)
+	return s.GetPrivacyPreferences(ctx, userID)
 }

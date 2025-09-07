@@ -45,7 +45,7 @@ type UserService interface {
 	GetUserStats(ctx context.Context) (*UserStats, error)
 }
 
-// ProfileService defines the interface for user profile management.
+// ProfileService defines the interface for user profile management and preferences.
 type ProfileService interface {
 	// Profile management
 	GetProfile(ctx context.Context, userID ulid.ULID) (*UserProfile, error)
@@ -53,34 +53,25 @@ type ProfileService interface {
 	UploadAvatar(ctx context.Context, userID ulid.ULID, imageData []byte, contentType string) (*UserProfile, error)
 	RemoveAvatar(ctx context.Context, userID ulid.ULID) error
 	
+	// Notification preferences (consolidated from preferences service)
+	GetNotificationPreferences(ctx context.Context, userID ulid.ULID) (*NotificationPreferences, error)
+	UpdateNotificationPreferences(ctx context.Context, userID ulid.ULID, req *UpdateNotificationPreferencesRequest) (*NotificationPreferences, error)
+	
+	// Theme and UI preferences (consolidated from preferences service)
+	GetThemePreferences(ctx context.Context, userID ulid.ULID) (*ThemePreferences, error)
+	UpdateThemePreferences(ctx context.Context, userID ulid.ULID, req *UpdateThemePreferencesRequest) (*ThemePreferences, error)
+	
 	// Profile visibility and privacy
 	UpdateProfileVisibility(ctx context.Context, userID ulid.ULID, visibility ProfileVisibility) error
 	GetPublicProfile(ctx context.Context, userID ulid.ULID) (*PublicProfile, error)
+	GetPrivacyPreferences(ctx context.Context, userID ulid.ULID) (*PrivacyPreferences, error)
+	UpdatePrivacyPreferences(ctx context.Context, userID ulid.ULID, req *UpdatePrivacyPreferencesRequest) (*PrivacyPreferences, error)
 	
 	// Profile completeness and validation
 	GetProfileCompleteness(ctx context.Context, userID ulid.ULID) (*ProfileCompleteness, error)
 	ValidateProfile(ctx context.Context, userID ulid.ULID) (*ProfileValidation, error)
 }
 
-// PreferenceService defines the interface for user preferences and settings management.
-type PreferenceService interface {
-	// General preferences
-	GetPreferences(ctx context.Context, userID ulid.ULID) (*UserPreferences, error)
-	UpdatePreferences(ctx context.Context, userID ulid.ULID, req *UpdatePreferencesRequest) (*UserPreferences, error)
-	ResetPreferences(ctx context.Context, userID ulid.ULID) (*UserPreferences, error)
-	
-	// Notification preferences
-	GetNotificationPreferences(ctx context.Context, userID ulid.ULID) (*NotificationPreferences, error)
-	UpdateNotificationPreferences(ctx context.Context, userID ulid.ULID, req *UpdateNotificationPreferencesRequest) (*NotificationPreferences, error)
-	
-	// Theme and UI preferences
-	GetThemePreferences(ctx context.Context, userID ulid.ULID) (*ThemePreferences, error)
-	UpdateThemePreferences(ctx context.Context, userID ulid.ULID, req *UpdateThemePreferencesRequest) (*ThemePreferences, error)
-	
-	// Privacy preferences
-	GetPrivacyPreferences(ctx context.Context, userID ulid.ULID) (*PrivacyPreferences, error)
-	UpdatePrivacyPreferences(ctx context.Context, userID ulid.ULID, req *UpdatePrivacyPreferencesRequest) (*PrivacyPreferences, error)
-}
 
 // OnboardingService defines the interface for user onboarding and initial setup.
 type OnboardingService interface {
@@ -113,10 +104,9 @@ type PublicProfile struct {
 	UserID    ulid.ULID `json:"user_id"`
 	FirstName string    `json:"first_name"`
 	LastName  string    `json:"last_name"`
-	AvatarURL string    `json:"avatar_url,omitempty"`
-	Title     string    `json:"title,omitempty"`
-	Bio       string    `json:"bio,omitempty"`
-	Location  string    `json:"location,omitempty"`
+	AvatarURL *string   `json:"avatar_url,omitempty"`
+	Bio       *string   `json:"bio,omitempty"`
+	Location  *string   `json:"location,omitempty"`
 }
 
 // ProfileCompleteness represents profile completion status
