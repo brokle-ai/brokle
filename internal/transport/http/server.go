@@ -271,6 +271,33 @@ func (s *Server) setupV1Routes(router *gin.RouterGroup) {
 		billing.POST("/:orgId/subscription", s.handlers.Billing.UpdateSubscription)
 	}
 
+	// RBAC routes (require authentication)
+	rbac := protected.Group("/rbac")
+	{
+		// Role management
+		rbac.GET("/roles", s.handlers.RBAC.ListRoles)
+		rbac.POST("/roles", s.handlers.RBAC.CreateRole)
+		rbac.GET("/roles/:roleId", s.handlers.RBAC.GetRole)
+		rbac.PUT("/roles/:roleId", s.handlers.RBAC.UpdateRole)
+		rbac.DELETE("/roles/:roleId", s.handlers.RBAC.DeleteRole)
+		rbac.GET("/roles/statistics", s.handlers.RBAC.GetRoleStatistics)
+		
+		// Permission management
+		rbac.GET("/permissions", s.handlers.RBAC.ListPermissions)
+		rbac.POST("/permissions", s.handlers.RBAC.CreatePermission)
+		rbac.GET("/permissions/:permissionId", s.handlers.RBAC.GetPermission)
+		rbac.GET("/permissions/resources", s.handlers.RBAC.GetAvailableResources)
+		rbac.GET("/permissions/resources/:resource/actions", s.handlers.RBAC.GetActionsForResource)
+		
+		// User role assignment
+		rbac.GET("/users/:userId/organizations/:orgId/role", s.handlers.RBAC.GetUserRole)
+		rbac.POST("/users/:userId/organizations/:orgId/role", s.handlers.RBAC.AssignUserRole)
+		
+		// Permission checking
+		rbac.GET("/users/:userId/organizations/:orgId/permissions", s.handlers.RBAC.GetUserPermissions)
+		rbac.POST("/users/:userId/organizations/:orgId/permissions/check", s.handlers.RBAC.CheckUserPermissions)
+	}
+
 	// Admin routes (require admin role)
 	adminRoutes := protected.Group("/admin")
 	adminRoutes.Use(middleware.RequireRole("admin")) // Admin role middleware

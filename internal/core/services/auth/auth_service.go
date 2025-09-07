@@ -81,7 +81,7 @@ func (s *authService) Login(ctx context.Context, req *auth.LoginRequest) (*auth.
 	// Get user permissions for default organization
 	var permissions []string
 	if user.DefaultOrganizationID != nil {
-		permissions, _ = s.roleService.GetUserPermissions(ctx, user.ID, *user.DefaultOrganizationID)
+		permissions, _ = s.roleService.GetUserPermissionStrings(ctx, user.ID, *user.DefaultOrganizationID)
 	}
 
 	// Generate access token with JTI for session tracking
@@ -195,7 +195,7 @@ func (s *authService) Register(ctx context.Context, req *auth.RegisterRequest) (
 	// Auto-login: Generate tokens for the new user
 	var permissions []string
 	if newUser.DefaultOrganizationID != nil {
-		permissions, _ = s.roleService.GetUserPermissions(ctx, newUser.ID, *newUser.DefaultOrganizationID)
+		permissions, _ = s.roleService.GetUserPermissionStrings(ctx, newUser.ID, *newUser.DefaultOrganizationID)
 	}
 
 	// Generate access token with JTI for session tracking
@@ -295,7 +295,7 @@ func (s *authService) RefreshToken(ctx context.Context, req *auth.RefreshTokenRe
 	// Get user permissions
 	var permissions []string
 	if user.DefaultOrganizationID != nil {
-		permissions, _ = s.roleService.GetUserPermissions(ctx, user.ID, *user.DefaultOrganizationID)
+		permissions, _ = s.roleService.GetUserPermissionStrings(ctx, user.ID, *user.DefaultOrganizationID)
 	}
 
 	// Generate new access token with JTI for session tracking
@@ -597,7 +597,7 @@ func (s *authService) GetAuthContext(ctx context.Context, token string) (*auth.A
 	// Get user permissions if organization is specified
 	var permissions []string
 	if claims.OrganizationID != nil {
-		permissions, _ = s.roleService.GetUserPermissions(ctx, claims.UserID, *claims.OrganizationID)
+		permissions, _ = s.roleService.GetUserPermissionStrings(ctx, claims.UserID, *claims.OrganizationID)
 	}
 
 	return &auth.AuthContext{

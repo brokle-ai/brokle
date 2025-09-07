@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"brokle/internal/core/domain/auth"
 	"brokle/pkg/ulid"
@@ -195,11 +196,37 @@ func (s *roleService) DeleteRole(ctx context.Context, roleID ulid.ULID) error {
 	return nil
 }
 
-// ListRoles lists roles for an organization
-func (s *roleService) ListRoles(ctx context.Context, orgID ulid.ULID) ([]*auth.Role, error) {
-	roles, err := s.roleRepo.GetAllRoles(ctx, orgID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list roles: %w", err)
+// ListRoles lists roles for an organization with pagination (interface-compatible version)
+func (s *roleService) ListRoles(ctx context.Context, orgID *ulid.ULID, limit, offset int) (*auth.RoleListResponse, error) {
+	var roles []*auth.Role
+	var totalCount int
+	var err error
+
+	if orgID == nil {
+		// Get system roles only
+		roles, err = s.roleRepo.GetSystemRoles(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list system roles: %w", err)
+		}
+		totalCount = len(roles)
+	} else {
+		// Get organization roles
+		allRoles, err := s.roleRepo.GetAllRoles(ctx, *orgID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list organization roles: %w", err)
+		}
+		totalCount = len(allRoles)
+		
+		// Apply pagination
+		start := offset
+		end := offset + limit
+		if start > len(allRoles) {
+			start = len(allRoles)
+		}
+		if end > len(allRoles) {
+			end = len(allRoles)
+		}
+		roles = allRoles[start:end]
 	}
 
 	// Load permissions for each role
@@ -214,7 +241,12 @@ func (s *roleService) ListRoles(ctx context.Context, orgID ulid.ULID) ([]*auth.R
 		}
 	}
 
-	return roles, nil
+	return &auth.RoleListResponse{
+		Roles:      roles,
+		TotalCount: totalCount,
+		Page:       offset/limit + 1,
+		PageSize:   limit,
+	}, nil
 }
 
 // GetSystemRoles returns system-defined roles
@@ -301,7 +333,13 @@ func (s *roleService) HasPermission(ctx context.Context, userID, orgID ulid.ULID
 		return false, fmt.Errorf("failed to get user permissions: %w", err)
 	}
 
-	return s.checkPermission(permission, userPermissions), nil
+	// Convert permissions to strings for checking
+	permStrings := make([]string, len(userPermissions))
+	for i, perm := range userPermissions {
+		permStrings[i] = perm.Name
+	}
+
+	return s.checkPermission(permission, permStrings), nil
 }
 
 // HasPermissions checks if a user has all specified permissions in an organization
@@ -311,8 +349,14 @@ func (s *roleService) HasPermissions(ctx context.Context, userID, orgID ulid.ULI
 		return false, fmt.Errorf("failed to get user permissions: %w", err)
 	}
 
+	// Convert permissions to strings for checking
+	permStrings := make([]string, len(userPermissions))
+	for i, perm := range userPermissions {
+		permStrings[i] = perm.Name
+	}
+
 	for _, permission := range permissions {
-		if !s.checkPermission(permission, userPermissions) {
+		if !s.checkPermission(permission, permStrings) {
 			return false, nil
 		}
 	}
@@ -326,25 +370,91 @@ func (s *roleService) HasAnyPermission(ctx context.Context, userID, orgID ulid.U
 		return false, fmt.Errorf("failed to get user permissions: %w", err)
 	}
 
+	// Convert permissions to strings for checking
+	permStrings := make([]string, len(userPermissions))
+	for i, perm := range userPermissions {
+		permStrings[i] = perm.Name
+	}
+
 	for _, permission := range permissions {
-		if s.checkPermission(permission, userPermissions) {
+		if s.checkPermission(permission, permStrings) {
 			return true, nil
 		}
 	}
 	return false, nil
 }
 
-// GetUserPermissions returns all permissions for a user in an organization
-func (s *roleService) GetUserPermissions(ctx context.Context, userID, orgID ulid.ULID) ([]string, error) {
-	return s.permissionRepo.GetUserPermissions(ctx, userID, orgID)
+// CheckPermissions checks multiple permissions and returns detailed results
+func (s *roleService) CheckPermissions(ctx context.Context, userID, orgID ulid.ULID, resourceActions []string) (*auth.CheckPermissionsResponse, error) {
+	userPermissions, err := s.permissionRepo.GetUserPermissions(ctx, userID, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user permissions: %w", err)
+	}
+
+	// Convert permissions to strings for checking
+	permStrings := make([]string, len(userPermissions))
+	for i, perm := range userPermissions {
+		permStrings[i] = perm.Name
+	}
+
+	results := make(map[string]bool)
+	for _, resourceAction := range resourceActions {
+		results[resourceAction] = s.checkPermission(resourceAction, permStrings)
+	}
+
+	return &auth.CheckPermissionsResponse{
+		Results: results,
+	}, nil
+}
+
+// GetUserPermissions returns full user permissions response with role info
+func (s *roleService) GetUserPermissions(ctx context.Context, userID, orgID ulid.ULID) (*auth.UserPermissionsResponse, error) {
+	// Get user's role
+	role, err := s.roleRepo.GetUserRole(ctx, userID, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user role: %w", err)
+	}
+
+	// Get user's permissions
+	userPermissions, err := s.permissionRepo.GetUserPermissions(ctx, userID, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user permissions: %w", err)
+	}
+
+	// Convert permissions to resource:action strings
+	resourceActions := make([]string, len(userPermissions))
+	for i, perm := range userPermissions {
+		resourceActions[i] = perm.Name
+	}
+
+	return &auth.UserPermissionsResponse{
+		UserID:          userID,
+		OrganizationID:  orgID,
+		Role:            role,
+		Permissions:     userPermissions,
+		ResourceActions: resourceActions,
+	}, nil
+}
+
+// GetUserPermissionStrings returns user permissions as strings only
+func (s *roleService) GetUserPermissionStrings(ctx context.Context, userID, orgID ulid.ULID) ([]string, error) {
+	userPermissions, err := s.permissionRepo.GetUserPermissions(ctx, userID, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user permissions: %w", err)
+	}
+
+	// Convert permissions to strings
+	permStrings := make([]string, len(userPermissions))
+	for i, perm := range userPermissions {
+		permStrings[i] = perm.Name
+	}
+
+	return permStrings, nil
 }
 
 // GetUserRole returns the user's role in an organization (assumes single role per user per org)
 func (s *roleService) GetUserRole(ctx context.Context, userID, orgID ulid.ULID) (*auth.Role, error) {
-	// This would typically require a user-role repository to get the user's assigned role
-	// For now, this is a placeholder that would need to be implemented based on your
-	// organization membership system
-	return nil, fmt.Errorf("GetUserRole not yet implemented - requires user-organization membership integration")
+	return s.roleRepo.GetUserRole(ctx, userID, orgID)
 }
 
 // Role seeding and defaults
@@ -400,13 +510,14 @@ func (s *roleService) SeedSystemPermissions(ctx context.Context) error {
 			return fmt.Errorf("invalid permission format: %s", permName)
 		}
 
-		category := parts[0]
+		resource := parts[0]
 		action := parts[1]
-		displayName := fmt.Sprintf("%s %s", strings.Title(action), strings.Title(category))
-		description := fmt.Sprintf("Permission to %s %s", action, category)
+		displayName := fmt.Sprintf("%s %s", strings.Title(action), strings.Title(resource))
+		description := fmt.Sprintf("Permission to %s %s", action, resource)
+		category := resource
 
 		// Create permission
-		perm := auth.NewPermission(permName, displayName, description, category)
+		perm := auth.NewPermission(resource, action, displayName, description, category)
 		if err := s.permissionRepo.Create(ctx, perm); err != nil {
 			return fmt.Errorf("failed to create permission %s: %w", permName, err)
 		}
@@ -420,6 +531,32 @@ func (s *roleService) EnsureDefaultRoles(ctx context.Context, orgID ulid.ULID) e
 	// For now, this just ensures system roles are available
 	// In a full implementation, you might want to create organization-specific default roles
 	return s.SeedSystemRoles(ctx)
+}
+
+// CanDeleteRole checks if a role can be safely deleted
+func (s *roleService) CanDeleteRole(ctx context.Context, roleID ulid.ULID) (bool, error) {
+	// Get role to check if it's a system role
+	role, err := s.roleRepo.GetByID(ctx, roleID)
+	if err != nil {
+		return false, fmt.Errorf("failed to get role: %w", err)
+	}
+
+	// System roles cannot be deleted
+	if role.IsSystemRole {
+		return false, nil
+	}
+
+	return true, nil
+}
+
+// AssignUserRole assigns a role to a user in an organization
+func (s *roleService) AssignUserRole(ctx context.Context, userID, orgID, roleID ulid.ULID) error {
+	return s.roleRepo.AssignUserRole(ctx, userID, orgID, roleID)
+}
+
+// RevokeUserRole revokes a user's role in an organization
+func (s *roleService) RevokeUserRole(ctx context.Context, userID, orgID ulid.ULID) error {
+	return s.roleRepo.RevokeUserRole(ctx, userID, orgID)
 }
 
 // Helper methods
@@ -447,4 +584,204 @@ func (s *roleService) checkPermission(requestedPermission string, userPermission
 	}
 	
 	return false
+}
+
+// Missing interface methods implementation
+
+
+// GetGlobalSystemRole gets a specific global system role by name
+func (s *roleService) GetGlobalSystemRole(ctx context.Context, name string) (*auth.Role, error) {
+	role, err := s.roleRepo.GetByName(ctx, nil, name)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get global system role: %w", err)
+	}
+
+	// Load permissions
+	permissions, err := s.permissionRepo.GetPermissionsByRoleID(ctx, role.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load role permissions: %w", err)
+	}
+	role.Permissions = make([]auth.Permission, len(permissions))
+	for i, perm := range permissions {
+		role.Permissions[i] = *perm
+	}
+
+	return role, nil
+}
+
+// GetOrganizationRoles gets organization-specific roles only
+func (s *roleService) GetOrganizationRoles(ctx context.Context, orgID ulid.ULID) ([]*auth.Role, error) {
+	roles, err := s.roleRepo.GetAllRoles(ctx, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get organization roles: %w", err)
+	}
+
+	// Filter out system roles to get only org-specific roles
+	orgRoles := make([]*auth.Role, 0)
+	for _, role := range roles {
+		if !role.IsSystemRole {
+			permissions, err := s.permissionRepo.GetPermissionsByRoleID(ctx, role.ID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to load permissions for role %s: %w", role.ID, err)
+			}
+			role.Permissions = make([]auth.Permission, len(permissions))
+			for i, perm := range permissions {
+				role.Permissions[i] = *perm
+			}
+			orgRoles = append(orgRoles, role)
+		}
+	}
+
+	return orgRoles, nil
+}
+
+// GetAvailableRoles gets system + org roles available for assignment
+func (s *roleService) GetAvailableRoles(ctx context.Context, orgID ulid.ULID) ([]*auth.Role, error) {
+	// Get all roles for the organization (includes system roles)
+	roles, err := s.roleRepo.GetAllRoles(ctx, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get available roles: %w", err)
+	}
+
+	// Load permissions for each role
+	for _, role := range roles {
+		permissions, err := s.permissionRepo.GetPermissionsByRoleID(ctx, role.ID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load permissions for role %s: %w", role.ID, err)
+		}
+		role.Permissions = make([]auth.Permission, len(permissions))
+		for i, perm := range permissions {
+			role.Permissions[i] = *perm
+		}
+	}
+
+	return roles, nil
+}
+
+// SearchRoles searches roles with pagination
+func (s *roleService) SearchRoles(ctx context.Context, orgID *ulid.ULID, query string, limit, offset int) (*auth.RoleListResponse, error) {
+	// For now, implement basic search by getting all roles and filtering
+	// In a production system, this would be implemented at the repository level with DB search
+	allRoles, err := s.ListRoles(ctx, orgID, 1000, 0) // Get all roles first
+	if err != nil {
+		return nil, fmt.Errorf("failed to search roles: %w", err)
+	}
+
+	// Filter roles by query
+	filteredRoles := make([]*auth.Role, 0)
+	for _, role := range allRoles.Roles {
+		if strings.Contains(strings.ToLower(role.Name), strings.ToLower(query)) ||
+		   strings.Contains(strings.ToLower(role.DisplayName), strings.ToLower(query)) ||
+		   strings.Contains(strings.ToLower(role.Description), strings.ToLower(query)) {
+			filteredRoles = append(filteredRoles, role)
+		}
+	}
+
+	// Apply pagination
+	totalCount := len(filteredRoles)
+	start := offset
+	end := offset + limit
+	if start > len(filteredRoles) {
+		start = len(filteredRoles)
+	}
+	if end > len(filteredRoles) {
+		end = len(filteredRoles)
+	}
+	paginatedRoles := filteredRoles[start:end]
+
+	return &auth.RoleListResponse{
+		Roles:      paginatedRoles,
+		TotalCount: totalCount,
+		Page:       offset/limit + 1,
+		PageSize:   limit,
+	}, nil
+}
+
+// UpdateRolePermissions replaces all permissions for a role
+func (s *roleService) UpdateRolePermissions(ctx context.Context, roleID ulid.ULID, permissionIDs []ulid.ULID) error {
+	// Check if role exists and is not system role
+	role, err := s.roleRepo.GetByID(ctx, roleID)
+	if err != nil {
+		return fmt.Errorf("role not found: %w", err)
+	}
+	if role.IsSystemRole {
+		return fmt.Errorf("cannot modify system role permissions")
+	}
+
+	// Validate permissions exist
+	for _, permID := range permissionIDs {
+		_, err := s.permissionRepo.GetByID(ctx, permID)
+		if err != nil {
+			return fmt.Errorf("permission %s does not exist: %w", permID, err)
+		}
+	}
+
+	// Remove all existing permissions and add new ones
+	if err := s.rolePermRepo.RevokeAllPermissions(ctx, roleID); err != nil {
+		return fmt.Errorf("failed to revoke existing permissions: %w", err)
+	}
+
+	if len(permissionIDs) > 0 {
+		if err := s.rolePermRepo.AssignPermissions(ctx, roleID, permissionIDs); err != nil {
+			return fmt.Errorf("failed to assign new permissions: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// HasResourceAction checks if a user has a specific resource:action permission
+func (s *roleService) HasResourceAction(ctx context.Context, userID, orgID ulid.ULID, resource, action string) (bool, error) {
+	resourceAction := fmt.Sprintf("%s:%s", resource, action)
+	return s.HasPermission(ctx, userID, orgID, resourceAction)
+}
+
+// ValidateRole validates if a role exists and is valid
+func (s *roleService) ValidateRole(ctx context.Context, roleID ulid.ULID) error {
+	_, err := s.roleRepo.GetByID(ctx, roleID)
+	if err != nil {
+		return fmt.Errorf("role validation failed: %w", err)
+	}
+	return nil
+}
+
+// GetRoleStatistics gets statistics about roles in an organization
+func (s *roleService) GetRoleStatistics(ctx context.Context, orgID ulid.ULID) (*auth.RoleStatistics, error) {
+	// This would be implemented with proper database queries in production
+	// For now, return basic statistics
+	roles, err := s.roleRepo.GetAllRoles(ctx, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get role statistics: %w", err)
+	}
+
+	systemRoles := 0
+	customRoles := 0
+	for _, role := range roles {
+		if role.IsSystemRole {
+			systemRoles++
+		} else {
+			customRoles++
+		}
+	}
+
+	permissions, err := s.permissionRepo.GetAllPermissions(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get permission count: %w", err)
+	}
+
+	return &auth.RoleStatistics{
+		OrganizationID:   orgID,
+		TotalRoles:       len(roles),
+		SystemRoles:      systemRoles,
+		CustomRoles:      customRoles,
+		TotalMembers:     0, // Would need to query organization members
+		RoleDistribution: make(map[string]int), // Would need to query member role assignments
+		PermissionCount:  len(permissions),
+		LastUpdated:      time.Now(),
+	}, nil
+}
+
+// HasLegacyPermission checks legacy dot notation permissions for backward compatibility
+func (s *roleService) HasLegacyPermission(ctx context.Context, userID, orgID ulid.ULID, permission string) (bool, error) {
+	return s.HasPermission(ctx, userID, orgID, permission)
 }

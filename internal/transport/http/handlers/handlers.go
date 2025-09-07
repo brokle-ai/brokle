@@ -19,6 +19,7 @@ import (
 	"brokle/internal/transport/http/handlers/metrics"
 	organizationHandler "brokle/internal/transport/http/handlers/organization"
 	"brokle/internal/transport/http/handlers/project"
+	"brokle/internal/transport/http/handlers/rbac"
 	userHandler "brokle/internal/transport/http/handlers/user"
 	"brokle/internal/transport/http/handlers/websocket"
 )
@@ -39,6 +40,7 @@ type Handlers struct {
 	AI           *ai.Handler
 	WebSocket    *websocket.Handler
 	Admin        *admin.TokenAdminHandler
+	RBAC         *rbac.Handler
 }
 
 // NewHandlers creates a new handlers instance with all dependencies
@@ -56,6 +58,8 @@ func NewHandlers(
 	environmentService organization.EnvironmentService,
 	invitationService organization.InvitationService,
 	settingsService organization.OrganizationSettingsService,
+	roleService auth.RoleService,
+	permissionService auth.PermissionService,
 	// Add other service dependencies as they're implemented
 ) *Handlers {
 	return &Handlers{
@@ -73,5 +77,6 @@ func NewHandlers(
 		AI:           ai.NewHandler(cfg, logger),
 		WebSocket:    websocket.NewHandler(cfg, logger),
 		Admin:        admin.NewTokenAdminHandler(authService, blacklistedTokens, logger),
+		RBAC:         rbac.NewHandler(cfg, logger, roleService, permissionService),
 	}
 }

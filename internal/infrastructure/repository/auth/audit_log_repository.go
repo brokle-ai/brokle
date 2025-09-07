@@ -182,3 +182,187 @@ func (r *auditLogRepository) CleanupOldLogs(ctx context.Context, olderThan time.
 		Where("created_at < ?", olderThan).
 		Delete(&auth.AuditLog{}).Error
 }
+
+// GetAuditLogStats returns audit log statistics
+func (r *auditLogRepository) GetAuditLogStats(ctx context.Context) (*auth.AuditLogStats, error) {
+	stats := &auth.AuditLogStats{
+		LogsByAction:   make(map[string]int64),
+		LogsByResource: make(map[string]int64),
+	}
+	
+	// Get total logs count
+	err := r.db.WithContext(ctx).
+		Model(&auth.AuditLog{}).
+		Count(&stats.TotalLogs).Error
+	if err != nil {
+		return nil, err
+	}
+	
+	// Get logs by action
+	type actionCount struct {
+		Action string
+		Count  int64
+	}
+	var actionCounts []actionCount
+	err = r.db.WithContext(ctx).
+		Model(&auth.AuditLog{}).
+		Select("action, COUNT(*) as count").
+		Group("action").
+		Find(&actionCounts).Error
+	if err != nil {
+		return nil, err
+	}
+	
+	for _, ac := range actionCounts {
+		stats.LogsByAction[ac.Action] = ac.Count
+	}
+	
+	// Get logs by resource
+	type resourceCount struct {
+		Resource string
+		Count    int64
+	}
+	var resourceCounts []resourceCount
+	err = r.db.WithContext(ctx).
+		Model(&auth.AuditLog{}).
+		Select("resource, COUNT(*) as count").
+		Where("resource IS NOT NULL AND resource != ''").
+		Group("resource").
+		Find(&resourceCounts).Error
+	if err != nil {
+		return nil, err
+	}
+	
+	for _, rc := range resourceCounts {
+		stats.LogsByResource[rc.Resource] = rc.Count
+	}
+	
+	// Get last log time
+	var lastLog auth.AuditLog
+	err = r.db.WithContext(ctx).
+		Order("created_at DESC").
+		First(&lastLog).Error
+	if err == nil {
+		stats.LastLogTime = &lastLog.CreatedAt
+	}
+	
+	return stats, nil
+}
+
+// GetUserAuditLogStats returns audit log statistics for a specific user
+func (r *auditLogRepository) GetUserAuditLogStats(ctx context.Context, userID ulid.ULID) (*auth.AuditLogStats, error) {
+	stats := &auth.AuditLogStats{
+		LogsByAction:   make(map[string]int64),
+		LogsByResource: make(map[string]int64),
+	}
+	
+	// Get total logs count for user
+	err := r.db.WithContext(ctx).
+		Model(&auth.AuditLog{}).
+		Where("user_id = ?", userID).
+		Count(&stats.TotalLogs).Error
+	if err != nil {
+		return nil, err
+	}
+	
+	// Get logs by action for user
+	type actionCount struct {
+		Action string
+		Count  int64
+	}
+	var actionCounts []actionCount
+	err = r.db.WithContext(ctx).
+		Model(&auth.AuditLog{}).
+		Select("action, COUNT(*) as count").
+		Where("user_id = ?", userID).
+		Group("action").
+		Find(&actionCounts).Error
+	if err != nil {
+		return nil, err
+	}
+	
+	for _, ac := range actionCounts {
+		stats.LogsByAction[ac.Action] = ac.Count
+	}
+	
+	// Get logs by resource for user
+	type resourceCount struct {
+		Resource string
+		Count    int64
+	}
+	var resourceCounts []resourceCount
+	err = r.db.WithContext(ctx).
+		Model(&auth.AuditLog{}).
+		Select("resource, COUNT(*) as count").
+		Where("user_id = ? AND resource IS NOT NULL AND resource != ''", userID).
+		Group("resource").
+		Find(&resourceCounts).Error
+	if err != nil {
+		return nil, err
+	}
+	
+	for _, rc := range resourceCounts {
+		stats.LogsByResource[rc.Resource] = rc.Count
+	}
+	
+	return stats, nil
+}
+
+// GetOrganizationAuditLogStats returns audit log statistics for a specific organization
+func (r *auditLogRepository) GetOrganizationAuditLogStats(ctx context.Context, orgID ulid.ULID) (*auth.AuditLogStats, error) {
+	stats := &auth.AuditLogStats{
+		LogsByAction:   make(map[string]int64),
+		LogsByResource: make(map[string]int64),
+	}
+	
+	// Get total logs count for organization
+	err := r.db.WithContext(ctx).
+		Model(&auth.AuditLog{}).
+		Where("organization_id = ?", orgID).
+		Count(&stats.TotalLogs).Error
+	if err != nil {
+		return nil, err
+	}
+	
+	// Get logs by action for organization
+	type actionCount struct {
+		Action string
+		Count  int64
+	}
+	var actionCounts []actionCount
+	err = r.db.WithContext(ctx).
+		Model(&auth.AuditLog{}).
+		Select("action, COUNT(*) as count").
+		Where("organization_id = ?", orgID).
+		Group("action").
+		Find(&actionCounts).Error
+	if err != nil {
+		return nil, err
+	}
+	
+	for _, ac := range actionCounts {
+		stats.LogsByAction[ac.Action] = ac.Count
+	}
+	
+	// Get logs by resource for organization
+	type resourceCount struct {
+		Resource string
+		Count    int64
+	}
+	var resourceCounts []resourceCount
+	err = r.db.WithContext(ctx).
+		Model(&auth.AuditLog{}).
+		Select("resource, COUNT(*) as count").
+		Where("organization_id = ? AND resource IS NOT NULL AND resource != ''", orgID).
+		Group("resource").
+		Find(&resourceCounts).Error
+	if err != nil {
+		return nil, err
+	}
+	
+	for _, rc := range resourceCounts {
+		stats.LogsByResource[rc.Resource] = rc.Count
+	}
+	
+	return stats, nil
+}
