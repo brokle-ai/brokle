@@ -2935,6 +2935,225 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/onboarding/questions": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Retrieves all active onboarding questions with user's current responses",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Onboarding"
+                ],
+                "summary": "Get onboarding questions",
+                "responses": {
+                    "200": {
+                        "description": "Questions retrieved successfully",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/user.OnboardingQuestionsResponse"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/onboarding/responses": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Submit answers to one or more onboarding questions",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Onboarding"
+                ],
+                "summary": "Submit onboarding responses",
+                "parameters": [
+                    {
+                        "description": "Responses to submit",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/user.SubmitResponsesRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Responses submitted successfully",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/onboarding/skip/{id}": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Skip a specific onboarding question",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Onboarding"
+                ],
+                "summary": "Skip onboarding question",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Question ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Question skipped successfully",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid question ID",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/onboarding/status": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get the user's current onboarding progress",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Onboarding"
+                ],
+                "summary": "Get onboarding status",
+                "responses": {
+                    "200": {
+                        "description": "Status retrieved successfully",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/user.OnboardingStatusResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/organizations": {
             "get": {
                 "security": [
@@ -7587,6 +7806,23 @@ const docTemplate = `{
                 }
             }
         },
+        "response.APIResponse": {
+            "description": "Standard API response wrapper",
+            "type": "object",
+            "properties": {
+                "data": {},
+                "error": {
+                    "$ref": "#/definitions/response.APIError"
+                },
+                "meta": {
+                    "$ref": "#/definitions/response.Meta"
+                },
+                "success": {
+                    "type": "boolean",
+                    "example": true
+                }
+            }
+        },
         "response.ErrorResponse": {
             "description": "Standard error response",
             "type": "object",
@@ -7679,6 +7915,121 @@ const docTemplate = `{
                 "success": {
                     "type": "boolean",
                     "example": true
+                }
+            }
+        },
+        "user.OnboardingQuestionsResponse": {
+            "description": "Complete onboarding question information including user's current response",
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string",
+                    "example": "This helps us customize your experience"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "01K4FHGHT3XX9WFM293QPZ5G9V"
+                },
+                "is_required": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "is_skipped": {
+                    "type": "boolean",
+                    "example": false
+                },
+                "options": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "[\"Developer\"",
+                        " \"Manager\"",
+                        " \"Analyst\"]"
+                    ]
+                },
+                "question_type": {
+                    "type": "string",
+                    "example": "single_choice"
+                },
+                "step": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "title": {
+                    "type": "string",
+                    "example": "What is your primary role?"
+                },
+                "user_answer": {
+                    "type": "string",
+                    "example": "Developer"
+                }
+            }
+        },
+        "user.OnboardingStatusResponse": {
+            "description": "User's current onboarding progress and completion status",
+            "type": "object",
+            "properties": {
+                "completed_questions": {
+                    "type": "integer",
+                    "example": 3
+                },
+                "current_step": {
+                    "type": "integer",
+                    "example": 2
+                },
+                "onboarding_completed": {
+                    "type": "boolean",
+                    "example": false
+                },
+                "remaining_questions": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "skipped_questions": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "total_questions": {
+                    "type": "integer",
+                    "example": 5
+                }
+            }
+        },
+        "user.SubmitResponseRequest": {
+            "description": "Request body for submitting a response to an onboarding question",
+            "type": "object",
+            "required": [
+                "question_id"
+            ],
+            "properties": {
+                "question_id": {
+                    "type": "string",
+                    "example": "01K4FHGHT3XX9WFM293QPZ5G9V"
+                },
+                "response_value": {
+                    "type": "string",
+                    "example": "Developer"
+                },
+                "skipped": {
+                    "type": "boolean",
+                    "example": false
+                }
+            }
+        },
+        "user.SubmitResponsesRequest": {
+            "description": "Request body for submitting multiple onboarding responses at once",
+            "type": "object",
+            "required": [
+                "responses"
+            ],
+            "properties": {
+                "responses": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/user.SubmitResponseRequest"
+                    }
                 }
             }
         },

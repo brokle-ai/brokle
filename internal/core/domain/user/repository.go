@@ -26,6 +26,17 @@ type Repository interface {
 	GetProfile(ctx context.Context, userID ulid.ULID) (*UserProfile, error)
 	UpdateProfile(ctx context.Context, profile *UserProfile) error
 	
+	// Onboarding question operations
+	CreateOnboardingQuestion(ctx context.Context, question *OnboardingQuestion) error
+	GetActiveOnboardingQuestions(ctx context.Context) ([]*OnboardingQuestion, error)
+	GetOnboardingQuestionByID(ctx context.Context, id ulid.ULID) (*OnboardingQuestion, error)
+	GetActiveOnboardingQuestionCount(ctx context.Context) (int, error)
+	GetNextUnansweredQuestion(ctx context.Context, userID ulid.ULID) (*OnboardingQuestion, error)
+	
+	// Onboarding response operations
+	GetUserOnboardingResponses(ctx context.Context, userID ulid.ULID) ([]*UserOnboardingResponse, error)
+	UpsertUserOnboardingResponse(ctx context.Context, response *UserOnboardingResponse) error
+	GetUserOnboardingResponse(ctx context.Context, userID, questionID ulid.ULID) (*UserOnboardingResponse, error)
 	
 	// Authentication operations
 	UpdatePassword(ctx context.Context, userID ulid.ULID, hashedPassword string) error

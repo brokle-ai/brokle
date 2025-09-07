@@ -73,18 +73,21 @@ type ProfileService interface {
 }
 
 
-// OnboardingService defines the interface for user onboarding and initial setup.
+// OnboardingService defines the interface for dynamic user onboarding with questions.
 type OnboardingService interface {
-	// Onboarding flow
-	GetOnboardingStatus(ctx context.Context, userID ulid.ULID) (*OnboardingStatus, error)
-	CompleteOnboardingStep(ctx context.Context, userID ulid.ULID, step OnboardingStep) error
-	CompleteOnboarding(ctx context.Context, userID ulid.ULID) error
-	IsOnboardingCompleted(ctx context.Context, userID ulid.ULID) (bool, error)
-	RestartOnboarding(ctx context.Context, userID ulid.ULID) error
+	// Question management
+	GetActiveQuestions(ctx context.Context) ([]*OnboardingQuestion, error)
+	GetQuestionByID(ctx context.Context, id ulid.ULID) (*OnboardingQuestion, error)
+	CreateQuestion(ctx context.Context, req *CreateOnboardingQuestionRequest) (*OnboardingQuestion, error)
 	
-	// Onboarding customization
-	GetOnboardingFlow(ctx context.Context, userType UserType) (*OnboardingFlow, error)
-	UpdateOnboardingPreferences(ctx context.Context, userID ulid.ULID, req *UpdateOnboardingPreferencesRequest) error
+	// User responses
+	GetUserResponses(ctx context.Context, userID ulid.ULID) ([]*UserOnboardingResponseData, error)
+	SubmitResponse(ctx context.Context, userID, questionID ulid.ULID, responseValue interface{}, skipped bool) error
+	SubmitMultipleResponses(ctx context.Context, userID ulid.ULID, responses []*SubmitOnboardingResponseRequest) error
+	
+	// Status and progress
+	GetOnboardingStatus(ctx context.Context, userID ulid.ULID) (*OnboardingProgressStatus, error)
+	CompleteOnboarding(ctx context.Context, userID ulid.ULID) error
 }
 
 // Supporting types for the new service interfaces

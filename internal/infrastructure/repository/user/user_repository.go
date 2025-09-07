@@ -443,3 +443,97 @@ func (r *userRepository) Transaction(fn func(user.Repository) error) error {
 		return fn(txRepo)
 	})
 }
+
+// Onboarding question operations
+
+func (r *userRepository) CreateOnboardingQuestion(ctx context.Context, question *user.OnboardingQuestion) error {
+	return r.db.WithContext(ctx).Create(question).Error
+}
+
+func (r *userRepository) GetActiveOnboardingQuestions(ctx context.Context) ([]*user.OnboardingQuestion, error) {
+	var questions []*user.OnboardingQuestion
+	err := r.db.WithContext(ctx).Where("is_active = ?", true).Order("display_order ASC, step ASC").Find(&questions).Error
+	return questions, err
+}
+
+func (r *userRepository) GetOnboardingQuestionByID(ctx context.Context, id ulid.ULID) (*user.OnboardingQuestion, error) {
+	var question user.OnboardingQuestion
+	err := r.db.WithContext(ctx).Where("id = ?", id).First(&question).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("onboarding question not found")
+		}
+		return nil, err
+	}
+	return &question, nil
+}
+
+func (r *userRepository) GetActiveOnboardingQuestionCount(ctx context.Context) (int, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&user.OnboardingQuestion{}).Where("is_active = ?", true).Count(&count).Error
+	return int(count), err
+}
+
+func (r *userRepository) GetNextUnansweredQuestion(ctx context.Context, userID ulid.ULID) (*user.OnboardingQuestion, error) {
+	var question user.OnboardingQuestion
+	
+	// Find the first question that the user hasn't answered
+	subquery := r.db.Model(&user.UserOnboardingResponse{}).
+		Select("question_id").
+		Where("user_id = ?", userID)
+	
+	err := r.db.WithContext(ctx).
+		Where("is_active = ? AND id NOT IN (?)", true, subquery).
+		Order("display_order ASC, step ASC").
+		First(&question).Error
+	
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("no unanswered questions found")
+		}
+		return nil, err
+	}
+	
+	return &question, nil
+}
+
+// Onboarding response operations
+
+func (r *userRepository) GetUserOnboardingResponses(ctx context.Context, userID ulid.ULID) ([]*user.UserOnboardingResponse, error) {
+	var responses []*user.UserOnboardingResponse
+	err := r.db.WithContext(ctx).Where("user_id = ?", userID).Find(&responses).Error
+	return responses, err
+}
+
+func (r *userRepository) UpsertUserOnboardingResponse(ctx context.Context, response *user.UserOnboardingResponse) error {
+	// Try to update existing response first
+	result := r.db.WithContext(ctx).Model(&user.UserOnboardingResponse{}).
+		Where("user_id = ? AND question_id = ?", response.UserID, response.QuestionID).
+		Updates(map[string]interface{}{
+			"response_value": response.ResponseValue,
+			"skipped":        response.Skipped,
+		})
+
+	if result.Error != nil {
+		return result.Error
+	}
+
+	// If no rows were affected, create new response
+	if result.RowsAffected == 0 {
+		return r.db.WithContext(ctx).Create(response).Error
+	}
+
+	return nil
+}
+
+func (r *userRepository) GetUserOnboardingResponse(ctx context.Context, userID, questionID ulid.ULID) (*user.UserOnboardingResponse, error) {
+	var response user.UserOnboardingResponse
+	err := r.db.WithContext(ctx).Where("user_id = ? AND question_id = ?", userID, questionID).First(&response).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("onboarding response not found")
+		}
+		return nil, err
+	}
+	return &response, nil
+}

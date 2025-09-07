@@ -14,19 +14,23 @@ import (
 
 // Handler handles user endpoints
 type Handler struct {
-	config         *config.Config
-	logger         *logrus.Logger
-	userService    user.UserService
-	profileService user.ProfileService
+	config            *config.Config
+	logger            *logrus.Logger
+	userService       user.UserService
+	profileService    user.ProfileService
+	onboardingService user.OnboardingService
+	Onboarding        *OnboardingHandler
 }
 
 // NewHandler creates a new user handler
-func NewHandler(config *config.Config, logger *logrus.Logger, userService user.UserService, profileService user.ProfileService) *Handler {
+func NewHandler(config *config.Config, logger *logrus.Logger, userService user.UserService, profileService user.ProfileService, onboardingService user.OnboardingService) *Handler {
 	return &Handler{
-		config:         config,
-		logger:         logger,
-		userService:    userService,
-		profileService: profileService,
+		config:            config,
+		logger:            logger,
+		userService:       userService,
+		profileService:    profileService,
+		onboardingService: onboardingService,
+		Onboarding:        NewOnboardingHandler(config, logger, onboardingService, userService),
 	}
 }
 
