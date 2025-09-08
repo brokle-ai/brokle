@@ -69,6 +69,8 @@ func (a *App) Start() error {
 		providers.Services.EnvironmentService,  // Direct environment service
 		providers.Services.InvitationService,   // Direct invitation service
 		providers.Services.SettingsService,     // Direct settings service
+		providers.Services.Auth.Role,           // Role service for RBAC
+		providers.Services.Auth.Permission,     // Permission service for RBAC
 		// All enterprise services available through providers.Enterprise
 	)
 
@@ -79,6 +81,7 @@ func (a *App) Start() error {
 		httpHandlers,
 		providers.Services.Auth.JWT,
 		providers.Services.Auth.BlacklistedTokens,
+		providers.Services.Auth.Role,
 		providers.Databases.Redis.Client,
 	)
 
@@ -121,6 +124,8 @@ func (a *App) Run() error {
 		providers.Services.EnvironmentService,  // Direct environment service
 		providers.Services.InvitationService,   // Direct invitation service
 		providers.Services.SettingsService,     // Direct settings service
+		providers.Services.Auth.Role,           // Role service for RBAC
+		providers.Services.Auth.Permission,     // Permission service for RBAC
 		// All enterprise services available through providers.Enterprise
 	)
 
@@ -131,6 +136,7 @@ func (a *App) Run() error {
 		httpHandlers,
 		providers.Services.Auth.JWT,
 		providers.Services.Auth.BlacklistedTokens,
+		providers.Services.Auth.Role,
 		providers.Databases.Redis.Client,
 	)
 

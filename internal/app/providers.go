@@ -114,6 +114,7 @@ type AuthServices struct {
 	JWT               auth.JWTService
 	Sessions          auth.SessionService
 	Role              auth.RoleService
+	Permission        auth.PermissionService
 	BlacklistedTokens auth.BlacklistedTokenService
 }
 
@@ -232,6 +233,12 @@ func ProvideAuthServices(
 		logger.WithError(err).Fatal("Failed to create JWT service")
 	}
 
+	// Create permission service with comprehensive permission management
+	permissionService := authService.NewPermissionService(
+		authRepos.Permission,
+		authRepos.RolePermission,
+	)
+
 	// Create role service with comprehensive RBAC
 	roleService := authService.NewRoleService(
 		authRepos.Role,
@@ -271,6 +278,7 @@ func ProvideAuthServices(
 		JWT:               jwtService,
 		Sessions:          sessionService,
 		Role:              roleService,
+		Permission:        permissionService,
 		BlacklistedTokens: blacklistedTokenService,
 	}
 }

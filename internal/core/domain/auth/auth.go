@@ -6,6 +6,8 @@ package auth
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	"brokle/pkg/ulid"
@@ -101,14 +103,14 @@ type APIKey struct {
 	DeletedAt      gorm.DeletedAt `json:"deleted_at,omitempty" gorm:"index"`
 }
 
-// Role represents a role with permissions (supports custom roles).
+// Role represents a role with permissions (supports both global system roles and organization-specific custom roles).
 type Role struct {
 	ID             ulid.ULID  `json:"id" gorm:"type:char(26);primaryKey"`
-	OrganizationID *ulid.ULID `json:"organization_id,omitempty" gorm:"type:char(26)"` // NULL for system roles
+	OrganizationID *ulid.ULID `json:"organization_id,omitempty" gorm:"type:char(26)"` // NULL for global system roles
 	Name           string     `json:"name" gorm:"size:50;not null"`
 	DisplayName    string     `json:"display_name" gorm:"size:100;not null"`
 	Description    string     `json:"description" gorm:"type:text"`
-	IsSystemRole   bool       `json:"is_system_role" gorm:"default:false"` // Cannot be deleted
+	IsSystemRole   bool       `json:"is_system_role" gorm:"default:false"` // true for global system roles (cannot be deleted)
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`
 	DeletedAt      gorm.DeletedAt `json:"deleted_at,omitempty" gorm:"index"`
@@ -118,10 +120,38 @@ type Role struct {
 	RolePermissions []RolePermission `json:"role_permissions,omitempty" gorm:"foreignKey:RoleID"`
 }
 
-// Permission represents a specific permission in the system.
+// IsGlobalSystemRole returns true if this is a global system role (organization_id is NULL)
+func (r *Role) IsGlobalSystemRole() bool {
+	return r.IsSystemRole && r.OrganizationID == nil
+}
+
+// IsOrganizationRole returns true if this is an organization-specific role
+func (r *Role) IsOrganizationRole() bool {
+	return r.OrganizationID != nil
+}
+
+// CanBeDeleted returns true if this role can be deleted (not a system role)
+func (r *Role) CanBeDeleted() bool {
+	return !r.IsSystemRole
+}
+
+// GetScope returns the scope of the role ("global" or organization ID)
+func (r *Role) GetScope() string {
+	if r.IsGlobalSystemRole() {
+		return "global"
+	}
+	if r.OrganizationID != nil {
+		return r.OrganizationID.String()
+	}
+	return "unknown"
+}
+
+// Permission represents a specific permission in the system using resource:action format.
 type Permission struct {
 	ID          ulid.ULID `json:"id" gorm:"type:char(26);primaryKey"`
-	Name        string    `json:"name" gorm:"size:255;not null;uniqueIndex"` // users.create, projects.read
+	Name        string    `json:"name" gorm:"size:255;not null;uniqueIndex"` // Legacy: users.create, projects.read (kept for compatibility)
+	Resource    string    `json:"resource" gorm:"size:50;not null;index"` // users, projects, billing, etc.
+	Action      string    `json:"action" gorm:"size:50;not null;index"` // create, read, update, delete, admin, etc.
 	DisplayName string    `json:"display_name" gorm:"size:255;not null"`
 	Description string    `json:"description" gorm:"type:text"`
 	Category    string    `json:"category" gorm:"size:100"` // users, projects, billing, etc.
@@ -132,6 +162,52 @@ type Permission struct {
 
 	// Relations
 	Roles []Role `json:"roles,omitempty" gorm:"many2many:role_permissions"`
+}
+
+// GetResourceAction returns the resource:action format string
+func (p *Permission) GetResourceAction() string {
+	return fmt.Sprintf("%s:%s", p.Resource, p.Action)
+}
+
+// IsWildcardPermission returns true if this is a wildcard permission (*:* or resource:*)
+func (p *Permission) IsWildcardPermission() bool {
+	return p.Resource == "*" || p.Action == "*"
+}
+
+// MatchesResourceAction checks if this permission matches the given resource:action
+func (p *Permission) MatchesResourceAction(resource, action string) bool {
+	// Exact match
+	if p.Resource == resource && p.Action == action {
+		return true
+	}
+	// Wildcard resource match
+	if p.Resource == "*" && p.Action == action {
+		return true
+	}
+	// Wildcard action match  
+	if p.Resource == resource && p.Action == "*" {
+		return true
+	}
+	// Full wildcard match
+	if p.Resource == "*" && p.Action == "*" {
+		return true
+	}
+	return false
+}
+
+// ParseResourceAction parses a resource:action string into resource and action components
+func ParseResourceAction(resourceAction string) (resource, action string, err error) {
+	parts := strings.Split(resourceAction, ":")
+	if len(parts) != 2 {
+		return "", "", fmt.Errorf("invalid resource:action format: %s", resourceAction)
+	}
+	return parts[0], parts[1], nil
+}
+
+// ValidateResourceAction validates a resource:action string format
+func ValidateResourceAction(resourceAction string) error {
+	_, _, err := ParseResourceAction(resourceAction)
+	return err
 }
 
 // RolePermission represents the many-to-many relationship between roles and permissions.
@@ -211,13 +287,11 @@ type RefreshTokenRequest struct {
 
 
 // AuthContext represents the authenticated context for a request.
+// AuthContext represents clean user identity context (permissions resolved dynamically)
 type AuthContext struct {
-	UserID         ulid.ULID  `json:"user_id"`
-	OrganizationID *ulid.ULID `json:"organization_id,omitempty"`
-	Role           *string    `json:"role,omitempty"`
-	Permissions    []string   `json:"permissions"`
-	APIKeyID       *ulid.ULID `json:"api_key_id,omitempty"` // Set if authenticated via API key
-	SessionID      *ulid.ULID `json:"session_id,omitempty"` // Set if authenticated via session
+	UserID    ulid.ULID  `json:"user_id"`
+	APIKeyID  *ulid.ULID `json:"api_key_id,omitempty"`  // Set if authenticated via API key
+	SessionID *ulid.ULID `json:"session_id,omitempty"`  // Set if authenticated via session
 }
 
 // Standard permission scopes for the platform
@@ -377,10 +451,15 @@ func NewRole(orgID *ulid.ULID, name, displayName, description string, isSystemRo
 	}
 }
 
-func NewPermission(name, displayName, description, category string) *Permission {
+func NewPermission(resource, action, displayName, description, category string) *Permission {
+	// Generate legacy name for compatibility
+	name := fmt.Sprintf("%s:%s", resource, action)
+	
 	return &Permission{
 		ID:          ulid.New(),
-		Name:        name,
+		Name:        name,        // Legacy format for compatibility
+		Resource:    resource,    // New resource field
+		Action:      action,      // New action field
 		DisplayName: displayName,
 		Description: description,
 		Category:    category,
@@ -461,6 +540,94 @@ func (r *Role) AddPermission(permissionID ulid.ULID) *RolePermission {
 		CreatedAt:    time.Now(),
 	}
 }
+
+// RBAC Request/Response DTOs
+
+// CreateRoleRequest represents a request to create a new role
+type CreateRoleRequest struct {
+	OrganizationID  *ulid.ULID   `json:"organization_id,omitempty"` // NULL for global system roles
+	Name            string       `json:"name" validate:"required,min=1,max=50"`
+	DisplayName     string       `json:"display_name" validate:"required,min=1,max=100"`
+	Description     string       `json:"description,omitempty"`
+	IsSystemRole    bool         `json:"is_system_role,omitempty"` // Only allowed for admin users
+	PermissionIDs   []ulid.ULID  `json:"permission_ids,omitempty"`
+}
+
+// UpdateRoleRequest represents a request to update an existing role
+type UpdateRoleRequest struct {
+	DisplayName   *string      `json:"display_name,omitempty" validate:"omitempty,min=1,max=100"`
+	Description   *string      `json:"description,omitempty"`
+	PermissionIDs []ulid.ULID  `json:"permission_ids,omitempty"`
+}
+
+// CreatePermissionRequest represents a request to create a new permission
+type CreatePermissionRequest struct {
+	Resource    string `json:"resource" validate:"required,min=1,max=50"`
+	Action      string `json:"action" validate:"required,min=1,max=50"`
+	DisplayName string `json:"display_name" validate:"required,min=1,max=255"`
+	Description string `json:"description,omitempty"`
+	Category    string `json:"category" validate:"required,min=1,max=100"`
+}
+
+// UpdatePermissionRequest represents a request to update an existing permission
+type UpdatePermissionRequest struct {
+	DisplayName *string `json:"display_name,omitempty" validate:"omitempty,min=1,max=255"`
+	Description *string `json:"description,omitempty"`
+	Category    *string `json:"category,omitempty" validate:"omitempty,min=1,max=100"`
+}
+
+// AssignRoleRequest represents a request to assign a role to a user
+type AssignRoleRequest struct {
+	RoleID ulid.ULID `json:"role_id" validate:"required"`
+}
+
+// RoleListResponse represents a list of roles with metadata
+type RoleListResponse struct {
+	Roles      []*Role `json:"roles"`
+	TotalCount int     `json:"total_count"`
+	Page       int     `json:"page,omitempty"`
+	PageSize   int     `json:"page_size,omitempty"`
+}
+
+// PermissionListResponse represents a list of permissions with metadata
+type PermissionListResponse struct {
+	Permissions []*Permission `json:"permissions"`
+	TotalCount  int           `json:"total_count"`
+	Page        int           `json:"page,omitempty"`
+	PageSize    int           `json:"page_size,omitempty"`
+}
+
+// UserPermissionsResponse represents a user's effective permissions in an organization
+type UserPermissionsResponse struct {
+	UserID         ulid.ULID     `json:"user_id"`
+	OrganizationID ulid.ULID     `json:"organization_id"`
+	Role           *Role         `json:"role,omitempty"`
+	Permissions    []*Permission `json:"permissions"`
+	ResourceActions []string     `json:"resource_actions"` // ["users:read", "projects:write", etc.]
+}
+
+// CheckPermissionsRequest represents a request to check multiple permissions
+type CheckPermissionsRequest struct {
+	ResourceActions []string `json:"resource_actions" validate:"required,min=1"`
+}
+
+// CheckPermissionsResponse represents the result of checking multiple permissions
+type CheckPermissionsResponse struct {
+	Results map[string]bool `json:"results"` // resource:action -> has_permission
+}
+
+// RoleStatistics represents statistics about roles in an organization
+type RoleStatistics struct {
+	OrganizationID     ulid.ULID `json:"organization_id"`
+	TotalRoles         int       `json:"total_roles"`
+	SystemRoles        int       `json:"system_roles"`
+	CustomRoles        int       `json:"custom_roles"`
+	TotalMembers       int       `json:"total_members"`
+	RoleDistribution   map[string]int `json:"role_distribution"` // role_name -> member_count
+	PermissionCount    int       `json:"permission_count"`
+	LastUpdated        time.Time `json:"last_updated"`
+}
+
 
 // Table name methods for GORM
 func (UserSession) TableName() string     { return "user_sessions" }

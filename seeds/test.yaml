@@ -1,0 +1,82 @@
+# Test Seed Data
+# Minimal test fixtures for automated testing
+
+organizations:
+  - name: "Test Organization"
+    slug: "test-org"
+    billing_email: "test@test.com"
+    plan: "free"
+    subscription_status: "active"
+
+users:
+  - email: "test@test.com"
+    first_name: "Test"
+    last_name: "User"
+    password: "test123"
+    email_verified: true
+    is_active: true
+    timezone: "UTC"
+    language: "en"
+
+rbac:
+  permissions:
+    - name: "organizations:read"
+      display_name: "Read Organizations"
+      description: "View organizations"
+      category: "organization"
+    
+    - name: "projects:read"
+      display_name: "Read Projects"
+      description: "View projects"
+      category: "project"
+    
+    - name: "api_keys:read"
+      display_name: "Read API Keys"
+      description: "View API keys"
+      category: "api_key"
+
+  roles:
+    - name: "owner"
+      display_name: "Owner"
+      description: "Full access"
+      is_system_role: false
+      organization_slug: "test-org"
+      permissions:
+        - "organizations:read"
+        - "projects:read"
+        - "api_keys:read"
+
+  memberships:
+    - user_email: "test@test.com"
+      organization_slug: "test-org"
+      role_name: "owner"
+
+projects:
+  - name: "Test Project"
+    description: "Test project for validation"
+    organization_slug: "test-org"
+    environments:
+      - name: "Test"
+        slug: "test"
+
+api_keys:
+  - name: "Test Key"
+    organization_slug: "test-org"
+    project_name: "Test Project"
+    environment_name: "Test"
+    rate_limit_per_minute: 60
+    rate_limit_per_hour: 500
+    rate_limit_per_day: 5000
+    scopes:
+      - "ai:completions"
+    allowed_ips: []
+
+onboarding_questions:
+  - step: 1
+    question_type: "text"
+    title: "Test Question"
+    description: "Simple test question"
+    is_required: false
+    options: []
+    display_order: 1
+    is_active: true

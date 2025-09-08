@@ -438,19 +438,6 @@ func (s *jwtService) mapClaimsToJWTClaims(claims jwt.MapClaims) (*auth.JWTClaims
 		return nil
 	}
 
-	// Helper function to safely extract string array claims
-	getStringArray := func(key string) []string {
-		if val, ok := claims[key].([]interface{}); ok {
-			result := make([]string, 0, len(val))
-			for _, item := range val {
-				if str, ok := item.(string); ok {
-					result = append(result, str)
-				}
-			}
-			return result
-		}
-		return nil
-	}
 
 	// Standard JWT claims
 	jwtClaims.Issuer = getString("iss")
@@ -472,29 +459,13 @@ func (s *jwtService) mapClaimsToJWTClaims(claims jwt.MapClaims) (*auth.JWTClaims
 		}
 	}
 
-	// Context claims
-	jwtClaims.OrganizationID = getULID("organization_id")
-	jwtClaims.ProjectID = getULID("project_id")
-	jwtClaims.EnvironmentID = getULID("environment_id")
-
-	// Permission claims
-	jwtClaims.Scopes = getStringArray("scopes")
-	jwtClaims.Permissions = getStringArray("permissions")
-	if role := getString("role"); role != "" {
-		jwtClaims.Role = &role
-	}
+	// Clean JWT structure - no context or permission claims stored in JWT
 
 	// API Key and session claims
 	jwtClaims.APIKeyID = getULID("api_key_id")
 	jwtClaims.SessionID = getULID("session_id")
 
-	// Security claims
-	if ipAddress := getString("ip_address"); ipAddress != "" {
-		jwtClaims.IPAddress = &ipAddress
-	}
-	if userAgent := getString("user_agent"); userAgent != "" {
-		jwtClaims.UserAgent = &userAgent
-	}
+	// Clean JWT structure - no IP or UserAgent tracking
 
 	return jwtClaims, nil
 }

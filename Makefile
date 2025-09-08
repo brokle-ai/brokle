@@ -5,7 +5,7 @@
 
 .PHONY: help setup dev build test lint clean docker
 .PHONY: dev-backend dev-frontend build-backend build-frontend
-.PHONY: migrate-up migrate-down migrate-status seed db-reset
+.PHONY: migrate-up migrate-down migrate-status seed seed-dev db-reset
 .PHONY: docker-build docker-build-dev docker-dev docker-prod
 
 # Default target
@@ -115,11 +115,11 @@ migrate-reset: ## Reset all databases (WARNING: destroys data)
 
 seed: ## Seed databases with production data
 	@echo "🌱 Seeding databases with production data..."
-	go run cmd/seed/main.go --env=production
+	go run cmd/migrate/main.go seed -env production
 
 seed-dev: ## Seed databases with development data
 	@echo "🌱 Seeding databases with development data..."
-	go run cmd/seed/main.go --env=development
+	go run cmd/migrate/main.go seed -env dev
 
 db-reset: migrate-reset seed-dev ## Reset databases and seed with dev data
 
