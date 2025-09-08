@@ -35,7 +35,7 @@ func (s *permissionService) CreatePermission(ctx context.Context, req *auth.Crea
 	}
 
 	// Create permission
-	permission := auth.NewPermission(req.Resource, req.Action, req.DisplayName, req.Description, req.Category)
+	permission := auth.NewPermission(req.Resource, req.Action, req.Description)
 	if err := s.permissionRepo.Create(ctx, permission); err != nil {
 		return nil, fmt.Errorf("failed to create permission: %w", err)
 	}
@@ -67,9 +67,6 @@ func (s *permissionService) UpdatePermission(ctx context.Context, permissionID u
 	}
 
 	// Update fields
-	if req.DisplayName != nil {
-		permission.DisplayName = *req.DisplayName
-	}
 	if req.Description != nil {
 		permission.Description = *req.Description
 	}
@@ -117,10 +114,6 @@ func (s *permissionService) GetAllPermissions(ctx context.Context) ([]*auth.Perm
 	return s.permissionRepo.GetAllPermissions(ctx)
 }
 
-// GetPermissionsByCategory returns permissions by category
-func (s *permissionService) GetPermissionsByCategory(ctx context.Context, category string) ([]*auth.Permission, error) {
-	return s.permissionRepo.GetByCategory(ctx, category)
-}
 
 // GetPermissionsByResource returns all permissions for a resource
 func (s *permissionService) GetPermissionsByResource(ctx context.Context, resource string) ([]*auth.Permission, error) {
@@ -170,7 +163,6 @@ func (s *permissionService) SearchPermissions(ctx context.Context, query string,
 	filteredPermissions := make([]*auth.Permission, 0)
 	for _, perm := range allPermissions {
 		if strings.Contains(strings.ToLower(perm.Name), strings.ToLower(query)) ||
-		   strings.Contains(strings.ToLower(perm.DisplayName), strings.ToLower(query)) ||
 		   strings.Contains(strings.ToLower(perm.Description), strings.ToLower(query)) ||
 		   strings.Contains(strings.ToLower(perm.Resource), strings.ToLower(query)) ||
 		   strings.Contains(strings.ToLower(perm.Action), strings.ToLower(query)) {
@@ -208,10 +200,6 @@ func (s *permissionService) GetActionsForResource(ctx context.Context, resource 
 	return s.permissionRepo.GetActionsForResource(ctx, resource)
 }
 
-// GetPermissionCategories returns all distinct categories
-func (s *permissionService) GetPermissionCategories(ctx context.Context) ([]string, error) {
-	return s.permissionRepo.GetPermissionCategories(ctx)
-}
 
 // ValidatePermissionName validates legacy permission name
 func (s *permissionService) ValidatePermissionName(ctx context.Context, name string) error {

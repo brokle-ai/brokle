@@ -58,19 +58,20 @@ func (a *App) Start() error {
 	httpHandlers := handlers.NewHandlers(
 		a.config,
 		a.logger,
-		providers.Services.Auth.Auth,               // Auth service from modular DI
-		providers.Services.Auth.BlacklistedTokens, // Blacklisted tokens service
-		providers.Services.User.User,               // User service from modular DI
-		providers.Services.User.Profile,            // Profile service from modular DI
-		providers.Services.User.Onboarding,         // Onboarding service from modular DI
-		providers.Services.OrganizationService, // Direct organization service
-		providers.Services.MemberService,       // Direct member service
-		providers.Services.ProjectService,      // Direct project service
-		providers.Services.EnvironmentService,  // Direct environment service
-		providers.Services.InvitationService,   // Direct invitation service
-		providers.Services.SettingsService,     // Direct settings service
-		providers.Services.Auth.Role,           // Role service for RBAC
-		providers.Services.Auth.Permission,     // Permission service for RBAC
+		providers.Services.Auth.Auth,                   // Auth service from modular DI
+		providers.Services.Auth.BlacklistedTokens,     // Blacklisted tokens service
+		providers.Services.User.User,                   // User service from modular DI
+		providers.Services.User.Profile,                // Profile service from modular DI
+		providers.Services.User.Onboarding,             // Onboarding service from modular DI
+		providers.Services.OrganizationService,         // Direct organization service
+		providers.Services.MemberService,               // Direct member service
+		providers.Services.ProjectService,              // Direct project service
+		providers.Services.EnvironmentService,          // Direct environment service
+		providers.Services.InvitationService,           // Direct invitation service
+		providers.Services.SettingsService,             // Direct settings service
+		providers.Services.Auth.Role,                   // Role service for RBAC
+		providers.Services.Auth.Permission,             // Permission service for RBAC
+		providers.Services.Auth.OrganizationMembers,    // Organization member service for normalized RBAC
 		// All enterprise services available through providers.Enterprise
 	)
 
@@ -81,7 +82,7 @@ func (a *App) Start() error {
 		httpHandlers,
 		providers.Services.Auth.JWT,
 		providers.Services.Auth.BlacklistedTokens,
-		providers.Services.Auth.Role,
+		providers.Services.Auth.OrganizationMembers,
 		providers.Databases.Redis.Client,
 	)
 
@@ -113,19 +114,20 @@ func (a *App) Run() error {
 	httpHandlers := handlers.NewHandlers(
 		a.config,
 		a.logger,
-		providers.Services.Auth.Auth,               // Auth service from modular DI
-		providers.Services.Auth.BlacklistedTokens, // Blacklisted tokens service
-		providers.Services.User.User,               // User service from modular DI
-		providers.Services.User.Profile,            // Profile service from modular DI
-		providers.Services.User.Onboarding,         // Onboarding service from modular DI
-		providers.Services.OrganizationService, // Direct organization service
-		providers.Services.MemberService,       // Direct member service
-		providers.Services.ProjectService,      // Direct project service
-		providers.Services.EnvironmentService,  // Direct environment service
-		providers.Services.InvitationService,   // Direct invitation service
-		providers.Services.SettingsService,     // Direct settings service
-		providers.Services.Auth.Role,           // Role service for RBAC
-		providers.Services.Auth.Permission,     // Permission service for RBAC
+		providers.Services.Auth.Auth,                   // Auth service from modular DI
+		providers.Services.Auth.BlacklistedTokens,     // Blacklisted tokens service
+		providers.Services.User.User,                   // User service from modular DI
+		providers.Services.User.Profile,                // Profile service from modular DI
+		providers.Services.User.Onboarding,             // Onboarding service from modular DI
+		providers.Services.OrganizationService,         // Direct organization service
+		providers.Services.MemberService,               // Direct member service
+		providers.Services.ProjectService,              // Direct project service
+		providers.Services.EnvironmentService,          // Direct environment service
+		providers.Services.InvitationService,           // Direct invitation service
+		providers.Services.SettingsService,             // Direct settings service
+		providers.Services.Auth.Role,                   // Role service for RBAC
+		providers.Services.Auth.Permission,             // Permission service for RBAC
+		providers.Services.Auth.OrganizationMembers,    // Organization member service for normalized RBAC
 		// All enterprise services available through providers.Enterprise
 	)
 
@@ -136,7 +138,7 @@ func (a *App) Run() error {
 		httpHandlers,
 		providers.Services.Auth.JWT,
 		providers.Services.Auth.BlacklistedTokens,
-		providers.Services.Auth.Role,
+		providers.Services.Auth.OrganizationMembers,
 		providers.Databases.Redis.Client,
 	)
 

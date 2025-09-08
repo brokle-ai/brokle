@@ -50,7 +50,7 @@ func (s *invitationService) InviteUser(ctx context.Context, orgID ulid.ULID, inv
 	}
 
 	// Verify role exists
-	role, err := s.roleService.GetRole(ctx, req.RoleID)
+	role, err := s.roleService.GetRoleByID(ctx, req.RoleID)
 	if err != nil {
 		return nil, fmt.Errorf("role not found: %w", err)
 	}

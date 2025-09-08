@@ -12,63 +12,38 @@ import (
 	"brokle/pkg/ulid"
 )
 
-// Handler handles RBAC-related HTTP requests (roles and permissions)
+// Handler handles RBAC-related HTTP requests (roles and permissions) - Clean version
 type Handler struct {
-	config            *config.Config
-	logger            *logrus.Logger
-	roleService       auth.RoleService
-	permissionService auth.PermissionService
+	config                    *config.Config
+	logger                    *logrus.Logger
+	roleService               auth.RoleService
+	permissionService         auth.PermissionService
+	organizationMemberService auth.OrganizationMemberService
 }
 
-// NewHandler creates a new RBAC handler
+// NewHandler creates a new clean RBAC handler
 func NewHandler(
 	config *config.Config,
 	logger *logrus.Logger,
 	roleService auth.RoleService,
 	permissionService auth.PermissionService,
+	organizationMemberService auth.OrganizationMemberService,
 ) *Handler {
 	return &Handler{
-		config:            config,
-		logger:            logger,
-		roleService:       roleService,
-		permissionService: permissionService,
+		config:                    config,
+		logger:                    logger,
+		roleService:               roleService,
+		permissionService:         permissionService,
+		organizationMemberService: organizationMemberService,
 	}
 }
 
 // =============================================================================
-// ROLE MANAGEMENT ENDPOINTS
+// CLEAN ROLE MANAGEMENT ENDPOINTS
 // =============================================================================
 
-// CreateRole handles POST /rbac/organizations/{orgId}/roles
-// @Summary Create a new role
-// @Description Create a new role for an organization (or global system role for admins)
-// @Tags RBAC
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param orgId path string true "Organization ID"
-// @Param request body auth.CreateRoleRequest true "Role creation request"
-// @Success 201 {object} response.RoleResponse "Role created successfully"
-// @Failure 400 {object} response.ErrorResponse "Bad request"
-// @Failure 401 {object} response.ErrorResponse "Unauthorized"
-// @Failure 403 {object} response.ErrorResponse "Forbidden"
-// @Failure 500 {object} response.ErrorResponse "Internal server error"
-// @Router /api/v1/rbac/organizations/{orgId}/roles [post]
+// CreateRole handles POST /rbac/roles
 func (h *Handler) CreateRole(c *gin.Context) {
-	// Parse organization ID
-	orgIDStr := c.Param("orgId")
-	var orgID *ulid.ULID
-	if orgIDStr != "" {
-		parsedOrgID, err := ulid.Parse(orgIDStr)
-		if err != nil {
-			h.logger.WithError(err).WithField("org_id", orgIDStr).Error("Invalid organization ID")
-			response.BadRequest(c, "Invalid organization ID", err.Error())
-			return
-		}
-		orgID = &parsedOrgID
-	}
-
-	// Parse request body
 	var req auth.CreateRoleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.logger.WithError(err).Error("Invalid create role request")
@@ -76,48 +51,26 @@ func (h *Handler) CreateRole(c *gin.Context) {
 		return
 	}
 
-	// Set organization ID from path if not provided in body
-	if req.OrganizationID == nil && orgID != nil {
-		req.OrganizationID = orgID
-	}
-
-	// Create role
-	role, err := h.roleService.CreateRole(c.Request.Context(), req.OrganizationID, &req)
+	role, err := h.roleService.CreateRole(c.Request.Context(), &req)
 	if err != nil {
 		h.logger.WithError(err).WithFields(logrus.Fields{
-			"org_id":      req.OrganizationID,
-			"role_name":   req.Name,
-			"system_role": req.IsSystemRole,
+			"scope_type": req.ScopeType,
+			"role_name":  req.Name,
 		}).Error("Failed to create role")
 		response.InternalServerError(c, "Failed to create role")
 		return
 	}
 
 	h.logger.WithFields(logrus.Fields{
-		"role_id":     role.ID,
-		"role_name":   role.Name,
-		"org_id":      role.OrganizationID,
-		"system_role": role.IsSystemRole,
+		"role_id":    role.ID,
+		"role_name":  role.Name,
+		"scope_type": role.ScopeType,
 	}).Info("Role created successfully")
 	response.Created(c, role)
 }
 
 // GetRole handles GET /rbac/roles/{roleId}
-// @Summary Get role details
-// @Description Get detailed information about a specific role
-// @Tags RBAC
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param roleId path string true "Role ID"
-// @Success 200 {object} response.RoleResponse "Role details"
-// @Failure 400 {object} response.ErrorResponse "Bad request"
-// @Failure 401 {object} response.ErrorResponse "Unauthorized"
-// @Failure 404 {object} response.ErrorResponse "Role not found"
-// @Failure 500 {object} response.ErrorResponse "Internal server error"
-// @Router /api/v1/rbac/roles/{roleId} [get]
 func (h *Handler) GetRole(c *gin.Context) {
-	// Parse role ID
 	roleIDStr := c.Param("roleId")
 	roleID, err := ulid.Parse(roleIDStr)
 	if err != nil {
@@ -126,8 +79,7 @@ func (h *Handler) GetRole(c *gin.Context) {
 		return
 	}
 
-	// Get role
-	role, err := h.roleService.GetRole(c.Request.Context(), roleID)
+	role, err := h.roleService.GetRoleByID(c.Request.Context(), roleID)
 	if err != nil {
 		h.logger.WithError(err).WithField("role_id", roleID).Error("Failed to get role")
 		response.NotFound(c, "Role not found")
@@ -139,23 +91,7 @@ func (h *Handler) GetRole(c *gin.Context) {
 }
 
 // UpdateRole handles PUT /rbac/roles/{roleId}
-// @Summary Update role
-// @Description Update an existing role (cannot update system roles)
-// @Tags RBAC
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param roleId path string true "Role ID"
-// @Param request body auth.UpdateRoleRequest true "Role update request"
-// @Success 200 {object} response.RoleResponse "Role updated successfully"
-// @Failure 400 {object} response.ErrorResponse "Bad request"
-// @Failure 401 {object} response.ErrorResponse "Unauthorized"
-// @Failure 403 {object} response.ErrorResponse "Forbidden (system role cannot be updated)"
-// @Failure 404 {object} response.ErrorResponse "Role not found"
-// @Failure 500 {object} response.ErrorResponse "Internal server error"
-// @Router /api/v1/rbac/roles/{roleId} [put]
 func (h *Handler) UpdateRole(c *gin.Context) {
-	// Parse role ID
 	roleIDStr := c.Param("roleId")
 	roleID, err := ulid.Parse(roleIDStr)
 	if err != nil {
@@ -164,7 +100,6 @@ func (h *Handler) UpdateRole(c *gin.Context) {
 		return
 	}
 
-	// Parse request body
 	var req auth.UpdateRoleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.logger.WithError(err).Error("Invalid update role request")
@@ -172,43 +107,19 @@ func (h *Handler) UpdateRole(c *gin.Context) {
 		return
 	}
 
-	// Update role
-	err = h.roleService.UpdateRole(c.Request.Context(), roleID, &req)
+	updatedRole, err := h.roleService.UpdateRole(c.Request.Context(), roleID, &req)
 	if err != nil {
 		h.logger.WithError(err).WithField("role_id", roleID).Error("Failed to update role")
 		response.InternalServerError(c, "Failed to update role")
 		return
 	}
 
-	// Get updated role
-	role, err := h.roleService.GetRole(c.Request.Context(), roleID)
-	if err != nil {
-		h.logger.WithError(err).WithField("role_id", roleID).Error("Failed to get updated role")
-		response.InternalServerError(c, "Failed to retrieve updated role")
-		return
-	}
-
 	h.logger.WithField("role_id", roleID).Info("Role updated successfully")
-	response.Success(c, role)
+	response.Success(c, updatedRole)
 }
 
 // DeleteRole handles DELETE /rbac/roles/{roleId}
-// @Summary Delete role
-// @Description Delete a role (cannot delete system roles)
-// @Tags RBAC
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param roleId path string true "Role ID"
-// @Success 204 "Role deleted successfully"
-// @Failure 400 {object} response.ErrorResponse "Bad request"
-// @Failure 401 {object} response.ErrorResponse "Unauthorized"
-// @Failure 403 {object} response.ErrorResponse "Forbidden (system role cannot be deleted)"
-// @Failure 404 {object} response.ErrorResponse "Role not found"
-// @Failure 500 {object} response.ErrorResponse "Internal server error"
-// @Router /api/v1/rbac/roles/{roleId} [delete]
 func (h *Handler) DeleteRole(c *gin.Context) {
-	// Parse role ID
 	roleIDStr := c.Param("roleId")
 	roleID, err := ulid.Parse(roleIDStr)
 	if err != nil {
@@ -217,16 +128,25 @@ func (h *Handler) DeleteRole(c *gin.Context) {
 		return
 	}
 
-	// Check if role can be deleted
-	canDelete, err := h.roleService.CanDeleteRole(c.Request.Context(), roleID)
+	// Get role first to check if it's a system role
+	role, err := h.roleService.GetRoleByID(c.Request.Context(), roleID)
 	if err != nil {
-		h.logger.WithError(err).WithField("role_id", roleID).Error("Failed to check if role can be deleted")
-		response.InternalServerError(c, "Failed to validate role deletion")
+		h.logger.WithError(err).WithField("role_id", roleID).Error("Failed to get role")
+		response.NotFound(c, "Role not found")
 		return
 	}
-	if !canDelete {
-		h.logger.WithField("role_id", roleID).Warn("Attempted to delete system role")
-		response.Forbidden(c, "Cannot delete system role")
+
+	// Check if it's a built-in role (cannot be deleted)
+	builtinRoles := map[string]bool{
+		"owner":     true,
+		"admin":     true,
+		"developer": true,
+		"viewer":    true,
+	}
+	
+	if builtinRoles[role.Name] {
+		h.logger.WithField("role_id", roleID).Warn("Attempted to delete built-in role")
+		response.Forbidden(c, "Cannot delete built-in role")
 		return
 	}
 
@@ -242,88 +162,90 @@ func (h *Handler) DeleteRole(c *gin.Context) {
 	response.NoContent(c)
 }
 
-// ListRoles handles GET /rbac/organizations/{orgId}/roles
-// @Summary List roles for organization
-// @Description Get all roles available for an organization (system + org-specific)
-// @Tags RBAC
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param orgId path string true "Organization ID"
-// @Param limit query int false "Limit (default: 50, max: 100)"
-// @Param offset query int false "Offset (default: 0)"
-// @Param search query string false "Search query"
-// @Success 200 {object} response.RoleListResponse "List of roles"
-// @Failure 400 {object} response.ErrorResponse "Bad request"
-// @Failure 401 {object} response.ErrorResponse "Unauthorized"
-// @Failure 500 {object} response.ErrorResponse "Internal server error"
-// @Router /api/v1/rbac/organizations/{orgId}/roles [get]
+// ListRoles handles GET /rbac/roles
 func (h *Handler) ListRoles(c *gin.Context) {
-	// Parse organization ID
-	orgIDStr := c.Param("orgId")
-	var orgID *ulid.ULID
-	if orgIDStr != "" && orgIDStr != "global" {
-		parsedOrgID, err := ulid.Parse(orgIDStr)
-		if err != nil {
-			h.logger.WithError(err).WithField("org_id", orgIDStr).Error("Invalid organization ID")
-			response.BadRequest(c, "Invalid organization ID", err.Error())
-			return
-		}
-		orgID = &parsedOrgID
+	scopeType := c.Query("scope_type")
+	if scopeType == "" {
+		response.BadRequest(c, "Scope type is required", "scope_type parameter cannot be empty")
+		return
 	}
 
-	// Parse query parameters
-	limit := parseQueryInt(c, "limit", 50)
-	if limit > 100 {
-		limit = 100
-	}
-	offset := parseQueryInt(c, "offset", 0)
-	search := c.Query("search")
-
-	// List roles
-	var result *auth.RoleListResponse
-	var err error
-
-	if search != "" {
-		result, err = h.roleService.SearchRoles(c.Request.Context(), orgID, search, limit, offset)
-	} else {
-		result, err = h.roleService.ListRoles(c.Request.Context(), orgID, limit, offset)
-	}
-
+	roles, err := h.roleService.GetRolesByScopeType(c.Request.Context(), scopeType)
 	if err != nil {
-		h.logger.WithError(err).WithFields(logrus.Fields{
-			"org_id": orgID,
-			"limit":  limit,
-			"offset": offset,
-			"search": search,
-		}).Error("Failed to list roles")
+		h.logger.WithError(err).WithField("scope_type", scopeType).Error("Failed to list roles")
 		response.InternalServerError(c, "Failed to list roles")
 		return
 	}
 
 	h.logger.WithFields(logrus.Fields{
-		"org_id":      orgID,
-		"roles_count": result.TotalCount,
-		"search":      search,
+		"scope_type":  scopeType,
+		"roles_count": len(roles),
 	}).Info("Roles listed successfully")
-	response.Success(c, result)
+	response.Success(c, roles)
 }
 
-// GetRoleStatistics handles GET /rbac/organizations/{orgId}/stats
-// @Summary Get role statistics
-// @Description Get statistics about roles and role distribution in an organization
-// @Tags RBAC
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param orgId path string true "Organization ID"
-// @Success 200 {object} response.RoleStatistics "Role statistics"
-// @Failure 400 {object} response.ErrorResponse "Bad request"
-// @Failure 401 {object} response.ErrorResponse "Unauthorized"
-// @Failure 500 {object} response.ErrorResponse "Internal server error"
-// @Router /api/v1/rbac/organizations/{orgId}/stats [get]
-func (h *Handler) GetRoleStatistics(c *gin.Context) {
-	// Parse organization ID
+// =============================================================================
+// USER ROLE MANAGEMENT
+// =============================================================================
+
+// GetUserRoles handles GET /rbac/users/{userId}/roles
+func (h *Handler) GetUserRoles(c *gin.Context) {
+	userIDStr := c.Param("userId")
+	userID, err := ulid.Parse(userIDStr)
+	if err != nil {
+		h.logger.WithError(err).WithField("user_id", userIDStr).Error("Invalid user ID")
+		response.BadRequest(c, "Invalid user ID", err.Error())
+		return
+	}
+
+	userMemberships, err := h.organizationMemberService.GetUserMemberships(c.Request.Context(), userID)
+	if err != nil {
+		h.logger.WithError(err).WithField("user_id", userID).Error("Failed to get user memberships")
+		response.NotFound(c, "User memberships not found")
+		return
+	}
+
+	h.logger.WithFields(logrus.Fields{
+		"user_id":           userID,
+		"memberships_count": len(userMemberships),
+	}).Info("User memberships retrieved successfully")
+	response.Success(c, userMemberships)
+}
+
+// GetUserPermissions handles GET /rbac/users/{userId}/permissions
+func (h *Handler) GetUserPermissions(c *gin.Context) {
+	userIDStr := c.Param("userId")
+	userID, err := ulid.Parse(userIDStr)
+	if err != nil {
+		h.logger.WithError(err).WithField("user_id", userIDStr).Error("Invalid user ID")
+		response.BadRequest(c, "Invalid user ID", err.Error())
+		return
+	}
+
+	permissions, err := h.organizationMemberService.GetUserEffectivePermissions(c.Request.Context(), userID)
+	if err != nil {
+		h.logger.WithError(err).WithField("user_id", userID).Error("Failed to get user permissions")
+		response.NotFound(c, "User permissions not found")
+		return
+	}
+
+	h.logger.WithFields(logrus.Fields{
+		"user_id":           userID,
+		"permissions_count": len(permissions),
+	}).Info("User permissions retrieved successfully")
+	response.Success(c, permissions)
+}
+
+// AssignOrganizationRole handles POST /rbac/users/{userId}/organizations/{orgId}/roles
+func (h *Handler) AssignOrganizationRole(c *gin.Context) {
+	userIDStr := c.Param("userId")
+	userID, err := ulid.Parse(userIDStr)
+	if err != nil {
+		h.logger.WithError(err).WithField("user_id", userIDStr).Error("Invalid user ID")
+		response.BadRequest(c, "Invalid user ID", err.Error())
+		return
+	}
+
 	orgIDStr := c.Param("orgId")
 	orgID, err := ulid.Parse(orgIDStr)
 	if err != nil {
@@ -332,15 +254,112 @@ func (h *Handler) GetRoleStatistics(c *gin.Context) {
 		return
 	}
 
-	// Get role statistics
-	stats, err := h.roleService.GetRoleStatistics(c.Request.Context(), orgID)
+	var req auth.AssignRoleRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.WithError(err).Error("Invalid assign role request")
+		response.BadRequest(c, "Invalid request payload", err.Error())
+		return
+	}
+
+	// Create organization membership with role
+	member, err := h.organizationMemberService.AddMember(c.Request.Context(), userID, orgID, req.RoleID, nil)
 	if err != nil {
-		h.logger.WithError(err).WithField("org_id", orgID).Error("Failed to get role statistics")
+		h.logger.WithError(err).WithFields(logrus.Fields{
+			"user_id": userID,
+			"org_id":  orgID,
+			"role_id": req.RoleID,
+		}).Error("Failed to assign role to user in organization")
+		response.InternalServerError(c, "Failed to assign role to user in organization")
+		return
+	}
+
+	h.logger.WithFields(logrus.Fields{
+		"user_id": userID,
+		"org_id":  orgID,
+		"role_id": req.RoleID,
+	}).Info("Role assigned to user in organization successfully")
+	response.Created(c, member)
+}
+
+// RemoveOrganizationMember handles DELETE /rbac/users/{userId}/organizations/{orgId}
+func (h *Handler) RemoveOrganizationMember(c *gin.Context) {
+	userIDStr := c.Param("userId")
+	userID, err := ulid.Parse(userIDStr)
+	if err != nil {
+		h.logger.WithError(err).WithField("user_id", userIDStr).Error("Invalid user ID")
+		response.BadRequest(c, "Invalid user ID", err.Error())
+		return
+	}
+
+	orgIDStr := c.Param("orgId")
+	orgID, err := ulid.Parse(orgIDStr)
+	if err != nil {
+		h.logger.WithError(err).WithField("org_id", orgIDStr).Error("Invalid organization ID")
+		response.BadRequest(c, "Invalid organization ID", err.Error())
+		return
+	}
+
+	err = h.organizationMemberService.RemoveMember(c.Request.Context(), userID, orgID)
+	if err != nil {
+		h.logger.WithError(err).WithFields(logrus.Fields{
+			"user_id": userID,
+			"org_id":  orgID,
+		}).Error("Failed to remove user from organization")
+		response.InternalServerError(c, "Failed to remove user from organization")
+		return
+	}
+
+	h.logger.WithFields(logrus.Fields{
+		"user_id": userID,
+		"org_id":  orgID,
+	}).Info("User removed from organization successfully")
+	response.NoContent(c)
+}
+
+// CheckUserPermissions handles POST /rbac/users/{userId}/permissions/check
+func (h *Handler) CheckUserPermissions(c *gin.Context) {
+	userIDStr := c.Param("userId")
+	userID, err := ulid.Parse(userIDStr)
+	if err != nil {
+		h.logger.WithError(err).WithField("user_id", userIDStr).Error("Invalid user ID")
+		response.BadRequest(c, "Invalid user ID", err.Error())
+		return
+	}
+
+	var req auth.CheckPermissionsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.WithError(err).Error("Invalid check permissions request")
+		response.BadRequest(c, "Invalid request payload", err.Error())
+		return
+	}
+
+	result, err := h.organizationMemberService.CheckUserPermissions(c.Request.Context(), userID, req.ResourceActions)
+	if err != nil {
+		h.logger.WithError(err).WithFields(logrus.Fields{
+			"user_id":           userID,
+			"permissions_count": len(req.ResourceActions),
+		}).Error("Failed to check user permissions")
+		response.InternalServerError(c, "Failed to check permissions")
+		return
+	}
+
+	h.logger.WithFields(logrus.Fields{
+		"user_id":           userID,
+		"permissions_count": len(req.ResourceActions),
+	}).Info("User permissions checked successfully")
+	response.Success(c, result)
+}
+
+// GetRoleStatistics handles GET /rbac/roles/statistics
+func (h *Handler) GetRoleStatistics(c *gin.Context) {
+	stats, err := h.roleService.GetRoleStatistics(c.Request.Context())
+	if err != nil {
+		h.logger.WithError(err).Error("Failed to get role statistics")
 		response.InternalServerError(c, "Failed to get role statistics")
 		return
 	}
 
-	h.logger.WithField("org_id", orgID).Info("Role statistics retrieved successfully")
+	h.logger.Info("Role statistics retrieved successfully")
 	response.Success(c, stats)
 }
 
@@ -348,22 +367,27 @@ func (h *Handler) GetRoleStatistics(c *gin.Context) {
 // PERMISSION MANAGEMENT ENDPOINTS
 // =============================================================================
 
+// ListPermissions handles GET /rbac/permissions
+func (h *Handler) ListPermissions(c *gin.Context) {
+	limit := parseQueryInt(c, "limit", 50)
+	if limit > 100 {
+		limit = 100
+	}
+	offset := parseQueryInt(c, "offset", 0)
+
+	result, err := h.permissionService.ListPermissions(c.Request.Context(), limit, offset)
+	if err != nil {
+		h.logger.WithError(err).Error("Failed to list permissions")
+		response.InternalServerError(c, "Failed to list permissions")
+		return
+	}
+
+	h.logger.WithField("permissions_count", result.TotalCount).Info("Permissions listed successfully")
+	response.Success(c, result)
+}
+
 // CreatePermission handles POST /rbac/permissions
-// @Summary Create a new permission
-// @Description Create a new permission with resource:action format
-// @Tags RBAC
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param request body auth.CreatePermissionRequest true "Permission creation request"
-// @Success 201 {object} response.PermissionResponse "Permission created successfully"
-// @Failure 400 {object} response.ErrorResponse "Bad request"
-// @Failure 401 {object} response.ErrorResponse "Unauthorized"
-// @Failure 403 {object} response.ErrorResponse "Forbidden"
-// @Failure 500 {object} response.ErrorResponse "Internal server error"
-// @Router /api/v1/rbac/permissions [post]
 func (h *Handler) CreatePermission(c *gin.Context) {
-	// Parse request body
 	var req auth.CreatePermissionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.logger.WithError(err).Error("Invalid create permission request")
@@ -371,13 +395,11 @@ func (h *Handler) CreatePermission(c *gin.Context) {
 		return
 	}
 
-	// Create permission
 	permission, err := h.permissionService.CreatePermission(c.Request.Context(), &req)
 	if err != nil {
 		h.logger.WithError(err).WithFields(logrus.Fields{
 			"resource": req.Resource,
 			"action":   req.Action,
-			"category": req.Category,
 		}).Error("Failed to create permission")
 		response.InternalServerError(c, "Failed to create permission")
 		return
@@ -392,21 +414,7 @@ func (h *Handler) CreatePermission(c *gin.Context) {
 }
 
 // GetPermission handles GET /rbac/permissions/{permissionId}
-// @Summary Get permission details
-// @Description Get detailed information about a specific permission
-// @Tags RBAC
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param permissionId path string true "Permission ID"
-// @Success 200 {object} response.PermissionResponse "Permission details"
-// @Failure 400 {object} response.ErrorResponse "Bad request"
-// @Failure 401 {object} response.ErrorResponse "Unauthorized"
-// @Failure 404 {object} response.ErrorResponse "Permission not found"
-// @Failure 500 {object} response.ErrorResponse "Internal server error"
-// @Router /api/v1/rbac/permissions/{permissionId} [get]
 func (h *Handler) GetPermission(c *gin.Context) {
-	// Parse permission ID
 	permissionIDStr := c.Param("permissionId")
 	permissionID, err := ulid.Parse(permissionIDStr)
 	if err != nil {
@@ -415,7 +423,6 @@ func (h *Handler) GetPermission(c *gin.Context) {
 		return
 	}
 
-	// Get permission
 	permission, err := h.permissionService.GetPermission(c.Request.Context(), permissionID)
 	if err != nil {
 		h.logger.WithError(err).WithField("permission_id", permissionID).Error("Failed to get permission")
@@ -427,108 +434,8 @@ func (h *Handler) GetPermission(c *gin.Context) {
 	response.Success(c, permission)
 }
 
-// ListPermissions handles GET /rbac/permissions
-// @Summary List all permissions
-// @Description Get all available permissions in the system
-// @Tags RBAC
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param limit query int false "Limit (default: 50, max: 100)"
-// @Param offset query int false "Offset (default: 0)"
-// @Param category query string false "Filter by category"
-// @Param resource query string false "Filter by resource"
-// @Param search query string false "Search query"
-// @Success 200 {object} response.PermissionListResponse "List of permissions"
-// @Failure 400 {object} response.ErrorResponse "Bad request"
-// @Failure 401 {object} response.ErrorResponse "Unauthorized"
-// @Failure 500 {object} response.ErrorResponse "Internal server error"
-// @Router /api/v1/rbac/permissions [get]
-func (h *Handler) ListPermissions(c *gin.Context) {
-	// Parse query parameters
-	limit := parseQueryInt(c, "limit", 50)
-	if limit > 100 {
-		limit = 100
-	}
-	offset := parseQueryInt(c, "offset", 0)
-	category := c.Query("category")
-	resource := c.Query("resource")
-	search := c.Query("search")
-
-	// List permissions based on filters
-	var permissions []*auth.Permission
-	var totalCount int
-	var err error
-
-	if search != "" {
-		result, searchErr := h.permissionService.SearchPermissions(c.Request.Context(), search, limit, offset)
-		if searchErr != nil {
-			err = searchErr
-		} else {
-			permissions = result.Permissions
-			totalCount = result.TotalCount
-		}
-	} else if category != "" {
-		permissions, err = h.permissionService.GetPermissionsByCategory(c.Request.Context(), category)
-		if err == nil {
-			totalCount = len(permissions)
-		}
-	} else if resource != "" {
-		permissions, err = h.permissionService.GetPermissionsByResource(c.Request.Context(), resource)
-		if err == nil {
-			totalCount = len(permissions)
-		}
-	} else {
-		result, listErr := h.permissionService.ListPermissions(c.Request.Context(), limit, offset)
-		if listErr != nil {
-			err = listErr
-		} else {
-			permissions = result.Permissions
-			totalCount = result.TotalCount
-		}
-	}
-
-	if err != nil {
-		h.logger.WithError(err).WithFields(logrus.Fields{
-			"limit":    limit,
-			"offset":   offset,
-			"category": category,
-			"resource": resource,
-			"search":   search,
-		}).Error("Failed to list permissions")
-		response.InternalServerError(c, "Failed to list permissions")
-		return
-	}
-
-	result := &auth.PermissionListResponse{
-		Permissions: permissions,
-		TotalCount:  totalCount,
-		Page:        offset/limit + 1,
-		PageSize:    limit,
-	}
-
-	h.logger.WithFields(logrus.Fields{
-		"permissions_count": totalCount,
-		"category":          category,
-		"resource":          resource,
-		"search":            search,
-	}).Info("Permissions listed successfully")
-	response.Success(c, result)
-}
-
 // GetAvailableResources handles GET /rbac/permissions/resources
-// @Summary Get available resources
-// @Description Get all distinct resources that have permissions defined
-// @Tags RBAC
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Success 200 {array} string "List of available resources"
-// @Failure 401 {object} response.ErrorResponse "Unauthorized"
-// @Failure 500 {object} response.ErrorResponse "Internal server error"
-// @Router /api/v1/rbac/permissions/resources [get]
 func (h *Handler) GetAvailableResources(c *gin.Context) {
-	// Get available resources
 	resources, err := h.permissionService.GetAvailableResources(c.Request.Context())
 	if err != nil {
 		h.logger.WithError(err).Error("Failed to get available resources")
@@ -541,18 +448,6 @@ func (h *Handler) GetAvailableResources(c *gin.Context) {
 }
 
 // GetActionsForResource handles GET /rbac/permissions/resources/{resource}/actions
-// @Summary Get actions for resource
-// @Description Get all actions available for a specific resource
-// @Tags RBAC
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param resource path string true "Resource name"
-// @Success 200 {array} string "List of actions for the resource"
-// @Failure 400 {object} response.ErrorResponse "Bad request"
-// @Failure 401 {object} response.ErrorResponse "Unauthorized"
-// @Failure 500 {object} response.ErrorResponse "Internal server error"
-// @Router /api/v1/rbac/permissions/resources/{resource}/actions [get]
 func (h *Handler) GetActionsForResource(c *gin.Context) {
 	resource := c.Param("resource")
 	if resource == "" {
@@ -560,7 +455,6 @@ func (h *Handler) GetActionsForResource(c *gin.Context) {
 		return
 	}
 
-	// Get actions for resource
 	actions, err := h.permissionService.GetActionsForResource(c.Request.Context(), resource)
 	if err != nil {
 		h.logger.WithError(err).WithField("resource", resource).Error("Failed to get actions for resource")
@@ -575,27 +469,9 @@ func (h *Handler) GetActionsForResource(c *gin.Context) {
 	response.Success(c, actions)
 }
 
-// =============================================================================
-// USER ROLE AND PERMISSION ENDPOINTS
-// =============================================================================
-
-// GetUserRole handles GET /rbac/users/{userId}/organizations/{orgId}/role
-// @Summary Get user's role in organization
-// @Description Get the role assigned to a user in a specific organization
-// @Tags RBAC
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param userId path string true "User ID"
-// @Param orgId path string true "Organization ID"
-// @Success 200 {object} response.RoleResponse "User's role"
-// @Failure 400 {object} response.ErrorResponse "Bad request"
-// @Failure 401 {object} response.ErrorResponse "Unauthorized"
-// @Failure 404 {object} response.ErrorResponse "User role not found"
-// @Failure 500 {object} response.ErrorResponse "Internal server error"
-// @Router /api/v1/rbac/users/{userId}/organizations/{orgId}/role [get]
+// Legacy method for backward compatibility
 func (h *Handler) GetUserRole(c *gin.Context) {
-	// Parse user ID
+	// This is a legacy endpoint that should redirect to the new GetUserRoles endpoint
 	userIDStr := c.Param("userId")
 	userID, err := ulid.Parse(userIDStr)
 	if err != nil {
@@ -604,7 +480,27 @@ func (h *Handler) GetUserRole(c *gin.Context) {
 		return
 	}
 
-	// Parse organization ID
+	// Get all user memberships instead of direct roles
+	userMemberships, err := h.organizationMemberService.GetUserMemberships(c.Request.Context(), userID)
+	if err != nil {
+		h.logger.WithError(err).WithField("user_id", userID).Error("Failed to get user memberships")
+		response.NotFound(c, "User memberships not found")
+		return
+	}
+
+	// Return first membership for backward compatibility
+	if len(userMemberships) > 0 {
+		response.Success(c, userMemberships[0])
+	} else {
+		response.NotFound(c, "User has no organization memberships")
+	}
+}
+
+// Custom Role Management Handlers
+
+// CreateCustomRole creates a custom role for an organization
+func (h *Handler) CreateCustomRole(c *gin.Context) {
+	// Get organization ID from URL
 	orgIDStr := c.Param("orgId")
 	orgID, err := ulid.Parse(orgIDStr)
 	if err != nil {
@@ -613,51 +509,48 @@ func (h *Handler) GetUserRole(c *gin.Context) {
 		return
 	}
 
-	// Get user role
-	role, err := h.roleService.GetUserRole(c.Request.Context(), userID, orgID)
+	var req auth.CreateRoleRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.WithError(err).Error("Failed to bind custom role request")
+		response.BadRequest(c, "Invalid request format", err.Error())
+		return
+	}
+
+	// Validate scope type for custom roles
+	if req.ScopeType != auth.ScopeOrganization {
+		response.BadRequest(c, "Custom roles must have organization scope type", "scope_type must be 'organization' for custom roles")
+		return
+	}
+
+	role, err := h.roleService.CreateCustomRole(c.Request.Context(), auth.ScopeOrganization, orgID, &req)
 	if err != nil {
 		h.logger.WithError(err).WithFields(logrus.Fields{
-			"user_id": userID,
-			"org_id":  orgID,
-		}).Error("Failed to get user role")
-		response.NotFound(c, "User role not found")
+			"org_id":     orgID,
+			"role_name":  req.Name,
+			"scope_type": req.ScopeType,
+		}).Error("Failed to create custom role")
+		
+		if err.Error() == "custom role with name "+req.Name+" already exists in this scope" {
+			response.Conflict(c, err.Error())
+			return
+		}
+		
+		response.InternalServerError(c, "Failed to create custom role")
 		return
 	}
 
 	h.logger.WithFields(logrus.Fields{
-		"user_id": userID,
-		"org_id":  orgID,
-		"role_id": role.ID,
-	}).Info("User role retrieved successfully")
+		"role_id":    role.ID,
+		"role_name":  role.Name,
+		"org_id":     orgID,
+	}).Info("Custom role created successfully")
+
 	response.Success(c, role)
 }
 
-// GetUserPermissions handles GET /rbac/users/{userId}/organizations/{orgId}/permissions
-// @Summary Get user's effective permissions
-// @Description Get all effective permissions for a user in an organization
-// @Tags RBAC
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param userId path string true "User ID"
-// @Param orgId path string true "Organization ID"
-// @Success 200 {object} response.UserPermissionsResponse "User's effective permissions"
-// @Failure 400 {object} response.ErrorResponse "Bad request"
-// @Failure 401 {object} response.ErrorResponse "Unauthorized"
-// @Failure 404 {object} response.ErrorResponse "User permissions not found"
-// @Failure 500 {object} response.ErrorResponse "Internal server error"
-// @Router /api/v1/rbac/users/{userId}/organizations/{orgId}/permissions [get]
-func (h *Handler) GetUserPermissions(c *gin.Context) {
-	// Parse user ID
-	userIDStr := c.Param("userId")
-	userID, err := ulid.Parse(userIDStr)
-	if err != nil {
-		h.logger.WithError(err).WithField("user_id", userIDStr).Error("Invalid user ID")
-		response.BadRequest(c, "Invalid user ID", err.Error())
-		return
-	}
-
-	// Parse organization ID
+// GetCustomRoles lists all custom roles for an organization
+func (h *Handler) GetCustomRoles(c *gin.Context) {
+	// Get organization ID from URL
 	orgIDStr := c.Param("orgId")
 	orgID, err := ulid.Parse(orgIDStr)
 	if err != nil {
@@ -666,161 +559,109 @@ func (h *Handler) GetUserPermissions(c *gin.Context) {
 		return
 	}
 
-	// Get user permissions
-	permissions, err := h.roleService.GetUserPermissions(c.Request.Context(), userID, orgID)
+	roles, err := h.roleService.GetCustomRolesByOrganization(c.Request.Context(), orgID)
 	if err != nil {
-		h.logger.WithError(err).WithFields(logrus.Fields{
-			"user_id": userID,
-			"org_id":  orgID,
-		}).Error("Failed to get user permissions")
-		response.NotFound(c, "User permissions not found")
+		h.logger.WithError(err).WithField("org_id", orgID).Error("Failed to get custom roles")
+		response.InternalServerError(c, "Failed to retrieve custom roles")
 		return
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"user_id":            userID,
-		"org_id":             orgID,
-		"permissions_count":  len(permissions.Permissions),
-	}).Info("User permissions retrieved successfully")
-	response.Success(c, permissions)
+	response.Success(c, gin.H{
+		"roles":       roles,
+		"total_count": len(roles),
+	})
 }
 
-// AssignUserRole handles POST /rbac/users/{userId}/organizations/{orgId}/role
-// @Summary Assign role to user
-// @Description Assign a role to a user in an organization
-// @Tags RBAC
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param userId path string true "User ID"
-// @Param orgId path string true "Organization ID"
-// @Param request body auth.AssignRoleRequest true "Role assignment request"
-// @Success 200 {object} response.RoleResponse "Assigned role"
-// @Failure 400 {object} response.ErrorResponse "Bad request"
-// @Failure 401 {object} response.ErrorResponse "Unauthorized"
-// @Failure 403 {object} response.ErrorResponse "Forbidden"
-// @Failure 500 {object} response.ErrorResponse "Internal server error"
-// @Router /api/v1/rbac/users/{userId}/organizations/{orgId}/role [post]
-func (h *Handler) AssignUserRole(c *gin.Context) {
-	// Parse user ID
-	userIDStr := c.Param("userId")
-	userID, err := ulid.Parse(userIDStr)
+// GetCustomRole retrieves a specific custom role
+func (h *Handler) GetCustomRole(c *gin.Context) {
+	roleIDStr := c.Param("roleId")
+	roleID, err := ulid.Parse(roleIDStr)
 	if err != nil {
-		h.logger.WithError(err).WithField("user_id", userIDStr).Error("Invalid user ID")
-		response.BadRequest(c, "Invalid user ID", err.Error())
+		h.logger.WithError(err).WithField("role_id", roleIDStr).Error("Invalid role ID")
+		response.BadRequest(c, "Invalid role ID", err.Error())
 		return
 	}
 
-	// Parse organization ID
-	orgIDStr := c.Param("orgId")
-	orgID, err := ulid.Parse(orgIDStr)
+	role, err := h.roleService.GetRoleByID(c.Request.Context(), roleID)
 	if err != nil {
-		h.logger.WithError(err).WithField("org_id", orgIDStr).Error("Invalid organization ID")
-		response.BadRequest(c, "Invalid organization ID", err.Error())
+		h.logger.WithError(err).WithField("role_id", roleID).Error("Failed to get custom role")
+		response.NotFound(c, "Custom role not found")
 		return
 	}
 
-	// Parse request body
-	var req auth.AssignRoleRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.WithError(err).Error("Invalid assign role request")
-		response.BadRequest(c, "Invalid request payload", err.Error())
+	// Verify it's a custom role (not system role)
+	if role.IsSystemRole() {
+		response.BadRequest(c, "Cannot access system role through custom role endpoint", "use /rbac/roles endpoint for system roles")
 		return
 	}
 
-	// Assign role to user
-	err = h.roleService.AssignUserRole(c.Request.Context(), userID, orgID, req.RoleID)
-	if err != nil {
-		h.logger.WithError(err).WithFields(logrus.Fields{
-			"user_id": userID,
-			"org_id":  orgID,
-			"role_id": req.RoleID,
-		}).Error("Failed to assign role to user")
-		response.InternalServerError(c, "Failed to assign role to user")
-		return
-	}
-
-	// Get assigned role for response
-	role, err := h.roleService.GetRole(c.Request.Context(), req.RoleID)
-	if err != nil {
-		h.logger.WithError(err).WithField("role_id", req.RoleID).Error("Failed to get assigned role")
-		response.InternalServerError(c, "Role assigned but failed to retrieve details")
-		return
-	}
-
-	h.logger.WithFields(logrus.Fields{
-		"user_id": userID,
-		"org_id":  orgID,
-		"role_id": req.RoleID,
-	}).Info("Role assigned to user successfully")
 	response.Success(c, role)
 }
 
-// CheckUserPermissions handles POST /rbac/users/{userId}/organizations/{orgId}/permissions/check
-// @Summary Check user permissions
-// @Description Check if a user has specific permissions in an organization
-// @Tags RBAC
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param userId path string true "User ID"
-// @Param orgId path string true "Organization ID"
-// @Param request body auth.CheckPermissionsRequest true "Permissions to check"
-// @Success 200 {object} response.CheckPermissionsResponse "Permission check results"
-// @Failure 400 {object} response.ErrorResponse "Bad request"
-// @Failure 401 {object} response.ErrorResponse "Unauthorized"
-// @Failure 500 {object} response.ErrorResponse "Internal server error"
-// @Router /api/v1/rbac/users/{userId}/organizations/{orgId}/permissions/check [post]
-func (h *Handler) CheckUserPermissions(c *gin.Context) {
-	// Parse user ID
-	userIDStr := c.Param("userId")
-	userID, err := ulid.Parse(userIDStr)
+// UpdateCustomRole updates a custom role
+func (h *Handler) UpdateCustomRole(c *gin.Context) {
+	roleIDStr := c.Param("roleId")
+	roleID, err := ulid.Parse(roleIDStr)
 	if err != nil {
-		h.logger.WithError(err).WithField("user_id", userIDStr).Error("Invalid user ID")
-		response.BadRequest(c, "Invalid user ID", err.Error())
+		h.logger.WithError(err).WithField("role_id", roleIDStr).Error("Invalid role ID")
+		response.BadRequest(c, "Invalid role ID", err.Error())
 		return
 	}
 
-	// Parse organization ID
-	orgIDStr := c.Param("orgId")
-	orgID, err := ulid.Parse(orgIDStr)
-	if err != nil {
-		h.logger.WithError(err).WithField("org_id", orgIDStr).Error("Invalid organization ID")
-		response.BadRequest(c, "Invalid organization ID", err.Error())
-		return
-	}
-
-	// Parse request body
-	var req auth.CheckPermissionsRequest
+	var req auth.UpdateRoleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.WithError(err).Error("Invalid check permissions request")
-		response.BadRequest(c, "Invalid request payload", err.Error())
+		h.logger.WithError(err).Error("Failed to bind update custom role request")
+		response.BadRequest(c, "Invalid request format", err.Error())
 		return
 	}
 
-	// Check permissions
-	result, err := h.roleService.CheckPermissions(c.Request.Context(), userID, orgID, req.ResourceActions)
+	role, err := h.roleService.UpdateCustomRole(c.Request.Context(), roleID, &req)
 	if err != nil {
-		h.logger.WithError(err).WithFields(logrus.Fields{
-			"user_id":            userID,
-			"org_id":             orgID,
-			"permissions_count":  len(req.ResourceActions),
-		}).Error("Failed to check user permissions")
-		response.InternalServerError(c, "Failed to check permissions")
+		h.logger.WithError(err).WithField("role_id", roleID).Error("Failed to update custom role")
+		
+		if err.Error() == "cannot update system role" {
+			response.Forbidden(c, err.Error())
+			return
+		}
+		
+		response.InternalServerError(c, "Failed to update custom role")
 		return
 	}
 
 	h.logger.WithFields(logrus.Fields{
-		"user_id":           userID,
-		"org_id":            orgID,
-		"permissions_count": len(req.ResourceActions),
-	}).Info("User permissions checked successfully")
-	response.Success(c, result)
+		"role_id":   role.ID,
+		"role_name": role.Name,
+	}).Info("Custom role updated successfully")
+
+	response.Success(c, role)
 }
 
-// =============================================================================
-// UTILITY FUNCTIONS
-// =============================================================================
+// DeleteCustomRole deletes a custom role
+func (h *Handler) DeleteCustomRole(c *gin.Context) {
+	roleIDStr := c.Param("roleId")
+	roleID, err := ulid.Parse(roleIDStr)
+	if err != nil {
+		h.logger.WithError(err).WithField("role_id", roleIDStr).Error("Invalid role ID")
+		response.BadRequest(c, "Invalid role ID", err.Error())
+		return
+	}
+
+	err = h.roleService.DeleteCustomRole(c.Request.Context(), roleID)
+	if err != nil {
+		h.logger.WithError(err).WithField("role_id", roleID).Error("Failed to delete custom role")
+		
+		if err.Error() == "cannot delete system role" {
+			response.Forbidden(c, err.Error())
+			return
+		}
+		
+		response.InternalServerError(c, "Failed to delete custom role")
+		return
+	}
+
+	h.logger.WithField("role_id", roleID).Info("Custom role deleted successfully")
+	response.Success(c, gin.H{"message": "Custom role deleted successfully"})
+}
 
 // parseQueryInt parses an integer query parameter with a default value
 func parseQueryInt(c *gin.Context, key string, defaultValue int) int {

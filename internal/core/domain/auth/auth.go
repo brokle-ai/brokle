@@ -103,62 +103,159 @@ type APIKey struct {
 	DeletedAt      gorm.DeletedAt `json:"deleted_at,omitempty" gorm:"index"`
 }
 
-// Role represents a role with permissions (supports both global system roles and organization-specific custom roles).
+// Role represents both system template roles and custom scoped roles
 type Role struct {
-	ID             ulid.ULID  `json:"id" gorm:"type:char(26);primaryKey"`
-	OrganizationID *ulid.ULID `json:"organization_id,omitempty" gorm:"type:char(26)"` // NULL for global system roles
-	Name           string     `json:"name" gorm:"size:50;not null"`
-	DisplayName    string     `json:"display_name" gorm:"size:100;not null"`
-	Description    string     `json:"description" gorm:"type:text"`
-	IsSystemRole   bool       `json:"is_system_role" gorm:"default:false"` // true for global system roles (cannot be deleted)
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
-	DeletedAt      gorm.DeletedAt `json:"deleted_at,omitempty" gorm:"index"`
+	ID          ulid.ULID  `json:"id" gorm:"type:char(26);primaryKey"`
+	Name        string     `json:"name" gorm:"size:50;not null"`
+	ScopeType   string     `json:"scope_type" gorm:"size:20;not null"`
+	ScopeID     *ulid.ULID `json:"scope_id,omitempty" gorm:"type:char(26);index"`
+	Description string     `json:"description" gorm:"type:text"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
 
 	// Relations
 	Permissions     []Permission     `json:"permissions,omitempty" gorm:"many2many:role_permissions"`
 	RolePermissions []RolePermission `json:"role_permissions,omitempty" gorm:"foreignKey:RoleID"`
 }
 
-// IsGlobalSystemRole returns true if this is a global system role (organization_id is NULL)
-func (r *Role) IsGlobalSystemRole() bool {
-	return r.IsSystemRole && r.OrganizationID == nil
+// OrganizationMember represents user membership in an organization with a single role
+type OrganizationMember struct {
+	UserID         ulid.ULID `json:"user_id" gorm:"type:char(26);primaryKey"`
+	OrganizationID ulid.ULID `json:"organization_id" gorm:"type:char(26);primaryKey"`
+	RoleID         ulid.ULID `json:"role_id" gorm:"type:char(26);not null"`
+	Status         string    `json:"status" gorm:"size:20;default:active"`
+	JoinedAt       time.Time `json:"joined_at" gorm:"default:CURRENT_TIMESTAMP"`
+	InvitedBy      *ulid.ULID `json:"invited_by,omitempty" gorm:"type:char(26)"`
+
+	// Relations
+	Role *Role `json:"role,omitempty" gorm:"foreignKey:RoleID"`
 }
 
-// IsOrganizationRole returns true if this is an organization-specific role
+// ProjectMember represents user membership in a project with a single role (future)
+type ProjectMember struct {
+	UserID    ulid.ULID `json:"user_id" gorm:"type:char(26);primaryKey"`
+	ProjectID ulid.ULID `json:"project_id" gorm:"type:char(26);primaryKey"`
+	RoleID    ulid.ULID `json:"role_id" gorm:"type:char(26);not null"`
+	Status    string    `json:"status" gorm:"size:20;default:active"`
+	JoinedAt  time.Time `json:"joined_at" gorm:"default:CURRENT_TIMESTAMP"`
+
+	// Relations
+	Role *Role `json:"role,omitempty" gorm:"foreignKey:RoleID"`
+}
+
+// EnvironmentMember represents user membership in an environment with a single role (future)
+type EnvironmentMember struct {
+	UserID        ulid.ULID `json:"user_id" gorm:"type:char(26);primaryKey"`
+	EnvironmentID ulid.ULID `json:"environment_id" gorm:"type:char(26);primaryKey"`
+	RoleID        ulid.ULID `json:"role_id" gorm:"type:char(26);not null"`
+	Status        string    `json:"status" gorm:"size:20;default:active"`
+	JoinedAt      time.Time `json:"joined_at" gorm:"default:CURRENT_TIMESTAMP"`
+
+	// Relations
+	Role *Role `json:"role,omitempty" gorm:"foreignKey:RoleID"`
+}
+
+// Scope constants for roles
+const (
+	ScopeSystem       = "system"       // System template roles
+	ScopeOrganization = "organization" // Organization-specific roles
+	ScopeProject      = "project"      // Project-specific roles  
+	ScopeEnvironment  = "environment"  // Environment-specific roles
+)
+
+// Membership status constants
+const (
+	MemberStatusActive    = "active"
+	MemberStatusInvited   = "invited"
+	MemberStatusSuspended = "suspended"
+)
+
+// Helper methods for scoped roles
+func (r *Role) IsSystemRole() bool {
+	return r.ScopeType == ScopeSystem && r.ScopeID == nil
+}
+
+func (r *Role) IsCustomRole() bool {
+	return r.ScopeType != ScopeSystem && r.ScopeID != nil
+}
+
 func (r *Role) IsOrganizationRole() bool {
-	return r.OrganizationID != nil
+	return r.ScopeType == ScopeOrganization
 }
 
-// CanBeDeleted returns true if this role can be deleted (not a system role)
-func (r *Role) CanBeDeleted() bool {
-	return !r.IsSystemRole
+func (r *Role) IsProjectRole() bool {
+	return r.ScopeType == ScopeProject
 }
 
-// GetScope returns the scope of the role ("global" or organization ID)
-func (r *Role) GetScope() string {
-	if r.IsGlobalSystemRole() {
-		return "global"
+func (r *Role) IsEnvironmentRole() bool {
+	return r.ScopeType == ScopeEnvironment
+}
+
+func (r *Role) GetScopeDisplay() string {
+	switch r.ScopeType {
+	case ScopeSystem:
+		return "System"
+	case ScopeOrganization:
+		if r.ScopeID == nil {
+			return "Organization Template"
+		}
+		return "Organization Custom"
+	case ScopeProject:
+		return "Project"
+	case ScopeEnvironment:
+		return "Environment"
+	default:
+		return "Unknown"
 	}
-	if r.OrganizationID != nil {
-		return r.OrganizationID.String()
-	}
-	return "unknown"
 }
 
-// Permission represents a specific permission in the system using resource:action format.
+// Helper methods for organization membership
+func (m *OrganizationMember) IsActive() bool {
+	return m.Status == MemberStatusActive
+}
+
+func (m *OrganizationMember) IsInvited() bool {
+	return m.Status == MemberStatusInvited
+}
+
+func (m *OrganizationMember) IsSuspended() bool {
+	return m.Status == MemberStatusSuspended
+}
+
+func (m *OrganizationMember) Activate() {
+	m.Status = MemberStatusActive
+}
+
+func (m *OrganizationMember) Suspend() {
+	m.Status = MemberStatusSuspended
+}
+
+// Helper methods for project membership
+func (m *ProjectMember) IsActive() bool {
+	return m.Status == MemberStatusActive
+}
+
+func (m *ProjectMember) Activate() {
+	m.Status = MemberStatusActive
+}
+
+// Helper methods for environment membership
+func (m *EnvironmentMember) IsActive() bool {
+	return m.Status == MemberStatusActive
+}
+
+func (m *EnvironmentMember) Activate() {
+	m.Status = MemberStatusActive
+}
+
+// Permission represents a normalized permission using resource:action format
 type Permission struct {
 	ID          ulid.ULID `json:"id" gorm:"type:char(26);primaryKey"`
-	Name        string    `json:"name" gorm:"size:255;not null;uniqueIndex"` // Legacy: users.create, projects.read (kept for compatibility)
-	Resource    string    `json:"resource" gorm:"size:50;not null;index"` // users, projects, billing, etc.
-	Action      string    `json:"action" gorm:"size:50;not null;index"` // create, read, update, delete, admin, etc.
-	DisplayName string    `json:"display_name" gorm:"size:255;not null"`
+	Name        string    `json:"name" gorm:"size:100;not null;uniqueIndex"`
+	Resource    string    `json:"resource" gorm:"size:50;not null;index"`
+	Action      string    `json:"action" gorm:"size:50;not null;index"`
 	Description string    `json:"description" gorm:"type:text"`
-	Category    string    `json:"category" gorm:"size:100"` // users, projects, billing, etc.
-
-	CreatedAt time.Time      `json:"created_at"`
-	UpdatedAt time.Time      `json:"updated_at"`
-	DeletedAt gorm.DeletedAt `json:"deleted_at,omitempty" gorm:"index"`
+	CreatedAt   time.Time `json:"created_at"`
 
 	// Relations
 	Roles []Role `json:"roles,omitempty" gorm:"many2many:role_permissions"`
@@ -210,11 +307,12 @@ func ValidateResourceAction(resourceAction string) error {
 	return err
 }
 
-// RolePermission represents the many-to-many relationship between roles and permissions.
+// RolePermission represents the many-to-many relationship between template roles and permissions
 type RolePermission struct {
-	RoleID       ulid.ULID `json:"role_id" gorm:"type:char(26);not null;primaryKey"`
-	PermissionID ulid.ULID `json:"permission_id" gorm:"type:char(26);not null;primaryKey"`
-	CreatedAt    time.Time `json:"created_at"`
+	RoleID       ulid.ULID  `json:"role_id" gorm:"type:char(26);not null;primaryKey"`
+	PermissionID ulid.ULID  `json:"permission_id" gorm:"type:char(26);not null;primaryKey"`
+	GrantedAt    time.Time  `json:"granted_at" gorm:"default:CURRENT_TIMESTAMP"`
+	GrantedBy    *ulid.ULID `json:"granted_by,omitempty" gorm:"type:char(26)"`
 
 	// Relations
 	Role       Role       `json:"role,omitempty" gorm:"foreignKey:RoleID"`
@@ -438,34 +536,85 @@ func NewAPIKey(userID, orgID ulid.ULID, name, keyPrefix, keyHash string, scopes 
 	}
 }
 
-func NewRole(orgID *ulid.ULID, name, displayName, description string, isSystemRole bool) *Role {
+func NewRole(name, scopeType, description string) *Role {
 	return &Role{
-		ID:             ulid.New(),
-		OrganizationID: orgID,
-		Name:           name,
-		DisplayName:    displayName,
-		Description:    description,
-		IsSystemRole:   isSystemRole,
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
+		ID:          ulid.New(),
+		Name:        name,
+		ScopeType:   scopeType,
+		ScopeID:     nil, // System/template role
+		Description: description,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
 	}
 }
 
-func NewPermission(resource, action, displayName, description, category string) *Permission {
-	// Generate legacy name for compatibility
+// NewCustomRole creates a custom role scoped to a specific organization/project/environment
+func NewCustomRole(name, scopeType, description string, scopeID ulid.ULID) *Role {
+	return &Role{
+		ID:          ulid.New(),
+		Name:        name,
+		ScopeType:   scopeType,
+		ScopeID:     &scopeID,
+		Description: description,
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+}
+
+func NewOrganizationMember(userID, organizationID, roleID ulid.ULID, invitedBy *ulid.ULID) *OrganizationMember {
+	return &OrganizationMember{
+		UserID:         userID,
+		OrganizationID: organizationID,
+		RoleID:         roleID,
+		Status:         MemberStatusActive,
+		JoinedAt:       time.Now(),
+		InvitedBy:      invitedBy,
+	}
+}
+
+func NewProjectMember(userID, projectID, roleID ulid.ULID) *ProjectMember {
+	return &ProjectMember{
+		UserID:    userID,
+		ProjectID: projectID,
+		RoleID:    roleID,
+		Status:    MemberStatusActive,
+		JoinedAt:  time.Now(),
+	}
+}
+
+func NewEnvironmentMember(userID, environmentID, roleID ulid.ULID) *EnvironmentMember {
+	return &EnvironmentMember{
+		UserID:        userID,
+		EnvironmentID: environmentID,
+		RoleID:        roleID,
+		Status:        MemberStatusActive,
+		JoinedAt:      time.Now(),
+	}
+}
+
+func NewPermission(resource, action, description string) *Permission {
 	name := fmt.Sprintf("%s:%s", resource, action)
 	
 	return &Permission{
 		ID:          ulid.New(),
-		Name:        name,        // Legacy format for compatibility
-		Resource:    resource,    // New resource field
-		Action:      action,      // New action field
-		DisplayName: displayName,
+		Name:        name,
+		Resource:    resource,
+		Action:      action,
 		Description: description,
-		Category:    category,
 		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
 	}
+}
+
+// PasswordResetToken represents a password reset token
+type PasswordResetToken struct {
+	ID        ulid.ULID  `json:"id" gorm:"type:char(26);primaryKey"`
+	UserID    ulid.ULID  `json:"user_id" gorm:"type:char(26);not null;index"`
+	Token     string     `json:"-" gorm:"size:255;not null;uniqueIndex"`
+	Used      bool       `json:"used" gorm:"default:false;not null"`
+	ExpiresAt time.Time  `json:"expires_at" gorm:"not null;index"`
+	UsedAt    *time.Time `json:"used_at,omitempty"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
 }
 
 func NewAuditLog(userID, orgID *ulid.ULID, action, resource, resourceID, metadata, ipAddress, userAgent string) *AuditLog {
@@ -480,6 +629,18 @@ func NewAuditLog(userID, orgID *ulid.ULID, action, resource, resourceID, metadat
 		IPAddress:      ipAddress,
 		UserAgent:      userAgent,
 		CreatedAt:      time.Now(),
+	}
+}
+
+func NewPasswordResetToken(userID ulid.ULID, token string, expiresAt time.Time) *PasswordResetToken {
+	return &PasswordResetToken{
+		ID:        ulid.New(),
+		UserID:    userID,
+		Token:     token,
+		Used:      false,
+		ExpiresAt: expiresAt,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
 }
 
@@ -533,11 +694,12 @@ func (k *APIKey) Deactivate() {
 	k.UpdatedAt = time.Now()
 }
 
-func (r *Role) AddPermission(permissionID ulid.ULID) *RolePermission {
+func (r *Role) AddPermission(permissionID ulid.ULID, grantedBy *ulid.ULID) *RolePermission {
 	return &RolePermission{
 		RoleID:       r.ID,
 		PermissionID: permissionID,
-		CreatedAt:    time.Now(),
+		GrantedAt:    time.Now(),
+		GrantedBy:    grantedBy,
 	}
 }
 
@@ -545,35 +707,28 @@ func (r *Role) AddPermission(permissionID ulid.ULID) *RolePermission {
 
 // CreateRoleRequest represents a request to create a new role
 type CreateRoleRequest struct {
-	OrganizationID  *ulid.ULID   `json:"organization_id,omitempty"` // NULL for global system roles
-	Name            string       `json:"name" validate:"required,min=1,max=50"`
-	DisplayName     string       `json:"display_name" validate:"required,min=1,max=100"`
-	Description     string       `json:"description,omitempty"`
-	IsSystemRole    bool         `json:"is_system_role,omitempty"` // Only allowed for admin users
-	PermissionIDs   []ulid.ULID  `json:"permission_ids,omitempty"`
+	ScopeType     string      `json:"scope_type" validate:"required,oneof=system organization project environment"`
+	Name          string      `json:"name" validate:"required,min=1,max=100"`
+	Description   string      `json:"description,omitempty"`
+	PermissionIDs []ulid.ULID `json:"permission_ids,omitempty"`
 }
 
 // UpdateRoleRequest represents a request to update an existing role
 type UpdateRoleRequest struct {
-	DisplayName   *string      `json:"display_name,omitempty" validate:"omitempty,min=1,max=100"`
-	Description   *string      `json:"description,omitempty"`
-	PermissionIDs []ulid.ULID  `json:"permission_ids,omitempty"`
+	Description   *string     `json:"description,omitempty"`
+	PermissionIDs []ulid.ULID `json:"permission_ids,omitempty"`
 }
 
 // CreatePermissionRequest represents a request to create a new permission
 type CreatePermissionRequest struct {
 	Resource    string `json:"resource" validate:"required,min=1,max=50"`
 	Action      string `json:"action" validate:"required,min=1,max=50"`
-	DisplayName string `json:"display_name" validate:"required,min=1,max=255"`
 	Description string `json:"description,omitempty"`
-	Category    string `json:"category" validate:"required,min=1,max=100"`
 }
 
 // UpdatePermissionRequest represents a request to update an existing permission
 type UpdatePermissionRequest struct {
-	DisplayName *string `json:"display_name,omitempty" validate:"omitempty,min=1,max=255"`
 	Description *string `json:"description,omitempty"`
-	Category    *string `json:"category,omitempty" validate:"omitempty,min=1,max=100"`
 }
 
 // AssignRoleRequest represents a request to assign a role to a user
@@ -597,13 +752,12 @@ type PermissionListResponse struct {
 	PageSize    int           `json:"page_size,omitempty"`
 }
 
-// UserPermissionsResponse represents a user's effective permissions in an organization
+// UserPermissionsResponse represents a user's effective permissions across all scopes
 type UserPermissionsResponse struct {
-	UserID         ulid.ULID     `json:"user_id"`
-	OrganizationID ulid.ULID     `json:"organization_id"`
-	Role           *Role         `json:"role,omitempty"`
-	Permissions    []*Permission `json:"permissions"`
-	ResourceActions []string     `json:"resource_actions"` // ["users:read", "projects:write", etc.]
+	UserID          ulid.ULID     `json:"user_id"`
+	Roles           []*Role       `json:"roles"`
+	Permissions     []*Permission `json:"permissions"`
+	ResourceActions []string      `json:"resource_actions"` // ["users:read", "projects:write", etc.]
 }
 
 // CheckPermissionsRequest represents a request to check multiple permissions
@@ -616,24 +770,28 @@ type CheckPermissionsResponse struct {
 	Results map[string]bool `json:"results"` // resource:action -> has_permission
 }
 
-// RoleStatistics represents statistics about roles in an organization
+// RoleStatistics represents statistics about roles across all scopes
 type RoleStatistics struct {
-	OrganizationID     ulid.ULID `json:"organization_id"`
-	TotalRoles         int       `json:"total_roles"`
-	SystemRoles        int       `json:"system_roles"`
-	CustomRoles        int       `json:"custom_roles"`
-	TotalMembers       int       `json:"total_members"`
-	RoleDistribution   map[string]int `json:"role_distribution"` // role_name -> member_count
-	PermissionCount    int       `json:"permission_count"`
-	LastUpdated        time.Time `json:"last_updated"`
+	TotalRoles         int               `json:"total_roles"`
+	SystemRoles        int               `json:"system_roles"`
+	OrganizationRoles  int               `json:"organization_roles"`
+	ProjectRoles       int               `json:"project_roles"`
+	ScopeDistribution  map[string]int    `json:"scope_distribution"` // scope_type -> role_count
+	RoleDistribution   map[string]int    `json:"role_distribution"`  // role_name -> member_count
+	PermissionCount    int               `json:"permission_count"`
+	LastUpdated        time.Time         `json:"last_updated"`
 }
 
 
 // Table name methods for GORM
-func (UserSession) TableName() string     { return "user_sessions" }
-func (BlacklistedToken) TableName() string { return "blacklisted_tokens" }
-func (APIKey) TableName() string          { return "api_keys" }
-func (Role) TableName() string            { return "roles" }
-func (Permission) TableName() string      { return "permissions" }
-func (RolePermission) TableName() string  { return "role_permissions" }
-func (AuditLog) TableName() string        { return "audit_logs" }
+func (UserSession) TableName() string         { return "user_sessions" }
+func (BlacklistedToken) TableName() string    { return "blacklisted_tokens" }
+func (APIKey) TableName() string              { return "api_keys" }
+func (Role) TableName() string                { return "roles" }
+func (OrganizationMember) TableName() string  { return "organization_members" }
+func (ProjectMember) TableName() string       { return "project_members" }
+func (EnvironmentMember) TableName() string   { return "environment_members" }
+func (Permission) TableName() string          { return "permissions" }
+func (RolePermission) TableName() string      { return "role_permissions" }
+func (AuditLog) TableName() string            { return "audit_logs" }
+func (PasswordResetToken) TableName() string  { return "password_reset_tokens" }

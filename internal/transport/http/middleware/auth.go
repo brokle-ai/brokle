@@ -16,7 +16,7 @@ import (
 type AuthMiddleware struct {
 	jwtService        auth.JWTService
 	blacklistedTokens auth.BlacklistedTokenService
-	roleService       auth.RoleService
+	orgMemberService  auth.OrganizationMemberService
 	logger            *logrus.Logger
 }
 
@@ -24,13 +24,13 @@ type AuthMiddleware struct {
 func NewAuthMiddleware(
 	jwtService auth.JWTService,
 	blacklistedTokens auth.BlacklistedTokenService,
-	roleService auth.RoleService,
+	orgMemberService auth.OrganizationMemberService,
 	logger *logrus.Logger,
 ) *AuthMiddleware {
 	return &AuthMiddleware{
 		jwtService:        jwtService,
 		blacklistedTokens: blacklistedTokens,
-		roleService:       roleService,
+		orgMemberService:  orgMemberService,
 		logger:            logger,
 	}
 }
@@ -123,8 +123,8 @@ func (m *AuthMiddleware) RequireAuth() gin.HandlerFunc {
 	})
 }
 
-// RequirePermission middleware ensures user has specific permission with dynamic resolution
-func (m *AuthMiddleware) RequirePermission(resourceAction string) gin.HandlerFunc {
+// RequirePermission middleware ensures user has specific permission with effective permissions
+func (m *AuthMiddleware) RequirePermission(permission string) gin.HandlerFunc {
 	return gin.HandlerFunc(func(c *gin.Context) {
 		// Get user ID from context
 		userID, exists := GetUserID(c)
@@ -143,27 +143,16 @@ func (m *AuthMiddleware) RequirePermission(resourceAction string) gin.HandlerFun
 			return
 		}
 
-		// Resolve organization context from headers or URL
-		orgID := ResolveOrganizationID(c)
-		if orgID == nil {
-			m.logger.WithField("user_id", userID).Warn("Organization context required but not found")
-			response.BadRequest(c, "Organization context required", "Missing X-Org-ID header or organization in URL path")
-			c.Abort()
-			return
-		}
-
-		// Check permission dynamically using role service
-		hasPermission, err := m.roleService.CheckPermissions(
+		// Check permission using user's effective permissions
+		hasPermission, err := m.orgMemberService.CheckUserPermissions(
 			c.Request.Context(),
 			userIDParsed,
-			*orgID,
-			[]string{resourceAction},
+			[]string{permission},
 		)
 		if err != nil {
 			m.logger.WithError(err).WithFields(logrus.Fields{
-				"user_id":         userID,
-				"organization_id": orgID,
-				"permission":      resourceAction,
+				"user_id":    userID,
+				"permission": permission,
 			}).Error("Failed to check user permissions")
 			response.InternalServerError(c, "Permission verification failed")
 			c.Abort()
@@ -171,11 +160,10 @@ func (m *AuthMiddleware) RequirePermission(resourceAction string) gin.HandlerFun
 		}
 
 		// Check if user has the required permission
-		if !hasPermission.Results[resourceAction] {
+		if !hasPermission[permission] {
 			m.logger.WithFields(logrus.Fields{
-				"user_id":         userID,
-				"organization_id": orgID,
-				"permission":      resourceAction,
+				"user_id":    userID,
+				"permission": permission,
 			}).Warn("Insufficient permissions")
 			response.Forbidden(c, "Insufficient permissions")
 			c.Abort()
@@ -187,7 +175,7 @@ func (m *AuthMiddleware) RequirePermission(resourceAction string) gin.HandlerFun
 }
 
 // RequireAnyPermission middleware ensures user has at least one of the specified permissions
-func (m *AuthMiddleware) RequireAnyPermission(resourceActions []string) gin.HandlerFunc {
+func (m *AuthMiddleware) RequireAnyPermission(permissions []string) gin.HandlerFunc {
 	return gin.HandlerFunc(func(c *gin.Context) {
 		// Get user ID from context
 		userID, exists := GetUserID(c)
@@ -205,26 +193,16 @@ func (m *AuthMiddleware) RequireAnyPermission(resourceActions []string) gin.Hand
 			return
 		}
 
-		// Resolve organization context
-		orgID := ResolveOrganizationID(c)
-		if orgID == nil {
-			response.BadRequest(c, "Organization context required", "Missing organization context")
-			c.Abort()
-			return
-		}
-
-		// Check if user has ANY of the permissions using role service
-		hasPermission, err := m.roleService.CheckPermissions(
+		// Check if user has ANY of the permissions using effective permissions API
+		hasPermission, err := m.orgMemberService.CheckUserPermissions(
 			c.Request.Context(),
 			userIDParsed,
-			*orgID,
-			resourceActions,
+			permissions,
 		)
 		if err != nil {
 			m.logger.WithError(err).WithFields(logrus.Fields{
-				"user_id":         userID,
-				"organization_id": orgID,
-				"permissions":     resourceActions,
+				"user_id":     userID,
+				"permissions": permissions,
 			}).Error("Failed to check user permissions")
 			response.InternalServerError(c, "Permission verification failed")
 			c.Abort()
@@ -233,8 +211,8 @@ func (m *AuthMiddleware) RequireAnyPermission(resourceActions []string) gin.Hand
 
 		// Check if user has any of the required permissions
 		hasAnyPermission := false
-		for _, resourceAction := range resourceActions {
-			if hasPermission.Results[resourceAction] {
+		for _, permission := range permissions {
+			if hasPermission[permission] {
 				hasAnyPermission = true
 				break
 			}
@@ -242,9 +220,8 @@ func (m *AuthMiddleware) RequireAnyPermission(resourceActions []string) gin.Hand
 
 		if !hasAnyPermission {
 			m.logger.WithFields(logrus.Fields{
-				"user_id":         userID,
-				"organization_id": orgID,
-				"permissions":     resourceActions,
+				"user_id":     userID,
+				"permissions": permissions,
 			}).Warn("Insufficient permissions - none of the required permissions found")
 			response.Forbidden(c, "Insufficient permissions")
 			c.Abort()
@@ -256,7 +233,7 @@ func (m *AuthMiddleware) RequireAnyPermission(resourceActions []string) gin.Hand
 }
 
 // RequireAllPermissions middleware ensures user has ALL specified permissions
-func (m *AuthMiddleware) RequireAllPermissions(resourceActions []string) gin.HandlerFunc {
+func (m *AuthMiddleware) RequireAllPermissions(permissions []string) gin.HandlerFunc {
 	return gin.HandlerFunc(func(c *gin.Context) {
 		// Get user ID from context
 		userID, exists := GetUserID(c)
@@ -274,40 +251,29 @@ func (m *AuthMiddleware) RequireAllPermissions(resourceActions []string) gin.Han
 			return
 		}
 
-		// Resolve context
-		orgID := ResolveOrganizationID(c)
-		if orgID == nil {
-			response.BadRequest(c, "Organization context required", "Missing organization context")
+		// Check all permissions using effective permissions API
+		hasPermission, err := m.orgMemberService.CheckUserPermissions(
+			c.Request.Context(),
+			userIDParsed,
+			permissions,
+		)
+		if err != nil {
+			m.logger.WithError(err).WithFields(logrus.Fields{
+				"user_id":     userID,
+				"permissions": permissions,
+			}).Error("Failed to check user permissions")
+			response.InternalServerError(c, "Permission verification failed")
 			c.Abort()
 			return
 		}
 
-		// Check all permissions individually
-		for _, resourceAction := range resourceActions {
-			hasPermission, err := m.roleService.CheckPermissions(
-				c.Request.Context(),
-				userIDParsed,
-				*orgID,
-				[]string{resourceAction},
-			)
-			if err != nil {
-				m.logger.WithError(err).WithFields(logrus.Fields{
-					"user_id":         userID,
-					"organization_id": orgID,
-					"permission":      resourceAction,
-				}).Error("Failed to check user permissions")
-				response.InternalServerError(c, "Permission verification failed")
-				c.Abort()
-				return
-			}
-
-			// Check if user has this specific permission
-			if !hasPermission.Results[resourceAction] {
+		// Check if user has ALL required permissions
+		for _, permission := range permissions {
+			if !hasPermission[permission] {
 				m.logger.WithFields(logrus.Fields{
-					"user_id":         userID,
-					"organization_id": orgID,
-					"permissions":     resourceActions,
-					"failed_on":       resourceAction,
+					"user_id":     userID,
+					"permissions": permissions,
+					"failed_on":   permission,
 				}).Warn("Insufficient permissions - missing required permission")
 				response.Forbidden(c, "Insufficient permissions")
 				c.Abort()

@@ -53,7 +53,7 @@ func (s *memberService) AddMember(ctx context.Context, orgID, userID, roleID uli
 	}
 
 	// Verify role exists
-	role, err := s.roleService.GetRole(ctx, roleID)
+	role, err := s.roleService.GetRoleByID(ctx, roleID)
 	if err != nil {
 		return fmt.Errorf("role not found: %w", err)
 	}
@@ -90,7 +90,7 @@ func (s *memberService) RemoveMember(ctx context.Context, orgID, userID ulid.ULI
 	}
 
 	// Check if this is the only owner
-	ownerRole, err := s.roleService.GetRoleByName(ctx, &orgID, "owner")
+	ownerRole, err := s.roleService.GetRoleByNameAndScope(ctx, "owner", auth.ScopeOrganization)
 	if err != nil {
 		return fmt.Errorf("failed to get owner role: %w", err)
 	}
@@ -136,13 +136,13 @@ func (s *memberService) UpdateMemberRole(ctx context.Context, orgID, userID, new
 	}
 
 	// Verify new role exists
-	newRole, err := s.roleService.GetRole(ctx, newRoleID)
+	newRole, err := s.roleService.GetRoleByID(ctx, newRoleID)
 	if err != nil {
 		return fmt.Errorf("role not found: %w", err)
 	}
 
 	// Check if demoting the last owner
-	ownerRole, err := s.roleService.GetRoleByName(ctx, &orgID, "owner")
+	ownerRole, err := s.roleService.GetRoleByNameAndScope(ctx, "owner", auth.ScopeOrganization)
 	if err != nil {
 		return fmt.Errorf("failed to get owner role: %w", err)
 	}

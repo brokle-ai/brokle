@@ -79,81 +79,88 @@ type APIKeyService interface {
 	GetAPIKeysByEnvironment(ctx context.Context, envID ulid.ULID) ([]*APIKey, error)
 }
 
-// RoleService defines the role and permission management service interface.
+// RoleService defines both system template and custom scoped role management service interface.
 type RoleService interface {
-	// Role management
-	CreateRole(ctx context.Context, orgID *ulid.ULID, req *CreateRoleRequest) (*Role, error)
-	GetRole(ctx context.Context, roleID ulid.ULID) (*Role, error)
-	GetRoleByName(ctx context.Context, orgID *ulid.ULID, name string) (*Role, error)
-	UpdateRole(ctx context.Context, roleID ulid.ULID, req *UpdateRoleRequest) error
+	// System template role management
+	CreateRole(ctx context.Context, req *CreateRoleRequest) (*Role, error)
+	GetRoleByID(ctx context.Context, roleID ulid.ULID) (*Role, error)
+	GetRoleByNameAndScope(ctx context.Context, name, scopeType string) (*Role, error)
+	UpdateRole(ctx context.Context, roleID ulid.ULID, req *UpdateRoleRequest) (*Role, error)
 	DeleteRole(ctx context.Context, roleID ulid.ULID) error
 	
-	// Role queries
-	ListRoles(ctx context.Context, orgID *ulid.ULID, limit, offset int) (*RoleListResponse, error) // Updated for pagination
-	GetSystemRoles(ctx context.Context) ([]*Role, error)                                           // Global system roles only
-	GetGlobalSystemRole(ctx context.Context, name string) (*Role, error)                          // Get specific global system role
-	GetOrganizationRoles(ctx context.Context, orgID ulid.ULID) ([]*Role, error)                  // Org-specific roles only
-	GetAvailableRoles(ctx context.Context, orgID ulid.ULID) ([]*Role, error)                     // System + org roles for assignment
-	SearchRoles(ctx context.Context, orgID *ulid.ULID, query string, limit, offset int) (*RoleListResponse, error)
+	// System template role queries
+	GetRolesByScopeType(ctx context.Context, scopeType string) ([]*Role, error)
+	GetAllRoles(ctx context.Context) ([]*Role, error)
+	GetSystemRoles(ctx context.Context) ([]*Role, error)
 	
-	// User role management
-	GetUserRole(ctx context.Context, userID, orgID ulid.ULID) (*Role, error)
-	AssignUserRole(ctx context.Context, userID, orgID, roleID ulid.ULID) error
-	RevokeUserRole(ctx context.Context, userID, orgID ulid.ULID) error
+	// Custom scoped role management
+	CreateCustomRole(ctx context.Context, scopeType string, scopeID ulid.ULID, req *CreateRoleRequest) (*Role, error)
+	GetCustomRolesByOrganization(ctx context.Context, organizationID ulid.ULID) ([]*Role, error)
+	UpdateCustomRole(ctx context.Context, roleID ulid.ULID, req *UpdateRoleRequest) (*Role, error)
+	DeleteCustomRole(ctx context.Context, roleID ulid.ULID) error
 	
-	// Permission management
+	// Permission management for roles
 	GetRolePermissions(ctx context.Context, roleID ulid.ULID) ([]*Permission, error)
-	AssignPermissionsToRole(ctx context.Context, roleID ulid.ULID, permissionIDs []ulid.ULID) error
-	RemovePermissionsFromRole(ctx context.Context, roleID ulid.ULID, permissionIDs []ulid.ULID) error
-	UpdateRolePermissions(ctx context.Context, roleID ulid.ULID, permissionIDs []ulid.ULID) error // Replace all permissions
+	AssignRolePermissions(ctx context.Context, roleID ulid.ULID, permissionIDs []ulid.ULID, grantedBy *ulid.ULID) error
+	RevokeRolePermissions(ctx context.Context, roleID ulid.ULID, permissionIDs []ulid.ULID) error
 	
-	// Permission checking (main authorization methods)
-	HasPermission(ctx context.Context, userID, orgID ulid.ULID, resourceAction string) (bool, error)        // resource:action format
-	HasResourceAction(ctx context.Context, userID, orgID ulid.ULID, resource, action string) (bool, error) // Separate resource/action
-	HasPermissions(ctx context.Context, userID, orgID ulid.ULID, resourceActions []string) (bool, error)   // All must be true
-	HasAnyPermission(ctx context.Context, userID, orgID ulid.ULID, resourceActions []string) (bool, error) // Any must be true
-	CheckPermissions(ctx context.Context, userID, orgID ulid.ULID, resourceActions []string) (*CheckPermissionsResponse, error)
-	
-	// User permissions (through roles via organization membership)
-	GetUserPermissions(ctx context.Context, userID, orgID ulid.ULID) (*UserPermissionsResponse, error) // Full response with role info
-	GetUserPermissionStrings(ctx context.Context, userID, orgID ulid.ULID) ([]string, error)         // Just resource:action strings
-	
-	// Role validation and statistics
-	ValidateRole(ctx context.Context, roleID ulid.ULID) error
-	CanDeleteRole(ctx context.Context, roleID ulid.ULID) (bool, error)
-	GetRoleStatistics(ctx context.Context, orgID ulid.ULID) (*RoleStatistics, error)
-	
-	// Legacy permission support (for backward compatibility)
-	HasLegacyPermission(ctx context.Context, userID, orgID ulid.ULID, permission string) (bool, error) // Old dot notation
+	// Statistics
+	GetRoleStatistics(ctx context.Context) (*RoleStatistics, error)
 }
 
-// PermissionService defines the permission management service interface.
+// OrganizationMemberService defines the organization membership management service interface.
+type OrganizationMemberService interface {
+	// Membership management
+	AddMember(ctx context.Context, userID, orgID, roleID ulid.ULID, invitedBy *ulid.ULID) (*OrganizationMember, error)
+	RemoveMember(ctx context.Context, userID, orgID ulid.ULID) error
+	UpdateMemberRole(ctx context.Context, userID, orgID, roleID ulid.ULID) error
+	
+	// Membership queries
+	GetMember(ctx context.Context, userID, orgID ulid.ULID) (*OrganizationMember, error)
+	GetUserMemberships(ctx context.Context, userID ulid.ULID) ([]*OrganizationMember, error)
+	GetOrganizationMembers(ctx context.Context, orgID ulid.ULID) ([]*OrganizationMember, error)
+	GetMembersByRole(ctx context.Context, roleID ulid.ULID) ([]*OrganizationMember, error)
+	IsMember(ctx context.Context, userID, orgID ulid.ULID) (bool, error)
+	
+	// Permission checking via membership
+	GetUserEffectivePermissions(ctx context.Context, userID ulid.ULID) ([]string, error)
+	GetUserPermissionsInOrganization(ctx context.Context, userID, orgID ulid.ULID) ([]string, error)
+	CheckUserPermission(ctx context.Context, userID ulid.ULID, permission string) (bool, error)
+	CheckUserPermissions(ctx context.Context, userID ulid.ULID, permissions []string) (map[string]bool, error)
+	
+	// Status management
+	ActivateMember(ctx context.Context, userID, orgID ulid.ULID) error
+	SuspendMember(ctx context.Context, userID, orgID ulid.ULID) error
+	GetActiveMembers(ctx context.Context, orgID ulid.ULID) ([]*OrganizationMember, error)
+	
+	// Statistics
+	GetMemberCount(ctx context.Context, orgID ulid.ULID) (int, error)
+	GetMembersByRoleCount(ctx context.Context, orgID ulid.ULID) (map[string]int, error)
+}
+
+// PermissionService defines the normalized permission management service interface.
 type PermissionService interface {
 	// Permission management
 	CreatePermission(ctx context.Context, req *CreatePermissionRequest) (*Permission, error)
 	GetPermission(ctx context.Context, permissionID ulid.ULID) (*Permission, error)
-	GetPermissionByName(ctx context.Context, name string) (*Permission, error)                                    // Legacy name lookup
-	GetPermissionByResourceAction(ctx context.Context, resource, action string) (*Permission, error)             // New resource:action lookup
+	GetPermissionByName(ctx context.Context, name string) (*Permission, error)
+	GetPermissionByResourceAction(ctx context.Context, resource, action string) (*Permission, error)
 	UpdatePermission(ctx context.Context, permissionID ulid.ULID, req *UpdatePermissionRequest) error
 	DeletePermission(ctx context.Context, permissionID ulid.ULID) error
 	
 	// Permission queries
-	ListPermissions(ctx context.Context, limit, offset int) (*PermissionListResponse, error)                     // Paginated list
+	ListPermissions(ctx context.Context, limit, offset int) (*PermissionListResponse, error)
 	GetAllPermissions(ctx context.Context) ([]*Permission, error)
-	GetPermissionsByCategory(ctx context.Context, category string) ([]*Permission, error)
-	GetPermissionsByResource(ctx context.Context, resource string) ([]*Permission, error)                       // All permissions for resource
-	GetPermissionsByNames(ctx context.Context, names []string) ([]*Permission, error)                           // Legacy bulk lookup
-	GetPermissionsByResourceActions(ctx context.Context, resourceActions []string) ([]*Permission, error)      // New bulk resource:action lookup
+	GetPermissionsByResource(ctx context.Context, resource string) ([]*Permission, error)
+	GetPermissionsByNames(ctx context.Context, names []string) ([]*Permission, error)
+	GetPermissionsByResourceActions(ctx context.Context, resourceActions []string) ([]*Permission, error)
 	SearchPermissions(ctx context.Context, query string, limit, offset int) (*PermissionListResponse, error)
 	
 	// Resource and action queries  
-	GetAvailableResources(ctx context.Context) ([]string, error)                                                 // Get all distinct resources
-	GetActionsForResource(ctx context.Context, resource string) ([]string, error)                               // Get all actions for resource
-	GetPermissionCategories(ctx context.Context) ([]string, error)                                              // Get all distinct categories
+	GetAvailableResources(ctx context.Context) ([]string, error)
+	GetActionsForResource(ctx context.Context, resource string) ([]string, error)
 	
 	// Permission validation
-	ValidatePermissionName(ctx context.Context, name string) error                                               // Legacy name validation
-	ValidateResourceAction(ctx context.Context, resource, action string) error                                  // New resource:action validation
 	PermissionExists(ctx context.Context, resource, action string) (bool, error)
 	BulkPermissionExists(ctx context.Context, resourceActions []string) (map[string]bool, error)
 	
@@ -292,12 +299,13 @@ type APIKeyFilters struct {
 
 // Statistics types - AuditLogStats is defined in repository.go
 
-// AuthServices aggregates all authentication-related services.
+// AuthServices aggregates all authentication-related services (normalized version).
 type AuthServices interface {
 	Auth() AuthService
 	Sessions() SessionService
 	APIKeys() APIKeyService
 	Roles() RoleService
+	OrganizationMembers() OrganizationMemberService
 	Permissions() PermissionService
 	JWT() JWTService
 	BlacklistedTokens() BlacklistedTokenService

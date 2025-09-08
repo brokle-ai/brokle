@@ -76,7 +76,7 @@ func (r *rolePermissionRepository) Exists(ctx context.Context, roleID, permissio
 }
 
 // AssignPermissions assigns permissions to a role (bulk operation)
-func (r *rolePermissionRepository) AssignPermissions(ctx context.Context, roleID ulid.ULID, permissionIDs []ulid.ULID) error {
+func (r *rolePermissionRepository) AssignPermissions(ctx context.Context, roleID ulid.ULID, permissionIDs []ulid.ULID, grantedBy *ulid.ULID) error {
 	// First, remove existing permissions for this role
 	err := r.DeleteByRoleID(ctx, roleID)
 	if err != nil {
@@ -88,6 +88,7 @@ func (r *rolePermissionRepository) AssignPermissions(ctx context.Context, roleID
 		rolePermission := &auth.RolePermission{
 			RoleID:       roleID,
 			PermissionID: permissionID,
+			GrantedBy:    grantedBy,
 		}
 		if err := r.Create(ctx, rolePermission); err != nil {
 			return err
@@ -114,7 +115,7 @@ func (r *rolePermissionRepository) HasPermission(ctx context.Context, roleID, pe
 }
 
 // ReplaceAllPermissions replaces all permissions for a role
-func (r *rolePermissionRepository) ReplaceAllPermissions(ctx context.Context, roleID ulid.ULID, permissionIDs []ulid.ULID) error {
+func (r *rolePermissionRepository) ReplaceAllPermissions(ctx context.Context, roleID ulid.ULID, permissionIDs []ulid.ULID, grantedBy *ulid.ULID) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// Remove all existing permissions
 		if err := tx.Where("role_id = ?", roleID).Delete(&auth.RolePermission{}).Error; err != nil {
@@ -126,6 +127,7 @@ func (r *rolePermissionRepository) ReplaceAllPermissions(ctx context.Context, ro
 			rolePermission := &auth.RolePermission{
 				RoleID:       roleID,
 				PermissionID: permissionID,
+				GrantedBy:    grantedBy,
 			}
 			if err := tx.Create(rolePermission).Error; err != nil {
 				return err

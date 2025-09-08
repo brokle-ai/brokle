@@ -63,8 +63,8 @@ func (s *organizationService) CreateOrganization(ctx context.Context, userID uli
 		return nil, fmt.Errorf("failed to create organization: %w", err)
 	}
 
-	// Get owner role
-	ownerRole, err := s.roleService.GetRoleByName(ctx, nil, "owner")
+	// Get owner role for this organization
+	ownerRole, err := s.roleService.GetRoleByNameAndScope(ctx, "owner", auth.ScopeOrganization)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get owner role: %w", err)
 	}
