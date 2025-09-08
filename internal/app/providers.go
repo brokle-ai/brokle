@@ -84,6 +84,7 @@ type AuthRepositories struct {
 	PasswordResetToken auth.PasswordResetTokenRepository
 	APIKey             auth.APIKeyRepository
 	Role               auth.RoleRepository
+	UserRole           auth.UserRoleRepository
 	Permission         auth.PermissionRepository
 	RolePermission     auth.RolePermissionRepository
 	AuditLog           auth.AuditLogRepository
@@ -163,6 +164,7 @@ func ProvideAuthRepositories(db *gorm.DB) *AuthRepositories {
 		PasswordResetToken: authRepo.NewPasswordResetTokenRepository(db),
 		APIKey:             authRepo.NewAPIKeyRepository(db),
 		Role:               authRepo.NewRoleRepository(db),
+		UserRole:           authRepo.NewUserRoleRepository(db),
 		Permission:         authRepo.NewPermissionRepository(db),
 		RolePermission:     authRepo.NewRolePermissionRepository(db),
 		AuditLog:           authRepo.NewAuditLogRepository(db),
@@ -239,9 +241,10 @@ func ProvideAuthServices(
 		authRepos.RolePermission,
 	)
 
-	// Create role service with comprehensive RBAC
+	// Create role service with clean RBAC
 	roleService := authService.NewRoleService(
 		authRepos.Role,
+		authRepos.UserRole,
 		authRepos.Permission,
 		authRepos.RolePermission,
 	)

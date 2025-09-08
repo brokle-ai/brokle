@@ -30,6 +30,7 @@ type Manager struct {
 	projectRepo      organization.ProjectRepository
 	environmentRepo  organization.EnvironmentRepository
 	roleRepo         auth.RoleRepository
+	userRoleRepo     auth.UserRoleRepository
 	permissionRepo   auth.PermissionRepository
 	rolePermRepo     auth.RolePermissionRepository
 
@@ -80,6 +81,7 @@ func (m *Manager) initializeRepositories() {
 
 	// Auth repositories
 	m.roleRepo = authRepo.NewRoleRepository(m.db)
+	m.userRoleRepo = authRepo.NewUserRoleRepository(m.db)
 	m.permissionRepo = authRepo.NewPermissionRepository(m.db)
 	m.rolePermRepo = authRepo.NewRolePermissionRepository(m.db)
 }
@@ -88,7 +90,7 @@ func (m *Manager) initializeRepositories() {
 func (m *Manager) initializeComponentSeeders() {
 	m.userSeeder = NewUserSeeder(m.userRepo)
 	m.organizationSeeder = NewOrganizationSeeder(m.organizationRepo)
-	m.rbacSeeder = NewRBACSeeder(m.roleRepo, m.permissionRepo, m.rolePermRepo, m.memberRepo)
+	m.rbacSeeder = NewRBACSeeder(m.roleRepo, m.userRoleRepo, m.permissionRepo, m.rolePermRepo)
 	m.projectSeeder = NewProjectSeeder(m.projectRepo, m.environmentRepo)
 	m.onboardingSeeder = NewOnboardingSeeder(m.userRepo)
 }

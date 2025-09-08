@@ -78,11 +78,8 @@ func (s *authService) Login(ctx context.Context, req *auth.LoginRequest) (*auth.
 		return nil, errors.New("invalid credentials")
 	}
 
-	// Get user permissions for default organization
-	var permissions []string
-	if user.DefaultOrganizationID != nil {
-		permissions, _ = s.roleService.GetUserPermissionStrings(ctx, user.ID, *user.DefaultOrganizationID)
-	}
+	// Get user effective permissions across all scopes
+	permissions, _ := s.roleService.GetUserEffectivePermissions(ctx, user.ID)
 
 	// Generate access token with JTI for session tracking
 	accessToken, jti, err := s.jwtService.GenerateAccessTokenWithJTI(ctx, user.ID, map[string]interface{}{
@@ -192,11 +189,8 @@ func (s *authService) Register(ctx context.Context, req *auth.RegisterRequest) (
 	auditLog := auth.NewAuditLog(&newUser.ID, nil, "auth.register.success", "user", newUser.ID.String(), fmt.Sprintf(`{"email": "%s"}`, newUser.Email), "", "")
 	s.auditRepo.Create(ctx, auditLog)
 
-	// Auto-login: Generate tokens for the new user
-	var permissions []string
-	if newUser.DefaultOrganizationID != nil {
-		permissions, _ = s.roleService.GetUserPermissionStrings(ctx, newUser.ID, *newUser.DefaultOrganizationID)
-	}
+	// Auto-login: Generate tokens for the new user - get effective permissions
+	permissions, _ := s.roleService.GetUserEffectivePermissions(ctx, newUser.ID)
 
 	// Generate access token with JTI for session tracking
 	accessToken, jti, err := s.jwtService.GenerateAccessTokenWithJTI(ctx, newUser.ID, map[string]interface{}{
@@ -292,11 +286,8 @@ func (s *authService) RefreshToken(ctx context.Context, req *auth.RefreshTokenRe
 		return nil, errors.New("user is inactive")
 	}
 
-	// Get user permissions
-	var permissions []string
-	if user.DefaultOrganizationID != nil {
-		permissions, _ = s.roleService.GetUserPermissionStrings(ctx, user.ID, *user.DefaultOrganizationID)
-	}
+	// Get user effective permissions across all scopes
+	permissions, _ := s.roleService.GetUserEffectivePermissions(ctx, user.ID)
 
 	// Generate new access token with JTI for session tracking
 	accessToken, jti, err := s.jwtService.GenerateAccessTokenWithJTI(ctx, user.ID, map[string]interface{}{

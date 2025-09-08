@@ -130,11 +130,11 @@ rbac:
       category: "member"
 
   roles:
-    # System roles (global)
+    # System roles (clean)
     - name: "super_admin"
       display_name: "Super Administrator"
       description: "Full system access across all organizations"
-      is_system_role: true
+      scope_type: "system"
       permissions:
         - "organizations:read"
         - "organizations:write"
@@ -150,12 +150,11 @@ rbac:
         - "members:write"
         - "members:delete"
     
-    # Organization-specific roles
+    # Organization role templates (available to ALL organizations)
     - name: "owner"
       display_name: "Organization Owner"
       description: "Full access to organization and all its resources"
-      is_system_role: false
-      organization_slug: "brokle-tech"
+      scope_type: "organization"
       permissions:
         - "organizations:read"
         - "organizations:write"
@@ -173,8 +172,7 @@ rbac:
     - name: "admin"
       display_name: "Administrator"
       description: "Administrative access to organization resources"
-      is_system_role: false
-      organization_slug: "brokle-tech"
+      scope_type: "organization"
       permissions:
         - "organizations:read"
         - "projects:read"
@@ -188,8 +186,7 @@ rbac:
     - name: "developer"
       display_name: "Developer"
       description: "Development access to projects and API keys"
-      is_system_role: false
-      organization_slug: "brokle-tech"
+      scope_type: "organization"
       permissions:
         - "organizations:read"
         - "projects:read"
@@ -201,70 +198,34 @@ rbac:
     - name: "viewer"
       display_name: "Viewer"
       description: "Read-only access to organization resources"
-      is_system_role: false
-      organization_slug: "brokle-tech"
+      scope_type: "organization"
       permissions:
         - "organizations:read"
         - "projects:read"
         - "api_keys:read"
         - "analytics:read"
-    
-    # Demo organization roles
-    - name: "owner"
-      display_name: "Organization Owner"
-      description: "Full access to organization and all its resources"
-      is_system_role: false
-      organization_slug: "demo-org"
-      permissions:
-        - "organizations:read"
-        - "organizations:write"
-        - "projects:read"
-        - "projects:write"
-        - "projects:delete"
-        - "api_keys:read"
-        - "api_keys:write"
-        - "api_keys:delete"
-        - "analytics:read"
-        - "members:read"
-        - "members:write"
-        - "members:delete"
-
-    # Test startup roles
-    - name: "owner"
-      display_name: "Organization Owner"
-      description: "Full access to organization and all its resources"
-      is_system_role: false
-      organization_slug: "test-startup"
-      permissions:
-        - "organizations:read"
-        - "organizations:write"
-        - "projects:read"
-        - "projects:write"
-        - "projects:delete"
-        - "api_keys:read"
-        - "api_keys:write"
-        - "api_keys:delete"
-        - "analytics:read"
-        - "members:read"
-        - "members:write"
-        - "members:delete"
 
   memberships:
+    # System role assignment (clean)
     - user_email: "admin@brokle.ai"
-      organization_slug: "brokle-tech"
       role_name: "super_admin"
+      scope_type: "system"
     
+    # Organization role assignments (clean)
     - user_email: "developer@brokle.ai"
-      organization_slug: "brokle-tech"
       role_name: "developer"
+      scope_type: "organization"
+      organization_slug: "brokle-tech"
     
     - user_email: "demo@example.com"
-      organization_slug: "demo-org"
       role_name: "owner"
+      scope_type: "organization"
+      organization_slug: "demo-org"
     
     - user_email: "test@startup.com"
-      organization_slug: "test-startup"
       role_name: "owner"
+      scope_type: "organization"
+      organization_slug: "test-startup"
 
 projects:
   - name: "AI Gateway"

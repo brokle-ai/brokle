@@ -79,52 +79,39 @@ type APIKeyService interface {
 	GetAPIKeysByEnvironment(ctx context.Context, envID ulid.ULID) ([]*APIKey, error)
 }
 
-// RoleService defines the role and permission management service interface.
+// RoleService defines the clean role and permission management service interface.
 type RoleService interface {
-	// Role management
-	CreateRole(ctx context.Context, orgID *ulid.ULID, req *CreateRoleRequest) (*Role, error)
-	GetRole(ctx context.Context, roleID ulid.ULID) (*Role, error)
-	GetRoleByName(ctx context.Context, orgID *ulid.ULID, name string) (*Role, error)
-	UpdateRole(ctx context.Context, roleID ulid.ULID, req *UpdateRoleRequest) error
+	// Clean role management
+	CreateRole(ctx context.Context, req *CreateRoleRequest) (*Role, error)
+	GetRoleByID(ctx context.Context, roleID ulid.ULID) (*Role, error)
+	UpdateRole(ctx context.Context, roleID ulid.ULID, req *UpdateRoleRequest) (*Role, error)
 	DeleteRole(ctx context.Context, roleID ulid.ULID) error
 	
-	// Role queries
-	ListRoles(ctx context.Context, orgID *ulid.ULID, limit, offset int) (*RoleListResponse, error) // Updated for pagination
-	GetSystemRoles(ctx context.Context) ([]*Role, error)                                           // Global system roles only
-	GetGlobalSystemRole(ctx context.Context, name string) (*Role, error)                          // Get specific global system role
-	GetOrganizationRoles(ctx context.Context, orgID ulid.ULID) ([]*Role, error)                  // Org-specific roles only
-	GetAvailableRoles(ctx context.Context, orgID ulid.ULID) ([]*Role, error)                     // System + org roles for assignment
-	SearchRoles(ctx context.Context, orgID *ulid.ULID, query string, limit, offset int) (*RoleListResponse, error)
+	// Clean scoped role queries
+	GetRolesByScope(ctx context.Context, scopeType string, scopeID *ulid.ULID) ([]*Role, error)
+	GetSystemRoles(ctx context.Context) ([]*Role, error)
+	GetOrganizationRoles(ctx context.Context, orgID ulid.ULID) ([]*Role, error)
 	
-	// User role management
-	GetUserRole(ctx context.Context, userID, orgID ulid.ULID) (*Role, error)
-	AssignUserRole(ctx context.Context, userID, orgID, roleID ulid.ULID) error
-	RevokeUserRole(ctx context.Context, userID, orgID ulid.ULID) error
+	// Clean user role management
+	AssignUserRole(ctx context.Context, userID, roleID ulid.ULID) error
+	RevokeUserRole(ctx context.Context, userID, roleID ulid.ULID) error
+	GetUserRoles(ctx context.Context, userID ulid.ULID) ([]*Role, error)
 	
-	// Permission management
+	// Clean permission management
 	GetRolePermissions(ctx context.Context, roleID ulid.ULID) ([]*Permission, error)
-	AssignPermissionsToRole(ctx context.Context, roleID ulid.ULID, permissionIDs []ulid.ULID) error
-	RemovePermissionsFromRole(ctx context.Context, roleID ulid.ULID, permissionIDs []ulid.ULID) error
-	UpdateRolePermissions(ctx context.Context, roleID ulid.ULID, permissionIDs []ulid.ULID) error // Replace all permissions
+	AssignRolePermissions(ctx context.Context, roleID ulid.ULID, permissionIDs []ulid.ULID) error
+	RevokeRolePermissions(ctx context.Context, roleID ulid.ULID, permissionIDs []ulid.ULID) error
 	
-	// Permission checking (main authorization methods)
-	HasPermission(ctx context.Context, userID, orgID ulid.ULID, resourceAction string) (bool, error)        // resource:action format
-	HasResourceAction(ctx context.Context, userID, orgID ulid.ULID, resource, action string) (bool, error) // Separate resource/action
-	HasPermissions(ctx context.Context, userID, orgID ulid.ULID, resourceActions []string) (bool, error)   // All must be true
-	HasAnyPermission(ctx context.Context, userID, orgID ulid.ULID, resourceActions []string) (bool, error) // Any must be true
-	CheckPermissions(ctx context.Context, userID, orgID ulid.ULID, resourceActions []string) (*CheckPermissionsResponse, error)
+	// Clean permission checking (effective permissions across all scopes)
+	GetUserEffectivePermissions(ctx context.Context, userID ulid.ULID) ([]string, error)
+	CheckUserPermission(ctx context.Context, userID ulid.ULID, permission string) (bool, error)
+	CheckUserPermissions(ctx context.Context, userID ulid.ULID, permissions []string) (map[string]bool, error)
 	
-	// User permissions (through roles via organization membership)
-	GetUserPermissions(ctx context.Context, userID, orgID ulid.ULID) (*UserPermissionsResponse, error) // Full response with role info
-	GetUserPermissionStrings(ctx context.Context, userID, orgID ulid.ULID) ([]string, error)         // Just resource:action strings
+	// Additional clean role queries
+	GetRoleByNameAndScope(ctx context.Context, name, scopeType string, scopeID *ulid.ULID) (*Role, error)
 	
-	// Role validation and statistics
-	ValidateRole(ctx context.Context, roleID ulid.ULID) error
-	CanDeleteRole(ctx context.Context, roleID ulid.ULID) (bool, error)
-	GetRoleStatistics(ctx context.Context, orgID ulid.ULID) (*RoleStatistics, error)
-	
-	// Legacy permission support (for backward compatibility)
-	HasLegacyPermission(ctx context.Context, userID, orgID ulid.ULID, permission string) (bool, error) // Old dot notation
+	// Statistics
+	GetRoleStatistics(ctx context.Context, scopeType string, scopeID *ulid.ULID) (*RoleStatistics, error)
 }
 
 // PermissionService defines the permission management service interface.
