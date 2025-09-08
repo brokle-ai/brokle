@@ -61,79 +61,84 @@ rbac:
   permissions:
     # Organization permissions
     - name: "organizations:read"
-      display_name: "Read Organizations"
       description: "View organization details and settings"
-      category: "organization"
     
     - name: "organizations:write"
-      display_name: "Write Organizations"
       description: "Create and modify organizations"
-      category: "organization"
     
     - name: "organizations:delete"
-      display_name: "Delete Organizations"
       description: "Delete organizations"
-      category: "organization"
     
     # Project permissions
     - name: "projects:read"
-      display_name: "Read Projects"
       description: "View projects and their details"
-      category: "project"
     
     - name: "projects:write"
-      display_name: "Write Projects"
       description: "Create and modify projects"
-      category: "project"
     
     - name: "projects:delete"
-      display_name: "Delete Projects"
       description: "Delete projects"
-      category: "project"
     
     # API Key permissions
     - name: "api_keys:read"
-      display_name: "Read API Keys"
       description: "View API keys (excluding full values)"
-      category: "api_key"
     
     - name: "api_keys:write"
-      display_name: "Write API Keys"
       description: "Create and modify API keys"
-      category: "api_key"
     
     - name: "api_keys:delete"
-      display_name: "Delete API Keys"
       description: "Delete API keys"
-      category: "api_key"
     
     # Analytics permissions
     - name: "analytics:read"
-      display_name: "Read Analytics"
       description: "View analytics and metrics"
-      category: "analytics"
     
     # Member permissions
     - name: "members:read"
-      display_name: "Read Members"
       description: "View organization members"
-      category: "member"
     
     - name: "members:write"
-      display_name: "Write Members"
       description: "Invite and manage members"
-      category: "member"
     
     - name: "members:delete"
-      display_name: "Delete Members"
       description: "Remove members from organization"
-      category: "member"
+    
+    # Role and permission management
+    - name: "roles:read"
+      description: "View roles and their permissions"
+    
+    - name: "roles:create"
+      description: "Create custom roles"
+    
+    - name: "roles:update"
+      description: "Update custom roles"
+    
+    - name: "roles:delete"
+      description: "Delete custom roles"
+    
+    - name: "permissions:read"
+      description: "View available permissions"
+    
+    # Settings management
+    - name: "settings:read"
+      description: "View organization settings"
+    
+    - name: "settings:write"
+      description: "Update organization settings"
+    
+    - name: "settings:export"
+      description: "Export organization settings"
+    
+    - name: "settings:import"
+      description: "Import organization settings"
+    
+    - name: "settings:admin"
+      description: "Advanced settings management"
 
   roles:
-    # System roles (clean)
+    # System role templates (global system administration)
     - name: "super_admin"
-      display_name: "Super Administrator"
-      description: "Full system access across all organizations"
+      description: "Full system administration access"
       scope_type: "system"
       permissions:
         - "organizations:read"
@@ -149,10 +154,9 @@ rbac:
         - "members:read"
         - "members:write"
         - "members:delete"
-    
+
     # Organization role templates (available to ALL organizations)
     - name: "owner"
-      display_name: "Organization Owner"
       description: "Full access to organization and all its resources"
       scope_type: "organization"
       permissions:
@@ -168,9 +172,18 @@ rbac:
         - "members:read"
         - "members:write"
         - "members:delete"
+        - "roles:read"
+        - "roles:create"
+        - "roles:update"
+        - "roles:delete"
+        - "permissions:read"
+        - "settings:read"
+        - "settings:write"
+        - "settings:export"
+        - "settings:import"
+        - "settings:admin"
     
     - name: "admin"
-      display_name: "Administrator"
       description: "Administrative access to organization resources"
       scope_type: "organization"
       permissions:
@@ -182,9 +195,14 @@ rbac:
         - "analytics:read"
         - "members:read"
         - "members:write"
+        - "roles:read"
+        - "roles:create"
+        - "roles:update"
+        - "permissions:read"
+        - "settings:read"
+        - "settings:write"
     
     - name: "developer"
-      display_name: "Developer"
       description: "Development access to projects and API keys"
       scope_type: "organization"
       permissions:
@@ -196,7 +214,6 @@ rbac:
         - "analytics:read"
     
     - name: "viewer"
-      display_name: "Viewer"
       description: "Read-only access to organization resources"
       scope_type: "organization"
       permissions:
@@ -206,12 +223,12 @@ rbac:
         - "analytics:read"
 
   memberships:
-    # System role assignment (clean)
+    # Organization memberships with single roles
     - user_email: "admin@brokle.ai"
-      role_name: "super_admin"
-      scope_type: "system"
+      role_name: "owner"
+      scope_type: "organization"
+      organization_slug: "brokle-tech"
     
-    # Organization role assignments (clean)
     - user_email: "developer@brokle.ai"
       role_name: "developer"
       scope_type: "organization"

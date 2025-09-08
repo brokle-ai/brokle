@@ -30,7 +30,7 @@ type Manager struct {
 	projectRepo      organization.ProjectRepository
 	environmentRepo  organization.EnvironmentRepository
 	roleRepo         auth.RoleRepository
-	userRoleRepo     auth.UserRoleRepository
+	orgMemberRepo    auth.OrganizationMemberRepository
 	permissionRepo   auth.PermissionRepository
 	rolePermRepo     auth.RolePermissionRepository
 
@@ -81,7 +81,7 @@ func (m *Manager) initializeRepositories() {
 
 	// Auth repositories
 	m.roleRepo = authRepo.NewRoleRepository(m.db)
-	m.userRoleRepo = authRepo.NewUserRoleRepository(m.db)
+	m.orgMemberRepo = authRepo.NewOrganizationMemberRepository(m.db)
 	m.permissionRepo = authRepo.NewPermissionRepository(m.db)
 	m.rolePermRepo = authRepo.NewRolePermissionRepository(m.db)
 }
@@ -90,7 +90,7 @@ func (m *Manager) initializeRepositories() {
 func (m *Manager) initializeComponentSeeders() {
 	m.userSeeder = NewUserSeeder(m.userRepo)
 	m.organizationSeeder = NewOrganizationSeeder(m.organizationRepo)
-	m.rbacSeeder = NewRBACSeeder(m.roleRepo, m.userRoleRepo, m.permissionRepo, m.rolePermRepo)
+	m.rbacSeeder = NewRBACSeeder(m.roleRepo, m.permissionRepo, m.rolePermRepo, m.orgMemberRepo)
 	m.projectSeeder = NewProjectSeeder(m.projectRepo, m.environmentRepo)
 	m.onboardingSeeder = NewOnboardingSeeder(m.userRepo)
 }
@@ -253,12 +253,12 @@ func (m *Manager) PrintSeedPlan(data *SeedData) {
 
 	fmt.Printf("\nPermissions: %d\n", len(data.RBAC.Permissions))
 	for _, permission := range data.RBAC.Permissions {
-		fmt.Printf("  - %s (%s)\n", permission.DisplayName, permission.Name)
+		fmt.Printf("  - %s\n", permission.Name)
 	}
 
 	fmt.Printf("\nRoles: %d\n", len(data.RBAC.Roles))
 	for _, role := range data.RBAC.Roles {
-		fmt.Printf("  - %s (%s) - %d permissions\n", role.DisplayName, role.Name, len(role.Permissions))
+		fmt.Printf("  - %s (%s) - %d permissions\n", role.Name, role.ScopeType, len(role.Permissions))
 	}
 
 	fmt.Printf("\nProjects: %d\n", len(data.Projects))

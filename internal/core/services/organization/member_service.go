@@ -90,7 +90,7 @@ func (s *memberService) RemoveMember(ctx context.Context, orgID, userID ulid.ULI
 	}
 
 	// Check if this is the only owner
-	ownerRole, err := s.roleService.GetRoleByNameAndScope(ctx, "owner", auth.ScopeOrganization, &orgID)
+	ownerRole, err := s.roleService.GetRoleByNameAndScope(ctx, "owner", auth.ScopeOrganization)
 	if err != nil {
 		return fmt.Errorf("failed to get owner role: %w", err)
 	}
@@ -142,7 +142,7 @@ func (s *memberService) UpdateMemberRole(ctx context.Context, orgID, userID, new
 	}
 
 	// Check if demoting the last owner
-	ownerRole, err := s.roleService.GetRoleByNameAndScope(ctx, "owner", auth.ScopeOrganization, &orgID)
+	ownerRole, err := s.roleService.GetRoleByNameAndScope(ctx, "owner", auth.ScopeOrganization)
 	if err != nil {
 		return fmt.Errorf("failed to get owner role: %w", err)
 	}

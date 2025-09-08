@@ -39,23 +39,18 @@ type RBACSeeds struct {
 	Memberships []MembershipSeed `yaml:"memberships"`
 }
 
-// RoleSeed represents clean seed data for roles with scope_type + scope_id design
+// RoleSeed represents clean seed data for roles with scope_type design
 type RoleSeed struct {
-	Name             string   `yaml:"name"`
-	DisplayName      string   `yaml:"display_name"`
-	Description      string   `yaml:"description"`
-	ScopeType        string   `yaml:"scope_type"`        // 'system' | 'organization' | 'project'
-	OrganizationSlug string   `yaml:"organization_slug,omitempty"` // Only for org/project scopes
-	ProjectName      string   `yaml:"project_name,omitempty"`      // Only for project scope
-	Permissions      []string `yaml:"permissions"`
+	Name        string   `yaml:"name"`
+	Description string   `yaml:"description"`
+	ScopeType   string   `yaml:"scope_type"` // 'organization' | 'project' | 'environment'
+	Permissions []string `yaml:"permissions"`
 }
 
 // PermissionSeed represents seed data for permissions
 type PermissionSeed struct {
 	Name        string `yaml:"name"`
-	DisplayName string `yaml:"display_name"`
 	Description string `yaml:"description"`
-	Category    string `yaml:"category"`
 }
 
 // MembershipSeed represents clean seed data for user role assignments

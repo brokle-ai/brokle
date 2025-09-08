@@ -16,7 +16,7 @@ import (
 type AuthMiddleware struct {
 	jwtService        auth.JWTService
 	blacklistedTokens auth.BlacklistedTokenService
-	roleService       auth.RoleService
+	orgMemberService  auth.OrganizationMemberService
 	logger            *logrus.Logger
 }
 
@@ -24,13 +24,13 @@ type AuthMiddleware struct {
 func NewAuthMiddleware(
 	jwtService auth.JWTService,
 	blacklistedTokens auth.BlacklistedTokenService,
-	roleService auth.RoleService,
+	orgMemberService auth.OrganizationMemberService,
 	logger *logrus.Logger,
 ) *AuthMiddleware {
 	return &AuthMiddleware{
 		jwtService:        jwtService,
 		blacklistedTokens: blacklistedTokens,
-		roleService:       roleService,
+		orgMemberService:  orgMemberService,
 		logger:            logger,
 	}
 }
@@ -143,8 +143,8 @@ func (m *AuthMiddleware) RequirePermission(permission string) gin.HandlerFunc {
 			return
 		}
 
-		// Check permission using new effective permissions API
-		hasPermission, err := m.roleService.CheckUserPermissions(
+		// Check permission using user's effective permissions
+		hasPermission, err := m.orgMemberService.CheckUserPermissions(
 			c.Request.Context(),
 			userIDParsed,
 			[]string{permission},
@@ -194,7 +194,7 @@ func (m *AuthMiddleware) RequireAnyPermission(permissions []string) gin.HandlerF
 		}
 
 		// Check if user has ANY of the permissions using effective permissions API
-		hasPermission, err := m.roleService.CheckUserPermissions(
+		hasPermission, err := m.orgMemberService.CheckUserPermissions(
 			c.Request.Context(),
 			userIDParsed,
 			permissions,
@@ -252,7 +252,7 @@ func (m *AuthMiddleware) RequireAllPermissions(permissions []string) gin.Handler
 		}
 
 		// Check all permissions using effective permissions API
-		hasPermission, err := m.roleService.CheckUserPermissions(
+		hasPermission, err := m.orgMemberService.CheckUserPermissions(
 			c.Request.Context(),
 			userIDParsed,
 			permissions,

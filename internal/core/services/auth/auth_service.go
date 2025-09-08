@@ -79,7 +79,8 @@ func (s *authService) Login(ctx context.Context, req *auth.LoginRequest) (*auth.
 	}
 
 	// Get user effective permissions across all scopes
-	permissions, _ := s.roleService.GetUserEffectivePermissions(ctx, user.ID)
+	// Note: Permissions are now handled by OrganizationMemberService
+	permissions := []string{}
 
 	// Generate access token with JTI for session tracking
 	accessToken, jti, err := s.jwtService.GenerateAccessTokenWithJTI(ctx, user.ID, map[string]interface{}{
@@ -190,7 +191,8 @@ func (s *authService) Register(ctx context.Context, req *auth.RegisterRequest) (
 	s.auditRepo.Create(ctx, auditLog)
 
 	// Auto-login: Generate tokens for the new user - get effective permissions
-	permissions, _ := s.roleService.GetUserEffectivePermissions(ctx, newUser.ID)
+	// Note: Permissions are now handled by OrganizationMemberService
+	permissions := []string{}
 
 	// Generate access token with JTI for session tracking
 	accessToken, jti, err := s.jwtService.GenerateAccessTokenWithJTI(ctx, newUser.ID, map[string]interface{}{
@@ -287,7 +289,8 @@ func (s *authService) RefreshToken(ctx context.Context, req *auth.RefreshTokenRe
 	}
 
 	// Get user effective permissions across all scopes
-	permissions, _ := s.roleService.GetUserEffectivePermissions(ctx, user.ID)
+	// Note: Permissions are now handled by OrganizationMemberService
+	permissions := []string{}
 
 	// Generate new access token with JTI for session tracking
 	accessToken, jti, err := s.jwtService.GenerateAccessTokenWithJTI(ctx, user.ID, map[string]interface{}{

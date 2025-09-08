@@ -102,13 +102,10 @@ func (dl *DataLoader) validateSeedData(data *SeedData) error {
 		permissionNames[permission.Name] = true
 	}
 
-	// Validate roles reference valid organizations (for non-system roles)
+	// Validate template roles 
 	for _, role := range data.RBAC.Roles {
-		if role.Name == "" || role.DisplayName == "" {
-			return fmt.Errorf("role missing required fields (name, display_name)")
-		}
-		if !role.IsSystemRole && role.OrganizationSlug != "" && !orgSlugs[role.OrganizationSlug] {
-			return fmt.Errorf("role references unknown organization: %s", role.OrganizationSlug)
+		if role.Name == "" || role.ScopeType == "" {
+			return fmt.Errorf("role missing required fields (name, scope_type)")
 		}
 		// Validate role permissions reference valid permissions
 		for _, permName := range role.Permissions {

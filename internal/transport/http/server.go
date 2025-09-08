@@ -40,14 +40,14 @@ func NewServer(
 	handlers *handlers.Handlers,
 	jwtService auth.JWTService,
 	blacklistedTokens auth.BlacklistedTokenService,
-	roleService auth.RoleService,
+	orgMemberService auth.OrganizationMemberService,
 	redisClient *redis.Client,
 ) *Server {
 	// Create stateless auth middleware
 	authMiddleware := middleware.NewAuthMiddleware(
 		jwtService,
 		blacklistedTokens,
-		roleService,
+		orgMemberService,
 		logger,
 	)
 
@@ -221,6 +221,13 @@ func (s *Server) setupV1Routes(router *gin.RouterGroup) {
 		orgs.GET("/:orgId/settings/export", s.authMiddleware.RequirePermission("settings:export"), s.handlers.Organization.ExportSettings)
 		orgs.POST("/:orgId/settings/import", s.authMiddleware.RequireAllPermissions([]string{"settings:write", "settings:import"}), s.handlers.Organization.ImportSettings)
 		orgs.POST("/:orgId/settings/reset", s.authMiddleware.RequireAnyPermission([]string{"settings:admin", "organizations:admin"}), s.handlers.Organization.ResetToDefaults)
+		
+		// Custom role management routes for organizations
+		orgs.GET("/:orgId/roles", s.authMiddleware.RequirePermission("roles:read"), s.handlers.RBAC.GetCustomRoles)
+		orgs.POST("/:orgId/roles", s.authMiddleware.RequirePermission("roles:create"), s.handlers.RBAC.CreateCustomRole)
+		orgs.GET("/:orgId/roles/:roleId", s.authMiddleware.RequirePermission("roles:read"), s.handlers.RBAC.GetCustomRole)
+		orgs.PUT("/:orgId/roles/:roleId", s.authMiddleware.RequirePermission("roles:update"), s.handlers.RBAC.UpdateCustomRole)
+		orgs.DELETE("/:orgId/roles/:roleId", s.authMiddleware.RequirePermission("roles:delete"), s.handlers.RBAC.DeleteCustomRole)
 	}
 
 	// Project routes with clean RBAC permissions
@@ -293,7 +300,7 @@ func (s *Server) setupV1Routes(router *gin.RouterGroup) {
 		
 		// User role assignment
 		rbac.GET("/users/:userId/organizations/:orgId/role", s.handlers.RBAC.GetUserRole)
-		rbac.POST("/users/:userId/organizations/:orgId/role", s.handlers.RBAC.AssignUserRole)
+		rbac.POST("/users/:userId/organizations/:orgId/role", s.handlers.RBAC.AssignOrganizationRole)
 		
 		// Permission checking
 		rbac.GET("/users/:userId/organizations/:orgId/permissions", s.handlers.RBAC.GetUserPermissions)

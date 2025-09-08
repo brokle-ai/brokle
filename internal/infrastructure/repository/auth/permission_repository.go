@@ -66,15 +66,6 @@ func (r *permissionRepository) GetAllPermissions(ctx context.Context) ([]*auth.P
 	return r.GetAll(ctx)
 }
 
-// GetByCategory retrieves permissions by category
-func (r *permissionRepository) GetByCategory(ctx context.Context, category string) ([]*auth.Permission, error) {
-	var permissions []*auth.Permission
-	err := r.db.WithContext(ctx).
-		Where("category = ?", category).
-		Order("name ASC").
-		Find(&permissions).Error
-	return permissions, err
-}
 
 // GetByNames retrieves permissions by names
 func (r *permissionRepository) GetByNames(ctx context.Context, names []string) ([]*auth.Permission, error) {
@@ -140,8 +131,7 @@ func (r *permissionRepository) GetUserPermissionsByAPIKey(ctx context.Context, a
 // GetByResourceAction retrieves permission by resource and action
 func (r *permissionRepository) GetByResourceAction(ctx context.Context, resource, action string) (*auth.Permission, error) {
 	var permission auth.Permission
-	resourceAction := resource + ":" + action
-	err := r.db.WithContext(ctx).Where("resource_action = ?", resourceAction).First(&permission).Error
+	err := r.db.WithContext(ctx).Where("resource = ? AND action = ?", resource, action).First(&permission).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("permission not found")

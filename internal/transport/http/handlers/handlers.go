@@ -60,6 +60,7 @@ func NewHandlers(
 	settingsService organization.OrganizationSettingsService,
 	roleService auth.RoleService,
 	permissionService auth.PermissionService,
+	organizationMemberService auth.OrganizationMemberService,
 	// Add other service dependencies as they're implemented
 ) *Handlers {
 	return &Handlers{
@@ -77,6 +78,6 @@ func NewHandlers(
 		AI:           ai.NewHandler(cfg, logger),
 		WebSocket:    websocket.NewHandler(cfg, logger),
 		Admin:        admin.NewTokenAdminHandler(authService, blacklistedTokens, logger),
-		RBAC:         rbac.NewHandler(cfg, logger, roleService, permissionService),
+		RBAC:         rbac.NewHandler(cfg, logger, roleService, permissionService, organizationMemberService),
 	}
 }

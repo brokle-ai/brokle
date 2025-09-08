@@ -79,15 +79,15 @@ type UserRepositories struct {
 
 // AuthRepositories contains all auth-related repositories
 type AuthRepositories struct {
-	UserSession        auth.UserSessionRepository
-	BlacklistedToken   auth.BlacklistedTokenRepository
-	PasswordResetToken auth.PasswordResetTokenRepository
-	APIKey             auth.APIKeyRepository
-	Role               auth.RoleRepository
-	UserRole           auth.UserRoleRepository
-	Permission         auth.PermissionRepository
-	RolePermission     auth.RolePermissionRepository
-	AuditLog           auth.AuditLogRepository
+	UserSession         auth.UserSessionRepository
+	BlacklistedToken    auth.BlacklistedTokenRepository
+	PasswordResetToken  auth.PasswordResetTokenRepository
+	APIKey              auth.APIKeyRepository
+	Role                auth.RoleRepository
+	OrganizationMember  auth.OrganizationMemberRepository
+	Permission          auth.PermissionRepository
+	RolePermission      auth.RolePermissionRepository
+	AuditLog            auth.AuditLogRepository
 }
 
 // OrganizationRepositories contains all organization-related repositories
@@ -111,12 +111,13 @@ type UserServices struct {
 
 // AuthServices contains all auth-related services
 type AuthServices struct {
-	Auth              auth.AuthService
-	JWT               auth.JWTService
-	Sessions          auth.SessionService
-	Role              auth.RoleService
-	Permission        auth.PermissionService
-	BlacklistedTokens auth.BlacklistedTokenService
+	Auth                   auth.AuthService
+	JWT                    auth.JWTService
+	Sessions               auth.SessionService
+	Role                   auth.RoleService
+	Permission             auth.PermissionService
+	OrganizationMembers    auth.OrganizationMemberService
+	BlacklistedTokens      auth.BlacklistedTokenService
 }
 
 
@@ -164,7 +165,7 @@ func ProvideAuthRepositories(db *gorm.DB) *AuthRepositories {
 		PasswordResetToken: authRepo.NewPasswordResetTokenRepository(db),
 		APIKey:             authRepo.NewAPIKeyRepository(db),
 		Role:               authRepo.NewRoleRepository(db),
-		UserRole:           authRepo.NewUserRoleRepository(db),
+		OrganizationMember: authRepo.NewOrganizationMemberRepository(db),
 		Permission:         authRepo.NewPermissionRepository(db),
 		RolePermission:     authRepo.NewRolePermissionRepository(db),
 		AuditLog:           authRepo.NewAuditLogRepository(db),
@@ -241,12 +242,17 @@ func ProvideAuthServices(
 		authRepos.RolePermission,
 	)
 
-	// Create role service with clean RBAC
+	// Create role service with clean RBAC (template roles only)
 	roleService := authService.NewRoleService(
 		authRepos.Role,
-		authRepos.UserRole,
-		authRepos.Permission,
 		authRepos.RolePermission,
+	)
+
+	// Create organization member service for RBAC membership management
+	orgMemberService := authService.NewOrganizationMemberService(
+		authRepos.OrganizationMember,
+		authRepos.Role,
+		authRepos.AuditLog,
 	)
 
 	// Create blacklisted token service for immediate revocation
@@ -277,11 +283,12 @@ func ProvideAuthServices(
 	)
 
 	return &AuthServices{
-		Auth:              authSvc,
-		JWT:               jwtService,
-		Sessions:          sessionService,
-		Role:              roleService,
-		Permission:        permissionService,
+		Auth:                authSvc,
+		JWT:                 jwtService,
+		Sessions:            sessionService,
+		Role:                roleService,
+		Permission:          permissionService,
+		OrganizationMembers: orgMemberService,
 		BlacklistedTokens: blacklistedTokenService,
 	}
 }

@@ -142,20 +142,6 @@ func (c *JWTClaims) GetUserContext() *AuthContext {
 	}
 }
 
-// PasswordResetToken represents a password reset token
-type PasswordResetToken struct {
-	ID        ulid.ULID  `json:"id" gorm:"type:char(26);primaryKey"`
-	UserID    ulid.ULID  `json:"user_id" gorm:"type:char(26);not null"`
-	Token     string     `json:"token" gorm:"size:255;not null;uniqueIndex"`
-	ExpiresAt time.Time  `json:"expires_at"`
-	UsedAt    *time.Time `json:"used_at,omitempty"` // Replaced Used bool with UsedAt timestamp
-	
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	
-	// Relations
-	User user.User `json:"user,omitempty" gorm:"foreignKey:UserID"`
-}
 
 // EmailVerificationToken represents an email verification token
 type EmailVerificationToken struct {
@@ -173,17 +159,6 @@ type EmailVerificationToken struct {
 }
 
 // Token creation helpers
-func NewPasswordResetToken(userID ulid.ULID, token string, expiresAt time.Time) *PasswordResetToken {
-	return &PasswordResetToken{
-		ID:        ulid.New(),
-		UserID:    userID,
-		Token:     token,
-		ExpiresAt: expiresAt,
-		UsedAt:    nil, // Not used initially
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}
-}
 
 func NewEmailVerificationToken(userID ulid.ULID, token string, expiresAt time.Time) *EmailVerificationToken {
 	return &EmailVerificationToken{
@@ -225,5 +200,4 @@ func (t *EmailVerificationToken) IsValid() bool {
 }
 
 // Table name methods
-func (PasswordResetToken) TableName() string       { return "password_reset_tokens" }
 func (EmailVerificationToken) TableName() string   { return "email_verification_tokens" }

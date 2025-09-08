@@ -85,45 +85,36 @@ type APIKeyRepository interface {
 	GetActiveAPIKeyCount(ctx context.Context, userID ulid.ULID) (int, error)
 }
 
-// RoleRepository defines the clean interface for role data access.
+// RoleRepository defines the interface for both system template and custom scoped role data access.
 type RoleRepository interface {
 	// Core CRUD operations
 	Create(ctx context.Context, role *Role) error
 	GetByID(ctx context.Context, id ulid.ULID) (*Role, error)
+	GetByNameAndScope(ctx context.Context, name, scopeType string) (*Role, error)
 	Update(ctx context.Context, role *Role) error
 	Delete(ctx context.Context, id ulid.ULID) error
 	
-	// Clean scoped queries
-	GetByScope(ctx context.Context, scopeType string, scopeID *ulid.ULID) ([]*Role, error)
-	GetByScopedName(ctx context.Context, scopeType string, scopeID *ulid.ULID, name string) (*Role, error)
+	// System template role queries
+	GetByScopeType(ctx context.Context, scopeType string) ([]*Role, error)
+	GetAllRoles(ctx context.Context) ([]*Role, error)
 	GetSystemRoles(ctx context.Context) ([]*Role, error)
-	GetOrganizationRoles(ctx context.Context, orgID ulid.ULID) ([]*Role, error)
-	GetProjectRoles(ctx context.Context, projectID ulid.ULID) ([]*Role, error)
 	
-	// User role management (clean)
-	AssignUserRole(ctx context.Context, userID, roleID ulid.ULID) error
-	RevokeUserRole(ctx context.Context, userID, roleID ulid.ULID) error
-	GetUserRoles(ctx context.Context, userID ulid.ULID) ([]*Role, error)
-	GetUserRolesByScope(ctx context.Context, userID ulid.ULID, scopeType string) ([]*Role, error)
+	// Custom scoped role queries
+	GetCustomRolesByScopeID(ctx context.Context, scopeType string, scopeID ulid.ULID) ([]*Role, error)
+	GetByNameScopeAndID(ctx context.Context, name, scopeType string, scopeID *ulid.ULID) (*Role, error)
+	GetCustomRolesByOrganization(ctx context.Context, organizationID ulid.ULID) ([]*Role, error)
 	
-	// Clean permission queries (effective permissions across all scopes)
-	GetUserEffectivePermissions(ctx context.Context, userID ulid.ULID) ([]string, error)
-	HasUserPermission(ctx context.Context, userID ulid.ULID, permission string) (bool, error)
-	CheckUserPermissions(ctx context.Context, userID ulid.ULID, permissions []string) (map[string]bool, error)
-	
-	// Permission management
+	// Permission management for roles
 	GetRolePermissions(ctx context.Context, roleID ulid.ULID) ([]*Permission, error)
-	AssignRolePermissions(ctx context.Context, roleID ulid.ULID, permissionIDs []ulid.ULID) error
+	AssignRolePermissions(ctx context.Context, roleID ulid.ULID, permissionIDs []ulid.ULID, grantedBy *ulid.ULID) error
 	RevokeRolePermissions(ctx context.Context, roleID ulid.ULID, permissionIDs []ulid.ULID) error
-	UpdateRolePermissions(ctx context.Context, roleID ulid.ULID, permissionIDs []ulid.ULID) error
+	UpdateRolePermissions(ctx context.Context, roleID ulid.ULID, permissionIDs []ulid.ULID, grantedBy *ulid.ULID) error
 	
-	// Statistics and validation
+	// Statistics
 	GetRoleStatistics(ctx context.Context) (*RoleStatistics, error)
-	CanDeleteRole(ctx context.Context, roleID ulid.ULID) (bool, error)
 	
 	// Bulk operations
-	BulkAssignPermissions(ctx context.Context, assignments []RolePermissionAssignment) error
-	BulkRevokePermissions(ctx context.Context, revocations []RolePermissionRevocation) error
+	BulkCreate(ctx context.Context, roles []*Role) error
 }
 
 // RolePermissionAssignment represents a bulk role permission assignment
@@ -138,70 +129,84 @@ type RolePermissionRevocation struct {
 	PermissionID ulid.ULID `json:"permission_id"`
 }
 
-// PermissionRepository defines the interface for permission data access.
+// PermissionRepository defines the interface for normalized permission data access.
 type PermissionRepository interface {
 	// Basic CRUD operations
 	Create(ctx context.Context, permission *Permission) error
 	GetByID(ctx context.Context, id ulid.ULID) (*Permission, error)
-	GetByName(ctx context.Context, name string) (*Permission, error)                                    // Legacy name lookup
-	GetByResourceAction(ctx context.Context, resource, action string) (*Permission, error)             // New resource:action lookup
+	GetByName(ctx context.Context, name string) (*Permission, error)
+	GetByResourceAction(ctx context.Context, resource, action string) (*Permission, error)
 	Update(ctx context.Context, permission *Permission) error
 	Delete(ctx context.Context, id ulid.ULID) error
 	
 	// Permission queries
 	GetAllPermissions(ctx context.Context) ([]*Permission, error)
-	GetByCategory(ctx context.Context, category string) ([]*Permission, error)
-	GetByResource(ctx context.Context, resource string) ([]*Permission, error)                         // Get all permissions for resource
-	GetByNames(ctx context.Context, names []string) ([]*Permission, error)                             // Legacy bulk lookup
-	GetByResourceActions(ctx context.Context, resourceActions []string) ([]*Permission, error)        // New bulk resource:action lookup
-	ListPermissions(ctx context.Context, limit, offset int) ([]*Permission, int, error)               // Paginated list with total count
+	GetByResource(ctx context.Context, resource string) ([]*Permission, error)
+	GetByNames(ctx context.Context, names []string) ([]*Permission, error)
+	GetByResourceActions(ctx context.Context, resourceActions []string) ([]*Permission, error)
+	ListPermissions(ctx context.Context, limit, offset int) ([]*Permission, int, error)
 	SearchPermissions(ctx context.Context, query string, limit, offset int) ([]*Permission, int, error)
 	
 	// Resource and action queries
-	GetAvailableResources(ctx context.Context) ([]string, error)                                       // Get all distinct resources
-	GetActionsForResource(ctx context.Context, resource string) ([]string, error)                     // Get all actions for resource
-	GetPermissionCategories(ctx context.Context) ([]string, error)                                    // Get all distinct categories
+	GetAvailableResources(ctx context.Context) ([]string, error)
+	GetActionsForResource(ctx context.Context, resource string) ([]string, error)
 	
 	// Role permissions
 	GetPermissionsByRoleID(ctx context.Context, roleID ulid.ULID) ([]*Permission, error)
-	GetRolePermissionMap(ctx context.Context, roleID ulid.ULID) (map[string]bool, error)              // resource:action -> true
-	
-	// User permissions (through roles)
-	GetUserPermissions(ctx context.Context, userID, orgID ulid.ULID) ([]*Permission, error)           // Full permission objects
-	GetUserPermissionStrings(ctx context.Context, userID, orgID ulid.ULID) ([]string, error)         // Just resource:action strings
-	GetUserPermissionsByAPIKey(ctx context.Context, apiKeyID ulid.ULID) ([]string, error)
-	GetUserEffectivePermissions(ctx context.Context, userID, orgID ulid.ULID) (map[string]bool, error) // resource:action -> true
 	
 	// Permission validation
-	ValidateResourceAction(ctx context.Context, resource, action string) error
 	PermissionExists(ctx context.Context, resource, action string) (bool, error)
 	BulkPermissionExists(ctx context.Context, resourceActions []string) (map[string]bool, error)
 	
 	// Bulk operations
 	BulkCreate(ctx context.Context, permissions []*Permission) error
-	BulkUpdate(ctx context.Context, permissions []*Permission) error
-	BulkDelete(ctx context.Context, permissionIDs []ulid.ULID) error
 }
 
-// UserRoleRepository defines the clean interface for user role assignments.
-type UserRoleRepository interface {
+// OrganizationMemberRepository defines the interface for organization membership management.
+type OrganizationMemberRepository interface {
 	// Core CRUD operations
-	Create(ctx context.Context, userRole *UserRole) error
-	Delete(ctx context.Context, userID, roleID ulid.ULID) error
-	GetByUser(ctx context.Context, userID ulid.ULID) ([]*UserRole, error)
-	GetByRole(ctx context.Context, roleID ulid.ULID) ([]*UserRole, error)
-	Exists(ctx context.Context, userID, roleID ulid.ULID) (bool, error)
+	Create(ctx context.Context, member *OrganizationMember) error
+	GetByUserAndOrganization(ctx context.Context, userID, orgID ulid.ULID) (*OrganizationMember, error)
+	Update(ctx context.Context, member *OrganizationMember) error
+	Delete(ctx context.Context, userID, orgID ulid.ULID) error
+	
+	// Membership queries
+	GetByUserID(ctx context.Context, userID ulid.ULID) ([]*OrganizationMember, error)
+	GetByOrganizationID(ctx context.Context, orgID ulid.ULID) ([]*OrganizationMember, error)
+	GetByRole(ctx context.Context, roleID ulid.ULID) ([]*OrganizationMember, error)
+	Exists(ctx context.Context, userID, orgID ulid.ULID) (bool, error)
+	
+	// Permission queries
+	GetUserEffectivePermissions(ctx context.Context, userID ulid.ULID) ([]string, error)
+	HasUserPermission(ctx context.Context, userID ulid.ULID, permission string) (bool, error)
+	CheckUserPermissions(ctx context.Context, userID ulid.ULID, permissions []string) (map[string]bool, error)
+	GetUserPermissionsInOrganization(ctx context.Context, userID, orgID ulid.ULID) ([]string, error)
+	
+	// Status management
+	ActivateMember(ctx context.Context, userID, orgID ulid.ULID) error
+	SuspendMember(ctx context.Context, userID, orgID ulid.ULID) error
+	GetActiveMembers(ctx context.Context, orgID ulid.ULID) ([]*OrganizationMember, error)
+	
+	// Role management
+	UpdateMemberRole(ctx context.Context, userID, orgID, roleID ulid.ULID) error
 	
 	// Bulk operations
-	BulkAssign(ctx context.Context, userRoles []*UserRole) error
-	BulkRevoke(ctx context.Context, userID ulid.ULID, roleIDs []ulid.ULID) error
+	BulkCreate(ctx context.Context, members []*OrganizationMember) error
+	BulkUpdateRoles(ctx context.Context, updates []MemberRoleUpdate) error
 	
 	// Statistics
-	GetUserRoleCount(ctx context.Context, userID ulid.ULID) (int, error)
-	GetRoleUserCount(ctx context.Context, roleID ulid.ULID) (int, error)
+	GetMemberCount(ctx context.Context, orgID ulid.ULID) (int, error)
+	GetMembersByRole(ctx context.Context, orgID ulid.ULID) (map[string]int, error)
 }
 
-// RolePermissionRepository defines the clean interface for role-permission relationships.
+// MemberRoleUpdate represents a bulk role update for a member
+type MemberRoleUpdate struct {
+	UserID         ulid.ULID `json:"user_id"`
+	OrganizationID ulid.ULID `json:"organization_id"`
+	RoleID         ulid.ULID `json:"role_id"`
+}
+
+// RolePermissionRepository defines the interface for role-permission relationships.
 type RolePermissionRepository interface {
 	// Core operations
 	Create(ctx context.Context, rolePermission *RolePermission) error
@@ -210,9 +215,9 @@ type RolePermissionRepository interface {
 	HasPermission(ctx context.Context, roleID, permissionID ulid.ULID) (bool, error)
 	
 	// Batch operations
-	AssignPermissions(ctx context.Context, roleID ulid.ULID, permissionIDs []ulid.ULID) error
+	AssignPermissions(ctx context.Context, roleID ulid.ULID, permissionIDs []ulid.ULID, grantedBy *ulid.ULID) error
 	RevokePermissions(ctx context.Context, roleID ulid.ULID, permissionIDs []ulid.ULID) error
-	ReplaceAllPermissions(ctx context.Context, roleID ulid.ULID, permissionIDs []ulid.ULID) error
+	ReplaceAllPermissions(ctx context.Context, roleID ulid.ULID, permissionIDs []ulid.ULID, grantedBy *ulid.ULID) error
 	
 	// Bulk operations
 	BulkAssign(ctx context.Context, assignments []RolePermissionAssignment) error
@@ -295,13 +300,13 @@ type PasswordResetTokenRepository interface {
 	InvalidateAllUserTokens(ctx context.Context, userID ulid.ULID) error
 }
 
-// Repository aggregates all auth-related repositories (clean version).
+// Repository aggregates all auth-related repositories (normalized version).
 type Repository interface {
 	UserSessions() UserSessionRepository
 	BlacklistedTokens() BlacklistedTokenRepository
 	APIKeys() APIKeyRepository
 	Roles() RoleRepository
-	UserRoles() UserRoleRepository
+	OrganizationMembers() OrganizationMemberRepository
 	Permissions() PermissionRepository
 	RolePermissions() RolePermissionRepository
 	AuditLogs() AuditLogRepository

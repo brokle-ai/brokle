@@ -10,46 +10,36 @@ import (
 	"brokle/pkg/ulid"
 )
 
-// RBACSeeder handles clean seeding of RBAC (roles, permissions, user roles) data
+// RBACSeeder handles seeding of normalized RBAC (roles, permissions, organization members) data
 type RBACSeeder struct {
 	roleRepo       auth.RoleRepository
-	userRoleRepo   auth.UserRoleRepository
 	permissionRepo auth.PermissionRepository
 	rolePermRepo   auth.RolePermissionRepository
+	orgMemberRepo  auth.OrganizationMemberRepository
 }
 
-// NewRBACSeeder creates a new clean RBACSeeder instance
+// NewRBACSeeder creates a new normalized RBACSeeder instance
 func NewRBACSeeder(
 	roleRepo auth.RoleRepository,
-	userRoleRepo auth.UserRoleRepository,
 	permissionRepo auth.PermissionRepository,
 	rolePermRepo auth.RolePermissionRepository,
+	orgMemberRepo auth.OrganizationMemberRepository,
 ) *RBACSeeder {
 	return &RBACSeeder{
 		roleRepo:       roleRepo,
-		userRoleRepo:   userRoleRepo,
 		permissionRepo: permissionRepo,
 		rolePermRepo:   rolePermRepo,
+		orgMemberRepo:  orgMemberRepo,
 	}
 }
 
-// SeedPermissions seeds permissions from the provided seed data
+// SeedPermissions seeds normalized permissions from the provided seed data
 func (rs *RBACSeeder) SeedPermissions(ctx context.Context, permissionSeeds []PermissionSeed, entityMaps *EntityMaps, verbose bool) error {
 	if verbose {
 		log.Printf("🔑 Seeding %d permissions...", len(permissionSeeds))
 	}
 
 	for _, permSeed := range permissionSeeds {
-		// Check if permission already exists
-		existing, err := rs.permissionRepo.GetByName(ctx, permSeed.Name)
-		if err == nil && existing != nil {
-			if verbose {
-				log.Printf("   Permission %s already exists, skipping", permSeed.Name)
-			}
-			entityMaps.Permissions[permSeed.Name] = existing.ID
-			continue
-		}
-
 		// Parse resource and action from name (format: "resource:action")
 		parts := strings.SplitN(permSeed.Name, ":", 2)
 		if len(parts) != 2 {
@@ -59,14 +49,18 @@ func (rs *RBACSeeder) SeedPermissions(ctx context.Context, permissionSeeds []Per
 		resource := parts[0]
 		action := parts[1]
 
-		// Create new permission
-		permission := auth.NewPermission(
-			resource,
-			action,
-			permSeed.DisplayName,
-			permSeed.Description,
-			permSeed.Category,
-		)
+		// Check if permission already exists
+		existing, err := rs.permissionRepo.GetByResourceAction(ctx, resource, action)
+		if err == nil && existing != nil {
+			if verbose {
+				log.Printf("   Permission %s already exists, skipping", permSeed.Name)
+			}
+			entityMaps.Permissions[permSeed.Name] = existing.ID
+			continue
+		}
+
+		// Create new normalized permission
+		permission := auth.NewPermission(resource, action, permSeed.Description)
 
 		if err := rs.permissionRepo.Create(ctx, permission); err != nil {
 			return fmt.Errorf("failed to create permission %s: %w", permSeed.Name, err)
@@ -82,48 +76,33 @@ func (rs *RBACSeeder) SeedPermissions(ctx context.Context, permissionSeeds []Per
 	return nil
 }
 
-// SeedRoles seeds clean scoped roles from the provided seed data
+// SeedRoles seeds template roles from the provided seed data
 func (rs *RBACSeeder) SeedRoles(ctx context.Context, roleSeeds []RoleSeed, entityMaps *EntityMaps, verbose bool) error {
 	if verbose {
-		log.Printf("👤 Seeding %d roles...", len(roleSeeds))
+		log.Printf("👤 Seeding %d template roles...", len(roleSeeds))
 	}
 
 	for _, roleSeed := range roleSeeds {
-		// Resolve scope ID based on scope type
-		// IMPORTANT: For organization and project roles, scope_id should be NULL
-		// These are role TEMPLATES available to all entities of that type
-		var scopeID *ulid.ULID = nil
-		
-		// Only system roles have scope_id = NULL explicitly
-		// Organization and project roles also have scope_id = NULL (they are templates)
-		// Future: Custom entity-specific roles would have scope_id set to specific entity
-
-		// Check if role already exists in this scope
-		existing, err := rs.roleRepo.GetByScopedName(ctx, roleSeed.ScopeType, scopeID, roleSeed.Name)
+		// Check if template role already exists
+		existing, err := rs.roleRepo.GetByNameAndScope(ctx, roleSeed.Name, roleSeed.ScopeType)
 		if err == nil && existing != nil {
 			if verbose {
-				log.Printf("   Role %s (%s) already exists, skipping", roleSeed.Name, roleSeed.ScopeType)
+				log.Printf("   Template role %s (%s) already exists, skipping", roleSeed.Name, roleSeed.ScopeType)
 			}
 			entityMaps.Roles[rs.getRoleKey(roleSeed)] = existing.ID
 			continue
 		}
 
-		// Create new role
-		role := auth.NewRole(
-			roleSeed.ScopeType,
-			scopeID,
-			roleSeed.Name,
-			roleSeed.DisplayName,
-			roleSeed.Description,
-		)
+		// Create new template role (available to all organizations)
+		role := auth.NewRole(roleSeed.Name, roleSeed.ScopeType, roleSeed.Description)
 
 		if err := rs.roleRepo.Create(ctx, role); err != nil {
-			return fmt.Errorf("failed to create role %s: %w", roleSeed.Name, err)
+			return fmt.Errorf("failed to create template role %s: %w", roleSeed.Name, err)
 		}
 
 		entityMaps.Roles[rs.getRoleKey(roleSeed)] = role.ID
 
-		// Assign permissions to role
+		// Assign permissions to role template
 		if len(roleSeed.Permissions) > 0 {
 			var permissionIDs []ulid.ULID
 			for _, permName := range roleSeed.Permissions {
@@ -134,61 +113,89 @@ func (rs *RBACSeeder) SeedRoles(ctx context.Context, roleSeeds []RoleSeed, entit
 				permissionIDs = append(permissionIDs, permID)
 			}
 
-			if err := rs.roleRepo.AssignRolePermissions(ctx, role.ID, permissionIDs); err != nil {
+			if err := rs.roleRepo.AssignRolePermissions(ctx, role.ID, permissionIDs, nil); err != nil {
 				return fmt.Errorf("failed to assign permissions to role %s: %w", roleSeed.Name, err)
 			}
 		}
 
 		if verbose {
-			log.Printf("   ✓ Created role: %s (%s scope)", roleSeed.Name, roleSeed.ScopeType)
+			log.Printf("   ✓ Created template role: %s (%s scope) with %d permissions", 
+				roleSeed.Name, roleSeed.ScopeType, len(roleSeed.Permissions))
 		}
 	}
 
 	return nil
 }
 
-// SeedMemberships seeds clean user role assignments from the provided seed data
-func (rs *RBACSeeder) SeedMemberships(ctx context.Context, membershipSeeds []MembershipSeed, entityMaps *EntityMaps, verbose bool) error {
+// SeedOrganizationMemberships seeds organization memberships with roles from the provided seed data
+func (rs *RBACSeeder) SeedOrganizationMemberships(ctx context.Context, membershipSeeds []MembershipSeed, entityMaps *EntityMaps, verbose bool) error {
 	if verbose {
-		log.Printf("🤝 Seeding %d memberships...", len(membershipSeeds))
+		log.Printf("🤝 Seeding %d organization memberships...", len(membershipSeeds))
 	}
 
 	for _, membershipSeed := range membershipSeeds {
+		// Only process organization memberships
+		if membershipSeed.ScopeType != auth.ScopeOrganization {
+			continue
+		}
+
 		// Find user
 		userID, exists := entityMaps.Users[membershipSeed.UserEmail]
 		if !exists {
 			return fmt.Errorf("user not found: %s", membershipSeed.UserEmail)
 		}
 
-		// Find role by constructing role key
-		roleKey := rs.getMembershipRoleKey(membershipSeed)
-		roleID, exists := entityMaps.Roles[roleKey]
+		// Find organization
+		orgID, exists := entityMaps.Organizations[membershipSeed.OrganizationSlug]
 		if !exists {
-			return fmt.Errorf("role not found for key: %s", roleKey)
+			return fmt.Errorf("organization not found: %s", membershipSeed.OrganizationSlug)
 		}
 
-		// Check if assignment already exists
-		exists, err := rs.userRoleRepo.Exists(ctx, userID, roleID)
-		if err != nil {
-			return fmt.Errorf("failed to check user role assignment: %w", err)
+		// Find template role
+		roleKey := fmt.Sprintf("%s:%s", membershipSeed.ScopeType, membershipSeed.RoleName)
+		roleID, exists := entityMaps.Roles[roleKey]
+		if !exists {
+			return fmt.Errorf("template role not found for key: %s", roleKey)
 		}
-		if exists {
+
+		// Check if membership already exists
+		existing, err := rs.orgMemberRepo.GetByUserAndOrganization(ctx, userID, orgID)
+		if err == nil && existing != nil {
 			if verbose {
-				log.Printf("   User role assignment already exists for %s -> %s, skipping", membershipSeed.UserEmail, membershipSeed.RoleName)
+				log.Printf("   Membership already exists for %s in %s, skipping", 
+					membershipSeed.UserEmail, membershipSeed.OrganizationSlug)
 			}
 			continue
 		}
 
-		// Create user role assignment
-		userRole := auth.NewUserRole(userID, roleID)
-		if err := rs.userRoleRepo.Create(ctx, userRole); err != nil {
-			return fmt.Errorf("failed to assign role %s to user %s: %w", membershipSeed.RoleName, membershipSeed.UserEmail, err)
+		// Create organization membership with single role
+		member := auth.NewOrganizationMember(userID, orgID, roleID, nil)
+		
+		if err := rs.orgMemberRepo.Create(ctx, member); err != nil {
+			return fmt.Errorf("failed to create membership for %s in %s: %w", 
+				membershipSeed.UserEmail, membershipSeed.OrganizationSlug, err)
 		}
 
 		if verbose {
-			log.Printf("   ✓ Assigned role %s (%s) to user %s", membershipSeed.RoleName, membershipSeed.ScopeType, membershipSeed.UserEmail)
+			log.Printf("   ✓ Added %s to %s with role %s", 
+				membershipSeed.UserEmail, membershipSeed.OrganizationSlug, membershipSeed.RoleName)
 		}
 	}
+
+	return nil
+}
+
+// SeedMemberships is the main method that delegates to specific membership types
+func (rs *RBACSeeder) SeedMemberships(ctx context.Context, membershipSeeds []MembershipSeed, entityMaps *EntityMaps, verbose bool) error {
+	// Seed organization memberships
+	if err := rs.SeedOrganizationMemberships(ctx, membershipSeeds, entityMaps, verbose); err != nil {
+		return fmt.Errorf("failed to seed organization memberships: %w", err)
+	}
+
+	// TODO: Add project and environment memberships when those are implemented
+	// if err := rs.SeedProjectMemberships(ctx, membershipSeeds, entityMaps, verbose); err != nil {
+	// 	return fmt.Errorf("failed to seed project memberships: %w", err)
+	// }
 
 	return nil
 }
@@ -196,29 +203,34 @@ func (rs *RBACSeeder) SeedMemberships(ctx context.Context, membershipSeeds []Mem
 // Helper methods
 
 func (rs *RBACSeeder) getRoleKey(roleSeed RoleSeed) string {
-	// Organization and project roles are templates, so key is just scope_type:name
-	switch roleSeed.ScopeType {
-	case auth.ScopeSystem:
-		return fmt.Sprintf("system:%s", roleSeed.Name)
-	case auth.ScopeOrganization:
-		return fmt.Sprintf("organization:%s", roleSeed.Name)  // No org slug - it's a template
-	case auth.ScopeProject:
-		return fmt.Sprintf("project:%s", roleSeed.Name)       // No org/project - it's a template
-	default:
-		return fmt.Sprintf("%s:%s", roleSeed.ScopeType, roleSeed.Name)
-	}
+	// Template roles are keyed by scope_type:name (no specific entity IDs)
+	return fmt.Sprintf("%s:%s", roleSeed.ScopeType, roleSeed.Name)
 }
 
-func (rs *RBACSeeder) getMembershipRoleKey(membershipSeed MembershipSeed) string {
-	// When assigning roles, we reference the template roles
-	switch membershipSeed.ScopeType {
-	case auth.ScopeSystem:
-		return fmt.Sprintf("system:%s", membershipSeed.RoleName)
-	case auth.ScopeOrganization:
-		return fmt.Sprintf("organization:%s", membershipSeed.RoleName)  // Reference template role
-	case auth.ScopeProject:
-		return fmt.Sprintf("project:%s", membershipSeed.RoleName)       // Reference template role
-	default:
-		return fmt.Sprintf("%s:%s", membershipSeed.ScopeType, membershipSeed.RoleName)
+// GetRoleStatistics provides statistics about seeded roles (for verification)
+func (rs *RBACSeeder) GetRoleStatistics(ctx context.Context) (*RoleStatistics, error) {
+	allRoles, err := rs.roleRepo.GetAllRoles(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get all roles: %w", err)
 	}
+
+	stats := &RoleStatistics{
+		TotalRoles:        len(allRoles),
+		ScopeDistribution: make(map[string]int),
+		RoleDistribution:  make(map[string]int),
+	}
+
+	for _, role := range allRoles {
+		stats.ScopeDistribution[role.ScopeType]++
+		stats.RoleDistribution[role.Name]++
+	}
+
+	return stats, nil
+}
+
+// RoleStatistics represents statistics about seeded roles
+type RoleStatistics struct {
+	TotalRoles        int            `json:"total_roles"`
+	ScopeDistribution map[string]int `json:"scope_distribution"` // scope_type -> count
+	RoleDistribution  map[string]int `json:"role_distribution"`  // role_name -> count
 }
