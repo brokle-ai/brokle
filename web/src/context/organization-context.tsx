@@ -61,11 +61,11 @@ export function OrganizationProvider({ children }: OrganizationProviderProps) {
 
       console.log('[OrganizationContext] Starting initialization for user:', user.email)
 
-      // Simply load user's organizations for UI display
-      const userOrgs = await getUserOrganizations()
-      setOrganizations(userOrgs)
+      // Simply load user's organizations for UI display (first page only for context)
+      const userOrgsResponse = await getUserOrganizations(1, 50) // Load first 50 orgs for context
+      setOrganizations(userOrgsResponse.data)
 
-      console.log('[OrganizationContext] Successfully loaded', userOrgs.length, 'organizations')
+      console.log('[OrganizationContext] Successfully loaded', userOrgsResponse.data.length, 'organizations')
 
     } catch (error) {
       console.error('[OrganizationContext] Failed to load organizations:', error)

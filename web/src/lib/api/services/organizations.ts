@@ -4,6 +4,7 @@
 import { BrokleAPIClient } from '../core/client'
 import type { RequestOptions } from '../core/types'
 import type { Organization, Project, OrganizationMember } from '@/types/organization'
+import type { PaginatedResponse } from '../core/types'
 
 // API response types matching backend
 interface OrganizationAPIResponse {
@@ -59,9 +60,15 @@ interface OrganizationMemberAPIResponse {
 const client = new BrokleAPIClient('/api')
 
 // Direct organization functions - latest & optimal endpoints
-export const getUserOrganizations = async (): Promise<Organization[]> => {
-    const response = await client.get<OrganizationAPIResponse[]>('/v2/organizations')
-    return response.map(mapOrganizationFromAPI)
+export const getUserOrganizations = async (page = 1, limit = 20): Promise<PaginatedResponse<Organization>> => {
+    const response = await client.getPaginated<OrganizationAPIResponse>('/v1/organizations', {
+      page,
+      limit
+    })
+    return {
+      data: response.data.map(mapOrganizationFromAPI),
+      pagination: response.pagination
+    }
   }
 
 export const resolveOrganizationSlug = async (slug: string): Promise<Organization> => {
@@ -108,17 +115,23 @@ export const getOrganization = async (organizationId: string): Promise<Organizat
     return mapOrganizationFromAPI(response)
   }
 
-export const getOrganizationMembers = async (organizationId: string): Promise<OrganizationMember[]> => {
-    const response = await client.get<OrganizationMemberAPIResponse[]>(
+export const getOrganizationMembers = async (organizationId: string, page = 1, limit = 20): Promise<PaginatedResponse<OrganizationMember>> => {
+    const response = await client.getPaginated<OrganizationMemberAPIResponse>(
       `/organizations/${organizationId}/members`,
-      {},
+      {
+        page,
+        limit
+      },
       { 
         includeOrgContext: true,
         customOrgId: organizationId
       }
     )
 
-    return response.map(mapOrganizationMemberFromAPI)
+    return {
+      data: response.data.map(mapOrganizationMemberFromAPI),
+      pagination: response.pagination
+    }
   }
 
 export const getOrganizationProjects = async (organizationId: string): Promise<Project[]> => {
