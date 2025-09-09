@@ -61,9 +61,18 @@ func (r *memberRepository) Update(ctx context.Context, member *organization.Memb
 	return r.db.WithContext(ctx).Save(member).Error
 }
 
-// Delete soft deletes a member
-func (r *memberRepository) Delete(ctx context.Context, id ulid.ULID) error {
-	return r.db.WithContext(ctx).Model(&organization.Member{}).Where("id = ?", id).Update("deleted_at", time.Now()).Error
+// Delete soft deletes a member by composite key (userID as the parameter for compatibility)
+func (r *memberRepository) Delete(ctx context.Context, userID ulid.ULID) error {
+	// Note: This method signature is problematic since Member has composite key
+	// This is a temporary fix - ideally the interface should be updated
+	return errors.New("Delete method needs organizationID as well - use DeleteByUserAndOrg")
+}
+
+// DeleteByUserAndOrg soft deletes a member by composite key
+func (r *memberRepository) DeleteByUserAndOrg(ctx context.Context, orgID, userID ulid.ULID) error {
+	return r.db.WithContext(ctx).Model(&organization.Member{}).
+		Where("organization_id = ? AND user_id = ?", orgID, userID).
+		Update("deleted_at", time.Now()).Error
 }
 
 // GetByOrganizationID retrieves all members of an organization

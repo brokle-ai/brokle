@@ -104,19 +104,6 @@ type GetRequest struct {
 	OrgID string `uri:"orgId" binding:"required" example:"01FXYZ123456789ABCDEFGHIJK0" description:"Organization ID"`
 }
 
-// ListOrganizationsResponse represents the response when listing organizations
-type ListOrganizationsResponse struct {
-	Organizations []Organization `json:"organizations" description:"List of organizations"`
-	Total         int            `json:"total" example:"5" description:"Total number of organizations"`
-	Page          int            `json:"page" example:"1" description:"Current page number"`
-	Limit         int            `json:"limit" example:"20" description:"Items per page"`
-}
-
-// ListMembersResponse represents the response when listing organization members
-type ListMembersResponse struct {
-	Members []OrganizationMember `json:"members" description:"List of organization members"`
-	Total   int                  `json:"total" example:"10" description:"Total number of members"`
-}
 
 // NewHandler creates a new organization handler
 func NewHandler(
@@ -154,7 +141,7 @@ func NewHandler(
 // @Param page query int false "Page number" default(1) minimum(1)
 // @Param limit query int false "Items per page" default(20) minimum(1) maximum(100)
 // @Param search query string false "Search organizations by name or slug"
-// @Success 200 {object} response.SuccessResponse{data=ListOrganizationsResponse} "List of organizations"
+// @Success 200 {object} response.APIResponse{data=[]Organization,meta=response.Meta{pagination=response.Pagination}} "List of organizations with pagination"
 // @Failure 400 {object} response.ErrorResponse "Bad request"
 // @Failure 401 {object} response.ErrorResponse "Unauthorized"
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
@@ -227,13 +214,8 @@ func (h *Handler) List(c *gin.Context) {
 		filteredOrgs = filteredOrgs[startIdx:endIdx]
 	}
 
-	// Create response
-	responseData := ListOrganizationsResponse{
-		Organizations: filteredOrgs,
-		Total:         total,
-		Page:          req.Page,
-		Limit:         req.Limit,
-	}
+	// Create pagination
+	pagination := response.NewPagination(req.Page, req.Limit, int64(total))
 
 	h.logger.WithFields(logrus.Fields{
 		"user_id": userID,
@@ -242,7 +224,7 @@ func (h *Handler) List(c *gin.Context) {
 		"page":    req.Page,
 	}).Info("Organizations listed successfully")
 
-	response.Success(c, responseData)
+	response.SuccessWithPagination(c, filteredOrgs, pagination)
 }
 
 // Create handles POST /organizations
@@ -648,7 +630,7 @@ func (h *Handler) Delete(c *gin.Context) {
 // @Param orgId path string true "Organization ID" example("org_1234567890")
 // @Param status query string false "Filter by member status" Enums(active,invited,suspended)
 // @Param role query string false "Filter by member role" Enums(owner,admin,developer,viewer)
-// @Success 200 {object} response.SuccessResponse{data=ListMembersResponse} "List of organization members"
+// @Success 200 {object} response.APIResponse{data=[]OrganizationMember,meta=response.Meta{pagination=response.Pagination}} "List of organization members with pagination"
 // @Failure 400 {object} response.ErrorResponse "Bad request - invalid organization ID or query parameters"
 // @Failure 401 {object} response.ErrorResponse "Unauthorized"
 // @Failure 403 {object} response.ErrorResponse "Forbidden - insufficient permissions to view members"
@@ -774,11 +756,8 @@ func (h *Handler) ListMembers(c *gin.Context) {
 		})
 	}
 
-	// Create response
-	responseData := ListMembersResponse{
-		Members: memberList,
-		Total:   len(memberList),
-	}
+	// Create pagination (using 1, len(memberList) since this endpoint doesn't support pagination yet)
+	pagination := response.NewPagination(1, len(memberList), int64(len(memberList)))
 
 	h.logger.WithFields(logrus.Fields{
 		"user_id": userID,
@@ -786,7 +765,7 @@ func (h *Handler) ListMembers(c *gin.Context) {
 		"count":   len(memberList),
 	}).Info("Organization members listed successfully")
 
-	response.Success(c, responseData)
+	response.SuccessWithPagination(c, memberList, pagination)
 }
 
 // InviteMember handles POST /organizations/:orgId/members
