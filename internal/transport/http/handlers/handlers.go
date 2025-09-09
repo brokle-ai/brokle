@@ -68,7 +68,7 @@ func NewHandlers(
 		Metrics:      metrics.NewHandler(cfg, logger),
 		Auth:         authHandler.NewHandler(cfg, logger, authService, userService),
 		User:         userHandler.NewHandler(cfg, logger, userService, profileService, onboardingService),
-		Organization: organizationHandler.NewHandler(cfg, logger, organizationService, memberService, projectService, environmentService, invitationService, settingsService),
+		Organization: organizationHandler.NewHandler(cfg, logger, organizationService, memberService, projectService, environmentService, invitationService, settingsService, userService, roleService),
 		Project:      project.NewHandler(cfg, logger, projectService, organizationService, memberService, environmentService),
 		Environment:  environment.NewHandler(cfg, logger),
 		APIKey:       apikey.NewHandler(cfg, logger),

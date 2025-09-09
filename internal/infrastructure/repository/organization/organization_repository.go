@@ -83,7 +83,7 @@ func (r *organizationRepository) GetOrganizationsByUserID(ctx context.Context, u
 		Table("organizations").
 		Select("organizations.*").
 		Joins("JOIN organization_members ON organizations.id = organization_members.organization_id").
-		Where("organization_members.user_id = ? AND organizations.deleted_at IS NULL AND organization_members.deleted_at IS NULL", userID).
+		Where("organization_members.user_id = ? AND organizations.deleted_at IS NULL", userID).
 		Order("organizations.created_at DESC").
 		Find(&orgs).Error
 	return orgs, err

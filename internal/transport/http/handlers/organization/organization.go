@@ -9,7 +9,9 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"brokle/internal/config"
+	"brokle/internal/core/domain/auth"
 	"brokle/internal/core/domain/organization"
+	"brokle/internal/core/domain/user"
 	"brokle/pkg/response"
 	"brokle/pkg/ulid"
 )
@@ -23,6 +25,8 @@ type Handler struct {
 	projectService      organization.ProjectService
 	environmentService  organization.EnvironmentService
 	invitationService   organization.InvitationService
+	userService         user.UserService
+	roleService         auth.RoleService
 	Settings            *SettingsHandler // Embedded settings handler
 }
 
@@ -56,15 +60,16 @@ type UpdateOrganizationRequest struct {
 
 // OrganizationMember represents a member of an organization
 type OrganizationMember struct {
-	ID        string    `json:"id" example:"usr_1234567890" description:"User ID"`
-	Email     string    `json:"email" example:"john@acme.com" description:"User email address"`
-	FirstName string    `json:"first_name" example:"John" description:"User first name"`
-	LastName  string    `json:"last_name" example:"Doe" description:"User last name"`
-	Role      string    `json:"role" example:"admin" description:"Role in organization (owner, admin, developer, viewer)"`
-	Status    string    `json:"status" example:"active" description:"Member status (active, invited, suspended)"`
-	JoinedAt  time.Time `json:"joined_at" example:"2024-01-01T00:00:00Z" description:"When user joined organization"`
-	InvitedAt time.Time `json:"invited_at,omitempty" example:"2024-01-01T00:00:00Z" description:"When user was invited (if not yet accepted)"`
-	InvitedBy string    `json:"invited_by,omitempty" example:"usr_0987654321" description:"ID of user who sent invitation"`
+	UserID    string     `json:"user_id" example:"usr_1234567890" description:"User ID"`
+	Email     string     `json:"email" example:"john@acme.com" description:"User email address"`
+	FirstName string     `json:"first_name" example:"John" description:"User first name"`
+	LastName  string     `json:"last_name" example:"Doe" description:"User last name"`
+	Role      string     `json:"role" example:"admin" description:"Role name in organization"`
+	Status    string     `json:"status" example:"active" description:"Member status (active, invited, suspended)"`
+	JoinedAt  time.Time  `json:"joined_at" example:"2024-01-01T00:00:00Z" description:"When user joined organization"`
+	InvitedBy *string    `json:"invited_by,omitempty" example:"john@inviter.com" description:"Email of user who sent invitation"`
+	CreatedAt time.Time  `json:"created_at" example:"2024-01-01T00:00:00Z" description:"When membership was created"`
+	UpdatedAt time.Time  `json:"updated_at" example:"2024-01-01T00:00:00Z" description:"When membership was last updated"`
 }
 
 // ListMembersRequest represents request parameters for listing members
@@ -123,6 +128,8 @@ func NewHandler(
 	environmentService organization.EnvironmentService,
 	invitationService organization.InvitationService,
 	settingsService organization.OrganizationSettingsService,
+	userService user.UserService,
+	roleService auth.RoleService,
 ) *Handler {
 	return &Handler{
 		config:              config,
@@ -132,6 +139,8 @@ func NewHandler(
 		projectService:      projectService,
 		environmentService:  environmentService,
 		invitationService:   invitationService,
+		userService:         userService,
+		roleService:         roleService,
 		Settings:            NewSettingsHandler(config, logger, settingsService),
 	}
 }
@@ -712,14 +721,56 @@ func (h *Handler) ListMembers(c *gin.Context) {
 		return
 	}
 
-	// Convert to response format
+	// Convert to response format with user and role resolution
 	var memberList []OrganizationMember
 	for _, member := range members {
+		// Resolve user details - this should always succeed if data integrity is maintained
+		userDetails, err := h.userService.GetUser(c.Request.Context(), member.UserID)
+		if err != nil {
+			h.logger.WithError(err).WithFields(logrus.Fields{
+				"user_id":         member.UserID,
+				"organization_id": orgID,
+				"member_status":   member.Status,
+			}).Error("CRITICAL: Member references non-existent user - data integrity violation")
+			response.InternalServerError(c, "Data integrity error - please contact support")
+			return
+		}
+
+		// Resolve role details - this should always succeed if data integrity is maintained
+		role, err := h.roleService.GetRoleByID(c.Request.Context(), member.RoleID)
+		if err != nil {
+			h.logger.WithError(err).WithFields(logrus.Fields{
+				"role_id":         member.RoleID,
+				"organization_id": orgID,
+				"user_id":         member.UserID,
+			}).Error("CRITICAL: Member references non-existent role - data integrity violation")
+			response.InternalServerError(c, "Data integrity error - please contact support")
+			return
+		}
+
+		// Resolve inviter details if present
+		var invitedByEmail *string
+		if member.InvitedBy != nil {
+			inviter, err := h.userService.GetUser(c.Request.Context(), *member.InvitedBy)
+			if err != nil {
+				h.logger.WithError(err).WithField("inviter_id", *member.InvitedBy).Warn("Failed to get inviter details - continuing without inviter info")
+				// For inviter, we can continue without this data as it's not critical
+			} else {
+				invitedByEmail = &inviter.Email
+			}
+		}
+
 		memberList = append(memberList, OrganizationMember{
-			ID:       member.UserID.String(),
-			Role:     member.RoleID.String(), // This should be resolved to role name in a real implementation
-			Status:   "active",               // This should come from member status
-			JoinedAt: member.CreatedAt,
+			UserID:    member.UserID.String(),
+			Email:     userDetails.Email,
+			FirstName: userDetails.FirstName,
+			LastName:  userDetails.LastName,
+			Role:      role.Name,
+			Status:    member.Status,
+			JoinedAt:  member.JoinedAt,
+			InvitedBy: invitedByEmail,
+			CreatedAt: member.CreatedAt,
+			UpdatedAt: member.UpdatedAt,
 		})
 	}
 
@@ -844,12 +895,20 @@ func (h *Handler) InviteMember(c *gin.Context) {
 	}
 
 	// Convert to response format
+	inviterEmail := userID.String() // Fallback to userID string
+	inviterUser, err := h.userService.GetUser(c.Request.Context(), userID)
+	if err == nil {
+		inviterEmail = inviterUser.Email
+	}
+	
 	responseData := OrganizationMember{
 		Email:     req.Email,
 		Role:      req.Role,
 		Status:    "invited",
-		InvitedAt: invitation.CreatedAt,
-		InvitedBy: userID.String(),
+		JoinedAt:  invitation.CreatedAt,
+		InvitedBy: &inviterEmail,
+		CreatedAt: invitation.CreatedAt,
+		UpdatedAt: invitation.UpdatedAt,
 	}
 
 	h.logger.WithFields(logrus.Fields{

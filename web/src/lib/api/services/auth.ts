@@ -27,7 +27,7 @@ tokenManager.setRefreshCallback(() => refreshTokens())
 export const login = async (credentials: LoginCredentials): Promise<AuthResponse> => {
     // Get token data from backend
     const backendResponse = await client.post<LoginResponse>(
-      '/v2/auth/login', // v2: Enhanced auth with MFA support
+      '/v1/auth/login',
       credentials, 
       { skipAuth: true }
     )
@@ -41,7 +41,7 @@ export const login = async (credentials: LoginCredentials): Promise<AuthResponse
     })
 
     // Get user details using the new token
-    const userResponse = await client.get<UserResponse>('/v1/users/me') // v1: Stable user profile endpoint
+    const userResponse = await client.get<UserResponse>('/v1/users/me')
 
     // Map backend user response to frontend format
     const user: User = {
@@ -71,7 +71,7 @@ export const login = async (credentials: LoginCredentials): Promise<AuthResponse
         subscription_plan: 'free' | 'pro' | 'business' | 'enterprise'
         created_at: string
         updated_at: string
-      }>>('/v2/organizations') // v2: Enhanced org data with metrics
+      }>>('/v1/organizations')
       
       const firstOrg = Array.isArray(orgResponse) && orgResponse.length > 0 ? orgResponse[0] : null
       
@@ -123,7 +123,7 @@ export const signup = async (credentials: SignUpCredentials): Promise<AuthRespon
     }
     
     const backendResponse = await client.post<LoginResponse>(
-      '/auth/signup', 
+      '/v1/auth/signup', 
       backendPayload, 
       { skipAuth: true }
     )
@@ -166,7 +166,7 @@ export const signup = async (credentials: SignUpCredentials): Promise<AuthRespon
         subscription_plan: 'free' | 'pro' | 'business' | 'enterprise'
         created_at: string
         updated_at: string
-      }>>('/v2/organizations') // v2: Enhanced org data with metrics
+      }>>('/v1/organizations')
       
       const firstOrg = Array.isArray(orgResponse) && orgResponse.length > 0 ? orgResponse[0] : null
       if (!firstOrg) {
@@ -204,7 +204,7 @@ export const signup = async (credentials: SignUpCredentials): Promise<AuthRespon
 
 export const logout = async (): Promise<void> => {
     try {
-      await client.post('/v2/auth/logout', {})
+      await client.post('/v1/auth/logout', {})
     } catch (error) {
       console.warn('Logout request failed:', error)
     } finally {
@@ -220,7 +220,7 @@ export const refreshTokens = async (refreshToken?: string): Promise<AuthTokens> 
     }
 
     const backendResponse = await client.post<LoginResponse>(
-      '/auth/refresh',
+      '/v1/auth/refresh',
       { refresh_token: tokenToUse },
       { skipAuth: true }
     )
@@ -234,7 +234,7 @@ export const refreshTokens = async (refreshToken?: string): Promise<AuthTokens> 
   }
 
 export const getCurrentUser = async (): Promise<User> => {
-    const userResponse = await client.get<UserResponse>('/v1/users/me') // v1: Stable user profile endpoint
+    const userResponse = await client.get<UserResponse>('/v1/users/me')
     
     return {
       id: userResponse.id,
@@ -279,19 +279,19 @@ export const updateProfile = async (data: Partial<User>): Promise<User> => {
   }
 
 export const changePassword = async (currentPassword: string, newPassword: string): Promise<void> => {
-    await client.patch('/v2/auth/password', {
+    await client.patch('/v1/auth/change-password', {
       current_password: currentPassword,
       new_password: newPassword,
     })
   }
 
 export const requestPasswordReset = async (email: string): Promise<void> => {
-    await client.post('/v2/auth/forgot-password', { email }, { skipAuth: true })
+    await client.post('/v1/auth/forgot-password', { email }, { skipAuth: true })
   }
 
 export const confirmPasswordReset = async (token: string, password: string): Promise<void> => {
     await client.post(
-      '/v2/auth/reset-password', // v2: Secure password reset
+      '/v1/auth/reset-password',
       { token, password },
       { skipAuth: true }
     )
@@ -307,7 +307,7 @@ export const getCurrentOrganization = async (): Promise<Organization> => {
         subscription_plan: 'free' | 'pro' | 'business' | 'enterprise'
         created_at: string
         updated_at: string
-      }>>('/v2/organizations') // v2: Enhanced org data with metrics
+      }>>('/v1/organizations')
       
       const firstOrg = Array.isArray(orgResponse) && orgResponse.length > 0 ? orgResponse[0] : null
       if (!firstOrg) {
@@ -351,7 +351,7 @@ export const completeOnboarding = async (): Promise<void> => {
  * Get API keys for current user
  */
 export const getApiKeys = async (): Promise<any[]> => {
-  const response = await client.get('/v1/auth/api-keys')
+  const response = await client.get<{ data: any[] }>('/v1/auth/api-keys')
   return response.data || []
 }
 
@@ -359,7 +359,7 @@ export const getApiKeys = async (): Promise<any[]> => {
  * Create new API key
  */
 export const createApiKey = async (data: { name: string; scopes?: string[] }): Promise<any> => {
-  const response = await client.post('/v1/auth/api-keys', data)
+  const response = await client.post<{ data: any }>('/v1/auth/api-keys', data)
   return response.data
 }
 
