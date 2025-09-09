@@ -3,9 +3,8 @@
  */
 
 import { canAccessContext } from '@/lib/utils/context-resolver'
-import { getOrganizationBySlug } from '@/lib/data/organizations'
-import { getProjectBySlug } from '@/lib/data/projects'
-import { AuthAPIClient } from '@/lib/api/services/auth'
+import { findOrganizationBySlug, findProjectBySlugInOrganization } from '@/lib/utils/organization-utils'
+import { setDefaultOrganization } from '@/lib/api'
 import type { 
   Organization, 
   Project, 
@@ -20,7 +19,7 @@ export interface ActionDependencies {
     push: (url: string) => void
   }
   saveLastContext: (orgSlug: string, projectSlug?: string) => void
-  updateProjectsList: (organizationId: string) => void
+  updateProjectsList: (organizationId: string) => Promise<void>
 }
 
 export interface ActionResult<T = void> {
@@ -47,19 +46,18 @@ export async function switchOrganization(
     return { success: false, error: `Access denied to organization "${orgSlug}"` }
   }
 
-  const organization = getOrganizationBySlug(orgSlug)
+  const organization = await findOrganizationBySlug(orgSlug)
   if (!organization) {
     return { success: false, error: `Organization "${orgSlug}" not found` }
   }
 
   // Update state through callbacks
-  updateProjectsList(organization.id)
+  await updateProjectsList(organization.id)
   saveLastContext(organization.slug)
 
   // Update user's default organization in backend (async, don't block navigation)
   try {
-    const authClient = new AuthAPIClient()
-    await authClient.setDefaultOrganization(organization.id)
+    await setDefaultOrganization(organization.id)
   } catch (error) {
     // Log error but don't fail the organization switch
     console.warn('[SwitchOrganization] Failed to update default organization:', error)
@@ -89,7 +87,7 @@ export async function switchProject(
     return { success: false, error: 'User not authenticated' }
   }
 
-  const project = getProjectBySlug(currentOrganization.id, projectSlug)
+  const project = await findProjectBySlugInOrganization(currentOrganization.id, projectSlug)
   if (!project) {
     return { success: false, error: `Project "${projectSlug}" not found` }
   }

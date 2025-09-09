@@ -1,7 +1,15 @@
 'use client'
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { api } from '@/lib/api'
+import { 
+  getCurrentUser,
+  getCurrentOrganization,
+  getApiKeys,
+  requestPasswordReset,
+  confirmPasswordReset,
+  createApiKey,
+  revokeApiKey
+} from '@/lib/api'
 import { useAuth } from '@/hooks/auth/use-auth'
 import type { 
   User, 
@@ -26,7 +34,7 @@ export function useCurrentUser() {
   
   return useQuery({
     queryKey: authQueryKeys.user(),
-    queryFn: () => api.auth.getCurrentUser(),
+    queryFn: () => getCurrentUser(),
     enabled: isAuthenticated,
     staleTime: 5 * 60 * 1000, // 5 minutes
     retry: (failureCount, error: any) => {
@@ -43,7 +51,7 @@ export function useCurrentOrganization() {
   
   return useQuery({
     queryKey: authQueryKeys.organization(),
-    queryFn: () => api.auth.getCurrentOrganization(),
+    queryFn: () => getCurrentOrganization(),
     enabled: isAuthenticated,
     staleTime: 5 * 60 * 1000, // 5 minutes
     retry: (failureCount, error: any) => {
@@ -59,7 +67,7 @@ export function useApiKeys() {
   
   return useQuery({
     queryKey: authQueryKeys.apiKeys(),
-    queryFn: () => api.auth.getApiKeys(),
+    queryFn: () => getApiKeys(),
     enabled: isAuthenticated,
     staleTime: 2 * 60 * 1000, // 2 minutes
   })
@@ -82,7 +90,7 @@ export function useLoginMutation() {
       // Prefetch commonly used data
       queryClient.prefetchQuery({
         queryKey: authQueryKeys.apiKeys(),
-        queryFn: () => api.auth.getApiKeys(),
+        queryFn: () => getApiKeys(),
       })
 
       toast.success('Welcome back!', {
@@ -201,7 +209,7 @@ export function useChangePasswordMutation() {
 export function useRequestPasswordResetMutation() {
   return useMutation({
     mutationFn: async (email: string) => {
-      await api.auth.requestPasswordReset(email)
+      await requestPasswordReset(email)
     },
     onSuccess: () => {
       toast.success('Reset Email Sent', {
@@ -220,7 +228,7 @@ export function useRequestPasswordResetMutation() {
 export function useConfirmPasswordResetMutation() {
   return useMutation({
     mutationFn: async (data: { token: string; password: string }) => {
-      await api.auth.confirmPasswordReset(data.token, data.password)
+      await confirmPasswordReset(data.token, data.password)
     },
     onSuccess: () => {
       toast.success('Password Reset', {
@@ -245,7 +253,7 @@ export function useCreateApiKeyMutation() {
       permissions: string[]
       expiresAt?: string
     }) => {
-      return api.auth.createApiKey(data)
+      return createApiKey(data)
     },
     onSuccess: () => {
       // Refresh API keys
@@ -269,7 +277,7 @@ export function useRevokeApiKeyMutation() {
 
   return useMutation({
     mutationFn: async (keyId: string) => {
-      await api.auth.revokeApiKey(keyId)
+      await revokeApiKey(keyId)
     },
     onSuccess: () => {
       // Refresh API keys

@@ -1,4 +1,14 @@
-// Clean API exports - New axios-based implementation
+// Clean API exports - Direct functions with explicit versioning
+// Perfect for dashboard application - latest optimal endpoints
+
+// Direct service exports - always use optimal backend version per endpoint
+export * from './services/auth'
+export * from './services/organizations' 
+export * from './services/analytics'
+export * from './services/users'
+export * from './services/onboarding'
+export * from './services/dashboard'
+export * from './services/public'
 
 // Core client and types
 export { BrokleAPIClient } from './core/client'
@@ -6,39 +16,10 @@ export type {
   APIClientConfig,
   RequestOptions,
   APIResponse,
-  BrokleAPIError as APIError,
   QueryParams,
-  PaginatedResponse
+  PaginatedResponse,
+  BrokleAPIError
 } from './core/types'
-
-// Import service clients for internal use
-import { AuthAPIClient } from './services/auth'
-import { PublicAPIClient } from './services/public'
-import { AnalyticsAPIClient } from './services/analytics'
-import { DashboardAPIClient } from './services/dashboard'
-import { OnboardingAPIClient } from './services/onboarding'
-import { OrganizationAPIClient } from './services/organizations'
-import { UsersAPIClient } from './services/users'
-
-// Re-export service clients
-export { AuthAPIClient } from './services/auth'
-export { PublicAPIClient } from './services/public' 
-export { AnalyticsAPIClient } from './services/analytics'
-export { DashboardAPIClient } from './services/dashboard'
-export { OnboardingAPIClient } from './services/onboarding'
-export { OrganizationAPIClient } from './services/organizations'
-export { UsersAPIClient } from './services/users'
-
-// Service client instances (singletons)
-export const api = {
-  auth: new AuthAPIClient(),
-  public: new PublicAPIClient(),
-  analytics: new AnalyticsAPIClient(),
-  dashboard: new DashboardAPIClient(),
-  onboarding: new OnboardingAPIClient(),
-  organizations: new OrganizationAPIClient(),
-  users: new UsersAPIClient(),
-}
 
 // Re-export auth types for convenience
 export type {
@@ -51,10 +32,57 @@ export type {
   ApiKey
 } from '@/types/auth'
 
-// Development helper
+// Re-export analytics types
+export type {
+  AnalyticsMetric,
+  ModelUsage,
+  ProviderUsage,
+  DashboardStats,
+  AnalyticsQuery,
+  CostAnalytics
+} from './services/analytics'
+
+// Re-export user types
+export type {
+  CreateUserData,
+  InviteUserData
+} from './services/users'
+
+// Re-export dashboard types
+export type {
+  QuickStat,
+  ChartData,
+  DashboardOverview,
+  DashboardConfig
+} from './services/dashboard'
+
+// Re-export public API types
+export type {
+  HealthStatus,
+  ServiceHealth,
+  PublicStats,
+  SystemStatus,
+  SystemIncident,
+  ContactFormData,
+  FeedbackData
+} from './services/public'
+
+// Development helper - Clean API object (optional)
 if (process.env.NODE_ENV === 'development') {
-  // Make API clients available globally for debugging
   if (typeof window !== 'undefined') {
-    (window as any).api = api
+    // Make API functions available globally for debugging
+    import('./services/auth').then((auth) => {
+      import('./services/organizations').then((orgs) => {
+        import('./services/analytics').then((analytics) => {
+          (window as any).brokleAPI = {
+            auth,
+            organizations: orgs,
+            analytics,
+            // Easy debugging access
+            client: new (require('./core/client').BrokleAPIClient)('/api')
+          }
+        })
+      })
+    })
   }
 }

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { User } from '@/features/users/data/schema'
 import type { PaginatedResponse, Pagination } from '@/lib/api/core/types'
-import { api } from '@/lib/api'
+import { getUsers } from '@/lib/api'
 import { BrokleAPIError } from '@/lib/api/core/types'
 
 // Internal pagination format for UI components
@@ -76,7 +76,7 @@ export function useUsersData(): UseUsersDataReturn {
       if (sortOrder) queryParams.sortOrder = sortOrder
       
       // Use BrokleAPIClient for proper error handling and authentication
-      const result: UsersResponse = await api.users.getUsers(queryParams)
+      const result: UsersResponse = await getUsers(queryParams)
       
       setData(result.data)
       setPagination(fromApiPagination(result.pagination))

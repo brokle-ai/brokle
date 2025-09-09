@@ -131,7 +131,10 @@ export function useContextNavigation(): ContextNavigationHooks {
     urlMatchesContext,
 
     // URL parsing
-    urlContext,
+    urlContext: {
+      orgSlug: urlContext.orgSlug || null,
+      projectSlug: urlContext.projectSlug || null,
+    },
   }
 }
 
@@ -242,6 +245,7 @@ export function useBreadcrumbNavigation() {
 export function useContextAwareRouting() {
   const navigation = useContextNavigation()
   const { hasAccess } = useOrganization()
+  const router = useRouter()
 
   /**
    * Build a context-aware URL by prepending current org/project context
@@ -278,7 +282,7 @@ export function useContextAwareRouting() {
    */
   const navigateWithinContext = (relativePath: string) => {
     const fullUrl = buildContextAwareUrl(relativePath)
-    navigation.router?.push(fullUrl)
+    router.push(fullUrl)
   }
 
   return {

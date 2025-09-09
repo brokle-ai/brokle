@@ -1,3 +1,6 @@
+// Users API - Latest endpoints for dashboard application
+// Direct functions using stable user management endpoints
+
 import { BrokleAPIClient } from '../core/client'
 import type { 
   PaginatedResponse,
@@ -5,109 +8,61 @@ import type {
 } from '../core/types'
 import type { User } from '@/features/users/data/schema'
 
-export class UsersAPIClient extends BrokleAPIClient {
-  constructor() {
-    super('/users') // All user endpoints will be prefixed with /users
-  }
-
-  /**
-   * Get paginated list of users
-   * @param params Query parameters for filtering, sorting, and pagination
-   * @returns Promise<PaginatedResponse<User>>
-   */
-  async getUsers(params?: QueryParams): Promise<PaginatedResponse<User>> {
-    return this.getPaginated<User>('/v1/users', params, {
-      includeOrgContext: true, // Include organization context headers
-      includeProjectContext: false, // Users are org-level, not project-level
-    })
-  }
-
-  /**
-   * Get a specific user by ID
-   * @param userId User ID
-   * @returns Promise<User>
-   */
-  async getUser(userId: string): Promise<User> {
-    return this.get<User>(`/v1/users/${userId}`, {}, {
-      includeOrgContext: true,
-    })
-  }
-
-  /**
-   * Create a new user
-   * @param userData User data
-   * @returns Promise<User>
-   */
-  async createUser(userData: {
-    firstName: string
-    lastName: string
-    email: string
-    role: string
-  }): Promise<User> {
-    return this.post<User>('/v1/users', userData, {
-      includeOrgContext: true,
-    })
-  }
-
-  /**
-   * Update an existing user
-   * @param userId User ID
-   * @param userData Updated user data
-   * @returns Promise<User>
-   */
-  async updateUser(userId: string, userData: Partial<User>): Promise<User> {
-    return this.put<User>(`/v1/users/${userId}`, userData, {
-      includeOrgContext: true,
-    })
-  }
-
-  /**
-   * Delete a user
-   * @param userId User ID
-   * @returns Promise<void>
-   */
-  async deleteUser(userId: string): Promise<void> {
-    return this.delete<void>(`/v1/users/${userId}`, {
-      includeOrgContext: true,
-    })
-  }
-
-  /**
-   * Invite a new user to the organization
-   * @param inviteData Invitation data
-   * @returns Promise<User>
-   */
-  async inviteUser(inviteData: {
-    email: string
-    role: string
-    firstName?: string
-    lastName?: string
-  }): Promise<User> {
-    return this.post<User>('/v1/users/invite', inviteData, {
-      includeOrgContext: true,
-    })
-  }
-
-  /**
-   * Resend invitation to a user
-   * @param userId User ID
-   * @returns Promise<void>
-   */
-  async resendInvitation(userId: string): Promise<void> {
-    return this.post<void>(`/v1/users/${userId}/resend-invitation`, {}, {
-      includeOrgContext: true,
-    })
-  }
-
-  /**
-   * Change user status (active, inactive, suspended)
-   * @param userId User ID
-   * @param status New status
-   * @returns Promise<User>
-   */
-  async changeUserStatus(userId: string, status: 'active' | 'inactive' | 'suspended'): Promise<User> {
-    return this.patch<User>(`/v1/users/${userId}/status`, { status }, {
-      includeOrgContext: true,
-    })
-  }
+// User management types
+export interface CreateUserData {
+  firstName: string
+  lastName: string
+  email: string
+  role: string
 }
+
+// Flexible base client - versions specified per endpoint
+const client = new BrokleAPIClient('/api')
+
+// Direct user management functions
+export const getUsers = async (params?: QueryParams): Promise<PaginatedResponse<User>> => {
+    return client.getPaginated<User>('/v1/users', params, { // v1: Stable user listing
+      includeOrgContext: true,
+      includeProjectContext: false,
+    })
+  }
+
+export const getUser = async (userId: string): Promise<User> => {
+    return client.get<User>(`/v1/users/${userId}`, {}, { // v1: Stable user profile
+      includeOrgContext: true,
+    })
+  }
+
+export const createUser = async (userData: CreateUserData): Promise<User> => {
+    return client.post<User>('/v1/users', userData, {
+      includeOrgContext: true,
+    })
+  }
+
+export const updateUser = async (userId: string, userData: Partial<User>): Promise<User> => {
+    return client.put<User>(`/users/${userId}`, userData, {
+      includeOrgContext: true,
+    })
+  }
+
+export const deleteUser = async (userId: string): Promise<void> => {
+    return client.delete<void>(`/users/${userId}`, {
+      includeOrgContext: true,
+    })
+  }
+
+export const resendInvitation = async (userId: string): Promise<void> => {
+    return client.post<void>(`/users/${userId}/resend-invitation`, {}, {
+      includeOrgContext: true,
+    })
+  }
+
+export const changeUserStatus = async (
+    userId: string, 
+    status: 'active' | 'inactive' | 'suspended'
+  ): Promise<User> => {
+    return client.patch<User>(`/users/${userId}/status`, { status }, {
+      includeOrgContext: true,
+    })
+  }
+

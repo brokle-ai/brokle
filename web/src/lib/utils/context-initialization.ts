@@ -2,8 +2,8 @@
  * Context initialization utilities for organization and project context
  */
 
-import { getUserOrganizations } from '@/lib/data/organizations'
-import { getProjectBySlug } from '@/lib/data/projects'
+import { getUserOrganizations, getOrganizationProjects } from '@/lib/api'
+import { findProjectBySlugInOrganization } from '@/lib/utils/organization-utils'
 import { 
   resolveContextFromPath,
   getDefaultContext,
@@ -25,7 +25,7 @@ export interface InitializationOptions {
   pathname: string
   defaultOrganizationId?: string
   getLastContext: () => { organizationSlug: string; projectSlug?: string } | null
-  updateProjectsList: (organizationId: string) => Project[]
+  updateProjectsList: (organizationId: string) => Promise<Project[]>
 }
 
 export interface InitializationResult {
@@ -41,7 +41,7 @@ export async function initializeContext(options: InitializationOptions): Promise
 
   try {
     // Load user's organizations
-    const userOrgs = getUserOrganizations(userEmail)
+    const userOrgs = await getUserOrganizations()
 
     if (userOrgs.length === 0) {
       return {
@@ -59,13 +59,13 @@ export async function initializeContext(options: InitializationOptions): Promise
     // Try to restore from URL first
     const { orgSlug, projectSlug } = parsePathContext(pathname)
     if (orgSlug) {
-      const resolvedContext = resolveContextFromPath({
+      const resolvedContext = await resolveContextFromPath({
         userEmail,
         pathname,
       })
 
       if (resolvedContext.hasAccess && resolvedContext.organization) {
-        const projects = updateProjectsList(resolvedContext.organization.id)
+        const projects = await updateProjectsList(resolvedContext.organization.id)
         
         return {
           state: {
@@ -86,15 +86,15 @@ export async function initializeContext(options: InitializationOptions): Promise
     // Try to restore from persistence
     const lastContext = getLastContext()
     if (lastContext) {
-      const canAccess = canAccessContext(userEmail, lastContext.organizationSlug, lastContext.projectSlug)
+      const canAccess = await canAccessContext(userEmail, lastContext.organizationSlug, lastContext.projectSlug)
       if (canAccess) {
         const org = userOrgs.find(o => o.slug === lastContext.organizationSlug)
         if (org) {
-          const projects = updateProjectsList(org.id)
+          const projects = await updateProjectsList(org.id)
           let project: Project | null = null
 
           if (lastContext.projectSlug) {
-            project = getProjectBySlug(org.id, lastContext.projectSlug)
+            project = await findProjectBySlugInOrganization(org.id, lastContext.projectSlug) || null
           }
 
           return {
@@ -112,9 +112,9 @@ export async function initializeContext(options: InitializationOptions): Promise
     }
 
     // Fallback to default context (user's default org or first org)
-    const defaultContext = getDefaultContext(userEmail, defaultOrganizationId)
+    const defaultContext = await getDefaultContext(userEmail, defaultOrganizationId)
     if (defaultContext.organization) {
-      const projects = updateProjectsList(defaultContext.organization.id)
+      const projects = await updateProjectsList(defaultContext.organization.id)
       
       return {
         state: {
@@ -165,7 +165,7 @@ export interface URLUpdateOptions {
   userEmail: string
   orgSlug: string
   projectSlug?: string
-  updateProjectsList: (organizationId: string) => Project[]
+  updateProjectsList: (organizationId: string) => Promise<Project[]>
 }
 
 export interface URLUpdateResult {
@@ -173,10 +173,10 @@ export interface URLUpdateResult {
   contextToSave: { orgSlug: string; projectSlug?: string } | null
 }
 
-export function updateContextFromURL(options: URLUpdateOptions): URLUpdateResult {
+export async function updateContextFromURL(options: URLUpdateOptions): Promise<URLUpdateResult> {
   const { userEmail, orgSlug, projectSlug, updateProjectsList } = options
 
-  const resolvedContext = resolveContextFromPath({
+  const resolvedContext = await resolveContextFromPath({
     userEmail,
     pathname: projectSlug ? `/${orgSlug}/${projectSlug}` : `/${orgSlug}`,
   })
@@ -191,7 +191,7 @@ export function updateContextFromURL(options: URLUpdateOptions): URLUpdateResult
   }
 
   if (resolvedContext.organization) {
-    const projects = updateProjectsList(resolvedContext.organization.id)
+    const projects = await updateProjectsList(resolvedContext.organization.id)
     
     return {
       state: {

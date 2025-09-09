@@ -1,10 +1,11 @@
+// Organizations API - Latest endpoints for dashboard application
+// Direct functions using optimal backend endpoints
+
 import { BrokleAPIClient } from '../core/client'
 import type { RequestOptions } from '../core/types'
 import type { Organization, Project, OrganizationMember } from '@/types/organization'
 
-/**
- * Organization API response types matching backend
- */
+// API response types matching backend
 interface OrganizationAPIResponse {
   id: string
   name: string
@@ -54,36 +55,18 @@ interface OrganizationMemberAPIResponse {
   avatar_url?: string
 }
 
-/**
- * Organization API Client
- * Handles all organization and project related API calls with context headers
- */
-export class OrganizationAPIClient extends BrokleAPIClient {
-  
-  constructor() {
-    super('/auth') // Organizations are managed through auth service
+// Flexible base client - versions specified per endpoint
+const client = new BrokleAPIClient('/api')
+
+// Direct organization functions - latest & optimal endpoints
+export const getUserOrganizations = async (): Promise<Organization[]> => {
+    const response = await client.get<OrganizationAPIResponse[]>('/v2/organizations')
+    return response.map(mapOrganizationFromAPI)
   }
 
-  /**
-   * Get user's organizations (no context headers needed - this gets the orgs)
-   */
-  async getUserOrganizations(): Promise<Organization[]> {
-    const response = await this.get<OrganizationAPIResponse[]>(
-      '/v1/organizations/user'
-      // No headers needed - getting user's orgs
-    )
-
-    return response.map(this.mapOrganizationFromAPI)
-  }
-
-  /**
-   * Resolve organization slug to organization data
-   * Used for URL-based context resolution
-   */
-  async resolveOrganizationSlug(slug: string): Promise<Organization> {
-    const response = await this.get<OrganizationAPIResponse[] | OrganizationAPIResponse>(
-      `/v1/organizations/slug/${slug}`
-      // No headers needed - slug resolution
+export const resolveOrganizationSlug = async (slug: string): Promise<Organization> => {
+    const response = await client.get<OrganizationAPIResponse[] | OrganizationAPIResponse>(
+      `/organizations/slug/${slug}`
     )
 
     console.debug('[OrganizationAPI] Slug resolution response:', { slug, response, isArray: Array.isArray(response) })
@@ -98,7 +81,6 @@ export class OrganizationAPIClient extends BrokleAPIClient {
       }
       orgData = response[0]
     } else if (response && typeof response === 'object') {
-      // Single object response
       orgData = response
     } else {
       console.warn('[OrganizationAPI] Invalid response type for slug:', slug, response)
@@ -110,31 +92,12 @@ export class OrganizationAPIClient extends BrokleAPIClient {
       throw new Error(`Invalid organization data for slug '${slug}'`)
     }
 
-    return this.mapOrganizationFromAPI(orgData)
+    return mapOrganizationFromAPI(orgData)
   }
 
-  /**
-   * Get single organization by ID (includes X-Org-ID header)
-   */
-  async getOrganization(organizationId: string): Promise<Organization> {
-    const response = await this.get<OrganizationAPIResponse>(
-      `/v1/organizations/${organizationId}`,
-      {},
-      { 
-        includeOrgContext: true,
-        customOrgId: organizationId // Override context with specific org ID
-      }
-    )
-
-    return this.mapOrganizationFromAPI(response)
-  }
-
-  /**
-   * Get organization members (requires X-Org-ID header)
-   */
-  async getOrganizationMembers(organizationId: string): Promise<OrganizationMember[]> {
-    const response = await this.get<OrganizationMemberAPIResponse[]>(
-      `/v1/organizations/${organizationId}/members`,
+export const getOrganization = async (organizationId: string): Promise<Organization> => {
+    const response = await client.get<OrganizationAPIResponse>(
+      `/organizations/${organizationId}`,
       {},
       { 
         includeOrgContext: true,
@@ -142,16 +105,25 @@ export class OrganizationAPIClient extends BrokleAPIClient {
       }
     )
 
-    return response.map(this.mapOrganizationMemberFromAPI)
+    return mapOrganizationFromAPI(response)
   }
 
-  /**
-   * Get organization projects (requires X-Org-ID header)
-   * TEMPORARY: Headers disabled due to CORS configuration - backend needs X-Org-ID in Access-Control-Allow-Headers
-   */
-  async getOrganizationProjects(organizationId: string): Promise<Project[]> {
-    const response = await this.get<ProjectAPIResponse[]>(
-      `/v1/organizations/${organizationId}/projects`,
+export const getOrganizationMembers = async (organizationId: string): Promise<OrganizationMember[]> => {
+    const response = await client.get<OrganizationMemberAPIResponse[]>(
+      `/organizations/${organizationId}/members`,
+      {},
+      { 
+        includeOrgContext: true,
+        customOrgId: organizationId
+      }
+    )
+
+    return response.map(mapOrganizationMemberFromAPI)
+  }
+
+export const getOrganizationProjects = async (organizationId: string): Promise<Project[]> => {
+    const response = await client.get<ProjectAPIResponse[]>(
+      `/organizations/${organizationId}/projects`,
       {},
       { 
         // TODO: Re-enable when backend CORS is configured
@@ -160,17 +132,12 @@ export class OrganizationAPIClient extends BrokleAPIClient {
       }
     )
 
-    return response.map(this.mapProjectFromAPI)
+    return response.map(mapProjectFromAPI)
   }
 
-  /**
-   * Resolve project slug to project data within an organization
-   * Used for URL-based context resolution
-   * TEMPORARY: Headers disabled due to CORS configuration - backend needs X-Org-ID in Access-Control-Allow-Headers
-   */
-  async resolveProjectSlug(organizationId: string, slug: string): Promise<Project> {
-    const response = await this.get<ProjectAPIResponse>(
-      `/v1/organizations/${organizationId}/projects/slug/${slug}`,
+export const resolveProjectSlug = async (organizationId: string, slug: string): Promise<Project> => {
+    const response = await client.get<ProjectAPIResponse>(
+      `/organizations/${organizationId}/projects/slug/${slug}`,
       {},
       { 
         // TODO: Re-enable when backend CORS is configured
@@ -186,15 +153,12 @@ export class OrganizationAPIClient extends BrokleAPIClient {
       throw new Error(`Invalid project data for slug '${slug}' in organization '${organizationId}'`)
     }
 
-    return this.mapProjectFromAPI(response)
+    return mapProjectFromAPI(response)
   }
 
-  /**
-   * Get single project by ID (requires X-Org-ID and X-Project-ID headers)
-   */
-  async getProject(organizationId: string, projectId: string): Promise<Project> {
-    const response = await this.get<ProjectAPIResponse>(
-      `/v1/organizations/${organizationId}/projects/${projectId}`,
+export const getProject = async (organizationId: string, projectId: string): Promise<Project> => {
+    const response = await client.get<ProjectAPIResponse>(
+      `/organizations/${organizationId}/projects/${projectId}`,
       {},
       { 
         includeOrgContext: true,
@@ -204,13 +168,10 @@ export class OrganizationAPIClient extends BrokleAPIClient {
       }
     )
 
-    return this.mapProjectFromAPI(response)
+    return mapProjectFromAPI(response)
   }
 
-  /**
-   * Get project metrics (requires X-Org-ID and X-Project-ID headers)
-   */
-  async getProjectMetrics(organizationId: string, projectId: string, environmentId?: string): Promise<ProjectMetricsAPIResponse> {
+export const getProjectMetrics = async (organizationId: string, projectId: string, environmentId?: string): Promise<ProjectMetricsAPIResponse> => {
     const options: RequestOptions = {
       includeOrgContext: true,
       includeProjectContext: true,
@@ -224,41 +185,30 @@ export class OrganizationAPIClient extends BrokleAPIClient {
       options.customEnvironmentId = environmentId
     }
 
-    return await this.get<ProjectMetricsAPIResponse>(
-      `/v1/organizations/${organizationId}/projects/${projectId}/metrics`,
+    return await client.get<ProjectMetricsAPIResponse>(
+      `/organizations/${organizationId}/projects/${projectId}/metrics`,
       {},
       options
     )
   }
 
-  /**
-   * Create new organization (no context headers needed)
-   */
-  async createOrganization(data: {
+export const createOrganization = async (data: {
     name: string
     slug?: string
     billing_email: string
     subscription_plan?: 'free' | 'pro' | 'business' | 'enterprise'
-  }): Promise<Organization> {
-    const response = await this.post<OrganizationAPIResponse>(
-      '/v1/organizations',
-      data
-      // No headers needed - creating new org
-    )
-
-    return this.mapOrganizationFromAPI(response)
+  }): Promise<Organization> => {
+    const response = await client.post<OrganizationAPIResponse>('/v2/organizations', data)
+    return mapOrganizationFromAPI(response)
   }
 
-  /**
-   * Update organization (requires X-Org-ID header)
-   */
-  async updateOrganization(organizationId: string, data: Partial<{
+export const updateOrganization = async (organizationId: string, data: Partial<{
     name: string
     billing_email: string
     subscription_plan: 'free' | 'pro' | 'business' | 'enterprise'
-  }>): Promise<Organization> {
-    const response = await this.patch<OrganizationAPIResponse>(
-      `/v1/organizations/${organizationId}`,
+  }>): Promise<Organization> => {
+    const response = await client.patch<OrganizationAPIResponse>(
+      `/organizations/${organizationId}`,
       data,
       { 
         includeOrgContext: true,
@@ -266,19 +216,16 @@ export class OrganizationAPIClient extends BrokleAPIClient {
       }
     )
 
-    return this.mapOrganizationFromAPI(response)
+    return mapOrganizationFromAPI(response)
   }
 
-  /**
-   * Create new project (requires X-Org-ID header)
-   */
-  async createProject(organizationId: string, data: {
+export const createProject = async (organizationId: string, data: {
     name: string
     slug?: string
     description?: string
-  }): Promise<Project> {
-    const response = await this.post<ProjectAPIResponse>(
-      `/v1/organizations/${organizationId}/projects`,
+  }): Promise<Project> => {
+    const response = await client.post<ProjectAPIResponse>(
+      `/organizations/${organizationId}/projects`,
       data,
       { 
         includeOrgContext: true,
@@ -286,18 +233,15 @@ export class OrganizationAPIClient extends BrokleAPIClient {
       }
     )
 
-    return this.mapProjectFromAPI(response)
+    return mapProjectFromAPI(response)
   }
 
-  /**
-   * Update project (requires X-Org-ID and X-Project-ID headers)
-   */
-  async updateProject(organizationId: string, projectId: string, data: Partial<{
+export const updateProject = async (organizationId: string, projectId: string, data: Partial<{
     name: string
     description: string
-  }>): Promise<Project> {
-    const response = await this.patch<ProjectAPIResponse>(
-      `/v1/organizations/${organizationId}/projects/${projectId}`,
+  }>): Promise<Project> => {
+    const response = await client.patch<ProjectAPIResponse>(
+      `/organizations/${organizationId}/projects/${projectId}`,
       data,
       { 
         includeOrgContext: true,
@@ -307,15 +251,12 @@ export class OrganizationAPIClient extends BrokleAPIClient {
       }
     )
 
-    return this.mapProjectFromAPI(response)
+    return mapProjectFromAPI(response)
   }
 
-  /**
-   * Delete project (requires X-Org-ID and X-Project-ID headers)
-   */
-  async deleteProject(organizationId: string, projectId: string): Promise<void> {
-    await this.delete(
-      `/v1/organizations/${organizationId}/projects/${projectId}`,
+export const deleteProject = async (organizationId: string, projectId: string): Promise<void> => {
+    await client.delete(
+      `/organizations/${organizationId}/projects/${projectId}`,
       { 
         includeOrgContext: true,
         includeProjectContext: true,
@@ -325,12 +266,9 @@ export class OrganizationAPIClient extends BrokleAPIClient {
     )
   }
 
-  /**
-   * Invite user to organization (requires X-Org-ID header)
-   */
-  async inviteUser(organizationId: string, email: string, role: 'admin' | 'developer' | 'viewer'): Promise<void> {
-    await this.post(
-      `/v1/organizations/${organizationId}/invitations`,
+export const inviteUser = async (organizationId: string, email: string, role: 'admin' | 'developer' | 'viewer'): Promise<void> => {
+    await client.post(
+      `/organizations/${organizationId}/invitations`,
       { email, role },
       { 
         includeOrgContext: true,
@@ -339,12 +277,9 @@ export class OrganizationAPIClient extends BrokleAPIClient {
     )
   }
 
-  /**
-   * Remove user from organization (requires X-Org-ID header)
-   */
-  async removeUser(organizationId: string, userId: string): Promise<void> {
-    await this.delete(
-      `/v1/organizations/${organizationId}/members/${userId}`,
+export const removeUser = async (organizationId: string, userId: string): Promise<void> => {
+    await client.delete(
+      `/organizations/${organizationId}/members/${userId}`,
       { 
         includeOrgContext: true,
         customOrgId: organizationId
@@ -352,12 +287,9 @@ export class OrganizationAPIClient extends BrokleAPIClient {
     )
   }
 
-  /**
-   * Update user role in organization (requires X-Org-ID header)
-   */
-  async updateUserRole(organizationId: string, userId: string, role: 'admin' | 'developer' | 'viewer'): Promise<void> {
-    await this.patch(
-      `/v1/organizations/${organizationId}/members/${userId}`,
+export const updateUserRole = async (organizationId: string, userId: string, role: 'admin' | 'developer' | 'viewer'): Promise<void> => {
+    await client.patch(
+      `/organizations/${organizationId}/members/${userId}`,
       { role },
       { 
         includeOrgContext: true,
@@ -367,8 +299,7 @@ export class OrganizationAPIClient extends BrokleAPIClient {
   }
 
   // Private mapping functions
-
-  private mapOrganizationFromAPI(apiOrg: OrganizationAPIResponse): Organization {
+  const mapOrganizationFromAPI = (apiOrg: OrganizationAPIResponse): Organization => {
     if (!apiOrg) {
       throw new Error('Organization API response is null or undefined')
     }
@@ -395,7 +326,7 @@ export class OrganizationAPIClient extends BrokleAPIClient {
     }
   }
 
-  private mapProjectFromAPI(apiProject: ProjectAPIResponse): Project {
+  const mapProjectFromAPI = (apiProject: ProjectAPIResponse): Project => {
     if (!apiProject) {
       throw new Error('Project API response is null or undefined')
     }
@@ -436,7 +367,7 @@ export class OrganizationAPIClient extends BrokleAPIClient {
     }
   }
 
-  private mapOrganizationMemberFromAPI(apiMember: OrganizationMemberAPIResponse): OrganizationMember {
+  const mapOrganizationMemberFromAPI = (apiMember: OrganizationMemberAPIResponse): OrganizationMember => {
     return {
       id: apiMember.user_id,
       email: apiMember.email,
@@ -446,4 +377,3 @@ export class OrganizationAPIClient extends BrokleAPIClient {
       joined_at: apiMember.joined_at,
     }
   }
-}

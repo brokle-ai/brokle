@@ -2,9 +2,9 @@
  * Context coordination utilities for managing cross-concern synchronization
  */
 
-import { getProjectsByOrganization } from '@/lib/data/projects'
+import { getOrganizationProjects } from '@/lib/api'
 import { canAccessContext, getUserRole } from '@/lib/utils/context-resolver'
-import { getProjectsByOrganizationSlug } from '@/lib/data/projects'
+import { findOrganizationBySlug } from '@/lib/utils/organization-utils'
 import type { Organization, Project, OrganizationRole } from '@/types/organization'
 import type { User } from '@/types/auth'
 
@@ -17,41 +17,43 @@ import type { User } from '@/types/auth'
  * Update projects list for an organization and return the projects
  * This ensures projects state stays in sync with the current organization
  */
-export function updateProjectsList(organizationId: string): Project[] {
-  return getProjectsByOrganization(organizationId)
+export async function updateProjectsList(organizationId: string): Promise<Project[]> {
+  return await getOrganizationProjects(organizationId)
 }
 
 /**
  * Check if user has access to a specific context
  * Centralizes access control logic
  */
-export function hasContextAccess(
+export async function hasContextAccess(
   userEmail: string | undefined,
   orgSlug: string,
   projectSlug?: string
-): boolean {
+): Promise<boolean> {
   if (!userEmail) return false
-  return canAccessContext(userEmail, orgSlug, projectSlug)
+  return await canAccessContext(userEmail, orgSlug, projectSlug)
 }
 
 /**
  * Get user's role in an organization
  * Centralizes role resolution logic
  */
-export function getUserContextRole(
+export async function getUserContextRole(
   userEmail: string | undefined,
   orgSlug: string
-): OrganizationRole | null {
+): Promise<OrganizationRole | null> {
   if (!userEmail) return null
-  return getUserRole(userEmail, orgSlug)
+  return await getUserRole(userEmail, orgSlug)
 }
 
 /**
  * Get projects for an organization by slug
  * Provides consistent project retrieval
  */
-export function getOrganizationProjects(orgSlug: string): Project[] {
-  return getProjectsByOrganizationSlug(orgSlug)
+export async function getOrganizationProjectsBySlug(orgSlug: string): Promise<Project[]> {
+  const organization = await findOrganizationBySlug(orgSlug)
+  if (!organization) return []
+  return await getOrganizationProjects(organization.id)
 }
 
 /**

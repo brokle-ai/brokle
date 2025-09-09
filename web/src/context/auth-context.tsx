@@ -6,7 +6,15 @@ import { getTokenManager } from '@/lib/auth/token-manager'
 import { getSessionSync } from '@/lib/auth/session-sync'
 import { SecureStorage } from '@/lib/auth/storage'
 import { AUTH_CONSTANTS } from '@/lib/auth/constants'
-import { api } from '@/lib/api'
+import { 
+  getCurrentUser,
+  getCurrentOrganization,
+  login as apiLogin,
+  signup as apiSignup,
+  logout as apiLogout,
+  updateProfile as apiUpdateProfile,
+  changePassword as apiChangePassword
+} from '@/lib/api'
 import type { 
   User, 
   Organization, 
@@ -151,8 +159,8 @@ export function AuthProvider({ children, serverUser }: AuthProviderProps) {
           }
           
           try {
-            const currentUser = await api.auth.getCurrentUser()
-            const currentOrg = await api.auth.getCurrentOrganization()
+            const currentUser = await getCurrentUser()
+            const currentOrg = await getCurrentOrganization()
             
             setUser(currentUser)
             setOrganization(currentOrg)
@@ -187,7 +195,7 @@ export function AuthProvider({ children, serverUser }: AuthProviderProps) {
       setIsLoading(true)
       setError(null)
 
-      const response = await api.auth.login(credentials)
+      const response = await apiLogin(credentials)
       
       // Update state
       setUser(response.user)
@@ -216,7 +224,7 @@ export function AuthProvider({ children, serverUser }: AuthProviderProps) {
       setIsLoading(true)
       setError(null)
 
-      const response = await api.auth.signup(credentials)
+      const response = await apiSignup(credentials)
       
       // Update state
       setUser(response.user)
@@ -245,7 +253,7 @@ export function AuthProvider({ children, serverUser }: AuthProviderProps) {
       setIsLoading(true)
       
       // Call logout API (this will clear tokens via tokenManager)
-      await api.auth.logout()
+      await apiLogout()
       
       // Clear local state
       await clearAuthState()
@@ -278,7 +286,7 @@ export function AuthProvider({ children, serverUser }: AuthProviderProps) {
 
   const updateUser = async (data: Partial<User>): Promise<User> => {
     try {
-      const updatedUser = await api.auth.updateProfile(data)
+      const updatedUser = await apiUpdateProfile(data)
       
       setUser(updatedUser)
       SecureStorage.setUser(updatedUser)
@@ -300,7 +308,7 @@ export function AuthProvider({ children, serverUser }: AuthProviderProps) {
     newPassword: string
   ): Promise<void> => {
     try {
-      await api.auth.changePassword(currentPassword, newPassword)
+      await apiChangePassword(currentPassword, newPassword)
     } catch (error) {
       const errorMessage = getErrorMessage(error)
       setError(errorMessage)

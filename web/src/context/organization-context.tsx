@@ -3,7 +3,12 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { useAuth } from '@/context/auth-context'
-import { api } from '@/lib/api'
+import { 
+  getUserOrganizations,
+  getOrganizationProjects,
+  createOrganization as apiCreateOrganization,
+  createProject as apiCreateProject
+} from '@/lib/api'
 import { parsePathContext } from '@/lib/utils/slug-utils'
 import type { 
   Organization, 
@@ -57,7 +62,7 @@ export function OrganizationProvider({ children }: OrganizationProviderProps) {
       console.log('[OrganizationContext] Starting initialization for user:', user.email)
 
       // Simply load user's organizations for UI display
-      const userOrgs = await api.organizations.getUserOrganizations()
+      const userOrgs = await getUserOrganizations()
       setOrganizations(userOrgs)
 
       console.log('[OrganizationContext] Successfully loaded', userOrgs.length, 'organizations')
@@ -99,7 +104,7 @@ export function OrganizationProvider({ children }: OrganizationProviderProps) {
         setCurrentOrganization(org)
         
         // Load projects for this organization
-        const orgProjects = await api.organizations.getOrganizationProjects(org.id)
+        const orgProjects = await getOrganizationProjects(org.id)
         setProjects(orgProjects)
         
         setCurrentProject(null) // Reset project when switching orgs
@@ -169,7 +174,7 @@ export function OrganizationProvider({ children }: OrganizationProviderProps) {
       setCurrentProject(null) // Clear project when switching orgs
 
       // Load projects for new organization
-      const orgProjects = await api.organizations.getOrganizationProjects(org.id)
+      const orgProjects = await getOrganizationProjects(org.id)
       setProjects(orgProjects)
 
       // Navigate to organization dashboard
@@ -191,7 +196,7 @@ export function OrganizationProvider({ children }: OrganizationProviderProps) {
 
     try {
       // Create organization via API
-      const newOrg = await api.organizations.createOrganization({
+      const newOrg = await apiCreateOrganization({
         name: data.name,
         slug: data.slug,
         billing_email: data.billing_email,
@@ -256,7 +261,7 @@ export function OrganizationProvider({ children }: OrganizationProviderProps) {
 
     try {
       // Create project via API
-      const newProject = await api.organizations.createProject(currentOrganization.id, {
+      const newProject = await apiCreateProject(currentOrganization.id, {
         name: data.name,
         slug: data.slug,
         description: data.description,
