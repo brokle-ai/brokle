@@ -4,16 +4,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { 
   getCurrentUser,
   getCurrentOrganization,
-  getApiKeys,
   requestPasswordReset,
-  confirmPasswordReset,
-  createApiKey,
-  revokeApiKey
+  confirmPasswordReset
 } from '@/lib/api'
 import { useAuth } from '@/hooks/auth/use-auth'
 import type { 
   User, 
-  Organization, 
   LoginCredentials, 
   SignUpCredentials,
   AuthResponse 
@@ -25,7 +21,6 @@ export const authQueryKeys = {
   all: ['auth'] as const,
   user: () => [...authQueryKeys.all, 'user'] as const,
   organization: () => [...authQueryKeys.all, 'organization'] as const,
-  apiKeys: () => [...authQueryKeys.all, 'apiKeys'] as const,
 } as const
 
 // Current user query
@@ -61,18 +56,6 @@ export function useCurrentOrganization() {
   })
 }
 
-// API keys query
-export function useApiKeys() {
-  const { isAuthenticated } = useAuth()
-  
-  return useQuery({
-    queryKey: authQueryKeys.apiKeys(),
-    queryFn: () => getApiKeys(),
-    enabled: isAuthenticated,
-    staleTime: 2 * 60 * 1000, // 2 minutes
-  })
-}
-
 // Login mutation
 export function useLoginMutation() {
   const queryClient = useQueryClient()
@@ -87,11 +70,6 @@ export function useLoginMutation() {
       queryClient.setQueryData(authQueryKeys.user(), data.user)
       queryClient.setQueryData(authQueryKeys.organization(), data.organization)
       
-      // Prefetch commonly used data
-      queryClient.prefetchQuery({
-        queryKey: authQueryKeys.apiKeys(),
-        queryFn: () => getApiKeys(),
-      })
 
       toast.success('Welcome back!', {
         description: `Signed in as ${data.user?.email || 'Unknown User'}`,
@@ -243,54 +221,3 @@ export function useConfirmPasswordResetMutation() {
   })
 }
 
-// Create API key mutation
-export function useCreateApiKeyMutation() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: async (data: {
-      name: string
-      permissions: string[]
-      expiresAt?: string
-    }) => {
-      return createApiKey(data)
-    },
-    onSuccess: () => {
-      // Refresh API keys
-      queryClient.invalidateQueries({ queryKey: authQueryKeys.apiKeys() })
-      
-      toast.success('API Key Created', {
-        description: 'Your new API key has been created.',
-      })
-    },
-    onError: (error: any) => {
-      toast.error('Creation Failed', {
-        description: error?.message || 'Failed to create API key',
-      })
-    },
-  })
-}
-
-// Revoke API key mutation
-export function useRevokeApiKeyMutation() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: async (keyId: string) => {
-      await revokeApiKey(keyId)
-    },
-    onSuccess: () => {
-      // Refresh API keys
-      queryClient.invalidateQueries({ queryKey: authQueryKeys.apiKeys() })
-      
-      toast.success('API Key Revoked', {
-        description: 'The API key has been revoked successfully.',
-      })
-    },
-    onError: (error: any) => {
-      toast.error('Revocation Failed', {
-        description: error?.message || 'Failed to revoke API key',
-      })
-    },
-  })
-}

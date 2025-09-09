@@ -2,7 +2,6 @@
 export {
   useCurrentUser,
   useCurrentOrganization,
-  useApiKeys,
   useLoginMutation,
   useSignupMutation,
   useLogoutMutation,
@@ -10,8 +9,6 @@ export {
   useChangePasswordMutation,
   useRequestPasswordResetMutation,
   useConfirmPasswordResetMutation,
-  useCreateApiKeyMutation,
-  useRevokeApiKeyMutation,
   authQueryKeys,
 } from './use-auth-queries'
 

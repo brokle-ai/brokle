@@ -11,7 +11,6 @@ import type {
   SignUpCredentials,
   User,
   Organization,
-  ApiKey,
   LoginResponse,
   UserResponse
 } from '@/types/auth'
@@ -346,29 +345,6 @@ export const completeOnboarding = async (): Promise<void> => {
       onboarding_completed: true
     })
   }
-
-/**
- * Get API keys for current user
- */
-export const getApiKeys = async (): Promise<any[]> => {
-  const response = await client.get<{ data: any[] }>('/v1/auth/api-keys')
-  return response.data || []
-}
-
-/**
- * Create new API key
- */
-export const createApiKey = async (data: { name: string; scopes?: string[] }): Promise<any> => {
-  const response = await client.post<{ data: any }>('/v1/auth/api-keys', data)
-  return response.data
-}
-
-/**
- * Revoke API key
- */
-export const revokeApiKey = async (keyId: string): Promise<void> => {
-  await client.delete(`/v1/auth/api-keys/${keyId}`)
-}
 
 // Helper function to get stored refresh token
 const getStoredRefreshToken = (): string | null => {

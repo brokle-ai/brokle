@@ -28,8 +28,7 @@ export type {
   LoginCredentials,
   SignUpCredentials,
   User,
-  Organization,
-  ApiKey
+  Organization
 } from '@/types/auth'
 
 // Re-export analytics types
@@ -44,8 +43,7 @@ export type {
 
 // Re-export user types
 export type {
-  CreateUserData,
-  InviteUserData
+  CreateUserData
 } from './services/users'
 
 // Re-export dashboard types
