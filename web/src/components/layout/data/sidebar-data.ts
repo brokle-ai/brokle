@@ -9,14 +9,14 @@ import {
   IconUserCog,
   IconUsers,
 } from '@tabler/icons-react'
-import { Activity, BarChart3, Database, DollarSign, Zap, Building2, FolderOpen } from 'lucide-react'
+import { BarChart3, Database, DollarSign, Building2 } from 'lucide-react'
 import { BrokleLogo } from '@/assets/brokle-logo'
 import { type SidebarData } from '../types'
 
 // Function to generate context-aware navigation
 export function getSidebarData(orgSlug?: string, projectSlug?: string): SidebarData {
-  const baseUrl = orgSlug ? `/${orgSlug}` : ''
-  const projectUrl = projectSlug ? `${baseUrl}/${projectSlug}` : baseUrl
+  const orgUrl = orgSlug ? `/organizations/${orgSlug}` : ''
+  const projectUrl = projectSlug ? `/projects/${projectSlug}` : ''
   
   // Define navigation groups based on context
   const navGroups = []
@@ -43,39 +43,34 @@ export function getSidebarData(orgSlug?: string, projectSlug?: string): SidebarD
         items: [
           {
             title: 'Overview',
-            url: baseUrl,
+            url: orgUrl,
             icon: Building2,
           },
           {
-            title: 'Projects',
-            url: `${baseUrl}/projects`,
-            icon: FolderOpen,
+            title: 'Members',
+            url: `${orgUrl}/members`,
+            icon: IconUsers,
+          },
+          {
+            title: 'Billing',
+            url: `${orgUrl}/billing`,
+            icon: DollarSign,
+          },
+          {
+            title: 'Settings',
+            url: `${orgUrl}/settings`,
+            icon: IconSettings,
           },
         ],
       }
     )
   }
       
-  // Project level navigation (when both organization and project are selected)
-  if (orgSlug && projectSlug) {
+  // Project level navigation (when project is selected)
+  if (projectSlug) {
     navGroups.push(
       {
-        title: 'Organization',
-        items: [
-          {
-            title: 'Overview',
-            url: baseUrl,
-            icon: Building2,
-          },
-          {
-            title: 'Projects',
-            url: `${baseUrl}/projects`,
-            icon: FolderOpen,
-          },
-        ],
-      },
-      {
-        title: 'AI Infrastructure',
+        title: 'Project',
         items: [
           {
             title: 'Dashboard',
@@ -93,20 +88,15 @@ export function getSidebarData(orgSlug?: string, projectSlug?: string): SidebarD
             icon: Database,
           },
           {
-            title: 'Cost Tracking',
+            title: 'Costs',
             url: `${projectUrl}/costs`,
             badge: '$1.2k',
             icon: DollarSign,
           },
           {
-            title: 'Performance',
-            url: `${projectUrl}/performance`,
-            icon: Activity,
-          },
-          {
-            title: 'Optimization',
-            url: `${projectUrl}/optimization`,
-            icon: Zap,
+            title: 'Settings',
+            url: `${projectUrl}/settings`,
+            icon: IconSettings,
           },
         ],
       }
@@ -121,17 +111,17 @@ export function getSidebarData(orgSlug?: string, projectSlug?: string): SidebarD
     settingsItems.push(
       {
         title: 'Organization',
-        url: `${baseUrl}/settings/organization`,
+        url: `${orgUrl}/settings`,
         icon: Building2,
       },
       {
         title: 'Members',
-        url: `${baseUrl}/settings/members`,
+        url: `${orgUrl}/members`,
         icon: IconUsers,
       },
       {
         title: 'Billing',
-        url: `${baseUrl}/settings/billing`,
+        url: `${orgUrl}/billing`,
         icon: DollarSign,
       }
     )

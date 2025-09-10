@@ -1,114 +1,87 @@
 /**
- * Utilities for working with organization and project slugs
+ * Slug utilities for composite slugs with embedded IDs
+ * Enables cross-organization access with user-friendly URLs
  */
 
 /**
- * Generate a URL-friendly slug from a name
+ * Generate a composite slug from name and ID
+ * @param name - Human readable name (e.g., "Brokle Technologies")
+ * @param id - ULID identifier (e.g., "01K4MZR3ZEXW0QE66DF8DKBEZ3")
+ * @returns Composite slug (e.g., "brokle-technologies-01k4mzr3zexw0qe66df8dkbez3")
  */
-export function generateSlug(name: string): string {
-  return name
+export function generateCompositeSlug(name: string, id: string): string {
+  // Convert name to slug format
+  const nameSlug = name
     .toLowerCase()
     .trim()
-    .replace(/\s+/g, '-')
-    .replace(/[^a-z0-9-]/g, '')
-    .replace(/^-+|-+$/g, '')
-    .substring(0, 50) // Max length for slugs
+    .replace(/[^\w\s-]/g, '') // Remove special characters
+    .replace(/[\s_-]+/g, '-') // Replace spaces and underscores with hyphens
+    .replace(/^-+|-+$/g, '') // Remove leading/trailing hyphens
+
+  // Convert ID to lowercase for URL
+  const lowercaseId = id.toLowerCase()
+
+  return `${nameSlug}-${lowercaseId}`
 }
 
 /**
- * Validate if a slug is properly formatted
+ * Extract the original ID from a composite slug
+ * @param compositeSlug - Composite slug (e.g., "brokle-technologies-01k4mzr3zexw0qe66df8dkbez3")
+ * @returns Original ULID (e.g., "01K4MZR3ZEXW0QE66DF8DKBEZ3")
  */
-export function isValidSlug(slug: string): boolean {
-  if (!slug || typeof slug !== 'string') return false
+export function extractIdFromCompositeSlug(compositeSlug: string): string {
+  // ULID format: 26 characters, alphanumeric
+  // Extract last 26 characters and convert back to uppercase
+  const urlId = compositeSlug.slice(-26)
   
-  // Must be lowercase, alphanumeric with hyphens, 1-50 characters
-  const slugRegex = /^[a-z0-9-]{1,50}$/
-  
-  // Cannot start or end with hyphen
-  if (slug.startsWith('-') || slug.endsWith('-')) return false
-  
-  // Cannot have consecutive hyphens
-  if (slug.includes('--')) return false
-  
-  return slugRegex.test(slug)
+  if (urlId.length !== 26) {
+    throw new Error(`Invalid composite slug format: ${compositeSlug}`)
+  }
+
+  return urlId.toUpperCase()
 }
 
 /**
- * Check if a slug is available (not taken by existing organizations/projects)
+ * Extract the name slug portion from a composite slug
+ * @param compositeSlug - Composite slug (e.g., "brokle-technologies-01k4mzr3zexw0qe66df8dkbez3")
+ * @returns Name slug portion (e.g., "brokle-technologies")
  */
-export function isSlugAvailable(
-  slug: string,
-  existingSlugs: string[]
-): boolean {
-  return !existingSlugs.includes(slug)
+export function extractNameSlugFromCompositeSlug(compositeSlug: string): string {
+  // Remove the last 27 characters (26 for ID + 1 for hyphen)
+  return compositeSlug.slice(0, -27)
 }
 
 /**
- * Generate a unique slug by appending numbers if needed
+ * Validate if a string looks like a composite slug
+ * @param slug - String to validate
+ * @returns True if it appears to be a valid composite slug
  */
-export function generateUniqueSlug(
-  baseName: string,
-  existingSlugs: string[]
-): string {
-  const slug = generateSlug(baseName)
-  
-  if (isSlugAvailable(slug, existingSlugs)) {
-    return slug
-  }
-  
-  let counter = 1
-  while (!isSlugAvailable(`${slug}-${counter}`, existingSlugs)) {
-    counter++
-  }
-  
-  return `${slug}-${counter}`
+export function isValidCompositeSlug(slug: string): boolean {
+  // Should end with hyphen + 26 character ULID
+  const pattern = /^.+-[0-9A-Za-z]{26}$/
+  return pattern.test(slug)
 }
 
 /**
- * Extract organization and project slugs from pathname
+ * Check if a slug is a legacy slug (no embedded ID)
+ * @param slug - String to check
+ * @returns True if it's a legacy slug format
  */
-export function parsePathContext(pathname: string): {
-  orgSlug?: string
-  projectSlug?: string
-} {
-  if (!pathname || pathname === '/') {
-    return {}
-  }
-  
-  // Remove leading slash and split
-  const segments = pathname.replace(/^\//, '').split('/')
-  
-  // Handle different path patterns:
-  // /orgSlug -> { orgSlug }
-  // /orgSlug/projectSlug -> { orgSlug, projectSlug }
-  // /orgSlug/projectSlug/... -> { orgSlug, projectSlug }
-  // /orgSlug/settings/... -> { orgSlug } (settings is not a project)
-  
-  if (segments.length === 0 || segments[0] === '') {
-    return {}
-  }
-  
-  const orgSlug = segments[0]
-  
-  // Check if the first segment is a reserved slug (like 'dashboard', 'auth', etc.)
-  if (isReservedSlug(orgSlug)) {
-    return {}
-  }
-  
-  // Check if second segment is a special path (not a project)
-  const specialPaths = ['settings', 'projects', 'members', 'billing', 'api-keys']
-  if (segments.length > 1 && !specialPaths.includes(segments[1])) {
-    return { orgSlug, projectSlug: segments[1] }
-  }
-  
-  return { orgSlug }
+export function isLegacySlug(slug: string): boolean {
+  return !isValidCompositeSlug(slug)
 }
 
 /**
- * Build URL for organization context
+ * Build URL for organization with composite slug
+ * @param name - Organization name
+ * @param id - Organization ID  
+ * @param path - Optional sub-path
+ * @returns Organization URL (e.g., "/organizations/brokle-tech-01k4mzr3zexw0qe66df8dkbez3")
  */
-export function buildOrgUrl(orgSlug: string, path: string = ''): string {
-  const basePath = `/${orgSlug}`
+export function buildOrgUrl(name: string, id: string, path: string = ''): string {
+  const compositeSlug = generateCompositeSlug(name, id)
+  const basePath = `/organizations/${compositeSlug}`
+  
   if (!path || path === '/') return basePath
   
   // Ensure path starts with /
@@ -117,14 +90,16 @@ export function buildOrgUrl(orgSlug: string, path: string = ''): string {
 }
 
 /**
- * Build URL for project context
+ * Build URL for project with composite slug
+ * @param name - Project name
+ * @param id - Project ID
+ * @param path - Optional sub-path
+ * @returns Project URL (e.g., "/projects/analytics-platform-01k4mzr4f36gmrf5r21v5fkxvj")
  */
-export function buildProjectUrl(
-  orgSlug: string,
-  projectSlug: string,
-  path: string = ''
-): string {
-  const basePath = `/${orgSlug}/${projectSlug}`
+export function buildProjectUrl(name: string, id: string, path: string = ''): string {
+  const compositeSlug = generateCompositeSlug(name, id)
+  const basePath = `/projects/${compositeSlug}`
+  
   if (!path || path === '/') return basePath
   
   // Ensure path starts with /
@@ -132,48 +107,4 @@ export function buildProjectUrl(
   return `${basePath}${normalizedPath}`
 }
 
-/**
- * Reserved slugs that cannot be used for organizations or projects
- */
-export const RESERVED_SLUGS = [
-  'api',
-  'auth',
-  'admin',
-  'www',
-  'mail',
-  'ftp',
-  'localhost',
-  'help',
-  'support',
-  'docs',
-  'blog',
-  'about',
-  'contact',
-  'pricing',
-  'features',
-  'security',
-  'privacy',
-  'terms',
-  'onboarding',
-  'settings',
-  'dashboard',
-  'app',
-  'web',
-  'mobile',
-  'static',
-  'assets',
-  'cdn',
-  'img',
-  'images',
-  'css',
-  'js',
-  'javascript',
-  'fonts',
-]
 
-/**
- * Check if a slug is reserved
- */
-export function isReservedSlug(slug: string): boolean {
-  return RESERVED_SLUGS.includes(slug.toLowerCase())
-}

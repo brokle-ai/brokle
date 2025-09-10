@@ -2,22 +2,16 @@
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
-import { getTokenManager } from '@/lib/auth/token-manager'
-import { getSessionSync } from '@/lib/auth/session-sync'
-import { SecureStorage } from '@/lib/auth/storage'
-import { AUTH_CONSTANTS } from '@/lib/auth/constants'
 import { 
-  getCurrentUser,
-  getCurrentOrganization,
   login as apiLogin,
   signup as apiSignup,
   logout as apiLogout,
+  getCurrentUser,
   updateProfile as apiUpdateProfile,
   changePassword as apiChangePassword
 } from '@/lib/api'
 import type { 
   User, 
-  Organization, 
   LoginCredentials, 
   SignUpCredentials,
   AuthResponse 
@@ -27,8 +21,7 @@ import { BrokleAPIError as APIError } from '@/lib/api/core/types'
 export interface AuthContextValue {
   // State
   user: User | null
-  organization: Organization | null
-  isAuthenticated: boolean
+  accessToken: string | null
   isLoading: boolean
   error: string | null
 
@@ -51,131 +44,110 @@ interface AuthProviderProps {
   serverUser?: User | null
 }
 
+// Simple token storage utilities
+const TokenStorage = {
+  setTokens: (accessToken: string, refreshToken: string, expiresIn: number) => {
+    if (typeof window === 'undefined') return
+    
+    // Store in memory (React state) and localStorage backup
+    localStorage.setItem('access_token', accessToken)
+    localStorage.setItem('refresh_token', refreshToken)
+    localStorage.setItem('expires_at', String(Date.now() + expiresIn * 1000))
+    
+    // Set cookie for middleware
+    document.cookie = `access_token=${accessToken}; path=/; max-age=${expiresIn}; SameSite=Strict`
+  },
+  
+  getAccessToken: (): string | null => {
+    if (typeof window === 'undefined') return null
+    return localStorage.getItem('access_token')
+  },
+  
+  getRefreshToken: (): string | null => {
+    if (typeof window === 'undefined') return null
+    return localStorage.getItem('refresh_token')
+  },
+  
+  isTokenExpired: (): boolean => {
+    if (typeof window === 'undefined') return true
+    const expiresAt = localStorage.getItem('expires_at')
+    if (!expiresAt) return true
+    return Date.now() >= parseInt(expiresAt) - 30000 // 30s buffer
+  },
+  
+  clear: () => {
+    if (typeof window === 'undefined') return
+    localStorage.removeItem('access_token')
+    localStorage.removeItem('refresh_token')
+    localStorage.removeItem('expires_at')
+    localStorage.removeItem('user')
+    
+    // Clear cookie
+    document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
+  },
+  
+  setUser: (user: User) => {
+    if (typeof window === 'undefined') return
+    localStorage.setItem('user', JSON.stringify(user))
+  },
+  
+  getUser: (): User | null => {
+    if (typeof window === 'undefined') return null
+    const userStr = localStorage.getItem('user')
+    try {
+      return userStr ? JSON.parse(userStr) : null
+    } catch {
+      return null
+    }
+  }
+}
+
 export function AuthProvider({ children, serverUser }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(serverUser || null)
-  const [organization, setOrganization] = useState<Organization | null>(null)
-  const [isLoading, setIsLoading] = useState(!serverUser) // If we have server user, we're not loading
+  const [accessToken, setAccessToken] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(!serverUser)
   const [error, setError] = useState<string | null>(null)
-  const [isAuthenticated, setIsAuthenticated] = useState(!!serverUser)
 
   const router = useRouter()
-  const tokenManager = getTokenManager()
-  const sessionSync = getSessionSync()
 
   // Initialize auth state on mount
   useEffect(() => {
-    // Skip client-side initialization if we already have server state
     if (serverUser) {
-      // We already have server-validated user, just need to set up token manager
-      const storedAccessToken = SecureStorage.getAccessToken()
-      const storedExpiresAt = SecureStorage.getExpiresAt()
-      const storedRefreshToken = SecureStorage.getRefreshToken()
-      
-      if (storedAccessToken && storedExpiresAt && storedRefreshToken) {
-        tokenManager.setTokens({
-          accessToken: storedAccessToken,
-          refreshToken: storedRefreshToken,
-          expiresIn: Math.floor((storedExpiresAt - Date.now()) / 1000),
-          tokenType: 'Bearer'
-        })
+      // Server-provided user, just load token from storage
+      const storedToken = TokenStorage.getAccessToken()
+      if (storedToken && !TokenStorage.isTokenExpired()) {
+        setAccessToken(storedToken)
       }
-      
       setIsLoading(false)
       return
     }
     
-    // No server state, run full client initialization
     initializeAuth()
   }, [serverUser])
 
-  // Setup session sync listeners
-  useEffect(() => {
-    const unsubscribeLogin = sessionSync.on('LOGIN', (event) => {
-      if (event.payload?.user) {
-        setUser(event.payload.user)
-        setIsAuthenticated(true)
-      }
-    })
-
-    const unsubscribeLogout = sessionSync.on('LOGOUT', () => {
-      setUser(null)
-      setOrganization(null)
-      setIsAuthenticated(false)
-    })
-
-    const unsubscribeSessionExpired = sessionSync.on('SESSION_EXPIRED', () => {
-      handleSessionExpired()
-    })
-
-    const unsubscribeUserUpdate = sessionSync.on('USER_UPDATED', (event) => {
-      if (event.payload?.user) {
-        setUser(event.payload.user)
-      }
-    })
-
-    return () => {
-      unsubscribeLogin()
-      unsubscribeLogout()
-      unsubscribeSessionExpired()
-      unsubscribeUserUpdate()
-    }
-  }, [])
-
-  /**
-   * Initialize authentication state on client-side
-   * 
-   * This function handles the race condition where TokenManager might not have loaded
-   * tokens from localStorage yet during app initialization, but the tokens exist.
-   * 
-   * The solution: Check localStorage directly for tokens and reload them into TokenManager
-   * if they exist but TokenManager hasn't loaded them yet. This prevents false negatives
-   * that would cause unnecessary token clearing.
-   */
   const initializeAuth = async () => {
     try {
       setIsLoading(true)
       
-      // Check if we have stored tokens and user
-      const storedUser = SecureStorage.getUser()
-      const storedAccessToken = SecureStorage.getAccessToken()
-      const storedExpiresAt = SecureStorage.getExpiresAt()
-      const hasToken = tokenManager.isAuthenticated()
-
-      // If we have stored user and stored tokens (even if TokenManager hasn't loaded them yet)
-      if (storedUser && storedAccessToken && storedExpiresAt) {
-        // Check if stored token is not expired
-        if (Date.now() < storedExpiresAt - AUTH_CONSTANTS.TOKEN_EXPIRY_BUFFER) {
-          // If TokenManager doesn't have the token yet, reload it
-          if (!hasToken) {
-            const storedRefreshToken = SecureStorage.getRefreshToken()
-            if (storedRefreshToken) {
-              tokenManager.setTokens({
-                accessToken: storedAccessToken,
-                refreshToken: storedRefreshToken,
-                expiresIn: Math.floor((storedExpiresAt - Date.now()) / 1000),
-                tokenType: 'Bearer'
-              })
-            }
-          }
-          
-          try {
-            const currentUser = await getCurrentUser()
-            const currentOrg = await getCurrentOrganization()
-            
-            setUser(currentUser)
-            setOrganization(currentOrg)
-            setIsAuthenticated(true)
-            
-            // Update stored user data if different
-            if (JSON.stringify(currentUser) !== JSON.stringify(storedUser)) {
-              SecureStorage.setUser(currentUser)
-            }
-          } catch (error) {
-            // Token is invalid or API call failed, clear everything
-            await clearAuthState()
-          }
-        } else {
-          // Token is expired, clear auth state
+      const storedToken = TokenStorage.getAccessToken()
+      const storedUser = TokenStorage.getUser()
+      
+      if (storedToken && storedUser && !TokenStorage.isTokenExpired()) {
+        // Token is valid, verify with server
+        try {
+          const currentUser = await getCurrentUser()
+          setUser(currentUser)
+          setAccessToken(storedToken)
+          TokenStorage.setUser(currentUser)
+        } catch {
+          // Token invalid, clear storage
+          await clearAuthState()
+        }
+      } else if (TokenStorage.isTokenExpired() && TokenStorage.getRefreshToken()) {
+        // Token expired, try refresh
+        try {
+          await refreshToken()
+        } catch {
           await clearAuthState()
         }
       } else {
@@ -183,7 +155,7 @@ export function AuthProvider({ children, serverUser }: AuthProviderProps) {
         await clearAuthState()
       }
     } catch (error) {
-      // Auth initialization failed, clear state and proceed
+      console.error('[AuthContext] Init failed:', error)
       await clearAuthState()
     } finally {
       setIsLoading(false)
@@ -197,22 +169,18 @@ export function AuthProvider({ children, serverUser }: AuthProviderProps) {
 
       const response = await apiLogin(credentials)
       
+      // Store tokens and user
+      TokenStorage.setTokens(response.accessToken, response.refreshToken, response.expiresIn)
+      TokenStorage.setUser(response.user)
+      
       // Update state
       setUser(response.user)
-      setOrganization(response.organization)
-      setIsAuthenticated(true)
-      
-      // Store user data
-      SecureStorage.setUser(response.user)
-      
-      // Broadcast to other tabs
-      sessionSync.broadcastLogin(response.user)
+      setAccessToken(response.accessToken)
       
       return response
     } catch (error) {
       const errorMessage = getErrorMessage(error)
       setError(errorMessage)
-      console.error('[AuthContext] Login failed:', error)
       throw error
     } finally {
       setIsLoading(false)
@@ -226,22 +194,18 @@ export function AuthProvider({ children, serverUser }: AuthProviderProps) {
 
       const response = await apiSignup(credentials)
       
+      // Store tokens and user
+      TokenStorage.setTokens(response.accessToken, response.refreshToken, response.expiresIn)
+      TokenStorage.setUser(response.user)
+      
       // Update state
       setUser(response.user)
-      setOrganization(response.organization)
-      setIsAuthenticated(true)
-      
-      // Store user data
-      SecureStorage.setUser(response.user)
-      
-      // Broadcast to other tabs
-      sessionSync.broadcastLogin(response.user)
+      setAccessToken(response.accessToken)
       
       return response
     } catch (error) {
       const errorMessage = getErrorMessage(error)
       setError(errorMessage)
-      console.error('[AuthContext] Signup failed:', error)
       throw error
     } finally {
       setIsLoading(false)
@@ -252,21 +216,18 @@ export function AuthProvider({ children, serverUser }: AuthProviderProps) {
     try {
       setIsLoading(true)
       
-      // Call logout API (this will clear tokens via tokenManager)
+      // Call logout API
       await apiLogout()
       
-      // Clear local state
+      // Clear state
       await clearAuthState()
-      
-      // Broadcast to other tabs
-      sessionSync.broadcastLogout()
       
       // Redirect to login
       router.push('/auth/signin')
       
     } catch (error) {
       console.error('[AuthContext] Logout failed:', error)
-      // Clear local state even if API call fails
+      // Clear state even if API fails
       await clearAuthState()
       router.push('/auth/signin')
     } finally {
@@ -275,13 +236,10 @@ export function AuthProvider({ children, serverUser }: AuthProviderProps) {
   }
 
   const refreshToken = async (): Promise<void> => {
-    try {
-      await tokenManager.refreshAccessToken()
-    } catch (error) {
-      console.error('[AuthContext] Token refresh failed:', error)
-      await handleSessionExpired()
-      throw error
-    }
+    // Simplified refresh - for now just clear and redirect
+    // In production, implement proper refresh token flow
+    await clearAuthState()
+    router.push('/auth/signin')
   }
 
   const updateUser = async (data: Partial<User>): Promise<User> => {
@@ -289,16 +247,12 @@ export function AuthProvider({ children, serverUser }: AuthProviderProps) {
       const updatedUser = await apiUpdateProfile(data)
       
       setUser(updatedUser)
-      SecureStorage.setUser(updatedUser)
-      
-      // Broadcast to other tabs
-      sessionSync.broadcastUserUpdate(updatedUser)
+      TokenStorage.setUser(updatedUser)
       
       return updatedUser
     } catch (error) {
       const errorMessage = getErrorMessage(error)
       setError(errorMessage)
-      console.error('[AuthContext] User update failed:', error)
       throw error
     }
   }
@@ -312,7 +266,6 @@ export function AuthProvider({ children, serverUser }: AuthProviderProps) {
     } catch (error) {
       const errorMessage = getErrorMessage(error)
       setError(errorMessage)
-      console.error('[AuthContext] Password change failed:', error)
       throw error
     }
   }
@@ -324,17 +277,9 @@ export function AuthProvider({ children, serverUser }: AuthProviderProps) {
   // Private helper methods
   const clearAuthState = async (): Promise<void> => {
     setUser(null)
-    setOrganization(null)
-    setIsAuthenticated(false)
+    setAccessToken(null)
     setError(null)
-    tokenManager.clearTokens()
-    SecureStorage.clearAllAuthData()
-  }
-
-  const handleSessionExpired = async (): Promise<void> => {
-    await clearAuthState()
-    setError('Your session has expired. Please login again.')
-    router.push('/auth/signin')
+    TokenStorage.clear()
   }
 
   const getErrorMessage = (error: unknown): string => {
@@ -350,8 +295,7 @@ export function AuthProvider({ children, serverUser }: AuthProviderProps) {
   const value: AuthContextValue = {
     // State
     user,
-    organization,
-    isAuthenticated,
+    accessToken,
     isLoading,
     error,
 

@@ -5,7 +5,7 @@
  * state and actions, without the complexity of project management.
  */
 
-import { useOrganization } from '@/context/organization-context'
+import { useOrganization } from '@/context/org-context'
 import type { Organization, CreateOrganizationData, OrganizationRole } from '@/types/organization'
 
 export interface OrganizationOnlyContext {

@@ -4,12 +4,14 @@ import * as React from 'react'
 import { useState } from 'react'
 import { Building2, ArrowRight, Plus } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { useOrganization } from '@/context/organization-context'
+import { useEffect } from 'react'
+import { getUserOrganizations } from '@/lib/api/services/organizations'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
+import { buildOrgUrl } from '@/lib/utils/slug-utils'
 import { cn } from '@/lib/utils'
 import type { Organization } from '@/types/organization'
 
@@ -19,12 +21,36 @@ interface OrganizationSelectorProps {
 
 export function OrganizationSelector({ className }: OrganizationSelectorProps) {
   const router = useRouter()
-  const { organizations, isLoading, error } = useOrganization()
+  const [organizations, setOrganizations] = useState<Organization[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null)
+
+  // Fetch organizations using API client
+  useEffect(() => {
+    const fetchOrganizations = async () => {
+      try {
+        setIsLoading(true)
+        
+        // Use the existing API client
+        const response = await getUserOrganizations()
+        setOrganizations(response.data)
+        setError(null)
+      } catch (err) {
+        console.error('Failed to fetch organizations:', err)
+        setError(err instanceof Error ? err.message : 'Failed to load organizations')
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    fetchOrganizations()
+  }, [])
 
   const handleOrgSelect = (organization: Organization) => {
     setSelectedOrgId(organization.id)
-    router.push(`/${organization.slug}`)
+    const orgUrl = buildOrgUrl(organization.name, organization.id)
+    router.push(orgUrl)
   }
 
   const getPlanBadgeColor = (plan: string) => {
@@ -181,7 +207,7 @@ export function OrganizationSelector({ className }: OrganizationSelectorProps) {
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div>
                     <div className="font-medium text-foreground">
-                      {formatUsage(org.usage.requests_this_month)}
+                      {formatUsage(org.usage.requests_this_month || 0)}
                     </div>
                     <div className="text-muted-foreground text-xs">
                       Requests/month
@@ -189,7 +215,7 @@ export function OrganizationSelector({ className }: OrganizationSelectorProps) {
                   </div>
                   <div>
                     <div className="font-medium text-foreground">
-                      ${org.usage.cost_this_month.toFixed(2)}
+                      ${(org.usage.cost_this_month || 0).toFixed(2)}
                     </div>
                     <div className="text-muted-foreground text-xs">
                       Cost/month

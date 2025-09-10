@@ -11,8 +11,9 @@ interface OrganizationAPIResponse {
   id: string
   name: string
   slug: string
-  billing_email: string
-  subscription_plan: 'free' | 'pro' | 'business' | 'enterprise'
+  plan: 'free' | 'pro' | 'business' | 'enterprise'
+  status: 'active' | 'inactive' | 'suspended'
+  owner_id: string
   created_at: string
   updated_at: string
 }
@@ -23,7 +24,9 @@ interface ProjectAPIResponse {
   name: string
   slug: string
   description?: string
-  environments: EnvironmentAPIResponse[]
+  status: 'active' | 'inactive' | 'archived'
+  owner_id: string
+  environments_count: number
   created_at: string
   updated_at: string
 }
@@ -71,49 +74,15 @@ export const getUserOrganizations = async (page = 1, limit = 20): Promise<Pagina
     }
   }
 
-export const resolveOrganizationSlug = async (slug: string): Promise<Organization> => {
-    const response = await client.get<OrganizationAPIResponse[] | OrganizationAPIResponse>(
-      `/organizations/slug/${slug}`
-    )
 
-    console.debug('[OrganizationAPI] Slug resolution response:', { slug, response, isArray: Array.isArray(response) })
-
-    let orgData: OrganizationAPIResponse
-
-    // Handle both array and single object responses
-    if (Array.isArray(response)) {
-      if (response.length === 0) {
-        console.warn('[OrganizationAPI] Empty array response for slug:', slug)
-        throw new Error(`Organization with slug '${slug}' not found`)
-      }
-      orgData = response[0]
-    } else if (response && typeof response === 'object') {
-      orgData = response
-    } else {
-      console.warn('[OrganizationAPI] Invalid response type for slug:', slug, response)
-      throw new Error(`Organization with slug '${slug}' not found`)
-    }
-
-    if (!orgData || !orgData.id) {
-      console.error('[OrganizationAPI] Invalid organization data:', orgData)
-      throw new Error(`Invalid organization data for slug '${slug}'`)
-    }
-
-    return mapOrganizationFromAPI(orgData)
-  }
-
-export const getOrganization = async (organizationId: string): Promise<Organization> => {
+export const getOrganizationById = async (organizationId: string): Promise<Organization> => {
     const response = await client.get<OrganizationAPIResponse>(
-      `/organizations/${organizationId}`,
-      {},
-      { 
-        includeOrgContext: true,
-        customOrgId: organizationId
-      }
+      `/v1/organizations/${organizationId}`
     )
 
     return mapOrganizationFromAPI(response)
   }
+
 
 export const getOrganizationMembers = async (organizationId: string, page = 1, limit = 20): Promise<PaginatedResponse<OrganizationMember>> => {
     const response = await client.getPaginated<OrganizationMemberAPIResponse>(
@@ -134,55 +103,28 @@ export const getOrganizationMembers = async (organizationId: string, page = 1, l
     }
   }
 
-export const getOrganizationProjects = async (organizationId: string): Promise<Project[]> => {
+export const getOrganizationProjects = async (organizationId: string, page = 1, limit = 20): Promise<Project[]> => {
     const response = await client.get<ProjectAPIResponse[]>(
-      `/organizations/${organizationId}/projects`,
-      {},
-      { 
-        // TODO: Re-enable when backend CORS is configured
-        // includeOrgContext: true,
-        // customOrgId: organizationId
+      `/v1/projects`,
+      {
+        organization_id: organizationId,
+        page,
+        limit
       }
     )
 
     return response.map(mapProjectFromAPI)
   }
 
-export const resolveProjectSlug = async (organizationId: string, slug: string): Promise<Project> => {
+
+export const getProjectById = async (projectId: string): Promise<Project> => {
     const response = await client.get<ProjectAPIResponse>(
-      `/organizations/${organizationId}/projects/slug/${slug}`,
-      {},
-      { 
-        // TODO: Re-enable when backend CORS is configured
-        // includeOrgContext: true,
-        // customOrgId: organizationId
-      }
-    )
-
-    console.debug('[OrganizationAPI] Project slug resolution response:', { organizationId, slug, response })
-
-    if (!response || !response.id) {
-      console.error('[OrganizationAPI] Invalid project data:', response)
-      throw new Error(`Invalid project data for slug '${slug}' in organization '${organizationId}'`)
-    }
-
-    return mapProjectFromAPI(response)
-  }
-
-export const getProject = async (organizationId: string, projectId: string): Promise<Project> => {
-    const response = await client.get<ProjectAPIResponse>(
-      `/organizations/${organizationId}/projects/${projectId}`,
-      {},
-      { 
-        includeOrgContext: true,
-        includeProjectContext: true,
-        customOrgId: organizationId,
-        customProjectId: projectId
-      }
+      `/v1/projects/${projectId}`
     )
 
     return mapProjectFromAPI(response)
   }
+
 
 export const getProjectMetrics = async (organizationId: string, projectId: string, environmentId?: string): Promise<ProjectMetricsAPIResponse> => {
     const options: RequestOptions = {
@@ -326,8 +268,8 @@ export const updateUserRole = async (organizationId: string, userId: string, rol
       id: apiOrg.id,
       name: apiOrg.name || '',
       slug: apiOrg.slug || '',
-      plan: apiOrg.subscription_plan || 'free',
-      billing_email: apiOrg.billing_email || '',
+      plan: apiOrg.plan || 'free',
+      billing_email: '', // Not provided in new API response
       created_at: apiOrg.created_at || '',
       updated_at: apiOrg.updated_at || '',
       members: [], // Will be populated separately if needed
@@ -355,8 +297,8 @@ export const updateUserRole = async (organizationId: string, userId: string, rol
       slug: apiProject.slug || '',
       organizationId: apiProject.organization_id || '',
       description: apiProject.description || '',
-      status: 'active', // Default status, will be determined by backend
-      environment: 'development', // Will be determined by selected environment
+      status: apiProject.status || 'active',
+      environment: 'development', // Default environment, TODO: get from API
       metrics: {
         requests_today: 0, // Will be populated from metrics API
         cost_today: 0,

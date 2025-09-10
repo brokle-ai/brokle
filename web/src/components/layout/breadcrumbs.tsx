@@ -4,7 +4,7 @@ import * as React from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { ChevronRight, Home, Building2, FolderOpen, Settings, Users, CreditCard } from 'lucide-react'
-import { useOrganization } from '@/context/organization-context'
+import { useOrganization } from '@/context/org-context'
 import {
   Breadcrumb,
   BreadcrumbItem,

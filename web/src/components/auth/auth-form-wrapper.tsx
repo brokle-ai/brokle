@@ -2,7 +2,6 @@
 
 import { Suspense } from 'react'
 import { Loader2 } from 'lucide-react'
-import { AuthErrorBoundary } from './auth-error-boundary'
 
 function AuthFormFallback() {
   return (
@@ -14,13 +13,8 @@ function AuthFormFallback() {
 
 export function AuthFormWrapper({ children }: { children: React.ReactNode }) {
   return (
-    <AuthErrorBoundary
-      fallbackTitle="Sign In Error"
-      fallbackDescription="Something went wrong while loading the sign-in form. Please try refreshing the page."
-    >
-      <Suspense fallback={<AuthFormFallback />}>
-        {children}
-      </Suspense>
-    </AuthErrorBoundary>
+    <Suspense fallback={<AuthFormFallback />}>
+      {children}
+    </Suspense>
   )
 }

@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { useState } from 'react'
 import { ChevronsUpDown, Plus, Building2, FolderOpen, Settings, Users } from 'lucide-react'
-import { useOrganization } from '@/context/organization-context'
+import { useOrganization } from '@/context/org-context'
 import {
   DropdownMenu,
   DropdownMenuContent,

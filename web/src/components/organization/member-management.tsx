@@ -14,7 +14,7 @@ import {
   Search,
   Filter
 } from 'lucide-react'
-import { useOrganization } from '@/context/organization-context'
+import { useOrganization } from '@/context/org-context'
 import { useAuth } from '@/context/auth-context'
 import {
   Table,

@@ -6,7 +6,7 @@
  */
 
 import { useRouter, usePathname } from 'next/navigation'
-import { useOrganization } from '@/context/organization-context'
+import { useOrganization } from '@/context/org-context'
 import { parsePathContext } from '@/lib/utils/slug-utils'
 import type { Organization, Project } from '@/types/organization'
 

@@ -2,9 +2,12 @@
 
 import * as React from 'react'
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { ChevronDown, FolderOpen, Plus, Settings } from 'lucide-react'
-import { useOrganization } from '@/context/organization-context'
+import { useOrganization } from '@/context/org-context'
+import { useProject } from '@/context/project-context'
 import { useIsMobile } from '@/hooks/use-mobile'
+import { buildProjectUrl, buildOrgUrl } from '@/lib/utils/slug-utils'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,44 +26,52 @@ interface ProjectSelectorProps {
 export function ProjectSelector({ className }: ProjectSelectorProps) {
   const { 
     currentOrganization,
-    currentProject,
     projects,
-    switchProject,
     switchOrganization,
-    isLoading,
+    isOrgReady,
   } = useOrganization()
   
+  const {
+    currentProject,
+    isLoading: isProjectLoading
+  } = useProject()
+  
+  const router = useRouter()
   const isMobile = useIsMobile()
-  const [isProjectLoading, setIsProjectLoading] = useState(false)
+  const [isSwitchLoading, setIsSwitchLoading] = useState(false)
 
-  const handleProjectSwitch = async (projectSlug: string) => {
-    if (isProjectLoading || projectSlug === currentProject?.slug) return
+  const handleProjectSwitch = async (project: any) => {
+    if (isSwitchLoading || project.id === currentProject?.id) return
     
     try {
-      setIsProjectLoading(true)
-      await switchProject(projectSlug)
+      setIsSwitchLoading(true)
+      // Build proper composite slug URL for project
+      const projectUrl = buildProjectUrl(project.name, project.id)
+      router.push(projectUrl)
     } catch (error) {
       console.error('Failed to switch project:', error)
     } finally {
-      setIsProjectLoading(false)
+      setIsSwitchLoading(false)
     }
   }
 
   const handleGoToOrganization = async () => {
-    if (!currentOrganization || isProjectLoading) return
+    if (!currentOrganization || isSwitchLoading) return
     
     try {
-      setIsProjectLoading(true)
-      await switchOrganization(currentOrganization.slug)
+      setIsSwitchLoading(true)
+      // Build proper composite slug URL for organization
+      const orgUrl = buildOrgUrl(currentOrganization.name, currentOrganization.id)
+      router.push(orgUrl)
     } catch (error) {
-      console.error('Failed to switch to organization:', error)
+      console.error('Failed to navigate to organization:', error)
     } finally {
-      setIsProjectLoading(false)
+      setIsSwitchLoading(false)
     }
   }
 
-  // Loading state
-  if (isLoading || !currentOrganization || !currentProject) {
+  // Loading state - only show when we have both org ready and current project
+  if (!isOrgReady || isProjectLoading || !currentOrganization || !currentProject) {
     return null // This component only shows when there's a current project
   }
 
@@ -74,7 +85,7 @@ export function ProjectSelector({ className }: ProjectSelectorProps) {
             isMobile ? "max-w-[140px]" : "max-w-[180px]",
             "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
           )}
-          disabled={isProjectLoading}
+          disabled={isSwitchLoading}
         >
           <div className="bg-muted flex size-4 items-center justify-center rounded-sm">
             <FolderOpen className="size-3" />
@@ -120,7 +131,7 @@ export function ProjectSelector({ className }: ProjectSelectorProps) {
         <DropdownMenuItem
           onClick={handleGoToOrganization}
           className="gap-2 p-2 cursor-pointer"
-          disabled={isProjectLoading}
+          disabled={isSwitchLoading}
         >
           <div className="bg-muted flex size-5 items-center justify-center rounded-sm">
             <FolderOpen className="size-3" />
@@ -139,9 +150,9 @@ export function ProjectSelector({ className }: ProjectSelectorProps) {
             {projects.filter(project => project.id !== currentProject.id).map((project) => (
               <DropdownMenuItem
                 key={project.id}
-                onClick={() => handleProjectSwitch(project.slug)}
+                onClick={() => handleProjectSwitch(project)}
                 className="gap-2 p-2 cursor-pointer"
-                disabled={isProjectLoading}
+                disabled={isSwitchLoading}
               >
                 <div className="bg-muted flex size-5 items-center justify-center rounded-sm">
                   <FolderOpen className="size-3" />

@@ -1,6 +1,6 @@
 'use client'
 
-import { parsePathContext } from '@/lib/utils/slug-utils'
+import { extractIdFromCompositeSlug, isValidCompositeSlug } from '@/lib/utils/slug-utils'
 import type { BrokleAPIError } from '@/lib/api/core/types'
 
 /**
@@ -43,18 +43,32 @@ export class URLContextManager {
    */
   async getHeadersFromURL(pathname: string, options: ContextOptions = {}): Promise<ContextHeaders> {
     try {
-      // Extract slugs from URL
-      const { orgSlug, projectSlug } = parsePathContext(pathname)
+      // Parse URL to extract composite slugs
+      const pathSegments = pathname.split('/').filter(Boolean)
+      let orgCompositeSlug: string | null = null
+      let projectCompositeSlug: string | null = null
       
-      if (!orgSlug) {
-        if (this.DEBUG) console.debug('[URLContextManager] No organization slug in pathname:', pathname)
+      // Look for organization composite slug (pattern: /organizations/[orgSlug])
+      const orgIndex = pathSegments.indexOf('organizations')
+      if (orgIndex !== -1 && pathSegments[orgIndex + 1]) {
+        orgCompositeSlug = pathSegments[orgIndex + 1]
+      }
+      
+      // Look for project composite slug (pattern: /projects/[projectSlug])
+      const projectIndex = pathSegments.indexOf('projects')
+      if (projectIndex !== -1 && pathSegments[projectIndex + 1]) {
+        projectCompositeSlug = pathSegments[projectIndex + 1]
+      }
+      
+      if (!orgCompositeSlug) {
+        if (this.DEBUG) console.debug('[URLContextManager] No organization composite slug in pathname:', pathname)
         return {} // No org in URL, no headers needed
       }
       
-      if (this.DEBUG) console.debug(`[URLContextManager] Getting headers for pathname: ${pathname}, orgSlug: ${orgSlug}, projectSlug: ${projectSlug}`)
+      if (this.DEBUG) console.debug(`[URLContextManager] Getting headers for pathname: ${pathname}, orgSlug: ${orgCompositeSlug}, projectSlug: ${projectCompositeSlug}`)
       
-      // Get or resolve context
-      const context = await this.getResolvedContext(pathname, orgSlug, projectSlug)
+      // Get or resolve context using composite slugs
+      const context = await this.getResolvedContext(pathname, orgCompositeSlug, projectCompositeSlug)
       
       if (!context) {
         console.warn(`[URLContextManager] Could not resolve context for pathname: ${pathname}`)
@@ -78,8 +92,8 @@ export class URLContextManager {
    */
   private async getResolvedContext(
     pathname: string, 
-    orgSlug: string, 
-    projectSlug?: string
+    orgCompositeSlug: string, 
+    projectCompositeSlug?: string
   ): Promise<CachedContext | null> {
     // Check cache first
     const cached = this.getCachedContext(pathname)
@@ -87,8 +101,8 @@ export class URLContextManager {
       return cached
     }
     
-    // Resolve slugs to IDs via API
-    const resolved = await this.resolveContext(orgSlug, projectSlug)
+    // Resolve composite slugs to IDs via direct extraction
+    const resolved = await this.resolveContext(orgCompositeSlug, projectCompositeSlug)
     
     if (resolved) {
       // Cache the resolved context
@@ -99,40 +113,53 @@ export class URLContextManager {
   }
   
   /**
-   * Resolve organization and project slugs to IDs using direct API calls
-   * Now uses efficient slug resolution endpoints instead of full list fetching
+   * Resolve organization and project composite slugs to IDs using direct ID extraction
+   * Uses composite slug format with embedded IDs for direct lookup
    */
   private async resolveContext(
-    orgSlug: string, 
-    projectSlug?: string
+    orgCompositeSlug: string, 
+    projectCompositeSlug?: string
   ): Promise<CachedContext | null> {
     try {
       // Import specific functions to avoid circular dependencies
-      const { resolveOrganizationSlug, resolveProjectSlug } = await import('@/lib/api')
+      const { getOrganizationById, getProjectById } = await import('@/lib/api')
       
-      // Resolve organization slug to organization data
-      if (this.DEBUG) console.debug(`[URLContextManager] Resolving organization slug: ${orgSlug}`)
-      const org = await resolveOrganizationSlug(orgSlug)
+      // Validate and extract organization ID from composite slug
+      if (!isValidCompositeSlug(orgCompositeSlug)) {
+        console.warn(`[URLContextManager] Invalid organization composite slug format: ${orgCompositeSlug}`)
+        return null
+      }
+      
+      const orgId = extractIdFromCompositeSlug(orgCompositeSlug)
+      if (this.DEBUG) console.debug(`[URLContextManager] Resolving organization ID: ${orgId}`)
+      
+      const org = await getOrganizationById(orgId)
       
       let project = null
-      if (projectSlug) {
+      if (projectCompositeSlug) {
         try {
-          if (this.DEBUG) console.debug(`[URLContextManager] Resolving project slug: ${projectSlug} in org: ${org.id}`)
-          // Resolve project slug using the organization ID
-          project = await resolveProjectSlug(org.id, projectSlug)
+          // Validate and extract project ID from composite slug
+          if (!isValidCompositeSlug(projectCompositeSlug)) {
+            console.warn(`[URLContextManager] Invalid project composite slug format: ${projectCompositeSlug}`)
+          } else {
+            const projectId = extractIdFromCompositeSlug(projectCompositeSlug)
+            if (this.DEBUG) console.debug(`[URLContextManager] Resolving project ID: ${projectId}`)
+            
+            project = await getProjectById(projectId)
+          }
         } catch (error) {
           // Handle different error types appropriately
           if (error && typeof error === 'object' && 'statusCode' in error) {
             const apiError = error as any
             if (apiError.statusCode === 404) {
-              console.warn(`[URLContextManager] Project '${projectSlug}' not found in organization '${orgSlug}'`)
+              console.warn(`[URLContextManager] Project '${projectCompositeSlug}' not found`)
             } else if (apiError.statusCode === 403) {
-              console.warn(`[URLContextManager] Access denied to project '${projectSlug}' in organization '${orgSlug}'`)
+              console.warn(`[URLContextManager] Access denied to project '${projectCompositeSlug}'`)
             } else {
-              console.error(`[URLContextManager] API error resolving project '${projectSlug}':`, apiError.message)
+              console.error(`[URLContextManager] API error resolving project '${projectCompositeSlug}':`, apiError.message)
             }
           } else {
-            console.warn('[URLContextManager] Unexpected error resolving project:', projectSlug, 'in org:', orgSlug, error)
+            console.warn('[URLContextManager] Unexpected error resolving project:', projectCompositeSlug, error)
           }
           // Don't fail the entire context resolution if project is not found
           // Return organization context without project
@@ -161,11 +188,11 @@ export class URLContextManager {
       if (error && typeof error === 'object' && 'statusCode' in error) {
         const apiError = error as any
         if (apiError.statusCode === 404) {
-          console.warn(`[URLContextManager] Organization '${orgSlug}' not found`)
+          console.warn(`[URLContextManager] Organization '${orgCompositeSlug}' not found`)
         } else if (apiError.statusCode === 403) {
-          console.warn(`[URLContextManager] Access denied to organization '${orgSlug}'`)
+          console.warn(`[URLContextManager] Access denied to organization '${orgCompositeSlug}'`)
         } else {
-          console.error(`[URLContextManager] API error resolving organization '${orgSlug}':`, apiError.message)
+          console.error(`[URLContextManager] API error resolving organization '${orgCompositeSlug}':`, apiError.message)
         }
       } else {
         console.error('[URLContextManager] Unexpected error resolving context:', error)
@@ -257,9 +284,25 @@ export class URLContextManager {
    * Preload context for a URL (useful for navigation)
    */
   async preloadContext(pathname: string): Promise<void> {
-    const { orgSlug, projectSlug } = parsePathContext(pathname)
-    if (orgSlug) {
-      await this.getResolvedContext(pathname, orgSlug, projectSlug)
+    // Parse URL to extract composite slugs
+    const pathSegments = pathname.split('/').filter(Boolean)
+    let orgCompositeSlug: string | null = null
+    let projectCompositeSlug: string | null = null
+    
+    // Look for organization composite slug
+    const orgIndex = pathSegments.indexOf('organizations')
+    if (orgIndex !== -1 && pathSegments[orgIndex + 1]) {
+      orgCompositeSlug = pathSegments[orgIndex + 1]
+    }
+    
+    // Look for project composite slug
+    const projectIndex = pathSegments.indexOf('projects')
+    if (projectIndex !== -1 && pathSegments[projectIndex + 1]) {
+      projectCompositeSlug = pathSegments[projectIndex + 1]
+    }
+    
+    if (orgCompositeSlug) {
+      await this.getResolvedContext(pathname, orgCompositeSlug, projectCompositeSlug)
     }
   }
   

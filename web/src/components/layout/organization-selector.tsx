@@ -2,9 +2,11 @@
 
 import * as React from 'react'
 import { useState } from 'react'
+import { usePathname, useRouter } from 'next/navigation'
 import { ChevronDown, Building2, Settings, Users, Plus } from 'lucide-react'
-import { useOrganization } from '@/context/organization-context'
+import { useOrganization } from '@/context/org-context'
 import { useIsMobile } from '@/hooks/use-mobile'
+import { buildOrgUrl } from '@/lib/utils/slug-utils'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,20 +27,50 @@ interface OrganizationSelectorProps {
 export function OrganizationSelector({ className }: OrganizationSelectorProps) {
   const { 
     organizations, 
-    currentOrganization, 
+    currentOrganization,
     switchOrganization,
-    isLoading,
+    isOrgReady,
   } = useOrganization()
   
+  const pathname = usePathname()
+  const router = useRouter()
   const isMobile = useIsMobile()
   const [isOrgLoading, setIsOrgLoading] = useState(false)
+  const isProjectPage = pathname.startsWith('/projects/')
 
   const handleOrgSwitch = async (orgSlug: string) => {
     if (isOrgLoading || orgSlug === currentOrganization?.slug) return
     
+    // Find the organization object by slug
+    const targetOrg = organizations.find(org => org.slug === orgSlug)
+    if (!targetOrg) {
+      console.error('Organization not found:', orgSlug)
+      return
+    }
+    
     try {
       setIsOrgLoading(true)
-      await switchOrganization(orgSlug)
+      
+      // Build proper composite slug URL
+      const orgUrl = buildOrgUrl(targetOrg.name, targetOrg.id)
+      
+      // On project pages, clear project context before navigation
+      if (isProjectPage) {
+        // Import project context dynamically to clear it
+        try {
+          const { useProject } = require('@/context/project-context')
+          const { setCurrentProject } = useProject()
+          
+          // Clear project context before navigation
+          setCurrentProject(null)
+        } catch (error) {
+          // Project context not available, that's fine
+          console.log('Project context not available for clearing')
+        }
+      }
+      
+      // Navigate to organization URL - let the route handle context updates
+      router.push(orgUrl)
     } catch (error) {
       console.error('Failed to switch organization:', error)
     } finally {
@@ -70,8 +102,8 @@ export function OrganizationSelector({ className }: OrganizationSelectorProps) {
       .toUpperCase()
   }
 
-  // Loading state
-  if (isLoading || !currentOrganization) {
+  // Loading state - use isOrgReady for better loading detection
+  if (!isOrgReady || !currentOrganization) {
     return (
       <div className={cn("animate-pulse bg-muted rounded h-8 w-32", className)}></div>
     )
@@ -144,12 +176,12 @@ export function OrganizationSelector({ className }: OrganizationSelectorProps) {
         </div>
 
         {/* Switch Organization */}
-        {organizations.filter(org => org.id !== currentOrganization.id).length > 0 && (
+        {organizations && organizations.filter(org => org.id !== currentOrganization.id).length > 0 && (
           <>
             <DropdownMenuLabel className="text-xs text-muted-foreground">
               Switch Organization
             </DropdownMenuLabel>
-            {organizations.filter(org => org.id !== currentOrganization.id).map((org) => (
+            {organizations && organizations.filter(org => org.id !== currentOrganization.id).map((org) => (
               <DropdownMenuItem
                 key={org.id}
                 onClick={() => handleOrgSwitch(org.slug)}
