@@ -572,9 +572,9 @@ export class BrokleAPIClient {
     }
 
     try {
-      const response = await axios.post('/api/auth/refresh', {
+      const response = await this.axiosInstance.post('/v1/auth/refresh', {
         refresh_token: refreshToken
-      })
+      }, { skipAuth: true } as any)
 
       const { access_token, refresh_token: newRefreshToken, expires_in } = response.data.data
       

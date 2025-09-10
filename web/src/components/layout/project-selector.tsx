@@ -2,12 +2,13 @@
 
 import * as React from 'react'
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import { ChevronDown, FolderOpen, Plus, Settings } from 'lucide-react'
 import { useOrganization } from '@/context/org-context'
 import { useProject } from '@/context/project-context'
 import { useIsMobile } from '@/hooks/use-mobile'
-import { buildProjectUrl, buildOrgUrl } from '@/lib/utils/slug-utils'
+import { buildProjectUrl } from '@/lib/utils/slug-utils'
+import { getSmartRedirectUrl } from '@/lib/utils/smart-redirect'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,7 +28,6 @@ export function ProjectSelector({ className }: ProjectSelectorProps) {
   const { 
     currentOrganization,
     projects,
-    switchOrganization,
     isOrgReady,
   } = useOrganization()
   
@@ -37,6 +37,7 @@ export function ProjectSelector({ className }: ProjectSelectorProps) {
   } = useProject()
   
   const router = useRouter()
+  const pathname = usePathname()
   const isMobile = useIsMobile()
   const [isSwitchLoading, setIsSwitchLoading] = useState(false)
 
@@ -45,9 +46,16 @@ export function ProjectSelector({ className }: ProjectSelectorProps) {
     
     try {
       setIsSwitchLoading(true)
-      // Build proper composite slug URL for project
-      const projectUrl = buildProjectUrl(project.name, project.id)
-      router.push(projectUrl)
+      
+      // Use smart redirect to determine the appropriate URL
+      const redirectUrl = getSmartRedirectUrl({
+        currentPath: pathname,
+        targetProjectSlug: project.slug || project.id, // fallback to id if no slug
+        targetProjectId: project.id,
+        targetProjectName: project.name
+      })
+      
+      router.push(redirectUrl)
     } catch (error) {
       console.error('Failed to switch project:', error)
     } finally {
@@ -60,9 +68,16 @@ export function ProjectSelector({ className }: ProjectSelectorProps) {
     
     try {
       setIsSwitchLoading(true)
-      // Build proper composite slug URL for organization
-      const orgUrl = buildOrgUrl(currentOrganization.name, currentOrganization.id)
-      router.push(orgUrl)
+      
+      // Use smart redirect to determine the appropriate URL (cross-context switch)
+      const redirectUrl = getSmartRedirectUrl({
+        currentPath: pathname,
+        targetOrgSlug: currentOrganization.slug,
+        targetOrgId: currentOrganization.id,
+        targetOrgName: currentOrganization.name
+      })
+      
+      router.push(redirectUrl)
     } catch (error) {
       console.error('Failed to navigate to organization:', error)
     } finally {

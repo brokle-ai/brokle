@@ -106,6 +106,7 @@ const PLAN_FEATURES = {
 
 export default function BillingSettingsPage() {
   const params = useParams() as OrganizationParams
+  const router = useRouter()
   const { 
     currentOrganization,
     isLoading,

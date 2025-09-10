@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { ChevronDown, Building2, Settings, Users, Plus } from 'lucide-react'
 import { useOrganization } from '@/context/org-context'
 import { useIsMobile } from '@/hooks/use-mobile'
-import { buildOrgUrl } from '@/lib/utils/slug-utils'
+import { getSmartRedirectUrl } from '@/lib/utils/smart-redirect'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,7 +28,6 @@ export function OrganizationSelector({ className }: OrganizationSelectorProps) {
   const { 
     organizations, 
     currentOrganization,
-    switchOrganization,
     isOrgReady,
   } = useOrganization()
   
@@ -51,8 +50,13 @@ export function OrganizationSelector({ className }: OrganizationSelectorProps) {
     try {
       setIsOrgLoading(true)
       
-      // Build proper composite slug URL
-      const orgUrl = buildOrgUrl(targetOrg.name, targetOrg.id)
+      // Use smart redirect to determine the appropriate URL
+      const redirectUrl = getSmartRedirectUrl({
+        currentPath: pathname,
+        targetOrgSlug: targetOrg.slug,
+        targetOrgId: targetOrg.id,
+        targetOrgName: targetOrg.name
+      })
       
       // On project pages, clear project context before navigation
       if (isProjectPage) {
@@ -69,8 +73,8 @@ export function OrganizationSelector({ className }: OrganizationSelectorProps) {
         }
       }
       
-      // Navigate to organization URL - let the route handle context updates
-      router.push(orgUrl)
+      // Navigate to smart redirect URL
+      router.push(redirectUrl)
     } catch (error) {
       console.error('Failed to switch organization:', error)
     } finally {
