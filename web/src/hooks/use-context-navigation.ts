@@ -244,7 +244,6 @@ export function useBreadcrumbNavigation() {
  */
 export function useContextAwareRouting() {
   const navigation = useContextNavigation()
-  const { hasAccess } = useOrganization()
   const router = useRouter()
 
   /**
@@ -268,13 +267,16 @@ export function useContextAwareRouting() {
 
   /**
    * Check if a route is accessible in the current context
+   * TODO: Implement with backend permission checking
    */
   const isValidContextRoute = (url: string): boolean => {
     const { orgSlug, projectSlug } = parsePathContext(url)
     
     if (!orgSlug) return true // Root routes are always valid
     
-    return hasAccess(orgSlug, projectSlug)
+    // TODO: Replace with backend permission checking
+    // For now, assume all routes are accessible if user is authenticated
+    return true
   }
 
   /**

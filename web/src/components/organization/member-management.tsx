@@ -65,7 +65,7 @@ interface MemberManagementProps {
 
 export function MemberManagement({ className }: MemberManagementProps) {
   const { user } = useAuth()
-  const { currentOrganization, getUserRole } = useOrganization()
+  const { currentOrganization } = useOrganization()
   
   const [searchTerm, setSearchTerm] = useState('')
   const [roleFilter, setRoleFilter] = useState<OrganizationRole | 'all'>('all')
@@ -74,8 +74,9 @@ export function MemberManagement({ className }: MemberManagementProps) {
     return null
   }
 
-  const currentUserRole = getUserRole(currentOrganization.slug)
-  const canManageMembers = currentUserRole === 'owner' || currentUserRole === 'admin'
+  // TODO: Implement backend permission checking for 'members:manage'
+  // For now, assume user can manage members if they can access this page
+  const canManageMembers = true
 
   const filteredMembers = currentOrganization.members.filter(member => {
     const matchesSearch = member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||

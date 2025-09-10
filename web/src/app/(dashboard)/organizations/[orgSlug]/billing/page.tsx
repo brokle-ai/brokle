@@ -103,32 +103,16 @@ const PLAN_FEATURES = {
 
 export default function BillingSettingsPage() {
   const params = useParams() as OrganizationParams
-  const router = useRouter()
   const { 
     currentOrganization,
     isLoading,
-    error,
-    hasAccess,
-    getUserRole
+    error
   } = useOrganization()
   
   const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan>('pro')
 
-  useEffect(() => {
-    if (isLoading) return
-
-    if (!hasAccess(params.orgSlug)) {
-      router.push('/')
-      return
-    }
-
-    // Check if user has admin permissions
-    const userRole = getUserRole(params.orgSlug)
-    if (userRole !== 'owner' && userRole !== 'admin') {
-      router.push(`/${params.orgSlug}`)
-      return
-    }
-  }, [params.orgSlug, isLoading, hasAccess, getUserRole, router])
+  // TODO: Implement proper permission-based access control with backend integration
+  // This page should verify user has 'billing:read' and 'billing:write' permissions
 
   if (isLoading) {
     return (

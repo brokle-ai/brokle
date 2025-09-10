@@ -1,31 +1,18 @@
 'use client'
 
-import { useEffect } from 'react'
-import { useParams, useRouter } from 'next/navigation'
-import { useOrganization } from '@/context/org-context'
+import { useProject } from '@/context/project-context'
 import { CostsView } from '@/views/costs-view'
 import { Skeleton } from '@/components/ui/skeleton'
-import type { ProjectParams } from '@/types/organization'
 
 export default function ProjectCostsPage() {
-  const params = useParams() as ProjectParams
-  const router = useRouter()
   const { 
-    currentOrganization,
     currentProject,
     isLoading,
-    error,
-    hasAccess
-  } = useOrganization()
+    error
+  } = useProject()
 
-  useEffect(() => {
-    if (isLoading) return
-
-    if (!hasAccess(params.orgSlug, params.projectSlug)) {
-      router.push('/')
-      return
-    }
-  }, [params.orgSlug, params.projectSlug, isLoading, hasAccess, router])
+  // TODO: Implement proper permission-based access control with backend integration
+  // This page should verify user has 'costs:read' permission for the project
 
   if (isLoading) {
     return (
@@ -44,7 +31,7 @@ export default function ProjectCostsPage() {
     )
   }
 
-  if (error || !currentOrganization || !currentProject) {
+  if (error || !currentProject) {
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="text-center">
@@ -54,12 +41,6 @@ export default function ProjectCostsPage() {
           <p className="text-muted-foreground mb-4">
             The requested project could not be found.
           </p>
-          <button 
-            onClick={() => router.push('/')}
-            className="text-primary hover:underline"
-          >
-            Go back to organization selector
-          </button>
         </div>
       </div>
     )

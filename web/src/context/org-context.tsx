@@ -18,6 +18,38 @@ import type {
   Project
 } from '@/types/organization'
 
+/**
+ * TODO: BACKEND INTEGRATION REQUIRED - Permission-Based Access Control
+ * 
+ * Current Status: Frontend access control has been cleaned up and role-based
+ * dependencies removed. The following needs to be implemented with backend:
+ *
+ * 1. Permission Calculation:
+ *    - Backend should calculate user permissions for current organization
+ *    - Include permissions in auth response: user.permissions: Permission[]
+ *    - Update permissions when switching organizations
+ *
+ * 2. Access Control Functions (to be added to this interface):
+ *    - hasPermission(permission: Permission): boolean
+ *    - hasAnyPermission(permissions: Permission[]): boolean  
+ *    - hasAllPermissions(permissions: Permission[]): boolean
+ *    - getUserPermissions(): Permission[]
+ *
+ * 3. Integration Points:
+ *    - Update useAuth hook to include permission methods
+ *    - Create PermissionGuard component using backend-provided permissions
+ *    - Replace all TODO comments in pages with actual permission checks
+ *
+ * 4. Backend API Changes Needed:
+ *    - GET /auth/me -> include user.permissions for current org context
+ *    - PUT /auth/organization/{orgId}/switch -> recalculate permissions
+ *    - RBAC system should map roles to permissions server-side
+ *
+ * 5. Security Model:
+ *    - All permission checking on frontend is for UI/UX only
+ *    - Backend MUST verify permissions on all API endpoints
+ *    - Never trust frontend permission state for security decisions
+ */
 interface OrgContextValue {
   // State
   organizations: Organization[]

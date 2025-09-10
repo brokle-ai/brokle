@@ -5,7 +5,7 @@ export interface User {
   firstName?: string
   lastName?: string
   avatar?: string
-  role: UserRole
+  role: UserRole  // TODO: Backend compatibility only
   organizationId: string
   defaultOrganizationId?: string
   projects: string[]
@@ -14,6 +14,14 @@ export interface User {
   lastLoginAt?: string
   isEmailVerified: boolean
   onboardingCompleted?: boolean
+  
+  // TODO: Add when implementing backend-integrated permission system
+  // permissions?: Permission[]  // User's calculated permissions for current context
+  // organizationMemberships?: Array<{
+  //   organizationId: string
+  //   role: OrganizationRole  // Backend compatibility
+  //   permissions: Permission[]  // Calculated permissions for this org
+  // }>
 }
 
 export interface Organization {
@@ -57,8 +65,9 @@ export interface ApiKey {
   expiresAt?: string
 }
 
+// TODO: These role types are kept for backend compatibility
+// Frontend should use Permission-based access control instead of role checking
 export type UserRole = 'user' | 'admin' | 'super_admin'
-
 export type OrganizationRole = 'owner' | 'admin' | 'developer' | 'viewer'
 
 export type SubscriptionPlan = 'free' | 'pro' | 'business' | 'enterprise'
@@ -76,6 +85,30 @@ export type Permission =
   | 'costs:write'
   | 'settings:read' 
   | 'settings:write'
+  | 'members:read'
+  | 'members:write'
+  | 'members:manage'
+  | 'billing:read'
+  | 'billing:write'
+  | 'projects:read'
+  | 'projects:write'
+  | 'projects:create'
+  | 'projects:delete'
+
+// TODO: Utility types for future permission-based system
+// export type PermissionCategory = 'auth' | 'analytics' | 'models' | 'costs' | 'settings' | 'members' | 'billing' | 'projects'
+// export type PermissionAction = 'read' | 'write' | 'create' | 'delete' | 'manage'
+// 
+// export interface PermissionCheck {
+//   required: Permission | Permission[]
+//   requireAll?: boolean
+// }
+//
+// export interface UserPermissions {
+//   organizationId: string
+//   permissions: Permission[]
+//   lastUpdated: string
+// }
 
 export interface UsageStats {
   requestsThisMonth: number
