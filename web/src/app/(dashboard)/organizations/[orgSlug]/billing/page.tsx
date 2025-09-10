@@ -16,7 +16,10 @@ import {
 import { useOrganization } from '@/context/org-context'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
-import { Breadcrumbs } from '@/components/layout/breadcrumbs'
+import { ContextNavbar } from '@/components/layout/context-navbar'
+import { Search } from '@/components/search'
+import { ThemeSwitch } from '@/components/theme-switch'
+import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -118,7 +121,12 @@ export default function BillingSettingsPage() {
     return (
       <>
         <Header>
-          <Skeleton className="h-8 w-64" />
+          <ContextNavbar />
+          <div className='ml-auto flex items-center space-x-4'>
+            <Search />
+            <ThemeSwitch />
+            <ProfileDropdown />
+          </div>
         </Header>
         <Main className="space-y-6">
           <Skeleton className="h-6 w-96" />
@@ -135,7 +143,12 @@ export default function BillingSettingsPage() {
     return (
       <>
         <Header>
-          <h1 className="text-2xl font-bold text-foreground">Access Denied</h1>
+          <ContextNavbar />
+          <div className='ml-auto flex items-center space-x-4'>
+            <Search />
+            <ThemeSwitch />
+            <ProfileDropdown />
+          </div>
         </Header>
         <Main>
           <div className="text-center py-12">
@@ -197,20 +210,25 @@ export default function BillingSettingsPage() {
   return (
     <>
       <Header>
-        <div className="space-y-2">
-          <Breadcrumbs />
+        <ContextNavbar />
+        <div className='ml-auto flex items-center space-x-4'>
+          <Search />
+          <ThemeSwitch />
+          <ProfileDropdown />
+        </div>
+      </Header>
+
+      <Main className="space-y-8">
+        {/* Page Header */}
+        <div className="mb-2 flex items-center justify-between space-y-2">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">
-              Billing & Subscription
-            </h1>
+            <h1 className="text-2xl font-bold tracking-tight">Billing & Subscription</h1>
             <p className="text-muted-foreground">
               Manage your subscription and billing details for {currentOrganization.name}
             </p>
           </div>
         </div>
-      </Header>
-
-      <Main className="space-y-8">
+        
         {/* Current Plan & Usage */}
         <div className="grid gap-6 md:grid-cols-2">
           {/* Current Plan */}

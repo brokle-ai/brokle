@@ -11,7 +11,6 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
-import { TopNav } from '@/components/layout/top-nav'
 import { ContextNavbar } from '@/components/layout/context-navbar'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
@@ -191,11 +190,3 @@ export function AnalyticsView() {
   )
 }
 
-const topNav = [
-  {
-    title: 'Analytics',
-    href: '#',
-    isActive: true,
-    disabled: false,
-  },
-]

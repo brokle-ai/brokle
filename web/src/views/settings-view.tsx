@@ -11,7 +11,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
-import { TopNav } from '@/components/layout/top-nav'
+import { ContextNavbar } from '@/components/layout/context-navbar'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
@@ -21,7 +21,7 @@ export function SettingsView() {
     <>
       {/* ===== Top Heading ===== */}
       <Header>
-        <TopNav links={topNav} />
+        <ContextNavbar />
         <div className='ml-auto flex items-center space-x-4'>
           <Search />
           <ThemeSwitch />
@@ -146,11 +146,3 @@ export function SettingsView() {
   )
 }
 
-const topNav = [
-  {
-    title: 'Settings',
-    href: '#',
-    isActive: true,
-    disabled: false,
-  },
-]

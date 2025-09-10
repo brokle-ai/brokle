@@ -5,7 +5,10 @@ import { useOrganization } from '@/context/org-context'
 import { MemberManagement } from '@/components/organization/member-management'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
-import { Breadcrumbs } from '@/components/layout/breadcrumbs'
+import { ContextNavbar } from '@/components/layout/context-navbar'
+import { Search } from '@/components/search'
+import { ThemeSwitch } from '@/components/theme-switch'
+import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { OrganizationParams } from '@/types/organization'
 
@@ -24,7 +27,12 @@ export default function MembersSettingsPage() {
     return (
       <>
         <Header>
-          <Skeleton className="h-8 w-64" />
+          <ContextNavbar />
+          <div className='ml-auto flex items-center space-x-4'>
+            <Search />
+            <ThemeSwitch />
+            <ProfileDropdown />
+          </div>
         </Header>
         <Main className="space-y-6">
           <Skeleton className="h-6 w-96" />
@@ -42,7 +50,12 @@ export default function MembersSettingsPage() {
     return (
       <>
         <Header>
-          <h1 className="text-2xl font-bold text-foreground">Organization Not Found</h1>
+          <ContextNavbar />
+          <div className='ml-auto flex items-center space-x-4'>
+            <Search />
+            <ThemeSwitch />
+            <ProfileDropdown />
+          </div>
         </Header>
         <Main>
           <div className="text-center py-12">
@@ -59,20 +72,22 @@ export default function MembersSettingsPage() {
   return (
     <>
       <Header>
-        <div className="space-y-2">
-          <Breadcrumbs />
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">
-              Member Management
-            </h1>
-            <p className="text-muted-foreground">
-              Manage team members and their permissions for {currentOrganization.name}
-            </p>
-          </div>
+        <ContextNavbar />
+        <div className='ml-auto flex items-center space-x-4'>
+          <Search />
+          <ThemeSwitch />
+          <ProfileDropdown />
         </div>
       </Header>
 
       <Main>
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold tracking-tight">Member Management</h1>
+          <p className="text-muted-foreground">
+            Manage team members and their permissions for {currentOrganization.name}
+          </p>
+        </div>
+        
         <MemberManagement />
       </Main>
     </>
