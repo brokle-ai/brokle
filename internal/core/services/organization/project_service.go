@@ -2,81 +2,73 @@ package organization
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"time"
 
-	"brokle/internal/core/domain/auth"
-	"brokle/internal/core/domain/organization"
+	orgDomain "brokle/internal/core/domain/organization"
 	"brokle/pkg/ulid"
+	appErrors "brokle/pkg/errors"
 )
 
-// projectService implements the organization.ProjectService interface
+// projectService implements the orgDomain.ProjectService interface
 type projectService struct {
-	projectRepo organization.ProjectRepository
-	orgRepo     organization.OrganizationRepository
-	memberRepo  organization.MemberRepository
-	auditRepo   auth.AuditLogRepository
+	projectRepo orgDomain.ProjectRepository
+	orgRepo     orgDomain.OrganizationRepository
+	memberRepo  orgDomain.MemberRepository
 }
 
 // NewProjectService creates a new project service instance
 func NewProjectService(
-	projectRepo organization.ProjectRepository,
-	orgRepo organization.OrganizationRepository,
-	memberRepo organization.MemberRepository,
-	auditRepo auth.AuditLogRepository,
-) organization.ProjectService {
+	projectRepo orgDomain.ProjectRepository,
+	orgRepo orgDomain.OrganizationRepository,
+	memberRepo orgDomain.MemberRepository,
+) orgDomain.ProjectService {
 	return &projectService{
 		projectRepo: projectRepo,
 		orgRepo:     orgRepo,
 		memberRepo:  memberRepo,
-		auditRepo:   auditRepo,
 	}
 }
 
 // CreateProject creates a new project in an organization
-func (s *projectService) CreateProject(ctx context.Context, orgID ulid.ULID, req *organization.CreateProjectRequest) (*organization.Project, error) {
+func (s *projectService) CreateProject(ctx context.Context, orgID ulid.ULID, req *orgDomain.CreateProjectRequest) (*orgDomain.Project, error) {
 	// Verify organization exists
 	_, err := s.orgRepo.GetByID(ctx, orgID)
 	if err != nil {
-		return nil, fmt.Errorf("organization not found: %w", err)
+		return nil, appErrors.NewNotFoundError("Organization not found")
 	}
 
 	// Check if project with slug already exists in organization
 	existing, _ := s.projectRepo.GetBySlug(ctx, orgID, req.Slug)
 	if existing != nil {
-		return nil, errors.New("project with this slug already exists in organization")
+		return nil, appErrors.NewConflictError("Project with this slug already exists in organization")
 	}
 
 	// Create project
-	project := organization.NewProject(orgID, req.Name, req.Slug, req.Description)
+	project := orgDomain.NewProject(orgID, req.Name, req.Slug, req.Description)
 	err = s.projectRepo.Create(ctx, project)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create project: %w", err)
+		return nil, appErrors.NewInternalError("Failed to create project", err)
 	}
 
-	// Audit log
-	s.auditRepo.Create(ctx, auth.NewAuditLog(nil, &orgID, "project.created", "project", project.ID.String(),
-		fmt.Sprintf(`{"name": "%s", "slug": "%s"}`, project.Name, project.Slug), "", ""))
 
 	return project, nil
 }
 
 // GetProject retrieves a project by ID
-func (s *projectService) GetProject(ctx context.Context, projectID ulid.ULID) (*organization.Project, error) {
+func (s *projectService) GetProject(ctx context.Context, projectID ulid.ULID) (*orgDomain.Project, error) {
 	return s.projectRepo.GetByID(ctx, projectID)
 }
 
 // GetProjectBySlug retrieves a project by organization and slug
-func (s *projectService) GetProjectBySlug(ctx context.Context, orgID ulid.ULID, slug string) (*organization.Project, error) {
+func (s *projectService) GetProjectBySlug(ctx context.Context, orgID ulid.ULID, slug string) (*orgDomain.Project, error) {
 	return s.projectRepo.GetBySlug(ctx, orgID, slug)
 }
 
 // UpdateProject updates project details
-func (s *projectService) UpdateProject(ctx context.Context, projectID ulid.ULID, req *organization.UpdateProjectRequest) error {
+func (s *projectService) UpdateProject(ctx context.Context, projectID ulid.ULID, req *orgDomain.UpdateProjectRequest) error {
 	project, err := s.projectRepo.GetByID(ctx, projectID)
 	if err != nil {
-		return fmt.Errorf("project not found: %w", err)
+		return appErrors.NewNotFoundError("Project not found")
 	}
 
 	// Update fields if provided
@@ -91,36 +83,32 @@ func (s *projectService) UpdateProject(ctx context.Context, projectID ulid.ULID,
 
 	err = s.projectRepo.Update(ctx, project)
 	if err != nil {
-		return fmt.Errorf("failed to update project: %w", err)
+		return appErrors.NewInternalError("Failed to update project", err)
 	}
 
-	// Audit log
-	s.auditRepo.Create(ctx, auth.NewAuditLog(nil, &project.OrganizationID, "project.updated", "project", projectID.String(), "", "", ""))
 
 	return nil
 }
 
 // DeleteProject soft deletes a project
 func (s *projectService) DeleteProject(ctx context.Context, projectID ulid.ULID) error {
-	project, err := s.projectRepo.GetByID(ctx, projectID)
+	// Verify project exists before deletion
+	_, err := s.projectRepo.GetByID(ctx, projectID)
 	if err != nil {
-		return fmt.Errorf("project not found: %w", err)
+		return appErrors.NewNotFoundError("Project not found")
 	}
 
 	err = s.projectRepo.Delete(ctx, projectID)
 	if err != nil {
-		return fmt.Errorf("failed to delete project: %w", err)
+		return appErrors.NewInternalError("Failed to delete project", err)
 	}
 
-	// Audit log
-	s.auditRepo.Create(ctx, auth.NewAuditLog(nil, &project.OrganizationID, "project.deleted", "project", projectID.String(),
-		fmt.Sprintf(`{"name": "%s"}`, project.Name), "", ""))
 
 	return nil
 }
 
 // GetProjectsByOrganization retrieves all projects for an organization
-func (s *projectService) GetProjectsByOrganization(ctx context.Context, orgID ulid.ULID) ([]*organization.Project, error) {
+func (s *projectService) GetProjectsByOrganization(ctx context.Context, orgID ulid.ULID) ([]*orgDomain.Project, error) {
 	return s.projectRepo.GetByOrganizationID(ctx, orgID)
 }
 
@@ -128,7 +116,7 @@ func (s *projectService) GetProjectsByOrganization(ctx context.Context, orgID ul
 func (s *projectService) GetProjectCount(ctx context.Context, orgID ulid.ULID) (int, error) {
 	projects, err := s.projectRepo.GetByOrganizationID(ctx, orgID)
 	if err != nil {
-		return 0, fmt.Errorf("failed to get projects: %w", err)
+		return 0, appErrors.NewInternalError("Failed to get projects", err)
 	}
 	return len(projects), nil
 }
@@ -138,7 +126,7 @@ func (s *projectService) CanUserAccessProject(ctx context.Context, userID, proje
 	// Get project to find organization
 	project, err := s.projectRepo.GetByID(ctx, projectID)
 	if err != nil {
-		return false, fmt.Errorf("project not found: %w", err)
+		return false, appErrors.NewNotFoundError("Project not found")
 	}
 
 	// Check if user is a member of the organization
@@ -152,7 +140,7 @@ func (s *projectService) ValidateProjectAccess(ctx context.Context, userID, proj
 		return err
 	}
 	if !canAccess {
-		return errors.New("user does not have access to this project")
+		return appErrors.NewForbiddenError("User does not have access to this project")
 	}
 	return nil
 }
