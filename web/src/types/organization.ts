@@ -88,8 +88,9 @@ export interface OrganizationContext {
   createProject: (data: CreateProjectData) => Promise<Project>
 
   // Utils
-  hasAccess: (orgSlug: string, projectSlug?: string) => boolean
-  getUserRole: (orgSlug: string) => OrganizationRole | null
+  // TODO: Remove deprecated access control functions - replaced with backend permissions
+  // hasAccess: (orgSlug: string, projectSlug?: string) => boolean
+  // getUserRole: (orgSlug: string) => OrganizationRole | null
   getProjectsByOrg: (orgSlug: string) => Project[]
 }
 

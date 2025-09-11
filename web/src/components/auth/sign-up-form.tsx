@@ -72,8 +72,8 @@ export function SignUpForm({ className, ...props }: SignUpFormProps) {
 
       setIsRedirecting(true)
 
-      // Get redirect URL from search params or default to dashboard
-      const redirectUrl = searchParams.get('redirect') || '/dashboard'
+      // Get redirect URL from search params or default to root
+      const redirectUrl = searchParams.get('redirect') || '/'
       
       // Use full page refresh to ensure middleware sees the new cookies
       // This is the most reliable way to handle post-signup navigation

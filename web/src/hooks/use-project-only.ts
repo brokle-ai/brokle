@@ -5,7 +5,7 @@
  * state and actions, with minimal organization context.
  */
 
-import { useOrganization } from '@/context/organization-context'
+import { useOrganization } from '@/context/org-context'
 import type { 
   Organization, 
   Project, 

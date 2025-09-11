@@ -1,19 +1,11 @@
-// Main guards
+// Authentication guards - simple auth verification only
 export { 
   AuthGuard,
-  AdminGuard,
-  OwnerGuard,
-  DeveloperGuard,
   VerifiedGuard,
 } from './auth-guard'
 
-export {
-  RoleGuard,
-  OwnerOnly,
-  AdminOnly,
-  DeveloperOnly,
-  ViewerOnly,
-} from './role-guard'
+// TODO: Role-based guards removed - implement PermissionGuard with backend integration
+// Future: export { PermissionGuard } from './permission-guard'
 
 // Fallback components
 export { LoadingSpinner, PageLoadingSpinner } from './loading-spinner'

@@ -5,14 +5,13 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { QuestionCard } from '@/components/onboarding'
 import { useAuth } from '@/context/auth-context'
-import { useOrganization } from '@/context/organization-context'
 import { getQuestions, submitResponse, skipQuestion } from '@/lib/api'
+import { buildOrgUrl } from '@/lib/utils/slug-utils'
 import type { OnboardingQuestion } from '@/types/onboarding'
 
 export default function OnboardingPage() {
   const router = useRouter()
   const { user } = useAuth()
-  const { organizations } = useOrganization()
   
   // Simplified onboarding state
   const [questions, setQuestions] = useState<OnboardingQuestion[]>([])
@@ -37,12 +36,8 @@ export default function OnboardingPage() {
       // If all questions are answered/skipped, redirect to main app
       const allCompleted = questionsData.every(q => q.user_answer || q.is_skipped)
       if (allCompleted && questionsData.length > 0) {
-        // Redirect to main app instead of showing organization creation
-        if (organizations.length > 0) {
-          router.push(`/${organizations[0].slug}`)
-        } else {
-          router.push('/')
-        }
+        // Redirect to root page after onboarding completion
+        router.push('/')
         return
       }
       

@@ -9,7 +9,6 @@ import { ThemeProvider } from "@/context/theme-context";
 import { SearchProvider } from "@/context/search-context";
 import { DirectionProvider } from "@/context/direction-context";
 import { AuthProvider } from '@/context/auth-context'
-import { OrganizationProvider } from '@/context/organization-context'
 import { ErrorBoundary } from './error-boundary'
 import type { User } from '@/types/auth'
 
@@ -51,14 +50,12 @@ export function ClientProviders({ children, serverUser }: ClientProvidersProps) 
         <DirectionProvider>
           <ThemeProvider>
             <AuthProvider serverUser={serverUser}>
-              <OrganizationProvider>
-                <SearchProvider>
-                  <NavigationProgress />
-                  <Toaster duration={5000} />
-                  {children}
-                  <ReactQueryDevtools initialIsOpen={false} />
-                </SearchProvider>
-              </OrganizationProvider>
+              <SearchProvider>
+                <NavigationProgress />
+                <Toaster duration={5000} />
+                {children}
+                <ReactQueryDevtools initialIsOpen={false} />
+              </SearchProvider>
             </AuthProvider>
           </ThemeProvider>
         </DirectionProvider>

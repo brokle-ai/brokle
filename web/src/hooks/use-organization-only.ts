@@ -5,8 +5,8 @@
  * state and actions, without the complexity of project management.
  */
 
-import { useOrganization } from '@/context/organization-context'
-import type { Organization, CreateOrganizationData, OrganizationRole } from '@/types/organization'
+import { useOrganization } from '@/context/org-context'
+import type { Organization, CreateOrganizationData } from '@/types/organization'
 
 export interface OrganizationOnlyContext {
   // State
@@ -19,9 +19,9 @@ export interface OrganizationOnlyContext {
   switchOrganization: (orgSlug: string) => Promise<void>
   createOrganization: (data: CreateOrganizationData) => Promise<Organization>
 
-  // Utilities
-  hasAccess: (orgSlug: string) => boolean
-  getUserRole: (orgSlug: string) => OrganizationRole | null
+  // TODO: Remove - access control will be implemented with backend integration
+  // hasAccess: (orgSlug: string) => boolean
+  // getUserRole: (orgSlug: string) => OrganizationRole | null
 
   // Computed Properties
   hasOrganization: boolean
@@ -80,19 +80,16 @@ export function useOrganizationOnly(): OrganizationOnlyContext {
     switchOrganization: context.switchOrganization,
     createOrganization: context.createOrganization,
 
-    // Utilities (organization-focused)
-    hasAccess: (orgSlug: string) => context.hasAccess(orgSlug),
-    getUserRole: context.getUserRole,
+    // TODO: Add utilities when implementing backend-integrated access control
+    // hasAccess: (orgSlug: string) => context.hasAccess(orgSlug),
+    // getUserRole: context.getUserRole,
 
     // Computed Properties
     hasOrganization: context.currentOrganization !== null,
     organizationCount: context.organizations.length,
-    isOwner: context.currentOrganization 
-      ? context.getUserRole(context.currentOrganization.slug) === 'owner'
-      : false,
-    isAdmin: context.currentOrganization
-      ? ['owner', 'admin'].includes(context.getUserRole(context.currentOrganization.slug) || '')
-      : false,
+    // TODO: Remove role-based properties, replace with permission-based access
+    isOwner: false, // Will be replaced with permission checking
+    isAdmin: false, // Will be replaced with permission checking
     canCreateOrganization: true, // User can always create organizations
   }
 }

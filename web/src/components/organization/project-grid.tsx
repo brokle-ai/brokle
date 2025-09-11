@@ -18,7 +18,7 @@ import {
   CheckSquare,
   Square
 } from 'lucide-react'
-import { useOrganization } from '@/context/organization-context'
+import { useOrganization } from '@/context/org-context'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -40,6 +40,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { CreateProjectModal } from './create-project-modal'
 import { BulkActionsBar } from './bulk-actions-bar'
+import { buildProjectUrl } from '@/lib/utils/slug-utils'
 import { cn } from '@/lib/utils'
 import type { Project, ProjectStatus, ProjectEnvironment } from '@/types/organization'
 
@@ -50,7 +51,7 @@ interface ProjectGridProps {
 
 export function ProjectGrid({ className, showCreateButton = true }: ProjectGridProps) {
   const router = useRouter()
-  const { currentOrganization, projects } = useOrganization()
+  const { currentOrganization, projects, isLoadingProjects } = useOrganization()
   
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<ProjectStatus | 'all'>('all')
@@ -60,7 +61,9 @@ export function ProjectGrid({ className, showCreateButton = true }: ProjectGridP
   const [bulkSelectMode, setBulkSelectMode] = useState(false)
 
   const filteredAndSortedProjects = useMemo(() => {
-    const filtered = projects.filter(project => {
+    // Ensure projects is always an array
+    const safeProjects = projects || []
+    const filtered = safeProjects.filter(project => {
       const matchesSearch = project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            project.description?.toLowerCase().includes(searchTerm.toLowerCase())
       const matchesStatus = statusFilter === 'all' || project.status === statusFilter
@@ -121,9 +124,8 @@ export function ProjectGrid({ className, showCreateButton = true }: ProjectGridP
   }
 
   const handleProjectClick = (project: Project) => {
-    if (currentOrganization) {
-      router.push(`/${currentOrganization.slug}/${project.slug}`)
-    }
+    const projectUrl = buildProjectUrl(project.name, project.id)
+    router.push(projectUrl)
   }
 
   const handleProjectAction = (action: string, project: Project) => {

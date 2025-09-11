@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, Building2, Loader2 } from 'lucide-react'
-import { useOrganization } from '@/context/organization-context'
+import { useOrganization } from '@/context/org-context'
 import {
   Dialog,
   DialogContent,
@@ -19,7 +19,6 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
-import { generateSlug, isValidSlug } from '@/lib/utils/slug-utils'
 
 interface CreateOrganizationModalProps {
   trigger?: React.ReactNode
@@ -34,36 +33,17 @@ export function CreateOrganizationModal({ trigger, onSuccess }: CreateOrganizati
   const [isLoading, setIsLoading] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
-    slug: '',
     billing_email: '',
     plan: 'free' as const,
   })
-  const [slugTouched, setSlugTouched] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
-  const existingSlugs = organizations.map(org => org.slug)
-
   const handleNameChange = (name: string) => {
-    setFormData(prev => ({
-      ...prev,
-      name,
-      // Auto-generate slug if user hasn't manually edited it
-      ...(slugTouched ? {} : { slug: generateSlug(name) })
-    }))
+    setFormData(prev => ({ ...prev, name }))
     
     // Clear name error
     if (errors.name) {
       setErrors(prev => ({ ...prev, name: '' }))
-    }
-  }
-
-  const handleSlugChange = (slug: string) => {
-    setSlugTouched(true)
-    setFormData(prev => ({ ...prev, slug }))
-    
-    // Clear slug error
-    if (errors.slug) {
-      setErrors(prev => ({ ...prev, slug: '' }))
     }
   }
 
@@ -72,14 +52,6 @@ export function CreateOrganizationModal({ trigger, onSuccess }: CreateOrganizati
 
     if (!formData.name.trim()) {
       newErrors.name = 'Organization name is required'
-    }
-
-    if (!formData.slug.trim()) {
-      newErrors.slug = 'Organization slug is required'
-    } else if (!isValidSlug(formData.slug)) {
-      newErrors.slug = 'Slug can only contain lowercase letters, numbers, and hyphens'
-    } else if (existingSlugs.includes(formData.slug)) {
-      newErrors.slug = 'This slug is already taken'
     }
 
     if (!formData.billing_email.trim()) {
@@ -109,11 +81,9 @@ export function CreateOrganizationModal({ trigger, onSuccess }: CreateOrganizati
       // Reset form
       setFormData({
         name: '',
-        slug: '',
         billing_email: '',
         plan: 'free',
       })
-      setSlugTouched(false)
       setErrors({})
       setIsOpen(false)
 
@@ -172,25 +142,6 @@ export function CreateOrganizationModal({ trigger, onSuccess }: CreateOrganizati
             )}
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="slug">URL Slug *</Label>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">brokle.com/</span>
-              <Input
-                id="slug"
-                value={formData.slug}
-                onChange={(e) => handleSlugChange(e.target.value)}
-                placeholder="acme-corp"
-                className={errors.slug ? 'border-destructive' : ''}
-              />
-            </div>
-            {errors.slug && (
-              <p className="text-sm text-destructive">{errors.slug}</p>
-            )}
-            <p className="text-xs text-muted-foreground">
-              This will be used in your organization's URL. Only lowercase letters, numbers, and hyphens are allowed.
-            </p>
-          </div>
 
           <div className="space-y-2">
             <Label htmlFor="billing_email">Billing Email *</Label>

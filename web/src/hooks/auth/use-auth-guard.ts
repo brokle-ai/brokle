@@ -3,59 +3,47 @@
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from './use-auth'
-import type { OrganizationRole } from '@/types/auth'
 
 interface UseAuthGuardOptions {
   redirectTo?: string
-  requiredRole?: OrganizationRole
   requireEmailVerification?: boolean
   onUnauthorized?: () => void
-  onForbidden?: () => void
 }
 
 interface UseAuthGuardReturn {
   isAuthorized: boolean
   isLoading: boolean
-  hasRequiredRole: boolean
   isEmailVerified: boolean
 }
 
+/**
+ * useAuthGuard - Simple authentication verification hook
+ * 
+ * Only handles basic authentication (login) and email verification.
+ * No role-based logic - permissions will be handled by backend.
+ */
 export function useAuthGuard(options: UseAuthGuardOptions = {}): UseAuthGuardReturn {
   const {
     redirectTo = '/auth/signin',
-    requiredRole,
     requireEmailVerification = false,
     onUnauthorized,
-    onForbidden,
   } = options
 
   const { 
-    isAuthenticated, 
-    isLoading, 
     user, 
-    organization 
+    isLoading
   } = useAuth()
   
   const router = useRouter()
-
-  // Check if user has required role
-  const hasRequiredRole = !requiredRole || (
-    user && 
-    organization &&
-    organization.members.some(
-      member => member.userId === user.id && 
-      (member.role === requiredRole || 
-       member.role === 'owner' || // Owner has all permissions
-       (requiredRole === 'viewer' && ['admin', 'developer'].includes(member.role)) ||
-       (requiredRole === 'developer' && member.role === 'admin'))
-    )
-  )
+  
+  // User is authenticated if we have a user object
+  const isAuthenticated = !!user
 
   // Check email verification status
   const isEmailVerified = !requireEmailVerification || (user?.isEmailVerified ?? false)
 
-  // Determine if user is authorized
-  const isAuthorized = isAuthenticated && hasRequiredRole && isEmailVerified
+  // Determine if user is authorized (authenticated and optionally email verified)
+  const isAuthorized = isAuthenticated && isEmailVerified
 
   useEffect(() => {
     // Don't redirect while loading
@@ -64,7 +52,7 @@ export function useAuthGuard(options: UseAuthGuardOptions = {}): UseAuthGuardRet
       return
     }
 
-    console.log('[AuthGuard] Auth check:', { isAuthenticated, isLoading, hasRequiredRole, isEmailVerified })
+    console.log('[AuthGuard] Auth check:', { isAuthenticated, isLoading, isEmailVerified })
 
     // Handle unauthenticated users
     if (!isAuthenticated) {
@@ -80,37 +68,25 @@ export function useAuthGuard(options: UseAuthGuardOptions = {}): UseAuthGuardRet
       return
     }
 
-    // Handle insufficient permissions
-    if (!hasRequiredRole) {
-      if (onForbidden) {
-        onForbidden()
-      } else {
-        // Redirect to login with return URL for production-ready handling
-        router.push(`/auth/signin?returnUrl=${encodeURIComponent(window.location.pathname)}`)
-      }
-      return
-    }
-
     // Handle unverified email
     if (requireEmailVerification && !isEmailVerified) {
+      console.log('[AuthGuard] Email verification required, redirecting')
       router.push('/auth/verify-email')
       return
     }
   }, [
     isLoading,
     isAuthenticated,
-    hasRequiredRole,
     isEmailVerified,
     redirectTo,
     onUnauthorized,
-    onForbidden,
     router,
+    requireEmailVerification
   ])
 
   return {
     isAuthorized,
     isLoading,
-    hasRequiredRole,
     isEmailVerified,
   }
 }

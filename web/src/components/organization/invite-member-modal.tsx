@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { UserPlus, Mail, Loader2, Copy, Check } from 'lucide-react'
-import { useOrganization } from '@/context/organization-context'
+import { useOrganization } from '@/context/org-context'
 import {
   Dialog,
   DialogContent,

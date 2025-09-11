@@ -1,5 +1,4 @@
 import axios, { AxiosInstance, AxiosResponse } from 'axios'
-import { getTokenManager } from '@/lib/auth/token-manager'
 import { urlContextManager } from '@/lib/context/url-context-manager'
 import type { 
   BrokleClientConfig,
@@ -14,7 +13,6 @@ import { BrokleAPIError as APIError } from './types'
 
 export class BrokleAPIClient {
   protected axiosInstance: AxiosInstance
-  private tokenManager = getTokenManager()
   private isRefreshing = false
   private refreshPromise: Promise<string | null> | null = null
 
@@ -152,7 +150,7 @@ export class BrokleAPIClient {
         config.headers = config.headers || {}
 
         // Add Bearer token for authenticated requests
-        const token = await this.tokenManager.getValidAccessToken()
+        const token = this.getAccessToken()
         if (token) {
           config.headers.Authorization = `Bearer ${token}`
         }
@@ -278,7 +276,7 @@ export class BrokleAPIClient {
             // Prevent multiple refresh attempts
             if (!this.isRefreshing) {
               this.isRefreshing = true
-              this.refreshPromise = this.tokenManager.refreshAccessToken()
+              this.refreshPromise = this.refreshAccessToken()
             }
 
             const newToken = await this.refreshPromise
@@ -291,7 +289,7 @@ export class BrokleAPIClient {
             }
           } catch (refreshError) {
             // Refresh failed, clear tokens and redirect to login
-            this.tokenManager.clearTokens()
+            this.clearTokens()
             
             // Broadcast session expired
             if (typeof window !== 'undefined') {
@@ -548,6 +546,53 @@ export class BrokleAPIClient {
     return this.axiosInstance.defaults.baseURL || ''
   }
 
+  // Simple token management methods
+  private getAccessToken(): string | null {
+    if (typeof window === 'undefined') return null
+    return localStorage.getItem('access_token')
+  }
+
+  private getRefreshToken(): string | null {
+    if (typeof window === 'undefined') return null
+    return localStorage.getItem('refresh_token')
+  }
+
+  private clearTokens(): void {
+    if (typeof window === 'undefined') return
+    localStorage.removeItem('access_token')
+    localStorage.removeItem('refresh_token')
+    localStorage.removeItem('expires_at')
+    document.cookie = 'access_token=; path=/; max-age=0'
+  }
+
+  private async refreshAccessToken(): Promise<string | null> {
+    const refreshToken = this.getRefreshToken()
+    if (!refreshToken) {
+      throw new Error('No refresh token available')
+    }
+
+    try {
+      const response = await this.axiosInstance.post('/v1/auth/refresh', {
+        refresh_token: refreshToken
+      }, { skipAuth: true } as any)
+
+      const { access_token, refresh_token: newRefreshToken, expires_in } = response.data.data
+      
+      // Store new tokens
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('access_token', access_token)
+        localStorage.setItem('refresh_token', newRefreshToken)
+        localStorage.setItem('expires_at', String(Date.now() + expires_in * 1000))
+        document.cookie = `access_token=${access_token}; path=/; max-age=${expires_in}; SameSite=Strict`
+      }
+
+      return access_token
+    } catch (error) {
+      console.error('Token refresh failed:', error)
+      throw error
+    }
+  }
+
   // Development helper
   debug(): void {
     if (process.env.NODE_ENV !== 'development') return
@@ -560,7 +605,7 @@ export class BrokleAPIClient {
       retries: this.config.retries,
       retryDelay: this.config.retryDelay
     })
-    console.log('Token Manager:', this.tokenManager)
+    console.log('Has Access Token:', !!this.getAccessToken())
     console.groupEnd()
   }
 }
