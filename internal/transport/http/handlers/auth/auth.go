@@ -71,7 +71,7 @@ func (h *Handler) Login(c *gin.Context) {
 	loginResp, err := h.authService.Login(c.Request.Context(), authReq)
 	if err != nil {
 		h.logger.WithError(err).WithField("email", req.Email).Error("Login failed")
-		response.Unauthorized(c, "Invalid credentials")
+		response.Error(c, err)
 		return
 	}
 
@@ -124,7 +124,7 @@ func (h *Handler) Signup(c *gin.Context) {
 	loginResp, err := h.authService.Register(c.Request.Context(), authReq)
 	if err != nil {
 		h.logger.WithError(err).WithField("email", req.Email).Error("Registration failed")
-		response.Conflict(c, "Registration failed")
+		response.Error(c, err)
 		return
 	}
 
@@ -167,7 +167,7 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 	loginResp, err := h.authService.RefreshToken(c.Request.Context(), authReq)
 	if err != nil {
 		h.logger.WithError(err).Error("Token refresh failed")
-		response.Unauthorized(c, "Invalid refresh token")
+		response.Error(c, err)
 		return
 	}
 

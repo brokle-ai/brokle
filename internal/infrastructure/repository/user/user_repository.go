@@ -2,7 +2,7 @@ package user
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"time"
 
 	"gorm.io/gorm"
@@ -33,10 +33,10 @@ func (r *userRepository) GetByID(ctx context.Context, id ulid.ULID) (*user.User,
 	var u user.User
 	err := r.db.WithContext(ctx).Where("id = ? AND deleted_at IS NULL", id).First(&u).Error
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("user not found")
+		if err == gorm.ErrRecordNotFound {
+			return nil, fmt.Errorf("get user by ID %s: %w", id, user.ErrNotFound)
 		}
-		return nil, err
+		return nil, fmt.Errorf("database query failed for user ID %s: %w", id, err)
 	}
 	return &u, nil
 }
@@ -46,10 +46,10 @@ func (r *userRepository) GetByEmail(ctx context.Context, email string) (*user.Us
 	var u user.User
 	err := r.db.WithContext(ctx).Where("email = ? AND deleted_at IS NULL", email).First(&u).Error
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("user not found")
+		if err == gorm.ErrRecordNotFound {
+			return nil, fmt.Errorf("get user by email %s: %w", email, user.ErrNotFound)
 		}
-		return nil, err
+		return nil, fmt.Errorf("database query failed for email %s: %w", email, err)
 	}
 	return &u, nil
 }
@@ -59,10 +59,10 @@ func (r *userRepository) GetByEmailWithPassword(ctx context.Context, email strin
 	var u user.User
 	err := r.db.WithContext(ctx).Select("*").Where("email = ? AND deleted_at IS NULL", email).First(&u).Error
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("user not found")
+		if err == gorm.ErrRecordNotFound {
+			return nil, fmt.Errorf("get user by email with password %s: %w", email, user.ErrNotFound)
 		}
-		return nil, err
+		return nil, fmt.Errorf("database query failed for email with password %s: %w", email, err)
 	}
 	return &u, nil
 }
@@ -342,10 +342,10 @@ func (r *userRepository) GetProfile(ctx context.Context, userID ulid.ULID) (*use
 	var profile user.UserProfile
 	err := r.db.WithContext(ctx).Where("user_id = ?", userID).First(&profile).Error
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("profile not found")
+		if err == gorm.ErrRecordNotFound {
+			return nil, fmt.Errorf("get profile for user %s: %w", userID, user.ErrNotFound)
 		}
-		return nil, err
+		return nil, fmt.Errorf("database query failed for profile %s: %w", userID, err)
 	}
 	return &profile, nil
 }
@@ -460,10 +460,10 @@ func (r *userRepository) GetOnboardingQuestionByID(ctx context.Context, id ulid.
 	var question user.OnboardingQuestion
 	err := r.db.WithContext(ctx).Where("id = ?", id).First(&question).Error
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("onboarding question not found")
+		if err == gorm.ErrRecordNotFound {
+			return nil, fmt.Errorf("get onboarding question %s: %w", id, user.ErrNotFound)
 		}
-		return nil, err
+		return nil, fmt.Errorf("database query failed for onboarding question %s: %w", id, err)
 	}
 	return &question, nil
 }
@@ -488,10 +488,10 @@ func (r *userRepository) GetNextUnansweredQuestion(ctx context.Context, userID u
 		First(&question).Error
 	
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("no unanswered questions found")
+		if err == gorm.ErrRecordNotFound {
+			return nil, fmt.Errorf("get next unanswered question for user %s: %w", userID, user.ErrNotFound)
 		}
-		return nil, err
+		return nil, fmt.Errorf("database query failed for next unanswered question %s: %w", userID, err)
 	}
 	
 	return &question, nil
@@ -530,10 +530,10 @@ func (r *userRepository) GetUserOnboardingResponse(ctx context.Context, userID, 
 	var response user.UserOnboardingResponse
 	err := r.db.WithContext(ctx).Where("user_id = ? AND question_id = ?", userID, questionID).First(&response).Error
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("onboarding response not found")
+		if err == gorm.ErrRecordNotFound {
+			return nil, fmt.Errorf("get onboarding response for user %s question %s: %w", userID, questionID, user.ErrNotFound)
 		}
-		return nil, err
+		return nil, fmt.Errorf("database query failed for onboarding response %s %s: %w", userID, questionID, err)
 	}
 	return &response, nil
 }

@@ -329,23 +329,50 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 ```
 
 ### Error Handling
-Use structured errors throughout:
 
+**📖 CRITICAL**: Use the comprehensive **[Industrial Error Handling Guide](INDUSTRIAL_ERROR_HANDLING_GUIDE.md)** for all error handling implementations.
+
+The platform follows **industrial Go best practices** with structured error handling:
+
+**Clean Architecture Error Flow:**
+```
+Repository (Domain Errors) → Service (AppErrors) → Handler (HTTP Response)
+```
+
+**Core Principles:**
+- **Repository Layer**: Domain errors with proper wrapping
+- **Service Layer**: AppError constructors (NewUnauthorizedError, NewNotFoundError, etc.)
+- **Handler Layer**: Centralized `response.Error(c, err)` handling
+- **Decorator Pattern**: Cross-cutting concerns (audit, logging) handled separately
+- **Zero Logging**: Core services focus on pure business logic
+
+**Example Implementation:**
 ```go
-import "github.com/pkg/errors"
-
-// Service layer
-if err != nil {
-    return errors.Wrap(err, "failed to create user")
+// Repository layer - Domain errors
+if errors.Is(err, gorm.ErrRecordNotFound) {
+    return nil, fmt.Errorf("get user by email %s: %w", email, user.ErrNotFound)
 }
 
-// Handler layer
+// Service layer - AppError constructors  
+if errors.Is(err, user.ErrNotFound) {
+    return nil, appErrors.NewUnauthorizedError("Invalid email or password")
+}
+
+// Handler layer - Centralized error handling
+resp, err := h.authService.Login(ctx, req)
 if err != nil {
-    http.Error(w, "Internal server error", http.StatusInternalServerError)
-    log.Error("create user failed", "error", err)
+    response.Error(c, err) // Automatic HTTP status mapping
     return
 }
+response.Success(c, resp)
 ```
+
+**Key Requirements:**
+- ❌ **No fmt.Errorf/errors.New** in services - use AppError constructors
+- ❌ **No logging** in core services - use decorator pattern  
+- ✅ **Domain error mapping** at repository layer
+- ✅ **Structured AppErrors** at service layer
+- ✅ **Clean separation** of business logic and cross-cutting concerns
 
 ### Logging
 Use structured logging with correlation IDs:
@@ -640,6 +667,15 @@ The app uses a centralized DI container in `internal/app/app.go`:
 - Initializes databases → repositories → services → handlers
 - Graceful shutdown handling
 - Health check aggregation
+
+### Industrial Error Handling Pattern
+**📖 See [INDUSTRIAL_ERROR_HANDLING_GUIDE.md](INDUSTRIAL_ERROR_HANDLING_GUIDE.md) for complete implementation guide.**
+
+The platform implements clean architecture error handling:
+- **Core Services**: Pure business logic with AppError constructors
+- **Decorator Pattern**: Cross-cutting concerns (audit logging) handled separately
+- **Zero Logging**: Business logic services have no logging dependencies
+- **Structured Flow**: Repository → Service → Handler with proper error transformation
 
 ### Enterprise Feature Toggle
 Enterprise features use interface-based design with build tags:

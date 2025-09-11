@@ -270,17 +270,19 @@ func ProvideAuthServices(
 		authRepos.AuditLog,
 	)
 
-	// Create auth service with all dependencies
-	authSvc := authService.NewAuthService(
+	// Create core auth service (without audit logging)
+	coreAuthSvc := authService.NewAuthService(
 		&cfg.Auth,
 		userRepos.User,
 		authRepos.UserSession,
-		authRepos.AuditLog,
 		jwtService,
 		roleService,
 		authRepos.PasswordResetToken,
 		blacklistedTokenService,
 	)
+
+	// Wrap with audit decorator for clean separation of concerns
+	authSvc := authService.NewAuditDecorator(coreAuthSvc, authRepos.AuditLog, logger)
 
 	return &AuthServices{
 		Auth:                authSvc,
