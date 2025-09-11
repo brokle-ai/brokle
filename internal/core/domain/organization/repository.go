@@ -29,6 +29,7 @@ type MemberRepository interface {
 	GetByUserAndOrganization(ctx context.Context, userID, orgID ulid.ULID) (*Member, error) // Alias for GetByUserAndOrg
 	Update(ctx context.Context, member *Member) error
 	Delete(ctx context.Context, id ulid.ULID) error
+	DeleteByUserAndOrg(ctx context.Context, orgID, userID ulid.ULID) error
 	
 	// Organization members
 	GetMembersByOrganizationID(ctx context.Context, orgID ulid.ULID) ([]*Member, error)

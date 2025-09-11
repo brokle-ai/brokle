@@ -44,11 +44,11 @@ type CreateAPIKeyRequest struct {
 }
 
 // ListAPIKeysResponse represents the response when listing API keys
+// NOTE: This struct is not used. When implementing, use response.SuccessWithPagination() 
+// with []APIKey directly and response.NewPagination() for consistent pagination format.
 type ListAPIKeysResponse struct {
 	APIKeys []APIKey `json:"api_keys" description:"List of API keys"`
-	Total   int      `json:"total" example:"5" description:"Total number of API keys"`
-	Page    int      `json:"page" example:"1" description:"Current page number"`
-	Limit   int      `json:"limit" example:"20" description:"Items per page"`
+	// Pagination fields removed - use response.SuccessWithPagination() instead
 }
 
 // List handles GET /environments/:envId/api-keys
@@ -61,7 +61,7 @@ type ListAPIKeysResponse struct {
 // @Param status query string false "Filter by API key status" Enums(active,inactive,revoked)
 // @Param page query int false "Page number" default(1) minimum(1)
 // @Param limit query int false "Items per page" default(20) minimum(1) maximum(100)
-// @Success 200 {object} response.SuccessResponse{data=ListAPIKeysResponse} "List of API keys"
+// @Success 200 {object} response.APIResponse{data=[]APIKey,meta=response.Meta{pagination=response.Pagination}} "List of API keys with pagination"
 // @Failure 400 {object} response.ErrorResponse "Bad request - invalid environment ID"
 // @Failure 401 {object} response.ErrorResponse "Unauthorized"
 // @Failure 403 {object} response.ErrorResponse "Forbidden - insufficient permissions to view API keys"

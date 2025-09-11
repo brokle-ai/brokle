@@ -86,13 +86,6 @@ type UpdateProjectRequest struct {
 	Status      string `json:"status,omitempty" binding:"omitempty,oneof=active paused archived" example:"active" description:"Project status (active, paused, archived)"`
 }
 
-// ListProjectsResponse represents the response when listing projects
-type ListProjectsResponse struct {
-	Projects []Project `json:"projects" description:"List of projects"`
-	Total    int       `json:"total" example:"15" description:"Total number of projects"`
-	Page     int       `json:"page" example:"1" description:"Current page number"`
-	Limit    int       `json:"limit" example:"20" description:"Items per page"`
-}
 
 // List handles GET /projects
 // @Summary List projects
@@ -105,7 +98,7 @@ type ListProjectsResponse struct {
 // @Param page query int false "Page number" default(1) minimum(1)
 // @Param limit query int false "Items per page" default(20) minimum(1) maximum(100)
 // @Param search query string false "Search projects by name or slug"
-// @Success 200 {object} response.SuccessResponse{data=ListProjectsResponse} "List of projects"
+// @Success 200 {object} response.APIResponse{data=[]Project,meta=response.Meta{pagination=response.Pagination}} "List of projects with pagination"
 // @Failure 400 {object} response.ErrorResponse "Bad request"
 // @Failure 401 {object} response.ErrorResponse "Unauthorized"
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
@@ -298,12 +291,10 @@ func (h *Handler) List(c *gin.Context) {
 		}
 	}
 
-	response.Success(c, ListProjectsResponse{
-		Projects: responseProjects,
-		Total:    total,
-		Page:     req.Page,
-		Limit:    req.Limit,
-	})
+	// Create pagination
+	pagination := response.NewPagination(req.Page, req.Limit, int64(total))
+
+	response.SuccessWithPagination(c, responseProjects, pagination)
 
 	h.logger.WithFields(logrus.Fields{
 		"endpoint":        "List",
@@ -966,7 +957,6 @@ type Environment struct {
 // ListEnvironmentsResponse represents the response when listing project environments
 type ListEnvironmentsResponse struct {
 	Environments []Environment `json:"environments" description:"List of environments"`
-	Total        int           `json:"total" example:"3" description:"Total number of environments"`
 	ProjectID    string        `json:"project_id" example:"proj_1234567890" description:"Project ID"`
 	ProjectName  string        `json:"project_name" example:"AI Chatbot" description:"Project name"`
 }
@@ -1109,7 +1099,6 @@ func (h *Handler) ListEnvironments(c *gin.Context) {
 
 	responseData := ListEnvironmentsResponse{
 		Environments: responseEnvironments,
-		Total:        len(environments),
 		ProjectID:    project.ID.String(),
 		ProjectName:  project.Name,
 	}

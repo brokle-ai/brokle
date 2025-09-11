@@ -1,3 +1,6 @@
+// Analytics API - Latest endpoints for dashboard application
+// Direct functions using optimal ML-powered backend endpoints
+
 import { BrokleAPIClient } from '../core/client'
 import type { 
   PaginatedResponse,
@@ -80,29 +83,25 @@ export interface CostAnalytics {
   budgetUtilization?: number
 }
 
-export class AnalyticsAPIClient extends BrokleAPIClient {
-  constructor() {
-    super('/analytics') // All analytics endpoints prefixed with /analytics
-  }
+// Flexible base client - versions specified per endpoint
+const client = new BrokleAPIClient('/api')
 
-  // Dashboard analytics
-  async getDashboardStats(
+// Direct analytics functions - latest ML-powered endpoints
+export const getDashboardStats = async (
     timeRange: string = '24h', 
     organizationId?: string
-  ): Promise<DashboardStats> {
-    return this.get<DashboardStats>('/v1/analytics/dashboard', {
+  ): Promise<DashboardStats> => {
+    return client.get<DashboardStats>('/v3/analytics/overview', {
       timeRange,
       organizationId,
     })
   }
 
-  // Cost analytics
-  async getCostAnalytics(query: Partial<AnalyticsQuery> = {}): Promise<CostAnalytics> {
-    return this.post<CostAnalytics>('/v1/analytics/costs', query)
+export const getCostAnalytics = async (query: Partial<AnalyticsQuery> = {}): Promise<CostAnalytics> => {
+    return client.post<CostAnalytics>('/v3/analytics/costs', query)
   }
 
-  // Usage analytics
-  async getUsageAnalytics(query: AnalyticsQuery): Promise<{
+export const getUsageAnalytics = async (query: AnalyticsQuery): Promise<{
     metrics: AnalyticsMetric[]
     summary: {
       total: number
@@ -110,41 +109,38 @@ export class AnalyticsAPIClient extends BrokleAPIClient {
       change: number
       changePercent: number
     }
-  }> {
-    return this.post('/v1/analytics/usage', query)
+  }> => {
+    return client.post('/v3/analytics/requests', query)
   }
 
-  // Model performance
-  async getModelAnalytics(
+export const getModelAnalytics = async (
     modelId?: string,
     timeRange: string = '7d'
   ): Promise<{
     models: ModelUsage[]
     trends: Record<string, AnalyticsMetric[]>
-  }> {
-    return this.get('/v1/analytics/models', {
+  }> => {
+    return client.get('/v3/analytics/models', {
       modelId,
       timeRange,
     })
   }
 
-  // Provider performance
-  async getProviderAnalytics(
+export const getProviderAnalytics = async (
     providerId?: string,
     timeRange: string = '7d'
   ): Promise<{
     providers: ProviderUsage[]
     healthScores: Record<string, number>
     latencyTrends: Record<string, AnalyticsMetric[]>
-  }> {
-    return this.get('/v1/analytics/providers', {
+  }> => {
+    return client.get('/v3/analytics/providers', {
       providerId,
       timeRange,
     })
   }
 
-  // Request analytics
-  async getRequestAnalytics(
+export const getRequestAnalytics = async (
     query: Partial<AnalyticsQuery> = {}
   ): Promise<{
     totalRequests: number
@@ -157,12 +153,11 @@ export class AnalyticsAPIClient extends BrokleAPIClient {
       p95: number
       p99: number
     }
-  }> {
-    return this.post('/v1/analytics/requests', query)
+  }> => {
+    return client.post('/v3/analytics/requests', query)
   }
 
-  // Quality analytics
-  async getQualityAnalytics(
+export const getQualityAnalytics = async (
     timeRange: string = '7d'
   ): Promise<{
     averageQualityScore: number
@@ -174,12 +169,11 @@ export class AnalyticsAPIClient extends BrokleAPIClient {
       totalEvaluations: number
     }>
     qualityDistribution: Record<string, number>
-  }> {
-    return this.get('/v1/analytics/quality', { timeRange })
+  }> => {
+    return client.get('/v3/analytics/quality', { timeRange })
   }
 
-  // Custom queries
-  async runCustomQuery(query: {
+export const runCustomQuery = async (query: {
     query: string
     parameters?: Record<string, any>
     timeRange?: string
@@ -188,24 +182,22 @@ export class AnalyticsAPIClient extends BrokleAPIClient {
     columns: string[]
     rowCount: number
     executionTime: number
-  }> {
-    return this.post('/v1/analytics/query', query)
+  }> => {
+    return client.post('/v3/analytics/query', query)
   }
 
-  // Export data
-  async exportAnalytics(
+export const exportAnalytics = async (
     query: AnalyticsQuery,
     format: 'csv' | 'json' | 'excel' = 'csv'
   ): Promise<{
     downloadUrl: string
     filename: string
     expiresAt: string
-  }> {
-    return this.post('/v1/analytics/export', { ...query, format })
+  }> => {
+    return client.post('/v3/analytics/export', { ...query, format })
   }
 
-  // Real-time metrics
-  async getRealTimeMetrics(): Promise<{
+export const getRealTimeMetrics = async (): Promise<{
     activeRequests: number
     requestsPerSecond: number
     averageLatency: number
@@ -215,7 +207,7 @@ export class AnalyticsAPIClient extends BrokleAPIClient {
       requestCount: number
     }>
     lastUpdated: string
-  }> {
-    return this.get('/v1/analytics/realtime')
+  }> => {
+    return client.get('/v3/analytics/realtime')
   }
-}
+

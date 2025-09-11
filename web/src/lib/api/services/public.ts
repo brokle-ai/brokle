@@ -1,3 +1,5 @@
+// Public API - Direct functions for public/status operations
+
 import { BrokleAPIClient } from '../core/client'
 
 // Public API response types
@@ -54,61 +56,71 @@ export interface IncidentUpdate {
   status: string
 }
 
-export class PublicAPIClient extends BrokleAPIClient {
-  constructor() {
-    super('') // No base path - public endpoints are at root level
-    
-    // Override all requests to skip authentication
-    this.axiosInstance.interceptors.request.use(
-      (config) => {
-        // Force all public API requests to skip auth
-        (config as any).skipAuth = true
-        return config
-      },
-      (error) => Promise.reject(error)
-    )
+export interface ContactFormData {
+  name: string
+  email: string
+  company?: string
+  subject: string
+  message: string
+}
+
+export interface FeedbackData {
+  email?: string
+  type: 'bug' | 'feature' | 'improvement' | 'other'
+  message: string
+  page?: string
+  userAgent?: string
+}
+
+// Public client (no auth, no base path)
+const client = new BrokleAPIClient('')
+
+// Override all requests to skip authentication
+client.axiosInstance.interceptors.request.use(
+  (config) => {
+    // Force all public API requests to skip auth
+    (config as any).skipAuth = true
+    return config
+  },
+  (error) => Promise.reject(error)
+)
+
+// Direct public API functions
+export const getHealthCheck = async (): Promise<HealthStatus> => {
+    return client.get<HealthStatus>('/health')
   }
 
-  // Health check endpoints
-  async getHealthCheck(): Promise<HealthStatus> {
-    return this.get<HealthStatus>('/health')
+export const getReadinessCheck = async (): Promise<{ ready: boolean; timestamp: string }> => {
+    return client.get('/ready')
   }
 
-  async getReadinessCheck(): Promise<{ ready: boolean; timestamp: string }> {
-    return this.get('/ready')
+export const getLivenessCheck = async (): Promise<{ alive: boolean; timestamp: string }> => {
+    return client.get('/live')
   }
 
-  async getLivenessCheck(): Promise<{ alive: boolean; timestamp: string }> {
-    return this.get('/live')
+export const getSystemStatus = async (): Promise<SystemStatus> => {
+    return client.get<SystemStatus>('/status')
   }
 
-  // System status endpoints
-  async getSystemStatus(): Promise<SystemStatus> {
-    return this.get<SystemStatus>('/status')
+export const getServiceHealth = async (serviceName: string): Promise<ServiceHealth> => {
+    return client.get<ServiceHealth>(`/health/${serviceName}`)
   }
 
-  async getServiceHealth(serviceName: string): Promise<ServiceHealth> {
-    return this.get<ServiceHealth>(`/health/${serviceName}`)
+export const getPublicStats = async (): Promise<PublicStats> => {
+    return client.get<PublicStats>('/stats/public')
   }
 
-  // Public statistics (non-sensitive data)
-  async getPublicStats(): Promise<PublicStats> {
-    return this.get<PublicStats>('/stats/public')
-  }
-
-  // Version and build info
-  async getVersionInfo(): Promise<{
+export const getVersionInfo = async (): Promise<{
     version: string
     buildId: string
     commitHash: string
     buildDate: string
     environment: string
-  }> {
-    return this.get('/version')
+  }> => {
+    return client.get('/version')
   }
 
-  // Supported models and providers (public info)
-  async getSupportedModels(): Promise<{
+export const getSupportedModels = async (): Promise<{
     models: Array<{
       id: string
       name: string
@@ -116,11 +128,11 @@ export class PublicAPIClient extends BrokleAPIClient {
       type: 'text' | 'image' | 'audio' | 'multimodal'
       capabilities: string[]
     }>
-  }> {
-    return this.get('/models/supported')
+  }> => {
+    return client.get('/models/supported')
   }
 
-  async getSupportedProviders(): Promise<{
+export const getSupportedProviders = async (): Promise<{
     providers: Array<{
       id: string
       name: string
@@ -128,12 +140,11 @@ export class PublicAPIClient extends BrokleAPIClient {
       supportedTypes: string[]
       regions: string[]
     }>
-  }> {
-    return this.get('/providers/supported')
+  }> => {
+    return client.get('/providers/supported')
   }
 
-  // Pricing information (public)
-  async getPricingInfo(): Promise<{
+export const getPricingInfo = async (): Promise<{
     plans: Array<{
       id: string
       name: string
@@ -142,12 +153,11 @@ export class PublicAPIClient extends BrokleAPIClient {
       features: string[]
       limits: Record<string, number>
     }>
-  }> {
-    return this.get('/pricing')
+  }> => {
+    return client.get('/pricing')
   }
 
-  // Documentation endpoints
-  async getAPIDocumentation(): Promise<{
+export const getAPIDocumentation = async (): Promise<{
     openapi: string
     version: string
     title: string
@@ -158,42 +168,27 @@ export class PublicAPIClient extends BrokleAPIClient {
       summary: string
       tags: string[]
     }>
-  }> {
-    return this.get('/docs/api')
+  }> => {
+    return client.get('/docs/api')
   }
 
-  // Contact and support endpoints (public forms)
-  async submitContactForm(data: {
-    name: string
-    email: string
-    company?: string
-    subject: string
-    message: string
-  }): Promise<{ success: boolean; ticketId: string }> {
-    return this.post('/contact', data)
+export const submitContactForm = async (data: ContactFormData): Promise<{ success: boolean; ticketId: string }> => {
+    return client.post('/contact', data)
   }
 
-  async submitFeedback(data: {
-    email?: string
-    type: 'bug' | 'feature' | 'improvement' | 'other'
-    message: string
-    page?: string
-    userAgent?: string
-  }): Promise<{ success: boolean; feedbackId: string }> {
-    return this.post('/feedback', data)
+export const submitFeedback = async (data: FeedbackData): Promise<{ success: boolean; feedbackId: string }> => {
+    return client.post('/feedback', data)
   }
 
-  // Newsletter subscription
-  async subscribeNewsletter(email: string): Promise<{ success: boolean }> {
-    return this.post('/newsletter/subscribe', { email })
+export const subscribeNewsletter = async (email: string): Promise<{ success: boolean }> => {
+    return client.post('/newsletter/subscribe', { email })
   }
 
-  async unsubscribeNewsletter(token: string): Promise<{ success: boolean }> {
-    return this.post('/newsletter/unsubscribe', { token })
+export const unsubscribeNewsletter = async (token: string): Promise<{ success: boolean }> => {
+    return client.post('/newsletter/unsubscribe', { token })
   }
 
-  // Rate limiting info (public)
-  async getRateLimitInfo(): Promise<{
+export const getRateLimitInfo = async (): Promise<{
     limits: {
       unauthenticated: {
         requests: number
@@ -206,12 +201,11 @@ export class PublicAPIClient extends BrokleAPIClient {
         }
       }
     }
-  }> {
-    return this.get('/limits')
+  }> => {
+    return client.get('/limits')
   }
 
-  // Service announcements and notices
-  async getServiceAnnouncements(): Promise<{
+export const getServiceAnnouncements = async (): Promise<{
     announcements: Array<{
       id: string
       title: string
@@ -221,7 +215,7 @@ export class PublicAPIClient extends BrokleAPIClient {
       endDate?: string
       affectedServices?: string[]
     }>
-  }> {
-    return this.get('/announcements')
+  }> => {
+    return client.get('/announcements')
   }
-}
+

@@ -107,19 +107,19 @@ export class URLContextManager {
     projectSlug?: string
   ): Promise<CachedContext | null> {
     try {
-      // Lazy load API to avoid circular dependencies
-      const { api } = await import('@/lib/api')
+      // Import specific functions to avoid circular dependencies
+      const { resolveOrganizationSlug, resolveProjectSlug } = await import('@/lib/api')
       
       // Resolve organization slug to organization data
       if (this.DEBUG) console.debug(`[URLContextManager] Resolving organization slug: ${orgSlug}`)
-      const org = await api.organizations.resolveOrganizationSlug(orgSlug)
+      const org = await resolveOrganizationSlug(orgSlug)
       
       let project = null
       if (projectSlug) {
         try {
           if (this.DEBUG) console.debug(`[URLContextManager] Resolving project slug: ${projectSlug} in org: ${org.id}`)
           // Resolve project slug using the organization ID
-          project = await api.organizations.resolveProjectSlug(org.id, projectSlug)
+          project = await resolveProjectSlug(org.id, projectSlug)
         } catch (error) {
           // Handle different error types appropriately
           if (error && typeof error === 'object' && 'statusCode' in error) {

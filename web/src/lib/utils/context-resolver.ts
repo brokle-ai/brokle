@@ -2,8 +2,12 @@
  * Context resolution utilities for organization and project routing
  */
 
-import { getOrganizationBySlug, getUserOrganizations, checkUserHasAccessToOrganization } from '@/lib/data/organizations'
-import { getProjectBySlug, getProjectsByOrganizationSlug } from '@/lib/data/projects'
+import { getUserOrganizations, getOrganizationProjects } from '@/lib/api'
+import { 
+  findOrganizationBySlug, 
+  findProjectBySlugInOrganization, 
+  checkUserHasAccessToOrganization 
+} from '@/lib/utils/organization-utils'
 import { parsePathContext } from './slug-utils'
 import type { Organization, Project, OrganizationRole } from '@/types/organization'
 
@@ -24,16 +28,16 @@ export interface ContextResolutionOptions {
 /**
  * Resolve context from URL pathname and user information
  */
-export function resolveContextFromPath(
+export async function resolveContextFromPath(
   options: ContextResolutionOptions
-): ResolvedContext {
+): Promise<ResolvedContext> {
   const { userEmail, pathname, fallbackToFirstOrg = false } = options
   const { orgSlug, projectSlug } = parsePathContext(pathname)
 
   // No organization in path
   if (!orgSlug) {
     if (fallbackToFirstOrg) {
-      const userOrgs = getUserOrganizations(userEmail)
+      const userOrgs = await getUserOrganizations()
       if (userOrgs.length > 0) {
         return {
           organization: userOrgs[0],
@@ -55,7 +59,7 @@ export function resolveContextFromPath(
   }
 
   // Check organization access
-  const organization = getOrganizationBySlug(orgSlug)
+  const organization = await findOrganizationBySlug(orgSlug)
   if (!organization) {
     return {
       organization: null,
@@ -66,7 +70,7 @@ export function resolveContextFromPath(
     }
   }
 
-  const hasOrgAccess = checkUserHasAccessToOrganization(userEmail, orgSlug)
+  const hasOrgAccess = await checkUserHasAccessToOrganization(userEmail, organization.id)
   if (!hasOrgAccess) {
     return {
       organization,
@@ -91,7 +95,7 @@ export function resolveContextFromPath(
   }
 
   // Resolve project context
-  const project = getProjectBySlug(organization.id, projectSlug)
+  const project = await findProjectBySlugInOrganization(organization.id, projectSlug)
   if (!project) {
     return {
       organization,
@@ -114,28 +118,31 @@ export function resolveContextFromPath(
 /**
  * Get available organizations for a user
  */
-export function getAvailableOrganizations(userEmail: string): Organization[] {
-  return getUserOrganizations(userEmail)
+export async function getAvailableOrganizations(userEmail: string): Promise<Organization[]> {
+  return await getUserOrganizations()
 }
 
 /**
  * Get available projects for a user in an organization
  */
-export function getAvailableProjects(userEmail: string, orgSlug: string): Project[] {
-  const hasAccess = checkUserHasAccessToOrganization(userEmail, orgSlug)
+export async function getAvailableProjects(userEmail: string, orgSlug: string): Promise<Project[]> {
+  const organization = await findOrganizationBySlug(orgSlug)
+  if (!organization) return []
+  
+  const hasAccess = await checkUserHasAccessToOrganization(userEmail, organization.id)
   if (!hasAccess) return []
   
-  return getProjectsByOrganizationSlug(orgSlug)
+  return await getOrganizationProjects(organization.id)
 }
 
 /**
  * Get default context for a user (their default organization or first organization)
  */
-export function getDefaultContext(userEmail: string, defaultOrgId?: string): {
+export async function getDefaultContext(userEmail: string, defaultOrgId?: string): Promise<{
   organization: Organization | null
   project: Project | null
-} {
-  const userOrgs = getUserOrganizations(userEmail)
+}> {
+  const userOrgs = await getUserOrganizations()
   if (userOrgs.length === 0) {
     return { organization: null, project: null }
   }
@@ -148,7 +155,7 @@ export function getDefaultContext(userEmail: string, defaultOrgId?: string): {
 
   // Fall back to first organization if no default or default not found
   const selectedOrg = defaultOrg || userOrgs[0]
-  const orgProjects = getProjectsByOrganization(selectedOrg.id)
+  const orgProjects = await getOrganizationProjects(selectedOrg.id)
   const firstProject = orgProjects.find(p => p.status === 'active') || orgProjects[0] || null
 
   return {
@@ -160,12 +167,12 @@ export function getDefaultContext(userEmail: string, defaultOrgId?: string): {
 /**
  * Check if user can access a specific context
  */
-export function canAccessContext(
+export async function canAccessContext(
   userEmail: string,
   orgSlug: string,
   projectSlug?: string
-): boolean {
-  const context = resolveContextFromPath({
+): Promise<boolean> {
+  const context = await resolveContextFromPath({
     userEmail,
     pathname: projectSlug ? `/${orgSlug}/${projectSlug}` : `/${orgSlug}`,
   })
@@ -176,17 +183,13 @@ export function canAccessContext(
 /**
  * Get user's role in organization
  */
-export function getUserRole(userEmail: string, orgSlug: string): OrganizationRole | null {
-  const organization = getOrganizationBySlug(orgSlug)
+export async function getUserRole(userEmail: string, orgSlug: string): Promise<OrganizationRole | null> {
+  const organization = await findOrganizationBySlug(orgSlug)
   if (!organization) return null
 
-  const member = organization.members.find(m => m.email === userEmail)
-  return member ? (member.role as OrganizationRole) : null
+  // Use the utility function to get user role
+  const { getUserRoleInOrganization } = await import('@/lib/utils/organization-utils')
+  return await getUserRoleInOrganization(userEmail, organization.id)
 }
 
-// Helper to import the function we need
-function getProjectsByOrganization(organizationId: string): Project[] {
-  // Import here to avoid circular dependencies
-  const { getProjectsByOrganization: getProjects } = require('@/lib/data/projects')
-  return getProjects(organizationId)
-}
+// This helper is no longer needed - using direct API calls

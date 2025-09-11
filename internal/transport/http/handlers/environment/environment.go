@@ -51,11 +51,11 @@ type UpdateEnvironmentRequest struct {
 }
 
 // ListEnvironmentsResponse represents the response when listing environments
+// NOTE: This struct is not used. When implementing, use response.SuccessWithPagination()
+// with []Environment directly and response.NewPagination() for consistent pagination format.
 type ListEnvironmentsResponse struct {
 	Environments []Environment `json:"environments" description:"List of environments"`
-	Total        int           `json:"total" example:"3" description:"Total number of environments"`
-	Page         int           `json:"page" example:"1" description:"Current page number"`
-	Limit        int           `json:"limit" example:"20" description:"Items per page"`
+	// Pagination fields removed - use response.SuccessWithPagination() instead
 }
 
 // List handles GET /environments
@@ -69,7 +69,7 @@ type ListEnvironmentsResponse struct {
 // @Param status query string false "Filter by environment status" Enums(active,paused,archived)
 // @Param page query int false "Page number" default(1) minimum(1)
 // @Param limit query int false "Items per page" default(20) minimum(1) maximum(100)
-// @Success 200 {object} response.SuccessResponse{data=ListEnvironmentsResponse} "List of environments"
+// @Success 200 {object} response.APIResponse{data=[]Environment,meta=response.Meta{pagination=response.Pagination}} "List of environments with pagination"
 // @Failure 400 {object} response.ErrorResponse "Bad request"
 // @Failure 401 {object} response.ErrorResponse "Unauthorized"
 // @Failure 500 {object} response.ErrorResponse "Internal server error"

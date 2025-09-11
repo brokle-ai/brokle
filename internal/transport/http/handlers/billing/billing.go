@@ -198,11 +198,11 @@ type UpdateSubscriptionRequest struct {
 }
 
 // ListInvoicesResponse represents the response when listing invoices
+// NOTE: This struct is not used. When implementing, use response.SuccessWithPagination()
+// with []Invoice directly and response.NewPagination() for consistent pagination format.
 type ListInvoicesResponse struct {
 	Invoices []Invoice `json:"invoices" description:"List of invoices"`
-	Total    int       `json:"total" example:"12" description:"Total number of invoices"`
-	Page     int       `json:"page" example:"1" description:"Current page number"`
-	Limit    int       `json:"limit" example:"20" description:"Items per page"`
+	// Pagination fields removed - use response.SuccessWithPagination() instead
 }
 
 // GetUsage handles GET /billing/:orgId/usage
@@ -237,7 +237,7 @@ func (h *Handler) GetUsage(c *gin.Context) { response.Success(c, gin.H{"message"
 // @Param end_date query string false "Filter invoices until date (RFC3339)" example("2024-01-31T23:59:59Z")
 // @Param page query int false "Page number" default(1) minimum(1)
 // @Param limit query int false "Items per page" default(20) minimum(1) maximum(100)
-// @Success 200 {object} response.SuccessResponse{data=ListInvoicesResponse} "List of organization invoices"
+// @Success 200 {object} response.APIResponse{data=[]Invoice,meta=response.Meta{pagination=response.Pagination}} "List of organization invoices with pagination"
 // @Failure 400 {object} response.ErrorResponse "Bad request - invalid organization ID or parameters"
 // @Failure 401 {object} response.ErrorResponse "Unauthorized"
 // @Failure 403 {object} response.ErrorResponse "Forbidden - insufficient permissions to view billing information"

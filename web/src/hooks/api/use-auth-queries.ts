@@ -1,11 +1,15 @@
 'use client'
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { api } from '@/lib/api'
+import { 
+  getCurrentUser,
+  getCurrentOrganization,
+  requestPasswordReset,
+  confirmPasswordReset
+} from '@/lib/api'
 import { useAuth } from '@/hooks/auth/use-auth'
 import type { 
   User, 
-  Organization, 
   LoginCredentials, 
   SignUpCredentials,
   AuthResponse 
@@ -17,7 +21,6 @@ export const authQueryKeys = {
   all: ['auth'] as const,
   user: () => [...authQueryKeys.all, 'user'] as const,
   organization: () => [...authQueryKeys.all, 'organization'] as const,
-  apiKeys: () => [...authQueryKeys.all, 'apiKeys'] as const,
 } as const
 
 // Current user query
@@ -26,7 +29,7 @@ export function useCurrentUser() {
   
   return useQuery({
     queryKey: authQueryKeys.user(),
-    queryFn: () => api.auth.getCurrentUser(),
+    queryFn: () => getCurrentUser(),
     enabled: isAuthenticated,
     staleTime: 5 * 60 * 1000, // 5 minutes
     retry: (failureCount, error: any) => {
@@ -43,25 +46,13 @@ export function useCurrentOrganization() {
   
   return useQuery({
     queryKey: authQueryKeys.organization(),
-    queryFn: () => api.auth.getCurrentOrganization(),
+    queryFn: () => getCurrentOrganization(),
     enabled: isAuthenticated,
     staleTime: 5 * 60 * 1000, // 5 minutes
     retry: (failureCount, error: any) => {
       if (error?.statusCode === 401) return false
       return failureCount < 3
     },
-  })
-}
-
-// API keys query
-export function useApiKeys() {
-  const { isAuthenticated } = useAuth()
-  
-  return useQuery({
-    queryKey: authQueryKeys.apiKeys(),
-    queryFn: () => api.auth.getApiKeys(),
-    enabled: isAuthenticated,
-    staleTime: 2 * 60 * 1000, // 2 minutes
   })
 }
 
@@ -79,11 +70,6 @@ export function useLoginMutation() {
       queryClient.setQueryData(authQueryKeys.user(), data.user)
       queryClient.setQueryData(authQueryKeys.organization(), data.organization)
       
-      // Prefetch commonly used data
-      queryClient.prefetchQuery({
-        queryKey: authQueryKeys.apiKeys(),
-        queryFn: () => api.auth.getApiKeys(),
-      })
 
       toast.success('Welcome back!', {
         description: `Signed in as ${data.user?.email || 'Unknown User'}`,
@@ -201,7 +187,7 @@ export function useChangePasswordMutation() {
 export function useRequestPasswordResetMutation() {
   return useMutation({
     mutationFn: async (email: string) => {
-      await api.auth.requestPasswordReset(email)
+      await requestPasswordReset(email)
     },
     onSuccess: () => {
       toast.success('Reset Email Sent', {
@@ -220,7 +206,7 @@ export function useRequestPasswordResetMutation() {
 export function useConfirmPasswordResetMutation() {
   return useMutation({
     mutationFn: async (data: { token: string; password: string }) => {
-      await api.auth.confirmPasswordReset(data.token, data.password)
+      await confirmPasswordReset(data.token, data.password)
     },
     onSuccess: () => {
       toast.success('Password Reset', {
@@ -235,54 +221,3 @@ export function useConfirmPasswordResetMutation() {
   })
 }
 
-// Create API key mutation
-export function useCreateApiKeyMutation() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: async (data: {
-      name: string
-      permissions: string[]
-      expiresAt?: string
-    }) => {
-      return api.auth.createApiKey(data)
-    },
-    onSuccess: () => {
-      // Refresh API keys
-      queryClient.invalidateQueries({ queryKey: authQueryKeys.apiKeys() })
-      
-      toast.success('API Key Created', {
-        description: 'Your new API key has been created.',
-      })
-    },
-    onError: (error: any) => {
-      toast.error('Creation Failed', {
-        description: error?.message || 'Failed to create API key',
-      })
-    },
-  })
-}
-
-// Revoke API key mutation
-export function useRevokeApiKeyMutation() {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: async (keyId: string) => {
-      await api.auth.revokeApiKey(keyId)
-    },
-    onSuccess: () => {
-      // Refresh API keys
-      queryClient.invalidateQueries({ queryKey: authQueryKeys.apiKeys() })
-      
-      toast.success('API Key Revoked', {
-        description: 'The API key has been revoked successfully.',
-      })
-    },
-    onError: (error: any) => {
-      toast.error('Revocation Failed', {
-        description: error?.message || 'Failed to revoke API key',
-      })
-    },
-  })
-}

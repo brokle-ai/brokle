@@ -466,29 +466,6 @@ definitions:
     - name
     - scopes
     type: object
-  apikey.ListAPIKeysResponse:
-    properties:
-      api_keys:
-        items:
-          $ref: '#/definitions/apikey.APIKey'
-        type: array
-      limit:
-        example: 20
-        type: integer
-      page:
-        example: 1
-        type: integer
-      total:
-        example: 5
-        type: integer
-    type: object
-  auth.AssignRoleRequest:
-    properties:
-      role_id:
-        $ref: '#/definitions/ulid.ULID'
-    required:
-    - role_id
-    type: object
   auth.ChangePasswordRequest:
     description: Password change information
     properties:
@@ -502,69 +479,6 @@ definitions:
     required:
     - current_password
     - new_password
-    type: object
-  auth.CheckPermissionsRequest:
-    properties:
-      resource_actions:
-        items:
-          type: string
-        minItems: 1
-        type: array
-    required:
-    - resource_actions
-    type: object
-  auth.CreatePermissionRequest:
-    properties:
-      action:
-        maxLength: 50
-        minLength: 1
-        type: string
-      category:
-        maxLength: 100
-        minLength: 1
-        type: string
-      description:
-        type: string
-      display_name:
-        maxLength: 255
-        minLength: 1
-        type: string
-      resource:
-        maxLength: 50
-        minLength: 1
-        type: string
-    required:
-    - action
-    - category
-    - display_name
-    - resource
-    type: object
-  auth.CreateRoleRequest:
-    properties:
-      description:
-        type: string
-      display_name:
-        maxLength: 100
-        minLength: 1
-        type: string
-      is_system_role:
-        description: Only allowed for admin users
-        type: boolean
-      name:
-        maxLength: 50
-        minLength: 1
-        type: string
-      organization_id:
-        allOf:
-        - $ref: '#/definitions/ulid.ULID'
-        description: NULL for global system roles
-      permission_ids:
-        items:
-          $ref: '#/definitions/ulid.ULID'
-        type: array
-    required:
-    - display_name
-    - name
     type: object
   auth.ForgotPasswordRequest:
     description: Email for password reset
@@ -590,19 +504,6 @@ definitions:
     - token
     type: object
   auth.RevokeAllSessionsRequest:
-    type: object
-  auth.UpdateRoleRequest:
-    properties:
-      description:
-        type: string
-      display_name:
-        maxLength: 100
-        minLength: 1
-        type: string
-      permission_ids:
-        items:
-          $ref: '#/definitions/ulid.ULID'
-        type: array
     type: object
   billing.BillingAlert:
     properties:
@@ -768,22 +669,6 @@ definitions:
       unit_price:
         example: 0.025
         type: number
-    type: object
-  billing.ListInvoicesResponse:
-    properties:
-      invoices:
-        items:
-          $ref: '#/definitions/billing.Invoice'
-        type: array
-      limit:
-        example: 20
-        type: integer
-      page:
-        example: 1
-        type: integer
-      total:
-        example: 12
-        type: integer
     type: object
   billing.PaymentMethod:
     properties:
@@ -1077,22 +962,6 @@ definitions:
       updated_at:
         example: "2024-01-01T00:00:00Z"
         type: string
-    type: object
-  environment.ListEnvironmentsResponse:
-    properties:
-      environments:
-        items:
-          $ref: '#/definitions/environment.Environment'
-        type: array
-      limit:
-        example: 20
-        type: integer
-      page:
-        example: 1
-        type: integer
-      total:
-        example: 3
-        type: integer
     type: object
   environment.UpdateEnvironmentRequest:
     properties:
@@ -1574,48 +1443,19 @@ definitions:
     - orgID
     - role
     type: object
-  organization.ListMembersResponse:
-    properties:
-      members:
-        items:
-          $ref: '#/definitions/organization.OrganizationMember'
-        type: array
-      total:
-        example: 10
-        type: integer
-    type: object
-  organization.ListOrganizationsResponse:
-    properties:
-      limit:
-        example: 20
-        type: integer
-      organizations:
-        items:
-          $ref: '#/definitions/internal_transport_http_handlers_organization.Organization'
-        type: array
-      page:
-        example: 1
-        type: integer
-      total:
-        example: 5
-        type: integer
-    type: object
   organization.OrganizationMember:
     properties:
+      created_at:
+        example: "2024-01-01T00:00:00Z"
+        type: string
       email:
         example: john@acme.com
         type: string
       first_name:
         example: John
         type: string
-      id:
-        example: usr_1234567890
-        type: string
-      invited_at:
-        example: "2024-01-01T00:00:00Z"
-        type: string
       invited_by:
-        example: usr_0987654321
+        example: john@inviter.com
         type: string
       joined_at:
         example: "2024-01-01T00:00:00Z"
@@ -1628,6 +1468,12 @@ definitions:
         type: string
       status:
         example: active
+        type: string
+      updated_at:
+        example: "2024-01-01T00:00:00Z"
+        type: string
+      user_id:
+        example: usr_1234567890
         type: string
     type: object
   organization.OrganizationSetting:
@@ -1718,25 +1564,6 @@ definitions:
       project_name:
         example: AI Chatbot
         type: string
-      total:
-        example: 3
-        type: integer
-    type: object
-  project.ListProjectsResponse:
-    properties:
-      limit:
-        example: 20
-        type: integer
-      page:
-        example: 1
-        type: integer
-      projects:
-        items:
-          $ref: '#/definitions/project.Project'
-        type: array
-      total:
-        example: 15
-        type: integer
     type: object
   project.Project:
     properties:
@@ -1818,14 +1645,6 @@ definitions:
         example: true
         type: boolean
     type: object
-  response.CheckPermissionsResponse:
-    description: Result of checking multiple permissions for a user
-    properties:
-      results:
-        additionalProperties:
-          type: boolean
-        type: object
-    type: object
   response.ErrorResponse:
     description: Standard error response
     properties:
@@ -1884,132 +1703,6 @@ definitions:
         example: 8
         type: integer
     type: object
-  response.PermissionListResponse:
-    description: Paginated list of permissions
-    properties:
-      page:
-        example: 1
-        type: integer
-      page_size:
-        example: 10
-        type: integer
-      permissions:
-        items:
-          $ref: '#/definitions/response.PermissionResponse'
-        type: array
-      total_count:
-        example: 50
-        type: integer
-    type: object
-  response.PermissionResponse:
-    description: Permission information for API responses
-    properties:
-      action:
-        example: read
-        type: string
-      category:
-        example: users
-        type: string
-      created_at:
-        example: "2023-01-01T00:00:00Z"
-        type: string
-      description:
-        example: Permission to read user information
-        type: string
-      display_name:
-        example: Read Users
-        type: string
-      id:
-        example: 01ARZ3NDEKTSV4RRFFQ69G5FAV
-        type: string
-      name:
-        example: users.read
-        type: string
-      resource:
-        example: users
-        type: string
-      updated_at:
-        example: "2023-01-01T00:00:00Z"
-        type: string
-    type: object
-  response.RoleListResponse:
-    description: Paginated list of roles
-    properties:
-      page:
-        example: 1
-        type: integer
-      page_size:
-        example: 10
-        type: integer
-      roles:
-        items:
-          $ref: '#/definitions/response.RoleResponse'
-        type: array
-      total_count:
-        example: 25
-        type: integer
-    type: object
-  response.RoleResponse:
-    description: Role information for API responses
-    properties:
-      created_at:
-        example: "2023-01-01T00:00:00Z"
-        type: string
-      description:
-        example: Full administrative access
-        type: string
-      display_name:
-        example: Administrator
-        type: string
-      id:
-        example: 01ARZ3NDEKTSV4RRFFQ69G5FAV
-        type: string
-      is_system_role:
-        example: false
-        type: boolean
-      name:
-        example: admin
-        type: string
-      organization_id:
-        example: 01ARZ3NDEKTSV4RRFFQ69G5FAV
-        type: string
-      permissions:
-        items:
-          $ref: '#/definitions/response.PermissionResponse'
-        type: array
-      updated_at:
-        example: "2023-01-01T00:00:00Z"
-        type: string
-    type: object
-  response.RoleStatistics:
-    description: Statistics about roles in an organization
-    properties:
-      custom_roles:
-        example: 6
-        type: integer
-      last_updated:
-        example: "2023-01-01T00:00:00Z"
-        type: string
-      organization_id:
-        example: 01ARZ3NDEKTSV4RRFFQ69G5FAV
-        type: string
-      permission_count:
-        example: 45
-        type: integer
-      role_distribution:
-        additionalProperties:
-          type: integer
-        type: object
-      system_roles:
-        example: 4
-        type: integer
-      total_members:
-        example: 25
-        type: integer
-      total_roles:
-        example: 10
-        type: integer
-    type: object
   response.SuccessResponse:
     description: Standard successful response
     properties:
@@ -2019,32 +1712,6 @@ definitions:
       success:
         example: true
         type: boolean
-    type: object
-  response.UserPermissionsResponse:
-    description: User's effective permissions with role information
-    properties:
-      organization_id:
-        example: 01ARZ3NDEKTSV4RRFFQ69G5FAV
-        type: string
-      permissions:
-        items:
-          $ref: '#/definitions/response.PermissionResponse'
-        type: array
-      resource_actions:
-        example:
-        - '["users:read"'
-        - ' "projects:write"]'
-        items:
-          type: string
-        type: array
-      role:
-        $ref: '#/definitions/response.RoleResponse'
-      user_id:
-        example: 01ARZ3NDEKTSV4RRFFQ69G5FAV
-        type: string
-    type: object
-  ulid.ULID:
-    description: ULID (Universally Unique Lexicographically Sortable Identifier)
     type: object
   user.OnboardingQuestionsResponse:
     description: Complete onboarding question information including user's current
@@ -3170,13 +2837,22 @@ paths:
       - application/json
       responses:
         "200":
-          description: List of organization invoices
+          description: List of organization invoices with pagination
           schema:
             allOf:
-            - $ref: '#/definitions/response.SuccessResponse'
+            - $ref: '#/definitions/response.APIResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/billing.ListInvoicesResponse'
+                  items:
+                    $ref: '#/definitions/billing.Invoice'
+                  type: array
+                meta:
+                  allOf:
+                  - $ref: '#/definitions/response.Meta'
+                  - properties:
+                      pagination:
+                        $ref: '#/definitions/response.Pagination'
+                    type: object
               type: object
         "400":
           description: Bad request - invalid organization ID or parameters
@@ -3436,13 +3112,22 @@ paths:
       - application/json
       responses:
         "200":
-          description: List of environments
+          description: List of environments with pagination
           schema:
             allOf:
-            - $ref: '#/definitions/response.SuccessResponse'
+            - $ref: '#/definitions/response.APIResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/environment.ListEnvironmentsResponse'
+                  items:
+                    $ref: '#/definitions/environment.Environment'
+                  type: array
+                meta:
+                  allOf:
+                  - $ref: '#/definitions/response.Meta'
+                  - properties:
+                      pagination:
+                        $ref: '#/definitions/response.Pagination'
+                    type: object
               type: object
         "400":
           description: Bad request
@@ -3703,13 +3388,22 @@ paths:
       - application/json
       responses:
         "200":
-          description: List of API keys
+          description: List of API keys with pagination
           schema:
             allOf:
-            - $ref: '#/definitions/response.SuccessResponse'
+            - $ref: '#/definitions/response.APIResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/apikey.ListAPIKeysResponse'
+                  items:
+                    $ref: '#/definitions/apikey.APIKey'
+                  type: array
+                meta:
+                  allOf:
+                  - $ref: '#/definitions/response.Meta'
+                  - properties:
+                      pagination:
+                        $ref: '#/definitions/response.Pagination'
+                    type: object
               type: object
         "400":
           description: Bad request - invalid environment ID
@@ -4284,13 +3978,22 @@ paths:
       - application/json
       responses:
         "200":
-          description: List of organizations
+          description: List of organizations with pagination
           schema:
             allOf:
-            - $ref: '#/definitions/response.SuccessResponse'
+            - $ref: '#/definitions/response.APIResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/organization.ListOrganizationsResponse'
+                  items:
+                    $ref: '#/definitions/internal_transport_http_handlers_organization.Organization'
+                  type: array
+                meta:
+                  allOf:
+                  - $ref: '#/definitions/response.Meta'
+                  - properties:
+                      pagination:
+                        $ref: '#/definitions/response.Pagination'
+                    type: object
               type: object
         "400":
           description: Bad request
@@ -4540,13 +4243,22 @@ paths:
       - application/json
       responses:
         "200":
-          description: List of organization members
+          description: List of organization members with pagination
           schema:
             allOf:
-            - $ref: '#/definitions/response.SuccessResponse'
+            - $ref: '#/definitions/response.APIResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/organization.ListMembersResponse'
+                  items:
+                    $ref: '#/definitions/organization.OrganizationMember'
+                  type: array
+                meta:
+                  allOf:
+                  - $ref: '#/definitions/response.Meta'
+                  - properties:
+                      pagination:
+                        $ref: '#/definitions/response.Pagination'
+                    type: object
               type: object
         "400":
           description: Bad request - invalid organization ID or query parameters
@@ -5093,13 +4805,22 @@ paths:
       - application/json
       responses:
         "200":
-          description: List of projects
+          description: List of projects with pagination
           schema:
             allOf:
-            - $ref: '#/definitions/response.SuccessResponse'
+            - $ref: '#/definitions/response.APIResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/project.ListProjectsResponse'
+                  items:
+                    $ref: '#/definitions/project.Project'
+                  type: array
+                meta:
+                  allOf:
+                  - $ref: '#/definitions/response.Meta'
+                  - properties:
+                      pagination:
+                        $ref: '#/definitions/response.Pagination'
+                    type: object
               type: object
         "400":
           description: Bad request
@@ -5372,635 +5093,6 @@ paths:
       summary: List project environments
       tags:
       - Projects
-  /api/v1/rbac/organizations/{orgId}/roles:
-    get:
-      consumes:
-      - application/json
-      description: Get all roles available for an organization (system + org-specific)
-      parameters:
-      - description: Organization ID
-        in: path
-        name: orgId
-        required: true
-        type: string
-      - description: 'Limit (default: 50, max: 100)'
-        in: query
-        name: limit
-        type: integer
-      - description: 'Offset (default: 0)'
-        in: query
-        name: offset
-        type: integer
-      - description: Search query
-        in: query
-        name: search
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: List of roles
-          schema:
-            $ref: '#/definitions/response.RoleListResponse'
-        "400":
-          description: Bad request
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: List roles for organization
-      tags:
-      - RBAC
-    post:
-      consumes:
-      - application/json
-      description: Create a new role for an organization (or global system role for
-        admins)
-      parameters:
-      - description: Organization ID
-        in: path
-        name: orgId
-        required: true
-        type: string
-      - description: Role creation request
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/auth.CreateRoleRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Role created successfully
-          schema:
-            $ref: '#/definitions/response.RoleResponse'
-        "400":
-          description: Bad request
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Create a new role
-      tags:
-      - RBAC
-  /api/v1/rbac/organizations/{orgId}/stats:
-    get:
-      consumes:
-      - application/json
-      description: Get statistics about roles and role distribution in an organization
-      parameters:
-      - description: Organization ID
-        in: path
-        name: orgId
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Role statistics
-          schema:
-            $ref: '#/definitions/response.RoleStatistics'
-        "400":
-          description: Bad request
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Get role statistics
-      tags:
-      - RBAC
-  /api/v1/rbac/permissions:
-    get:
-      consumes:
-      - application/json
-      description: Get all available permissions in the system
-      parameters:
-      - description: 'Limit (default: 50, max: 100)'
-        in: query
-        name: limit
-        type: integer
-      - description: 'Offset (default: 0)'
-        in: query
-        name: offset
-        type: integer
-      - description: Filter by category
-        in: query
-        name: category
-        type: string
-      - description: Filter by resource
-        in: query
-        name: resource
-        type: string
-      - description: Search query
-        in: query
-        name: search
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: List of permissions
-          schema:
-            $ref: '#/definitions/response.PermissionListResponse'
-        "400":
-          description: Bad request
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: List all permissions
-      tags:
-      - RBAC
-    post:
-      consumes:
-      - application/json
-      description: Create a new permission with resource:action format
-      parameters:
-      - description: Permission creation request
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/auth.CreatePermissionRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Permission created successfully
-          schema:
-            $ref: '#/definitions/response.PermissionResponse'
-        "400":
-          description: Bad request
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Create a new permission
-      tags:
-      - RBAC
-  /api/v1/rbac/permissions/{permissionId}:
-    get:
-      consumes:
-      - application/json
-      description: Get detailed information about a specific permission
-      parameters:
-      - description: Permission ID
-        in: path
-        name: permissionId
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Permission details
-          schema:
-            $ref: '#/definitions/response.PermissionResponse'
-        "400":
-          description: Bad request
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "404":
-          description: Permission not found
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Get permission details
-      tags:
-      - RBAC
-  /api/v1/rbac/permissions/resources:
-    get:
-      consumes:
-      - application/json
-      description: Get all distinct resources that have permissions defined
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: List of available resources
-          schema:
-            items:
-              type: string
-            type: array
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Get available resources
-      tags:
-      - RBAC
-  /api/v1/rbac/permissions/resources/{resource}/actions:
-    get:
-      consumes:
-      - application/json
-      description: Get all actions available for a specific resource
-      parameters:
-      - description: Resource name
-        in: path
-        name: resource
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: List of actions for the resource
-          schema:
-            items:
-              type: string
-            type: array
-        "400":
-          description: Bad request
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Get actions for resource
-      tags:
-      - RBAC
-  /api/v1/rbac/roles/{roleId}:
-    delete:
-      consumes:
-      - application/json
-      description: Delete a role (cannot delete system roles)
-      parameters:
-      - description: Role ID
-        in: path
-        name: roleId
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "204":
-          description: Role deleted successfully
-        "400":
-          description: Bad request
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "403":
-          description: Forbidden (system role cannot be deleted)
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "404":
-          description: Role not found
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Delete role
-      tags:
-      - RBAC
-    get:
-      consumes:
-      - application/json
-      description: Get detailed information about a specific role
-      parameters:
-      - description: Role ID
-        in: path
-        name: roleId
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Role details
-          schema:
-            $ref: '#/definitions/response.RoleResponse'
-        "400":
-          description: Bad request
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "404":
-          description: Role not found
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Get role details
-      tags:
-      - RBAC
-    put:
-      consumes:
-      - application/json
-      description: Update an existing role (cannot update system roles)
-      parameters:
-      - description: Role ID
-        in: path
-        name: roleId
-        required: true
-        type: string
-      - description: Role update request
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/auth.UpdateRoleRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Role updated successfully
-          schema:
-            $ref: '#/definitions/response.RoleResponse'
-        "400":
-          description: Bad request
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "403":
-          description: Forbidden (system role cannot be updated)
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "404":
-          description: Role not found
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Update role
-      tags:
-      - RBAC
-  /api/v1/rbac/users/{userId}/organizations/{orgId}/permissions:
-    get:
-      consumes:
-      - application/json
-      description: Get all effective permissions for a user in an organization
-      parameters:
-      - description: User ID
-        in: path
-        name: userId
-        required: true
-        type: string
-      - description: Organization ID
-        in: path
-        name: orgId
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: User's effective permissions
-          schema:
-            $ref: '#/definitions/response.UserPermissionsResponse'
-        "400":
-          description: Bad request
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "404":
-          description: User permissions not found
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Get user's effective permissions
-      tags:
-      - RBAC
-  /api/v1/rbac/users/{userId}/organizations/{orgId}/permissions/check:
-    post:
-      consumes:
-      - application/json
-      description: Check if a user has specific permissions in an organization
-      parameters:
-      - description: User ID
-        in: path
-        name: userId
-        required: true
-        type: string
-      - description: Organization ID
-        in: path
-        name: orgId
-        required: true
-        type: string
-      - description: Permissions to check
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/auth.CheckPermissionsRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Permission check results
-          schema:
-            $ref: '#/definitions/response.CheckPermissionsResponse'
-        "400":
-          description: Bad request
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Check user permissions
-      tags:
-      - RBAC
-  /api/v1/rbac/users/{userId}/organizations/{orgId}/role:
-    get:
-      consumes:
-      - application/json
-      description: Get the role assigned to a user in a specific organization
-      parameters:
-      - description: User ID
-        in: path
-        name: userId
-        required: true
-        type: string
-      - description: Organization ID
-        in: path
-        name: orgId
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: User's role
-          schema:
-            $ref: '#/definitions/response.RoleResponse'
-        "400":
-          description: Bad request
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "404":
-          description: User role not found
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Get user's role in organization
-      tags:
-      - RBAC
-    post:
-      consumes:
-      - application/json
-      description: Assign a role to a user in an organization
-      parameters:
-      - description: User ID
-        in: path
-        name: userId
-        required: true
-        type: string
-      - description: Organization ID
-        in: path
-        name: orgId
-        required: true
-        type: string
-      - description: Role assignment request
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/auth.AssignRoleRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Assigned role
-          schema:
-            $ref: '#/definitions/response.RoleResponse'
-        "400":
-          description: Bad request
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Assign role to user
-      tags:
-      - RBAC
   /api/v1/users/me:
     get:
       description: Get the profile information of the currently authenticated user

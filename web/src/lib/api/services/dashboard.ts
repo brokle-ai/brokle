@@ -1,3 +1,5 @@
+// Dashboard API - Direct functions for dashboard data
+
 import { BrokleAPIClient } from '../core/client'
 import type { QueryParams } from '../core/types'
 
@@ -47,66 +49,59 @@ export interface DashboardOverview {
   }>
 }
 
-export class DashboardAPIClient extends BrokleAPIClient {
-  constructor() {
-    super('/dashboard')
+export interface DashboardConfig {
+  widgets: Array<{
+    id: string
+    type: string
+    position: { x: number; y: number }
+    size: { width: number; height: number }
+    config: Record<string, any>
+  }>
+  layout: string
+}
+
+// Flexible base client - versions specified per endpoint
+const client = new BrokleAPIClient('/api')
+
+// Direct dashboard functions
+export const getOverview = async (timeRange: string = '24h'): Promise<DashboardOverview> => {
+    return client.get<DashboardOverview>('/v2/analytics/overview', { timeRange })
   }
 
-  // Main dashboard overview
-  async getOverview(timeRange: string = '24h'): Promise<DashboardOverview> {
-    return this.get<DashboardOverview>('/v1/dashboard/overview', { timeRange })
+export const getQuickStats = async (timeRange: string = '24h'): Promise<QuickStat[]> => {
+    return client.get<QuickStat[]>('/v2/analytics/overview', { timeRange })
   }
 
-  // Quick stats
-  async getQuickStats(timeRange: string = '24h'): Promise<QuickStat[]> {
-    return this.get<QuickStat[]>('/v1/dashboard/stats', { timeRange })
+export const getRecentActivity = async (limit: number = 10): Promise<DashboardOverview['recentActivity']> => {
+    return client.get('/logs/requests', { limit })
   }
 
-  // Recent activity
-  async getRecentActivity(limit: number = 10): Promise<DashboardOverview['recentActivity']> {
-    return this.get('/v1/dashboard/activity', { limit })
+export const getAlerts = async (acknowledged?: boolean): Promise<DashboardOverview['alerts']> => {
+    const params = acknowledged !== undefined ? { acknowledged } : {}
+    return client.get('/alerts', params)
   }
 
-  // System alerts
-  async getAlerts(acknowledged?: boolean): Promise<DashboardOverview['alerts']> {
-    return this.get('/v1/dashboard/alerts', { acknowledged })
+export const acknowledgeAlert = async (alertId: string): Promise<void> => {
+    return client.patch<void>(`/alerts/${alertId}/acknowledge`, {})
   }
 
-  // Acknowledge alert
-  async acknowledgeAlert(alertId: string): Promise<void> {
-    await this.patch(`/v1/dashboard/alerts/${alertId}`, { acknowledged: true })
+export const dismissAlert = async (alertId: string): Promise<void> => {
+    return client.delete<void>(`/alerts/${alertId}`)
   }
 
-  // Dismiss alert
-  async dismissAlert(alertId: string): Promise<void> {
-    await this.delete(`/v1/dashboard/alerts/${alertId}`)
+export const getWidgetData = async (widgetType: string, config?: QueryParams): Promise<any> => {
+    return client.get(`/dashboard/widgets/${widgetType}`, config)
   }
 
-  // Dashboard widgets data
-  async getWidgetData(widgetType: string, config?: QueryParams): Promise<any> {
-    return this.get(`/v1/dashboard/widgets/${widgetType}`, config)
+export const saveDashboardConfig = async (config: DashboardConfig): Promise<void> => {
+    return client.post<void>('/dashboard/config', config)
   }
 
-  // Save dashboard configuration
-  async saveDashboardConfig(config: {
-    widgets: Array<{
-      id: string
-      type: string
-      position: { x: number; y: number }
-      size: { width: number; height: number }
-      config: Record<string, any>
-    }>
-    layout: string
-  }): Promise<void> {
-    await this.post('/v1/dashboard/config', config)
-  }
-
-  // Load dashboard configuration
-  async getDashboardConfig(): Promise<{
+export const getDashboardConfig = async (): Promise<{
     widgets: any[]
     layout: string
     lastUpdated: string
-  }> {
-    return this.get('/v1/dashboard/config')
+  }> => {
+    return client.get('/dashboard/config')
   }
-}
+

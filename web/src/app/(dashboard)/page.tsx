@@ -6,7 +6,7 @@ import { useAuth } from '@/context/auth-context'
 import { useOrganization } from '@/context/organization-context'
 import { OrganizationSelector } from '@/components/organization/organization-selector'
 import { Skeleton } from '@/components/ui/skeleton'
-import { api } from '@/lib/api'
+import { getCurrentUser } from '@/lib/api'
 
 export default function RootPage() {
   const router = useRouter()
@@ -31,7 +31,7 @@ export default function RootPage() {
     const checkOnboardingStatus = async () => {
       try {
         setCheckingOnboarding(true)
-        const user = await api.auth.getCurrentUser()
+        const user = await getCurrentUser()
         
         // If user hasn't completed onboarding, redirect to onboarding
         if (!user.onboardingCompleted) {

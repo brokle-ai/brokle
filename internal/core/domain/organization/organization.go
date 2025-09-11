@@ -37,12 +37,15 @@ type Organization struct {
 
 // Member represents the many-to-many relationship between users and organizations.
 type Member struct {
-	ID             ulid.ULID `json:"id" gorm:"type:char(26);primaryKey"`
-	OrganizationID ulid.ULID `json:"organization_id" gorm:"type:char(26);not null"`
-	UserID         ulid.ULID `json:"user_id" gorm:"type:char(26);not null"` // References user.User.ID
+	OrganizationID ulid.ULID `json:"organization_id" gorm:"type:char(26);not null;primaryKey;priority:1"`
+	UserID         ulid.ULID `json:"user_id" gorm:"type:char(26);not null;primaryKey;priority:2"` // References user.User.ID
 	RoleID         ulid.ULID `json:"role_id" gorm:"type:char(26);not null"` // References auth.Role.ID
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	Status         string    `json:"status" gorm:"size:20;default:'active'"` // "active", "suspended", "invited"
+	JoinedAt       time.Time `json:"joined_at"`
+	InvitedBy      *ulid.ULID `json:"invited_by,omitempty" gorm:"type:char(26)"` // References user.User.ID
+	CreatedAt      time.Time      `json:"created_at"`
+	UpdatedAt      time.Time      `json:"updated_at"`
+	DeletedAt      gorm.DeletedAt `json:"deleted_at,omitempty" gorm:"index"`
 
 	// Relations
 	Organization Organization `json:"organization,omitempty" gorm:"foreignKey:OrganizationID"`
@@ -189,13 +192,15 @@ func NewEnvironment(projectID ulid.ULID, name, slug string) *Environment {
 }
 
 func NewMember(orgID, userID, roleID ulid.ULID) *Member {
+	now := time.Now()
 	return &Member{
-		ID:             ulid.New(),
 		OrganizationID: orgID,
 		UserID:         userID,
 		RoleID:         roleID,
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
+		Status:         "active",
+		JoinedAt:       now,
+		CreatedAt:      now,
+		UpdatedAt:      now,
 	}
 }
 

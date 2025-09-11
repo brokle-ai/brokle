@@ -1,3 +1,5 @@
+// Onboarding API - Direct functions for onboarding flow
+
 import { BrokleAPIClient } from '../core/client'
 import type {
   OnboardingQuestion,
@@ -6,25 +8,19 @@ import type {
   SubmitResponsesRequest
 } from '@/types/onboarding'
 
-export class OnboardingAPIClient extends BrokleAPIClient {
-  constructor() {
-    super('/auth') // All onboarding endpoints will be prefixed with /auth
+// Flexible base client - versions specified per endpoint
+const client = new BrokleAPIClient('/api')
+
+// Direct onboarding functions
+export const getQuestions = async (): Promise<OnboardingQuestion[]> => {
+    return client.get<OnboardingQuestion[]>('/v1/onboarding/questions')
   }
 
-  /**
-   * Fetch all active onboarding questions with user's current responses
-   */
-  async getQuestions(): Promise<OnboardingQuestion[]> {
-    const response = await this.get<OnboardingQuestion[]>(
-      '/v1/onboarding/questions'
-    )
-    return response
-  }
-
-  /**
-   * Submit a single response for a question (individual submission)
-   */
-  async submitResponse(questionId: string, responseValue: string | string[], skipped = false): Promise<void> {
+export const submitResponse = async (
+    questionId: string, 
+    responseValue: string | string[], 
+    skipped = false
+  ): Promise<void> => {
     const request: SubmitResponsesRequest = {
       responses: [{
         question_id: questionId,
@@ -33,51 +29,25 @@ export class OnboardingAPIClient extends BrokleAPIClient {
       }]
     }
 
-    await this.post<{ message: string }>(
-      '/v1/onboarding/responses',
-      request
-    )
+    await client.post<{ message: string }>('/v1/onboarding/responses', request)
   }
 
-  /**
-   * Skip an individual question
-   */
-  async skipQuestion(questionId: string): Promise<void> {
-    await this.post<{ message: string }>(
-      `/v1/onboarding/skip/${questionId}`,
-      {}
-    )
+export const skipQuestion = async (questionId: string): Promise<void> => {
+    await client.post<{ message: string }>(`/onboarding/skip/${questionId}`, {})
   }
 
-  /**
-   * Get current onboarding progress and status
-   */
-  async getStatus(): Promise<OnboardingStatus> {
-    const response = await this.get<OnboardingStatus>(
-      '/v1/onboarding/status'
-    )
-    return response
+export const getStatus = async (): Promise<OnboardingStatus> => {
+    return client.get<OnboardingStatus>('/v1/onboarding/status')
   }
 
-  /**
-   * Submit multiple responses at once (batch submission)
-   * Keeping this for potential future use, but primary approach is individual submission
-   */
-  async submitMultipleResponses(responses: SubmitResponseRequest[]): Promise<void> {
+export const submitMultipleResponses = async (responses: SubmitResponseRequest[]): Promise<void> => {
     const request: SubmitResponsesRequest = { responses }
-    
-    await this.post<{ message: string }>(
-      '/v1/onboarding/responses',
-      request
-    )
+    await client.post<{ message: string }>('/v1/onboarding/responses', request)
   }
 
-  /**
-   * Helper method to determine if onboarding is complete
-   */
-  async isOnboardingComplete(): Promise<boolean> {
+export const isOnboardingComplete = async (): Promise<boolean> => {
     try {
-      const status = await this.getStatus()
+      const status = await getStatus()
       return status.onboarding_completed
     } catch (error) {
       console.error('Error checking onboarding status:', error)
@@ -85,11 +55,8 @@ export class OnboardingAPIClient extends BrokleAPIClient {
     }
   }
 
-  /**
-   * Get the next unanswered question based on current progress
-   */
-  async getNextQuestion(): Promise<OnboardingQuestion | null> {
-    const questions = await this.getQuestions()
+export const getNextQuestion = async (): Promise<OnboardingQuestion | null> => {
+    const questions = await getQuestions()
     
     // Find first question that hasn't been answered or skipped
     const nextQuestion = questions.find(q => !q.user_answer && !q.is_skipped)
@@ -97,15 +64,12 @@ export class OnboardingAPIClient extends BrokleAPIClient {
     return nextQuestion || null
   }
 
-  /**
-   * Get completion percentage for progress tracking
-   */
-  async getCompletionPercentage(): Promise<number> {
-    const status = await this.getStatus()
+export const getCompletionPercentage = async (): Promise<number> => {
+    const status = await getStatus()
     
     if (status.total_questions === 0) return 0
     
     const answeredOrSkipped = status.completed_questions + status.skipped_questions
     return Math.round((answeredOrSkipped / status.total_questions) * 100)
   }
-}
+

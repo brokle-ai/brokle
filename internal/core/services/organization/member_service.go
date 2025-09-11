@@ -105,8 +105,8 @@ func (s *memberService) RemoveMember(ctx context.Context, orgID, userID ulid.ULI
 		}
 	}
 
-	// Remove member
-	err = s.memberRepo.Delete(ctx, member.ID)
+	// Remove member (Member has composite primary key: OrganizationID + UserID)
+	err = s.memberRepo.DeleteByUserAndOrg(ctx, member.OrganizationID, member.UserID)
 	if err != nil {
 		return fmt.Errorf("failed to remove member: %w", err)
 	}

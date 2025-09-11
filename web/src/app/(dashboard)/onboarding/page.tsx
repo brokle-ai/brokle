@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { QuestionCard } from '@/components/onboarding'
 import { useAuth } from '@/context/auth-context'
 import { useOrganization } from '@/context/organization-context'
-import { api } from '@/lib/api'
+import { getQuestions, submitResponse, skipQuestion } from '@/lib/api'
 import type { OnboardingQuestion } from '@/types/onboarding'
 
 export default function OnboardingPage() {
@@ -27,7 +27,7 @@ export default function OnboardingPage() {
       setLoading(true)
       setError(null)
       
-      const questionsData = await api.onboarding.getQuestions()
+      const questionsData = await getQuestions()
       setQuestions(questionsData)
       
       // Set current step to next unanswered question or first step
@@ -58,7 +58,7 @@ export default function OnboardingPage() {
   const handleSubmitResponse = async (questionId: string, value: string | string[]) => {
     try {
       setIsSubmitting(true)
-      await api.onboarding.submitResponse(questionId, value)
+      await submitResponse(questionId, value)
       
       // Refresh data to get updated progress
       await loadOnboardingData()
@@ -81,7 +81,7 @@ export default function OnboardingPage() {
   const handleSkipQuestion = async (questionId: string) => {
     try {
       setIsSubmitting(true)
-      await api.onboarding.skipQuestion(questionId)
+      await skipQuestion(questionId)
       
       // Refresh data to get updated progress
       await loadOnboardingData()
