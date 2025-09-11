@@ -2,55 +2,52 @@ package auth
 
 import (
 	"context"
-	"fmt"
 
-	"brokle/internal/core/domain/auth"
+	authDomain "brokle/internal/core/domain/auth"
 	"brokle/pkg/ulid"
+	appErrors "brokle/pkg/errors"
 )
 
 // organizationMemberService implements the auth.OrganizationMemberService interface
 type organizationMemberService struct {
-	orgMemberRepo auth.OrganizationMemberRepository
-	roleRepo      auth.RoleRepository
-	auditRepo     auth.AuditLogRepository
+	orgMemberRepo authDomain.OrganizationMemberRepository
+	roleRepo      authDomain.RoleRepository
 }
 
 // NewOrganizationMemberService creates a new organization member service instance
 func NewOrganizationMemberService(
-	orgMemberRepo auth.OrganizationMemberRepository,
-	roleRepo auth.RoleRepository,
-	auditRepo auth.AuditLogRepository,
-) auth.OrganizationMemberService {
+	orgMemberRepo authDomain.OrganizationMemberRepository,
+	roleRepo authDomain.RoleRepository,
+) authDomain.OrganizationMemberService {
 	return &organizationMemberService{
 		orgMemberRepo: orgMemberRepo,
 		roleRepo:      roleRepo,
-		auditRepo:     auditRepo,
 	}
 }
 
 // AddMember adds a user to an organization with specified role
-func (s *organizationMemberService) AddMember(ctx context.Context, userID, orgID, roleID ulid.ULID, invitedBy *ulid.ULID) (*auth.OrganizationMember, error) {
+func (s *organizationMemberService) AddMember(ctx context.Context, userID, orgID, roleID ulid.ULID, invitedBy *ulid.ULID) (*authDomain.OrganizationMember, error) {
 	// Verify role exists
 	_, err := s.roleRepo.GetByID(ctx, roleID)
 	if err != nil {
-		return nil, fmt.Errorf("role not found: %w", err)
+		return nil, appErrors.NewNotFoundError("Role not found")
 	}
 
 	// Check if user is already a member
 	exists, err := s.orgMemberRepo.Exists(ctx, userID, orgID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to check membership: %w", err)
+		return nil, appErrors.NewInternalError("Failed to check membership", err)
 	}
 	if exists {
-		return nil, fmt.Errorf("user is already a member of this organization")
+		return nil, appErrors.NewConflictError("User is already a member of this organization")
 	}
 
 	// Create new membership
-	member := auth.NewOrganizationMember(userID, orgID, roleID, invitedBy)
+	member := authDomain.NewOrganizationMember(userID, orgID, roleID, invitedBy)
 	
 	err = s.orgMemberRepo.Create(ctx, member)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create membership: %w", err)
+		return nil, appErrors.NewInternalError("Failed to create membership", err)
 	}
 
 	return member, nil
@@ -61,10 +58,10 @@ func (s *organizationMemberService) RemoveMember(ctx context.Context, userID, or
 	// Check if user is a member
 	exists, err := s.orgMemberRepo.Exists(ctx, userID, orgID)
 	if err != nil {
-		return fmt.Errorf("failed to check membership: %w", err)
+		return appErrors.NewInternalError("Failed to check membership", err)
 	}
 	if !exists {
-		return fmt.Errorf("user is not a member of this organization")
+		return appErrors.NewNotFoundError("User is not a member of this organization")
 	}
 
 	return s.orgMemberRepo.Delete(ctx, userID, orgID)
@@ -75,38 +72,38 @@ func (s *organizationMemberService) UpdateMemberRole(ctx context.Context, userID
 	// Verify role exists
 	_, err := s.roleRepo.GetByID(ctx, roleID)
 	if err != nil {
-		return fmt.Errorf("role not found: %w", err)
+		return appErrors.NewNotFoundError("Role not found")
 	}
 
 	// Check if user is a member
 	exists, err := s.orgMemberRepo.Exists(ctx, userID, orgID)
 	if err != nil {
-		return fmt.Errorf("failed to check membership: %w", err)
+		return appErrors.NewInternalError("Failed to check membership", err)
 	}
 	if !exists {
-		return fmt.Errorf("user is not a member of this organization")
+		return appErrors.NewNotFoundError("User is not a member of this organization")
 	}
 
 	return s.orgMemberRepo.UpdateMemberRole(ctx, userID, orgID, roleID)
 }
 
 // GetMember gets a specific organization membership
-func (s *organizationMemberService) GetMember(ctx context.Context, userID, orgID ulid.ULID) (*auth.OrganizationMember, error) {
+func (s *organizationMemberService) GetMember(ctx context.Context, userID, orgID ulid.ULID) (*authDomain.OrganizationMember, error) {
 	return s.orgMemberRepo.GetByUserAndOrganization(ctx, userID, orgID)
 }
 
 // GetUserMemberships gets all organization memberships for a user
-func (s *organizationMemberService) GetUserMemberships(ctx context.Context, userID ulid.ULID) ([]*auth.OrganizationMember, error) {
+func (s *organizationMemberService) GetUserMemberships(ctx context.Context, userID ulid.ULID) ([]*authDomain.OrganizationMember, error) {
 	return s.orgMemberRepo.GetByUserID(ctx, userID)
 }
 
 // GetOrganizationMembers gets all members of an organization
-func (s *organizationMemberService) GetOrganizationMembers(ctx context.Context, orgID ulid.ULID) ([]*auth.OrganizationMember, error) {
+func (s *organizationMemberService) GetOrganizationMembers(ctx context.Context, orgID ulid.ULID) ([]*authDomain.OrganizationMember, error) {
 	return s.orgMemberRepo.GetByOrganizationID(ctx, orgID)
 }
 
 // GetMembersByRole gets all members with a specific role
-func (s *organizationMemberService) GetMembersByRole(ctx context.Context, roleID ulid.ULID) ([]*auth.OrganizationMember, error) {
+func (s *organizationMemberService) GetMembersByRole(ctx context.Context, roleID ulid.ULID) ([]*authDomain.OrganizationMember, error) {
 	return s.orgMemberRepo.GetByRole(ctx, roleID)
 }
 
@@ -146,7 +143,7 @@ func (s *organizationMemberService) SuspendMember(ctx context.Context, userID, o
 }
 
 // GetActiveMembers gets all active members of an organization
-func (s *organizationMemberService) GetActiveMembers(ctx context.Context, orgID ulid.ULID) ([]*auth.OrganizationMember, error) {
+func (s *organizationMemberService) GetActiveMembers(ctx context.Context, orgID ulid.ULID) ([]*authDomain.OrganizationMember, error) {
 	return s.orgMemberRepo.GetActiveMembers(ctx, orgID)
 }
 

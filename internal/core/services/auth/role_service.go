@@ -2,23 +2,23 @@ package auth
 
 import (
 	"context"
-	"fmt"
 
-	"brokle/internal/core/domain/auth"
+	authDomain "brokle/internal/core/domain/auth"
 	"brokle/pkg/ulid"
+	appErrors "brokle/pkg/errors"
 )
 
 // roleService implements clean auth.RoleService interface (template roles only)
 type roleService struct {
-	roleRepo     auth.RoleRepository
-	rolePermRepo auth.RolePermissionRepository
+	roleRepo     authDomain.RoleRepository
+	rolePermRepo authDomain.RolePermissionRepository
 }
 
 // NewRoleService creates a new clean role service instance
 func NewRoleService(
-	roleRepo auth.RoleRepository,
-	rolePermRepo auth.RolePermissionRepository,
-) auth.RoleService {
+	roleRepo authDomain.RoleRepository,
+	rolePermRepo authDomain.RolePermissionRepository,
+) authDomain.RoleService {
 	return &roleService{
 		roleRepo:     roleRepo,
 		rolePermRepo: rolePermRepo,
@@ -26,48 +26,48 @@ func NewRoleService(
 }
 
 // CreateRole creates a new template role
-func (s *roleService) CreateRole(ctx context.Context, req *auth.CreateRoleRequest) (*auth.Role, error) {
+func (s *roleService) CreateRole(ctx context.Context, req *authDomain.CreateRoleRequest) (*authDomain.Role, error) {
 	// Validate request
 	if req.Name == "" {
-		return nil, fmt.Errorf("role name is required")
+		return nil, appErrors.NewValidationError("name", "Role name is required")
 	}
 	if req.ScopeType == "" {
-		return nil, fmt.Errorf("scope type is required")
+		return nil, appErrors.NewValidationError("scope_type", "Scope type is required")
 	}
 
 	// Check if role already exists with this name and scope
 	existing, err := s.roleRepo.GetByNameAndScope(ctx, req.Name, req.ScopeType)
 	if err == nil && existing != nil {
-		return nil, fmt.Errorf("role with name %s and scope %s already exists", req.Name, req.ScopeType)
+		return nil, appErrors.NewConflictError("Role with name "+req.Name+" and scope "+req.ScopeType+" already exists")
 	}
 
 	// Create new role
-	role := auth.NewRole(req.Name, req.ScopeType, req.Description)
+	role := authDomain.NewRole(req.Name, req.ScopeType, req.Description)
 	
 	err = s.roleRepo.Create(ctx, role)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create role: %w", err)
+		return nil, appErrors.NewInternalError("Failed to create role", err)
 	}
 
 	return role, nil
 }
 
 // GetRoleByID gets a role by ID
-func (s *roleService) GetRoleByID(ctx context.Context, roleID ulid.ULID) (*auth.Role, error) {
+func (s *roleService) GetRoleByID(ctx context.Context, roleID ulid.ULID) (*authDomain.Role, error) {
 	return s.roleRepo.GetByID(ctx, roleID)
 }
 
 // GetRoleByNameAndScope gets a role by name and scope type
-func (s *roleService) GetRoleByNameAndScope(ctx context.Context, name, scopeType string) (*auth.Role, error) {
+func (s *roleService) GetRoleByNameAndScope(ctx context.Context, name, scopeType string) (*authDomain.Role, error) {
 	return s.roleRepo.GetByNameAndScope(ctx, name, scopeType)
 }
 
 // UpdateRole updates a role
-func (s *roleService) UpdateRole(ctx context.Context, roleID ulid.ULID, req *auth.UpdateRoleRequest) (*auth.Role, error) {
+func (s *roleService) UpdateRole(ctx context.Context, roleID ulid.ULID, req *authDomain.UpdateRoleRequest) (*authDomain.Role, error) {
 	// Get existing role
 	role, err := s.roleRepo.GetByID(ctx, roleID)
 	if err != nil {
-		return nil, fmt.Errorf("role not found: %w", err)
+		return nil, appErrors.NewNotFoundError("Role not found")
 	}
 
 	// Update fields
@@ -78,7 +78,7 @@ func (s *roleService) UpdateRole(ctx context.Context, roleID ulid.ULID, req *aut
 	// Save changes
 	err = s.roleRepo.Update(ctx, role)
 	if err != nil {
-		return nil, fmt.Errorf("failed to update role: %w", err)
+		return nil, appErrors.NewInternalError("Failed to update role", err)
 	}
 
 	return role, nil
@@ -89,7 +89,7 @@ func (s *roleService) DeleteRole(ctx context.Context, roleID ulid.ULID) error {
 	// Get role to check if it exists
 	role, err := s.roleRepo.GetByID(ctx, roleID)
 	if err != nil {
-		return fmt.Errorf("role not found: %w", err)
+		return appErrors.NewNotFoundError("Role not found")
 	}
 
 	// Built-in role names that cannot be deleted
@@ -101,24 +101,24 @@ func (s *roleService) DeleteRole(ctx context.Context, roleID ulid.ULID) error {
 	}
 
 	if builtinRoles[role.Name] {
-		return fmt.Errorf("cannot delete built-in role: %s", role.Name)
+		return appErrors.NewForbiddenError("Cannot delete built-in role: "+role.Name)
 	}
 
 	return s.roleRepo.Delete(ctx, roleID)
 }
 
 // GetRolesByScopeType gets all roles for a specific scope type
-func (s *roleService) GetRolesByScopeType(ctx context.Context, scopeType string) ([]*auth.Role, error) {
+func (s *roleService) GetRolesByScopeType(ctx context.Context, scopeType string) ([]*authDomain.Role, error) {
 	return s.roleRepo.GetByScopeType(ctx, scopeType)
 }
 
 // GetAllRoles gets all template roles
-func (s *roleService) GetAllRoles(ctx context.Context) ([]*auth.Role, error) {
+func (s *roleService) GetAllRoles(ctx context.Context) ([]*authDomain.Role, error) {
 	return s.roleRepo.GetAllRoles(ctx)
 }
 
 // GetRolePermissions gets all permissions assigned to a role
-func (s *roleService) GetRolePermissions(ctx context.Context, roleID ulid.ULID) ([]*auth.Permission, error) {
+func (s *roleService) GetRolePermissions(ctx context.Context, roleID ulid.ULID) ([]*authDomain.Permission, error) {
 	return s.roleRepo.GetRolePermissions(ctx, roleID)
 }
 
@@ -127,7 +127,7 @@ func (s *roleService) AssignRolePermissions(ctx context.Context, roleID ulid.ULI
 	// Verify role exists
 	_, err := s.roleRepo.GetByID(ctx, roleID)
 	if err != nil {
-		return fmt.Errorf("role not found: %w", err)
+		return appErrors.NewNotFoundError("Role not found")
 	}
 
 	return s.roleRepo.AssignRolePermissions(ctx, roleID, permissionIDs, grantedBy)
@@ -138,72 +138,72 @@ func (s *roleService) RevokeRolePermissions(ctx context.Context, roleID ulid.ULI
 	// Verify role exists
 	_, err := s.roleRepo.GetByID(ctx, roleID)
 	if err != nil {
-		return fmt.Errorf("role not found: %w", err)
+		return appErrors.NewNotFoundError("Role not found")
 	}
 
 	return s.roleRepo.RevokeRolePermissions(ctx, roleID, permissionIDs)
 }
 
 // GetRoleStatistics gets role usage statistics
-func (s *roleService) GetRoleStatistics(ctx context.Context) (*auth.RoleStatistics, error) {
+func (s *roleService) GetRoleStatistics(ctx context.Context) (*authDomain.RoleStatistics, error) {
 	return s.roleRepo.GetRoleStatistics(ctx)
 }
 
 // System template role methods
 
-func (s *roleService) GetSystemRoles(ctx context.Context) ([]*auth.Role, error) {
+func (s *roleService) GetSystemRoles(ctx context.Context) ([]*authDomain.Role, error) {
 	return s.roleRepo.GetSystemRoles(ctx)
 }
 
 // Custom scoped role management
 
-func (s *roleService) CreateCustomRole(ctx context.Context, scopeType string, scopeID ulid.ULID, req *auth.CreateRoleRequest) (*auth.Role, error) {
+func (s *roleService) CreateCustomRole(ctx context.Context, scopeType string, scopeID ulid.ULID, req *authDomain.CreateRoleRequest) (*authDomain.Role, error) {
 	// Validate request
 	if req.Name == "" {
-		return nil, fmt.Errorf("role name is required")
+		return nil, appErrors.NewValidationError("name", "Role name is required")
 	}
 	if scopeType == "" {
-		return nil, fmt.Errorf("scope type is required")
+		return nil, appErrors.NewValidationError("scope_type", "Scope type is required")
 	}
 
 	// Check if custom role already exists with this name and scope
 	existing, err := s.roleRepo.GetByNameScopeAndID(ctx, req.Name, scopeType, &scopeID)
 	if err == nil && existing != nil {
-		return nil, fmt.Errorf("custom role with name %s already exists in this scope", req.Name)
+		return nil, appErrors.NewConflictError("Custom role with name "+req.Name+" already exists in this scope")
 	}
 
 	// Create new custom role
-	role := auth.NewCustomRole(req.Name, scopeType, req.Description, scopeID)
+	role := authDomain.NewCustomRole(req.Name, scopeType, req.Description, scopeID)
 	
 	err = s.roleRepo.Create(ctx, role)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create custom role: %w", err)
+		return nil, appErrors.NewInternalError("Failed to create custom role", err)
 	}
 
 	// Assign permissions if provided
 	if len(req.PermissionIDs) > 0 {
 		err = s.roleRepo.AssignRolePermissions(ctx, role.ID, req.PermissionIDs, nil)
 		if err != nil {
-			return nil, fmt.Errorf("failed to assign permissions to custom role: %w", err)
+			return nil, appErrors.NewInternalError("Failed to assign permissions to custom role", err)
 		}
 	}
 
 	return role, nil
 }
 
-func (s *roleService) GetCustomRolesByOrganization(ctx context.Context, organizationID ulid.ULID) ([]*auth.Role, error) {
+func (s *roleService) GetCustomRolesByOrganization(ctx context.Context, organizationID ulid.ULID) ([]*authDomain.Role, error) {
 	return s.roleRepo.GetCustomRolesByOrganization(ctx, organizationID)
 }
 
-func (s *roleService) UpdateCustomRole(ctx context.Context, roleID ulid.ULID, req *auth.UpdateRoleRequest) (*auth.Role, error) {
+func (s *roleService) UpdateCustomRole(ctx context.Context, roleID ulid.ULID, req *authDomain.UpdateRoleRequest) (*authDomain.Role, error) {
 	// Get existing role and verify it's a custom role
 	role, err := s.roleRepo.GetByID(ctx, roleID)
 	if err != nil {
-		return nil, fmt.Errorf("custom role not found: %w", err)
+		return nil, appErrors.NewNotFoundError("Custom role not found")
 	}
 
 	if role.IsSystemRole() {
-		return nil, fmt.Errorf("cannot update system role")
+		return nil, appErrors.NewForbiddenError("Cannot update system role")
 	}
 
 	// Update fields
@@ -214,14 +214,14 @@ func (s *roleService) UpdateCustomRole(ctx context.Context, roleID ulid.ULID, re
 	// Save changes
 	err = s.roleRepo.Update(ctx, role)
 	if err != nil {
-		return nil, fmt.Errorf("failed to update custom role: %w", err)
+		return nil, appErrors.NewInternalError("Failed to update custom role", err)
 	}
 
 	// Update permissions if provided
 	if req.PermissionIDs != nil {
 		err = s.roleRepo.UpdateRolePermissions(ctx, role.ID, req.PermissionIDs, nil)
 		if err != nil {
-			return nil, fmt.Errorf("failed to update role permissions: %w", err)
+			return nil, appErrors.NewInternalError("Failed to update role permissions", err)
 		}
 	}
 
@@ -232,11 +232,11 @@ func (s *roleService) DeleteCustomRole(ctx context.Context, roleID ulid.ULID) er
 	// Get role to check if it exists and is a custom role
 	role, err := s.roleRepo.GetByID(ctx, roleID)
 	if err != nil {
-		return fmt.Errorf("custom role not found: %w", err)
+		return appErrors.NewNotFoundError("Custom role not found")
 	}
 
 	if role.IsSystemRole() {
-		return fmt.Errorf("cannot delete system role")
+		return appErrors.NewForbiddenError("Cannot delete system role")
 	}
 
 	// TODO: Add check if role is in use by organization members
