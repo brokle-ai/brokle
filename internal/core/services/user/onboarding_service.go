@@ -3,79 +3,71 @@ package user
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 
-	"brokle/internal/core/domain/auth"
-	"brokle/internal/core/domain/user"
+	userDomain "brokle/internal/core/domain/user"
 	"brokle/pkg/ulid"
+	appErrors "brokle/pkg/errors"
 )
 
 // onboardingService implements the user.OnboardingService interface for dynamic onboarding
 type onboardingService struct {
-	userRepo  user.Repository
-	auditRepo auth.AuditLogRepository
+	userRepo userDomain.Repository
 }
 
 // NewOnboardingService creates a new dynamic onboarding service instance
 func NewOnboardingService(
-	userRepo user.Repository,
-	auditRepo auth.AuditLogRepository,
-) user.OnboardingService {
+	userRepo userDomain.Repository,
+) userDomain.OnboardingService {
 	return &onboardingService{
-		userRepo:  userRepo,
-		auditRepo: auditRepo,
+		userRepo: userRepo,
 	}
 }
 
 // GetActiveQuestions retrieves all active onboarding questions
-func (s *onboardingService) GetActiveQuestions(ctx context.Context) ([]*user.OnboardingQuestion, error) {
+func (s *onboardingService) GetActiveQuestions(ctx context.Context) ([]*userDomain.OnboardingQuestion, error) {
 	return s.userRepo.GetActiveOnboardingQuestions(ctx)
 }
 
 // GetQuestionByID retrieves a specific onboarding question by ID
-func (s *onboardingService) GetQuestionByID(ctx context.Context, id ulid.ULID) (*user.OnboardingQuestion, error) {
+func (s *onboardingService) GetQuestionByID(ctx context.Context, id ulid.ULID) (*userDomain.OnboardingQuestion, error) {
 	return s.userRepo.GetOnboardingQuestionByID(ctx, id)
 }
 
 // CreateQuestion creates a new onboarding question
-func (s *onboardingService) CreateQuestion(ctx context.Context, req *user.CreateOnboardingQuestionRequest) (*user.OnboardingQuestion, error) {
+func (s *onboardingService) CreateQuestion(ctx context.Context, req *userDomain.CreateOnboardingQuestionRequest) (*userDomain.OnboardingQuestion, error) {
 	// Validate request
 	if req.Title == "" {
-		return nil, fmt.Errorf("question title is required")
+		return nil, appErrors.NewValidationError("title", "Question title is required")
 	}
 
 	if req.QuestionType != "single_choice" && req.QuestionType != "multiple_choice" && 
 	   req.QuestionType != "text" && req.QuestionType != "skip_optional" {
-		return nil, fmt.Errorf("invalid question type")
+		return nil, appErrors.NewValidationError("question_type", "Invalid question type")
 	}
 
 	if req.Step <= 0 {
-		return nil, fmt.Errorf("step must be greater than 0")
+		return nil, appErrors.NewValidationError("step", "Step must be greater than 0")
 	}
 
 	// Create question
-	question := user.NewOnboardingQuestion(req)
+	question := userDomain.NewOnboardingQuestion(req)
 	
 	err := s.userRepo.CreateOnboardingQuestion(ctx, question)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create onboarding question: %w", err)
+		return nil, appErrors.NewInternalError("Failed to create onboarding question", err)
 	}
-
-	// Audit log
-	s.auditRepo.Create(ctx, auth.NewAuditLog(nil, nil, "onboarding.question_created", "onboarding", question.ID.String(),
-		fmt.Sprintf(`{"title": "%s", "type": "%s", "step": %d}`, req.Title, req.QuestionType, req.Step), "", ""))
 
 	return question, nil
 }
 
 // GetUserResponses retrieves all user responses with parsed values
-func (s *onboardingService) GetUserResponses(ctx context.Context, userID ulid.ULID) ([]*user.UserOnboardingResponseData, error) {
+func (s *onboardingService) GetUserResponses(ctx context.Context, userID ulid.ULID) ([]*userDomain.UserOnboardingResponseData, error) {
 	responses, err := s.userRepo.GetUserOnboardingResponses(ctx, userID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get user responses: %w", err)
+		return nil, appErrors.NewInternalError("Failed to get user responses", err)
 	}
 
-	var result []*user.UserOnboardingResponseData
+	var result []*userDomain.UserOnboardingResponseData
 	for _, response := range responses {
 		// Parse the JSON response value
 		var responseValue interface{}
@@ -86,7 +78,7 @@ func (s *onboardingService) GetUserResponses(ctx context.Context, userID ulid.UL
 			}
 		}
 
-		result = append(result, &user.UserOnboardingResponseData{
+		result = append(result, &userDomain.UserOnboardingResponseData{
 			ID:            response.ID,
 			UserID:        response.UserID,
 			QuestionID:    response.QuestionID,
@@ -103,56 +95,47 @@ func (s *onboardingService) SubmitResponse(ctx context.Context, userID, question
 	// Verify question exists
 	question, err := s.userRepo.GetOnboardingQuestionByID(ctx, questionID)
 	if err != nil {
-		return fmt.Errorf("question not found: %w", err)
+		return appErrors.NewNotFoundError("Question not found")
 	}
 
 	// Verify user exists
 	_, err = s.userRepo.GetByID(ctx, userID)
 	if err != nil {
-		return fmt.Errorf("user not found: %w", err)
+		return appErrors.NewNotFoundError("User not found")
 	}
 
 	// Validate response if not skipped
 	if !skipped {
 		err = s.validateResponse(question, responseValue)
 		if err != nil {
-			return fmt.Errorf("invalid response: %w", err)
+			return err // validateResponse already returns AppError
 		}
 	}
 
 	// Create or update response
-	response := user.NewUserOnboardingResponse(userID, questionID, responseValue, skipped)
+	response := userDomain.NewUserOnboardingResponse(userID, questionID, responseValue, skipped)
 	
 	err = s.userRepo.UpsertUserOnboardingResponse(ctx, response)
 	if err != nil {
-		return fmt.Errorf("failed to save response: %w", err)
+		return appErrors.NewInternalError("Failed to save response", err)
 	}
-
-	// Audit log
-	actionType := "onboarding.response_submitted"
-	if skipped {
-		actionType = "onboarding.question_skipped"
-	}
-	
-	metadata := fmt.Sprintf(`{"question_id": "%s", "skipped": %t}`, questionID.String(), skipped)
-	s.auditRepo.Create(ctx, auth.NewAuditLog(&userID, nil, actionType, "onboarding", questionID.String(), metadata, "", ""))
 
 	return nil
 }
 
 // SubmitMultipleResponses submits multiple responses at once
-func (s *onboardingService) SubmitMultipleResponses(ctx context.Context, userID ulid.ULID, responses []*user.SubmitOnboardingResponseRequest) error {
+func (s *onboardingService) SubmitMultipleResponses(ctx context.Context, userID ulid.ULID, responses []*userDomain.SubmitOnboardingResponseRequest) error {
 	// Verify user exists
 	_, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
-		return fmt.Errorf("user not found: %w", err)
+		return appErrors.NewNotFoundError("User not found")
 	}
 
 	// Process each response
 	for _, resp := range responses {
 		err = s.SubmitResponse(ctx, userID, resp.QuestionID, resp.ResponseValue, resp.Skipped)
 		if err != nil {
-			return fmt.Errorf("failed to submit response for question %s: %w", resp.QuestionID.String(), err)
+			return appErrors.NewInternalError("Failed to submit response for question "+resp.QuestionID.String(), err)
 		}
 	}
 
@@ -160,17 +143,17 @@ func (s *onboardingService) SubmitMultipleResponses(ctx context.Context, userID 
 }
 
 // GetOnboardingStatus retrieves the user's current onboarding progress
-func (s *onboardingService) GetOnboardingStatus(ctx context.Context, userID ulid.ULID) (*user.OnboardingProgressStatus, error) {
+func (s *onboardingService) GetOnboardingStatus(ctx context.Context, userID ulid.ULID) (*userDomain.OnboardingProgressStatus, error) {
 	// Get total questions
 	totalQuestions, err := s.userRepo.GetActiveOnboardingQuestionCount(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get question count: %w", err)
+		return nil, appErrors.NewInternalError("Failed to get question count", err)
 	}
 
 	// Get user responses
 	responses, err := s.userRepo.GetUserOnboardingResponses(ctx, userID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get user responses: %w", err)
+		return nil, appErrors.NewInternalError("Failed to get user responses", err)
 	}
 
 	// Calculate status
@@ -198,7 +181,7 @@ func (s *onboardingService) GetOnboardingStatus(ctx context.Context, userID ulid
 		}
 	}
 
-	return &user.OnboardingProgressStatus{
+	return &userDomain.OnboardingProgressStatus{
 		TotalQuestions:      totalQuestions,
 		CompletedQuestions:  completedQuestions,
 		SkippedQuestions:    skippedQuestions,
@@ -212,19 +195,16 @@ func (s *onboardingService) GetOnboardingStatus(ctx context.Context, userID ulid
 func (s *onboardingService) CompleteOnboarding(ctx context.Context, userID ulid.ULID) error {
 	err := s.userRepo.CompleteOnboarding(ctx, userID)
 	if err != nil {
-		return fmt.Errorf("failed to complete onboarding: %w", err)
+		return appErrors.NewInternalError("Failed to complete onboarding", err)
 	}
-
-	// Audit log
-	s.auditRepo.Create(ctx, auth.NewAuditLog(&userID, nil, "user.onboarding_completed", "onboarding", userID.String(), "", "", ""))
 
 	return nil
 }
 
 // validateResponse validates a response against the question requirements
-func (s *onboardingService) validateResponse(question *user.OnboardingQuestion, responseValue interface{}) error {
+func (s *onboardingService) validateResponse(question *userDomain.OnboardingQuestion, responseValue interface{}) error {
 	if question.IsRequired && responseValue == nil {
-		return fmt.Errorf("response is required for this question")
+		return appErrors.NewValidationError("response", "Response is required for this question")
 	}
 
 	if responseValue == nil {
@@ -236,18 +216,18 @@ func (s *onboardingService) validateResponse(question *user.OnboardingQuestion, 
 		// Validate against available options
 		options, err := question.GetOptionsAsStrings()
 		if err != nil {
-			return fmt.Errorf("failed to parse question options: %w", err)
+			return appErrors.NewInternalError("Failed to parse question options", err)
 		}
 
 		if len(options) == 0 {
-			return fmt.Errorf("question has no valid options")
+			return appErrors.NewValidationError("options", "Question has no valid options")
 		}
 
 		if question.QuestionType == "single_choice" {
 			// Single choice should be a string
 			responseStr, ok := responseValue.(string)
 			if !ok {
-				return fmt.Errorf("single choice response must be a string")
+				return appErrors.NewValidationError("response", "Single choice response must be a string")
 			}
 			
 			// Check if response is in options
@@ -256,19 +236,19 @@ func (s *onboardingService) validateResponse(question *user.OnboardingQuestion, 
 					return nil
 				}
 			}
-			return fmt.Errorf("response is not a valid option")
+			return appErrors.NewValidationError("response", "Response is not a valid option")
 		} else {
 			// Multiple choice should be an array
 			responseArray, ok := responseValue.([]interface{})
 			if !ok {
-				return fmt.Errorf("multiple choice response must be an array")
+				return appErrors.NewValidationError("response", "Multiple choice response must be an array")
 			}
 			
 			// Check if all responses are valid options
 			for _, resp := range responseArray {
 				respStr, ok := resp.(string)
 				if !ok {
-					return fmt.Errorf("all multiple choice responses must be strings")
+					return appErrors.NewValidationError("response", "All multiple choice responses must be strings")
 				}
 				
 				found := false
@@ -279,7 +259,7 @@ func (s *onboardingService) validateResponse(question *user.OnboardingQuestion, 
 					}
 				}
 				if !found {
-					return fmt.Errorf("response '%s' is not a valid option", respStr)
+					return appErrors.NewValidationError("response", "Response '"+respStr+"' is not a valid option")
 				}
 			}
 		}
@@ -288,7 +268,7 @@ func (s *onboardingService) validateResponse(question *user.OnboardingQuestion, 
 		// Text response should be a string
 		_, ok := responseValue.(string)
 		if !ok {
-			return fmt.Errorf("text response must be a string")
+			return appErrors.NewValidationError("response", "Text response must be a string")
 		}
 
 	case "skip_optional":

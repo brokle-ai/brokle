@@ -91,8 +91,13 @@ var (
 ### Service Layer Pattern
 ```go
 // BEFORE (inconsistent error handling)
+import (
+    "brokle/internal/core/domain/auth"
+    "brokle/internal/core/domain/user"
+)
+
 func (s *authService) Login(ctx context.Context, req *auth.LoginRequest) (*auth.LoginResponse, error) {
-    user, err := s.userRepo.GetByEmailWithPassword(ctx, req.Email)
+    foundUser, err := s.userRepo.GetByEmailWithPassword(ctx, req.Email) // ❌ Awkward naming
     if err != nil {
         return nil, fmt.Errorf("failed to get user: %w", err) // ❌ Generic error
     }
@@ -101,17 +106,23 @@ func (s *authService) Login(ctx context.Context, req *auth.LoginRequest) (*auth.
     return response, nil
 }
 
-// AFTER (structured AppErrors)
-func (s *authService) Login(ctx context.Context, req *auth.LoginRequest) (*auth.LoginResponse, error) {
-    foundUser, err := s.userRepo.GetByEmailWithPassword(ctx, req.Email)
+// AFTER (professional pattern with domain aliases)
+import (
+    authDomain "brokle/internal/core/domain/auth"
+    userDomain "brokle/internal/core/domain/user"
+    appErrors "brokle/pkg/errors"
+)
+
+func (s *authService) Login(ctx context.Context, req *authDomain.LoginRequest) (*authDomain.LoginResponse, error) {
+    user, err := s.userRepo.GetByEmailWithPassword(ctx, req.Email) // ✅ Natural naming
     if err != nil {
-        if errors.Is(err, user.ErrNotFound) {
+        if errors.Is(err, userDomain.ErrNotFound) { // ✅ Clear domain reference
             return nil, appErrors.NewUnauthorizedError("Invalid email or password")
         }
         return nil, appErrors.NewInternalError("Authentication service unavailable", err)
     }
     
-    if !foundUser.IsActive {
+    if !user.IsActive {
         return nil, appErrors.NewForbiddenError("Account is inactive")
     }
     // ... pure business logic only ✅
@@ -211,9 +222,9 @@ return fmt.Errorf("something went wrong: %w", err)
 log.Error("Failed to create user", err)
 fmt.Printf("Debug: %v\n", data)
 
-// Variable shadowing
-user, err := repo.GetUser(...)
-if errors.Is(err, user.ErrNotFound) { // ❌ 'user' is variable, not package
+// Variable shadowing - ugly prefixes
+foundUser, err := repo.GetUser(...)
+if errors.Is(err, user.ErrNotFound) { // ❌ Awkward naming
 }
 
 // Mixed concerns
@@ -224,24 +235,39 @@ func (s *service) CreateUser(...) {
 }
 ```
 
-### ✅ Do This Instead
+### ✅ Do This Instead (Professional Pattern)
 ```go
+// ✅ PROFESSIONAL: Domain aliases + natural variable names
+import (
+    userDomain "brokle/internal/core/domain/user"
+    authDomain "brokle/internal/core/domain/auth" 
+    orgDomain  "brokle/internal/core/domain/organization"
+)
+
 // Proper domain error wrapping
 if errors.Is(err, gorm.ErrRecordNotFound) {
-    return nil, fmt.Errorf("get user by ID %s: %w", id, user.ErrNotFound)
+    return nil, fmt.Errorf("get user by ID %s: %w", id, userDomain.ErrNotFound)
 }
 
 // Specific AppError constructors
 return appErrors.NewNotFoundError("User not found")
 
+// Clean variable naming + domain aliases
+user, err := repo.GetUser(...)
+if errors.Is(err, userDomain.ErrNotFound) { // ✅ Clean and clear
+}
+
+// Multiple users? Use descriptive names
+inviter, err := s.userRepo.GetByID(ctx, inviterID)
+invitee, err := s.userRepo.GetByID(ctx, inviteeID)
+
+// Collections use plural or indexed
+users, err := s.userRepo.List(ctx)
+for _, user := range users { ... }
+
 // No logging in core services - pure business logic only
 func (s *service) CreateUser(...) {
     // pure business logic only ✅
-}
-
-// Avoid variable shadowing
-foundUser, err := repo.GetUser(...)
-if errors.Is(err, user.ErrNotFound) { // ✅ Clear reference to package
 }
 
 // Decorator pattern for cross-cutting concerns

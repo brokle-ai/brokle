@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"gorm.io/gorm"
@@ -34,7 +35,7 @@ func (r *passwordResetTokenRepository) GetByID(ctx context.Context, id ulid.ULID
 	err := r.db.WithContext(ctx).Where("id = ?", id).First(&token).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("password reset token not found")
+			return nil, fmt.Errorf("get password reset token: %w", auth.ErrNotFound)
 		}
 		return nil, err
 	}
@@ -47,7 +48,7 @@ func (r *passwordResetTokenRepository) GetByToken(ctx context.Context, tokenStr 
 	err := r.db.WithContext(ctx).Where("token = ?", tokenStr).First(&token).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("password reset token not found")
+			return nil, fmt.Errorf("get password reset token: %w", auth.ErrNotFound)
 		}
 		return nil, err
 	}

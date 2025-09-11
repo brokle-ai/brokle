@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"gorm.io/gorm"
@@ -34,9 +35,9 @@ func (r *apiKeyRepository) GetByID(ctx context.Context, id ulid.ULID) (*auth.API
 	err := r.db.WithContext(ctx).Where("id = ? AND deleted_at IS NULL", id).First(&apiKey).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("API key not found")
+			return nil, fmt.Errorf("get API key by ID %s: %w", id, auth.ErrNotFound)
 		}
-		return nil, err
+		return nil, fmt.Errorf("database error getting API key by ID %s: %w", id, err)
 	}
 	return &apiKey, nil
 }
@@ -47,9 +48,9 @@ func (r *apiKeyRepository) GetByKeyHash(ctx context.Context, keyHash string) (*a
 	err := r.db.WithContext(ctx).Where("key_hash = ? AND deleted_at IS NULL", keyHash).First(&apiKey).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("API key not found")
+			return nil, fmt.Errorf("get API key by hash %s: %w", keyHash, auth.ErrNotFound)
 		}
-		return nil, err
+		return nil, fmt.Errorf("database error getting API key by hash %s: %w", keyHash, err)
 	}
 	return &apiKey, nil
 }
