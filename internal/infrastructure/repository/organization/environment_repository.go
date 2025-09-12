@@ -2,39 +2,39 @@ package organization
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"time"
 
 	"gorm.io/gorm"
 
-	"brokle/internal/core/domain/organization"
+	orgDomain "brokle/internal/core/domain/organization"
 	"brokle/pkg/ulid"
 )
 
-// environmentRepository implements organization.EnvironmentRepository using GORM
+// environmentRepository implements orgDomain.EnvironmentRepository using GORM
 type environmentRepository struct {
 	db *gorm.DB
 }
 
 // NewEnvironmentRepository creates a new environment repository instance
-func NewEnvironmentRepository(db *gorm.DB) organization.EnvironmentRepository {
+func NewEnvironmentRepository(db *gorm.DB) orgDomain.EnvironmentRepository {
 	return &environmentRepository{
 		db: db,
 	}
 }
 
 // Create creates a new environment
-func (r *environmentRepository) Create(ctx context.Context, env *organization.Environment) error {
+func (r *environmentRepository) Create(ctx context.Context, env *orgDomain.Environment) error {
 	return r.db.WithContext(ctx).Create(env).Error
 }
 
 // GetByID retrieves an environment by ID
-func (r *environmentRepository) GetByID(ctx context.Context, id ulid.ULID) (*organization.Environment, error) {
-	var env organization.Environment
+func (r *environmentRepository) GetByID(ctx context.Context, id ulid.ULID) (*orgDomain.Environment, error) {
+	var env orgDomain.Environment
 	err := r.db.WithContext(ctx).Where("id = ? AND deleted_at IS NULL", id).First(&env).Error
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("environment not found")
+		if err == gorm.ErrRecordNotFound {
+			return nil, fmt.Errorf("get environment by ID %s: %w", id, orgDomain.ErrEnvironmentNotFound)
 		}
 		return nil, err
 	}
@@ -42,14 +42,14 @@ func (r *environmentRepository) GetByID(ctx context.Context, id ulid.ULID) (*org
 }
 
 // GetBySlug retrieves an environment by project and slug
-func (r *environmentRepository) GetBySlug(ctx context.Context, projectID ulid.ULID, slug string) (*organization.Environment, error) {
-	var env organization.Environment
+func (r *environmentRepository) GetBySlug(ctx context.Context, projectID ulid.ULID, slug string) (*orgDomain.Environment, error) {
+	var env orgDomain.Environment
 	err := r.db.WithContext(ctx).
 		Where("project_id = ? AND slug = ? AND deleted_at IS NULL", projectID, slug).
 		First(&env).Error
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("environment not found")
+		if err == gorm.ErrRecordNotFound {
+			return nil, fmt.Errorf("get environment by project %s and slug %s: %w", projectID, slug, orgDomain.ErrEnvironmentNotFound)
 		}
 		return nil, err
 	}
@@ -57,18 +57,18 @@ func (r *environmentRepository) GetBySlug(ctx context.Context, projectID ulid.UL
 }
 
 // Update updates an environment
-func (r *environmentRepository) Update(ctx context.Context, env *organization.Environment) error {
+func (r *environmentRepository) Update(ctx context.Context, env *orgDomain.Environment) error {
 	return r.db.WithContext(ctx).Save(env).Error
 }
 
 // Delete soft deletes an environment
 func (r *environmentRepository) Delete(ctx context.Context, id ulid.ULID) error {
-	return r.db.WithContext(ctx).Model(&organization.Environment{}).Where("id = ?", id).Update("deleted_at", time.Now()).Error
+	return r.db.WithContext(ctx).Model(&orgDomain.Environment{}).Where("id = ?", id).Update("deleted_at", time.Now()).Error
 }
 
 // GetByProjectID retrieves all environments in a project
-func (r *environmentRepository) GetByProjectID(ctx context.Context, projectID ulid.ULID) ([]*organization.Environment, error) {
-	var environments []*organization.Environment
+func (r *environmentRepository) GetByProjectID(ctx context.Context, projectID ulid.ULID) ([]*orgDomain.Environment, error) {
+	var environments []*orgDomain.Environment
 	err := r.db.WithContext(ctx).
 		Where("project_id = ? AND deleted_at IS NULL", projectID).
 		Order("created_at ASC").
@@ -80,7 +80,7 @@ func (r *environmentRepository) GetByProjectID(ctx context.Context, projectID ul
 func (r *environmentRepository) CountByProject(ctx context.Context, projectID ulid.ULID) (int64, error) {
 	var count int64
 	err := r.db.WithContext(ctx).
-		Model(&organization.Environment{}).
+		Model(&orgDomain.Environment{}).
 		Where("project_id = ? AND deleted_at IS NULL", projectID).
 		Count(&count).Error
 	return count, err
@@ -90,7 +90,7 @@ func (r *environmentRepository) CountByProject(ctx context.Context, projectID ul
 func (r *environmentRepository) GetEnvironmentCount(ctx context.Context, projectID ulid.ULID) (int, error) {
 	var count int64
 	err := r.db.WithContext(ctx).
-		Model(&organization.Environment{}).
+		Model(&orgDomain.Environment{}).
 		Where("project_id = ? AND deleted_at IS NULL", projectID).
 		Count(&count).Error
 	return int(count), err

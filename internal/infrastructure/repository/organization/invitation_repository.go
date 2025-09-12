@@ -2,39 +2,39 @@ package organization
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"time"
 
 	"gorm.io/gorm"
 
-	"brokle/internal/core/domain/organization"
+	orgDomain "brokle/internal/core/domain/organization"
 	"brokle/pkg/ulid"
 )
 
-// invitationRepository implements organization.InvitationRepository using GORM
+// invitationRepository implements orgDomain.InvitationRepository using GORM
 type invitationRepository struct {
 	db *gorm.DB
 }
 
 // NewInvitationRepository creates a new invitation repository instance
-func NewInvitationRepository(db *gorm.DB) organization.InvitationRepository {
+func NewInvitationRepository(db *gorm.DB) orgDomain.InvitationRepository {
 	return &invitationRepository{
 		db: db,
 	}
 }
 
 // Create creates a new invitation
-func (r *invitationRepository) Create(ctx context.Context, invitation *organization.Invitation) error {
+func (r *invitationRepository) Create(ctx context.Context, invitation *orgDomain.Invitation) error {
 	return r.db.WithContext(ctx).Create(invitation).Error
 }
 
 // GetByID retrieves an invitation by ID
-func (r *invitationRepository) GetByID(ctx context.Context, id ulid.ULID) (*organization.Invitation, error) {
-	var invitation organization.Invitation
+func (r *invitationRepository) GetByID(ctx context.Context, id ulid.ULID) (*orgDomain.Invitation, error) {
+	var invitation orgDomain.Invitation
 	err := r.db.WithContext(ctx).Where("id = ?", id).First(&invitation).Error
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("invitation not found")
+		if err == gorm.ErrRecordNotFound {
+			return nil, fmt.Errorf("get invitation by ID %s: %w", id, orgDomain.ErrInvitationNotFound)
 		}
 		return nil, err
 	}
@@ -42,13 +42,13 @@ func (r *invitationRepository) GetByID(ctx context.Context, id ulid.ULID) (*orga
 }
 
 // Update updates an invitation
-func (r *invitationRepository) Update(ctx context.Context, invitation *organization.Invitation) error {
+func (r *invitationRepository) Update(ctx context.Context, invitation *orgDomain.Invitation) error {
 	return r.db.WithContext(ctx).Save(invitation).Error
 }
 
 // GetByOrganizationID retrieves all invitations for an organization
-func (r *invitationRepository) GetByOrganizationID(ctx context.Context, orgID ulid.ULID) ([]*organization.Invitation, error) {
-	var invitations []*organization.Invitation
+func (r *invitationRepository) GetByOrganizationID(ctx context.Context, orgID ulid.ULID) ([]*orgDomain.Invitation, error) {
+	var invitations []*orgDomain.Invitation
 	err := r.db.WithContext(ctx).
 		Where("organization_id = ?", orgID).
 		Order("created_at DESC").
@@ -57,8 +57,8 @@ func (r *invitationRepository) GetByOrganizationID(ctx context.Context, orgID ul
 }
 
 // GetByOrganizationAndStatus retrieves invitations by organization and status
-func (r *invitationRepository) GetByOrganizationAndStatus(ctx context.Context, orgID ulid.ULID, status organization.InvitationStatus) ([]*organization.Invitation, error) {
-	var invitations []*organization.Invitation
+func (r *invitationRepository) GetByOrganizationAndStatus(ctx context.Context, orgID ulid.ULID, status orgDomain.InvitationStatus) ([]*orgDomain.Invitation, error) {
+	var invitations []*orgDomain.Invitation
 	err := r.db.WithContext(ctx).
 		Where("organization_id = ? AND status = ?", orgID, status).
 		Order("created_at DESC").
@@ -67,8 +67,8 @@ func (r *invitationRepository) GetByOrganizationAndStatus(ctx context.Context, o
 }
 
 // GetByUserID retrieves all invitations for a user
-func (r *invitationRepository) GetByUserID(ctx context.Context, userID ulid.ULID) ([]*organization.Invitation, error) {
-	var invitations []*organization.Invitation
+func (r *invitationRepository) GetByUserID(ctx context.Context, userID ulid.ULID) ([]*orgDomain.Invitation, error) {
+	var invitations []*orgDomain.Invitation
 	err := r.db.WithContext(ctx).
 		Where("user_id = ?", userID).
 		Order("created_at DESC").
@@ -77,8 +77,8 @@ func (r *invitationRepository) GetByUserID(ctx context.Context, userID ulid.ULID
 }
 
 // GetByUserAndStatus retrieves invitations by user and status
-func (r *invitationRepository) GetByUserAndStatus(ctx context.Context, userID ulid.ULID, status organization.InvitationStatus) ([]*organization.Invitation, error) {
-	var invitations []*organization.Invitation
+func (r *invitationRepository) GetByUserAndStatus(ctx context.Context, userID ulid.ULID, status orgDomain.InvitationStatus) ([]*orgDomain.Invitation, error) {
+	var invitations []*orgDomain.Invitation
 	err := r.db.WithContext(ctx).
 		Where("user_id = ? AND status = ?", userID, status).
 		Order("created_at DESC").
@@ -87,14 +87,14 @@ func (r *invitationRepository) GetByUserAndStatus(ctx context.Context, userID ul
 }
 
 // GetPendingByEmail retrieves pending invitations by email
-func (r *invitationRepository) GetPendingByEmail(ctx context.Context, orgID ulid.ULID, email string) (*organization.Invitation, error) {
-	var invitation organization.Invitation
+func (r *invitationRepository) GetPendingByEmail(ctx context.Context, orgID ulid.ULID, email string) (*orgDomain.Invitation, error) {
+	var invitation orgDomain.Invitation
 	err := r.db.WithContext(ctx).
-		Where("organization_id = ? AND email = ? AND status = ?", orgID, email, organization.InvitationStatusPending).
+		Where("organization_id = ? AND email = ? AND status = ?", orgID, email, orgDomain.InvitationStatusPending).
 		First(&invitation).Error
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("invitation not found")
+		if err == gorm.ErrRecordNotFound {
+			return nil, fmt.Errorf("get pending invitation by org %s and email %s: %w", orgID, email, orgDomain.ErrInvitationNotFound)
 		}
 		return nil, err
 	}
@@ -102,26 +102,26 @@ func (r *invitationRepository) GetPendingByEmail(ctx context.Context, orgID ulid
 }
 
 // GetExpiredInvitations retrieves expired invitations
-func (r *invitationRepository) GetExpiredInvitations(ctx context.Context) ([]*organization.Invitation, error) {
-	var invitations []*organization.Invitation
+func (r *invitationRepository) GetExpiredInvitations(ctx context.Context) ([]*orgDomain.Invitation, error) {
+	var invitations []*orgDomain.Invitation
 	err := r.db.WithContext(ctx).
-		Where("status = ? AND expires_at < ?", organization.InvitationStatusPending, time.Now()).
+		Where("status = ? AND expires_at < ?", orgDomain.InvitationStatusPending, time.Now()).
 		Find(&invitations).Error
 	return invitations, err
 }
 
 // Delete soft deletes an invitation
 func (r *invitationRepository) Delete(ctx context.Context, id ulid.ULID) error {
-	return r.db.WithContext(ctx).Model(&organization.Invitation{}).Where("id = ?", id).Update("deleted_at", time.Now()).Error
+	return r.db.WithContext(ctx).Model(&orgDomain.Invitation{}).Where("id = ?", id).Update("deleted_at", time.Now()).Error
 }
 
 // GetByToken retrieves an invitation by token
-func (r *invitationRepository) GetByToken(ctx context.Context, token string) (*organization.Invitation, error) {
-	var invitation organization.Invitation
+func (r *invitationRepository) GetByToken(ctx context.Context, token string) (*orgDomain.Invitation, error) {
+	var invitation orgDomain.Invitation
 	err := r.db.WithContext(ctx).Where("token = ? AND deleted_at IS NULL", token).First(&invitation).Error
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("invitation not found")
+		if err == gorm.ErrRecordNotFound {
+			return nil, fmt.Errorf("get invitation by token: %w", orgDomain.ErrInvitationNotFound)
 		}
 		return nil, err
 	}
@@ -129,8 +129,8 @@ func (r *invitationRepository) GetByToken(ctx context.Context, token string) (*o
 }
 
 // GetByEmail retrieves all invitations for an email address
-func (r *invitationRepository) GetByEmail(ctx context.Context, email string) ([]*organization.Invitation, error) {
-	var invitations []*organization.Invitation
+func (r *invitationRepository) GetByEmail(ctx context.Context, email string) ([]*orgDomain.Invitation, error) {
+	var invitations []*orgDomain.Invitation
 	err := r.db.WithContext(ctx).
 		Where("email = ? AND deleted_at IS NULL", email).
 		Order("created_at DESC").
@@ -139,10 +139,10 @@ func (r *invitationRepository) GetByEmail(ctx context.Context, email string) ([]
 }
 
 // GetPendingInvitations retrieves pending invitations for an organization
-func (r *invitationRepository) GetPendingInvitations(ctx context.Context, orgID ulid.ULID) ([]*organization.Invitation, error) {
-	var invitations []*organization.Invitation
+func (r *invitationRepository) GetPendingInvitations(ctx context.Context, orgID ulid.ULID) ([]*orgDomain.Invitation, error) {
+	var invitations []*orgDomain.Invitation
 	err := r.db.WithContext(ctx).
-		Where("organization_id = ? AND status = ? AND deleted_at IS NULL", orgID, organization.InvitationStatusPending).
+		Where("organization_id = ? AND status = ? AND deleted_at IS NULL", orgID, orgDomain.InvitationStatusPending).
 		Order("created_at DESC").
 		Find(&invitations).Error
 	return invitations, err
@@ -151,10 +151,10 @@ func (r *invitationRepository) GetPendingInvitations(ctx context.Context, orgID 
 // MarkAccepted marks an invitation as accepted
 func (r *invitationRepository) MarkAccepted(ctx context.Context, id ulid.ULID) error {
 	return r.db.WithContext(ctx).
-		Model(&organization.Invitation{}).
+		Model(&orgDomain.Invitation{}).
 		Where("id = ?", id).
 		Updates(map[string]interface{}{
-			"status":      organization.InvitationStatusAccepted,
+			"status":      orgDomain.InvitationStatusAccepted,
 			"accepted_at": time.Now(),
 			"updated_at":  time.Now(),
 		}).Error
@@ -163,16 +163,16 @@ func (r *invitationRepository) MarkAccepted(ctx context.Context, id ulid.ULID) e
 // CleanupExpiredInvitations removes expired invitations
 func (r *invitationRepository) CleanupExpiredInvitations(ctx context.Context) error {
 	return r.db.WithContext(ctx).
-		Where("status = ? AND expires_at < ?", organization.InvitationStatusPending, time.Now()).
-		Delete(&organization.Invitation{}).Error
+		Where("status = ? AND expires_at < ?", orgDomain.InvitationStatusPending, time.Now()).
+		Delete(&orgDomain.Invitation{}).Error
 }
 
 // IsEmailAlreadyInvited checks if an email already has a pending invitation for an organization
 func (r *invitationRepository) IsEmailAlreadyInvited(ctx context.Context, email string, orgID ulid.ULID) (bool, error) {
 	var count int64
 	err := r.db.WithContext(ctx).
-		Model(&organization.Invitation{}).
-		Where("organization_id = ? AND email = ? AND status = ? AND deleted_at IS NULL", orgID, email, organization.InvitationStatusPending).
+		Model(&orgDomain.Invitation{}).
+		Where("organization_id = ? AND email = ? AND status = ? AND deleted_at IS NULL", orgID, email, orgDomain.InvitationStatusPending).
 		Count(&count).Error
 	return count > 0, err
 }
@@ -180,10 +180,10 @@ func (r *invitationRepository) IsEmailAlreadyInvited(ctx context.Context, email 
 // MarkExpired marks an invitation as expired
 func (r *invitationRepository) MarkExpired(ctx context.Context, id ulid.ULID) error {
 	return r.db.WithContext(ctx).
-		Model(&organization.Invitation{}).
+		Model(&orgDomain.Invitation{}).
 		Where("id = ?", id).
 		Updates(map[string]interface{}{
-			"status":     organization.InvitationStatusExpired,
+			"status":     orgDomain.InvitationStatusExpired,
 			"updated_at": time.Now(),
 		}).Error
 }
@@ -191,10 +191,10 @@ func (r *invitationRepository) MarkExpired(ctx context.Context, id ulid.ULID) er
 // RevokeInvitation revokes an invitation
 func (r *invitationRepository) RevokeInvitation(ctx context.Context, id ulid.ULID) error {
 	return r.db.WithContext(ctx).
-		Model(&organization.Invitation{}).
+		Model(&orgDomain.Invitation{}).
 		Where("id = ?", id).
 		Updates(map[string]interface{}{
-			"status":     organization.InvitationStatusRevoked,
+			"status":     orgDomain.InvitationStatusRevoked,
 			"updated_at": time.Now(),
 		}).Error
 }
