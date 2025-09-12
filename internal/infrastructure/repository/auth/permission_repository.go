@@ -3,38 +3,39 @@ package auth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"gorm.io/gorm"
 
-	"brokle/internal/core/domain/auth"
+	authDomain "brokle/internal/core/domain/auth"
 	"brokle/pkg/ulid"
 )
 
-// permissionRepository implements auth.PermissionRepository using GORM
+// permissionRepository implements authDomain.PermissionRepository using GORM
 type permissionRepository struct {
 	db *gorm.DB
 }
 
 // NewPermissionRepository creates a new permission repository instance
-func NewPermissionRepository(db *gorm.DB) auth.PermissionRepository {
+func NewPermissionRepository(db *gorm.DB) authDomain.PermissionRepository {
 	return &permissionRepository{
 		db: db,
 	}
 }
 
 // Create creates a new permission
-func (r *permissionRepository) Create(ctx context.Context, permission *auth.Permission) error {
+func (r *permissionRepository) Create(ctx context.Context, permission *authDomain.Permission) error {
 	return r.db.WithContext(ctx).Create(permission).Error
 }
 
 // GetByID retrieves a permission by ID
-func (r *permissionRepository) GetByID(ctx context.Context, id ulid.ULID) (*auth.Permission, error) {
-	var permission auth.Permission
+func (r *permissionRepository) GetByID(ctx context.Context, id ulid.ULID) (*authDomain.Permission, error) {
+	var permission authDomain.Permission
 	err := r.db.WithContext(ctx).Where("id = ?", id).First(&permission).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("permission not found")
+			return nil, fmt.Errorf("get permission by ID %s: %w", id, authDomain.ErrNotFound)
 		}
 		return nil, err
 	}
@@ -42,12 +43,12 @@ func (r *permissionRepository) GetByID(ctx context.Context, id ulid.ULID) (*auth
 }
 
 // GetByName retrieves a permission by name
-func (r *permissionRepository) GetByName(ctx context.Context, name string) (*auth.Permission, error) {
-	var permission auth.Permission
+func (r *permissionRepository) GetByName(ctx context.Context, name string) (*authDomain.Permission, error) {
+	var permission authDomain.Permission
 	err := r.db.WithContext(ctx).Where("name = ?", name).First(&permission).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("permission not found")
+			return nil, fmt.Errorf("get permission by name %s: %w", name, authDomain.ErrNotFound)
 		}
 		return nil, err
 	}
@@ -55,21 +56,21 @@ func (r *permissionRepository) GetByName(ctx context.Context, name string) (*aut
 }
 
 // GetAll retrieves all permissions
-func (r *permissionRepository) GetAll(ctx context.Context) ([]*auth.Permission, error) {
-	var permissions []*auth.Permission
+func (r *permissionRepository) GetAll(ctx context.Context) ([]*authDomain.Permission, error) {
+	var permissions []*authDomain.Permission
 	err := r.db.WithContext(ctx).Order("category ASC, name ASC").Find(&permissions).Error
 	return permissions, err
 }
 
 // GetAllPermissions retrieves all permissions (interface method)
-func (r *permissionRepository) GetAllPermissions(ctx context.Context) ([]*auth.Permission, error) {
+func (r *permissionRepository) GetAllPermissions(ctx context.Context) ([]*authDomain.Permission, error) {
 	return r.GetAll(ctx)
 }
 
 
 // GetByNames retrieves permissions by names
-func (r *permissionRepository) GetByNames(ctx context.Context, names []string) ([]*auth.Permission, error) {
-	var permissions []*auth.Permission
+func (r *permissionRepository) GetByNames(ctx context.Context, names []string) ([]*authDomain.Permission, error) {
+	var permissions []*authDomain.Permission
 	err := r.db.WithContext(ctx).
 		Where("name IN ?", names).
 		Order("name ASC").
@@ -78,18 +79,18 @@ func (r *permissionRepository) GetByNames(ctx context.Context, names []string) (
 }
 
 // Update updates a permission
-func (r *permissionRepository) Update(ctx context.Context, permission *auth.Permission) error {
+func (r *permissionRepository) Update(ctx context.Context, permission *authDomain.Permission) error {
 	return r.db.WithContext(ctx).Save(permission).Error
 }
 
 // Delete soft deletes a permission
 func (r *permissionRepository) Delete(ctx context.Context, id ulid.ULID) error {
-	return r.db.WithContext(ctx).Model(&auth.Permission{}).Where("id = ?", id).Update("deleted_at", time.Now()).Error
+	return r.db.WithContext(ctx).Model(&authDomain.Permission{}).Where("id = ?", id).Update("deleted_at", time.Now()).Error
 }
 
 // GetPermissionsByRoleID retrieves permissions for a specific role
-func (r *permissionRepository) GetPermissionsByRoleID(ctx context.Context, roleID ulid.ULID) ([]*auth.Permission, error) {
-	var permissions []*auth.Permission
+func (r *permissionRepository) GetPermissionsByRoleID(ctx context.Context, roleID ulid.ULID) ([]*authDomain.Permission, error) {
+	var permissions []*authDomain.Permission
 	err := r.db.WithContext(ctx).
 		Table("permissions").
 		Joins("JOIN role_permissions ON permissions.id = role_permissions.permission_id").
@@ -100,8 +101,8 @@ func (r *permissionRepository) GetPermissionsByRoleID(ctx context.Context, roleI
 }
 
 // GetUserPermissions retrieves permissions for a user in an organization
-func (r *permissionRepository) GetUserPermissions(ctx context.Context, userID, orgID ulid.ULID) ([]*auth.Permission, error) {
-	var permissions []*auth.Permission
+func (r *permissionRepository) GetUserPermissions(ctx context.Context, userID, orgID ulid.ULID) ([]*authDomain.Permission, error) {
+	var permissions []*authDomain.Permission
 	err := r.db.WithContext(ctx).
 		Table("permissions").
 		Joins("JOIN role_permissions ON permissions.id = role_permissions.permission_id").
@@ -129,12 +130,12 @@ func (r *permissionRepository) GetUserPermissionsByAPIKey(ctx context.Context, a
 }
 
 // GetByResourceAction retrieves permission by resource and action
-func (r *permissionRepository) GetByResourceAction(ctx context.Context, resource, action string) (*auth.Permission, error) {
-	var permission auth.Permission
+func (r *permissionRepository) GetByResourceAction(ctx context.Context, resource, action string) (*authDomain.Permission, error) {
+	var permission authDomain.Permission
 	err := r.db.WithContext(ctx).Where("resource = ? AND action = ?", resource, action).First(&permission).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("permission not found")
+			return nil, fmt.Errorf("get permission by resource %s action %s: %w", resource, action, authDomain.ErrNotFound)
 		}
 		return nil, err
 	}
@@ -142,8 +143,8 @@ func (r *permissionRepository) GetByResourceAction(ctx context.Context, resource
 }
 
 // GetByResource retrieves permissions for a specific resource
-func (r *permissionRepository) GetByResource(ctx context.Context, resource string) ([]*auth.Permission, error) {
-	var permissions []*auth.Permission
+func (r *permissionRepository) GetByResource(ctx context.Context, resource string) ([]*authDomain.Permission, error) {
+	var permissions []*authDomain.Permission
 	err := r.db.WithContext(ctx).
 		Where("resource = ?", resource).
 		Order("action ASC").
@@ -152,8 +153,8 @@ func (r *permissionRepository) GetByResource(ctx context.Context, resource strin
 }
 
 // GetByResourceActions retrieves permissions by resource:action format
-func (r *permissionRepository) GetByResourceActions(ctx context.Context, resourceActions []string) ([]*auth.Permission, error) {
-	var permissions []*auth.Permission
+func (r *permissionRepository) GetByResourceActions(ctx context.Context, resourceActions []string) ([]*authDomain.Permission, error) {
+	var permissions []*authDomain.Permission
 	err := r.db.WithContext(ctx).
 		Where("resource_action IN ?", resourceActions).
 		Order("resource ASC, action ASC").
@@ -162,15 +163,15 @@ func (r *permissionRepository) GetByResourceActions(ctx context.Context, resourc
 }
 
 // ListPermissions returns paginated list of permissions with total count
-func (r *permissionRepository) ListPermissions(ctx context.Context, limit, offset int) ([]*auth.Permission, int, error) {
+func (r *permissionRepository) ListPermissions(ctx context.Context, limit, offset int) ([]*authDomain.Permission, int, error) {
 	// Get total count
 	var total int64
-	if err := r.db.WithContext(ctx).Model(&auth.Permission{}).Count(&total).Error; err != nil {
+	if err := r.db.WithContext(ctx).Model(&authDomain.Permission{}).Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 	
 	// Get permissions with pagination
-	var permissions []*auth.Permission
+	var permissions []*authDomain.Permission
 	err := r.db.WithContext(ctx).
 		Order("category ASC, resource ASC, action ASC").
 		Limit(limit).
@@ -181,7 +182,7 @@ func (r *permissionRepository) ListPermissions(ctx context.Context, limit, offse
 }
 
 // SearchPermissions searches permissions with pagination
-func (r *permissionRepository) SearchPermissions(ctx context.Context, query string, limit, offset int) ([]*auth.Permission, int, error) {
+func (r *permissionRepository) SearchPermissions(ctx context.Context, query string, limit, offset int) ([]*authDomain.Permission, int, error) {
 	searchPattern := "%" + query + "%"
 	dbQuery := r.db.WithContext(ctx).Where(
 		"(name ILIKE ? OR description ILIKE ? OR resource ILIKE ? OR action ILIKE ? OR category ILIKE ?)",
@@ -190,12 +191,12 @@ func (r *permissionRepository) SearchPermissions(ctx context.Context, query stri
 	
 	// Get total count
 	var total int64
-	if err := dbQuery.Model(&auth.Permission{}).Count(&total).Error; err != nil {
+	if err := dbQuery.Model(&authDomain.Permission{}).Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 	
 	// Get permissions with pagination
-	var permissions []*auth.Permission
+	var permissions []*authDomain.Permission
 	err := dbQuery.
 		Order("category ASC, resource ASC, action ASC").
 		Limit(limit).
@@ -209,7 +210,7 @@ func (r *permissionRepository) SearchPermissions(ctx context.Context, query stri
 func (r *permissionRepository) GetAvailableResources(ctx context.Context) ([]string, error) {
 	var resources []string
 	err := r.db.WithContext(ctx).
-		Model(&auth.Permission{}).
+		Model(&authDomain.Permission{}).
 		Distinct("resource").
 		Where("resource IS NOT NULL AND resource != ''").
 		Order("resource ASC").
@@ -221,7 +222,7 @@ func (r *permissionRepository) GetAvailableResources(ctx context.Context) ([]str
 func (r *permissionRepository) GetActionsForResource(ctx context.Context, resource string) ([]string, error) {
 	var actions []string
 	err := r.db.WithContext(ctx).
-		Model(&auth.Permission{}).
+		Model(&authDomain.Permission{}).
 		Where("resource = ?", resource).
 		Order("action ASC").
 		Pluck("action", &actions).Error
@@ -232,7 +233,7 @@ func (r *permissionRepository) GetActionsForResource(ctx context.Context, resour
 func (r *permissionRepository) GetPermissionCategories(ctx context.Context) ([]string, error) {
 	var categories []string
 	err := r.db.WithContext(ctx).
-		Model(&auth.Permission{}).
+		Model(&authDomain.Permission{}).
 		Distinct("category").
 		Where("category IS NOT NULL AND category != ''").
 		Order("category ASC").
@@ -291,10 +292,10 @@ func (r *permissionRepository) GetUserEffectivePermissions(ctx context.Context, 
 // ValidateResourceAction validates resource:action format
 func (r *permissionRepository) ValidateResourceAction(ctx context.Context, resource, action string) error {
 	if resource == "" {
-		return errors.New("resource cannot be empty")
+		return fmt.Errorf("validate permission resource: %w", authDomain.ErrInvalidCredentials)
 	}
 	if action == "" {
-		return errors.New("action cannot be empty")
+		return fmt.Errorf("validate permission action: %w", authDomain.ErrInvalidCredentials)
 	}
 	return nil
 }
@@ -304,7 +305,7 @@ func (r *permissionRepository) PermissionExists(ctx context.Context, resource, a
 	resourceAction := resource + ":" + action
 	var count int64
 	err := r.db.WithContext(ctx).
-		Model(&auth.Permission{}).
+		Model(&authDomain.Permission{}).
 		Where("resource_action = ?", resourceAction).
 		Count(&count).Error
 	return count > 0, err
@@ -314,7 +315,7 @@ func (r *permissionRepository) PermissionExists(ctx context.Context, resource, a
 func (r *permissionRepository) BulkPermissionExists(ctx context.Context, resourceActions []string) (map[string]bool, error) {
 	var existingActions []string
 	err := r.db.WithContext(ctx).
-		Model(&auth.Permission{}).
+		Model(&authDomain.Permission{}).
 		Where("resource_action IN ?", resourceActions).
 		Pluck("resource_action", &existingActions).Error
 	if err != nil {
@@ -335,7 +336,7 @@ func (r *permissionRepository) BulkPermissionExists(ctx context.Context, resourc
 }
 
 // BulkCreate creates multiple permissions
-func (r *permissionRepository) BulkCreate(ctx context.Context, permissions []*auth.Permission) error {
+func (r *permissionRepository) BulkCreate(ctx context.Context, permissions []*authDomain.Permission) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for _, permission := range permissions {
 			if err := tx.Create(permission).Error; err != nil {
@@ -347,7 +348,7 @@ func (r *permissionRepository) BulkCreate(ctx context.Context, permissions []*au
 }
 
 // BulkUpdate updates multiple permissions
-func (r *permissionRepository) BulkUpdate(ctx context.Context, permissions []*auth.Permission) error {
+func (r *permissionRepository) BulkUpdate(ctx context.Context, permissions []*authDomain.Permission) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for _, permission := range permissions {
 			if err := tx.Save(permission).Error; err != nil {
@@ -362,7 +363,7 @@ func (r *permissionRepository) BulkUpdate(ctx context.Context, permissions []*au
 func (r *permissionRepository) BulkDelete(ctx context.Context, permissionIDs []ulid.ULID) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for _, id := range permissionIDs {
-			if err := tx.Model(&auth.Permission{}).Where("id = ?", id).Update("deleted_at", time.Now()).Error; err != nil {
+			if err := tx.Model(&authDomain.Permission{}).Where("id = ?", id).Update("deleted_at", time.Now()).Error; err != nil {
 				return err
 			}
 		}
