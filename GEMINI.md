@@ -4,7 +4,7 @@ This document provides comprehensive context for the Gemini AI agent to understa
 
 ## 1. Project Overview
 
-The Brokle Platform is a production-ready, microservices-based AI infrastructure platform. It acts as an intelligent proxy between applications and Large Language Model (LLM) providers (e.g., OpenAI, Anthropic, Google). The platform's core mission is to be the **"Stripe for AI Infrastructure,"** providing a unified solution for AI teams to build, deploy, and scale production AI applications.
+The Brokle Platform is The Open-Source AI Control Plane - See Everything. Control Everything. It acts as an intelligent proxy between applications and Large Language Model (LLM) providers (e.g., OpenAI, Anthropic, Google). The platform provides observability, routing, and governance for AI in production — open source and built for scale.
 
 ### Key Differentiators:
 

@@ -1,4 +1,4 @@
-# Brokle AI Infrastructure Platform Configuration
+# Brokle AI Control Plane Configuration
 # 
 # This is the main configuration file for the Brokle platform.
 # Environment-specific values can be overridden using environment variables:

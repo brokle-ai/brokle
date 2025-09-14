@@ -1,4 +1,4 @@
-# Makefile for Brokle AI Infrastructure Platform
+# Makefile for Brokle AI Control Plane
 #
 # This Makefile provides automation for development, testing, building,
 # and deployment of the Brokle platform.
@@ -10,7 +10,7 @@
 
 # Default target
 help: ## Show this help message
-	@echo "Brokle AI Infrastructure Platform - Available Commands:"
+	@echo "Brokle AI Control Plane - Available Commands:"
 	@echo ""
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
 	@echo ""
@@ -386,7 +386,7 @@ install-tools: ## Install development tools
 ##@ Information
 
 version: ## Show version information
-	@echo "Brokle AI Infrastructure Platform"
+	@echo "Brokle AI Control Plane"
 	@echo "Version: $(shell git describe --tags --always --dirty)"
 	@echo "Commit: $(shell git rev-parse HEAD)"
 	@echo "Build Date: $(shell date -u +%Y-%m-%dT%H:%M:%SZ)"

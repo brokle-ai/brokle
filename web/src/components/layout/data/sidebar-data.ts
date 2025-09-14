@@ -182,7 +182,7 @@ export function getSidebarData(orgSlug?: string, projectSlug?: string): SidebarD
       {
         name: 'Brokle AI Platform',
         logo: BrokleLogo,
-        plan: 'Complete AI Infrastructure',
+        plan: 'The Open-Source AI Control Plane',
       },
     ],
     navGroups,

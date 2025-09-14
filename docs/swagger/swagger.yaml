@@ -1880,13 +1880,13 @@ info:
     email: support@brokle.ai
     name: Brokle Platform Team
     url: https://brokle.ai/support
-  description: Complete AI infrastructure platform providing gateway, observability,
-    caching, and optimization services.
+  description: The Open-Source AI Control Plane - See Everything. Control Everything.
+    Observability, routing, and governance for AI in production.
   license:
     name: MIT License
     url: https://opensource.org/licenses/MIT
   termsOfService: https://brokle.ai/terms
-  title: Brokle AI Infrastructure Platform API
+  title: Brokle AI Control Plane API
   version: 1.0.0
 paths:
   /api/v1/admin/tokens/blacklisted:

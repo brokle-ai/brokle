@@ -4,17 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Platform Overview
 
-**Brokle** - Complete AI Infrastructure Platform that provides everything AI teams need to build, deploy, and scale production AI applications.
+**Brokle** - The Open-Source AI Control Plane. See Everything. Control Everything. Observability, routing, and governance for AI in production — open source and built for scale.
 
 ### Core Mission
-Build the unified platform for AI teams to build, deploy, and scale production AI applications. Position as "The Stripe for AI Infrastructure" - handling all complexity so developers can focus on building great AI applications.
+See Everything. Control Everything. Build the unified open-source control plane for AI teams to monitor, route, and govern production AI applications with complete visibility and control.
 
 ### Key Features
-- **Intelligent Gateway**: OpenAI-compatible proxy with smart routing across 250+ LLM providers
-- **Advanced Observability**: 40+ AI-specific metrics with real-time monitoring
-- **Semantic Caching**: Vector-based caching for 95% cost reduction potential  
-- **Cost Optimization**: 30-50% reduction in LLM costs through intelligent routing
-- **Multi-tenant Architecture**: Organization → Project → Environment isolation
+- **See Everything**: 40+ AI-specific metrics with real-time observability and monitoring
+- **Control Everything**: Intelligent routing across 250+ LLM providers with governance controls
+- **Open-Source Control**: Complete visibility into your AI infrastructure with no vendor lock-in
+- **Production Scale**: Multi-tenant architecture with enterprise-grade governance
+- **Cost Intelligence**: 30-50% reduction in LLM costs through smart routing and optimization
 
 ## Architecture: Scalable Monolith
 
