@@ -8139,7 +8139,7 @@ var SwaggerInfo = &swag.Spec{
 	BasePath:         "",
 	Schemes:          []string{"http", "https"},
 	Title:            "Brokle AI Control Plane API",
-	Description:      "The Open-Source AI Control Plane - See Everything. Control Everything. Observability, routing, and governance for AI in production.",
+	Description:      "The Open-Source AI Control Plane - See Everything. Control Everything. Observability, routing, and governance for AI.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

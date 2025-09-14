@@ -23,7 +23,7 @@ import (
 
 // @title Brokle AI Control Plane API
 // @version 1.0.0
-// @description The Open-Source AI Control Plane - See Everything. Control Everything. Observability, routing, and governance for AI in production.
+// @description The Open-Source AI Control Plane - See Everything. Control Everything. Observability, routing, and governance for AI.
 // @termsOfService https://brokle.ai/terms
 //
 // @contact.name Brokle Platform Team

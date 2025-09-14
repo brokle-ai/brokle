@@ -1881,7 +1881,7 @@ info:
     name: Brokle Platform Team
     url: https://brokle.ai/support
   description: The Open-Source AI Control Plane - See Everything. Control Everything.
-    Observability, routing, and governance for AI in production.
+    Observability, routing, and governance for AI.
   license:
     name: MIT License
     url: https://opensource.org/licenses/MIT
