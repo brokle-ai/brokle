@@ -2,7 +2,7 @@
 
 ## 🚀 Overview
 
-This document provides comprehensive guidance for developing and maintaining the Brokle Dashboard - a Next.js 15 App Router application that serves as the frontend interface for the Complete AI Infrastructure Platform.
+This document provides comprehensive guidance for developing and maintaining the Brokle Dashboard - a Next.js 15 App Router application that serves as the frontend interface for The Open-Source AI Control Plane.
 
 ## 📁 Project Structure
 

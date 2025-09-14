@@ -5,8 +5,8 @@
     ],
     "swagger": "2.0",
     "info": {
-        "description": "Complete AI infrastructure platform providing gateway, observability, caching, and optimization services.",
-        "title": "Brokle AI Infrastructure Platform API",
+        "description": "The Open-Source AI Control Plane - See Everything. Control Everything. Observability, routing, and governance for AI.",
+        "title": "Brokle AI Control Plane API",
         "termsOfService": "https://brokle.ai/terms",
         "contact": {
             "name": "Brokle Platform Team",

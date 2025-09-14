@@ -229,84 +229,55 @@ func (s *userService) Register(ctx context.Context, email, name, password string
 
 ### Error Handling
 
-#### Custom Error Types
+The Brokle platform implements **industrial-grade error handling patterns** across all architectural layers. These patterns ensure clean architecture, proper error propagation, and maintainable code.
 
+#### 📖 Comprehensive Error Handling Documentation
+
+For complete error handling implementation patterns, see:
+
+- **[Error Handling Guide](./development/ERROR_HANDLING_GUIDE.md)** - Complete industrial patterns across Repository → Service → Handler layers
+- **[Domain Alias Patterns](./development/DOMAIN_ALIAS_PATTERNS.md)** - Professional import patterns for clean, conflict-free code
+- **[Quick Reference](./development/ERROR_HANDLING_QUICK_REFERENCE.md)** - Developer cheat sheet for daily development
+
+#### Key Patterns Overview
+
+**Repository Layer**: Domain errors with context wrapping
 ```go
-// pkg/errors/errors.go
-type ErrorType string
+// Professional domain alias imports
+import authDomain "brokle/internal/core/domain/auth"
 
-const (
-    ErrorTypeValidation   ErrorType = "VALIDATION_ERROR"
-    ErrorTypeNotFound     ErrorType = "NOT_FOUND"
-    ErrorTypeUnauthorized ErrorType = "UNAUTHORIZED"
-    ErrorTypeInternal     ErrorType = "INTERNAL_ERROR"
-)
-
-type Error struct {
-    Type    ErrorType `json:"type"`
-    Code    string    `json:"code"`
-    Message string    `json:"message"`
-    Details map[string]interface{} `json:"details,omitempty"`
-}
-
-func (e *Error) Error() string {
-    return e.Message
-}
-
-// Constructor functions
-func NewValidationError(message string) *Error {
-    return &Error{
-        Type:    ErrorTypeValidation,
-        Code:    "INVALID_INPUT",
-        Message: message,
-    }
-}
-
-func NewNotFoundError(resource string) *Error {
-    return &Error{
-        Type:    ErrorTypeNotFound,
-        Code:    "RESOURCE_NOT_FOUND",
-        Message: fmt.Sprintf("%s not found", resource),
-    }
+// GORM error handling with domain error wrapping
+if err == gorm.ErrRecordNotFound {
+    return nil, fmt.Errorf("get user by ID %s: %w", id, authDomain.ErrNotFound)
 }
 ```
 
-#### Error Handling Best Practices
-
+**Service Layer**: AppError constructors for business logic
 ```go
-// Good - wrap errors with context
-func (s *userService) GetUser(ctx context.Context, id ulid.ULID) (*user.User, error) {
-    user, err := s.repo.GetByID(ctx, id)
-    if err != nil {
-        return nil, fmt.Errorf("failed to get user %s: %w", id, err)
-    }
-    
-    return user, nil
-}
-
-// Good - handle different error types
-func (h *userHandler) GetUser(w http.ResponseWriter, r *http.Request) {
-    userID, err := ulid.Parse(mux.Vars(r)["id"])
-    if err != nil {
-        http.Error(w, "Invalid user ID", http.StatusBadRequest)
-        return
-    }
-    
-    user, err := h.service.GetUser(r.Context(), userID)
-    if err != nil {
-        var notFoundErr *errors.NotFoundError
-        if errors.As(err, &notFoundErr) {
-            http.Error(w, err.Error(), http.StatusNotFound)
-            return
-        }
-        
-        http.Error(w, "Internal server error", http.StatusInternalServerError)
-        return
-    }
-    
-    response.JSON(w, http.StatusOK, user)
+// Convert domain errors to business errors
+if errors.Is(err, userDomain.ErrNotFound) {
+    return nil, appErrors.NewNotFoundError("User not found")
 }
 ```
+
+**Handler Layer**: Structured HTTP response handling
+```go
+// Automatic HTTP status mapping
+resp, err := h.userService.GetUser(c, userID)
+if err != nil {
+    response.Error(c, err) // Maps AppErrors to HTTP status codes
+    return
+}
+response.Success(c, resp)
+```
+
+#### Architecture Benefits
+
+- **Clean Architecture**: Proper layer separation with structured error flow
+- **Domain Separation**: Professional domain aliases prevent naming conflicts
+- **Industrial Standards**: Following Go best practices for enterprise applications
+- **Maintainable**: Consistent patterns across 18+ repository files and 14+ services
+- **Production Ready**: Comprehensive error context and automated HTTP mapping
 
 ### HTTP Handler Patterns
 

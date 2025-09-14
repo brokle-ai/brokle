@@ -2,27 +2,24 @@ package auth
 
 import (
 	"context"
-	"fmt"
 	"time"
 
-	"brokle/internal/core/domain/auth"
+	authDomain "brokle/internal/core/domain/auth"
 	"brokle/pkg/ulid"
+	appErrors "brokle/pkg/errors"
 )
 
 // blacklistedTokenService implements the auth.BlacklistedTokenService interface
 type blacklistedTokenService struct {
-	blacklistedTokenRepo auth.BlacklistedTokenRepository
-	auditRepo            auth.AuditLogRepository
+	blacklistedTokenRepo authDomain.BlacklistedTokenRepository
 }
 
 // NewBlacklistedTokenService creates a new blacklisted token service instance
 func NewBlacklistedTokenService(
-	blacklistedTokenRepo auth.BlacklistedTokenRepository,
-	auditRepo auth.AuditLogRepository,
-) auth.BlacklistedTokenService {
+	blacklistedTokenRepo authDomain.BlacklistedTokenRepository,
+) authDomain.BlacklistedTokenService {
 	return &blacklistedTokenService{
 		blacklistedTokenRepo: blacklistedTokenRepo,
-		auditRepo:            auditRepo,
 	}
 }
 
@@ -31,7 +28,7 @@ func (s *blacklistedTokenService) BlacklistToken(ctx context.Context, jti string
 	// Check if token is already blacklisted
 	isBlacklisted, err := s.blacklistedTokenRepo.IsTokenBlacklisted(ctx, jti)
 	if err != nil {
-		return fmt.Errorf("failed to check token blacklist status: %w", err)
+		return appErrors.NewInternalError("Failed to check token blacklist status", err)
 	}
 	
 	if isBlacklisted {
@@ -40,26 +37,14 @@ func (s *blacklistedTokenService) BlacklistToken(ctx context.Context, jti string
 	}
 
 	// Create blacklisted token entry
-	blacklistedToken := auth.NewBlacklistedToken(jti, userID, expiresAt, reason)
+	blacklistedToken := authDomain.NewBlacklistedToken(jti, userID, expiresAt, reason)
 	
 	// Add to blacklist
 	err = s.blacklistedTokenRepo.Create(ctx, blacklistedToken)
 	if err != nil {
-		return fmt.Errorf("failed to blacklist token: %w", err)
+		return appErrors.NewInternalError("Failed to blacklist token", err)
 	}
 
-	// Log the blacklisting action
-	auditLog := auth.NewAuditLog(
-		&userID, 
-		nil, 
-		"token.blacklisted", 
-		"token", 
-		jti, 
-		fmt.Sprintf(`{"reason": "%s", "expires_at": "%s"}`, reason, expiresAt.Format(time.RFC3339)),
-		"", 
-		"",
-	)
-	s.auditRepo.Create(ctx, auditLog) // Don't fail if audit logging fails
 
 	return nil
 }
@@ -70,7 +55,7 @@ func (s *blacklistedTokenService) IsTokenBlacklisted(ctx context.Context, jti st
 }
 
 // GetBlacklistedToken retrieves a blacklisted token by JTI
-func (s *blacklistedTokenService) GetBlacklistedToken(ctx context.Context, jti string) (*auth.BlacklistedToken, error) {
+func (s *blacklistedTokenService) GetBlacklistedToken(ctx context.Context, jti string) (*authDomain.BlacklistedToken, error) {
 	return s.blacklistedTokenRepo.GetByJTI(ctx, jti)
 }
 
@@ -80,21 +65,9 @@ func (s *blacklistedTokenService) CreateUserTimestampBlacklist(ctx context.Conte
 	
 	err := s.blacklistedTokenRepo.CreateUserTimestampBlacklist(ctx, userID, blacklistTimestamp, reason)
 	if err != nil {
-		return fmt.Errorf("failed to create user timestamp blacklist: %w", err)
+		return appErrors.NewInternalError("Failed to create user timestamp blacklist", err)
 	}
 
-	// Log the user-wide blacklisting action
-	auditLog := auth.NewAuditLog(
-		&userID, 
-		nil, 
-		"token.user_wide_blacklisted", 
-		"user", 
-		userID.String(), 
-		fmt.Sprintf(`{"reason": "%s", "action": "user_wide_blacklist", "timestamp": %d}`, reason, blacklistTimestamp),
-		"", 
-		"",
-	)
-	s.auditRepo.Create(ctx, auditLog) // Don't fail if audit logging fails
 
 	return nil
 }
@@ -116,7 +89,7 @@ func (s *blacklistedTokenService) BlacklistUserTokens(ctx context.Context, userI
 }
 
 // GetUserBlacklistedTokens retrieves blacklisted tokens for a specific user
-func (s *blacklistedTokenService) GetUserBlacklistedTokens(ctx context.Context, userID ulid.ULID, limit, offset int) ([]*auth.BlacklistedToken, error) {
+func (s *blacklistedTokenService) GetUserBlacklistedTokens(ctx context.Context, userID ulid.ULID, limit, offset int) ([]*authDomain.BlacklistedToken, error) {
 	return s.blacklistedTokenRepo.GetBlacklistedTokensByUser(ctx, userID, limit, offset)
 }
 
@@ -124,21 +97,9 @@ func (s *blacklistedTokenService) GetUserBlacklistedTokens(ctx context.Context, 
 func (s *blacklistedTokenService) CleanupExpiredTokens(ctx context.Context) error {
 	err := s.blacklistedTokenRepo.CleanupExpiredTokens(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to cleanup expired tokens: %w", err)
+		return appErrors.NewInternalError("Failed to cleanup expired tokens", err)
 	}
 
-	// Log cleanup action
-	auditLog := auth.NewAuditLog(
-		nil, 
-		nil, 
-		"token.cleanup_expired", 
-		"system", 
-		"blacklisted_tokens", 
-		`{"action": "cleanup", "type": "expired"}`,
-		"", 
-		"",
-	)
-	s.auditRepo.Create(ctx, auditLog) // Don't fail if audit logging fails
 
 	return nil
 }
@@ -147,21 +108,9 @@ func (s *blacklistedTokenService) CleanupExpiredTokens(ctx context.Context) erro
 func (s *blacklistedTokenService) CleanupOldTokens(ctx context.Context, olderThan time.Time) error {
 	err := s.blacklistedTokenRepo.CleanupTokensOlderThan(ctx, olderThan)
 	if err != nil {
-		return fmt.Errorf("failed to cleanup old tokens: %w", err)
+		return appErrors.NewInternalError("Failed to cleanup old tokens", err)
 	}
 
-	// Log cleanup action
-	auditLog := auth.NewAuditLog(
-		nil, 
-		nil, 
-		"token.cleanup_old", 
-		"system", 
-		"blacklisted_tokens", 
-		fmt.Sprintf(`{"action": "cleanup", "type": "old", "older_than": "%s"}`, olderThan.Format(time.RFC3339)),
-		"", 
-		"",
-	)
-	s.auditRepo.Create(ctx, auditLog) // Don't fail if audit logging fails
 
 	return nil
 }
@@ -172,6 +121,6 @@ func (s *blacklistedTokenService) GetBlacklistedTokensCount(ctx context.Context)
 }
 
 // GetTokensByReason retrieves tokens blacklisted for a specific reason
-func (s *blacklistedTokenService) GetTokensByReason(ctx context.Context, reason string) ([]*auth.BlacklistedToken, error) {
+func (s *blacklistedTokenService) GetTokensByReason(ctx context.Context, reason string) ([]*authDomain.BlacklistedToken, error) {
 	return s.blacklistedTokenRepo.GetBlacklistedTokensByReason(ctx, reason)
 }

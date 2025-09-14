@@ -2,81 +2,73 @@ package organization
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"time"
 
-	"brokle/internal/core/domain/auth"
-	"brokle/internal/core/domain/organization"
+	orgDomain "brokle/internal/core/domain/organization"
 	"brokle/pkg/ulid"
+	appErrors "brokle/pkg/errors"
 )
 
-// environmentService implements the organization.EnvironmentService interface
+// environmentService implements the orgDomain.EnvironmentService interface
 type environmentService struct {
-	envRepo     organization.EnvironmentRepository
-	projectRepo organization.ProjectRepository
-	memberRepo  organization.MemberRepository
-	auditRepo   auth.AuditLogRepository
+	envRepo     orgDomain.EnvironmentRepository
+	projectRepo orgDomain.ProjectRepository
+	memberRepo  orgDomain.MemberRepository
 }
 
 // NewEnvironmentService creates a new environment service instance
 func NewEnvironmentService(
-	envRepo organization.EnvironmentRepository,
-	projectRepo organization.ProjectRepository,
-	memberRepo organization.MemberRepository,
-	auditRepo auth.AuditLogRepository,
-) organization.EnvironmentService {
+	envRepo orgDomain.EnvironmentRepository,
+	projectRepo orgDomain.ProjectRepository,
+	memberRepo orgDomain.MemberRepository,
+) orgDomain.EnvironmentService {
 	return &environmentService{
 		envRepo:     envRepo,
 		projectRepo: projectRepo,
 		memberRepo:  memberRepo,
-		auditRepo:   auditRepo,
 	}
 }
 
 // CreateEnvironment creates a new environment in a project
-func (s *environmentService) CreateEnvironment(ctx context.Context, projectID ulid.ULID, req *organization.CreateEnvironmentRequest) (*organization.Environment, error) {
+func (s *environmentService) CreateEnvironment(ctx context.Context, projectID ulid.ULID, req *orgDomain.CreateEnvironmentRequest) (*orgDomain.Environment, error) {
 	// Verify project exists
-	project, err := s.projectRepo.GetByID(ctx, projectID)
+	_, err := s.projectRepo.GetByID(ctx, projectID)
 	if err != nil {
-		return nil, fmt.Errorf("project not found: %w", err)
+		return nil, appErrors.NewNotFoundError("Project not found")
 	}
 
 	// Check if environment with slug already exists in project
 	existing, _ := s.envRepo.GetBySlug(ctx, projectID, req.Slug)
 	if existing != nil {
-		return nil, errors.New("environment with this slug already exists in project")
+		return nil, appErrors.NewConflictError("Environment with this slug already exists in project")
 	}
 
 	// Create environment
-	environment := organization.NewEnvironment(projectID, req.Name, req.Slug)
+	environment := orgDomain.NewEnvironment(projectID, req.Name, req.Slug)
 	err = s.envRepo.Create(ctx, environment)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create environment: %w", err)
+		return nil, appErrors.NewInternalError("Failed to create environment", err)
 	}
 
-	// Audit log
-	s.auditRepo.Create(ctx, auth.NewAuditLog(nil, &project.OrganizationID, "environment.created", "environment", environment.ID.String(),
-		fmt.Sprintf(`{"name": "%s", "slug": "%s", "project": "%s"}`, environment.Name, environment.Slug, project.Name), "", ""))
 
 	return environment, nil
 }
 
 // GetEnvironment retrieves an environment by ID
-func (s *environmentService) GetEnvironment(ctx context.Context, envID ulid.ULID) (*organization.Environment, error) {
+func (s *environmentService) GetEnvironment(ctx context.Context, envID ulid.ULID) (*orgDomain.Environment, error) {
 	return s.envRepo.GetByID(ctx, envID)
 }
 
 // GetEnvironmentBySlug retrieves an environment by project and slug
-func (s *environmentService) GetEnvironmentBySlug(ctx context.Context, projectID ulid.ULID, slug string) (*organization.Environment, error) {
+func (s *environmentService) GetEnvironmentBySlug(ctx context.Context, projectID ulid.ULID, slug string) (*orgDomain.Environment, error) {
 	return s.envRepo.GetBySlug(ctx, projectID, slug)
 }
 
 // UpdateEnvironment updates environment details
-func (s *environmentService) UpdateEnvironment(ctx context.Context, envID ulid.ULID, req *organization.UpdateEnvironmentRequest) error {
+func (s *environmentService) UpdateEnvironment(ctx context.Context, envID ulid.ULID, req *orgDomain.UpdateEnvironmentRequest) error {
 	environment, err := s.envRepo.GetByID(ctx, envID)
 	if err != nil {
-		return fmt.Errorf("environment not found: %w", err)
+		return appErrors.NewNotFoundError("Environment not found")
 	}
 
 	// Update fields if provided
@@ -88,50 +80,32 @@ func (s *environmentService) UpdateEnvironment(ctx context.Context, envID ulid.U
 
 	err = s.envRepo.Update(ctx, environment)
 	if err != nil {
-		return fmt.Errorf("failed to update environment: %w", err)
+		return appErrors.NewInternalError("Failed to update environment", err)
 	}
 
-	// Get project for audit log
-	project, _ := s.projectRepo.GetByID(ctx, environment.ProjectID)
-	var orgID *ulid.ULID
-	if project != nil {
-		orgID = &project.OrganizationID
-	}
-
-	// Audit log
-	s.auditRepo.Create(ctx, auth.NewAuditLog(nil, orgID, "environment.updated", "environment", envID.String(), "", "", ""))
 
 	return nil
 }
 
 // DeleteEnvironment soft deletes an environment
 func (s *environmentService) DeleteEnvironment(ctx context.Context, envID ulid.ULID) error {
-	environment, err := s.envRepo.GetByID(ctx, envID)
+	// Verify environment exists before deletion
+	_, err := s.envRepo.GetByID(ctx, envID)
 	if err != nil {
-		return fmt.Errorf("environment not found: %w", err)
+		return appErrors.NewNotFoundError("Environment not found")
 	}
 
 	err = s.envRepo.Delete(ctx, envID)
 	if err != nil {
-		return fmt.Errorf("failed to delete environment: %w", err)
+		return appErrors.NewInternalError("Failed to delete environment", err)
 	}
 
-	// Get project for audit log
-	project, _ := s.projectRepo.GetByID(ctx, environment.ProjectID)
-	var orgID *ulid.ULID
-	if project != nil {
-		orgID = &project.OrganizationID
-	}
-
-	// Audit log
-	s.auditRepo.Create(ctx, auth.NewAuditLog(nil, orgID, "environment.deleted", "environment", envID.String(),
-		fmt.Sprintf(`{"name": "%s"}`, environment.Name), "", ""))
 
 	return nil
 }
 
 // GetEnvironmentsByProject retrieves all environments for a project
-func (s *environmentService) GetEnvironmentsByProject(ctx context.Context, projectID ulid.ULID) ([]*organization.Environment, error) {
+func (s *environmentService) GetEnvironmentsByProject(ctx context.Context, projectID ulid.ULID) ([]*orgDomain.Environment, error) {
 	return s.envRepo.GetByProjectID(ctx, projectID)
 }
 
@@ -139,7 +113,7 @@ func (s *environmentService) GetEnvironmentsByProject(ctx context.Context, proje
 func (s *environmentService) GetEnvironmentCount(ctx context.Context, projectID ulid.ULID) (int, error) {
 	environments, err := s.envRepo.GetByProjectID(ctx, projectID)
 	if err != nil {
-		return 0, fmt.Errorf("failed to get environments: %w", err)
+		return 0, appErrors.NewInternalError("Failed to get environments", err)
 	}
 	return len(environments), nil
 }
@@ -156,10 +130,10 @@ func (s *environmentService) CreateDefaultEnvironments(ctx context.Context, proj
 	}
 
 	for _, env := range environments {
-		environment := organization.NewEnvironment(projectID, env.name, env.slug)
+		environment := orgDomain.NewEnvironment(projectID, env.name, env.slug)
 		err := s.envRepo.Create(ctx, environment)
 		if err != nil {
-			return fmt.Errorf("failed to create %s environment: %w", env.name, err)
+			return appErrors.NewInternalError("Failed to create "+env.name+" environment", err)
 		}
 	}
 
@@ -171,13 +145,13 @@ func (s *environmentService) CanUserAccessEnvironment(ctx context.Context, userI
 	// Get environment to find project
 	environment, err := s.envRepo.GetByID(ctx, envID)
 	if err != nil {
-		return false, fmt.Errorf("environment not found: %w", err)
+		return false, appErrors.NewNotFoundError("Environment not found")
 	}
 
 	// Get project to find organization
 	project, err := s.projectRepo.GetByID(ctx, environment.ProjectID)
 	if err != nil {
-		return false, fmt.Errorf("project not found: %w", err)
+		return false, appErrors.NewNotFoundError("Project not found")
 	}
 
 	// Check if user is a member of the organization
@@ -191,7 +165,7 @@ func (s *environmentService) ValidateEnvironmentAccess(ctx context.Context, user
 		return err
 	}
 	if !canAccess {
-		return errors.New("user does not have access to this environment")
+		return appErrors.NewForbiddenError("User does not have access to this environment")
 	}
 	return nil
 }
@@ -201,13 +175,13 @@ func (s *environmentService) GetEnvironmentOrganization(ctx context.Context, env
 	// Get environment to find project
 	environment, err := s.envRepo.GetByID(ctx, envID)
 	if err != nil {
-		return ulid.ULID{}, fmt.Errorf("environment not found: %w", err)
+		return ulid.ULID{}, appErrors.NewNotFoundError("Environment not found")
 	}
 
 	// Get project to find organization
 	project, err := s.projectRepo.GetByID(ctx, environment.ProjectID)
 	if err != nil {
-		return ulid.ULID{}, fmt.Errorf("project not found: %w", err)
+		return ulid.ULID{}, appErrors.NewNotFoundError("Project not found")
 	}
 
 	return project.OrganizationID, nil

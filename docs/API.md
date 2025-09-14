@@ -230,9 +230,9 @@ List projects in an organization.
   "meta": {
     "pagination": {
       "page": 1,
-      "limit": 20,
+      "page_size": 20,
       "total": 45,
-      "total_pages": 3
+      "total_page": 3
     }
   }
 }

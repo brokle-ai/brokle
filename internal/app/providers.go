@@ -203,17 +203,14 @@ func ProvideUserServices(
 	userSvc := userService.NewUserService(
 		userRepos.User,
 		nil, // AuthService - would need to be injected if needed
-		authRepos.AuditLog,
 	)
 	
 	profileSvc := userService.NewProfileService(
 		userRepos.User,
-		authRepos.AuditLog,
 	)
 	
 	onboardingSvc := userService.NewOnboardingService(
 		userRepos.User,
-		authRepos.AuditLog,
 	)
 
 	return &UserServices{
@@ -252,13 +249,11 @@ func ProvideAuthServices(
 	orgMemberService := authService.NewOrganizationMemberService(
 		authRepos.OrganizationMember,
 		authRepos.Role,
-		authRepos.AuditLog,
 	)
 
 	// Create blacklisted token service for immediate revocation
 	blacklistedTokenService := authService.NewBlacklistedTokenService(
 		authRepos.BlacklistedToken,
-		authRepos.AuditLog,
 	)
 
 	// Create session service for session management
@@ -267,20 +262,21 @@ func ProvideAuthServices(
 		authRepos.UserSession,
 		userRepos.User,
 		jwtService,
-		authRepos.AuditLog,
 	)
 
-	// Create auth service with all dependencies
-	authSvc := authService.NewAuthService(
+	// Create core auth service (without audit logging)
+	coreAuthSvc := authService.NewAuthService(
 		&cfg.Auth,
 		userRepos.User,
 		authRepos.UserSession,
-		authRepos.AuditLog,
 		jwtService,
 		roleService,
 		authRepos.PasswordResetToken,
 		blacklistedTokenService,
 	)
+
+	// Wrap with audit decorator for clean separation of concerns
+	authSvc := authService.NewAuditDecorator(coreAuthSvc, authRepos.AuditLog, logger)
 
 	return &AuthServices{
 		Auth:                authSvc,
@@ -314,21 +310,18 @@ func ProvideOrganizationServices(
 		orgRepos.Organization,
 		userRepos.User,
 		authServices.Role,
-		authRepos.AuditLog,
 	)
 
 	projectSvc := orgService.NewProjectService(
 		orgRepos.Project,
 		orgRepos.Organization,
 		orgRepos.Member,
-		authRepos.AuditLog,
 	)
 
 	environmentSvc := orgService.NewEnvironmentService(
 		orgRepos.Environment,
 		orgRepos.Project,
 		orgRepos.Member,
-		authRepos.AuditLog,
 	)
 
 	invitationSvc := orgService.NewInvitationService(
@@ -337,7 +330,6 @@ func ProvideOrganizationServices(
 		orgRepos.Member,
 		userRepos.User,
 		authServices.Role,
-		authRepos.AuditLog,
 	)
 
 	// Create organization service with dependencies on other services
@@ -348,14 +340,12 @@ func ProvideOrganizationServices(
 		projectSvc,
 		environmentSvc,
 		authServices.Role,
-		authRepos.AuditLog,
 	)
 
 	// Create settings service
 	settingsSvc := orgService.NewOrganizationSettingsService(
 		orgRepos.Settings,
 		orgRepos.Member,
-		authRepos.AuditLog,
 	)
 
 	return orgSvc, memberSvc, projectSvc, environmentSvc, invitationSvc, settingsSvc

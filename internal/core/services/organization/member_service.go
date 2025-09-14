@@ -2,39 +2,36 @@ package organization
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
-	"brokle/internal/core/domain/auth"
-	"brokle/internal/core/domain/organization"
-	"brokle/internal/core/domain/user"
+	authDomain "brokle/internal/core/domain/auth"
+	orgDomain "brokle/internal/core/domain/organization"
+	userDomain "brokle/internal/core/domain/user"
 	"brokle/pkg/ulid"
+	appErrors "brokle/pkg/errors"
 )
 
-// memberService implements the organization.MemberService interface
+// memberService implements the orgDomain.MemberService interface
 type memberService struct {
-	memberRepo  organization.MemberRepository
-	orgRepo     organization.OrganizationRepository
-	userRepo    user.Repository
-	roleService auth.RoleService
-	auditRepo   auth.AuditLogRepository
+	memberRepo  orgDomain.MemberRepository
+	orgRepo     orgDomain.OrganizationRepository
+	userRepo    userDomain.Repository
+	roleService authDomain.RoleService
 }
 
 // NewMemberService creates a new member service instance
 func NewMemberService(
-	memberRepo organization.MemberRepository,
-	orgRepo organization.OrganizationRepository,
-	userRepo user.Repository,
-	roleService auth.RoleService,
-	auditRepo auth.AuditLogRepository,
-) organization.MemberService {
+	memberRepo orgDomain.MemberRepository,
+	orgRepo orgDomain.OrganizationRepository,
+	userRepo userDomain.Repository,
+	roleService authDomain.RoleService,
+) orgDomain.MemberService {
 	return &memberService{
 		memberRepo:  memberRepo,
 		orgRepo:     orgRepo,
 		userRepo:    userRepo,
 		roleService: roleService,
-		auditRepo:   auditRepo,
 	}
 }
 
@@ -43,40 +40,37 @@ func (s *memberService) AddMember(ctx context.Context, orgID, userID, roleID uli
 	// Verify organization exists
 	_, err := s.orgRepo.GetByID(ctx, orgID)
 	if err != nil {
-		return fmt.Errorf("organization not found: %w", err)
+		return appErrors.NewNotFoundError("Organization not found")
 	}
 
 	// Verify user exists
-	user, err := s.userRepo.GetByID(ctx, userID)
+	_, err = s.userRepo.GetByID(ctx, userID)
 	if err != nil {
-		return fmt.Errorf("user not found: %w", err)
+		return appErrors.NewNotFoundError("User not found")
 	}
 
 	// Verify role exists
-	role, err := s.roleService.GetRoleByID(ctx, roleID)
+	_, err = s.roleService.GetRoleByID(ctx, roleID)
 	if err != nil {
-		return fmt.Errorf("role not found: %w", err)
+		return appErrors.NewNotFoundError("Role not found")
 	}
 
 	// Check if user is already a member
 	isMember, err := s.memberRepo.IsMember(ctx, userID, orgID)
 	if err != nil {
-		return fmt.Errorf("failed to check membership: %w", err)
+		return appErrors.NewInternalError("Failed to check membership", err)
 	}
 	if isMember {
-		return errors.New("user is already a member of this organization")
+		return appErrors.NewConflictError("User is already a member of this organization")
 	}
 
 	// Create member
-	member := organization.NewMember(orgID, userID, roleID)
+	member := orgDomain.NewMember(orgID, userID, roleID)
 	err = s.memberRepo.Create(ctx, member)
 	if err != nil {
-		return fmt.Errorf("failed to add member: %w", err)
+		return appErrors.NewInternalError("Failed to add member", err)
 	}
 
-	// Audit log
-	s.auditRepo.Create(ctx, auth.NewAuditLog(&addedByID, &orgID, "member.added", "organization", orgID.String(),
-		fmt.Sprintf(`{"user_email": "%s", "role": "%s"}`, user.Email, role.Name), "", ""))
 
 	return nil
 }
@@ -86,29 +80,29 @@ func (s *memberService) RemoveMember(ctx context.Context, orgID, userID ulid.ULI
 	// Verify membership exists
 	member, err := s.memberRepo.GetByUserAndOrganization(ctx, userID, orgID)
 	if err != nil {
-		return fmt.Errorf("member not found: %w", err)
+		return appErrors.NewNotFoundError("Member not found")
 	}
 
 	// Check if this is the only owner
-	ownerRole, err := s.roleService.GetRoleByNameAndScope(ctx, "owner", auth.ScopeOrganization)
+	ownerRole, err := s.roleService.GetRoleByNameAndScope(ctx, "owner", authDomain.ScopeOrganization)
 	if err != nil {
-		return fmt.Errorf("failed to get owner role: %w", err)
+		return appErrors.NewInternalError("Failed to get owner role", err)
 	}
 
 	if member.RoleID == ownerRole.ID {
 		ownerCount, err := s.memberRepo.CountByOrganizationAndRole(ctx, orgID, ownerRole.ID)
 		if err != nil {
-			return fmt.Errorf("failed to count owners: %w", err)
+			return appErrors.NewInternalError("Failed to count owners", err)
 		}
 		if ownerCount <= 1 {
-			return errors.New("cannot remove the last owner of the organization")
+			return appErrors.NewForbiddenError("Cannot remove the last owner of the organization")
 		}
 	}
 
 	// Remove member (Member has composite primary key: OrganizationID + UserID)
 	err = s.memberRepo.DeleteByUserAndOrg(ctx, member.OrganizationID, member.UserID)
 	if err != nil {
-		return fmt.Errorf("failed to remove member: %w", err)
+		return appErrors.NewInternalError("Failed to remove member", err)
 	}
 
 	// If this was their default organization, clear it
@@ -120,9 +114,6 @@ func (s *memberService) RemoveMember(ctx context.Context, orgID, userID ulid.ULI
 		}
 	}
 
-	// Audit log
-	s.auditRepo.Create(ctx, auth.NewAuditLog(&removedByID, &orgID, "member.removed", "organization", orgID.String(),
-		fmt.Sprintf(`{"user_id": "%s"}`, userID.String()), "", ""))
 
 	return nil
 }
@@ -132,28 +123,28 @@ func (s *memberService) UpdateMemberRole(ctx context.Context, orgID, userID, new
 	// Verify membership exists
 	member, err := s.memberRepo.GetByUserAndOrganization(ctx, userID, orgID)
 	if err != nil {
-		return fmt.Errorf("member not found: %w", err)
+		return appErrors.NewNotFoundError("Member not found")
 	}
 
 	// Verify new role exists
-	newRole, err := s.roleService.GetRoleByID(ctx, newRoleID)
+	_, err = s.roleService.GetRoleByID(ctx, newRoleID)
 	if err != nil {
-		return fmt.Errorf("role not found: %w", err)
+		return appErrors.NewNotFoundError("Role not found")
 	}
 
 	// Check if demoting the last owner
-	ownerRole, err := s.roleService.GetRoleByNameAndScope(ctx, "owner", auth.ScopeOrganization)
+	ownerRole, err := s.roleService.GetRoleByNameAndScope(ctx, "owner", authDomain.ScopeOrganization)
 	if err != nil {
-		return fmt.Errorf("failed to get owner role: %w", err)
+		return appErrors.NewInternalError("Failed to get owner role", err)
 	}
 
 	if member.RoleID == ownerRole.ID && newRoleID != ownerRole.ID {
 		ownerCount, err := s.memberRepo.CountByOrganizationAndRole(ctx, orgID, ownerRole.ID)
 		if err != nil {
-			return fmt.Errorf("failed to count owners: %w", err)
+			return appErrors.NewInternalError("Failed to count owners", err)
 		}
 		if ownerCount <= 1 {
-			return errors.New("cannot demote the last owner of the organization")
+			return appErrors.NewForbiddenError("Cannot demote the last owner of the organization")
 		}
 	}
 
@@ -162,23 +153,20 @@ func (s *memberService) UpdateMemberRole(ctx context.Context, orgID, userID, new
 	member.UpdatedAt = time.Now()
 	err = s.memberRepo.Update(ctx, member)
 	if err != nil {
-		return fmt.Errorf("failed to update member role: %w", err)
+		return appErrors.NewInternalError("Failed to update member role", err)
 	}
 
-	// Audit log
-	s.auditRepo.Create(ctx, auth.NewAuditLog(&updatedByID, &orgID, "member.role_updated", "organization", orgID.String(),
-		fmt.Sprintf(`{"user_id": "%s", "new_role": "%s"}`, userID.String(), newRole.Name), "", ""))
 
 	return nil
 }
 
 // GetMember retrieves a specific member
-func (s *memberService) GetMember(ctx context.Context, orgID, userID ulid.ULID) (*organization.Member, error) {
+func (s *memberService) GetMember(ctx context.Context, orgID, userID ulid.ULID) (*orgDomain.Member, error) {
 	return s.memberRepo.GetByUserAndOrganization(ctx, userID, orgID)
 }
 
 // GetMembers retrieves all members of an organization
-func (s *memberService) GetMembers(ctx context.Context, orgID ulid.ULID) ([]*organization.Member, error) {
+func (s *memberService) GetMembers(ctx context.Context, orgID ulid.ULID) ([]*orgDomain.Member, error) {
 	return s.memberRepo.GetByOrganizationID(ctx, orgID)
 }
 
@@ -196,7 +184,7 @@ func (s *memberService) CanUserAccessOrganization(ctx context.Context, userID, o
 func (s *memberService) GetUserRole(ctx context.Context, userID, orgID ulid.ULID) (ulid.ULID, error) {
 	member, err := s.memberRepo.GetByUserAndOrganization(ctx, userID, orgID)
 	if err != nil {
-		return ulid.ULID{}, fmt.Errorf("member not found: %w", err)
+		return ulid.ULID{}, appErrors.NewNotFoundError("Member not found")
 	}
 
 	return member.RoleID, nil
@@ -206,19 +194,19 @@ func (s *memberService) GetUserRole(ctx context.Context, userID, orgID ulid.ULID
 func (s *memberService) GetMemberCount(ctx context.Context, orgID ulid.ULID) (int, error) {
 	members, err := s.memberRepo.GetByOrganizationID(ctx, orgID)
 	if err != nil {
-		return 0, fmt.Errorf("failed to get members: %w", err)
+		return 0, appErrors.NewInternalError("Failed to get members", err)
 	}
 	return len(members), nil
 }
 
 // GetMembersByRole returns all members with a specific role
-func (s *memberService) GetMembersByRole(ctx context.Context, orgID, roleID ulid.ULID) ([]*organization.Member, error) {
+func (s *memberService) GetMembersByRole(ctx context.Context, orgID, roleID ulid.ULID) ([]*orgDomain.Member, error) {
 	allMembers, err := s.memberRepo.GetByOrganizationID(ctx, orgID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get members: %w", err)
+		return nil, appErrors.NewInternalError("Failed to get members", err)
 	}
 
-	var membersWithRole []*organization.Member
+	var membersWithRole []*orgDomain.Member
 	for _, member := range allMembers {
 		if member.RoleID == roleID {
 			membersWithRole = append(membersWithRole, member)

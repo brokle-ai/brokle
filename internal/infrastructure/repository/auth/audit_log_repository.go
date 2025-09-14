@@ -3,38 +3,39 @@ package auth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"gorm.io/gorm"
 
-	"brokle/internal/core/domain/auth"
+	authDomain "brokle/internal/core/domain/auth"
 	"brokle/pkg/ulid"
 )
 
-// auditLogRepository implements auth.AuditLogRepository using GORM
+// auditLogRepository implements authDomain.AuditLogRepository using GORM
 type auditLogRepository struct {
 	db *gorm.DB
 }
 
 // NewAuditLogRepository creates a new audit log repository instance
-func NewAuditLogRepository(db *gorm.DB) auth.AuditLogRepository {
+func NewAuditLogRepository(db *gorm.DB) authDomain.AuditLogRepository {
 	return &auditLogRepository{
 		db: db,
 	}
 }
 
 // Create creates a new audit log entry
-func (r *auditLogRepository) Create(ctx context.Context, auditLog *auth.AuditLog) error {
+func (r *auditLogRepository) Create(ctx context.Context, auditLog *authDomain.AuditLog) error {
 	return r.db.WithContext(ctx).Create(auditLog).Error
 }
 
 // GetByID retrieves an audit log by ID
-func (r *auditLogRepository) GetByID(ctx context.Context, id ulid.ULID) (*auth.AuditLog, error) {
-	var auditLog auth.AuditLog
+func (r *auditLogRepository) GetByID(ctx context.Context, id ulid.ULID) (*authDomain.AuditLog, error) {
+	var auditLog authDomain.AuditLog
 	err := r.db.WithContext(ctx).Where("id = ?", id).First(&auditLog).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("audit log not found")
+			return nil, fmt.Errorf("get audit log by ID %s: %w", id, authDomain.ErrNotFound)
 		}
 		return nil, err
 	}
@@ -42,8 +43,8 @@ func (r *auditLogRepository) GetByID(ctx context.Context, id ulid.ULID) (*auth.A
 }
 
 // GetByUserID retrieves audit logs for a user
-func (r *auditLogRepository) GetByUserID(ctx context.Context, userID ulid.ULID, limit, offset int) ([]*auth.AuditLog, error) {
-	var auditLogs []*auth.AuditLog
+func (r *auditLogRepository) GetByUserID(ctx context.Context, userID ulid.ULID, limit, offset int) ([]*authDomain.AuditLog, error) {
+	var auditLogs []*authDomain.AuditLog
 	err := r.db.WithContext(ctx).
 		Where("user_id = ?", userID).
 		Limit(limit).
@@ -54,8 +55,8 @@ func (r *auditLogRepository) GetByUserID(ctx context.Context, userID ulid.ULID, 
 }
 
 // GetByOrganizationID retrieves audit logs for an organization
-func (r *auditLogRepository) GetByOrganizationID(ctx context.Context, orgID ulid.ULID, limit, offset int) ([]*auth.AuditLog, error) {
-	var auditLogs []*auth.AuditLog
+func (r *auditLogRepository) GetByOrganizationID(ctx context.Context, orgID ulid.ULID, limit, offset int) ([]*authDomain.AuditLog, error) {
+	var auditLogs []*authDomain.AuditLog
 	err := r.db.WithContext(ctx).
 		Where("organization_id = ?", orgID).
 		Limit(limit).
@@ -66,8 +67,8 @@ func (r *auditLogRepository) GetByOrganizationID(ctx context.Context, orgID ulid
 }
 
 // GetByResource retrieves audit logs for a resource
-func (r *auditLogRepository) GetByResource(ctx context.Context, resource, resourceID string, limit, offset int) ([]*auth.AuditLog, error) {
-	var auditLogs []*auth.AuditLog
+func (r *auditLogRepository) GetByResource(ctx context.Context, resource, resourceID string, limit, offset int) ([]*authDomain.AuditLog, error) {
+	var auditLogs []*authDomain.AuditLog
 	err := r.db.WithContext(ctx).
 		Where("resource = ? AND resource_id = ?", resource, resourceID).
 		Limit(limit).
@@ -78,11 +79,11 @@ func (r *auditLogRepository) GetByResource(ctx context.Context, resource, resour
 }
 
 // GetByFilters retrieves audit logs based on filters
-func (r *auditLogRepository) GetByFilters(ctx context.Context, filters *auth.AuditLogFilters) ([]*auth.AuditLog, int, error) {
-	var auditLogs []*auth.AuditLog
+func (r *auditLogRepository) GetByFilters(ctx context.Context, filters *authDomain.AuditLogFilters) ([]*authDomain.AuditLog, int, error) {
+	var auditLogs []*authDomain.AuditLog
 	var totalCount int64
 
-	query := r.db.WithContext(ctx).Model(&auth.AuditLog{})
+	query := r.db.WithContext(ctx).Model(&authDomain.AuditLog{})
 
 	// Apply filters
 	if filters.UserID != nil {
@@ -147,8 +148,8 @@ func (r *auditLogRepository) GetByFilters(ctx context.Context, filters *auth.Aud
 }
 
 // GetByAction retrieves audit logs by action
-func (r *auditLogRepository) GetByAction(ctx context.Context, action string, limit, offset int) ([]*auth.AuditLog, error) {
-	var auditLogs []*auth.AuditLog
+func (r *auditLogRepository) GetByAction(ctx context.Context, action string, limit, offset int) ([]*authDomain.AuditLog, error) {
+	var auditLogs []*authDomain.AuditLog
 	err := r.db.WithContext(ctx).
 		Where("action = ?", action).
 		Order("created_at DESC").
@@ -159,8 +160,8 @@ func (r *auditLogRepository) GetByAction(ctx context.Context, action string, lim
 }
 
 // GetByDateRange retrieves audit logs within a date range
-func (r *auditLogRepository) GetByDateRange(ctx context.Context, startDate, endDate time.Time, limit, offset int) ([]*auth.AuditLog, error) {
-	var auditLogs []*auth.AuditLog
+func (r *auditLogRepository) GetByDateRange(ctx context.Context, startDate, endDate time.Time, limit, offset int) ([]*authDomain.AuditLog, error) {
+	var auditLogs []*authDomain.AuditLog
 	err := r.db.WithContext(ctx).
 		Where("created_at BETWEEN ? AND ?", startDate, endDate).
 		Order("created_at DESC").
@@ -171,7 +172,7 @@ func (r *auditLogRepository) GetByDateRange(ctx context.Context, startDate, endD
 }
 
 // Search searches audit logs based on filters
-func (r *auditLogRepository) Search(ctx context.Context, filters *auth.AuditLogFilters) ([]*auth.AuditLog, int, error) {
+func (r *auditLogRepository) Search(ctx context.Context, filters *authDomain.AuditLogFilters) ([]*authDomain.AuditLog, int, error) {
 	// This method already exists as GetByFilters, so let's alias it
 	return r.GetByFilters(ctx, filters)
 }
@@ -180,19 +181,19 @@ func (r *auditLogRepository) Search(ctx context.Context, filters *auth.AuditLogF
 func (r *auditLogRepository) CleanupOldLogs(ctx context.Context, olderThan time.Time) error {
 	return r.db.WithContext(ctx).
 		Where("created_at < ?", olderThan).
-		Delete(&auth.AuditLog{}).Error
+		Delete(&authDomain.AuditLog{}).Error
 }
 
 // GetAuditLogStats returns audit log statistics
-func (r *auditLogRepository) GetAuditLogStats(ctx context.Context) (*auth.AuditLogStats, error) {
-	stats := &auth.AuditLogStats{
+func (r *auditLogRepository) GetAuditLogStats(ctx context.Context) (*authDomain.AuditLogStats, error) {
+	stats := &authDomain.AuditLogStats{
 		LogsByAction:   make(map[string]int64),
 		LogsByResource: make(map[string]int64),
 	}
 	
 	// Get total logs count
 	err := r.db.WithContext(ctx).
-		Model(&auth.AuditLog{}).
+		Model(&authDomain.AuditLog{}).
 		Count(&stats.TotalLogs).Error
 	if err != nil {
 		return nil, err
@@ -205,7 +206,7 @@ func (r *auditLogRepository) GetAuditLogStats(ctx context.Context) (*auth.AuditL
 	}
 	var actionCounts []actionCount
 	err = r.db.WithContext(ctx).
-		Model(&auth.AuditLog{}).
+		Model(&authDomain.AuditLog{}).
 		Select("action, COUNT(*) as count").
 		Group("action").
 		Find(&actionCounts).Error
@@ -224,7 +225,7 @@ func (r *auditLogRepository) GetAuditLogStats(ctx context.Context) (*auth.AuditL
 	}
 	var resourceCounts []resourceCount
 	err = r.db.WithContext(ctx).
-		Model(&auth.AuditLog{}).
+		Model(&authDomain.AuditLog{}).
 		Select("resource, COUNT(*) as count").
 		Where("resource IS NOT NULL AND resource != ''").
 		Group("resource").
@@ -238,7 +239,7 @@ func (r *auditLogRepository) GetAuditLogStats(ctx context.Context) (*auth.AuditL
 	}
 	
 	// Get last log time
-	var lastLog auth.AuditLog
+	var lastLog authDomain.AuditLog
 	err = r.db.WithContext(ctx).
 		Order("created_at DESC").
 		First(&lastLog).Error
@@ -250,15 +251,15 @@ func (r *auditLogRepository) GetAuditLogStats(ctx context.Context) (*auth.AuditL
 }
 
 // GetUserAuditLogStats returns audit log statistics for a specific user
-func (r *auditLogRepository) GetUserAuditLogStats(ctx context.Context, userID ulid.ULID) (*auth.AuditLogStats, error) {
-	stats := &auth.AuditLogStats{
+func (r *auditLogRepository) GetUserAuditLogStats(ctx context.Context, userID ulid.ULID) (*authDomain.AuditLogStats, error) {
+	stats := &authDomain.AuditLogStats{
 		LogsByAction:   make(map[string]int64),
 		LogsByResource: make(map[string]int64),
 	}
 	
 	// Get total logs count for user
 	err := r.db.WithContext(ctx).
-		Model(&auth.AuditLog{}).
+		Model(&authDomain.AuditLog{}).
 		Where("user_id = ?", userID).
 		Count(&stats.TotalLogs).Error
 	if err != nil {
@@ -272,7 +273,7 @@ func (r *auditLogRepository) GetUserAuditLogStats(ctx context.Context, userID ul
 	}
 	var actionCounts []actionCount
 	err = r.db.WithContext(ctx).
-		Model(&auth.AuditLog{}).
+		Model(&authDomain.AuditLog{}).
 		Select("action, COUNT(*) as count").
 		Where("user_id = ?", userID).
 		Group("action").
@@ -292,7 +293,7 @@ func (r *auditLogRepository) GetUserAuditLogStats(ctx context.Context, userID ul
 	}
 	var resourceCounts []resourceCount
 	err = r.db.WithContext(ctx).
-		Model(&auth.AuditLog{}).
+		Model(&authDomain.AuditLog{}).
 		Select("resource, COUNT(*) as count").
 		Where("user_id = ? AND resource IS NOT NULL AND resource != ''", userID).
 		Group("resource").
@@ -309,15 +310,15 @@ func (r *auditLogRepository) GetUserAuditLogStats(ctx context.Context, userID ul
 }
 
 // GetOrganizationAuditLogStats returns audit log statistics for a specific organization
-func (r *auditLogRepository) GetOrganizationAuditLogStats(ctx context.Context, orgID ulid.ULID) (*auth.AuditLogStats, error) {
-	stats := &auth.AuditLogStats{
+func (r *auditLogRepository) GetOrganizationAuditLogStats(ctx context.Context, orgID ulid.ULID) (*authDomain.AuditLogStats, error) {
+	stats := &authDomain.AuditLogStats{
 		LogsByAction:   make(map[string]int64),
 		LogsByResource: make(map[string]int64),
 	}
 	
 	// Get total logs count for organization
 	err := r.db.WithContext(ctx).
-		Model(&auth.AuditLog{}).
+		Model(&authDomain.AuditLog{}).
 		Where("organization_id = ?", orgID).
 		Count(&stats.TotalLogs).Error
 	if err != nil {
@@ -331,7 +332,7 @@ func (r *auditLogRepository) GetOrganizationAuditLogStats(ctx context.Context, o
 	}
 	var actionCounts []actionCount
 	err = r.db.WithContext(ctx).
-		Model(&auth.AuditLog{}).
+		Model(&authDomain.AuditLog{}).
 		Select("action, COUNT(*) as count").
 		Where("organization_id = ?", orgID).
 		Group("action").
@@ -351,7 +352,7 @@ func (r *auditLogRepository) GetOrganizationAuditLogStats(ctx context.Context, o
 	}
 	var resourceCounts []resourceCount
 	err = r.db.WithContext(ctx).
-		Model(&auth.AuditLog{}).
+		Model(&authDomain.AuditLog{}).
 		Select("resource, COUNT(*) as count").
 		Where("organization_id = ? AND resource IS NOT NULL AND resource != ''", orgID).
 		Group("resource").

@@ -14,11 +14,11 @@
 
 ## Overview
 
-Brokle Enterprise Edition extends the open-source Brokle AI Infrastructure Platform with advanced features for production-scale AI operations. Built on an open-core model, Brokle EE provides enterprise-grade security, compliance, analytics, and support while maintaining compatibility with the OSS version.
+Brokle Enterprise Edition extends the open-source Brokle AI Control Plane with advanced features for production-scale AI operations. Built on an open-core model, Brokle EE provides enterprise-grade security, compliance, analytics, and support while maintaining compatibility with the OSS version.
 
 ### Key Value Propositions
 
-- **Complete AI Infrastructure**: Unified platform for gateway, observability, caching, and optimization
+- **Complete AI Control Plane**: Unified platform for observability, routing, governance, and optimization
 - **Enterprise Security**: SSO integration, advanced RBAC, compliance controls
 - **Advanced Analytics**: Predictive insights, custom dashboards, ML-powered optimization
 - **Production Scale**: Unlimited requests, multi-organization support, dedicated infrastructure

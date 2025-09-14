@@ -4,37 +4,38 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"gorm.io/gorm"
 
-	"brokle/internal/core/domain/organization"
+	orgDomain "brokle/internal/core/domain/organization"
 	"brokle/pkg/ulid"
 )
 
-// organizationSettingsRepository implements organization.OrganizationSettingsRepository using GORM
+// organizationSettingsRepository implements orgDomain.OrganizationSettingsRepository using GORM
 type organizationSettingsRepository struct {
 	db *gorm.DB
 }
 
 // NewOrganizationSettingsRepository creates a new organization settings repository instance
-func NewOrganizationSettingsRepository(db *gorm.DB) organization.OrganizationSettingsRepository {
+func NewOrganizationSettingsRepository(db *gorm.DB) orgDomain.OrganizationSettingsRepository {
 	return &organizationSettingsRepository{
 		db: db,
 	}
 }
 
 // Create creates a new organization setting
-func (r *organizationSettingsRepository) Create(ctx context.Context, setting *organization.OrganizationSettings) error {
+func (r *organizationSettingsRepository) Create(ctx context.Context, setting *orgDomain.OrganizationSettings) error {
 	return r.db.WithContext(ctx).Create(setting).Error
 }
 
 // GetByID retrieves an organization setting by ID
-func (r *organizationSettingsRepository) GetByID(ctx context.Context, id ulid.ULID) (*organization.OrganizationSettings, error) {
-	var setting organization.OrganizationSettings
+func (r *organizationSettingsRepository) GetByID(ctx context.Context, id ulid.ULID) (*orgDomain.OrganizationSettings, error) {
+	var setting orgDomain.OrganizationSettings
 	err := r.db.WithContext(ctx).Where("id = ?", id).First(&setting).Error
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("organization setting not found")
+		if err == gorm.ErrRecordNotFound {
+			return nil, fmt.Errorf("get organization setting by ID %s: %w", id, orgDomain.ErrSettingsNotFound)
 		}
 		return nil, err
 	}
@@ -42,12 +43,12 @@ func (r *organizationSettingsRepository) GetByID(ctx context.Context, id ulid.UL
 }
 
 // GetByKey retrieves an organization setting by organization ID and key
-func (r *organizationSettingsRepository) GetByKey(ctx context.Context, orgID ulid.ULID, key string) (*organization.OrganizationSettings, error) {
-	var setting organization.OrganizationSettings
+func (r *organizationSettingsRepository) GetByKey(ctx context.Context, orgID ulid.ULID, key string) (*orgDomain.OrganizationSettings, error) {
+	var setting orgDomain.OrganizationSettings
 	err := r.db.WithContext(ctx).Where("organization_id = ? AND key = ?", orgID, key).First(&setting).Error
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("organization setting not found")
+		if err == gorm.ErrRecordNotFound {
+			return nil, fmt.Errorf("get organization setting by org %s and key %s: %w", orgID, key, orgDomain.ErrSettingsNotFound)
 		}
 		return nil, err
 	}
@@ -55,18 +56,18 @@ func (r *organizationSettingsRepository) GetByKey(ctx context.Context, orgID uli
 }
 
 // Update updates an existing organization setting
-func (r *organizationSettingsRepository) Update(ctx context.Context, setting *organization.OrganizationSettings) error {
+func (r *organizationSettingsRepository) Update(ctx context.Context, setting *orgDomain.OrganizationSettings) error {
 	return r.db.WithContext(ctx).Save(setting).Error
 }
 
 // Delete deletes an organization setting by ID
 func (r *organizationSettingsRepository) Delete(ctx context.Context, id ulid.ULID) error {
-	return r.db.WithContext(ctx).Delete(&organization.OrganizationSettings{}, "id = ?", id).Error
+	return r.db.WithContext(ctx).Delete(&orgDomain.OrganizationSettings{}, "id = ?", id).Error
 }
 
 // GetAllByOrganizationID retrieves all settings for an organization
-func (r *organizationSettingsRepository) GetAllByOrganizationID(ctx context.Context, orgID ulid.ULID) ([]*organization.OrganizationSettings, error) {
-	var settings []*organization.OrganizationSettings
+func (r *organizationSettingsRepository) GetAllByOrganizationID(ctx context.Context, orgID ulid.ULID) ([]*orgDomain.OrganizationSettings, error) {
+	var settings []*orgDomain.OrganizationSettings
 	err := r.db.WithContext(ctx).Where("organization_id = ?", orgID).Find(&settings).Error
 	if err != nil {
 		return nil, err
@@ -96,14 +97,14 @@ func (r *organizationSettingsRepository) GetSettingsMap(ctx context.Context, org
 
 // DeleteByKey deletes an organization setting by organization ID and key
 func (r *organizationSettingsRepository) DeleteByKey(ctx context.Context, orgID ulid.ULID, key string) error {
-	return r.db.WithContext(ctx).Delete(&organization.OrganizationSettings{}, "organization_id = ? AND key = ?", orgID, key).Error
+	return r.db.WithContext(ctx).Delete(&orgDomain.OrganizationSettings{}, "organization_id = ? AND key = ?", orgID, key).Error
 }
 
 // UpsertSetting creates or updates a setting by organization ID and key
-func (r *organizationSettingsRepository) UpsertSetting(ctx context.Context, orgID ulid.ULID, key string, value interface{}) (*organization.OrganizationSettings, error) {
+func (r *organizationSettingsRepository) UpsertSetting(ctx context.Context, orgID ulid.ULID, key string, value interface{}) (*orgDomain.OrganizationSettings, error) {
 	// Try to get existing setting
 	existing, err := r.GetByKey(ctx, orgID, key)
-	if err != nil && err.Error() != "organization setting not found" {
+	if err != nil && !errors.Is(err, orgDomain.ErrSettingsNotFound) {
 		return nil, err
 	}
 
@@ -124,7 +125,7 @@ func (r *organizationSettingsRepository) UpsertSetting(ctx context.Context, orgI
 		return existing, nil
 	} else {
 		// Create new
-		setting, err := organization.NewOrganizationSettings(orgID, key, value)
+		setting, err := orgDomain.NewOrganizationSettings(orgID, key, value)
 		if err != nil {
 			return nil, err
 		}
@@ -136,7 +137,7 @@ func (r *organizationSettingsRepository) UpsertSetting(ctx context.Context, orgI
 }
 
 // CreateMultiple creates multiple organization settings in a transaction
-func (r *organizationSettingsRepository) CreateMultiple(ctx context.Context, settings []*organization.OrganizationSettings) error {
+func (r *organizationSettingsRepository) CreateMultiple(ctx context.Context, settings []*orgDomain.OrganizationSettings) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for _, setting := range settings {
 			if err := tx.Create(setting).Error; err != nil {
@@ -148,8 +149,8 @@ func (r *organizationSettingsRepository) CreateMultiple(ctx context.Context, set
 }
 
 // GetByKeys retrieves settings by organization ID and multiple keys
-func (r *organizationSettingsRepository) GetByKeys(ctx context.Context, orgID ulid.ULID, keys []string) ([]*organization.OrganizationSettings, error) {
-	var settings []*organization.OrganizationSettings
+func (r *organizationSettingsRepository) GetByKeys(ctx context.Context, orgID ulid.ULID, keys []string) ([]*orgDomain.OrganizationSettings, error) {
+	var settings []*orgDomain.OrganizationSettings
 	err := r.db.WithContext(ctx).Where("organization_id = ? AND key IN ?", orgID, keys).Find(&settings).Error
 	if err != nil {
 		return nil, err
@@ -159,5 +160,5 @@ func (r *organizationSettingsRepository) GetByKeys(ctx context.Context, orgID ul
 
 // DeleteMultiple deletes multiple settings by organization ID and keys
 func (r *organizationSettingsRepository) DeleteMultiple(ctx context.Context, orgID ulid.ULID, keys []string) error {
-	return r.db.WithContext(ctx).Delete(&organization.OrganizationSettings{}, "organization_id = ? AND key IN ?", orgID, keys).Error
+	return r.db.WithContext(ctx).Delete(&orgDomain.OrganizationSettings{}, "organization_id = ? AND key IN ?", orgID, keys).Error
 }

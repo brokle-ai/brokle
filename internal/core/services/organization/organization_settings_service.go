@@ -2,37 +2,31 @@ package organization
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
-	"fmt"
 
-	"brokle/internal/core/domain/auth"
-	"brokle/internal/core/domain/organization"
+	orgDomain "brokle/internal/core/domain/organization"
 	"brokle/pkg/ulid"
+	appErrors "brokle/pkg/errors"
 )
 
-// organizationSettingsService implements organization.OrganizationSettingsService
+// organizationSettingsService implements orgDomain.OrganizationSettingsService
 type organizationSettingsService struct {
-	settingsRepo organization.OrganizationSettingsRepository
-	memberRepo   organization.MemberRepository
-	auditRepo    auth.AuditLogRepository
+	settingsRepo orgDomain.OrganizationSettingsRepository
+	memberRepo   orgDomain.MemberRepository
 }
 
 // NewOrganizationSettingsService creates a new organization settings service instance
 func NewOrganizationSettingsService(
-	settingsRepo organization.OrganizationSettingsRepository,
-	memberRepo organization.MemberRepository,
-	auditRepo auth.AuditLogRepository,
-) organization.OrganizationSettingsService {
+	settingsRepo orgDomain.OrganizationSettingsRepository,
+	memberRepo orgDomain.MemberRepository,
+) orgDomain.OrganizationSettingsService {
 	return &organizationSettingsService{
 		settingsRepo: settingsRepo,
 		memberRepo:   memberRepo,
-		auditRepo:    auditRepo,
 	}
 }
 
 // CreateSetting creates a new organization setting
-func (s *organizationSettingsService) CreateSetting(ctx context.Context, orgID ulid.ULID, userID ulid.ULID, req *organization.CreateOrganizationSettingRequest) (*organization.OrganizationSettings, error) {
+func (s *organizationSettingsService) CreateSetting(ctx context.Context, orgID ulid.ULID, userID ulid.ULID, req *orgDomain.CreateOrganizationSettingRequest) (*orgDomain.OrganizationSettings, error) {
 	// Validate user access
 	if err := s.ValidateSettingsAccess(ctx, userID, orgID, "create"); err != nil {
 		return nil, err
@@ -41,32 +35,28 @@ func (s *organizationSettingsService) CreateSetting(ctx context.Context, orgID u
 	// Check if setting already exists
 	existing, err := s.settingsRepo.GetByKey(ctx, orgID, req.Key)
 	if err != nil && err.Error() != "organization setting not found" {
-		return nil, fmt.Errorf("failed to check existing setting: %w", err)
+		return nil, appErrors.NewInternalError("Failed to check existing setting", err)
 	}
 	if existing != nil {
-		return nil, errors.New("setting with this key already exists")
+		return nil, appErrors.NewConflictError("Setting with this key already exists")
 	}
 
 	// Create new setting
-	setting, err := organization.NewOrganizationSettings(orgID, req.Key, req.Value)
+	setting, err := orgDomain.NewOrganizationSettings(orgID, req.Key, req.Value)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create setting: %w", err)
+		return nil, appErrors.NewInternalError("Failed to create setting", err)
 	}
 
 	if err := s.settingsRepo.Create(ctx, setting); err != nil {
-		return nil, fmt.Errorf("failed to save setting: %w", err)
+		return nil, appErrors.NewInternalError("Failed to save setting", err)
 	}
 
-	// Create audit log
-	s.createAuditLog(ctx, &userID, &orgID, "setting.create", "setting", setting.ID.String(), map[string]interface{}{
-		"key": req.Key,
-	})
 
 	return setting, nil
 }
 
 // GetSetting retrieves a specific organization setting
-func (s *organizationSettingsService) GetSetting(ctx context.Context, orgID ulid.ULID, key string) (*organization.OrganizationSettings, error) {
+func (s *organizationSettingsService) GetSetting(ctx context.Context, orgID ulid.ULID, key string) (*orgDomain.OrganizationSettings, error) {
 	return s.settingsRepo.GetByKey(ctx, orgID, key)
 }
 
@@ -76,7 +66,7 @@ func (s *organizationSettingsService) GetAllSettings(ctx context.Context, orgID 
 }
 
 // UpdateSetting updates an existing organization setting
-func (s *organizationSettingsService) UpdateSetting(ctx context.Context, orgID ulid.ULID, key string, userID ulid.ULID, req *organization.UpdateOrganizationSettingRequest) error {
+func (s *organizationSettingsService) UpdateSetting(ctx context.Context, orgID ulid.ULID, key string, userID ulid.ULID, req *orgDomain.UpdateOrganizationSettingRequest) error {
 	// Validate user access
 	if err := s.ValidateSettingsAccess(ctx, userID, orgID, "update"); err != nil {
 		return err
@@ -85,25 +75,18 @@ func (s *organizationSettingsService) UpdateSetting(ctx context.Context, orgID u
 	// Get existing setting
 	setting, err := s.settingsRepo.GetByKey(ctx, orgID, key)
 	if err != nil {
-		return fmt.Errorf("setting not found: %w", err)
+		return appErrors.NewNotFoundError("Setting not found")
 	}
 
 	// Update setting value
-	oldValue, _ := setting.GetValue()
 	if err := setting.SetValue(req.Value); err != nil {
-		return fmt.Errorf("failed to set value: %w", err)
+		return appErrors.NewInternalError("Failed to set value", err)
 	}
 
 	if err := s.settingsRepo.Update(ctx, setting); err != nil {
-		return fmt.Errorf("failed to update setting: %w", err)
+		return appErrors.NewInternalError("Failed to update setting", err)
 	}
 
-	// Create audit log
-	s.createAuditLog(ctx, &userID, &orgID, "setting.update", "setting", setting.ID.String(), map[string]interface{}{
-		"key":       key,
-		"old_value": oldValue,
-		"new_value": req.Value,
-	})
 
 	return nil
 }
@@ -115,26 +98,22 @@ func (s *organizationSettingsService) DeleteSetting(ctx context.Context, orgID u
 		return err
 	}
 
-	// Get setting for audit purposes
-	setting, err := s.settingsRepo.GetByKey(ctx, orgID, key)
+	// Verify setting exists before deletion
+	_, err := s.settingsRepo.GetByKey(ctx, orgID, key)
 	if err != nil {
-		return fmt.Errorf("setting not found: %w", err)
+		return appErrors.NewNotFoundError("Setting not found")
 	}
 
 	if err := s.settingsRepo.DeleteByKey(ctx, orgID, key); err != nil {
-		return fmt.Errorf("failed to delete setting: %w", err)
+		return appErrors.NewInternalError("Failed to delete setting", err)
 	}
 
-	// Create audit log
-	s.createAuditLog(ctx, &userID, &orgID, "setting.delete", "setting", setting.ID.String(), map[string]interface{}{
-		"key": key,
-	})
 
 	return nil
 }
 
 // UpsertSetting creates or updates a setting
-func (s *organizationSettingsService) UpsertSetting(ctx context.Context, orgID ulid.ULID, key string, value interface{}, userID ulid.ULID) (*organization.OrganizationSettings, error) {
+func (s *organizationSettingsService) UpsertSetting(ctx context.Context, orgID ulid.ULID, key string, value interface{}, userID ulid.ULID) (*orgDomain.OrganizationSettings, error) {
 	// Validate user access
 	if err := s.ValidateSettingsAccess(ctx, userID, orgID, "upsert"); err != nil {
 		return nil, err
@@ -142,14 +121,9 @@ func (s *organizationSettingsService) UpsertSetting(ctx context.Context, orgID u
 
 	setting, err := s.settingsRepo.UpsertSetting(ctx, orgID, key, value)
 	if err != nil {
-		return nil, fmt.Errorf("failed to upsert setting: %w", err)
+		return nil, appErrors.NewInternalError("Failed to upsert setting", err)
 	}
 
-	// Create audit log
-	s.createAuditLog(ctx, &userID, &orgID, "setting.upsert", "setting", setting.ID.String(), map[string]interface{}{
-		"key":   key,
-		"value": value,
-	})
 
 	return setting, nil
 }
@@ -161,24 +135,19 @@ func (s *organizationSettingsService) CreateMultipleSettings(ctx context.Context
 		return err
 	}
 
-	settingEntities := make([]*organization.OrganizationSettings, 0, len(settings))
+	settingEntities := make([]*orgDomain.OrganizationSettings, 0, len(settings))
 	for key, value := range settings {
-		setting, err := organization.NewOrganizationSettings(orgID, key, value)
+		setting, err := orgDomain.NewOrganizationSettings(orgID, key, value)
 		if err != nil {
-			return fmt.Errorf("failed to create setting for key %s: %w", key, err)
+			return appErrors.NewInternalError("Failed to create setting for key "+key, err)
 		}
 		settingEntities = append(settingEntities, setting)
 	}
 
 	if err := s.settingsRepo.CreateMultiple(ctx, settingEntities); err != nil {
-		return fmt.Errorf("failed to create multiple settings: %w", err)
+		return appErrors.NewInternalError("Failed to create multiple settings", err)
 	}
 
-	// Create audit log
-	s.createAuditLog(ctx, &userID, &orgID, "setting.bulk_create", "settings", "", map[string]interface{}{
-		"count": len(settings),
-		"keys":  getMapKeys(settings),
-	})
 
 	return nil
 }
@@ -187,7 +156,7 @@ func (s *organizationSettingsService) CreateMultipleSettings(ctx context.Context
 func (s *organizationSettingsService) GetSettingsByKeys(ctx context.Context, orgID ulid.ULID, keys []string) (map[string]interface{}, error) {
 	settings, err := s.settingsRepo.GetByKeys(ctx, orgID, keys)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get settings by keys: %w", err)
+		return nil, appErrors.NewInternalError("Failed to get settings by keys", err)
 	}
 
 	result := make(map[string]interface{})
@@ -211,14 +180,9 @@ func (s *organizationSettingsService) DeleteMultipleSettings(ctx context.Context
 	}
 
 	if err := s.settingsRepo.DeleteMultiple(ctx, orgID, keys); err != nil {
-		return fmt.Errorf("failed to delete multiple settings: %w", err)
+		return appErrors.NewInternalError("Failed to delete multiple settings", err)
 	}
 
-	// Create audit log
-	s.createAuditLog(ctx, &userID, &orgID, "setting.bulk_delete", "settings", "", map[string]interface{}{
-		"count": len(keys),
-		"keys":  keys,
-	})
 
 	return nil
 }
@@ -228,10 +192,10 @@ func (s *organizationSettingsService) ValidateSettingsAccess(ctx context.Context
 	// Check if user is a member of the organization
 	isMember, err := s.memberRepo.IsMember(ctx, userID, orgID)
 	if err != nil {
-		return fmt.Errorf("failed to check membership: %w", err)
+		return appErrors.NewInternalError("Failed to check membership", err)
 	}
 	if !isMember {
-		return errors.New("user is not a member of this organization")
+		return appErrors.NewForbiddenError("User is not a member of this organization")
 	}
 
 	// For now, allow any member to manage settings
@@ -255,7 +219,7 @@ func (s *organizationSettingsService) ResetToDefaults(ctx context.Context, orgID
 	// Get all current settings
 	currentSettings, err := s.settingsRepo.GetAllByOrganizationID(ctx, orgID)
 	if err != nil {
-		return fmt.Errorf("failed to get current settings: %w", err)
+		return appErrors.NewInternalError("Failed to get current settings", err)
 	}
 
 	// Delete all current settings
@@ -265,14 +229,10 @@ func (s *organizationSettingsService) ResetToDefaults(ctx context.Context, orgID
 			keys[i] = setting.Key
 		}
 		if err := s.settingsRepo.DeleteMultiple(ctx, orgID, keys); err != nil {
-			return fmt.Errorf("failed to clear current settings: %w", err)
+			return appErrors.NewInternalError("Failed to clear current settings", err)
 		}
 	}
 
-	// Create audit log
-	s.createAuditLog(ctx, &userID, &orgID, "setting.reset_defaults", "settings", "", map[string]interface{}{
-		"cleared_count": len(currentSettings),
-	})
 
 	return nil
 }
@@ -286,13 +246,9 @@ func (s *organizationSettingsService) ExportSettings(ctx context.Context, orgID 
 
 	settings, err := s.settingsRepo.GetSettingsMap(ctx, orgID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to export settings: %w", err)
+		return nil, appErrors.NewInternalError("Failed to export settings", err)
 	}
 
-	// Create audit log
-	s.createAuditLog(ctx, &userID, &orgID, "setting.export", "settings", "", map[string]interface{}{
-		"exported_count": len(settings),
-	})
 
 	return settings, nil
 }
@@ -308,38 +264,11 @@ func (s *organizationSettingsService) ImportSettings(ctx context.Context, orgID 
 	for key, value := range settings {
 		_, err := s.settingsRepo.UpsertSetting(ctx, orgID, key, value)
 		if err != nil {
-			return fmt.Errorf("failed to import setting %s: %w", key, err)
+			return appErrors.NewInternalError("Failed to import setting "+key, err)
 		}
 	}
 
-	// Create audit log
-	s.createAuditLog(ctx, &userID, &orgID, "setting.import", "settings", "", map[string]interface{}{
-		"imported_count": len(settings),
-		"keys":          getMapKeys(settings),
-	})
 
 	return nil
 }
 
-// Helper methods
-
-func (s *organizationSettingsService) createAuditLog(ctx context.Context, userID, orgID *ulid.ULID, action, resource, resourceID string, metadata map[string]interface{}) {
-	var metadataStr string
-	if metadata != nil {
-		if metadataBytes, err := json.Marshal(metadata); err == nil {
-			metadataStr = string(metadataBytes)
-		}
-	}
-	
-	auditLog := auth.NewAuditLog(userID, orgID, action, resource, resourceID, metadataStr, "", "")
-	// Note: IP address and user agent would come from context in a real implementation
-	s.auditRepo.Create(ctx, auditLog)
-}
-
-func getMapKeys(m map[string]interface{}) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	return keys
-}

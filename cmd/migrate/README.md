@@ -1,6 +1,6 @@
 # 🚀 Brokle Database CLI
 
-Production-ready database migration and seeding CLI for the Brokle AI Infrastructure Platform. Handles multi-database migrations and data seeding with comprehensive safety features and enterprise-grade reliability.
+Production-ready database migration and seeding CLI for the Brokle AI Control Plane. Handles multi-database migrations and data seeding with comprehensive safety features and enterprise-grade reliability.
 
 ## Overview
 
@@ -504,6 +504,6 @@ When adding new database capabilities:
 
 ---
 
-**🚀 Built for Brokle - Complete AI Infrastructure Platform**
+**🚀 Built for Brokle - The Open-Source AI Control Plane**
 
-This unified database CLI handles both schema migrations and data seeding for the Brokle AI Infrastructure Platform. For more information about the platform, see the main project documentation.
+This unified database CLI handles both schema migrations and data seeding for the Brokle AI Control Plane. For more information about the platform, see the main project documentation.

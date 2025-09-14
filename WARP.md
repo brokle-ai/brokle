@@ -4,10 +4,10 @@ This file provides guidance to WARP (warp.dev) when working with code in this re
 
 ## Project Overview
 
-**Brokle** is a production-grade AI Infrastructure Platform providing observability, gateway, routing, and optimization services for LLM applications. Built as a **scalable monolith** with an **open-core business model**, it offers both OSS and Enterprise editions through Go build tags.
+**Brokle** is The Open-Source AI Control Plane - See Everything. Control Everything. Provides observability, routing, and governance services for AI in production. Built as a **scalable monolith** with an **open-core business model**, it offers both OSS and Enterprise editions through Go build tags.
 
 ### Core Mission
-Position as "The Stripe for AI Infrastructure" - handling all complexity so developers can focus on building great AI applications. The platform provides everything AI teams need to build, deploy, and scale production AI applications.
+See Everything. Control Everything. The unified open-source control plane for AI teams to monitor, route, and govern production AI applications with complete visibility and control.
 
 ### Key Features
 - **AI Gateway & Routing**: OpenAI-compatible proxy with smart multi-provider routing across 250+ LLM providers

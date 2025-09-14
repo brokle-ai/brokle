@@ -6,17 +6,17 @@ import (
 	
 	"gorm.io/gorm"
 
-	"brokle/internal/core/domain/auth"
+	authDomain "brokle/internal/core/domain/auth"
 	"brokle/pkg/ulid"
 )
 
-// organizationMemberRepository implements auth.OrganizationMemberRepository using GORM
+// organizationMemberRepository implements authDomain.OrganizationMemberRepository using GORM
 type organizationMemberRepository struct {
 	db *gorm.DB
 }
 
 // NewOrganizationMemberRepository creates a new organization member repository instance
-func NewOrganizationMemberRepository(db *gorm.DB) auth.OrganizationMemberRepository {
+func NewOrganizationMemberRepository(db *gorm.DB) authDomain.OrganizationMemberRepository {
 	return &organizationMemberRepository{
 		db: db,
 	}
@@ -24,12 +24,12 @@ func NewOrganizationMemberRepository(db *gorm.DB) auth.OrganizationMemberReposit
 
 // Core CRUD operations
 
-func (r *organizationMemberRepository) Create(ctx context.Context, member *auth.OrganizationMember) error {
+func (r *organizationMemberRepository) Create(ctx context.Context, member *authDomain.OrganizationMember) error {
 	return r.db.WithContext(ctx).Create(member).Error
 }
 
-func (r *organizationMemberRepository) GetByUserAndOrganization(ctx context.Context, userID, orgID ulid.ULID) (*auth.OrganizationMember, error) {
-	var member auth.OrganizationMember
+func (r *organizationMemberRepository) GetByUserAndOrganization(ctx context.Context, userID, orgID ulid.ULID) (*authDomain.OrganizationMember, error) {
+	var member authDomain.OrganizationMember
 	err := r.db.WithContext(ctx).
 		Where("user_id = ? AND organization_id = ?", userID, orgID).
 		Preload("Role").
@@ -41,20 +41,20 @@ func (r *organizationMemberRepository) GetByUserAndOrganization(ctx context.Cont
 	return &member, nil
 }
 
-func (r *organizationMemberRepository) Update(ctx context.Context, member *auth.OrganizationMember) error {
+func (r *organizationMemberRepository) Update(ctx context.Context, member *authDomain.OrganizationMember) error {
 	return r.db.WithContext(ctx).Save(member).Error
 }
 
 func (r *organizationMemberRepository) Delete(ctx context.Context, userID, orgID ulid.ULID) error {
 	return r.db.WithContext(ctx).
 		Where("user_id = ? AND organization_id = ?", userID, orgID).
-		Delete(&auth.OrganizationMember{}).Error
+		Delete(&authDomain.OrganizationMember{}).Error
 }
 
 // Membership queries
 
-func (r *organizationMemberRepository) GetByUserID(ctx context.Context, userID ulid.ULID) ([]*auth.OrganizationMember, error) {
-	var members []*auth.OrganizationMember
+func (r *organizationMemberRepository) GetByUserID(ctx context.Context, userID ulid.ULID) ([]*authDomain.OrganizationMember, error) {
+	var members []*authDomain.OrganizationMember
 	err := r.db.WithContext(ctx).
 		Where("user_id = ?", userID).
 		Preload("Role").
@@ -63,8 +63,8 @@ func (r *organizationMemberRepository) GetByUserID(ctx context.Context, userID u
 	return members, err
 }
 
-func (r *organizationMemberRepository) GetByOrganizationID(ctx context.Context, orgID ulid.ULID) ([]*auth.OrganizationMember, error) {
-	var members []*auth.OrganizationMember
+func (r *organizationMemberRepository) GetByOrganizationID(ctx context.Context, orgID ulid.ULID) ([]*authDomain.OrganizationMember, error) {
+	var members []*authDomain.OrganizationMember
 	err := r.db.WithContext(ctx).
 		Where("organization_id = ?", orgID).
 		Preload("Role").
@@ -73,8 +73,8 @@ func (r *organizationMemberRepository) GetByOrganizationID(ctx context.Context, 
 	return members, err
 }
 
-func (r *organizationMemberRepository) GetByRole(ctx context.Context, roleID ulid.ULID) ([]*auth.OrganizationMember, error) {
-	var members []*auth.OrganizationMember
+func (r *organizationMemberRepository) GetByRole(ctx context.Context, roleID ulid.ULID) ([]*authDomain.OrganizationMember, error) {
+	var members []*authDomain.OrganizationMember
 	err := r.db.WithContext(ctx).
 		Where("role_id = ?", roleID).
 		Preload("Role").
@@ -86,7 +86,7 @@ func (r *organizationMemberRepository) GetByRole(ctx context.Context, roleID uli
 func (r *organizationMemberRepository) Exists(ctx context.Context, userID, orgID ulid.ULID) (bool, error) {
 	var count int64
 	err := r.db.WithContext(ctx).
-		Model(&auth.OrganizationMember{}).
+		Model(&authDomain.OrganizationMember{}).
 		Where("user_id = ? AND organization_id = ?", userID, orgID).
 		Count(&count).Error
 	
@@ -158,22 +158,22 @@ func (r *organizationMemberRepository) GetUserPermissionsInOrganization(ctx cont
 
 func (r *organizationMemberRepository) ActivateMember(ctx context.Context, userID, orgID ulid.ULID) error {
 	return r.db.WithContext(ctx).
-		Model(&auth.OrganizationMember{}).
+		Model(&authDomain.OrganizationMember{}).
 		Where("user_id = ? AND organization_id = ?", userID, orgID).
-		Update("status", auth.MemberStatusActive).Error
+		Update("status", authDomain.MemberStatusActive).Error
 }
 
 func (r *organizationMemberRepository) SuspendMember(ctx context.Context, userID, orgID ulid.ULID) error {
 	return r.db.WithContext(ctx).
-		Model(&auth.OrganizationMember{}).
+		Model(&authDomain.OrganizationMember{}).
 		Where("user_id = ? AND organization_id = ?", userID, orgID).
-		Update("status", auth.MemberStatusSuspended).Error
+		Update("status", authDomain.MemberStatusSuspended).Error
 }
 
-func (r *organizationMemberRepository) GetActiveMembers(ctx context.Context, orgID ulid.ULID) ([]*auth.OrganizationMember, error) {
-	var members []*auth.OrganizationMember
+func (r *organizationMemberRepository) GetActiveMembers(ctx context.Context, orgID ulid.ULID) ([]*authDomain.OrganizationMember, error) {
+	var members []*authDomain.OrganizationMember
 	err := r.db.WithContext(ctx).
-		Where("organization_id = ? AND status = ?", orgID, auth.MemberStatusActive).
+		Where("organization_id = ? AND status = ?", orgID, authDomain.MemberStatusActive).
 		Preload("Role").
 		Find(&members).Error
 	
@@ -184,21 +184,21 @@ func (r *organizationMemberRepository) GetActiveMembers(ctx context.Context, org
 
 func (r *organizationMemberRepository) UpdateMemberRole(ctx context.Context, userID, orgID, roleID ulid.ULID) error {
 	return r.db.WithContext(ctx).
-		Model(&auth.OrganizationMember{}).
+		Model(&authDomain.OrganizationMember{}).
 		Where("user_id = ? AND organization_id = ?", userID, orgID).
 		Update("role_id", roleID).Error
 }
 
 // Bulk operations
 
-func (r *organizationMemberRepository) BulkCreate(ctx context.Context, members []*auth.OrganizationMember) error {
+func (r *organizationMemberRepository) BulkCreate(ctx context.Context, members []*authDomain.OrganizationMember) error {
 	return r.db.WithContext(ctx).Create(&members).Error
 }
 
-func (r *organizationMemberRepository) BulkUpdateRoles(ctx context.Context, updates []auth.MemberRoleUpdate) error {
+func (r *organizationMemberRepository) BulkUpdateRoles(ctx context.Context, updates []authDomain.MemberRoleUpdate) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for _, update := range updates {
-			if err := tx.Model(&auth.OrganizationMember{}).
+			if err := tx.Model(&authDomain.OrganizationMember{}).
 				Where("user_id = ? AND organization_id = ?", update.UserID, update.OrganizationID).
 				Update("role_id", update.RoleID).Error; err != nil {
 				return err
@@ -213,8 +213,8 @@ func (r *organizationMemberRepository) BulkUpdateRoles(ctx context.Context, upda
 func (r *organizationMemberRepository) GetMemberCount(ctx context.Context, orgID ulid.ULID) (int, error) {
 	var count int64
 	err := r.db.WithContext(ctx).
-		Model(&auth.OrganizationMember{}).
-		Where("organization_id = ? AND status = ?", orgID, auth.MemberStatusActive).
+		Model(&authDomain.OrganizationMember{}).
+		Where("organization_id = ? AND status = ?", orgID, authDomain.MemberStatusActive).
 		Count(&count).Error
 	
 	return int(count), err
@@ -227,10 +227,10 @@ func (r *organizationMemberRepository) GetMembersByRole(ctx context.Context, org
 	}
 	
 	err := r.db.WithContext(ctx).
-		Model(&auth.OrganizationMember{}).
+		Model(&authDomain.OrganizationMember{}).
 		Select("r.name as role_name, COUNT(*) as count").
 		Joins("JOIN roles r ON organization_members.role_id = r.id").
-		Where("organization_members.organization_id = ? AND organization_members.status = ?", orgID, auth.MemberStatusActive).
+		Where("organization_members.organization_id = ? AND organization_members.status = ?", orgID, authDomain.MemberStatusActive).
 		Group("r.name").
 		Find(&results).Error
 	

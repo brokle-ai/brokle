@@ -4,17 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Platform Overview
 
-**Brokle** - Complete AI Infrastructure Platform that provides everything AI teams need to build, deploy, and scale production AI applications.
+**Brokle** - The Open-Source AI Control Plane. See Everything. Control Everything. Observability, routing, and governance for AI — open source and built for scale.
 
 ### Core Mission
-Build the unified platform for AI teams to build, deploy, and scale production AI applications. Position as "The Stripe for AI Infrastructure" - handling all complexity so developers can focus on building great AI applications.
+See Everything. Control Everything. Build the unified open-source control plane for AI teams to monitor, route, and govern production AI applications with complete visibility and control.
 
 ### Key Features
-- **Intelligent Gateway**: OpenAI-compatible proxy with smart routing across 250+ LLM providers
-- **Advanced Observability**: 40+ AI-specific metrics with real-time monitoring
-- **Semantic Caching**: Vector-based caching for 95% cost reduction potential  
-- **Cost Optimization**: 30-50% reduction in LLM costs through intelligent routing
-- **Multi-tenant Architecture**: Organization → Project → Environment isolation
+- **See Everything**: 40+ AI-specific metrics with real-time observability and monitoring
+- **Control Everything**: Intelligent routing across 250+ LLM providers with governance controls
+- **Open-Source Control**: Complete visibility into your AI infrastructure with no vendor lock-in
+- **Production Scale**: Multi-tenant architecture with enterprise-grade governance
+- **Cost Intelligence**: 30-50% reduction in LLM costs through smart routing and optimization
 
 ## Architecture: Scalable Monolith
 
@@ -329,23 +329,54 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 ```
 
 ### Error Handling
-Use structured errors throughout:
 
+**📖 CRITICAL**: Use the comprehensive **[Development Error Handling Guides](docs/development/)** for all error handling implementations:
+
+- **[ERROR_HANDLING_GUIDE.md](docs/development/ERROR_HANDLING_GUIDE.md)** - Complete industrial patterns across all layers
+- **[DOMAIN_ALIAS_PATTERNS.md](docs/development/DOMAIN_ALIAS_PATTERNS.md)** - Professional import patterns  
+- **[ERROR_HANDLING_QUICK_REFERENCE.md](docs/development/ERROR_HANDLING_QUICK_REFERENCE.md)** - Developer cheat sheet
+
+The platform follows **industrial Go best practices** with structured error handling:
+
+**Clean Architecture Error Flow:**
+```
+Repository (Domain Errors) → Service (AppErrors) → Handler (HTTP Response)
+```
+
+**Core Principles:**
+- **Repository Layer**: Domain errors with proper wrapping
+- **Service Layer**: AppError constructors (NewUnauthorizedError, NewNotFoundError, etc.)
+- **Handler Layer**: Centralized `response.Error(c, err)` handling
+- **Decorator Pattern**: Cross-cutting concerns (audit, logging) handled separately
+- **Zero Logging**: Core services focus on pure business logic
+
+**Example Implementation:**
 ```go
-import "github.com/pkg/errors"
-
-// Service layer
-if err != nil {
-    return errors.Wrap(err, "failed to create user")
+// Repository layer - Domain errors
+if errors.Is(err, gorm.ErrRecordNotFound) {
+    return nil, fmt.Errorf("get user by email %s: %w", email, user.ErrNotFound)
 }
 
-// Handler layer
+// Service layer - AppError constructors  
+if errors.Is(err, user.ErrNotFound) {
+    return nil, appErrors.NewUnauthorizedError("Invalid email or password")
+}
+
+// Handler layer - Centralized error handling
+resp, err := h.authService.Login(ctx, req)
 if err != nil {
-    http.Error(w, "Internal server error", http.StatusInternalServerError)
-    log.Error("create user failed", "error", err)
+    response.Error(c, err) // Automatic HTTP status mapping
     return
 }
+response.Success(c, resp)
 ```
+
+**Key Requirements:**
+- ❌ **No fmt.Errorf/errors.New** in services - use AppError constructors
+- ❌ **No logging** in core services - use decorator pattern  
+- ✅ **Domain error mapping** at repository layer
+- ✅ **Structured AppErrors** at service layer
+- ✅ **Clean separation** of business logic and cross-cutting concerns
 
 ### Logging
 Use structured logging with correlation IDs:
@@ -640,6 +671,15 @@ The app uses a centralized DI container in `internal/app/app.go`:
 - Initializes databases → repositories → services → handlers
 - Graceful shutdown handling
 - Health check aggregation
+
+### Industrial Error Handling Pattern
+**📖 See [INDUSTRIAL_ERROR_HANDLING_GUIDE.md](INDUSTRIAL_ERROR_HANDLING_GUIDE.md) for complete implementation guide.**
+
+The platform implements clean architecture error handling:
+- **Core Services**: Pure business logic with AppError constructors
+- **Decorator Pattern**: Cross-cutting concerns (audit logging) handled separately
+- **Zero Logging**: Business logic services have no logging dependencies
+- **Structured Flow**: Repository → Service → Handler with proper error transformation
 
 ### Enterprise Feature Toggle
 Enterprise features use interface-based design with build tags:

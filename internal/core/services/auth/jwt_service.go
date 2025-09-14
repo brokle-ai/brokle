@@ -13,8 +13,9 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 
 	"brokle/internal/config"
-	"brokle/internal/core/domain/auth"
+	authDomain "brokle/internal/core/domain/auth"
 	"brokle/pkg/ulid"
+	appErrors "brokle/pkg/errors"
 )
 
 // jwtService implements the auth.JWTService interface with flexible signing methods
@@ -25,14 +26,14 @@ type jwtService struct {
 }
 
 // NewJWTService creates a new JWT service instance with flexible configuration
-func NewJWTService(authConfig *config.AuthConfig) (auth.JWTService, error) {
+func NewJWTService(authConfig *config.AuthConfig) (authDomain.JWTService, error) {
 	if authConfig == nil {
-		return nil, fmt.Errorf("auth config is required")
+		return nil, appErrors.NewValidationError("config", "Auth config is required")
 	}
 
 	// Validate configuration
 	if err := authConfig.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid auth config: %w", err)
+		return nil, appErrors.NewValidationError("config", "Invalid auth config: "+err.Error())
 	}
 
 	service := &jwtService{
@@ -41,7 +42,7 @@ func NewJWTService(authConfig *config.AuthConfig) (auth.JWTService, error) {
 
 	// Load keys based on signing method
 	if err := service.loadKeys(); err != nil {
-		return nil, fmt.Errorf("failed to load JWT keys: %w", err)
+		return nil, appErrors.NewInternalError("Failed to load JWT keys", err)
 	}
 
 	return service, nil
@@ -60,7 +61,7 @@ func (s *jwtService) loadKeys() error {
 		return s.loadRSAKeys()
 
 	default:
-		return fmt.Errorf("unsupported signing method: %s", s.config.JWTSigningMethod)
+		return appErrors.NewValidationError("signing_method", "Unsupported signing method: "+s.config.JWTSigningMethod)
 	}
 }
 
@@ -73,29 +74,29 @@ func (s *jwtService) loadRSAKeys() error {
 	if s.config.HasKeyPaths() {
 		privateKeyData, err = ioutil.ReadFile(s.config.JWTPrivateKeyPath)
 		if err != nil {
-			return fmt.Errorf("failed to read private key file: %w", err)
+			return appErrors.NewInternalError("Failed to read private key file", err)
 		}
 		publicKeyData, err = ioutil.ReadFile(s.config.JWTPublicKeyPath)
 		if err != nil {
-			return fmt.Errorf("failed to read public key file: %w", err)
+			return appErrors.NewInternalError("Failed to read public key file", err)
 		}
 	} else if s.config.HasKeyBase64() {
 		privateKeyData, err = base64.StdEncoding.DecodeString(s.config.JWTPrivateKeyBase64)
 		if err != nil {
-			return fmt.Errorf("failed to decode base64 private key: %w", err)
+			return appErrors.NewInternalError("Failed to decode base64 private key", err)
 		}
 		publicKeyData, err = base64.StdEncoding.DecodeString(s.config.JWTPublicKeyBase64)
 		if err != nil {
-			return fmt.Errorf("failed to decode base64 public key: %w", err)
+			return appErrors.NewInternalError("Failed to decode base64 public key", err)
 		}
 	} else {
-		return fmt.Errorf("RS256 requires either key paths or base64 encoded keys")
+		return appErrors.NewValidationError("keys", "RS256 requires either key paths or base64 encoded keys")
 	}
 
 	// Parse private key
 	privateBlock, _ := pem.Decode(privateKeyData)
 	if privateBlock == nil {
-		return fmt.Errorf("failed to decode PEM private key")
+		return appErrors.NewInternalError("Failed to decode PEM private key", nil)
 	}
 
 	privateKey, err := x509.ParsePKCS8PrivateKey(privateBlock.Bytes)
@@ -103,29 +104,29 @@ func (s *jwtService) loadRSAKeys() error {
 		// Try PKCS1 format
 		privateKey, err = x509.ParsePKCS1PrivateKey(privateBlock.Bytes)
 		if err != nil {
-			return fmt.Errorf("failed to parse private key: %w", err)
+			return appErrors.NewInternalError("Failed to parse private key", err)
 		}
 	}
 
 	rsaPrivateKey, ok := privateKey.(*rsa.PrivateKey)
 	if !ok {
-		return fmt.Errorf("private key is not an RSA key")
+		return appErrors.NewInternalError("Private key is not an RSA key", nil)
 	}
 
 	// Parse public key
 	publicBlock, _ := pem.Decode(publicKeyData)
 	if publicBlock == nil {
-		return fmt.Errorf("failed to decode PEM public key")
+		return appErrors.NewInternalError("Failed to decode PEM public key", nil)
 	}
 
 	publicKey, err := x509.ParsePKIXPublicKey(publicBlock.Bytes)
 	if err != nil {
-		return fmt.Errorf("failed to parse public key: %w", err)
+		return appErrors.NewInternalError("Failed to parse public key", err)
 	}
 
 	rsaPublicKey, ok := publicKey.(*rsa.PublicKey)
 	if !ok {
-		return fmt.Errorf("public key is not an RSA key")
+		return appErrors.NewInternalError("Public key is not an RSA key", nil)
 	}
 
 	s.privateKey = rsaPrivateKey
@@ -155,7 +156,7 @@ func (s *jwtService) GenerateAccessTokenWithJTI(ctx context.Context, userID ulid
 		"nbf":        now.Unix(),
 		"exp":        now.Add(s.config.AccessTokenTTL).Unix(),
 		"jti":        jti,
-		"token_type": string(auth.TokenTypeAccess),
+		"token_type": string(authDomain.TokenTypeAccess),
 		"user_id":    userID.String(),
 	}
 
@@ -172,13 +173,13 @@ func (s *jwtService) GenerateAccessTokenWithJTI(ctx context.Context, userID ulid
 	case "RS256":
 		signingMethod = jwt.SigningMethodRS256
 	default:
-		return "", "", fmt.Errorf("unsupported signing method: %s", s.config.JWTSigningMethod)
+		return "", "", appErrors.NewValidationError("signing_method", "Unsupported signing method: "+s.config.JWTSigningMethod)
 	}
 
 	token := jwt.NewWithClaims(signingMethod, claims)
 	tokenString, err := token.SignedString(s.privateKey)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to sign access token: %w", err)
+		return "", "", appErrors.NewInternalError("Failed to sign access token", err)
 	}
 
 	return tokenString, jti, nil
@@ -196,7 +197,7 @@ func (s *jwtService) GenerateRefreshToken(ctx context.Context, userID ulid.ULID)
 		"nbf":        now.Unix(),
 		"exp":        now.Add(s.config.RefreshTokenTTL).Unix(),
 		"jti":        ulid.New().String(),
-		"token_type": string(auth.TokenTypeRefresh),
+		"token_type": string(authDomain.TokenTypeRefresh),
 		"user_id":    userID.String(),
 	}
 
@@ -208,13 +209,13 @@ func (s *jwtService) GenerateRefreshToken(ctx context.Context, userID ulid.ULID)
 	case "RS256":
 		signingMethod = jwt.SigningMethodRS256
 	default:
-		return "", fmt.Errorf("unsupported signing method: %s", s.config.JWTSigningMethod)
+		return "", appErrors.NewValidationError("signing_method", "Unsupported signing method: "+s.config.JWTSigningMethod)
 	}
 
 	token := jwt.NewWithClaims(signingMethod, claims)
 	tokenString, err := token.SignedString(s.privateKey)
 	if err != nil {
-		return "", fmt.Errorf("failed to sign refresh token: %w", err)
+		return "", appErrors.NewInternalError("Failed to sign refresh token", err)
 	}
 
 	return tokenString, nil
@@ -235,7 +236,7 @@ func (s *jwtService) GenerateAPIKeyToken(ctx context.Context, keyID ulid.ULID, s
 		"nbf":        now.Unix(),
 		"exp":        now.Add(ttl).Unix(),
 		"jti":        ulid.New().String(),
-		"token_type": string(auth.TokenTypeAPIKey),
+		"token_type": string(authDomain.TokenTypeAPIKey),
 		"api_key_id": keyID.String(),
 		"scopes":     scopes,
 	}
@@ -248,127 +249,127 @@ func (s *jwtService) GenerateAPIKeyToken(ctx context.Context, keyID ulid.ULID, s
 	case "RS256":
 		signingMethod = jwt.SigningMethodRS256
 	default:
-		return "", fmt.Errorf("unsupported signing method: %s", s.config.JWTSigningMethod)
+		return "", appErrors.NewValidationError("signing_method", "Unsupported signing method: "+s.config.JWTSigningMethod)
 	}
 
 	token := jwt.NewWithClaims(signingMethod, claims)
 	tokenString, err := token.SignedString(s.privateKey)
 	if err != nil {
-		return "", fmt.Errorf("failed to sign API key token: %w", err)
+		return "", appErrors.NewInternalError("Failed to sign API key token", err)
 	}
 
 	return tokenString, nil
 }
 
 // ValidateToken validates any JWT token and returns claims
-func (s *jwtService) ValidateToken(ctx context.Context, tokenString string) (*auth.JWTClaims, error) {
+func (s *jwtService) ValidateToken(ctx context.Context, tokenString string) (*authDomain.JWTClaims, error) {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		// Verify signing method matches configuration
 		switch s.config.JWTSigningMethod {
 		case "HS256":
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, fmt.Errorf("unexpected signing method: %v (expected HMAC)", token.Header["alg"])
+				return nil, appErrors.NewUnauthorizedError("Unexpected signing method: expected HMAC, got: "+fmt.Sprintf("%v", token.Header["alg"]))
 			}
 			return s.publicKey, nil
 		case "RS256":
 			if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
-				return nil, fmt.Errorf("unexpected signing method: %v (expected RSA)", token.Header["alg"])
+				return nil, appErrors.NewUnauthorizedError("Unexpected signing method: expected RSA, got: "+fmt.Sprintf("%v", token.Header["alg"]))
 			}
 			return s.publicKey, nil
 		default:
-			return nil, fmt.Errorf("unsupported signing method in config: %s", s.config.JWTSigningMethod)
+			return nil, appErrors.NewValidationError("signing_method", "Unsupported signing method in config: "+s.config.JWTSigningMethod)
 		}
 	})
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse token: %w", err)
+		return nil, appErrors.NewUnauthorizedError("Invalid token: failed to parse")
 	}
 
 	if !token.Valid {
-		return nil, fmt.Errorf("token is invalid")
+		return nil, appErrors.NewUnauthorizedError("Token is invalid")
 	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
-		return nil, fmt.Errorf("invalid token claims")
+		return nil, appErrors.NewUnauthorizedError("Invalid token claims")
 	}
 
 	// Convert to our custom claims structure
 	tokenClaims, err := s.mapClaimsToJWTClaims(claims)
 	if err != nil {
-		return nil, fmt.Errorf("failed to convert claims: %w", err)
+		return nil, appErrors.NewUnauthorizedError("Failed to convert claims: "+err.Error())
 	}
 
 	// Verify issuer
 	if tokenClaims.Issuer != s.config.JWTIssuer {
-		return nil, fmt.Errorf("invalid token issuer")
+		return nil, appErrors.NewUnauthorizedError("Invalid token issuer")
 	}
 
 	// Check if token is expired
 	if tokenClaims.IsExpired() {
-		return nil, fmt.Errorf("token is expired")
+		return nil, appErrors.NewUnauthorizedError("Token is expired")
 	}
 
 	// Check not before
 	if !tokenClaims.IsValidNow() {
-		return nil, fmt.Errorf("token is not valid yet")
+		return nil, appErrors.NewUnauthorizedError("Token is not valid yet")
 	}
 
 	return tokenClaims, nil
 }
 
 // ValidateAccessToken validates specifically an access token
-func (s *jwtService) ValidateAccessToken(ctx context.Context, tokenString string) (*auth.JWTClaims, error) {
+func (s *jwtService) ValidateAccessToken(ctx context.Context, tokenString string) (*authDomain.JWTClaims, error) {
 	claims, err := s.ValidateToken(ctx, tokenString)
 	if err != nil {
 		return nil, err
 	}
 
-	if claims.TokenType != auth.TokenTypeAccess {
-		return nil, fmt.Errorf("token is not an access token")
+	if claims.TokenType != authDomain.TokenTypeAccess {
+		return nil, appErrors.NewUnauthorizedError("Token is not an access token")
 	}
 
 	return claims, nil
 }
 
 // ValidateRefreshToken validates specifically a refresh token
-func (s *jwtService) ValidateRefreshToken(ctx context.Context, tokenString string) (*auth.JWTClaims, error) {
+func (s *jwtService) ValidateRefreshToken(ctx context.Context, tokenString string) (*authDomain.JWTClaims, error) {
 	claims, err := s.ValidateToken(ctx, tokenString)
 	if err != nil {
 		return nil, err
 	}
 
-	if claims.TokenType != auth.TokenTypeRefresh {
-		return nil, fmt.Errorf("token is not a refresh token")
+	if claims.TokenType != authDomain.TokenTypeRefresh {
+		return nil, appErrors.NewUnauthorizedError("Token is not a refresh token")
 	}
 
 	return claims, nil
 }
 
 // ValidateAPIKeyToken validates specifically an API key token
-func (s *jwtService) ValidateAPIKeyToken(ctx context.Context, tokenString string) (*auth.JWTClaims, error) {
+func (s *jwtService) ValidateAPIKeyToken(ctx context.Context, tokenString string) (*authDomain.JWTClaims, error) {
 	claims, err := s.ValidateToken(ctx, tokenString)
 	if err != nil {
 		return nil, err
 	}
 
-	if claims.TokenType != auth.TokenTypeAPIKey {
-		return nil, fmt.Errorf("token is not an API key token")
+	if claims.TokenType != authDomain.TokenTypeAPIKey {
+		return nil, appErrors.NewUnauthorizedError("Token is not an API key token")
 	}
 
 	return claims, nil
 }
 
 // ExtractClaims extracts claims without validation (for debugging)
-func (s *jwtService) ExtractClaims(ctx context.Context, tokenString string) (*auth.JWTClaims, error) {
+func (s *jwtService) ExtractClaims(ctx context.Context, tokenString string) (*authDomain.JWTClaims, error) {
 	token, _, err := new(jwt.Parser).ParseUnverified(tokenString, jwt.MapClaims{})
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse token: %w", err)
+		return nil, appErrors.NewUnauthorizedError("Invalid token: failed to parse")
 	}
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
-		return nil, fmt.Errorf("invalid token claims")
+		return nil, appErrors.NewUnauthorizedError("Invalid token claims")
 	}
 
 	return s.mapClaimsToJWTClaims(claims)
@@ -388,7 +389,7 @@ func (s *jwtService) IsTokenExpired(ctx context.Context, tokenString string) (bo
 func (s *jwtService) GetTokenExpiry(ctx context.Context, token string) (time.Time, error) {
 	claims, err := s.ExtractClaims(ctx, token)
 	if err != nil {
-		return time.Time{}, fmt.Errorf("failed to extract claims: %w", err)
+		return time.Time{}, appErrors.NewUnauthorizedError("Failed to extract claims: "+err.Error())
 	}
 	
 	return time.Unix(claims.ExpiresAt, 0), nil
@@ -409,8 +410,8 @@ func (s *jwtService) GetTokenTTL(ctx context.Context, tokenString string) (time.
 }
 
 // mapClaimsToJWTClaims converts jwt.MapClaims to our JWTClaims structure
-func (s *jwtService) mapClaimsToJWTClaims(claims jwt.MapClaims) (*auth.JWTClaims, error) {
-	jwtClaims := &auth.JWTClaims{}
+func (s *jwtService) mapClaimsToJWTClaims(claims jwt.MapClaims) (*authDomain.JWTClaims, error) {
+	jwtClaims := &authDomain.JWTClaims{}
 
 	// Helper function to safely extract string claims
 	getString := func(key string) string {
@@ -449,7 +450,7 @@ func (s *jwtService) mapClaimsToJWTClaims(claims jwt.MapClaims) (*auth.JWTClaims
 	jwtClaims.JWTID = getString("jti")
 
 	// Custom claims
-	jwtClaims.TokenType = auth.TokenType(getString("token_type"))
+	jwtClaims.TokenType = authDomain.TokenType(getString("token_type"))
 	jwtClaims.Email = getString("email")
 
 	// Parse UserID

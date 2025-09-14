@@ -10,7 +10,7 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: "Brokle Dashboard",
-  description: "Complete AI Infrastructure Platform Dashboard",
+  description: "The Open-Source AI Control Plane Dashboard - See Everything. Control Everything.",
 };
 
 export default function RootLayout({

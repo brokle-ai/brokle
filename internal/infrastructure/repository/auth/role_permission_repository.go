@@ -5,30 +5,30 @@ import (
 
 	"gorm.io/gorm"
 
-	"brokle/internal/core/domain/auth"
+	authDomain "brokle/internal/core/domain/auth"
 	"brokle/pkg/ulid"
 )
 
-// rolePermissionRepository implements auth.RolePermissionRepository using GORM
+// rolePermissionRepository implements authDomain.RolePermissionRepository using GORM
 type rolePermissionRepository struct {
 	db *gorm.DB
 }
 
 // NewRolePermissionRepository creates a new role permission repository instance
-func NewRolePermissionRepository(db *gorm.DB) auth.RolePermissionRepository {
+func NewRolePermissionRepository(db *gorm.DB) authDomain.RolePermissionRepository {
 	return &rolePermissionRepository{
 		db: db,
 	}
 }
 
 // Create creates a new role permission association
-func (r *rolePermissionRepository) Create(ctx context.Context, rolePermission *auth.RolePermission) error {
+func (r *rolePermissionRepository) Create(ctx context.Context, rolePermission *authDomain.RolePermission) error {
 	return r.db.WithContext(ctx).Create(rolePermission).Error
 }
 
 // GetByRoleID retrieves all role permissions for a role
-func (r *rolePermissionRepository) GetByRoleID(ctx context.Context, roleID ulid.ULID) ([]*auth.RolePermission, error) {
-	var rolePermissions []*auth.RolePermission
+func (r *rolePermissionRepository) GetByRoleID(ctx context.Context, roleID ulid.ULID) ([]*authDomain.RolePermission, error) {
+	var rolePermissions []*authDomain.RolePermission
 	err := r.db.WithContext(ctx).
 		Where("role_id = ?", roleID).
 		Find(&rolePermissions).Error
@@ -36,8 +36,8 @@ func (r *rolePermissionRepository) GetByRoleID(ctx context.Context, roleID ulid.
 }
 
 // GetByPermissionID retrieves all role permissions for a permission
-func (r *rolePermissionRepository) GetByPermissionID(ctx context.Context, permissionID ulid.ULID) ([]*auth.RolePermission, error) {
-	var rolePermissions []*auth.RolePermission
+func (r *rolePermissionRepository) GetByPermissionID(ctx context.Context, permissionID ulid.ULID) ([]*authDomain.RolePermission, error) {
+	var rolePermissions []*authDomain.RolePermission
 	err := r.db.WithContext(ctx).
 		Where("permission_id = ?", permissionID).
 		Find(&rolePermissions).Error
@@ -48,28 +48,28 @@ func (r *rolePermissionRepository) GetByPermissionID(ctx context.Context, permis
 func (r *rolePermissionRepository) Delete(ctx context.Context, roleID, permissionID ulid.ULID) error {
 	return r.db.WithContext(ctx).
 		Where("role_id = ? AND permission_id = ?", roleID, permissionID).
-		Delete(&auth.RolePermission{}).Error
+		Delete(&authDomain.RolePermission{}).Error
 }
 
 // DeleteByRoleID removes all permissions for a role
 func (r *rolePermissionRepository) DeleteByRoleID(ctx context.Context, roleID ulid.ULID) error {
 	return r.db.WithContext(ctx).
 		Where("role_id = ?", roleID).
-		Delete(&auth.RolePermission{}).Error
+		Delete(&authDomain.RolePermission{}).Error
 }
 
 // DeleteByPermissionID removes all roles for a permission
 func (r *rolePermissionRepository) DeleteByPermissionID(ctx context.Context, permissionID ulid.ULID) error {
 	return r.db.WithContext(ctx).
 		Where("permission_id = ?", permissionID).
-		Delete(&auth.RolePermission{}).Error
+		Delete(&authDomain.RolePermission{}).Error
 }
 
 // Exists checks if a role permission association exists
 func (r *rolePermissionRepository) Exists(ctx context.Context, roleID, permissionID ulid.ULID) (bool, error) {
 	var count int64
 	err := r.db.WithContext(ctx).
-		Model(&auth.RolePermission{}).
+		Model(&authDomain.RolePermission{}).
 		Where("role_id = ? AND permission_id = ?", roleID, permissionID).
 		Count(&count).Error
 	return count > 0, err
@@ -85,7 +85,7 @@ func (r *rolePermissionRepository) AssignPermissions(ctx context.Context, roleID
 
 	// Add new permissions
 	for _, permissionID := range permissionIDs {
-		rolePermission := &auth.RolePermission{
+		rolePermission := &authDomain.RolePermission{
 			RoleID:       roleID,
 			PermissionID: permissionID,
 			GrantedBy:    grantedBy,
@@ -101,7 +101,7 @@ func (r *rolePermissionRepository) AssignPermissions(ctx context.Context, roleID
 func (r *rolePermissionRepository) RevokePermissions(ctx context.Context, roleID ulid.ULID, permissionIDs []ulid.ULID) error {
 	return r.db.WithContext(ctx).
 		Where("role_id = ? AND permission_id IN ?", roleID, permissionIDs).
-		Delete(&auth.RolePermission{}).Error
+		Delete(&authDomain.RolePermission{}).Error
 }
 
 // RevokeAllPermissions removes all permissions from a role
@@ -118,13 +118,13 @@ func (r *rolePermissionRepository) HasPermission(ctx context.Context, roleID, pe
 func (r *rolePermissionRepository) ReplaceAllPermissions(ctx context.Context, roleID ulid.ULID, permissionIDs []ulid.ULID, grantedBy *ulid.ULID) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// Remove all existing permissions
-		if err := tx.Where("role_id = ?", roleID).Delete(&auth.RolePermission{}).Error; err != nil {
+		if err := tx.Where("role_id = ?", roleID).Delete(&authDomain.RolePermission{}).Error; err != nil {
 			return err
 		}
 		
 		// Add new permissions
 		for _, permissionID := range permissionIDs {
-			rolePermission := &auth.RolePermission{
+			rolePermission := &authDomain.RolePermission{
 				RoleID:       roleID,
 				PermissionID: permissionID,
 				GrantedBy:    grantedBy,
@@ -183,10 +183,10 @@ func (r *rolePermissionRepository) CheckResourceActions(ctx context.Context, rol
 }
 
 // BulkAssign assigns permissions to multiple roles in bulk
-func (r *rolePermissionRepository) BulkAssign(ctx context.Context, assignments []auth.RolePermissionAssignment) error {
+func (r *rolePermissionRepository) BulkAssign(ctx context.Context, assignments []authDomain.RolePermissionAssignment) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for _, assignment := range assignments {
-			rolePermission := &auth.RolePermission{
+			rolePermission := &authDomain.RolePermission{
 				RoleID:       assignment.RoleID,
 				PermissionID: assignment.PermissionID,
 			}
@@ -199,11 +199,11 @@ func (r *rolePermissionRepository) BulkAssign(ctx context.Context, assignments [
 }
 
 // BulkRevoke revokes permissions from multiple roles in bulk
-func (r *rolePermissionRepository) BulkRevoke(ctx context.Context, revocations []auth.RolePermissionRevocation) error {
+func (r *rolePermissionRepository) BulkRevoke(ctx context.Context, revocations []authDomain.RolePermissionRevocation) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for _, revocation := range revocations {
 			if err := tx.Where("role_id = ? AND permission_id = ?", revocation.RoleID, revocation.PermissionID).
-				Delete(&auth.RolePermission{}).Error; err != nil {
+				Delete(&authDomain.RolePermission{}).Error; err != nil {
 				return err
 			}
 		}
@@ -215,7 +215,7 @@ func (r *rolePermissionRepository) BulkRevoke(ctx context.Context, revocations [
 func (r *rolePermissionRepository) GetRolePermissionCount(ctx context.Context, roleID ulid.ULID) (int, error) {
 	var count int64
 	err := r.db.WithContext(ctx).
-		Model(&auth.RolePermission{}).
+		Model(&authDomain.RolePermission{}).
 		Where("role_id = ?", roleID).
 		Count(&count).Error
 	return int(count), err
@@ -225,7 +225,7 @@ func (r *rolePermissionRepository) GetRolePermissionCount(ctx context.Context, r
 func (r *rolePermissionRepository) GetPermissionRoleCount(ctx context.Context, permissionID ulid.ULID) (int, error) {
 	var count int64
 	err := r.db.WithContext(ctx).
-		Model(&auth.RolePermission{}).
+		Model(&authDomain.RolePermission{}).
 		Where("permission_id = ?", permissionID).
 		Count(&count).Error
 	return int(count), err
