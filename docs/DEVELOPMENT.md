@@ -429,6 +429,20 @@ make load-test TEST=api_endpoints
 
 ### Code Quality
 
+#### Error Handling Standards
+
+The platform follows industrial-grade error handling patterns. **Always reference these guides** when implementing features:
+
+- **[ERROR_HANDLING_GUIDE.md](./development/ERROR_HANDLING_GUIDE.md)** - Complete implementation guide across Repository → Service → Handler layers
+- **[DOMAIN_ALIAS_PATTERNS.md](./development/DOMAIN_ALIAS_PATTERNS.md)** - Professional import patterns for clean, conflict-free code  
+- **[ERROR_HANDLING_QUICK_REFERENCE.md](./development/ERROR_HANDLING_QUICK_REFERENCE.md)** - Quick reference for daily development
+
+These patterns ensure:
+- Clean architecture with proper error propagation
+- Professional domain separation with aliases
+- Consistent error context and debugging capabilities
+- Industrial Go standards across all layers
+
 #### Linting
 
 ```bash

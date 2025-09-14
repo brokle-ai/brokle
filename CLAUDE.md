@@ -330,7 +330,11 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 
 ### Error Handling
 
-**📖 CRITICAL**: Use the comprehensive **[Industrial Error Handling Guide](INDUSTRIAL_ERROR_HANDLING_GUIDE.md)** for all error handling implementations.
+**📖 CRITICAL**: Use the comprehensive **[Development Error Handling Guides](docs/development/)** for all error handling implementations:
+
+- **[ERROR_HANDLING_GUIDE.md](docs/development/ERROR_HANDLING_GUIDE.md)** - Complete industrial patterns across all layers
+- **[DOMAIN_ALIAS_PATTERNS.md](docs/development/DOMAIN_ALIAS_PATTERNS.md)** - Professional import patterns  
+- **[ERROR_HANDLING_QUICK_REFERENCE.md](docs/development/ERROR_HANDLING_QUICK_REFERENCE.md)** - Developer cheat sheet
 
 The platform follows **industrial Go best practices** with structured error handling:
 
