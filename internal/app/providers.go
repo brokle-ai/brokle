@@ -9,6 +9,7 @@ import (
 
 	"brokle/internal/config"
 	"brokle/internal/core/domain/auth"
+	"brokle/internal/core/domain/observability"
 	"brokle/internal/core/domain/organization"
 	"brokle/internal/core/domain/user"
 	authService "brokle/internal/core/services/auth"
@@ -20,9 +21,11 @@ import (
 	"brokle/internal/ee/sso"
 	"brokle/internal/infrastructure/database"
 	authRepo "brokle/internal/infrastructure/repository/auth"
+	observabilityRepo "brokle/internal/infrastructure/repository/observability"
 	orgRepo "brokle/internal/infrastructure/repository/organization"
 	userRepo "brokle/internal/infrastructure/repository/user"
 	"brokle/internal/migration"
+	observabilityService "brokle/internal/services/observability"
 )
 
 // ProviderContainer holds all provider instances for dependency injection
@@ -44,9 +47,10 @@ type DatabaseContainer struct {
 
 // RepositoryContainer holds all repository instances organized by domain
 type RepositoryContainer struct {
-	User         *UserRepositories
-	Auth         *AuthRepositories
-	Organization *OrganizationRepositories
+	User          *UserRepositories
+	Auth          *AuthRepositories
+	Organization  *OrganizationRepositories
+	Observability *ObservabilityRepositories
 }
 
 // ServiceContainer holds all service instances organized by domain
@@ -60,6 +64,8 @@ type ServiceContainer struct {
 	EnvironmentService    organization.EnvironmentService
 	InvitationService     organization.InvitationService
 	SettingsService       organization.OrganizationSettingsService
+	// Observability services
+	Observability         *observabilityService.ServiceRegistry
 }
 
 // EnterpriseContainer holds all enterprise service instances
@@ -98,6 +104,13 @@ type OrganizationRepositories struct {
 	Environment  organization.EnvironmentRepository
 	Invitation   organization.InvitationRepository
 	Settings     organization.OrganizationSettingsRepository
+}
+
+// ObservabilityRepositories contains all observability-related repositories
+type ObservabilityRepositories struct {
+	Trace        observability.TraceRepository
+	Observation  observability.ObservationRepository
+	QualityScore observability.QualityScoreRepository
 }
 
 // Domain-specific service containers
@@ -184,12 +197,22 @@ func ProvideOrganizationRepositories(db *gorm.DB) *OrganizationRepositories {
 	}
 }
 
+// ProvideObservabilityRepositories creates all observability-related repositories
+func ProvideObservabilityRepositories(postgresDB *gorm.DB, clickhouseDB *database.ClickHouseDB) *ObservabilityRepositories {
+	return &ObservabilityRepositories{
+		Trace:        observabilityRepo.NewTraceRepository(postgresDB),
+		Observation:  observabilityRepo.NewObservationRepository(postgresDB),
+		QualityScore: observabilityRepo.NewQualityScoreRepository(postgresDB),
+	}
+}
+
 // ProvideRepositories creates all repository containers
 func ProvideRepositories(dbs *DatabaseContainer) *RepositoryContainer {
 	return &RepositoryContainer{
-		User:         ProvideUserRepositories(dbs.Postgres.DB),
-		Auth:         ProvideAuthRepositories(dbs.Postgres.DB),
-		Organization: ProvideOrganizationRepositories(dbs.Postgres.DB),
+		User:          ProvideUserRepositories(dbs.Postgres.DB),
+		Auth:          ProvideAuthRepositories(dbs.Postgres.DB),
+		Organization:  ProvideOrganizationRepositories(dbs.Postgres.DB),
+		Observability: ProvideObservabilityRepositories(dbs.Postgres.DB, dbs.ClickHouse),
 	}
 }
 
@@ -351,6 +374,45 @@ func ProvideOrganizationServices(
 	return orgSvc, memberSvc, projectSvc, environmentSvc, invitationSvc, settingsSvc
 }
 
+// ProvideObservabilityServices creates all observability-related services
+func ProvideObservabilityServices(
+	observabilityRepos *ObservabilityRepositories,
+	logger *logrus.Logger,
+) *observabilityService.ServiceRegistry {
+	// Create a simple event publisher for now
+	eventPublisher := &simpleEventPublisher{logger: logger}
+
+	return observabilityService.NewServiceRegistry(
+		observabilityRepos.Trace,
+		observabilityRepos.Observation,
+		observabilityRepos.QualityScore,
+		eventPublisher,
+	)
+}
+
+// simpleEventPublisher is a simple implementation of EventPublisher for initial integration
+type simpleEventPublisher struct {
+	logger *logrus.Logger
+}
+
+func (p *simpleEventPublisher) Publish(ctx context.Context, event *observability.Event) error {
+	p.logger.WithFields(logrus.Fields{
+		"event_type": event.Type,
+		"subject":    event.Subject,
+		"project_id": event.ProjectID.String(),
+	}).Debug("publishing event")
+	return nil
+}
+
+func (p *simpleEventPublisher) PublishBatch(ctx context.Context, events []*observability.Event) error {
+	for _, event := range events {
+		if err := p.Publish(ctx, event); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // ProvideServices creates all service containers with proper dependency resolution
 func ProvideServices(
 	cfg *config.Config,
@@ -372,6 +434,9 @@ func ProvideServices(
 		logger,
 	)
 
+	// Create observability services
+	observabilityServices := ProvideObservabilityServices(repos.Observability, logger)
+
 	return &ServiceContainer{
 		User:               userServices,
 		Auth:               authServices,
@@ -381,6 +446,7 @@ func ProvideServices(
 		EnvironmentService: environmentService,
 		InvitationService:  invitationService,
 		SettingsService:    settingsService,
+		Observability:      observabilityServices,
 	}
 }
 

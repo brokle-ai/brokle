@@ -72,6 +72,7 @@ func (a *App) Start() error {
 		providers.Services.Auth.Role,                   // Role service for RBAC
 		providers.Services.Auth.Permission,             // Permission service for RBAC
 		providers.Services.Auth.OrganizationMembers,    // Organization member service for normalized RBAC
+		providers.Services.Observability,               // Observability service registry
 		// All enterprise services available through providers.Enterprise
 	)
 
@@ -128,6 +129,7 @@ func (a *App) Run() error {
 		providers.Services.Auth.Role,                   // Role service for RBAC
 		providers.Services.Auth.Permission,             // Permission service for RBAC
 		providers.Services.Auth.OrganizationMembers,    // Organization member service for normalized RBAC
+		providers.Services.Observability,               // Observability service registry
 		// All enterprise services available through providers.Enterprise
 	)
 
