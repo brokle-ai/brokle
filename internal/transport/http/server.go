@@ -280,6 +280,39 @@ func (s *Server) setupV1Routes(router *gin.RouterGroup) {
 		billing.POST("/:orgId/subscription", s.handlers.Billing.UpdateSubscription)
 	}
 
+	// Observability routes
+	observability := protected.Group("/observability")
+	{
+		// Trace routes
+		observability.POST("/traces", s.handlers.Observability.CreateTrace)
+		observability.GET("/traces", s.handlers.Observability.ListTraces)
+		observability.GET("/traces/:id", s.handlers.Observability.GetTrace)
+		observability.PUT("/traces/:id", s.handlers.Observability.UpdateTrace)
+		observability.DELETE("/traces/:id", s.handlers.Observability.DeleteTrace)
+		observability.GET("/traces/:id/observations", s.handlers.Observability.GetTraceWithObservations)
+		observability.GET("/traces/:id/stats", s.handlers.Observability.GetTraceStats)
+		observability.POST("/traces/batch", s.handlers.Observability.CreateTracesBatch)
+
+		// Observation routes
+		observability.POST("/observations", s.handlers.Observability.CreateObservation)
+		observability.GET("/observations", s.handlers.Observability.ListObservations)
+		observability.GET("/observations/:id", s.handlers.Observability.GetObservation)
+		observability.PUT("/observations/:id", s.handlers.Observability.UpdateObservation)
+		observability.POST("/observations/:id/complete", s.handlers.Observability.CompleteObservation)
+		observability.DELETE("/observations/:id", s.handlers.Observability.DeleteObservation)
+		observability.GET("/traces/:trace_id/observations", s.handlers.Observability.GetObservationsByTrace)
+		observability.POST("/observations/batch", s.handlers.Observability.CreateObservationsBatch)
+
+		// Quality score routes
+		observability.POST("/quality-scores", s.handlers.Observability.CreateQualityScore)
+		observability.GET("/quality-scores", s.handlers.Observability.ListQualityScores)
+		observability.GET("/quality-scores/:id", s.handlers.Observability.GetQualityScore)
+		observability.PUT("/quality-scores/:id", s.handlers.Observability.UpdateQualityScore)
+		observability.DELETE("/quality-scores/:id", s.handlers.Observability.DeleteQualityScore)
+		observability.GET("/traces/:trace_id/quality-scores", s.handlers.Observability.GetQualityScoresByTrace)
+		observability.GET("/observations/:observation_id/quality-scores", s.handlers.Observability.GetQualityScoresByObservation)
+	}
+
 	// RBAC routes (require authentication)
 	rbac := protected.Group("/rbac")
 	{

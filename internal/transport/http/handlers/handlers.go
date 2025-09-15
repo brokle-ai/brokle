@@ -2,11 +2,12 @@ package handlers
 
 import (
 	"github.com/sirupsen/logrus"
-	
+
 	"brokle/internal/config"
 	"brokle/internal/core/domain/auth"
 	"brokle/internal/core/domain/organization"
 	"brokle/internal/core/domain/user"
+	obsServices "brokle/internal/services/observability"
 	"brokle/internal/transport/http/handlers/admin"
 	"brokle/internal/transport/http/handlers/ai"
 	"brokle/internal/transport/http/handlers/analytics"
@@ -17,6 +18,7 @@ import (
 	"brokle/internal/transport/http/handlers/health"
 	"brokle/internal/transport/http/handlers/logs"
 	"brokle/internal/transport/http/handlers/metrics"
+	"brokle/internal/transport/http/handlers/observability"
 	organizationHandler "brokle/internal/transport/http/handlers/organization"
 	"brokle/internal/transport/http/handlers/project"
 	"brokle/internal/transport/http/handlers/rbac"
@@ -34,13 +36,14 @@ type Handlers struct {
 	Project      *project.Handler
 	Environment  *environment.Handler
 	APIKey       *apikey.Handler
-	Analytics    *analytics.Handler
-	Logs         *logs.Handler
-	Billing      *billing.Handler
-	AI           *ai.Handler
-	WebSocket    *websocket.Handler
-	Admin        *admin.TokenAdminHandler
-	RBAC         *rbac.Handler
+	Analytics     *analytics.Handler
+	Logs          *logs.Handler
+	Billing       *billing.Handler
+	AI            *ai.Handler
+	WebSocket     *websocket.Handler
+	Admin         *admin.TokenAdminHandler
+	RBAC          *rbac.Handler
+	Observability *observability.Handler
 }
 
 // NewHandlers creates a new handlers instance with all dependencies
@@ -61,6 +64,7 @@ func NewHandlers(
 	roleService auth.RoleService,
 	permissionService auth.PermissionService,
 	organizationMemberService auth.OrganizationMemberService,
+	observabilityServices *obsServices.ServiceRegistry,
 	// Add other service dependencies as they're implemented
 ) *Handlers {
 	return &Handlers{
@@ -77,7 +81,8 @@ func NewHandlers(
 		Billing:      billing.NewHandler(cfg, logger),
 		AI:           ai.NewHandler(cfg, logger),
 		WebSocket:    websocket.NewHandler(cfg, logger),
-		Admin:        admin.NewTokenAdminHandler(authService, blacklistedTokens, logger),
-		RBAC:         rbac.NewHandler(cfg, logger, roleService, permissionService, organizationMemberService),
+		Admin:         admin.NewTokenAdminHandler(authService, blacklistedTokens, logger),
+		RBAC:          rbac.NewHandler(cfg, logger, roleService, permissionService, organizationMemberService),
+		Observability: observability.NewHandler(cfg, logger, observabilityServices),
 	}
 }

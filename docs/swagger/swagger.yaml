@@ -1403,6 +1403,318 @@ definitions:
         example: "2024-01-01T00:00:00Z"
         type: string
     type: object
+  observability.BatchCreateTracesRequest:
+    properties:
+      traces:
+        items:
+          $ref: '#/definitions/observability.CreateTraceRequest'
+        type: array
+    required:
+    - traces
+    type: object
+  observability.BatchCreateTracesResponse:
+    properties:
+      processed_count:
+        type: integer
+      traces:
+        items:
+          $ref: '#/definitions/observability.TraceResponse'
+        type: array
+    type: object
+  observability.CreateObservationRequest:
+    properties:
+      completion_tokens:
+        type: integer
+      end_time:
+        type: string
+      external_observation_id:
+        type: string
+      input:
+        additionalProperties: true
+        type: object
+      input_cost:
+        type: number
+      latency_ms:
+        type: integer
+      level:
+        type: string
+      model:
+        type: string
+      model_parameters:
+        additionalProperties: true
+        type: object
+      name:
+        type: string
+      output:
+        additionalProperties: true
+        type: object
+      output_cost:
+        type: number
+      parent_observation_id:
+        type: string
+      prompt_tokens:
+        type: integer
+      provider:
+        type: string
+      quality_score:
+        type: number
+      start_time:
+        type: string
+      status_message:
+        type: string
+      total_cost:
+        type: number
+      total_tokens:
+        type: integer
+      trace_id:
+        type: string
+      type:
+        type: string
+      version:
+        type: string
+    required:
+    - external_observation_id
+    - name
+    - start_time
+    - trace_id
+    - type
+    type: object
+  observability.CreateQualityScoreRequest:
+    properties:
+      author_user_id:
+        type: string
+      comment:
+        type: string
+      data_type:
+        type: string
+      evaluator_name:
+        type: string
+      evaluator_version:
+        type: string
+      observation_id:
+        type: string
+      score_name:
+        type: string
+      score_value:
+        type: number
+      source:
+        type: string
+      string_value:
+        type: string
+      trace_id:
+        type: string
+    required:
+    - data_type
+    - score_name
+    - trace_id
+    type: object
+  observability.CreateTraceRequest:
+    properties:
+      external_trace_id:
+        type: string
+      metadata:
+        additionalProperties: true
+        type: object
+      name:
+        type: string
+      parent_trace_id:
+        type: string
+      project_id:
+        type: string
+      session_id:
+        type: string
+      tags:
+        additionalProperties: true
+        type: object
+      user_id:
+        type: string
+    required:
+    - external_trace_id
+    - name
+    - project_id
+    type: object
+  observability.ListTracesResponse:
+    properties:
+      limit:
+        type: integer
+      offset:
+        type: integer
+      total:
+        type: integer
+      traces:
+        items:
+          $ref: '#/definitions/observability.TraceResponse'
+        type: array
+    type: object
+  observability.ObservationResponse:
+    properties:
+      completion_tokens:
+        type: integer
+      created_at:
+        type: string
+      end_time:
+        type: string
+      external_observation_id:
+        type: string
+      id:
+        type: string
+      input:
+        additionalProperties: true
+        type: object
+      input_cost:
+        type: number
+      latency_ms:
+        type: integer
+      level:
+        type: string
+      model:
+        type: string
+      model_parameters:
+        additionalProperties: true
+        type: object
+      name:
+        type: string
+      output:
+        additionalProperties: true
+        type: object
+      output_cost:
+        type: number
+      parent_observation_id:
+        type: string
+      prompt_tokens:
+        type: integer
+      provider:
+        type: string
+      quality_score:
+        type: number
+      start_time:
+        type: string
+      status_message:
+        type: string
+      total_cost:
+        type: number
+      total_tokens:
+        type: integer
+      trace_id:
+        type: string
+      type:
+        type: string
+      updated_at:
+        type: string
+      version:
+        type: string
+    type: object
+  observability.QualityScoreResponse:
+    properties:
+      author_user_id:
+        type: string
+      comment:
+        type: string
+      created_at:
+        type: string
+      data_type:
+        type: string
+      evaluator_name:
+        type: string
+      evaluator_version:
+        type: string
+      id:
+        type: string
+      observation_id:
+        type: string
+      score_name:
+        type: string
+      score_value:
+        type: number
+      source:
+        type: string
+      string_value:
+        type: string
+      trace_id:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  observability.TraceResponse:
+    properties:
+      created_at:
+        type: string
+      external_trace_id:
+        type: string
+      id:
+        type: string
+      metadata:
+        additionalProperties: true
+        type: object
+      name:
+        type: string
+      parent_trace_id:
+        type: string
+      project_id:
+        type: string
+      session_id:
+        type: string
+      tags:
+        additionalProperties: true
+        type: object
+      updated_at:
+        type: string
+      user_id:
+        type: string
+    type: object
+  observability.TraceStatsResponse:
+    properties:
+      total_cost:
+        type: number
+      total_tokens:
+        type: integer
+      trace_id:
+        type: string
+    type: object
+  observability.TraceWithObservationsResponse:
+    properties:
+      created_at:
+        type: string
+      external_trace_id:
+        type: string
+      id:
+        type: string
+      metadata:
+        additionalProperties: true
+        type: object
+      name:
+        type: string
+      observations:
+        items:
+          $ref: '#/definitions/observability.ObservationResponse'
+        type: array
+      parent_trace_id:
+        type: string
+      project_id:
+        type: string
+      session_id:
+        type: string
+      tags:
+        additionalProperties: true
+        type: object
+      updated_at:
+        type: string
+      user_id:
+        type: string
+    type: object
+  observability.UpdateTraceRequest:
+    properties:
+      metadata:
+        additionalProperties: true
+        type: object
+      name:
+        type: string
+      tags:
+        additionalProperties: true
+        type: object
+      user_id:
+        type: string
+    type: object
   organization.BulkSettingsRequest:
     properties:
       settings:
@@ -3818,6 +4130,477 @@ paths:
       summary: Get detailed request information
       tags:
       - Logs
+  /api/v1/observability/observations:
+    post:
+      consumes:
+      - application/json
+      description: Create a new LLM observation (LLM call, span, event, generation,
+        etc.) within a trace
+      parameters:
+      - description: Observation creation data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/observability.CreateObservationRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Observation created successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/observability.ObservationResponse'
+              type: object
+        "400":
+          description: Invalid request payload or observation data
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "409":
+          description: Observation with external_observation_id already exists
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "422":
+          description: Validation failed
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a new observation
+      tags:
+      - Observability - Observations
+  /api/v1/observability/quality-scores:
+    post:
+      consumes:
+      - application/json
+      description: Create a new quality evaluation score for a trace or observation
+        (numeric, categorical, or boolean)
+      parameters:
+      - description: Quality score creation data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/observability.CreateQualityScoreRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Quality score created successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/observability.QualityScoreResponse'
+              type: object
+        "400":
+          description: Invalid request payload or quality score data
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "409":
+          description: Duplicate quality score for same trace/observation and score
+            name
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "422":
+          description: Validation failed
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a quality score
+      tags:
+      - Observability - Quality
+  /api/v1/observability/traces:
+    get:
+      consumes:
+      - application/json
+      description: Get a paginated list of LLM observability traces with filtering
+        options
+      parameters:
+      - description: Project ID filter
+        in: query
+        name: project_id
+        type: string
+      - description: User ID filter
+        in: query
+        name: user_id
+        type: string
+      - description: Session ID filter
+        in: query
+        name: session_id
+        type: string
+      - description: Trace name filter
+        in: query
+        name: name
+        type: string
+      - description: External trace ID filter
+        in: query
+        name: external_trace_id
+        type: string
+      - description: Start time filter (RFC3339 format)
+        in: query
+        name: start_time
+        type: string
+      - description: End time filter (RFC3339 format)
+        in: query
+        name: end_time
+        type: string
+      - default: 50
+        description: Maximum number of results
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Number of results to skip
+        in: query
+        name: offset
+        type: integer
+      - default: created_at
+        description: Sort field
+        in: query
+        name: sort_by
+        type: string
+      - default: desc
+        description: Sort order (asc/desc)
+        in: query
+        name: sort_order
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Traces retrieved successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/observability.ListTracesResponse'
+                meta:
+                  allOf:
+                  - $ref: '#/definitions/response.Meta'
+                  - properties:
+                      pagination:
+                        $ref: '#/definitions/response.Pagination'
+                    type: object
+              type: object
+        "400":
+          description: Invalid filter parameters
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List traces
+      tags:
+      - Observability - Traces
+    post:
+      consumes:
+      - application/json
+      description: Create a new LLM observability trace for tracking AI operations
+      parameters:
+      - description: Trace creation data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/observability.CreateTraceRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Trace created successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/observability.TraceResponse'
+              type: object
+        "400":
+          description: Invalid request payload or trace data
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "409":
+          description: Trace with external_trace_id already exists
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "422":
+          description: Validation failed
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a new trace
+      tags:
+      - Observability - Traces
+  /api/v1/observability/traces/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete an LLM observability trace and all associated data
+      parameters:
+      - description: Trace ID (ULID format)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Trace deleted successfully
+          schema:
+            $ref: '#/definitions/response.MessageResponse'
+        "400":
+          description: Invalid trace ID format
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Trace not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete trace
+      tags:
+      - Observability - Traces
+    get:
+      consumes:
+      - application/json
+      description: Retrieve a specific LLM observability trace by its unique identifier
+      parameters:
+      - description: Trace ID (ULID format)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Trace retrieved successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/observability.TraceResponse'
+              type: object
+        "400":
+          description: Invalid trace ID format
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Trace not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get trace by ID
+      tags:
+      - Observability - Traces
+    put:
+      consumes:
+      - application/json
+      description: Update an existing LLM observability trace with new information
+      parameters:
+      - description: Trace ID (ULID format)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Trace update data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/observability.UpdateTraceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Trace updated successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/observability.TraceResponse'
+              type: object
+        "400":
+          description: Invalid trace ID or request payload
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Trace not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "422":
+          description: Validation failed
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update trace
+      tags:
+      - Observability - Traces
+  /api/v1/observability/traces/{id}/observations:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve a trace along with all its associated observations (LLM
+        calls, spans, events)
+      parameters:
+      - description: Trace ID (ULID format)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Trace with observations retrieved successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/observability.TraceWithObservationsResponse'
+              type: object
+        "400":
+          description: Invalid trace ID format
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Trace not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get trace with observations
+      tags:
+      - Observability - Traces
+  /api/v1/observability/traces/{id}/stats:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve aggregated statistics for a specific LLM trace (cost,
+        tokens, latency, etc.)
+      parameters:
+      - description: Trace ID (ULID format)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Trace statistics retrieved successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/observability.TraceStatsResponse'
+              type: object
+        "400":
+          description: Invalid trace ID format
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Trace not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get trace statistics
+      tags:
+      - Observability - Traces
+  /api/v1/observability/traces/batch:
+    post:
+      consumes:
+      - application/json
+      description: Create multiple LLM observability traces in a single batch operation
+        for improved performance
+      parameters:
+      - description: Batch trace creation data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/observability.BatchCreateTracesRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Traces created successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/observability.BatchCreateTracesResponse'
+              type: object
+        "400":
+          description: Invalid request payload or trace data
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "422":
+          description: Validation failed
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create multiple traces in batch
+      tags:
+      - Observability - Traces
   /api/v1/onboarding/questions:
     get:
       consumes:
