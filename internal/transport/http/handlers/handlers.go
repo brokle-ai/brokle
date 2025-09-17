@@ -11,7 +11,7 @@ import (
 	"brokle/internal/transport/http/handlers/admin"
 	"brokle/internal/transport/http/handlers/ai"
 	"brokle/internal/transport/http/handlers/analytics"
-	"brokle/internal/transport/http/handlers/apikey"
+	"brokle/internal/transport/http/handlers/keypair"
 	authHandler "brokle/internal/transport/http/handlers/auth"
 	"brokle/internal/transport/http/handlers/billing"
 	"brokle/internal/transport/http/handlers/environment"
@@ -35,7 +35,7 @@ type Handlers struct {
 	Organization *organizationHandler.Handler
 	Project      *project.Handler
 	Environment  *environment.Handler
-	APIKey       *apikey.Handler
+	KeyPair      *keypair.Handler
 	Analytics     *analytics.Handler
 	Logs          *logs.Handler
 	Billing       *billing.Handler
@@ -64,6 +64,7 @@ func NewHandlers(
 	roleService auth.RoleService,
 	permissionService auth.PermissionService,
 	organizationMemberService auth.OrganizationMemberService,
+	keyPairService auth.KeyPairService,
 	observabilityServices *obsServices.ServiceRegistry,
 	// Add other service dependencies as they're implemented
 ) *Handlers {
@@ -75,7 +76,7 @@ func NewHandlers(
 		Organization: organizationHandler.NewHandler(cfg, logger, organizationService, memberService, projectService, environmentService, invitationService, settingsService, userService, roleService),
 		Project:      project.NewHandler(cfg, logger, projectService, organizationService, memberService, environmentService),
 		Environment:  environment.NewHandler(cfg, logger),
-		APIKey:       apikey.NewHandler(cfg, logger),
+		KeyPair:      keypair.NewHandler(cfg, logger, keyPairService),
 		Analytics:    analytics.NewHandler(cfg, logger),
 		Logs:         logs.NewHandler(cfg, logger),
 		Billing:      billing.NewHandler(cfg, logger),

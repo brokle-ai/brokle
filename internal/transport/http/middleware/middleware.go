@@ -143,39 +143,6 @@ func JWTAuth(authHandler *auth.Handler) gin.HandlerFunc {
 	}
 }
 
-// APIKeyAuth middleware validates API keys
-func APIKeyAuth(authHandler *auth.Handler) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		// Extract API key from header
-		apiKey := c.GetHeader("Authorization")
-		if apiKey == "" {
-			apiKey = c.GetHeader("X-API-Key")
-		}
-
-		if apiKey == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "API key required"})
-			c.Abort()
-			return
-		}
-
-		// Remove "Bearer " prefix if present
-		if len(apiKey) > 7 && apiKey[:7] == "Bearer " {
-			apiKey = apiKey[7:]
-		}
-
-		// Validate API key and get context
-		keyContext, err := authHandler.ValidateAPIKey(apiKey)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid API key"})
-			c.Abort()
-			return
-		}
-
-		// Add key context to request context
-		c.Set("api_key", keyContext)
-		c.Next()
-	}
-}
 
 // RateLimit middleware implements rate limiting
 func RateLimit() func(http.Handler) http.Handler {

@@ -400,72 +400,6 @@ definitions:
         example: 1250.5
         type: number
     type: object
-  apikey.APIKey:
-    properties:
-      created_at:
-        example: "2024-01-01T00:00:00Z"
-        type: string
-      created_by:
-        example: usr_1234567890
-        type: string
-      environment_id:
-        example: env_1234567890
-        type: string
-      expires_at:
-        example: "2024-12-31T23:59:59Z"
-        type: string
-      id:
-        example: key_1234567890
-        type: string
-      key:
-        example: bk_live_1234567890abcdef
-        type: string
-      key_preview:
-        example: bk_live_...cdef
-        type: string
-      last_used:
-        example: "2024-01-01T00:00:00Z"
-        type: string
-      name:
-        example: Production API Key
-        type: string
-      scopes:
-        example:
-        - '["read"'
-        - ' "write"]'
-        items:
-          type: string
-        type: array
-      status:
-        example: active
-        type: string
-    type: object
-  apikey.CreateAPIKeyRequest:
-    properties:
-      environment_id:
-        example: env_1234567890
-        type: string
-      expires_at:
-        example: "2024-12-31T23:59:59Z"
-        type: string
-      name:
-        example: Production API Key
-        maxLength: 100
-        minLength: 2
-        type: string
-      scopes:
-        example:
-        - '["read"'
-        - ' "write"]'
-        items:
-          type: string
-        minItems: 1
-        type: array
-    required:
-    - environment_id
-    - name
-    - scopes
-    type: object
   auth.ChangePasswordRequest:
     description: Password change information
     properties:
@@ -1157,6 +1091,144 @@ definitions:
       timezone:
         example: UTC
         type: string
+    type: object
+  keypair.CreateKeyPairRequest:
+    description: Request to create a new public+secret key pair
+    properties:
+      environment_id:
+        example: 01K4FHGHT3XX9WFM293QPZ5G9V
+        type: string
+      expires_at:
+        example: "2024-12-31T23:59:59Z"
+        type: string
+      name:
+        example: Production Key Pair
+        maxLength: 100
+        minLength: 2
+        type: string
+      project_id:
+        example: 01K4FHGHT3XX9WFM293QPZ5G9V
+        type: string
+      rate_limit_rpm:
+        example: 1000
+        maximum: 10000
+        minimum: 1
+        type: integer
+      scopes:
+        example:
+        - '["gateway:read"'
+        - ' "analytics:read"]'
+        items:
+          type: string
+        minItems: 1
+        type: array
+    required:
+    - name
+    - project_id
+    - scopes
+    type: object
+  keypair.CreateKeyPairResponse:
+    description: Response when creating a key pair (includes secret key - only shown
+      once)
+    properties:
+      created_at:
+        example: "2024-01-01T00:00:00Z"
+        type: string
+      environment_id:
+        example: 01K4FHGHT3XX9WFM293QPZ5G9V
+        type: string
+      expires_at:
+        example: "2024-12-31T23:59:59Z"
+        type: string
+      id:
+        example: 01K4FHGHT3XX9WFM293QPZ5G9V
+        type: string
+      name:
+        example: Production Key Pair
+        type: string
+      project_id:
+        example: 01K4FHGHT3XX9WFM293QPZ5G9V
+        type: string
+      public_key:
+        example: pk_01K4FHGHT3XX9WFM293QPZ5G9V_abc123def456
+        type: string
+      rate_limit_rpm:
+        example: 1000
+        type: integer
+      scopes:
+        example:
+        - '["gateway:read"'
+        - ' "analytics:read"]'
+        items:
+          type: string
+        type: array
+      secret_key:
+        example: sk_xyz789uvw456rst123
+        type: string
+    type: object
+  keypair.KeyPairResponse:
+    description: Key pair information (secret key not included for security)
+    properties:
+      created_at:
+        example: "2024-01-01T00:00:00Z"
+        type: string
+      environment_id:
+        example: 01K4FHGHT3XX9WFM293QPZ5G9V
+        type: string
+      expires_at:
+        example: "2024-12-31T23:59:59Z"
+        type: string
+      id:
+        example: 01K4FHGHT3XX9WFM293QPZ5G9V
+        type: string
+      is_active:
+        example: true
+        type: boolean
+      last_used_at:
+        example: "2024-01-01T00:00:00Z"
+        type: string
+      name:
+        example: Production Key Pair
+        type: string
+      project_id:
+        example: 01K4FHGHT3XX9WFM293QPZ5G9V
+        type: string
+      public_key:
+        example: pk_01K4FHGHT3XX9WFM293QPZ5G9V_abc123def456
+        type: string
+      rate_limit_rpm:
+        example: 1000
+        type: integer
+      scopes:
+        example:
+        - '["gateway:read"'
+        - ' "analytics:read"]'
+        items:
+          type: string
+        type: array
+    type: object
+  keypair.UpdateKeyPairRequest:
+    description: Request to update an existing key pair
+    properties:
+      expires_at:
+        example: "2025-12-31T23:59:59Z"
+        type: string
+      is_active:
+        example: false
+        type: boolean
+      name:
+        example: Updated Key Pair Name
+        type: string
+      rate_limit_rpm:
+        example: 2000
+        type: integer
+      scopes:
+        example:
+        - '["gateway:read"'
+        - ' "analytics:read"]'
+        items:
+          type: string
+        type: array
     type: object
   logs.AIRequest:
     properties:
@@ -3663,193 +3735,6 @@ paths:
       summary: Update environment
       tags:
       - Environments
-  /api/v1/environments/{envId}/api-keys:
-    get:
-      consumes:
-      - application/json
-      description: Get a paginated list of API keys for a specific environment
-      parameters:
-      - description: Environment ID
-        example: '"env_1234567890"'
-        in: path
-        name: envId
-        required: true
-        type: string
-      - description: Filter by API key status
-        enum:
-        - active
-        - inactive
-        - revoked
-        in: query
-        name: status
-        type: string
-      - default: 1
-        description: Page number
-        in: query
-        minimum: 1
-        name: page
-        type: integer
-      - default: 20
-        description: Items per page
-        in: query
-        maximum: 100
-        minimum: 1
-        name: limit
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: List of API keys with pagination
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                data:
-                  items:
-                    $ref: '#/definitions/apikey.APIKey'
-                  type: array
-                meta:
-                  allOf:
-                  - $ref: '#/definitions/response.Meta'
-                  - properties:
-                      pagination:
-                        $ref: '#/definitions/response.Pagination'
-                    type: object
-              type: object
-        "400":
-          description: Bad request - invalid environment ID
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "403":
-          description: Forbidden - insufficient permissions to view API keys
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "404":
-          description: Environment not found
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: List API keys
-      tags:
-      - API Keys
-    post:
-      consumes:
-      - application/json
-      description: Create a new API key for an environment. The key will only be displayed
-        once upon creation.
-      parameters:
-      - description: Environment ID
-        example: '"env_1234567890"'
-        in: path
-        name: envId
-        required: true
-        type: string
-      - description: API key details
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/apikey.CreateAPIKeyRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: API key created successfully (key only shown once)
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.SuccessResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/apikey.APIKey'
-              type: object
-        "400":
-          description: Bad request - invalid input or validation errors
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "403":
-          description: Forbidden - insufficient permissions to create API keys
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "404":
-          description: Environment not found
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "409":
-          description: Conflict - API key name already exists in environment
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Create API key
-      tags:
-      - API Keys
-  /api/v1/environments/{envId}/api-keys/{keyId}:
-    delete:
-      consumes:
-      - application/json
-      description: Permanently revoke and delete an API key. This action cannot be
-        undone and will immediately invalidate the key.
-      parameters:
-      - description: Environment ID
-        example: '"env_1234567890"'
-        in: path
-        name: envId
-        required: true
-        type: string
-      - description: API Key ID
-        example: '"key_1234567890"'
-        in: path
-        name: keyId
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "204":
-          description: API key deleted successfully
-        "400":
-          description: Bad request - invalid environment ID or key ID
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "403":
-          description: Forbidden - insufficient permissions to delete API keys
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "404":
-          description: Environment or API key not found
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Delete API key
-      tags:
-      - API Keys
   /api/v1/logs/export:
     get:
       consumes:
@@ -5876,6 +5761,313 @@ paths:
       summary: List project environments
       tags:
       - Projects
+  /api/v1/projects/{projectId}/key-pairs:
+    get:
+      consumes:
+      - application/json
+      description: Get a paginated list of key pairs for a specific project
+      parameters:
+      - description: Project ID
+        example: '"01K4FHGHT3XX9WFM293QPZ5G9V"'
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Filter by environment ID
+        in: query
+        name: environment_id
+        type: string
+      - description: Filter by active status
+        in: query
+        name: is_active
+        type: boolean
+      - default: 1
+        description: Page number
+        in: query
+        minimum: 1
+        name: page
+        type: integer
+      - default: 20
+        description: Items per page
+        in: query
+        maximum: 100
+        minimum: 1
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of key pairs with pagination
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/keypair.KeyPairResponse'
+                  type: array
+                meta:
+                  allOf:
+                  - $ref: '#/definitions/response.Meta'
+                  - properties:
+                      pagination:
+                        $ref: '#/definitions/response.Pagination'
+                    type: object
+              type: object
+        "400":
+          description: Bad request - invalid project ID
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Forbidden - insufficient permissions to view key pairs
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Project not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - KeyPairAuth: []
+      summary: List key pairs
+      tags:
+      - Key Pairs
+    post:
+      consumes:
+      - application/json
+      description: Create a new public+secret key pair for a project. The secret key
+        will only be displayed once upon creation.
+      parameters:
+      - description: Project ID
+        example: '"01K4FHGHT3XX9WFM293QPZ5G9V"'
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Key pair details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/keypair.CreateKeyPairRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Key pair created successfully (secret key only shown once)
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/keypair.CreateKeyPairResponse'
+              type: object
+        "400":
+          description: Bad request - invalid input or validation errors
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Forbidden - insufficient permissions to create key pairs
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Project not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "409":
+          description: Conflict - key pair name already exists in project
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - KeyPairAuth: []
+      summary: Create key pair
+      tags:
+      - Key Pairs
+  /api/v1/projects/{projectId}/key-pairs/{keyPairId}:
+    delete:
+      consumes:
+      - application/json
+      description: Permanently revoke and delete a key pair. This action cannot be
+        undone and will immediately invalidate the key.
+      parameters:
+      - description: Project ID
+        example: '"01K4FHGHT3XX9WFM293QPZ5G9V"'
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Key Pair ID
+        example: '"01K4FHGHT3XX9WFM293QPZ5G9V"'
+        in: path
+        name: keyPairId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Key pair deleted successfully
+        "400":
+          description: Bad request - invalid project ID or key pair ID
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Forbidden - insufficient permissions to delete key pairs
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Project or key pair not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - KeyPairAuth: []
+      summary: Delete key pair
+      tags:
+      - Key Pairs
+    get:
+      consumes:
+      - application/json
+      description: Retrieve a specific key pair by its ID
+      parameters:
+      - description: Project ID
+        example: '"01HQZMQY8PFRJQH1TQZRBQGS5Q"'
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Key Pair ID
+        example: '"01HQZMQY8PFRJQH1TQZRBQGS5R"'
+        in: path
+        name: keyPairId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Key pair retrieved successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/keypair.KeyPairResponse'
+              type: object
+        "400":
+          description: Bad request - invalid project ID or key pair ID
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Forbidden - insufficient permissions to view key pair
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Key pair not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - KeyPairAuth: []
+      summary: Get key pair by ID
+      tags:
+      - Key Pairs
+    patch:
+      consumes:
+      - application/json
+      description: Update an existing key pair's properties (name, scopes, rate limit,
+        active status, expiration)
+      parameters:
+      - description: Project ID
+        example: '"01K4FHGHT3XX9WFM293QPZ5G9V"'
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Key Pair ID
+        example: '"01K4FHGHT3XX9WFM293QPZ5G9V"'
+        in: path
+        name: keyPairId
+        required: true
+        type: string
+      - description: Key pair updates
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/keypair.UpdateKeyPairRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Key pair updated successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/keypair.KeyPairResponse'
+              type: object
+        "400":
+          description: Bad request - invalid input
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Forbidden - insufficient permissions
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Key pair not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      - KeyPairAuth: []
+      summary: Update key pair
+      tags:
+      - Key Pairs
   /api/v1/users/me:
     get:
       description: Get the profile information of the currently authenticated user
@@ -6034,7 +6226,7 @@ paths:
           schema:
             $ref: '#/definitions/response.ErrorResponse'
       security:
-      - ApiKeyAuth: []
+      - KeyPairAuth: []
       summary: Create chat completion
       tags:
       - AI Gateway
@@ -6074,7 +6266,7 @@ paths:
           schema:
             $ref: '#/definitions/response.ErrorResponse'
       security:
-      - ApiKeyAuth: []
+      - KeyPairAuth: []
       summary: Create text completion
       tags:
       - AI Gateway
@@ -6114,7 +6306,7 @@ paths:
           schema:
             $ref: '#/definitions/response.ErrorResponse'
       security:
-      - ApiKeyAuth: []
+      - KeyPairAuth: []
       summary: Create embeddings
       tags:
       - AI Gateway
@@ -6139,7 +6331,7 @@ paths:
           schema:
             $ref: '#/definitions/response.ErrorResponse'
       security:
-      - ApiKeyAuth: []
+      - KeyPairAuth: []
       summary: List available models
       tags:
       - AI Gateway
@@ -6173,7 +6365,7 @@ paths:
           schema:
             $ref: '#/definitions/response.ErrorResponse'
       security:
-      - ApiKeyAuth: []
+      - KeyPairAuth: []
       summary: Get model information
       tags:
       - AI Gateway
@@ -6215,17 +6407,19 @@ schemes:
 - http
 - https
 securityDefinitions:
-  ApiKeyAuth:
-    description: 'API key for authentication. Format: X-API-Key: bk_live_...'
+  BearerAuth:
+    description: 'JWT Bearer token for web dashboard authentication. Format: Authorization:
+      Bearer <jwt_token>'
     in: header
-    name: X-API-Key
+    name: Authorization
+    type: apiKey
+  KeyPairAuth:
+    description: 'API Key authentication for AI gateway. Format: Authorization: Bearer
+      pk_projectId_random:sk_random'
+    in: header
+    name: Authorization
     type: apiKey
     x-extension-openapi: '{"definitions": {"ULID": {"type": "string", "description":
       "ULID (Universally Unique Lexicographically Sortable Identifier)", "example":
       "01ARZ3NDEKTSV4RRFFQ69G5FAV", "pattern": "^[0-9A-Z]{26}$"}}}'
-  BearerAuth:
-    description: 'JWT token for authentication. Format: Authorization: Bearer <token>'
-    in: header
-    name: Authorization
-    type: apiKey
 swagger: "2.0"

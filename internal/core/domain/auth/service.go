@@ -54,29 +54,36 @@ type SessionService interface {
 	GetActiveSessions(ctx context.Context, userID ulid.ULID) ([]*UserSession, error)
 }
 
-// APIKeyService defines the API key management service interface.
-type APIKeyService interface {
-	// API key management
-	CreateAPIKey(ctx context.Context, userID ulid.ULID, req *CreateAPIKeyRequest) (*CreateAPIKeyResponse, error)
-	GetAPIKey(ctx context.Context, keyID ulid.ULID) (*APIKey, error)
-	GetAPIKeys(ctx context.Context, filters *APIKeyFilters) ([]*APIKey, error)
-	UpdateAPIKey(ctx context.Context, keyID ulid.ULID, req *UpdateAPIKeyRequest) error
-	RevokeAPIKey(ctx context.Context, keyID ulid.ULID) error
-	
-	// API key validation and usage
-	ValidateAPIKey(ctx context.Context, keyHash string) (*APIKey, error)
+// KeyPairService defines the key pair management service interface for public+secret key authentication.
+type KeyPairService interface {
+	// Key pair management
+	CreateKeyPair(ctx context.Context, userID ulid.ULID, req *CreateKeyPairRequest) (*CreateKeyPairResponse, error)
+	GetKeyPair(ctx context.Context, keyID ulid.ULID) (*KeyPair, error)
+	GetKeyPairs(ctx context.Context, filters *KeyPairFilters) ([]*KeyPair, error)
+	UpdateKeyPair(ctx context.Context, keyID ulid.ULID, req *UpdateKeyPairRequest) error
+	RevokeKeyPair(ctx context.Context, keyID ulid.ULID) error
+
+	// Key pair validation and authentication
+	ValidateKeyPair(ctx context.Context, publicKey, secretKey string) (*KeyPair, error)
+	AuthenticateWithKeyPair(ctx context.Context, publicKey, secretKey string) (*AuthContext, error)
 	UpdateLastUsed(ctx context.Context, keyID ulid.ULID) error
 	CheckRateLimit(ctx context.Context, keyID ulid.ULID) (bool, error)
-	
-	// API key context and permissions
-	GetAPIKeyContext(ctx context.Context, keyID ulid.ULID) (*AuthContext, error)
-	CanAPIKeyAccessResource(ctx context.Context, keyID ulid.ULID, resource string) (bool, error)
-	
-	// API key scoping
-	GetAPIKeysByUser(ctx context.Context, userID ulid.ULID) ([]*APIKey, error)
-	GetAPIKeysByOrganization(ctx context.Context, orgID ulid.ULID) ([]*APIKey, error)
-	GetAPIKeysByProject(ctx context.Context, projectID ulid.ULID) ([]*APIKey, error)
-	GetAPIKeysByEnvironment(ctx context.Context, envID ulid.ULID) ([]*APIKey, error)
+
+	// Key pair context and permissions
+	GetKeyPairContext(ctx context.Context, keyID ulid.ULID) (*AuthContext, error)
+	CanKeyPairAccessResource(ctx context.Context, keyID ulid.ULID, resource string) (bool, error)
+	CheckKeyPairScopes(ctx context.Context, keyID ulid.ULID, requiredScopes []string) (bool, error)
+
+	// Key pair scoping
+	GetKeyPairsByUser(ctx context.Context, userID ulid.ULID) ([]*KeyPair, error)
+	GetKeyPairsByOrganization(ctx context.Context, orgID ulid.ULID) ([]*KeyPair, error)
+	GetKeyPairsByProject(ctx context.Context, projectID ulid.ULID) ([]*KeyPair, error)
+	GetKeyPairsByEnvironment(ctx context.Context, envID ulid.ULID) ([]*KeyPair, error)
+
+	// Key format utilities
+	GenerateKeyPair(ctx context.Context, projectID ulid.ULID) (publicKey, secretKey string, err error)
+	ValidatePublicKeyFormat(ctx context.Context, publicKey string) error
+	ExtractProjectIDFromPublicKey(ctx context.Context, publicKey string) (ulid.ULID, error)
 }
 
 // RoleService defines both system template and custom scoped role management service interface.
@@ -181,7 +188,6 @@ type JWTService interface {
 	// Token validation
 	ValidateAccessToken(ctx context.Context, token string) (*JWTClaims, error)
 	ValidateRefreshToken(ctx context.Context, token string) (*JWTClaims, error)
-	ValidateAPIKeyToken(ctx context.Context, token string) (*JWTClaims, error)
 	
 	// Token utilities
 	GetTokenExpiry(ctx context.Context, token string) (time.Time, error)
@@ -303,7 +309,7 @@ type APIKeyFilters struct {
 type AuthServices interface {
 	Auth() AuthService
 	Sessions() SessionService
-	APIKeys() APIKeyService
+	KeyPairs() KeyPairService
 	Roles() RoleService
 	OrganizationMembers() OrganizationMemberService
 	Permissions() PermissionService

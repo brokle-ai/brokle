@@ -222,7 +222,7 @@ func (h *Handler) GetQualityScoresByTrace(c *gin.Context) {
 
 // GetQualityScoresByObservation handles GET /api/v1/observability/observations/{observation_id}/quality-scores
 func (h *Handler) GetQualityScoresByObservation(c *gin.Context) {
-	observationIDStr := c.Param("observation_id")
+	observationIDStr := c.Param("id")
 
 	observationID, err := ulid.Parse(observationIDStr)
 	if err != nil {

@@ -72,16 +72,18 @@ func (a *App) Start() error {
 		providers.Services.Auth.Role,                   // Role service for RBAC
 		providers.Services.Auth.Permission,             // Permission service for RBAC
 		providers.Services.Auth.OrganizationMembers,    // Organization member service for normalized RBAC
+		providers.Services.Auth.KeyPairs,               // Key pair service for public+secret key auth
 		providers.Services.Observability,               // Observability service registry
 		// All enterprise services available through providers.Enterprise
 	)
 
 	// Initialize HTTP server with auth services
 	a.httpServer = http.NewServer(
-		a.config, 
-		a.logger, 
+		a.config,
+		a.logger,
 		httpHandlers,
 		providers.Services.Auth.JWT,
+		providers.Services.Auth.KeyPairs,
 		providers.Services.Auth.BlacklistedTokens,
 		providers.Services.Auth.OrganizationMembers,
 		providers.Databases.Redis.Client,
@@ -129,16 +131,18 @@ func (a *App) Run() error {
 		providers.Services.Auth.Role,                   // Role service for RBAC
 		providers.Services.Auth.Permission,             // Permission service for RBAC
 		providers.Services.Auth.OrganizationMembers,    // Organization member service for normalized RBAC
+		providers.Services.Auth.KeyPairs,               // Key pair service for public+secret key auth
 		providers.Services.Observability,               // Observability service registry
 		// All enterprise services available through providers.Enterprise
 	)
 
 	// Initialize HTTP server with auth services
 	a.httpServer = http.NewServer(
-		a.config, 
-		a.logger, 
+		a.config,
+		a.logger,
 		httpHandlers,
 		providers.Services.Auth.JWT,
+		providers.Services.Auth.KeyPairs,
 		providers.Services.Auth.BlacklistedTokens,
 		providers.Services.Auth.OrganizationMembers,
 		providers.Databases.Redis.Client,

@@ -27,9 +27,11 @@ type Config struct {
 	Auth        AuthConfig       `mapstructure:"auth"`
 	Logging     LoggingConfig    `mapstructure:"logging"`
 	External    ExternalConfig   `mapstructure:"external"`
-	Features    FeatureConfig    `mapstructure:"features"`
-	Monitoring  MonitoringConfig `mapstructure:"monitoring"`
-	Enterprise  EnterpriseConfig `mapstructure:"enterprise"`
+	Features      FeatureConfig      `mapstructure:"features"`
+	Monitoring    MonitoringConfig   `mapstructure:"monitoring"`
+	Enterprise    EnterpriseConfig   `mapstructure:"enterprise"`
+	Workers       WorkersConfig      `mapstructure:"workers"`
+	Notifications NotificationsConfig `mapstructure:"notifications"`
 }
 
 // AppConfig contains application-level configuration.
@@ -202,6 +204,17 @@ type MonitoringConfig struct {
 	FlushInterval  time.Duration `mapstructure:"flush_interval"`
 }
 
+// WorkersConfig contains background worker configuration.
+type WorkersConfig struct {
+	AnalyticsWorkers    int `mapstructure:"analytics_workers"`
+	NotificationWorkers int `mapstructure:"notification_workers"`
+}
+
+// NotificationsConfig contains notification system configuration.
+type NotificationsConfig struct {
+	AlertWebhookURL string `mapstructure:"alert_webhook_url"`
+}
+
 // Validate validates the main configuration and all sub-configurations.
 func (c *Config) Validate() error {
 	if err := c.Server.Validate(); err != nil {
@@ -246,6 +259,14 @@ func (c *Config) Validate() error {
 
 	if err := c.Enterprise.Validate(); err != nil {
 		return fmt.Errorf("enterprise config validation failed: %w", err)
+	}
+
+	if err := c.Workers.Validate(); err != nil {
+		return fmt.Errorf("workers config validation failed: %w", err)
+	}
+
+	if err := c.Notifications.Validate(); err != nil {
+		return fmt.Errorf("notifications config validation failed: %w", err)
 	}
 
 	return nil
@@ -597,6 +618,23 @@ func (mc *MonitoringConfig) Validate() error {
 	return nil
 }
 
+// Validate validates workers configuration.
+func (wc *WorkersConfig) Validate() error {
+	if wc.AnalyticsWorkers < 0 {
+		return fmt.Errorf("analytics_workers cannot be negative")
+	}
+	if wc.NotificationWorkers < 0 {
+		return fmt.Errorf("notification_workers cannot be negative")
+	}
+	return nil
+}
+
+// Validate validates notifications configuration.
+func (nc *NotificationsConfig) Validate() error {
+	// Alert webhook URL is optional, no specific validation needed
+	return nil
+}
+
 // Load loads configuration from files and environment variables.
 func Load() (*Config, error) {
 	// Load .env file if it exists (optional, for local development)
@@ -867,6 +905,13 @@ func setDefaults() {
 	viper.SetDefault("enterprise.support.sla", "99.9%")
 	viper.SetDefault("enterprise.support.dedicated_manager", false)
 	viper.SetDefault("enterprise.support.on_call_support", false)
+
+	// Workers defaults
+	viper.SetDefault("workers.analytics_workers", 3)
+	viper.SetDefault("workers.notification_workers", 2)
+
+	// Notifications defaults
+	viper.SetDefault("notifications.alert_webhook_url", "")
 }
 
 // GetServerAddress returns the server address string.

@@ -82,25 +82,135 @@ type OrganizationRepository interface {
 	IsMember(ctx context.Context, userID, orgID ulid.ULID) (bool, error)
 }
 
-// APIKey represents an API key for programmatic access with full scoping.
-type APIKey struct {
+// KeyPair represents a public+secret key pair for API authentication with project scoping.
+// Replaces the old APIKey system with a more secure two-key authentication model.
+// Format: Public key = pk_projectId_random, Secret key = sk_random (hashed)
+type KeyPair struct {
 	ID             ulid.ULID  `json:"id" gorm:"type:char(26);primaryKey"`
 	UserID         ulid.ULID  `json:"user_id" gorm:"type:char(26);not null"`
 	OrganizationID ulid.ULID  `json:"organization_id" gorm:"type:char(26);not null"`
-	ProjectID      *ulid.ULID `json:"project_id,omitempty" gorm:"type:char(26)"`
+	ProjectID      ulid.ULID  `json:"project_id" gorm:"type:char(26);not null"`  // Required - derived from public key
 	EnvironmentID  *ulid.ULID `json:"environment_id,omitempty" gorm:"type:char(26)"`
+
+	// Key pair identification
 	Name           string     `json:"name" gorm:"size:255;not null"`
-	KeyPrefix      string     `json:"key_prefix" gorm:"size:8;not null"`       // First 8 chars for display
-	KeyHash        string      `json:"-" gorm:"size:255;not null"`                  // Hashed key for storage
-	Scopes         []string    `json:"scopes" gorm:"type:json"`               // JSON array of permissions
-	RateLimitRPM   int         `json:"rate_limit_rpm" gorm:"default:1000"` // Requests per minute
-	Metadata       interface{} `json:"metadata,omitempty" gorm:"type:jsonb"`   // Flexible metadata storage
-	IsActive       bool        `json:"is_active" gorm:"default:true"`
+
+	// Public key (pk_projectId_random) - stored in plain text for lookup
+	PublicKey      string     `json:"public_key" gorm:"size:255;not null;uniqueIndex"`
+
+	// Secret key hash (sk_random hashed) - never store plain text
+	SecretKeyHash  string     `json:"-" gorm:"size:255;not null;uniqueIndex"`
+	SecretKeyPrefix string    `json:"secret_key_prefix" gorm:"size:8;not null;default:'sk_'"` // Always 'sk_'
+
+	// Scoping and permissions
+	Scopes         []string   `json:"scopes" gorm:"type:json"`               // JSON array of permissions
+
+	// Rate limiting and usage controls
+	RateLimitRPM   int        `json:"rate_limit_rpm" gorm:"default:1000"`    // Requests per minute
+
+	// Status and lifecycle
+	IsActive       bool       `json:"is_active" gorm:"default:true"`
 	ExpiresAt      *time.Time `json:"expires_at,omitempty"`
 	LastUsedAt     *time.Time `json:"last_used_at,omitempty"`
+
+	// Metadata for enterprise features
+	Metadata       interface{} `json:"metadata,omitempty" gorm:"type:jsonb"`  // Flexible metadata storage
+
+	// Audit fields
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`
 	DeletedAt      gorm.DeletedAt `json:"deleted_at,omitempty" gorm:"index"`
+}
+
+// KeyPairScope represents the scopes/permissions for key pair access control
+type KeyPairScope string
+
+const (
+	// Gateway scopes for AI routing and proxy functionality
+	ScopeGatewayRead   KeyPairScope = "gateway:read"
+	ScopeGatewayWrite  KeyPairScope = "gateway:write"
+
+	// Analytics scopes for metrics and reporting
+	ScopeAnalyticsRead KeyPairScope = "analytics:read"
+
+	// Config scopes for configuration management
+	ScopeConfigRead    KeyPairScope = "config:read"
+	ScopeConfigWrite   KeyPairScope = "config:write"
+
+	// Admin scope for full access (enterprise)
+	ScopeAdmin         KeyPairScope = "admin"
+)
+
+// ValidatePublicKeyFormat validates the public key format: pk_projectId_random
+func (kp *KeyPair) ValidatePublicKeyFormat() error {
+	if !strings.HasPrefix(kp.PublicKey, "pk_") {
+		return fmt.Errorf("public key must start with 'pk_', got: %s", kp.PublicKey)
+	}
+
+	parts := strings.Split(kp.PublicKey, "_")
+	if len(parts) < 3 {
+		return fmt.Errorf("public key must be in format pk_projectId_random, got: %s", kp.PublicKey)
+	}
+
+	projectIDPart := parts[1]
+	if len(projectIDPart) != 26 {
+		return fmt.Errorf("project ID in public key must be 26 characters (ULID), got: %d characters", len(projectIDPart))
+	}
+
+	return nil
+}
+
+// ExtractProjectIDFromPublicKey extracts the project ID from the public key format
+func (kp *KeyPair) ExtractProjectIDFromPublicKey() (ulid.ULID, error) {
+	if err := kp.ValidatePublicKeyFormat(); err != nil {
+		return ulid.ULID{}, err
+	}
+
+	parts := strings.Split(kp.PublicKey, "_")
+	projectIDStr := parts[1]
+
+	projectID, err := ulid.Parse(projectIDStr)
+	if err != nil {
+		return ulid.ULID{}, fmt.Errorf("invalid project ID in public key: %w", err)
+	}
+
+	return projectID, nil
+}
+
+// ValidateSecretKeyPrefix validates that the secret key prefix is 'sk_'
+func (kp *KeyPair) ValidateSecretKeyPrefix() error {
+	if kp.SecretKeyPrefix != "sk_" {
+		return fmt.Errorf("secret key prefix must be 'sk_', got: %s", kp.SecretKeyPrefix)
+	}
+	return nil
+}
+
+// HasScope checks if the key pair has a specific scope
+func (kp *KeyPair) HasScope(scope KeyPairScope) bool {
+	scopeStr := string(scope)
+	for _, s := range kp.Scopes {
+		if s == scopeStr {
+			return true
+		}
+		// Check for admin scope which grants all permissions
+		if s == string(ScopeAdmin) {
+			return true
+		}
+	}
+	return false
+}
+
+// IsExpired checks if the key pair has expired
+func (kp *KeyPair) IsExpired() bool {
+	if kp.ExpiresAt == nil {
+		return false
+	}
+	return time.Now().After(*kp.ExpiresAt)
+}
+
+// IsValid checks if the key pair is valid for use (active and not expired)
+func (kp *KeyPair) IsValid() bool {
+	return kp.IsActive && !kp.IsExpired()
 }
 
 // Role represents both system template roles and custom scoped roles
@@ -359,23 +469,45 @@ type AuthUser struct {
 	DefaultOrganizationID *ulid.ULID `json:"default_organization_id,omitempty"`
 }
 
-type CreateAPIKeyRequest struct {
+type CreateKeyPairRequest struct {
 	Name           string     `json:"name" validate:"required,min=1,max=100"`
 	OrganizationID ulid.ULID  `json:"organization_id" validate:"required"`
-	ProjectID      *ulid.ULID `json:"project_id,omitempty"`
+	ProjectID      ulid.ULID  `json:"project_id" validate:"required"`  // Required for key pair generation
 	EnvironmentID  *ulid.ULID `json:"environment_id,omitempty"`
 	Scopes         []string   `json:"scopes" validate:"required,min=1"`
 	RateLimitRPM   int        `json:"rate_limit_rpm" validate:"min=1,max=10000"`
 	ExpiresAt      *time.Time `json:"expires_at,omitempty"`
 }
 
-type CreateAPIKeyResponse struct {
-	ID        ulid.ULID  `json:"id"`
-	Name      string     `json:"name"`
-	Key       string     `json:"key"`        // Full key - only returned once
-	KeyPrefix string     `json:"key_prefix"` // For display purposes
-	Scopes    []string   `json:"scopes"`
-	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+type CreateKeyPairResponse struct {
+	ID           ulid.ULID  `json:"id"`
+	Name         string     `json:"name"`
+	PublicKey    string     `json:"public_key"`    // pk_projectId_random format
+	SecretKey    string     `json:"secret_key"`    // sk_random format - only returned once
+	Scopes       []string   `json:"scopes"`
+	ProjectID    ulid.ULID  `json:"project_id"`
+	ExpiresAt    *time.Time `json:"expires_at,omitempty"`
+}
+
+// UpdateKeyPairRequest represents the request to update a key pair.
+type UpdateKeyPairRequest struct {
+	Name         *string    `json:"name,omitempty"`
+	Scopes       []string   `json:"scopes,omitempty"`
+	RateLimitRPM *int       `json:"rate_limit_rpm,omitempty"`
+	ExpiresAt    *time.Time `json:"expires_at,omitempty"`
+	IsActive     *bool      `json:"is_active,omitempty"`
+}
+
+// KeyPairFilters represents filters for querying key pairs.
+type KeyPairFilters struct {
+	UserID         *ulid.ULID `json:"user_id,omitempty"`
+	OrganizationID *ulid.ULID `json:"organization_id,omitempty"`
+	ProjectID      *ulid.ULID `json:"project_id,omitempty"`
+	EnvironmentID  *ulid.ULID `json:"environment_id,omitempty"`
+	IsActive       *bool      `json:"is_active,omitempty"`
+	HasScopes      []string   `json:"has_scopes,omitempty"`
+	Limit          int        `json:"limit,omitempty"`
+	Offset         int        `json:"offset,omitempty"`
 }
 
 type RefreshTokenRequest struct {
@@ -387,9 +519,15 @@ type RefreshTokenRequest struct {
 // AuthContext represents the authenticated context for a request.
 // AuthContext represents clean user identity context (permissions resolved dynamically)
 type AuthContext struct {
-	UserID    ulid.ULID  `json:"user_id"`
-	APIKeyID  *ulid.ULID `json:"api_key_id,omitempty"`  // Set if authenticated via API key
-	SessionID *ulid.ULID `json:"session_id,omitempty"`  // Set if authenticated via session
+	UserID       ulid.ULID  `json:"user_id"`
+	KeyPairID    *ulid.ULID `json:"key_pair_id,omitempty"`    // Set if authenticated via key pair
+	SessionID    *ulid.ULID `json:"session_id,omitempty"`     // Set if authenticated via session
+
+	// Additional context for key pair authentication
+	OrganizationID *ulid.ULID `json:"organization_id,omitempty"` // From key pair
+	ProjectID      *ulid.ULID `json:"project_id,omitempty"`      // From key pair
+	EnvironmentID  *ulid.ULID `json:"environment_id,omitempty"`  // From key pair
+	Scopes         []string   `json:"scopes,omitempty"`          // From key pair
 }
 
 // Standard permission scopes for the platform
@@ -519,20 +657,22 @@ func NewUserTimestampBlacklistedToken(userID ulid.ULID, blacklistTimestamp int64
 	}
 }
 
-func NewAPIKey(userID, orgID ulid.ULID, name, keyPrefix, keyHash string, scopes []string, rateLimitRPM int, expiresAt *time.Time) *APIKey {
-	return &APIKey{
-		ID:             ulid.New(),
-		UserID:         userID,
-		OrganizationID: orgID,
-		Name:           name,
-		KeyPrefix:      keyPrefix,
-		KeyHash:        keyHash,
-		Scopes:         scopes,
-		RateLimitRPM:   rateLimitRPM,
-		IsActive:       true,
-		ExpiresAt:      expiresAt,
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
+func NewKeyPair(userID, orgID, projectID ulid.ULID, name, publicKey, secretKeyHash string, scopes []string, rateLimitRPM int, expiresAt *time.Time) *KeyPair {
+	return &KeyPair{
+		ID:              ulid.New(),
+		UserID:          userID,
+		OrganizationID:  orgID,
+		ProjectID:       projectID,
+		Name:            name,
+		PublicKey:       publicKey,
+		SecretKeyHash:   secretKeyHash,
+		SecretKeyPrefix: "sk_",
+		Scopes:          scopes,
+		RateLimitRPM:    rateLimitRPM,
+		IsActive:        true,
+		ExpiresAt:       expiresAt,
+		CreatedAt:       time.Now(),
+		UpdatedAt:       time.Now(),
 	}
 }
 
@@ -675,24 +815,8 @@ func (s *UserSession) Deactivate() {
 	s.UpdatedAt = time.Now()
 }
 
-func (k *APIKey) IsExpired() bool {
-	return k.ExpiresAt != nil && time.Now().After(*k.ExpiresAt)
-}
-
-func (k *APIKey) IsValid() bool {
-	return k.IsActive && !k.IsExpired()
-}
-
-func (k *APIKey) MarkAsUsed() {
-	now := time.Now()
-	k.LastUsedAt = &now
-	k.UpdatedAt = now
-}
-
-func (k *APIKey) Deactivate() {
-	k.IsActive = false
-	k.UpdatedAt = time.Now()
-}
+// KeyPair methods moved to the KeyPair struct definition above
+// (IsExpired, IsValid, etc. are already defined there)
 
 func (r *Role) AddPermission(permissionID ulid.ULID, grantedBy *ulid.ULID) *RolePermission {
 	return &RolePermission{
@@ -786,7 +910,7 @@ type RoleStatistics struct {
 // Table name methods for GORM
 func (UserSession) TableName() string         { return "user_sessions" }
 func (BlacklistedToken) TableName() string    { return "blacklisted_tokens" }
-func (APIKey) TableName() string              { return "api_keys" }
+func (KeyPair) TableName() string             { return "key_pairs" }
 func (Role) TableName() string                { return "roles" }
 func (OrganizationMember) TableName() string  { return "organization_members" }
 func (ProjectMember) TableName() string       { return "project_members" }

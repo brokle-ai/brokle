@@ -120,31 +120,30 @@ func (m *RateLimitMiddleware) RateLimitByAPIKey() gin.HandlerFunc {
 	}
 
 	return func(c *gin.Context) {
-		// Get API key from context (set by APIKeyAuth middleware)
-		apiKeyContext, exists := c.Get("api_key")
-		if !exists {
+		// Get auth context (set by RequireKeyPair middleware)
+		authCtx, exists := GetAuthContext(c)
+		if !exists || authCtx == nil || authCtx.KeyPairID == nil {
 			c.Next()
 			return
 		}
 
-		// In a full implementation, you'd extract the API key ID
-		// For now, we'll use a simplified approach
-		apiKeyStr := fmt.Sprintf("%v", apiKeyContext)
-		key := fmt.Sprintf("rate_limit:apikey:%s", apiKeyStr)
-		
-		// API keys typically have higher limits
-		apiKeyLimit := m.config.RateLimitPerUser * 5 // 5x higher limit for API keys
-		
-		allowed, err := m.checkRateLimit(c.Request.Context(), key, apiKeyLimit, m.config.RateLimitWindow)
+		// Use key pair ID for rate limiting
+		keyPairStr := authCtx.KeyPairID.String()
+		key := fmt.Sprintf("rate_limit:keypair:%s", keyPairStr)
+
+		// Key pairs typically have higher limits
+		keyPairLimit := m.config.RateLimitPerUser * 5 // 5x higher limit for key pairs
+
+		allowed, err := m.checkRateLimit(c.Request.Context(), key, keyPairLimit, m.config.RateLimitWindow)
 		if err != nil {
-			m.logger.WithError(err).WithField("api_key", apiKeyStr).Error("API key rate limit check failed")
+			m.logger.WithError(err).WithField("key_pair_id", keyPairStr).Error("Key pair rate limit check failed")
 			c.Next()
 			return
 		}
 
 		if !allowed {
-			m.logger.WithField("api_key", apiKeyStr).Warn("Rate limit exceeded for API key")
-			response.TooManyRequests(c, "API key rate limit exceeded. Please try again later.")
+			m.logger.WithField("key_pair_id", keyPairStr).Warn("Rate limit exceeded for key pair")
+			response.TooManyRequests(c, "Key pair rate limit exceeded. Please try again later.")
 			c.Abort()
 			return
 		}

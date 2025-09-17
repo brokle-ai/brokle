@@ -35,10 +35,11 @@ type Server struct {
 
 // NewServer creates a new HTTP server instance
 func NewServer(
-	cfg *config.Config, 
-	logger *logrus.Logger, 
+	cfg *config.Config,
+	logger *logrus.Logger,
 	handlers *handlers.Handlers,
 	jwtService auth.JWTService,
+	keyPairService auth.KeyPairService,
 	blacklistedTokens auth.BlacklistedTokenService,
 	orgMemberService auth.OrganizationMemberService,
 	redisClient *redis.Client,
@@ -46,6 +47,7 @@ func NewServer(
 	// Create stateless auth middleware
 	authMiddleware := middleware.NewAuthMiddleware(
 		jwtService,
+		keyPairService,
 		blacklistedTokens,
 		orgMemberService,
 		logger,
@@ -149,7 +151,7 @@ func (s *Server) setupRoutes() {
 
 	// OpenAI-compatible routes (with auth)
 	openai := s.engine.Group("/v1")
-	openai.Use(middleware.APIKeyAuth(s.handlers.Auth))
+	openai.Use(s.authMiddleware.RequireKeyPair())
 	s.setupOpenAIRoutes(openai)
 }
 
@@ -248,9 +250,11 @@ func (s *Server) setupV1Routes(router *gin.RouterGroup) {
 		envs.GET("/:envId", s.handlers.Environment.Get)
 		envs.PUT("/:envId", s.handlers.Environment.Update)
 		envs.DELETE("/:envId", s.handlers.Environment.Delete)
-		envs.GET("/:envId/api-keys", s.handlers.APIKey.List)
-		envs.POST("/:envId/api-keys", s.handlers.APIKey.Create)
-		envs.DELETE("/:envId/api-keys/:keyId", s.handlers.APIKey.Delete)
+		envs.GET("/:envId/key-pairs", s.handlers.KeyPair.List)
+		envs.POST("/:envId/key-pairs", s.handlers.KeyPair.Create)
+		envs.GET("/:envId/key-pairs/:keyId", s.handlers.KeyPair.GetByID)
+		envs.PUT("/:envId/key-pairs/:keyId", s.handlers.KeyPair.Update)
+		envs.DELETE("/:envId/key-pairs/:keyId", s.handlers.KeyPair.Delete)
 	}
 
 	// Analytics routes
@@ -300,7 +304,6 @@ func (s *Server) setupV1Routes(router *gin.RouterGroup) {
 		observability.PUT("/observations/:id", s.handlers.Observability.UpdateObservation)
 		observability.POST("/observations/:id/complete", s.handlers.Observability.CompleteObservation)
 		observability.DELETE("/observations/:id", s.handlers.Observability.DeleteObservation)
-		observability.GET("/traces/:trace_id/observations", s.handlers.Observability.GetObservationsByTrace)
 		observability.POST("/observations/batch", s.handlers.Observability.CreateObservationsBatch)
 
 		// Quality score routes
@@ -309,8 +312,7 @@ func (s *Server) setupV1Routes(router *gin.RouterGroup) {
 		observability.GET("/quality-scores/:id", s.handlers.Observability.GetQualityScore)
 		observability.PUT("/quality-scores/:id", s.handlers.Observability.UpdateQualityScore)
 		observability.DELETE("/quality-scores/:id", s.handlers.Observability.DeleteQualityScore)
-		observability.GET("/traces/:trace_id/quality-scores", s.handlers.Observability.GetQualityScoresByTrace)
-		observability.GET("/observations/:observation_id/quality-scores", s.handlers.Observability.GetQualityScoresByObservation)
+		observability.GET("/observations/:id/quality-scores", s.handlers.Observability.GetQualityScoresByObservation)
 	}
 
 	// RBAC routes (require authentication)

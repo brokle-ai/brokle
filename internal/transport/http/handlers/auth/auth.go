@@ -443,12 +443,6 @@ func (h *Handler) ValidateToken(token string) (*auth.AuthContext, error) {
 	return h.authService.ValidateAuthToken(context.Background(), token)
 }
 
-// ValidateAPIKey validates API keys (for middleware)
-func (h *Handler) ValidateAPIKey(apiKey string) (*auth.AuthContext, error) {
-	// TODO: Implement API key validation through APIKeyService
-	// This will need to be updated once we have access to the AuthServices composite
-	return nil, nil
-}
 
 // ListSessionsRequest represents request for listing user sessions
 type ListSessionsRequest struct {

@@ -251,7 +251,7 @@ func (ls *LicenseService) validateLicenseLocally(license *config.LicenseConfig) 
 		Key:           license.Key,
 		Type:          license.Type,
 		ValidUntil:    license.ValidUntil,
-		MaxRequests:   license.MaxRequests,
+		MaxRequests:   int64(license.MaxRequests),
 		MaxUsers:      license.MaxUsers,
 		MaxProjects:   license.MaxProjects,
 		Features:      license.Features,

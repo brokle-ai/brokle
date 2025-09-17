@@ -88,7 +88,7 @@ type AuthRepositories struct {
 	UserSession         auth.UserSessionRepository
 	BlacklistedToken    auth.BlacklistedTokenRepository
 	PasswordResetToken  auth.PasswordResetTokenRepository
-	APIKey              auth.APIKeyRepository
+	KeyPair             auth.KeyPairRepository
 	Role                auth.RoleRepository
 	OrganizationMember  auth.OrganizationMemberRepository
 	Permission          auth.PermissionRepository
@@ -127,6 +127,7 @@ type AuthServices struct {
 	Auth                   auth.AuthService
 	JWT                    auth.JWTService
 	Sessions               auth.SessionService
+	KeyPairs               auth.KeyPairService
 	Role                   auth.RoleService
 	Permission             auth.PermissionService
 	OrganizationMembers    auth.OrganizationMemberService
@@ -176,7 +177,7 @@ func ProvideAuthRepositories(db *gorm.DB) *AuthRepositories {
 		UserSession:        authRepo.NewUserSessionRepository(db),
 		BlacklistedToken:   authRepo.NewBlacklistedTokenRepository(db),
 		PasswordResetToken: authRepo.NewPasswordResetTokenRepository(db),
-		APIKey:             authRepo.NewAPIKeyRepository(db),
+		KeyPair:            authRepo.NewKeyPairRepository(db),
 		Role:               authRepo.NewRoleRepository(db),
 		OrganizationMember: authRepo.NewOrganizationMemberRepository(db),
 		Permission:         authRepo.NewPermissionRepository(db),
@@ -301,10 +302,17 @@ func ProvideAuthServices(
 	// Wrap with audit decorator for clean separation of concerns
 	authSvc := authService.NewAuditDecorator(coreAuthSvc, authRepos.AuditLog, logger)
 
+	// Create key pair service for public+secret key authentication
+	keyPairService := authService.NewKeyPairService(
+		authRepos.KeyPair,
+		userRepos.User,
+	)
+
 	return &AuthServices{
 		Auth:                authSvc,
 		JWT:                 jwtService,
 		Sessions:            sessionService,
+		KeyPairs:            keyPairService,
 		Role:                roleService,
 		Permission:          permissionService,
 		OrganizationMembers: orgMemberService,
@@ -526,7 +534,7 @@ type Repositories struct {
 	OrganizationSettingsRepository organization.OrganizationSettingsRepository
 	UserSessionRepository       auth.UserSessionRepository
 	PasswordResetTokenRepository auth.PasswordResetTokenRepository
-	APIKeyRepository            auth.APIKeyRepository
+	KeyPairRepository           auth.KeyPairRepository
 	RoleRepository              auth.RoleRepository
 	PermissionRepository        auth.PermissionRepository
 	RolePermissionRepository    auth.RolePermissionRepository
@@ -558,7 +566,7 @@ func (pc *ProviderContainer) GetAllRepositories() *Repositories {
 		OrganizationSettingsRepository: pc.Repos.Organization.Settings,
 		UserSessionRepository:          pc.Repos.Auth.UserSession,
 		PasswordResetTokenRepository:   pc.Repos.Auth.PasswordResetToken,
-		APIKeyRepository:               pc.Repos.Auth.APIKey,
+		KeyPairRepository:              pc.Repos.Auth.KeyPair,
 		RoleRepository:                 pc.Repos.Auth.Role,
 		PermissionRepository:           pc.Repos.Auth.Permission,
 		RolePermissionRepository:       pc.Repos.Auth.RolePermission,

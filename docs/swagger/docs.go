@@ -2276,298 +2276,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/environments/{envId}/api-keys": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Get a paginated list of API keys for a specific environment",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "API Keys"
-                ],
-                "summary": "List API keys",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "example": "\"env_1234567890\"",
-                        "description": "Environment ID",
-                        "name": "envId",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "enum": [
-                            "active",
-                            "inactive",
-                            "revoked"
-                        ],
-                        "type": "string",
-                        "description": "Filter by API key status",
-                        "name": "status",
-                        "in": "query"
-                    },
-                    {
-                        "minimum": 1,
-                        "type": "integer",
-                        "default": 1,
-                        "description": "Page number",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "maximum": 100,
-                        "minimum": 1,
-                        "type": "integer",
-                        "default": 20,
-                        "description": "Items per page",
-                        "name": "limit",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "List of API keys with pagination",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "$ref": "#/definitions/apikey.APIKey"
-                                            }
-                                        },
-                                        "meta": {
-                                            "allOf": [
-                                                {
-                                                    "$ref": "#/definitions/response.Meta"
-                                                },
-                                                {
-                                                    "type": "object",
-                                                    "properties": {
-                                                        "pagination": {
-                                                            "$ref": "#/definitions/response.Pagination"
-                                                        }
-                                                    }
-                                                }
-                                            ]
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad request - invalid environment ID",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden - insufficient permissions to view API keys",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Environment not found",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Create a new API key for an environment. The key will only be displayed once upon creation.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "API Keys"
-                ],
-                "summary": "Create API key",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "example": "\"env_1234567890\"",
-                        "description": "Environment ID",
-                        "name": "envId",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "API key details",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/apikey.CreateAPIKeyRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "API key created successfully (key only shown once)",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.SuccessResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/apikey.APIKey"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad request - invalid input or validation errors",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden - insufficient permissions to create API keys",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Environment not found",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "409": {
-                        "description": "Conflict - API key name already exists in environment",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/environments/{envId}/api-keys/{keyId}": {
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Permanently revoke and delete an API key. This action cannot be undone and will immediately invalidate the key.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "API Keys"
-                ],
-                "summary": "Delete API key",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "example": "\"env_1234567890\"",
-                        "description": "Environment ID",
-                        "name": "envId",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "example": "\"key_1234567890\"",
-                        "description": "API Key ID",
-                        "name": "keyId",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "description": "API key deleted successfully"
-                    },
-                    "400": {
-                        "description": "Bad request - invalid environment ID or key ID",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden - insufficient permissions to delete API keys",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Environment or API key not found",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/api/v1/logs/export": {
             "get": {
                 "security": [
@@ -5769,6 +5477,495 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/projects/{projectId}/key-pairs": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "KeyPairAuth": []
+                    }
+                ],
+                "description": "Get a paginated list of key pairs for a specific project",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Key Pairs"
+                ],
+                "summary": "List key pairs",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "example": "\"01K4FHGHT3XX9WFM293QPZ5G9V\"",
+                        "description": "Project ID",
+                        "name": "projectId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by environment ID",
+                        "name": "environment_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Filter by active status",
+                        "name": "is_active",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 100,
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Items per page",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "List of key pairs with pagination",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/keypair.KeyPairResponse"
+                                            }
+                                        },
+                                        "meta": {
+                                            "allOf": [
+                                                {
+                                                    "$ref": "#/definitions/response.Meta"
+                                                },
+                                                {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "pagination": {
+                                                            "$ref": "#/definitions/response.Pagination"
+                                                        }
+                                                    }
+                                                }
+                                            ]
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request - invalid project ID",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - insufficient permissions to view key pairs",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Project not found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "KeyPairAuth": []
+                    }
+                ],
+                "description": "Create a new public+secret key pair for a project. The secret key will only be displayed once upon creation.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Key Pairs"
+                ],
+                "summary": "Create key pair",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "example": "\"01K4FHGHT3XX9WFM293QPZ5G9V\"",
+                        "description": "Project ID",
+                        "name": "projectId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Key pair details",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/keypair.CreateKeyPairRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Key pair created successfully (secret key only shown once)",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/keypair.CreateKeyPairResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request - invalid input or validation errors",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - insufficient permissions to create key pairs",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Project not found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict - key pair name already exists in project",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/projects/{projectId}/key-pairs/{keyPairId}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "KeyPairAuth": []
+                    }
+                ],
+                "description": "Retrieve a specific key pair by its ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Key Pairs"
+                ],
+                "summary": "Get key pair by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "example": "\"01HQZMQY8PFRJQH1TQZRBQGS5Q\"",
+                        "description": "Project ID",
+                        "name": "projectId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "example": "\"01HQZMQY8PFRJQH1TQZRBQGS5R\"",
+                        "description": "Key Pair ID",
+                        "name": "keyPairId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Key pair retrieved successfully",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/keypair.KeyPairResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request - invalid project ID or key pair ID",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - insufficient permissions to view key pair",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Key pair not found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "KeyPairAuth": []
+                    }
+                ],
+                "description": "Permanently revoke and delete a key pair. This action cannot be undone and will immediately invalidate the key.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Key Pairs"
+                ],
+                "summary": "Delete key pair",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "example": "\"01K4FHGHT3XX9WFM293QPZ5G9V\"",
+                        "description": "Project ID",
+                        "name": "projectId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "example": "\"01K4FHGHT3XX9WFM293QPZ5G9V\"",
+                        "description": "Key Pair ID",
+                        "name": "keyPairId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Key pair deleted successfully"
+                    },
+                    "400": {
+                        "description": "Bad request - invalid project ID or key pair ID",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - insufficient permissions to delete key pairs",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Project or key pair not found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    },
+                    {
+                        "KeyPairAuth": []
+                    }
+                ],
+                "description": "Update an existing key pair's properties (name, scopes, rate limit, active status, expiration)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Key Pairs"
+                ],
+                "summary": "Update key pair",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "example": "\"01K4FHGHT3XX9WFM293QPZ5G9V\"",
+                        "description": "Project ID",
+                        "name": "projectId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "example": "\"01K4FHGHT3XX9WFM293QPZ5G9V\"",
+                        "description": "Key Pair ID",
+                        "name": "keyPairId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Key pair updates",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/keypair.UpdateKeyPairRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Key pair updated successfully",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/keypair.KeyPairResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request - invalid input",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - insufficient permissions",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Key pair not found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/users/me": {
             "get": {
                 "security": [
@@ -5963,7 +6160,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "ApiKeyAuth": []
+                        "KeyPairAuth": []
                     }
                 ],
                 "description": "Generate AI chat completions using OpenAI-compatible API",
@@ -6026,7 +6223,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "ApiKeyAuth": []
+                        "KeyPairAuth": []
                     }
                 ],
                 "description": "Generate AI text completions using OpenAI-compatible API",
@@ -6089,7 +6286,7 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "ApiKeyAuth": []
+                        "KeyPairAuth": []
                     }
                 ],
                 "description": "Generate text embeddings using OpenAI-compatible API",
@@ -6152,7 +6349,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "ApiKeyAuth": []
+                        "KeyPairAuth": []
                     }
                 ],
                 "description": "Get list of available AI models",
@@ -6192,7 +6389,7 @@ const docTemplate = `{
             "get": {
                 "security": [
                     {
-                        "ApiKeyAuth": []
+                        "KeyPairAuth": []
                     }
                 ],
                 "description": "Get detailed information about a specific AI model",
@@ -6850,96 +7047,6 @@ const docTemplate = `{
                 "value": {
                     "type": "number",
                     "example": 1250.5
-                }
-            }
-        },
-        "apikey.APIKey": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string",
-                    "example": "2024-01-01T00:00:00Z"
-                },
-                "created_by": {
-                    "type": "string",
-                    "example": "usr_1234567890"
-                },
-                "environment_id": {
-                    "type": "string",
-                    "example": "env_1234567890"
-                },
-                "expires_at": {
-                    "type": "string",
-                    "example": "2024-12-31T23:59:59Z"
-                },
-                "id": {
-                    "type": "string",
-                    "example": "key_1234567890"
-                },
-                "key": {
-                    "type": "string",
-                    "example": "bk_live_1234567890abcdef"
-                },
-                "key_preview": {
-                    "type": "string",
-                    "example": "bk_live_...cdef"
-                },
-                "last_used": {
-                    "type": "string",
-                    "example": "2024-01-01T00:00:00Z"
-                },
-                "name": {
-                    "type": "string",
-                    "example": "Production API Key"
-                },
-                "scopes": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    },
-                    "example": [
-                        "[\"read\"",
-                        " \"write\"]"
-                    ]
-                },
-                "status": {
-                    "type": "string",
-                    "example": "active"
-                }
-            }
-        },
-        "apikey.CreateAPIKeyRequest": {
-            "type": "object",
-            "required": [
-                "environment_id",
-                "name",
-                "scopes"
-            ],
-            "properties": {
-                "environment_id": {
-                    "type": "string",
-                    "example": "env_1234567890"
-                },
-                "expires_at": {
-                    "type": "string",
-                    "example": "2024-12-31T23:59:59Z"
-                },
-                "name": {
-                    "type": "string",
-                    "maxLength": 100,
-                    "minLength": 2,
-                    "example": "Production API Key"
-                },
-                "scopes": {
-                    "type": "array",
-                    "minItems": 1,
-                    "items": {
-                        "type": "string"
-                    },
-                    "example": [
-                        "[\"read\"",
-                        " \"write\"]"
-                    ]
                 }
             }
         },
@@ -7892,6 +7999,192 @@ const docTemplate = `{
                 "timezone": {
                     "type": "string",
                     "example": "UTC"
+                }
+            }
+        },
+        "keypair.CreateKeyPairRequest": {
+            "description": "Request to create a new public+secret key pair",
+            "type": "object",
+            "required": [
+                "name",
+                "project_id",
+                "scopes"
+            ],
+            "properties": {
+                "environment_id": {
+                    "type": "string",
+                    "example": "01K4FHGHT3XX9WFM293QPZ5G9V"
+                },
+                "expires_at": {
+                    "type": "string",
+                    "example": "2024-12-31T23:59:59Z"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 2,
+                    "example": "Production Key Pair"
+                },
+                "project_id": {
+                    "type": "string",
+                    "example": "01K4FHGHT3XX9WFM293QPZ5G9V"
+                },
+                "rate_limit_rpm": {
+                    "type": "integer",
+                    "maximum": 10000,
+                    "minimum": 1,
+                    "example": 1000
+                },
+                "scopes": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "[\"gateway:read\"",
+                        " \"analytics:read\"]"
+                    ]
+                }
+            }
+        },
+        "keypair.CreateKeyPairResponse": {
+            "description": "Response when creating a key pair (includes secret key - only shown once)",
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string",
+                    "example": "2024-01-01T00:00:00Z"
+                },
+                "environment_id": {
+                    "type": "string",
+                    "example": "01K4FHGHT3XX9WFM293QPZ5G9V"
+                },
+                "expires_at": {
+                    "type": "string",
+                    "example": "2024-12-31T23:59:59Z"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "01K4FHGHT3XX9WFM293QPZ5G9V"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Production Key Pair"
+                },
+                "project_id": {
+                    "type": "string",
+                    "example": "01K4FHGHT3XX9WFM293QPZ5G9V"
+                },
+                "public_key": {
+                    "type": "string",
+                    "example": "pk_01K4FHGHT3XX9WFM293QPZ5G9V_abc123def456"
+                },
+                "rate_limit_rpm": {
+                    "type": "integer",
+                    "example": 1000
+                },
+                "scopes": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "[\"gateway:read\"",
+                        " \"analytics:read\"]"
+                    ]
+                },
+                "secret_key": {
+                    "type": "string",
+                    "example": "sk_xyz789uvw456rst123"
+                }
+            }
+        },
+        "keypair.KeyPairResponse": {
+            "description": "Key pair information (secret key not included for security)",
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string",
+                    "example": "2024-01-01T00:00:00Z"
+                },
+                "environment_id": {
+                    "type": "string",
+                    "example": "01K4FHGHT3XX9WFM293QPZ5G9V"
+                },
+                "expires_at": {
+                    "type": "string",
+                    "example": "2024-12-31T23:59:59Z"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "01K4FHGHT3XX9WFM293QPZ5G9V"
+                },
+                "is_active": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "last_used_at": {
+                    "type": "string",
+                    "example": "2024-01-01T00:00:00Z"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Production Key Pair"
+                },
+                "project_id": {
+                    "type": "string",
+                    "example": "01K4FHGHT3XX9WFM293QPZ5G9V"
+                },
+                "public_key": {
+                    "type": "string",
+                    "example": "pk_01K4FHGHT3XX9WFM293QPZ5G9V_abc123def456"
+                },
+                "rate_limit_rpm": {
+                    "type": "integer",
+                    "example": 1000
+                },
+                "scopes": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "[\"gateway:read\"",
+                        " \"analytics:read\"]"
+                    ]
+                }
+            }
+        },
+        "keypair.UpdateKeyPairRequest": {
+            "description": "Request to update an existing key pair",
+            "type": "object",
+            "properties": {
+                "expires_at": {
+                    "type": "string",
+                    "example": "2025-12-31T23:59:59Z"
+                },
+                "is_active": {
+                    "type": "boolean",
+                    "example": false
+                },
+                "name": {
+                    "type": "string",
+                    "example": "Updated Key Pair Name"
+                },
+                "rate_limit_rpm": {
+                    "type": "integer",
+                    "example": 2000
+                },
+                "scopes": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "[\"gateway:read\"",
+                        " \"analytics:read\"]"
+                    ]
                 }
             }
         },
@@ -9344,18 +9637,18 @@ const docTemplate = `{
         }
     },
     "securityDefinitions": {
-        "ApiKeyAuth": {
-            "description": "API key for authentication. Format: X-API-Key: bk_live_...",
-            "type": "apiKey",
-            "name": "X-API-Key",
-            "in": "header",
-            "x-extension-openapi": "{\"definitions\": {\"ULID\": {\"type\": \"string\", \"description\": \"ULID (Universally Unique Lexicographically Sortable Identifier)\", \"example\": \"01ARZ3NDEKTSV4RRFFQ69G5FAV\", \"pattern\": \"^[0-9A-Z]{26}$\"}}}"
-        },
         "BearerAuth": {
-            "description": "JWT token for authentication. Format: Authorization: Bearer \u003ctoken\u003e",
+            "description": "JWT Bearer token for web dashboard authentication. Format: Authorization: Bearer \u003cjwt_token\u003e",
             "type": "apiKey",
             "name": "Authorization",
             "in": "header"
+        },
+        "KeyPairAuth": {
+            "description": "API Key authentication for AI gateway. Format: Authorization: Bearer pk_projectId_random:sk_random",
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header",
+            "x-extension-openapi": "{\"definitions\": {\"ULID\": {\"type\": \"string\", \"description\": \"ULID (Universally Unique Lexicographically Sortable Identifier)\", \"example\": \"01ARZ3NDEKTSV4RRFFQ69G5FAV\", \"pattern\": \"^[0-9A-Z]{26}$\"}}}"
         }
     }
 }`

@@ -60,29 +60,39 @@ type BlacklistedTokenRepository interface {
 	GetBlacklistedTokensByReason(ctx context.Context, reason string) ([]*BlacklistedToken, error)
 }
 
-// APIKeyRepository defines the interface for API key data access.
-type APIKeyRepository interface {
+// KeyPairRepository defines the interface for key pair data access with public+secret key authentication.
+type KeyPairRepository interface {
 	// Basic CRUD operations
-	Create(ctx context.Context, apiKey *APIKey) error
-	GetByID(ctx context.Context, id ulid.ULID) (*APIKey, error)
-	GetByKeyHash(ctx context.Context, keyHash string) (*APIKey, error)
-	Update(ctx context.Context, apiKey *APIKey) error
+	Create(ctx context.Context, keyPair *KeyPair) error
+	GetByID(ctx context.Context, id ulid.ULID) (*KeyPair, error)
+	GetByPublicKey(ctx context.Context, publicKey string) (*KeyPair, error)
+	GetBySecretKeyHash(ctx context.Context, secretKeyHash string) (*KeyPair, error)
+	Update(ctx context.Context, keyPair *KeyPair) error
 	Delete(ctx context.Context, id ulid.ULID) error
-	
+
+	// Authentication operations
+	ValidateKeyPair(ctx context.Context, publicKey, secretKey string) (*KeyPair, error)
+
 	// User and organization scoped
-	GetByUserID(ctx context.Context, userID ulid.ULID) ([]*APIKey, error)
-	GetByOrganizationID(ctx context.Context, orgID ulid.ULID) ([]*APIKey, error)
-	GetByProjectID(ctx context.Context, projectID ulid.ULID) ([]*APIKey, error)
-	GetByEnvironmentID(ctx context.Context, envID ulid.ULID) ([]*APIKey, error)
-	
-	// API key management
-	DeactivateAPIKey(ctx context.Context, id ulid.ULID) error
+	GetByUserID(ctx context.Context, userID ulid.ULID) ([]*KeyPair, error)
+	GetByOrganizationID(ctx context.Context, orgID ulid.ULID) ([]*KeyPair, error)
+	GetByProjectID(ctx context.Context, projectID ulid.ULID) ([]*KeyPair, error)
+	GetByEnvironmentID(ctx context.Context, envID ulid.ULID) ([]*KeyPair, error)
+
+	// Key pair management
+	DeactivateKeyPair(ctx context.Context, id ulid.ULID) error
 	MarkAsUsed(ctx context.Context, id ulid.ULID) error
-	CleanupExpiredAPIKeys(ctx context.Context) error
-	
+	CleanupExpiredKeyPairs(ctx context.Context) error
+
+	// Validation and security
+	ValidatePublicKeyFormat(ctx context.Context, publicKey string) error
+	ExtractProjectIDFromPublicKey(ctx context.Context, publicKey string) (ulid.ULID, error)
+	CheckKeyPairScopes(ctx context.Context, id ulid.ULID, requiredScopes []string) (bool, error)
+
 	// Statistics
-	GetAPIKeyCount(ctx context.Context, userID ulid.ULID) (int, error)
-	GetActiveAPIKeyCount(ctx context.Context, userID ulid.ULID) (int, error)
+	GetKeyPairCount(ctx context.Context, userID ulid.ULID) (int, error)
+	GetActiveKeyPairCount(ctx context.Context, userID ulid.ULID) (int, error)
+	GetKeyPairCountByProject(ctx context.Context, projectID ulid.ULID) (int, error)
 }
 
 // RoleRepository defines the interface for both system template and custom scoped role data access.
@@ -304,7 +314,7 @@ type PasswordResetTokenRepository interface {
 type Repository interface {
 	UserSessions() UserSessionRepository
 	BlacklistedTokens() BlacklistedTokenRepository
-	APIKeys() APIKeyRepository
+	KeyPairs() KeyPairRepository
 	Roles() RoleRepository
 	OrganizationMembers() OrganizationMemberRepository
 	Permissions() PermissionRepository

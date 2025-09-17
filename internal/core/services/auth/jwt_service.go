@@ -346,19 +346,6 @@ func (s *jwtService) ValidateRefreshToken(ctx context.Context, tokenString strin
 	return claims, nil
 }
 
-// ValidateAPIKeyToken validates specifically an API key token
-func (s *jwtService) ValidateAPIKeyToken(ctx context.Context, tokenString string) (*authDomain.JWTClaims, error) {
-	claims, err := s.ValidateToken(ctx, tokenString)
-	if err != nil {
-		return nil, err
-	}
-
-	if claims.TokenType != authDomain.TokenTypeAPIKey {
-		return nil, appErrors.NewUnauthorizedError("Token is not an API key token")
-	}
-
-	return claims, nil
-}
 
 // ExtractClaims extracts claims without validation (for debugging)
 func (s *jwtService) ExtractClaims(ctx context.Context, tokenString string) (*authDomain.JWTClaims, error) {

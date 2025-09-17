@@ -137,7 +137,7 @@ func (c *JWTClaims) TimeUntilExpiry() time.Duration {
 func (c *JWTClaims) GetUserContext() *AuthContext {
 	return &AuthContext{
 		UserID:    c.UserID,
-		APIKeyID:  c.APIKeyID,
+		KeyPairID: c.APIKeyID,  // TODO: Update JWT claims to use KeyPairID instead of APIKeyID
 		SessionID: c.SessionID,
 	}
 }

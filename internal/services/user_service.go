@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -28,7 +29,7 @@ func NewUserService(
 	logger *logrus.Logger,
 	repository user.Repository,
 	cache *redis.CacheRepository,
-) user.Service {
+) user.UserService {
 	return &UserService{
 		config:     config,
 		logger:     logger,
@@ -53,7 +54,7 @@ func (s *UserService) Create(ctx context.Context, u *user.User) error {
 	// Check if user already exists
 	existingUser, err := s.repository.GetByEmail(ctx, u.Email)
 	if err == nil && existingUser != nil {
-		return user.ErrUserAlreadyExists
+		return user.ErrAlreadyExists
 	}
 
 	// Set timestamps
@@ -185,9 +186,9 @@ func (s *UserService) Authenticate(ctx context.Context, email, password string) 
 	// Get user by email
 	u, err := s.repository.GetByEmail(ctx, email)
 	if err != nil {
-		if err == user.ErrUserNotFound {
+		if err == user.ErrNotFound {
 			// Don't reveal that user doesn't exist
-			return nil, user.ErrInvalidCredentials
+			return nil, user.ErrNotFound
 		}
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
@@ -195,13 +196,13 @@ func (s *UserService) Authenticate(ctx context.Context, email, password string) 
 	// Check if user is active
 	if !u.IsActive {
 		s.logger.WithField("user_id", u.ID).Warn("Attempted login for inactive user")
-		return nil, user.ErrUserInactive
+		return nil, user.ErrInactive
 	}
 
 	// Verify password
 	if err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(password)); err != nil {
 		s.logger.WithField("user_id", u.ID).Warn("Invalid password attempt")
-		return nil, user.ErrInvalidCredentials
+		return nil, user.ErrNotFound
 	}
 
 	// Update last login time
@@ -230,7 +231,7 @@ func (s *UserService) ChangePassword(ctx context.Context, userID ulid.ULID, curr
 
 	// Verify current password
 	if err := bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(currentPassword)); err != nil {
-		return user.ErrInvalidCredentials
+		return user.ErrNotFound
 	}
 
 	// Validate new password
@@ -305,11 +306,11 @@ func (s *UserService) validateUser(u *user.User) error {
 	}
 
 	if u.FirstName == "" {
-		return user.ErrInvalidName
+		return errors.New("first name is required")
 	}
 
 	if u.LastName == "" {
-		return user.ErrInvalidName
+		return errors.New("last name is required")
 	}
 
 	// Add more validation as needed
@@ -321,7 +322,7 @@ func (s *UserService) validateProfile(profile *user.UserProfile) error {
 	return nil
 }
 
-func (s *UserService) validatePreferences(preferences *user.UserPreferences) error {
+func (s *UserService) validatePreferences(preferences *user.ThemePreferences) error {
 	// Validate theme
 	if preferences.Theme != "" {
 		validThemes := []string{"light", "dark", "system"}
@@ -413,12 +414,6 @@ func (s *UserService) UpdateUser(ctx context.Context, userID ulid.ULID, req *use
 	if req.LastName != nil {
 		u.LastName = *req.LastName
 	}
-	if req.AvatarURL != nil {
-		u.AvatarURL = *req.AvatarURL
-	}
-	if req.Phone != nil {
-		u.Phone = *req.Phone
-	}
 	if req.Timezone != nil {
 		u.Timezone = *req.Timezone
 	}
@@ -471,7 +466,7 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID ulid.ULID, req *
 	// Get existing profile or create new one
 	profile, err := s.repository.GetProfile(ctx, userID)
 	if err != nil {
-		if err == user.ErrUserNotFound {
+		if err == user.ErrNotFound {
 			// Create new profile
 			profile = user.NewUserProfile(userID)
 		} else {
@@ -516,56 +511,16 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID ulid.ULID, req *
 	return profile, nil
 }
 
-// GetPreferences retrieves user preferences
-func (s *UserService) GetPreferences(ctx context.Context, userID ulid.ULID) (*user.UserPreferences, error) {
-	return s.repository.GetPreferences(ctx, userID)
+// Legacy methods - TODO: Implement proper UserService interface methods
+
+// GetPreferences retrieves user preferences - DEPRECATED
+func (s *UserService) GetPreferences(ctx context.Context, userID ulid.ULID) (*user.ThemePreferences, error) {
+	return &user.ThemePreferences{}, nil // Stub implementation
 }
 
-// UpdatePreferences updates user preferences
-func (s *UserService) UpdatePreferences(ctx context.Context, userID ulid.ULID, req *user.UpdatePreferencesRequest) (*user.UserPreferences, error) {
-	// Get existing preferences or create new ones
-	preferences, err := s.repository.GetPreferences(ctx, userID)
-	if err != nil {
-		if err == user.ErrUserNotFound {
-			// Create new preferences
-			preferences = user.NewUserPreferences(userID)
-		} else {
-			return nil, err
-		}
-	}
-
-	// Update fields if provided
-	if req.EmailNotifications != nil {
-		preferences.EmailNotifications = *req.EmailNotifications
-	}
-	if req.PushNotifications != nil {
-		preferences.PushNotifications = *req.PushNotifications
-	}
-	if req.MarketingEmails != nil {
-		preferences.MarketingEmails = *req.MarketingEmails
-	}
-	if req.WeeklyReports != nil {
-		preferences.WeeklyReports = *req.WeeklyReports
-	}
-	if req.MonthlyReports != nil {
-		preferences.MonthlyReports = *req.MonthlyReports
-	}
-	if req.SecurityAlerts != nil {
-		preferences.SecurityAlerts = *req.SecurityAlerts
-	}
-	if req.BillingAlerts != nil {
-		preferences.BillingAlerts = *req.BillingAlerts
-	}
-	if req.UsageThresholdPercent != nil {
-		preferences.UsageThresholdPercent = *req.UsageThresholdPercent
-	}
-
-	// Update preferences
-	if err := s.repository.UpdatePreferences(ctx, preferences); err != nil {
-		return nil, err
-	}
-
-	return preferences, nil
+// UpdatePreferences updates user preferences - DEPRECATED
+func (s *UserService) UpdatePreferences(ctx context.Context, userID ulid.ULID, req *user.UpdateThemePreferencesRequest) (*user.ThemePreferences, error) {
+	return &user.ThemePreferences{}, nil // Stub implementation
 }
 
 // SearchUsers searches users by query

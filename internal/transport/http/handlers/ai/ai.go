@@ -87,7 +87,7 @@ type Model struct {
 // @Tags AI Gateway
 // @Accept json
 // @Produce json
-// @Security ApiKeyAuth
+// @Security KeyPairAuth
 // @Param request body ChatCompletionRequest true "Chat completion request"
 // @Success 200 {object} response.SuccessResponse "Chat completion generated successfully"
 // @Failure 400 {object} response.ErrorResponse "Invalid request payload"
@@ -105,7 +105,7 @@ func (h *Handler) ChatCompletions(c *gin.Context) {
 // @Tags AI Gateway
 // @Accept json
 // @Produce json
-// @Security ApiKeyAuth
+// @Security KeyPairAuth
 // @Param request body CompletionRequest true "Text completion request"
 // @Success 200 {object} response.SuccessResponse "Text completion generated successfully"
 // @Failure 400 {object} response.ErrorResponse "Invalid request payload"
@@ -123,7 +123,7 @@ func (h *Handler) Completions(c *gin.Context) {
 // @Tags AI Gateway
 // @Accept json
 // @Produce json
-// @Security ApiKeyAuth
+// @Security KeyPairAuth
 // @Param request body EmbeddingRequest true "Embedding request"
 // @Success 200 {object} response.SuccessResponse "Embeddings generated successfully"
 // @Failure 400 {object} response.ErrorResponse "Invalid request payload"
@@ -140,7 +140,7 @@ func (h *Handler) Embeddings(c *gin.Context) {
 // @Description Get list of available AI models
 // @Tags AI Gateway
 // @Produce json
-// @Security ApiKeyAuth
+// @Security KeyPairAuth
 // @Success 200 {array} Model "List of available models"
 // @Failure 401 {object} response.ErrorResponse "Invalid API key"
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
@@ -154,7 +154,7 @@ func (h *Handler) ListModels(c *gin.Context) {
 // @Description Get detailed information about a specific AI model
 // @Tags AI Gateway
 // @Produce json
-// @Security ApiKeyAuth
+// @Security KeyPairAuth
 // @Param model path string true "Model ID" example("gpt-3.5-turbo")
 // @Success 200 {object} Model "Model information"
 // @Failure 401 {object} response.ErrorResponse "Invalid API key"

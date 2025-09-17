@@ -12,9 +12,10 @@ import (
 	"brokle/pkg/ulid"
 )
 
-// AuthMiddleware handles JWT token authentication and authorization
+// AuthMiddleware handles JWT token and key pair authentication and authorization
 type AuthMiddleware struct {
 	jwtService        auth.JWTService
+	keyPairService    auth.KeyPairService
 	blacklistedTokens auth.BlacklistedTokenService
 	orgMemberService  auth.OrganizationMemberService
 	logger            *logrus.Logger
@@ -23,12 +24,14 @@ type AuthMiddleware struct {
 // NewAuthMiddleware creates a new stateless authentication middleware
 func NewAuthMiddleware(
 	jwtService auth.JWTService,
+	keyPairService auth.KeyPairService,
 	blacklistedTokens auth.BlacklistedTokenService,
 	orgMemberService auth.OrganizationMemberService,
 	logger *logrus.Logger,
 ) *AuthMiddleware {
 	return &AuthMiddleware{
 		jwtService:        jwtService,
+		keyPairService:    keyPairService,
 		blacklistedTokens: blacklistedTokens,
 		orgMemberService:  orgMemberService,
 		logger:            logger,
@@ -118,6 +121,159 @@ func (m *AuthMiddleware) RequireAuth() gin.HandlerFunc {
 			"user_id": claims.UserID,
 			"jti":     claims.JWTID,
 		}).Debug("Authentication successful")
+
+		c.Next()
+	})
+}
+
+// RequireKeyPair middleware ensures valid public+secret key pair authentication
+func (m *AuthMiddleware) RequireKeyPair() gin.HandlerFunc {
+	return gin.HandlerFunc(func(c *gin.Context) {
+		// Extract public and secret keys from headers
+		publicKey, secretKey, err := m.extractKeyPair(c)
+		if err != nil {
+			m.logger.WithError(err).Warn("Failed to extract key pair")
+			response.Unauthorized(c, "Key pair authentication required")
+			c.Abort()
+			return
+		}
+
+		// Authenticate with key pair
+		authContext, err := m.keyPairService.AuthenticateWithKeyPair(c.Request.Context(), publicKey, secretKey)
+		if err != nil {
+			m.logger.WithError(err).WithFields(logrus.Fields{
+				"public_key_prefix": publicKey[:min(len(publicKey), 15)],
+			}).Warn("Key pair authentication failed")
+			response.Unauthorized(c, "Invalid key pair")
+			c.Abort()
+			return
+		}
+
+		// Store authentication context in Gin context
+		c.Set(AuthContextKey, authContext)
+		c.Set(UserIDKey, authContext.UserID.String())
+
+		// Log successful authentication
+		m.logger.WithFields(logrus.Fields{
+			"user_id":    authContext.UserID,
+			"key_pair_id": authContext.KeyPairID,
+			"project_id": authContext.ProjectID,
+		}).Debug("Key pair authentication successful")
+
+		c.Next()
+	})
+}
+
+// RequireEitherAuth middleware allows either JWT token or key pair authentication
+func (m *AuthMiddleware) RequireEitherAuth() gin.HandlerFunc {
+	return gin.HandlerFunc(func(c *gin.Context) {
+		// Check for JWT token first
+		token, tokenErr := m.extractToken(c)
+
+		// Check for key pair
+		publicKey, secretKey, keyPairErr := m.extractKeyPair(c)
+
+		// If both authentication methods are missing, reject
+		if tokenErr != nil && keyPairErr != nil {
+			m.logger.Warn("No valid authentication method provided")
+			response.Unauthorized(c, "Authentication required: provide either Bearer token or key pair authentication")
+			c.Abort()
+			return
+		}
+
+		// Try JWT authentication first if token is present
+		if tokenErr == nil {
+			// Validate JWT token
+			claims, err := m.jwtService.ValidateAccessToken(c.Request.Context(), token)
+			if err == nil {
+				// Check if token is blacklisted
+				isBlacklisted, err := m.blacklistedTokens.IsTokenBlacklisted(c.Request.Context(), claims.JWTID)
+				if err == nil && !isBlacklisted {
+					// Check user-wide timestamp blacklisting
+					isUserBlacklisted, err := m.blacklistedTokens.IsUserBlacklistedAfterTimestamp(
+						c.Request.Context(), claims.UserID, claims.IssuedAt)
+					if err == nil && !isUserBlacklisted {
+						// JWT authentication successful
+						authContext := claims.GetUserContext()
+						c.Set(AuthContextKey, authContext)
+						c.Set(UserIDKey, claims.UserID.String())
+						c.Set(TokenClaimsKey, claims)
+
+						m.logger.WithFields(logrus.Fields{
+							"user_id": claims.UserID,
+							"auth_method": "jwt",
+						}).Debug("JWT authentication successful")
+
+						c.Next()
+						return
+					}
+				}
+			}
+		}
+
+		// Try key pair authentication if JWT failed or wasn't provided
+		if keyPairErr == nil {
+			authContext, err := m.keyPairService.AuthenticateWithKeyPair(c.Request.Context(), publicKey, secretKey)
+			if err == nil {
+				// Key pair authentication successful
+				c.Set(AuthContextKey, authContext)
+				c.Set(UserIDKey, authContext.UserID.String())
+
+				m.logger.WithFields(logrus.Fields{
+					"user_id":    authContext.UserID,
+					"auth_method": "key_pair",
+					"project_id": authContext.ProjectID,
+				}).Debug("Key pair authentication successful")
+
+				c.Next()
+				return
+			}
+		}
+
+		// Both authentication methods failed
+		m.logger.Warn("All authentication methods failed")
+		response.Unauthorized(c, "Invalid authentication credentials")
+		c.Abort()
+	})
+}
+
+// RequireScope middleware ensures key pair has required scope (for key pair auth only)
+func (m *AuthMiddleware) RequireScope(requiredScope string) gin.HandlerFunc {
+	return gin.HandlerFunc(func(c *gin.Context) {
+		// Get auth context
+		authCtx, exists := GetAuthContext(c)
+		if !exists {
+			response.Unauthorized(c, "Authentication required")
+			c.Abort()
+			return
+		}
+
+		// Check if this is key pair authentication (has scopes)
+		if authCtx.KeyPairID == nil {
+			// For JWT authentication, skip scope check (use permission-based instead)
+			c.Next()
+			return
+		}
+
+		// Check if key pair has required scope
+		hasScope := false
+		for _, scope := range authCtx.Scopes {
+			if scope == requiredScope || scope == string(auth.ScopeAdmin) {
+				hasScope = true
+				break
+			}
+		}
+
+		if !hasScope {
+			m.logger.WithFields(logrus.Fields{
+				"key_pair_id": authCtx.KeyPairID,
+				"required_scope": requiredScope,
+				"available_scopes": authCtx.Scopes,
+			}).Warn("Insufficient scope for key pair")
+			response.Forbidden(c, "Insufficient scope")
+			c.Abort()
+			return
+		}
 
 		c.Next()
 	})
@@ -341,6 +497,61 @@ func (m *AuthMiddleware) extractToken(c *gin.Context) (string, error) {
 	}
 
 	return token, nil
+}
+
+// extractKeyPair extracts public and secret keys from Authorization or X-API-Key headers
+func (m *AuthMiddleware) extractKeyPair(c *gin.Context) (string, string, error) {
+	// Try Authorization header first: "Authorization: Bearer pk_xxx:sk_xxx"
+	authHeader := c.GetHeader("Authorization")
+	if authHeader != "" {
+		const bearerPrefix = "Bearer "
+		if strings.HasPrefix(authHeader, bearerPrefix) {
+			keyPair := strings.TrimPrefix(authHeader, bearerPrefix)
+			return m.parseKeyPairString(keyPair)
+		}
+	}
+
+	// Try X-API-Key header: "X-API-Key: pk_xxx:sk_xxx"
+	apiKeyHeader := c.GetHeader("X-API-Key")
+	if apiKeyHeader != "" {
+		return m.parseKeyPairString(apiKeyHeader)
+	}
+
+	// Try separate headers for backward compatibility
+	publicKey := c.GetHeader("X-Public-Key")
+	secretKey := c.GetHeader("X-Secret-Key")
+	if publicKey != "" && secretKey != "" {
+		return publicKey, secretKey, nil
+	}
+
+	return "", "", errors.New("key pair authentication required: use Authorization: Bearer pk_xxx:sk_xxx or X-API-Key: pk_xxx:sk_xxx")
+}
+
+// parseKeyPairString parses "pk_xxx:sk_xxx" format into separate keys
+func (m *AuthMiddleware) parseKeyPairString(keyPairStr string) (string, string, error) {
+	parts := strings.SplitN(keyPairStr, ":", 2)
+	if len(parts) != 2 {
+		return "", "", errors.New("invalid key pair format: expected pk_xxx:sk_xxx")
+	}
+
+	publicKey := strings.TrimSpace(parts[0])
+	secretKey := strings.TrimSpace(parts[1])
+
+	if publicKey == "" || secretKey == "" {
+		return "", "", errors.New("empty public or secret key")
+	}
+
+	// Validate public key format
+	if !strings.HasPrefix(publicKey, "pk_") {
+		return "", "", errors.New("invalid public key format: must start with pk_")
+	}
+
+	// Validate secret key format
+	if !strings.HasPrefix(secretKey, "sk_") {
+		return "", "", errors.New("invalid secret key format: must start with sk_")
+	}
+
+	return publicKey, secretKey, nil
 }
 
 // Helper function for min
