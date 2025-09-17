@@ -300,7 +300,6 @@ func (s *Server) setupV1Routes(router *gin.RouterGroup) {
 		observability.PUT("/observations/:id", s.handlers.Observability.UpdateObservation)
 		observability.POST("/observations/:id/complete", s.handlers.Observability.CompleteObservation)
 		observability.DELETE("/observations/:id", s.handlers.Observability.DeleteObservation)
-		observability.GET("/traces/:trace_id/observations", s.handlers.Observability.GetObservationsByTrace)
 		observability.POST("/observations/batch", s.handlers.Observability.CreateObservationsBatch)
 
 		// Quality score routes
@@ -309,8 +308,8 @@ func (s *Server) setupV1Routes(router *gin.RouterGroup) {
 		observability.GET("/quality-scores/:id", s.handlers.Observability.GetQualityScore)
 		observability.PUT("/quality-scores/:id", s.handlers.Observability.UpdateQualityScore)
 		observability.DELETE("/quality-scores/:id", s.handlers.Observability.DeleteQualityScore)
-		observability.GET("/traces/:trace_id/quality-scores", s.handlers.Observability.GetQualityScoresByTrace)
-		observability.GET("/observations/:observation_id/quality-scores", s.handlers.Observability.GetQualityScoresByObservation)
+		observability.GET("/traces/:id/quality-scores", s.handlers.Observability.GetQualityScoresByTrace)
+		observability.GET("/observations/:id/quality-scores", s.handlers.Observability.GetQualityScoresByObservation)
 	}
 
 	// RBAC routes (require authentication)

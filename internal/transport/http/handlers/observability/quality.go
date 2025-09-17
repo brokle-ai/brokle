@@ -187,9 +187,9 @@ func (h *Handler) ListQualityScores(c *gin.Context) {
 	response.SuccessWithPagination(c, resp, pagination)
 }
 
-// GetQualityScoresByTrace handles GET /api/v1/observability/traces/{trace_id}/quality-scores
+// GetQualityScoresByTrace handles GET /api/v1/observability/traces/{id}/quality-scores
 func (h *Handler) GetQualityScoresByTrace(c *gin.Context) {
-	traceIDStr := c.Param("trace_id")
+	traceIDStr := c.Param("id")
 
 	traceID, err := ulid.Parse(traceIDStr)
 	if err != nil {
@@ -220,9 +220,9 @@ func (h *Handler) GetQualityScoresByTrace(c *gin.Context) {
 	response.Success(c, resp)
 }
 
-// GetQualityScoresByObservation handles GET /api/v1/observability/observations/{observation_id}/quality-scores
+// GetQualityScoresByObservation handles GET /api/v1/observability/observations/{id}/quality-scores
 func (h *Handler) GetQualityScoresByObservation(c *gin.Context) {
-	observationIDStr := c.Param("observation_id")
+	observationIDStr := c.Param("id")
 
 	observationID, err := ulid.Parse(observationIDStr)
 	if err != nil {
