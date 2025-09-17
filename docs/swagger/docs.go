@@ -9345,17 +9345,17 @@ const docTemplate = `{
     },
     "securityDefinitions": {
         "ApiKeyAuth": {
-            "description": "API key for authentication. Format: X-API-Key: bk_live_...",
-            "type": "apiKey",
-            "name": "X-API-Key",
-            "in": "header",
-            "x-extension-openapi": "{\"definitions\": {\"ULID\": {\"type\": \"string\", \"description\": \"ULID (Universally Unique Lexicographically Sortable Identifier)\", \"example\": \"01ARZ3NDEKTSV4RRFFQ69G5FAV\", \"pattern\": \"^[0-9A-Z]{26}$\"}}}"
-        },
-        "BearerAuth": {
-            "description": "JWT token for authentication. Format: Authorization: Bearer \u003ctoken\u003e",
+            "description": "API key authentication for AI gateway and SDKs. Format: Authorization: Bearer bk_live_... OR X-API-Key: bk_live_... (both supported for flexibility)",
             "type": "apiKey",
             "name": "Authorization",
             "in": "header"
+        },
+        "BearerAuth": {
+            "description": "JWT token authentication for web dashboard. Format: Authorization: Bearer \u003cjwt_token\u003e",
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header",
+            "x-extension-openapi": "{\"definitions\": {\"ULID\": {\"type\": \"string\", \"description\": \"ULID (Universally Unique Lexicographically Sortable Identifier)\", \"example\": \"01ARZ3NDEKTSV4RRFFQ69G5FAV\", \"pattern\": \"^[0-9A-Z]{26}$\"}}}"
         }
     }
 }`

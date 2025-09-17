@@ -28,7 +28,7 @@ func NewUserService(
 	logger *logrus.Logger,
 	repository user.Repository,
 	cache *redis.CacheRepository,
-) user.Service {
+) user.UserService {
 	return &UserService{
 		config:     config,
 		logger:     logger,
@@ -53,7 +53,7 @@ func (s *UserService) Create(ctx context.Context, u *user.User) error {
 	// Check if user already exists
 	existingUser, err := s.repository.GetByEmail(ctx, u.Email)
 	if err == nil && existingUser != nil {
-		return user.ErrUserAlreadyExists
+		return user.ErrAlreadyExists
 	}
 
 	// Set timestamps
@@ -321,24 +321,6 @@ func (s *UserService) validateProfile(profile *user.UserProfile) error {
 	return nil
 }
 
-func (s *UserService) validatePreferences(preferences *user.UserPreferences) error {
-	// Validate theme
-	if preferences.Theme != "" {
-		validThemes := []string{"light", "dark", "system"}
-		valid := false
-		for _, theme := range validThemes {
-			if preferences.Theme == theme {
-				valid = true
-				break
-			}
-		}
-		if !valid {
-			return fmt.Errorf("invalid theme: %s", preferences.Theme)
-		}
-	}
-
-	return nil
-}
 
 func (s *UserService) validatePassword(password string) error {
 	if len(password) < 8 {
@@ -516,57 +498,6 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID ulid.ULID, req *
 	return profile, nil
 }
 
-// GetPreferences retrieves user preferences
-func (s *UserService) GetPreferences(ctx context.Context, userID ulid.ULID) (*user.UserPreferences, error) {
-	return s.repository.GetPreferences(ctx, userID)
-}
-
-// UpdatePreferences updates user preferences
-func (s *UserService) UpdatePreferences(ctx context.Context, userID ulid.ULID, req *user.UpdatePreferencesRequest) (*user.UserPreferences, error) {
-	// Get existing preferences or create new ones
-	preferences, err := s.repository.GetPreferences(ctx, userID)
-	if err != nil {
-		if err == user.ErrUserNotFound {
-			// Create new preferences
-			preferences = user.NewUserPreferences(userID)
-		} else {
-			return nil, err
-		}
-	}
-
-	// Update fields if provided
-	if req.EmailNotifications != nil {
-		preferences.EmailNotifications = *req.EmailNotifications
-	}
-	if req.PushNotifications != nil {
-		preferences.PushNotifications = *req.PushNotifications
-	}
-	if req.MarketingEmails != nil {
-		preferences.MarketingEmails = *req.MarketingEmails
-	}
-	if req.WeeklyReports != nil {
-		preferences.WeeklyReports = *req.WeeklyReports
-	}
-	if req.MonthlyReports != nil {
-		preferences.MonthlyReports = *req.MonthlyReports
-	}
-	if req.SecurityAlerts != nil {
-		preferences.SecurityAlerts = *req.SecurityAlerts
-	}
-	if req.BillingAlerts != nil {
-		preferences.BillingAlerts = *req.BillingAlerts
-	}
-	if req.UsageThresholdPercent != nil {
-		preferences.UsageThresholdPercent = *req.UsageThresholdPercent
-	}
-
-	// Update preferences
-	if err := s.repository.UpdatePreferences(ctx, preferences); err != nil {
-		return nil, err
-	}
-
-	return preferences, nil
-}
 
 // SearchUsers searches users by query
 func (s *UserService) SearchUsers(ctx context.Context, query string, limit, offset int) ([]*user.User, int, error) {

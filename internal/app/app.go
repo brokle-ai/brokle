@@ -59,6 +59,7 @@ func (a *App) Start() error {
 		a.config,
 		a.logger,
 		providers.Services.Auth.Auth,                   // Auth service from modular DI
+		providers.Services.Auth.APIKey,                 // API key service for authentication
 		providers.Services.Auth.BlacklistedTokens,     // Blacklisted tokens service
 		providers.Services.User.User,                   // User service from modular DI
 		providers.Services.User.Profile,                // Profile service from modular DI
@@ -116,6 +117,7 @@ func (a *App) Run() error {
 		a.config,
 		a.logger,
 		providers.Services.Auth.Auth,                   // Auth service from modular DI
+		providers.Services.Auth.APIKey,                 // API key service for authentication
 		providers.Services.Auth.BlacklistedTokens,     // Blacklisted tokens service
 		providers.Services.User.User,                   // User service from modular DI
 		providers.Services.User.Profile,                // Profile service from modular DI

@@ -127,6 +127,7 @@ type AuthServices struct {
 	Auth                   auth.AuthService
 	JWT                    auth.JWTService
 	Sessions               auth.SessionService
+	APIKey                 auth.APIKeyService
 	Role                   auth.RoleService
 	Permission             auth.PermissionService
 	OrganizationMembers    auth.OrganizationMemberService
@@ -287,6 +288,12 @@ func ProvideAuthServices(
 		jwtService,
 	)
 
+	// Create API key service for programmatic authentication
+	apiKeyService := authService.NewAPIKeyService(
+		authRepos.APIKey,
+		authRepos.OrganizationMember,
+	)
+
 	// Create core auth service (without audit logging)
 	coreAuthSvc := authService.NewAuthService(
 		&cfg.Auth,
@@ -305,10 +312,11 @@ func ProvideAuthServices(
 		Auth:                authSvc,
 		JWT:                 jwtService,
 		Sessions:            sessionService,
+		APIKey:              apiKeyService,
 		Role:                roleService,
 		Permission:          permissionService,
 		OrganizationMembers: orgMemberService,
-		BlacklistedTokens: blacklistedTokenService,
+		BlacklistedTokens:   blacklistedTokenService,
 	}
 }
 

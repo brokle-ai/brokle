@@ -16,19 +16,21 @@ import (
 
 // Handler handles authentication endpoints
 type Handler struct {
-	config      *config.Config
-	logger      *logrus.Logger
-	authService auth.AuthService
-	userService user.UserService
+	config        *config.Config
+	logger        *logrus.Logger
+	authService   auth.AuthService
+	apiKeyService auth.APIKeyService
+	userService   user.UserService
 }
 
 // NewHandler creates a new auth handler
-func NewHandler(config *config.Config, logger *logrus.Logger, authService auth.AuthService, userService user.UserService) *Handler {
+func NewHandler(config *config.Config, logger *logrus.Logger, authService auth.AuthService, apiKeyService auth.APIKeyService, userService user.UserService) *Handler {
 	return &Handler{
-		config:      config,
-		logger:      logger,
-		authService: authService,
-		userService: userService,
+		config:        config,
+		logger:        logger,
+		authService:   authService,
+		apiKeyService: apiKeyService,
+		userService:   userService,
 	}
 }
 
@@ -445,9 +447,39 @@ func (h *Handler) ValidateToken(token string) (*auth.AuthContext, error) {
 
 // ValidateAPIKey validates API keys (for middleware)
 func (h *Handler) ValidateAPIKey(apiKey string) (*auth.AuthContext, error) {
-	// TODO: Implement API key validation through APIKeyService
-	// This will need to be updated once we have access to the AuthServices composite
-	return nil, nil
+	ctx := context.Background()
+
+	// Validate the API key using the APIKeyService
+	key, err := h.apiKeyService.ValidateAPIKey(ctx, apiKey)
+	if err != nil {
+		h.logger.WithError(err).WithField("key_prefix", extractKeyPrefix(apiKey)).
+			Warn("API key validation failed")
+		return nil, err
+	}
+
+	// Create AuthContext from the validated key
+	authContext := &auth.AuthContext{
+		UserID:   key.UserID,
+		APIKeyID: &key.ID,
+	}
+
+	// Log successful validation (without the actual key)
+	h.logger.WithFields(map[string]interface{}{
+		"user_id":    key.UserID,
+		"api_key_id": key.ID,
+		"key_prefix": key.KeyPrefix,
+		"scopes":     key.Scopes,
+	}).Debug("API key validation successful")
+
+	return authContext, nil
+}
+
+// extractKeyPrefix safely extracts the first 8 characters for logging
+func extractKeyPrefix(apiKey string) string {
+	if len(apiKey) < 8 {
+		return apiKey
+	}
+	return apiKey[:8]
 }
 
 // ListSessionsRequest represents request for listing user sessions

@@ -6216,16 +6216,18 @@ schemes:
 - https
 securityDefinitions:
   ApiKeyAuth:
-    description: 'API key for authentication. Format: X-API-Key: bk_live_...'
+    description: 'API key authentication for AI gateway and SDKs. Format: Authorization:
+      Bearer bk_live_... OR X-API-Key: bk_live_... (both supported for flexibility)'
     in: header
-    name: X-API-Key
+    name: Authorization
+    type: apiKey
+  BearerAuth:
+    description: 'JWT token authentication for web dashboard. Format: Authorization:
+      Bearer <jwt_token>'
+    in: header
+    name: Authorization
     type: apiKey
     x-extension-openapi: '{"definitions": {"ULID": {"type": "string", "description":
       "ULID (Universally Unique Lexicographically Sortable Identifier)", "example":
       "01ARZ3NDEKTSV4RRFFQ69G5FAV", "pattern": "^[0-9A-Z]{26}$"}}}'
-  BearerAuth:
-    description: 'JWT token for authentication. Format: Authorization: Bearer <token>'
-    in: header
-    name: Authorization
-    type: apiKey
 swagger: "2.0"
