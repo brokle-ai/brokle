@@ -4,13 +4,14 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 	"brokle/internal/config"
 	"brokle/internal/core/domain/auth"
 	"brokle/internal/transport/http/middleware"
 	"brokle/pkg/response"
 	"brokle/pkg/ulid"
+
+	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 )
 
 type Handler struct {
@@ -54,7 +55,7 @@ type CreateAPIKeyRequest struct {
 }
 
 // ListAPIKeysResponse represents the response when listing API keys
-// NOTE: This struct is not used. When implementing, use response.SuccessWithPagination() 
+// NOTE: This struct is not used. When implementing, use response.SuccessWithPagination()
 // with []APIKey directly and response.NewPagination() for consistent pagination format.
 type ListAPIKeysResponse struct {
 	APIKeys []APIKey `json:"api_keys" description:"List of API keys"`
@@ -164,11 +165,11 @@ func (h *Handler) List(c *gin.Context) {
 	}
 
 	h.logger.WithFields(map[string]interface{}{
-		"user_id":        userID,
+		"user_id":    userID,
 		"project_id": projectID,
-		"count":          len(responseKeys),
-		"page":           page,
-		"limit":          limit,
+		"count":      len(responseKeys),
+		"page":       page,
+		"limit":      limit,
 	}).Debug("Listed API keys")
 
 	// Use response.SuccessWithPagination for consistent pagination
@@ -186,6 +187,7 @@ func getKeyStatus(key auth.APIKey) string {
 	}
 	return "active"
 }
+
 // Create handles POST /projects/:projectId/api-keys
 // @Summary Create API key
 // @Description Create a new API key for a project. The key will only be displayed once upon creation.
@@ -238,8 +240,8 @@ func (h *Handler) Create(c *gin.Context) {
 	// Create service request
 	serviceReq := &auth.CreateAPIKeyRequest{
 		Name:               req.Name,
-		OrganizationID:     projectID, // TODO: Get actual organization ID from project
-		ProjectID:          projectID, // Using envId as projectId since API keys are now project-scoped
+		OrganizationID:     projectID, // TODO: API key service should get organization ID from project
+		ProjectID:          projectID,
 		DefaultEnvironment: req.DefaultEnvironment, // Use environment tag from request
 		Scopes:             req.Scopes,
 		RateLimitRPM:       1000, // Default rate limit
@@ -278,14 +280,15 @@ func (h *Handler) Create(c *gin.Context) {
 	}
 
 	h.logger.WithFields(map[string]interface{}{
-		"user_id":        userID,
-		"api_key_id":     apiKeyResp.ID,
+		"user_id":    userID,
+		"api_key_id": apiKeyResp.ID,
 		"project_id": projectID,
-		"key_name":       req.Name,
+		"key_name":   req.Name,
 	}).Info("API key created successfully")
 
 	response.Created(c, responseKey)
 }
+
 // Delete handles DELETE /projects/:projectId/api-keys/:keyId
 // @Summary Delete API key
 // @Description Permanently revoke and delete an API key. This action cannot be undone and will immediately invalidate the key.
@@ -338,8 +341,8 @@ func (h *Handler) Delete(c *gin.Context) {
 	// Verify the API key belongs to the specified project (since API keys are now project-scoped)
 	if apiKey.ProjectID != projectID {
 		h.logger.WithFields(map[string]interface{}{
-			"api_key_id": keyID,
-			"project_id": projectID,
+			"api_key_id":     keyID,
+			"project_id":     projectID,
 			"key_project_id": apiKey.ProjectID,
 		}).Warn("API key does not belong to specified project")
 		response.NotFound(c, "API key not found in this project")
@@ -354,10 +357,10 @@ func (h *Handler) Delete(c *gin.Context) {
 	}
 
 	h.logger.WithFields(map[string]interface{}{
-		"user_id":        userID,
-		"api_key_id":     keyID,
+		"user_id":    userID,
+		"api_key_id": keyID,
 		"project_id": projectID,
-		"key_name":       apiKey.Name,
+		"key_name":   apiKey.Name,
 	}).Info("API key deleted successfully")
 
 	response.NoContent(c)

@@ -192,7 +192,7 @@ func (rs *RBACSeeder) SeedMemberships(ctx context.Context, membershipSeeds []Mem
 		return fmt.Errorf("failed to seed organization memberships: %w", err)
 	}
 
-	// TODO: Add project and environment memberships when those are implemented
+	// TODO: Add project memberships when those are implemented
 	// if err := rs.SeedProjectMemberships(ctx, membershipSeeds, entityMaps, verbose); err != nil {
 	// 	return fmt.Errorf("failed to seed project memberships: %w", err)
 	// }

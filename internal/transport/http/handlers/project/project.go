@@ -901,8 +901,8 @@ func (h *Handler) Delete(c *gin.Context) {
 	// TODO: Add additional validation for admin/owner permissions
 	// For now, we allow any organization member to delete projects
 
-	// TODO: Check if project has active environments or API usage
-	// For now, we allow deletion regardless of environments
+	// TODO: Check if project has active API keys or usage data
+	// For now, we allow deletion regardless of active resources
 
 	// Delete project via service (soft delete)
 	err = h.projectService.DeleteProject(ctx, projectID)
