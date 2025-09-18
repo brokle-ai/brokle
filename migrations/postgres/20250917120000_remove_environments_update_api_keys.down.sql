@@ -53,4 +53,4 @@ ALTER TABLE api_keys ALTER COLUMN project_id DROP NOT NULL;
 ALTER TABLE api_keys DROP COLUMN IF EXISTS default_environment;
 
 -- Add comment to document the rollback
-COMMENT ON TABLE environments IS 'Environment entity restored from Langfuse-style migration rollback';
+COMMENT ON TABLE environments IS 'Environment entity restored from migration rollback';

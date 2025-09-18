@@ -2,7 +2,7 @@
 -- ADD ENVIRONMENT COLUMNS TO ANALYTICS TABLES
 -- ===================================
 -- This migration adds environment columns to all ClickHouse analytics tables
--- to support Langfuse-style environment tags.
+-- to support environment tags.
 
 -- Add environment column to request_logs table
 ALTER TABLE request_logs ADD COLUMN IF NOT EXISTS environment String DEFAULT 'default';
@@ -30,8 +30,8 @@ ALTER TABLE traces UPDATE environment = 'default' WHERE environment = '';
 ALTER TABLE events UPDATE environment = 'default' WHERE environment = '';
 
 -- Add comments to document the purpose
-ALTER TABLE request_logs COMMENT COLUMN environment 'Environment tag for request (Langfuse-style): default, production, staging, development, etc.';
-ALTER TABLE metrics COMMENT COLUMN environment 'Environment tag for metric (Langfuse-style): default, production, staging, development, etc.';
-ALTER TABLE ai_routing_metrics COMMENT COLUMN environment 'Environment tag for AI routing decision (Langfuse-style): default, production, staging, development, etc.';
-ALTER TABLE traces COMMENT COLUMN environment 'Environment tag for trace (Langfuse-style): default, production, staging, development, etc.';
-ALTER TABLE events COMMENT COLUMN environment 'Environment tag for event (Langfuse-style): default, production, staging, development, etc.';
+ALTER TABLE request_logs COMMENT COLUMN environment 'Environment tag for request: default, production, staging, development, etc.';
+ALTER TABLE metrics COMMENT COLUMN environment 'Environment tag for metric: default, production, staging, development, etc.';
+ALTER TABLE ai_routing_metrics COMMENT COLUMN environment 'Environment tag for AI routing decision: default, production, staging, development, etc.';
+ALTER TABLE traces COMMENT COLUMN environment 'Environment tag for trace: default, production, staging, development, etc.';
+ALTER TABLE events COMMENT COLUMN environment 'Environment tag for event: default, production, staging, development, etc.';

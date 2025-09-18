@@ -10,13 +10,13 @@ import (
 	"time"
 
 	authDomain "brokle/internal/core/domain/auth"
-	"brokle/pkg/ulid"
 	appErrors "brokle/pkg/errors"
+	"brokle/pkg/ulid"
 )
 
 // apiKeyService implements the authDomain.APIKeyService interface
 type apiKeyService struct {
-	apiKeyRepo           authDomain.APIKeyRepository
+	apiKeyRepo             authDomain.APIKeyRepository
 	organizationMemberRepo authDomain.OrganizationMemberRepository
 }
 
@@ -26,7 +26,7 @@ func NewAPIKeyService(
 	organizationMemberRepo authDomain.OrganizationMemberRepository,
 ) authDomain.APIKeyService {
 	return &apiKeyService{
-		apiKeyRepo:           apiKeyRepo,
+		apiKeyRepo:             apiKeyRepo,
 		organizationMemberRepo: organizationMemberRepo,
 	}
 }
@@ -60,7 +60,7 @@ func (s *apiKeyService) CreateAPIKey(ctx context.Context, userID ulid.ULID, req 
 		defaultEnv = authDomain.DefaultEnvironmentName // "default"
 	}
 
-	// Validate environment name according to Langfuse rules
+	// Validate environment name according to rules
 	if err := authDomain.ValidateEnvironmentName(defaultEnv); err != nil {
 		return nil, appErrors.NewBadRequestError("Invalid environment name", err.Error())
 	}
@@ -87,11 +87,11 @@ func (s *apiKeyService) CreateAPIKey(ctx context.Context, userID ulid.ULID, req 
 	apiKeyEntity := authDomain.NewAPIKey(
 		userID,
 		req.OrganizationID,
-		req.ProjectID,           // Now required
+		req.ProjectID, // Now required
 		req.Name,
 		keyPrefix,
 		keyHash,
-		defaultEnv,              // Default environment
+		defaultEnv, // Default environment
 		req.Scopes,
 		req.RateLimitRPM,
 		req.ExpiresAt,
@@ -276,7 +276,6 @@ func (s *apiKeyService) GetAPIKeysByOrganization(ctx context.Context, orgID ulid
 func (s *apiKeyService) GetAPIKeysByProject(ctx context.Context, projectID ulid.ULID) ([]*authDomain.APIKey, error) {
 	return s.apiKeyRepo.GetByProjectID(ctx, projectID)
 }
-
 
 // Private helper methods
 

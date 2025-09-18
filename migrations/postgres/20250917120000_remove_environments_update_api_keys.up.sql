@@ -2,7 +2,7 @@
 -- REMOVE ENVIRONMENTS & UPDATE API KEYS
 -- ===================================
 -- This migration removes the Environment entity entirely and implements
--- a Langfuse-style approach where environments are just metadata tags.
+-- a approach where environments are just metadata tags.
 
 -- Step 1: Remove environment_id from api_keys and add default_environment
 -- First, let's backup any existing environment associations
@@ -28,11 +28,11 @@ SET default_environment = COALESCE(temp.env_name, 'default')
 FROM temp_api_key_env temp
 WHERE api_keys.id = temp.id;
 
--- Add constraint for environment name validation (Langfuse rules)
+-- Add constraint for environment name validation (rules)
 ALTER TABLE api_keys ADD CONSTRAINT chk_environment_name
 CHECK (
     default_environment ~ '^[a-z0-9_-]+$'
-    AND default_environment NOT LIKE 'langfuse%'
+    AND default_environment NOT LIKE 'brokle%'
     AND length(default_environment) <= 40
     AND length(default_environment) > 0
 );
@@ -47,4 +47,4 @@ DROP TABLE IF EXISTS environments CASCADE;
 CREATE INDEX idx_api_keys_default_environment ON api_keys(default_environment);
 
 -- Add comment to document the change
-COMMENT ON COLUMN api_keys.default_environment IS 'Default environment tag for API requests (Langfuse-style), can be overridden per request';
+COMMENT ON COLUMN api_keys.default_environment IS 'Default environment tag for API requests, can be overridden per request';

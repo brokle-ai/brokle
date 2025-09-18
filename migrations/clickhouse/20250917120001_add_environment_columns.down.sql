@@ -2,7 +2,7 @@
 -- REMOVE ENVIRONMENT COLUMNS FROM ANALYTICS TABLES
 -- ===================================
 -- This migration removes environment columns from all ClickHouse analytics tables
--- to rollback the Langfuse-style environment tags.
+-- to rollback the environment tags.
 
 -- Remove environment column from request_logs table
 ALTER TABLE request_logs DROP COLUMN IF EXISTS environment;
