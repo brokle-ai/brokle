@@ -61,7 +61,6 @@ type ServiceContainer struct {
 	OrganizationService    organization.OrganizationService
 	MemberService         organization.MemberService
 	ProjectService        organization.ProjectService
-	EnvironmentService    organization.EnvironmentService
 	InvitationService     organization.InvitationService
 	SettingsService       organization.OrganizationSettingsService
 	// Observability services
@@ -101,7 +100,6 @@ type OrganizationRepositories struct {
 	Organization organization.OrganizationRepository
 	Member       organization.MemberRepository
 	Project      organization.ProjectRepository
-	Environment  organization.EnvironmentRepository
 	Invitation   organization.InvitationRepository
 	Settings     organization.OrganizationSettingsRepository
 }
@@ -192,7 +190,6 @@ func ProvideOrganizationRepositories(db *gorm.DB) *OrganizationRepositories {
 		Organization: orgRepo.NewOrganizationRepository(db),
 		Member:       orgRepo.NewMemberRepository(db),
 		Project:      orgRepo.NewProjectRepository(db),
-		Environment:  orgRepo.NewEnvironmentRepository(db),
 		Invitation:   orgRepo.NewInvitationRepository(db),
 		Settings:     orgRepo.NewOrganizationSettingsRepository(db),
 	}
@@ -331,7 +328,6 @@ func ProvideOrganizationServices(
 	organization.OrganizationService,
 	organization.MemberService,
 	organization.ProjectService,
-	organization.EnvironmentService,
 	organization.InvitationService,
 	organization.OrganizationSettingsService,
 ) {
@@ -349,12 +345,6 @@ func ProvideOrganizationServices(
 		orgRepos.Member,
 	)
 
-	environmentSvc := orgService.NewEnvironmentService(
-		orgRepos.Environment,
-		orgRepos.Project,
-		orgRepos.Member,
-	)
-
 	invitationSvc := orgService.NewInvitationService(
 		orgRepos.Invitation,
 		orgRepos.Organization,
@@ -369,7 +359,6 @@ func ProvideOrganizationServices(
 		userRepos.User,
 		memberSvc,
 		projectSvc,
-		environmentSvc,
 		authServices.Role,
 	)
 
@@ -379,7 +368,7 @@ func ProvideOrganizationServices(
 		orgRepos.Member,
 	)
 
-	return orgSvc, memberSvc, projectSvc, environmentSvc, invitationSvc, settingsSvc
+	return orgSvc, memberSvc, projectSvc, invitationSvc, settingsSvc
 }
 
 // ProvideObservabilityServices creates all observability-related services
@@ -434,7 +423,7 @@ func ProvideServices(
 	userServices := ProvideUserServices(repos.User, repos.Auth, logger)
 
 	// Create organization services (depends on auth services)
-	orgService, memberService, projectService, environmentService, invitationService, settingsService := ProvideOrganizationServices(
+	orgService, memberService, projectService, invitationService, settingsService := ProvideOrganizationServices(
 		repos.User,
 		repos.Auth,
 		repos.Organization,
@@ -451,7 +440,6 @@ func ProvideServices(
 		OrganizationService: orgService,
 		MemberService:      memberService,
 		ProjectService:     projectService,
-		EnvironmentService: environmentService,
 		InvitationService:  invitationService,
 		SettingsService:    settingsService,
 		Observability:      observabilityServices,
@@ -529,7 +517,6 @@ type Repositories struct {
 	OrganizationRepository      organization.OrganizationRepository
 	MemberRepository            organization.MemberRepository
 	ProjectRepository           organization.ProjectRepository
-	EnvironmentRepository       organization.EnvironmentRepository
 	InvitationRepository        organization.InvitationRepository
 	OrganizationSettingsRepository organization.OrganizationSettingsRepository
 	UserSessionRepository       auth.UserSessionRepository
@@ -561,7 +548,6 @@ func (pc *ProviderContainer) GetAllRepositories() *Repositories {
 		OrganizationRepository:         pc.Repos.Organization.Organization,
 		MemberRepository:               pc.Repos.Organization.Member,
 		ProjectRepository:              pc.Repos.Organization.Project,
-		EnvironmentRepository:          pc.Repos.Organization.Environment,
 		InvitationRepository:           pc.Repos.Organization.Invitation,
 		OrganizationSettingsRepository: pc.Repos.Organization.Settings,
 		UserSessionRepository:          pc.Repos.Auth.UserSession,

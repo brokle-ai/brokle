@@ -84,23 +84,61 @@ type OrganizationRepository interface {
 
 // APIKey represents an API key for programmatic access with full scoping.
 type APIKey struct {
-	ID             ulid.ULID  `json:"id" gorm:"type:char(26);primaryKey"`
-	UserID         ulid.ULID  `json:"user_id" gorm:"type:char(26);not null"`
-	OrganizationID ulid.ULID  `json:"organization_id" gorm:"type:char(26);not null"`
-	ProjectID      *ulid.ULID `json:"project_id,omitempty" gorm:"type:char(26)"`
-	EnvironmentID  *ulid.ULID `json:"environment_id,omitempty" gorm:"type:char(26)"`
-	Name           string     `json:"name" gorm:"size:255;not null"`
-	KeyPrefix      string     `json:"key_prefix" gorm:"size:8;not null"`       // First 8 chars for display
-	KeyHash        string      `json:"-" gorm:"size:255;not null"`                  // Hashed key for storage
-	Scopes         []string    `json:"scopes" gorm:"type:json"`               // JSON array of permissions
-	RateLimitRPM   int         `json:"rate_limit_rpm" gorm:"default:1000"` // Requests per minute
-	Metadata       interface{} `json:"metadata,omitempty" gorm:"type:jsonb"`   // Flexible metadata storage
-	IsActive       bool        `json:"is_active" gorm:"default:true"`
-	ExpiresAt      *time.Time `json:"expires_at,omitempty"`
-	LastUsedAt     *time.Time `json:"last_used_at,omitempty"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
-	DeletedAt      gorm.DeletedAt `json:"deleted_at,omitempty" gorm:"index"`
+	ID                 ulid.ULID   `json:"id" gorm:"type:char(26);primaryKey"`
+	UserID             ulid.ULID   `json:"user_id" gorm:"type:char(26);not null"`
+	OrganizationID     ulid.ULID   `json:"organization_id" gorm:"type:char(26);not null"`
+	ProjectID          ulid.ULID   `json:"project_id" gorm:"type:char(26);not null"`        // Required, not optional
+	Name               string      `json:"name" gorm:"size:255;not null"`
+	KeyPrefix          string      `json:"key_prefix" gorm:"size:8;not null"`               // First 8 chars for display
+	KeyHash            string      `json:"-" gorm:"size:255;not null"`                      // Hashed key for storage
+	DefaultEnvironment string      `json:"default_environment" gorm:"size:40;default:'default'"` // Langfuse-style tag
+	Scopes             []string    `json:"scopes" gorm:"type:json"`                         // JSON array of permissions
+	RateLimitRPM       int         `json:"rate_limit_rpm" gorm:"default:1000"`             // Requests per minute
+	Metadata           interface{} `json:"metadata,omitempty" gorm:"type:jsonb"`           // Flexible metadata storage
+	IsActive           bool        `json:"is_active" gorm:"default:true"`
+	ExpiresAt          *time.Time  `json:"expires_at,omitempty"`
+	LastUsedAt         *time.Time  `json:"last_used_at,omitempty"`
+	CreatedAt          time.Time      `json:"created_at"`
+	UpdatedAt          time.Time      `json:"updated_at"`
+	DeletedAt          gorm.DeletedAt `json:"deleted_at,omitempty" gorm:"index"`
+}
+
+// Environment validation constants (following Langfuse rules)
+const (
+	MaxEnvironmentNameLength = 40
+	DefaultEnvironmentName   = "default"
+)
+
+// ValidateEnvironmentName validates environment name according to Langfuse rules
+func ValidateEnvironmentName(env string) error {
+	if env == "" {
+		return fmt.Errorf("environment name cannot be empty")
+	}
+
+	if len(env) > MaxEnvironmentNameLength {
+		return fmt.Errorf("environment name cannot exceed %d characters", MaxEnvironmentNameLength)
+	}
+
+	if strings.HasPrefix(strings.ToLower(env), "langfuse") {
+		return fmt.Errorf("environment name cannot start with 'langfuse'")
+	}
+
+	// Check for valid characters (lowercase letters, numbers, hyphens, underscores)
+	for _, char := range env {
+		if !((char >= 'a' && char <= 'z') || (char >= '0' && char <= '9') || char == '-' || char == '_') {
+			return fmt.Errorf("environment name can only contain lowercase letters, numbers, hyphens, and underscores")
+		}
+	}
+
+	return nil
+}
+
+// GetEffectiveEnvironment returns the environment to use for a request
+func (ak *APIKey) GetEffectiveEnvironment(requestEnv string) string {
+	if requestEnv != "" {
+		return requestEnv
+	}
+	return ak.DefaultEnvironment
 }
 
 // Role represents both system template roles and custom scoped roles
@@ -143,24 +181,12 @@ type ProjectMember struct {
 	Role *Role `json:"role,omitempty" gorm:"foreignKey:RoleID"`
 }
 
-// EnvironmentMember represents user membership in an environment with a single role (future)
-type EnvironmentMember struct {
-	UserID        ulid.ULID `json:"user_id" gorm:"type:char(26);primaryKey"`
-	EnvironmentID ulid.ULID `json:"environment_id" gorm:"type:char(26);primaryKey"`
-	RoleID        ulid.ULID `json:"role_id" gorm:"type:char(26);not null"`
-	Status        string    `json:"status" gorm:"size:20;default:active"`
-	JoinedAt      time.Time `json:"joined_at" gorm:"default:CURRENT_TIMESTAMP"`
-
-	// Relations
-	Role *Role `json:"role,omitempty" gorm:"foreignKey:RoleID"`
-}
 
 // Scope constants for roles
 const (
 	ScopeSystem       = "system"       // System template roles
 	ScopeOrganization = "organization" // Organization-specific roles
-	ScopeProject      = "project"      // Project-specific roles  
-	ScopeEnvironment  = "environment"  // Environment-specific roles
+	ScopeProject      = "project"      // Project-specific roles
 )
 
 // Membership status constants
@@ -187,9 +213,6 @@ func (r *Role) IsProjectRole() bool {
 	return r.ScopeType == ScopeProject
 }
 
-func (r *Role) IsEnvironmentRole() bool {
-	return r.ScopeType == ScopeEnvironment
-}
 
 func (r *Role) GetScopeDisplay() string {
 	switch r.ScopeType {
@@ -202,8 +225,6 @@ func (r *Role) GetScopeDisplay() string {
 		return "Organization Custom"
 	case ScopeProject:
 		return "Project"
-	case ScopeEnvironment:
-		return "Environment"
 	default:
 		return "Unknown"
 	}
@@ -239,14 +260,6 @@ func (m *ProjectMember) Activate() {
 	m.Status = MemberStatusActive
 }
 
-// Helper methods for environment membership
-func (m *EnvironmentMember) IsActive() bool {
-	return m.Status == MemberStatusActive
-}
-
-func (m *EnvironmentMember) Activate() {
-	m.Status = MemberStatusActive
-}
 
 // Permission represents a normalized permission using resource:action format
 type Permission struct {
@@ -360,13 +373,13 @@ type AuthUser struct {
 }
 
 type CreateAPIKeyRequest struct {
-	Name           string     `json:"name" validate:"required,min=1,max=100"`
-	OrganizationID ulid.ULID  `json:"organization_id" validate:"required"`
-	ProjectID      *ulid.ULID `json:"project_id,omitempty"`
-	EnvironmentID  *ulid.ULID `json:"environment_id,omitempty"`
-	Scopes         []string   `json:"scopes" validate:"required,min=1"`
-	RateLimitRPM   int        `json:"rate_limit_rpm" validate:"min=1,max=10000"`
-	ExpiresAt      *time.Time `json:"expires_at,omitempty"`
+	Name               string     `json:"name" validate:"required,min=1,max=100"`
+	OrganizationID     ulid.ULID  `json:"organization_id" validate:"required"`
+	ProjectID          ulid.ULID  `json:"project_id" validate:"required"`        // Required, not optional
+	DefaultEnvironment string     `json:"default_environment,omitempty"`        // Optional, defaults to "default"
+	Scopes             []string   `json:"scopes" validate:"required,min=1"`
+	RateLimitRPM       int        `json:"rate_limit_rpm" validate:"min=1,max=10000"`
+	ExpiresAt          *time.Time `json:"expires_at,omitempty"`
 }
 
 type CreateAPIKeyResponse struct {
@@ -519,20 +532,26 @@ func NewUserTimestampBlacklistedToken(userID ulid.ULID, blacklistTimestamp int64
 	}
 }
 
-func NewAPIKey(userID, orgID ulid.ULID, name, keyPrefix, keyHash string, scopes []string, rateLimitRPM int, expiresAt *time.Time) *APIKey {
+func NewAPIKey(userID, orgID, projectID ulid.ULID, name, keyPrefix, keyHash, defaultEnvironment string, scopes []string, rateLimitRPM int, expiresAt *time.Time) *APIKey {
+	if defaultEnvironment == "" {
+		defaultEnvironment = DefaultEnvironmentName
+	}
+
 	return &APIKey{
-		ID:             ulid.New(),
-		UserID:         userID,
-		OrganizationID: orgID,
-		Name:           name,
-		KeyPrefix:      keyPrefix,
-		KeyHash:        keyHash,
-		Scopes:         scopes,
-		RateLimitRPM:   rateLimitRPM,
-		IsActive:       true,
-		ExpiresAt:      expiresAt,
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
+		ID:                 ulid.New(),
+		UserID:             userID,
+		OrganizationID:     orgID,
+		ProjectID:          projectID,
+		Name:               name,
+		KeyPrefix:          keyPrefix,
+		KeyHash:            keyHash,
+		DefaultEnvironment: defaultEnvironment,
+		Scopes:             scopes,
+		RateLimitRPM:       rateLimitRPM,
+		IsActive:           true,
+		ExpiresAt:          expiresAt,
+		CreatedAt:          time.Now(),
+		UpdatedAt:          time.Now(),
 	}
 }
 
@@ -582,15 +601,6 @@ func NewProjectMember(userID, projectID, roleID ulid.ULID) *ProjectMember {
 	}
 }
 
-func NewEnvironmentMember(userID, environmentID, roleID ulid.ULID) *EnvironmentMember {
-	return &EnvironmentMember{
-		UserID:        userID,
-		EnvironmentID: environmentID,
-		RoleID:        roleID,
-		Status:        MemberStatusActive,
-		JoinedAt:      time.Now(),
-	}
-}
 
 func NewPermission(resource, action, description string) *Permission {
 	name := fmt.Sprintf("%s:%s", resource, action)
@@ -790,7 +800,6 @@ func (APIKey) TableName() string              { return "api_keys" }
 func (Role) TableName() string                { return "roles" }
 func (OrganizationMember) TableName() string  { return "organization_members" }
 func (ProjectMember) TableName() string       { return "project_members" }
-func (EnvironmentMember) TableName() string   { return "environment_members" }
 func (Permission) TableName() string          { return "permissions" }
 func (RolePermission) TableName() string      { return "role_permissions" }
 func (AuditLog) TableName() string            { return "audit_logs" }

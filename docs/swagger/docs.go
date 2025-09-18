@@ -319,9 +319,9 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "example": "\"env_1234567890\"",
-                        "description": "Filter by environment ID",
-                        "name": "environment_id",
+                        "example": "\"production\"",
+                        "description": "Filter by environment tag",
+                        "name": "environment",
                         "in": "query"
                     },
                     {
@@ -432,9 +432,9 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "example": "\"env_1234567890\"",
-                        "description": "Filter by environment ID",
-                        "name": "environment_id",
+                        "example": "\"production\"",
+                        "description": "Filter by environment tag",
+                        "name": "environment",
                         "in": "query"
                     },
                     {
@@ -550,9 +550,9 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "example": "\"env_1234567890\"",
-                        "description": "Filter by environment ID",
-                        "name": "environment_id",
+                        "example": "\"production\"",
+                        "description": "Filter by environment tag",
+                        "name": "environment",
                         "in": "query"
                     }
                 ],
@@ -651,9 +651,9 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "example": "\"env_1234567890\"",
-                        "description": "Filter by environment ID",
-                        "name": "environment_id",
+                        "example": "\"production\"",
+                        "description": "Filter by environment tag",
+                        "name": "environment",
                         "in": "query"
                     },
                     {
@@ -762,9 +762,9 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "example": "\"env_1234567890\"",
-                        "description": "Filter by environment ID",
-                        "name": "environment_id",
+                        "example": "\"production\"",
+                        "description": "Filter by environment tag",
+                        "name": "environment",
                         "in": "query"
                     },
                     {
@@ -1818,743 +1818,6 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Organization not found",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/environments": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Get a paginated list of environments accessible to the authenticated user",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Environments"
-                ],
-                "summary": "List environments",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "example": "\"proj_1234567890\"",
-                        "description": "Filter by project ID",
-                        "name": "project_id",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "development",
-                            "staging",
-                            "production"
-                        ],
-                        "type": "string",
-                        "description": "Filter by environment type",
-                        "name": "type",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "active",
-                            "paused",
-                            "archived"
-                        ],
-                        "type": "string",
-                        "description": "Filter by environment status",
-                        "name": "status",
-                        "in": "query"
-                    },
-                    {
-                        "minimum": 1,
-                        "type": "integer",
-                        "default": 1,
-                        "description": "Page number",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "maximum": 100,
-                        "minimum": 1,
-                        "type": "integer",
-                        "default": 20,
-                        "description": "Items per page",
-                        "name": "limit",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "List of environments with pagination",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "$ref": "#/definitions/environment.Environment"
-                                            }
-                                        },
-                                        "meta": {
-                                            "allOf": [
-                                                {
-                                                    "$ref": "#/definitions/response.Meta"
-                                                },
-                                                {
-                                                    "type": "object",
-                                                    "properties": {
-                                                        "pagination": {
-                                                            "$ref": "#/definitions/response.Pagination"
-                                                        }
-                                                    }
-                                                }
-                                            ]
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad request",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Create a new environment within a project. User must have appropriate permissions in the project.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Environments"
-                ],
-                "summary": "Create environment",
-                "parameters": [
-                    {
-                        "description": "Environment details",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/environment.CreateEnvironmentRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Environment created successfully",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.SuccessResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/environment.Environment"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad request - invalid input or validation errors",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden - insufficient permissions in project",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Project not found",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "409": {
-                        "description": "Conflict - environment slug already exists in project",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/environments/{envId}": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Get detailed information about a specific environment",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Environments"
-                ],
-                "summary": "Get environment details",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "example": "\"env_1234567890\"",
-                        "description": "Environment ID",
-                        "name": "envId",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Environment details",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.SuccessResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/environment.Environment"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad request - invalid environment ID",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden - insufficient permissions",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Environment not found",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Update environment details. Requires appropriate permissions within the project.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Environments"
-                ],
-                "summary": "Update environment",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "example": "\"env_1234567890\"",
-                        "description": "Environment ID",
-                        "name": "envId",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Updated environment details",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/environment.UpdateEnvironmentRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Environment updated successfully",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.SuccessResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/environment.Environment"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad request - invalid input or validation errors",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden - insufficient permissions",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Environment not found",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Permanently delete an environment and all associated API keys and data. This action cannot be undone.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Environments"
-                ],
-                "summary": "Delete environment",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "example": "\"env_1234567890\"",
-                        "description": "Environment ID",
-                        "name": "envId",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "description": "Environment deleted successfully"
-                    },
-                    "400": {
-                        "description": "Bad request - invalid environment ID",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden - insufficient permissions (requires admin or owner role)",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Environment not found",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "409": {
-                        "description": "Conflict - cannot delete environment with active API keys or recent usage",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/environments/{envId}/api-keys": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Get a paginated list of API keys for a specific environment",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "API Keys"
-                ],
-                "summary": "List API keys",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "example": "\"env_1234567890\"",
-                        "description": "Environment ID",
-                        "name": "envId",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "enum": [
-                            "active",
-                            "inactive",
-                            "revoked"
-                        ],
-                        "type": "string",
-                        "description": "Filter by API key status",
-                        "name": "status",
-                        "in": "query"
-                    },
-                    {
-                        "minimum": 1,
-                        "type": "integer",
-                        "default": 1,
-                        "description": "Page number",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "maximum": 100,
-                        "minimum": 1,
-                        "type": "integer",
-                        "default": 20,
-                        "description": "Items per page",
-                        "name": "limit",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "List of API keys with pagination",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "$ref": "#/definitions/apikey.APIKey"
-                                            }
-                                        },
-                                        "meta": {
-                                            "allOf": [
-                                                {
-                                                    "$ref": "#/definitions/response.Meta"
-                                                },
-                                                {
-                                                    "type": "object",
-                                                    "properties": {
-                                                        "pagination": {
-                                                            "$ref": "#/definitions/response.Pagination"
-                                                        }
-                                                    }
-                                                }
-                                            ]
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad request - invalid environment ID",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden - insufficient permissions to view API keys",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Environment not found",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Create a new API key for an environment. The key will only be displayed once upon creation.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "API Keys"
-                ],
-                "summary": "Create API key",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "example": "\"env_1234567890\"",
-                        "description": "Environment ID",
-                        "name": "envId",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "API key details",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/apikey.CreateAPIKeyRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "API key created successfully (key only shown once)",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.SuccessResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/apikey.APIKey"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad request - invalid input or validation errors",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden - insufficient permissions to create API keys",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Environment not found",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "409": {
-                        "description": "Conflict - API key name already exists in environment",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/environments/{envId}/api-keys/{keyId}": {
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Permanently revoke and delete an API key. This action cannot be undone and will immediately invalidate the key.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "API Keys"
-                ],
-                "summary": "Delete API key",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "example": "\"env_1234567890\"",
-                        "description": "Environment ID",
-                        "name": "envId",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "example": "\"key_1234567890\"",
-                        "description": "API Key ID",
-                        "name": "keyId",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "description": "API key deleted successfully"
-                    },
-                    "400": {
-                        "description": "Bad request - invalid environment ID or key ID",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden - insufficient permissions to delete API keys",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Environment or API key not found",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorResponse"
                         }
@@ -5689,14 +4952,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/projects/{projectId}/environments": {
+        "/api/v1/projects/{projectId}/api-keys": {
             "get": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get all environments that belong to a specific project",
+                "description": "Get a paginated list of API keys for a specific project",
                 "consumes": [
                     "application/json"
                 ],
@@ -5704,9 +4967,9 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Projects"
+                    "API Keys"
                 ],
-                "summary": "List project environments",
+                "summary": "List API keys",
                 "parameters": [
                     {
                         "type": "string",
@@ -5715,21 +4978,67 @@ const docTemplate = `{
                         "name": "projectId",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "enum": [
+                            "active",
+                            "inactive",
+                            "revoked"
+                        ],
+                        "type": "string",
+                        "description": "Filter by API key status",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 100,
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Items per page",
+                        "name": "limit",
+                        "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "List of project environments",
+                        "description": "List of API keys with pagination",
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/response.SuccessResponse"
+                                    "$ref": "#/definitions/response.APIResponse"
                                 },
                                 {
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/project.ListEnvironmentsResponse"
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/apikey.APIKey"
+                                            }
+                                        },
+                                        "meta": {
+                                            "allOf": [
+                                                {
+                                                    "$ref": "#/definitions/response.Meta"
+                                                },
+                                                {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "pagination": {
+                                                            "$ref": "#/definitions/response.Pagination"
+                                                        }
+                                                    }
+                                                }
+                                            ]
                                         }
                                     }
                                 }
@@ -5749,13 +5058,179 @@ const docTemplate = `{
                         }
                     },
                     "403": {
-                        "description": "Forbidden - insufficient permissions",
+                        "description": "Forbidden - insufficient permissions to view API keys",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Project not found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Create a new API key for a project. The key will only be displayed once upon creation.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "API Keys"
+                ],
+                "summary": "Create API key",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "example": "\"proj_1234567890\"",
+                        "description": "Project ID",
+                        "name": "projectId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "API key details",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/apikey.CreateAPIKeyRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "API key created successfully (key only shown once)",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/apikey.APIKey"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request - invalid input or validation errors",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - insufficient permissions to create API keys",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Project not found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict - API key name already exists in project",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/projects/{projectId}/api-keys/{keyId}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Permanently revoke and delete an API key. This action cannot be undone and will immediately invalidate the key.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "API Keys"
+                ],
+                "summary": "Delete API key",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "example": "\"proj_1234567890\"",
+                        "description": "Project ID",
+                        "name": "projectId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "example": "\"key_1234567890\"",
+                        "description": "API Key ID",
+                        "name": "keyId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "API key deleted successfully"
+                    },
+                    "400": {
+                        "description": "Bad request - invalid project ID or key ID",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - insufficient permissions to delete API keys",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Project or API key not found",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorResponse"
                         }
@@ -6864,9 +6339,9 @@ const docTemplate = `{
                     "type": "string",
                     "example": "usr_1234567890"
                 },
-                "environment_id": {
+                "default_environment": {
                     "type": "string",
-                    "example": "env_1234567890"
+                    "example": "production"
                 },
                 "expires_at": {
                     "type": "string",
@@ -6892,6 +6367,10 @@ const docTemplate = `{
                     "type": "string",
                     "example": "Production API Key"
                 },
+                "project_id": {
+                    "type": "string",
+                    "example": "proj_1234567890"
+                },
                 "scopes": {
                     "type": "array",
                     "items": {
@@ -6911,14 +6390,13 @@ const docTemplate = `{
         "apikey.CreateAPIKeyRequest": {
             "type": "object",
             "required": [
-                "environment_id",
                 "name",
                 "scopes"
             ],
             "properties": {
-                "environment_id": {
+                "default_environment": {
                     "type": "string",
-                    "example": "env_1234567890"
+                    "example": "production"
                 },
                 "expires_at": {
                     "type": "string",
@@ -7104,13 +6582,9 @@ const docTemplate = `{
                     "type": "number",
                     "example": 1000.5
                 },
-                "environment_id": {
+                "environment": {
                     "type": "string",
-                    "example": "env_1234567890"
-                },
-                "environment_name": {
-                    "type": "string",
-                    "example": "Production"
+                    "example": "production"
                 },
                 "percent": {
                     "type": "number",
@@ -7123,10 +6597,6 @@ const docTemplate = `{
                 "tokens": {
                     "type": "integer",
                     "example": 2000000
-                },
-                "type": {
-                    "type": "string",
-                    "example": "production"
                 }
             }
         },
@@ -7544,116 +7014,6 @@ const docTemplate = `{
                     "items": {
                         "$ref": "#/definitions/billing.ProviderUsage"
                     }
-                }
-            }
-        },
-        "environment.CreateEnvironmentRequest": {
-            "type": "object",
-            "required": [
-                "name",
-                "project_id",
-                "type"
-            ],
-            "properties": {
-                "description": {
-                    "type": "string",
-                    "maxLength": 500,
-                    "example": "Production environment for live traffic"
-                },
-                "name": {
-                    "type": "string",
-                    "maxLength": 100,
-                    "minLength": 2,
-                    "example": "Production"
-                },
-                "project_id": {
-                    "type": "string",
-                    "example": "proj_1234567890"
-                },
-                "slug": {
-                    "type": "string",
-                    "maxLength": 50,
-                    "minLength": 2,
-                    "example": "production"
-                },
-                "type": {
-                    "type": "string",
-                    "enum": [
-                        "development",
-                        "staging",
-                        "production"
-                    ],
-                    "example": "production"
-                }
-            }
-        },
-        "environment.Environment": {
-            "type": "object",
-            "properties": {
-                "api_keys_count": {
-                    "type": "integer",
-                    "example": 2
-                },
-                "created_at": {
-                    "type": "string",
-                    "example": "2024-01-01T00:00:00Z"
-                },
-                "description": {
-                    "type": "string",
-                    "example": "Production environment for live traffic"
-                },
-                "id": {
-                    "type": "string",
-                    "example": "env_1234567890"
-                },
-                "name": {
-                    "type": "string",
-                    "example": "Production"
-                },
-                "project_id": {
-                    "type": "string",
-                    "example": "proj_1234567890"
-                },
-                "slug": {
-                    "type": "string",
-                    "example": "production"
-                },
-                "status": {
-                    "type": "string",
-                    "example": "active"
-                },
-                "type": {
-                    "type": "string",
-                    "example": "production"
-                },
-                "updated_at": {
-                    "type": "string",
-                    "example": "2024-01-01T00:00:00Z"
-                }
-            }
-        },
-        "environment.UpdateEnvironmentRequest": {
-            "type": "object",
-            "properties": {
-                "description": {
-                    "type": "string",
-                    "maxLength": 500,
-                    "example": "Production environment for live traffic"
-                },
-                "name": {
-                    "type": "string",
-                    "maxLength": 100,
-                    "minLength": 2,
-                    "example": "Production"
-                },
-                "status": {
-                    "type": "string",
-                    "enum": [
-                        "active",
-                        "paused",
-                        "archived"
-                    ],
-                    "example": "active"
                 }
             }
         },
@@ -8869,54 +8229,6 @@ const docTemplate = `{
                     "maxLength": 50,
                     "minLength": 2,
                     "example": "ai-chatbot"
-                }
-            }
-        },
-        "project.Environment": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string",
-                    "example": "2024-01-01T00:00:00Z"
-                },
-                "id": {
-                    "type": "string",
-                    "example": "env_1234567890"
-                },
-                "name": {
-                    "type": "string",
-                    "example": "Production"
-                },
-                "project_id": {
-                    "type": "string",
-                    "example": "proj_1234567890"
-                },
-                "slug": {
-                    "type": "string",
-                    "example": "prod"
-                },
-                "updated_at": {
-                    "type": "string",
-                    "example": "2024-01-01T00:00:00Z"
-                }
-            }
-        },
-        "project.ListEnvironmentsResponse": {
-            "type": "object",
-            "properties": {
-                "environments": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/project.Environment"
-                    }
-                },
-                "project_id": {
-                    "type": "string",
-                    "example": "proj_1234567890"
-                },
-                "project_name": {
-                    "type": "string",
-                    "example": "AI Chatbot"
                 }
             }
         },

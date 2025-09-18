@@ -238,20 +238,11 @@ func (s *Server) setupV1Routes(router *gin.RouterGroup) {
 		projects.GET("/:projectId", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Project.Get)
 		projects.PUT("/:projectId", s.authMiddleware.RequirePermission("projects:update"), s.handlers.Project.Update)
 		projects.DELETE("/:projectId", s.authMiddleware.RequirePermission("projects:delete"), s.handlers.Project.Delete)
-		projects.GET("/:projectId/environments", s.authMiddleware.RequirePermission("environments:read"), s.handlers.Environment.List)
+		projects.GET("/:projectId/api-keys", s.authMiddleware.RequirePermission("api-keys:read"), s.handlers.APIKey.List)
+		projects.POST("/:projectId/api-keys", s.authMiddleware.RequirePermission("api-keys:create"), s.handlers.APIKey.Create)
+		projects.DELETE("/:projectId/api-keys/:keyId", s.authMiddleware.RequirePermission("api-keys:delete"), s.handlers.APIKey.Delete)
 	}
 
-	// Environment routes
-	envs := protected.Group("/environments")
-	{
-		envs.POST("", s.handlers.Environment.Create)
-		envs.GET("/:envId", s.handlers.Environment.Get)
-		envs.PUT("/:envId", s.handlers.Environment.Update)
-		envs.DELETE("/:envId", s.handlers.Environment.Delete)
-		envs.GET("/:envId/api-keys", s.handlers.APIKey.List)
-		envs.POST("/:envId/api-keys", s.handlers.APIKey.Create)
-		envs.DELETE("/:envId/api-keys/:keyId", s.handlers.APIKey.Delete)
-	}
 
 	// Analytics routes
 	analytics := protected.Group("/analytics")

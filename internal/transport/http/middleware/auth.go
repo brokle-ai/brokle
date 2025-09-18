@@ -408,7 +408,7 @@ const (
 type ContextResolver struct {
 	OrganizationID *ulid.ULID
 	ProjectID      *ulid.ULID
-	EnvironmentID  *ulid.ULID
+	Environment    string // Environment tag (e.g., "production", "staging")
 }
 
 // ResolveContext resolves specified context types (variadic - any combination is optional)
@@ -464,21 +464,21 @@ func ResolveContext(c *gin.Context, contextTypes ...ContextType) *ContextResolve
 		}
 	}
 	
-	// Resolve environment ID if requested
+	// Resolve environment tag if requested
 	if typeSet[ContextEnv] {
-		// Try X-Environment-ID header first
-		if envIDHeader := c.GetHeader("X-Environment-ID"); envIDHeader != "" {
-			if envID, err := ulid.Parse(envIDHeader); err == nil {
-				resolver.EnvironmentID = &envID
+		// Try X-Environment header first
+		if envHeader := c.GetHeader("X-Environment"); envHeader != "" {
+			resolver.Environment = envHeader
+		}
+		// Try environment query parameter if header failed
+		if resolver.Environment == "" {
+			if envParam := c.Query("environment"); envParam != "" {
+				resolver.Environment = envParam
 			}
 		}
-		// Try envId URL parameter if header failed
-		if resolver.EnvironmentID == nil {
-			if envIDParam := c.Param("envId"); envIDParam != "" {
-				if envID, err := ulid.Parse(envIDParam); err == nil {
-					resolver.EnvironmentID = &envID
-				}
-			}
+		// Default to "default" if no environment specified
+		if resolver.Environment == "" {
+			resolver.Environment = "default"
 		}
 	}
 	
@@ -494,7 +494,7 @@ func ResolveProjectID(c *gin.Context) *ulid.ULID {
 	return ResolveContext(c, ContextProject).ProjectID
 }
 
-func ResolveEnvironmentID(c *gin.Context) *ulid.ULID {
-	return ResolveContext(c, ContextEnv).EnvironmentID
+func ResolveEnvironment(c *gin.Context) string {
+	return ResolveContext(c, ContextEnv).Environment
 }
 

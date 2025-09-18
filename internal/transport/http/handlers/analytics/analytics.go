@@ -143,7 +143,7 @@ type BudgetStatus struct {
 // @Param period query string false "Time period for analytics" default("30d") Enums(1d,7d,30d,90d,1y)
 // @Param organization_id query string false "Filter by organization ID" example("org_1234567890")
 // @Param project_id query string false "Filter by project ID" example("proj_1234567890")
-// @Param environment_id query string false "Filter by environment ID" example("env_1234567890")
+// @Param environment query string false "Filter by environment tag" example("production")
 // @Success 200 {object} response.SuccessResponse{data=AnalyticsOverview} "Analytics overview"
 // @Failure 400 {object} response.ErrorResponse "Bad request - invalid query parameters"
 // @Failure 401 {object} response.ErrorResponse "Unauthorized"
@@ -161,7 +161,7 @@ func (h *Handler) Overview(c *gin.Context) { response.Success(c, gin.H{"message"
 // @Param period query string false "Time period for analytics" default("30d") Enums(1d,7d,30d,90d,1y)
 // @Param organization_id query string false "Filter by organization ID" example("org_1234567890")
 // @Param project_id query string false "Filter by project ID" example("proj_1234567890")
-// @Param environment_id query string false "Filter by environment ID" example("env_1234567890")
+// @Param environment query string false "Filter by environment tag" example("production")
 // @Param provider query string false "Filter by AI provider" example("openai")
 // @Param model query string false "Filter by AI model" example("gpt-4")
 // @Success 200 {object} response.SuccessResponse{data=RequestAnalytics} "Request analytics"
@@ -181,7 +181,7 @@ func (h *Handler) Requests(c *gin.Context) { response.Success(c, gin.H{"message"
 // @Param period query string false "Time period for analytics" default("30d") Enums(1d,7d,30d,90d,1y)
 // @Param organization_id query string false "Filter by organization ID" example("org_1234567890")
 // @Param project_id query string false "Filter by project ID" example("proj_1234567890")
-// @Param environment_id query string false "Filter by environment ID" example("env_1234567890")
+// @Param environment query string false "Filter by environment tag" example("production")
 // @Param currency query string false "Currency for cost display" default("USD") Enums(USD,EUR,GBP)
 // @Success 200 {object} response.SuccessResponse{data=CostAnalytics} "Cost analytics and optimization insights"
 // @Failure 400 {object} response.ErrorResponse "Bad request - invalid query parameters"
@@ -200,7 +200,7 @@ func (h *Handler) Costs(c *gin.Context) { response.Success(c, gin.H{"message": "
 // @Param period query string false "Time period for analytics" default("30d") Enums(1d,7d,30d,90d,1y)
 // @Param organization_id query string false "Filter by organization ID" example("org_1234567890")
 // @Param project_id query string false "Filter by project ID" example("proj_1234567890")
-// @Param environment_id query string false "Filter by environment ID" example("env_1234567890")
+// @Param environment query string false "Filter by environment tag" example("production")
 // @Param provider query string false "Filter by specific provider" example("openai")
 // @Success 200 {object} response.SuccessResponse{data=[]ProviderAnalytics} "Provider performance analytics"
 // @Failure 400 {object} response.ErrorResponse "Bad request - invalid query parameters"
@@ -219,7 +219,7 @@ func (h *Handler) Providers(c *gin.Context) { response.Success(c, gin.H{"message
 // @Param period query string false "Time period for analytics" default("30d") Enums(1d,7d,30d,90d,1y)
 // @Param organization_id query string false "Filter by organization ID" example("org_1234567890")
 // @Param project_id query string false "Filter by project ID" example("proj_1234567890")
-// @Param environment_id query string false "Filter by environment ID" example("env_1234567890")
+// @Param environment query string false "Filter by environment tag" example("production")
 // @Param provider query string false "Filter by AI provider" example("openai")
 // @Param model query string false "Filter by specific model" example("gpt-4")
 // @Success 200 {object} response.SuccessResponse{data=[]ModelAnalytics} "AI model performance analytics"

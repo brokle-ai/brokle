@@ -14,7 +14,6 @@ import (
 	"brokle/internal/transport/http/handlers/apikey"
 	authHandler "brokle/internal/transport/http/handlers/auth"
 	"brokle/internal/transport/http/handlers/billing"
-	"brokle/internal/transport/http/handlers/environment"
 	"brokle/internal/transport/http/handlers/health"
 	"brokle/internal/transport/http/handlers/logs"
 	"brokle/internal/transport/http/handlers/metrics"
@@ -34,7 +33,6 @@ type Handlers struct {
 	User         *userHandler.Handler
 	Organization *organizationHandler.Handler
 	Project      *project.Handler
-	Environment  *environment.Handler
 	APIKey       *apikey.Handler
 	Analytics     *analytics.Handler
 	Logs          *logs.Handler
@@ -59,7 +57,6 @@ func NewHandlers(
 	organizationService organization.OrganizationService,
 	memberService organization.MemberService,
 	projectService organization.ProjectService,
-	environmentService organization.EnvironmentService,
 	invitationService organization.InvitationService,
 	settingsService organization.OrganizationSettingsService,
 	roleService auth.RoleService,
@@ -73,9 +70,8 @@ func NewHandlers(
 		Metrics:      metrics.NewHandler(cfg, logger),
 		Auth:         authHandler.NewHandler(cfg, logger, authService, apiKeyService, userService),
 		User:         userHandler.NewHandler(cfg, logger, userService, profileService, onboardingService),
-		Organization: organizationHandler.NewHandler(cfg, logger, organizationService, memberService, projectService, environmentService, invitationService, settingsService, userService, roleService),
-		Project:      project.NewHandler(cfg, logger, projectService, organizationService, memberService, environmentService),
-		Environment:  environment.NewHandler(cfg, logger),
+		Organization: organizationHandler.NewHandler(cfg, logger, organizationService, memberService, projectService, invitationService, settingsService, userService, roleService),
+		Project:      project.NewHandler(cfg, logger, projectService, organizationService, memberService),
 		APIKey:       apikey.NewHandler(cfg, logger, apiKeyService),
 		Analytics:    analytics.NewHandler(cfg, logger),
 		Logs:         logs.NewHandler(cfg, logger),

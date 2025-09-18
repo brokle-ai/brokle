@@ -103,15 +103,6 @@ func (r *apiKeyRepository) GetByProjectID(ctx context.Context, projectID ulid.UL
 	return apiKeys, err
 }
 
-// GetByEnvironmentID retrieves API keys for an environment
-func (r *apiKeyRepository) GetByEnvironmentID(ctx context.Context, envID ulid.ULID) ([]*authDomain.APIKey, error) {
-	var apiKeys []*authDomain.APIKey
-	err := r.db.WithContext(ctx).
-		Where("environment_id = ? AND deleted_at IS NULL", envID).
-		Order("created_at DESC").
-		Find(&apiKeys).Error
-	return apiKeys, err
-}
 
 // GetByFilters retrieves API keys based on filters
 func (r *apiKeyRepository) GetByFilters(ctx context.Context, filters *authDomain.APIKeyFilters) ([]*authDomain.APIKey, error) {
@@ -128,8 +119,8 @@ func (r *apiKeyRepository) GetByFilters(ctx context.Context, filters *authDomain
 	if filters.ProjectID != nil {
 		query = query.Where("project_id = ?", *filters.ProjectID)
 	}
-	if filters.EnvironmentID != nil {
-		query = query.Where("environment_id = ?", *filters.EnvironmentID)
+	if filters.Environment != nil && *filters.Environment != "" {
+		query = query.Where("default_environment = ?", *filters.Environment)
 	}
 	if filters.IsActive != nil {
 		query = query.Where("is_active = ?", *filters.IsActive)

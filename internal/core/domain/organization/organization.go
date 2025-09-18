@@ -65,24 +65,9 @@ type Project struct {
 	DeletedAt gorm.DeletedAt `json:"deleted_at,omitempty" gorm:"index"`
 
 	// Relations
-	Organization Organization  `json:"organization,omitempty" gorm:"foreignKey:OrganizationID"`
-	Environments []Environment `json:"environments,omitempty" gorm:"foreignKey:ProjectID"`
+	Organization Organization `json:"organization,omitempty" gorm:"foreignKey:OrganizationID"`
 }
 
-// Environment represents an environment within a project (dev, staging, prod).
-type Environment struct {
-	ID        ulid.ULID `json:"id" gorm:"type:char(26);primaryKey"`
-	ProjectID ulid.ULID `json:"project_id" gorm:"type:char(26);not null"`
-	Name      string    `json:"name" gorm:"size:255;not null"`
-	Slug      string    `json:"slug" gorm:"size:255;not null"`
-
-	CreatedAt time.Time      `json:"created_at"`
-	UpdatedAt time.Time      `json:"updated_at"`
-	DeletedAt gorm.DeletedAt `json:"deleted_at,omitempty" gorm:"index"`
-
-	// Relations
-	Project Project `json:"project,omitempty" gorm:"foreignKey:ProjectID"`
-}
 
 // Invitation represents an invitation to join an organization.
 type Invitation struct {
@@ -129,15 +114,6 @@ type UpdateProjectRequest struct {
 	Description *string `json:"description,omitempty"`
 }
 
-type CreateEnvironmentRequest struct {
-	Name string `json:"name" validate:"required,min=1,max=100"`
-	Slug string `json:"slug" validate:"required,min=1,max=50,slug"`
-}
-
-type UpdateEnvironmentRequest struct {
-	Name *string `json:"name,omitempty"`
-	Slug *string `json:"slug,omitempty"`
-}
 
 type InviteUserRequest struct {
 	Email  string    `json:"email" validate:"required,email"`
@@ -180,16 +156,6 @@ func NewProject(orgID ulid.ULID, name, slug, description string) *Project {
 	}
 }
 
-func NewEnvironment(projectID ulid.ULID, name, slug string) *Environment {
-	return &Environment{
-		ID:        ulid.New(),
-		ProjectID: projectID,
-		Name:      name,
-		Slug:      slug,
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
-	}
-}
 
 func NewMember(orgID, userID, roleID ulid.ULID) *Member {
 	now := time.Now()
@@ -305,6 +271,5 @@ func (os *OrganizationSettings) SetValue(value interface{}) error {
 func (Organization) TableName() string         { return "organizations" }
 func (Member) TableName() string               { return "organization_members" }
 func (Project) TableName() string              { return "projects" }
-func (Environment) TableName() string          { return "environments" }
 func (Invitation) TableName() string           { return "user_invitations" }
 func (OrganizationSettings) TableName() string { return "organization_settings" }

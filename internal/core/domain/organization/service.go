@@ -59,27 +59,6 @@ type ProjectService interface {
 	ValidateProjectAccess(ctx context.Context, userID, projectID ulid.ULID) error
 }
 
-// EnvironmentService defines the environment management service interface.
-type EnvironmentService interface {
-	// Environment CRUD operations
-	CreateEnvironment(ctx context.Context, projectID ulid.ULID, req *CreateEnvironmentRequest) (*Environment, error)
-	GetEnvironment(ctx context.Context, envID ulid.ULID) (*Environment, error)
-	GetEnvironmentBySlug(ctx context.Context, projectID ulid.ULID, slug string) (*Environment, error)
-	UpdateEnvironment(ctx context.Context, envID ulid.ULID, req *UpdateEnvironmentRequest) error
-	DeleteEnvironment(ctx context.Context, envID ulid.ULID) error
-	
-	// Project environments
-	GetEnvironmentsByProject(ctx context.Context, projectID ulid.ULID) ([]*Environment, error)
-	GetEnvironmentCount(ctx context.Context, projectID ulid.ULID) (int, error)
-	
-	// Default environments
-	CreateDefaultEnvironments(ctx context.Context, projectID ulid.ULID) error
-	
-	// Access validation
-	CanUserAccessEnvironment(ctx context.Context, userID, envID ulid.ULID) (bool, error)
-	ValidateEnvironmentAccess(ctx context.Context, userID, envID ulid.ULID) error
-	GetEnvironmentOrganization(ctx context.Context, envID ulid.ULID) (ulid.ULID, error)
-}
 
 // InvitationService defines the user invitation service interface.
 type InvitationService interface {

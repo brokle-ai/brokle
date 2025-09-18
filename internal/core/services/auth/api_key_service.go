@@ -54,11 +54,23 @@ func (s *apiKeyService) CreateAPIKey(ctx context.Context, userID ulid.ULID, req 
 	// TODO: Validate user has permission to create keys in the organization
 	// For now, skip membership validation - will be implemented when organization service is ready
 
-	// Determine environment type (default to development for safety)
+	// Validate and set default environment
+	defaultEnv := req.DefaultEnvironment
+	if defaultEnv == "" {
+		defaultEnv = authDomain.DefaultEnvironmentName // "default"
+	}
+
+	// Validate environment name according to Langfuse rules
+	if err := authDomain.ValidateEnvironmentName(defaultEnv); err != nil {
+		return nil, appErrors.NewBadRequestError("Invalid environment name", err.Error())
+	}
+
+	// Determine environment type for key prefix (default to development for safety)
 	envType := EnvDevelopment
-	if req.EnvironmentID != nil {
-		// TODO: In future, fetch environment type from environment service
-		// For now, default to development
+	if defaultEnv == "production" || defaultEnv == "prod" {
+		envType = EnvProduction
+	} else if defaultEnv == "staging" || defaultEnv == "stage" {
+		envType = EnvStaging
 	}
 
 	// Generate API key
@@ -71,25 +83,19 @@ func (s *apiKeyService) CreateAPIKey(ctx context.Context, userID ulid.ULID, req 
 	keyHash := s.hashAPIKey(apiKey)
 	keyPrefix := s.extractKeyPrefix(apiKey)
 
-	// Create API key entity
+	// Create API key entity with new schema
 	apiKeyEntity := authDomain.NewAPIKey(
 		userID,
 		req.OrganizationID,
+		req.ProjectID,           // Now required
 		req.Name,
 		keyPrefix,
 		keyHash,
+		defaultEnv,              // Default environment
 		req.Scopes,
 		req.RateLimitRPM,
 		req.ExpiresAt,
 	)
-
-	// Set optional scoping
-	if req.ProjectID != nil {
-		apiKeyEntity.ProjectID = req.ProjectID
-	}
-	if req.EnvironmentID != nil {
-		apiKeyEntity.EnvironmentID = req.EnvironmentID
-	}
 
 	// Save to database
 	if err := s.apiKeyRepo.Create(ctx, apiKeyEntity); err != nil {
@@ -119,9 +125,6 @@ func (s *apiKeyService) GetAPIKey(ctx context.Context, keyID ulid.ULID) (*authDo
 // GetAPIKeys retrieves API keys based on filters
 func (s *apiKeyService) GetAPIKeys(ctx context.Context, filters *authDomain.APIKeyFilters) ([]*authDomain.APIKey, error) {
 	// Use existing repository methods based on filters
-	if filters.EnvironmentID != nil {
-		return s.apiKeyRepo.GetByEnvironmentID(ctx, *filters.EnvironmentID)
-	}
 	if filters.ProjectID != nil {
 		return s.apiKeyRepo.GetByProjectID(ctx, *filters.ProjectID)
 	}
@@ -133,7 +136,7 @@ func (s *apiKeyService) GetAPIKeys(ctx context.Context, filters *authDomain.APIK
 	}
 
 	// If no specific filters, return empty array for now
-	// TODO: Implement comprehensive filtering in repository
+	// TODO: Implement comprehensive filtering in repository including environment tags
 	return []*authDomain.APIKey{}, nil
 }
 
@@ -148,6 +151,13 @@ func (s *apiKeyService) UpdateAPIKey(ctx context.Context, keyID ulid.ULID, req *
 	// Update fields
 	if req.Name != nil {
 		apiKey.Name = *req.Name
+	}
+	if req.DefaultEnvironment != nil {
+		// Validate environment name
+		if err := authDomain.ValidateEnvironmentName(*req.DefaultEnvironment); err != nil {
+			return appErrors.NewBadRequestError("Invalid environment name", err.Error())
+		}
+		apiKey.DefaultEnvironment = *req.DefaultEnvironment
 	}
 	if req.Scopes != nil {
 		apiKey.Scopes = req.Scopes
@@ -267,9 +277,6 @@ func (s *apiKeyService) GetAPIKeysByProject(ctx context.Context, projectID ulid.
 	return s.apiKeyRepo.GetByProjectID(ctx, projectID)
 }
 
-func (s *apiKeyService) GetAPIKeysByEnvironment(ctx context.Context, envID ulid.ULID) ([]*authDomain.APIKey, error) {
-	return s.apiKeyRepo.GetByEnvironmentID(ctx, envID)
-}
 
 // Private helper methods
 

@@ -67,7 +67,6 @@ func (a *App) Start() error {
 		providers.Services.OrganizationService,         // Direct organization service
 		providers.Services.MemberService,               // Direct member service
 		providers.Services.ProjectService,              // Direct project service
-		providers.Services.EnvironmentService,          // Direct environment service
 		providers.Services.InvitationService,           // Direct invitation service
 		providers.Services.SettingsService,             // Direct settings service
 		providers.Services.Auth.Role,                   // Role service for RBAC
@@ -125,7 +124,6 @@ func (a *App) Run() error {
 		providers.Services.OrganizationService,         // Direct organization service
 		providers.Services.MemberService,               // Direct member service
 		providers.Services.ProjectService,              // Direct project service
-		providers.Services.EnvironmentService,          // Direct environment service
 		providers.Services.InvitationService,           // Direct invitation service
 		providers.Services.SettingsService,             // Direct settings service
 		providers.Services.Auth.Role,                   // Role service for RBAC

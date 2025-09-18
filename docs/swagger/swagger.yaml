@@ -408,8 +408,8 @@ definitions:
       created_by:
         example: usr_1234567890
         type: string
-      environment_id:
-        example: env_1234567890
+      default_environment:
+        example: production
         type: string
       expires_at:
         example: "2024-12-31T23:59:59Z"
@@ -429,6 +429,9 @@ definitions:
       name:
         example: Production API Key
         type: string
+      project_id:
+        example: proj_1234567890
+        type: string
       scopes:
         example:
         - '["read"'
@@ -442,8 +445,8 @@ definitions:
     type: object
   apikey.CreateAPIKeyRequest:
     properties:
-      environment_id:
-        example: env_1234567890
+      default_environment:
+        example: production
         type: string
       expires_at:
         example: "2024-12-31T23:59:59Z"
@@ -462,7 +465,6 @@ definitions:
         minItems: 1
         type: array
     required:
-    - environment_id
     - name
     - scopes
     type: object
@@ -582,11 +584,8 @@ definitions:
       cost:
         example: 1000.5
         type: number
-      environment_id:
-        example: env_1234567890
-        type: string
-      environment_name:
-        example: Production
+      environment:
+        example: production
         type: string
       percent:
         example: 0.8
@@ -597,9 +596,6 @@ definitions:
       tokens:
         example: 2000000
         type: integer
-      type:
-        example: production
-        type: string
     type: object
   billing.Invoice:
     properties:
@@ -898,89 +894,6 @@ definitions:
         items:
           $ref: '#/definitions/billing.ProviderUsage'
         type: array
-    type: object
-  environment.CreateEnvironmentRequest:
-    properties:
-      description:
-        example: Production environment for live traffic
-        maxLength: 500
-        type: string
-      name:
-        example: Production
-        maxLength: 100
-        minLength: 2
-        type: string
-      project_id:
-        example: proj_1234567890
-        type: string
-      slug:
-        example: production
-        maxLength: 50
-        minLength: 2
-        type: string
-      type:
-        enum:
-        - development
-        - staging
-        - production
-        example: production
-        type: string
-    required:
-    - name
-    - project_id
-    - type
-    type: object
-  environment.Environment:
-    properties:
-      api_keys_count:
-        example: 2
-        type: integer
-      created_at:
-        example: "2024-01-01T00:00:00Z"
-        type: string
-      description:
-        example: Production environment for live traffic
-        type: string
-      id:
-        example: env_1234567890
-        type: string
-      name:
-        example: Production
-        type: string
-      project_id:
-        example: proj_1234567890
-        type: string
-      slug:
-        example: production
-        type: string
-      status:
-        example: active
-        type: string
-      type:
-        example: production
-        type: string
-      updated_at:
-        example: "2024-01-01T00:00:00Z"
-        type: string
-    type: object
-  environment.UpdateEnvironmentRequest:
-    properties:
-      description:
-        example: Production environment for live traffic
-        maxLength: 500
-        type: string
-      name:
-        example: Production
-        maxLength: 100
-        minLength: 2
-        type: string
-      status:
-        enum:
-        - active
-        - paused
-        - archived
-        example: active
-        type: string
     type: object
   health.HealthCheck:
     description: Individual component health check result
@@ -1843,40 +1756,6 @@ definitions:
     - name
     - organization_id
     type: object
-  project.Environment:
-    properties:
-      created_at:
-        example: "2024-01-01T00:00:00Z"
-        type: string
-      id:
-        example: env_1234567890
-        type: string
-      name:
-        example: Production
-        type: string
-      project_id:
-        example: proj_1234567890
-        type: string
-      slug:
-        example: prod
-        type: string
-      updated_at:
-        example: "2024-01-01T00:00:00Z"
-        type: string
-    type: object
-  project.ListEnvironmentsResponse:
-    properties:
-      environments:
-        items:
-          $ref: '#/definitions/project.Environment'
-        type: array
-      project_id:
-        example: proj_1234567890
-        type: string
-      project_name:
-        example: AI Chatbot
-        type: string
-    type: object
   project.Project:
     properties:
       created_at:
@@ -2394,10 +2273,10 @@ paths:
         in: query
         name: project_id
         type: string
-      - description: Filter by environment ID
-        example: '"env_1234567890"'
+      - description: Filter by environment tag
+        example: '"production"'
         in: query
-        name: environment_id
+        name: environment
         type: string
       - default: '"USD"'
         description: Currency for cost display
@@ -2469,10 +2348,10 @@ paths:
         in: query
         name: project_id
         type: string
-      - description: Filter by environment ID
-        example: '"env_1234567890"'
+      - description: Filter by environment tag
+        example: '"production"'
         in: query
-        name: environment_id
+        name: environment
         type: string
       - description: Filter by AI provider
         example: '"openai"'
@@ -2547,10 +2426,10 @@ paths:
         in: query
         name: project_id
         type: string
-      - description: Filter by environment ID
-        example: '"env_1234567890"'
+      - description: Filter by environment tag
+        example: '"production"'
         in: query
-        name: environment_id
+        name: environment
         type: string
       produces:
       - application/json
@@ -2613,10 +2492,10 @@ paths:
         in: query
         name: project_id
         type: string
-      - description: Filter by environment ID
-        example: '"env_1234567890"'
+      - description: Filter by environment tag
+        example: '"production"'
         in: query
-        name: environment_id
+        name: environment
         type: string
       - description: Filter by specific provider
         example: '"openai"'
@@ -2686,10 +2565,10 @@ paths:
         in: query
         name: project_id
         type: string
-      - description: Filter by environment ID
-        example: '"env_1234567890"'
+      - description: Filter by environment tag
+        example: '"production"'
         in: query
-        name: environment_id
+        name: environment
         type: string
       - description: Filter by AI provider
         example: '"openai"'
@@ -3379,477 +3258,6 @@ paths:
       summary: Get organization usage metrics
       tags:
       - Billing
-  /api/v1/environments:
-    get:
-      consumes:
-      - application/json
-      description: Get a paginated list of environments accessible to the authenticated
-        user
-      parameters:
-      - description: Filter by project ID
-        example: '"proj_1234567890"'
-        in: query
-        name: project_id
-        type: string
-      - description: Filter by environment type
-        enum:
-        - development
-        - staging
-        - production
-        in: query
-        name: type
-        type: string
-      - description: Filter by environment status
-        enum:
-        - active
-        - paused
-        - archived
-        in: query
-        name: status
-        type: string
-      - default: 1
-        description: Page number
-        in: query
-        minimum: 1
-        name: page
-        type: integer
-      - default: 20
-        description: Items per page
-        in: query
-        maximum: 100
-        minimum: 1
-        name: limit
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: List of environments with pagination
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                data:
-                  items:
-                    $ref: '#/definitions/environment.Environment'
-                  type: array
-                meta:
-                  allOf:
-                  - $ref: '#/definitions/response.Meta'
-                  - properties:
-                      pagination:
-                        $ref: '#/definitions/response.Pagination'
-                    type: object
-              type: object
-        "400":
-          description: Bad request
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: List environments
-      tags:
-      - Environments
-    post:
-      consumes:
-      - application/json
-      description: Create a new environment within a project. User must have appropriate
-        permissions in the project.
-      parameters:
-      - description: Environment details
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/environment.CreateEnvironmentRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Environment created successfully
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.SuccessResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/environment.Environment'
-              type: object
-        "400":
-          description: Bad request - invalid input or validation errors
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "403":
-          description: Forbidden - insufficient permissions in project
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "404":
-          description: Project not found
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "409":
-          description: Conflict - environment slug already exists in project
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Create environment
-      tags:
-      - Environments
-  /api/v1/environments/{envId}:
-    delete:
-      consumes:
-      - application/json
-      description: Permanently delete an environment and all associated API keys and
-        data. This action cannot be undone.
-      parameters:
-      - description: Environment ID
-        example: '"env_1234567890"'
-        in: path
-        name: envId
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "204":
-          description: Environment deleted successfully
-        "400":
-          description: Bad request - invalid environment ID
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "403":
-          description: Forbidden - insufficient permissions (requires admin or owner
-            role)
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "404":
-          description: Environment not found
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "409":
-          description: Conflict - cannot delete environment with active API keys or
-            recent usage
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Delete environment
-      tags:
-      - Environments
-    get:
-      consumes:
-      - application/json
-      description: Get detailed information about a specific environment
-      parameters:
-      - description: Environment ID
-        example: '"env_1234567890"'
-        in: path
-        name: envId
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Environment details
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.SuccessResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/environment.Environment'
-              type: object
-        "400":
-          description: Bad request - invalid environment ID
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "403":
-          description: Forbidden - insufficient permissions
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "404":
-          description: Environment not found
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Get environment details
-      tags:
-      - Environments
-    put:
-      consumes:
-      - application/json
-      description: Update environment details. Requires appropriate permissions within
-        the project.
-      parameters:
-      - description: Environment ID
-        example: '"env_1234567890"'
-        in: path
-        name: envId
-        required: true
-        type: string
-      - description: Updated environment details
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/environment.UpdateEnvironmentRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Environment updated successfully
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.SuccessResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/environment.Environment'
-              type: object
-        "400":
-          description: Bad request - invalid input or validation errors
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "403":
-          description: Forbidden - insufficient permissions
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "404":
-          description: Environment not found
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Update environment
-      tags:
-      - Environments
-  /api/v1/environments/{envId}/api-keys:
-    get:
-      consumes:
-      - application/json
-      description: Get a paginated list of API keys for a specific environment
-      parameters:
-      - description: Environment ID
-        example: '"env_1234567890"'
-        in: path
-        name: envId
-        required: true
-        type: string
-      - description: Filter by API key status
-        enum:
-        - active
-        - inactive
-        - revoked
-        in: query
-        name: status
-        type: string
-      - default: 1
-        description: Page number
-        in: query
-        minimum: 1
-        name: page
-        type: integer
-      - default: 20
-        description: Items per page
-        in: query
-        maximum: 100
-        minimum: 1
-        name: limit
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: List of API keys with pagination
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                data:
-                  items:
-                    $ref: '#/definitions/apikey.APIKey'
-                  type: array
-                meta:
-                  allOf:
-                  - $ref: '#/definitions/response.Meta'
-                  - properties:
-                      pagination:
-                        $ref: '#/definitions/response.Pagination'
-                    type: object
-              type: object
-        "400":
-          description: Bad request - invalid environment ID
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "403":
-          description: Forbidden - insufficient permissions to view API keys
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "404":
-          description: Environment not found
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: List API keys
-      tags:
-      - API Keys
-    post:
-      consumes:
-      - application/json
-      description: Create a new API key for an environment. The key will only be displayed
-        once upon creation.
-      parameters:
-      - description: Environment ID
-        example: '"env_1234567890"'
-        in: path
-        name: envId
-        required: true
-        type: string
-      - description: API key details
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/apikey.CreateAPIKeyRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: API key created successfully (key only shown once)
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.SuccessResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/apikey.APIKey'
-              type: object
-        "400":
-          description: Bad request - invalid input or validation errors
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "403":
-          description: Forbidden - insufficient permissions to create API keys
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "404":
-          description: Environment not found
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "409":
-          description: Conflict - API key name already exists in environment
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Create API key
-      tags:
-      - API Keys
-  /api/v1/environments/{envId}/api-keys/{keyId}:
-    delete:
-      consumes:
-      - application/json
-      description: Permanently revoke and delete an API key. This action cannot be
-        undone and will immediately invalidate the key.
-      parameters:
-      - description: Environment ID
-        example: '"env_1234567890"'
-        in: path
-        name: envId
-        required: true
-        type: string
-      - description: API Key ID
-        example: '"key_1234567890"'
-        in: path
-        name: keyId
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "204":
-          description: API key deleted successfully
-        "400":
-          description: Bad request - invalid environment ID or key ID
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "403":
-          description: Forbidden - insufficient permissions to delete API keys
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "404":
-          description: Environment or API key not found
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Delete API key
-      tags:
-      - API Keys
   /api/v1/logs/export:
     get:
       consumes:
@@ -5827,11 +5235,11 @@ paths:
       summary: Update project
       tags:
       - Projects
-  /api/v1/projects/{projectId}/environments:
+  /api/v1/projects/{projectId}/api-keys:
     get:
       consumes:
       - application/json
-      description: Get all environments that belong to a specific project
+      description: Get a paginated list of API keys for a specific project
       parameters:
       - description: Project ID
         example: '"proj_1234567890"'
@@ -5839,17 +5247,47 @@ paths:
         name: projectId
         required: true
         type: string
+      - description: Filter by API key status
+        enum:
+        - active
+        - inactive
+        - revoked
+        in: query
+        name: status
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        minimum: 1
+        name: page
+        type: integer
+      - default: 20
+        description: Items per page
+        in: query
+        maximum: 100
+        minimum: 1
+        name: limit
+        type: integer
       produces:
       - application/json
       responses:
         "200":
-          description: List of project environments
+          description: List of API keys with pagination
           schema:
             allOf:
-            - $ref: '#/definitions/response.SuccessResponse'
+            - $ref: '#/definitions/response.APIResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/project.ListEnvironmentsResponse'
+                  items:
+                    $ref: '#/definitions/apikey.APIKey'
+                  type: array
+                meta:
+                  allOf:
+                  - $ref: '#/definitions/response.Meta'
+                  - properties:
+                      pagination:
+                        $ref: '#/definitions/response.Pagination'
+                    type: object
               type: object
         "400":
           description: Bad request - invalid project ID
@@ -5860,7 +5298,7 @@ paths:
           schema:
             $ref: '#/definitions/response.ErrorResponse'
         "403":
-          description: Forbidden - insufficient permissions
+          description: Forbidden - insufficient permissions to view API keys
           schema:
             $ref: '#/definitions/response.ErrorResponse'
         "404":
@@ -5873,9 +5311,117 @@ paths:
             $ref: '#/definitions/response.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: List project environments
+      summary: List API keys
       tags:
-      - Projects
+      - API Keys
+    post:
+      consumes:
+      - application/json
+      description: Create a new API key for a project. The key will only be displayed
+        once upon creation.
+      parameters:
+      - description: Project ID
+        example: '"proj_1234567890"'
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: API key details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/apikey.CreateAPIKeyRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: API key created successfully (key only shown once)
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/apikey.APIKey'
+              type: object
+        "400":
+          description: Bad request - invalid input or validation errors
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Forbidden - insufficient permissions to create API keys
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Project not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "409":
+          description: Conflict - API key name already exists in project
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create API key
+      tags:
+      - API Keys
+  /api/v1/projects/{projectId}/api-keys/{keyId}:
+    delete:
+      consumes:
+      - application/json
+      description: Permanently revoke and delete an API key. This action cannot be
+        undone and will immediately invalidate the key.
+      parameters:
+      - description: Project ID
+        example: '"proj_1234567890"'
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: API Key ID
+        example: '"key_1234567890"'
+        in: path
+        name: keyId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: API key deleted successfully
+        "400":
+          description: Bad request - invalid project ID or key ID
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Forbidden - insufficient permissions to delete API keys
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Project or API key not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete API key
+      tags:
+      - API Keys
   /api/v1/users/me:
     get:
       description: Get the profile information of the currently authenticated user

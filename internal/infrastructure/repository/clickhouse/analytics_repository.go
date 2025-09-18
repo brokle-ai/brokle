@@ -26,7 +26,7 @@ type RequestLog struct {
 	UserID         string    `ch:"user_id"`
 	OrganizationID string    `ch:"organization_id"`
 	ProjectID      string    `ch:"project_id"`
-	EnvironmentID  string    `ch:"environment_id"`
+	Environment    string    `ch:"environment"`
 	Provider       string    `ch:"provider"`
 	Model          string    `ch:"model"`
 	Method         string    `ch:"method"`
@@ -48,7 +48,7 @@ type MetricPoint struct {
 	Timestamp      time.Time `ch:"timestamp"`
 	OrganizationID string    `ch:"organization_id"`
 	ProjectID      string    `ch:"project_id"`
-	EnvironmentID  string    `ch:"environment_id"`
+	Environment    string    `ch:"environment"`
 	MetricName     string    `ch:"metric_name"`
 	MetricValue    float64   `ch:"metric_value"`
 	Tags           string    `ch:"tags"`
@@ -68,7 +68,7 @@ type ProviderHealth struct {
 func (r *AnalyticsRepository) InsertRequestLog(ctx context.Context, log *RequestLog) error {
 	query := `
 		INSERT INTO request_logs (
-			id, user_id, organization_id, project_id, environment_id,
+			id, user_id, organization_id, project_id, environment,
 			provider, model, method, endpoint, status_code,
 			input_tokens, output_tokens, total_tokens, cost, latency,
 			quality_score, cached, error, timestamp
@@ -77,7 +77,7 @@ func (r *AnalyticsRepository) InsertRequestLog(ctx context.Context, log *Request
 		)`
 
 	return r.db.Execute(ctx, query,
-		log.ID, log.UserID, log.OrganizationID, log.ProjectID, log.EnvironmentID,
+		log.ID, log.UserID, log.OrganizationID, log.ProjectID, log.Environment,
 		log.Provider, log.Model, log.Method, log.Endpoint, log.StatusCode,
 		log.InputTokens, log.OutputTokens, log.TotalTokens, log.Cost, log.Latency,
 		log.QualityScore, log.Cached, log.Error, log.Timestamp,
@@ -93,7 +93,7 @@ func (r *AnalyticsRepository) InsertBatchRequestLogs(ctx context.Context, logs [
 	batch := make([][]interface{}, len(logs))
 	for i, log := range logs {
 		batch[i] = []interface{}{
-			log.ID, log.UserID, log.OrganizationID, log.ProjectID, log.EnvironmentID,
+			log.ID, log.UserID, log.OrganizationID, log.ProjectID, log.Environment,
 			log.Provider, log.Model, log.Method, log.Endpoint, log.StatusCode,
 			log.InputTokens, log.OutputTokens, log.TotalTokens, log.Cost, log.Latency,
 			log.QualityScore, log.Cached, log.Error, log.Timestamp,
@@ -102,7 +102,7 @@ func (r *AnalyticsRepository) InsertBatchRequestLogs(ctx context.Context, logs [
 
 	query := `
 		INSERT INTO request_logs (
-			id, user_id, organization_id, project_id, environment_id,
+			id, user_id, organization_id, project_id, environment,
 			provider, model, method, endpoint, status_code,
 			input_tokens, output_tokens, total_tokens, cost, latency,
 			quality_score, cached, error, timestamp
@@ -310,12 +310,12 @@ func (r *AnalyticsRepository) GetCostBreakdown(ctx context.Context, filter Analy
 func (r *AnalyticsRepository) InsertMetric(ctx context.Context, metric *MetricPoint) error {
 	query := `
 		INSERT INTO metrics (
-			timestamp, organization_id, project_id, environment_id,
+			timestamp, organization_id, project_id, environment,
 			metric_name, metric_value, tags
 		) VALUES (?, ?, ?, ?, ?, ?, ?)`
 
 	return r.db.Execute(ctx, query,
-		metric.Timestamp, metric.OrganizationID, metric.ProjectID, metric.EnvironmentID,
+		metric.Timestamp, metric.OrganizationID, metric.ProjectID, metric.Environment,
 		metric.MetricName, metric.MetricValue, metric.Tags,
 	)
 }
@@ -338,9 +338,9 @@ func (r *AnalyticsRepository) buildWhereClause(filter AnalyticsFilter) (string, 
 		args = append(args, filter.ProjectID)
 	}
 
-	if filter.EnvironmentID != "" {
-		conditions = append(conditions, "environment_id = ?")
-		args = append(args, filter.EnvironmentID)
+	if filter.Environment != "" {
+		conditions = append(conditions, "environment = ?")
+		args = append(args, filter.Environment)
 	}
 
 	if filter.UserID != "" {
@@ -378,7 +378,7 @@ type AnalyticsFilter struct {
 	EndTime        time.Time
 	OrganizationID string
 	ProjectID      string
-	EnvironmentID  string
+	Environment    string
 	UserID         string
 	Provider       string
 	Model          string

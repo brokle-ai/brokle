@@ -76,7 +76,6 @@ type APIKeyService interface {
 	GetAPIKeysByUser(ctx context.Context, userID ulid.ULID) ([]*APIKey, error)
 	GetAPIKeysByOrganization(ctx context.Context, orgID ulid.ULID) ([]*APIKey, error)
 	GetAPIKeysByProject(ctx context.Context, projectID ulid.ULID) ([]*APIKey, error)
-	GetAPIKeysByEnvironment(ctx context.Context, envID ulid.ULID) ([]*APIKey, error)
 }
 
 // RoleService defines both system template and custom scoped role management service interface.
@@ -272,10 +271,11 @@ type CreateSessionRequest struct {
 
 
 type UpdateAPIKeyRequest struct {
-	Name         *string  `json:"name,omitempty" validate:"omitempty,min=1,max=100"`
-	Scopes       []string `json:"scopes,omitempty"`
-	RateLimitRPM *int     `json:"rate_limit_rpm,omitempty" validate:"omitempty,min=1,max=10000"`
-	IsActive     *bool    `json:"is_active,omitempty"`
+	Name               *string  `json:"name,omitempty" validate:"omitempty,min=1,max=100"`
+	DefaultEnvironment *string  `json:"default_environment,omitempty"`
+	Scopes             []string `json:"scopes,omitempty"`
+	RateLimitRPM       *int     `json:"rate_limit_rpm,omitempty" validate:"omitempty,min=1,max=10000"`
+	IsActive           *bool    `json:"is_active,omitempty"`
 }
 
 // Filter types
@@ -283,15 +283,15 @@ type APIKeyFilters struct {
 	// Pagination
 	Limit  int `json:"limit"`
 	Offset int `json:"offset"`
-	
+
 	// Filters
 	UserID         *ulid.ULID `json:"user_id,omitempty"`
 	OrganizationID *ulid.ULID `json:"organization_id,omitempty"`
 	ProjectID      *ulid.ULID `json:"project_id,omitempty"`
-	EnvironmentID  *ulid.ULID `json:"environment_id,omitempty"`
+	Environment    *string    `json:"environment,omitempty"`           // Filter by environment tag
 	IsActive       *bool      `json:"is_active,omitempty"`
 	IsExpired      *bool      `json:"is_expired,omitempty"`
-	
+
 	// Sorting
 	SortBy    string `json:"sort_by"`    // name, created_at, last_used_at
 	SortOrder string `json:"sort_order"` // asc, desc

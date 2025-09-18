@@ -23,7 +23,6 @@ type Handler struct {
 	organizationService organization.OrganizationService
 	memberService       organization.MemberService
 	projectService      organization.ProjectService
-	environmentService  organization.EnvironmentService
 	invitationService   organization.InvitationService
 	userService         user.UserService
 	roleService         auth.RoleService
@@ -112,7 +111,6 @@ func NewHandler(
 	organizationService organization.OrganizationService,
 	memberService organization.MemberService,
 	projectService organization.ProjectService,
-	environmentService organization.EnvironmentService,
 	invitationService organization.InvitationService,
 	settingsService organization.OrganizationSettingsService,
 	userService user.UserService,
@@ -124,7 +122,6 @@ func NewHandler(
 		organizationService: organizationService,
 		memberService:       memberService,
 		projectService:      projectService,
-		environmentService:  environmentService,
 		invitationService:   invitationService,
 		userService:         userService,
 		roleService:         roleService,

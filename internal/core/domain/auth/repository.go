@@ -73,7 +73,6 @@ type APIKeyRepository interface {
 	GetByUserID(ctx context.Context, userID ulid.ULID) ([]*APIKey, error)
 	GetByOrganizationID(ctx context.Context, orgID ulid.ULID) ([]*APIKey, error)
 	GetByProjectID(ctx context.Context, projectID ulid.ULID) ([]*APIKey, error)
-	GetByEnvironmentID(ctx context.Context, envID ulid.ULID) ([]*APIKey, error)
 	
 	// API key management
 	DeactivateAPIKey(ctx context.Context, id ulid.ULID) error
