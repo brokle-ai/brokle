@@ -23,6 +23,34 @@ definitions:
     required:
     - reason
     type: object
+  ai.CacheStatusResponse:
+    description: Cache health and statistics response
+    properties:
+      eviction_count:
+        example: 142
+        type: integer
+      hit_rate:
+        example: 0.85
+        type: number
+      last_eviction:
+        example: 1677610602
+        type: integer
+      memory_usage:
+        example: 0.45
+        type: number
+      provider_breakdown:
+        additionalProperties: true
+        type: object
+      size_bytes:
+        example: 1048576
+        type: integer
+      status:
+        example: healthy
+        type: string
+      total_entries:
+        example: 15420
+        type: integer
+    type: object
   ai.ChatCompletionRequest:
     description: OpenAI-compatible chat completion request
     properties:
@@ -142,6 +170,48 @@ definitions:
         example: user-123
         type: string
     type: object
+  ai.InvalidateCacheRequest:
+    description: Request data for cache invalidation
+    properties:
+      clear_all:
+        example: false
+        type: boolean
+      keys:
+        items:
+          type: string
+        type: array
+      max_age:
+        example: 3600
+        type: integer
+      model:
+        example: gpt-3.5-turbo
+        type: string
+      pattern:
+        example: chat:*
+        type: string
+      provider:
+        example: openai
+        type: string
+    type: object
+  ai.InvalidateCacheResponse:
+    description: Cache invalidation result
+    properties:
+      count:
+        example: 25
+        type: integer
+      error:
+        type: string
+      invalidated_keys:
+        items:
+          type: string
+        type: array
+      message:
+        example: Cache invalidated successfully
+        type: string
+      success:
+        example: true
+        type: boolean
+    type: object
   ai.Model:
     description: Available AI model information
     properties:
@@ -156,6 +226,69 @@ definitions:
         type: string
       owned_by:
         example: openai
+        type: string
+    type: object
+  ai.RouteRequest:
+    description: Request data for AI routing decisions
+    properties:
+      max_tokens:
+        example: 150
+        type: integer
+      messages:
+        items:
+          $ref: '#/definitions/ai.ChatMessage'
+        type: array
+      metadata:
+        additionalProperties: true
+        type: object
+      model:
+        example: gpt-3.5-turbo
+        type: string
+      prompt:
+        example: Hello world
+        type: string
+      provider:
+        example: openai
+        type: string
+      strategy:
+        example: cost_optimized
+        type: string
+      temperature:
+        example: 0.7
+        type: number
+    type: object
+  ai.RouteResponse:
+    description: AI routing decision response
+    properties:
+      cache_hit:
+        example: false
+        type: boolean
+      endpoint:
+        example: https://api.openai.com/v1/chat/completions
+        type: string
+      estimated_cost:
+        example: 0.0015
+        type: number
+      estimated_latency:
+        example: 250
+        type: integer
+      metadata:
+        additionalProperties: true
+        type: object
+      model:
+        example: gpt-3.5-turbo
+        type: string
+      provider:
+        example: openai
+        type: string
+      provider_health:
+        example: 0.98
+        type: number
+      quality_score:
+        example: 0.95
+        type: number
+      strategy:
+        example: cost_optimized
         type: string
     type: object
   analytics.AnalyticsOverview:
@@ -406,22 +539,22 @@ definitions:
         example: "2024-01-01T00:00:00Z"
         type: string
       created_by:
-        example: usr_1234567890
+        example: usr_01234567890123456789012345
         type: string
-      default_environment:
-        example: production
+      description:
+        example: API key for production environment
         type: string
       expires_at:
         example: "2024-12-31T23:59:59Z"
         type: string
       id:
-        example: key_1234567890
+        example: key_01234567890123456789012345
         type: string
       key:
-        example: bk_live_1234567890abcdef
+        example: bk_proj_01234567890123456789012345_abcdef1234567890abcdef1234567890
         type: string
       key_preview:
-        example: bk_live_...cdef
+        example: bk_proj_...7890
         type: string
       last_used:
         example: "2024-01-01T00:00:00Z"
@@ -430,8 +563,11 @@ definitions:
         example: Production API Key
         type: string
       project_id:
-        example: proj_1234567890
+        example: proj_01234567890123456789012345
         type: string
+      rate_limit_rpm:
+        example: 1000
+        type: integer
       scopes:
         example:
         - '["read"'
@@ -445,8 +581,9 @@ definitions:
     type: object
   apikey.CreateAPIKeyRequest:
     properties:
-      default_environment:
-        example: production
+      description:
+        example: API key for production environment
+        maxLength: 500
         type: string
       expires_at:
         example: "2024-12-31T23:59:59Z"
@@ -456,6 +593,11 @@ definitions:
         maxLength: 100
         minLength: 2
         type: string
+      rate_limit_rpm:
+        example: 1000
+        maximum: 10000
+        minimum: 1
+        type: integer
       scopes:
         example:
         - '["read"'
@@ -1334,6 +1476,47 @@ definitions:
           $ref: '#/definitions/observability.TraceResponse'
         type: array
     type: object
+  observability.CreateEventRequest:
+    description: Request data for creating telemetry events
+    properties:
+      environment:
+        example: production
+        type: string
+      event_type:
+        example: ai.request.completed
+        type: string
+      metadata:
+        additionalProperties: true
+        type: object
+      properties:
+        additionalProperties: true
+        type: object
+      session_id:
+        example: sess_abc123
+        type: string
+      source:
+        example: python-sdk
+        type: string
+      span_id:
+        example: span_ghi789
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+      timestamp:
+        example: 1677610602
+        type: integer
+      trace_id:
+        example: trace_def456
+        type: string
+      user_id:
+        example: user_123
+        type: string
+      version:
+        example: 1.0.0
+        type: string
+    type: object
   observability.CreateObservationRequest:
     properties:
       completion_tokens:
@@ -1445,6 +1628,22 @@ definitions:
     - external_trace_id
     - name
     - project_id
+    type: object
+  observability.EventResponse:
+    description: Telemetry event creation result
+    properties:
+      event_id:
+        example: evt_abc123
+        type: string
+      message:
+        example: Event created successfully
+        type: string
+      processed_at:
+        example: 1677610602
+        type: integer
+      status:
+        example: created
+        type: string
     type: object
   observability.ListTracesResponse:
     properties:
@@ -2977,52 +3176,6 @@ paths:
           schema:
             $ref: '#/definitions/response.ErrorResponse'
       summary: User registration
-      tags:
-      - Authentication
-  /api/v1/auth/validate:
-    post:
-      consumes:
-      - application/json
-      description: Validates an API key and checks project scoping and environment
-      parameters:
-      - description: API key starting with ak_
-        in: header
-        name: X-API-Key
-        required: true
-        type: string
-      - description: Project identifier (ULID format)
-        in: header
-        name: X-Project-ID
-        required: true
-        type: string
-      - description: Environment name (lowercase, ≤40 chars, no brokle prefix) - optional
-        in: header
-        name: X-Environment
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: API key validation successful
-          schema:
-            $ref: '#/definitions/response.SuccessResponse'
-        "400":
-          description: Invalid request headers or validation failed
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Invalid API key
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "403":
-          description: API key doesn't belong to project
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      summary: Validate API key with project scoping
       tags:
       - Authentication
   /api/v1/billing/{orgId}/invoices:
@@ -5285,10 +5438,11 @@ paths:
     get:
       consumes:
       - application/json
-      description: Get a paginated list of API keys for a specific project
+      description: Get a paginated list of project-scoped API keys for a specific
+        project. Keys are shown with preview format (bk_proj_...7890) for security.
       parameters:
       - description: Project ID
-        example: '"proj_1234567890"'
+        example: '"proj_01234567890123456789012345"'
         in: path
         name: projectId
         required: true
@@ -5297,7 +5451,7 @@ paths:
         enum:
         - active
         - inactive
-        - revoked
+        - expired
         in: query
         name: status
         type: string
@@ -5318,7 +5472,7 @@ paths:
       - application/json
       responses:
         "200":
-          description: List of API keys with pagination
+          description: List of project-scoped API keys with pagination
           schema:
             allOf:
             - $ref: '#/definitions/response.APIResponse'
@@ -5357,17 +5511,17 @@ paths:
             $ref: '#/definitions/response.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: List API keys
+      summary: List project-scoped API keys
       tags:
       - API Keys
     post:
       consumes:
       - application/json
-      description: Create a new API key for a project. The key will only be displayed
-        once upon creation.
+      description: 'Create a new project-scoped API key with embedded project context.
+        The full key will only be displayed once upon creation. Format: bk_proj_{project_id}_{secret}'
       parameters:
       - description: Project ID
-        example: '"proj_1234567890"'
+        example: '"proj_01234567890123456789012345"'
         in: path
         name: projectId
         required: true
@@ -5382,7 +5536,8 @@ paths:
       - application/json
       responses:
         "201":
-          description: API key created successfully (key only shown once)
+          description: Project-scoped API key created successfully (full key only
+            shown once)
           schema:
             allOf:
             - $ref: '#/definitions/response.SuccessResponse'
@@ -5416,24 +5571,24 @@ paths:
             $ref: '#/definitions/response.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Create API key
+      summary: Create project-scoped API key
       tags:
       - API Keys
   /api/v1/projects/{projectId}/api-keys/{keyId}:
     delete:
       consumes:
       - application/json
-      description: Permanently revoke and delete an API key. This action cannot be
-        undone and will immediately invalidate the key.
+      description: Permanently revoke and delete a project-scoped API key. This action
+        cannot be undone and will immediately invalidate the key across all environments.
       parameters:
       - description: Project ID
-        example: '"proj_1234567890"'
+        example: '"proj_01234567890123456789012345"'
         in: path
         name: projectId
         required: true
         type: string
       - description: API Key ID
-        example: '"key_1234567890"'
+        example: '"key_01234567890123456789012345"'
         in: path
         name: keyId
         required: true
@@ -5442,7 +5597,7 @@ paths:
       - application/json
       responses:
         "204":
-          description: API key deleted successfully
+          description: Project-scoped API key deleted successfully
         "400":
           description: Bad request - invalid project ID or key ID
           schema:
@@ -5465,7 +5620,7 @@ paths:
             $ref: '#/definitions/response.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Delete API key
+      summary: Delete project-scoped API key
       tags:
       - API Keys
   /api/v1/users/me:
@@ -5590,6 +5745,112 @@ paths:
       summary: Get Prometheus metrics
       tags:
       - Monitoring
+  /v1/auth/validate-key:
+    post:
+      consumes:
+      - application/json
+      description: Validates a self-contained API key and extracts project information
+        automatically
+      parameters:
+      - description: 'API key (format: bk_proj_{project_id}_{secret})'
+        in: header
+        name: X-API-Key
+        type: string
+      - description: 'Bearer token format: Bearer {api_key}'
+        in: header
+        name: Authorization
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: API key validation successful
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Invalid, inactive, or expired API key
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Validate API key
+      tags:
+      - Authentication
+  /v1/cache/invalidate:
+    post:
+      consumes:
+      - application/json
+      description: Invalidate specific cache entries or clear cache
+      parameters:
+      - description: Cache invalidation data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/ai.InvalidateCacheRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Cache invalidated successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/ai.InvalidateCacheResponse'
+              type: object
+        "400":
+          description: Invalid request payload
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Invalid or missing API key
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Invalidate cache entries
+      tags:
+      - SDK - Cache
+  /v1/cache/status:
+    get:
+      description: Get current cache health and statistics
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Cache status returned
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/ai.CacheStatusResponse'
+              type: object
+        "401":
+          description: Invalid or missing API key
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get cache status
+      tags:
+      - SDK - Cache
   /v1/chat/completions:
     post:
       consumes:
@@ -5710,6 +5971,51 @@ paths:
       summary: Create embeddings
       tags:
       - AI Gateway
+  /v1/events:
+    post:
+      consumes:
+      - application/json
+      description: Create a new telemetry event for SDK observability
+      parameters:
+      - description: Event creation data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/observability.CreateEventRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Event created successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/observability.EventResponse'
+              type: object
+        "400":
+          description: Invalid request payload
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Invalid or missing API key
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "422":
+          description: Validation failed
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Create a telemetry event
+      tags:
+      - SDK - Events
   /v1/models:
     get:
       description: Get list of available AI models
@@ -5769,6 +6075,47 @@ paths:
       summary: Get model information
       tags:
       - AI Gateway
+  /v1/route:
+    post:
+      consumes:
+      - application/json
+      description: Determine optimal AI provider and model for a request
+      parameters:
+      - description: Routing request data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/ai.RouteRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Routing decision returned
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/ai.RouteResponse'
+              type: object
+        "400":
+          description: Invalid request payload
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Invalid or missing API key
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Make AI routing decision
+      tags:
+      - SDK - Routing
   /ws:
     get:
       consumes:

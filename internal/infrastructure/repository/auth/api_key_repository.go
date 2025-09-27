@@ -55,6 +55,19 @@ func (r *apiKeyRepository) GetByKeyHash(ctx context.Context, keyHash string) (*a
 	return &apiKey, nil
 }
 
+// GetByKeyID retrieves an API key by key ID (for project-scoped keys)
+func (r *apiKeyRepository) GetByKeyID(ctx context.Context, keyID string) (*authDomain.APIKey, error) {
+	var apiKey authDomain.APIKey
+	err := r.db.WithContext(ctx).Where("key_id = ? AND deleted_at IS NULL", keyID).First(&apiKey).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("get API key by key ID %s: %w", keyID, authDomain.ErrAPIKeyNotFound)
+		}
+		return nil, fmt.Errorf("database error getting API key by key ID %s: %w", keyID, err)
+	}
+	return &apiKey, nil
+}
+
 // Update updates an API key
 func (r *apiKeyRepository) Update(ctx context.Context, apiKey *authDomain.APIKey) error {
 	return r.db.WithContext(ctx).Save(apiKey).Error
@@ -118,9 +131,6 @@ func (r *apiKeyRepository) GetByFilters(ctx context.Context, filters *authDomain
 	}
 	if filters.ProjectID != nil {
 		query = query.Where("project_id = ?", *filters.ProjectID)
-	}
-	if filters.Environment != nil && *filters.Environment != "" {
-		query = query.Where("default_environment = ?", *filters.Environment)
 	}
 	if filters.IsActive != nil {
 		query = query.Where("is_active = ?", *filters.IsActive)

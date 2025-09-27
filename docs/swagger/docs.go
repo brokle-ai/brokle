@@ -1396,75 +1396,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/auth/validate": {
-            "post": {
-                "description": "Validates an API key and checks project scoping and environment",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Authentication"
-                ],
-                "summary": "Validate API key with project scoping",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "API key starting with ak_",
-                        "name": "X-API-Key",
-                        "in": "header",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Project identifier (ULID format)",
-                        "name": "X-Project-ID",
-                        "in": "header",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Environment name (lowercase, ≤40 chars, no brokle prefix) - optional",
-                        "name": "X-Environment",
-                        "in": "header"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "API key validation successful",
-                        "schema": {
-                            "$ref": "#/definitions/response.SuccessResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request headers or validation failed",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Invalid API key",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "API key doesn't belong to project",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/api/v1/billing/{orgId}/invoices": {
             "get": {
                 "security": [
@@ -5028,7 +4959,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get a paginated list of API keys for a specific project",
+                "description": "Get a paginated list of project-scoped API keys for a specific project. Keys are shown with preview format (bk_proj_...7890) for security.",
                 "consumes": [
                     "application/json"
                 ],
@@ -5038,11 +4969,11 @@ const docTemplate = `{
                 "tags": [
                     "API Keys"
                 ],
-                "summary": "List API keys",
+                "summary": "List project-scoped API keys",
                 "parameters": [
                     {
                         "type": "string",
-                        "example": "\"proj_1234567890\"",
+                        "example": "\"proj_01234567890123456789012345\"",
                         "description": "Project ID",
                         "name": "projectId",
                         "in": "path",
@@ -5052,7 +4983,7 @@ const docTemplate = `{
                         "enum": [
                             "active",
                             "inactive",
-                            "revoked"
+                            "expired"
                         ],
                         "type": "string",
                         "description": "Filter by API key status",
@@ -5079,7 +5010,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "List of API keys with pagination",
+                        "description": "List of project-scoped API keys with pagination",
                         "schema": {
                             "allOf": [
                                 {
@@ -5152,7 +5083,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Create a new API key for a project. The key will only be displayed once upon creation.",
+                "description": "Create a new project-scoped API key with embedded project context. The full key will only be displayed once upon creation. Format: bk_proj_{project_id}_{secret}",
                 "consumes": [
                     "application/json"
                 ],
@@ -5162,11 +5093,11 @@ const docTemplate = `{
                 "tags": [
                     "API Keys"
                 ],
-                "summary": "Create API key",
+                "summary": "Create project-scoped API key",
                 "parameters": [
                     {
                         "type": "string",
-                        "example": "\"proj_1234567890\"",
+                        "example": "\"proj_01234567890123456789012345\"",
                         "description": "Project ID",
                         "name": "projectId",
                         "in": "path",
@@ -5184,7 +5115,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "201": {
-                        "description": "API key created successfully (key only shown once)",
+                        "description": "Project-scoped API key created successfully (full key only shown once)",
                         "schema": {
                             "allOf": [
                                 {
@@ -5247,7 +5178,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Permanently revoke and delete an API key. This action cannot be undone and will immediately invalidate the key.",
+                "description": "Permanently revoke and delete a project-scoped API key. This action cannot be undone and will immediately invalidate the key across all environments.",
                 "consumes": [
                     "application/json"
                 ],
@@ -5257,11 +5188,11 @@ const docTemplate = `{
                 "tags": [
                     "API Keys"
                 ],
-                "summary": "Delete API key",
+                "summary": "Delete project-scoped API key",
                 "parameters": [
                     {
                         "type": "string",
-                        "example": "\"proj_1234567890\"",
+                        "example": "\"proj_01234567890123456789012345\"",
                         "description": "Project ID",
                         "name": "projectId",
                         "in": "path",
@@ -5269,7 +5200,7 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "example": "\"key_1234567890\"",
+                        "example": "\"key_01234567890123456789012345\"",
                         "description": "API Key ID",
                         "name": "keyId",
                         "in": "path",
@@ -5278,7 +5209,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "204": {
-                        "description": "API key deleted successfully"
+                        "description": "Project-scoped API key deleted successfully"
                     },
                     "400": {
                         "description": "Bad request - invalid project ID or key ID",
@@ -5503,6 +5434,179 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/auth/validate-key": {
+            "post": {
+                "description": "Validates a self-contained API key and extracts project information automatically",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Validate API key",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "API key (format: bk_proj_{project_id}_{secret})",
+                        "name": "X-API-Key",
+                        "in": "header"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Bearer token format: Bearer {api_key}",
+                        "name": "Authorization",
+                        "in": "header"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "API key validation successful",
+                        "schema": {
+                            "$ref": "#/definitions/response.SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid, inactive, or expired API key",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/cache/invalidate": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Invalidate specific cache entries or clear cache",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SDK - Cache"
+                ],
+                "summary": "Invalidate cache entries",
+                "parameters": [
+                    {
+                        "description": "Cache invalidation data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/ai.InvalidateCacheRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Cache invalidated successfully",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/ai.InvalidateCacheResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request payload",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid or missing API key",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/cache/status": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get current cache health and statistics",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SDK - Cache"
+                ],
+                "summary": "Get cache status",
+                "responses": {
+                    "200": {
+                        "description": "Cache status returned",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/ai.CacheStatusResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid or missing API key",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/chat/completions": {
             "post": {
                 "security": [
@@ -5692,6 +5796,81 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/events": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Create a new telemetry event for SDK observability",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SDK - Events"
+                ],
+                "summary": "Create a telemetry event",
+                "parameters": [
+                    {
+                        "description": "Event creation data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/observability.CreateEventRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Event created successfully",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/observability.EventResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request payload",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid or missing API key",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Validation failed",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/models": {
             "get": {
                 "security": [
@@ -5772,6 +5951,75 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Model not found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/route": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Determine optimal AI provider and model for a request",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SDK - Routing"
+                ],
+                "summary": "Make AI routing decision",
+                "parameters": [
+                    {
+                        "description": "Routing request data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/ai.RouteRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Routing decision returned",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/ai.RouteResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request payload",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid or missing API key",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorResponse"
                         }
@@ -5869,6 +6117,44 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 100,
                     "example": "account_compromise"
+                }
+            }
+        },
+        "ai.CacheStatusResponse": {
+            "description": "Cache health and statistics response",
+            "type": "object",
+            "properties": {
+                "eviction_count": {
+                    "type": "integer",
+                    "example": 142
+                },
+                "hit_rate": {
+                    "type": "number",
+                    "example": 0.85
+                },
+                "last_eviction": {
+                    "type": "integer",
+                    "example": 1677610602
+                },
+                "memory_usage": {
+                    "type": "number",
+                    "example": 0.45
+                },
+                "provider_breakdown": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "size_bytes": {
+                    "type": "integer",
+                    "example": 1048576
+                },
+                "status": {
+                    "type": "string",
+                    "example": "healthy"
+                },
+                "total_entries": {
+                    "type": "integer",
+                    "example": 15420
                 }
             }
         },
@@ -6034,6 +6320,65 @@ const docTemplate = `{
                 }
             }
         },
+        "ai.InvalidateCacheRequest": {
+            "description": "Request data for cache invalidation",
+            "type": "object",
+            "properties": {
+                "clear_all": {
+                    "type": "boolean",
+                    "example": false
+                },
+                "keys": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "max_age": {
+                    "type": "integer",
+                    "example": 3600
+                },
+                "model": {
+                    "type": "string",
+                    "example": "gpt-3.5-turbo"
+                },
+                "pattern": {
+                    "type": "string",
+                    "example": "chat:*"
+                },
+                "provider": {
+                    "type": "string",
+                    "example": "openai"
+                }
+            }
+        },
+        "ai.InvalidateCacheResponse": {
+            "description": "Cache invalidation result",
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer",
+                    "example": 25
+                },
+                "error": {
+                    "type": "string"
+                },
+                "invalidated_keys": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "message": {
+                    "type": "string",
+                    "example": "Cache invalidated successfully"
+                },
+                "success": {
+                    "type": "boolean",
+                    "example": true
+                }
+            }
+        },
         "ai.Model": {
             "description": "Available AI model information",
             "type": "object",
@@ -6053,6 +6398,92 @@ const docTemplate = `{
                 "owned_by": {
                     "type": "string",
                     "example": "openai"
+                }
+            }
+        },
+        "ai.RouteRequest": {
+            "description": "Request data for AI routing decisions",
+            "type": "object",
+            "properties": {
+                "max_tokens": {
+                    "type": "integer",
+                    "example": 150
+                },
+                "messages": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ai.ChatMessage"
+                    }
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "model": {
+                    "type": "string",
+                    "example": "gpt-3.5-turbo"
+                },
+                "prompt": {
+                    "type": "string",
+                    "example": "Hello world"
+                },
+                "provider": {
+                    "type": "string",
+                    "example": "openai"
+                },
+                "strategy": {
+                    "type": "string",
+                    "example": "cost_optimized"
+                },
+                "temperature": {
+                    "type": "number",
+                    "example": 0.7
+                }
+            }
+        },
+        "ai.RouteResponse": {
+            "description": "AI routing decision response",
+            "type": "object",
+            "properties": {
+                "cache_hit": {
+                    "type": "boolean",
+                    "example": false
+                },
+                "endpoint": {
+                    "type": "string",
+                    "example": "https://api.openai.com/v1/chat/completions"
+                },
+                "estimated_cost": {
+                    "type": "number",
+                    "example": 0.0015
+                },
+                "estimated_latency": {
+                    "type": "integer",
+                    "example": 250
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "model": {
+                    "type": "string",
+                    "example": "gpt-3.5-turbo"
+                },
+                "provider": {
+                    "type": "string",
+                    "example": "openai"
+                },
+                "provider_health": {
+                    "type": "number",
+                    "example": 0.98
+                },
+                "quality_score": {
+                    "type": "number",
+                    "example": 0.95
+                },
+                "strategy": {
+                    "type": "string",
+                    "example": "cost_optimized"
                 }
             }
         },
@@ -6406,11 +6837,11 @@ const docTemplate = `{
                 },
                 "created_by": {
                     "type": "string",
-                    "example": "usr_1234567890"
+                    "example": "usr_01234567890123456789012345"
                 },
-                "default_environment": {
+                "description": {
                     "type": "string",
-                    "example": "production"
+                    "example": "API key for production environment"
                 },
                 "expires_at": {
                     "type": "string",
@@ -6418,15 +6849,15 @@ const docTemplate = `{
                 },
                 "id": {
                     "type": "string",
-                    "example": "key_1234567890"
+                    "example": "key_01234567890123456789012345"
                 },
                 "key": {
                     "type": "string",
-                    "example": "bk_live_1234567890abcdef"
+                    "example": "bk_proj_01234567890123456789012345_abcdef1234567890abcdef1234567890"
                 },
                 "key_preview": {
                     "type": "string",
-                    "example": "bk_live_...cdef"
+                    "example": "bk_proj_...7890"
                 },
                 "last_used": {
                     "type": "string",
@@ -6438,7 +6869,11 @@ const docTemplate = `{
                 },
                 "project_id": {
                     "type": "string",
-                    "example": "proj_1234567890"
+                    "example": "proj_01234567890123456789012345"
+                },
+                "rate_limit_rpm": {
+                    "type": "integer",
+                    "example": 1000
                 },
                 "scopes": {
                     "type": "array",
@@ -6463,9 +6898,10 @@ const docTemplate = `{
                 "scopes"
             ],
             "properties": {
-                "default_environment": {
+                "description": {
                     "type": "string",
-                    "example": "production"
+                    "maxLength": 500,
+                    "example": "API key for production environment"
                 },
                 "expires_at": {
                     "type": "string",
@@ -6476,6 +6912,12 @@ const docTemplate = `{
                     "maxLength": 100,
                     "minLength": 2,
                     "example": "Production API Key"
+                },
+                "rate_limit_rpm": {
+                    "type": "integer",
+                    "maximum": 10000,
+                    "minimum": 1,
+                    "example": 1000
                 },
                 "scopes": {
                     "type": "array",
@@ -7688,6 +8130,62 @@ const docTemplate = `{
                 }
             }
         },
+        "observability.CreateEventRequest": {
+            "description": "Request data for creating telemetry events",
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "example": "production"
+                },
+                "event_type": {
+                    "type": "string",
+                    "example": "ai.request.completed"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "properties": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "session_id": {
+                    "type": "string",
+                    "example": "sess_abc123"
+                },
+                "source": {
+                    "type": "string",
+                    "example": "python-sdk"
+                },
+                "span_id": {
+                    "type": "string",
+                    "example": "span_ghi789"
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "timestamp": {
+                    "type": "integer",
+                    "example": 1677610602
+                },
+                "trace_id": {
+                    "type": "string",
+                    "example": "trace_def456"
+                },
+                "user_id": {
+                    "type": "string",
+                    "example": "user_123"
+                },
+                "version": {
+                    "type": "string",
+                    "example": "1.0.0"
+                }
+            }
+        },
         "observability.CreateObservationRequest": {
             "type": "object",
             "required": [
@@ -7848,6 +8346,28 @@ const docTemplate = `{
                 },
                 "user_id": {
                     "type": "string"
+                }
+            }
+        },
+        "observability.EventResponse": {
+            "description": "Telemetry event creation result",
+            "type": "object",
+            "properties": {
+                "event_id": {
+                    "type": "string",
+                    "example": "evt_abc123"
+                },
+                "message": {
+                    "type": "string",
+                    "example": "Event created successfully"
+                },
+                "processed_at": {
+                    "type": "integer",
+                    "example": 1677610602
+                },
+                "status": {
+                    "type": "string",
+                    "example": "created"
                 }
             }
         },

@@ -151,6 +151,14 @@ func (s *Server) setupRoutes() {
 
 	// SDK routes (/v1) - API Key authentication for SDKs
 	sdk := s.engine.Group("/v1")
+
+	// Public SDK auth routes (no authentication required)
+	sdkAuth := sdk.Group("/auth")
+	{
+		sdkAuth.POST("/validate-key", s.handlers.Auth.ValidateAPIKeyHandler)
+	}
+
+	// Protected SDK routes (require API key authentication)
 	sdk.Use(s.sdkAuthMiddleware.RequireSDKAuth())
 	sdk.Use(s.rateLimitMiddleware.RateLimitByAPIKey())
 	s.setupSDKRoutes(sdk)
@@ -176,7 +184,7 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 		auth.POST("/refresh", s.handlers.Auth.RefreshToken)
 		auth.POST("/forgot-password", s.handlers.Auth.ForgotPassword)
 		auth.POST("/reset-password", s.handlers.Auth.ResetPassword)
-		auth.POST("/validate", s.handlers.Auth.ValidateAPIKeyAndProject)
+		// Note: validate-key moved to SDK routes (/v1/auth/validate-key)
 	}
 
 	// Protected routes (require JWT auth)

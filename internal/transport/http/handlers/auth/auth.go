@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -458,117 +459,65 @@ func (h *Handler) ValidateAPIKey(apiKey string) (*auth.AuthContext, error) {
 	}
 
 	// Create AuthContext from the validated key
-	authContext := &auth.AuthContext{
-		UserID:   key.UserID,
-		APIKeyID: &key.ID,
-	}
+	authContext := key.AuthContext
 
 	// Log successful validation (without the actual key)
 	h.logger.WithFields(map[string]interface{}{
-		"user_id":    key.UserID,
-		"api_key_id": key.ID,
-		"key_prefix": key.KeyPrefix,
+		"user_id":    key.AuthContext.UserID,
+		"api_key_id": key.AuthContext.APIKeyID,
+		"project_id": key.ProjectID,
 		"scopes":     key.Scopes,
 	}).Debug("API key validation successful")
 
 	return authContext, nil
 }
 
-// ValidateAPIKeyAndProject validates API key with project scoping
-// @Summary Validate API key with project scoping
-// @Description Validates an API key and checks project scoping and environment
+// ValidateAPIKeyHandler validates self-contained API keys (industry standard)
+// @Summary Validate API key
+// @Description Validates a self-contained API key and extracts project information automatically
 // @Tags Authentication
 // @Accept json
 // @Produce json
-// @Param X-API-Key header string true "API key starting with ak_"
-// @Param X-Project-ID header string true "Project identifier (ULID format)"
-// @Param X-Environment header string false "Environment name (lowercase, ≤40 chars, no brokle prefix) - optional"
+// @Param X-API-Key header string false "API key (format: bk_proj_{project_id}_{secret})"
+// @Param Authorization header string false "Bearer token format: Bearer {api_key}"
 // @Success 200 {object} response.SuccessResponse "API key validation successful"
-// @Failure 400 {object} response.ErrorResponse "Invalid request headers or validation failed"
-// @Failure 401 {object} response.ErrorResponse "Invalid API key"
-// @Failure 403 {object} response.ErrorResponse "API key doesn't belong to project"
+// @Failure 400 {object} response.ErrorResponse "Invalid request"
+// @Failure 401 {object} response.ErrorResponse "Invalid, inactive, or expired API key"
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
-// @Router /api/v1/auth/validate [post]
-func (h *Handler) ValidateAPIKeyAndProject(c *gin.Context) {
-	// Extract required headers
+// @Router /v1/auth/validate-key [post]
+func (h *Handler) ValidateAPIKeyHandler(c *gin.Context) {
+	// Extract API key from X-API-Key header or Authorization Bearer
 	apiKey := c.GetHeader("X-API-Key")
-	projectIDStr := c.GetHeader("X-Project-ID")
-	environment := c.GetHeader("X-Environment") // Optional
-
-	// Validate required headers are present
 	if apiKey == "" {
-		h.logger.Error("Missing X-API-Key header")
-		response.BadRequest(c, "Missing required header", "X-API-Key header is required")
-		return
-	}
-
-	if projectIDStr == "" {
-		h.logger.Error("Missing X-Project-ID header")
-		response.BadRequest(c, "Missing required header", "X-Project-ID header is required")
-		return
-	}
-
-	// Note: X-Environment header is optional
-
-	// Parse project ID
-	projectID, err := ulid.Parse(projectIDStr)
-	if err != nil {
-		h.logger.WithError(err).WithField("project_id", projectIDStr).Error("Invalid project ID format")
-		response.BadRequest(c, "Invalid project ID format", "Project ID must be a valid ULID")
-		return
-	}
-
-	// Create validation request
-	req := &auth.ValidateAPIKeyRequest{
-		APIKey:      apiKey,
-		ProjectID:   projectID,
-		Environment: environment,
-	}
-
-	// Perform validation with project scoping
-	resp, err := h.apiKeyService.ValidateAPIKeyWithProjectScoping(c.Request.Context(), req)
-	if err != nil {
-		h.logger.WithError(err).WithFields(logrus.Fields{
-			"project_id":  projectID,
-			"environment": environment,
-			"key_prefix":  extractKeyPrefix(apiKey),
-		}).Error("API key validation with project scoping failed")
-		response.Error(c, err)
-		return
-	}
-
-	// Check if validation was successful
-	if !resp.Valid {
-		h.logger.WithFields(logrus.Fields{
-			"project_id":    projectID,
-			"environment":   environment,
-			"key_prefix":    extractKeyPrefix(apiKey),
-			"error_code":    resp.ErrorCode,
-			"error_message": resp.ErrorMessage,
-		}).Warn("API key validation failed")
-
-		// Map error codes to HTTP status
-		switch resp.ErrorCode {
-		case "invalid_environment":
-			response.BadRequest(c, "Invalid environment", resp.ErrorMessage)
-		case "unauthorized":
-			response.Unauthorized(c, resp.ErrorMessage)
-		case "project_mismatch":
-			response.Forbidden(c, resp.ErrorMessage)
-		default:
-			response.BadRequest(c, "Validation failed", resp.ErrorMessage)
+		// Fallback to Authorization header with Bearer format
+		authHeader := c.GetHeader("Authorization")
+		if authHeader != "" && strings.HasPrefix(authHeader, "Bearer ") {
+			apiKey = strings.TrimPrefix(authHeader, "Bearer ")
 		}
+	}
+
+	if apiKey == "" {
+		h.logger.Warn("API key validation request missing API key")
+		response.BadRequest(c, "Missing API key", "API key must be provided via X-API-Key header or Authorization Bearer token")
 		return
 	}
 
-	// Log successful validation
+	// Validate the self-contained API key
+	resp, err := h.apiKeyService.ValidateAPIKey(c.Request.Context(), apiKey)
+	if err != nil {
+		h.logger.WithError(err).WithField("key_prefix", extractKeyPrefix(apiKey)).
+			Warn("API key validation failed")
+		response.Error(c, err) // Properly propagate AppError status codes (401, etc.)
+		return
+	}
+
+	// Log successful validation (without the actual key)
 	h.logger.WithFields(logrus.Fields{
-		"user_id":     resp.AuthContext.UserID,
-		"api_key_id":  resp.KeyID,
-		"project_id":  resp.ProjectID,
-		"environment": resp.Environment,
-		"scopes":      resp.Scopes,
-	}).Info("API key validation with project scoping successful")
+		"user_id":    resp.AuthContext.UserID,
+		"api_key_id": resp.AuthContext.APIKeyID,
+		"project_id": resp.ProjectID,
+		"scopes":     resp.Scopes,
+	}).Info("API key validation successful")
 
 	response.Success(c, resp)
 }

@@ -83,63 +83,40 @@ type OrganizationRepository interface {
 	IsMember(ctx context.Context, userID, orgID ulid.ULID) (bool, error)
 }
 
-// APIKey represents an API key for programmatic access with full scoping.
+// APIKey represents a project-scoped API key with self-contained authentication.
+// Format: bk_proj_{project_id}_{secret}
 type APIKey struct {
-	ID                 ulid.ULID      `json:"id" gorm:"type:char(26);primaryKey"`
-	UserID             ulid.ULID      `json:"user_id" gorm:"type:char(26);not null"`
-	OrganizationID     ulid.ULID      `json:"organization_id" gorm:"type:char(26);not null"`
-	ProjectID          ulid.ULID      `json:"project_id" gorm:"type:char(26);not null"` // Required, not optional
-	Name               string         `json:"name" gorm:"size:255;not null"`
-	KeyPrefix          string         `json:"key_prefix" gorm:"size:8;not null"`                    // First 8 chars for display
-	KeyHash            string         `json:"-" gorm:"size:255;not null"`                           // Hashed key for storage
-	DefaultEnvironment string         `json:"default_environment" gorm:"size:40;default:'default'"` // tag
-	Scopes             []string       `json:"scopes" gorm:"type:json"`                              // JSON array of permissions
-	RateLimitRPM       int            `json:"rate_limit_rpm" gorm:"default:1000"`                   // Requests per minute
-	Metadata           interface{}    `json:"metadata,omitempty" gorm:"type:jsonb"`                 // Flexible metadata storage
-	IsActive           bool           `json:"is_active" gorm:"default:true"`
-	ExpiresAt          *time.Time     `json:"expires_at,omitempty"`
-	LastUsedAt         *time.Time     `json:"last_used_at,omitempty"`
-	CreatedAt          time.Time      `json:"created_at"`
-	UpdatedAt          time.Time      `json:"updated_at"`
-	DeletedAt          gorm.DeletedAt `json:"deleted_at,omitempty" gorm:"index"`
+	ID             ulid.ULID      `json:"id" gorm:"type:char(26);primaryKey"`
+	KeyID          string         `json:"key_id" gorm:"size:100;unique;not null;index"`        // bk_proj_{project_id}
+	SecretHash     string         `json:"-" gorm:"size:255;not null"`                          // Hashed secret portion
+	ProjectID      ulid.ULID      `json:"project_id" gorm:"type:char(26);not null;index"`      // Project this key belongs to
+	OrganizationID ulid.ULID      `json:"organization_id" gorm:"type:char(26);not null;index"` // Organization (from project)
+	UserID         ulid.ULID      `json:"user_id" gorm:"type:char(26);not null;index"`         // Creator user
+
+	// Key metadata
+	Name        string `json:"name" gorm:"size:255;not null"`
+	Description string `json:"description" gorm:"type:text"`
+	Scopes      []string `json:"scopes" gorm:"type:json"` // ["read", "write", "admin"]
+
+	// Usage controls
+	RateLimitRPM int  `json:"rate_limit_rpm" gorm:"default:1000"`
+	IsActive     bool `json:"is_active" gorm:"default:true"`
+
+	// Timestamps
+	LastUsedAt *time.Time     `json:"last_used_at,omitempty"`
+	ExpiresAt  *time.Time     `json:"expires_at,omitempty"`
+	CreatedAt  time.Time      `json:"created_at"`
+	UpdatedAt  time.Time      `json:"updated_at"`
+	DeletedAt  gorm.DeletedAt `json:"deleted_at,omitempty" gorm:"index"`
 }
 
-// Environment validation constants
-const (
-	MaxEnvironmentNameLength = 40
-	DefaultEnvironmentName   = "default"
-)
-
-// ValidateEnvironmentName validates environment name according to rules
-func ValidateEnvironmentName(env string) error {
-	if env == "" {
-		return fmt.Errorf("environment name cannot be empty")
-	}
-
-	if len(env) > MaxEnvironmentNameLength {
-		return fmt.Errorf("environment name cannot exceed %d characters", MaxEnvironmentNameLength)
-	}
-
-	if strings.HasPrefix(strings.ToLower(env), "brokle") {
-		return fmt.Errorf("environment name cannot start with 'brokle'")
-	}
-
-	// Check for valid characters (lowercase letters, numbers, hyphens, underscores)
-	for _, char := range env {
-		if !((char >= 'a' && char <= 'z') || (char >= '0' && char <= '9') || char == '-' || char == '_') {
-			return fmt.Errorf("environment name can only contain lowercase letters, numbers, hyphens, and underscores")
-		}
-	}
-
-	return nil
-}
-
-// GetEffectiveEnvironment returns the environment to use for a request
-func (ak *APIKey) GetEffectiveEnvironment(requestEnv string) string {
-	if requestEnv != "" {
-		return requestEnv
-	}
-	return ak.DefaultEnvironment
+// ParsedAPIKey represents the components of a parsed project-scoped API key
+type ParsedAPIKey struct {
+	Prefix    string    `json:"prefix"`     // "bk"
+	Scope     string    `json:"scope"`      // "proj"
+	ProjectID ulid.ULID `json:"project_id"` // Extracted project ID
+	Secret    string    `json:"secret"`     // Secret portion for verification
+	KeyID     string    `json:"key_id"`     // Full prefix (bk_proj_{project_id})
 }
 
 // Role represents both system template roles and custom scoped roles
@@ -371,22 +348,24 @@ type AuthUser struct {
 }
 
 type CreateAPIKeyRequest struct {
-	Name               string     `json:"name" validate:"required,min=1,max=100"`
-	OrganizationID     ulid.ULID  `json:"organization_id" validate:"required"`
-	ProjectID          ulid.ULID  `json:"project_id" validate:"required"` // Required, not optional
-	DefaultEnvironment string     `json:"default_environment,omitempty"`  // Optional, defaults to "default"
-	Scopes             []string   `json:"scopes" validate:"required,min=1"`
-	RateLimitRPM       int        `json:"rate_limit_rpm" validate:"min=1,max=10000"`
-	ExpiresAt          *time.Time `json:"expires_at,omitempty"`
+	Name         string     `json:"name" validate:"required,min=1,max=100"`
+	ProjectID    ulid.ULID  `json:"project_id" validate:"required"`
+	Description  string     `json:"description,omitempty"`
+	Scopes       []string   `json:"scopes" validate:"required,min=1"`
+	RateLimitRPM int        `json:"rate_limit_rpm" validate:"min=1,max=10000"`
+	ExpiresAt    *time.Time `json:"expires_at,omitempty"`
 }
 
 type CreateAPIKeyResponse struct {
-	ID        ulid.ULID  `json:"id"`
-	Name      string     `json:"name"`
-	Key       string     `json:"key"`        // Full key - only returned once
-	KeyPrefix string     `json:"key_prefix"` // For display purposes
-	Scopes    []string   `json:"scopes"`
-	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+	ID           string     `json:"id" example:"key_01234567890123456789012345"`
+	Name         string     `json:"name" example:"Production API Key"`
+	Key          string     `json:"key" example:"bk_proj_01234567890123456789012345_abcdef1234567890abcdef1234567890"` // Full key - shown only once
+	KeyPreview   string     `json:"key_preview" example:"bk_proj_...7890"`
+	ProjectID    string     `json:"project_id" example:"proj_01234567890123456789012345"`
+	Scopes       []string   `json:"scopes" example:"[\"read\", \"write\"]"`
+	RateLimitRPM int        `json:"rate_limit_rpm" example:"1000"`
+	CreatedAt    time.Time  `json:"created_at"`
+	ExpiresAt    *time.Time `json:"expires_at,omitempty"`
 }
 
 type RefreshTokenRequest struct {
@@ -528,26 +507,22 @@ func NewUserTimestampBlacklistedToken(userID ulid.ULID, blacklistTimestamp int64
 	}
 }
 
-func NewAPIKey(userID, orgID, projectID ulid.ULID, name, keyPrefix, keyHash, defaultEnvironment string, scopes []string, rateLimitRPM int, expiresAt *time.Time) *APIKey {
-	if defaultEnvironment == "" {
-		defaultEnvironment = DefaultEnvironmentName
-	}
-
+func NewAPIKey(userID, orgID, projectID ulid.ULID, name, description, keyID, secretHash string, scopes []string, rateLimitRPM int, expiresAt *time.Time) *APIKey {
 	return &APIKey{
-		ID:                 ulid.New(),
-		UserID:             userID,
-		OrganizationID:     orgID,
-		ProjectID:          projectID,
-		Name:               name,
-		KeyPrefix:          keyPrefix,
-		KeyHash:            keyHash,
-		DefaultEnvironment: defaultEnvironment,
-		Scopes:             scopes,
-		RateLimitRPM:       rateLimitRPM,
-		IsActive:           true,
-		ExpiresAt:          expiresAt,
-		CreatedAt:          time.Now(),
-		UpdatedAt:          time.Now(),
+		ID:             ulid.New(),
+		KeyID:          keyID,
+		SecretHash:     secretHash,
+		ProjectID:      projectID,
+		OrganizationID: orgID,
+		UserID:         userID,
+		Name:           name,
+		Description:    description,
+		Scopes:         scopes,
+		RateLimitRPM:   rateLimitRPM,
+		IsActive:       true,
+		ExpiresAt:      expiresAt,
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
 	}
 }
 
@@ -649,23 +624,14 @@ func NewPasswordResetToken(userID ulid.ULID, token string, expiresAt time.Time) 
 	}
 }
 
-// ValidateAPIKeyRequest represents a request to validate an API key with project scoping
-type ValidateAPIKeyRequest struct {
-	APIKey      string    `json:"api_key" validate:"required"`          // From X-API-Key header
-	ProjectID   ulid.ULID `json:"project_id" validate:"required"`       // From X-Project-ID header
-	Environment string    `json:"environment,omitempty"`                // From X-Environment header (optional)
-}
-
 // ValidateAPIKeyResponse represents the response from API key validation
 type ValidateAPIKeyResponse struct {
-	Valid         bool               `json:"valid"`
-	KeyID         *ulid.ULID         `json:"key_id,omitempty"`
-	ProjectID     *ulid.ULID         `json:"project_id,omitempty"`
-	Environment   string             `json:"environment,omitempty"`
-	Scopes        []string           `json:"scopes,omitempty"`
-	AuthContext   *AuthContext       `json:"auth_context,omitempty"`
-	ErrorCode     string             `json:"error_code,omitempty"`
-	ErrorMessage  string             `json:"error_message,omitempty"`
+	APIKey      *APIKey   `json:"api_key"`
+	ProjectID   ulid.ULID `json:"project_id"`
+	Valid       bool      `json:"valid"`
+	Scopes      []string  `json:"scopes"`
+	RateLimit   int       `json:"rate_limit_rpm"`
+	AuthContext *AuthContext `json:"auth_context,omitempty"`
 }
 
 // Utility methods

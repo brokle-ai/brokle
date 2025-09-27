@@ -36,7 +36,8 @@ const (
 	EnvironmentKey    = "environment"
 )
 
-// RequireSDKAuth middleware validates API keys with project scoping for SDK routes
+// RequireSDKAuth middleware validates self-contained API keys for SDK routes
+// Extracts project ID automatically from the API key (no additional headers required)
 func (m *SDKAuthMiddleware) RequireSDKAuth() gin.HandlerFunc {
 	return gin.HandlerFunc(func(c *gin.Context) {
 		// Extract API key from X-API-Key header
@@ -56,77 +57,33 @@ func (m *SDKAuthMiddleware) RequireSDKAuth() gin.HandlerFunc {
 			return
 		}
 
-		// Extract project ID from X-Project-ID header (required for SDK auth)
-		projectIDHeader := c.GetHeader("X-Project-ID")
-		if projectIDHeader == "" {
-			m.logger.Warn("SDK request missing project ID")
-			response.BadRequest(c, "X-Project-ID header required", "Project ID must be provided for SDK requests")
-			c.Abort()
-			return
-		}
-
-		projectID, err := ulid.Parse(projectIDHeader)
-		if err != nil {
-			m.logger.WithError(err).WithField("project_id", projectIDHeader).Warn("Invalid project ID format")
-			response.BadRequest(c, "Invalid project ID format", err.Error())
-			c.Abort()
-			return
-		}
-
 		// Extract optional environment from X-Environment header
 		environment := c.GetHeader("X-Environment")
 
-		// Validate API key with project scoping
-		validateReq := &auth.ValidateAPIKeyRequest{
-			APIKey:      apiKey,
-			ProjectID:   projectID,
-			Environment: environment,
-		}
-
-		validateResp, err := m.apiKeyService.ValidateAPIKeyWithProjectScoping(c.Request.Context(), validateReq)
+		// Validate API key (self-contained, extracts project ID automatically)
+		validateResp, err := m.apiKeyService.ValidateAPIKey(c.Request.Context(), apiKey)
 		if err != nil {
 			m.logger.WithError(err).WithFields(logrus.Fields{
-				"project_id": projectID,
-				"has_env":    environment != "",
+				"has_env": environment != "",
 			}).Warn("API key validation failed")
-			response.InternalServerError(c, "Authentication verification failed")
-			c.Abort()
-			return
-		}
-
-		if !validateResp.Valid {
-			m.logger.WithFields(logrus.Fields{
-				"error_code":    validateResp.ErrorCode,
-				"error_message": validateResp.ErrorMessage,
-				"project_id":    projectID,
-			}).Warn("Invalid API key for SDK request")
-
-			// Map error codes to appropriate HTTP responses
-			switch validateResp.ErrorCode {
-			case "invalid_environment":
-				response.BadRequest(c, "Invalid environment", validateResp.ErrorMessage)
-			case "project_mismatch":
-				response.Forbidden(c, "API key does not belong to the specified project")
-			case "unauthorized", "invalid_api_key":
-				response.Unauthorized(c, "Invalid API key")
-			default:
-				response.Unauthorized(c, validateResp.ErrorMessage)
-			}
+			response.Error(c, err) // Properly propagate AppError status codes (401, 403, etc.)
 			c.Abort()
 			return
 		}
 
 		// Store SDK authentication context in Gin context
 		c.Set(SDKAuthContextKey, validateResp.AuthContext)
-		c.Set(APIKeyIDKey, validateResp.KeyID)
-		c.Set(ProjectIDKey, validateResp.ProjectID)
-		c.Set(EnvironmentKey, validateResp.Environment)
+		c.Set(APIKeyIDKey, validateResp.AuthContext.APIKeyID)
+		// Store project ID as pointer to match GetProjectID() expectations
+		projectID := validateResp.ProjectID
+		c.Set(ProjectIDKey, &projectID)
+		c.Set(EnvironmentKey, environment) // From optional X-Environment header
 
 		// Log successful SDK authentication
 		m.logger.WithFields(logrus.Fields{
-			"api_key_id": validateResp.KeyID,
+			"api_key_id": validateResp.AuthContext.APIKeyID,
 			"project_id": validateResp.ProjectID,
-			"environment": validateResp.Environment,
+			"environment": environment,
 		}).Debug("SDK authentication successful")
 
 		c.Next()

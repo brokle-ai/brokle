@@ -2,12 +2,11 @@ package auth
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/hex"
+	"errors"
 	"fmt"
-	"strings"
 	"time"
+
+	"golang.org/x/crypto/bcrypt"
 
 	authDomain "brokle/internal/core/domain/auth"
 	appErrors "brokle/pkg/errors"
@@ -31,67 +30,36 @@ func NewAPIKeyService(
 	}
 }
 
-// Environment constants for key prefixes
-const (
-	EnvProduction  = "production"
-	EnvTesting     = "testing"
-	EnvStaging     = "staging"
-	EnvDevelopment = "development"
-	EnvLocal       = "local"
-)
-
-// Key prefix mapping
-var envPrefixMap = map[string]string{
-	EnvProduction:  "bk_live_",
-	EnvTesting:     "bk_test_",
-	EnvStaging:     "bk_test_",
-	EnvDevelopment: "bk_dev_",
-	EnvLocal:       "bk_dev_",
-}
-
-// CreateAPIKey creates a new API key
+// CreateAPIKey creates a new project-scoped API key
 func (s *apiKeyService) CreateAPIKey(ctx context.Context, userID ulid.ULID, req *authDomain.CreateAPIKeyRequest) (*authDomain.CreateAPIKeyResponse, error) {
-	// TODO: Validate user has permission to create keys in the organization
+	// TODO: Validate user has permission to create keys in the project
 	// For now, skip membership validation - will be implemented when organization service is ready
 
-	// Validate and set default environment
-	defaultEnv := req.DefaultEnvironment
-	if defaultEnv == "" {
-		defaultEnv = authDomain.DefaultEnvironmentName // "default"
-	}
-
-	// Validate environment name according to rules
-	if err := authDomain.ValidateEnvironmentName(defaultEnv); err != nil {
-		return nil, appErrors.NewBadRequestError("Invalid environment name", err.Error())
-	}
-
-	// Determine environment type for key prefix (default to development for safety)
-	envType := EnvDevelopment
-	if defaultEnv == "production" || defaultEnv == "prod" {
-		envType = EnvProduction
-	} else if defaultEnv == "staging" || defaultEnv == "stage" {
-		envType = EnvStaging
-	}
-
-	// Generate API key
-	apiKey, err := s.generateAPIKey(envType)
+	// Generate project-scoped API key
+	fullKey, keyID, secret, err := authDomain.GenerateProjectScopedAPIKey(req.ProjectID)
 	if err != nil {
-		return nil, fmt.Errorf("generate API key: %w", err)
+		return nil, appErrors.NewInternalError("Failed to generate API key", err)
 	}
 
-	// Hash the key for storage
-	keyHash := s.hashAPIKey(apiKey)
-	keyPrefix := s.extractKeyPrefix(apiKey)
+	// Hash secret for storage
+	secretHash, err := bcrypt.GenerateFromPassword([]byte(secret), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, appErrors.NewInternalError("Failed to hash secret", err)
+	}
 
-	// Create API key entity with new schema
+	// TODO: Get organization ID from project lookup
+	// For now, we'll need to pass it in the request or look it up
+	orgID := req.ProjectID // Temporary - should be actual org ID
+
+	// Create API key entity
 	apiKeyEntity := authDomain.NewAPIKey(
 		userID,
-		req.OrganizationID,
-		req.ProjectID, // Now required
+		orgID, // Organization ID (from project lookup)
+		req.ProjectID,
 		req.Name,
-		keyPrefix,
-		keyHash,
-		defaultEnv, // Default environment
+		req.Description,
+		keyID,
+		string(secretHash),
 		req.Scopes,
 		req.RateLimitRPM,
 		req.ExpiresAt,
@@ -99,17 +67,23 @@ func (s *apiKeyService) CreateAPIKey(ctx context.Context, userID ulid.ULID, req 
 
 	// Save to database
 	if err := s.apiKeyRepo.Create(ctx, apiKeyEntity); err != nil {
-		return nil, fmt.Errorf("create API key: %w", err)
+		return nil, appErrors.NewInternalError("Failed to save API key", err)
 	}
 
-	// Return response with the actual key (only shown once)
+	// Create key preview for display
+	keyPreview := authDomain.CreateKeyPreview(keyID)
+
+	// Return response with the full key (only shown once)
 	return &authDomain.CreateAPIKeyResponse{
-		ID:        apiKeyEntity.ID,
-		Name:      apiKeyEntity.Name,
-		Key:       apiKey, // Full key - only returned once
-		KeyPrefix: keyPrefix,
-		Scopes:    apiKeyEntity.Scopes,
-		ExpiresAt: apiKeyEntity.ExpiresAt,
+		ID:           apiKeyEntity.ID.String(),
+		Name:         apiKeyEntity.Name,
+		Key:          fullKey, // Full key - only returned once
+		KeyPreview:   keyPreview,
+		ProjectID:    apiKeyEntity.ProjectID.String(),
+		Scopes:       apiKeyEntity.Scopes,
+		RateLimitRPM: apiKeyEntity.RateLimitRPM,
+		CreatedAt:    apiKeyEntity.CreatedAt,
+		ExpiresAt:    apiKeyEntity.ExpiresAt,
 	}, nil
 }
 
@@ -152,13 +126,7 @@ func (s *apiKeyService) UpdateAPIKey(ctx context.Context, keyID ulid.ULID, req *
 	if req.Name != nil {
 		apiKey.Name = *req.Name
 	}
-	if req.DefaultEnvironment != nil {
-		// Validate environment name
-		if err := authDomain.ValidateEnvironmentName(*req.DefaultEnvironment); err != nil {
-			return appErrors.NewBadRequestError("Invalid environment name", err.Error())
-		}
-		apiKey.DefaultEnvironment = *req.DefaultEnvironment
-	}
+	// Note: Environment handling removed - environments are now sent via SDK headers/tags
 	if req.Scopes != nil {
 		apiKey.Scopes = req.Scopes
 	}
@@ -187,83 +155,36 @@ func (s *apiKeyService) RevokeAPIKey(ctx context.Context, keyID ulid.ULID) error
 	return nil
 }
 
-// ValidateAPIKey validates an API key and returns the key entity
-func (s *apiKeyService) ValidateAPIKey(ctx context.Context, apiKey string) (*authDomain.APIKey, error) {
-	// Validate key format
-	if !s.isValidKeyFormat(apiKey) {
+// ValidateAPIKey validates a project-scoped API key and returns validation response
+func (s *apiKeyService) ValidateAPIKey(ctx context.Context, fullKey string) (*authDomain.ValidateAPIKeyResponse, error) {
+	// Parse the API key
+	parsed, err := authDomain.ParseAPIKey(fullKey)
+	if err != nil {
 		return nil, appErrors.NewUnauthorizedError("Invalid API key format")
 	}
 
-	// Hash the key for lookup
-	keyHash := s.hashAPIKey(apiKey)
-
-	// Get key from database
-	key, err := s.apiKeyRepo.GetByKeyHash(ctx, keyHash)
+	// Look up API key by keyID
+	apiKey, err := s.apiKeyRepo.GetByKeyID(ctx, parsed.KeyID)
 	if err != nil {
+		if errors.Is(err, authDomain.ErrAPIKeyNotFound) {
+			return nil, appErrors.NewUnauthorizedError("API key not found")
+		}
+		return nil, appErrors.NewInternalError("Failed to validate API key", err)
+	}
+
+	// Verify secret
+	if err := bcrypt.CompareHashAndPassword([]byte(apiKey.SecretHash), []byte(parsed.Secret)); err != nil {
 		return nil, appErrors.NewUnauthorizedError("Invalid API key")
 	}
 
 	// Check if key is active
-	if !key.IsActive {
+	if !apiKey.IsActive {
 		return nil, appErrors.NewUnauthorizedError("API key is inactive")
 	}
 
-	// Check if key is expired
-	if key.IsExpired() {
+	// Check expiration
+	if apiKey.ExpiresAt != nil && time.Now().After(*apiKey.ExpiresAt) {
 		return nil, appErrors.NewUnauthorizedError("API key has expired")
-	}
-
-	// Update last used timestamp asynchronously
-	go func() {
-		bgCtx := context.Background()
-		s.apiKeyRepo.MarkAsUsed(bgCtx, key.ID)
-	}()
-
-	return key, nil
-}
-
-// ValidateAPIKeyWithProjectScoping validates an API key with project and environment scoping
-func (s *apiKeyService) ValidateAPIKeyWithProjectScoping(ctx context.Context, req *authDomain.ValidateAPIKeyRequest) (*authDomain.ValidateAPIKeyResponse, error) {
-	// Validate environment name if provided (lowercase, ≤40 chars, no brokle prefix)
-	if req.Environment != "" {
-		if err := authDomain.ValidateEnvironmentName(req.Environment); err != nil {
-			return &authDomain.ValidateAPIKeyResponse{
-				Valid:        false,
-				ErrorCode:    "invalid_environment",
-				ErrorMessage: err.Error(),
-			}, nil
-		}
-	}
-
-	// Validate and get API key
-	apiKey, err := s.ValidateAPIKey(ctx, req.APIKey)
-	if err != nil {
-		errorCode := "invalid_api_key"
-		if appErr, ok := err.(*appErrors.AppError); ok {
-			switch appErr.Type {
-			case appErrors.UnauthorizedError:
-				errorCode = "unauthorized"
-			case appErrors.ForbiddenError:
-				errorCode = "forbidden"
-			default:
-				errorCode = "invalid_api_key"
-			}
-		}
-
-		return &authDomain.ValidateAPIKeyResponse{
-			Valid:        false,
-			ErrorCode:    errorCode,
-			ErrorMessage: err.Error(),
-		}, nil
-	}
-
-	// Validate project scoping - API key must belong to the specified project
-	if apiKey.ProjectID != req.ProjectID {
-		return &authDomain.ValidateAPIKeyResponse{
-			Valid:        false,
-			ErrorCode:    "project_mismatch",
-			ErrorMessage: "API key does not belong to the specified project",
-		}, nil
 	}
 
 	// Create auth context
@@ -272,19 +193,20 @@ func (s *apiKeyService) ValidateAPIKeyWithProjectScoping(ctx context.Context, re
 		APIKeyID: &apiKey.ID,
 	}
 
-	// Determine effective environment (use API key's default if none provided)
-	effectiveEnvironment := req.Environment
-	if effectiveEnvironment == "" {
-		effectiveEnvironment = apiKey.DefaultEnvironment
-	}
+	// Update last used timestamp (async)
+	go func() {
+		ctx := context.Background()
+		if err := s.apiKeyRepo.UpdateLastUsed(ctx, apiKey.ID); err != nil {
+			// Log error but don't fail validation
+		}
+	}()
 
-	// Return successful validation response
 	return &authDomain.ValidateAPIKeyResponse{
+		APIKey:      apiKey,
+		ProjectID:   parsed.ProjectID,
 		Valid:       true,
-		KeyID:       &apiKey.ID,
-		ProjectID:   &apiKey.ProjectID,
-		Environment: effectiveEnvironment,
 		Scopes:      apiKey.Scopes,
+		RateLimit:   apiKey.RateLimitRPM,
 		AuthContext: authContext,
 	}, nil
 }
@@ -344,65 +266,3 @@ func (s *apiKeyService) GetAPIKeysByProject(ctx context.Context, projectID ulid.
 	return s.apiKeyRepo.GetByProjectID(ctx, projectID)
 }
 
-// Private helper methods
-
-// generateAPIKey generates a new API key with environment prefix
-func (s *apiKeyService) generateAPIKey(envType string) (string, error) {
-	// Get prefix for environment
-	prefix, exists := envPrefixMap[envType]
-	if !exists {
-		prefix = envPrefixMap[EnvDevelopment] // Default to dev
-	}
-
-	// Generate 24 random characters for the key suffix
-	randomBytes := make([]byte, 18) // 18 bytes = 24 hex chars
-	if _, err := rand.Read(randomBytes); err != nil {
-		return "", fmt.Errorf("generate random bytes: %w", err)
-	}
-
-	// Convert to hex string
-	randomHex := hex.EncodeToString(randomBytes)
-
-	return prefix + randomHex, nil
-}
-
-// hashAPIKey creates a SHA-256 hash of the API key
-func (s *apiKeyService) hashAPIKey(apiKey string) string {
-	hash := sha256.Sum256([]byte(apiKey))
-	return hex.EncodeToString(hash[:])
-}
-
-// extractKeyPrefix extracts the display prefix from an API key
-func (s *apiKeyService) extractKeyPrefix(apiKey string) string {
-	if len(apiKey) < 8 {
-		return apiKey
-	}
-	return apiKey[:8]
-}
-
-// isValidKeyFormat validates the API key format
-func (s *apiKeyService) isValidKeyFormat(apiKey string) bool {
-	// Check minimum length (prefix + random part)
-	if len(apiKey) < 16 {
-		return false
-	}
-
-	// Check if it starts with a valid prefix
-	for _, prefix := range envPrefixMap {
-		if strings.HasPrefix(apiKey, prefix) {
-			return true
-		}
-	}
-
-	return false
-}
-
-// detectEnvironmentFromKey detects environment type from key prefix
-func (s *apiKeyService) detectEnvironmentFromKey(apiKey string) string {
-	for env, prefix := range envPrefixMap {
-		if strings.HasPrefix(apiKey, prefix) {
-			return env
-		}
-	}
-	return EnvDevelopment // Default
-}

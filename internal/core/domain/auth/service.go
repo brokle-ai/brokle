@@ -64,8 +64,7 @@ type APIKeyService interface {
 	RevokeAPIKey(ctx context.Context, keyID ulid.ULID) error
 
 	// API key validation and usage
-	ValidateAPIKey(ctx context.Context, keyHash string) (*APIKey, error)
-	ValidateAPIKeyWithProjectScoping(ctx context.Context, req *ValidateAPIKeyRequest) (*ValidateAPIKeyResponse, error)
+	ValidateAPIKey(ctx context.Context, fullKey string) (*ValidateAPIKeyResponse, error)
 	UpdateLastUsed(ctx context.Context, keyID ulid.ULID) error
 	CheckRateLimit(ctx context.Context, keyID ulid.ULID) (bool, error)
 
@@ -272,11 +271,10 @@ type CreateSessionRequest struct {
 
 
 type UpdateAPIKeyRequest struct {
-	Name               *string  `json:"name,omitempty" validate:"omitempty,min=1,max=100"`
-	DefaultEnvironment *string  `json:"default_environment,omitempty"`
-	Scopes             []string `json:"scopes,omitempty"`
-	RateLimitRPM       *int     `json:"rate_limit_rpm,omitempty" validate:"omitempty,min=1,max=10000"`
-	IsActive           *bool    `json:"is_active,omitempty"`
+	Name         *string  `json:"name,omitempty" validate:"omitempty,min=1,max=100"`
+	Scopes       []string `json:"scopes,omitempty"`
+	RateLimitRPM *int     `json:"rate_limit_rpm,omitempty" validate:"omitempty,min=1,max=10000"`
+	IsActive     *bool    `json:"is_active,omitempty"`
 }
 
 // Filter types
@@ -289,7 +287,6 @@ type APIKeyFilters struct {
 	UserID         *ulid.ULID `json:"user_id,omitempty"`
 	OrganizationID *ulid.ULID `json:"organization_id,omitempty"`
 	ProjectID      *ulid.ULID `json:"project_id,omitempty"`
-	Environment    *string    `json:"environment,omitempty"`           // Filter by environment tag
 	IsActive       *bool      `json:"is_active,omitempty"`
 	IsExpired      *bool      `json:"is_expired,omitempty"`
 
