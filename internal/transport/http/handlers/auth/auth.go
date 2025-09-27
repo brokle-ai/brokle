@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -16,19 +17,21 @@ import (
 
 // Handler handles authentication endpoints
 type Handler struct {
-	config      *config.Config
-	logger      *logrus.Logger
-	authService auth.AuthService
-	userService user.UserService
+	config        *config.Config
+	logger        *logrus.Logger
+	authService   auth.AuthService
+	apiKeyService auth.APIKeyService
+	userService   user.UserService
 }
 
 // NewHandler creates a new auth handler
-func NewHandler(config *config.Config, logger *logrus.Logger, authService auth.AuthService, userService user.UserService) *Handler {
+func NewHandler(config *config.Config, logger *logrus.Logger, authService auth.AuthService, apiKeyService auth.APIKeyService, userService user.UserService) *Handler {
 	return &Handler{
-		config:      config,
-		logger:      logger,
-		authService: authService,
-		userService: userService,
+		config:        config,
+		logger:        logger,
+		authService:   authService,
+		apiKeyService: apiKeyService,
+		userService:   userService,
 	}
 }
 
@@ -445,9 +448,86 @@ func (h *Handler) ValidateToken(token string) (*auth.AuthContext, error) {
 
 // ValidateAPIKey validates API keys (for middleware)
 func (h *Handler) ValidateAPIKey(apiKey string) (*auth.AuthContext, error) {
-	// TODO: Implement API key validation through APIKeyService
-	// This will need to be updated once we have access to the AuthServices composite
-	return nil, nil
+	ctx := context.Background()
+
+	// Validate the API key using the APIKeyService
+	key, err := h.apiKeyService.ValidateAPIKey(ctx, apiKey)
+	if err != nil {
+		h.logger.WithError(err).WithField("key_prefix", extractKeyPrefix(apiKey)).
+			Warn("API key validation failed")
+		return nil, err
+	}
+
+	// Create AuthContext from the validated key
+	authContext := key.AuthContext
+
+	// Log successful validation (without the actual key)
+	h.logger.WithFields(map[string]interface{}{
+		"user_id":    key.AuthContext.UserID,
+		"api_key_id": key.AuthContext.APIKeyID,
+		"project_id": key.ProjectID,
+		"scopes":     key.Scopes,
+	}).Debug("API key validation successful")
+
+	return authContext, nil
+}
+
+// ValidateAPIKeyHandler validates self-contained API keys (industry standard)
+// @Summary Validate API key
+// @Description Validates a self-contained API key and extracts project information automatically
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Param X-API-Key header string false "API key (format: bk_proj_{project_id}_{secret})"
+// @Param Authorization header string false "Bearer token format: Bearer {api_key}"
+// @Success 200 {object} response.SuccessResponse "API key validation successful"
+// @Failure 400 {object} response.ErrorResponse "Invalid request"
+// @Failure 401 {object} response.ErrorResponse "Invalid, inactive, or expired API key"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /v1/auth/validate-key [post]
+func (h *Handler) ValidateAPIKeyHandler(c *gin.Context) {
+	// Extract API key from X-API-Key header or Authorization Bearer
+	apiKey := c.GetHeader("X-API-Key")
+	if apiKey == "" {
+		// Fallback to Authorization header with Bearer format
+		authHeader := c.GetHeader("Authorization")
+		if authHeader != "" && strings.HasPrefix(authHeader, "Bearer ") {
+			apiKey = strings.TrimPrefix(authHeader, "Bearer ")
+		}
+	}
+
+	if apiKey == "" {
+		h.logger.Warn("API key validation request missing API key")
+		response.BadRequest(c, "Missing API key", "API key must be provided via X-API-Key header or Authorization Bearer token")
+		return
+	}
+
+	// Validate the self-contained API key
+	resp, err := h.apiKeyService.ValidateAPIKey(c.Request.Context(), apiKey)
+	if err != nil {
+		h.logger.WithError(err).WithField("key_prefix", extractKeyPrefix(apiKey)).
+			Warn("API key validation failed")
+		response.Error(c, err) // Properly propagate AppError status codes (401, etc.)
+		return
+	}
+
+	// Log successful validation (without the actual key)
+	h.logger.WithFields(logrus.Fields{
+		"user_id":    resp.AuthContext.UserID,
+		"api_key_id": resp.AuthContext.APIKeyID,
+		"project_id": resp.ProjectID,
+		"scopes":     resp.Scopes,
+	}).Info("API key validation successful")
+
+	response.Success(c, resp)
+}
+
+// extractKeyPrefix safely extracts the first 8 characters for logging
+func extractKeyPrefix(apiKey string) string {
+	if len(apiKey) < 8 {
+		return apiKey
+	}
+	return apiKey[:8]
 }
 
 // ListSessionsRequest represents request for listing user sessions

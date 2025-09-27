@@ -7,7 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
-	
+
 	"brokle/internal/config"
 	"brokle/internal/core/domain/organization"
 	"brokle/pkg/response"
@@ -20,16 +20,14 @@ type Handler struct {
 	projectService      organization.ProjectService
 	organizationService organization.OrganizationService
 	memberService       organization.MemberService
-	environmentService  organization.EnvironmentService
 }
 
 func NewHandler(
-	config *config.Config, 
+	config *config.Config,
 	logger *logrus.Logger,
 	projectService organization.ProjectService,
 	organizationService organization.OrganizationService,
 	memberService organization.MemberService,
-	environmentService organization.EnvironmentService,
 ) *Handler {
 	return &Handler{
 		config:              config,
@@ -37,7 +35,6 @@ func NewHandler(
 		projectService:      projectService,
 		organizationService: organizationService,
 		memberService:       memberService,
-		environmentService:  environmentService,
 	}
 }
 
@@ -86,7 +83,6 @@ type UpdateProjectRequest struct {
 	Status      string `json:"status,omitempty" binding:"omitempty,oneof=active paused archived" example:"active" description:"Project status (active, paused, archived)"`
 }
 
-
 // List handles GET /projects
 // @Summary List projects
 // @Description Get a paginated list of projects accessible to the authenticated user
@@ -112,7 +108,7 @@ func (h *Handler) List(c *gin.Context) {
 		response.Unauthorized(c, "User not authenticated")
 		return
 	}
-	
+
 	userULID, ok := userID.(ulid.ULID)
 	if !ok {
 		h.logger.WithFields(logrus.Fields{
@@ -274,7 +270,6 @@ func (h *Handler) List(c *gin.Context) {
 	// Convert to response format
 	responseProjects := make([]Project, len(paginatedProjects))
 	for i, proj := range paginatedProjects {
-		envCount, _ := h.environmentService.GetEnvironmentCount(ctx, proj.ID)
 		responseProjects[i] = Project{
 			ID:             proj.ID.String(),
 			Name:           proj.Name,
@@ -285,7 +280,7 @@ func (h *Handler) List(c *gin.Context) {
 			CreatedAt:      proj.CreatedAt,
 			UpdatedAt:      proj.UpdatedAt,
 			OwnerID:        "", // TODO: Add owner concept when needed
-			Environments:   envCount,
+			Environments:   0,  // Environments are now tags, not entities
 		}
 	}
 
@@ -304,6 +299,7 @@ func (h *Handler) List(c *gin.Context) {
 		"limit":           req.Limit,
 	}).Info("Projects listed successfully")
 }
+
 // Create handles POST /projects
 // @Summary Create project
 // @Description Create a new project within an organization. User must have appropriate permissions in the organization.
@@ -404,7 +400,7 @@ func (h *Handler) Create(c *gin.Context) {
 			}
 		}
 		slug = slugBuilder.String()
-		
+
 		// Ensure slug is not empty and not too long
 		if slug == "" {
 			slug = "project"
@@ -457,8 +453,7 @@ func (h *Handler) Create(c *gin.Context) {
 		return
 	}
 
-	// Get environment count for response
-	envCount, _ := h.environmentService.GetEnvironmentCount(ctx, project.ID)
+	// Environments are now tags, not entities
 
 	// Convert to response format
 	responseProject := Project{
@@ -471,7 +466,7 @@ func (h *Handler) Create(c *gin.Context) {
 		CreatedAt:      project.CreatedAt,
 		UpdatedAt:      project.UpdatedAt,
 		OwnerID:        userULID.String(), // Set creator as owner
-		Environments:   envCount,
+		Environments:   0,                 // Environments are now tags, not entities
 	}
 
 	response.Created(c, responseProject)
@@ -485,6 +480,7 @@ func (h *Handler) Create(c *gin.Context) {
 		"project_slug":    project.Slug,
 	}).Info("Project created successfully")
 }
+
 // Get handles GET /projects/:projectId
 // @Summary Get project details
 // @Description Get detailed information about a specific project
@@ -592,8 +588,7 @@ func (h *Handler) Get(c *gin.Context) {
 		return
 	}
 
-	// Get environment count for response
-	envCount, _ := h.environmentService.GetEnvironmentCount(ctx, project.ID)
+	// Environments are now tags, not entities
 
 	// Convert to response format
 	responseProject := Project{
@@ -606,7 +601,7 @@ func (h *Handler) Get(c *gin.Context) {
 		CreatedAt:      project.CreatedAt,
 		UpdatedAt:      project.UpdatedAt,
 		OwnerID:        "", // TODO: Add owner concept when needed
-		Environments:   envCount,
+		Environments:   0,  // Environments are now tags, not entities
 	}
 
 	response.Success(c, responseProject)
@@ -616,9 +611,9 @@ func (h *Handler) Get(c *gin.Context) {
 		"user_id":      userULID.String(),
 		"project_id":   project.ID.String(),
 		"project_name": project.Name,
-		"environments": envCount,
 	}).Info("Project retrieved successfully")
 }
+
 // Update handles PUT /projects/:projectId
 // @Summary Update project
 // @Description Update project details. Requires appropriate permissions within the project organization.
@@ -761,8 +756,7 @@ func (h *Handler) Update(c *gin.Context) {
 		return
 	}
 
-	// Get environment count for response
-	envCount, _ := h.environmentService.GetEnvironmentCount(ctx, project.ID)
+	// Environments are now tags, not entities
 
 	// Convert to response format
 	responseProject := Project{
@@ -775,7 +769,7 @@ func (h *Handler) Update(c *gin.Context) {
 		CreatedAt:      project.CreatedAt,
 		UpdatedAt:      project.UpdatedAt,
 		OwnerID:        "", // TODO: Add owner concept when needed
-		Environments:   envCount,
+		Environments:   0,  // Environments are now tags, not entities
 	}
 
 	// Handle status field from request if provided
@@ -795,6 +789,7 @@ func (h *Handler) Update(c *gin.Context) {
 		"changes":      fmt.Sprintf("name=%v, description=%v, status=%v", req.Name != "", req.Description != "", req.Status != ""),
 	}).Info("Project updated successfully")
 }
+
 // Delete handles DELETE /projects/:projectId
 // @Summary Delete project
 // @Description Permanently delete a project and all associated environments and data. This action cannot be undone.
@@ -906,8 +901,8 @@ func (h *Handler) Delete(c *gin.Context) {
 	// TODO: Add additional validation for admin/owner permissions
 	// For now, we allow any organization member to delete projects
 
-	// TODO: Check if project has active environments or API usage
-	// For now, we allow deletion regardless of environments
+	// TODO: Check if project has active API keys or usage data
+	// For now, we allow deletion regardless of active resources
 
 	// Delete project via service (soft delete)
 	err = h.projectService.DeleteProject(ctx, projectID)
@@ -934,171 +929,5 @@ func (h *Handler) Delete(c *gin.Context) {
 	}).Info("Project deleted successfully")
 }
 
-// Environment represents an environment entity for responses
-type Environment struct {
-	ID        string    `json:"id" example:"env_1234567890" description:"Unique environment identifier"`
-	Name      string    `json:"name" example:"Production" description:"Environment name"`
-	Slug      string    `json:"slug" example:"prod" description:"URL-friendly environment identifier"`
-	ProjectID string    `json:"project_id" example:"proj_1234567890" description:"Project ID this environment belongs to"`
-	CreatedAt time.Time `json:"created_at" example:"2024-01-01T00:00:00Z" description:"Creation timestamp"`
-	UpdatedAt time.Time `json:"updated_at" example:"2024-01-01T00:00:00Z" description:"Last update timestamp"`
-}
 
-// ListEnvironmentsResponse represents the response when listing project environments
-type ListEnvironmentsResponse struct {
-	Environments []Environment `json:"environments" description:"List of environments"`
-	ProjectID    string        `json:"project_id" example:"proj_1234567890" description:"Project ID"`
-	ProjectName  string        `json:"project_name" example:"AI Chatbot" description:"Project name"`
-}
 
-// ListEnvironments handles GET /projects/:projectId/environments  
-// @Summary List project environments
-// @Description Get all environments that belong to a specific project
-// @Tags Projects
-// @Accept json
-// @Produce json
-// @Param projectId path string true "Project ID" example("proj_1234567890")
-// @Success 200 {object} response.SuccessResponse{data=ListEnvironmentsResponse} "List of project environments"
-// @Failure 400 {object} response.ErrorResponse "Bad request - invalid project ID"
-// @Failure 401 {object} response.ErrorResponse "Unauthorized"
-// @Failure 403 {object} response.ErrorResponse "Forbidden - insufficient permissions"
-// @Failure 404 {object} response.ErrorResponse "Project not found"
-// @Failure 500 {object} response.ErrorResponse "Internal server error"
-// @Security BearerAuth
-// @Router /api/v1/projects/{projectId}/environments [get]
-func (h *Handler) ListEnvironments(c *gin.Context) {
-	// Extract user ID from JWT
-	userID, exists := c.Get("user_id")
-	if !exists {
-		h.logger.WithField("endpoint", "ListEnvironments").Error("User not authenticated")
-		response.Unauthorized(c, "User not authenticated")
-		return
-	}
-
-	userULID, ok := userID.(ulid.ULID)
-	if !ok {
-		h.logger.WithFields(logrus.Fields{
-			"endpoint": "ListEnvironments",
-			"user_id":  userID,
-		}).Error("Invalid user ID type")
-		response.BadRequest(c, "Invalid user ID", "")
-		return
-	}
-
-	// Parse and validate project ID from path parameter
-	projectIDStr := c.Param("projectId")
-	if projectIDStr == "" {
-		h.logger.WithFields(logrus.Fields{
-			"endpoint": "ListEnvironments",
-			"user_id":  userULID.String(),
-		}).Error("Project ID parameter missing")
-		response.BadRequest(c, "Project ID is required", "")
-		return
-	}
-
-	projectID, err := ulid.Parse(projectIDStr)
-	if err != nil {
-		h.logger.WithFields(logrus.Fields{
-			"endpoint":   "ListEnvironments",
-			"user_id":    userULID.String(),
-			"project_id": projectIDStr,
-			"error":      err.Error(),
-		}).Error("Invalid project ID format")
-		response.BadRequest(c, "Invalid project ID", "")
-		return
-	}
-
-	ctx := c.Request.Context()
-
-	// Validate user can access this project
-	err = h.projectService.ValidateProjectAccess(ctx, userULID, projectID)
-	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
-			h.logger.WithFields(logrus.Fields{
-				"endpoint":   "ListEnvironments",
-				"user_id":    userULID.String(),
-				"project_id": projectIDStr,
-				"error":      err.Error(),
-			}).Warn("Project not found")
-			response.NotFound(c, "Project")
-			return
-		}
-
-		if strings.Contains(err.Error(), "access") {
-			h.logger.WithFields(logrus.Fields{
-				"endpoint":   "ListEnvironments",
-				"user_id":    userULID.String(),
-				"project_id": projectIDStr,
-				"error":      err.Error(),
-			}).Warn("User attempted to access project environments without permission")
-			response.Forbidden(c, "You don't have access to this project")
-			return
-		}
-
-		h.logger.WithFields(logrus.Fields{
-			"endpoint":   "ListEnvironments",
-			"user_id":    userULID.String(),
-			"project_id": projectIDStr,
-			"error":      err.Error(),
-		}).Error("Failed to validate project access")
-		response.InternalServerError(c, "Failed to validate project access")
-		return
-	}
-
-	// Get project details for response metadata
-	project, err := h.projectService.GetProject(ctx, projectID)
-	if err != nil {
-		h.logger.WithFields(logrus.Fields{
-			"endpoint":   "ListEnvironments",
-			"user_id":    userULID.String(),
-			"project_id": projectIDStr,
-			"error":      err.Error(),
-		}).Error("Failed to get project")
-		response.InternalServerError(c, "Failed to get project")
-		return
-	}
-
-	// Get environments for the project
-	environments, err := h.environmentService.GetEnvironmentsByProject(ctx, projectID)
-	if err != nil {
-		h.logger.WithFields(logrus.Fields{
-			"endpoint":     "ListEnvironments",
-			"user_id":      userULID.String(),
-			"project_id":   projectIDStr,
-			"project_name": project.Name,
-			"error":        err.Error(),
-		}).Error("Failed to get project environments")
-		response.InternalServerError(c, "Failed to retrieve environments")
-		return
-	}
-
-	// Convert to response format
-	responseEnvironments := make([]Environment, len(environments))
-	for i, env := range environments {
-		responseEnvironments[i] = Environment{
-			ID:        env.ID.String(),
-			Name:      env.Name,
-			Slug:      env.Slug,
-			ProjectID: env.ProjectID.String(),
-			CreatedAt: env.CreatedAt,
-			UpdatedAt: env.UpdatedAt,
-		}
-	}
-
-	responseData := ListEnvironmentsResponse{
-		Environments: responseEnvironments,
-		ProjectID:    project.ID.String(),
-		ProjectName:  project.Name,
-	}
-
-	response.Success(c, responseData)
-
-	h.logger.WithFields(logrus.Fields{
-		"endpoint":        "ListEnvironments",
-		"user_id":         userULID.String(),
-		"project_id":      project.ID.String(),
-		"project_name":    project.Name,
-		"total_envs":      len(environments),
-		"organization_id": project.OrganizationID.String(),
-	}).Info("Project environments listed successfully")
-}

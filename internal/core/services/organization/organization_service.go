@@ -14,12 +14,11 @@ import (
 
 // organizationService implements the orgDomain.OrganizationService interface
 type organizationService struct {
-	orgRepo        orgDomain.OrganizationRepository
-	userRepo       userDomain.Repository
-	memberSvc      orgDomain.MemberService
-	projectSvc     orgDomain.ProjectService
-	environmentSvc orgDomain.EnvironmentService
-	roleService    authDomain.RoleService
+	orgRepo     orgDomain.OrganizationRepository
+	userRepo    userDomain.Repository
+	memberSvc   orgDomain.MemberService
+	projectSvc  orgDomain.ProjectService
+	roleService authDomain.RoleService
 }
 
 // NewOrganizationService creates a new organization service instance
@@ -28,16 +27,14 @@ func NewOrganizationService(
 	userRepo userDomain.Repository,
 	memberSvc orgDomain.MemberService,
 	projectSvc orgDomain.ProjectService,
-	environmentSvc orgDomain.EnvironmentService,
 	roleService authDomain.RoleService,
 ) orgDomain.OrganizationService {
 	return &organizationService{
-		orgRepo:        orgRepo,
-		userRepo:       userRepo,
-		memberSvc:      memberSvc,
-		projectSvc:     projectSvc,
-		environmentSvc: environmentSvc,
-		roleService:    roleService,
+		orgRepo:     orgRepo,
+		userRepo:    userRepo,
+		memberSvc:   memberSvc,
+		projectSvc:  projectSvc,
+		roleService: roleService,
 	}
 }
 
@@ -82,11 +79,11 @@ func (s *organizationService) CreateOrganization(ctx context.Context, userID uli
 		}
 	}
 
-	// Create default project and environments
-	err = s.createDefaultProjectAndEnvironments(ctx, org.ID)
+	// Create default project
+	err = s.createDefaultProject(ctx, org.ID)
 	if err != nil {
 		// Log but don't fail organization creation
-		fmt.Printf("Failed to create default project and environments: %v\n", err)
+		fmt.Printf("Failed to create default project: %v\n", err)
 	}
 
 
@@ -187,24 +184,18 @@ func (s *organizationService) SetUserDefaultOrganization(ctx context.Context, us
 	return s.userRepo.SetDefaultOrganization(ctx, userID, orgID)
 }
 
-// createDefaultProjectAndEnvironments creates default project and environments for a new organization
-func (s *organizationService) createDefaultProjectAndEnvironments(ctx context.Context, orgID ulid.ULID) error {
+// createDefaultProject creates default project for a new organization
+func (s *organizationService) createDefaultProject(ctx context.Context, orgID ulid.ULID) error {
 	// Create default project using project service
 	defaultProjectReq := &orgDomain.CreateProjectRequest{
 		Name:        "Default",
 		Slug:        "default",
 		Description: "Default project for getting started",
 	}
-	
-	project, err := s.projectSvc.CreateProject(ctx, orgID, defaultProjectReq)
+
+	_, err := s.projectSvc.CreateProject(ctx, orgID, defaultProjectReq)
 	if err != nil {
 		return appErrors.NewInternalError("Failed to create default project", err)
-	}
-
-	// Create default environments using environment service
-	err = s.environmentSvc.CreateDefaultEnvironments(ctx, project.ID)
-	if err != nil {
-		return appErrors.NewInternalError("Failed to create default environments", err)
 	}
 
 	return nil

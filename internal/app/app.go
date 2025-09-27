@@ -59,6 +59,7 @@ func (a *App) Start() error {
 		a.config,
 		a.logger,
 		providers.Services.Auth.Auth,                   // Auth service from modular DI
+		providers.Services.Auth.APIKey,                 // API key service for authentication
 		providers.Services.Auth.BlacklistedTokens,     // Blacklisted tokens service
 		providers.Services.User.User,                   // User service from modular DI
 		providers.Services.User.Profile,                // Profile service from modular DI
@@ -66,23 +67,24 @@ func (a *App) Start() error {
 		providers.Services.OrganizationService,         // Direct organization service
 		providers.Services.MemberService,               // Direct member service
 		providers.Services.ProjectService,              // Direct project service
-		providers.Services.EnvironmentService,          // Direct environment service
 		providers.Services.InvitationService,           // Direct invitation service
 		providers.Services.SettingsService,             // Direct settings service
 		providers.Services.Auth.Role,                   // Role service for RBAC
 		providers.Services.Auth.Permission,             // Permission service for RBAC
 		providers.Services.Auth.OrganizationMembers,    // Organization member service for normalized RBAC
+		providers.Services.Observability,               // Observability service registry
 		// All enterprise services available through providers.Enterprise
 	)
 
 	// Initialize HTTP server with auth services
 	a.httpServer = http.NewServer(
-		a.config, 
-		a.logger, 
+		a.config,
+		a.logger,
 		httpHandlers,
 		providers.Services.Auth.JWT,
 		providers.Services.Auth.BlacklistedTokens,
 		providers.Services.Auth.OrganizationMembers,
+		providers.Services.Auth.APIKey,
 		providers.Databases.Redis.Client,
 	)
 
@@ -115,6 +117,7 @@ func (a *App) Run() error {
 		a.config,
 		a.logger,
 		providers.Services.Auth.Auth,                   // Auth service from modular DI
+		providers.Services.Auth.APIKey,                 // API key service for authentication
 		providers.Services.Auth.BlacklistedTokens,     // Blacklisted tokens service
 		providers.Services.User.User,                   // User service from modular DI
 		providers.Services.User.Profile,                // Profile service from modular DI
@@ -122,23 +125,24 @@ func (a *App) Run() error {
 		providers.Services.OrganizationService,         // Direct organization service
 		providers.Services.MemberService,               // Direct member service
 		providers.Services.ProjectService,              // Direct project service
-		providers.Services.EnvironmentService,          // Direct environment service
 		providers.Services.InvitationService,           // Direct invitation service
 		providers.Services.SettingsService,             // Direct settings service
 		providers.Services.Auth.Role,                   // Role service for RBAC
 		providers.Services.Auth.Permission,             // Permission service for RBAC
 		providers.Services.Auth.OrganizationMembers,    // Organization member service for normalized RBAC
+		providers.Services.Observability,               // Observability service registry
 		// All enterprise services available through providers.Enterprise
 	)
 
 	// Initialize HTTP server with auth services
 	a.httpServer = http.NewServer(
-		a.config, 
-		a.logger, 
+		a.config,
+		a.logger,
 		httpHandlers,
 		providers.Services.Auth.JWT,
 		providers.Services.Auth.BlacklistedTokens,
 		providers.Services.Auth.OrganizationMembers,
+		providers.Services.Auth.APIKey,
 		providers.Databases.Redis.Client,
 	)
 

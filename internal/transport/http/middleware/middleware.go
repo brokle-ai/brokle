@@ -12,8 +12,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"math/rand"
-
-	"brokle/internal/transport/http/handlers/auth"
 )
 
 // Prometheus metrics
@@ -118,65 +116,6 @@ func Metrics() gin.HandlerFunc {
 	}
 }
 
-// JWTAuth middleware validates JWT tokens
-func JWTAuth(authHandler *auth.Handler) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		// Extract token from Authorization header
-		token := extractTokenFromGin(c)
-		if token == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header required"})
-			c.Abort()
-			return
-		}
-
-		// Validate token and get user
-		user, err := authHandler.ValidateToken(token)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired token"})
-			c.Abort()
-			return
-		}
-
-		// Add user to context
-		c.Set("user", user)
-		c.Next()
-	}
-}
-
-// APIKeyAuth middleware validates API keys
-func APIKeyAuth(authHandler *auth.Handler) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		// Extract API key from header
-		apiKey := c.GetHeader("Authorization")
-		if apiKey == "" {
-			apiKey = c.GetHeader("X-API-Key")
-		}
-
-		if apiKey == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "API key required"})
-			c.Abort()
-			return
-		}
-
-		// Remove "Bearer " prefix if present
-		if len(apiKey) > 7 && apiKey[:7] == "Bearer " {
-			apiKey = apiKey[7:]
-		}
-
-		// Validate API key and get context
-		keyContext, err := authHandler.ValidateAPIKey(apiKey)
-		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid API key"})
-			c.Abort()
-			return
-		}
-
-		// Add key context to request context
-		c.Set("api_key", keyContext)
-		c.Next()
-	}
-}
-
 // RateLimit middleware implements rate limiting
 func RateLimit() func(http.Handler) http.Handler {
 	// TODO: Implement rate limiting using Redis
@@ -199,15 +138,6 @@ func (rw *responseWriter) WriteHeader(code int) {
 	rw.ResponseWriter.WriteHeader(code)
 }
 
-// extractToken extracts JWT token from Authorization header
-func extractToken(r *http.Request) string {
-	bearerToken := r.Header.Get("Authorization")
-	if len(bearerToken) > 7 && bearerToken[:7] == "Bearer " {
-		return bearerToken[7:]
-	}
-	return ""
-}
-
 // extractTokenFromGin extracts JWT token from Gin context
 func extractTokenFromGin(c *gin.Context) string {
 	bearerToken := c.GetHeader("Authorization")
@@ -215,22 +145,4 @@ func extractTokenFromGin(c *gin.Context) string {
 		return bearerToken[7:]
 	}
 	return ""
-}
-
-// getClientIP gets the real client IP address
-func getClientIP(r *http.Request) string {
-	// Check X-Forwarded-For header first
-	forwarded := r.Header.Get("X-Forwarded-For")
-	if forwarded != "" {
-		return forwarded
-	}
-
-	// Check X-Real-IP header
-	realIP := r.Header.Get("X-Real-IP")
-	if realIP != "" {
-		return realIP
-	}
-
-	// Fall back to RemoteAddr
-	return r.RemoteAddr
 }

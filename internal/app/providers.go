@@ -9,6 +9,7 @@ import (
 
 	"brokle/internal/config"
 	"brokle/internal/core/domain/auth"
+	"brokle/internal/core/domain/observability"
 	"brokle/internal/core/domain/organization"
 	"brokle/internal/core/domain/user"
 	authService "brokle/internal/core/services/auth"
@@ -20,9 +21,11 @@ import (
 	"brokle/internal/ee/sso"
 	"brokle/internal/infrastructure/database"
 	authRepo "brokle/internal/infrastructure/repository/auth"
+	observabilityRepo "brokle/internal/infrastructure/repository/observability"
 	orgRepo "brokle/internal/infrastructure/repository/organization"
 	userRepo "brokle/internal/infrastructure/repository/user"
 	"brokle/internal/migration"
+	observabilityService "brokle/internal/services/observability"
 )
 
 // ProviderContainer holds all provider instances for dependency injection
@@ -44,9 +47,10 @@ type DatabaseContainer struct {
 
 // RepositoryContainer holds all repository instances organized by domain
 type RepositoryContainer struct {
-	User         *UserRepositories
-	Auth         *AuthRepositories
-	Organization *OrganizationRepositories
+	User          *UserRepositories
+	Auth          *AuthRepositories
+	Organization  *OrganizationRepositories
+	Observability *ObservabilityRepositories
 }
 
 // ServiceContainer holds all service instances organized by domain
@@ -57,9 +61,10 @@ type ServiceContainer struct {
 	OrganizationService    organization.OrganizationService
 	MemberService         organization.MemberService
 	ProjectService        organization.ProjectService
-	EnvironmentService    organization.EnvironmentService
 	InvitationService     organization.InvitationService
 	SettingsService       organization.OrganizationSettingsService
+	// Observability services
+	Observability         *observabilityService.ServiceRegistry
 }
 
 // EnterpriseContainer holds all enterprise service instances
@@ -95,9 +100,15 @@ type OrganizationRepositories struct {
 	Organization organization.OrganizationRepository
 	Member       organization.MemberRepository
 	Project      organization.ProjectRepository
-	Environment  organization.EnvironmentRepository
 	Invitation   organization.InvitationRepository
 	Settings     organization.OrganizationSettingsRepository
+}
+
+// ObservabilityRepositories contains all observability-related repositories
+type ObservabilityRepositories struct {
+	Trace        observability.TraceRepository
+	Observation  observability.ObservationRepository
+	QualityScore observability.QualityScoreRepository
 }
 
 // Domain-specific service containers
@@ -114,6 +125,7 @@ type AuthServices struct {
 	Auth                   auth.AuthService
 	JWT                    auth.JWTService
 	Sessions               auth.SessionService
+	APIKey                 auth.APIKeyService
 	Role                   auth.RoleService
 	Permission             auth.PermissionService
 	OrganizationMembers    auth.OrganizationMemberService
@@ -178,18 +190,27 @@ func ProvideOrganizationRepositories(db *gorm.DB) *OrganizationRepositories {
 		Organization: orgRepo.NewOrganizationRepository(db),
 		Member:       orgRepo.NewMemberRepository(db),
 		Project:      orgRepo.NewProjectRepository(db),
-		Environment:  orgRepo.NewEnvironmentRepository(db),
 		Invitation:   orgRepo.NewInvitationRepository(db),
 		Settings:     orgRepo.NewOrganizationSettingsRepository(db),
+	}
+}
+
+// ProvideObservabilityRepositories creates all observability-related repositories
+func ProvideObservabilityRepositories(postgresDB *gorm.DB, clickhouseDB *database.ClickHouseDB) *ObservabilityRepositories {
+	return &ObservabilityRepositories{
+		Trace:        observabilityRepo.NewTraceRepository(postgresDB),
+		Observation:  observabilityRepo.NewObservationRepository(postgresDB),
+		QualityScore: observabilityRepo.NewQualityScoreRepository(postgresDB),
 	}
 }
 
 // ProvideRepositories creates all repository containers
 func ProvideRepositories(dbs *DatabaseContainer) *RepositoryContainer {
 	return &RepositoryContainer{
-		User:         ProvideUserRepositories(dbs.Postgres.DB),
-		Auth:         ProvideAuthRepositories(dbs.Postgres.DB),
-		Organization: ProvideOrganizationRepositories(dbs.Postgres.DB),
+		User:          ProvideUserRepositories(dbs.Postgres.DB),
+		Auth:          ProvideAuthRepositories(dbs.Postgres.DB),
+		Organization:  ProvideOrganizationRepositories(dbs.Postgres.DB),
+		Observability: ProvideObservabilityRepositories(dbs.Postgres.DB, dbs.ClickHouse),
 	}
 }
 
@@ -264,6 +285,12 @@ func ProvideAuthServices(
 		jwtService,
 	)
 
+	// Create API key service for programmatic authentication
+	apiKeyService := authService.NewAPIKeyService(
+		authRepos.APIKey,
+		authRepos.OrganizationMember,
+	)
+
 	// Create core auth service (without audit logging)
 	coreAuthSvc := authService.NewAuthService(
 		&cfg.Auth,
@@ -282,10 +309,11 @@ func ProvideAuthServices(
 		Auth:                authSvc,
 		JWT:                 jwtService,
 		Sessions:            sessionService,
+		APIKey:              apiKeyService,
 		Role:                roleService,
 		Permission:          permissionService,
 		OrganizationMembers: orgMemberService,
-		BlacklistedTokens: blacklistedTokenService,
+		BlacklistedTokens:   blacklistedTokenService,
 	}
 }
 
@@ -300,7 +328,6 @@ func ProvideOrganizationServices(
 	organization.OrganizationService,
 	organization.MemberService,
 	organization.ProjectService,
-	organization.EnvironmentService,
 	organization.InvitationService,
 	organization.OrganizationSettingsService,
 ) {
@@ -318,12 +345,6 @@ func ProvideOrganizationServices(
 		orgRepos.Member,
 	)
 
-	environmentSvc := orgService.NewEnvironmentService(
-		orgRepos.Environment,
-		orgRepos.Project,
-		orgRepos.Member,
-	)
-
 	invitationSvc := orgService.NewInvitationService(
 		orgRepos.Invitation,
 		orgRepos.Organization,
@@ -338,7 +359,6 @@ func ProvideOrganizationServices(
 		userRepos.User,
 		memberSvc,
 		projectSvc,
-		environmentSvc,
 		authServices.Role,
 	)
 
@@ -348,7 +368,46 @@ func ProvideOrganizationServices(
 		orgRepos.Member,
 	)
 
-	return orgSvc, memberSvc, projectSvc, environmentSvc, invitationSvc, settingsSvc
+	return orgSvc, memberSvc, projectSvc, invitationSvc, settingsSvc
+}
+
+// ProvideObservabilityServices creates all observability-related services
+func ProvideObservabilityServices(
+	observabilityRepos *ObservabilityRepositories,
+	logger *logrus.Logger,
+) *observabilityService.ServiceRegistry {
+	// Create a simple event publisher for now
+	eventPublisher := &simpleEventPublisher{logger: logger}
+
+	return observabilityService.NewServiceRegistry(
+		observabilityRepos.Trace,
+		observabilityRepos.Observation,
+		observabilityRepos.QualityScore,
+		eventPublisher,
+	)
+}
+
+// simpleEventPublisher is a simple implementation of EventPublisher for initial integration
+type simpleEventPublisher struct {
+	logger *logrus.Logger
+}
+
+func (p *simpleEventPublisher) Publish(ctx context.Context, event *observability.Event) error {
+	p.logger.WithFields(logrus.Fields{
+		"event_type": event.Type,
+		"subject":    event.Subject,
+		"project_id": event.ProjectID.String(),
+	}).Debug("publishing event")
+	return nil
+}
+
+func (p *simpleEventPublisher) PublishBatch(ctx context.Context, events []*observability.Event) error {
+	for _, event := range events {
+		if err := p.Publish(ctx, event); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // ProvideServices creates all service containers with proper dependency resolution
@@ -364,7 +423,7 @@ func ProvideServices(
 	userServices := ProvideUserServices(repos.User, repos.Auth, logger)
 
 	// Create organization services (depends on auth services)
-	orgService, memberService, projectService, environmentService, invitationService, settingsService := ProvideOrganizationServices(
+	orgService, memberService, projectService, invitationService, settingsService := ProvideOrganizationServices(
 		repos.User,
 		repos.Auth,
 		repos.Organization,
@@ -372,15 +431,18 @@ func ProvideServices(
 		logger,
 	)
 
+	// Create observability services
+	observabilityServices := ProvideObservabilityServices(repos.Observability, logger)
+
 	return &ServiceContainer{
 		User:               userServices,
 		Auth:               authServices,
 		OrganizationService: orgService,
 		MemberService:      memberService,
 		ProjectService:     projectService,
-		EnvironmentService: environmentService,
 		InvitationService:  invitationService,
 		SettingsService:    settingsService,
+		Observability:      observabilityServices,
 	}
 }
 
@@ -455,7 +517,6 @@ type Repositories struct {
 	OrganizationRepository      organization.OrganizationRepository
 	MemberRepository            organization.MemberRepository
 	ProjectRepository           organization.ProjectRepository
-	EnvironmentRepository       organization.EnvironmentRepository
 	InvitationRepository        organization.InvitationRepository
 	OrganizationSettingsRepository organization.OrganizationSettingsRepository
 	UserSessionRepository       auth.UserSessionRepository
@@ -487,7 +548,6 @@ func (pc *ProviderContainer) GetAllRepositories() *Repositories {
 		OrganizationRepository:         pc.Repos.Organization.Organization,
 		MemberRepository:               pc.Repos.Organization.Member,
 		ProjectRepository:              pc.Repos.Organization.Project,
-		EnvironmentRepository:          pc.Repos.Organization.Environment,
 		InvitationRepository:           pc.Repos.Organization.Invitation,
 		OrganizationSettingsRepository: pc.Repos.Organization.Settings,
 		UserSessionRepository:          pc.Repos.Auth.UserSession,

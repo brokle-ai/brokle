@@ -9,21 +9,19 @@ import (
 	"brokle/pkg/ulid"
 )
 
-// ProjectSeeder handles seeding of project and environment data
+// ProjectSeeder handles seeding of project data
 type ProjectSeeder struct {
-	projectRepo     organization.ProjectRepository
-	environmentRepo organization.EnvironmentRepository
+	projectRepo organization.ProjectRepository
 }
 
 // NewProjectSeeder creates a new ProjectSeeder instance
-func NewProjectSeeder(projectRepo organization.ProjectRepository, environmentRepo organization.EnvironmentRepository) *ProjectSeeder {
+func NewProjectSeeder(projectRepo organization.ProjectRepository) *ProjectSeeder {
 	return &ProjectSeeder{
-		projectRepo:     projectRepo,
-		environmentRepo: environmentRepo,
+		projectRepo: projectRepo,
 	}
 }
 
-// SeedProjects seeds projects and their environments from the provided seed data
+// SeedProjects seeds projects from the provided seed data
 func (ps *ProjectSeeder) SeedProjects(ctx context.Context, projectSeeds []ProjectSeed, entityMaps *EntityMaps, verbose bool) error {
 	if verbose {
 		log.Printf("📂 Seeding %d projects...", len(projectSeeds))
@@ -46,11 +44,6 @@ func (ps *ProjectSeeder) SeedProjects(ctx context.Context, projectSeeds []Projec
 			}
 			projectKey := fmt.Sprintf("%s:%s", projectSeed.OrganizationSlug, projectSeed.Name)
 			entityMaps.Projects[projectKey] = existing.ID
-			
-			// Still need to process environments for existing project
-			if err := ps.seedEnvironments(ctx, existing.ID, projectSeed.Environments, entityMaps, verbose); err != nil {
-				return fmt.Errorf("failed to seed environments for existing project %s: %w", projectSeed.Name, err)
-			}
 			continue
 		}
 
@@ -74,13 +67,8 @@ func (ps *ProjectSeeder) SeedProjects(ctx context.Context, projectSeeds []Projec
 		projectKey := fmt.Sprintf("%s:%s", projectSeed.OrganizationSlug, projectSeed.Name)
 		entityMaps.Projects[projectKey] = project.ID
 
-		// Seed environments for this project
-		if err := ps.seedEnvironments(ctx, project.ID, projectSeed.Environments, entityMaps, verbose); err != nil {
-			return fmt.Errorf("failed to seed environments for project %s: %w", projectSeed.Name, err)
-		}
-
 		if verbose {
-			log.Printf("   ✅ Created project: %s (%s) with %d environments", project.Name, projectSlug, len(projectSeed.Environments))
+			log.Printf("   ✅ Created project: %s (%s)", project.Name, projectSlug)
 		}
 	}
 
@@ -90,50 +78,6 @@ func (ps *ProjectSeeder) SeedProjects(ctx context.Context, projectSeeds []Projec
 	return nil
 }
 
-// seedEnvironments seeds environments for a specific project
-func (ps *ProjectSeeder) seedEnvironments(ctx context.Context, projectID ulid.ULID, envSeeds []EnvironmentSeed, entityMaps *EntityMaps, verbose bool) error {
-	for _, envSeed := range envSeeds {
-		// Generate environment slug if not provided
-		envSlug := envSeed.Slug
-		if envSlug == "" {
-			envSlug = generateSlug(envSeed.Name)
-		}
-
-		// Check if environment already exists
-		existing, err := ps.environmentRepo.GetBySlug(ctx, projectID, envSlug)
-		if err == nil && existing != nil {
-			if verbose {
-				log.Printf("     Environment %s already exists, skipping", envSeed.Name)
-			}
-			envKey := fmt.Sprintf("%s:%s", projectID.String(), envSeed.Name)
-			entityMaps.Environments[envKey] = existing.ID
-			continue
-		}
-
-		// Create environment entity
-		environment := &organization.Environment{
-			ID:        ulid.New(),
-			ProjectID: projectID,
-			Name:      envSeed.Name,
-			Slug:      envSlug,
-		}
-
-		// Create environment in database
-		if err := ps.environmentRepo.Create(ctx, environment); err != nil {
-			return fmt.Errorf("failed to create environment %s: %w", envSeed.Name, err)
-		}
-
-		// Store environment ID for later reference
-		envKey := fmt.Sprintf("%s:%s", projectID.String(), envSeed.Name)
-		entityMaps.Environments[envKey] = environment.ID
-
-		if verbose {
-			log.Printf("     ✅ Created environment: %s (%s)", environment.Name, environment.Slug)
-		}
-	}
-
-	return nil
-}
 
 // generateSlug creates a URL-friendly slug from a name
 func generateSlug(name string) string {

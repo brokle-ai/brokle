@@ -28,7 +28,6 @@ type Manager struct {
 	organizationRepo organization.OrganizationRepository
 	memberRepo       organization.MemberRepository
 	projectRepo      organization.ProjectRepository
-	environmentRepo  organization.EnvironmentRepository
 	roleRepo         auth.RoleRepository
 	orgMemberRepo    auth.OrganizationMemberRepository
 	permissionRepo   auth.PermissionRepository
@@ -77,7 +76,6 @@ func (m *Manager) initializeRepositories() {
 	m.organizationRepo = orgRepo.NewOrganizationRepository(m.db)
 	m.memberRepo = orgRepo.NewMemberRepository(m.db)
 	m.projectRepo = orgRepo.NewProjectRepository(m.db)
-	m.environmentRepo = orgRepo.NewEnvironmentRepository(m.db)
 
 	// Auth repositories
 	m.roleRepo = authRepo.NewRoleRepository(m.db)
@@ -91,7 +89,7 @@ func (m *Manager) initializeComponentSeeders() {
 	m.userSeeder = NewUserSeeder(m.userRepo)
 	m.organizationSeeder = NewOrganizationSeeder(m.organizationRepo)
 	m.rbacSeeder = NewRBACSeeder(m.roleRepo, m.permissionRepo, m.rolePermRepo, m.orgMemberRepo)
-	m.projectSeeder = NewProjectSeeder(m.projectRepo, m.environmentRepo)
+	m.projectSeeder = NewProjectSeeder(m.projectRepo)
 	m.onboardingSeeder = NewOnboardingSeeder(m.userRepo)
 }
 
@@ -263,7 +261,7 @@ func (m *Manager) PrintSeedPlan(data *SeedData) {
 
 	fmt.Printf("\nProjects: %d\n", len(data.Projects))
 	for _, project := range data.Projects {
-		fmt.Printf("  - %s (%s) - %d environments\n", project.Name, project.OrganizationSlug, len(project.Environments))
+		fmt.Printf("  - %s (%s)\n", project.Name, project.OrganizationSlug)
 	}
 
 	fmt.Printf("\nMemberships: %d\n", len(data.RBAC.Memberships))

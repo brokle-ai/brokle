@@ -316,9 +316,9 @@
                     },
                     {
                         "type": "string",
-                        "example": "\"env_1234567890\"",
-                        "description": "Filter by environment ID",
-                        "name": "environment_id",
+                        "example": "\"production\"",
+                        "description": "Filter by environment tag",
+                        "name": "environment",
                         "in": "query"
                     },
                     {
@@ -429,9 +429,9 @@
                     },
                     {
                         "type": "string",
-                        "example": "\"env_1234567890\"",
-                        "description": "Filter by environment ID",
-                        "name": "environment_id",
+                        "example": "\"production\"",
+                        "description": "Filter by environment tag",
+                        "name": "environment",
                         "in": "query"
                     },
                     {
@@ -547,9 +547,9 @@
                     },
                     {
                         "type": "string",
-                        "example": "\"env_1234567890\"",
-                        "description": "Filter by environment ID",
-                        "name": "environment_id",
+                        "example": "\"production\"",
+                        "description": "Filter by environment tag",
+                        "name": "environment",
                         "in": "query"
                     }
                 ],
@@ -648,9 +648,9 @@
                     },
                     {
                         "type": "string",
-                        "example": "\"env_1234567890\"",
-                        "description": "Filter by environment ID",
-                        "name": "environment_id",
+                        "example": "\"production\"",
+                        "description": "Filter by environment tag",
+                        "name": "environment",
                         "in": "query"
                     },
                     {
@@ -759,9 +759,9 @@
                     },
                     {
                         "type": "string",
-                        "example": "\"env_1234567890\"",
-                        "description": "Filter by environment ID",
-                        "name": "environment_id",
+                        "example": "\"production\"",
+                        "description": "Filter by environment tag",
+                        "name": "environment",
                         "in": "query"
                     },
                     {
@@ -1828,743 +1828,6 @@
                 }
             }
         },
-        "/api/v1/environments": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Get a paginated list of environments accessible to the authenticated user",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Environments"
-                ],
-                "summary": "List environments",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "example": "\"proj_1234567890\"",
-                        "description": "Filter by project ID",
-                        "name": "project_id",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "development",
-                            "staging",
-                            "production"
-                        ],
-                        "type": "string",
-                        "description": "Filter by environment type",
-                        "name": "type",
-                        "in": "query"
-                    },
-                    {
-                        "enum": [
-                            "active",
-                            "paused",
-                            "archived"
-                        ],
-                        "type": "string",
-                        "description": "Filter by environment status",
-                        "name": "status",
-                        "in": "query"
-                    },
-                    {
-                        "minimum": 1,
-                        "type": "integer",
-                        "default": 1,
-                        "description": "Page number",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "maximum": 100,
-                        "minimum": 1,
-                        "type": "integer",
-                        "default": 20,
-                        "description": "Items per page",
-                        "name": "limit",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "List of environments with pagination",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "$ref": "#/definitions/environment.Environment"
-                                            }
-                                        },
-                                        "meta": {
-                                            "allOf": [
-                                                {
-                                                    "$ref": "#/definitions/response.Meta"
-                                                },
-                                                {
-                                                    "type": "object",
-                                                    "properties": {
-                                                        "pagination": {
-                                                            "$ref": "#/definitions/response.Pagination"
-                                                        }
-                                                    }
-                                                }
-                                            ]
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad request",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Create a new environment within a project. User must have appropriate permissions in the project.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Environments"
-                ],
-                "summary": "Create environment",
-                "parameters": [
-                    {
-                        "description": "Environment details",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/environment.CreateEnvironmentRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Environment created successfully",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.SuccessResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/environment.Environment"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad request - invalid input or validation errors",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden - insufficient permissions in project",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Project not found",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "409": {
-                        "description": "Conflict - environment slug already exists in project",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/environments/{envId}": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Get detailed information about a specific environment",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Environments"
-                ],
-                "summary": "Get environment details",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "example": "\"env_1234567890\"",
-                        "description": "Environment ID",
-                        "name": "envId",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Environment details",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.SuccessResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/environment.Environment"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad request - invalid environment ID",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden - insufficient permissions",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Environment not found",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Update environment details. Requires appropriate permissions within the project.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Environments"
-                ],
-                "summary": "Update environment",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "example": "\"env_1234567890\"",
-                        "description": "Environment ID",
-                        "name": "envId",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Updated environment details",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/environment.UpdateEnvironmentRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Environment updated successfully",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.SuccessResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/environment.Environment"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad request - invalid input or validation errors",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden - insufficient permissions",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Environment not found",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Permanently delete an environment and all associated API keys and data. This action cannot be undone.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Environments"
-                ],
-                "summary": "Delete environment",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "example": "\"env_1234567890\"",
-                        "description": "Environment ID",
-                        "name": "envId",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "description": "Environment deleted successfully"
-                    },
-                    "400": {
-                        "description": "Bad request - invalid environment ID",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden - insufficient permissions (requires admin or owner role)",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Environment not found",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "409": {
-                        "description": "Conflict - cannot delete environment with active API keys or recent usage",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/environments/{envId}/api-keys": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Get a paginated list of API keys for a specific environment",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "API Keys"
-                ],
-                "summary": "List API keys",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "example": "\"env_1234567890\"",
-                        "description": "Environment ID",
-                        "name": "envId",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "enum": [
-                            "active",
-                            "inactive",
-                            "revoked"
-                        ],
-                        "type": "string",
-                        "description": "Filter by API key status",
-                        "name": "status",
-                        "in": "query"
-                    },
-                    {
-                        "minimum": 1,
-                        "type": "integer",
-                        "default": 1,
-                        "description": "Page number",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "maximum": 100,
-                        "minimum": 1,
-                        "type": "integer",
-                        "default": 20,
-                        "description": "Items per page",
-                        "name": "limit",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "List of API keys with pagination",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "$ref": "#/definitions/apikey.APIKey"
-                                            }
-                                        },
-                                        "meta": {
-                                            "allOf": [
-                                                {
-                                                    "$ref": "#/definitions/response.Meta"
-                                                },
-                                                {
-                                                    "type": "object",
-                                                    "properties": {
-                                                        "pagination": {
-                                                            "$ref": "#/definitions/response.Pagination"
-                                                        }
-                                                    }
-                                                }
-                                            ]
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad request - invalid environment ID",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden - insufficient permissions to view API keys",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Environment not found",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Create a new API key for an environment. The key will only be displayed once upon creation.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "API Keys"
-                ],
-                "summary": "Create API key",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "example": "\"env_1234567890\"",
-                        "description": "Environment ID",
-                        "name": "envId",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "API key details",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/apikey.CreateAPIKeyRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "API key created successfully (key only shown once)",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.SuccessResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/apikey.APIKey"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad request - invalid input or validation errors",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden - insufficient permissions to create API keys",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Environment not found",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "409": {
-                        "description": "Conflict - API key name already exists in environment",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/environments/{envId}/api-keys/{keyId}": {
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Permanently revoke and delete an API key. This action cannot be undone and will immediately invalidate the key.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "API Keys"
-                ],
-                "summary": "Delete API key",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "example": "\"env_1234567890\"",
-                        "description": "Environment ID",
-                        "name": "envId",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "example": "\"key_1234567890\"",
-                        "description": "API Key ID",
-                        "name": "keyId",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "204": {
-                        "description": "API key deleted successfully"
-                    },
-                    "400": {
-                        "description": "Bad request - invalid environment ID or key ID",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden - insufficient permissions to delete API keys",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Environment or API key not found",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/api/v1/logs/export": {
             "get": {
                 "security": [
@@ -2973,6 +2236,771 @@
                     },
                     "404": {
                         "description": "Request not found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/observability/observations": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Create a new LLM observation (LLM call, span, event, generation, etc.) within a trace",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Observability - Observations"
+                ],
+                "summary": "Create a new observation",
+                "parameters": [
+                    {
+                        "description": "Observation creation data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/observability.CreateObservationRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Observation created successfully",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/observability.ObservationResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request payload or observation data",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Observation with external_observation_id already exists",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Validation failed",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/observability/quality-scores": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Create a new quality evaluation score for a trace or observation (numeric, categorical, or boolean)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Observability - Quality"
+                ],
+                "summary": "Create a quality score",
+                "parameters": [
+                    {
+                        "description": "Quality score creation data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/observability.CreateQualityScoreRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Quality score created successfully",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/observability.QualityScoreResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request payload or quality score data",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Duplicate quality score for same trace/observation and score name",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Validation failed",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/observability/traces": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get a paginated list of LLM observability traces with filtering options",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Observability - Traces"
+                ],
+                "summary": "List traces",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project ID filter",
+                        "name": "project_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "User ID filter",
+                        "name": "user_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Session ID filter",
+                        "name": "session_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Trace name filter",
+                        "name": "name",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "External trace ID filter",
+                        "name": "external_trace_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start time filter (RFC3339 format)",
+                        "name": "start_time",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End time filter (RFC3339 format)",
+                        "name": "end_time",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 50,
+                        "description": "Maximum number of results",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 0,
+                        "description": "Number of results to skip",
+                        "name": "offset",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "default": "created_at",
+                        "description": "Sort field",
+                        "name": "sort_by",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "default": "desc",
+                        "description": "Sort order (asc/desc)",
+                        "name": "sort_order",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Traces retrieved successfully",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/observability.ListTracesResponse"
+                                        },
+                                        "meta": {
+                                            "allOf": [
+                                                {
+                                                    "$ref": "#/definitions/response.Meta"
+                                                },
+                                                {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "pagination": {
+                                                            "$ref": "#/definitions/response.Pagination"
+                                                        }
+                                                    }
+                                                }
+                                            ]
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid filter parameters",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Create a new LLM observability trace for tracking AI operations",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Observability - Traces"
+                ],
+                "summary": "Create a new trace",
+                "parameters": [
+                    {
+                        "description": "Trace creation data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/observability.CreateTraceRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Trace created successfully",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/observability.TraceResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request payload or trace data",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Trace with external_trace_id already exists",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Validation failed",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/observability/traces/batch": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Create multiple LLM observability traces in a single batch operation for improved performance",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Observability - Traces"
+                ],
+                "summary": "Create multiple traces in batch",
+                "parameters": [
+                    {
+                        "description": "Batch trace creation data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/observability.BatchCreateTracesRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Traces created successfully",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/observability.BatchCreateTracesResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request payload or trace data",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Validation failed",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/observability/traces/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Retrieve a specific LLM observability trace by its unique identifier",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Observability - Traces"
+                ],
+                "summary": "Get trace by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Trace ID (ULID format)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Trace retrieved successfully",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/observability.TraceResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid trace ID format",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Trace not found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Update an existing LLM observability trace with new information",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Observability - Traces"
+                ],
+                "summary": "Update trace",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Trace ID (ULID format)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Trace update data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/observability.UpdateTraceRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Trace updated successfully",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/observability.TraceResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid trace ID or request payload",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Trace not found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Validation failed",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Delete an LLM observability trace and all associated data",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Observability - Traces"
+                ],
+                "summary": "Delete trace",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Trace ID (ULID format)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Trace deleted successfully",
+                        "schema": {
+                            "$ref": "#/definitions/response.MessageResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid trace ID format",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Trace not found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/observability/traces/{id}/observations": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Retrieve a trace along with all its associated observations (LLM calls, spans, events)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Observability - Traces"
+                ],
+                "summary": "Get trace with observations",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Trace ID (ULID format)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Trace with observations retrieved successfully",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/observability.TraceWithObservationsResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid trace ID format",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Trace not found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/observability/traces/{id}/stats": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Retrieve aggregated statistics for a specific LLM trace (cost, tokens, latency, etc.)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Observability - Traces"
+                ],
+                "summary": "Get trace statistics",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Trace ID (ULID format)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Trace statistics retrieved successfully",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/observability.TraceStatsResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid trace ID format",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Trace not found",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorResponse"
                         }
@@ -4921,14 +4949,14 @@
                 }
             }
         },
-        "/api/v1/projects/{projectId}/environments": {
+        "/api/v1/projects/{projectId}/api-keys": {
             "get": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get all environments that belong to a specific project",
+                "description": "Get a paginated list of project-scoped API keys for a specific project. Keys are shown with preview format (bk_proj_...7890) for security.",
                 "consumes": [
                     "application/json"
                 ],
@@ -4936,32 +4964,78 @@
                     "application/json"
                 ],
                 "tags": [
-                    "Projects"
+                    "API Keys"
                 ],
-                "summary": "List project environments",
+                "summary": "List project-scoped API keys",
                 "parameters": [
                     {
                         "type": "string",
-                        "example": "\"proj_1234567890\"",
+                        "example": "\"proj_01234567890123456789012345\"",
                         "description": "Project ID",
                         "name": "projectId",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "enum": [
+                            "active",
+                            "inactive",
+                            "expired"
+                        ],
+                        "type": "string",
+                        "description": "Filter by API key status",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "maximum": 100,
+                        "minimum": 1,
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Items per page",
+                        "name": "limit",
+                        "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "List of project environments",
+                        "description": "List of project-scoped API keys with pagination",
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/response.SuccessResponse"
+                                    "$ref": "#/definitions/response.APIResponse"
                                 },
                                 {
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/project.ListEnvironmentsResponse"
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/apikey.APIKey"
+                                            }
+                                        },
+                                        "meta": {
+                                            "allOf": [
+                                                {
+                                                    "$ref": "#/definitions/response.Meta"
+                                                },
+                                                {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "pagination": {
+                                                            "$ref": "#/definitions/response.Pagination"
+                                                        }
+                                                    }
+                                                }
+                                            ]
                                         }
                                     }
                                 }
@@ -4981,13 +5055,179 @@
                         }
                     },
                     "403": {
-                        "description": "Forbidden - insufficient permissions",
+                        "description": "Forbidden - insufficient permissions to view API keys",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
                     "404": {
                         "description": "Project not found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Create a new project-scoped API key with embedded project context. The full key will only be displayed once upon creation. Format: bk_proj_{project_id}_{secret}",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "API Keys"
+                ],
+                "summary": "Create project-scoped API key",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "example": "\"proj_01234567890123456789012345\"",
+                        "description": "Project ID",
+                        "name": "projectId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "API key details",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/apikey.CreateAPIKeyRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Project-scoped API key created successfully (full key only shown once)",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/apikey.APIKey"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request - invalid input or validation errors",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - insufficient permissions to create API keys",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Project not found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict - API key name already exists in project",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/projects/{projectId}/api-keys/{keyId}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Permanently revoke and delete a project-scoped API key. This action cannot be undone and will immediately invalidate the key across all environments.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "API Keys"
+                ],
+                "summary": "Delete project-scoped API key",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "example": "\"proj_01234567890123456789012345\"",
+                        "description": "Project ID",
+                        "name": "projectId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "example": "\"key_01234567890123456789012345\"",
+                        "description": "API Key ID",
+                        "name": "keyId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Project-scoped API key deleted successfully"
+                    },
+                    "400": {
+                        "description": "Bad request - invalid project ID or key ID",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - insufficient permissions to delete API keys",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Project or API key not found",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorResponse"
                         }
@@ -5191,6 +5431,179 @@
                 }
             }
         },
+        "/v1/auth/validate-key": {
+            "post": {
+                "description": "Validates a self-contained API key and extracts project information automatically",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Validate API key",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "API key (format: bk_proj_{project_id}_{secret})",
+                        "name": "X-API-Key",
+                        "in": "header"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Bearer token format: Bearer {api_key}",
+                        "name": "Authorization",
+                        "in": "header"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "API key validation successful",
+                        "schema": {
+                            "$ref": "#/definitions/response.SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid, inactive, or expired API key",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/cache/invalidate": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Invalidate specific cache entries or clear cache",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SDK - Cache"
+                ],
+                "summary": "Invalidate cache entries",
+                "parameters": [
+                    {
+                        "description": "Cache invalidation data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/ai.InvalidateCacheRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Cache invalidated successfully",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/ai.InvalidateCacheResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request payload",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid or missing API key",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/cache/status": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get current cache health and statistics",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SDK - Cache"
+                ],
+                "summary": "Get cache status",
+                "responses": {
+                    "200": {
+                        "description": "Cache status returned",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/ai.CacheStatusResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid or missing API key",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/chat/completions": {
             "post": {
                 "security": [
@@ -5380,6 +5793,81 @@
                 }
             }
         },
+        "/v1/events": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Create a new telemetry event for SDK observability",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SDK - Events"
+                ],
+                "summary": "Create a telemetry event",
+                "parameters": [
+                    {
+                        "description": "Event creation data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/observability.CreateEventRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Event created successfully",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/observability.EventResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request payload",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid or missing API key",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Validation failed",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/models": {
             "get": {
                 "security": [
@@ -5460,6 +5948,75 @@
                     },
                     "404": {
                         "description": "Model not found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/route": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Determine optimal AI provider and model for a request",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SDK - Routing"
+                ],
+                "summary": "Make AI routing decision",
+                "parameters": [
+                    {
+                        "description": "Routing request data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/ai.RouteRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Routing decision returned",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/ai.RouteResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request payload",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid or missing API key",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorResponse"
                         }
@@ -5557,6 +6114,44 @@
                     "type": "string",
                     "maxLength": 100,
                     "example": "account_compromise"
+                }
+            }
+        },
+        "ai.CacheStatusResponse": {
+            "description": "Cache health and statistics response",
+            "type": "object",
+            "properties": {
+                "eviction_count": {
+                    "type": "integer",
+                    "example": 142
+                },
+                "hit_rate": {
+                    "type": "number",
+                    "example": 0.85
+                },
+                "last_eviction": {
+                    "type": "integer",
+                    "example": 1677610602
+                },
+                "memory_usage": {
+                    "type": "number",
+                    "example": 0.45
+                },
+                "provider_breakdown": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "size_bytes": {
+                    "type": "integer",
+                    "example": 1048576
+                },
+                "status": {
+                    "type": "string",
+                    "example": "healthy"
+                },
+                "total_entries": {
+                    "type": "integer",
+                    "example": 15420
                 }
             }
         },
@@ -5722,6 +6317,65 @@
                 }
             }
         },
+        "ai.InvalidateCacheRequest": {
+            "description": "Request data for cache invalidation",
+            "type": "object",
+            "properties": {
+                "clear_all": {
+                    "type": "boolean",
+                    "example": false
+                },
+                "keys": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "max_age": {
+                    "type": "integer",
+                    "example": 3600
+                },
+                "model": {
+                    "type": "string",
+                    "example": "gpt-3.5-turbo"
+                },
+                "pattern": {
+                    "type": "string",
+                    "example": "chat:*"
+                },
+                "provider": {
+                    "type": "string",
+                    "example": "openai"
+                }
+            }
+        },
+        "ai.InvalidateCacheResponse": {
+            "description": "Cache invalidation result",
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer",
+                    "example": 25
+                },
+                "error": {
+                    "type": "string"
+                },
+                "invalidated_keys": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "message": {
+                    "type": "string",
+                    "example": "Cache invalidated successfully"
+                },
+                "success": {
+                    "type": "boolean",
+                    "example": true
+                }
+            }
+        },
         "ai.Model": {
             "description": "Available AI model information",
             "type": "object",
@@ -5741,6 +6395,92 @@
                 "owned_by": {
                     "type": "string",
                     "example": "openai"
+                }
+            }
+        },
+        "ai.RouteRequest": {
+            "description": "Request data for AI routing decisions",
+            "type": "object",
+            "properties": {
+                "max_tokens": {
+                    "type": "integer",
+                    "example": 150
+                },
+                "messages": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/ai.ChatMessage"
+                    }
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "model": {
+                    "type": "string",
+                    "example": "gpt-3.5-turbo"
+                },
+                "prompt": {
+                    "type": "string",
+                    "example": "Hello world"
+                },
+                "provider": {
+                    "type": "string",
+                    "example": "openai"
+                },
+                "strategy": {
+                    "type": "string",
+                    "example": "cost_optimized"
+                },
+                "temperature": {
+                    "type": "number",
+                    "example": 0.7
+                }
+            }
+        },
+        "ai.RouteResponse": {
+            "description": "AI routing decision response",
+            "type": "object",
+            "properties": {
+                "cache_hit": {
+                    "type": "boolean",
+                    "example": false
+                },
+                "endpoint": {
+                    "type": "string",
+                    "example": "https://api.openai.com/v1/chat/completions"
+                },
+                "estimated_cost": {
+                    "type": "number",
+                    "example": 0.0015
+                },
+                "estimated_latency": {
+                    "type": "integer",
+                    "example": 250
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "model": {
+                    "type": "string",
+                    "example": "gpt-3.5-turbo"
+                },
+                "provider": {
+                    "type": "string",
+                    "example": "openai"
+                },
+                "provider_health": {
+                    "type": "number",
+                    "example": 0.98
+                },
+                "quality_score": {
+                    "type": "number",
+                    "example": 0.95
+                },
+                "strategy": {
+                    "type": "string",
+                    "example": "cost_optimized"
                 }
             }
         },
@@ -6094,11 +6834,11 @@
                 },
                 "created_by": {
                     "type": "string",
-                    "example": "usr_1234567890"
+                    "example": "usr_01234567890123456789012345"
                 },
-                "environment_id": {
+                "description": {
                     "type": "string",
-                    "example": "env_1234567890"
+                    "example": "API key for production environment"
                 },
                 "expires_at": {
                     "type": "string",
@@ -6106,15 +6846,15 @@
                 },
                 "id": {
                     "type": "string",
-                    "example": "key_1234567890"
+                    "example": "key_01234567890123456789012345"
                 },
                 "key": {
                     "type": "string",
-                    "example": "bk_live_1234567890abcdef"
+                    "example": "bk_proj_01234567890123456789012345_abcdef1234567890abcdef1234567890"
                 },
                 "key_preview": {
                     "type": "string",
-                    "example": "bk_live_...cdef"
+                    "example": "bk_proj_...7890"
                 },
                 "last_used": {
                     "type": "string",
@@ -6123,6 +6863,14 @@
                 "name": {
                     "type": "string",
                     "example": "Production API Key"
+                },
+                "project_id": {
+                    "type": "string",
+                    "example": "proj_01234567890123456789012345"
+                },
+                "rate_limit_rpm": {
+                    "type": "integer",
+                    "example": 1000
                 },
                 "scopes": {
                     "type": "array",
@@ -6143,14 +6891,14 @@
         "apikey.CreateAPIKeyRequest": {
             "type": "object",
             "required": [
-                "environment_id",
                 "name",
                 "scopes"
             ],
             "properties": {
-                "environment_id": {
+                "description": {
                     "type": "string",
-                    "example": "env_1234567890"
+                    "maxLength": 500,
+                    "example": "API key for production environment"
                 },
                 "expires_at": {
                     "type": "string",
@@ -6161,6 +6909,12 @@
                     "maxLength": 100,
                     "minLength": 2,
                     "example": "Production API Key"
+                },
+                "rate_limit_rpm": {
+                    "type": "integer",
+                    "maximum": 10000,
+                    "minimum": 1,
+                    "example": 1000
                 },
                 "scopes": {
                     "type": "array",
@@ -6336,13 +7090,9 @@
                     "type": "number",
                     "example": 1000.5
                 },
-                "environment_id": {
+                "environment": {
                     "type": "string",
-                    "example": "env_1234567890"
-                },
-                "environment_name": {
-                    "type": "string",
-                    "example": "Production"
+                    "example": "production"
                 },
                 "percent": {
                     "type": "number",
@@ -6355,10 +7105,6 @@
                 "tokens": {
                     "type": "integer",
                     "example": 2000000
-                },
-                "type": {
-                    "type": "string",
-                    "example": "production"
                 }
             }
         },
@@ -6776,116 +7522,6 @@
                     "items": {
                         "$ref": "#/definitions/billing.ProviderUsage"
                     }
-                }
-            }
-        },
-        "environment.CreateEnvironmentRequest": {
-            "type": "object",
-            "required": [
-                "name",
-                "project_id",
-                "type"
-            ],
-            "properties": {
-                "description": {
-                    "type": "string",
-                    "maxLength": 500,
-                    "example": "Production environment for live traffic"
-                },
-                "name": {
-                    "type": "string",
-                    "maxLength": 100,
-                    "minLength": 2,
-                    "example": "Production"
-                },
-                "project_id": {
-                    "type": "string",
-                    "example": "proj_1234567890"
-                },
-                "slug": {
-                    "type": "string",
-                    "maxLength": 50,
-                    "minLength": 2,
-                    "example": "production"
-                },
-                "type": {
-                    "type": "string",
-                    "enum": [
-                        "development",
-                        "staging",
-                        "production"
-                    ],
-                    "example": "production"
-                }
-            }
-        },
-        "environment.Environment": {
-            "type": "object",
-            "properties": {
-                "api_keys_count": {
-                    "type": "integer",
-                    "example": 2
-                },
-                "created_at": {
-                    "type": "string",
-                    "example": "2024-01-01T00:00:00Z"
-                },
-                "description": {
-                    "type": "string",
-                    "example": "Production environment for live traffic"
-                },
-                "id": {
-                    "type": "string",
-                    "example": "env_1234567890"
-                },
-                "name": {
-                    "type": "string",
-                    "example": "Production"
-                },
-                "project_id": {
-                    "type": "string",
-                    "example": "proj_1234567890"
-                },
-                "slug": {
-                    "type": "string",
-                    "example": "production"
-                },
-                "status": {
-                    "type": "string",
-                    "example": "active"
-                },
-                "type": {
-                    "type": "string",
-                    "example": "production"
-                },
-                "updated_at": {
-                    "type": "string",
-                    "example": "2024-01-01T00:00:00Z"
-                }
-            }
-        },
-        "environment.UpdateEnvironmentRequest": {
-            "type": "object",
-            "properties": {
-                "description": {
-                    "type": "string",
-                    "maxLength": 500,
-                    "example": "Production environment for live traffic"
-                },
-                "name": {
-                    "type": "string",
-                    "maxLength": 100,
-                    "minLength": 2,
-                    "example": "Production"
-                },
-                "status": {
-                    "type": "string",
-                    "enum": [
-                        "active",
-                        "paused",
-                        "archived"
-                    ],
-                    "example": "active"
                 }
             }
         },
@@ -7463,6 +8099,547 @@
                 }
             }
         },
+        "observability.BatchCreateTracesRequest": {
+            "type": "object",
+            "required": [
+                "traces"
+            ],
+            "properties": {
+                "traces": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/observability.CreateTraceRequest"
+                    }
+                }
+            }
+        },
+        "observability.BatchCreateTracesResponse": {
+            "type": "object",
+            "properties": {
+                "processed_count": {
+                    "type": "integer"
+                },
+                "traces": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/observability.TraceResponse"
+                    }
+                }
+            }
+        },
+        "observability.CreateEventRequest": {
+            "description": "Request data for creating telemetry events",
+            "type": "object",
+            "properties": {
+                "environment": {
+                    "type": "string",
+                    "example": "production"
+                },
+                "event_type": {
+                    "type": "string",
+                    "example": "ai.request.completed"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "properties": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "session_id": {
+                    "type": "string",
+                    "example": "sess_abc123"
+                },
+                "source": {
+                    "type": "string",
+                    "example": "python-sdk"
+                },
+                "span_id": {
+                    "type": "string",
+                    "example": "span_ghi789"
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "timestamp": {
+                    "type": "integer",
+                    "example": 1677610602
+                },
+                "trace_id": {
+                    "type": "string",
+                    "example": "trace_def456"
+                },
+                "user_id": {
+                    "type": "string",
+                    "example": "user_123"
+                },
+                "version": {
+                    "type": "string",
+                    "example": "1.0.0"
+                }
+            }
+        },
+        "observability.CreateObservationRequest": {
+            "type": "object",
+            "required": [
+                "external_observation_id",
+                "name",
+                "start_time",
+                "trace_id",
+                "type"
+            ],
+            "properties": {
+                "completion_tokens": {
+                    "type": "integer"
+                },
+                "end_time": {
+                    "type": "string"
+                },
+                "external_observation_id": {
+                    "type": "string"
+                },
+                "input": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "input_cost": {
+                    "type": "number"
+                },
+                "latency_ms": {
+                    "type": "integer"
+                },
+                "level": {
+                    "type": "string"
+                },
+                "model": {
+                    "type": "string"
+                },
+                "model_parameters": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "name": {
+                    "type": "string"
+                },
+                "output": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "output_cost": {
+                    "type": "number"
+                },
+                "parent_observation_id": {
+                    "type": "string"
+                },
+                "prompt_tokens": {
+                    "type": "integer"
+                },
+                "provider": {
+                    "type": "string"
+                },
+                "quality_score": {
+                    "type": "number"
+                },
+                "start_time": {
+                    "type": "string"
+                },
+                "status_message": {
+                    "type": "string"
+                },
+                "total_cost": {
+                    "type": "number"
+                },
+                "total_tokens": {
+                    "type": "integer"
+                },
+                "trace_id": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                },
+                "version": {
+                    "type": "string"
+                }
+            }
+        },
+        "observability.CreateQualityScoreRequest": {
+            "type": "object",
+            "required": [
+                "data_type",
+                "score_name",
+                "trace_id"
+            ],
+            "properties": {
+                "author_user_id": {
+                    "type": "string"
+                },
+                "comment": {
+                    "type": "string"
+                },
+                "data_type": {
+                    "type": "string"
+                },
+                "evaluator_name": {
+                    "type": "string"
+                },
+                "evaluator_version": {
+                    "type": "string"
+                },
+                "observation_id": {
+                    "type": "string"
+                },
+                "score_name": {
+                    "type": "string"
+                },
+                "score_value": {
+                    "type": "number"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "string_value": {
+                    "type": "string"
+                },
+                "trace_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "observability.CreateTraceRequest": {
+            "type": "object",
+            "required": [
+                "external_trace_id",
+                "name",
+                "project_id"
+            ],
+            "properties": {
+                "external_trace_id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "name": {
+                    "type": "string"
+                },
+                "parent_trace_id": {
+                    "type": "string"
+                },
+                "project_id": {
+                    "type": "string"
+                },
+                "session_id": {
+                    "type": "string"
+                },
+                "tags": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "observability.EventResponse": {
+            "description": "Telemetry event creation result",
+            "type": "object",
+            "properties": {
+                "event_id": {
+                    "type": "string",
+                    "example": "evt_abc123"
+                },
+                "message": {
+                    "type": "string",
+                    "example": "Event created successfully"
+                },
+                "processed_at": {
+                    "type": "integer",
+                    "example": 1677610602
+                },
+                "status": {
+                    "type": "string",
+                    "example": "created"
+                }
+            }
+        },
+        "observability.ListTracesResponse": {
+            "type": "object",
+            "properties": {
+                "limit": {
+                    "type": "integer"
+                },
+                "offset": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                },
+                "traces": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/observability.TraceResponse"
+                    }
+                }
+            }
+        },
+        "observability.ObservationResponse": {
+            "type": "object",
+            "properties": {
+                "completion_tokens": {
+                    "type": "integer"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "end_time": {
+                    "type": "string"
+                },
+                "external_observation_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "input": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "input_cost": {
+                    "type": "number"
+                },
+                "latency_ms": {
+                    "type": "integer"
+                },
+                "level": {
+                    "type": "string"
+                },
+                "model": {
+                    "type": "string"
+                },
+                "model_parameters": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "name": {
+                    "type": "string"
+                },
+                "output": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "output_cost": {
+                    "type": "number"
+                },
+                "parent_observation_id": {
+                    "type": "string"
+                },
+                "prompt_tokens": {
+                    "type": "integer"
+                },
+                "provider": {
+                    "type": "string"
+                },
+                "quality_score": {
+                    "type": "number"
+                },
+                "start_time": {
+                    "type": "string"
+                },
+                "status_message": {
+                    "type": "string"
+                },
+                "total_cost": {
+                    "type": "number"
+                },
+                "total_tokens": {
+                    "type": "integer"
+                },
+                "trace_id": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "version": {
+                    "type": "string"
+                }
+            }
+        },
+        "observability.QualityScoreResponse": {
+            "type": "object",
+            "properties": {
+                "author_user_id": {
+                    "type": "string"
+                },
+                "comment": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "data_type": {
+                    "type": "string"
+                },
+                "evaluator_name": {
+                    "type": "string"
+                },
+                "evaluator_version": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "observation_id": {
+                    "type": "string"
+                },
+                "score_name": {
+                    "type": "string"
+                },
+                "score_value": {
+                    "type": "number"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "string_value": {
+                    "type": "string"
+                },
+                "trace_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "observability.TraceResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "external_trace_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "name": {
+                    "type": "string"
+                },
+                "parent_trace_id": {
+                    "type": "string"
+                },
+                "project_id": {
+                    "type": "string"
+                },
+                "session_id": {
+                    "type": "string"
+                },
+                "tags": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "observability.TraceStatsResponse": {
+            "type": "object",
+            "properties": {
+                "total_cost": {
+                    "type": "number"
+                },
+                "total_tokens": {
+                    "type": "integer"
+                },
+                "trace_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "observability.TraceWithObservationsResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "external_trace_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "name": {
+                    "type": "string"
+                },
+                "observations": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/observability.ObservationResponse"
+                    }
+                },
+                "parent_trace_id": {
+                    "type": "string"
+                },
+                "project_id": {
+                    "type": "string"
+                },
+                "session_id": {
+                    "type": "string"
+                },
+                "tags": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "observability.UpdateTraceRequest": {
+            "type": "object",
+            "properties": {
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "name": {
+                    "type": "string"
+                },
+                "tags": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "user_id": {
+                    "type": "string"
+                }
+            }
+        },
         "organization.BulkSettingsRequest": {
             "type": "object",
             "required": [
@@ -7638,54 +8815,6 @@
                     "maxLength": 50,
                     "minLength": 2,
                     "example": "ai-chatbot"
-                }
-            }
-        },
-        "project.Environment": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string",
-                    "example": "2024-01-01T00:00:00Z"
-                },
-                "id": {
-                    "type": "string",
-                    "example": "env_1234567890"
-                },
-                "name": {
-                    "type": "string",
-                    "example": "Production"
-                },
-                "project_id": {
-                    "type": "string",
-                    "example": "proj_1234567890"
-                },
-                "slug": {
-                    "type": "string",
-                    "example": "prod"
-                },
-                "updated_at": {
-                    "type": "string",
-                    "example": "2024-01-01T00:00:00Z"
-                }
-            }
-        },
-        "project.ListEnvironmentsResponse": {
-            "type": "object",
-            "properties": {
-                "environments": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/project.Environment"
-                    }
-                },
-                "project_id": {
-                    "type": "string",
-                    "example": "proj_1234567890"
-                },
-                "project_name": {
-                    "type": "string",
-                    "example": "AI Chatbot"
                 }
             }
         },
@@ -8114,17 +9243,17 @@
     },
     "securityDefinitions": {
         "ApiKeyAuth": {
-            "description": "API key for authentication. Format: X-API-Key: bk_live_...",
-            "type": "apiKey",
-            "name": "X-API-Key",
-            "in": "header",
-            "x-extension-openapi": "{\"definitions\": {\"ULID\": {\"type\": \"string\", \"description\": \"ULID (Universally Unique Lexicographically Sortable Identifier)\", \"example\": \"01ARZ3NDEKTSV4RRFFQ69G5FAV\", \"pattern\": \"^[0-9A-Z]{26}$\"}}}"
-        },
-        "BearerAuth": {
-            "description": "JWT token for authentication. Format: Authorization: Bearer \u003ctoken\u003e",
+            "description": "API key authentication for AI gateway and SDKs. Format: Authorization: Bearer bk_live_... OR X-API-Key: bk_live_... (both supported for flexibility)",
             "type": "apiKey",
             "name": "Authorization",
             "in": "header"
+        },
+        "BearerAuth": {
+            "description": "JWT token authentication for web dashboard. Format: Authorization: Bearer \u003cjwt_token\u003e",
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header",
+            "x-extension-openapi": "{\"definitions\": {\"ULID\": {\"type\": \"string\", \"description\": \"ULID (Universally Unique Lexicographically Sortable Identifier)\", \"example\": \"01ARZ3NDEKTSV4RRFFQ69G5FAV\", \"pattern\": \"^[0-9A-Z]{26}$\"}}}"
         }
     }
 }

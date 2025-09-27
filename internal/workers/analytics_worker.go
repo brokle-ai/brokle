@@ -35,7 +35,7 @@ type RequestLogJob struct {
 	UserID         string    `json:"user_id"`
 	OrganizationID string    `json:"organization_id"`
 	ProjectID      string    `json:"project_id"`
-	EnvironmentID  string    `json:"environment_id"`
+	Environment    string    `json:"environment"`
 	Provider       string    `json:"provider"`
 	Model          string    `json:"model"`
 	Method         string    `json:"method"`
@@ -56,7 +56,7 @@ type RequestLogJob struct {
 type MetricJob struct {
 	OrganizationID string                 `json:"organization_id"`
 	ProjectID      string                 `json:"project_id"`
-	EnvironmentID  string                 `json:"environment_id"`
+	Environment    string                 `json:"environment"`
 	MetricName     string                 `json:"metric_name"`
 	MetricValue    float64                `json:"metric_value"`
 	Tags           map[string]interface{} `json:"tags"`
@@ -211,7 +211,7 @@ func (w *AnalyticsWorker) processRequestLog(ctx context.Context, data interface{
 		UserID:         jobData.UserID,
 		OrganizationID: jobData.OrganizationID,
 		ProjectID:      jobData.ProjectID,
-		EnvironmentID:  jobData.EnvironmentID,
+		Environment:    jobData.Environment,
 		Provider:       jobData.Provider,
 		Model:          jobData.Model,
 		Method:         jobData.Method,
@@ -265,7 +265,7 @@ func (w *AnalyticsWorker) processMetric(ctx context.Context, data interface{}) e
 		Timestamp:      jobData.Timestamp,
 		OrganizationID: jobData.OrganizationID,
 		ProjectID:      jobData.ProjectID,
-		EnvironmentID:  jobData.EnvironmentID,
+		Environment:    jobData.Environment,
 		MetricName:     jobData.MetricName,
 		MetricValue:    jobData.MetricValue,
 		Tags:           tagsJSON,

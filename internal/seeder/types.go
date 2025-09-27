@@ -43,7 +43,7 @@ type RBACSeeds struct {
 type RoleSeed struct {
 	Name        string   `yaml:"name"`
 	Description string   `yaml:"description"`
-	ScopeType   string   `yaml:"scope_type"` // 'organization' | 'project' | 'environment'
+	ScopeType   string   `yaml:"scope_type"` // 'organization' | 'project'
 	Permissions []string `yaml:"permissions"`
 }
 
@@ -64,17 +64,11 @@ type MembershipSeed struct {
 
 // ProjectSeed represents seed data for projects
 type ProjectSeed struct {
-	Name             string            `yaml:"name"`
-	Description      string            `yaml:"description"`
-	OrganizationSlug string            `yaml:"organization_slug"`
-	Environments     []EnvironmentSeed `yaml:"environments"`
+	Name             string `yaml:"name"`
+	Description      string `yaml:"description"`
+	OrganizationSlug string `yaml:"organization_slug"`
 }
 
-// EnvironmentSeed represents seed data for environments
-type EnvironmentSeed struct {
-	Name string `yaml:"name"`
-	Slug string `yaml:"slug"`
-}
 
 // OnboardingSeed represents seed data for onboarding questions
 type OnboardingSeed struct {
@@ -103,7 +97,6 @@ type EntityMaps struct {
 	Roles         map[string]ulid.ULID // org_slug:role_name -> role ID
 	Permissions   map[string]ulid.ULID // permission name -> permission ID
 	Projects      map[string]ulid.ULID // org_slug:project_name -> project ID
-	Environments  map[string]ulid.ULID // project_id:env_name -> environment ID
 }
 
 // NewEntityMaps creates a new EntityMaps instance with initialized maps
@@ -114,6 +107,5 @@ func NewEntityMaps() *EntityMaps {
 		Roles:         make(map[string]ulid.ULID),
 		Permissions:   make(map[string]ulid.ULID),
 		Projects:      make(map[string]ulid.ULID),
-		Environments:  make(map[string]ulid.ULID),
 	}
 }

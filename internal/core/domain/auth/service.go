@@ -62,21 +62,20 @@ type APIKeyService interface {
 	GetAPIKeys(ctx context.Context, filters *APIKeyFilters) ([]*APIKey, error)
 	UpdateAPIKey(ctx context.Context, keyID ulid.ULID, req *UpdateAPIKeyRequest) error
 	RevokeAPIKey(ctx context.Context, keyID ulid.ULID) error
-	
+
 	// API key validation and usage
-	ValidateAPIKey(ctx context.Context, keyHash string) (*APIKey, error)
+	ValidateAPIKey(ctx context.Context, fullKey string) (*ValidateAPIKeyResponse, error)
 	UpdateLastUsed(ctx context.Context, keyID ulid.ULID) error
 	CheckRateLimit(ctx context.Context, keyID ulid.ULID) (bool, error)
-	
+
 	// API key context and permissions
 	GetAPIKeyContext(ctx context.Context, keyID ulid.ULID) (*AuthContext, error)
 	CanAPIKeyAccessResource(ctx context.Context, keyID ulid.ULID, resource string) (bool, error)
-	
+
 	// API key scoping
 	GetAPIKeysByUser(ctx context.Context, userID ulid.ULID) ([]*APIKey, error)
 	GetAPIKeysByOrganization(ctx context.Context, orgID ulid.ULID) ([]*APIKey, error)
 	GetAPIKeysByProject(ctx context.Context, projectID ulid.ULID) ([]*APIKey, error)
-	GetAPIKeysByEnvironment(ctx context.Context, envID ulid.ULID) ([]*APIKey, error)
 }
 
 // RoleService defines both system template and custom scoped role management service interface.
@@ -283,15 +282,14 @@ type APIKeyFilters struct {
 	// Pagination
 	Limit  int `json:"limit"`
 	Offset int `json:"offset"`
-	
+
 	// Filters
 	UserID         *ulid.ULID `json:"user_id,omitempty"`
 	OrganizationID *ulid.ULID `json:"organization_id,omitempty"`
 	ProjectID      *ulid.ULID `json:"project_id,omitempty"`
-	EnvironmentID  *ulid.ULID `json:"environment_id,omitempty"`
 	IsActive       *bool      `json:"is_active,omitempty"`
 	IsExpired      *bool      `json:"is_expired,omitempty"`
-	
+
 	// Sorting
 	SortBy    string `json:"sort_by"`    // name, created_at, last_used_at
 	SortOrder string `json:"sort_order"` // asc, desc

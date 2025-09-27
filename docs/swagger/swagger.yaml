@@ -23,6 +23,34 @@ definitions:
     required:
     - reason
     type: object
+  ai.CacheStatusResponse:
+    description: Cache health and statistics response
+    properties:
+      eviction_count:
+        example: 142
+        type: integer
+      hit_rate:
+        example: 0.85
+        type: number
+      last_eviction:
+        example: 1677610602
+        type: integer
+      memory_usage:
+        example: 0.45
+        type: number
+      provider_breakdown:
+        additionalProperties: true
+        type: object
+      size_bytes:
+        example: 1048576
+        type: integer
+      status:
+        example: healthy
+        type: string
+      total_entries:
+        example: 15420
+        type: integer
+    type: object
   ai.ChatCompletionRequest:
     description: OpenAI-compatible chat completion request
     properties:
@@ -142,6 +170,48 @@ definitions:
         example: user-123
         type: string
     type: object
+  ai.InvalidateCacheRequest:
+    description: Request data for cache invalidation
+    properties:
+      clear_all:
+        example: false
+        type: boolean
+      keys:
+        items:
+          type: string
+        type: array
+      max_age:
+        example: 3600
+        type: integer
+      model:
+        example: gpt-3.5-turbo
+        type: string
+      pattern:
+        example: chat:*
+        type: string
+      provider:
+        example: openai
+        type: string
+    type: object
+  ai.InvalidateCacheResponse:
+    description: Cache invalidation result
+    properties:
+      count:
+        example: 25
+        type: integer
+      error:
+        type: string
+      invalidated_keys:
+        items:
+          type: string
+        type: array
+      message:
+        example: Cache invalidated successfully
+        type: string
+      success:
+        example: true
+        type: boolean
+    type: object
   ai.Model:
     description: Available AI model information
     properties:
@@ -156,6 +226,69 @@ definitions:
         type: string
       owned_by:
         example: openai
+        type: string
+    type: object
+  ai.RouteRequest:
+    description: Request data for AI routing decisions
+    properties:
+      max_tokens:
+        example: 150
+        type: integer
+      messages:
+        items:
+          $ref: '#/definitions/ai.ChatMessage'
+        type: array
+      metadata:
+        additionalProperties: true
+        type: object
+      model:
+        example: gpt-3.5-turbo
+        type: string
+      prompt:
+        example: Hello world
+        type: string
+      provider:
+        example: openai
+        type: string
+      strategy:
+        example: cost_optimized
+        type: string
+      temperature:
+        example: 0.7
+        type: number
+    type: object
+  ai.RouteResponse:
+    description: AI routing decision response
+    properties:
+      cache_hit:
+        example: false
+        type: boolean
+      endpoint:
+        example: https://api.openai.com/v1/chat/completions
+        type: string
+      estimated_cost:
+        example: 0.0015
+        type: number
+      estimated_latency:
+        example: 250
+        type: integer
+      metadata:
+        additionalProperties: true
+        type: object
+      model:
+        example: gpt-3.5-turbo
+        type: string
+      provider:
+        example: openai
+        type: string
+      provider_health:
+        example: 0.98
+        type: number
+      quality_score:
+        example: 0.95
+        type: number
+      strategy:
+        example: cost_optimized
         type: string
     type: object
   analytics.AnalyticsOverview:
@@ -406,22 +539,22 @@ definitions:
         example: "2024-01-01T00:00:00Z"
         type: string
       created_by:
-        example: usr_1234567890
+        example: usr_01234567890123456789012345
         type: string
-      environment_id:
-        example: env_1234567890
+      description:
+        example: API key for production environment
         type: string
       expires_at:
         example: "2024-12-31T23:59:59Z"
         type: string
       id:
-        example: key_1234567890
+        example: key_01234567890123456789012345
         type: string
       key:
-        example: bk_live_1234567890abcdef
+        example: bk_proj_01234567890123456789012345_abcdef1234567890abcdef1234567890
         type: string
       key_preview:
-        example: bk_live_...cdef
+        example: bk_proj_...7890
         type: string
       last_used:
         example: "2024-01-01T00:00:00Z"
@@ -429,6 +562,12 @@ definitions:
       name:
         example: Production API Key
         type: string
+      project_id:
+        example: proj_01234567890123456789012345
+        type: string
+      rate_limit_rpm:
+        example: 1000
+        type: integer
       scopes:
         example:
         - '["read"'
@@ -442,8 +581,9 @@ definitions:
     type: object
   apikey.CreateAPIKeyRequest:
     properties:
-      environment_id:
-        example: env_1234567890
+      description:
+        example: API key for production environment
+        maxLength: 500
         type: string
       expires_at:
         example: "2024-12-31T23:59:59Z"
@@ -453,6 +593,11 @@ definitions:
         maxLength: 100
         minLength: 2
         type: string
+      rate_limit_rpm:
+        example: 1000
+        maximum: 10000
+        minimum: 1
+        type: integer
       scopes:
         example:
         - '["read"'
@@ -462,7 +607,6 @@ definitions:
         minItems: 1
         type: array
     required:
-    - environment_id
     - name
     - scopes
     type: object
@@ -582,11 +726,8 @@ definitions:
       cost:
         example: 1000.5
         type: number
-      environment_id:
-        example: env_1234567890
-        type: string
-      environment_name:
-        example: Production
+      environment:
+        example: production
         type: string
       percent:
         example: 0.8
@@ -597,9 +738,6 @@ definitions:
       tokens:
         example: 2000000
         type: integer
-      type:
-        example: production
-        type: string
     type: object
   billing.Invoice:
     properties:
@@ -898,89 +1036,6 @@ definitions:
         items:
           $ref: '#/definitions/billing.ProviderUsage'
         type: array
-    type: object
-  environment.CreateEnvironmentRequest:
-    properties:
-      description:
-        example: Production environment for live traffic
-        maxLength: 500
-        type: string
-      name:
-        example: Production
-        maxLength: 100
-        minLength: 2
-        type: string
-      project_id:
-        example: proj_1234567890
-        type: string
-      slug:
-        example: production
-        maxLength: 50
-        minLength: 2
-        type: string
-      type:
-        enum:
-        - development
-        - staging
-        - production
-        example: production
-        type: string
-    required:
-    - name
-    - project_id
-    - type
-    type: object
-  environment.Environment:
-    properties:
-      api_keys_count:
-        example: 2
-        type: integer
-      created_at:
-        example: "2024-01-01T00:00:00Z"
-        type: string
-      description:
-        example: Production environment for live traffic
-        type: string
-      id:
-        example: env_1234567890
-        type: string
-      name:
-        example: Production
-        type: string
-      project_id:
-        example: proj_1234567890
-        type: string
-      slug:
-        example: production
-        type: string
-      status:
-        example: active
-        type: string
-      type:
-        example: production
-        type: string
-      updated_at:
-        example: "2024-01-01T00:00:00Z"
-        type: string
-    type: object
-  environment.UpdateEnvironmentRequest:
-    properties:
-      description:
-        example: Production environment for live traffic
-        maxLength: 500
-        type: string
-      name:
-        example: Production
-        maxLength: 100
-        minLength: 2
-        type: string
-      status:
-        enum:
-        - active
-        - paused
-        - archived
-        example: active
-        type: string
     type: object
   health.HealthCheck:
     description: Individual component health check result
@@ -1403,6 +1458,375 @@ definitions:
         example: "2024-01-01T00:00:00Z"
         type: string
     type: object
+  observability.BatchCreateTracesRequest:
+    properties:
+      traces:
+        items:
+          $ref: '#/definitions/observability.CreateTraceRequest'
+        type: array
+    required:
+    - traces
+    type: object
+  observability.BatchCreateTracesResponse:
+    properties:
+      processed_count:
+        type: integer
+      traces:
+        items:
+          $ref: '#/definitions/observability.TraceResponse'
+        type: array
+    type: object
+  observability.CreateEventRequest:
+    description: Request data for creating telemetry events
+    properties:
+      environment:
+        example: production
+        type: string
+      event_type:
+        example: ai.request.completed
+        type: string
+      metadata:
+        additionalProperties: true
+        type: object
+      properties:
+        additionalProperties: true
+        type: object
+      session_id:
+        example: sess_abc123
+        type: string
+      source:
+        example: python-sdk
+        type: string
+      span_id:
+        example: span_ghi789
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+      timestamp:
+        example: 1677610602
+        type: integer
+      trace_id:
+        example: trace_def456
+        type: string
+      user_id:
+        example: user_123
+        type: string
+      version:
+        example: 1.0.0
+        type: string
+    type: object
+  observability.CreateObservationRequest:
+    properties:
+      completion_tokens:
+        type: integer
+      end_time:
+        type: string
+      external_observation_id:
+        type: string
+      input:
+        additionalProperties: true
+        type: object
+      input_cost:
+        type: number
+      latency_ms:
+        type: integer
+      level:
+        type: string
+      model:
+        type: string
+      model_parameters:
+        additionalProperties: true
+        type: object
+      name:
+        type: string
+      output:
+        additionalProperties: true
+        type: object
+      output_cost:
+        type: number
+      parent_observation_id:
+        type: string
+      prompt_tokens:
+        type: integer
+      provider:
+        type: string
+      quality_score:
+        type: number
+      start_time:
+        type: string
+      status_message:
+        type: string
+      total_cost:
+        type: number
+      total_tokens:
+        type: integer
+      trace_id:
+        type: string
+      type:
+        type: string
+      version:
+        type: string
+    required:
+    - external_observation_id
+    - name
+    - start_time
+    - trace_id
+    - type
+    type: object
+  observability.CreateQualityScoreRequest:
+    properties:
+      author_user_id:
+        type: string
+      comment:
+        type: string
+      data_type:
+        type: string
+      evaluator_name:
+        type: string
+      evaluator_version:
+        type: string
+      observation_id:
+        type: string
+      score_name:
+        type: string
+      score_value:
+        type: number
+      source:
+        type: string
+      string_value:
+        type: string
+      trace_id:
+        type: string
+    required:
+    - data_type
+    - score_name
+    - trace_id
+    type: object
+  observability.CreateTraceRequest:
+    properties:
+      external_trace_id:
+        type: string
+      metadata:
+        additionalProperties: true
+        type: object
+      name:
+        type: string
+      parent_trace_id:
+        type: string
+      project_id:
+        type: string
+      session_id:
+        type: string
+      tags:
+        additionalProperties: true
+        type: object
+      user_id:
+        type: string
+    required:
+    - external_trace_id
+    - name
+    - project_id
+    type: object
+  observability.EventResponse:
+    description: Telemetry event creation result
+    properties:
+      event_id:
+        example: evt_abc123
+        type: string
+      message:
+        example: Event created successfully
+        type: string
+      processed_at:
+        example: 1677610602
+        type: integer
+      status:
+        example: created
+        type: string
+    type: object
+  observability.ListTracesResponse:
+    properties:
+      limit:
+        type: integer
+      offset:
+        type: integer
+      total:
+        type: integer
+      traces:
+        items:
+          $ref: '#/definitions/observability.TraceResponse'
+        type: array
+    type: object
+  observability.ObservationResponse:
+    properties:
+      completion_tokens:
+        type: integer
+      created_at:
+        type: string
+      end_time:
+        type: string
+      external_observation_id:
+        type: string
+      id:
+        type: string
+      input:
+        additionalProperties: true
+        type: object
+      input_cost:
+        type: number
+      latency_ms:
+        type: integer
+      level:
+        type: string
+      model:
+        type: string
+      model_parameters:
+        additionalProperties: true
+        type: object
+      name:
+        type: string
+      output:
+        additionalProperties: true
+        type: object
+      output_cost:
+        type: number
+      parent_observation_id:
+        type: string
+      prompt_tokens:
+        type: integer
+      provider:
+        type: string
+      quality_score:
+        type: number
+      start_time:
+        type: string
+      status_message:
+        type: string
+      total_cost:
+        type: number
+      total_tokens:
+        type: integer
+      trace_id:
+        type: string
+      type:
+        type: string
+      updated_at:
+        type: string
+      version:
+        type: string
+    type: object
+  observability.QualityScoreResponse:
+    properties:
+      author_user_id:
+        type: string
+      comment:
+        type: string
+      created_at:
+        type: string
+      data_type:
+        type: string
+      evaluator_name:
+        type: string
+      evaluator_version:
+        type: string
+      id:
+        type: string
+      observation_id:
+        type: string
+      score_name:
+        type: string
+      score_value:
+        type: number
+      source:
+        type: string
+      string_value:
+        type: string
+      trace_id:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  observability.TraceResponse:
+    properties:
+      created_at:
+        type: string
+      external_trace_id:
+        type: string
+      id:
+        type: string
+      metadata:
+        additionalProperties: true
+        type: object
+      name:
+        type: string
+      parent_trace_id:
+        type: string
+      project_id:
+        type: string
+      session_id:
+        type: string
+      tags:
+        additionalProperties: true
+        type: object
+      updated_at:
+        type: string
+      user_id:
+        type: string
+    type: object
+  observability.TraceStatsResponse:
+    properties:
+      total_cost:
+        type: number
+      total_tokens:
+        type: integer
+      trace_id:
+        type: string
+    type: object
+  observability.TraceWithObservationsResponse:
+    properties:
+      created_at:
+        type: string
+      external_trace_id:
+        type: string
+      id:
+        type: string
+      metadata:
+        additionalProperties: true
+        type: object
+      name:
+        type: string
+      observations:
+        items:
+          $ref: '#/definitions/observability.ObservationResponse'
+        type: array
+      parent_trace_id:
+        type: string
+      project_id:
+        type: string
+      session_id:
+        type: string
+      tags:
+        additionalProperties: true
+        type: object
+      updated_at:
+        type: string
+      user_id:
+        type: string
+    type: object
+  observability.UpdateTraceRequest:
+    properties:
+      metadata:
+        additionalProperties: true
+        type: object
+      name:
+        type: string
+      tags:
+        additionalProperties: true
+        type: object
+      user_id:
+        type: string
+    type: object
   organization.BulkSettingsRequest:
     properties:
       settings:
@@ -1530,40 +1954,6 @@ definitions:
     required:
     - name
     - organization_id
-    type: object
-  project.Environment:
-    properties:
-      created_at:
-        example: "2024-01-01T00:00:00Z"
-        type: string
-      id:
-        example: env_1234567890
-        type: string
-      name:
-        example: Production
-        type: string
-      project_id:
-        example: proj_1234567890
-        type: string
-      slug:
-        example: prod
-        type: string
-      updated_at:
-        example: "2024-01-01T00:00:00Z"
-        type: string
-    type: object
-  project.ListEnvironmentsResponse:
-    properties:
-      environments:
-        items:
-          $ref: '#/definitions/project.Environment'
-        type: array
-      project_id:
-        example: proj_1234567890
-        type: string
-      project_name:
-        example: AI Chatbot
-        type: string
     type: object
   project.Project:
     properties:
@@ -2082,10 +2472,10 @@ paths:
         in: query
         name: project_id
         type: string
-      - description: Filter by environment ID
-        example: '"env_1234567890"'
+      - description: Filter by environment tag
+        example: '"production"'
         in: query
-        name: environment_id
+        name: environment
         type: string
       - default: '"USD"'
         description: Currency for cost display
@@ -2157,10 +2547,10 @@ paths:
         in: query
         name: project_id
         type: string
-      - description: Filter by environment ID
-        example: '"env_1234567890"'
+      - description: Filter by environment tag
+        example: '"production"'
         in: query
-        name: environment_id
+        name: environment
         type: string
       - description: Filter by AI provider
         example: '"openai"'
@@ -2235,10 +2625,10 @@ paths:
         in: query
         name: project_id
         type: string
-      - description: Filter by environment ID
-        example: '"env_1234567890"'
+      - description: Filter by environment tag
+        example: '"production"'
         in: query
-        name: environment_id
+        name: environment
         type: string
       produces:
       - application/json
@@ -2301,10 +2691,10 @@ paths:
         in: query
         name: project_id
         type: string
-      - description: Filter by environment ID
-        example: '"env_1234567890"'
+      - description: Filter by environment tag
+        example: '"production"'
         in: query
-        name: environment_id
+        name: environment
         type: string
       - description: Filter by specific provider
         example: '"openai"'
@@ -2374,10 +2764,10 @@ paths:
         in: query
         name: project_id
         type: string
-      - description: Filter by environment ID
-        example: '"env_1234567890"'
+      - description: Filter by environment tag
+        example: '"production"'
         in: query
-        name: environment_id
+        name: environment
         type: string
       - description: Filter by AI provider
         example: '"openai"'
@@ -3067,477 +3457,6 @@ paths:
       summary: Get organization usage metrics
       tags:
       - Billing
-  /api/v1/environments:
-    get:
-      consumes:
-      - application/json
-      description: Get a paginated list of environments accessible to the authenticated
-        user
-      parameters:
-      - description: Filter by project ID
-        example: '"proj_1234567890"'
-        in: query
-        name: project_id
-        type: string
-      - description: Filter by environment type
-        enum:
-        - development
-        - staging
-        - production
-        in: query
-        name: type
-        type: string
-      - description: Filter by environment status
-        enum:
-        - active
-        - paused
-        - archived
-        in: query
-        name: status
-        type: string
-      - default: 1
-        description: Page number
-        in: query
-        minimum: 1
-        name: page
-        type: integer
-      - default: 20
-        description: Items per page
-        in: query
-        maximum: 100
-        minimum: 1
-        name: limit
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: List of environments with pagination
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                data:
-                  items:
-                    $ref: '#/definitions/environment.Environment'
-                  type: array
-                meta:
-                  allOf:
-                  - $ref: '#/definitions/response.Meta'
-                  - properties:
-                      pagination:
-                        $ref: '#/definitions/response.Pagination'
-                    type: object
-              type: object
-        "400":
-          description: Bad request
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: List environments
-      tags:
-      - Environments
-    post:
-      consumes:
-      - application/json
-      description: Create a new environment within a project. User must have appropriate
-        permissions in the project.
-      parameters:
-      - description: Environment details
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/environment.CreateEnvironmentRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Environment created successfully
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.SuccessResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/environment.Environment'
-              type: object
-        "400":
-          description: Bad request - invalid input or validation errors
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "403":
-          description: Forbidden - insufficient permissions in project
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "404":
-          description: Project not found
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "409":
-          description: Conflict - environment slug already exists in project
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Create environment
-      tags:
-      - Environments
-  /api/v1/environments/{envId}:
-    delete:
-      consumes:
-      - application/json
-      description: Permanently delete an environment and all associated API keys and
-        data. This action cannot be undone.
-      parameters:
-      - description: Environment ID
-        example: '"env_1234567890"'
-        in: path
-        name: envId
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "204":
-          description: Environment deleted successfully
-        "400":
-          description: Bad request - invalid environment ID
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "403":
-          description: Forbidden - insufficient permissions (requires admin or owner
-            role)
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "404":
-          description: Environment not found
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "409":
-          description: Conflict - cannot delete environment with active API keys or
-            recent usage
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Delete environment
-      tags:
-      - Environments
-    get:
-      consumes:
-      - application/json
-      description: Get detailed information about a specific environment
-      parameters:
-      - description: Environment ID
-        example: '"env_1234567890"'
-        in: path
-        name: envId
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Environment details
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.SuccessResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/environment.Environment'
-              type: object
-        "400":
-          description: Bad request - invalid environment ID
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "403":
-          description: Forbidden - insufficient permissions
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "404":
-          description: Environment not found
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Get environment details
-      tags:
-      - Environments
-    put:
-      consumes:
-      - application/json
-      description: Update environment details. Requires appropriate permissions within
-        the project.
-      parameters:
-      - description: Environment ID
-        example: '"env_1234567890"'
-        in: path
-        name: envId
-        required: true
-        type: string
-      - description: Updated environment details
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/environment.UpdateEnvironmentRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Environment updated successfully
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.SuccessResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/environment.Environment'
-              type: object
-        "400":
-          description: Bad request - invalid input or validation errors
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "403":
-          description: Forbidden - insufficient permissions
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "404":
-          description: Environment not found
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Update environment
-      tags:
-      - Environments
-  /api/v1/environments/{envId}/api-keys:
-    get:
-      consumes:
-      - application/json
-      description: Get a paginated list of API keys for a specific environment
-      parameters:
-      - description: Environment ID
-        example: '"env_1234567890"'
-        in: path
-        name: envId
-        required: true
-        type: string
-      - description: Filter by API key status
-        enum:
-        - active
-        - inactive
-        - revoked
-        in: query
-        name: status
-        type: string
-      - default: 1
-        description: Page number
-        in: query
-        minimum: 1
-        name: page
-        type: integer
-      - default: 20
-        description: Items per page
-        in: query
-        maximum: 100
-        minimum: 1
-        name: limit
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: List of API keys with pagination
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                data:
-                  items:
-                    $ref: '#/definitions/apikey.APIKey'
-                  type: array
-                meta:
-                  allOf:
-                  - $ref: '#/definitions/response.Meta'
-                  - properties:
-                      pagination:
-                        $ref: '#/definitions/response.Pagination'
-                    type: object
-              type: object
-        "400":
-          description: Bad request - invalid environment ID
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "403":
-          description: Forbidden - insufficient permissions to view API keys
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "404":
-          description: Environment not found
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: List API keys
-      tags:
-      - API Keys
-    post:
-      consumes:
-      - application/json
-      description: Create a new API key for an environment. The key will only be displayed
-        once upon creation.
-      parameters:
-      - description: Environment ID
-        example: '"env_1234567890"'
-        in: path
-        name: envId
-        required: true
-        type: string
-      - description: API key details
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/apikey.CreateAPIKeyRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: API key created successfully (key only shown once)
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.SuccessResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/apikey.APIKey'
-              type: object
-        "400":
-          description: Bad request - invalid input or validation errors
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "403":
-          description: Forbidden - insufficient permissions to create API keys
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "404":
-          description: Environment not found
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "409":
-          description: Conflict - API key name already exists in environment
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Create API key
-      tags:
-      - API Keys
-  /api/v1/environments/{envId}/api-keys/{keyId}:
-    delete:
-      consumes:
-      - application/json
-      description: Permanently revoke and delete an API key. This action cannot be
-        undone and will immediately invalidate the key.
-      parameters:
-      - description: Environment ID
-        example: '"env_1234567890"'
-        in: path
-        name: envId
-        required: true
-        type: string
-      - description: API Key ID
-        example: '"key_1234567890"'
-        in: path
-        name: keyId
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "204":
-          description: API key deleted successfully
-        "400":
-          description: Bad request - invalid environment ID or key ID
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "403":
-          description: Forbidden - insufficient permissions to delete API keys
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "404":
-          description: Environment or API key not found
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - BearerAuth: []
-      summary: Delete API key
-      tags:
-      - API Keys
   /api/v1/logs/export:
     get:
       consumes:
@@ -3818,6 +3737,477 @@ paths:
       summary: Get detailed request information
       tags:
       - Logs
+  /api/v1/observability/observations:
+    post:
+      consumes:
+      - application/json
+      description: Create a new LLM observation (LLM call, span, event, generation,
+        etc.) within a trace
+      parameters:
+      - description: Observation creation data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/observability.CreateObservationRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Observation created successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/observability.ObservationResponse'
+              type: object
+        "400":
+          description: Invalid request payload or observation data
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "409":
+          description: Observation with external_observation_id already exists
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "422":
+          description: Validation failed
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a new observation
+      tags:
+      - Observability - Observations
+  /api/v1/observability/quality-scores:
+    post:
+      consumes:
+      - application/json
+      description: Create a new quality evaluation score for a trace or observation
+        (numeric, categorical, or boolean)
+      parameters:
+      - description: Quality score creation data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/observability.CreateQualityScoreRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Quality score created successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/observability.QualityScoreResponse'
+              type: object
+        "400":
+          description: Invalid request payload or quality score data
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "409":
+          description: Duplicate quality score for same trace/observation and score
+            name
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "422":
+          description: Validation failed
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a quality score
+      tags:
+      - Observability - Quality
+  /api/v1/observability/traces:
+    get:
+      consumes:
+      - application/json
+      description: Get a paginated list of LLM observability traces with filtering
+        options
+      parameters:
+      - description: Project ID filter
+        in: query
+        name: project_id
+        type: string
+      - description: User ID filter
+        in: query
+        name: user_id
+        type: string
+      - description: Session ID filter
+        in: query
+        name: session_id
+        type: string
+      - description: Trace name filter
+        in: query
+        name: name
+        type: string
+      - description: External trace ID filter
+        in: query
+        name: external_trace_id
+        type: string
+      - description: Start time filter (RFC3339 format)
+        in: query
+        name: start_time
+        type: string
+      - description: End time filter (RFC3339 format)
+        in: query
+        name: end_time
+        type: string
+      - default: 50
+        description: Maximum number of results
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Number of results to skip
+        in: query
+        name: offset
+        type: integer
+      - default: created_at
+        description: Sort field
+        in: query
+        name: sort_by
+        type: string
+      - default: desc
+        description: Sort order (asc/desc)
+        in: query
+        name: sort_order
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Traces retrieved successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/observability.ListTracesResponse'
+                meta:
+                  allOf:
+                  - $ref: '#/definitions/response.Meta'
+                  - properties:
+                      pagination:
+                        $ref: '#/definitions/response.Pagination'
+                    type: object
+              type: object
+        "400":
+          description: Invalid filter parameters
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List traces
+      tags:
+      - Observability - Traces
+    post:
+      consumes:
+      - application/json
+      description: Create a new LLM observability trace for tracking AI operations
+      parameters:
+      - description: Trace creation data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/observability.CreateTraceRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Trace created successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/observability.TraceResponse'
+              type: object
+        "400":
+          description: Invalid request payload or trace data
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "409":
+          description: Trace with external_trace_id already exists
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "422":
+          description: Validation failed
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a new trace
+      tags:
+      - Observability - Traces
+  /api/v1/observability/traces/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete an LLM observability trace and all associated data
+      parameters:
+      - description: Trace ID (ULID format)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Trace deleted successfully
+          schema:
+            $ref: '#/definitions/response.MessageResponse'
+        "400":
+          description: Invalid trace ID format
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Trace not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete trace
+      tags:
+      - Observability - Traces
+    get:
+      consumes:
+      - application/json
+      description: Retrieve a specific LLM observability trace by its unique identifier
+      parameters:
+      - description: Trace ID (ULID format)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Trace retrieved successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/observability.TraceResponse'
+              type: object
+        "400":
+          description: Invalid trace ID format
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Trace not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get trace by ID
+      tags:
+      - Observability - Traces
+    put:
+      consumes:
+      - application/json
+      description: Update an existing LLM observability trace with new information
+      parameters:
+      - description: Trace ID (ULID format)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Trace update data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/observability.UpdateTraceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Trace updated successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/observability.TraceResponse'
+              type: object
+        "400":
+          description: Invalid trace ID or request payload
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Trace not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "422":
+          description: Validation failed
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update trace
+      tags:
+      - Observability - Traces
+  /api/v1/observability/traces/{id}/observations:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve a trace along with all its associated observations (LLM
+        calls, spans, events)
+      parameters:
+      - description: Trace ID (ULID format)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Trace with observations retrieved successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/observability.TraceWithObservationsResponse'
+              type: object
+        "400":
+          description: Invalid trace ID format
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Trace not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get trace with observations
+      tags:
+      - Observability - Traces
+  /api/v1/observability/traces/{id}/stats:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve aggregated statistics for a specific LLM trace (cost,
+        tokens, latency, etc.)
+      parameters:
+      - description: Trace ID (ULID format)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Trace statistics retrieved successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/observability.TraceStatsResponse'
+              type: object
+        "400":
+          description: Invalid trace ID format
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Trace not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get trace statistics
+      tags:
+      - Observability - Traces
+  /api/v1/observability/traces/batch:
+    post:
+      consumes:
+      - application/json
+      description: Create multiple LLM observability traces in a single batch operation
+        for improved performance
+      parameters:
+      - description: Batch trace creation data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/observability.BatchCreateTracesRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Traces created successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/observability.BatchCreateTracesResponse'
+              type: object
+        "400":
+          description: Invalid request payload or trace data
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "422":
+          description: Validation failed
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create multiple traces in batch
+      tags:
+      - Observability - Traces
   /api/v1/onboarding/questions:
     get:
       consumes:
@@ -5044,29 +5434,60 @@ paths:
       summary: Update project
       tags:
       - Projects
-  /api/v1/projects/{projectId}/environments:
+  /api/v1/projects/{projectId}/api-keys:
     get:
       consumes:
       - application/json
-      description: Get all environments that belong to a specific project
+      description: Get a paginated list of project-scoped API keys for a specific
+        project. Keys are shown with preview format (bk_proj_...7890) for security.
       parameters:
       - description: Project ID
-        example: '"proj_1234567890"'
+        example: '"proj_01234567890123456789012345"'
         in: path
         name: projectId
         required: true
         type: string
+      - description: Filter by API key status
+        enum:
+        - active
+        - inactive
+        - expired
+        in: query
+        name: status
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        minimum: 1
+        name: page
+        type: integer
+      - default: 20
+        description: Items per page
+        in: query
+        maximum: 100
+        minimum: 1
+        name: limit
+        type: integer
       produces:
       - application/json
       responses:
         "200":
-          description: List of project environments
+          description: List of project-scoped API keys with pagination
           schema:
             allOf:
-            - $ref: '#/definitions/response.SuccessResponse'
+            - $ref: '#/definitions/response.APIResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/project.ListEnvironmentsResponse'
+                  items:
+                    $ref: '#/definitions/apikey.APIKey'
+                  type: array
+                meta:
+                  allOf:
+                  - $ref: '#/definitions/response.Meta'
+                  - properties:
+                      pagination:
+                        $ref: '#/definitions/response.Pagination'
+                    type: object
               type: object
         "400":
           description: Bad request - invalid project ID
@@ -5077,7 +5498,7 @@ paths:
           schema:
             $ref: '#/definitions/response.ErrorResponse'
         "403":
-          description: Forbidden - insufficient permissions
+          description: Forbidden - insufficient permissions to view API keys
           schema:
             $ref: '#/definitions/response.ErrorResponse'
         "404":
@@ -5090,9 +5511,118 @@ paths:
             $ref: '#/definitions/response.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: List project environments
+      summary: List project-scoped API keys
       tags:
-      - Projects
+      - API Keys
+    post:
+      consumes:
+      - application/json
+      description: 'Create a new project-scoped API key with embedded project context.
+        The full key will only be displayed once upon creation. Format: bk_proj_{project_id}_{secret}'
+      parameters:
+      - description: Project ID
+        example: '"proj_01234567890123456789012345"'
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: API key details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/apikey.CreateAPIKeyRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Project-scoped API key created successfully (full key only
+            shown once)
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/apikey.APIKey'
+              type: object
+        "400":
+          description: Bad request - invalid input or validation errors
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Forbidden - insufficient permissions to create API keys
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Project not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "409":
+          description: Conflict - API key name already exists in project
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create project-scoped API key
+      tags:
+      - API Keys
+  /api/v1/projects/{projectId}/api-keys/{keyId}:
+    delete:
+      consumes:
+      - application/json
+      description: Permanently revoke and delete a project-scoped API key. This action
+        cannot be undone and will immediately invalidate the key across all environments.
+      parameters:
+      - description: Project ID
+        example: '"proj_01234567890123456789012345"'
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: API Key ID
+        example: '"key_01234567890123456789012345"'
+        in: path
+        name: keyId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Project-scoped API key deleted successfully
+        "400":
+          description: Bad request - invalid project ID or key ID
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Forbidden - insufficient permissions to delete API keys
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Project or API key not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete project-scoped API key
+      tags:
+      - API Keys
   /api/v1/users/me:
     get:
       description: Get the profile information of the currently authenticated user
@@ -5215,6 +5745,112 @@ paths:
       summary: Get Prometheus metrics
       tags:
       - Monitoring
+  /v1/auth/validate-key:
+    post:
+      consumes:
+      - application/json
+      description: Validates a self-contained API key and extracts project information
+        automatically
+      parameters:
+      - description: 'API key (format: bk_proj_{project_id}_{secret})'
+        in: header
+        name: X-API-Key
+        type: string
+      - description: 'Bearer token format: Bearer {api_key}'
+        in: header
+        name: Authorization
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: API key validation successful
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Invalid, inactive, or expired API key
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Validate API key
+      tags:
+      - Authentication
+  /v1/cache/invalidate:
+    post:
+      consumes:
+      - application/json
+      description: Invalidate specific cache entries or clear cache
+      parameters:
+      - description: Cache invalidation data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/ai.InvalidateCacheRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Cache invalidated successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/ai.InvalidateCacheResponse'
+              type: object
+        "400":
+          description: Invalid request payload
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Invalid or missing API key
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Invalidate cache entries
+      tags:
+      - SDK - Cache
+  /v1/cache/status:
+    get:
+      description: Get current cache health and statistics
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Cache status returned
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/ai.CacheStatusResponse'
+              type: object
+        "401":
+          description: Invalid or missing API key
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get cache status
+      tags:
+      - SDK - Cache
   /v1/chat/completions:
     post:
       consumes:
@@ -5335,6 +5971,51 @@ paths:
       summary: Create embeddings
       tags:
       - AI Gateway
+  /v1/events:
+    post:
+      consumes:
+      - application/json
+      description: Create a new telemetry event for SDK observability
+      parameters:
+      - description: Event creation data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/observability.CreateEventRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Event created successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/observability.EventResponse'
+              type: object
+        "400":
+          description: Invalid request payload
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Invalid or missing API key
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "422":
+          description: Validation failed
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Create a telemetry event
+      tags:
+      - SDK - Events
   /v1/models:
     get:
       description: Get list of available AI models
@@ -5394,6 +6075,47 @@ paths:
       summary: Get model information
       tags:
       - AI Gateway
+  /v1/route:
+    post:
+      consumes:
+      - application/json
+      description: Determine optimal AI provider and model for a request
+      parameters:
+      - description: Routing request data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/ai.RouteRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Routing decision returned
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/ai.RouteResponse'
+              type: object
+        "400":
+          description: Invalid request payload
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Invalid or missing API key
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Make AI routing decision
+      tags:
+      - SDK - Routing
   /ws:
     get:
       consumes:
@@ -5433,16 +6155,18 @@ schemes:
 - https
 securityDefinitions:
   ApiKeyAuth:
-    description: 'API key for authentication. Format: X-API-Key: bk_live_...'
+    description: 'API key authentication for AI gateway and SDKs. Format: Authorization:
+      Bearer bk_live_... OR X-API-Key: bk_live_... (both supported for flexibility)'
     in: header
-    name: X-API-Key
+    name: Authorization
+    type: apiKey
+  BearerAuth:
+    description: 'JWT token authentication for web dashboard. Format: Authorization:
+      Bearer <jwt_token>'
+    in: header
+    name: Authorization
     type: apiKey
     x-extension-openapi: '{"definitions": {"ULID": {"type": "string", "description":
       "ULID (Universally Unique Lexicographically Sortable Identifier)", "example":
       "01ARZ3NDEKTSV4RRFFQ69G5FAV", "pattern": "^[0-9A-Z]{26}$"}}}'
-  BearerAuth:
-    description: 'JWT token for authentication. Format: Authorization: Bearer <token>'
-    in: header
-    name: Authorization
-    type: apiKey
 swagger: "2.0"

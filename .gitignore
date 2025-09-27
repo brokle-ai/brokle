@@ -194,3 +194,5 @@ google_ai_key
 # Backup files
 *.bak
 *.backup
+sdk/competetors/
+

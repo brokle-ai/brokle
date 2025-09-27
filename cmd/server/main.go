@@ -38,16 +38,16 @@ import (
 //
 // @securityDefinitions.apikey ApiKeyAuth
 // @in header
-// @name X-API-Key
-// @description API key for authentication. Format: X-API-Key: bk_live_...
-//
-// Custom type definitions for Swagger
-// @x-extension-openapi {"definitions": {"ULID": {"type": "string", "description": "ULID (Universally Unique Lexicographically Sortable Identifier)", "example": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "pattern": "^[0-9A-Z]{26}$"}}}
+// @name Authorization
+// @description API key authentication for AI gateway and SDKs. Format: Authorization: Bearer bk_live_... OR X-API-Key: bk_live_... (both supported for flexibility)
 //
 // @securityDefinitions.apikey BearerAuth
 // @in header
 // @name Authorization
-// @description JWT token for authentication. Format: Authorization: Bearer <token>
+// @description JWT token authentication for web dashboard. Format: Authorization: Bearer <jwt_token>
+//
+// Custom type definitions for Swagger
+// @x-extension-openapi {"definitions": {"ULID": {"type": "string", "description": "ULID (Universally Unique Lexicographically Sortable Identifier)", "example": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "pattern": "^[0-9A-Z]{26}$"}}}
 func main() {
 	// Load configuration
 	cfg, err := config.Load()

@@ -66,20 +66,21 @@ type APIKeyRepository interface {
 	Create(ctx context.Context, apiKey *APIKey) error
 	GetByID(ctx context.Context, id ulid.ULID) (*APIKey, error)
 	GetByKeyHash(ctx context.Context, keyHash string) (*APIKey, error)
+	GetByKeyID(ctx context.Context, keyID string) (*APIKey, error) // For project-scoped key lookup
 	Update(ctx context.Context, apiKey *APIKey) error
 	Delete(ctx context.Context, id ulid.ULID) error
-	
+
 	// User and organization scoped
 	GetByUserID(ctx context.Context, userID ulid.ULID) ([]*APIKey, error)
 	GetByOrganizationID(ctx context.Context, orgID ulid.ULID) ([]*APIKey, error)
 	GetByProjectID(ctx context.Context, projectID ulid.ULID) ([]*APIKey, error)
-	GetByEnvironmentID(ctx context.Context, envID ulid.ULID) ([]*APIKey, error)
-	
+
 	// API key management
 	DeactivateAPIKey(ctx context.Context, id ulid.ULID) error
 	MarkAsUsed(ctx context.Context, id ulid.ULID) error
+	UpdateLastUsed(ctx context.Context, id ulid.ULID) error // For async last used updates
 	CleanupExpiredAPIKeys(ctx context.Context) error
-	
+
 	// Statistics
 	GetAPIKeyCount(ctx context.Context, userID ulid.ULID) (int, error)
 	GetActiveAPIKeyCount(ctx context.Context, userID ulid.ULID) (int, error)

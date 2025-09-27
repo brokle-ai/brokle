@@ -17,19 +17,21 @@ import (
 
 // Config represents the complete application configuration.
 type Config struct {
-	Environment string           `mapstructure:"environment"`
-	App         AppConfig        `mapstructure:"app"`
-	Server      ServerConfig     `mapstructure:"server"`
-	Database    DatabaseConfig   `mapstructure:"database"`
-	ClickHouse  ClickHouseConfig `mapstructure:"clickhouse"`
-	Redis       RedisConfig      `mapstructure:"redis"`
-	JWT         JWTConfig        `mapstructure:"jwt"`
-	Auth        AuthConfig       `mapstructure:"auth"`
-	Logging     LoggingConfig    `mapstructure:"logging"`
-	External    ExternalConfig   `mapstructure:"external"`
-	Features    FeatureConfig    `mapstructure:"features"`
-	Monitoring  MonitoringConfig `mapstructure:"monitoring"`
-	Enterprise  EnterpriseConfig `mapstructure:"enterprise"`
+	Environment   string           `mapstructure:"environment"`
+	App           AppConfig        `mapstructure:"app"`
+	Server        ServerConfig     `mapstructure:"server"`
+	Database      DatabaseConfig   `mapstructure:"database"`
+	ClickHouse    ClickHouseConfig `mapstructure:"clickhouse"`
+	Redis         RedisConfig      `mapstructure:"redis"`
+	JWT           JWTConfig        `mapstructure:"jwt"`
+	Auth          AuthConfig       `mapstructure:"auth"`
+	Logging       LoggingConfig    `mapstructure:"logging"`
+	External      ExternalConfig   `mapstructure:"external"`
+	Features      FeatureConfig    `mapstructure:"features"`
+	Monitoring    MonitoringConfig `mapstructure:"monitoring"`
+	Enterprise    EnterpriseConfig `mapstructure:"enterprise"`
+	Workers       WorkersConfig    `mapstructure:"workers"`
+	Notifications NotificationsConfig `mapstructure:"notifications"`
 }
 
 // AppConfig contains application-level configuration.
@@ -200,6 +202,17 @@ type MonitoringConfig struct {
 	JaegerEndpoint string        `mapstructure:"jaeger_endpoint"`
 	SampleRate     float64       `mapstructure:"sample_rate"`
 	FlushInterval  time.Duration `mapstructure:"flush_interval"`
+}
+
+// WorkersConfig contains background worker configuration.
+type WorkersConfig struct {
+	AnalyticsWorkers    int `mapstructure:"analytics_workers"`
+	NotificationWorkers int `mapstructure:"notification_workers"`
+}
+
+// NotificationsConfig contains notification system configuration.
+type NotificationsConfig struct {
+	AlertWebhookURL string `mapstructure:"alert_webhook_url"`
 }
 
 // Validate validates the main configuration and all sub-configurations.

@@ -24,23 +24,25 @@ import (
 
 // Server represents the HTTP server
 type Server struct {
-	config             *config.Config
-	logger             *logrus.Logger
-	server             *http.Server
-	handlers           *handlers.Handlers
-	engine             *gin.Engine
-	authMiddleware     *middleware.AuthMiddleware
+	config              *config.Config
+	logger              *logrus.Logger
+	server              *http.Server
+	handlers            *handlers.Handlers
+	engine              *gin.Engine
+	authMiddleware      *middleware.AuthMiddleware
+	sdkAuthMiddleware   *middleware.SDKAuthMiddleware
 	rateLimitMiddleware *middleware.RateLimitMiddleware
 }
 
 // NewServer creates a new HTTP server instance
 func NewServer(
-	cfg *config.Config, 
-	logger *logrus.Logger, 
+	cfg *config.Config,
+	logger *logrus.Logger,
 	handlers *handlers.Handlers,
 	jwtService auth.JWTService,
 	blacklistedTokens auth.BlacklistedTokenService,
 	orgMemberService auth.OrganizationMemberService,
+	apiKeyService auth.APIKeyService,
 	redisClient *redis.Client,
 ) *Server {
 	// Create stateless auth middleware
@@ -48,6 +50,12 @@ func NewServer(
 		jwtService,
 		blacklistedTokens,
 		orgMemberService,
+		logger,
+	)
+
+	// Create SDK auth middleware for API key authentication
+	sdkAuthMiddleware := middleware.NewSDKAuthMiddleware(
+		apiKeyService,
 		logger,
 	)
 
@@ -63,6 +71,7 @@ func NewServer(
 		logger:              logger,
 		handlers:            handlers,
 		authMiddleware:      authMiddleware,
+		sdkAuthMiddleware:   sdkAuthMiddleware,
 		rateLimitMiddleware: rateLimitMiddleware,
 	}
 }
@@ -140,21 +149,30 @@ func (s *Server) setupRoutes() {
 		s.engine.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
 	}
 
-	// API v1 routes
-	v1 := s.engine.Group("/api/v1")
-	s.setupV1Routes(v1)
+	// SDK routes (/v1) - API Key authentication for SDKs
+	sdk := s.engine.Group("/v1")
+
+	// Public SDK auth routes (no authentication required)
+	sdkAuth := sdk.Group("/auth")
+	{
+		sdkAuth.POST("/validate-key", s.handlers.Auth.ValidateAPIKeyHandler)
+	}
+
+	// Protected SDK routes (require API key authentication)
+	sdk.Use(s.sdkAuthMiddleware.RequireSDKAuth())
+	sdk.Use(s.rateLimitMiddleware.RateLimitByAPIKey())
+	s.setupSDKRoutes(sdk)
+
+	// Dashboard routes (/api/v1) - Bearer token authentication for dashboard
+	dashboard := s.engine.Group("/api/v1")
+	s.setupDashboardRoutes(dashboard)
 
 	// WebSocket endpoint
 	s.engine.GET("/ws", s.handlers.WebSocket.Handle)
-
-	// OpenAI-compatible routes (with auth)
-	openai := s.engine.Group("/v1")
-	openai.Use(middleware.APIKeyAuth(s.handlers.Auth))
-	s.setupOpenAIRoutes(openai)
 }
 
-// setupV1Routes configures API v1 routes
-func (s *Server) setupV1Routes(router *gin.RouterGroup) {
+// setupDashboardRoutes configures dashboard routes (/api/v1/*)
+func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 	// Apply IP-based rate limiting to all API routes
 	router.Use(s.rateLimitMiddleware.RateLimitByIP())
 
@@ -166,6 +184,7 @@ func (s *Server) setupV1Routes(router *gin.RouterGroup) {
 		auth.POST("/refresh", s.handlers.Auth.RefreshToken)
 		auth.POST("/forgot-password", s.handlers.Auth.ForgotPassword)
 		auth.POST("/reset-password", s.handlers.Auth.ResetPassword)
+		// Note: validate-key moved to SDK routes (/v1/auth/validate-key)
 	}
 
 	// Protected routes (require JWT auth)
@@ -238,20 +257,11 @@ func (s *Server) setupV1Routes(router *gin.RouterGroup) {
 		projects.GET("/:projectId", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Project.Get)
 		projects.PUT("/:projectId", s.authMiddleware.RequirePermission("projects:update"), s.handlers.Project.Update)
 		projects.DELETE("/:projectId", s.authMiddleware.RequirePermission("projects:delete"), s.handlers.Project.Delete)
-		projects.GET("/:projectId/environments", s.authMiddleware.RequirePermission("environments:read"), s.handlers.Environment.List)
+		projects.GET("/:projectId/api-keys", s.authMiddleware.RequirePermission("api-keys:read"), s.handlers.APIKey.List)
+		projects.POST("/:projectId/api-keys", s.authMiddleware.RequirePermission("api-keys:create"), s.handlers.APIKey.Create)
+		projects.DELETE("/:projectId/api-keys/:keyId", s.authMiddleware.RequirePermission("api-keys:delete"), s.handlers.APIKey.Delete)
 	}
 
-	// Environment routes
-	envs := protected.Group("/environments")
-	{
-		envs.POST("", s.handlers.Environment.Create)
-		envs.GET("/:envId", s.handlers.Environment.Get)
-		envs.PUT("/:envId", s.handlers.Environment.Update)
-		envs.DELETE("/:envId", s.handlers.Environment.Delete)
-		envs.GET("/:envId/api-keys", s.handlers.APIKey.List)
-		envs.POST("/:envId/api-keys", s.handlers.APIKey.Create)
-		envs.DELETE("/:envId/api-keys/:keyId", s.handlers.APIKey.Delete)
-	}
 
 	// Analytics routes
 	analytics := protected.Group("/analytics")
@@ -261,6 +271,18 @@ func (s *Server) setupV1Routes(router *gin.RouterGroup) {
 		analytics.GET("/costs", s.handlers.Analytics.Costs)
 		analytics.GET("/providers", s.handlers.Analytics.Providers)
 		analytics.GET("/models", s.handlers.Analytics.Models)
+
+		// Observability analytics routes (read-only for dashboard)
+		analytics.GET("/traces", s.handlers.Observability.ListTraces)
+		analytics.GET("/traces/:id", s.handlers.Observability.GetTrace)
+		analytics.GET("/traces/:id/observations", s.handlers.Observability.GetTraceWithObservations)
+		analytics.GET("/traces/:id/stats", s.handlers.Observability.GetTraceStats)
+		analytics.GET("/observations", s.handlers.Observability.ListObservations)
+		analytics.GET("/observations/:id", s.handlers.Observability.GetObservation)
+		analytics.GET("/quality-scores", s.handlers.Observability.ListQualityScores)
+		analytics.GET("/quality-scores/:id", s.handlers.Observability.GetQualityScore)
+		analytics.GET("/traces/:id/quality-scores", s.handlers.Observability.GetQualityScoresByTrace)
+		analytics.GET("/observations/:id/quality-scores", s.handlers.Observability.GetQualityScoresByObservation)
 	}
 
 	// Logs routes
@@ -319,23 +341,41 @@ func (s *Server) setupV1Routes(router *gin.RouterGroup) {
 	}
 }
 
-// setupOpenAIRoutes configures OpenAI-compatible routes
-func (s *Server) setupOpenAIRoutes(router *gin.RouterGroup) {
-	// Apply API key-based rate limiting for OpenAI routes
-	router.Use(s.rateLimitMiddleware.RateLimitByAPIKey())
-
-	// Chat completions
+// setupSDKRoutes configures SDK routes (/v1/*)
+func (s *Server) setupSDKRoutes(router *gin.RouterGroup) {
+	// OpenAI-compatible endpoints
 	router.POST("/chat/completions", s.handlers.AI.ChatCompletions)
-	
-	// Completions
 	router.POST("/completions", s.handlers.AI.Completions)
-	
-	// Embeddings
 	router.POST("/embeddings", s.handlers.AI.Embeddings)
-	
-	// Models
 	router.GET("/models", s.handlers.AI.ListModels)
 	router.GET("/models/:model", s.handlers.AI.GetModel)
+
+	// Observability endpoints for SDK telemetry (write operations)
+	router.POST("/traces", s.handlers.Observability.CreateTrace)
+	router.PUT("/traces/:id", s.handlers.Observability.UpdateTrace)
+	router.DELETE("/traces/:id", s.handlers.Observability.DeleteTrace)
+	router.POST("/traces/batch", s.handlers.Observability.CreateTracesBatch)
+
+	router.POST("/observations", s.handlers.Observability.CreateObservation)
+	router.PUT("/observations/:id", s.handlers.Observability.UpdateObservation)
+	router.POST("/observations/:id/complete", s.handlers.Observability.CompleteObservation)
+	router.DELETE("/observations/:id", s.handlers.Observability.DeleteObservation)
+	router.POST("/observations/batch", s.handlers.Observability.CreateObservationsBatch)
+
+	router.POST("/quality-scores", s.handlers.Observability.CreateQualityScore)
+	router.PUT("/quality-scores/:id", s.handlers.Observability.UpdateQualityScore)
+	router.DELETE("/quality-scores/:id", s.handlers.Observability.DeleteQualityScore)
+
+	// New SDK-specific endpoints
+	router.POST("/events", s.handlers.Observability.CreateEvent)           // Telemetry events
+	router.POST("/route", s.handlers.AI.RouteRequest)                       // AI routing decisions
+
+	// Cache management endpoints
+	cache := router.Group("/cache")
+	{
+		cache.GET("/status", s.handlers.AI.CacheStatus)         // Cache health
+		cache.POST("/invalidate", s.handlers.AI.InvalidateCache) // Cache management
+	}
 }
 
 // waitForShutdown waits for interrupt signal and gracefully shuts down the server

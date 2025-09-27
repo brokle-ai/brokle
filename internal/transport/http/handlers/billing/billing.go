@@ -63,13 +63,11 @@ type ProjectUsage struct {
 
 // EnvironmentUsage represents usage metrics for a specific environment
 type EnvironmentUsage struct {
-	EnvironmentID   string  `json:"environment_id" example:"env_1234567890" description:"Environment identifier"`
-	EnvironmentName string  `json:"environment_name" example:"Production" description:"Environment name"`
-	Type            string  `json:"type" example:"production" description:"Environment type"`
-	Requests        int64   `json:"requests" example:"100000" description:"Number of requests"`
-	Tokens          int64   `json:"tokens" example:"2000000" description:"Total tokens processed"`
-	Cost            float64 `json:"cost" example:"1000.50" description:"Total cost in USD"`
-	Percent         float64 `json:"percent" example:"0.80" description:"Percentage of total usage"`
+	Environment string  `json:"environment" example:"production" description:"Environment tag"`
+	Requests    int64   `json:"requests" example:"100000" description:"Number of requests"`
+	Tokens      int64   `json:"tokens" example:"2000000" description:"Total tokens processed"`
+	Cost        float64 `json:"cost" example:"1000.50" description:"Total cost in USD"`
+	Percent     float64 `json:"percent" example:"0.80" description:"Percentage of total usage"`
 }
 
 // DailyUsage represents usage metrics for a specific day

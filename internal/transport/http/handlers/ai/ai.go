@@ -81,6 +81,68 @@ type Model struct {
 	OwnedBy string `json:"owned_by" example:"openai" description:"Organization that owns the model"`
 }
 
+// RouteRequest represents AI routing request
+// @Description Request data for AI routing decisions
+type RouteRequest struct {
+	Model       string                 `json:"model" example:"gpt-3.5-turbo" description:"Target AI model"`
+	Provider    *string                `json:"provider,omitempty" example:"openai" description:"Preferred AI provider"`
+	Messages    []ChatMessage          `json:"messages,omitempty" description:"Chat messages for context"`
+	Prompt      *string                `json:"prompt,omitempty" example:"Hello world" description:"Text prompt for context"`
+	MaxTokens   *int                   `json:"max_tokens,omitempty" example:"150" description:"Maximum tokens for estimation"`
+	Temperature *float64               `json:"temperature,omitempty" example:"0.7" description:"Temperature parameter"`
+	Strategy    *string                `json:"strategy,omitempty" example:"cost_optimized" description:"Routing strategy (cost_optimized, latency_optimized, quality_optimized)"`
+	Metadata    map[string]interface{} `json:"metadata,omitempty" description:"Additional metadata for routing decisions"`
+}
+
+// RouteResponse represents AI routing response
+// @Description AI routing decision response
+type RouteResponse struct {
+	Provider         string                 `json:"provider" example:"openai" description:"Selected AI provider"`
+	Model            string                 `json:"model" example:"gpt-3.5-turbo" description:"Selected model"`
+	Endpoint         string                 `json:"endpoint" example:"https://api.openai.com/v1/chat/completions" description:"Provider endpoint URL"`
+	Strategy         string                 `json:"strategy" example:"cost_optimized" description:"Applied routing strategy"`
+	EstimatedCost    *float64               `json:"estimated_cost,omitempty" example:"0.0015" description:"Estimated cost in USD"`
+	EstimatedLatency *int                   `json:"estimated_latency,omitempty" example:"250" description:"Estimated latency in milliseconds"`
+	QualityScore     *float64               `json:"quality_score,omitempty" example:"0.95" description:"Expected quality score (0.0-1.0)"`
+	CacheHit         bool                   `json:"cache_hit" example:"false" description:"Whether response can be served from cache"`
+	ProviderHealth   *float64               `json:"provider_health,omitempty" example:"0.98" description:"Provider health score (0.0-1.0)"`
+	Metadata         map[string]interface{} `json:"metadata,omitempty" description:"Additional routing metadata"`
+}
+
+// CacheStatusResponse represents cache status information
+// @Description Cache health and statistics response
+type CacheStatusResponse struct {
+	Status          string  `json:"status" example:"healthy" description:"Cache health status"`
+	HitRate         float64 `json:"hit_rate" example:"0.85" description:"Cache hit rate (0.0-1.0)"`
+	TotalEntries    int64   `json:"total_entries" example:"15420" description:"Total number of cached entries"`
+	SizeBytes       int64   `json:"size_bytes" example:"1048576" description:"Total cache size in bytes"`
+	MemoryUsage     float64 `json:"memory_usage" example:"0.45" description:"Memory usage percentage (0.0-1.0)"`
+	EvictionCount   int64   `json:"eviction_count" example:"142" description:"Number of evicted entries"`
+	LastEviction    *int64  `json:"last_eviction,omitempty" example:"1677610602" description:"Unix timestamp of last eviction"`
+	ProviderBreakdown map[string]interface{} `json:"provider_breakdown,omitempty" description:"Cache statistics by provider"`
+}
+
+// InvalidateCacheRequest represents cache invalidation request
+// @Description Request data for cache invalidation
+type InvalidateCacheRequest struct {
+	Provider    *string  `json:"provider,omitempty" example:"openai" description:"Target specific provider"`
+	Model       *string  `json:"model,omitempty" example:"gpt-3.5-turbo" description:"Target specific model"`
+	Keys        []string `json:"keys,omitempty" description:"Specific cache keys to invalidate"`
+	ClearAll    *bool    `json:"clear_all,omitempty" example:"false" description:"Clear entire cache (use with caution)"`
+	MaxAge      *int     `json:"max_age,omitempty" example:"3600" description:"Invalidate entries older than this (seconds)"`
+	Pattern     *string  `json:"pattern,omitempty" example:"chat:*" description:"Pattern for key matching"`
+}
+
+// InvalidateCacheResponse represents cache invalidation response
+// @Description Cache invalidation result
+type InvalidateCacheResponse struct {
+	Success         bool     `json:"success" example:"true" description:"Whether invalidation succeeded"`
+	InvalidatedKeys []string `json:"invalidated_keys,omitempty" description:"List of invalidated cache keys"`
+	Count           int      `json:"count" example:"25" description:"Number of entries invalidated"`
+	Message         string   `json:"message" example:"Cache invalidated successfully" description:"Operation result message"`
+	Error           *string  `json:"error,omitempty" description:"Error message if operation failed"`
+}
+
 // ChatCompletions handles OpenAI-compatible chat completions
 // @Summary Create chat completion
 // @Description Generate AI chat completions using OpenAI-compatible API
@@ -161,6 +223,73 @@ func (h *Handler) ListModels(c *gin.Context) {
 // @Failure 404 {object} response.ErrorResponse "Model not found"
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /v1/models/{model} [get]
-func (h *Handler) GetModel(c *gin.Context) { 
-	response.Success(c, gin.H{"message": "Get model - TODO"}) 
+func (h *Handler) GetModel(c *gin.Context) {
+	response.Success(c, gin.H{"message": "Get model - TODO"})
+}
+
+// RouteRequest handles AI routing decisions
+// @Summary Make AI routing decision
+// @Description Determine optimal AI provider and model for a request
+// @Tags SDK - Routing
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param request body RouteRequest true "Routing request data"
+// @Success 200 {object} response.SuccessResponse{data=RouteResponse} "Routing decision returned"
+// @Failure 400 {object} response.ErrorResponse "Invalid request payload"
+// @Failure 401 {object} response.ErrorResponse "Invalid or missing API key"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /v1/route [post]
+func (h *Handler) RouteRequest(c *gin.Context) {
+	h.logger.Info("RouteRequest handler called - placeholder implementation")
+
+	// Placeholder response for now
+	response.Success(c, gin.H{
+		"message": "AI routing endpoint placeholder - implementation pending",
+		"path":    "/v1/route",
+	})
+}
+
+// CacheStatus handles cache health checks
+// @Summary Get cache status
+// @Description Get current cache health and statistics
+// @Tags SDK - Cache
+// @Produce json
+// @Security ApiKeyAuth
+// @Success 200 {object} response.SuccessResponse{data=CacheStatusResponse} "Cache status returned"
+// @Failure 401 {object} response.ErrorResponse "Invalid or missing API key"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /v1/cache/status [get]
+func (h *Handler) CacheStatus(c *gin.Context) {
+	h.logger.Info("CacheStatus handler called - placeholder implementation")
+
+	// Placeholder response for now
+	response.Success(c, gin.H{
+		"message": "Cache status endpoint placeholder - implementation pending",
+		"path":    "/v1/cache/status",
+		"status":  "healthy",
+	})
+}
+
+// InvalidateCache handles cache invalidation
+// @Summary Invalidate cache entries
+// @Description Invalidate specific cache entries or clear cache
+// @Tags SDK - Cache
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param request body InvalidateCacheRequest true "Cache invalidation data"
+// @Success 200 {object} response.SuccessResponse{data=InvalidateCacheResponse} "Cache invalidated successfully"
+// @Failure 400 {object} response.ErrorResponse "Invalid request payload"
+// @Failure 401 {object} response.ErrorResponse "Invalid or missing API key"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /v1/cache/invalidate [post]
+func (h *Handler) InvalidateCache(c *gin.Context) {
+	h.logger.Info("InvalidateCache handler called - placeholder implementation")
+
+	// Placeholder response for now
+	response.Success(c, gin.H{
+		"message": "Cache invalidation endpoint placeholder - implementation pending",
+		"path":    "/v1/cache/invalidate",
+	})
 }

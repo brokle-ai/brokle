@@ -12,6 +12,7 @@ import (
 
 	"brokle/internal/config"
 	"brokle/pkg/response"
+	"brokle/pkg/ulid"
 )
 
 // RateLimitMiddleware handles Redis-based rate limiting
@@ -120,34 +121,45 @@ func (m *RateLimitMiddleware) RateLimitByAPIKey() gin.HandlerFunc {
 	}
 
 	return func(c *gin.Context) {
-		// Get API key from context (set by APIKeyAuth middleware)
-		apiKeyContext, exists := c.Get("api_key")
-		if !exists {
+		var apiKeyID string
+
+		// Try new SDK auth context first (preferred)
+		if keyID, exists := c.Get(APIKeyIDKey); exists {
+			if ulidKey, ok := keyID.(*ulid.ULID); ok {
+				apiKeyID = ulidKey.String()
+			}
+		} else if oldKey, exists := c.Get("api_key"); exists {
+			// Fallback for any remaining old usage (temporary compatibility)
+			apiKeyID = fmt.Sprintf("%v", oldKey)
+		} else {
+			// No API key context found, skip rate limiting
+			m.logger.Debug("No API key context found for rate limiting")
 			c.Next()
 			return
 		}
 
-		// In a full implementation, you'd extract the API key ID
-		// For now, we'll use a simplified approach
-		apiKeyStr := fmt.Sprintf("%v", apiKeyContext)
-		key := fmt.Sprintf("rate_limit:apikey:%s", apiKeyStr)
-		
-		// API keys typically have higher limits
-		apiKeyLimit := m.config.RateLimitPerUser * 5 // 5x higher limit for API keys
-		
+		key := fmt.Sprintf("rate_limit:apikey:%s", apiKeyID)
+
+		// API keys typically have higher limits (5x user limits)
+		apiKeyLimit := m.config.RateLimitPerUser * 5
+
 		allowed, err := m.checkRateLimit(c.Request.Context(), key, apiKeyLimit, m.config.RateLimitWindow)
 		if err != nil {
-			m.logger.WithError(err).WithField("api_key", apiKeyStr).Error("API key rate limit check failed")
+			m.logger.WithError(err).WithField("api_key_id", apiKeyID).Error("API key rate limit check failed")
+			// On error, allow request to continue (fail open for availability)
 			c.Next()
 			return
 		}
 
 		if !allowed {
-			m.logger.WithField("api_key", apiKeyStr).Warn("Rate limit exceeded for API key")
+			m.logger.WithField("api_key_id", apiKeyID).Warn("Rate limit exceeded for API key")
 			response.TooManyRequests(c, "API key rate limit exceeded. Please try again later.")
 			c.Abort()
 			return
 		}
+
+		// Log successful rate limit check
+		m.logger.WithField("api_key_id", apiKeyID).WithField("limit", apiKeyLimit).Debug("API key rate limit check passed")
 
 		c.Next()
 	}

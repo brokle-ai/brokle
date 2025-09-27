@@ -63,23 +63,6 @@ type ProjectRepository interface {
 	CanUserAccessProject(ctx context.Context, userID, projectID ulid.ULID) (bool, error)
 }
 
-// EnvironmentRepository defines the interface for environment data access.
-type EnvironmentRepository interface {
-	// Basic CRUD operations
-	Create(ctx context.Context, env *Environment) error
-	GetByID(ctx context.Context, id ulid.ULID) (*Environment, error)
-	GetBySlug(ctx context.Context, projectID ulid.ULID, slug string) (*Environment, error)
-	Update(ctx context.Context, env *Environment) error
-	Delete(ctx context.Context, id ulid.ULID) error
-	
-	// Project scoped
-	GetByProjectID(ctx context.Context, projectID ulid.ULID) ([]*Environment, error)
-	GetEnvironmentCount(ctx context.Context, projectID ulid.ULID) (int, error)
-	
-	// Access validation
-	CanUserAccessEnvironment(ctx context.Context, userID, envID ulid.ULID) (bool, error)
-	GetEnvironmentOrganization(ctx context.Context, envID ulid.ULID) (ulid.ULID, error)
-}
 
 // InvitationRepository defines the interface for user invitation data access.
 type InvitationRepository interface {
@@ -167,7 +150,6 @@ type Repository interface {
 	Organizations() OrganizationRepository
 	Members() MemberRepository
 	Projects() ProjectRepository
-	Environments() EnvironmentRepository
 	Invitations() InvitationRepository
 	Settings() OrganizationSettingsRepository
 }
