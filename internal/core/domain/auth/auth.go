@@ -649,6 +649,25 @@ func NewPasswordResetToken(userID ulid.ULID, token string, expiresAt time.Time) 
 	}
 }
 
+// ValidateAPIKeyRequest represents a request to validate an API key with project scoping
+type ValidateAPIKeyRequest struct {
+	APIKey      string    `json:"api_key" validate:"required"`          // From X-API-Key header
+	ProjectID   ulid.ULID `json:"project_id" validate:"required"`       // From X-Project-ID header
+	Environment string    `json:"environment,omitempty"`                // From X-Environment header (optional)
+}
+
+// ValidateAPIKeyResponse represents the response from API key validation
+type ValidateAPIKeyResponse struct {
+	Valid         bool               `json:"valid"`
+	KeyID         *ulid.ULID         `json:"key_id,omitempty"`
+	ProjectID     *ulid.ULID         `json:"project_id,omitempty"`
+	Environment   string             `json:"environment,omitempty"`
+	Scopes        []string           `json:"scopes,omitempty"`
+	AuthContext   *AuthContext       `json:"auth_context,omitempty"`
+	ErrorCode     string             `json:"error_code,omitempty"`
+	ErrorMessage  string             `json:"error_message,omitempty"`
+}
+
 // Utility methods
 func (s *UserSession) IsExpired() bool {
 	return time.Now().After(s.ExpiresAt)

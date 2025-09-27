@@ -2979,6 +2979,52 @@ paths:
       summary: User registration
       tags:
       - Authentication
+  /api/v1/auth/validate:
+    post:
+      consumes:
+      - application/json
+      description: Validates an API key and checks project scoping and environment
+      parameters:
+      - description: API key starting with ak_
+        in: header
+        name: X-API-Key
+        required: true
+        type: string
+      - description: Project identifier (ULID format)
+        in: header
+        name: X-Project-ID
+        required: true
+        type: string
+      - description: Environment name (lowercase, ≤40 chars, no brokle prefix) - optional
+        in: header
+        name: X-Environment
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: API key validation successful
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "400":
+          description: Invalid request headers or validation failed
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Invalid API key
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: API key doesn't belong to project
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Validate API key with project scoping
+      tags:
+      - Authentication
   /api/v1/billing/{orgId}/invoices:
     get:
       consumes:

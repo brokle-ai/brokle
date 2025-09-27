@@ -222,6 +222,73 @@ func (s *apiKeyService) ValidateAPIKey(ctx context.Context, apiKey string) (*aut
 	return key, nil
 }
 
+// ValidateAPIKeyWithProjectScoping validates an API key with project and environment scoping
+func (s *apiKeyService) ValidateAPIKeyWithProjectScoping(ctx context.Context, req *authDomain.ValidateAPIKeyRequest) (*authDomain.ValidateAPIKeyResponse, error) {
+	// Validate environment name if provided (lowercase, ≤40 chars, no brokle prefix)
+	if req.Environment != "" {
+		if err := authDomain.ValidateEnvironmentName(req.Environment); err != nil {
+			return &authDomain.ValidateAPIKeyResponse{
+				Valid:        false,
+				ErrorCode:    "invalid_environment",
+				ErrorMessage: err.Error(),
+			}, nil
+		}
+	}
+
+	// Validate and get API key
+	apiKey, err := s.ValidateAPIKey(ctx, req.APIKey)
+	if err != nil {
+		errorCode := "invalid_api_key"
+		if appErr, ok := err.(*appErrors.AppError); ok {
+			switch appErr.Type {
+			case appErrors.UnauthorizedError:
+				errorCode = "unauthorized"
+			case appErrors.ForbiddenError:
+				errorCode = "forbidden"
+			default:
+				errorCode = "invalid_api_key"
+			}
+		}
+
+		return &authDomain.ValidateAPIKeyResponse{
+			Valid:        false,
+			ErrorCode:    errorCode,
+			ErrorMessage: err.Error(),
+		}, nil
+	}
+
+	// Validate project scoping - API key must belong to the specified project
+	if apiKey.ProjectID != req.ProjectID {
+		return &authDomain.ValidateAPIKeyResponse{
+			Valid:        false,
+			ErrorCode:    "project_mismatch",
+			ErrorMessage: "API key does not belong to the specified project",
+		}, nil
+	}
+
+	// Create auth context
+	authContext := &authDomain.AuthContext{
+		UserID:   apiKey.UserID,
+		APIKeyID: &apiKey.ID,
+	}
+
+	// Determine effective environment (use API key's default if none provided)
+	effectiveEnvironment := req.Environment
+	if effectiveEnvironment == "" {
+		effectiveEnvironment = apiKey.DefaultEnvironment
+	}
+
+	// Return successful validation response
+	return &authDomain.ValidateAPIKeyResponse{
+		Valid:       true,
+		KeyID:       &apiKey.ID,
+		ProjectID:   &apiKey.ProjectID,
+		Environment: effectiveEnvironment,
+		Scopes:      apiKey.Scopes,
+		AuthContext: authContext,
+	}, nil
+}
+
 // UpdateLastUsed updates the last used timestamp
 func (s *apiKeyService) UpdateLastUsed(ctx context.Context, keyID ulid.ULID) error {
 	return s.apiKeyRepo.MarkAsUsed(ctx, keyID)

@@ -166,6 +166,7 @@ func (s *Server) setupV1Routes(router *gin.RouterGroup) {
 		auth.POST("/refresh", s.handlers.Auth.RefreshToken)
 		auth.POST("/forgot-password", s.handlers.Auth.ForgotPassword)
 		auth.POST("/reset-password", s.handlers.Auth.ResetPassword)
+		auth.POST("/validate", s.handlers.Auth.ValidateAPIKeyAndProject)
 	}
 
 	// Protected routes (require JWT auth)

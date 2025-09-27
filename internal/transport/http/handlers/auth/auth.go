@@ -474,6 +474,105 @@ func (h *Handler) ValidateAPIKey(apiKey string) (*auth.AuthContext, error) {
 	return authContext, nil
 }
 
+// ValidateAPIKeyAndProject validates API key with project scoping
+// @Summary Validate API key with project scoping
+// @Description Validates an API key and checks project scoping and environment
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Param X-API-Key header string true "API key starting with ak_"
+// @Param X-Project-ID header string true "Project identifier (ULID format)"
+// @Param X-Environment header string false "Environment name (lowercase, ≤40 chars, no brokle prefix) - optional"
+// @Success 200 {object} response.SuccessResponse "API key validation successful"
+// @Failure 400 {object} response.ErrorResponse "Invalid request headers or validation failed"
+// @Failure 401 {object} response.ErrorResponse "Invalid API key"
+// @Failure 403 {object} response.ErrorResponse "API key doesn't belong to project"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /api/v1/auth/validate [post]
+func (h *Handler) ValidateAPIKeyAndProject(c *gin.Context) {
+	// Extract required headers
+	apiKey := c.GetHeader("X-API-Key")
+	projectIDStr := c.GetHeader("X-Project-ID")
+	environment := c.GetHeader("X-Environment") // Optional
+
+	// Validate required headers are present
+	if apiKey == "" {
+		h.logger.Error("Missing X-API-Key header")
+		response.BadRequest(c, "Missing required header", "X-API-Key header is required")
+		return
+	}
+
+	if projectIDStr == "" {
+		h.logger.Error("Missing X-Project-ID header")
+		response.BadRequest(c, "Missing required header", "X-Project-ID header is required")
+		return
+	}
+
+	// Note: X-Environment header is optional
+
+	// Parse project ID
+	projectID, err := ulid.Parse(projectIDStr)
+	if err != nil {
+		h.logger.WithError(err).WithField("project_id", projectIDStr).Error("Invalid project ID format")
+		response.BadRequest(c, "Invalid project ID format", "Project ID must be a valid ULID")
+		return
+	}
+
+	// Create validation request
+	req := &auth.ValidateAPIKeyRequest{
+		APIKey:      apiKey,
+		ProjectID:   projectID,
+		Environment: environment,
+	}
+
+	// Perform validation with project scoping
+	resp, err := h.apiKeyService.ValidateAPIKeyWithProjectScoping(c.Request.Context(), req)
+	if err != nil {
+		h.logger.WithError(err).WithFields(logrus.Fields{
+			"project_id":  projectID,
+			"environment": environment,
+			"key_prefix":  extractKeyPrefix(apiKey),
+		}).Error("API key validation with project scoping failed")
+		response.Error(c, err)
+		return
+	}
+
+	// Check if validation was successful
+	if !resp.Valid {
+		h.logger.WithFields(logrus.Fields{
+			"project_id":    projectID,
+			"environment":   environment,
+			"key_prefix":    extractKeyPrefix(apiKey),
+			"error_code":    resp.ErrorCode,
+			"error_message": resp.ErrorMessage,
+		}).Warn("API key validation failed")
+
+		// Map error codes to HTTP status
+		switch resp.ErrorCode {
+		case "invalid_environment":
+			response.BadRequest(c, "Invalid environment", resp.ErrorMessage)
+		case "unauthorized":
+			response.Unauthorized(c, resp.ErrorMessage)
+		case "project_mismatch":
+			response.Forbidden(c, resp.ErrorMessage)
+		default:
+			response.BadRequest(c, "Validation failed", resp.ErrorMessage)
+		}
+		return
+	}
+
+	// Log successful validation
+	h.logger.WithFields(logrus.Fields{
+		"user_id":     resp.AuthContext.UserID,
+		"api_key_id":  resp.KeyID,
+		"project_id":  resp.ProjectID,
+		"environment": resp.Environment,
+		"scopes":      resp.Scopes,
+	}).Info("API key validation with project scoping successful")
+
+	response.Success(c, resp)
+}
+
 // extractKeyPrefix safely extracts the first 8 characters for logging
 func extractKeyPrefix(apiKey string) string {
 	if len(apiKey) < 8 {

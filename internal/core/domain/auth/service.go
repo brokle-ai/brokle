@@ -62,16 +62,17 @@ type APIKeyService interface {
 	GetAPIKeys(ctx context.Context, filters *APIKeyFilters) ([]*APIKey, error)
 	UpdateAPIKey(ctx context.Context, keyID ulid.ULID, req *UpdateAPIKeyRequest) error
 	RevokeAPIKey(ctx context.Context, keyID ulid.ULID) error
-	
+
 	// API key validation and usage
 	ValidateAPIKey(ctx context.Context, keyHash string) (*APIKey, error)
+	ValidateAPIKeyWithProjectScoping(ctx context.Context, req *ValidateAPIKeyRequest) (*ValidateAPIKeyResponse, error)
 	UpdateLastUsed(ctx context.Context, keyID ulid.ULID) error
 	CheckRateLimit(ctx context.Context, keyID ulid.ULID) (bool, error)
-	
+
 	// API key context and permissions
 	GetAPIKeyContext(ctx context.Context, keyID ulid.ULID) (*AuthContext, error)
 	CanAPIKeyAccessResource(ctx context.Context, keyID ulid.ULID, resource string) (bool, error)
-	
+
 	// API key scoping
 	GetAPIKeysByUser(ctx context.Context, userID ulid.ULID) ([]*APIKey, error)
 	GetAPIKeysByOrganization(ctx context.Context, orgID ulid.ULID) ([]*APIKey, error)
