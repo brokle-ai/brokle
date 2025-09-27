@@ -78,12 +78,13 @@ func (a *App) Start() error {
 
 	// Initialize HTTP server with auth services
 	a.httpServer = http.NewServer(
-		a.config, 
-		a.logger, 
+		a.config,
+		a.logger,
 		httpHandlers,
 		providers.Services.Auth.JWT,
 		providers.Services.Auth.BlacklistedTokens,
 		providers.Services.Auth.OrganizationMembers,
+		providers.Services.Auth.APIKey,
 		providers.Databases.Redis.Client,
 	)
 
@@ -135,12 +136,13 @@ func (a *App) Run() error {
 
 	// Initialize HTTP server with auth services
 	a.httpServer = http.NewServer(
-		a.config, 
-		a.logger, 
+		a.config,
+		a.logger,
 		httpHandlers,
 		providers.Services.Auth.JWT,
 		providers.Services.Auth.BlacklistedTokens,
 		providers.Services.Auth.OrganizationMembers,
+		providers.Services.Auth.APIKey,
 		providers.Databases.Redis.Client,
 	)
 

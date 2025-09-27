@@ -161,6 +161,73 @@ func (h *Handler) ListModels(c *gin.Context) {
 // @Failure 404 {object} response.ErrorResponse "Model not found"
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /v1/models/{model} [get]
-func (h *Handler) GetModel(c *gin.Context) { 
-	response.Success(c, gin.H{"message": "Get model - TODO"}) 
+func (h *Handler) GetModel(c *gin.Context) {
+	response.Success(c, gin.H{"message": "Get model - TODO"})
+}
+
+// RouteRequest handles AI routing decisions
+// @Summary Make AI routing decision
+// @Description Determine optimal AI provider and model for a request
+// @Tags SDK - Routing
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param request body RouteRequest true "Routing request data"
+// @Success 200 {object} response.SuccessResponse{data=RouteResponse} "Routing decision returned"
+// @Failure 400 {object} response.ErrorResponse "Invalid request payload"
+// @Failure 401 {object} response.ErrorResponse "Invalid or missing API key"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /v1/route [post]
+func (h *Handler) RouteRequest(c *gin.Context) {
+	h.logger.Info("RouteRequest handler called - placeholder implementation")
+
+	// Placeholder response for now
+	response.Success(c, gin.H{
+		"message": "AI routing endpoint placeholder - implementation pending",
+		"path":    "/v1/route",
+	})
+}
+
+// CacheStatus handles cache health checks
+// @Summary Get cache status
+// @Description Get current cache health and statistics
+// @Tags SDK - Cache
+// @Produce json
+// @Security ApiKeyAuth
+// @Success 200 {object} response.SuccessResponse{data=CacheStatusResponse} "Cache status returned"
+// @Failure 401 {object} response.ErrorResponse "Invalid or missing API key"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /v1/cache/status [get]
+func (h *Handler) CacheStatus(c *gin.Context) {
+	h.logger.Info("CacheStatus handler called - placeholder implementation")
+
+	// Placeholder response for now
+	response.Success(c, gin.H{
+		"message": "Cache status endpoint placeholder - implementation pending",
+		"path":    "/v1/cache/status",
+		"status":  "healthy",
+	})
+}
+
+// InvalidateCache handles cache invalidation
+// @Summary Invalidate cache entries
+// @Description Invalidate specific cache entries or clear cache
+// @Tags SDK - Cache
+// @Accept json
+// @Produce json
+// @Security ApiKeyAuth
+// @Param request body InvalidateCacheRequest true "Cache invalidation data"
+// @Success 200 {object} response.SuccessResponse{data=InvalidateCacheResponse} "Cache invalidated successfully"
+// @Failure 400 {object} response.ErrorResponse "Invalid request payload"
+// @Failure 401 {object} response.ErrorResponse "Invalid or missing API key"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /v1/cache/invalidate [post]
+func (h *Handler) InvalidateCache(c *gin.Context) {
+	h.logger.Info("InvalidateCache handler called - placeholder implementation")
+
+	// Placeholder response for now
+	response.Success(c, gin.H{
+		"message": "Cache invalidation endpoint placeholder - implementation pending",
+		"path":    "/v1/cache/invalidate",
+	})
 }
