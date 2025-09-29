@@ -1130,6 +1130,91 @@ definitions:
     - last_name
     - password
     type: object
+  internal_transport_http_handlers_observability.TelemetryBatchRequest:
+    description: High-performance batch request for telemetry events with ULID-based
+      deduplication
+    properties:
+      async:
+        type: boolean
+      deduplication:
+        $ref: '#/definitions/observability.DeduplicationConfigRequest'
+      environment:
+        example: production
+        type: string
+      events:
+        items:
+          $ref: '#/definitions/internal_transport_http_handlers_observability.TelemetryEventRequest'
+        maxItems: 1000
+        minItems: 1
+        type: array
+      metadata:
+        additionalProperties: true
+        type: object
+    required:
+    - events
+    type: object
+  internal_transport_http_handlers_observability.TelemetryBatchResponse:
+    description: Response for high-throughput telemetry batch processing
+    properties:
+      batch_id:
+        example: 01ABCDEFGHIJKLMNOPQRSTUVWXYZ
+        type: string
+      duplicate_event_ids:
+        items:
+          type: string
+        type: array
+      duplicate_events:
+        example: 3
+        type: integer
+      errors:
+        items:
+          $ref: '#/definitions/internal_transport_http_handlers_observability.TelemetryEventError'
+        type: array
+      failed_events:
+        example: 2
+        type: integer
+      job_id:
+        example: job_01ABC123
+        type: string
+      processed_events:
+        example: 95
+        type: integer
+      processing_time_ms:
+        example: 123
+        type: integer
+    type: object
+  internal_transport_http_handlers_observability.TelemetryEventError:
+    description: Error details for failed telemetry event processing
+    properties:
+      details:
+        type: string
+      error:
+        example: Invalid payload format
+        type: string
+      event_id:
+        example: 01ABCDEFGHIJKLMNOPQRSTUVWXYZ
+        type: string
+    type: object
+  internal_transport_http_handlers_observability.TelemetryEventRequest:
+    description: Individual telemetry event using envelope pattern for high throughput
+    properties:
+      event_id:
+        example: 01ABCDEFGHIJKLMNOPQRSTUVWXYZ
+        type: string
+      event_type:
+        example: trace_create
+        type: string
+      payload:
+        additionalProperties: true
+        type: object
+      timestamp:
+        example: 1677610602
+        type: integer
+    required:
+    - event_id
+    - event_type
+    - payload
+    type: object
   internal_transport_http_handlers_organization.CreateOrganizationRequest:
     properties:
       description:
@@ -1629,6 +1714,37 @@ definitions:
     - name
     - project_id
     type: object
+  observability.DatabaseHealthResponse:
+    description: Database connectivity and performance status
+    properties:
+      active_connections:
+        example: 10
+        type: integer
+      connected:
+        example: true
+        type: boolean
+      latency_ms:
+        example: 1.5
+        type: number
+      max_connections:
+        example: 100
+        type: integer
+    type: object
+  observability.DeduplicationConfigRequest:
+    description: Configuration for event deduplication behavior
+    properties:
+      enabled:
+        example: true
+        type: boolean
+      fail_on_duplicate:
+        type: boolean
+      ttl:
+        example: 3600
+        type: integer
+      use_redis_cache:
+        example: true
+        type: boolean
+    type: object
   observability.EventResponse:
     description: Telemetry event creation result
     properties:
@@ -1746,6 +1862,193 @@ definitions:
         type: string
       updated_at:
         type: string
+    type: object
+  observability.QueueHealthResponse:
+    description: Processing queue status and performance
+    properties:
+      average_wait_time_ms:
+        example: 10.2
+        type: number
+      oldest_message_age_ms:
+        example: 500
+        type: number
+      processing_rate:
+        example: 100.5
+        type: number
+      size:
+        example: 150
+        type: integer
+    type: object
+  observability.RedisHealthResponse:
+    description: Redis connectivity and performance status
+    properties:
+      available:
+        example: true
+        type: boolean
+      connections:
+        example: 5
+        type: integer
+      last_error:
+        type: string
+      latency_ms:
+        example: 0.5
+        type: number
+      uptime:
+        example: 24h0m0s
+        type: string
+    type: object
+  observability.TelemetryBatchStatusResponse:
+    description: Status information for a telemetry batch
+    properties:
+      batch_id:
+        example: 01ABCDEFGHIJKLMNOPQRSTUVWXYZ
+        type: string
+      completed_at:
+        example: "2023-12-01T10:30:05Z"
+        type: string
+      created_at:
+        example: "2023-12-01T10:30:00Z"
+        type: string
+      failed_events:
+        example: 5
+        type: integer
+      processed_events:
+        example: 95
+        type: integer
+      processing_time_ms:
+        example: 1234
+        type: integer
+      status:
+        example: completed
+        type: string
+      total_events:
+        example: 100
+        type: integer
+    type: object
+  observability.TelemetryHealthResponse:
+    description: Health status of telemetry processing system
+    properties:
+      active_workers:
+        example: 5
+        type: integer
+      average_processing_time_ms:
+        example: 45.7
+        type: number
+      database:
+        $ref: '#/definitions/observability.DatabaseHealthResponse'
+      error_rate:
+        example: 0.01
+        type: number
+      healthy:
+        example: true
+        type: boolean
+      processing_queue:
+        $ref: '#/definitions/observability.QueueHealthResponse'
+      redis:
+        $ref: '#/definitions/observability.RedisHealthResponse'
+      throughput_per_minute:
+        example: 1200.5
+        type: number
+    type: object
+  observability.TelemetryMetricsResponse:
+    description: Comprehensive metrics for telemetry processing system
+    properties:
+      average_events_per_batch:
+        example: 100
+        type: number
+      completed_batches:
+        example: 1230
+        type: integer
+      deduplication_rate:
+        example: 0.4
+        type: number
+      duplicate_events:
+        example: 500
+        type: integer
+      failed_batches:
+        example: 15
+        type: integer
+      failed_events:
+        example: 1500
+        type: integer
+      processed_events:
+        example: 123000
+        type: integer
+      processing_batches:
+        example: 5
+        type: integer
+      success_rate:
+        example: 99.2
+        type: number
+      throughput_per_second:
+        example: 85.5
+        type: number
+      total_batches:
+        example: 1250
+        type: integer
+      total_events:
+        example: 125000
+        type: integer
+    type: object
+  observability.TelemetryPerformanceStatsResponse:
+    description: Performance statistics over a time window
+    properties:
+      average_latency_ms:
+        example: 45.7
+        type: number
+      cache_hit_rate:
+        example: 0.85
+        type: number
+      database_fallback_rate:
+        example: 0.15
+        type: number
+      error_rate:
+        example: 0.01
+        type: number
+      p95_latency_ms:
+        example: 89.2
+        type: number
+      p99_latency_ms:
+        example: 156.8
+        type: number
+      peak_throughput:
+        example: 120.3
+        type: number
+      retry_rate:
+        example: 0.02
+        type: number
+      successful_requests:
+        example: 1185
+        type: integer
+      throughput_per_second:
+        example: 85.5
+        type: number
+      time_window:
+        example: 1h
+        type: string
+      total_requests:
+        example: 1200
+        type: integer
+    type: object
+  observability.TelemetryValidationResponse:
+    description: Result of telemetry event validation
+    properties:
+      errors:
+        items:
+          type: string
+        type: array
+      event_id:
+        example: 01ABCDEFGHIJKLMNOPQRSTUVWXYZ
+        type: string
+      event_type:
+        example: trace_create
+        type: string
+      message:
+        example: Event structure is valid
+        type: string
+      valid:
+        example: true
+        type: boolean
     type: object
   observability.TraceResponse:
     properties:
@@ -6116,6 +6419,336 @@ paths:
       summary: Make AI routing decision
       tags:
       - SDK - Routing
+  /v1/telemetry/batch:
+    post:
+      consumes:
+      - application/json
+      description: Process a batch of telemetry events with ULID-based deduplication
+        and 5x performance optimization
+      parameters:
+      - description: Telemetry batch data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_transport_http_handlers_observability.TelemetryBatchRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Batch processed successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/internal_transport_http_handlers_observability.TelemetryBatchResponse'
+              type: object
+        "400":
+          description: Invalid request payload
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "401":
+          description: Invalid or missing API key
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "422":
+          description: Validation failed
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "429":
+          description: Rate limit exceeded
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Process high-throughput telemetry batch
+      tags:
+      - SDK - Telemetry
+  /v1/telemetry/batch/{batch_id}:
+    get:
+      description: Get status and details for a specific telemetry batch
+      parameters:
+      - description: Batch ID (ULID format)
+        in: path
+        name: batch_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Batch status retrieved successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/observability.TelemetryBatchStatusResponse'
+              type: object
+        "400":
+          description: Invalid batch ID format
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "401":
+          description: Invalid or missing API key
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "404":
+          description: Batch not found
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Get telemetry batch status
+      tags:
+      - SDK - Telemetry
+  /v1/telemetry/health:
+    get:
+      description: Get comprehensive health status of telemetry processing system
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Health status retrieved successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/observability.TelemetryHealthResponse'
+              type: object
+        "401":
+          description: Invalid or missing API key
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Get telemetry service health status
+      tags:
+      - SDK - Telemetry
+  /v1/telemetry/metrics:
+    get:
+      description: Get comprehensive metrics for telemetry processing system
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Metrics retrieved successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/observability.TelemetryMetricsResponse'
+              type: object
+        "401":
+          description: Invalid or missing API key
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Get telemetry service metrics
+      tags:
+      - SDK - Telemetry
+  /v1/telemetry/performance:
+    get:
+      description: Get performance statistics for telemetry processing over a time
+        window
+      parameters:
+      - default: 1h
+        description: Time window for statistics
+        enum:
+        - 1m
+        - 5m
+        - 15m
+        - 1h
+        - 6h
+        - 24h
+        in: query
+        name: window
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Performance stats retrieved successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/observability.TelemetryPerformanceStatsResponse'
+              type: object
+        "400":
+          description: Invalid time window parameter
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "401":
+          description: Invalid or missing API key
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Get telemetry performance statistics
+      tags:
+      - SDK - Telemetry
+  /v1/telemetry/validate:
+    post:
+      consumes:
+      - application/json
+      description: Validate a telemetry event without processing it
+      parameters:
+      - description: Event to validate
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_transport_http_handlers_observability.TelemetryEventRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Event validation result
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/observability.TelemetryValidationResponse'
+              type: object
+        "400":
+          description: Invalid request payload
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "401":
+          description: Invalid or missing API key
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "422":
+          description: Validation failed
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Validate telemetry event structure
+      tags:
+      - SDK - Telemetry
   /ws:
     get:
       consumes:

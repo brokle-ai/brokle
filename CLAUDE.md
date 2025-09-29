@@ -253,32 +253,161 @@ Copy `.env.example` to `.env` and configure:
 
 ## API Architecture
 
-### OpenAI-Compatible Gateway
-The monolith provides OpenAI-compatible endpoints:
-- `POST /v1/chat/completions` - Chat completions
-- `POST /v1/completions` - Text completions  
-- `POST /v1/embeddings` - Text embeddings
-- `GET /v1/models` - Available models
+### Dual Route Architecture
+The platform implements a clean separation between SDK and Dashboard routes:
 
-### Management APIs
-- `/api/v1/auth/*` - Authentication & user management
-- `/api/v1/organizations/*` - Organization management
-- `/api/v1/projects/*` - Project management
-- `/api/v1/analytics/*` - Metrics & reporting
-- `/api/v1/billing/*` - Usage & billing
+#### SDK Routes (`/v1/*`) - API Key Authentication
+**Authentication**: Project-scoped API keys (`bk_proj_{project_id}_{secret}`)
+**Rate Limiting**: API key-based rate limiting
+**Target Users**: SDK integration, programmatic access
+
+- `POST /v1/chat/completions` - OpenAI-compatible chat completions
+- `POST /v1/completions` - OpenAI-compatible text completions
+- `POST /v1/embeddings` - OpenAI-compatible embeddings
+- `GET /v1/models` - Available AI models
+- `GET /v1/models/:model` - Specific model details
+
+**Observability Endpoints (SDK Telemetry)**:
+- `POST /v1/traces` - Create trace
+- `PUT /v1/traces/:id` - Update trace
+- `POST /v1/traces/batch` - Batch trace creation
+- `POST /v1/observations` - Create observation
+- `PUT /v1/observations/:id` - Update observation
+- `POST /v1/observations/:id/complete` - Complete observation
+- `POST /v1/quality-scores` - Create quality score
+- `POST /v1/events` - Create telemetry event
+- `POST /v1/route` - AI routing decisions
+
+**Cache Management**:
+- `GET /v1/cache/status` - Cache health status
+- `POST /v1/cache/invalidate` - Cache invalidation
+
+**SDK Authentication**:
+- `POST /v1/auth/validate-key` - API key validation (public endpoint)
+
+#### Dashboard Routes (`/api/v1/*`) - JWT Authentication
+**Authentication**: Bearer JWT tokens with session management
+**Rate Limiting**: IP-based and user-based rate limiting
+**Target Users**: Web dashboard, administrative access
+
+- `/api/v1/auth/*` - Authentication & session management
+- `/api/v1/users/*` - User profile management
+- `/api/v1/onboarding/*` - User onboarding flow
+- `/api/v1/organizations/*` - Organization management with RBAC
+- `/api/v1/projects/*` - Project management and API key management
+- `/api/v1/analytics/*` - Metrics & reporting (read-only dashboard views)
+- `/api/v1/logs/*` - Request logs and export
+- `/api/v1/billing/*` - Usage & billing management
+- `/api/v1/rbac/*` - Role and permission management
+- `/api/v1/admin/*` - Administrative token management
 
 ### Real-time APIs
 - `/ws` - WebSocket connections for real-time updates
 - `/api/v1/streaming/*` - Server-sent events
+
+## SDK Architecture & Authentication
+
+### Project-Scoped API Key System
+The platform implements a sophisticated API key system for SDK authentication:
+
+#### API Key Format
+```
+bk_proj_{project_id}_{secret}
+```
+- **Prefix**: `bk` (Brokle identifier)
+- **Scope**: `proj` (project-scoped)
+- **Project ID**: 26-character ULID identifying the project
+- **Secret**: 32-character cryptographically secure random string
+
+#### Key Features
+- **Self-contained**: Project ID embedded in the API key
+- **No additional headers required**: Authentication context extracted from key
+- **Secure validation**: Server-side validation with database lookup
+- **Environment support**: Optional `X-Environment` header for environment tagging
+
+#### SDK Authentication Flow
+```go
+// 1. Extract API key from X-API-Key or Authorization header
+apiKey := c.GetHeader("X-API-Key")
+// Fallback: Authorization: Bearer {api_key}
+
+// 2. Parse and validate API key format
+parsedKey, err := auth.ParseAPIKey(apiKey)
+projectID := parsedKey.ProjectID
+
+// 3. Validate against database
+validateResp, err := apiKeyService.ValidateAPIKey(ctx, apiKey)
+
+// 4. Store authentication context
+c.Set("project_id", &validateResp.ProjectID)
+c.Set("api_key_id", validateResp.AuthContext.APIKeyID)
+c.Set("environment", c.GetHeader("X-Environment"))
+```
+
+### Middleware Architecture
+
+#### SDKAuthMiddleware
+Located in `internal/transport/http/middleware/sdk_auth.go`:
+
+```go
+type SDKAuthMiddleware struct {
+    apiKeyService auth.APIKeyService
+    logger        *logrus.Logger
+}
+
+// RequireSDKAuth validates API keys for SDK routes
+func (m *SDKAuthMiddleware) RequireSDKAuth() gin.HandlerFunc {
+    // Extracts and validates API key
+    // Stores authentication context in Gin context
+    // Handles both X-API-Key and Authorization headers
+}
+```
+
+**Context Keys**:
+- `SDKAuthContextKey` - Full authentication context
+- `APIKeyIDKey` - API key identifier
+- `ProjectIDKey` - Project ID (stored as pointer)
+- `EnvironmentKey` - Environment tag from header
+
+#### Rate Limiting Strategy
+```go
+// API key-based rate limiting for SDK routes
+router.Use(rateLimitMiddleware.RateLimitByAPIKey())
+
+// IP-based rate limiting for dashboard routes
+router.Use(rateLimitMiddleware.RateLimitByIP())
+
+// User-based rate limiting after JWT authentication
+protectedRoutes.Use(rateLimitMiddleware.RateLimitByUser())
+```
+
+### Server Route Setup
+The HTTP server implements clean route separation in `internal/transport/http/server.go`:
+
+```go
+// SDK routes (/v1) - API Key authentication
+sdk := engine.Group("/v1")
+sdk.Use(sdkAuthMiddleware.RequireSDKAuth())
+sdk.Use(rateLimitMiddleware.RateLimitByAPIKey())
+setupSDKRoutes(sdk)
+
+// Dashboard routes (/api/v1) - JWT authentication
+dashboard := engine.Group("/api/v1")
+dashboard.Use(rateLimitMiddleware.RateLimitByIP()) // Global IP limiting
+protected := dashboard.Group("")
+protected.Use(authMiddleware.RequireAuth())       // JWT auth
+protected.Use(rateLimitMiddleware.RateLimitByUser()) // User limiting
+setupDashboardRoutes(protected)
+```
 
 ## Data Architecture
 
 ### Primary Database (PostgreSQL)
 Single database with domain-separated tables:
 - `users`, `auth_sessions` - Authentication & user management
-- `organizations`, `organization_members` - Multi-tenant structure  
-- `projects`, `environments` - Project and environment management
-- `api_keys` - API key management and scoping
+- `organizations`, `organization_members` - Multi-tenant structure
+- `projects` - Project management (environments now handled as tags)
+- `api_keys` - Project-scoped API key management
 - `gateway_*` - AI provider configurations
 - `billing_usage` - Usage tracking and billing
 
@@ -298,6 +427,76 @@ Time-series data optimized for analytical queries:
 - Real-time event pub/sub for WebSocket
 
 ## Development Patterns
+
+### API Key Management Utilities
+The platform includes comprehensive API key utilities in `internal/core/domain/auth/apikey_utils.go`:
+
+```go
+// Generate new project-scoped API key
+fullKey, keyID, secret, err := auth.GenerateProjectScopedAPIKey(projectID)
+// Returns: "bk_proj_{project_id}_{secret}", "bk_proj_{project_id}", "{secret}", error
+
+// Parse existing API key
+parsedKey, err := auth.ParseAPIKey(fullKey)
+// Returns: &ParsedAPIKey{Prefix, Scope, ProjectID, Secret, KeyID}
+
+// Extract just the project ID quickly
+projectID, err := auth.ExtractProjectID(fullKey)
+
+// Validate API key format
+err := auth.ValidateAPIKeyFormat(fullKey)
+
+// Create preview for display (security)
+preview := auth.CreateKeyPreview(keyID) // "bk_proj_01ABCD...WXYZ"
+
+// Check if key is project-scoped
+isProjectScoped := auth.IsProjectScopedKey(fullKey) // true for bk_proj_* keys
+```
+
+### Authentication Middleware Patterns
+
+#### SDK Authentication (API Keys)
+```go
+// For SDK routes requiring API key authentication
+func (h *Handler) SDKEndpoint(c *gin.Context) {
+    // Get authentication context from middleware
+    authCtx, exists := middleware.GetSDKAuthContext(c)
+    if !exists {
+        response.Unauthorized(c, "Authentication required")
+        return
+    }
+
+    // Get project ID (stored as pointer)
+    projectID, exists := middleware.GetProjectID(c)
+    if !exists {
+        response.InternalServerError(c, "Project context missing")
+        return
+    }
+
+    // Optional environment tag
+    environment, _ := middleware.GetEnvironment(c)
+
+    // Use authentication context
+    log.Printf("Project: %s, Environment: %s", projectID.String(), environment)
+}
+```
+
+#### Dashboard Authentication (JWT)
+```go
+// For dashboard routes requiring JWT authentication
+func (h *Handler) DashboardEndpoint(c *gin.Context) {
+    // Get user context from JWT middleware
+    userID, exists := middleware.GetUserID(c)
+    if !exists {
+        response.Unauthorized(c, "Authentication required")
+        return
+    }
+
+    // Get organization context (if required)
+    orgID, exists := middleware.GetOrganizationID(c)
+    // Handle organization-scoped operations
+}
+```
 
 ### Clean Architecture
 Follow repository → service → handler pattern:
@@ -657,6 +856,55 @@ docs: update API documentation
 4. Add monitoring metrics
 5. Write integration tests
 
+### Working with SDK Observability
+The platform includes comprehensive observability endpoints for SDK telemetry:
+
+#### Creating Traces and Observations
+```go
+// SDK routes for telemetry (require API key authentication)
+POST /v1/traces                    // Create new trace
+PUT /v1/traces/:id                 // Update existing trace
+POST /v1/traces/batch              // Batch create traces
+DELETE /v1/traces/:id              // Delete trace
+
+POST /v1/observations              // Create observation
+PUT /v1/observations/:id           // Update observation
+POST /v1/observations/:id/complete // Complete observation
+POST /v1/observations/batch        // Batch create observations
+
+POST /v1/quality-scores            // Create quality scores
+POST /v1/events                    // Create telemetry events
+POST /v1/route                     // Log AI routing decisions
+```
+
+#### Dashboard Analytics (Read-only)
+```go
+// Dashboard routes for viewing telemetry (require JWT authentication)
+GET /api/v1/analytics/traces              // List traces
+GET /api/v1/analytics/traces/:id          // Get specific trace
+GET /api/v1/analytics/traces/:id/observations // Get trace with observations
+GET /api/v1/analytics/observations        // List observations
+GET /api/v1/analytics/quality-scores      // List quality scores
+```
+
+### Environment Tag System
+The platform now uses environment tags instead of environment entities:
+
+```go
+// Environment passed via header (optional)
+environment := c.GetHeader("X-Environment") // "production", "staging", "development"
+
+// Stored in context for telemetry and analytics
+c.Set("environment", environment)
+
+// Used in observability and routing decisions
+telemetryData := TelemetryData{
+    ProjectID:   projectID,
+    Environment: environment, // Optional tag
+    // ... other fields
+}
+```
+
 ### Database Changes
 1. Create migration file in `migrations/`
 2. Update models in relevant domain
@@ -749,3 +997,44 @@ make docker-clean
 - **Migration dirty state**: Use `go run cmd/migrate/main.go -db <database> drop` then re-run migrations
 - **Enterprise build errors**: Ensure proper build tags usage
 - **WebSocket connection issues**: Check CORS and proxy settings
+
+### SDK Authentication Issues
+```bash
+# Test API key validation
+curl -X POST http://localhost:8080/v1/auth/validate-key \
+  -H "Content-Type: application/json" \
+  -d '{"api_key": "bk_proj_01ABCD123456789012345DEFGH_abcdefghijklmnopqrstuvwxyz123456"}'
+
+# Test SDK endpoint with API key
+curl -X GET http://localhost:8080/v1/models \
+  -H "X-API-Key: bk_proj_01ABCD123456789012345DEFGH_abcdefghijklmnopqrstuvwxyz123456"
+
+# Test with environment header
+curl -X POST http://localhost:8080/v1/chat/completions \
+  -H "X-API-Key: your_api_key" \
+  -H "X-Environment: production" \
+  -H "Content-Type: application/json" \
+  -d '{"model": "gpt-3.5-turbo", "messages": [{"role": "user", "content": "Hello"}]}'
+```
+
+### API Key Debugging
+```go
+// Debug API key parsing
+parsedKey, err := auth.ParseAPIKey("bk_proj_01ABCD123456789012345DEFGH_abcdefghijklmnopqrstuvwxyz123456")
+if err != nil {
+    log.Printf("Parse error: %v", err)
+    return
+}
+log.Printf("Project ID: %s", parsedKey.ProjectID.String())
+
+// Validate format without full parsing
+if err := auth.ValidateAPIKeyFormat(apiKey); err != nil {
+    log.Printf("Invalid format: %v", err)
+}
+
+// Quick project ID extraction
+projectID, err := auth.ExtractProjectID(apiKey)
+if err != nil {
+    log.Printf("Project extraction failed: %v", err)
+}
+```

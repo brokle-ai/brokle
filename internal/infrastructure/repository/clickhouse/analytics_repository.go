@@ -64,6 +64,47 @@ type ProviderHealth struct {
 	Timestamp      time.Time `ch:"timestamp"`
 }
 
+// TelemetryEvent represents a telemetry event in ClickHouse
+type TelemetryEvent struct {
+	ID          string    `ch:"id"`
+	BatchID     string    `ch:"batch_id"`
+	ProjectID   string    `ch:"project_id"`
+	Environment string    `ch:"environment"`
+	EventType   string    `ch:"event_type"`
+	EventData   string    `ch:"event_data"`
+	Timestamp   time.Time `ch:"timestamp"`
+	RetryCount  int       `ch:"retry_count"`
+	ProcessedAt time.Time `ch:"processed_at"`
+}
+
+// TelemetryBatch represents a telemetry batch in ClickHouse
+type TelemetryBatch struct {
+	ID               string    `ch:"id"`
+	ProjectID        string    `ch:"project_id"`
+	Environment      string    `ch:"environment"`
+	Status           string    `ch:"status"`
+	TotalEvents      int       `ch:"total_events"`
+	ProcessedEvents  int       `ch:"processed_events"`
+	FailedEvents     int       `ch:"failed_events"`
+	ProcessingTimeMs int       `ch:"processing_time_ms"`
+	Metadata         string    `ch:"metadata"`
+	Timestamp        time.Time `ch:"timestamp"`
+	ProcessedAt      time.Time `ch:"processed_at"`
+}
+
+// TelemetryMetric represents a telemetry metric in ClickHouse
+type TelemetryMetric struct {
+	ProjectID    string    `ch:"project_id"`
+	Environment  string    `ch:"environment"`
+	MetricName   string    `ch:"metric_name"`
+	MetricType   string    `ch:"metric_type"`
+	MetricValue  float64   `ch:"metric_value"`
+	Labels       string    `ch:"labels"`
+	Metadata     string    `ch:"metadata"`
+	Timestamp    time.Time `ch:"timestamp"`
+	ProcessedAt  time.Time `ch:"processed_at"`
+}
+
 // InsertRequestLog inserts a new request log
 func (r *AnalyticsRepository) InsertRequestLog(ctx context.Context, log *RequestLog) error {
 	query := `
@@ -416,4 +457,139 @@ type CostBreakdown struct {
 	TotalCost             float64 `json:"total_cost"`
 	RequestCount          int64   `json:"request_count"`
 	AverageCostPerRequest float64 `json:"average_cost_per_request"`
+}
+
+// Telemetry-specific insert methods
+
+// InsertTelemetryEvent inserts a single telemetry event
+func (r *AnalyticsRepository) InsertTelemetryEvent(ctx context.Context, event *TelemetryEvent) error {
+	query := `
+		INSERT INTO telemetry_events (
+			id, batch_id, project_id, environment, event_type,
+			event_data, timestamp, retry_count, processed_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	return r.db.Execute(ctx, query,
+		event.ID, event.BatchID, event.ProjectID, event.Environment, event.EventType,
+		event.EventData, event.Timestamp, event.RetryCount, event.ProcessedAt,
+	)
+}
+
+// InsertTelemetryEventsBatch inserts multiple telemetry events efficiently
+func (r *AnalyticsRepository) InsertTelemetryEventsBatch(ctx context.Context, events []*TelemetryEvent) error {
+	if len(events) == 0 {
+		return nil
+	}
+
+	batch := make([][]interface{}, len(events))
+	for i, event := range events {
+		batch[i] = []interface{}{
+			event.ID, event.BatchID, event.ProjectID, event.Environment, event.EventType,
+			event.EventData, event.Timestamp, event.RetryCount, event.ProcessedAt,
+		}
+	}
+
+	query := `
+		INSERT INTO telemetry_events (
+			id, batch_id, project_id, environment, event_type,
+			event_data, timestamp, retry_count, processed_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	for _, row := range batch {
+		if err := r.db.Execute(ctx, query, row...); err != nil {
+			return fmt.Errorf("failed to insert telemetry event batch: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// InsertTelemetryBatch inserts a single telemetry batch record
+func (r *AnalyticsRepository) InsertTelemetryBatch(ctx context.Context, batch *TelemetryBatch) error {
+	query := `
+		INSERT INTO telemetry_batches (
+			id, project_id, environment, status, total_events,
+			processed_events, failed_events, processing_time_ms,
+			metadata, timestamp, processed_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	return r.db.Execute(ctx, query,
+		batch.ID, batch.ProjectID, batch.Environment, batch.Status, batch.TotalEvents,
+		batch.ProcessedEvents, batch.FailedEvents, batch.ProcessingTimeMs,
+		batch.Metadata, batch.Timestamp, batch.ProcessedAt,
+	)
+}
+
+// InsertTelemetryBatchesBatch inserts multiple telemetry batch records efficiently
+func (r *AnalyticsRepository) InsertTelemetryBatchesBatch(ctx context.Context, batches []*TelemetryBatch) error {
+	if len(batches) == 0 {
+		return nil
+	}
+
+	batchRows := make([][]interface{}, len(batches))
+	for i, batch := range batches {
+		batchRows[i] = []interface{}{
+			batch.ID, batch.ProjectID, batch.Environment, batch.Status, batch.TotalEvents,
+			batch.ProcessedEvents, batch.FailedEvents, batch.ProcessingTimeMs,
+			batch.Metadata, batch.Timestamp, batch.ProcessedAt,
+		}
+	}
+
+	query := `
+		INSERT INTO telemetry_batches (
+			id, project_id, environment, status, total_events,
+			processed_events, failed_events, processing_time_ms,
+			metadata, timestamp, processed_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	for _, row := range batchRows {
+		if err := r.db.Execute(ctx, query, row...); err != nil {
+			return fmt.Errorf("failed to insert telemetry batch record: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// InsertTelemetryMetric inserts a single telemetry metric
+func (r *AnalyticsRepository) InsertTelemetryMetric(ctx context.Context, metric *TelemetryMetric) error {
+	query := `
+		INSERT INTO telemetry_metrics (
+			project_id, environment, metric_name, metric_type, metric_value,
+			labels, metadata, timestamp, processed_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	return r.db.Execute(ctx, query,
+		metric.ProjectID, metric.Environment, metric.MetricName, metric.MetricType, metric.MetricValue,
+		metric.Labels, metric.Metadata, metric.Timestamp, metric.ProcessedAt,
+	)
+}
+
+// InsertTelemetryMetricsBatch inserts multiple telemetry metrics efficiently
+func (r *AnalyticsRepository) InsertTelemetryMetricsBatch(ctx context.Context, metrics []*TelemetryMetric) error {
+	if len(metrics) == 0 {
+		return nil
+	}
+
+	batch := make([][]interface{}, len(metrics))
+	for i, metric := range metrics {
+		batch[i] = []interface{}{
+			metric.ProjectID, metric.Environment, metric.MetricName, metric.MetricType, metric.MetricValue,
+			metric.Labels, metric.Metadata, metric.Timestamp, metric.ProcessedAt,
+		}
+	}
+
+	query := `
+		INSERT INTO telemetry_metrics (
+			project_id, environment, metric_name, metric_type, metric_value,
+			labels, metadata, timestamp, processed_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+
+	for _, row := range batch {
+		if err := r.db.Execute(ctx, query, row...); err != nil {
+			return fmt.Errorf("failed to insert telemetry metric batch: %w", err)
+		}
+	}
+
+	return nil
 }
