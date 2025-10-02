@@ -350,27 +350,10 @@ func (s *Server) setupSDKRoutes(router *gin.RouterGroup) {
 	router.GET("/models", s.handlers.AI.ListModels)
 	router.GET("/models/:model", s.handlers.AI.GetModel)
 
-	// Observability endpoints for SDK telemetry (write operations)
-	router.POST("/traces", s.handlers.Observability.CreateTrace)
-	router.PUT("/traces/:id", s.handlers.Observability.UpdateTrace)
-	router.DELETE("/traces/:id", s.handlers.Observability.DeleteTrace)
-	router.POST("/traces/batch", s.handlers.Observability.CreateTracesBatch)
+	// AI routing decisions
+	router.POST("/route", s.handlers.AI.RouteRequest)
 
-	router.POST("/observations", s.handlers.Observability.CreateObservation)
-	router.PUT("/observations/:id", s.handlers.Observability.UpdateObservation)
-	router.POST("/observations/:id/complete", s.handlers.Observability.CompleteObservation)
-	router.DELETE("/observations/:id", s.handlers.Observability.DeleteObservation)
-	router.POST("/observations/batch", s.handlers.Observability.CreateObservationsBatch)
-
-	router.POST("/quality-scores", s.handlers.Observability.CreateQualityScore)
-	router.PUT("/quality-scores/:id", s.handlers.Observability.UpdateQualityScore)
-	router.DELETE("/quality-scores/:id", s.handlers.Observability.DeleteQualityScore)
-
-	// New SDK-specific endpoints
-	router.POST("/events", s.handlers.Observability.CreateEvent)           // Telemetry events
-	router.POST("/route", s.handlers.AI.RouteRequest)                       // AI routing decisions
-
-	// High-performance telemetry endpoints with ULID-based deduplication
+	// High-performance unified telemetry batch system with ULID-based deduplication
 	telemetry := router.Group("/telemetry")
 	{
 		telemetry.POST("/batch", s.handlers.Observability.ProcessTelemetryBatch)     // Batch processing (main endpoint)

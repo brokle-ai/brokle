@@ -267,16 +267,16 @@ The platform implements a clean separation between SDK and Dashboard routes:
 - `GET /v1/models` - Available AI models
 - `GET /v1/models/:model` - Specific model details
 
-**Observability Endpoints (SDK Telemetry)**:
-- `POST /v1/traces` - Create trace
-- `PUT /v1/traces/:id` - Update trace
-- `POST /v1/traces/batch` - Batch trace creation
-- `POST /v1/observations` - Create observation
-- `PUT /v1/observations/:id` - Update observation
-- `POST /v1/observations/:id/complete` - Complete observation
-- `POST /v1/quality-scores` - Create quality score
-- `POST /v1/events` - Create telemetry event
+**AI Routing**:
 - `POST /v1/route` - AI routing decisions
+
+**Unified Telemetry Batch System (SDK Observability)**:
+- `POST /v1/telemetry/batch` - High-performance batch processing for all telemetry events (traces, observations, quality scores)
+- `GET /v1/telemetry/health` - Telemetry service health monitoring
+- `GET /v1/telemetry/metrics` - Telemetry performance metrics
+- `GET /v1/telemetry/performance` - Performance statistics
+- `GET /v1/telemetry/batch/:batch_id` - Batch status tracking
+- `POST /v1/telemetry/validate` - Event validation
 
 **Cache Management**:
 - `GET /v1/cache/status` - Cache health status
@@ -857,34 +857,70 @@ docs: update API documentation
 5. Write integration tests
 
 ### Working with SDK Observability
-The platform includes comprehensive observability endpoints for SDK telemetry:
+The platform uses a unified high-performance telemetry batch system for all SDK observability operations.
 
-#### Creating Traces and Observations
+#### Unified Telemetry Batch Endpoint
+The SDK sends all telemetry data (traces, observations, quality scores, events) through a single batch endpoint:
+
 ```go
-// SDK routes for telemetry (require API key authentication)
-POST /v1/traces                    // Create new trace
-PUT /v1/traces/:id                 // Update existing trace
-POST /v1/traces/batch              // Batch create traces
-DELETE /v1/traces/:id              // Delete trace
-
-POST /v1/observations              // Create observation
-PUT /v1/observations/:id           // Update observation
-POST /v1/observations/:id/complete // Complete observation
-POST /v1/observations/batch        // Batch create observations
-
-POST /v1/quality-scores            // Create quality scores
-POST /v1/events                    // Create telemetry events
-POST /v1/route                     // Log AI routing decisions
+// SDK telemetry ingestion (require API key authentication)
+POST /v1/telemetry/batch           // Unified batch processing for all event types
+GET  /v1/telemetry/health          // Service health monitoring
+GET  /v1/telemetry/metrics         // Performance metrics
+GET  /v1/telemetry/performance     // Performance statistics
+GET  /v1/telemetry/batch/:batch_id // Batch status tracking
+POST /v1/telemetry/validate        // Event validation
 ```
+
+**Example Telemetry Batch Request**:
+```json
+{
+  "environment": "production",
+  "events": [
+    {
+      "event_id": "01ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+      "event_type": "trace_create",
+      "payload": {"name": "my-trace", "user_id": "user_123"}
+    },
+    {
+      "event_id": "01BCDEFGHIJKLMNOPQRSTUVWXYZ0",
+      "event_type": "observation_create",
+      "payload": {"trace_id": "...", "type": "llm"}
+    },
+    {
+      "event_id": "01CDEFGHIJKLMNOPQRSTUVWXYZ01",
+      "event_type": "quality_score_create",
+      "payload": {"trace_id": "...", "score": 0.95}
+    }
+  ],
+  "deduplication": {
+    "enabled": true,
+    "ttl": 3600,
+    "use_redis_cache": true
+  }
+}
+```
+
+**Key Features**:
+- ✅ ULID-based deduplication (prevents duplicate events)
+- ✅ High-throughput batch processing (1000+ events per request)
+- ✅ Mixed event types in single request
+- ✅ Async processing support
+- ✅ Redis-backed caching for performance
 
 #### Dashboard Analytics (Read-only)
 ```go
 // Dashboard routes for viewing telemetry (require JWT authentication)
-GET /api/v1/analytics/traces              // List traces
-GET /api/v1/analytics/traces/:id          // Get specific trace
-GET /api/v1/analytics/traces/:id/observations // Get trace with observations
-GET /api/v1/analytics/observations        // List observations
-GET /api/v1/analytics/quality-scores      // List quality scores
+GET /api/v1/analytics/traces                      // List traces
+GET /api/v1/analytics/traces/:id                  // Get specific trace
+GET /api/v1/analytics/traces/:id/observations     // Get trace with observations
+GET /api/v1/analytics/traces/:id/stats            // Trace statistics
+GET /api/v1/analytics/observations                // List observations
+GET /api/v1/analytics/observations/:id            // Get observation details
+GET /api/v1/analytics/quality-scores              // List quality scores
+GET /api/v1/analytics/quality-scores/:id          // Get quality score
+GET /api/v1/analytics/traces/:id/quality-scores   // Quality scores by trace
+GET /api/v1/analytics/observations/:id/quality-scores // Quality scores by observation
 ```
 
 ### Environment Tag System

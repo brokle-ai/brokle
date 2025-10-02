@@ -10,54 +10,6 @@ import (
 	"brokle/pkg/ulid"
 )
 
-// CreateQualityScore handles POST /api/v1/observability/quality-scores
-// @Summary Create a quality score
-// @Description Create a new quality evaluation score for a trace or observation (numeric, categorical, or boolean)
-// @Tags Observability - Quality
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param request body CreateQualityScoreRequest true "Quality score creation data"
-// @Success 201 {object} response.SuccessResponse{data=QualityScoreResponse} "Quality score created successfully"
-// @Failure 400 {object} response.ErrorResponse "Invalid request payload or quality score data"
-// @Failure 409 {object} response.ErrorResponse "Duplicate quality score for same trace/observation and score name"
-// @Failure 422 {object} response.ErrorResponse "Validation failed"
-// @Failure 500 {object} response.ErrorResponse "Internal server error"
-// @Router /api/v1/observability/quality-scores [post]
-func (h *Handler) CreateQualityScore(c *gin.Context) {
-	var req CreateQualityScoreRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "Invalid request body", err.Error())
-		return
-	}
-
-	// Convert request to domain entity
-	score, err := h.requestToQualityScore(&req)
-	if err != nil {
-		response.BadRequest(c, "Invalid quality score data", err.Error())
-		return
-	}
-
-	// Create quality score via service
-	createdScore, err := h.services.GetQualityService().CreateQualityScore(c.Request.Context(), score)
-	if err != nil {
-		if observability.IsValidationError(err) {
-			response.ValidationError(c, "Validation failed", err.Error())
-			return
-		}
-		if observability.IsConflictError(err) {
-			response.Conflict(c, "Quality score already exists")
-			return
-		}
-		response.InternalServerError(c, "Failed to create quality score")
-		return
-	}
-
-	// Convert to response
-	resp := h.qualityScoreToResponse(createdScore)
-	response.Created(c, resp)
-}
-
 // GetQualityScore handles GET /api/v1/observability/quality-scores/{id}
 func (h *Handler) GetQualityScore(c *gin.Context) {
 	idStr := c.Param("id")
@@ -82,75 +34,6 @@ func (h *Handler) GetQualityScore(c *gin.Context) {
 	// Convert to response
 	resp := h.qualityScoreToResponse(score)
 	response.Success(c, resp)
-}
-
-// UpdateQualityScore handles PUT /api/v1/observability/quality-scores/{id}
-func (h *Handler) UpdateQualityScore(c *gin.Context) {
-	idStr := c.Param("id")
-
-	scoreID, err := ulid.Parse(idStr)
-	if err != nil {
-		response.BadRequest(c, "Invalid quality score ID", err.Error())
-		return
-	}
-
-	var req UpdateQualityScoreRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		response.BadRequest(c, "Invalid request body", err.Error())
-		return
-	}
-
-	// Get existing score first
-	score, err := h.services.GetQualityService().GetQualityScore(c.Request.Context(), scoreID)
-	if err != nil {
-		if observability.IsNotFoundError(err) {
-			response.NotFound(c, "Quality score")
-			return
-		}
-		response.InternalServerError(c, "Failed to get quality score")
-		return
-	}
-
-	// Apply updates from request
-	h.applyQualityScoreUpdates(score, &req)
-
-	// Update quality score via service
-	updatedScore, err := h.services.GetQualityService().UpdateQualityScore(c.Request.Context(), score)
-	if err != nil {
-		if observability.IsValidationError(err) {
-			response.ValidationError(c, "Validation failed", err.Error())
-			return
-		}
-		response.InternalServerError(c, "Failed to update quality score")
-		return
-	}
-
-	// Convert to response
-	resp := h.qualityScoreToResponse(updatedScore)
-	response.Success(c, resp)
-}
-
-// DeleteQualityScore handles DELETE /api/v1/observability/quality-scores/{id}
-func (h *Handler) DeleteQualityScore(c *gin.Context) {
-	idStr := c.Param("id")
-
-	scoreID, err := ulid.Parse(idStr)
-	if err != nil {
-		response.BadRequest(c, "Invalid quality score ID", err.Error())
-		return
-	}
-
-	// Delete quality score via service
-	if err := h.services.GetQualityService().DeleteQualityScore(c.Request.Context(), scoreID); err != nil {
-		if observability.IsNotFoundError(err) {
-			response.NotFound(c, "Quality score")
-			return
-		}
-		response.InternalServerError(c, "Failed to delete quality score")
-		return
-	}
-
-	response.Success(c, gin.H{"message": "Quality score deleted successfully"})
 }
 
 // ListQualityScores handles GET /api/v1/observability/quality-scores
@@ -212,9 +95,9 @@ func (h *Handler) GetQualityScoresByTrace(c *gin.Context) {
 
 	resp := ListQualityScoresResponse{
 		QualityScores: scoreResponses,
-		Total:  len(scoreResponses),
-		Limit:  len(scoreResponses),
-		Offset: 0,
+		Total:         len(scoreResponses),
+		Limit:         len(scoreResponses),
+		Offset:        0,
 	}
 
 	response.Success(c, resp)
@@ -245,9 +128,9 @@ func (h *Handler) GetQualityScoresByObservation(c *gin.Context) {
 
 	resp := ListQualityScoresResponse{
 		QualityScores: scoreResponses,
-		Total:  len(scoreResponses),
-		Limit:  len(scoreResponses),
-		Offset: 0,
+		Total:         len(scoreResponses),
+		Limit:         len(scoreResponses),
+		Offset:        0,
 	}
 
 	response.Success(c, resp)
@@ -332,84 +215,6 @@ func (h *Handler) parseQualityScoreFilter(c *gin.Context) (*observability.Qualit
 	}
 
 	return filter, nil
-}
-
-// requestToQualityScore converts a CreateQualityScoreRequest to a QualityScore domain entity
-func (h *Handler) requestToQualityScore(req *CreateQualityScoreRequest) (*observability.QualityScore, error) {
-	score := &observability.QualityScore{
-		ScoreName: req.ScoreName,
-		DataType:  observability.ScoreDataType(req.DataType),
-		Source:    observability.ScoreSource(req.Source),
-	}
-
-	// Parse trace_id
-	traceID, err := ulid.Parse(req.TraceID)
-	if err != nil {
-		return nil, err
-	}
-	score.TraceID = traceID
-
-	// Parse observation_id (optional)
-	if req.ObservationID != "" {
-		observationID, err := ulid.Parse(req.ObservationID)
-		if err != nil {
-			return nil, err
-		}
-		score.ObservationID = &observationID
-	}
-
-	// Parse author_user_id (optional)
-	if req.AuthorUserID != "" {
-		authorUserID, err := ulid.Parse(req.AuthorUserID)
-		if err != nil {
-			return nil, err
-		}
-		score.AuthorUserID = &authorUserID
-	}
-
-	// Set optional fields
-	if req.ScoreValue != nil {
-		score.ScoreValue = req.ScoreValue
-	}
-
-	if req.StringValue != nil && *req.StringValue != "" {
-		score.StringValue = req.StringValue
-	}
-
-	if req.EvaluatorName != "" {
-		score.EvaluatorName = &req.EvaluatorName
-	}
-
-	if req.EvaluatorVersion != "" {
-		score.EvaluatorVersion = &req.EvaluatorVersion
-	}
-
-	if req.Comment != "" {
-		score.Comment = &req.Comment
-	}
-
-	return score, nil
-}
-
-// applyQualityScoreUpdates applies updates from UpdateQualityScoreRequest to a quality score
-func (h *Handler) applyQualityScoreUpdates(score *observability.QualityScore, req *UpdateQualityScoreRequest) {
-	if req.ScoreValue != nil {
-		score.ScoreValue = req.ScoreValue
-	}
-
-	if req.StringValue != nil {
-		score.StringValue = req.StringValue
-	}
-
-	if req.Comment != "" {
-		comment := req.Comment
-		score.Comment = &comment
-	}
-
-	if req.EvaluatorVersion != "" {
-		evaluatorVersion := req.EvaluatorVersion
-		score.EvaluatorVersion = &evaluatorVersion
-	}
 }
 
 // qualityScoreToResponse converts a QualityScore domain entity to a QualityScoreResponse
