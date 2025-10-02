@@ -335,34 +335,126 @@ func (r *TelemetryEventRepository) IncrementRetryCount(ctx context.Context, id u
 	return nil
 }
 
-// CreateBatch creates multiple telemetry events in a single transaction
+// CreateBatch creates multiple telemetry events using efficient bulk INSERT
 func (r *TelemetryEventRepository) CreateBatch(ctx context.Context, events []*observability.TelemetryEvent) error {
 	if len(events) == 0 {
 		return nil
 	}
 
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Build bulk INSERT with multiple VALUES
+		valueStrings := make([]string, 0, len(events))
+		valueArgs := make([]interface{}, 0, len(events)*8)
+		argIndex := 1
+
+		now := time.Now()
 		for _, event := range events {
-			if err := r.createWithTx(ctx, tx, event); err != nil {
-				return err
+			// Generate ID if not provided
+			if event.ID.IsZero() {
+				event.ID = ulid.New()
 			}
+
+			// Set creation timestamp
+			event.CreatedAt = now
+
+			// Marshal event payload
+			payloadJSON, err := json.Marshal(event.EventPayload)
+			if err != nil {
+				return fmt.Errorf("failed to marshal event payload for event %s: %w", event.ID.String(), err)
+			}
+
+			// Build VALUE clause for this event
+			valueStrings = append(valueStrings, fmt.Sprintf("($%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d)",
+				argIndex, argIndex+1, argIndex+2, argIndex+3, argIndex+4, argIndex+5, argIndex+6, argIndex+7))
+
+			// Add arguments for this event
+			valueArgs = append(valueArgs,
+				event.ID.String(),
+				event.BatchID.String(),
+				string(event.EventType),
+				string(payloadJSON),
+				event.ProcessedAt,
+				event.ErrorMessage,
+				event.RetryCount,
+				event.CreatedAt,
+			)
+			argIndex += 8
 		}
+
+		// Execute single bulk INSERT
+		query := fmt.Sprintf(`
+			INSERT INTO telemetry_events (
+				id, batch_id, event_type, event_payload, processed_at,
+				error_message, retry_count, created_at
+			) VALUES %s
+		`, strings.Join(valueStrings, ", "))
+
+		err := tx.WithContext(ctx).Exec(query, valueArgs...).Error
+		if err != nil {
+			return fmt.Errorf("failed to bulk create telemetry events: %w", err)
+		}
+
 		return nil
 	})
 }
 
-// UpdateBatch updates multiple telemetry events in a single transaction
+// UpdateBatch updates multiple telemetry events using efficient UPDATE FROM VALUES
 func (r *TelemetryEventRepository) UpdateBatch(ctx context.Context, events []*observability.TelemetryEvent) error {
 	if len(events) == 0 {
 		return nil
 	}
 
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Build VALUES list for UPDATE FROM
+		valueStrings := make([]string, 0, len(events))
+		valueArgs := make([]interface{}, 0, len(events)*7) // 7 fields: id + 6 update fields
+		argIndex := 1
+
 		for _, event := range events {
-			if err := r.updateWithTx(ctx, tx, event); err != nil {
-				return err
+			// Marshal event payload
+			payloadJSON, err := json.Marshal(event.EventPayload)
+			if err != nil {
+				return fmt.Errorf("failed to marshal event payload for event %s: %w", event.ID.String(), err)
 			}
+
+			// Build VALUE tuple for this event
+			valueStrings = append(valueStrings, fmt.Sprintf("($%d::char(26), $%d::text, $%d::jsonb, $%d::timestamptz, $%d::text, $%d::int)",
+				argIndex, argIndex+1, argIndex+2, argIndex+3, argIndex+4, argIndex+5))
+
+			// Add arguments for this event
+			valueArgs = append(valueArgs,
+				event.ID.String(),
+				string(event.EventType),
+				string(payloadJSON),
+				event.ProcessedAt,
+				event.ErrorMessage,
+				event.RetryCount,
+			)
+			argIndex += 6
 		}
+
+		// Execute single bulk UPDATE using UPDATE FROM VALUES pattern
+		query := fmt.Sprintf(`
+			UPDATE telemetry_events SET
+				event_type = data.event_type,
+				event_payload = data.event_payload,
+				processed_at = data.processed_at,
+				error_message = data.error_message,
+				retry_count = data.retry_count
+			FROM (VALUES %s) AS data(id, event_type, event_payload, processed_at, error_message, retry_count)
+			WHERE telemetry_events.id = data.id
+		`, strings.Join(valueStrings, ", "))
+
+		result := tx.WithContext(ctx).Exec(query, valueArgs...)
+		if result.Error != nil {
+			return fmt.Errorf("failed to bulk update telemetry events: %w", result.Error)
+		}
+
+		// Verify that all events were updated
+		if result.RowsAffected != int64(len(events)) {
+			return fmt.Errorf("expected to update %d events, but updated %d", len(events), result.RowsAffected)
+		}
+
 		return nil
 	})
 }

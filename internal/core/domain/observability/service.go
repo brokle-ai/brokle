@@ -173,6 +173,8 @@ type TelemetryBatchService interface {
 type TelemetryEventService interface {
 	// Event operations
 	CreateEvent(ctx context.Context, event *TelemetryEvent) (*TelemetryEvent, error)
+	CreateEventsBatch(ctx context.Context, events []*TelemetryEvent) error
+	UpdateEventsBatch(ctx context.Context, events []*TelemetryEvent) error
 	GetEvent(ctx context.Context, id ulid.ULID) (*TelemetryEvent, error)
 	UpdateEvent(ctx context.Context, event *TelemetryEvent) (*TelemetryEvent, error)
 	DeleteEvent(ctx context.Context, id ulid.ULID) error
@@ -367,9 +369,14 @@ type BatchProcessingResult struct {
 type EventProcessingResult struct {
 	ProcessedCount    int                         `json:"processed_count"`
 	FailedCount       int                         `json:"failed_count"`
+	NotProcessedCount int                         `json:"not_processed_count"`    // NEW: Events never attempted
 	RetryCount        int                         `json:"retry_count"`
 	ProcessingTimeMs  int                         `json:"processing_time_ms"`
-	Errors            []TelemetryEventError       `json:"errors,omitempty"`
+
+	// Explicit event ID lists for precise tracking
+	ProcessedEventIDs []ulid.ULID                 `json:"processed_event_ids"`    // NEW: Successfully processed
+	NotProcessedIDs   []ulid.ULID                 `json:"not_processed_ids"`      // NEW: Never attempted
+	Errors            []TelemetryEventError       `json:"errors,omitempty"`       // Failed events with details
 	SuccessRate       float64                     `json:"success_rate"`
 }
 

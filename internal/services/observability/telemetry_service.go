@@ -104,70 +104,104 @@ func (s *telemetryService) ProcessTelemetryBatch(ctx context.Context, request *o
 		CreatedAt:        time.Now(),
 	}
 
-	// Create batch using batch service
-	_, err = s.batchService.CreateBatch(ctx, batch)
+	// COMPENSATION PATTERN: Create batch first, store events, compensate on failure
+	// Create batch record first (use returned persisted batch for consistency)
+	persistedBatch, err := s.batchService.CreateBatch(ctx, batch)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create batch: %w", err)
 	}
 
-	// Process events if any unique ones exist
+	// Try to store events - if this fails, compensate by deleting the batch
+	if len(uniqueEvents) > 0 {
+		if err := s.eventService.CreateEventsBatch(ctx, uniqueEvents); err != nil {
+			// Compensation: delete the batch we just created (log but preserve original error)
+			if deleteErr := s.batchService.DeleteBatch(ctx, persistedBatch.ID); deleteErr != nil {
+				s.logger.WithError(deleteErr).Error("Failed to delete batch during compensation")
+			}
+			return nil, fmt.Errorf("failed to store events, batch deleted: %w", err)
+		}
+
+		s.logger.WithFields(logrus.Fields{
+			"batch_id":      persistedBatch.ID.String(),
+			"events_stored": len(uniqueEvents),
+		}).Info("Batch and events stored successfully")
+	} else {
+		s.logger.WithFields(logrus.Fields{
+			"batch_id": persistedBatch.ID.String(),
+		}).Info("Batch created with no unique events (all duplicates)")
+	}
+
+	// Process stored events and update batch status based on results
 	var processedCount, failedCount int
 	if len(uniqueEvents) > 0 {
 		result, err := s.eventService.ProcessEventsBatch(ctx, uniqueEvents)
+
+		// Always update event statuses based on processing results
+		s.updateEventStatuses(uniqueEvents, result)
+
+		// Update event statuses in database using bulk operation
+		if updateErr := s.eventService.UpdateEventsBatch(ctx, uniqueEvents); updateErr != nil {
+			s.logger.WithError(updateErr).Error("Failed to update event processing statuses")
+		}
+
+		if result != nil {
+			processedCount = result.ProcessedCount
+			failedCount = result.FailedCount
+
+			// Set batch status based on processing results:
+			// - Failed if ALL events errored
+			// - Partial if SOME events errored
+			// - Completed if NO events errored
+			if failedCount == len(uniqueEvents) {
+				persistedBatch.Status = observability.BatchStatusFailed
+			} else if failedCount > 0 {
+				persistedBatch.Status = observability.BatchStatusPartial
+			} else {
+				persistedBatch.Status = observability.BatchStatusCompleted
+			}
+
+			// Update persisted batch with final counts and status
+			persistedBatch.ProcessedEvents = processedCount
+			persistedBatch.FailedEvents = failedCount
+			if _, updateErr := s.batchService.UpdateBatch(ctx, persistedBatch); updateErr != nil {
+				s.logger.WithError(updateErr).Error("Failed to update batch status and counts")
+			}
+
+			// CRITICAL: Register ONLY successfully processed events with deduplication service
+			// Failed events must NOT be registered so they can be retried in future batches
+			if processedCount > 0 {
+				// Use the ProcessedEventIDs from enhanced result for precise tracking
+				if len(result.ProcessedEventIDs) > 0 {
+					if err := s.deduplicationService.RegisterProcessedEventsBatch(ctx, request.ProjectID, result.ProcessedEventIDs); err != nil {
+						s.logger.WithError(err).Warn("Failed to register processed events for deduplication - future duplicates may not be detected")
+						// Don't fail the request for deduplication registration errors, but log it
+					}
+				}
+			}
+		}
+
+		// Handle processing errors (but events are already stored)
 		if err != nil {
-			// Update batch status to failed
-			batch.Status = observability.BatchStatusFailed
-			if _, updateErr := s.batchService.UpdateBatch(ctx, batch); updateErr != nil {
-				s.logger.WithError(updateErr).Error("Failed to update batch status to failed")
-			}
-			return nil, fmt.Errorf("failed to process events: %w", err)
+			s.logger.WithError(err).Error("Event processing encountered errors, but raw events are preserved")
+			// Note: Don't return error here since batch and events are safely stored
 		}
-		processedCount = result.ProcessedCount
-		failedCount = result.FailedCount
-
-		// CRITICAL: Register ONLY successfully processed events with deduplication service
-		// Failed events must NOT be registered so they can be retried in future batches
-		if processedCount > 0 {
-			// Build set of failed event IDs to exclude from registration
-			failedEventIDs := make(map[ulid.ULID]bool)
-			for _, errorDetail := range result.Errors {
-				failedEventIDs[errorDetail.EventID] = true
-			}
-
-			// Only register successfully processed events (exclude failed ones)
-			successfulEventIDs := make([]ulid.ULID, 0, processedCount)
-			for _, event := range uniqueEvents {
-				if !failedEventIDs[event.ID] {
-					successfulEventIDs = append(successfulEventIDs, event.ID)
-				}
-			}
-
-			if len(successfulEventIDs) > 0 {
-				if err := s.deduplicationService.RegisterProcessedEventsBatch(ctx, request.ProjectID, successfulEventIDs); err != nil {
-					s.logger.WithError(err).Warn("Failed to register processed events for deduplication - future duplicates may not be detected")
-					// Don't fail the request for deduplication registration errors, but log it
-				}
-			}
+	} else {
+		// No events to process, mark batch as completed
+		persistedBatch.Status = observability.BatchStatusCompleted
+		if _, updateErr := s.batchService.UpdateBatch(ctx, persistedBatch); updateErr != nil {
+			s.logger.WithError(updateErr).Error("Failed to update batch status to completed")
 		}
-	}
-
-	// Update batch status to completed
-	batch.Status = observability.BatchStatusCompleted
-	batch.ProcessedEvents = processedCount
-	batch.FailedEvents = failedCount
-	if _, err := s.batchService.UpdateBatch(ctx, batch); err != nil {
-		s.logger.WithError(err).Error("Failed to update batch status to completed")
 	}
 
 	// Queue analytics jobs for processed events and batch
-	s.queueAnalyticsJobs(ctx, request, batch, uniqueEvents, time.Since(startTime))
+	s.queueAnalyticsJobs(ctx, request, persistedBatch, uniqueEvents, time.Since(startTime))
 
 	// Update performance metrics
 	s.updatePerformanceMetrics(len(request.Events), time.Since(startTime))
 
 	// Build response
 	response := &observability.TelemetryBatchResponse{
-		BatchID:           batchID,
+		BatchID:           persistedBatch.ID,
 		ProcessedEvents:   processedCount,
 		DuplicateEvents:   len(duplicateIDs),
 		FailedEvents:      failedCount,
@@ -538,4 +572,31 @@ func (s *telemetryService) isCriticalEventType(eventType observability.Telemetry
 		}
 	}
 	return false
+}
+
+// updateEventStatuses updates event processing statuses based on processing results
+// Uses existing schema fields: processed_at, error_message, retry_count
+func (s *telemetryService) updateEventStatuses(events []*observability.TelemetryEvent, result *observability.EventProcessingResult) {
+	now := time.Now()
+
+	// Build lookup maps for O(1) status determination
+	errorMap := make(map[ulid.ULID]string)
+	for _, err := range result.Errors {
+		errorMap[err.EventID] = err.ErrorMessage
+	}
+
+	// Update each event's status precisely
+	for _, event := range events {
+		if errorMsg, hasError := errorMap[event.ID]; hasError {
+			// Event explicitly failed during processing
+			event.ErrorMessage = &errorMsg
+			event.RetryCount++
+			event.ProcessedAt = nil // Keep as unprocessed for retry
+		} else {
+			// Event processed successfully (no error recorded)
+			event.ProcessedAt = &now
+			event.ErrorMessage = nil
+			// retry_count stays the same
+		}
+	}
 }

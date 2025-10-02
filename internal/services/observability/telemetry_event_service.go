@@ -55,6 +55,71 @@ func (s *telemetryEventService) CreateEvent(ctx context.Context, event *observab
 	return event, nil
 }
 
+// CreateEventsBatch creates multiple telemetry events using efficient bulk operations
+func (s *telemetryEventService) CreateEventsBatch(ctx context.Context, events []*observability.TelemetryEvent) error {
+	if len(events) == 0 {
+		return nil
+	}
+
+	// Validate all events before storing
+	for i, event := range events {
+		if event == nil {
+			return fmt.Errorf("event at index %d cannot be nil", i)
+		}
+
+		// Generate ID if not provided
+		if event.ID.IsZero() {
+			event.ID = ulid.New()
+		}
+
+		// Validate event
+		if validationErrors := event.Validate(); len(validationErrors) > 0 {
+			return fmt.Errorf("event validation failed for event %s: %v", event.ID.String(), validationErrors)
+		}
+
+		// Set creation timestamp
+		if event.CreatedAt.IsZero() {
+			event.CreatedAt = time.Now()
+		}
+	}
+
+	// Use repository's optimized bulk create
+	if err := s.eventRepo.CreateBatch(ctx, events); err != nil {
+		return fmt.Errorf("failed to create events batch: %w", err)
+	}
+
+	return nil
+}
+
+// UpdateEventsBatch updates multiple telemetry events using efficient bulk operations
+func (s *telemetryEventService) UpdateEventsBatch(ctx context.Context, events []*observability.TelemetryEvent) error {
+	if len(events) == 0 {
+		return nil
+	}
+
+	// Validate all events before updating
+	for i, event := range events {
+		if event == nil {
+			return fmt.Errorf("event at index %d cannot be nil", i)
+		}
+		if event.ID.IsZero() {
+			return fmt.Errorf("event at index %d must have a valid ID for update", i)
+		}
+
+		// Validate event
+		if validationErrors := event.Validate(); len(validationErrors) > 0 {
+			return fmt.Errorf("event validation failed for event %s: %v", event.ID.String(), validationErrors)
+		}
+	}
+
+	// Use repository's optimized bulk update
+	if err := s.eventRepo.UpdateBatch(ctx, events); err != nil {
+		return fmt.Errorf("failed to update events batch: %w", err)
+	}
+
+	return nil
+}
+
 // GetEvent retrieves a telemetry event by ID
 func (s *telemetryEventService) GetEvent(ctx context.Context, id ulid.ULID) (*observability.TelemetryEvent, error) {
 	if id.IsZero() {
@@ -238,22 +303,28 @@ func (s *telemetryEventService) ProcessEvent(ctx context.Context, eventID ulid.U
 func (s *telemetryEventService) ProcessEventsBatch(ctx context.Context, events []*observability.TelemetryEvent) (*observability.EventProcessingResult, error) {
 	if len(events) == 0 {
 		return &observability.EventProcessingResult{
-			ProcessedCount: 0,
-			FailedCount:    0,
-			SuccessRate:    100.0,
+			ProcessedCount:    0,
+			FailedCount:       0,
+			NotProcessedCount: 0,
+			ProcessedEventIDs: []ulid.ULID{},
+			NotProcessedIDs:   []ulid.ULID{},
+			SuccessRate:       100.0,
 		}, nil
 	}
 
 	startTime := time.Now()
-	var processedCount, failedCount, retryCount int
+	var processedCount, failedCount, notProcessedCount, retryCount int
 	var errors []observability.TelemetryEventError
+	var processedEventIDs []ulid.ULID
+	var notProcessedIDs []ulid.ULID
 
 	for _, event := range events {
 		if event == nil {
-			failedCount++
+			notProcessedCount++
 			continue
 		}
 
+		// Attempt to process the event
 		if err := s.processEventByType(ctx, event); err != nil {
 			failedCount++
 			retryCount++
@@ -271,8 +342,41 @@ func (s *telemetryEventService) ProcessEventsBatch(ctx context.Context, events [
 			_ = s.eventRepo.IncrementRetryCount(ctx, event.ID)
 		} else {
 			processedCount++
+			processedEventIDs = append(processedEventIDs, event.ID)
 			// Mark event as processed
 			_ = s.eventRepo.MarkAsProcessed(ctx, event.ID, time.Now())
+		}
+	}
+
+	// Identify events that were never attempted (nil events or validation failures)
+	for _, event := range events {
+		if event == nil {
+			continue // Can't track ID for nil events
+		}
+
+		// Check if this event ID is in processed list or error list
+		isProcessed := false
+		isFailed := false
+
+		for _, processedID := range processedEventIDs {
+			if processedID == event.ID {
+				isProcessed = true
+				break
+			}
+		}
+
+		if !isProcessed {
+			for _, err := range errors {
+				if err.EventID == event.ID {
+					isFailed = true
+					break
+				}
+			}
+		}
+
+		// If neither processed nor failed, it was not processed
+		if !isProcessed && !isFailed {
+			notProcessedIDs = append(notProcessedIDs, event.ID)
 		}
 	}
 
@@ -282,12 +386,15 @@ func (s *telemetryEventService) ProcessEventsBatch(ctx context.Context, events [
 	successRate := float64(processedCount) / float64(len(events)) * 100.0
 
 	return &observability.EventProcessingResult{
-		ProcessedCount:   processedCount,
-		FailedCount:      failedCount,
-		RetryCount:       retryCount,
-		ProcessingTimeMs: processingTimeMs,
-		Errors:           errors,
-		SuccessRate:      successRate,
+		ProcessedCount:    processedCount,
+		FailedCount:       failedCount,
+		NotProcessedCount: notProcessedCount,
+		RetryCount:        retryCount,
+		ProcessingTimeMs:  processingTimeMs,
+		ProcessedEventIDs: processedEventIDs,
+		NotProcessedIDs:   notProcessedIDs,
+		Errors:            errors,
+		SuccessRate:       successRate,
 	}, nil
 }
 
