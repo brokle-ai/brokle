@@ -395,12 +395,6 @@ func (s *UserService) UpdateUser(ctx context.Context, userID ulid.ULID, req *use
 	if req.LastName != nil {
 		u.LastName = *req.LastName
 	}
-	if req.AvatarURL != nil {
-		u.AvatarURL = *req.AvatarURL
-	}
-	if req.Phone != nil {
-		u.Phone = *req.Phone
-	}
 	if req.Timezone != nil {
 		u.Timezone = *req.Timezone
 	}

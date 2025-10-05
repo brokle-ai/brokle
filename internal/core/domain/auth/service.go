@@ -271,10 +271,8 @@ type CreateSessionRequest struct {
 
 
 type UpdateAPIKeyRequest struct {
-	Name         *string  `json:"name,omitempty" validate:"omitempty,min=1,max=100"`
-	Scopes       []string `json:"scopes,omitempty"`
-	RateLimitRPM *int     `json:"rate_limit_rpm,omitempty" validate:"omitempty,min=1,max=10000"`
-	IsActive     *bool    `json:"is_active,omitempty"`
+	Name     *string `json:"name,omitempty" validate:"omitempty,min=1,max=100"`
+	IsActive *bool   `json:"is_active,omitempty"`
 }
 
 // Filter types

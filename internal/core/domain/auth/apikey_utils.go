@@ -109,23 +109,30 @@ func ValidateAPIKeyFormat(fullKey string) error {
 	return nil
 }
 
-// ExtractProjectID quickly extracts just the project ID from an API key without full parsing.
-func ExtractProjectID(fullKey string) (ulid.ULID, error) {
+// ExtractProjectIDFromFullKey extracts the project ID from a full API key.
+// Format: bk_proj_{project_id}_{secret}
+func ExtractProjectIDFromFullKey(fullKey string) (ulid.ULID, error) {
 	parts := strings.Split(fullKey, APIKeySeparator)
 	if len(parts) != 4 {
-		return ulid.ULID{}, fmt.Errorf("invalid API key format")
+		return ulid.ULID{}, fmt.Errorf("invalid API key format: expected 4 parts")
+	}
+
+	if parts[0] != APIKeyPrefix || parts[1] != APIKeyScope {
+		return ulid.ULID{}, fmt.Errorf("invalid API key prefix/scope")
 	}
 
 	return ulid.Parse(parts[2])
 }
 
-// CreateKeyPreview creates a preview version of an API key for display purposes.
-func CreateKeyPreview(keyID string) string {
-	if len(keyID) <= 10 {
-		return keyID + "..."
+// CreateKeyPreview creates a preview version of a full API key for display purposes.
+// Input: bk_proj_{project_id}_{secret} (full key)
+// Output: bk_proj_...WXYZ (first 8 chars + ... + last 4 chars)
+func CreateKeyPreview(fullKey string) string {
+	if len(fullKey) <= 12 {
+		return fullKey + "..."
 	}
-	// Show first part and last 4 characters
-	return keyID[:len(keyID)-4] + "..." + keyID[len(keyID)-4:]
+	// Show first 8 characters (bk_proj_) and last 4 characters of full key
+	return fullKey[:8] + "..." + fullKey[len(fullKey)-4:]
 }
 
 // generateSecureSecret generates a cryptographically secure random string.

@@ -2,7 +2,6 @@ package auth
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -36,32 +35,27 @@ func (s *apiKeyService) CreateAPIKey(ctx context.Context, userID ulid.ULID, req 
 	// For now, skip membership validation - will be implemented when organization service is ready
 
 	// Generate project-scoped API key
-	fullKey, keyID, secret, err := authDomain.GenerateProjectScopedAPIKey(req.ProjectID)
+	fullKey, _, _, err := authDomain.GenerateProjectScopedAPIKey(req.ProjectID)
 	if err != nil {
 		return nil, appErrors.NewInternalError("Failed to generate API key", err)
 	}
 
-	// Hash secret for storage
-	secretHash, err := bcrypt.GenerateFromPassword([]byte(secret), bcrypt.DefaultCost)
+	// Hash the FULL key (not just secret) for secure storage
+	keyHash, err := bcrypt.GenerateFromPassword([]byte(fullKey), bcrypt.DefaultCost)
 	if err != nil {
-		return nil, appErrors.NewInternalError("Failed to hash secret", err)
+		return nil, appErrors.NewInternalError("Failed to hash API key", err)
 	}
 
-	// TODO: Get organization ID from project lookup
-	// For now, we'll need to pass it in the request or look it up
-	orgID := req.ProjectID // Temporary - should be actual org ID
+	// Create key preview for display
+	keyPreview := authDomain.CreateKeyPreview(fullKey)
 
 	// Create API key entity
 	apiKeyEntity := authDomain.NewAPIKey(
 		userID,
-		orgID, // Organization ID (from project lookup)
 		req.ProjectID,
 		req.Name,
-		req.Description,
-		keyID,
-		string(secretHash),
-		req.Scopes,
-		req.RateLimitRPM,
+		string(keyHash), // Hash of full key
+		keyPreview,
 		req.ExpiresAt,
 	)
 
@@ -70,20 +64,15 @@ func (s *apiKeyService) CreateAPIKey(ctx context.Context, userID ulid.ULID, req 
 		return nil, appErrors.NewInternalError("Failed to save API key", err)
 	}
 
-	// Create key preview for display
-	keyPreview := authDomain.CreateKeyPreview(keyID)
-
 	// Return response with the full key (only shown once)
 	return &authDomain.CreateAPIKeyResponse{
-		ID:           apiKeyEntity.ID.String(),
-		Name:         apiKeyEntity.Name,
-		Key:          fullKey, // Full key - only returned once
-		KeyPreview:   keyPreview,
-		ProjectID:    apiKeyEntity.ProjectID.String(),
-		Scopes:       apiKeyEntity.Scopes,
-		RateLimitRPM: apiKeyEntity.RateLimitRPM,
-		CreatedAt:    apiKeyEntity.CreatedAt,
-		ExpiresAt:    apiKeyEntity.ExpiresAt,
+		ID:         apiKeyEntity.ID.String(),
+		Name:       apiKeyEntity.Name,
+		Key:        fullKey, // Full key - only returned once
+		KeyPreview: apiKeyEntity.KeyPreview,
+		ProjectID:  apiKeyEntity.ProjectID.String(),
+		CreatedAt:  apiKeyEntity.CreatedAt,
+		ExpiresAt:  apiKeyEntity.ExpiresAt,
 	}, nil
 }
 
@@ -126,13 +115,6 @@ func (s *apiKeyService) UpdateAPIKey(ctx context.Context, keyID ulid.ULID, req *
 	if req.Name != nil {
 		apiKey.Name = *req.Name
 	}
-	// Note: Environment handling removed - environments are now sent via SDK headers/tags
-	if req.Scopes != nil {
-		apiKey.Scopes = req.Scopes
-	}
-	if req.RateLimitRPM != nil {
-		apiKey.RateLimitRPM = *req.RateLimitRPM
-	}
 	if req.IsActive != nil {
 		apiKey.IsActive = *req.IsActive
 	}
@@ -155,58 +137,61 @@ func (s *apiKeyService) RevokeAPIKey(ctx context.Context, keyID ulid.ULID) error
 	return nil
 }
 
-// ValidateAPIKey validates a project-scoped API key and returns validation response
+// ValidateAPIKey validates a project-scoped API key by comparing hash
 func (s *apiKeyService) ValidateAPIKey(ctx context.Context, fullKey string) (*authDomain.ValidateAPIKeyResponse, error) {
-	// Parse the API key
-	parsed, err := authDomain.ParseAPIKey(fullKey)
+	// Extract project ID from the key format
+	projectID, err := authDomain.ExtractProjectIDFromFullKey(fullKey)
 	if err != nil {
 		return nil, appErrors.NewUnauthorizedError("Invalid API key format")
 	}
 
-	// Look up API key by keyID
-	apiKey, err := s.apiKeyRepo.GetByKeyID(ctx, parsed.KeyID)
+	// Get all API keys for this project
+	apiKeys, err := s.apiKeyRepo.GetByProjectID(ctx, projectID)
 	if err != nil {
-		if errors.Is(err, authDomain.ErrAPIKeyNotFound) {
-			return nil, appErrors.NewUnauthorizedError("API key not found")
-		}
 		return nil, appErrors.NewInternalError("Failed to validate API key", err)
 	}
 
-	// Verify secret
-	if err := bcrypt.CompareHashAndPassword([]byte(apiKey.SecretHash), []byte(parsed.Secret)); err != nil {
+	// Find the matching key by comparing hashes
+	var matchedKey *authDomain.APIKey
+	for _, key := range apiKeys {
+		if bcrypt.CompareHashAndPassword([]byte(key.KeyHash), []byte(fullKey)) == nil {
+			matchedKey = key
+			break
+		}
+	}
+
+	if matchedKey == nil {
 		return nil, appErrors.NewUnauthorizedError("Invalid API key")
 	}
 
 	// Check if key is active
-	if !apiKey.IsActive {
+	if !matchedKey.IsActive {
 		return nil, appErrors.NewUnauthorizedError("API key is inactive")
 	}
 
 	// Check expiration
-	if apiKey.ExpiresAt != nil && time.Now().After(*apiKey.ExpiresAt) {
+	if matchedKey.ExpiresAt != nil && time.Now().After(*matchedKey.ExpiresAt) {
 		return nil, appErrors.NewUnauthorizedError("API key has expired")
 	}
 
 	// Create auth context
 	authContext := &authDomain.AuthContext{
-		UserID:   apiKey.UserID,
-		APIKeyID: &apiKey.ID,
+		UserID:   matchedKey.UserID,
+		APIKeyID: &matchedKey.ID,
 	}
 
 	// Update last used timestamp (async)
 	go func() {
 		ctx := context.Background()
-		if err := s.apiKeyRepo.UpdateLastUsed(ctx, apiKey.ID); err != nil {
+		if err := s.apiKeyRepo.UpdateLastUsed(ctx, matchedKey.ID); err != nil {
 			// Log error but don't fail validation
 		}
 	}()
 
 	return &authDomain.ValidateAPIKeyResponse{
-		APIKey:      apiKey,
-		ProjectID:   parsed.ProjectID,
+		APIKey:      matchedKey,
+		ProjectID:   projectID,
 		Valid:       true,
-		Scopes:      apiKey.Scopes,
-		RateLimit:   apiKey.RateLimitRPM,
 		AuthContext: authContext,
 	}, nil
 }
@@ -237,20 +222,17 @@ func (s *apiKeyService) GetAPIKeyContext(ctx context.Context, keyID ulid.ULID) (
 }
 
 // CanAPIKeyAccessResource checks if an API key can access a specific resource
+// Note: With scopes removed, this now checks if the key is active
+// Access control should be handled at the organization RBAC level
 func (s *apiKeyService) CanAPIKeyAccessResource(ctx context.Context, keyID ulid.ULID, resource string) (bool, error) {
 	apiKey, err := s.apiKeyRepo.GetByID(ctx, keyID)
 	if err != nil {
 		return false, fmt.Errorf("get API key: %w", err)
 	}
 
-	// Check if resource is in scopes
-	for _, scope := range apiKey.Scopes {
-		if scope == "*" || scope == resource {
-			return true, nil
-		}
-	}
-
-	return false, nil
+	// All active API keys have full access to their project
+	// Fine-grained permissions handled by organization RBAC
+	return apiKey.IsActive, nil
 }
 
 // Scoped access methods

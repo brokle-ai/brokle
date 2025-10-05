@@ -453,7 +453,7 @@ func (h *Handler) ValidateAPIKey(apiKey string) (*auth.AuthContext, error) {
 	// Validate the API key using the APIKeyService
 	key, err := h.apiKeyService.ValidateAPIKey(ctx, apiKey)
 	if err != nil {
-		h.logger.WithError(err).WithField("key_prefix", extractKeyPrefix(apiKey)).
+		h.logger.WithError(err).WithField("key_id", extractKeyID(apiKey)).
 			Warn("API key validation failed")
 		return nil, err
 	}
@@ -466,7 +466,6 @@ func (h *Handler) ValidateAPIKey(apiKey string) (*auth.AuthContext, error) {
 		"user_id":    key.AuthContext.UserID,
 		"api_key_id": key.AuthContext.APIKeyID,
 		"project_id": key.ProjectID,
-		"scopes":     key.Scopes,
 	}).Debug("API key validation successful")
 
 	return authContext, nil
@@ -505,7 +504,7 @@ func (h *Handler) ValidateAPIKeyHandler(c *gin.Context) {
 	// Validate the self-contained API key
 	resp, err := h.apiKeyService.ValidateAPIKey(c.Request.Context(), apiKey)
 	if err != nil {
-		h.logger.WithError(err).WithField("key_prefix", extractKeyPrefix(apiKey)).
+		h.logger.WithError(err).WithField("key_id", extractKeyID(apiKey)).
 			Warn("API key validation failed")
 		response.Error(c, err) // Properly propagate AppError status codes (401, etc.)
 		return
@@ -516,14 +515,19 @@ func (h *Handler) ValidateAPIKeyHandler(c *gin.Context) {
 		"user_id":    resp.AuthContext.UserID,
 		"api_key_id": resp.AuthContext.APIKeyID,
 		"project_id": resp.ProjectID,
-		"scopes":     resp.Scopes,
 	}).Info("API key validation successful")
 
 	response.Success(c, resp)
 }
 
-// extractKeyPrefix safely extracts the first 8 characters for logging
-func extractKeyPrefix(apiKey string) string {
+// extractKeyID safely extracts the key_id portion (bk_proj_{project_id}) for logging
+func extractKeyID(apiKey string) string {
+	parts := strings.Split(apiKey, "_")
+	if len(parts) >= 3 {
+		// Return bk_proj_{project_id} portion
+		return strings.Join(parts[:3], "_")
+	}
+	// Fallback for invalid format
 	if len(apiKey) < 8 {
 		return apiKey
 	}

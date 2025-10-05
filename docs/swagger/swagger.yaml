@@ -541,9 +541,6 @@ definitions:
       created_by:
         example: usr_01234567890123456789012345
         type: string
-      description:
-        example: API key for production environment
-        type: string
       expires_at:
         example: "2024-12-31T23:59:59Z"
         type: string
@@ -565,50 +562,27 @@ definitions:
       project_id:
         example: proj_01234567890123456789012345
         type: string
-      rate_limit_rpm:
-        example: 1000
-        type: integer
-      scopes:
-        example:
-        - '["read"'
-        - ' "write"]'
-        items:
-          type: string
-        type: array
       status:
         example: active
         type: string
     type: object
   apikey.CreateAPIKeyRequest:
     properties:
-      description:
-        example: API key for production environment
-        maxLength: 500
-        type: string
-      expires_at:
-        example: "2024-12-31T23:59:59Z"
+      expiry_option:
+        enum:
+        - 30days
+        - 90days
+        - never
+        example: 90days
         type: string
       name:
         example: Production API Key
         maxLength: 100
         minLength: 2
         type: string
-      rate_limit_rpm:
-        example: 1000
-        maximum: 10000
-        minimum: 1
-        type: integer
-      scopes:
-        example:
-        - '["read"'
-        - ' "write"]'
-        items:
-          type: string
-        minItems: 1
-        type: array
     required:
+    - expiry_option
     - name
-    - scopes
     type: object
   auth.ChangePasswordRequest:
     description: Password change information

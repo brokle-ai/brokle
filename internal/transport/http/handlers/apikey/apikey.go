@@ -32,28 +32,22 @@ func NewHandler(config *config.Config, logger *logrus.Logger, apiKeyService auth
 
 // APIKey represents an API key entity for response
 type APIKey struct {
-	ID           string    `json:"id" example:"key_01234567890123456789012345" description:"Unique API key identifier"`
-	Name         string    `json:"name" example:"Production API Key" description:"Human-readable name for the API key"`
-	Key          string    `json:"key,omitempty" example:"bk_proj_01234567890123456789012345_abcdef1234567890abcdef1234567890" description:"The actual API key (only shown on creation)"`
-	KeyPreview   string    `json:"key_preview" example:"bk_proj_...7890" description:"Truncated version of the key for display"`
-	ProjectID    string    `json:"project_id" example:"proj_01234567890123456789012345" description:"Project ID this key belongs to"`
-	Description  string    `json:"description,omitempty" example:"API key for production environment" description:"Optional description"`
-	Scopes       []string  `json:"scopes" example:"[\"read\", \"write\"]" description:"Permissions granted to this API key"`
-	RateLimitRPM int       `json:"rate_limit_rpm" example:"1000" description:"Rate limit in requests per minute"`
-	Status       string    `json:"status" example:"active" description:"API key status (active, inactive, expired)"`
-	LastUsed     time.Time `json:"last_used,omitempty" example:"2024-01-01T00:00:00Z" description:"Last time this key was used (null if never used)"`
-	CreatedAt    time.Time `json:"created_at" example:"2024-01-01T00:00:00Z" description:"Creation timestamp"`
-	ExpiresAt    time.Time `json:"expires_at,omitempty" example:"2024-12-31T23:59:59Z" description:"Expiration timestamp (null if never expires)"`
-	CreatedBy    string    `json:"created_by" example:"usr_01234567890123456789012345" description:"User ID who created this key"`
+	ID         string    `json:"id" example:"key_01234567890123456789012345" description:"Unique API key identifier"`
+	Name       string    `json:"name" example:"Production API Key" description:"Human-readable name for the API key"`
+	Key        string    `json:"key,omitempty" example:"bk_proj_01234567890123456789012345_abcdef1234567890abcdef1234567890" description:"The actual API key (only shown on creation)"`
+	KeyPreview string    `json:"key_preview" example:"bk_proj_...7890" description:"Truncated version of the key for display"`
+	ProjectID  string    `json:"project_id" example:"proj_01234567890123456789012345" description:"Project ID this key belongs to"`
+	Status     string    `json:"status" example:"active" description:"API key status (active, inactive, expired)"`
+	LastUsed   time.Time `json:"last_used,omitempty" example:"2024-01-01T00:00:00Z" description:"Last time this key was used (null if never used)"`
+	CreatedAt  time.Time `json:"created_at" example:"2024-01-01T00:00:00Z" description:"Creation timestamp"`
+	ExpiresAt  time.Time `json:"expires_at,omitempty" example:"2024-12-31T23:59:59Z" description:"Expiration timestamp (null if never expires)"`
+	CreatedBy  string    `json:"created_by" example:"usr_01234567890123456789012345" description:"User ID who created this key"`
 }
 
 // CreateAPIKeyRequest represents the request to create an API key
 type CreateAPIKeyRequest struct {
-	Name         string     `json:"name" binding:"required,min=2,max=100" example:"Production API Key" description:"Human-readable name for the API key (2-100 characters)"`
-	Description  string     `json:"description,omitempty" binding:"max=500" example:"API key for production environment" description:"Optional description (max 500 characters)"`
-	Scopes       []string   `json:"scopes" binding:"required,min=1" example:"[\"read\", \"write\"]" description:"Permissions to grant (read, write, admin)"`
-	RateLimitRPM int        `json:"rate_limit_rpm,omitempty" binding:"omitempty,min=1,max=10000" example:"1000" description:"Rate limit in requests per minute (1-10000, default: 1000)"`
-	ExpiresAt    *time.Time `json:"expires_at,omitempty" example:"2024-12-31T23:59:59Z" description:"Optional expiration date (null for no expiration)"`
+	Name         string `json:"name" binding:"required,min=2,max=100" example:"Production API Key" description:"Human-readable name for the API key (2-100 characters)"`
+	ExpiryOption string `json:"expiry_option" binding:"required,oneof=30days 90days never" example:"90days" description:"Expiration option: '30days', '90days', or 'never'"`
 }
 
 // ListAPIKeysResponse represents the response when listing API keys
@@ -143,20 +137,14 @@ func (h *Handler) List(c *gin.Context) {
 	// Convert to response format
 	responseKeys := make([]APIKey, len(apiKeys))
 	for i, key := range apiKeys {
-		// Create key preview using the new KeyID format
-		keyPreview := auth.CreateKeyPreview(key.KeyID)
-
 		responseKeys[i] = APIKey{
-			ID:           key.ID.String(),
-			Name:         key.Name,
-			KeyPreview:   keyPreview,
-			ProjectID:    key.ProjectID.String(),
-			Description:  key.Description,
-			Scopes:       key.Scopes,
-			RateLimitRPM: key.RateLimitRPM,
-			Status:       getKeyStatus(*key),
-			CreatedAt:    key.CreatedAt,
-			CreatedBy:    key.UserID.String(),
+			ID:         key.ID.String(),
+			Name:       key.Name,
+			KeyPreview: key.KeyPreview, // Use stored preview
+			ProjectID:  key.ProjectID.String(),
+			Status:     getKeyStatus(*key),
+			CreatedAt:  key.CreatedAt,
+			CreatedBy:  key.UserID.String(),
 		}
 
 		if key.LastUsedAt != nil {
@@ -240,20 +228,24 @@ func (h *Handler) Create(c *gin.Context) {
 		return
 	}
 
-	// Set default rate limit if not provided
-	rateLimitRPM := req.RateLimitRPM
-	if rateLimitRPM == 0 {
-		rateLimitRPM = 1000 // Default rate limit
+	// Convert expiry option to timestamp
+	var expiresAt *time.Time
+	switch req.ExpiryOption {
+	case "30days":
+		t := time.Now().Add(30 * 24 * time.Hour)
+		expiresAt = &t
+	case "90days":
+		t := time.Now().Add(90 * 24 * time.Hour)
+		expiresAt = &t
+	case "never":
+		expiresAt = nil
 	}
 
 	// Create service request
 	serviceReq := &auth.CreateAPIKeyRequest{
-		Name:         req.Name,
-		ProjectID:    projectID,
-		Description:  req.Description,
-		Scopes:       req.Scopes,
-		RateLimitRPM: rateLimitRPM,
-		ExpiresAt:    req.ExpiresAt,
+		Name:      req.Name,
+		ProjectID: projectID,
+		ExpiresAt: expiresAt,
 	}
 
 	// Create the API key
@@ -266,17 +258,14 @@ func (h *Handler) Create(c *gin.Context) {
 
 	// Convert to response format
 	responseKey := APIKey{
-		ID:           apiKeyResp.ID,
-		Name:         apiKeyResp.Name,
-		Key:          apiKeyResp.Key, // Only shown once
-		KeyPreview:   apiKeyResp.KeyPreview,
-		ProjectID:    apiKeyResp.ProjectID,
-		Description:  req.Description,
-		Scopes:       apiKeyResp.Scopes,
-		RateLimitRPM: apiKeyResp.RateLimitRPM,
-		Status:       "active",
-		CreatedAt:    apiKeyResp.CreatedAt,
-		CreatedBy:    userID,
+		ID:         apiKeyResp.ID,
+		Name:       apiKeyResp.Name,
+		Key:        apiKeyResp.Key, // Only shown once
+		KeyPreview: apiKeyResp.KeyPreview,
+		ProjectID:  apiKeyResp.ProjectID,
+		Status:     "active",
+		CreatedAt:  apiKeyResp.CreatedAt,
+		CreatedBy:  userID,
 	}
 
 	if apiKeyResp.ExpiresAt != nil {

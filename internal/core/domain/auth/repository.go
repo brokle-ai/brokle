@@ -65,8 +65,6 @@ type APIKeyRepository interface {
 	// Basic CRUD operations
 	Create(ctx context.Context, apiKey *APIKey) error
 	GetByID(ctx context.Context, id ulid.ULID) (*APIKey, error)
-	GetByKeyHash(ctx context.Context, keyHash string) (*APIKey, error)
-	GetByKeyID(ctx context.Context, keyID string) (*APIKey, error) // For project-scoped key lookup
 	Update(ctx context.Context, apiKey *APIKey) error
 	Delete(ctx context.Context, id ulid.ULID) error
 
