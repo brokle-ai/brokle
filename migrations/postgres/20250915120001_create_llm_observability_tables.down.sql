@@ -8,11 +8,11 @@ DROP TRIGGER IF EXISTS trigger_llm_quality_scores_updated_at ON llm_quality_scor
 DROP TRIGGER IF EXISTS trigger_llm_observations_updated_at ON llm_observations;
 DROP TRIGGER IF EXISTS trigger_llm_traces_updated_at ON llm_traces;
 
--- Drop trigger functions
+-- Drop trigger functions (only the ones created in this migration)
 DROP FUNCTION IF EXISTS calculate_total_cost();
 DROP FUNCTION IF EXISTS calculate_total_tokens();
 DROP FUNCTION IF EXISTS calculate_observation_latency();
-DROP FUNCTION IF EXISTS update_updated_at_column();
+-- NOTE: update_updated_at_column() is NOT dropped - it's a shared utility from initial_schema
 
 -- Drop tables in reverse dependency order
 DROP TABLE IF EXISTS llm_quality_scores;
