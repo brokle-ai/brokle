@@ -687,41 +687,75 @@ Enterprise features are in `internal/ee/` with stub implementations for OSS buil
 
 ## Testing Strategy
 
-### Unit Tests
-Test business logic in isolation:
+The Brokle platform follows a **pragmatic testing philosophy** that prioritizes high-value business logic tests over low-value granular tests.
 
-```go
-func TestUserService_CreateUser(t *testing.T) {
-    mockRepo := &MockUserRepository{}
-    service := NewUserService(mockRepo)
-    
-    err := service.CreateUser(ctx, req)
-    assert.NoError(t, err)
-    assert.Called(t, mockRepo.Create)
-}
-```
+### Core Testing Principle
 
-### Integration Tests
-Test with real database:
+**Test Business Logic, Not Framework Behavior**
 
-```go
-func TestUserHandler_CreateUser(t *testing.T) {
-    db := setupTestDB(t)
-    handler := setupHandler(db)
-    
-    resp := httptest.NewRecorder()
-    handler.CreateUser(resp, req)
-    
-    assert.Equal(t, http.StatusCreated, resp.Code)
-}
-```
+We focus on:
+- ✅ Complex business logic and calculations
+- ✅ Batch operations and orchestration workflows
+- ✅ Error handling patterns and retry mechanisms
+- ✅ Analytics, aggregations, and metrics
+- ✅ Multi-step operations with dependencies
 
-### E2E Tests
-Test complete user flows:
+We avoid testing:
+- ❌ Simple CRUD operations without business logic
+- ❌ Field validation (already in domain layer)
+- ❌ Trivial constructors and getters
+- ❌ Framework behavior (ULID, time.Now(), errors.Is)
+- ❌ Static constant definitions
+
+### Test Coverage Guidelines
+
+**Target Metrics:**
+- Service Layer: ~1:1 test-to-code ratio (focus on business logic)
+- Domain Layer: Minimal (only complex calculations and business rules)
+- Handler Layer: Critical workflows only (integration tests)
+
+**Current Coverage:**
+- Observability Services: 3,485 lines of tests (0.96:1 ratio) ✅
+- Observability Domain: 594 lines of tests (business logic only) ✅
+- All tests passing with healthy coverage
+
+### Running Tests
 
 ```bash
-make test-e2e
+# Run all tests
+make test
+
+# Run unit tests only
+make test-unit
+
+# Run integration tests
+make test-integration
+
+# Run with coverage
+make test-coverage
+
+# Run specific package
+go test ./internal/services/observability -v
+
+# Run with race detection
+go test -race ./...
 ```
+
+### Quick Reference
+
+- **Detailed Guide**: See `docs/TESTING.md` for complete examples and patterns
+- **AI Prompt**: See `prompts/testing.txt` for AI-assisted test generation
+- **Reference Code**: See `internal/services/observability/*_test.go` for real examples
+
+### Test Quality Checklist
+
+Before committing tests:
+- ✅ Table-driven test pattern with comprehensive scenarios
+- ✅ Mocks implement full repository interfaces
+- ✅ Tests business logic, not framework behavior
+- ✅ Verifies mock expectations with `AssertExpectations()`
+- ✅ Maintains ~1:1 test-to-code ratio
+- ❌ No tests for simple CRUD, validation, or constructors
 
 ## Frontend Architecture
 

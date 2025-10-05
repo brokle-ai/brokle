@@ -63,7 +63,7 @@ func main() {
 	defer application.Shutdown(context.Background())
 
 	// Start the application (HTTP server + WebSocket + background workers)
-	if err := application.Run(); err != nil {
+	if err := application.Start(); err != nil {
 		log.Fatalf("Failed to start application: %v", err)
 	}
 
