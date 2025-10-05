@@ -4534,7 +4534,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get a paginated list of project-scoped API keys for a specific project. Keys are shown with preview format (bk_proj_...7890) for security.",
+                "description": "Get a paginated list of API keys for a specific project. Keys are shown with preview format (bk_xxxx...yyyy) for security.",
                 "consumes": [
                     "application/json"
                 ],
@@ -4544,7 +4544,7 @@ const docTemplate = `{
                 "tags": [
                     "API Keys"
                 ],
-                "summary": "List project-scoped API keys",
+                "summary": "List API keys",
                 "parameters": [
                     {
                         "type": "string",
@@ -4658,7 +4658,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Create a new project-scoped API key with embedded project context. The full key will only be displayed once upon creation. Format: bk_proj_{project_id}_{secret}",
+                "description": "Create a new industry-standard API key for the project. The full key will only be displayed once upon creation. Format: bk_{40_char_random}",
                 "consumes": [
                     "application/json"
                 ],
@@ -4668,7 +4668,7 @@ const docTemplate = `{
                 "tags": [
                     "API Keys"
                 ],
-                "summary": "Create project-scoped API key",
+                "summary": "Create API key",
                 "parameters": [
                     {
                         "type": "string",
@@ -5025,7 +5025,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "API key (format: bk_proj_{project_id}_{secret})",
+                        "description": "API key (format: bk_{40_char_random})",
                         "name": "X-API-Key",
                         "in": "header"
                     },
@@ -6967,11 +6967,11 @@ const docTemplate = `{
                 },
                 "key": {
                     "type": "string",
-                    "example": "bk_proj_01234567890123456789012345_abcdef1234567890abcdef1234567890"
+                    "example": "bk_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789AbCd"
                 },
                 "key_preview": {
                     "type": "string",
-                    "example": "bk_proj_...7890"
+                    "example": "bk_AbCd...AbCd"
                 },
                 "last_used": {
                     "type": "string",

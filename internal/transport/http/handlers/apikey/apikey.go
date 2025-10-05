@@ -34,8 +34,8 @@ func NewHandler(config *config.Config, logger *logrus.Logger, apiKeyService auth
 type APIKey struct {
 	ID         string    `json:"id" example:"key_01234567890123456789012345" description:"Unique API key identifier"`
 	Name       string    `json:"name" example:"Production API Key" description:"Human-readable name for the API key"`
-	Key        string    `json:"key,omitempty" example:"bk_proj_01234567890123456789012345_abcdef1234567890abcdef1234567890" description:"The actual API key (only shown on creation)"`
-	KeyPreview string    `json:"key_preview" example:"bk_proj_...7890" description:"Truncated version of the key for display"`
+	Key        string    `json:"key,omitempty" example:"bk_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789AbCd" description:"The actual API key (only shown on creation)"`
+	KeyPreview string    `json:"key_preview" example:"bk_AbCd...AbCd" description:"Truncated version of the key for display"`
 	ProjectID  string    `json:"project_id" example:"proj_01234567890123456789012345" description:"Project ID this key belongs to"`
 	Status     string    `json:"status" example:"active" description:"API key status (active, inactive, expired)"`
 	LastUsed   time.Time `json:"last_used,omitempty" example:"2024-01-01T00:00:00Z" description:"Last time this key was used (null if never used)"`
@@ -59,8 +59,8 @@ type ListAPIKeysResponse struct {
 }
 
 // List handles GET /projects/:projectId/api-keys
-// @Summary List project-scoped API keys
-// @Description Get a paginated list of project-scoped API keys for a specific project. Keys are shown with preview format (bk_proj_...7890) for security.
+// @Summary List API keys
+// @Description Get a paginated list of API keys for a specific project. Keys are shown with preview format (bk_xxxx...yyyy) for security.
 // @Tags API Keys
 // @Accept json
 // @Produce json
@@ -110,8 +110,9 @@ func (h *Handler) List(c *gin.Context) {
 
 	status := c.Query("status")
 
-	// Create filters
+	// Create filters with project ID
 	filters := &auth.APIKeyFilters{
+		ProjectID: &projectID, // Set project ID filter
 		Limit:     limit,
 		Offset:    (page - 1) * limit,
 		SortBy:    "created_at",
@@ -180,8 +181,8 @@ func getKeyStatus(key auth.APIKey) string {
 }
 
 // Create handles POST /projects/:projectId/api-keys
-// @Summary Create project-scoped API key
-// @Description Create a new project-scoped API key with embedded project context. The full key will only be displayed once upon creation. Format: bk_proj_{project_id}_{secret}
+// @Summary Create API key
+// @Description Create a new industry-standard API key for the project. The full key will only be displayed once upon creation. Format: bk_{40_char_random}
 // @Tags API Keys
 // @Accept json
 // @Produce json

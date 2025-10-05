@@ -453,8 +453,8 @@ func (h *Handler) ValidateAPIKey(apiKey string) (*auth.AuthContext, error) {
 	// Validate the API key using the APIKeyService
 	key, err := h.apiKeyService.ValidateAPIKey(ctx, apiKey)
 	if err != nil {
-		h.logger.WithError(err).WithField("key_id", extractKeyID(apiKey)).
-			Warn("API key validation failed")
+		// Log validation failure without exposing the full key (security best practice)
+		h.logger.WithError(err).Warn("API key validation failed")
 		return nil, err
 	}
 
@@ -477,7 +477,7 @@ func (h *Handler) ValidateAPIKey(apiKey string) (*auth.AuthContext, error) {
 // @Tags Authentication
 // @Accept json
 // @Produce json
-// @Param X-API-Key header string false "API key (format: bk_proj_{project_id}_{secret})"
+// @Param X-API-Key header string false "API key (format: bk_{40_char_random})"
 // @Param Authorization header string false "Bearer token format: Bearer {api_key}"
 // @Success 200 {object} response.SuccessResponse "API key validation successful"
 // @Failure 400 {object} response.ErrorResponse "Invalid request"
@@ -501,11 +501,11 @@ func (h *Handler) ValidateAPIKeyHandler(c *gin.Context) {
 		return
 	}
 
-	// Validate the self-contained API key
+	// Validate the industry-standard API key (bk_{random})
 	resp, err := h.apiKeyService.ValidateAPIKey(c.Request.Context(), apiKey)
 	if err != nil {
-		h.logger.WithError(err).WithField("key_id", extractKeyID(apiKey)).
-			Warn("API key validation failed")
+		// Log validation failure without exposing the full key (security best practice)
+		h.logger.WithError(err).Warn("API key validation failed")
 		response.Error(c, err) // Properly propagate AppError status codes (401, etc.)
 		return
 	}
@@ -520,19 +520,6 @@ func (h *Handler) ValidateAPIKeyHandler(c *gin.Context) {
 	response.Success(c, resp)
 }
 
-// extractKeyID safely extracts the key_id portion (bk_proj_{project_id}) for logging
-func extractKeyID(apiKey string) string {
-	parts := strings.Split(apiKey, "_")
-	if len(parts) >= 3 {
-		// Return bk_proj_{project_id} portion
-		return strings.Join(parts[:3], "_")
-	}
-	// Fallback for invalid format
-	if len(apiKey) < 8 {
-		return apiKey
-	}
-	return apiKey[:8]
-}
 
 // ListSessionsRequest represents request for listing user sessions
 type ListSessionsRequest struct {

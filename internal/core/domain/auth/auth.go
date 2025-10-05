@@ -83,14 +83,14 @@ type OrganizationRepository interface {
 	IsMember(ctx context.Context, userID, orgID ulid.ULID) (bool, error)
 }
 
-// APIKey represents a project-scoped API key with secure hash storage.
-// Format: bk_proj_{project_id}_{secret}
-// Security: Full key is hashed with bcrypt (no plaintext storage)
+// APIKey represents an industry-standard API key with secure hash storage.
+// Format: bk_{40_char_random}
+// Security: Full key is hashed with SHA-256 (deterministic, enables O(1) lookup)
 // Organization is derived via projects.organization_id (no redundant storage)
 type APIKey struct {
 	ID         ulid.ULID      `json:"id" gorm:"type:char(26);primaryKey"`
-	KeyHash    string         `json:"-" gorm:"size:255;unique;not null;index"`        // bcrypt(full_key)
-	KeyPreview string         `json:"key_preview" gorm:"size:50;not null"`            // bk_proj_...WXYZ (for display)
+	KeyHash    string         `json:"-" gorm:"size:255;unique;not null;index"`        // SHA-256(full_key)
+	KeyPreview string         `json:"key_preview" gorm:"size:50;not null"`            // bk_xxxx...yyyy (for display)
 	ProjectID  ulid.ULID      `json:"project_id" gorm:"type:char(26);not null;index"` // Project this key belongs to
 	UserID     ulid.ULID      `json:"user_id" gorm:"type:char(26);not null;index"`    // Creator user
 
@@ -104,15 +104,6 @@ type APIKey struct {
 	CreatedAt  time.Time      `json:"created_at"`
 	UpdatedAt  time.Time      `json:"updated_at"`
 	DeletedAt  gorm.DeletedAt `json:"deleted_at,omitempty" gorm:"index"`
-}
-
-// ParsedAPIKey represents the components of a parsed project-scoped API key
-type ParsedAPIKey struct {
-	Prefix    string    `json:"prefix"`     // "bk"
-	Scope     string    `json:"scope"`      // "proj"
-	ProjectID ulid.ULID `json:"project_id"` // Extracted project ID
-	Secret    string    `json:"secret"`     // Secret portion for verification
-	KeyID     string    `json:"key_id"`     // Full prefix (bk_proj_{project_id})
 }
 
 // Role represents both system template roles and custom scoped roles
@@ -352,8 +343,8 @@ type CreateAPIKeyRequest struct {
 type CreateAPIKeyResponse struct {
 	ID         string     `json:"id" example:"key_01234567890123456789012345"`
 	Name       string     `json:"name" example:"Production API Key"`
-	Key        string     `json:"key" example:"bk_proj_01234567890123456789012345_abcdef1234567890abcdef1234567890"` // Full key - shown only once
-	KeyPreview string     `json:"key_preview" example:"bk_proj_...7890"`
+	Key        string     `json:"key" example:"bk_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789AbCd"` // Full key - shown only once
+	KeyPreview string     `json:"key_preview" example:"bk_AbCd...AbCd"`
 	ProjectID  string     `json:"project_id" example:"proj_01234567890123456789012345"`
 	CreatedAt  time.Time  `json:"created_at"`
 	ExpiresAt  *time.Time `json:"expires_at,omitempty"`

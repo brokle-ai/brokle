@@ -42,8 +42,20 @@ func (r *apiKeyRepository) GetByID(ctx context.Context, id ulid.ULID) (*authDoma
 	return &apiKey, nil
 }
 
-// Removed GetBySecretHash and GetByKeyID - no longer needed with key_hash approach
-// Validation now done by fetching all project keys and comparing hashes
+// GetByKeyHash retrieves an API key by its SHA-256 hash (industry-standard direct lookup)
+// This enables O(1) validation with unique index on key_hash column
+// Note: We use SHA-256 (not bcrypt) because it's deterministic, enabling direct hash lookups
+func (r *apiKeyRepository) GetByKeyHash(ctx context.Context, keyHash string) (*authDomain.APIKey, error) {
+	var apiKey authDomain.APIKey
+	err := r.db.WithContext(ctx).Where("key_hash = ? AND deleted_at IS NULL", keyHash).First(&apiKey).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("get API key by hash: %w", authDomain.ErrNotFound)
+		}
+		return nil, fmt.Errorf("database error getting API key by hash: %w", err)
+	}
+	return &apiKey, nil
+}
 
 // Update updates an API key
 func (r *apiKeyRepository) Update(ctx context.Context, apiKey *authDomain.APIKey) error {

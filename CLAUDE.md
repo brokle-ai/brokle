@@ -257,7 +257,7 @@ Copy `.env.example` to `.env` and configure:
 The platform implements a clean separation between SDK and Dashboard routes:
 
 #### SDK Routes (`/v1/*`) - API Key Authentication
-**Authentication**: Project-scoped API keys (`bk_proj_{project_id}_{secret}`)
+**Authentication**: Industry-standard API keys (`bk_{40_char_random}`)
 **Rate Limiting**: API key-based rate limiting
 **Target Users**: SDK integration, programmatic access
 
@@ -307,23 +307,24 @@ The platform implements a clean separation between SDK and Dashboard routes:
 
 ## SDK Architecture & Authentication
 
-### Project-Scoped API Key System
-The platform implements a sophisticated API key system for SDK authentication:
+### Industry-Standard API Key System
+The platform implements industry-standard API keys for SDK authentication (following GitHub/Stripe/OpenAI patterns):
 
 #### API Key Format
 ```
-bk_proj_{project_id}_{secret}
+bk_{40_char_random_secret}
 ```
-- **Prefix**: `bk` (Brokle identifier)
-- **Scope**: `proj` (project-scoped)
-- **Project ID**: 26-character ULID identifying the project
-- **Secret**: 32-character cryptographically secure random string
+- **Prefix**: `bk_` (Brokle identifier)
+- **Secret**: 40 characters of cryptographically secure random data (alphanumeric)
+- **Example**: `bk_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789AbCd`
 
 #### Key Features
-- **Self-contained**: Project ID embedded in the API key
-- **No additional headers required**: Authentication context extracted from key
-- **Secure validation**: Server-side validation with database lookup
-- **Environment support**: Optional `X-Environment` header for environment tagging
+- **Industry Standard**: Pure random format matching GitHub, Stripe, OpenAI
+- **Secure Storage**: SHA-256 hashing (deterministic, enables O(1) lookup)
+- **O(1) Validation**: Direct hash lookup with unique database index
+- **Project Association**: Project ID stored in database, not embedded in key
+- **Environment Support**: Optional `X-Environment` header for environment tagging
+- **Security Best Practice**: No sensitive data embedded in key
 
 #### SDK Authentication Flow
 ```go
@@ -331,14 +332,16 @@ bk_proj_{project_id}_{secret}
 apiKey := c.GetHeader("X-API-Key")
 // Fallback: Authorization: Bearer {api_key}
 
-// 2. Parse and validate API key format
-parsedKey, err := auth.ParseAPIKey(apiKey)
-projectID := parsedKey.ProjectID
+// 2. Validate API key format (bk_{40_chars})
+if err := auth.ValidateAPIKeyFormat(apiKey); err != nil {
+    return errors.New("invalid API key format")
+}
 
-// 3. Validate against database
+// 3. Validate against database with SHA-256 hash lookup (O(1))
 validateResp, err := apiKeyService.ValidateAPIKey(ctx, apiKey)
+// This does: SHA-256(apiKey) -> database lookup -> return project_id + auth context
 
-// 4. Store authentication context
+// 4. Store authentication context (project_id comes from database)
 c.Set("project_id", &validateResp.ProjectID)
 c.Set("api_key_id", validateResp.AuthContext.APIKeyID)
 c.Set("environment", c.GetHeader("X-Environment"))
@@ -429,28 +432,34 @@ Time-series data optimized for analytical queries:
 ## Development Patterns
 
 ### API Key Management Utilities
-The platform includes comprehensive API key utilities in `internal/core/domain/auth/apikey_utils.go`:
+The platform includes industry-standard API key utilities in `internal/core/domain/auth/apikey_utils.go`:
 
 ```go
-// Generate new project-scoped API key
-fullKey, keyID, secret, err := auth.GenerateProjectScopedAPIKey(projectID)
-// Returns: "bk_proj_{project_id}_{secret}", "bk_proj_{project_id}", "{secret}", error
+// Generate new industry-standard API key (pure random)
+fullKey, err := auth.GenerateAPIKey()
+// Returns: "bk_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789AbCd" (43 chars total)
 
-// Parse existing API key
-parsedKey, err := auth.ParseAPIKey(fullKey)
-// Returns: &ParsedAPIKey{Prefix, Scope, ProjectID, Secret, KeyID}
-
-// Extract just the project ID quickly
-projectID, err := auth.ExtractProjectID(fullKey)
-
-// Validate API key format
+// Validate API key format (bk_{40_chars})
 err := auth.ValidateAPIKeyFormat(fullKey)
+// Returns error if format is invalid
 
-// Create preview for display (security)
-preview := auth.CreateKeyPreview(keyID) // "bk_proj_01ABCD...WXYZ"
+// Create preview for display (security best practice - GitHub pattern)
+preview := auth.CreateKeyPreview(fullKey)
+// Returns: "bk_AbCd...AbCd" (shows bk_ + first 4 + ... + last 4 chars)
 
-// Check if key is project-scoped
-isProjectScoped := auth.IsProjectScopedKey(fullKey) // true for bk_proj_* keys
+// Example: Creating and storing an API key
+fullKey, err := auth.GenerateAPIKey()
+keyHash := sha256.Sum256([]byte(fullKey))
+keyHashHex := hex.EncodeToString(keyHash[:])
+keyPreview := auth.CreateKeyPreview(fullKey)
+
+// Store in database: keyHashHex, keyPreview, project_id
+// Return to user: fullKey (ONLY ONCE), keyPreview
+
+// Example: Validating an API key
+hash := sha256.Sum256([]byte(incomingKey))
+hashHex := hex.EncodeToString(hash[:])
+apiKey, err := repo.GetByKeyHash(ctx, hashHex) // O(1) with unique index
 ```
 
 ### Authentication Middleware Patterns
@@ -1070,14 +1079,14 @@ make docker-clean
 
 ### SDK Authentication Issues
 ```bash
-# Test API key validation
+# Test API key validation (public endpoint)
 curl -X POST http://localhost:8080/v1/auth/validate-key \
   -H "Content-Type: application/json" \
-  -d '{"api_key": "bk_proj_01ABCD123456789012345DEFGH_abcdefghijklmnopqrstuvwxyz123456"}'
+  -d '{"api_key": "bk_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789AbCd"}'
 
 # Test SDK endpoint with API key
 curl -X GET http://localhost:8080/v1/models \
-  -H "X-API-Key: bk_proj_01ABCD123456789012345DEFGH_abcdefghijklmnopqrstuvwxyz123456"
+  -H "X-API-Key: bk_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789AbCd"
 
 # Test with environment header
 curl -X POST http://localhost:8080/v1/chat/completions \
@@ -1089,22 +1098,26 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 
 ### API Key Debugging
 ```go
-// Debug API key parsing
-parsedKey, err := auth.ParseAPIKey("bk_proj_01ABCD123456789012345DEFGH_abcdefghijklmnopqrstuvwxyz123456")
-if err != nil {
-    log.Printf("Parse error: %v", err)
-    return
-}
-log.Printf("Project ID: %s", parsedKey.ProjectID.String())
-
-// Validate format without full parsing
+// Validate API key format
 if err := auth.ValidateAPIKeyFormat(apiKey); err != nil {
     log.Printf("Invalid format: %v", err)
+    return
 }
 
-// Quick project ID extraction
-projectID, err := auth.ExtractProjectID(apiKey)
+// Generate key preview for logging (security best practice - GitHub pattern)
+preview := auth.CreateKeyPreview(apiKey)
+log.Printf("Key preview: %s", preview) // "bk_rvOJ...yym0"
+
+// Hash API key for database lookup
+hash := sha256.Sum256([]byte(apiKey))
+hashHex := hex.EncodeToString(hash[:])
+log.Printf("Key hash: %s", hashHex[:16]+"...") // Partial hash for debugging
+
+// Validate and retrieve API key from database
+apiKey, err := repo.GetByKeyHash(ctx, hashHex)
 if err != nil {
-    log.Printf("Project extraction failed: %v", err)
+    log.Printf("Key not found or invalid: %v", err)
+    return
 }
+log.Printf("Project ID: %s", apiKey.ProjectID.String()) // Retrieved from database
 ```
