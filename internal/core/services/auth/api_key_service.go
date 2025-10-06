@@ -2,11 +2,11 @@ package auth
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
-
-	"golang.org/x/crypto/bcrypt"
 
 	authDomain "brokle/internal/core/domain/auth"
 	appErrors "brokle/pkg/errors"
@@ -30,38 +30,33 @@ func NewAPIKeyService(
 	}
 }
 
-// CreateAPIKey creates a new project-scoped API key
+// CreateAPIKey creates a new industry-standard API key with pure random secret
 func (s *apiKeyService) CreateAPIKey(ctx context.Context, userID ulid.ULID, req *authDomain.CreateAPIKeyRequest) (*authDomain.CreateAPIKeyResponse, error) {
 	// TODO: Validate user has permission to create keys in the project
 	// For now, skip membership validation - will be implemented when organization service is ready
 
-	// Generate project-scoped API key
-	fullKey, keyID, secret, err := authDomain.GenerateProjectScopedAPIKey(req.ProjectID)
+	// Generate industry-standard pure random API key (bk_{40_char_random})
+	fullKey, err := authDomain.GenerateAPIKey()
 	if err != nil {
 		return nil, appErrors.NewInternalError("Failed to generate API key", err)
 	}
 
-	// Hash secret for storage
-	secretHash, err := bcrypt.GenerateFromPassword([]byte(secret), bcrypt.DefaultCost)
-	if err != nil {
-		return nil, appErrors.NewInternalError("Failed to hash secret", err)
-	}
+	// Hash the full key for secure storage using SHA-256 (industry standard for API keys)
+	// Note: SHA-256 is deterministic (same input = same output), enabling O(1) lookup
+	// This is different from bcrypt (used for passwords) which is non-deterministic
+	hash := sha256.Sum256([]byte(fullKey))
+	keyHash := hex.EncodeToString(hash[:])
 
-	// TODO: Get organization ID from project lookup
-	// For now, we'll need to pass it in the request or look it up
-	orgID := req.ProjectID // Temporary - should be actual org ID
+	// Create key preview for display (bk_...xyz)
+	keyPreview := authDomain.CreateKeyPreview(fullKey)
 
-	// Create API key entity
+	// Create API key entity (project_id stored in database, not in key)
 	apiKeyEntity := authDomain.NewAPIKey(
 		userID,
-		orgID, // Organization ID (from project lookup)
 		req.ProjectID,
 		req.Name,
-		req.Description,
-		keyID,
-		string(secretHash),
-		req.Scopes,
-		req.RateLimitRPM,
+		keyHash, // SHA-256 hash of full key (deterministic, enables O(1) lookup)
+		keyPreview,
 		req.ExpiresAt,
 	)
 
@@ -70,20 +65,15 @@ func (s *apiKeyService) CreateAPIKey(ctx context.Context, userID ulid.ULID, req 
 		return nil, appErrors.NewInternalError("Failed to save API key", err)
 	}
 
-	// Create key preview for display
-	keyPreview := authDomain.CreateKeyPreview(keyID)
-
 	// Return response with the full key (only shown once)
 	return &authDomain.CreateAPIKeyResponse{
-		ID:           apiKeyEntity.ID.String(),
-		Name:         apiKeyEntity.Name,
-		Key:          fullKey, // Full key - only returned once
-		KeyPreview:   keyPreview,
-		ProjectID:    apiKeyEntity.ProjectID.String(),
-		Scopes:       apiKeyEntity.Scopes,
-		RateLimitRPM: apiKeyEntity.RateLimitRPM,
-		CreatedAt:    apiKeyEntity.CreatedAt,
-		ExpiresAt:    apiKeyEntity.ExpiresAt,
+		ID:         apiKeyEntity.ID.String(),
+		Name:       apiKeyEntity.Name,
+		Key:        fullKey, // Full key - only returned once
+		KeyPreview: apiKeyEntity.KeyPreview,
+		ProjectID:  apiKeyEntity.ProjectID.String(),
+		CreatedAt:  apiKeyEntity.CreatedAt,
+		ExpiresAt:  apiKeyEntity.ExpiresAt,
 	}, nil
 }
 
@@ -126,13 +116,6 @@ func (s *apiKeyService) UpdateAPIKey(ctx context.Context, keyID ulid.ULID, req *
 	if req.Name != nil {
 		apiKey.Name = *req.Name
 	}
-	// Note: Environment handling removed - environments are now sent via SDK headers/tags
-	if req.Scopes != nil {
-		apiKey.Scopes = req.Scopes
-	}
-	if req.RateLimitRPM != nil {
-		apiKey.RateLimitRPM = *req.RateLimitRPM
-	}
 	if req.IsActive != nil {
 		apiKey.IsActive = *req.IsActive
 	}
@@ -155,26 +138,30 @@ func (s *apiKeyService) RevokeAPIKey(ctx context.Context, keyID ulid.ULID) error
 	return nil
 }
 
-// ValidateAPIKey validates a project-scoped API key and returns validation response
+// ValidateAPIKey validates an industry-standard API key using direct SHA-256 hash lookup
+// This is O(1) with unique index on key_hash column (GitHub/Stripe pattern)
 func (s *apiKeyService) ValidateAPIKey(ctx context.Context, fullKey string) (*authDomain.ValidateAPIKeyResponse, error) {
-	// Parse the API key
-	parsed, err := authDomain.ParseAPIKey(fullKey)
-	if err != nil {
+	// Validate API key format (bk_{40_chars})
+	if err := authDomain.ValidateAPIKeyFormat(fullKey); err != nil {
 		return nil, appErrors.NewUnauthorizedError("Invalid API key format")
 	}
 
-	// Look up API key by keyID
-	apiKey, err := s.apiKeyRepo.GetByKeyID(ctx, parsed.KeyID)
-	if err != nil {
-		if errors.Is(err, authDomain.ErrAPIKeyNotFound) {
-			return nil, appErrors.NewUnauthorizedError("API key not found")
-		}
-		return nil, appErrors.NewInternalError("Failed to validate API key", err)
-	}
+	// Hash the incoming key using SHA-256 for O(1) lookup
+	// SHA-256 is deterministic (same input = same hash), enabling direct database lookup
+	// This is the industry standard for API keys (GitHub, Stripe, OpenAI all use this)
+	hash := sha256.Sum256([]byte(fullKey))
+	keyHash := hex.EncodeToString(hash[:])
 
-	// Verify secret
-	if err := bcrypt.CompareHashAndPassword([]byte(apiKey.SecretHash), []byte(parsed.Secret)); err != nil {
-		return nil, appErrors.NewUnauthorizedError("Invalid API key")
+	// Direct lookup by hash (O(1) with unique index on key_hash)
+	apiKey, err := s.apiKeyRepo.GetByKeyHash(ctx, keyHash)
+	if err != nil {
+		// Distinguish between not-found (401) and infrastructure errors (500)
+		if errors.Is(err, authDomain.ErrNotFound) {
+			// Don't expose whether key exists or not (security best practice)
+			return nil, appErrors.NewUnauthorizedError("Invalid API key")
+		}
+		// Infrastructure error (DB connection, migration issue, etc.) - return 500
+		return nil, appErrors.NewInternalError("Failed to validate API key", err)
 	}
 
 	// Check if key is active
@@ -193,20 +180,20 @@ func (s *apiKeyService) ValidateAPIKey(ctx context.Context, fullKey string) (*au
 		APIKeyID: &apiKey.ID,
 	}
 
-	// Update last used timestamp (async)
+	// Update last used timestamp (async, don't block validation)
 	go func() {
 		ctx := context.Background()
 		if err := s.apiKeyRepo.UpdateLastUsed(ctx, apiKey.ID); err != nil {
 			// Log error but don't fail validation
+			// TODO: Add proper logging when logger is available
 		}
 	}()
 
+	// Return validation response with project_id from database
 	return &authDomain.ValidateAPIKeyResponse{
 		APIKey:      apiKey,
-		ProjectID:   parsed.ProjectID,
+		ProjectID:   apiKey.ProjectID, // Retrieved from database, not extracted from key
 		Valid:       true,
-		Scopes:      apiKey.Scopes,
-		RateLimit:   apiKey.RateLimitRPM,
 		AuthContext: authContext,
 	}, nil
 }
@@ -237,20 +224,17 @@ func (s *apiKeyService) GetAPIKeyContext(ctx context.Context, keyID ulid.ULID) (
 }
 
 // CanAPIKeyAccessResource checks if an API key can access a specific resource
+// Note: With scopes removed, this now checks if the key is active
+// Access control should be handled at the organization RBAC level
 func (s *apiKeyService) CanAPIKeyAccessResource(ctx context.Context, keyID ulid.ULID, resource string) (bool, error) {
 	apiKey, err := s.apiKeyRepo.GetByID(ctx, keyID)
 	if err != nil {
 		return false, fmt.Errorf("get API key: %w", err)
 	}
 
-	// Check if resource is in scopes
-	for _, scope := range apiKey.Scopes {
-		if scope == "*" || scope == resource {
-			return true, nil
-		}
-	}
-
-	return false, nil
+	// All active API keys have full access to their project
+	// Fine-grained permissions handled by organization RBAC
+	return apiKey.IsActive, nil
 }
 
 // Scoped access methods

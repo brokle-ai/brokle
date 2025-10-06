@@ -83,24 +83,20 @@ type OrganizationRepository interface {
 	IsMember(ctx context.Context, userID, orgID ulid.ULID) (bool, error)
 }
 
-// APIKey represents a project-scoped API key with self-contained authentication.
-// Format: bk_proj_{project_id}_{secret}
+// APIKey represents an industry-standard API key with secure hash storage.
+// Format: bk_{40_char_random}
+// Security: Full key is hashed with SHA-256 (deterministic, enables O(1) lookup)
+// Organization is derived via projects.organization_id (no redundant storage)
 type APIKey struct {
-	ID             ulid.ULID      `json:"id" gorm:"type:char(26);primaryKey"`
-	KeyID          string         `json:"key_id" gorm:"size:100;unique;not null;index"`        // bk_proj_{project_id}
-	SecretHash     string         `json:"-" gorm:"size:255;not null"`                          // Hashed secret portion
-	ProjectID      ulid.ULID      `json:"project_id" gorm:"type:char(26);not null;index"`      // Project this key belongs to
-	OrganizationID ulid.ULID      `json:"organization_id" gorm:"type:char(26);not null;index"` // Organization (from project)
-	UserID         ulid.ULID      `json:"user_id" gorm:"type:char(26);not null;index"`         // Creator user
+	ID         ulid.ULID      `json:"id" gorm:"type:char(26);primaryKey"`
+	KeyHash    string         `json:"-" gorm:"size:255;unique;not null;index"`        // SHA-256(full_key)
+	KeyPreview string         `json:"key_preview" gorm:"size:50;not null"`            // bk_xxxx...yyyy (for display)
+	ProjectID  ulid.ULID      `json:"project_id" gorm:"type:char(26);not null;index"` // Project this key belongs to
+	UserID     ulid.ULID      `json:"user_id" gorm:"type:char(26);not null;index"`    // Creator user
 
 	// Key metadata
-	Name        string `json:"name" gorm:"size:255;not null"`
-	Description string `json:"description" gorm:"type:text"`
-	Scopes      []string `json:"scopes" gorm:"type:json"` // ["read", "write", "admin"]
-
-	// Usage controls
-	RateLimitRPM int  `json:"rate_limit_rpm" gorm:"default:1000"`
-	IsActive     bool `json:"is_active" gorm:"default:true"`
+	Name     string `json:"name" gorm:"size:255;not null"`
+	IsActive bool   `json:"is_active" gorm:"default:true"`
 
 	// Timestamps
 	LastUsedAt *time.Time     `json:"last_used_at,omitempty"`
@@ -108,15 +104,6 @@ type APIKey struct {
 	CreatedAt  time.Time      `json:"created_at"`
 	UpdatedAt  time.Time      `json:"updated_at"`
 	DeletedAt  gorm.DeletedAt `json:"deleted_at,omitempty" gorm:"index"`
-}
-
-// ParsedAPIKey represents the components of a parsed project-scoped API key
-type ParsedAPIKey struct {
-	Prefix    string    `json:"prefix"`     // "bk"
-	Scope     string    `json:"scope"`      // "proj"
-	ProjectID ulid.ULID `json:"project_id"` // Extracted project ID
-	Secret    string    `json:"secret"`     // Secret portion for verification
-	KeyID     string    `json:"key_id"`     // Full prefix (bk_proj_{project_id})
 }
 
 // Role represents both system template roles and custom scoped roles
@@ -348,24 +335,19 @@ type AuthUser struct {
 }
 
 type CreateAPIKeyRequest struct {
-	Name         string     `json:"name" validate:"required,min=1,max=100"`
-	ProjectID    ulid.ULID  `json:"project_id" validate:"required"`
-	Description  string     `json:"description,omitempty"`
-	Scopes       []string   `json:"scopes" validate:"required,min=1"`
-	RateLimitRPM int        `json:"rate_limit_rpm" validate:"min=1,max=10000"`
-	ExpiresAt    *time.Time `json:"expires_at,omitempty"`
+	Name      string     `json:"name" validate:"required,min=1,max=100"`
+	ProjectID ulid.ULID  `json:"project_id" validate:"required"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 }
 
 type CreateAPIKeyResponse struct {
-	ID           string     `json:"id" example:"key_01234567890123456789012345"`
-	Name         string     `json:"name" example:"Production API Key"`
-	Key          string     `json:"key" example:"bk_proj_01234567890123456789012345_abcdef1234567890abcdef1234567890"` // Full key - shown only once
-	KeyPreview   string     `json:"key_preview" example:"bk_proj_...7890"`
-	ProjectID    string     `json:"project_id" example:"proj_01234567890123456789012345"`
-	Scopes       []string   `json:"scopes" example:"[\"read\", \"write\"]"`
-	RateLimitRPM int        `json:"rate_limit_rpm" example:"1000"`
-	CreatedAt    time.Time  `json:"created_at"`
-	ExpiresAt    *time.Time `json:"expires_at,omitempty"`
+	ID         string     `json:"id" example:"key_01234567890123456789012345"`
+	Name       string     `json:"name" example:"Production API Key"`
+	Key        string     `json:"key" example:"bk_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789AbCd"` // Full key - shown only once
+	KeyPreview string     `json:"key_preview" example:"bk_AbCd...AbCd"`
+	ProjectID  string     `json:"project_id" example:"proj_01234567890123456789012345"`
+	CreatedAt  time.Time  `json:"created_at"`
+	ExpiresAt  *time.Time `json:"expires_at,omitempty"`
 }
 
 type RefreshTokenRequest struct {
@@ -507,22 +489,18 @@ func NewUserTimestampBlacklistedToken(userID ulid.ULID, blacklistTimestamp int64
 	}
 }
 
-func NewAPIKey(userID, orgID, projectID ulid.ULID, name, description, keyID, secretHash string, scopes []string, rateLimitRPM int, expiresAt *time.Time) *APIKey {
+func NewAPIKey(userID, projectID ulid.ULID, name, keyHash, keyPreview string, expiresAt *time.Time) *APIKey {
 	return &APIKey{
-		ID:             ulid.New(),
-		KeyID:          keyID,
-		SecretHash:     secretHash,
-		ProjectID:      projectID,
-		OrganizationID: orgID,
-		UserID:         userID,
-		Name:           name,
-		Description:    description,
-		Scopes:         scopes,
-		RateLimitRPM:   rateLimitRPM,
-		IsActive:       true,
-		ExpiresAt:      expiresAt,
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
+		ID:         ulid.New(),
+		KeyHash:    keyHash,
+		KeyPreview: keyPreview,
+		ProjectID:  projectID,
+		UserID:     userID,
+		Name:       name,
+		IsActive:   true,
+		ExpiresAt:  expiresAt,
+		CreatedAt:  time.Now(),
+		UpdatedAt:  time.Now(),
 	}
 }
 
@@ -626,11 +604,9 @@ func NewPasswordResetToken(userID ulid.ULID, token string, expiresAt time.Time) 
 
 // ValidateAPIKeyResponse represents the response from API key validation
 type ValidateAPIKeyResponse struct {
-	APIKey      *APIKey   `json:"api_key"`
-	ProjectID   ulid.ULID `json:"project_id"`
-	Valid       bool      `json:"valid"`
-	Scopes      []string  `json:"scopes"`
-	RateLimit   int       `json:"rate_limit_rpm"`
+	APIKey      *APIKey      `json:"api_key"`
+	ProjectID   ulid.ULID    `json:"project_id"`
+	Valid       bool         `json:"valid"`
 	AuthContext *AuthContext `json:"auth_context,omitempty"`
 }
 

@@ -4534,7 +4534,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get a paginated list of project-scoped API keys for a specific project. Keys are shown with preview format (bk_proj_...7890) for security.",
+                "description": "Get a paginated list of API keys for a specific project. Keys are shown with preview format (bk_xxxx...yyyy) for security.",
                 "consumes": [
                     "application/json"
                 ],
@@ -4544,7 +4544,7 @@ const docTemplate = `{
                 "tags": [
                     "API Keys"
                 ],
-                "summary": "List project-scoped API keys",
+                "summary": "List API keys",
                 "parameters": [
                     {
                         "type": "string",
@@ -4658,7 +4658,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Create a new project-scoped API key with embedded project context. The full key will only be displayed once upon creation. Format: bk_proj_{project_id}_{secret}",
+                "description": "Create a new industry-standard API key for the project. The full key will only be displayed once upon creation. Format: bk_{40_char_random}",
                 "consumes": [
                     "application/json"
                 ],
@@ -4668,7 +4668,7 @@ const docTemplate = `{
                 "tags": [
                     "API Keys"
                 ],
-                "summary": "Create project-scoped API key",
+                "summary": "Create API key",
                 "parameters": [
                     {
                         "type": "string",
@@ -5025,7 +5025,7 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "API key (format: bk_proj_{project_id}_{secret})",
+                        "description": "API key (format: bk_{40_char_random})",
                         "name": "X-API-Key",
                         "in": "header"
                     },
@@ -6957,10 +6957,6 @@ const docTemplate = `{
                     "type": "string",
                     "example": "usr_01234567890123456789012345"
                 },
-                "description": {
-                    "type": "string",
-                    "example": "API key for production environment"
-                },
                 "expires_at": {
                     "type": "string",
                     "example": "2024-12-31T23:59:59Z"
@@ -6971,11 +6967,11 @@ const docTemplate = `{
                 },
                 "key": {
                     "type": "string",
-                    "example": "bk_proj_01234567890123456789012345_abcdef1234567890abcdef1234567890"
+                    "example": "bk_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789AbCd"
                 },
                 "key_preview": {
                     "type": "string",
-                    "example": "bk_proj_...7890"
+                    "example": "bk_AbCd...AbCd"
                 },
                 "last_used": {
                     "type": "string",
@@ -6989,20 +6985,6 @@ const docTemplate = `{
                     "type": "string",
                     "example": "proj_01234567890123456789012345"
                 },
-                "rate_limit_rpm": {
-                    "type": "integer",
-                    "example": 1000
-                },
-                "scopes": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    },
-                    "example": [
-                        "[\"read\"",
-                        " \"write\"]"
-                    ]
-                },
                 "status": {
                     "type": "string",
                     "example": "active"
@@ -7012,41 +6994,24 @@ const docTemplate = `{
         "apikey.CreateAPIKeyRequest": {
             "type": "object",
             "required": [
-                "name",
-                "scopes"
+                "expiry_option",
+                "name"
             ],
             "properties": {
-                "description": {
+                "expiry_option": {
                     "type": "string",
-                    "maxLength": 500,
-                    "example": "API key for production environment"
-                },
-                "expires_at": {
-                    "type": "string",
-                    "example": "2024-12-31T23:59:59Z"
+                    "enum": [
+                        "30days",
+                        "90days",
+                        "never"
+                    ],
+                    "example": "90days"
                 },
                 "name": {
                     "type": "string",
                     "maxLength": 100,
                     "minLength": 2,
                     "example": "Production API Key"
-                },
-                "rate_limit_rpm": {
-                    "type": "integer",
-                    "maximum": 10000,
-                    "minimum": 1,
-                    "example": 1000
-                },
-                "scopes": {
-                    "type": "array",
-                    "minItems": 1,
-                    "items": {
-                        "type": "string"
-                    },
-                    "example": [
-                        "[\"read\"",
-                        " \"write\"]"
-                    ]
                 }
             }
         },

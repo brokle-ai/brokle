@@ -42,28 +42,17 @@ func (r *apiKeyRepository) GetByID(ctx context.Context, id ulid.ULID) (*authDoma
 	return &apiKey, nil
 }
 
-// GetByKeyHash retrieves an API key by key hash
+// GetByKeyHash retrieves an API key by its SHA-256 hash (industry-standard direct lookup)
+// This enables O(1) validation with unique index on key_hash column
+// Note: We use SHA-256 (not bcrypt) because it's deterministic, enabling direct hash lookups
 func (r *apiKeyRepository) GetByKeyHash(ctx context.Context, keyHash string) (*authDomain.APIKey, error) {
 	var apiKey authDomain.APIKey
 	err := r.db.WithContext(ctx).Where("key_hash = ? AND deleted_at IS NULL", keyHash).First(&apiKey).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, fmt.Errorf("get API key by hash %s: %w", keyHash, authDomain.ErrNotFound)
+			return nil, fmt.Errorf("get API key by hash: %w", authDomain.ErrNotFound)
 		}
-		return nil, fmt.Errorf("database error getting API key by hash %s: %w", keyHash, err)
-	}
-	return &apiKey, nil
-}
-
-// GetByKeyID retrieves an API key by key ID (for project-scoped keys)
-func (r *apiKeyRepository) GetByKeyID(ctx context.Context, keyID string) (*authDomain.APIKey, error) {
-	var apiKey authDomain.APIKey
-	err := r.db.WithContext(ctx).Where("key_id = ? AND deleted_at IS NULL", keyID).First(&apiKey).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, fmt.Errorf("get API key by key ID %s: %w", keyID, authDomain.ErrAPIKeyNotFound)
-		}
-		return nil, fmt.Errorf("database error getting API key by key ID %s: %w", keyID, err)
+		return nil, fmt.Errorf("database error getting API key by hash: %w", err)
 	}
 	return &apiKey, nil
 }
@@ -96,12 +85,13 @@ func (r *apiKeyRepository) GetByUserID(ctx context.Context, userID ulid.ULID) ([
 	return apiKeys, err
 }
 
-// GetByOrganizationID retrieves API keys for an organization
+// GetByOrganizationID retrieves API keys for an organization (via project JOIN)
 func (r *apiKeyRepository) GetByOrganizationID(ctx context.Context, orgID ulid.ULID) ([]*authDomain.APIKey, error) {
 	var apiKeys []*authDomain.APIKey
 	err := r.db.WithContext(ctx).
-		Where("organization_id = ? AND deleted_at IS NULL", orgID).
-		Order("created_at DESC").
+		Joins("JOIN projects ON api_keys.project_id = projects.id").
+		Where("projects.organization_id = ? AND api_keys.deleted_at IS NULL", orgID).
+		Order("api_keys.created_at DESC").
 		Find(&apiKeys).Error
 	return apiKeys, err
 }
@@ -116,7 +106,6 @@ func (r *apiKeyRepository) GetByProjectID(ctx context.Context, projectID ulid.UL
 	return apiKeys, err
 }
 
-
 // GetByFilters retrieves API keys based on filters
 func (r *apiKeyRepository) GetByFilters(ctx context.Context, filters *authDomain.APIKeyFilters) ([]*authDomain.APIKey, error) {
 	var apiKeys []*authDomain.APIKey
@@ -127,7 +116,9 @@ func (r *apiKeyRepository) GetByFilters(ctx context.Context, filters *authDomain
 		query = query.Where("user_id = ?", *filters.UserID)
 	}
 	if filters.OrganizationID != nil {
-		query = query.Where("organization_id = ?", *filters.OrganizationID)
+		// Organization filter requires JOIN with projects table
+		query = query.Joins("JOIN projects ON api_keys.project_id = projects.id").
+			Where("projects.organization_id = ?", *filters.OrganizationID)
 	}
 	if filters.ProjectID != nil {
 		query = query.Where("project_id = ?", *filters.ProjectID)
