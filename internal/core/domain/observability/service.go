@@ -139,6 +139,114 @@ type IngestionService interface {
 	GetIngestionMetrics(ctx context.Context) (*IngestionMetrics, error)
 }
 
+// TelemetryBatchService defines the interface for telemetry batch processing with ULID-based deduplication
+type TelemetryBatchService interface {
+	// Batch operations
+	CreateBatch(ctx context.Context, batch *TelemetryBatch) (*TelemetryBatch, error)
+	GetBatch(ctx context.Context, id ulid.ULID) (*TelemetryBatch, error)
+	UpdateBatch(ctx context.Context, batch *TelemetryBatch) (*TelemetryBatch, error)
+	DeleteBatch(ctx context.Context, id ulid.ULID) error
+
+	// Batch queries
+	ListBatches(ctx context.Context, filter *TelemetryBatchFilter) ([]*TelemetryBatch, int, error)
+	GetBatchWithEvents(ctx context.Context, id ulid.ULID) (*TelemetryBatch, error)
+	GetActiveBatches(ctx context.Context, projectID ulid.ULID) ([]*TelemetryBatch, error)
+	GetProcessingBatches(ctx context.Context) ([]*TelemetryBatch, error)
+
+	// Batch processing
+	ProcessBatch(ctx context.Context, batchID ulid.ULID) (*BatchProcessingResult, error)
+	ProcessEventsBatch(ctx context.Context, events []*TelemetryEvent) (*BatchProcessingResult, error)
+	RetryFailedEvents(ctx context.Context, batchID ulid.ULID, maxRetries int) (*BatchProcessingResult, error)
+
+	// Batch analytics
+	GetBatchStats(ctx context.Context, id ulid.ULID) (*BatchStats, error)
+	GetBatchMetrics(ctx context.Context, filter *TelemetryBatchFilter) (*BatchProcessingMetrics, error)
+	GetThroughputStats(ctx context.Context, projectID ulid.ULID, timeWindow time.Duration) (*BatchThroughputStats, error)
+
+	// Batch lifecycle management
+	MarkBatchCompleted(ctx context.Context, batchID ulid.ULID, processingTimeMs int) error
+	MarkBatchFailed(ctx context.Context, batchID ulid.ULID, errorMessage string) error
+	MarkBatchPartial(ctx context.Context, batchID ulid.ULID, processingTimeMs int) error
+}
+
+// TelemetryEventService defines the interface for telemetry event processing
+type TelemetryEventService interface {
+	// Event operations
+	CreateEvent(ctx context.Context, event *TelemetryEvent) (*TelemetryEvent, error)
+	CreateEventsBatch(ctx context.Context, events []*TelemetryEvent) error
+	UpdateEventsBatch(ctx context.Context, events []*TelemetryEvent) error
+	GetEvent(ctx context.Context, id ulid.ULID) (*TelemetryEvent, error)
+	UpdateEvent(ctx context.Context, event *TelemetryEvent) (*TelemetryEvent, error)
+	DeleteEvent(ctx context.Context, id ulid.ULID) error
+
+	// Event queries
+	ListEvents(ctx context.Context, filter *TelemetryEventFilter) ([]*TelemetryEvent, int, error)
+	GetEventsByBatch(ctx context.Context, batchID ulid.ULID) ([]*TelemetryEvent, error)
+	GetUnprocessedEvents(ctx context.Context, batchID ulid.ULID) ([]*TelemetryEvent, error)
+	GetFailedEvents(ctx context.Context, batchID *ulid.ULID, limit, offset int) ([]*TelemetryEvent, error)
+
+	// Event processing
+	ProcessEvent(ctx context.Context, eventID ulid.ULID) error
+	ProcessEventsBatch(ctx context.Context, events []*TelemetryEvent) (*EventProcessingResult, error)
+	MarkEventProcessed(ctx context.Context, eventID ulid.ULID) error
+	MarkEventFailed(ctx context.Context, eventID ulid.ULID, errorMessage string) error
+
+	// Retry logic
+	RetryEvent(ctx context.Context, eventID ulid.ULID) error
+	GetEventsForRetry(ctx context.Context, maxRetries int, limit int) ([]*TelemetryEvent, error)
+	BulkRetryEvents(ctx context.Context, eventIDs []ulid.ULID) (*EventProcessingResult, error)
+
+	// Event analytics
+	GetEventStats(ctx context.Context, filter *TelemetryEventFilter) (*TelemetryEventStats, error)
+	GetEventTypeDistribution(ctx context.Context, batchID *ulid.ULID) (map[TelemetryEventType]int, error)
+
+	// Event cleanup
+	CleanupFailedEvents(ctx context.Context, olderThan time.Time) (int64, error)
+}
+
+// TelemetryDeduplicationService defines the interface for ULID-based deduplication
+type TelemetryDeduplicationService interface {
+	// Deduplication operations
+	CheckDuplicate(ctx context.Context, eventID ulid.ULID) (bool, error)
+	CheckBatchDuplicates(ctx context.Context, eventIDs []ulid.ULID) ([]ulid.ULID, error)
+	RegisterEvent(ctx context.Context, eventID ulid.ULID, batchID ulid.ULID, projectID ulid.ULID, ttl time.Duration) error
+	RegisterProcessedEventsBatch(ctx context.Context, projectID ulid.ULID, eventIDs []ulid.ULID) error
+
+	// ULID-based TTL management
+	CalculateOptimalTTL(ctx context.Context, eventID ulid.ULID, defaultTTL time.Duration) (time.Duration, error)
+	GetExpirationTime(eventID ulid.ULID, baseTTL time.Duration) time.Time
+
+	// Cleanup operations
+	CleanupExpired(ctx context.Context) (int64, error)
+	CleanupByProject(ctx context.Context, projectID ulid.ULID, olderThan time.Time) (int64, error)
+	BatchCleanup(ctx context.Context, olderThan time.Time, batchSize int) (int64, error)
+
+	// Redis fallback management
+	SyncToRedis(ctx context.Context, entries []*TelemetryEventDeduplication) error
+	ValidateRedisHealth(ctx context.Context) (*RedisHealthStatus, error)
+	GetDeduplicationStats(ctx context.Context, projectID ulid.ULID) (*DeduplicationStats, error)
+
+	// Performance monitoring
+	GetCacheHitRate(ctx context.Context, timeWindow time.Duration) (float64, error)
+	GetFallbackRate(ctx context.Context, timeWindow time.Duration) (float64, error)
+}
+
+// TelemetryService aggregates all telemetry-related services with high-performance batch processing
+type TelemetryService interface {
+	// High-throughput batch endpoint
+	ProcessTelemetryBatch(ctx context.Context, request *TelemetryBatchRequest) (*TelemetryBatchResponse, error)
+
+	// Service access
+	Batch() TelemetryBatchService
+	Event() TelemetryEventService
+	Deduplication() TelemetryDeduplicationService
+
+	// Health and monitoring
+	GetHealth(ctx context.Context) (*TelemetryHealthStatus, error)
+	GetMetrics(ctx context.Context) (*TelemetryMetrics, error)
+	GetPerformanceStats(ctx context.Context, timeWindow time.Duration) (*TelemetryPerformanceStats, error)
+}
+
 // Quality evaluator interface
 type QualityEvaluator interface {
 	Name() string
@@ -193,6 +301,166 @@ type BatchIngestResult struct {
 	Errors         []BatchIngestionError  `json:"errors,omitempty"`
 	Duration       time.Duration          `json:"duration"`
 	JobID          *string                `json:"job_id,omitempty"` // For async operations
+}
+
+// Service-specific request and response types for telemetry processing
+
+// TelemetryBatchRequest represents a high-throughput telemetry batch request
+type TelemetryBatchRequest struct {
+	ProjectID    ulid.ULID                      `json:"project_id"`
+	Environment  *string                        `json:"environment,omitempty"`
+	Metadata     map[string]any                 `json:"metadata"`
+	Events       []*TelemetryEventRequest       `json:"events"`
+	Async        bool                           `json:"async"`
+	Deduplication *DeduplicationConfig          `json:"deduplication,omitempty"`
+}
+
+// TelemetryEventRequest represents an individual telemetry event in a batch
+type TelemetryEventRequest struct {
+	EventID      ulid.ULID                      `json:"event_id"`
+	EventType    TelemetryEventType             `json:"event_type"`
+	Payload      map[string]any                 `json:"payload"`
+	Timestamp    *time.Time                     `json:"timestamp,omitempty"`
+}
+
+// TelemetryBatchResponse represents the response for telemetry batch processing
+type TelemetryBatchResponse struct {
+	BatchID           ulid.ULID                   `json:"batch_id"`
+	ProcessedEvents   int                         `json:"processed_events"`
+	DuplicateEvents   int                         `json:"duplicate_events"`
+	FailedEvents      int                         `json:"failed_events"`
+	ProcessingTimeMs  int                         `json:"processing_time_ms"`
+	Errors            []TelemetryEventError       `json:"errors,omitempty"`
+	DuplicateEventIDs []ulid.ULID                 `json:"duplicate_event_ids,omitempty"`
+	JobID             *string                     `json:"job_id,omitempty"` // For async processing
+}
+
+// DeduplicationConfig represents deduplication configuration
+type DeduplicationConfig struct {
+	Enabled          bool          `json:"enabled"`
+	TTL             time.Duration `json:"ttl"`
+	UseRedisCache   bool          `json:"use_redis_cache"`
+	FailOnDuplicate bool          `json:"fail_on_duplicate"`
+}
+
+// TelemetryEventError represents an error processing a telemetry event
+type TelemetryEventError struct {
+	EventID      ulid.ULID `json:"event_id"`
+	EventType    TelemetryEventType `json:"event_type"`
+	ErrorCode    string    `json:"error_code"`
+	ErrorMessage string    `json:"error_message"`
+	Retryable    bool      `json:"retryable"`
+}
+
+// BatchProcessingResult represents the result of batch processing operations
+type BatchProcessingResult struct {
+	BatchID           ulid.ULID                   `json:"batch_id"`
+	TotalEvents       int                         `json:"total_events"`
+	ProcessedEvents   int                         `json:"processed_events"`
+	FailedEvents      int                         `json:"failed_events"`
+	SkippedEvents     int                         `json:"skipped_events"`
+	ProcessingTimeMs  int                         `json:"processing_time_ms"`
+	ThroughputPerSec  float64                     `json:"throughput_per_sec"`
+	Errors            []TelemetryEventError       `json:"errors,omitempty"`
+	SuccessRate       float64                     `json:"success_rate"`
+}
+
+// EventProcessingResult represents the result of event processing operations
+type EventProcessingResult struct {
+	ProcessedCount    int                         `json:"processed_count"`
+	FailedCount       int                         `json:"failed_count"`
+	NotProcessedCount int                         `json:"not_processed_count"`    // NEW: Events never attempted
+	RetryCount        int                         `json:"retry_count"`
+	ProcessingTimeMs  int                         `json:"processing_time_ms"`
+
+	// Explicit event ID lists for precise tracking
+	ProcessedEventIDs []ulid.ULID                 `json:"processed_event_ids"`    // NEW: Successfully processed
+	NotProcessedIDs   []ulid.ULID                 `json:"not_processed_ids"`      // NEW: Never attempted
+	Errors            []TelemetryEventError       `json:"errors,omitempty"`       // Failed events with details
+	SuccessRate       float64                     `json:"success_rate"`
+}
+
+// RedisHealthStatus represents Redis health status for deduplication
+type RedisHealthStatus struct {
+	Available      bool          `json:"available"`
+	LatencyMs      float64       `json:"latency_ms"`
+	MemoryUsage    int64         `json:"memory_usage_bytes"`
+	Connections    int           `json:"connections"`
+	LastError      *string       `json:"last_error,omitempty"`
+	Uptime         time.Duration `json:"uptime"`
+}
+
+// DeduplicationStats represents deduplication performance statistics
+type DeduplicationStats struct {
+	ProjectID         ulid.ULID `json:"project_id"`
+	TotalChecks       int64     `json:"total_checks"`
+	CacheHits         int64     `json:"cache_hits"`
+	CacheMisses       int64     `json:"cache_misses"`
+	DatabaseFallbacks int64     `json:"database_fallbacks"`
+	DuplicatesFound   int64     `json:"duplicates_found"`
+	CacheHitRate      float64   `json:"cache_hit_rate"`
+	FallbackRate      float64   `json:"fallback_rate"`
+	AverageLatencyMs  float64   `json:"average_latency_ms"`
+}
+
+// TelemetryHealthStatus represents overall telemetry service health
+type TelemetryHealthStatus struct {
+	Healthy               bool                `json:"healthy"`
+	Database              *DatabaseHealth     `json:"database"`
+	Redis                 *RedisHealthStatus  `json:"redis"`
+	ProcessingQueue       *QueueHealth        `json:"processing_queue"`
+	ActiveWorkers         int                 `json:"active_workers"`
+	AverageProcessingTime float64             `json:"average_processing_time_ms"`
+	ThroughputPerMinute   float64             `json:"throughput_per_minute"`
+	ErrorRate             float64             `json:"error_rate"`
+}
+
+// DatabaseHealth represents database health status
+type DatabaseHealth struct {
+	Connected        bool    `json:"connected"`
+	LatencyMs        float64 `json:"latency_ms"`
+	ActiveConnections int    `json:"active_connections"`
+	MaxConnections   int     `json:"max_connections"`
+}
+
+// QueueHealth represents processing queue health
+type QueueHealth struct {
+	Size             int64   `json:"size"`
+	ProcessingRate   float64 `json:"processing_rate"`
+	AverageWaitTime  float64 `json:"average_wait_time_ms"`
+	OldestMessageAge float64 `json:"oldest_message_age_ms"`
+}
+
+// TelemetryMetrics represents comprehensive telemetry service metrics
+type TelemetryMetrics struct {
+	TotalBatches         int64   `json:"total_batches"`
+	CompletedBatches     int64   `json:"completed_batches"`
+	FailedBatches        int64   `json:"failed_batches"`
+	ProcessingBatches    int64   `json:"processing_batches"`
+	TotalEvents          int64   `json:"total_events"`
+	ProcessedEvents      int64   `json:"processed_events"`
+	FailedEvents         int64   `json:"failed_events"`
+	DuplicateEvents      int64   `json:"duplicate_events"`
+	AverageEventsPerBatch float64 `json:"average_events_per_batch"`
+	ThroughputPerSecond  float64 `json:"throughput_per_second"`
+	SuccessRate          float64 `json:"success_rate"`
+	DeduplicationRate    float64 `json:"deduplication_rate"`
+}
+
+// TelemetryPerformanceStats represents performance statistics over a time window
+type TelemetryPerformanceStats struct {
+	TimeWindow           time.Duration `json:"time_window"`
+	TotalRequests        int64         `json:"total_requests"`
+	SuccessfulRequests   int64         `json:"successful_requests"`
+	AverageLatencyMs     float64       `json:"average_latency_ms"`
+	P95LatencyMs         float64       `json:"p95_latency_ms"`
+	P99LatencyMs         float64       `json:"p99_latency_ms"`
+	ThroughputPerSecond  float64       `json:"throughput_per_second"`
+	PeakThroughput       float64       `json:"peak_throughput"`
+	CacheHitRate         float64       `json:"cache_hit_rate"`
+	DatabaseFallbackRate float64       `json:"database_fallback_rate"`
+	ErrorRate            float64       `json:"error_rate"`
+	RetryRate            float64       `json:"retry_rate"`
 }
 
 // ObservationBatchRequest represents a batch observation ingestion request

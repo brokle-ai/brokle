@@ -8,8 +8,8 @@ import (
 	authDomain "brokle/internal/core/domain/auth"
 	orgDomain "brokle/internal/core/domain/organization"
 	userDomain "brokle/internal/core/domain/user"
-	"brokle/pkg/ulid"
 	appErrors "brokle/pkg/errors"
+	"brokle/pkg/ulid"
 )
 
 // organizationService implements the orgDomain.OrganizationService interface
@@ -79,14 +79,6 @@ func (s *organizationService) CreateOrganization(ctx context.Context, userID uli
 		}
 	}
 
-	// Create default project
-	err = s.createDefaultProject(ctx, org.ID)
-	if err != nil {
-		// Log but don't fail organization creation
-		fmt.Printf("Failed to create default project: %v\n", err)
-	}
-
-
 	return org, nil
 }
 
@@ -125,7 +117,6 @@ func (s *organizationService) UpdateOrganization(ctx context.Context, orgID ulid
 		return appErrors.NewInternalError("Failed to update organization", err)
 	}
 
-
 	return nil
 }
 
@@ -141,7 +132,6 @@ func (s *organizationService) DeleteOrganization(ctx context.Context, orgID ulid
 	if err != nil {
 		return appErrors.NewInternalError("Failed to delete organization", err)
 	}
-
 
 	return nil
 }
@@ -182,21 +172,4 @@ func (s *organizationService) SetUserDefaultOrganization(ctx context.Context, us
 	}
 
 	return s.userRepo.SetDefaultOrganization(ctx, userID, orgID)
-}
-
-// createDefaultProject creates default project for a new organization
-func (s *organizationService) createDefaultProject(ctx context.Context, orgID ulid.ULID) error {
-	// Create default project using project service
-	defaultProjectReq := &orgDomain.CreateProjectRequest{
-		Name:        "Default",
-		Slug:        "default",
-		Description: "Default project for getting started",
-	}
-
-	_, err := s.projectSvc.CreateProject(ctx, orgID, defaultProjectReq)
-	if err != nil {
-		return appErrors.NewInternalError("Failed to create default project", err)
-	}
-
-	return nil
 }

@@ -135,11 +135,120 @@ type AnalyticsRepository interface {
 	GetRealtimeMetrics(ctx context.Context, projectID ulid.ULID) (*RealtimeMetrics, error)
 }
 
+// TelemetryBatchRepository defines the interface for telemetry batch data access
+type TelemetryBatchRepository interface {
+	// Basic CRUD operations
+	Create(ctx context.Context, batch *TelemetryBatch) error
+	GetByID(ctx context.Context, id ulid.ULID) (*TelemetryBatch, error)
+	Update(ctx context.Context, batch *TelemetryBatch) error
+	Delete(ctx context.Context, id ulid.ULID) error
+
+	// Project-scoped queries
+	GetByProjectID(ctx context.Context, projectID ulid.ULID, limit, offset int) ([]*TelemetryBatch, error)
+	GetActiveByProjectID(ctx context.Context, projectID ulid.ULID) ([]*TelemetryBatch, error)
+
+	// Status-based queries
+	GetByStatus(ctx context.Context, status BatchStatus, limit, offset int) ([]*TelemetryBatch, error)
+	GetProcessingBatches(ctx context.Context) ([]*TelemetryBatch, error)
+	GetCompletedBatches(ctx context.Context, projectID ulid.ULID, limit, offset int) ([]*TelemetryBatch, error)
+
+	// Advanced queries
+	SearchBatches(ctx context.Context, filter *TelemetryBatchFilter) ([]*TelemetryBatch, int, error)
+	GetBatchWithEvents(ctx context.Context, id ulid.ULID) (*TelemetryBatch, error)
+	GetBatchStats(ctx context.Context, id ulid.ULID) (*BatchStats, error)
+
+	// Batch operations
+	CreateBatch(ctx context.Context, batches []*TelemetryBatch) error
+	UpdateBatch(ctx context.Context, batches []*TelemetryBatch) error
+	UpdateBatchStatus(ctx context.Context, id ulid.ULID, status BatchStatus, processingTimeMs *int) error
+
+	// Time-based queries
+	GetBatchesByTimeRange(ctx context.Context, projectID ulid.ULID, startTime, endTime time.Time, limit, offset int) ([]*TelemetryBatch, error)
+	CountBatches(ctx context.Context, filter *TelemetryBatchFilter) (int64, error)
+	GetRecentBatches(ctx context.Context, projectID ulid.ULID, limit int) ([]*TelemetryBatch, error)
+
+	// Performance monitoring
+	GetBatchThroughputStats(ctx context.Context, projectID ulid.ULID, timeWindow time.Duration) (*BatchThroughputStats, error)
+	GetBatchProcessingMetrics(ctx context.Context, filter *TelemetryBatchFilter) (*BatchProcessingMetrics, error)
+}
+
+// TelemetryEventRepository defines the interface for telemetry event data access
+type TelemetryEventRepository interface {
+	// Basic CRUD operations
+	Create(ctx context.Context, event *TelemetryEvent) error
+	GetByID(ctx context.Context, id ulid.ULID) (*TelemetryEvent, error)
+	Update(ctx context.Context, event *TelemetryEvent) error
+	Delete(ctx context.Context, id ulid.ULID) error
+
+	// Batch-scoped queries
+	GetByBatchID(ctx context.Context, batchID ulid.ULID) ([]*TelemetryEvent, error)
+	GetUnprocessedByBatchID(ctx context.Context, batchID ulid.ULID) ([]*TelemetryEvent, error)
+	GetFailedByBatchID(ctx context.Context, batchID ulid.ULID) ([]*TelemetryEvent, error)
+
+	// Type-based queries
+	GetByEventType(ctx context.Context, eventType TelemetryEventType, limit, offset int) ([]*TelemetryEvent, error)
+	GetUnprocessedByType(ctx context.Context, eventType TelemetryEventType, limit int) ([]*TelemetryEvent, error)
+
+	// Processing operations
+	MarkAsProcessed(ctx context.Context, id ulid.ULID, processedAt time.Time) error
+	MarkAsFailed(ctx context.Context, id ulid.ULID, errorMessage string) error
+	IncrementRetryCount(ctx context.Context, id ulid.ULID) error
+
+	// Batch operations
+	CreateBatch(ctx context.Context, events []*TelemetryEvent) error
+	UpdateBatch(ctx context.Context, events []*TelemetryEvent) error
+	ProcessBatch(ctx context.Context, batchID ulid.ULID, processor func([]*TelemetryEvent) error) error
+
+	// Retry and failure handling
+	GetEventsForRetry(ctx context.Context, maxRetries int, limit int) ([]*TelemetryEvent, error)
+	GetFailedEvents(ctx context.Context, batchID *ulid.ULID, limit, offset int) ([]*TelemetryEvent, error)
+	DeleteFailedEvents(ctx context.Context, olderThan time.Time) (int64, error)
+
+	// Analytics queries
+	GetEventStats(ctx context.Context, filter *TelemetryEventFilter) (*TelemetryEventStats, error)
+	GetEventTypeDistribution(ctx context.Context, batchID *ulid.ULID) (map[TelemetryEventType]int, error)
+	CountEvents(ctx context.Context, filter *TelemetryEventFilter) (int64, error)
+}
+
+// TelemetryDeduplicationRepository defines the interface for deduplication data access
+type TelemetryDeduplicationRepository interface {
+	// Basic CRUD operations
+	Create(ctx context.Context, dedup *TelemetryEventDeduplication) error
+	GetByEventID(ctx context.Context, eventID ulid.ULID) (*TelemetryEventDeduplication, error)
+	Delete(ctx context.Context, eventID ulid.ULID) error
+
+	// Existence checks
+	Exists(ctx context.Context, eventID ulid.ULID) (bool, error)
+	ExistsInBatch(ctx context.Context, eventID ulid.ULID, batchID ulid.ULID) (bool, error)
+
+	// Redis fallback operations
+	ExistsWithRedisCheck(ctx context.Context, eventID ulid.ULID) (bool, bool, error) // exists, inRedis, error
+	StoreInRedis(ctx context.Context, eventID ulid.ULID, batchID ulid.ULID, ttl time.Duration) error
+	GetFromRedis(ctx context.Context, eventID ulid.ULID) (*ulid.ULID, error) // returns batchID or nil
+
+	// Cleanup operations
+	CleanupExpired(ctx context.Context) (int64, error)
+	GetExpiredEntries(ctx context.Context, limit int) ([]*TelemetryEventDeduplication, error)
+	BatchCleanup(ctx context.Context, olderThan time.Time, batchSize int) (int64, error)
+
+	// Project-scoped operations
+	GetByProjectID(ctx context.Context, projectID ulid.ULID, limit, offset int) ([]*TelemetryEventDeduplication, error)
+	CountByProjectID(ctx context.Context, projectID ulid.ULID) (int64, error)
+	CleanupByProjectID(ctx context.Context, projectID ulid.ULID, olderThan time.Time) (int64, error)
+
+	// Batch deduplication operations
+	CheckBatchDuplicates(ctx context.Context, eventIDs []ulid.ULID) ([]ulid.ULID, error) // returns duplicate IDs
+	CreateBatch(ctx context.Context, entries []*TelemetryEventDeduplication) error
+}
+
 // Repository aggregates all observability-related repositories
 type Repository interface {
 	Traces() TraceRepository
 	Observations() ObservationRepository
 	QualityScores() QualityScoreRepository
+	TelemetryBatches() TelemetryBatchRepository
+	TelemetryEvents() TelemetryEventRepository
+	TelemetryDeduplication() TelemetryDeduplicationRepository
 	Analytics() AnalyticsRepository
 }
 
@@ -353,4 +462,91 @@ type EvaluatorStats struct {
 	TotalScores    int64   `json:"total_scores"`
 	AverageScore   float64 `json:"average_score"`
 	LastEvaluation time.Time `json:"last_evaluation"`
+}
+
+// Filter structures for telemetry batch repository queries
+
+// TelemetryBatchFilter represents filters for telemetry batch queries
+type TelemetryBatchFilter struct {
+	ProjectID         *ulid.ULID   `json:"project_id,omitempty"`
+	Status            *BatchStatus `json:"status,omitempty"`
+	Statuses          []BatchStatus `json:"statuses,omitempty"`
+	StartTime         *time.Time   `json:"start_time,omitempty"`
+	EndTime           *time.Time   `json:"end_time,omitempty"`
+	MinTotalEvents    *int         `json:"min_total_events,omitempty"`
+	MaxTotalEvents    *int         `json:"max_total_events,omitempty"`
+	MinProcessedEvents *int        `json:"min_processed_events,omitempty"`
+	MinFailedEvents   *int         `json:"min_failed_events,omitempty"`
+	MinProcessingTime *int         `json:"min_processing_time,omitempty"`
+	MaxProcessingTime *int         `json:"max_processing_time,omitempty"`
+	HasMetadata       map[string]any `json:"has_metadata,omitempty"`
+	SortBy            string       `json:"sort_by"`    // created_at, completed_at, total_events, processing_time_ms
+	SortOrder         string       `json:"sort_order"` // asc, desc
+	Limit             int          `json:"limit"`
+	Offset            int          `json:"offset"`
+}
+
+// TelemetryEventFilter represents filters for telemetry event queries
+type TelemetryEventFilter struct {
+	BatchID      *ulid.ULID          `json:"batch_id,omitempty"`
+	BatchIDs     []ulid.ULID         `json:"batch_ids,omitempty"`
+	EventType    *TelemetryEventType `json:"event_type,omitempty"`
+	EventTypes   []TelemetryEventType `json:"event_types,omitempty"`
+	IsProcessed  *bool               `json:"is_processed,omitempty"`
+	HasError     *bool               `json:"has_error,omitempty"`
+	MinRetryCount *int               `json:"min_retry_count,omitempty"`
+	MaxRetryCount *int               `json:"max_retry_count,omitempty"`
+	StartTime    *time.Time          `json:"start_time,omitempty"`
+	EndTime      *time.Time          `json:"end_time,omitempty"`
+	SortBy       string              `json:"sort_by"`    // created_at, processed_at, retry_count
+	SortOrder    string              `json:"sort_order"` // asc, desc
+	Limit        int                 `json:"limit"`
+	Offset       int                 `json:"offset"`
+}
+
+// Analytics result structures for telemetry batches
+
+// BatchThroughputStats represents throughput statistics for batches
+type BatchThroughputStats struct {
+	BatchesPerMinute  float64   `json:"batches_per_minute"`
+	EventsPerMinute   float64   `json:"events_per_minute"`
+	AverageEventsPerBatch float64 `json:"average_events_per_batch"`
+	PeakThroughput    float64   `json:"peak_throughput"`
+	ThroughputTrend   string    `json:"throughput_trend"` // increasing, decreasing, stable
+	TimeWindow        time.Duration `json:"time_window"`
+	LastCalculated    time.Time `json:"last_calculated"`
+}
+
+// BatchProcessingMetrics represents processing performance metrics
+type BatchProcessingMetrics struct {
+	TotalBatches         int64   `json:"total_batches"`
+	CompletedBatches     int64   `json:"completed_batches"`
+	FailedBatches        int64   `json:"failed_batches"`
+	PartialBatches       int64   `json:"partial_batches"`
+	ProcessingBatches    int64   `json:"processing_batches"`
+	SuccessRate          float64 `json:"success_rate"`
+	AverageProcessingTime float64 `json:"average_processing_time"`
+	MedianProcessingTime float64 `json:"median_processing_time"`
+	P95ProcessingTime    float64 `json:"p95_processing_time"`
+	P99ProcessingTime    float64 `json:"p99_processing_time"`
+	AverageEventsPerBatch float64 `json:"average_events_per_batch"`
+	TotalEvents          int64   `json:"total_events"`
+	ProcessedEvents      int64   `json:"processed_events"`
+	FailedEvents         int64   `json:"failed_events"`
+	EventSuccessRate     float64 `json:"event_success_rate"`
+	DeduplicationRate    float64 `json:"deduplication_rate"`
+}
+
+// TelemetryEventStats represents statistics for telemetry events
+type TelemetryEventStats struct {
+	TotalEvents       int64   `json:"total_events"`
+	ProcessedEvents   int64   `json:"processed_events"`
+	FailedEvents      int64   `json:"failed_events"`
+	PendingEvents     int64   `json:"pending_events"`
+	SuccessRate       float64 `json:"success_rate"`
+	AverageRetryCount float64 `json:"average_retry_count"`
+	EventTypeDistribution map[TelemetryEventType]int64 `json:"event_type_distribution"`
+	ErrorDistribution map[string]int64 `json:"error_distribution"`
+	RetryDistribution map[int]int64 `json:"retry_distribution"`
+	ProcessingTimeDistribution map[string]int64 `json:"processing_time_distribution"`
 }

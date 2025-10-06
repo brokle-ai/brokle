@@ -2249,156 +2249,6 @@
                 }
             }
         },
-        "/api/v1/observability/observations": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Create a new LLM observation (LLM call, span, event, generation, etc.) within a trace",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Observability - Observations"
-                ],
-                "summary": "Create a new observation",
-                "parameters": [
-                    {
-                        "description": "Observation creation data",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/observability.CreateObservationRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Observation created successfully",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.SuccessResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/observability.ObservationResponse"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request payload or observation data",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "409": {
-                        "description": "Observation with external_observation_id already exists",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "422": {
-                        "description": "Validation failed",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/observability/quality-scores": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Create a new quality evaluation score for a trace or observation (numeric, categorical, or boolean)",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Observability - Quality"
-                ],
-                "summary": "Create a quality score",
-                "parameters": [
-                    {
-                        "description": "Quality score creation data",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/observability.CreateQualityScoreRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Quality score created successfully",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.SuccessResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/observability.QualityScoreResponse"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request payload or quality score data",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "409": {
-                        "description": "Duplicate quality score for same trace/observation and score name",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "422": {
-                        "description": "Validation failed",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/api/v1/observability/traces": {
             "get": {
                 "security": [
@@ -2536,148 +2386,6 @@
                         }
                     }
                 }
-            },
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Create a new LLM observability trace for tracking AI operations",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Observability - Traces"
-                ],
-                "summary": "Create a new trace",
-                "parameters": [
-                    {
-                        "description": "Trace creation data",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/observability.CreateTraceRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Trace created successfully",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.SuccessResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/observability.TraceResponse"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request payload or trace data",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "409": {
-                        "description": "Trace with external_trace_id already exists",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "422": {
-                        "description": "Validation failed",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/observability/traces/batch": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Create multiple LLM observability traces in a single batch operation for improved performance",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Observability - Traces"
-                ],
-                "summary": "Create multiple traces in batch",
-                "parameters": [
-                    {
-                        "description": "Batch trace creation data",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/observability.BatchCreateTracesRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Traces created successfully",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.SuccessResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/observability.BatchCreateTracesResponse"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request payload or trace data",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "422": {
-                        "description": "Validation failed",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
             }
         },
         "/api/v1/observability/traces/{id}": {
@@ -2724,139 +2432,6 @@
                                     }
                                 }
                             ]
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid trace ID format",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Trace not found",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Update an existing LLM observability trace with new information",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Observability - Traces"
-                ],
-                "summary": "Update trace",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Trace ID (ULID format)",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Trace update data",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/observability.UpdateTraceRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Trace updated successfully",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.SuccessResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/observability.TraceResponse"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid trace ID or request payload",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Trace not found",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "422": {
-                        "description": "Validation failed",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Delete an LLM observability trace and all associated data",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Observability - Traces"
-                ],
-                "summary": "Delete trace",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Trace ID (ULID format)",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Trace deleted successfully",
-                        "schema": {
-                            "$ref": "#/definitions/response.MessageResponse"
                         }
                     },
                     "400": {
@@ -5793,81 +5368,6 @@
                 }
             }
         },
-        "/v1/events": {
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Create a new telemetry event for SDK observability",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "SDK - Events"
-                ],
-                "summary": "Create a telemetry event",
-                "parameters": [
-                    {
-                        "description": "Event creation data",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/observability.CreateEventRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Event created successfully",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.SuccessResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/observability.EventResponse"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request payload",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Invalid or missing API key",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "422": {
-                        "description": "Validation failed",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/v1/models": {
             "get": {
                 "security": [
@@ -6025,6 +5525,624 @@
                         "description": "Internal server error",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/telemetry/batch": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Process a batch of telemetry events with ULID-based deduplication and 5x performance optimization",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SDK - Telemetry"
+                ],
+                "summary": "Process high-throughput telemetry batch",
+                "parameters": [
+                    {
+                        "description": "Telemetry batch data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_transport_http_handlers_observability.TelemetryBatchRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Batch processed successfully",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/internal_transport_http_handlers_observability.TelemetryBatchResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request payload",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid or missing API key",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "422": {
+                        "description": "Validation failed",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "429": {
+                        "description": "Rate limit exceeded",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/telemetry/batch/{batch_id}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get status and details for a specific telemetry batch",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SDK - Telemetry"
+                ],
+                "summary": "Get telemetry batch status",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Batch ID (ULID format)",
+                        "name": "batch_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Batch status retrieved successfully",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/observability.TelemetryBatchStatusResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid batch ID format",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid or missing API key",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "Batch not found",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/telemetry/health": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get comprehensive health status of telemetry processing system",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SDK - Telemetry"
+                ],
+                "summary": "Get telemetry service health status",
+                "responses": {
+                    "200": {
+                        "description": "Health status retrieved successfully",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/observability.TelemetryHealthResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid or missing API key",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/telemetry/metrics": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get comprehensive metrics for telemetry processing system",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SDK - Telemetry"
+                ],
+                "summary": "Get telemetry service metrics",
+                "responses": {
+                    "200": {
+                        "description": "Metrics retrieved successfully",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/observability.TelemetryMetricsResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid or missing API key",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/telemetry/performance": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get performance statistics for telemetry processing over a time window",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SDK - Telemetry"
+                ],
+                "summary": "Get telemetry performance statistics",
+                "parameters": [
+                    {
+                        "enum": [
+                            "1m",
+                            "5m",
+                            "15m",
+                            "1h",
+                            "6h",
+                            "24h"
+                        ],
+                        "type": "string",
+                        "default": "1h",
+                        "description": "Time window for statistics",
+                        "name": "window",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Performance stats retrieved successfully",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/observability.TelemetryPerformanceStatsResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid time window parameter",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid or missing API key",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/telemetry/validate": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Validate a telemetry event without processing it",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SDK - Telemetry"
+                ],
+                "summary": "Validate telemetry event structure",
+                "parameters": [
+                    {
+                        "description": "Event to validate",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_transport_http_handlers_observability.TelemetryEventRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Event validation result",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/observability.TelemetryValidationResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request payload",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid or missing API key",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "422": {
+                        "description": "Validation failed",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     }
                 }
@@ -7651,6 +7769,123 @@
                 }
             }
         },
+        "internal_transport_http_handlers_observability.TelemetryBatchRequest": {
+            "description": "High-performance batch request for telemetry events with ULID-based deduplication",
+            "type": "object",
+            "required": [
+                "events"
+            ],
+            "properties": {
+                "async": {
+                    "type": "boolean"
+                },
+                "deduplication": {
+                    "$ref": "#/definitions/observability.DeduplicationConfigRequest"
+                },
+                "environment": {
+                    "type": "string",
+                    "example": "production"
+                },
+                "events": {
+                    "type": "array",
+                    "maxItems": 1000,
+                    "minItems": 1,
+                    "items": {
+                        "$ref": "#/definitions/internal_transport_http_handlers_observability.TelemetryEventRequest"
+                    }
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                }
+            }
+        },
+        "internal_transport_http_handlers_observability.TelemetryBatchResponse": {
+            "description": "Response for high-throughput telemetry batch processing",
+            "type": "object",
+            "properties": {
+                "batch_id": {
+                    "type": "string",
+                    "example": "01ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                },
+                "duplicate_event_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "duplicate_events": {
+                    "type": "integer",
+                    "example": 3
+                },
+                "errors": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_transport_http_handlers_observability.TelemetryEventError"
+                    }
+                },
+                "failed_events": {
+                    "type": "integer",
+                    "example": 2
+                },
+                "job_id": {
+                    "type": "string",
+                    "example": "job_01ABC123"
+                },
+                "processed_events": {
+                    "type": "integer",
+                    "example": 95
+                },
+                "processing_time_ms": {
+                    "type": "integer",
+                    "example": 123
+                }
+            }
+        },
+        "internal_transport_http_handlers_observability.TelemetryEventError": {
+            "description": "Error details for failed telemetry event processing",
+            "type": "object",
+            "properties": {
+                "details": {
+                    "type": "string"
+                },
+                "error": {
+                    "type": "string",
+                    "example": "Invalid payload format"
+                },
+                "event_id": {
+                    "type": "string",
+                    "example": "01ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                }
+            }
+        },
+        "internal_transport_http_handlers_observability.TelemetryEventRequest": {
+            "description": "Individual telemetry event using envelope pattern for high throughput",
+            "type": "object",
+            "required": [
+                "event_id",
+                "event_type",
+                "payload"
+            ],
+            "properties": {
+                "event_id": {
+                    "type": "string",
+                    "example": "01ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                },
+                "event_type": {
+                    "type": "string",
+                    "example": "trace_create"
+                },
+                "payload": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "timestamp": {
+                    "type": "integer",
+                    "example": 1677610602
+                }
+            }
+        },
         "internal_transport_http_handlers_organization.CreateOrganizationRequest": {
             "type": "object",
             "required": [
@@ -8099,272 +8334,46 @@
                 }
             }
         },
-        "observability.BatchCreateTracesRequest": {
-            "type": "object",
-            "required": [
-                "traces"
-            ],
-            "properties": {
-                "traces": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/observability.CreateTraceRequest"
-                    }
-                }
-            }
-        },
-        "observability.BatchCreateTracesResponse": {
+        "observability.DatabaseHealthResponse": {
+            "description": "Database connectivity and performance status",
             "type": "object",
             "properties": {
-                "processed_count": {
-                    "type": "integer"
-                },
-                "traces": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/observability.TraceResponse"
-                    }
-                }
-            }
-        },
-        "observability.CreateEventRequest": {
-            "description": "Request data for creating telemetry events",
-            "type": "object",
-            "properties": {
-                "environment": {
-                    "type": "string",
-                    "example": "production"
-                },
-                "event_type": {
-                    "type": "string",
-                    "example": "ai.request.completed"
-                },
-                "metadata": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "properties": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "session_id": {
-                    "type": "string",
-                    "example": "sess_abc123"
-                },
-                "source": {
-                    "type": "string",
-                    "example": "python-sdk"
-                },
-                "span_id": {
-                    "type": "string",
-                    "example": "span_ghi789"
-                },
-                "tags": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "timestamp": {
+                "active_connections": {
                     "type": "integer",
-                    "example": 1677610602
+                    "example": 10
                 },
-                "trace_id": {
-                    "type": "string",
-                    "example": "trace_def456"
-                },
-                "user_id": {
-                    "type": "string",
-                    "example": "user_123"
-                },
-                "version": {
-                    "type": "string",
-                    "example": "1.0.0"
-                }
-            }
-        },
-        "observability.CreateObservationRequest": {
-            "type": "object",
-            "required": [
-                "external_observation_id",
-                "name",
-                "start_time",
-                "trace_id",
-                "type"
-            ],
-            "properties": {
-                "completion_tokens": {
-                    "type": "integer"
-                },
-                "end_time": {
-                    "type": "string"
-                },
-                "external_observation_id": {
-                    "type": "string"
-                },
-                "input": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "input_cost": {
-                    "type": "number"
+                "connected": {
+                    "type": "boolean",
+                    "example": true
                 },
                 "latency_ms": {
-                    "type": "integer"
+                    "type": "number",
+                    "example": 1.5
                 },
-                "level": {
-                    "type": "string"
-                },
-                "model": {
-                    "type": "string"
-                },
-                "model_parameters": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "name": {
-                    "type": "string"
-                },
-                "output": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "output_cost": {
-                    "type": "number"
-                },
-                "parent_observation_id": {
-                    "type": "string"
-                },
-                "prompt_tokens": {
-                    "type": "integer"
-                },
-                "provider": {
-                    "type": "string"
-                },
-                "quality_score": {
-                    "type": "number"
-                },
-                "start_time": {
-                    "type": "string"
-                },
-                "status_message": {
-                    "type": "string"
-                },
-                "total_cost": {
-                    "type": "number"
-                },
-                "total_tokens": {
-                    "type": "integer"
-                },
-                "trace_id": {
-                    "type": "string"
-                },
-                "type": {
-                    "type": "string"
-                },
-                "version": {
-                    "type": "string"
-                }
-            }
-        },
-        "observability.CreateQualityScoreRequest": {
-            "type": "object",
-            "required": [
-                "data_type",
-                "score_name",
-                "trace_id"
-            ],
-            "properties": {
-                "author_user_id": {
-                    "type": "string"
-                },
-                "comment": {
-                    "type": "string"
-                },
-                "data_type": {
-                    "type": "string"
-                },
-                "evaluator_name": {
-                    "type": "string"
-                },
-                "evaluator_version": {
-                    "type": "string"
-                },
-                "observation_id": {
-                    "type": "string"
-                },
-                "score_name": {
-                    "type": "string"
-                },
-                "score_value": {
-                    "type": "number"
-                },
-                "source": {
-                    "type": "string"
-                },
-                "string_value": {
-                    "type": "string"
-                },
-                "trace_id": {
-                    "type": "string"
-                }
-            }
-        },
-        "observability.CreateTraceRequest": {
-            "type": "object",
-            "required": [
-                "external_trace_id",
-                "name",
-                "project_id"
-            ],
-            "properties": {
-                "external_trace_id": {
-                    "type": "string"
-                },
-                "metadata": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "name": {
-                    "type": "string"
-                },
-                "parent_trace_id": {
-                    "type": "string"
-                },
-                "project_id": {
-                    "type": "string"
-                },
-                "session_id": {
-                    "type": "string"
-                },
-                "tags": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "user_id": {
-                    "type": "string"
-                }
-            }
-        },
-        "observability.EventResponse": {
-            "description": "Telemetry event creation result",
-            "type": "object",
-            "properties": {
-                "event_id": {
-                    "type": "string",
-                    "example": "evt_abc123"
-                },
-                "message": {
-                    "type": "string",
-                    "example": "Event created successfully"
-                },
-                "processed_at": {
+                "max_connections": {
                     "type": "integer",
-                    "example": 1677610602
+                    "example": 100
+                }
+            }
+        },
+        "observability.DeduplicationConfigRequest": {
+            "description": "Configuration for event deduplication behavior",
+            "type": "object",
+            "properties": {
+                "enabled": {
+                    "type": "boolean",
+                    "example": true
                 },
-                "status": {
-                    "type": "string",
-                    "example": "created"
+                "fail_on_duplicate": {
+                    "type": "boolean"
+                },
+                "ttl": {
+                    "type": "integer",
+                    "example": 3600
+                },
+                "use_redis_cache": {
+                    "type": "boolean",
+                    "example": true
                 }
             }
         },
@@ -8474,50 +8483,259 @@
                 }
             }
         },
-        "observability.QualityScoreResponse": {
+        "observability.QueueHealthResponse": {
+            "description": "Processing queue status and performance",
             "type": "object",
             "properties": {
-                "author_user_id": {
+                "average_wait_time_ms": {
+                    "type": "number",
+                    "example": 10.2
+                },
+                "oldest_message_age_ms": {
+                    "type": "number",
+                    "example": 500
+                },
+                "processing_rate": {
+                    "type": "number",
+                    "example": 100.5
+                },
+                "size": {
+                    "type": "integer",
+                    "example": 150
+                }
+            }
+        },
+        "observability.RedisHealthResponse": {
+            "description": "Redis connectivity and performance status",
+            "type": "object",
+            "properties": {
+                "available": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "connections": {
+                    "type": "integer",
+                    "example": 5
+                },
+                "last_error": {
                     "type": "string"
                 },
-                "comment": {
-                    "type": "string"
+                "latency_ms": {
+                    "type": "number",
+                    "example": 0.5
+                },
+                "uptime": {
+                    "type": "string",
+                    "example": "24h0m0s"
+                }
+            }
+        },
+        "observability.TelemetryBatchStatusResponse": {
+            "description": "Status information for a telemetry batch",
+            "type": "object",
+            "properties": {
+                "batch_id": {
+                    "type": "string",
+                    "example": "01ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                },
+                "completed_at": {
+                    "type": "string",
+                    "example": "2023-12-01T10:30:05Z"
                 },
                 "created_at": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "2023-12-01T10:30:00Z"
                 },
-                "data_type": {
-                    "type": "string"
+                "failed_events": {
+                    "type": "integer",
+                    "example": 5
                 },
-                "evaluator_name": {
-                    "type": "string"
+                "processed_events": {
+                    "type": "integer",
+                    "example": 95
                 },
-                "evaluator_version": {
-                    "type": "string"
+                "processing_time_ms": {
+                    "type": "integer",
+                    "example": 1234
                 },
-                "id": {
-                    "type": "string"
+                "status": {
+                    "type": "string",
+                    "example": "completed"
                 },
-                "observation_id": {
-                    "type": "string"
+                "total_events": {
+                    "type": "integer",
+                    "example": 100
+                }
+            }
+        },
+        "observability.TelemetryHealthResponse": {
+            "description": "Health status of telemetry processing system",
+            "type": "object",
+            "properties": {
+                "active_workers": {
+                    "type": "integer",
+                    "example": 5
                 },
-                "score_name": {
-                    "type": "string"
+                "average_processing_time_ms": {
+                    "type": "number",
+                    "example": 45.7
                 },
-                "score_value": {
-                    "type": "number"
+                "database": {
+                    "$ref": "#/definitions/observability.DatabaseHealthResponse"
                 },
-                "source": {
-                    "type": "string"
+                "error_rate": {
+                    "type": "number",
+                    "example": 0.01
                 },
-                "string_value": {
-                    "type": "string"
+                "healthy": {
+                    "type": "boolean",
+                    "example": true
                 },
-                "trace_id": {
-                    "type": "string"
+                "processing_queue": {
+                    "$ref": "#/definitions/observability.QueueHealthResponse"
                 },
-                "updated_at": {
-                    "type": "string"
+                "redis": {
+                    "$ref": "#/definitions/observability.RedisHealthResponse"
+                },
+                "throughput_per_minute": {
+                    "type": "number",
+                    "example": 1200.5
+                }
+            }
+        },
+        "observability.TelemetryMetricsResponse": {
+            "description": "Comprehensive metrics for telemetry processing system",
+            "type": "object",
+            "properties": {
+                "average_events_per_batch": {
+                    "type": "number",
+                    "example": 100
+                },
+                "completed_batches": {
+                    "type": "integer",
+                    "example": 1230
+                },
+                "deduplication_rate": {
+                    "type": "number",
+                    "example": 0.4
+                },
+                "duplicate_events": {
+                    "type": "integer",
+                    "example": 500
+                },
+                "failed_batches": {
+                    "type": "integer",
+                    "example": 15
+                },
+                "failed_events": {
+                    "type": "integer",
+                    "example": 1500
+                },
+                "processed_events": {
+                    "type": "integer",
+                    "example": 123000
+                },
+                "processing_batches": {
+                    "type": "integer",
+                    "example": 5
+                },
+                "success_rate": {
+                    "type": "number",
+                    "example": 99.2
+                },
+                "throughput_per_second": {
+                    "type": "number",
+                    "example": 85.5
+                },
+                "total_batches": {
+                    "type": "integer",
+                    "example": 1250
+                },
+                "total_events": {
+                    "type": "integer",
+                    "example": 125000
+                }
+            }
+        },
+        "observability.TelemetryPerformanceStatsResponse": {
+            "description": "Performance statistics over a time window",
+            "type": "object",
+            "properties": {
+                "average_latency_ms": {
+                    "type": "number",
+                    "example": 45.7
+                },
+                "cache_hit_rate": {
+                    "type": "number",
+                    "example": 0.85
+                },
+                "database_fallback_rate": {
+                    "type": "number",
+                    "example": 0.15
+                },
+                "error_rate": {
+                    "type": "number",
+                    "example": 0.01
+                },
+                "p95_latency_ms": {
+                    "type": "number",
+                    "example": 89.2
+                },
+                "p99_latency_ms": {
+                    "type": "number",
+                    "example": 156.8
+                },
+                "peak_throughput": {
+                    "type": "number",
+                    "example": 120.3
+                },
+                "retry_rate": {
+                    "type": "number",
+                    "example": 0.02
+                },
+                "successful_requests": {
+                    "type": "integer",
+                    "example": 1185
+                },
+                "throughput_per_second": {
+                    "type": "number",
+                    "example": 85.5
+                },
+                "time_window": {
+                    "type": "string",
+                    "example": "1h"
+                },
+                "total_requests": {
+                    "type": "integer",
+                    "example": 1200
+                }
+            }
+        },
+        "observability.TelemetryValidationResponse": {
+            "description": "Result of telemetry event validation",
+            "type": "object",
+            "properties": {
+                "errors": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "event_id": {
+                    "type": "string",
+                    "example": "01ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                },
+                "event_type": {
+                    "type": "string",
+                    "example": "trace_create"
+                },
+                "message": {
+                    "type": "string",
+                    "example": "Event structure is valid"
+                },
+                "valid": {
+                    "type": "boolean",
+                    "example": true
                 }
             }
         },
@@ -8615,25 +8833,6 @@
                 },
                 "updated_at": {
                     "type": "string"
-                },
-                "user_id": {
-                    "type": "string"
-                }
-            }
-        },
-        "observability.UpdateTraceRequest": {
-            "type": "object",
-            "properties": {
-                "metadata": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "name": {
-                    "type": "string"
-                },
-                "tags": {
-                    "type": "object",
-                    "additionalProperties": true
                 },
                 "user_id": {
                     "type": "string"

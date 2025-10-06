@@ -64,29 +64,32 @@ rbac:
       description: "View organization details and settings"
     
     - name: "organizations:write"
-      description: "Create and modify organizations"
-    
+      description: "Create and update organizations"
+
     - name: "organizations:delete"
       description: "Delete organizations"
-    
+
+    - name: "organizations:admin"
+      description: "Advanced organization administration"
+
     # Project permissions
     - name: "projects:read"
       description: "View projects and their details"
-    
+
     - name: "projects:write"
-      description: "Create and modify projects"
-    
+      description: "Create and update projects"
+
     - name: "projects:delete"
       description: "Delete projects"
-    
+
     # API Key permissions
-    - name: "api_keys:read"
+    - name: "api-keys:read"
       description: "View API keys (excluding full values)"
-    
-    - name: "api_keys:write"
-      description: "Create and modify API keys"
-    
-    - name: "api_keys:delete"
+
+    - name: "api-keys:write"
+      description: "Create and update API keys"
+
+    - name: "api-keys:delete"
       description: "Delete API keys"
     
     # Analytics permissions
@@ -96,23 +99,20 @@ rbac:
     # Member permissions
     - name: "members:read"
       description: "View organization members"
-    
-    - name: "members:write"
-      description: "Invite and manage members"
-    
-    - name: "members:delete"
+
+    - name: "members:invite"
+      description: "Invite new members to organization"
+
+    - name: "members:remove"
       description: "Remove members from organization"
     
     # Role and permission management
     - name: "roles:read"
       description: "View roles and their permissions"
-    
-    - name: "roles:create"
-      description: "Create custom roles"
-    
-    - name: "roles:update"
-      description: "Update custom roles"
-    
+
+    - name: "roles:write"
+      description: "Create and update custom roles"
+
     - name: "roles:delete"
       description: "Delete custom roles"
     
@@ -135,26 +135,11 @@ rbac:
     - name: "settings:admin"
       description: "Advanced settings management"
 
-  roles:
-    # System role templates (global system administration)
-    - name: "super_admin"
-      description: "Full system administration access"
-      scope_type: "system"
-      permissions:
-        - "organizations:read"
-        - "organizations:write"
-        - "organizations:delete"
-        - "projects:read"
-        - "projects:write"
-        - "projects:delete"
-        - "api_keys:read"
-        - "api_keys:write"
-        - "api_keys:delete"
-        - "analytics:read"
-        - "members:read"
-        - "members:write"
-        - "members:delete"
+    # Admin permissions
+    - name: "admin:manage"
+      description: "Administrative access to platform management"
 
+  roles:
     # Organization role templates (available to ALL organizations)
     - name: "owner"
       description: "Full access to organization and all its resources"
@@ -162,19 +147,20 @@ rbac:
       permissions:
         - "organizations:read"
         - "organizations:write"
+        - "organizations:delete"
+        - "organizations:admin"
         - "projects:read"
         - "projects:write"
         - "projects:delete"
-        - "api_keys:read"
-        - "api_keys:write"
-        - "api_keys:delete"
+        - "api-keys:read"
+        - "api-keys:write"
+        - "api-keys:delete"
         - "analytics:read"
         - "members:read"
-        - "members:write"
-        - "members:delete"
+        - "members:invite"
+        - "members:remove"
         - "roles:read"
-        - "roles:create"
-        - "roles:update"
+        - "roles:write"
         - "roles:delete"
         - "permissions:read"
         - "settings:read"
@@ -188,16 +174,16 @@ rbac:
       scope_type: "organization"
       permissions:
         - "organizations:read"
+        - "organizations:write"
         - "projects:read"
         - "projects:write"
-        - "api_keys:read"
-        - "api_keys:write"
+        - "api-keys:read"
+        - "api-keys:write"
         - "analytics:read"
         - "members:read"
-        - "members:write"
+        - "members:invite"
         - "roles:read"
-        - "roles:create"
-        - "roles:update"
+        - "roles:write"
         - "permissions:read"
         - "settings:read"
         - "settings:write"
@@ -209,8 +195,8 @@ rbac:
         - "organizations:read"
         - "projects:read"
         - "projects:write"
-        - "api_keys:read"
-        - "api_keys:write"
+        - "api-keys:read"
+        - "api-keys:write"
         - "analytics:read"
     
     - name: "viewer"
@@ -219,7 +205,7 @@ rbac:
       permissions:
         - "organizations:read"
         - "projects:read"
-        - "api_keys:read"
+        - "api-keys:read"
         - "analytics:read"
 
   memberships:

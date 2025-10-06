@@ -12,13 +12,14 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
-	ginSwagger "github.com/swaggo/gin-swagger"
 	swaggerfiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 
 	"brokle/internal/config"
 	"brokle/internal/core/domain/auth"
 	"brokle/internal/transport/http/handlers"
 	"brokle/internal/transport/http/middleware"
+
 	"github.com/redis/go-redis/v9"
 )
 
@@ -90,14 +91,14 @@ func (s *Server) Start() error {
 
 	// Setup CORS
 	corsConfig := cors.DefaultConfig()
-	
+
 	// Handle wildcard origins gracefully
 	if len(s.config.Server.CORSAllowedOrigins) == 1 && s.config.Server.CORSAllowedOrigins[0] == "*" {
 		corsConfig.AllowAllOrigins = true
 	} else {
 		corsConfig.AllowOrigins = s.config.Server.CORSAllowedOrigins
 	}
-	
+
 	corsConfig.AllowMethods = s.config.Server.CORSAllowedMethods
 	corsConfig.AllowHeaders = s.config.Server.CORSAllowedHeaders
 	corsConfig.AllowCredentials = true
@@ -198,7 +199,7 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 		users.GET("/me", s.handlers.User.GetProfile)
 		users.PUT("/me", s.handlers.User.UpdateProfile)
 	}
-	
+
 	// Onboarding routes
 	onboarding := protected.Group("/onboarding")
 	{
@@ -207,7 +208,7 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 		onboarding.POST("/skip/:id", s.handlers.User.Onboarding.SkipQuestion)
 		onboarding.GET("/status", s.handlers.User.Onboarding.GetStatus)
 	}
-	
+
 	// Auth session management routes (protected)
 	authSessions := protected.Group("/auth")
 	{
@@ -222,14 +223,14 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 	orgs := protected.Group("/organizations")
 	{
 		orgs.GET("", s.handlers.Organization.List) // No org context required for listing user's orgs
-		orgs.POST("", s.authMiddleware.RequirePermission("organizations:create"), s.handlers.Organization.Create)
-		orgs.GET("/:orgId", s.authMiddleware.RequirePermission("organizations:read"), s.handlers.Organization.Get)
-		orgs.PUT("/:orgId", s.authMiddleware.RequirePermission("organizations:update"), s.handlers.Organization.Update)
+		orgs.POST("", s.handlers.Organization.Create)
+		orgs.GET("/:orgId", s.handlers.Organization.Get)
+		orgs.PUT("/:orgId", s.authMiddleware.RequirePermission("organizations:write"), s.handlers.Organization.Update)
 		orgs.DELETE("/:orgId", s.authMiddleware.RequirePermission("organizations:delete"), s.handlers.Organization.Delete)
 		orgs.GET("/:orgId/members", s.authMiddleware.RequirePermission("members:read"), s.handlers.Organization.ListMembers)
 		orgs.POST("/:orgId/members", s.authMiddleware.RequirePermission("members:invite"), s.handlers.Organization.InviteMember)
 		orgs.DELETE("/:orgId/members/:userId", s.authMiddleware.RequirePermission("members:remove"), s.handlers.Organization.RemoveMember)
-		
+
 		// Organization settings routes with permission middleware
 		orgs.GET("/:orgId/settings", s.authMiddleware.RequirePermission("settings:read"), s.handlers.Organization.GetSettings)
 		orgs.POST("/:orgId/settings", s.authMiddleware.RequirePermission("settings:write"), s.handlers.Organization.CreateSetting)
@@ -240,12 +241,12 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 		orgs.GET("/:orgId/settings/export", s.authMiddleware.RequirePermission("settings:export"), s.handlers.Organization.ExportSettings)
 		orgs.POST("/:orgId/settings/import", s.authMiddleware.RequireAllPermissions([]string{"settings:write", "settings:import"}), s.handlers.Organization.ImportSettings)
 		orgs.POST("/:orgId/settings/reset", s.authMiddleware.RequireAnyPermission([]string{"settings:admin", "organizations:admin"}), s.handlers.Organization.ResetToDefaults)
-		
+
 		// Custom role management routes for organizations
 		orgs.GET("/:orgId/roles", s.authMiddleware.RequirePermission("roles:read"), s.handlers.RBAC.GetCustomRoles)
-		orgs.POST("/:orgId/roles", s.authMiddleware.RequirePermission("roles:create"), s.handlers.RBAC.CreateCustomRole)
+		orgs.POST("/:orgId/roles", s.authMiddleware.RequirePermission("roles:write"), s.handlers.RBAC.CreateCustomRole)
 		orgs.GET("/:orgId/roles/:roleId", s.authMiddleware.RequirePermission("roles:read"), s.handlers.RBAC.GetCustomRole)
-		orgs.PUT("/:orgId/roles/:roleId", s.authMiddleware.RequirePermission("roles:update"), s.handlers.RBAC.UpdateCustomRole)
+		orgs.PUT("/:orgId/roles/:roleId", s.authMiddleware.RequirePermission("roles:write"), s.handlers.RBAC.UpdateCustomRole)
 		orgs.DELETE("/:orgId/roles/:roleId", s.authMiddleware.RequirePermission("roles:delete"), s.handlers.RBAC.DeleteCustomRole)
 	}
 
@@ -253,15 +254,14 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 	projects := protected.Group("/projects")
 	{
 		projects.GET("", s.handlers.Project.List) // Lists projects for authenticated user
-		projects.POST("", s.authMiddleware.RequirePermission("projects:create"), s.handlers.Project.Create)
+		projects.POST("", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Project.Create)
 		projects.GET("/:projectId", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Project.Get)
-		projects.PUT("/:projectId", s.authMiddleware.RequirePermission("projects:update"), s.handlers.Project.Update)
+		projects.PUT("/:projectId", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Project.Update)
 		projects.DELETE("/:projectId", s.authMiddleware.RequirePermission("projects:delete"), s.handlers.Project.Delete)
 		projects.GET("/:projectId/api-keys", s.authMiddleware.RequirePermission("api-keys:read"), s.handlers.APIKey.List)
-		projects.POST("/:projectId/api-keys", s.authMiddleware.RequirePermission("api-keys:create"), s.handlers.APIKey.Create)
+		projects.POST("/:projectId/api-keys", s.authMiddleware.RequirePermission("api-keys:write"), s.handlers.APIKey.Create)
 		projects.DELETE("/:projectId/api-keys/:keyId", s.authMiddleware.RequirePermission("api-keys:delete"), s.handlers.APIKey.Delete)
 	}
-
 
 	// Analytics routes
 	analytics := protected.Group("/analytics")
@@ -312,18 +312,18 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 		rbac.PUT("/roles/:roleId", s.handlers.RBAC.UpdateRole)
 		rbac.DELETE("/roles/:roleId", s.handlers.RBAC.DeleteRole)
 		rbac.GET("/roles/statistics", s.handlers.RBAC.GetRoleStatistics)
-		
+
 		// Permission management
 		rbac.GET("/permissions", s.handlers.RBAC.ListPermissions)
 		rbac.POST("/permissions", s.handlers.RBAC.CreatePermission)
 		rbac.GET("/permissions/:permissionId", s.handlers.RBAC.GetPermission)
 		rbac.GET("/permissions/resources", s.handlers.RBAC.GetAvailableResources)
 		rbac.GET("/permissions/resources/:resource/actions", s.handlers.RBAC.GetActionsForResource)
-		
+
 		// User role assignment
 		rbac.GET("/users/:userId/organizations/:orgId/role", s.handlers.RBAC.GetUserRole)
 		rbac.POST("/users/:userId/organizations/:orgId/role", s.handlers.RBAC.AssignOrganizationRole)
-		
+
 		// Permission checking
 		rbac.GET("/users/:userId/organizations/:orgId/permissions", s.handlers.RBAC.GetUserPermissions)
 		rbac.POST("/users/:userId/organizations/:orgId/permissions/check", s.handlers.RBAC.CheckUserPermissions)
@@ -350,30 +350,24 @@ func (s *Server) setupSDKRoutes(router *gin.RouterGroup) {
 	router.GET("/models", s.handlers.AI.ListModels)
 	router.GET("/models/:model", s.handlers.AI.GetModel)
 
-	// Observability endpoints for SDK telemetry (write operations)
-	router.POST("/traces", s.handlers.Observability.CreateTrace)
-	router.PUT("/traces/:id", s.handlers.Observability.UpdateTrace)
-	router.DELETE("/traces/:id", s.handlers.Observability.DeleteTrace)
-	router.POST("/traces/batch", s.handlers.Observability.CreateTracesBatch)
+	// AI routing decisions
+	router.POST("/route", s.handlers.AI.RouteRequest)
 
-	router.POST("/observations", s.handlers.Observability.CreateObservation)
-	router.PUT("/observations/:id", s.handlers.Observability.UpdateObservation)
-	router.POST("/observations/:id/complete", s.handlers.Observability.CompleteObservation)
-	router.DELETE("/observations/:id", s.handlers.Observability.DeleteObservation)
-	router.POST("/observations/batch", s.handlers.Observability.CreateObservationsBatch)
-
-	router.POST("/quality-scores", s.handlers.Observability.CreateQualityScore)
-	router.PUT("/quality-scores/:id", s.handlers.Observability.UpdateQualityScore)
-	router.DELETE("/quality-scores/:id", s.handlers.Observability.DeleteQualityScore)
-
-	// New SDK-specific endpoints
-	router.POST("/events", s.handlers.Observability.CreateEvent)           // Telemetry events
-	router.POST("/route", s.handlers.AI.RouteRequest)                       // AI routing decisions
+	// High-performance unified telemetry batch system with ULID-based deduplication
+	telemetry := router.Group("/telemetry")
+	{
+		telemetry.POST("/batch", s.handlers.Observability.ProcessTelemetryBatch)             // Batch processing (main endpoint)
+		telemetry.GET("/health", s.handlers.Observability.GetTelemetryHealth)                // Health monitoring
+		telemetry.GET("/metrics", s.handlers.Observability.GetTelemetryMetrics)              // Performance metrics
+		telemetry.GET("/performance", s.handlers.Observability.GetTelemetryPerformanceStats) // Performance stats
+		telemetry.GET("/batch/:batch_id", s.handlers.Observability.GetBatchStatus)           // Batch status tracking
+		telemetry.POST("/validate", s.handlers.Observability.ValidateEvent)                  // Event validation
+	}
 
 	// Cache management endpoints
 	cache := router.Group("/cache")
 	{
-		cache.GET("/status", s.handlers.AI.CacheStatus)         // Cache health
+		cache.GET("/status", s.handlers.AI.CacheStatus)          // Cache health
 		cache.POST("/invalidate", s.handlers.AI.InvalidateCache) // Cache management
 	}
 }

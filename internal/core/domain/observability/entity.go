@@ -313,3 +313,266 @@ type QualityScoreAggregation struct {
 	MinValue  *float64 `json:"min_value,omitempty"`
 	MaxValue  *float64 `json:"max_value,omitempty"`
 }
+
+// TelemetryBatch represents a batch of telemetry events for high-throughput processing
+type TelemetryBatch struct {
+	ID               ulid.ULID              `json:"id" db:"id"`
+	ProjectID        ulid.ULID              `json:"project_id" db:"project_id"`
+	BatchMetadata    map[string]interface{} `json:"batch_metadata" db:"batch_metadata"`
+	TotalEvents      int                    `json:"total_events" db:"total_events"`
+	ProcessedEvents  int                    `json:"processed_events" db:"processed_events"`
+	FailedEvents     int                    `json:"failed_events" db:"failed_events"`
+	Status           BatchStatus            `json:"status" db:"status"`
+	ProcessingTimeMs *int                   `json:"processing_time_ms,omitempty" db:"processing_time_ms"`
+	CreatedAt        time.Time              `json:"created_at" db:"created_at"`
+	CompletedAt      *time.Time             `json:"completed_at,omitempty" db:"completed_at"`
+	Events           []TelemetryEvent       `json:"events,omitempty" db:"-"`
+}
+
+// TelemetryEvent represents an individual telemetry event within a batch using envelope pattern
+type TelemetryEvent struct {
+	ID           ulid.ULID               `json:"id" db:"id"`
+	BatchID      ulid.ULID               `json:"batch_id" db:"batch_id"`
+	EventType    TelemetryEventType      `json:"event_type" db:"event_type"`
+	EventPayload map[string]interface{}  `json:"event_payload" db:"event_payload"`
+	ProcessedAt  *time.Time              `json:"processed_at,omitempty" db:"processed_at"`
+	ErrorMessage *string                 `json:"error_message,omitempty" db:"error_message"`
+	RetryCount   int                     `json:"retry_count" db:"retry_count"`
+	CreatedAt    time.Time               `json:"created_at" db:"created_at"`
+}
+
+// TelemetryEventDeduplication represents ULID-based event deduplication with smart TTL
+type TelemetryEventDeduplication struct {
+	EventID      ulid.ULID `json:"event_id" db:"event_id"`
+	BatchID      ulid.ULID `json:"batch_id" db:"batch_id"`
+	ProjectID    ulid.ULID `json:"project_id" db:"project_id"`
+	FirstSeenAt  time.Time `json:"first_seen_at" db:"first_seen_at"`
+	ExpiresAt    time.Time `json:"expires_at" db:"expires_at"`
+}
+
+// BatchStatus defines the status of a telemetry batch
+type BatchStatus string
+
+const (
+	BatchStatusProcessing BatchStatus = "processing"
+	BatchStatusCompleted  BatchStatus = "completed"
+	BatchStatusFailed     BatchStatus = "failed"
+	BatchStatusPartial    BatchStatus = "partial"
+)
+
+// TelemetryEventType defines the type of telemetry event
+type TelemetryEventType string
+
+const (
+	TelemetryEventTypeTraceCreate        TelemetryEventType = "trace_create"
+	TelemetryEventTypeTraceUpdate        TelemetryEventType = "trace_update"
+	TelemetryEventTypeObservationCreate  TelemetryEventType = "observation_create"
+	TelemetryEventTypeObservationUpdate  TelemetryEventType = "observation_update"
+	TelemetryEventTypeObservationComplete TelemetryEventType = "observation_complete"
+	TelemetryEventTypeQualityScoreCreate TelemetryEventType = "quality_score_create"
+)
+
+// BatchStats represents aggregated statistics for a telemetry batch
+type BatchStats struct {
+	BatchID            ulid.ULID          `json:"batch_id"`
+	TotalEvents        int                `json:"total_events"`
+	ProcessedEvents    int                `json:"processed_events"`
+	FailedEvents       int                `json:"failed_events"`
+	SuccessRate        float64            `json:"success_rate"`
+	ProcessingTimeMs   *int               `json:"processing_time_ms,omitempty"`
+	ThroughputPerSec   float64            `json:"throughput_per_sec"`
+	EventTypeDistribution map[TelemetryEventType]int `json:"event_type_distribution"`
+	RetryDistribution  map[int]int        `json:"retry_distribution"`
+}
+
+// ValidateTelemetryBatch validates a telemetry batch entity
+func (tb *TelemetryBatch) Validate() []ValidationError {
+	var errors []ValidationError
+
+	if tb.TotalEvents < 0 {
+		errors = append(errors, ValidationError{
+			Field:   "total_events",
+			Message: "total events must be non-negative",
+		})
+	}
+
+	if tb.ProcessedEvents < 0 {
+		errors = append(errors, ValidationError{
+			Field:   "processed_events",
+			Message: "processed events must be non-negative",
+		})
+	}
+
+	if tb.FailedEvents < 0 {
+		errors = append(errors, ValidationError{
+			Field:   "failed_events",
+			Message: "failed events must be non-negative",
+		})
+	}
+
+	if tb.ProcessedEvents+tb.FailedEvents > tb.TotalEvents {
+		errors = append(errors, ValidationError{
+			Field:   "events",
+			Message: "processed + failed events cannot exceed total events",
+		})
+	}
+
+	if !tb.isValidBatchStatus() {
+		errors = append(errors, ValidationError{
+			Field:   "status",
+			Message: "invalid batch status",
+		})
+	}
+
+	return errors
+}
+
+// isValidBatchStatus checks if the batch status is valid
+func (tb *TelemetryBatch) isValidBatchStatus() bool {
+	validStatuses := []BatchStatus{
+		BatchStatusProcessing,
+		BatchStatusCompleted,
+		BatchStatusFailed,
+		BatchStatusPartial,
+	}
+
+	for _, status := range validStatuses {
+		if tb.Status == status {
+			return true
+		}
+	}
+	return false
+}
+
+// IsCompleted checks if the batch processing is completed
+func (tb *TelemetryBatch) IsCompleted() bool {
+	return tb.Status == BatchStatusCompleted || tb.Status == BatchStatusFailed || tb.Status == BatchStatusPartial
+}
+
+// CalculateSuccessRate calculates the success rate of batch processing
+func (tb *TelemetryBatch) CalculateSuccessRate() float64 {
+	if tb.TotalEvents == 0 {
+		return 0.0
+	}
+	return float64(tb.ProcessedEvents) / float64(tb.TotalEvents) * 100.0
+}
+
+// CalculateProcessingTime calculates the processing time if completed
+func (tb *TelemetryBatch) CalculateProcessingTime() *int {
+	if tb.CompletedAt == nil || tb.CreatedAt.IsZero() {
+		return nil
+	}
+
+	processingMs := int(tb.CompletedAt.Sub(tb.CreatedAt).Milliseconds())
+	return &processingMs
+}
+
+// ValidateTelemetryEvent validates a telemetry event entity
+func (te *TelemetryEvent) Validate() []ValidationError {
+	var errors []ValidationError
+
+	if te.EventType == "" {
+		errors = append(errors, ValidationError{
+			Field:   "event_type",
+			Message: "event type is required",
+		})
+	}
+
+	if !te.isValidEventType() {
+		errors = append(errors, ValidationError{
+			Field:   "event_type",
+			Message: "invalid event type",
+		})
+	}
+
+	if te.EventPayload == nil || len(te.EventPayload) == 0 {
+		errors = append(errors, ValidationError{
+			Field:   "event_payload",
+			Message: "event payload is required",
+		})
+	}
+
+	if te.RetryCount < 0 {
+		errors = append(errors, ValidationError{
+			Field:   "retry_count",
+			Message: "retry count must be non-negative",
+		})
+	}
+
+	return errors
+}
+
+// isValidEventType checks if the event type is valid
+func (te *TelemetryEvent) isValidEventType() bool {
+	validTypes := []TelemetryEventType{
+		TelemetryEventTypeTraceCreate,
+		TelemetryEventTypeTraceUpdate,
+		TelemetryEventTypeObservationCreate,
+		TelemetryEventTypeObservationUpdate,
+		TelemetryEventTypeObservationComplete,
+		TelemetryEventTypeQualityScoreCreate,
+	}
+
+	for _, validType := range validTypes {
+		if te.EventType == validType {
+			return true
+		}
+	}
+	return false
+}
+
+// IsProcessed checks if the event has been processed
+func (te *TelemetryEvent) IsProcessed() bool {
+	return te.ProcessedAt != nil && !te.ProcessedAt.IsZero()
+}
+
+// HasErrors checks if the event has processing errors
+func (te *TelemetryEvent) HasErrors() bool {
+	return te.ErrorMessage != nil && *te.ErrorMessage != ""
+}
+
+// ShouldRetry determines if the event should be retried based on retry count
+func (te *TelemetryEvent) ShouldRetry(maxRetries int) bool {
+	return te.RetryCount < maxRetries && te.HasErrors() && !te.IsProcessed()
+}
+
+// ValidateTelemetryEventDeduplication validates a deduplication entry
+func (ted *TelemetryEventDeduplication) Validate() []ValidationError {
+	var errors []ValidationError
+
+	if ted.FirstSeenAt.IsZero() {
+		errors = append(errors, ValidationError{
+			Field:   "first_seen_at",
+			Message: "first seen at timestamp is required",
+		})
+	}
+
+	if ted.ExpiresAt.IsZero() {
+		errors = append(errors, ValidationError{
+			Field:   "expires_at",
+			Message: "expires at timestamp is required",
+		})
+	}
+
+	if !ted.FirstSeenAt.IsZero() && !ted.ExpiresAt.IsZero() && ted.ExpiresAt.Before(ted.FirstSeenAt) {
+		errors = append(errors, ValidationError{
+			Field:   "expires_at",
+			Message: "expires at must be after first seen at",
+		})
+	}
+
+	return errors
+}
+
+// IsExpired checks if the deduplication entry has expired
+func (ted *TelemetryEventDeduplication) IsExpired() bool {
+	return time.Now().After(ted.ExpiresAt)
+}
+
+// TimeUntilExpiry returns the duration until the entry expires
+func (ted *TelemetryEventDeduplication) TimeUntilExpiry() time.Duration {
+	if ted.IsExpired() {
+		return 0
+	}
+	return ted.ExpiresAt.Sub(time.Now())
+}

@@ -21,11 +21,13 @@ import (
 	"brokle/internal/ee/sso"
 	"brokle/internal/infrastructure/database"
 	authRepo "brokle/internal/infrastructure/repository/auth"
+	clickhouseRepo "brokle/internal/infrastructure/repository/clickhouse"
 	observabilityRepo "brokle/internal/infrastructure/repository/observability"
 	orgRepo "brokle/internal/infrastructure/repository/organization"
 	userRepo "brokle/internal/infrastructure/repository/user"
 	"brokle/internal/migration"
 	observabilityService "brokle/internal/services/observability"
+	"brokle/internal/workers"
 )
 
 // ProviderContainer holds all provider instances for dependency injection
@@ -34,6 +36,7 @@ type ProviderContainer struct {
 	Logger     *logrus.Logger
 	Databases  *DatabaseContainer
 	Repos      *RepositoryContainer
+	Workers    *WorkerContainer
 	Services   *ServiceContainer
 	Enterprise *EnterpriseContainer
 }
@@ -43,6 +46,11 @@ type DatabaseContainer struct {
 	Postgres   *database.PostgresDB
 	Redis      *database.RedisDB
 	ClickHouse *database.ClickHouseDB
+}
+
+// WorkerContainer holds all background worker instances
+type WorkerContainer struct {
+	TelemetryAnalytics *workers.TelemetryAnalyticsWorker
 }
 
 // RepositoryContainer holds all repository instances organized by domain
@@ -106,9 +114,12 @@ type OrganizationRepositories struct {
 
 // ObservabilityRepositories contains all observability-related repositories
 type ObservabilityRepositories struct {
-	Trace        observability.TraceRepository
-	Observation  observability.ObservationRepository
-	QualityScore observability.QualityScoreRepository
+	Trace                  observability.TraceRepository
+	Observation            observability.ObservationRepository
+	QualityScore           observability.QualityScoreRepository
+	TelemetryBatch         observability.TelemetryBatchRepository
+	TelemetryEvent         observability.TelemetryEventRepository
+	TelemetryDeduplication observability.TelemetryDeduplicationRepository
 }
 
 // Domain-specific service containers
@@ -162,6 +173,19 @@ func ProvideDatabases(cfg *config.Config, logger *logrus.Logger) (*DatabaseConta
 	}, nil
 }
 
+// ProvideWorkers initializes all background workers
+func ProvideWorkers(cfg *config.Config, clickhouseDB *database.ClickHouseDB, logger *logrus.Logger) (*WorkerContainer, error) {
+	// Create analytics repository for worker (from clickhouse package)
+	analyticsRepo := clickhouseRepo.NewAnalyticsRepository(clickhouseDB)
+
+	// Create telemetry analytics worker
+	analyticsWorker := workers.NewTelemetryAnalyticsWorker(cfg, logger, analyticsRepo)
+
+	return &WorkerContainer{
+		TelemetryAnalytics: analyticsWorker,
+	}, nil
+}
+
 // ProvideUserRepositories creates all user-related repositories
 func ProvideUserRepositories(db *gorm.DB) *UserRepositories {
 	return &UserRepositories{
@@ -196,11 +220,14 @@ func ProvideOrganizationRepositories(db *gorm.DB) *OrganizationRepositories {
 }
 
 // ProvideObservabilityRepositories creates all observability-related repositories
-func ProvideObservabilityRepositories(postgresDB *gorm.DB, clickhouseDB *database.ClickHouseDB) *ObservabilityRepositories {
+func ProvideObservabilityRepositories(postgresDB *gorm.DB, clickhouseDB *database.ClickHouseDB, redisDB *database.RedisDB) *ObservabilityRepositories {
 	return &ObservabilityRepositories{
-		Trace:        observabilityRepo.NewTraceRepository(postgresDB),
-		Observation:  observabilityRepo.NewObservationRepository(postgresDB),
-		QualityScore: observabilityRepo.NewQualityScoreRepository(postgresDB),
+		Trace:                  observabilityRepo.NewTraceRepository(postgresDB),
+		Observation:            observabilityRepo.NewObservationRepository(postgresDB),
+		QualityScore:           observabilityRepo.NewQualityScoreRepository(postgresDB),
+		TelemetryBatch:         observabilityRepo.NewTelemetryBatchRepository(postgresDB),
+		TelemetryEvent:         observabilityRepo.NewTelemetryEventRepository(postgresDB),
+		TelemetryDeduplication: observabilityRepo.NewTelemetryDeduplicationRepository(postgresDB, redisDB),
 	}
 }
 
@@ -210,7 +237,7 @@ func ProvideRepositories(dbs *DatabaseContainer) *RepositoryContainer {
 		User:          ProvideUserRepositories(dbs.Postgres.DB),
 		Auth:          ProvideAuthRepositories(dbs.Postgres.DB),
 		Organization:  ProvideOrganizationRepositories(dbs.Postgres.DB),
-		Observability: ProvideObservabilityRepositories(dbs.Postgres.DB, dbs.ClickHouse),
+		Observability: ProvideObservabilityRepositories(dbs.Postgres.DB, dbs.ClickHouse, dbs.Redis),
 	}
 }
 
@@ -374,6 +401,7 @@ func ProvideOrganizationServices(
 // ProvideObservabilityServices creates all observability-related services
 func ProvideObservabilityServices(
 	observabilityRepos *ObservabilityRepositories,
+	workers *WorkerContainer,
 	logger *logrus.Logger,
 ) *observabilityService.ServiceRegistry {
 	// Create a simple event publisher for now
@@ -384,6 +412,13 @@ func ProvideObservabilityServices(
 		observabilityRepos.Observation,
 		observabilityRepos.QualityScore,
 		eventPublisher,
+		// Telemetry repositories
+		observabilityRepos.TelemetryBatch,
+		observabilityRepos.TelemetryEvent,
+		observabilityRepos.TelemetryDeduplication,
+		// Analytics worker
+		workers.TelemetryAnalytics,
+		logger,
 	)
 }
 
@@ -414,6 +449,7 @@ func (p *simpleEventPublisher) PublishBatch(ctx context.Context, events []*obser
 func ProvideServices(
 	cfg *config.Config,
 	repos *RepositoryContainer,
+	workers *WorkerContainer,
 	logger *logrus.Logger,
 ) *ServiceContainer {
 	// Create auth services first (other services depend on them)
@@ -431,8 +467,8 @@ func ProvideServices(
 		logger,
 	)
 
-	// Create observability services
-	observabilityServices := ProvideObservabilityServices(repos.Observability, logger)
+	// Create observability services (includes analytics worker integration)
+	observabilityServices := ProvideObservabilityServices(repos.Observability, workers, logger)
 
 	return &ServiceContainer{
 		User:               userServices,
@@ -467,8 +503,18 @@ func ProvideAll(cfg *config.Config, logger *logrus.Logger) (*ProviderContainer, 
 	// Initialize repositories
 	repos := ProvideRepositories(databases)
 
-	// Initialize services
-	services := ProvideServices(cfg, repos, logger)
+	// Initialize workers (require ClickHouse for analytics)
+	workers, err := ProvideWorkers(cfg, databases.ClickHouse, logger)
+	if err != nil {
+		return nil, err
+	}
+
+	// Start analytics worker
+	workers.TelemetryAnalytics.Start()
+	logger.Info("Telemetry analytics worker started")
+
+	// Initialize services (includes worker integration)
+	services := ProvideServices(cfg, repos, workers, logger)
 
 	// Initialize enterprise services
 	enterprise := ProvideEnterpriseServices(cfg, logger)
@@ -504,6 +550,7 @@ func ProvideAll(cfg *config.Config, logger *logrus.Logger) (*ProviderContainer, 
 		Logger:     logger,
 		Databases:  databases,
 		Repos:      repos,
+		Workers:    workers,
 		Services:   services,
 		Enterprise: enterprise,
 	}, nil
@@ -602,12 +649,29 @@ func (pc *ProviderContainer) HealthCheck() map[string]string {
 		}
 	}
 
+	// Check worker health
+	if pc.Workers != nil && pc.Workers.TelemetryAnalytics != nil {
+		workerHealth := pc.Workers.TelemetryAnalytics.GetHealth()
+		if workerHealth.Healthy {
+			health["telemetry_analytics_worker"] = "healthy"
+		} else {
+			health["telemetry_analytics_worker"] = "unhealthy: queue depth exceeded or processing failed"
+		}
+	}
+
 	return health
 }
 
 // Graceful shutdown of all providers
 func (pc *ProviderContainer) Shutdown() error {
 	var lastErr error
+
+	// Stop background workers first
+	if pc.Workers != nil && pc.Workers.TelemetryAnalytics != nil {
+		pc.Logger.Info("Stopping telemetry analytics worker...")
+		pc.Workers.TelemetryAnalytics.Stop()
+		pc.Logger.Info("Telemetry analytics worker stopped")
+	}
 
 	// Close database connections
 	if pc.Databases.Postgres != nil {

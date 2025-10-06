@@ -32,11 +32,20 @@ func NewClickHouseDB(cfg *config.Config, logger *logrus.Logger) (*ClickHouseDB, 
 		"max_execution_time": 60,
 		"max_memory_usage":   "10000000000",
 	}
-	
+
 	options.DialTimeout = 5 * time.Second
 	options.Compression = &clickhouse.Compression{
 		Method: clickhouse.CompressionLZ4,
 	}
+
+	// Configure connection pooling for high-throughput analytics worker
+	// Sized for 4.5k buffer capacity with concurrent processing
+	options.MaxOpenConns = 50              // Maximum open connections
+	options.MaxIdleConns = 10              // Keep connections alive for reuse
+	options.ConnMaxLifetime = time.Hour    // Connection lifetime
+
+	// Configure batch processing settings
+	options.BlockBufferSize = 10           // Optimize for batch inserts
 
 	// Open connection
 	conn, err := clickhouse.Open(options)

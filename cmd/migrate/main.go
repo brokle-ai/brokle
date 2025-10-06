@@ -6,7 +6,8 @@
 //
 // Usage Examples:
 //   go run cmd/migrate/main.go up                    # Run all pending migrations
-//   go run cmd/migrate/main.go down                  # Rollback migrations (with confirmation)
+//   go run cmd/migrate/main.go down                  # Rollback 1 migration (with confirmation)
+//   go run cmd/migrate/main.go down -steps 5         # Rollback 5 migrations (with confirmation)
 //   go run cmd/migrate/main.go -db postgres up       # Run PostgreSQL migrations only
 //   go run cmd/migrate/main.go -db clickhouse up     # Run ClickHouse migrations only
 //   go run cmd/migrate/main.go status                # Show migration status
@@ -83,11 +84,17 @@ func main() {
 		fmt.Println("✅ Migrations completed successfully")
 
 	case "down":
-		if !confirmDestructiveOperation("rollback migrations") {
+		// Default to 1 step if no -steps flag provided
+		downSteps := *steps
+		if downSteps == 0 {
+			downSteps = 1
+		}
+
+		if !confirmDestructiveOperation(fmt.Sprintf("rollback %d migration(s)", downSteps)) {
 			fmt.Println("Operation cancelled")
 			return
 		}
-		if err := runMigrations(ctx, manager, *database, "down", *steps, *dryRun); err != nil {
+		if err := runMigrations(ctx, manager, *database, "down", downSteps, *dryRun); err != nil {
 			log.Fatalf("Migration failed: %v", err)
 		}
 		fmt.Println("✅ Rollback completed successfully")
@@ -414,7 +421,7 @@ func printUsage() {
 	fmt.Println()
 	fmt.Println("COMMANDS:")
 	fmt.Println("  up                    Run all pending migrations")
-	fmt.Println("  down                  Rollback migrations (with confirmation)")
+	fmt.Println("  down                  Rollback 1 migration (use -steps for more)")
 	fmt.Println("  status                Show migration status for all databases")
 	fmt.Println("  goto -version N       Migrate to specific version (with confirmation)")
 	fmt.Println("  force -version N      Force version without migration (DANGEROUS)")
@@ -437,7 +444,8 @@ func printUsage() {
 	fmt.Println("EXAMPLES:")
 	fmt.Println("  migrate up                              # Run all pending migrations")
 	fmt.Println("  migrate -db postgres up                 # Run PostgreSQL migrations only")
-	fmt.Println("  migrate down                            # Rollback with confirmation")
+	fmt.Println("  migrate down                            # Rollback 1 migration")
+	fmt.Println("  migrate down -steps 5                   # Rollback 5 migrations")
 	fmt.Println("  migrate goto -version 5                 # Go to version 5 with confirmation")
 	fmt.Println("  migrate steps -steps 2                  # Run 2 migration steps")
 	fmt.Println("  migrate steps -steps -1                 # Rollback 1 migration step")
