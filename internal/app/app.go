@@ -20,6 +20,9 @@ type App struct {
 	httpServer *http.Server
 }
 
+// Application is an alias for App for compatibility
+type Application = App
+
 // New creates a new application instance
 func New(cfg *config.Config) (*App, error) {
 
@@ -69,6 +72,7 @@ func (a *App) Start() error {
 		providers.Services.Auth.Permission,             // Permission service for RBAC
 		providers.Services.Auth.OrganizationMembers,    // Organization member service for normalized RBAC
 		providers.Services.Observability,               // Observability service registry
+		providers.Services.Gateway,                     // Gateway service for AI API endpoints
 		// All enterprise services available through providers.Enterprise
 	)
 
@@ -172,4 +176,48 @@ func (a *App) Health() map[string]string {
 	return map[string]string{
 		"status": "providers not initialized",
 	}
+}
+
+// GetGatewayServices returns the gateway services for AI API operations
+func (a *App) GetGatewayServices() *GatewayServices {
+	if a.providers == nil || a.providers.Services == nil {
+		return nil
+	}
+	return a.providers.Services.Gateway
+}
+
+// GetWorkers returns the worker container for background processing
+func (a *App) GetWorkers() *WorkerContainer {
+	if a.providers == nil {
+		return nil
+	}
+	return a.providers.Workers
+}
+
+// GetLogger returns the application logger
+func (a *App) GetLogger() *logrus.Logger {
+	return a.logger
+}
+
+// GetConfig returns the application configuration
+func (a *App) GetConfig() *config.Config {
+	return a.config
+}
+
+// GetDatabases returns the database connections
+func (a *App) GetDatabases() *DatabaseContainer {
+	if a.providers == nil {
+		return nil
+	}
+	return a.providers.Databases
+}
+
+// Services is an alias for GetServices for compatibility
+func (a *App) Services() *Services {
+	return a.GetServices()
+}
+
+// Logger is an alias for GetLogger for compatibility  
+func (a *App) Logger() *logrus.Logger {
+	return a.GetLogger()
 }

@@ -228,6 +228,21 @@ func ServiceUnavailable(c *gin.Context, message string) {
 	ErrorWithStatus(c, http.StatusServiceUnavailable, string(appErrors.ServiceUnavailable), message, "")
 }
 
+// ErrorWithCode creates an error response using predefined error codes
+func ErrorWithCode(c *gin.Context, statusCode int, code string, details string) {
+	appErr := appErrors.NewErrorWithCode(code, details)
+	c.JSON(statusCode, APIResponse{
+		Success: false,
+		Error: &APIError{
+			Code:    code,
+			Message: appErr.Message,
+			Details: details,
+			Type:    string(appErr.Type),
+		},
+		Meta: getMeta(c),
+	})
+}
+
 func getMeta(c *gin.Context) *Meta {
 	meta := &Meta{
 		Timestamp: time.Now().UTC().Format(time.RFC3339),

@@ -4,11 +4,15 @@ import (
 	"context"
 	"time"
 
+	"github.com/ClickHouse/clickhouse-go/v2"
+	"github.com/jmoiron/sqlx"
+	"github.com/oklog/ulid/v2"
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 
 	"brokle/internal/config"
 	"brokle/internal/core/domain/auth"
+	"brokle/internal/core/domain/gateway"
 	"brokle/internal/core/domain/observability"
 	"brokle/internal/core/domain/organization"
 	"brokle/internal/core/domain/user"
@@ -20,14 +24,21 @@ import (
 	"brokle/internal/ee/rbac"
 	"brokle/internal/ee/sso"
 	"brokle/internal/infrastructure/database"
+	"brokle/internal/infrastructure/providers/openai"
+	analyticsRepo "brokle/internal/infrastructure/repository/analytics"
 	authRepo "brokle/internal/infrastructure/repository/auth"
+	billingRepo "brokle/internal/infrastructure/repository/billing"
 	clickhouseRepo "brokle/internal/infrastructure/repository/clickhouse"
+	gatewayRepo "brokle/internal/infrastructure/repository/gateway"
 	observabilityRepo "brokle/internal/infrastructure/repository/observability"
 	orgRepo "brokle/internal/infrastructure/repository/organization"
 	userRepo "brokle/internal/infrastructure/repository/user"
 	"brokle/internal/migration"
+	billingService "brokle/internal/services/billing"
+	gatewayService "brokle/internal/services/gateway"
 	observabilityService "brokle/internal/services/observability"
 	"brokle/internal/workers"
+	gatewayAnalytics "brokle/internal/workers/analytics"
 )
 
 // ProviderContainer holds all provider instances for dependency injection
@@ -51,6 +62,7 @@ type DatabaseContainer struct {
 // WorkerContainer holds all background worker instances
 type WorkerContainer struct {
 	TelemetryAnalytics *workers.TelemetryAnalyticsWorker
+	GatewayAnalytics   *gatewayAnalytics.GatewayAnalyticsWorker
 }
 
 // RepositoryContainer holds all repository instances organized by domain
@@ -59,6 +71,9 @@ type RepositoryContainer struct {
 	Auth          *AuthRepositories
 	Organization  *OrganizationRepositories
 	Observability *ObservabilityRepositories
+	Gateway       *GatewayRepositories
+	Billing       *BillingRepositories
+	Analytics     *AnalyticsRepositories
 }
 
 // ServiceContainer holds all service instances organized by domain
@@ -73,6 +88,10 @@ type ServiceContainer struct {
 	SettingsService       organization.OrganizationSettingsService
 	// Observability services
 	Observability         *observabilityService.ServiceRegistry
+	// Gateway services
+	Gateway               *GatewayServices
+	// Billing services
+	Billing               *BillingServices
 }
 
 // EnterpriseContainer holds all enterprise service instances
@@ -122,6 +141,23 @@ type ObservabilityRepositories struct {
 	TelemetryDeduplication observability.TelemetryDeduplicationRepository
 }
 
+// GatewayRepositories contains all gateway-related repositories
+type GatewayRepositories struct {
+	Provider       gateway.ProviderRepository
+	Model          gateway.ModelRepository
+	ProviderConfig gateway.ProviderConfigRepository
+}
+
+// BillingRepositories contains all billing-related repositories
+type BillingRepositories struct {
+	Billing *billingRepo.Repository
+}
+
+// AnalyticsRepositories contains all analytics-related repositories
+type AnalyticsRepositories struct {
+	Analytics *analyticsRepo.Repository
+}
+
 // Domain-specific service containers
 
 // UserServices contains all user-related services
@@ -141,6 +177,18 @@ type AuthServices struct {
 	Permission             auth.PermissionService
 	OrganizationMembers    auth.OrganizationMemberService
 	BlacklistedTokens      auth.BlacklistedTokenService
+}
+
+// GatewayServices contains all gateway-related services
+type GatewayServices struct {
+	Gateway gateway.GatewayService
+	Routing gateway.RoutingService
+	Cost    gateway.CostService
+}
+
+// BillingServices contains all billing-related services
+type BillingServices struct {
+	Billing *billingService.BillingService
 }
 
 
@@ -174,15 +222,30 @@ func ProvideDatabases(cfg *config.Config, logger *logrus.Logger) (*DatabaseConta
 }
 
 // ProvideWorkers initializes all background workers
-func ProvideWorkers(cfg *config.Config, clickhouseDB *database.ClickHouseDB, logger *logrus.Logger) (*WorkerContainer, error) {
+func ProvideWorkers(
+	cfg *config.Config, 
+	clickhouseDB *database.ClickHouseDB, 
+	analyticsRepo *analyticsRepo.Repository,
+	billingService *billingService.BillingService,
+	logger *logrus.Logger,
+) (*WorkerContainer, error) {
 	// Create analytics repository for worker (from clickhouse package)
-	analyticsRepo := clickhouseRepo.NewAnalyticsRepository(clickhouseDB)
+	telemetryRepo := clickhouseRepo.NewAnalyticsRepository(clickhouseDB)
 
 	// Create telemetry analytics worker
-	analyticsWorker := workers.NewTelemetryAnalyticsWorker(cfg, logger, analyticsRepo)
+	telemetryWorker := workers.NewTelemetryAnalyticsWorker(cfg, logger, telemetryRepo)
+	
+	// Create gateway analytics worker
+	gatewayAnalyticsWorker := gatewayAnalytics.NewGatewayAnalyticsWorker(
+		logger,
+		nil, // config - use defaults
+		analyticsRepo,
+		billingService,
+	)
 
 	return &WorkerContainer{
-		TelemetryAnalytics: analyticsWorker,
+		TelemetryAnalytics: telemetryWorker,
+		GatewayAnalytics:   gatewayAnalyticsWorker,
 	}, nil
 }
 
@@ -231,13 +294,39 @@ func ProvideObservabilityRepositories(postgresDB *gorm.DB, clickhouseDB *databas
 	}
 }
 
+// ProvideGatewayRepositories creates all gateway-related repositories
+func ProvideGatewayRepositories(db *sqlx.DB, logger *logrus.Logger) *GatewayRepositories {
+	return &GatewayRepositories{
+		Provider:       gatewayRepo.NewProviderRepository(db, logger),
+		Model:          gatewayRepo.NewModelRepository(db, logger),
+		ProviderConfig: gatewayRepo.NewProviderConfigRepository(db, logger),
+	}
+}
+
+// ProvideBillingRepositories creates all billing-related repositories
+func ProvideBillingRepositories(db *sqlx.DB, logger *logrus.Logger) *BillingRepositories {
+	return &BillingRepositories{
+		Billing: billingRepo.NewRepository(db, logger),
+	}
+}
+
+// ProvideAnalyticsRepositories creates all analytics-related repositories
+func ProvideAnalyticsRepositories(conn clickhouse.Conn, logger *logrus.Logger) *AnalyticsRepositories {
+	return &AnalyticsRepositories{
+		Analytics: analyticsRepo.NewRepository(conn, logger),
+	}
+}
+
 // ProvideRepositories creates all repository containers
-func ProvideRepositories(dbs *DatabaseContainer) *RepositoryContainer {
+func ProvideRepositories(dbs *DatabaseContainer, logger *logrus.Logger) *RepositoryContainer {
 	return &RepositoryContainer{
 		User:          ProvideUserRepositories(dbs.Postgres.DB),
 		Auth:          ProvideAuthRepositories(dbs.Postgres.DB),
 		Organization:  ProvideOrganizationRepositories(dbs.Postgres.DB),
 		Observability: ProvideObservabilityRepositories(dbs.Postgres.DB, dbs.ClickHouse, dbs.Redis),
+		Gateway:       ProvideGatewayRepositories(dbs.Postgres.SQLXConn, logger),
+		Billing:       ProvideBillingRepositories(dbs.Postgres.SQLXConn, logger),
+		Analytics:     ProvideAnalyticsRepositories(dbs.ClickHouse.Conn, logger),
 	}
 }
 
@@ -422,6 +511,69 @@ func ProvideObservabilityServices(
 	)
 }
 
+// ProvideGatewayServices creates all gateway-related services
+func ProvideGatewayServices(
+	gatewayRepos *GatewayRepositories,
+	logger *logrus.Logger,
+) *GatewayServices {
+	// Create OpenAI provider client
+	openaiProvider := openai.NewProvider(logger)
+	
+	// Create cost service
+	costService := gatewayService.NewCostService(logger)
+	
+	// Create routing service with cost service dependency
+	routingService := gatewayService.NewRoutingService(
+		gatewayRepos.Provider,
+		gatewayRepos.Model,
+		gatewayRepos.ProviderConfig,
+		costService,
+		logger,
+	)
+	
+	// Create gateway service with all dependencies
+	gatewayServiceImpl := gatewayService.NewGatewayService(
+		gatewayRepos.Provider,
+		gatewayRepos.Model,
+		gatewayRepos.ProviderConfig,
+		routingService,
+		costService,
+		map[string]gateway.ProviderClient{
+			"openai": openaiProvider,
+		},
+		logger,
+	)
+	
+	return &GatewayServices{
+		Gateway: gatewayServiceImpl,
+		Routing: routingService,
+		Cost:    costService,
+	}
+}
+
+// ProvideBillingServices creates all billing-related services
+func ProvideBillingServices(
+	billingRepos *BillingRepositories,
+	gatewayRepos *GatewayRepositories,
+	logger *logrus.Logger,
+) *BillingServices {
+	// Create organization service interface implementation
+	// This is a simple implementation - in production you'd inject the real org service
+	orgService := &simpleBillingOrgService{logger: logger}
+	
+	// Create billing service
+	billingServiceImpl := billingService.NewBillingService(
+		logger,
+		nil, // config - use defaults
+		billingRepos.Billing,
+		orgService,
+	)
+	
+	return &BillingServices{
+		Billing: billingServiceImpl,
+	}
+}
+
 // simpleEventPublisher is a simple implementation of EventPublisher for initial integration
 type simpleEventPublisher struct {
 	logger *logrus.Logger
@@ -445,11 +597,33 @@ func (p *simpleEventPublisher) PublishBatch(ctx context.Context, events []*obser
 	return nil
 }
 
+// simpleBillingOrgService is a simple implementation of BillingOrganizationService
+type simpleBillingOrgService struct {
+	logger *logrus.Logger
+}
+
+func (s *simpleBillingOrgService) GetBillingTier(ctx context.Context, orgID ulid.ULID) (string, error) {
+	// Default to free tier for now - in production this would query the org service
+	return "free", nil
+}
+
+func (s *simpleBillingOrgService) GetDiscountRate(ctx context.Context, orgID ulid.ULID) (float64, error) {
+	// Default to no discount - in production this would query the org service
+	return 0.0, nil
+}
+
+func (s *simpleBillingOrgService) GetPaymentMethod(ctx context.Context, orgID ulid.ULID) (*billingService.PaymentMethod, error) {
+	// No payment method by default - in production this would query the org service
+	return nil, nil
+}
+
 // ProvideServices creates all service containers with proper dependency resolution
 func ProvideServices(
 	cfg *config.Config,
 	repos *RepositoryContainer,
 	workers *WorkerContainer,
+	gatewayServices *GatewayServices,
+	billingServices *BillingServices,
 	logger *logrus.Logger,
 ) *ServiceContainer {
 	// Create auth services first (other services depend on them)
@@ -479,6 +653,8 @@ func ProvideServices(
 		InvitationService:  invitationService,
 		SettingsService:    settingsService,
 		Observability:      observabilityServices,
+		Gateway:            gatewayServices,
+		Billing:            billingServices,
 	}
 }
 
@@ -501,20 +677,27 @@ func ProvideAll(cfg *config.Config, logger *logrus.Logger) (*ProviderContainer, 
 	}
 
 	// Initialize repositories
-	repos := ProvideRepositories(databases)
+	repos := ProvideRepositories(databases, logger)
 
-	// Initialize workers (require ClickHouse for analytics)
-	workers, err := ProvideWorkers(cfg, databases.ClickHouse, logger)
+	// Create gateway and billing services before workers
+	gatewayServices := ProvideGatewayServices(repos.Gateway, logger)
+	billingServices := ProvideBillingServices(repos.Billing, repos.Gateway, logger)
+
+	// Initialize workers (require ClickHouse for analytics and services for gateway analytics)
+	workers, err := ProvideWorkers(cfg, databases.ClickHouse, repos.Analytics.Analytics, billingServices.Billing, logger)
 	if err != nil {
 		return nil, err
 	}
 
-	// Start analytics worker
+	// Start analytics workers
 	workers.TelemetryAnalytics.Start()
 	logger.Info("Telemetry analytics worker started")
+	
+	workers.GatewayAnalytics.Start()
+	logger.Info("Gateway analytics worker started")
 
 	// Initialize services (includes worker integration)
-	services := ProvideServices(cfg, repos, workers, logger)
+	services := ProvideServices(cfg, repos, workers, gatewayServices, billingServices, logger)
 
 	// Initialize enterprise services
 	enterprise := ProvideEnterpriseServices(cfg, logger)
@@ -658,6 +841,14 @@ func (pc *ProviderContainer) HealthCheck() map[string]string {
 			health["telemetry_analytics_worker"] = "unhealthy: queue depth exceeded or processing failed"
 		}
 	}
+	
+	if pc.Workers != nil && pc.Workers.GatewayAnalytics != nil {
+		if pc.Workers.GatewayAnalytics.IsHealthy() {
+			health["gateway_analytics_worker"] = "healthy"
+		} else {
+			health["gateway_analytics_worker"] = "unhealthy: queue depth exceeded or processing failed"
+		}
+	}
 
 	return health
 }
@@ -671,6 +862,12 @@ func (pc *ProviderContainer) Shutdown() error {
 		pc.Logger.Info("Stopping telemetry analytics worker...")
 		pc.Workers.TelemetryAnalytics.Stop()
 		pc.Logger.Info("Telemetry analytics worker stopped")
+	}
+	
+	if pc.Workers != nil && pc.Workers.GatewayAnalytics != nil {
+		pc.Logger.Info("Stopping gateway analytics worker...")
+		pc.Workers.GatewayAnalytics.Stop()
+		pc.Logger.Info("Gateway analytics worker stopped")
 	}
 
 	// Close database connections
