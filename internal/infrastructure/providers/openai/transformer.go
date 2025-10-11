@@ -193,28 +193,40 @@ func (p *OpenAIProvider) transformEmbeddingRequest(req *providers.EmbeddingReque
 
 func (p *OpenAIProvider) transformChatCompletionResponse(resp *openai.ChatCompletionResponse) *providers.ChatCompletionResponse {
 	result := &providers.ChatCompletionResponse{
-		ID:                resp.ID,
-		Object:            resp.Object,
-		Created:           resp.Created,
-		Model:             resp.Model,
-		SystemFingerprint: &resp.SystemFingerprint,
+		ID:      resp.ID,
+		Object:  resp.Object,
+		Created: resp.Created,
+		Model:   resp.Model,
+	}
+
+	// Only set SystemFingerprint if non-empty
+	if resp.SystemFingerprint != "" {
+		result.SystemFingerprint = &resp.SystemFingerprint
 	}
 
 	// Transform choices
 	if len(resp.Choices) > 0 {
 		result.Choices = make([]providers.ChatCompletionChoice, len(resp.Choices))
 		for i, choice := range resp.Choices {
-			finishReason := string(choice.FinishReason)
 			result.Choices[i] = providers.ChatCompletionChoice{
-				Index:        choice.Index,
-				FinishReason: &finishReason,
+				Index: choice.Index,
+			}
+
+			// Only set FinishReason if non-empty
+			if choice.FinishReason != "" {
+				finishReason := string(choice.FinishReason)
+				result.Choices[i].FinishReason = &finishReason
 			}
 
 			if choice.Message.Role != "" {
 				result.Choices[i].Message = &providers.ChatMessage{
 					Role:    choice.Message.Role,
 					Content: choice.Message.Content,
-					Name:    &choice.Message.Name,
+				}
+
+				// Only set Name if non-empty
+				if choice.Message.Name != "" {
+					result.Choices[i].Message.Name = &choice.Message.Name
 				}
 
 				// Transform function call
@@ -257,21 +269,29 @@ func (p *OpenAIProvider) transformChatCompletionResponse(resp *openai.ChatComple
 
 func (p *OpenAIProvider) transformChatCompletionStreamResponse(resp *openai.ChatCompletionStreamResponse) *providers.ChatCompletionResponse {
 	result := &providers.ChatCompletionResponse{
-		ID:                resp.ID,
-		Object:            resp.Object,
-		Created:           resp.Created,
-		Model:             resp.Model,
-		SystemFingerprint: &resp.SystemFingerprint,
+		ID:      resp.ID,
+		Object:  resp.Object,
+		Created: resp.Created,
+		Model:   resp.Model,
+	}
+
+	// Only set SystemFingerprint if non-empty
+	if resp.SystemFingerprint != "" {
+		result.SystemFingerprint = &resp.SystemFingerprint
 	}
 
 	// Transform choices for streaming
 	if len(resp.Choices) > 0 {
 		result.Choices = make([]providers.ChatCompletionChoice, len(resp.Choices))
 		for i, choice := range resp.Choices {
-			finishReason := string(choice.FinishReason)
 			result.Choices[i] = providers.ChatCompletionChoice{
-				Index:        choice.Index,
-				FinishReason: &finishReason,
+				Index: choice.Index,
+			}
+
+			// Only set FinishReason if non-empty
+			if choice.FinishReason != "" {
+				finishReason := string(choice.FinishReason)
+				result.Choices[i].FinishReason = &finishReason
 			}
 
 			// For streaming, we have delta instead of message
@@ -325,12 +345,16 @@ func (p *OpenAIProvider) transformCompletionResponse(resp *openai.CompletionResp
 	if len(resp.Choices) > 0 {
 		result.Choices = make([]providers.CompletionChoice, len(resp.Choices))
 		for i, choice := range resp.Choices {
-			finishReason := choice.FinishReason
 			result.Choices[i] = providers.CompletionChoice{
-				Text:         choice.Text,
-				Index:        choice.Index,
-				Logprobs:     choice.LogProbs,
-				FinishReason: &finishReason,
+				Text:     choice.Text,
+				Index:    choice.Index,
+				Logprobs: choice.LogProbs,
+			}
+
+			// Only set FinishReason if non-empty
+			if choice.FinishReason != "" {
+				finishReason := choice.FinishReason
+				result.Choices[i].FinishReason = &finishReason
 			}
 		}
 	}

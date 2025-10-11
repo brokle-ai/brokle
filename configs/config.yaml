@@ -86,22 +86,33 @@ redis:
   idle_timeout: 5m
   max_retries: 3
 
-# JWT Token Configuration
-jwt:
-  # These should be set via environment variables in production
-  private_key: |
-    -----BEGIN PRIVATE KEY-----
-    # Your RSA private key here (use environment variable in production)
-    -----END PRIVATE KEY-----
-  public_key: |
-    -----BEGIN PUBLIC KEY-----
-    # Your RSA public key here (use environment variable in production)
-    -----END PUBLIC KEY-----
-  issuer: brokle-platform
+# Authentication & JWT Configuration (Flexible: HS256 for dev, RS256 for prod)
+auth:
+  # Token Lifetimes (Go duration format: ns, us, ms, s, m, h)
   access_token_ttl: 15m
-  refresh_token_ttl: 168h
-  api_key_token_ttl: 8760h
-  algorithm: RS256
+  refresh_token_ttl: 168h  # 7 days
+  token_rotation_enabled: true
+
+  # Rate Limiting Configuration
+  rate_limit_enabled: false  # Disabled by default for development
+  rate_limit_per_ip: 100
+  rate_limit_per_user: 1000
+  rate_limit_window: 1h
+
+  # JWT Security - Choose signing method based on environment
+  jwt_signing_method: HS256  # HS256 (dev/simple) or RS256 (prod/enterprise)
+  jwt_issuer: brokle
+
+  # HS256 (Development/Simple deployments) - Set via JWT_SECRET env var
+  # Requires minimum 32 characters for security
+  jwt_secret: ""  # MUST be set via JWT_SECRET environment variable
+
+  # RS256 (Production/Enterprise) - Set via environment variables
+  # Use either file paths OR base64 encoded keys
+  jwt_private_key_path: ""        # Set via JWT_PRIVATE_KEY_PATH
+  jwt_public_key_path: ""         # Set via JWT_PUBLIC_KEY_PATH
+  jwt_private_key_base64: ""      # Set via JWT_PRIVATE_KEY_BASE64
+  jwt_public_key_base64: ""       # Set via JWT_PUBLIC_KEY_BASE64
 
 # Logging Configuration
 logging:

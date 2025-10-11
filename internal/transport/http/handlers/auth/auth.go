@@ -474,7 +474,7 @@ func (h *Handler) ValidateAPIKey(apiKey string) (*auth.AuthContext, error) {
 // ValidateAPIKeyHandler validates self-contained API keys (industry standard)
 // @Summary Validate API key
 // @Description Validates a self-contained API key and extracts project information automatically
-// @Tags Authentication
+// @Tags SDK - Authentication
 // @Accept json
 // @Produce json
 // @Param X-API-Key header string false "API key (format: bk_{40_char_random})"

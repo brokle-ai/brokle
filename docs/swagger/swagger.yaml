@@ -5565,7 +5565,7 @@ paths:
             $ref: '#/definitions/response.ErrorResponse'
       summary: Validate API key
       tags:
-      - Authentication
+      - SDK - Authentication
   /v1/cache/invalidate:
     post:
       consumes:

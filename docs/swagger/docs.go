@@ -5019,7 +5019,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Authentication"
+                    "SDK - Authentication"
                 ],
                 "summary": "Validate API key",
                 "parameters": [

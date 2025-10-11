@@ -2,6 +2,7 @@ package openai
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -26,6 +27,15 @@ type OpenAIProvider struct {
 
 // NewOpenAIProvider creates a new OpenAI provider instance
 func NewOpenAIProvider(config *providers.ProviderConfig) (providers.Provider, error) {
+	// Check for nil configuration
+	if config == nil {
+		return nil, providers.NewProviderError(
+			"INVALID_CONFIG",
+			"Provider configuration cannot be nil",
+			400,
+		)
+	}
+
 	if config.APIKey == "" {
 		return nil, providers.NewProviderError(
 			"MISSING_API_KEY",
@@ -446,6 +456,14 @@ func (p *OpenAIProvider) isRetryableError(err error) bool {
 			apiErr.HTTPStatusCode >= 500 // Server errors
 	}
 
+	// Check for ProviderError (wrapped errors from transformError)
+	if providerErr, ok := err.(*providers.ProviderError); ok {
+		// Retry on rate limits, timeouts, and server errors
+		return providerErr.HTTPStatusCode == 429 || // Rate limit
+			providerErr.HTTPStatusCode == 408 || // Request timeout
+			providerErr.HTTPStatusCode >= 500 // Server errors
+	}
+
 	// Retry on context timeouts
 	if err == context.DeadlineExceeded {
 		return true
@@ -469,8 +487,8 @@ func (p *OpenAIProvider) transformError(err error) *providers.ProviderError {
 		)
 	}
 
-	// Handle context timeout
-	if err == context.DeadlineExceeded {
+	// Handle context timeout (use errors.Is to catch wrapped timeout errors)
+	if errors.Is(err, context.DeadlineExceeded) {
 		return providers.NewProviderErrorWithCause(
 			"REQUEST_TIMEOUT",
 			"Request timed out",

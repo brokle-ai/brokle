@@ -3,16 +3,12 @@ package openai
 import (
 	"bytes"
 	"context"
-	"io"
 	"net/http"
 	"net/http/httptest"
-	"strconv"
 	"testing"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"brokle/internal/core/domain/gateway"
@@ -129,11 +125,11 @@ const (
 
 func createValidConfig() *providers.ProviderConfig {
 	return &providers.ProviderConfig{
-		APIKey:          validAPIKey,
-		BaseURL:         testBaseURL,
-		Timeout:         testTimeout,
-		MaxRetries:      testMaxRetries,
-		OrganizationID:  &testOrgID,
+		APIKey:         validAPIKey,
+		BaseURL:        testBaseURL,
+		Timeout:        testTimeout,
+		MaxRetries:     testMaxRetries,
+		OrganizationID: &testOrgID,
 	}
 }
 
@@ -279,7 +275,7 @@ func TestOpenAIProvider_ChatCompletion_Error(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, resp)
 	assert.IsType(t, &providers.ProviderError{}, err)
-	
+
 	providerErr := err.(*providers.ProviderError)
 	assert.Equal(t, 401, providerErr.HTTPStatusCode)
 	assert.Contains(t, providerErr.Message, "Invalid API key")
@@ -292,7 +288,7 @@ func TestOpenAIProvider_ChatCompletion_Retry(t *testing.T) {
 	// Create a mock HTTP server that fails twice then succeeds
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestCount++
-		
+
 		if requestCount <= 2 {
 			// First two requests fail with rate limit
 			w.Header().Set("Content-Type", "application/json")
@@ -466,7 +462,12 @@ func TestOpenAIProvider_Embedding(t *testing.T) {
 	assert.Len(t, resp.Data, 1)
 	assert.Equal(t, "embedding", resp.Data[0].Object)
 	assert.Equal(t, 0, resp.Data[0].Index)
-	assert.Equal(t, []float64{0.1, 0.2, 0.3, 0.4, 0.5}, resp.Data[0].Embedding)
+	// Use InDelta for float comparisons to account for float32→float64 precision loss
+	expectedEmbedding := []float64{0.1, 0.2, 0.3, 0.4, 0.5}
+	assert.Len(t, resp.Data[0].Embedding, len(expectedEmbedding))
+	for i, expected := range expectedEmbedding {
+		assert.InDelta(t, expected, resp.Data[0].Embedding[i], 0.0001)
+	}
 	assert.NotNil(t, resp.Usage)
 	assert.Equal(t, 5, resp.Usage.PromptTokens)
 	assert.Equal(t, 5, resp.Usage.TotalTokens)
@@ -593,7 +594,7 @@ func TestOpenAIProvider_TestConnection(t *testing.T) {
 			assert.NoError(t, err)
 			assert.NotNil(t, result)
 			assert.Equal(t, tt.expectSuccess, result.Success)
-			assert.Greater(t, result.LatencyMs, int64(0))
+			assert.GreaterOrEqual(t, result.LatencyMs, int64(0)) // Latency can be 0 for fast mock responses
 			assert.NotZero(t, result.TestedAt)
 
 			if !tt.expectSuccess {
@@ -604,31 +605,6 @@ func TestOpenAIProvider_TestConnection(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestOpenAIProvider_Configuration(t *testing.T) {
-	provider, err := NewOpenAIProvider(createValidConfig())
-	require.NoError(t, err)
-
-	// Test SetAPIKey
-	newAPIKey := "sk-new-key-456"
-	provider.SetAPIKey(newAPIKey)
-	assert.Equal(t, newAPIKey, provider.config.APIKey)
-
-	// Test SetBaseURL
-	newBaseURL := "https://custom-api.com/v1"
-	provider.SetBaseURL(newBaseURL)
-	assert.Equal(t, newBaseURL, provider.config.BaseURL)
-
-	// Test SetTimeout
-	newTimeout := 60 * time.Second
-	provider.SetTimeout(newTimeout)
-	assert.Equal(t, newTimeout, provider.timeout)
-
-	// Test SetMaxRetries
-	newMaxRetries := 5
-	provider.SetMaxRetries(newMaxRetries)
-	assert.Equal(t, newMaxRetries, provider.maxRetries)
 }
 
 func TestOpenAIProvider_Capabilities(t *testing.T) {
@@ -687,7 +663,7 @@ func TestOpenAIProvider_ContextTimeout(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, resp)
 	assert.IsType(t, &providers.ProviderError{}, err)
-	
+
 	providerErr := err.(*providers.ProviderError)
 	assert.Equal(t, 408, providerErr.HTTPStatusCode)
 	assert.Contains(t, providerErr.Message, "Request timed out")

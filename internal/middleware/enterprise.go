@@ -2,8 +2,9 @@ package middleware
 
 import (
 	"net/http"
+	"strconv"
 	"time"
-	
+
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 
@@ -147,7 +148,7 @@ func CheckUsageLimit(limitType string, licenseService *services.LicenseService, 
 		}
 
 		// Within limits, add usage info to context
-		c.Header("X-Usage-Remaining", string(remaining))
+		c.Header("X-Usage-Remaining", strconv.FormatInt(remaining, 10))
 		c.Next()
 
 		// Increment usage after successful request (in background)
