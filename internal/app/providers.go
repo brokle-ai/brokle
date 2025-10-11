@@ -5,8 +5,6 @@ import (
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
-	"github.com/jmoiron/sqlx"
-	"github.com/oklog/ulid/v2"
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 
@@ -24,7 +22,8 @@ import (
 	"brokle/internal/ee/rbac"
 	"brokle/internal/ee/sso"
 	"brokle/internal/infrastructure/database"
-	"brokle/internal/infrastructure/providers/openai"
+	"brokle/internal/infrastructure/providers"
+	_ "brokle/internal/infrastructure/providers/openai" // Import for side-effect (provider registration)
 	analyticsRepo "brokle/internal/infrastructure/repository/analytics"
 	authRepo "brokle/internal/infrastructure/repository/auth"
 	billingRepo "brokle/internal/infrastructure/repository/billing"
@@ -39,6 +38,7 @@ import (
 	observabilityService "brokle/internal/services/observability"
 	"brokle/internal/workers"
 	gatewayAnalytics "brokle/internal/workers/analytics"
+	"brokle/pkg/ulid"
 )
 
 // ProviderContainer holds all provider instances for dependency injection
@@ -295,16 +295,16 @@ func ProvideObservabilityRepositories(postgresDB *gorm.DB, clickhouseDB *databas
 }
 
 // ProvideGatewayRepositories creates all gateway-related repositories
-func ProvideGatewayRepositories(db *sqlx.DB, logger *logrus.Logger) *GatewayRepositories {
+func ProvideGatewayRepositories(db *gorm.DB) *GatewayRepositories {
 	return &GatewayRepositories{
-		Provider:       gatewayRepo.NewProviderRepository(db, logger),
-		Model:          gatewayRepo.NewModelRepository(db, logger),
-		ProviderConfig: gatewayRepo.NewProviderConfigRepository(db, logger),
+		Provider:       gatewayRepo.NewProviderRepository(db),
+		Model:          gatewayRepo.NewModelRepository(db),
+		ProviderConfig: gatewayRepo.NewProviderConfigRepository(db),
 	}
 }
 
 // ProvideBillingRepositories creates all billing-related repositories
-func ProvideBillingRepositories(db *sqlx.DB, logger *logrus.Logger) *BillingRepositories {
+func ProvideBillingRepositories(db *gorm.DB, logger *logrus.Logger) *BillingRepositories {
 	return &BillingRepositories{
 		Billing: billingRepo.NewRepository(db, logger),
 	}
@@ -324,8 +324,8 @@ func ProvideRepositories(dbs *DatabaseContainer, logger *logrus.Logger) *Reposit
 		Auth:          ProvideAuthRepositories(dbs.Postgres.DB),
 		Organization:  ProvideOrganizationRepositories(dbs.Postgres.DB),
 		Observability: ProvideObservabilityRepositories(dbs.Postgres.DB, dbs.ClickHouse, dbs.Redis),
-		Gateway:       ProvideGatewayRepositories(dbs.Postgres.SQLXConn, logger),
-		Billing:       ProvideBillingRepositories(dbs.Postgres.SQLXConn, logger),
+		Gateway:       ProvideGatewayRepositories(dbs.Postgres.DB),
+		Billing:       ProvideBillingRepositories(dbs.Postgres.DB, logger),
 		Analytics:     ProvideAnalyticsRepositories(dbs.ClickHouse.Conn, logger),
 	}
 }
@@ -516,12 +516,17 @@ func ProvideGatewayServices(
 	gatewayRepos *GatewayRepositories,
 	logger *logrus.Logger,
 ) *GatewayServices {
-	// Create OpenAI provider client
-	openaiProvider := openai.NewProvider(logger)
-	
-	// Create cost service
-	costService := gatewayService.NewCostService(logger)
-	
+	// Create provider factory (OpenAI provider auto-registers via init())
+	providerFactory := providers.NewProviderFactory()
+
+	// Create cost service with repository dependencies
+	costService := gatewayService.NewCostService(
+		gatewayRepos.Model,
+		gatewayRepos.Provider,
+		gatewayRepos.ProviderConfig,
+		logger,
+	)
+
 	// Create routing service with cost service dependency
 	routingService := gatewayService.NewRoutingService(
 		gatewayRepos.Provider,
@@ -530,7 +535,7 @@ func ProvideGatewayServices(
 		costService,
 		logger,
 	)
-	
+
 	// Create gateway service with all dependencies
 	gatewayServiceImpl := gatewayService.NewGatewayService(
 		gatewayRepos.Provider,
@@ -538,12 +543,10 @@ func ProvideGatewayServices(
 		gatewayRepos.ProviderConfig,
 		routingService,
 		costService,
-		map[string]gateway.ProviderClient{
-			"openai": openaiProvider,
-		},
+		providerFactory,
 		logger,
 	)
-	
+
 	return &GatewayServices{
 		Gateway: gatewayServiceImpl,
 		Routing: routingService,

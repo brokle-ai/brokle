@@ -293,14 +293,74 @@ func NewProviderErrorWithCause(code, message string, httpStatusCode int, cause e
 	}
 }
 
-// Factory function type for creating providers
-type ProviderFactory func(config *ProviderConfig) (Provider, error)
+// ProviderFactory interface for creating provider instances
+type ProviderFactory interface {
+	GetProvider(ctx context.Context, providerType gateway.ProviderType, config map[string]interface{}) (Provider, error)
+	GetSupportedProviders() []gateway.ProviderType
+}
+
+// DefaultProviderFactory implements the ProviderFactory interface
+type DefaultProviderFactory struct{}
+
+// NewProviderFactory creates a new provider factory
+func NewProviderFactory() ProviderFactory {
+	return &DefaultProviderFactory{}
+}
+
+// GetProvider creates a provider instance based on type and configuration
+func (f *DefaultProviderFactory) GetProvider(ctx context.Context, providerType gateway.ProviderType, config map[string]interface{}) (Provider, error) {
+	// Convert map to ProviderConfig
+	providerConfig := &ProviderConfig{}
+	
+	// Extract configuration values from the map
+	if apiKey, ok := config["api_key"].(string); ok {
+		providerConfig.APIKey = apiKey
+	}
+	if baseURL, ok := config["base_url"].(string); ok {
+		providerConfig.BaseURL = baseURL
+	}
+	if timeout, ok := config["timeout"].(time.Duration); ok {
+		providerConfig.Timeout = timeout
+	}
+	if maxRetries, ok := config["max_retries"].(int); ok {
+		providerConfig.MaxRetries = maxRetries
+	}
+	if headers, ok := config["custom_headers"].(map[string]string); ok {
+		providerConfig.CustomHeaders = headers
+	}
+	if orgID, ok := config["organization_id"].(string); ok {
+		providerConfig.OrganizationID = &orgID
+	}
+	if projectID, ok := config["project_id"].(string); ok {
+		providerConfig.ProjectID = &projectID
+	}
+	
+	// Use the existing factory registration system
+	factory, exists := providerFactories[providerType]
+	if !exists {
+		return nil, NewProviderError(
+			"PROVIDER_NOT_SUPPORTED",
+			"Provider type not supported: "+string(providerType),
+			400,
+		)
+	}
+	
+	return factory(providerConfig)
+}
+
+// GetSupportedProviders returns a list of supported provider types
+func (f *DefaultProviderFactory) GetSupportedProviders() []gateway.ProviderType {
+	return GetSupportedProviders()
+}
+
+// Legacy factory function type for creating providers (deprecated, use interface above)
+type ProviderFactoryFunc func(config *ProviderConfig) (Provider, error)
 
 // Registry of provider factories
-var providerFactories = make(map[gateway.ProviderType]ProviderFactory)
+var providerFactories = make(map[gateway.ProviderType]ProviderFactoryFunc)
 
 // RegisterProvider registers a provider factory
-func RegisterProvider(providerType gateway.ProviderType, factory ProviderFactory) {
+func RegisterProvider(providerType gateway.ProviderType, factory ProviderFactoryFunc) {
 	providerFactories[providerType] = factory
 }
 

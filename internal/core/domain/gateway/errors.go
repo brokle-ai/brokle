@@ -240,6 +240,12 @@ func NewProviderConfigNotFoundError(projectID, providerID string) *GatewayError 
 		WithDetail("provider_id", providerID)
 }
 
+// NewProviderConfigNotFoundByIDError creates a provider config not found error with just ID
+func NewProviderConfigNotFoundByIDError(configID string) *GatewayError {
+	return NewGatewayError(ErrCodeProviderConfigNotFound, "provider configuration not found").
+		WithDetail("config_id", configID)
+}
+
 // NewValidationError creates a validation error with field details
 func NewValidationError(field, message string) *GatewayError {
 	return NewGatewayError(ErrCodeValidationFailed, "validation failed").

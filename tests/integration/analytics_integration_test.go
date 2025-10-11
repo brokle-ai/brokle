@@ -343,7 +343,6 @@ func (suite *AnalyticsIntegrationTestSuite) TestBatchProcessing() {
 		metric := &gateway.RequestMetrics{
 			RequestID:       ulid.New().String(),
 			ProjectID:       suite.testOrgID,
-			Environment:     "production",
 			Provider:        "openai",
 			Model:           "gpt-3.5-turbo",
 			InputTokens:     50,
@@ -402,7 +401,6 @@ func (suite *AnalyticsIntegrationTestSuite) TestUsageStatsRetrieval() {
 		{
 			ID:                ulid.New(),
 			OrganizationID:    suite.testOrgID,
-			Environment:       gateway.EnvironmentProduction,
 			ProviderID:        suite.testProviderID,
 			ModelID:           suite.testModelID,
 			RequestType:       gateway.RequestTypeChatCompletion,
@@ -424,7 +422,6 @@ func (suite *AnalyticsIntegrationTestSuite) TestUsageStatsRetrieval() {
 		{
 			ID:                ulid.New(),
 			OrganizationID:    ulid.New(), // Different org
-			Environment:       gateway.EnvironmentProduction,
 			ProviderID:        suite.testProviderID,
 			ModelID:           suite.testModelID,
 			RequestType:       gateway.RequestTypeChatCompletion,
@@ -479,7 +476,6 @@ func (suite *AnalyticsIntegrationTestSuite) TestCostStatsRetrieval() {
 			ID:             ulid.New(),
 			RequestID:      ulid.New(),
 			OrganizationID: suite.testOrgID,
-			Environment:    gateway.EnvironmentProduction,
 			ProviderID:     suite.testProviderID,
 			ModelID:        suite.testModelID,
 			RequestType:    gateway.RequestTypeChatCompletion,
@@ -500,7 +496,6 @@ func (suite *AnalyticsIntegrationTestSuite) TestCostStatsRetrieval() {
 			ID:             ulid.New(),
 			RequestID:      ulid.New(),
 			OrganizationID: suite.testOrgID,
-			Environment:    gateway.EnvironmentStaging,
 			ProviderID:     suite.testProviderID,
 			ModelID:        suite.testModelID,
 			RequestType:    gateway.RequestTypeCompletion,
@@ -537,13 +532,11 @@ func (suite *AnalyticsIntegrationTestSuite) TestCostStatsRetrieval() {
 	assert.Equal(suite.T(), suite.testOrgID, stats[0].OrganizationID)
 	assert.Equal(suite.T(), 0.003, stats[0].TotalCost)
 	assert.Equal(suite.T(), int32(150), stats[0].TotalTokens)
-	assert.Equal(suite.T(), gateway.EnvironmentProduction, stats[0].Environment)
 
 	// Verify second cost metric
 	assert.Equal(suite.T(), suite.testOrgID, stats[1].OrganizationID)
 	assert.Equal(suite.T(), 0.0024, stats[1].TotalCost)
 	assert.Equal(suite.T(), int32(120), stats[1].TotalTokens)
-	assert.Equal(suite.T(), gateway.EnvironmentStaging, stats[1].Environment)
 }
 
 // TestBillingGeneration tests billing summary generation

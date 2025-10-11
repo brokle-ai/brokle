@@ -72,7 +72,9 @@ func (a *App) Start() error {
 		providers.Services.Auth.Permission,             // Permission service for RBAC
 		providers.Services.Auth.OrganizationMembers,    // Organization member service for normalized RBAC
 		providers.Services.Observability,               // Observability service registry
-		providers.Services.Gateway,                     // Gateway service for AI API endpoints
+		providers.Services.Gateway.Gateway,             // Gateway service for AI API endpoints
+		providers.Services.Gateway.Routing,             // Routing service for AI gateway
+		providers.Services.Gateway.Cost,                // Cost service for AI gateway
 		// All enterprise services available through providers.Enterprise
 	)
 

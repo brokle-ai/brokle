@@ -9,6 +9,7 @@ import (
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/sirupsen/logrus"
 
+	"brokle/internal/core/domain/gateway"
 	"brokle/internal/workers/analytics"
 	"brokle/pkg/ulid"
 )
@@ -35,14 +36,14 @@ func (r *Repository) BatchInsertRequestMetrics(ctx context.Context, metrics []*a
 
 	query := `
 		INSERT INTO gateway_request_metrics (
-			id, request_id, organization_id, user_id, environment,
+			id, request_id, organization_id, user_id,
 			provider_id, provider_name, model_id, model_name,
 			request_type, method, endpoint, status, status_code,
 			duration, input_tokens, output_tokens, total_tokens,
 			estimated_cost, actual_cost, currency, routing_reason,
 			cache_hit, error, metadata, timestamp
 		) VALUES (
-			?, ?, ?, ?, ?,
+			?, ?, ?, ?,
 			?, ?, ?, ?,
 			?, ?, ?, ?, ?,
 			?, ?, ?, ?,
@@ -76,7 +77,6 @@ func (r *Repository) BatchInsertRequestMetrics(ctx context.Context, metrics []*a
 			metric.RequestID.String(),
 			metric.OrganizationID.String(),
 			userID,
-			string(metric.Environment),
 			metric.ProviderID.String(),
 			metric.ProviderName,
 			metric.ModelID.String(),
@@ -123,14 +123,14 @@ func (r *Repository) BatchInsertUsageMetrics(ctx context.Context, metrics []*ana
 
 	query := `
 		INSERT INTO gateway_usage_metrics (
-			id, organization_id, environment, provider_id, model_id,
+			id, organization_id, provider_id, model_id,
 			request_type, period, period_start, period_end,
 			request_count, success_count, error_count,
 			total_input_tokens, total_output_tokens, total_tokens,
 			total_cost, currency, avg_duration, min_duration, max_duration,
 			cache_hit_rate, timestamp
 		) VALUES (
-			?, ?, ?, ?, ?,
+			?, ?, ?, ?,
 			?, ?, ?, ?,
 			?, ?, ?,
 			?, ?, ?,
@@ -148,7 +148,6 @@ func (r *Repository) BatchInsertUsageMetrics(ctx context.Context, metrics []*ana
 		err := batch.Append(
 			metric.ID.String(),
 			metric.OrganizationID.String(),
-			string(metric.Environment),
 			metric.ProviderID.String(),
 			metric.ModelID.String(),
 			string(metric.RequestType),
@@ -193,7 +192,7 @@ func (r *Repository) BatchInsertCostMetrics(ctx context.Context, metrics []*anal
 
 	query := `
 		INSERT INTO gateway_cost_metrics (
-			id, request_id, organization_id, environment,
+			id, request_id, organization_id,
 			provider_id, model_id, request_type,
 			input_tokens, output_tokens, total_tokens,
 			input_cost, output_cost, total_cost,
@@ -219,7 +218,6 @@ func (r *Repository) BatchInsertCostMetrics(ctx context.Context, metrics []*anal
 			metric.ID.String(),
 			metric.RequestID.String(),
 			metric.OrganizationID.String(),
-			string(metric.Environment),
 			metric.ProviderID.String(),
 			metric.ModelID.String(),
 			string(metric.RequestType),
@@ -256,7 +254,7 @@ func (r *Repository) BatchInsertCostMetrics(ctx context.Context, metrics []*anal
 func (r *Repository) GetUsageStats(ctx context.Context, orgID ulid.ULID, period string, start, end time.Time) ([]*analytics.UsageMetric, error) {
 	query := `
 		SELECT 
-			id, organization_id, environment, provider_id, model_id,
+			id, organization_id, provider_id, model_id,
 			request_type, period, period_start, period_end,
 			request_count, success_count, error_count,
 			total_input_tokens, total_output_tokens, total_tokens,
@@ -279,15 +277,14 @@ func (r *Repository) GetUsageStats(ctx context.Context, orgID ulid.ULID, period 
 	for rows.Next() {
 		metric := &analytics.UsageMetric{}
 		var (
-			id, orgIDStr, envStr, providerIDStr, modelIDStr string
-			reqTypeStr                                      string
+			id, orgIDStr, providerIDStr, modelIDStr string
+			reqTypeStr                              string
 			minDurationNs, maxDurationNs                    int64
 		)
 
 		err := rows.Scan(
 			&id,
 			&orgIDStr,
-			&envStr,
 			&providerIDStr,
 			&modelIDStr,
 			&reqTypeStr,
@@ -328,8 +325,7 @@ func (r *Repository) GetUsageStats(ctx context.Context, orgID ulid.ULID, period 
 		}
 
 		// Parse enums and durations
-		metric.Environment = analytics.Environment(envStr)
-		metric.RequestType = analytics.RequestType(reqTypeStr)
+		metric.RequestType = gateway.RequestType(reqTypeStr)
 		metric.MinDuration = time.Duration(minDurationNs)
 		metric.MaxDuration = time.Duration(maxDurationNs)
 
@@ -347,7 +343,7 @@ func (r *Repository) GetUsageStats(ctx context.Context, orgID ulid.ULID, period 
 func (r *Repository) GetCostStats(ctx context.Context, orgID ulid.ULID, period string, start, end time.Time) ([]*analytics.CostMetric, error) {
 	query := `
 		SELECT 
-			id, request_id, organization_id, environment,
+			id, request_id, organization_id,
 			provider_id, model_id, request_type,
 			input_tokens, output_tokens, total_tokens,
 			input_cost, output_cost, total_cost,
@@ -370,7 +366,7 @@ func (r *Repository) GetCostStats(ctx context.Context, orgID ulid.ULID, period s
 	for rows.Next() {
 		metric := &analytics.CostMetric{}
 		var (
-			id, reqIDStr, orgIDStr, envStr string
+			id, reqIDStr, orgIDStr string
 			providerIDStr, modelIDStr      string
 			reqTypeStr                     string
 		)
@@ -379,7 +375,6 @@ func (r *Repository) GetCostStats(ctx context.Context, orgID ulid.ULID, period s
 			&id,
 			&reqIDStr,
 			&orgIDStr,
-			&envStr,
 			&providerIDStr,
 			&modelIDStr,
 			&reqTypeStr,
@@ -419,8 +414,7 @@ func (r *Repository) GetCostStats(ctx context.Context, orgID ulid.ULID, period s
 		}
 
 		// Parse enums
-		metric.Environment = analytics.Environment(envStr)
-		metric.RequestType = analytics.RequestType(reqTypeStr)
+		metric.RequestType = gateway.RequestType(reqTypeStr)
 
 		metrics = append(metrics, metric)
 	}
@@ -440,7 +434,7 @@ func (r *Repository) GetRequestMetrics(ctx context.Context, orgID ulid.ULID, sta
 
 	query := `
 		SELECT 
-			id, request_id, organization_id, user_id, environment,
+			id, request_id, organization_id, user_id,
 			provider_id, provider_name, model_id, model_name,
 			request_type, method, endpoint, status, status_code,
 			duration, input_tokens, output_tokens, total_tokens,
@@ -465,7 +459,6 @@ func (r *Repository) GetRequestMetrics(ctx context.Context, orgID ulid.ULID, sta
 		var (
 			id, reqIDStr, orgIDStr string
 			userIDStr              sql.NullString
-			envStr                 string
 			durationNs             int64
 			metadataStr            string
 		)
@@ -475,7 +468,6 @@ func (r *Repository) GetRequestMetrics(ctx context.Context, orgID ulid.ULID, sta
 			&reqIDStr,
 			&orgIDStr,
 			&userIDStr,
-			&envStr,
 			&metric.ProviderID,
 			&metric.ProviderName,
 			&metric.ModelID,
@@ -521,8 +513,7 @@ func (r *Repository) GetRequestMetrics(ctx context.Context, orgID ulid.ULID, sta
 			}
 		}
 
-		// Parse enums and duration
-		metric.Environment = analytics.Environment(envStr)
+		// Parse duration
 		metric.Duration = time.Duration(durationNs)
 
 		// Parse metadata (simplified - in production you might want proper JSON unmarshaling)

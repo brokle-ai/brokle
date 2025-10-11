@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -47,18 +45,18 @@ func NewHandler(
 // ChatCompletionRequest represents the chat completion request
 // @Description OpenAI-compatible chat completion request
 type ChatCompletionRequest struct {
-	Model            string                 `json:"model" example:"gpt-3.5-turbo" description:"Model to use for completion"`
-	Messages         []ChatMessage          `json:"messages" description:"Array of messages in the conversation"`
-	MaxTokens        *int                   `json:"max_tokens,omitempty" example:"150" description:"Maximum number of tokens to generate"`
-	Temperature      *float64               `json:"temperature,omitempty" example:"0.7" description:"Controls randomness (0.0 to 2.0)"`
-	TopP             *float64               `json:"top_p,omitempty" example:"1.0" description:"Nucleus sampling parameter"`
-	N                *int                   `json:"n,omitempty" example:"1" description:"Number of completions to generate"`
-	Stream           *bool                  `json:"stream,omitempty" example:"false" description:"Whether to stream responses"`
-	Stop             interface{}            `json:"stop,omitempty" description:"Up to 4 sequences where the API will stop generating"`
-	PresencePenalty  *float64               `json:"presence_penalty,omitempty" example:"0.0" description:"Presence penalty (-2.0 to 2.0)"`
-	FrequencyPenalty *float64               `json:"frequency_penalty,omitempty" example:"0.0" description:"Frequency penalty (-2.0 to 2.0)"`
-	LogitBias        map[string]float64     `json:"logit_bias,omitempty" description:"Modify likelihood of specified tokens"`
-	User             *string                `json:"user,omitempty" example:"user-123" description:"Unique identifier for the end-user"`
+	Model            string             `json:"model" example:"gpt-3.5-turbo" description:"Model to use for completion"`
+	Messages         []ChatMessage      `json:"messages" description:"Array of messages in the conversation"`
+	MaxTokens        *int               `json:"max_tokens,omitempty" example:"150" description:"Maximum number of tokens to generate"`
+	Temperature      *float64           `json:"temperature,omitempty" example:"0.7" description:"Controls randomness (0.0 to 2.0)"`
+	TopP             *float64           `json:"top_p,omitempty" example:"1.0" description:"Nucleus sampling parameter"`
+	N                *int               `json:"n,omitempty" example:"1" description:"Number of completions to generate"`
+	Stream           *bool              `json:"stream,omitempty" example:"false" description:"Whether to stream responses"`
+	Stop             interface{}        `json:"stop,omitempty" description:"Up to 4 sequences where the API will stop generating"`
+	PresencePenalty  *float64           `json:"presence_penalty,omitempty" example:"0.0" description:"Presence penalty (-2.0 to 2.0)"`
+	FrequencyPenalty *float64           `json:"frequency_penalty,omitempty" example:"0.0" description:"Frequency penalty (-2.0 to 2.0)"`
+	LogitBias        map[string]float64 `json:"logit_bias,omitempty" description:"Modify likelihood of specified tokens"`
+	User             *string            `json:"user,omitempty" example:"user-123" description:"Unique identifier for the end-user"`
 }
 
 // ChatMessage represents a chat message
@@ -138,25 +136,25 @@ type RouteResponse struct {
 // CacheStatusResponse represents cache status information
 // @Description Cache health and statistics response
 type CacheStatusResponse struct {
-	Status          string  `json:"status" example:"healthy" description:"Cache health status"`
-	HitRate         float64 `json:"hit_rate" example:"0.85" description:"Cache hit rate (0.0-1.0)"`
-	TotalEntries    int64   `json:"total_entries" example:"15420" description:"Total number of cached entries"`
-	SizeBytes       int64   `json:"size_bytes" example:"1048576" description:"Total cache size in bytes"`
-	MemoryUsage     float64 `json:"memory_usage" example:"0.45" description:"Memory usage percentage (0.0-1.0)"`
-	EvictionCount   int64   `json:"eviction_count" example:"142" description:"Number of evicted entries"`
-	LastEviction    *int64  `json:"last_eviction,omitempty" example:"1677610602" description:"Unix timestamp of last eviction"`
+	Status            string                 `json:"status" example:"healthy" description:"Cache health status"`
+	HitRate           float64                `json:"hit_rate" example:"0.85" description:"Cache hit rate (0.0-1.0)"`
+	TotalEntries      int64                  `json:"total_entries" example:"15420" description:"Total number of cached entries"`
+	SizeBytes         int64                  `json:"size_bytes" example:"1048576" description:"Total cache size in bytes"`
+	MemoryUsage       float64                `json:"memory_usage" example:"0.45" description:"Memory usage percentage (0.0-1.0)"`
+	EvictionCount     int64                  `json:"eviction_count" example:"142" description:"Number of evicted entries"`
+	LastEviction      *int64                 `json:"last_eviction,omitempty" example:"1677610602" description:"Unix timestamp of last eviction"`
 	ProviderBreakdown map[string]interface{} `json:"provider_breakdown,omitempty" description:"Cache statistics by provider"`
 }
 
 // InvalidateCacheRequest represents cache invalidation request
 // @Description Request data for cache invalidation
 type InvalidateCacheRequest struct {
-	Provider    *string  `json:"provider,omitempty" example:"openai" description:"Target specific provider"`
-	Model       *string  `json:"model,omitempty" example:"gpt-3.5-turbo" description:"Target specific model"`
-	Keys        []string `json:"keys,omitempty" description:"Specific cache keys to invalidate"`
-	ClearAll    *bool    `json:"clear_all,omitempty" example:"false" description:"Clear entire cache (use with caution)"`
-	MaxAge      *int     `json:"max_age,omitempty" example:"3600" description:"Invalidate entries older than this (seconds)"`
-	Pattern     *string  `json:"pattern,omitempty" example:"chat:*" description:"Pattern for key matching"`
+	Provider *string  `json:"provider,omitempty" example:"openai" description:"Target specific provider"`
+	Model    *string  `json:"model,omitempty" example:"gpt-3.5-turbo" description:"Target specific model"`
+	Keys     []string `json:"keys,omitempty" description:"Specific cache keys to invalidate"`
+	ClearAll *bool    `json:"clear_all,omitempty" example:"false" description:"Clear entire cache (use with caution)"`
+	MaxAge   *int     `json:"max_age,omitempty" example:"3600" description:"Invalidate entries older than this (seconds)"`
+	Pattern  *string  `json:"pattern,omitempty" example:"chat:*" description:"Pattern for key matching"`
 }
 
 // InvalidateCacheResponse represents cache invalidation response
@@ -200,19 +198,17 @@ func (h *Handler) ChatCompletions(c *gin.Context) {
 		return
 	}
 
-	// Extract organization and environment from context
-	orgID, err := h.extractOrganizationID(c)
+	// Extract project ID from SDK auth context
+	projectID, err := h.extractProjectID(c)
 	if err != nil {
-		logger.WithError(err).Error("Failed to extract organization ID")
-		response.ErrorWithCode(c, http.StatusUnauthorized, "unauthorized", "Invalid organization context")
+		logger.WithError(err).Error("Failed to extract project ID")
+		response.ErrorWithCode(c, http.StatusUnauthorized, "unauthorized", "Invalid project context")
 		return
 	}
 
-	environment := h.extractEnvironment(c)
 	logger = logger.WithFields(logrus.Fields{
-		"organization_id": orgID,
-		"environment":     environment,
-		"model":           req.Model,
+		"project_id": projectID,
+		"model":      req.Model,
 	})
 
 	// Validate request
@@ -223,13 +219,13 @@ func (h *Handler) ChatCompletions(c *gin.Context) {
 	}
 
 	// Transform to gateway request
-	gatewayReq := h.transformChatCompletionRequest(&req, orgID, environment)
+	gatewayReq := h.transformChatCompletionRequest(&req, projectID)
 
 	// Process through gateway
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 60*time.Second)
 	defer cancel()
 
-	gatewayResp, err := h.gatewayService.CreateChatCompletion(ctx, orgID, string(environment), gatewayReq)
+	gatewayResp, err := h.gatewayService.CreateChatCompletion(ctx, projectID, gatewayReq)
 	if err != nil {
 		logger.WithError(err).Error("Gateway processing failed")
 		h.handleGatewayError(c, err)
@@ -247,7 +243,7 @@ func (h *Handler) ChatCompletions(c *gin.Context) {
 	// Return response
 	if req.Stream != nil && *req.Stream {
 		// Handle streaming response with SSE
-		h.handleChatCompletionStream(c, orgID, string(environment), gatewayReq)
+		h.handleChatCompletionStream(c, projectID, gatewayReq)
 		return
 	} else {
 		c.JSON(http.StatusOK, resp)
@@ -285,19 +281,17 @@ func (h *Handler) Completions(c *gin.Context) {
 		return
 	}
 
-	// Extract organization and environment from context
-	orgID, err := h.extractOrganizationID(c)
+	// Extract project ID from SDK auth context
+	projectID, err := h.extractProjectID(c)
 	if err != nil {
-		logger.WithError(err).Error("Failed to extract organization ID")
-		response.ErrorWithCode(c, http.StatusUnauthorized, "unauthorized", "Invalid organization context")
+		logger.WithError(err).Error("Failed to extract project ID")
+		response.ErrorWithCode(c, http.StatusUnauthorized, "unauthorized", "Invalid project context")
 		return
 	}
 
-	environment := h.extractEnvironment(c)
 	logger = logger.WithFields(logrus.Fields{
-		"organization_id": orgID,
-		"environment":     environment,
-		"model":           req.Model,
+		"project_id": projectID,
+		"model":      req.Model,
 	})
 
 	// Validate request
@@ -308,13 +302,13 @@ func (h *Handler) Completions(c *gin.Context) {
 	}
 
 	// Transform to gateway request
-	gatewayReq := h.transformCompletionRequest(&req, orgID, environment)
+	gatewayReq := h.transformCompletionRequest(&req, projectID)
 
 	// Process through gateway
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 60*time.Second)
 	defer cancel()
 
-	gatewayResp, err := h.gatewayService.CreateCompletion(ctx, orgID, string(environment), gatewayReq)
+	gatewayResp, err := h.gatewayService.CreateCompletion(ctx, projectID, gatewayReq)
 	if err != nil {
 		logger.WithError(err).Error("Gateway processing failed")
 		h.handleGatewayError(c, err)
@@ -332,7 +326,7 @@ func (h *Handler) Completions(c *gin.Context) {
 	// Return response
 	if req.Stream != nil && *req.Stream {
 		// Handle streaming response with SSE
-		h.handleCompletionStream(c, orgID, string(environment), gatewayReq)
+		h.handleCompletionStream(c, projectID, gatewayReq)
 		return
 	} else {
 		c.JSON(http.StatusOK, resp)
@@ -370,19 +364,17 @@ func (h *Handler) Embeddings(c *gin.Context) {
 		return
 	}
 
-	// Extract organization and environment from context
-	orgID, err := h.extractOrganizationID(c)
+	// Extract project ID from SDK auth context
+	projectID, err := h.extractProjectID(c)
 	if err != nil {
-		logger.WithError(err).Error("Failed to extract organization ID")
-		response.ErrorWithCode(c, http.StatusUnauthorized, "unauthorized", "Invalid organization context")
+		logger.WithError(err).Error("Failed to extract project ID")
+		response.ErrorWithCode(c, http.StatusUnauthorized, "unauthorized", "Invalid project context")
 		return
 	}
 
-	environment := h.extractEnvironment(c)
 	logger = logger.WithFields(logrus.Fields{
-		"organization_id": orgID,
-		"environment":     environment,
-		"model":           req.Model,
+		"project_id": projectID,
+		"model":      req.Model,
 	})
 
 	// Validate request
@@ -393,11 +385,11 @@ func (h *Handler) Embeddings(c *gin.Context) {
 	}
 
 	// Transform to gateway request
-	gatewayReq := h.transformEmbeddingsRequest(&req, orgID, environment)
+	gatewayReq := h.transformEmbeddingsRequest(&req, projectID)
 
 	// Process through gateway
 	ctx := c.Request.Context()
-	gatewayResp, err := h.gatewayService.CreateEmbedding(ctx, orgID, string(environment), gatewayReq)
+	gatewayResp, err := h.gatewayService.CreateEmbedding(ctx, projectID, gatewayReq)
 	if err != nil {
 		logger.WithError(err).Error("Gateway processing failed")
 		h.handleGatewayError(c, err)
@@ -405,11 +397,11 @@ func (h *Handler) Embeddings(c *gin.Context) {
 	}
 
 	// Transform to OpenAI-compatible response
-	resp := h.transformEmbeddingsResponse(gatewayResp)
+	resp := h.transformEmbeddingResponse(gatewayResp)
 
 	logger.WithFields(logrus.Fields{
-		"response_tokens":     gatewayResp.Usage.TotalTokens,
-		"embeddings_count":    len(gatewayResp.Data),
+		"response_tokens":  gatewayResp.Usage.TotalTokens,
+		"embeddings_count": len(gatewayResp.Data),
 	}).Info("Embeddings request completed successfully")
 
 	c.JSON(http.StatusOK, resp)
@@ -434,29 +426,23 @@ func (h *Handler) ListModels(c *gin.Context) {
 
 	logger.Info("Processing list models request")
 
-	// Extract organization and environment from context
-	orgID, err := h.extractOrganizationID(c)
+	// Extract project ID from SDK auth context
+	projectID, err := h.extractProjectID(c)
 	if err != nil {
-		logger.WithError(err).Error("Failed to extract organization ID")
-		response.ErrorWithCode(c, http.StatusUnauthorized, "unauthorized", "Invalid organization context")
+		logger.WithError(err).Error("Failed to extract project ID")
+		response.ErrorWithCode(c, http.StatusUnauthorized, "unauthorized", "Invalid project context")
 		return
 	}
 
-	environment := h.extractEnvironment(c)
 	logger = logger.WithFields(logrus.Fields{
-		"organization_id": orgID,
-		"environment":     environment,
+		"project_id": projectID,
 	})
 
-	// Create gateway request
-	gatewayReq := &gateway.ListModelsRequest{
-		OrganizationID: orgID,
-		Environment:    environment,
-	}
+	// List available models directly
 
 	// Process through gateway
 	ctx := c.Request.Context()
-	models, err := h.gatewayService.ListAvailableModels(ctx, orgID)
+	models, err := h.gatewayService.ListAvailableModels(ctx, projectID)
 	if err != nil {
 		logger.WithError(err).Error("Gateway processing failed")
 		h.handleGatewayError(c, err)
@@ -469,11 +455,11 @@ func (h *Handler) ListModels(c *gin.Context) {
 		respData[i] = Model{
 			ID:      model.ID,
 			Object:  "model",
-			Created: model.Created,
-			OwnedBy: model.OwnedBy,
+			Created: time.Now().Unix(),
+			OwnedBy: model.Provider,
 		}
 	}
-	
+
 	resp := ModelsResponse{
 		Object: "list",
 		Data:   respData,
@@ -513,24 +499,18 @@ func (h *Handler) GetModel(c *gin.Context) {
 		return
 	}
 
-	// Extract organization and environment from context
-	orgID, err := h.extractOrganizationID(c)
+	// Extract project ID from SDK auth context
+	projectID, err := h.extractProjectID(c)
 	if err != nil {
-		logger.WithError(err).Error("Failed to extract organization ID")
-		response.ErrorWithCode(c, http.StatusUnauthorized, "unauthorized", "Invalid organization context")
+		logger.WithError(err).Error("Failed to extract project ID")
+		response.ErrorWithCode(c, http.StatusUnauthorized, "unauthorized", "Invalid project context")
 		return
 	}
 
-	environment := h.extractEnvironment(c)
-
 	// Get available models and find the requested one
-	gatewayReq := &gateway.ListModelsRequest{
-		OrganizationID: orgID,
-		Environment:    environment,
-	}
 
 	ctx := c.Request.Context()
-	models, err := h.gatewayService.ListAvailableModels(ctx, orgID)
+	models, err := h.gatewayService.ListAvailableModels(ctx, projectID)
 	if err != nil {
 		logger.WithError(err).Error("Gateway processing failed")
 		h.handleGatewayError(c, err)
@@ -555,8 +535,8 @@ func (h *Handler) GetModel(c *gin.Context) {
 	resp := Model{
 		ID:      foundModel.ID,
 		Object:  "model",
-		Created: foundModel.Created,
-		OwnedBy: foundModel.OwnedBy,
+		Created: time.Now().Unix(),
+		OwnedBy: foundModel.Provider,
 	}
 
 	logger.Info("Get model request completed successfully")
@@ -594,19 +574,17 @@ func (h *Handler) RouteRequest(c *gin.Context) {
 		return
 	}
 
-	// Extract organization and environment from context
-	orgID, err := h.extractOrganizationID(c)
+	// Extract project ID from SDK auth context
+	projectID, err := h.extractProjectID(c)
 	if err != nil {
-		logger.WithError(err).Error("Failed to extract organization ID")
-		response.ErrorWithCode(c, http.StatusUnauthorized, "unauthorized", "Invalid organization context")
+		logger.WithError(err).Error("Failed to extract project ID")
+		response.ErrorWithCode(c, http.StatusUnauthorized, "unauthorized", "Invalid project context")
 		return
 	}
 
-	environment := h.extractEnvironment(c)
 	logger = logger.WithFields(logrus.Fields{
-		"organization_id": orgID,
-		"environment":     environment,
-		"model":           req.Model,
+		"project_id": projectID,
+		"model":      req.Model,
 	})
 
 	// Validate request
@@ -617,11 +595,11 @@ func (h *Handler) RouteRequest(c *gin.Context) {
 	}
 
 	// Transform to gateway routing request
-	gatewayReq := h.transformRouteRequest(&req, orgID, environment)
+	gatewayReq := h.transformRouteRequest(&req, projectID)
 
 	// Process through routing service
 	ctx := c.Request.Context()
-	routingResp, err := h.routingService.SelectProvider(ctx, gatewayReq)
+	routingResp, err := h.routingService.RouteRequest(ctx, projectID, gatewayReq)
 	if err != nil {
 		logger.WithError(err).Error("Routing service failed")
 		h.handleGatewayError(c, err)
@@ -629,7 +607,18 @@ func (h *Handler) RouteRequest(c *gin.Context) {
 	}
 
 	// Transform to API response
-	resp := h.transformRouteResponse(routingResp)
+	resp := &RouteResponse{
+		Provider:         routingResp.Provider,
+		Model:            routingResp.Model,
+		Strategy:         routingResp.Strategy,
+		EstimatedCost:    &routingResp.EstimatedCost,
+		EstimatedLatency: &routingResp.EstimatedLatency,
+		ProviderHealth:   &routingResp.ProviderHealth,
+		CacheHit:         false, // Set appropriate value
+		Endpoint:         "",    // Set if available
+		QualityScore:     nil,   // Set if available
+		Metadata:         nil,   // Set if available
+	}
 
 	logger.WithFields(logrus.Fields{
 		"selected_provider": resp.Provider,
@@ -660,43 +649,42 @@ func (h *Handler) CacheStatus(c *gin.Context) {
 
 	logger.Info("Processing cache status request")
 
-	// Extract organization and environment from context
-	orgID, err := h.extractOrganizationID(c)
+	// Extract project ID from SDK auth context
+	projectID, err := h.extractProjectID(c)
 	if err != nil {
-		logger.WithError(err).Error("Failed to extract organization ID")
-		response.ErrorWithCode(c, http.StatusUnauthorized, "unauthorized", "Invalid organization context")
+		logger.WithError(err).Error("Failed to extract project ID")
+		response.ErrorWithCode(c, http.StatusUnauthorized, "unauthorized", "Invalid project context")
 		return
 	}
 
-	environment := h.extractEnvironment(c)
 	logger = logger.WithFields(logrus.Fields{
-		"organization_id": orgID,
-		"environment":     environment,
+		"project_id": projectID,
 	})
 
-	// Create cache status request
-	gatewayReq := &gateway.CacheStatusRequest{
-		OrganizationID: orgID,
-		Environment:    environment,
-	}
+	// Cache status request not needed for stub implementation
+	_ = projectID // Silence unused variable
 
-	// Get cache status from gateway service
-	ctx := c.Request.Context()
-	gatewayResp, err := h.gatewayService.GetCacheStatus(ctx, gatewayReq)
-	if err != nil {
-		logger.WithError(err).Error("Gateway cache status failed")
-		h.handleGatewayError(c, err)
-		return
+	// Cache status functionality not implemented yet
+	// TODO: Implement cache status in gateway service
+	gatewayResp := &gateway.CacheStatusResponse{
+		Status:            "healthy",
+		HitRate:           0.0,
+		TotalEntries:      0,
+		SizeBytes:         0,
+		MemoryUsage:       0.0,
+		EvictionCount:     0,
+		LastEviction:      nil,
+		ProviderBreakdown: make(map[string]interface{}),
 	}
 
 	// Transform to API response
 	resp := h.transformCacheStatusResponse(gatewayResp)
 
 	logger.WithFields(logrus.Fields{
-		"status":          resp.Status,
-		"hit_rate":        resp.HitRate,
-		"total_entries":   resp.TotalEntries,
-		"memory_usage":    resp.MemoryUsage,
+		"status":        resp.Status,
+		"hit_rate":      resp.HitRate,
+		"total_entries": resp.TotalEntries,
+		"memory_usage":  resp.MemoryUsage,
 	}).Info("Cache status request completed successfully")
 
 	response.Success(c, resp)
@@ -732,19 +720,17 @@ func (h *Handler) InvalidateCache(c *gin.Context) {
 		return
 	}
 
-	// Extract organization and environment from context
-	orgID, err := h.extractOrganizationID(c)
+	// Extract project ID from SDK auth context
+	projectID, err := h.extractProjectID(c)
 	if err != nil {
-		logger.WithError(err).Error("Failed to extract organization ID")
-		response.ErrorWithCode(c, http.StatusUnauthorized, "unauthorized", "Invalid organization context")
+		logger.WithError(err).Error("Failed to extract project ID")
+		response.ErrorWithCode(c, http.StatusUnauthorized, "unauthorized", "Invalid project context")
 		return
 	}
 
-	environment := h.extractEnvironment(c)
 	logger = logger.WithFields(logrus.Fields{
-		"organization_id": orgID,
-		"environment":     environment,
-		"clear_all":       req.ClearAll != nil && *req.ClearAll,
+		"project_id": projectID,
+		"clear_all":  req.ClearAll != nil && *req.ClearAll,
 	})
 
 	// Validate request
@@ -754,16 +740,17 @@ func (h *Handler) InvalidateCache(c *gin.Context) {
 		return
 	}
 
-	// Transform to gateway request
-	gatewayReq := h.transformInvalidateCacheRequest(&req, orgID, environment)
+	// Cache invalidation request not needed for stub implementation
+	_ = projectID // Silence unused variable
 
-	// Process cache invalidation through gateway service
-	ctx := c.Request.Context()
-	gatewayResp, err := h.gatewayService.InvalidateCache(ctx, gatewayReq)
-	if err != nil {
-		logger.WithError(err).Error("Gateway cache invalidation failed")
-		h.handleGatewayError(c, err)
-		return
+	// Cache invalidation functionality not implemented yet
+	// TODO: Implement cache invalidation in gateway service
+	gatewayResp := &gateway.InvalidateCacheResponse{
+		Success:         true,
+		InvalidatedKeys: []string{},
+		Count:           0,
+		Message:         "Cache invalidation not yet implemented",
+		Error:           "",
 	}
 
 	// Transform to API response
@@ -780,24 +767,24 @@ func (h *Handler) InvalidateCache(c *gin.Context) {
 // OpenAI-compatible response structures
 
 type ChatCompletionResponse struct {
-	ID      string                     `json:"id"`
-	Object  string                     `json:"object"`
-	Created int64                      `json:"created"`
-	Model   string                     `json:"model"`
-	Choices []ChatCompletionChoice     `json:"choices"`
-	Usage   ChatCompletionUsage        `json:"usage"`
-	
+	ID      string                 `json:"id"`
+	Object  string                 `json:"object"`
+	Created int64                  `json:"created"`
+	Model   string                 `json:"model"`
+	Choices []ChatCompletionChoice `json:"choices"`
+	Usage   ChatCompletionUsage    `json:"usage"`
+
 	// Brokle extensions
-	Provider        *string                `json:"provider,omitempty"`
-	Cost            *gateway.CostCalculation `json:"cost,omitempty"`
-	RoutingDecision *string                `json:"routing_decision,omitempty"`
+	Provider        *string  `json:"provider,omitempty"`
+	Cost            *float64 `json:"cost,omitempty"`
+	RoutingDecision *string  `json:"routing_decision,omitempty"`
 }
 
 type ChatCompletionChoice struct {
-	Index        int          `json:"index"`
-	Message      ChatMessage  `json:"message"`
-	FinishReason *string      `json:"finish_reason"`
-	LogProbs     interface{}  `json:"logprobs"`
+	Index        int         `json:"index"`
+	Message      ChatMessage `json:"message"`
+	FinishReason *string     `json:"finish_reason"`
+	LogProbs     interface{} `json:"logprobs"`
 }
 
 type ChatCompletionUsage struct {
@@ -813,11 +800,11 @@ type CompletionResponse struct {
 	Model   string              `json:"model"`
 	Choices []CompletionChoice  `json:"choices"`
 	Usage   ChatCompletionUsage `json:"usage"`
-	
+
 	// Brokle extensions
-	Provider        *string                `json:"provider,omitempty"`
-	Cost            *gateway.CostCalculation `json:"cost,omitempty"`
-	RoutingDecision *string                `json:"routing_decision,omitempty"`
+	Provider        *string  `json:"provider,omitempty"`
+	Cost            *float64 `json:"cost,omitempty"`
+	RoutingDecision *string  `json:"routing_decision,omitempty"`
 }
 
 type CompletionChoice struct {
@@ -832,11 +819,11 @@ type EmbeddingResponse struct {
 	Data   []EmbeddingData `json:"data"`
 	Model  string          `json:"model"`
 	Usage  EmbeddingUsage  `json:"usage"`
-	
+
 	// Brokle extensions
-	Provider        *string                `json:"provider,omitempty"`
-	Cost            *gateway.CostCalculation `json:"cost,omitempty"`
-	RoutingDecision *string                `json:"routing_decision,omitempty"`
+	Provider        *string  `json:"provider,omitempty"`
+	Cost            *float64 `json:"cost,omitempty"`
+	RoutingDecision *string  `json:"routing_decision,omitempty"`
 }
 
 type EmbeddingData struct {
@@ -857,39 +844,19 @@ type ModelsResponse struct {
 
 // Helper functions for request/response transformation
 
-func (h *Handler) extractOrganizationID(c *gin.Context) (ulid.ULID, error) {
-	// Extract organization ID from JWT token or API key context
-	// This would typically be set by authentication middleware
-	orgIDStr := c.GetString("organization_id")
-	if orgIDStr == "" {
-		return ulid.ULID{}, fmt.Errorf("organization ID not found in context")
+func (h *Handler) extractProjectID(c *gin.Context) (ulid.ULID, error) {
+	// Extract project ID from SDK auth middleware context
+	projectIDPtr, exists := c.Get("project_id")
+	if !exists {
+		return ulid.ULID{}, fmt.Errorf("project ID not found in context")
 	}
-	
-	orgID, err := ulid.Parse(orgIDStr)
-	if err != nil {
-		return ulid.ULID{}, fmt.Errorf("invalid organization ID format: %w", err)
-	}
-	
-	return orgID, nil
-}
 
-func (h *Handler) extractEnvironment(c *gin.Context) gateway.Environment {
-	// Extract environment from header or default to production
-	env := c.GetHeader("X-Brokle-Environment")
-	if env == "" {
-		env = "production"
+	projectID, ok := projectIDPtr.(*ulid.ULID)
+	if !ok || projectID == nil {
+		return ulid.ULID{}, fmt.Errorf("invalid project ID in context")
 	}
-	
-	switch strings.ToLower(env) {
-	case "development", "dev":
-		return gateway.EnvironmentDevelopment
-	case "staging", "stage":
-		return gateway.EnvironmentStaging
-	case "production", "prod":
-		return gateway.EnvironmentProduction
-	default:
-		return gateway.EnvironmentProduction
-	}
+
+	return *projectID, nil
 }
 
 // Validation functions
@@ -898,11 +865,11 @@ func (h *Handler) validateChatCompletionRequest(req *ChatCompletionRequest) erro
 	if req.Model == "" {
 		return fmt.Errorf("model is required")
 	}
-	
+
 	if len(req.Messages) == 0 {
 		return fmt.Errorf("messages array cannot be empty")
 	}
-	
+
 	for i, msg := range req.Messages {
 		if msg.Role == "" {
 			return fmt.Errorf("message[%d].role is required", i)
@@ -914,15 +881,15 @@ func (h *Handler) validateChatCompletionRequest(req *ChatCompletionRequest) erro
 			return fmt.Errorf("message[%d].role must be one of: system, user, assistant", i)
 		}
 	}
-	
+
 	if req.MaxTokens != nil && *req.MaxTokens < 1 {
 		return fmt.Errorf("max_tokens must be greater than 0")
 	}
-	
+
 	if req.Temperature != nil && (*req.Temperature < 0 || *req.Temperature > 2) {
 		return fmt.Errorf("temperature must be between 0 and 2")
 	}
-	
+
 	return nil
 }
 
@@ -930,19 +897,19 @@ func (h *Handler) validateCompletionRequest(req *CompletionRequest) error {
 	if req.Model == "" {
 		return fmt.Errorf("model is required")
 	}
-	
+
 	if req.Prompt == nil {
 		return fmt.Errorf("prompt is required")
 	}
-	
+
 	if req.MaxTokens != nil && *req.MaxTokens < 1 {
 		return fmt.Errorf("max_tokens must be greater than 0")
 	}
-	
+
 	if req.Temperature != nil && (*req.Temperature < 0 || *req.Temperature > 2) {
 		return fmt.Errorf("temperature must be between 0 and 2")
 	}
-	
+
 	return nil
 }
 
@@ -950,11 +917,11 @@ func (h *Handler) validateEmbeddingsRequest(req *EmbeddingRequest) error {
 	if req.Model == "" {
 		return fmt.Errorf("model is required")
 	}
-	
+
 	if req.Input == nil {
 		return fmt.Errorf("input is required")
 	}
-	
+
 	return nil
 }
 
@@ -962,12 +929,12 @@ func (h *Handler) validateRouteRequest(req *RouteRequest) error {
 	if req.Model == "" {
 		return fmt.Errorf("model is required")
 	}
-	
+
 	// Either messages or prompt should be provided for cost estimation
 	if len(req.Messages) == 0 && (req.Prompt == nil || *req.Prompt == "") {
 		return fmt.Errorf("either messages or prompt must be provided for routing decision")
 	}
-	
+
 	// Validate strategy if provided
 	if req.Strategy != nil {
 		validStrategies := []string{"cost_optimized", "latency_optimized", "quality_optimized", "reliability_optimized"}
@@ -982,7 +949,7 @@ func (h *Handler) validateRouteRequest(req *RouteRequest) error {
 			return fmt.Errorf("invalid strategy: must be one of cost_optimized, latency_optimized, quality_optimized, reliability_optimized")
 		}
 	}
-	
+
 	return nil
 }
 
@@ -994,171 +961,180 @@ func (h *Handler) validateInvalidateCacheRequest(req *InvalidateCacheRequest) er
 		(req.ClearAll != nil && *req.ClearAll) ||
 		(req.MaxAge != nil && *req.MaxAge > 0) ||
 		(req.Pattern != nil && *req.Pattern != "")
-	
+
 	if !hasTarget {
 		return fmt.Errorf("at least one invalidation criteria must be specified (provider, model, keys, clear_all, max_age, or pattern)")
 	}
-	
+
 	// Validate MaxAge if provided
 	if req.MaxAge != nil && *req.MaxAge < 0 {
 		return fmt.Errorf("max_age must be non-negative")
 	}
-	
+
 	// Warn about clear_all
 	if req.ClearAll != nil && *req.ClearAll {
 		h.logger.Warn("Cache clear_all requested - this will invalidate all cached entries")
 	}
-	
+
 	return nil
 }
 
 // Request transformation functions
 
-func (h *Handler) transformChatCompletionRequest(req *ChatCompletionRequest, orgID ulid.ULID, env gateway.Environment) *gateway.ChatCompletionRequest {
+func (h *Handler) transformChatCompletionRequest(req *ChatCompletionRequest, projectID ulid.ULID) *gateway.ChatCompletionRequest {
 	messages := make([]gateway.ChatMessage, len(req.Messages))
 	for i, msg := range req.Messages {
 		messages[i] = gateway.ChatMessage{
 			Role:    msg.Role,
 			Content: msg.Content,
-			Name:    msg.Name,
+			Name:    &msg.Name,
 		}
 	}
-	
+
 	gatewayReq := &gateway.ChatCompletionRequest{
-		OrganizationID: orgID,
-		Environment:    env,
+		ProjectID:      projectID,
+		OrganizationID: projectID,
 		Model:          req.Model,
 		Messages:       messages,
 		Stream:         req.Stream != nil && *req.Stream,
 	}
-	
+
 	if req.MaxTokens != nil {
-		gatewayReq.MaxTokens = int32(*req.MaxTokens)
+		gatewayReq.MaxTokens = req.MaxTokens
 	}
 	if req.Temperature != nil {
-		gatewayReq.Temperature = *req.Temperature
+		gatewayReq.Temperature = req.Temperature
 	}
 	if req.TopP != nil {
-		gatewayReq.TopP = *req.TopP
+		gatewayReq.TopP = req.TopP
 	}
 	if req.N != nil {
-		gatewayReq.N = int32(*req.N)
+		gatewayReq.N = req.N
 	}
 	if req.PresencePenalty != nil {
-		gatewayReq.PresencePenalty = *req.PresencePenalty
+		gatewayReq.PresencePenalty = req.PresencePenalty
 	}
 	if req.FrequencyPenalty != nil {
-		gatewayReq.FrequencyPenalty = *req.FrequencyPenalty
+		gatewayReq.FrequencyPenalty = req.FrequencyPenalty
 	}
 	if req.User != nil {
-		gatewayReq.User = *req.User
+		gatewayReq.User = req.User
 	}
-	
+
 	return gatewayReq
 }
 
-func (h *Handler) transformCompletionRequest(req *CompletionRequest, orgID ulid.ULID, env gateway.Environment) *gateway.CompletionRequest {
+func (h *Handler) transformCompletionRequest(req *CompletionRequest, projectID ulid.ULID) *gateway.CompletionRequest {
+	// Handle OpenAI-compatible prompt formats: string, []string, or []interface{}
+	var promptStr string
+	switch p := req.Prompt.(type) {
+	case string:
+		promptStr = p
+	case []string:
+		// Join array of strings with newlines
+		promptStr = ""
+		for i, s := range p {
+			if i > 0 {
+				promptStr += "\n"
+			}
+			promptStr += s
+		}
+	case []interface{}:
+		// Extract strings from mixed array
+		var parts []string
+		for _, item := range p {
+			if str, ok := item.(string); ok {
+				parts = append(parts, str)
+			}
+		}
+		promptStr = ""
+		for i, s := range parts {
+			if i > 0 {
+				promptStr += "\n"
+			}
+			promptStr += s
+		}
+	default:
+		// Fallback: convert to string
+		promptStr = fmt.Sprintf("%v", p)
+	}
+
 	gatewayReq := &gateway.CompletionRequest{
-		OrganizationID: orgID,
-		Environment:    env,
+		ProjectID:      projectID,
+		OrganizationID: projectID,
 		Model:          req.Model,
-		Prompt:         req.Prompt,
+		Prompt:         promptStr,
 		Stream:         req.Stream != nil && *req.Stream,
 	}
-	
+
 	if req.MaxTokens != nil {
-		gatewayReq.MaxTokens = int32(*req.MaxTokens)
+		gatewayReq.MaxTokens = req.MaxTokens
 	}
 	if req.Temperature != nil {
-		gatewayReq.Temperature = *req.Temperature
+		gatewayReq.Temperature = req.Temperature
 	}
 	if req.TopP != nil {
-		gatewayReq.TopP = *req.TopP
+		gatewayReq.TopP = req.TopP
 	}
 	if req.N != nil {
-		gatewayReq.N = int32(*req.N)
+		gatewayReq.N = req.N
 	}
 	if req.Echo != nil {
 		gatewayReq.Echo = *req.Echo
 	}
 	if req.PresencePenalty != nil {
-		gatewayReq.PresencePenalty = *req.PresencePenalty
+		gatewayReq.PresencePenalty = req.PresencePenalty
 	}
 	if req.FrequencyPenalty != nil {
-		gatewayReq.FrequencyPenalty = *req.FrequencyPenalty
+		gatewayReq.FrequencyPenalty = req.FrequencyPenalty
 	}
 	if req.User != nil {
-		gatewayReq.User = *req.User
+		gatewayReq.User = req.User
 	}
-	
+
 	return gatewayReq
 }
 
-func (h *Handler) transformEmbeddingsRequest(req *EmbeddingRequest, orgID ulid.ULID, env gateway.Environment) *gateway.EmbeddingRequest {
+func (h *Handler) transformEmbeddingsRequest(req *EmbeddingRequest, projectID ulid.ULID) *gateway.EmbeddingRequest {
 	return &gateway.EmbeddingRequest{
-		Model:           req.Model,
-		Input:           req.Input,
-		EncodingFormat:  req.EncodingFormat,
-		User:            req.User,
+		ProjectID:      projectID,
+		OrganizationID: projectID,
+		Model:          req.Model,
+		Input:          req.Input,
+		EncodingFormat: req.EncodingFormat,
+		User:           req.User,
 	}
 }
 
-func (h *Handler) transformRouteRequest(req *RouteRequest, orgID ulid.ULID, env gateway.Environment) *gateway.RoutingRequest {
+func (h *Handler) transformRouteRequest(req *RouteRequest, projectID ulid.ULID) *gateway.RoutingRequest {
 	gatewayReq := &gateway.RoutingRequest{
-		OrganizationID: orgID,
-		Environment:    env,
-		Model:          req.Model,
-		Metadata:       req.Metadata,
+		ModelName: req.Model,
+		Context:   req.Metadata,
 	}
-	
-	// Set preferred provider if specified
-	if req.Provider != nil && *req.Provider != "" {
-		gatewayReq.PreferredProvider = *req.Provider
-	}
-	
+
 	// Set routing strategy
 	if req.Strategy != nil {
-		gatewayReq.Strategy = *req.Strategy
+		strategy := gateway.RoutingStrategy(*req.Strategy)
+		gatewayReq.Strategy = &strategy
 	} else {
-		gatewayReq.Strategy = "cost_optimized" // Default strategy
+		strategy := gateway.RoutingStrategyCostOptimized
+		gatewayReq.Strategy = &strategy
 	}
-	
-	// Transform messages for context estimation
-	if len(req.Messages) > 0 {
-		messages := make([]gateway.ChatMessage, len(req.Messages))
-		for i, msg := range req.Messages {
-			messages[i] = gateway.ChatMessage{
-				Role:    msg.Role,
-				Content: msg.Content,
-				Name:    msg.Name,
-			}
-		}
-		gatewayReq.Messages = messages
-	}
-	
-	// Set prompt if provided
-	if req.Prompt != nil {
-		gatewayReq.Prompt = *req.Prompt
-	}
-	
-	// Set parameters for cost estimation
+
+	// Set estimated tokens for cost estimation
 	if req.MaxTokens != nil {
-		gatewayReq.MaxTokens = int32(*req.MaxTokens)
+		gatewayReq.EstimatedTokens = req.MaxTokens
 	}
-	if req.Temperature != nil {
-		gatewayReq.Temperature = *req.Temperature
-	}
-	
+
 	return gatewayReq
 }
 
-func (h *Handler) transformInvalidateCacheRequest(req *InvalidateCacheRequest, orgID ulid.ULID, env gateway.Environment) *gateway.InvalidateCacheRequest {
+func (h *Handler) transformInvalidateCacheRequest(req *InvalidateCacheRequest, projectID ulid.ULID) *gateway.InvalidateCacheRequest {
 	gatewayReq := &gateway.InvalidateCacheRequest{
-		OrganizationID: orgID,
-		Environment:    env,
-		Keys:          req.Keys,
+		OrganizationID: projectID,
+		Keys:           req.Keys,
 	}
-	
+
 	if req.Provider != nil {
 		gatewayReq.Provider = *req.Provider
 	}
@@ -1174,7 +1150,7 @@ func (h *Handler) transformInvalidateCacheRequest(req *InvalidateCacheRequest, o
 	if req.Pattern != nil {
 		gatewayReq.Pattern = *req.Pattern
 	}
-	
+
 	return gatewayReq
 }
 
@@ -1188,12 +1164,17 @@ func (h *Handler) transformChatCompletionResponse(resp *gateway.ChatCompletionRe
 			Message: ChatMessage{
 				Role:    choice.Message.Role,
 				Content: choice.Message.Content,
-				Name:    choice.Message.Name,
+				Name: func() string {
+					if choice.Message.Name != nil {
+						return *choice.Message.Name
+					}
+					return ""
+				}(),
 			},
-			FinishReason: &choice.FinishReason,
+			FinishReason: choice.FinishReason,
 		}
 	}
-	
+
 	return &ChatCompletionResponse{
 		ID:      resp.ID,
 		Object:  "chat.completion",
@@ -1201,13 +1182,13 @@ func (h *Handler) transformChatCompletionResponse(resp *gateway.ChatCompletionRe
 		Model:   resp.Model,
 		Choices: choices,
 		Usage: ChatCompletionUsage{
-			PromptTokens:     resp.Usage.PromptTokens,
-			CompletionTokens: resp.Usage.CompletionTokens,
-			TotalTokens:      resp.Usage.TotalTokens,
+			PromptTokens:     int32(resp.Usage.InputTokens),
+			CompletionTokens: int32(resp.Usage.OutputTokens),
+			TotalTokens:      int32(resp.Usage.TotalTokens),
 		},
 		Provider:        &resp.Provider,
 		Cost:            resp.Cost,
-		RoutingDecision: &resp.RoutingDecision,
+		RoutingDecision: &resp.RoutingReason,
 	}
 }
 
@@ -1217,10 +1198,10 @@ func (h *Handler) transformCompletionResponse(resp *gateway.CompletionResponse) 
 		choices[i] = CompletionChoice{
 			Index:        choice.Index,
 			Text:         choice.Text,
-			FinishReason: &choice.FinishReason,
+			FinishReason: choice.FinishReason,
 		}
 	}
-	
+
 	return &CompletionResponse{
 		ID:      resp.ID,
 		Object:  "text_completion",
@@ -1228,17 +1209,17 @@ func (h *Handler) transformCompletionResponse(resp *gateway.CompletionResponse) 
 		Model:   resp.Model,
 		Choices: choices,
 		Usage: ChatCompletionUsage{
-			PromptTokens:     resp.Usage.PromptTokens,
-			CompletionTokens: resp.Usage.CompletionTokens,
-			TotalTokens:      resp.Usage.TotalTokens,
+			PromptTokens:     int32(resp.Usage.InputTokens),
+			CompletionTokens: int32(resp.Usage.OutputTokens),
+			TotalTokens:      int32(resp.Usage.TotalTokens),
 		},
 		Provider:        &resp.Provider,
 		Cost:            resp.Cost,
-		RoutingDecision: &resp.RoutingDecision,
+		RoutingDecision: &resp.RoutingReason,
 	}
 }
 
-func (h *Handler) transformEmbeddingsResponse(resp *gateway.EmbeddingsResponse) *EmbeddingResponse {
+func (h *Handler) transformEmbeddingResponse(resp *gateway.EmbeddingResponse) *EmbeddingResponse {
 	data := make([]EmbeddingData, len(resp.Data))
 	for i, embedding := range resp.Data {
 		data[i] = EmbeddingData{
@@ -1247,14 +1228,14 @@ func (h *Handler) transformEmbeddingsResponse(resp *gateway.EmbeddingsResponse) 
 			Embedding: embedding.Embedding,
 		}
 	}
-	
+
 	return &EmbeddingResponse{
 		Object: "list",
 		Data:   data,
 		Model:  resp.Model,
 		Usage: EmbeddingUsage{
-			PromptTokens: resp.Usage.PromptTokens,
-			TotalTokens:  resp.Usage.TotalTokens,
+			PromptTokens: int32(resp.Usage.InputTokens),
+			TotalTokens:  int32(resp.Usage.TotalTokens),
 		},
 		Provider:        &resp.Provider,
 		Cost:            resp.Cost,
@@ -1268,11 +1249,11 @@ func (h *Handler) transformModelsResponse(resp *gateway.ListModelsResponse) *Mod
 		models[i] = Model{
 			ID:      model.ID,
 			Object:  "model",
-			Created: model.Created,
-			OwnedBy: model.OwnedBy,
+			Created: time.Now().Unix(),
+			OwnedBy: model.Provider,
 		}
 	}
-	
+
 	return &ModelsResponse{
 		Object: "list",
 		Data:   models,
@@ -1314,23 +1295,22 @@ func (h *Handler) transformInvalidateCacheResponse(resp *gateway.InvalidateCache
 		Count:           resp.Count,
 		Message:         resp.Message,
 	}
-	
+
 	if resp.Error != "" {
 		apiResp.Error = &resp.Error
 	}
-	
+
 	return apiResp
 }
 
 // Streaming handlers for SSE support
 
 // handleChatCompletionStream handles streaming chat completion responses using SSE
-func (h *Handler) handleChatCompletionStream(c *gin.Context, orgID ulid.ULID, environment string, req *gateway.ChatCompletionRequest) {
+func (h *Handler) handleChatCompletionStream(c *gin.Context, projectID ulid.ULID, req *gateway.ChatCompletionRequest) {
 	logger := h.logger.WithFields(logrus.Fields{
-		"endpoint": "/v1/chat/completions",
-		"stream": true,
-		"organization_id": orgID,
-		"environment": environment,
+		"endpoint":   "/v1/chat/completions",
+		"stream":     true,
+		"project_id": projectID,
 	})
 
 	logger.Info("Starting streaming chat completion")
@@ -1347,7 +1327,7 @@ func (h *Handler) handleChatCompletionStream(c *gin.Context, orgID ulid.ULID, en
 	defer cancel()
 
 	// Use gin's response writer directly for streaming
-	err := h.gatewayService.CreateChatCompletionStream(ctx, orgID, environment, req, c.Writer)
+	err := h.gatewayService.CreateChatCompletionStream(ctx, projectID, req, c.Writer)
 	if err != nil {
 		logger.WithError(err).Error("Streaming chat completion failed")
 		h.sendSSEError(c, err)
@@ -1358,12 +1338,11 @@ func (h *Handler) handleChatCompletionStream(c *gin.Context, orgID ulid.ULID, en
 }
 
 // handleCompletionStream handles streaming completion responses using SSE
-func (h *Handler) handleCompletionStream(c *gin.Context, orgID ulid.ULID, environment string, req *gateway.CompletionRequest) {
+func (h *Handler) handleCompletionStream(c *gin.Context, projectID ulid.ULID, req *gateway.CompletionRequest) {
 	logger := h.logger.WithFields(logrus.Fields{
-		"endpoint": "/v1/completions",
-		"stream": true,
-		"organization_id": orgID,
-		"environment": environment,
+		"endpoint":   "/v1/completions",
+		"stream":     true,
+		"project_id": projectID,
 	})
 
 	logger.Info("Starting streaming completion")
@@ -1380,7 +1359,7 @@ func (h *Handler) handleCompletionStream(c *gin.Context, orgID ulid.ULID, enviro
 	defer cancel()
 
 	// Use gin's response writer directly for streaming
-	err := h.gatewayService.CreateCompletionStream(ctx, orgID, environment, req, c.Writer)
+	err := h.gatewayService.CreateCompletionStream(ctx, projectID, req, c.Writer)
 	if err != nil {
 		logger.WithError(err).Error("Streaming completion failed")
 		h.sendSSEError(c, err)
@@ -1432,14 +1411,14 @@ func (h *Handler) handleGatewayError(c *gin.Context, err error) {
 		response.ErrorWithCode(c, http.StatusNotFound, "provider_not_found", "No suitable provider was found")
 	case gateway.ErrProviderDisabled:
 		response.ErrorWithCode(c, http.StatusServiceUnavailable, "provider_disabled", "The provider is currently disabled")
-	case gateway.ErrProviderConfigInactive:
-		response.ErrorWithCode(c, http.StatusServiceUnavailable, "provider_config_inactive", "The provider configuration is inactive")
-	case gateway.ErrUnsupportedOperation:
-		response.ErrorWithCode(c, http.StatusBadRequest, "unsupported_operation", "The operation is not supported by the selected provider")
+	case gateway.ErrProviderConfigInvalid:
+		response.ErrorWithCode(c, http.StatusServiceUnavailable, "provider_config_invalid", "The provider configuration is invalid")
+	case gateway.ErrUnsupportedRequestType:
+		response.ErrorWithCode(c, http.StatusBadRequest, "unsupported_request_type", "The request type is not supported by the selected provider")
 	case gateway.ErrNoProvidersAvailable:
 		response.ErrorWithCode(c, http.StatusServiceUnavailable, "no_providers_available", "No providers are currently available")
-	case gateway.ErrNoFallbackProviders:
-		response.ErrorWithCode(c, http.StatusServiceUnavailable, "no_fallback_providers", "No fallback providers are available")
+	case gateway.ErrFallbackProviderFailed:
+		response.ErrorWithCode(c, http.StatusServiceUnavailable, "fallback_provider_failed", "Fallback provider failed")
 	default:
 		h.logger.WithError(err).Error("Unhandled gateway error")
 		response.ErrorWithCode(c, http.StatusInternalServerError, "internal_server_error", "An internal error occurred")

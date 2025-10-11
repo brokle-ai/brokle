@@ -34,22 +34,22 @@ func (r *ProviderConfigRepository) Create(ctx context.Context, config *gateway.P
 	}
 
 	// Convert maps to JSON for storage
-	configDataJSON, err := json.Marshal(config.ConfigData)
+	rateLimitJSON, err := json.Marshal(config.RateLimitOverride)
 	if err != nil {
-		return fmt.Errorf("failed to marshal config data: %w", err)
+		return fmt.Errorf("failed to marshal rate limit override: %w", err)
 	}
 
-	encryptionKeyJSON, err := json.Marshal(config.EncryptionKey)
+	configurationJSON, err := json.Marshal(config.Configuration)
 	if err != nil {
-		return fmt.Errorf("failed to marshal encryption key: %w", err)
+		return fmt.Errorf("failed to marshal configuration: %w", err)
 	}
 
 	query := `
 		INSERT INTO gateway_provider_configs (
-			id, provider_id, organization_id, environment, priority,
-			config_data, encryption_key, is_encrypted, is_active,
-			created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+			id, project_id, provider_id, api_key_encrypted, is_enabled,
+			custom_base_url, custom_timeout_seconds, rate_limit_override,
+			priority_order, configuration, created_at, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 	`
 
 	now := time.Now()
@@ -58,21 +58,22 @@ func (r *ProviderConfigRepository) Create(ctx context.Context, config *gateway.P
 
 	err = r.db.WithContext(ctx).Exec(query,
 		config.ID,
+		config.ProjectID,
 		config.ProviderID,
-		config.OrganizationID,
-		string(config.Environment),
-		config.Priority,
-		string(configDataJSON),
-		string(encryptionKeyJSON),
-		config.IsEncrypted,
-		config.IsActive,
+		config.APIKeyEncrypted,
+		config.IsEnabled,
+		config.CustomBaseURL,
+		config.CustomTimeoutSecs,
+		string(rateLimitJSON),
+		config.PriorityOrder,
+		string(configurationJSON),
 		config.CreatedAt,
 		config.UpdatedAt,
 	).Error
 
 	if err != nil {
 		if isDuplicateKeyError(err) {
-			return gateway.NewProviderConfigNotFoundError(config.ProviderID.String())
+			return gateway.NewProviderConfigNotFoundError(config.ProjectID.String(), config.ProviderID.String())
 		}
 		return fmt.Errorf("failed to create provider config: %w", err)
 	}
@@ -83,13 +84,12 @@ func (r *ProviderConfigRepository) Create(ctx context.Context, config *gateway.P
 // GetByID retrieves a provider configuration by its ID
 func (r *ProviderConfigRepository) GetByID(ctx context.Context, id ulid.ULID) (*gateway.ProviderConfig, error) {
 	var config gateway.ProviderConfig
-	var environment string
-	var configDataJSON, encryptionKeyJSON string
+	var rateLimitJSON, configurationJSON string
 
 	query := `
-		SELECT id, provider_id, organization_id, environment, priority,
-			   config_data, encryption_key, is_encrypted, is_active,
-			   created_at, updated_at
+		SELECT id, project_id, provider_id, api_key_encrypted, is_enabled,
+			   custom_base_url, custom_timeout_seconds, rate_limit_override,
+			   priority_order, configuration, created_at, updated_at
 		FROM gateway_provider_configs
 		WHERE id = $1
 	`
@@ -98,48 +98,98 @@ func (r *ProviderConfigRepository) GetByID(ctx context.Context, id ulid.ULID) (*
 
 	err := row.Scan(
 		&config.ID,
+		&config.ProjectID,
 		&config.ProviderID,
-		&config.OrganizationID,
-		&environment,
-		&config.Priority,
-		&configDataJSON,
-		&encryptionKeyJSON,
-		&config.IsEncrypted,
-		&config.IsActive,
+		&config.APIKeyEncrypted,
+		&config.IsEnabled,
+		&config.CustomBaseURL,
+		&config.CustomTimeoutSecs,
+		&rateLimitJSON,
+		&config.PriorityOrder,
+		&configurationJSON,
 		&config.CreatedAt,
 		&config.UpdatedAt,
 	)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, gateway.NewProviderConfigNotFoundError(id.String())
+			return nil, gateway.NewProviderConfigNotFoundByIDError(id.String())
 		}
 		return nil, fmt.Errorf("failed to get provider config by ID: %w", err)
 	}
 
-	// Parse enum and JSON fields
-	config.Environment = gateway.Environment(environment)
-
-	if err := json.Unmarshal([]byte(configDataJSON), &config.ConfigData); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal config data: %w", err)
+	// Parse JSON fields
+	if err := json.Unmarshal([]byte(rateLimitJSON), &config.RateLimitOverride); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal rate limit override: %w", err)
 	}
 
-	if err := json.Unmarshal([]byte(encryptionKeyJSON), &config.EncryptionKey); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal encryption key: %w", err)
+	if err := json.Unmarshal([]byte(configurationJSON), &config.Configuration); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal configuration: %w", err)
 	}
 
 	return &config, nil
 }
 
-// GetByProvider retrieves provider configurations by provider ID
-func (r *ProviderConfigRepository) GetByProvider(ctx context.Context, providerID ulid.ULID) ([]*gateway.ProviderConfig, error) {
+// GetByProjectAndProvider retrieves a provider configuration by project ID and provider ID
+func (r *ProviderConfigRepository) GetByProjectAndProvider(ctx context.Context, projectID, providerID ulid.ULID) (*gateway.ProviderConfig, error) {
+	var config gateway.ProviderConfig
+	var rateLimitJSON, configurationJSON string
+
 	query := `
-		SELECT id, provider_id, organization_id, environment, priority,
-			   config_data, encryption_key, is_encrypted, is_active,
-			   created_at, updated_at
+		SELECT id, project_id, provider_id, api_key_encrypted, is_enabled,
+			   custom_base_url, custom_timeout_seconds, rate_limit_override,
+			   priority_order, configuration, created_at, updated_at
+		FROM gateway_provider_configs
+		WHERE project_id = $1 AND provider_id = $2
+		ORDER BY priority_order DESC
+		LIMIT 1
+	`
+
+	row := r.db.WithContext(ctx).Raw(query, projectID, providerID).Row()
+
+	err := row.Scan(
+		&config.ID,
+		&config.ProjectID,
+		&config.ProviderID,
+		&config.APIKeyEncrypted,
+		&config.IsEnabled,
+		&config.CustomBaseURL,
+		&config.CustomTimeoutSecs,
+		&rateLimitJSON,
+		&config.PriorityOrder,
+		&configurationJSON,
+		&config.CreatedAt,
+		&config.UpdatedAt,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, gateway.NewProviderConfigNotFoundError(projectID.String(), providerID.String())
+		}
+		return nil, fmt.Errorf("failed to get provider config by project and provider: %w", err)
+	}
+
+	// Parse JSON fields
+	if err := json.Unmarshal([]byte(rateLimitJSON), &config.RateLimitOverride); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal rate limit override: %w", err)
+	}
+
+	if err := json.Unmarshal([]byte(configurationJSON), &config.Configuration); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal configuration: %w", err)
+	}
+
+	return &config, nil
+}
+
+// GetByProviderID retrieves provider configurations by provider ID
+func (r *ProviderConfigRepository) GetByProviderID(ctx context.Context, providerID ulid.ULID) ([]*gateway.ProviderConfig, error) {
+	query := `
+		SELECT id, project_id, provider_id, api_key_encrypted, is_enabled,
+			   custom_base_url, custom_timeout_seconds, rate_limit_override,
+			   priority_order, configuration, created_at, updated_at
 		FROM gateway_provider_configs
 		WHERE provider_id = $1
-		ORDER BY priority DESC, created_at DESC
+		ORDER BY priority_order DESC, created_at DESC
 	`
 
 	rows, err := r.db.WithContext(ctx).Raw(query, providerID).Rows()
@@ -151,88 +201,126 @@ func (r *ProviderConfigRepository) GetByProvider(ctx context.Context, providerID
 	return r.scanProviderConfigs(rows)
 }
 
-// GetByProviderAndOrg retrieves provider configurations by provider ID and organization ID
-func (r *ProviderConfigRepository) GetByProviderAndOrg(ctx context.Context, providerID, orgID ulid.ULID) ([]*gateway.ProviderConfig, error) {
+// GetByProjectID retrieves provider configurations by project ID
+func (r *ProviderConfigRepository) GetByProjectID(ctx context.Context, projectID ulid.ULID) ([]*gateway.ProviderConfig, error) {
 	query := `
-		SELECT id, provider_id, organization_id, environment, priority,
-			   config_data, encryption_key, is_encrypted, is_active,
-			   created_at, updated_at
+		SELECT id, project_id, provider_id, api_key_encrypted, is_enabled,
+			   custom_base_url, custom_timeout_seconds, rate_limit_override,
+			   priority_order, configuration, created_at, updated_at
 		FROM gateway_provider_configs
-		WHERE provider_id = $1 AND organization_id = $2
-		ORDER BY priority DESC, created_at DESC
+		WHERE project_id = $1
+		ORDER BY priority_order DESC, created_at DESC
 	`
 
-	rows, err := r.db.WithContext(ctx).Raw(query, providerID, orgID).Rows()
+	rows, err := r.db.WithContext(ctx).Raw(query, projectID).Rows()
 	if err != nil {
-		return nil, fmt.Errorf("failed to query provider configs by provider and org: %w", err)
+		return nil, fmt.Errorf("failed to query provider configs by project: %w", err)
 	}
 	defer rows.Close()
 
 	return r.scanProviderConfigs(rows)
 }
 
-// GetByProviderOrgAndEnv retrieves a specific provider configuration by provider, organization, and environment
-func (r *ProviderConfigRepository) GetByProviderOrgAndEnv(ctx context.Context, providerID, orgID ulid.ULID, env gateway.Environment) (*gateway.ProviderConfig, error) {
+// GetEnabledByProjectID retrieves enabled provider configurations by project ID
+func (r *ProviderConfigRepository) GetEnabledByProjectID(ctx context.Context, projectID ulid.ULID) ([]*gateway.ProviderConfig, error) {
+	query := `
+		SELECT id, project_id, provider_id, api_key_encrypted, is_enabled,
+			   custom_base_url, custom_timeout_seconds, rate_limit_override,
+			   priority_order, configuration, created_at, updated_at
+		FROM gateway_provider_configs
+		WHERE project_id = $1 AND is_enabled = true
+		ORDER BY priority_order DESC, created_at DESC
+	`
+
+	rows, err := r.db.WithContext(ctx).Raw(query, projectID).Rows()
+	if err != nil {
+		return nil, fmt.Errorf("failed to query enabled provider configs by project: %w", err)
+	}
+	defer rows.Close()
+
+	return r.scanProviderConfigs(rows)
+}
+
+// GetByProviderAndOrg retrieves provider configurations by provider ID and project ID (legacy compatibility)
+func (r *ProviderConfigRepository) GetByProviderAndOrg(ctx context.Context, providerID, projectID ulid.ULID) ([]*gateway.ProviderConfig, error) {
+	query := `
+		SELECT id, project_id, provider_id, api_key_encrypted, is_enabled,
+			   custom_base_url, custom_timeout_seconds, rate_limit_override,
+			   priority_order, configuration, created_at, updated_at
+		FROM gateway_provider_configs
+		WHERE provider_id = $1 AND project_id = $2
+		ORDER BY priority_order DESC, created_at DESC
+	`
+
+	rows, err := r.db.WithContext(ctx).Raw(query, providerID, projectID).Rows()
+	if err != nil {
+		return nil, fmt.Errorf("failed to query provider configs by provider and project: %w", err)
+	}
+	defer rows.Close()
+
+	return r.scanProviderConfigs(rows)
+}
+
+// GetByProviderAndProject retrieves the first enabled provider configuration by provider ID and project ID
+func (r *ProviderConfigRepository) GetByProviderAndProject(ctx context.Context, providerID, projectID ulid.ULID) (*gateway.ProviderConfig, error) {
 	var config gateway.ProviderConfig
-	var environment string
-	var configDataJSON, encryptionKeyJSON string
+	var rateLimitJSON, configurationJSON string
 
 	query := `
-		SELECT id, provider_id, organization_id, environment, priority,
-			   config_data, encryption_key, is_encrypted, is_active,
-			   created_at, updated_at
+		SELECT id, project_id, provider_id, api_key_encrypted, is_enabled,
+			   custom_base_url, custom_timeout_seconds, rate_limit_override,
+			   priority_order, configuration, created_at, updated_at
 		FROM gateway_provider_configs
-		WHERE provider_id = $1 AND organization_id = $2 AND environment = $3 AND is_active = true
-		ORDER BY priority DESC
+		WHERE provider_id = $1 AND project_id = $2 AND is_enabled = true
+		ORDER BY priority_order DESC
 		LIMIT 1
 	`
 
-	row := r.db.WithContext(ctx).Raw(query, providerID, orgID, string(env)).Row()
+	row := r.db.WithContext(ctx).Raw(query, providerID, projectID).Row()
 
 	err := row.Scan(
 		&config.ID,
+		&config.ProjectID,
 		&config.ProviderID,
-		&config.OrganizationID,
-		&environment,
-		&config.Priority,
-		&configDataJSON,
-		&encryptionKeyJSON,
-		&config.IsEncrypted,
-		&config.IsActive,
+		&config.APIKeyEncrypted,
+		&config.IsEnabled,
+		&config.CustomBaseURL,
+		&config.CustomTimeoutSecs,
+		&rateLimitJSON,
+		&config.PriorityOrder,
+		&configurationJSON,
 		&config.CreatedAt,
 		&config.UpdatedAt,
 	)
 
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, gateway.NewProviderConfigNotFoundError(fmt.Sprintf("provider:%s,org:%s,env:%s", providerID, orgID, env))
+			return nil, gateway.NewProviderConfigNotFoundByIDError(fmt.Sprintf("provider:%s,project:%s", providerID, projectID))
 		}
-		return nil, fmt.Errorf("failed to get provider config by provider, org, and env: %w", err)
+		return nil, fmt.Errorf("failed to get provider config by provider and project: %w", err)
 	}
 
-	// Parse enum and JSON fields
-	config.Environment = gateway.Environment(environment)
-
-	if err := json.Unmarshal([]byte(configDataJSON), &config.ConfigData); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal config data: %w", err)
+	// Parse JSON fields
+	if err := json.Unmarshal([]byte(rateLimitJSON), &config.RateLimitOverride); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal rate limit override: %w", err)
 	}
 
-	if err := json.Unmarshal([]byte(encryptionKeyJSON), &config.EncryptionKey); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal encryption key: %w", err)
+	if err := json.Unmarshal([]byte(configurationJSON), &config.Configuration); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal configuration: %w", err)
 	}
 
 	return &config, nil
 }
 
-// GetActiveByProvider retrieves active provider configurations by provider ID
+// GetActiveByProvider retrieves enabled provider configurations by provider ID
 func (r *ProviderConfigRepository) GetActiveByProvider(ctx context.Context, providerID ulid.ULID) ([]*gateway.ProviderConfig, error) {
 	query := `
-		SELECT id, provider_id, organization_id, environment, priority,
-			   config_data, encryption_key, is_encrypted, is_active,
-			   created_at, updated_at
+		SELECT id, project_id, provider_id, api_key_encrypted, is_enabled,
+			   custom_base_url, custom_timeout_seconds, rate_limit_override,
+			   priority_order, configuration, created_at, updated_at
 		FROM gateway_provider_configs
-		WHERE provider_id = $1 AND is_active = true
-		ORDER BY priority DESC, created_at DESC
+		WHERE provider_id = $1 AND is_enabled = true
+		ORDER BY priority_order DESC, created_at DESC
 	`
 
 	rows, err := r.db.WithContext(ctx).Raw(query, providerID).Rows()
@@ -247,21 +335,21 @@ func (r *ProviderConfigRepository) GetActiveByProvider(ctx context.Context, prov
 // Update updates an existing provider configuration
 func (r *ProviderConfigRepository) Update(ctx context.Context, config *gateway.ProviderConfig) error {
 	// Convert maps to JSON for storage
-	configDataJSON, err := json.Marshal(config.ConfigData)
+	rateLimitJSON, err := json.Marshal(config.RateLimitOverride)
 	if err != nil {
-		return fmt.Errorf("failed to marshal config data: %w", err)
+		return fmt.Errorf("failed to marshal rate limit override: %w", err)
 	}
 
-	encryptionKeyJSON, err := json.Marshal(config.EncryptionKey)
+	configurationJSON, err := json.Marshal(config.Configuration)
 	if err != nil {
-		return fmt.Errorf("failed to marshal encryption key: %w", err)
+		return fmt.Errorf("failed to marshal configuration: %w", err)
 	}
 
 	query := `
 		UPDATE gateway_provider_configs
-		SET provider_id = $2, organization_id = $3, environment = $4,
-			priority = $5, config_data = $6, encryption_key = $7,
-			is_encrypted = $8, is_active = $9, updated_at = $10
+		SET project_id = $2, provider_id = $3, api_key_encrypted = $4,
+			is_enabled = $5, custom_base_url = $6, custom_timeout_seconds = $7,
+			rate_limit_override = $8, priority_order = $9, configuration = $10, updated_at = $11
 		WHERE id = $1
 	`
 
@@ -269,14 +357,15 @@ func (r *ProviderConfigRepository) Update(ctx context.Context, config *gateway.P
 
 	result := r.db.WithContext(ctx).Exec(query,
 		config.ID,
+		config.ProjectID,
 		config.ProviderID,
-		config.OrganizationID,
-		string(config.Environment),
-		config.Priority,
-		string(configDataJSON),
-		string(encryptionKeyJSON),
-		config.IsEncrypted,
-		config.IsActive,
+		config.APIKeyEncrypted,
+		config.IsEnabled,
+		config.CustomBaseURL,
+		config.CustomTimeoutSecs,
+		string(rateLimitJSON),
+		config.PriorityOrder,
+		string(configurationJSON),
 		config.UpdatedAt,
 	)
 
@@ -285,7 +374,7 @@ func (r *ProviderConfigRepository) Update(ctx context.Context, config *gateway.P
 	}
 
 	if result.RowsAffected == 0 {
-		return gateway.NewProviderConfigNotFoundError(config.ID.String())
+		return gateway.NewProviderConfigNotFoundError(config.ProjectID.String(), config.ProviderID.String())
 	}
 
 	return nil
@@ -301,7 +390,7 @@ func (r *ProviderConfigRepository) Delete(ctx context.Context, id ulid.ULID) err
 	}
 
 	if result.RowsAffected == 0 {
-		return gateway.NewProviderConfigNotFoundError(id.String())
+		return gateway.NewProviderConfigNotFoundByIDError(id.String())
 	}
 
 	return nil
@@ -359,26 +448,16 @@ func (r *ProviderConfigRepository) SearchConfigs(ctx context.Context, filter *ga
 		return nil, 0, fmt.Errorf("failed to count provider configs: %w", err)
 	}
 
-	// Main query with pagination
-	limitClause := ""
-	if filter != nil {
-		if filter.Limit > 0 {
-			args = append(args, filter.Limit)
-			limitClause = fmt.Sprintf(" LIMIT $%d", len(args))
-		}
-		if filter.Offset > 0 {
-			args = append(args, filter.Offset)
-			limitClause += fmt.Sprintf(" OFFSET $%d", len(args))
-		}
-	}
+	// Main query with pagination (using fixed limit/offset for now)
+	limitClause := " LIMIT 100" // Default limit
 
 	query := fmt.Sprintf(`
-		SELECT id, provider_id, organization_id, environment, priority,
-			   config_data, encryption_key, is_encrypted, is_active,
-			   created_at, updated_at
+		SELECT id, project_id, provider_id, api_key_encrypted, is_enabled,
+			   custom_base_url, custom_timeout_seconds, rate_limit_override,
+			   priority_order, configuration, created_at, updated_at
 		FROM gateway_provider_configs
 		%s
-		ORDER BY priority DESC, created_at DESC%s
+		ORDER BY priority_order DESC, created_at DESC%s
 	`, whereClause, limitClause)
 
 	rows, err := r.db.WithContext(ctx).Raw(query, args...).Rows()
@@ -480,7 +559,7 @@ func (r *ProviderConfigRepository) EncryptConfig(ctx context.Context, configID u
 	}
 
 	if result.RowsAffected == 0 {
-		return gateway.NewProviderConfigNotFoundError(configID.String())
+		return gateway.NewProviderConfigNotFoundByIDError(configID.String())
 	}
 
 	return nil
@@ -506,7 +585,7 @@ func (r *ProviderConfigRepository) DecryptConfig(ctx context.Context, configID u
 	}
 
 	if result.RowsAffected == 0 {
-		return gateway.NewProviderConfigNotFoundError(configID.String())
+		return gateway.NewProviderConfigNotFoundByIDError(configID.String())
 	}
 
 	return nil
@@ -541,7 +620,7 @@ func (r *ProviderConfigRepository) UpdateConfigPriority(ctx context.Context, con
 	}
 
 	if result.RowsAffected == 0 {
-		return gateway.NewProviderConfigNotFoundError(configID.String())
+		return gateway.NewProviderConfigNotFoundByIDError(configID.String())
 	}
 
 	return nil
@@ -561,7 +640,7 @@ func (r *ProviderConfigRepository) ActivateConfig(ctx context.Context, configID 
 	}
 
 	if result.RowsAffected == 0 {
-		return gateway.NewProviderConfigNotFoundError(configID.String())
+		return gateway.NewProviderConfigNotFoundByIDError(configID.String())
 	}
 
 	return nil
@@ -581,7 +660,7 @@ func (r *ProviderConfigRepository) DeactivateConfig(ctx context.Context, configI
 	}
 
 	if result.RowsAffected == 0 {
-		return gateway.NewProviderConfigNotFoundError(configID.String())
+		return gateway.NewProviderConfigNotFoundByIDError(configID.String())
 	}
 
 	return nil
@@ -594,19 +673,19 @@ func (r *ProviderConfigRepository) scanProviderConfigs(rows *sql.Rows) ([]*gatew
 
 	for rows.Next() {
 		var config gateway.ProviderConfig
-		var environment string
-		var configDataJSON, encryptionKeyJSON string
+		var rateLimitJSON, configurationJSON string
 
 		err := rows.Scan(
 			&config.ID,
+			&config.ProjectID,
 			&config.ProviderID,
-			&config.OrganizationID,
-			&environment,
-			&config.Priority,
-			&configDataJSON,
-			&encryptionKeyJSON,
-			&config.IsEncrypted,
-			&config.IsActive,
+			&config.APIKeyEncrypted,
+			&config.IsEnabled,
+			&config.CustomBaseURL,
+			&config.CustomTimeoutSecs,
+			&rateLimitJSON,
+			&config.PriorityOrder,
+			&configurationJSON,
 			&config.CreatedAt,
 			&config.UpdatedAt,
 		)
@@ -615,15 +694,13 @@ func (r *ProviderConfigRepository) scanProviderConfigs(rows *sql.Rows) ([]*gatew
 			return nil, fmt.Errorf("failed to scan provider config row: %w", err)
 		}
 
-		// Parse enum and JSON fields
-		config.Environment = gateway.Environment(environment)
-
-		if err := json.Unmarshal([]byte(configDataJSON), &config.ConfigData); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal config data: %w", err)
+		// Parse JSON fields
+		if err := json.Unmarshal([]byte(rateLimitJSON), &config.RateLimitOverride); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal rate limit override: %w", err)
 		}
 
-		if err := json.Unmarshal([]byte(encryptionKeyJSON), &config.EncryptionKey); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal encryption key: %w", err)
+		if err := json.Unmarshal([]byte(configurationJSON), &config.Configuration); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal configuration: %w", err)
 		}
 
 		configs = append(configs, &config)
@@ -647,53 +724,31 @@ func (r *ProviderConfigRepository) buildWhereClause(filter *gateway.ProviderConf
 		argIndex++
 	}
 
-	if filter.OrganizationID != nil {
-		conditions = append(conditions, fmt.Sprintf("organization_id = $%d", argIndex))
-		args = append(args, *filter.OrganizationID)
+	if filter.ProjectID != nil {
+		conditions = append(conditions, fmt.Sprintf("project_id = $%d", argIndex))
+		args = append(args, *filter.ProjectID)
 		argIndex++
 	}
 
-	if filter.Environment != nil {
-		conditions = append(conditions, fmt.Sprintf("environment = $%d", argIndex))
-		args = append(args, string(*filter.Environment))
-		argIndex++
-	}
-
-	if filter.IsActive != nil {
-		conditions = append(conditions, fmt.Sprintf("is_active = $%d", argIndex))
-		args = append(args, *filter.IsActive)
-		argIndex++
-	}
-
-	if filter.IsEncrypted != nil {
-		conditions = append(conditions, fmt.Sprintf("is_encrypted = $%d", argIndex))
-		args = append(args, *filter.IsEncrypted)
+	if filter.IsEnabled != nil {
+		conditions = append(conditions, fmt.Sprintf("is_enabled = $%d", argIndex))
+		args = append(args, *filter.IsEnabled)
 		argIndex++
 	}
 
 	if filter.MinPriority != nil {
-		conditions = append(conditions, fmt.Sprintf("priority >= $%d", argIndex))
+		conditions = append(conditions, fmt.Sprintf("priority_order >= $%d", argIndex))
 		args = append(args, *filter.MinPriority)
 		argIndex++
 	}
 
 	if filter.MaxPriority != nil {
-		conditions = append(conditions, fmt.Sprintf("priority <= $%d", argIndex))
+		conditions = append(conditions, fmt.Sprintf("priority_order <= $%d", argIndex))
 		args = append(args, *filter.MaxPriority)
 		argIndex++
 	}
 
-	if filter.CreatedAfter != nil {
-		conditions = append(conditions, fmt.Sprintf("created_at >= $%d", argIndex))
-		args = append(args, *filter.CreatedAfter)
-		argIndex++
-	}
-
-	if filter.CreatedBefore != nil {
-		conditions = append(conditions, fmt.Sprintf("created_at <= $%d", argIndex))
-		args = append(args, *filter.CreatedBefore)
-		argIndex++
-	}
+	// CreatedAfter and CreatedBefore fields are not available in ProviderConfigFilter
 
 	if len(conditions) == 0 {
 		return "", args
@@ -708,22 +763,22 @@ func (r *ProviderConfigRepository) createWithTx(ctx context.Context, tx *gorm.DB
 	}
 
 	// Convert maps to JSON for storage
-	configDataJSON, err := json.Marshal(config.ConfigData)
+	rateLimitJSON, err := json.Marshal(config.RateLimitOverride)
 	if err != nil {
-		return fmt.Errorf("failed to marshal config data: %w", err)
+		return fmt.Errorf("failed to marshal rate limit override: %w", err)
 	}
 
-	encryptionKeyJSON, err := json.Marshal(config.EncryptionKey)
+	configurationJSON, err := json.Marshal(config.Configuration)
 	if err != nil {
-		return fmt.Errorf("failed to marshal encryption key: %w", err)
+		return fmt.Errorf("failed to marshal configuration: %w", err)
 	}
 
 	query := `
 		INSERT INTO gateway_provider_configs (
-			id, provider_id, organization_id, environment, priority,
-			config_data, encryption_key, is_encrypted, is_active,
-			created_at, updated_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+			id, project_id, provider_id, api_key_encrypted, is_enabled,
+			custom_base_url, custom_timeout_seconds, rate_limit_override,
+			priority_order, configuration, created_at, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 	`
 
 	now := time.Now()
@@ -732,21 +787,22 @@ func (r *ProviderConfigRepository) createWithTx(ctx context.Context, tx *gorm.DB
 
 	err = tx.WithContext(ctx).Exec(query,
 		config.ID,
+		config.ProjectID,
 		config.ProviderID,
-		config.OrganizationID,
-		string(config.Environment),
-		config.Priority,
-		string(configDataJSON),
-		string(encryptionKeyJSON),
-		config.IsEncrypted,
-		config.IsActive,
+		config.APIKeyEncrypted,
+		config.IsEnabled,
+		config.CustomBaseURL,
+		config.CustomTimeoutSecs,
+		string(rateLimitJSON),
+		config.PriorityOrder,
+		string(configurationJSON),
 		config.CreatedAt,
 		config.UpdatedAt,
 	).Error
 
 	if err != nil {
 		if isDuplicateKeyError(err) {
-			return gateway.NewProviderConfigNotFoundError(config.ProviderID.String())
+			return gateway.NewProviderConfigNotFoundByIDError(config.ID.String())
 		}
 		return fmt.Errorf("failed to create provider config: %w", err)
 	}
@@ -756,21 +812,21 @@ func (r *ProviderConfigRepository) createWithTx(ctx context.Context, tx *gorm.DB
 
 func (r *ProviderConfigRepository) updateWithTx(ctx context.Context, tx *gorm.DB, config *gateway.ProviderConfig) error {
 	// Convert maps to JSON for storage
-	configDataJSON, err := json.Marshal(config.ConfigData)
+	rateLimitJSON, err := json.Marshal(config.RateLimitOverride)
 	if err != nil {
-		return fmt.Errorf("failed to marshal config data: %w", err)
+		return fmt.Errorf("failed to marshal rate limit override: %w", err)
 	}
 
-	encryptionKeyJSON, err := json.Marshal(config.EncryptionKey)
+	configurationJSON, err := json.Marshal(config.Configuration)
 	if err != nil {
-		return fmt.Errorf("failed to marshal encryption key: %w", err)
+		return fmt.Errorf("failed to marshal configuration: %w", err)
 	}
 
 	query := `
 		UPDATE gateway_provider_configs
-		SET provider_id = $2, organization_id = $3, environment = $4,
-			priority = $5, config_data = $6, encryption_key = $7,
-			is_encrypted = $8, is_active = $9, updated_at = $10
+		SET project_id = $2, provider_id = $3, api_key_encrypted = $4,
+			is_enabled = $5, custom_base_url = $6, custom_timeout_seconds = $7,
+			rate_limit_override = $8, priority_order = $9, configuration = $10, updated_at = $11
 		WHERE id = $1
 	`
 
@@ -778,14 +834,15 @@ func (r *ProviderConfigRepository) updateWithTx(ctx context.Context, tx *gorm.DB
 
 	result := tx.WithContext(ctx).Exec(query,
 		config.ID,
+		config.ProjectID,
 		config.ProviderID,
-		config.OrganizationID,
-		string(config.Environment),
-		config.Priority,
-		string(configDataJSON),
-		string(encryptionKeyJSON),
-		config.IsEncrypted,
-		config.IsActive,
+		config.APIKeyEncrypted,
+		config.IsEnabled,
+		config.CustomBaseURL,
+		config.CustomTimeoutSecs,
+		string(rateLimitJSON),
+		config.PriorityOrder,
+		string(configurationJSON),
 		config.UpdatedAt,
 	)
 
@@ -794,8 +851,139 @@ func (r *ProviderConfigRepository) updateWithTx(ctx context.Context, tx *gorm.DB
 	}
 
 	if result.RowsAffected == 0 {
-		return gateway.NewProviderConfigNotFoundError(config.ID.String())
+		return gateway.NewProviderConfigNotFoundByIDError(config.ID.String())
 	}
 
 	return nil
+}
+
+// CountProjectsForProvider counts the number of projects that have configurations for a specific provider
+func (r *ProviderConfigRepository) CountProjectsForProvider(ctx context.Context, providerID ulid.ULID) (int64, error) {
+	query := `
+		SELECT COUNT(DISTINCT project_id) 
+		FROM gateway_provider_configs 
+		WHERE provider_id = $1
+	`
+
+	var count int64
+	err := r.db.WithContext(ctx).Raw(query, providerID).Scan(&count).Error
+	if err != nil {
+		return 0, fmt.Errorf("failed to count projects for provider: %w", err)
+	}
+
+	return count, nil
+}
+
+// EncryptAPIKey encrypts an API key (placeholder implementation)
+func (r *ProviderConfigRepository) EncryptAPIKey(ctx context.Context, plaintext string) (string, error) {
+	// TODO: Implement proper encryption
+	// For now, return the plaintext (NOT SECURE - FOR DEVELOPMENT ONLY)
+	return plaintext, nil
+}
+
+// DecryptAPIKey decrypts an API key (placeholder implementation)
+func (r *ProviderConfigRepository) DecryptAPIKey(ctx context.Context, encrypted string) (string, error) {
+	// TODO: Implement proper decryption
+	// For now, return the encrypted value as-is (NOT SECURE - FOR DEVELOPMENT ONLY)
+	return encrypted, nil
+}
+
+// ListEnabled retrieves all enabled provider configurations
+func (r *ProviderConfigRepository) ListEnabled(ctx context.Context) ([]*gateway.ProviderConfig, error) {
+	query := `
+		SELECT id, project_id, provider_id, api_key_encrypted, is_enabled,
+			   custom_base_url, custom_timeout_seconds, rate_limit_override,
+			   priority_order, configuration, created_at, updated_at
+		FROM gateway_provider_configs
+		WHERE is_enabled = true
+		ORDER BY priority_order ASC
+	`
+
+	rows, err := r.db.WithContext(ctx).Raw(query).Rows()
+	if err != nil {
+		return nil, fmt.Errorf("failed to query enabled provider configs: %w", err)
+	}
+	defer rows.Close()
+
+	return r.scanProviderConfigs(rows)
+}
+
+// GetByProjectIDWithProvider retrieves provider configs for a project with provider details
+func (r *ProviderConfigRepository) GetByProjectIDWithProvider(ctx context.Context, projectID ulid.ULID) ([]*gateway.ProviderConfig, error) {
+	// For now, delegate to existing GetByProjectID method
+	// In a full implementation, this would join with provider table to include provider details
+	return r.GetByProjectID(ctx, projectID)
+}
+
+// GetOrderedByPriority retrieves provider configs for a project ordered by priority
+func (r *ProviderConfigRepository) GetOrderedByPriority(ctx context.Context, projectID ulid.ULID) ([]*gateway.ProviderConfig, error) {
+	query := `
+		SELECT id, project_id, provider_id, api_key_encrypted, is_enabled,
+			   custom_base_url, custom_timeout_seconds, rate_limit_override,
+			   priority_order, configuration, created_at, updated_at
+		FROM gateway_provider_configs
+		WHERE project_id = $1
+		ORDER BY priority_order ASC
+	`
+
+	rows, err := r.db.WithContext(ctx).Raw(query, projectID).Rows()
+	if err != nil {
+		return nil, fmt.Errorf("failed to query provider configs by priority: %w", err)
+	}
+	defer rows.Close()
+
+	return r.scanProviderConfigs(rows)
+}
+
+// TestProviderConnection tests the connection to a provider using the given configuration
+func (r *ProviderConfigRepository) TestProviderConnection(ctx context.Context, config *gateway.ProviderConfig) error {
+	// TODO: Implement actual connection testing logic
+	// This would involve making a test request to the provider's API
+	// to verify that the configuration is valid and the connection works
+	
+	// For now, just validate that the config has required fields
+	if config.APIKeyEncrypted == "" {
+		return fmt.Errorf("API key is required for provider connection test")
+	}
+	
+	// In a real implementation, this would:
+	// 1. Decrypt the API key
+	// 2. Make a test request to the provider's API
+	// 3. Return success/failure based on the response
+	
+	return nil // Placeholder - always succeeds
+}
+
+// UpdatePriority updates the priority of a provider configuration
+func (r *ProviderConfigRepository) UpdatePriority(ctx context.Context, configID ulid.ULID, priority int) error {
+	// Delegate to existing UpdateConfigPriority method
+	return r.UpdateConfigPriority(ctx, configID, priority)
+}
+
+// ValidateConfiguration validates a provider configuration
+func (r *ProviderConfigRepository) ValidateConfiguration(ctx context.Context, config *gateway.ProviderConfig) error {
+	// TODO: Implement actual validation logic
+	// This would involve validating the provider configuration schema,
+	// checking required fields, validating API key format, etc.
+	
+	// Basic validation - check required fields
+	if config.ProviderID.IsZero() {
+		return fmt.Errorf("provider ID is required")
+	}
+	
+	if config.ProjectID.IsZero() {
+		return fmt.Errorf("project ID is required")
+	}
+	
+	if config.APIKeyEncrypted == "" {
+		return fmt.Errorf("API key is required")
+	}
+	
+	// In a full implementation, this would:
+	// 1. Validate against provider-specific schemas
+	// 2. Check API key format
+	// 3. Validate configuration parameters
+	// 4. Test connection to provider
+	
+	return nil // Placeholder - always succeeds after basic validation
 }

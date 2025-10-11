@@ -217,6 +217,7 @@ func (s *BillingService) CalculateBill(ctx context.Context, orgID ulid.ULID, per
 
 	if len(usageRecords) == 0 {
 		return &analytics.BillingSummary{
+			ID:             ulid.New(),
 			OrganizationID: orgID,
 			Period:         period,
 			PeriodStart:    start,
@@ -233,6 +234,7 @@ func (s *BillingService) CalculateBill(ctx context.Context, orgID ulid.ULID, per
 
 	// Calculate summary statistics
 	summary := &analytics.BillingSummary{
+		ID:                ulid.New(),
 		OrganizationID:    orgID,
 		Period:            period,
 		PeriodStart:       start,

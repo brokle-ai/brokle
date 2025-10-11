@@ -13,16 +13,16 @@ import (
 func (p *OpenAIProvider) transformChatCompletionRequest(req *providers.ChatCompletionRequest) openai.ChatCompletionRequest {
 	openaiReq := openai.ChatCompletionRequest{
 		Model:            req.Model,
-		MaxTokens:        req.MaxTokens,
-		Temperature:      req.Temperature,
-		TopP:             req.TopP,
-		N:                req.N,
+		MaxTokens:        p.derefInt(req.MaxTokens),
+		Temperature:      p.derefFloat32(req.Temperature),
+		TopP:             p.derefFloat32(req.TopP),
+		N:                p.derefInt(req.N),
 		Stream:           req.Stream,
 		Stop:             req.Stop,
-		PresencePenalty:  req.PresencePenalty,
-		FrequencyPenalty: req.FrequencyPenalty,
-		LogitBias:        req.LogitBias,
-		User:             req.User,
+		PresencePenalty:  p.derefFloat32(req.PresencePenalty),
+		FrequencyPenalty: p.derefFloat32(req.FrequencyPenalty),
+		LogitBias:        p.transformLogitBias(req.LogitBias),
+		User:             p.derefString(req.User),
 		Seed:             req.Seed,
 	}
 
@@ -75,7 +75,7 @@ func (p *OpenAIProvider) transformChatMessage(msg *providers.ChatMessage) openai
 	openaiMsg := openai.ChatCompletionMessage{
 		Role:    msg.Role,
 		Content: p.transformMessageContent(msg.Content),
-		Name:    msg.Name,
+		Name:    p.derefString(msg.Name),
 	}
 
 	// Handle function call (legacy)
@@ -109,7 +109,7 @@ func (p *OpenAIProvider) transformChatMessage(msg *providers.ChatMessage) openai
 
 	// Handle tool call ID for tool response messages
 	if msg.ToolCallID != nil {
-		openaiMsg.ToolCallID = msg.ToolCallID
+		openaiMsg.ToolCallID = p.derefString(msg.ToolCallID)
 	}
 
 	return openaiMsg
@@ -149,20 +149,20 @@ func (p *OpenAIProvider) transformCompletionRequest(req *providers.CompletionReq
 	return openai.CompletionRequest{
 		Model:            req.Model,
 		Prompt:           p.transformPrompt(req.Prompt),
-		MaxTokens:        req.MaxTokens,
-		Temperature:      req.Temperature,
-		TopP:             req.TopP,
-		N:                req.N,
+		MaxTokens:        p.derefInt(req.MaxTokens),
+		Temperature:      p.derefFloat32(req.Temperature),
+		TopP:             p.derefFloat32(req.TopP),
+		N:                p.derefInt(req.N),
 		Stream:           req.Stream,
-		Logprobs:         req.Logprobs,
+		LogProbs:         p.derefInt(req.Logprobs),  // Fixed to dereference pointer
 		Echo:             req.Echo,
 		Stop:             req.Stop,
-		PresencePenalty:  req.PresencePenalty,
-		FrequencyPenalty: req.FrequencyPenalty,
-		BestOf:           req.BestOf,
-		LogitBias:        req.LogitBias,
-		User:             req.User,
-		Suffix:           req.Suffix,
+		PresencePenalty:  p.derefFloat32(req.PresencePenalty),
+		FrequencyPenalty: p.derefFloat32(req.FrequencyPenalty),
+		BestOf:           p.derefInt(req.BestOf),
+		LogitBias:        p.transformLogitBias(req.LogitBias),
+		User:             p.derefString(req.User),
+		Suffix:           p.derefString(req.Suffix),
 	}
 }
 
@@ -175,7 +175,7 @@ func (p *OpenAIProvider) transformEmbeddingRequest(req *providers.EmbeddingReque
 	openaiReq := openai.EmbeddingRequest{
 		Model: openai.EmbeddingModel(req.Model),
 		Input: req.Input,
-		User:  req.User,
+		User:  p.derefString(req.User),
 	}
 
 	if req.EncodingFormat != nil {
@@ -197,23 +197,24 @@ func (p *OpenAIProvider) transformChatCompletionResponse(resp *openai.ChatComple
 		Object:            resp.Object,
 		Created:           resp.Created,
 		Model:             resp.Model,
-		SystemFingerprint: resp.SystemFingerprint,
+		SystemFingerprint: &resp.SystemFingerprint,
 	}
 
 	// Transform choices
 	if len(resp.Choices) > 0 {
 		result.Choices = make([]providers.ChatCompletionChoice, len(resp.Choices))
 		for i, choice := range resp.Choices {
+			finishReason := string(choice.FinishReason)
 			result.Choices[i] = providers.ChatCompletionChoice{
 				Index:        choice.Index,
-				FinishReason: choice.FinishReason,
+				FinishReason: &finishReason,
 			}
 
 			if choice.Message.Role != "" {
 				result.Choices[i].Message = &providers.ChatMessage{
 					Role:    choice.Message.Role,
 					Content: choice.Message.Content,
-					Name:    choice.Message.Name,
+					Name:    &choice.Message.Name,
 				}
 
 				// Transform function call
@@ -260,16 +261,17 @@ func (p *OpenAIProvider) transformChatCompletionStreamResponse(resp *openai.Chat
 		Object:            resp.Object,
 		Created:           resp.Created,
 		Model:             resp.Model,
-		SystemFingerprint: resp.SystemFingerprint,
+		SystemFingerprint: &resp.SystemFingerprint,
 	}
 
 	// Transform choices for streaming
 	if len(resp.Choices) > 0 {
 		result.Choices = make([]providers.ChatCompletionChoice, len(resp.Choices))
 		for i, choice := range resp.Choices {
+			finishReason := string(choice.FinishReason)
 			result.Choices[i] = providers.ChatCompletionChoice{
 				Index:        choice.Index,
-				FinishReason: choice.FinishReason,
+				FinishReason: &finishReason,
 			}
 
 			// For streaming, we have delta instead of message
@@ -296,12 +298,12 @@ func (p *OpenAIProvider) transformChatCompletionStreamResponse(resp *openai.Chat
 							Type: string(tc.Type),
 						}
 						
-						if tc.Function != nil {
-							result.Choices[i].Delta.ToolCalls[j].Function = providers.FunctionCall{
-								Name:      tc.Function.Name,
-								Arguments: tc.Function.Arguments,
-							}
+					if tc.Function.Name != "" || tc.Function.Arguments != "" {
+						result.Choices[i].Delta.ToolCalls[j].Function = providers.FunctionCall{
+							Name:      tc.Function.Name,
+							Arguments: tc.Function.Arguments,
 						}
+					}
 					}
 				}
 			}
@@ -323,11 +325,12 @@ func (p *OpenAIProvider) transformCompletionResponse(resp *openai.CompletionResp
 	if len(resp.Choices) > 0 {
 		result.Choices = make([]providers.CompletionChoice, len(resp.Choices))
 		for i, choice := range resp.Choices {
+			finishReason := choice.FinishReason
 			result.Choices[i] = providers.CompletionChoice{
 				Text:         choice.Text,
 				Index:        choice.Index,
 				Logprobs:     choice.LogProbs,
-				FinishReason: choice.FinishReason,
+				FinishReason: &finishReason,
 			}
 		}
 	}
@@ -352,17 +355,22 @@ func (p *OpenAIProvider) transformCompletionStreamResponse(resp *openai.Completi
 func (p *OpenAIProvider) transformEmbeddingResponse(resp *openai.EmbeddingResponse) *providers.EmbeddingResponse {
 	result := &providers.EmbeddingResponse{
 		Object: resp.Object,
-		Model:  resp.Model,
+		Model:  string(resp.Model),
 	}
 
 	// Transform embeddings
 	if len(resp.Data) > 0 {
 		result.Data = make([]providers.Embedding, len(resp.Data))
 		for i, embedding := range resp.Data {
+			// Convert []float32 to []float64
+			embeddingFloat64 := make([]float64, len(embedding.Embedding))
+			for j, val := range embedding.Embedding {
+				embeddingFloat64[j] = float64(val)
+			}
 			result.Data[i] = providers.Embedding{
 				Object:    embedding.Object,
 				Index:     embedding.Index,
-				Embedding: embedding.Embedding,
+				Embedding: embeddingFloat64,
 			}
 		}
 	}
@@ -383,20 +391,27 @@ func (p *OpenAIProvider) transformModel(model *openai.Model) *providers.Model {
 	result := &providers.Model{
 		ID      : model.ID,
 		Object  : model.Object,
-		Created : model.Created,
+		// Created field doesn't exist in openai.Model, use 0 as default
+		Created : 0,
 		OwnedBy : model.OwnedBy,
 		Root    : model.Root,
-		Parent  : model.Parent,
+		Parent  : &model.Parent,
 	}
 
 	// Transform permissions if present
 	if len(model.Permission) > 0 {
 		result.Permission = make([]providers.ModelPermission, len(model.Permission))
 		for i, perm := range model.Permission {
+			// Convert Group interface{} to *string safely
+			var groupStr *string
+			if groupVal, ok := perm.Group.(string); ok && groupVal != "" {
+				groupStr = &groupVal
+			}
 			result.Permission[i] = providers.ModelPermission{
 				ID:                 perm.ID,
 				Object:             perm.Object,
-				Created:            perm.Created,
+				// Created field doesn't exist in openai.Permission, use 0 as default
+				Created:            0,
 				AllowCreateEngine:  perm.AllowCreateEngine,
 				AllowSampling:      perm.AllowSampling,
 				AllowLogprobs:      perm.AllowLogprobs,
@@ -404,7 +419,7 @@ func (p *OpenAIProvider) transformModel(model *openai.Model) *providers.Model {
 				AllowView:          perm.AllowView,
 				AllowFineTuning:    perm.AllowFineTuning,
 				Organization:       perm.Organization,
-				Group:              perm.Group,
+				Group:              groupStr,
 				IsBlocking:         perm.IsBlocking,
 			}
 		}
@@ -421,4 +436,42 @@ func (p *OpenAIProvider) marshalJSON(v interface{}) string {
 		return "{}"
 	}
 	return string(data)
+}
+
+// Helper methods for dereferencing pointers safely
+
+func (p *OpenAIProvider) derefInt(ptr *int) int {
+	if ptr == nil {
+		return 0
+	}
+	return *ptr
+}
+
+func (p *OpenAIProvider) derefFloat32(ptr *float64) float32 {
+	if ptr == nil {
+		return 0
+	}
+	return float32(*ptr)
+}
+
+func (p *OpenAIProvider) derefString(ptr *string) string {
+	if ptr == nil {
+		return ""
+	}
+	return *ptr
+}
+
+func (p *OpenAIProvider) transformLogitBias(logitBias map[string]interface{}) map[string]int {
+	if logitBias == nil {
+		return nil
+	}
+	result := make(map[string]int)
+	for k, v := range logitBias {
+		if intVal, ok := v.(int); ok {
+			result[k] = intVal
+		} else if floatVal, ok := v.(float64); ok {
+			result[k] = int(floatVal)
+		}
+	}
+	return result
 }

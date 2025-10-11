@@ -303,7 +303,6 @@ func (suite *DatabaseIntegrationTestSuite) TestProviderConfigRepository() {
 		ID:                     suite.testProviderConfigID,
 		ProviderID:            suite.testProviderID,
 		OrganizationID:        testOrgID,
-		Environment:           gateway.EnvironmentProduction,
 		Name:                  "test-config",
 		APIKey:                "test-api-key-encrypted",
 		BaseURL:               "https://custom.api.com",

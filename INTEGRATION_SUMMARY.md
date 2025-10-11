@@ -84,7 +84,7 @@ Several components have type signature mismatches that need alignment:
    - Field mapping needs to be updated
 
 3. **AI Handlers**: 
-   - Missing several gateway response types (EmbeddingsResponse, CostCalculation, etc.)
+   - Missing several gateway response types (EmbeddingResponse, CostCalculation, etc.)
    - Need to add missing request/response types
 
 4. **OpenAI Provider**: 

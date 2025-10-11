@@ -11,15 +11,15 @@ import (
 // GatewayService defines the main gateway service interface for AI requests
 type GatewayService interface {
 	// Chat completion operations
-	CreateChatCompletion(ctx context.Context, projectID ulid.ULID, environment string, req *ChatCompletionRequest) (*ChatCompletionResponse, error)
-	CreateChatCompletionStream(ctx context.Context, projectID ulid.ULID, environment string, req *ChatCompletionRequest, writer io.Writer) error
+	CreateChatCompletion(ctx context.Context, projectID ulid.ULID, req *ChatCompletionRequest) (*ChatCompletionResponse, error)
+	CreateChatCompletionStream(ctx context.Context, projectID ulid.ULID, req *ChatCompletionRequest, writer io.Writer) error
 
 	// Text completion operations
-	CreateCompletion(ctx context.Context, projectID ulid.ULID, environment string, req *CompletionRequest) (*CompletionResponse, error)
-	CreateCompletionStream(ctx context.Context, projectID ulid.ULID, environment string, req *CompletionRequest, writer io.Writer) error
+	CreateCompletion(ctx context.Context, projectID ulid.ULID, req *CompletionRequest) (*CompletionResponse, error)
+	CreateCompletionStream(ctx context.Context, projectID ulid.ULID, req *CompletionRequest, writer io.Writer) error
 
 	// Embedding operations
-	CreateEmbedding(ctx context.Context, projectID ulid.ULID, environment string, req *EmbeddingRequest) (*EmbeddingResponse, error)
+	CreateEmbedding(ctx context.Context, projectID ulid.ULID, req *EmbeddingRequest) (*EmbeddingResponse, error)
 
 	// Model operations
 	ListAvailableModels(ctx context.Context, projectID ulid.ULID) ([]*ModelInfo, error)
@@ -203,6 +203,8 @@ type HealthService interface {
 
 // ChatCompletionRequest represents a chat completion request
 type ChatCompletionRequest struct {
+	ProjectID        ulid.ULID              `json:"project_id"`
+	OrganizationID   ulid.ULID              `json:"organization_id"`
 	Model            string                 `json:"model" binding:"required"`
 	Messages         []ChatMessage          `json:"messages" binding:"required,min=1"`
 	MaxTokens        *int                   `json:"max_tokens,omitempty"`
@@ -230,20 +232,20 @@ type ChatMessage struct {
 
 // ChatCompletionResponse represents the response from a chat completion
 type ChatCompletionResponse struct {
-	ID                string                    `json:"id"`
-	Object            string                    `json:"object"`
-	Created           int64                     `json:"created"`
-	Model             string                    `json:"model"`
-	Choices           []ChatCompletionChoice    `json:"choices"`
-	Usage             *TokenUsage               `json:"usage,omitempty"`
-	SystemFingerprint *string                   `json:"system_fingerprint,omitempty"`
+	ID                string                 `json:"id"`
+	Object            string                 `json:"object"`
+	Created           int64                  `json:"created"`
+	Model             string                 `json:"model"`
+	Choices           []ChatCompletionChoice `json:"choices"`
+	Usage             *TokenUsage            `json:"usage,omitempty"`
+	SystemFingerprint *string                `json:"system_fingerprint,omitempty"`
 	// Brokle-specific extensions
-	Provider       string    `json:"x-brokle-provider,omitempty"`
-	RoutingReason  string    `json:"x-brokle-routing-reason,omitempty"`
-	Cost           *float64  `json:"x-brokle-cost,omitempty"`
-	CacheHit       bool      `json:"x-brokle-cache-hit,omitempty"`
-	ProcessingTime int       `json:"x-brokle-processing-time-ms,omitempty"`
-	RequestID      string    `json:"x-brokle-request-id,omitempty"`
+	Provider       string   `json:"x-brokle-provider,omitempty"`
+	RoutingReason  string   `json:"x-brokle-routing-reason,omitempty"`
+	Cost           *float64 `json:"x-brokle-cost,omitempty"`
+	CacheHit       bool     `json:"x-brokle-cache-hit,omitempty"`
+	ProcessingTime int      `json:"x-brokle-processing-time-ms,omitempty"`
+	RequestID      string   `json:"x-brokle-request-id,omitempty"`
 }
 
 // ChatCompletionChoice represents a choice in the chat completion response
@@ -257,6 +259,8 @@ type ChatCompletionChoice struct {
 
 // CompletionRequest represents a text completion request
 type CompletionRequest struct {
+	ProjectID        ulid.ULID `json:"project_id"`
+	OrganizationID   ulid.ULID `json:"organization_id"`
 	Model            string    `json:"model" binding:"required"`
 	Prompt           string    `json:"prompt" binding:"required"`
 	MaxTokens        *int      `json:"max_tokens,omitempty"`
@@ -276,12 +280,12 @@ type CompletionRequest struct {
 
 // CompletionResponse represents the response from a text completion
 type CompletionResponse struct {
-	ID                string             `json:"id"`
-	Object            string             `json:"object"`
-	Created           int64              `json:"created"`
-	Model             string             `json:"model"`
-	Choices           []CompletionChoice `json:"choices"`
-	Usage             *TokenUsage        `json:"usage,omitempty"`
+	ID      string             `json:"id"`
+	Object  string             `json:"object"`
+	Created int64              `json:"created"`
+	Model   string             `json:"model"`
+	Choices []CompletionChoice `json:"choices"`
+	Usage   *TokenUsage        `json:"usage,omitempty"`
 	// Brokle-specific extensions
 	Provider       string   `json:"x-brokle-provider,omitempty"`
 	RoutingReason  string   `json:"x-brokle-routing-reason,omitempty"`
@@ -301,6 +305,8 @@ type CompletionChoice struct {
 
 // EmbeddingRequest represents an embedding request
 type EmbeddingRequest struct {
+	ProjectID       ulid.ULID   `json:"project_id"`
+	OrganizationID  ulid.ULID   `json:"organization_id"`
 	Model           string      `json:"model" binding:"required"`
 	Input           interface{} `json:"input" binding:"required"`
 	EncodingFormat  *string     `json:"encoding_format,omitempty"`
@@ -309,26 +315,8 @@ type EmbeddingRequest struct {
 	RoutingStrategy *string     `json:"routing_strategy,omitempty"`
 }
 
-// EmbeddingResponse represents the response from an embedding request
-type EmbeddingResponse struct {
-	Object string      `json:"object"`
-	Data   []Embedding `json:"data"`
-	Model  string      `json:"model"`
-	Usage  *TokenUsage `json:"usage,omitempty"`
-	// Brokle-specific extensions
-	Provider       string   `json:"x-brokle-provider,omitempty"`
-	RoutingReason  string   `json:"x-brokle-routing-reason,omitempty"`
-	Cost           *float64 `json:"x-brokle-cost,omitempty"`
-	ProcessingTime int      `json:"x-brokle-processing-time-ms,omitempty"`
-	RequestID      string   `json:"x-brokle-request-id,omitempty"`
-}
-
-// Embedding represents a single embedding vector
-type Embedding struct {
-	Object    string    `json:"object"`
-	Index     int       `json:"index"`
-	Embedding []float64 `json:"embedding"`
-}
+// EmbeddingResponse is defined in types.go
+// Embedding types are defined in types.go
 
 // Function represents a function definition for function calling
 type Function struct {
@@ -341,37 +329,37 @@ type Function struct {
 
 // ModelInfo represents model information for listing
 type ModelInfo struct {
-	ID            string                 `json:"id"`
-	Object        string                 `json:"object"`
-	Provider      string                 `json:"provider"`
-	DisplayName   string                 `json:"display_name"`
-	MaxTokens     int                    `json:"max_tokens"`
-	InputCost     float64                `json:"input_cost_per_1k_tokens"`
-	OutputCost    float64                `json:"output_cost_per_1k_tokens"`
-	Features      []string               `json:"features"`
-	QualityScore  *float64               `json:"quality_score,omitempty"`
-	SpeedScore    *float64               `json:"speed_score,omitempty"`
-	Metadata      map[string]interface{} `json:"metadata"`
+	ID           string                 `json:"id"`
+	Object       string                 `json:"object"`
+	Provider     string                 `json:"provider"`
+	DisplayName  string                 `json:"display_name"`
+	MaxTokens    int                    `json:"max_tokens"`
+	InputCost    float64                `json:"input_cost_per_1k_tokens"`
+	OutputCost   float64                `json:"output_cost_per_1k_tokens"`
+	Features     []string               `json:"features"`
+	QualityScore *float64               `json:"quality_score,omitempty"`
+	SpeedScore   *float64               `json:"speed_score,omitempty"`
+	Metadata     map[string]interface{} `json:"metadata"`
 }
 
 // ProviderHealth represents provider health status
 type ProviderHealth struct {
-	ProviderID       ulid.ULID `json:"provider_id"`
-	ProviderName     string    `json:"provider_name"`
+	ProviderID       ulid.ULID    `json:"provider_id"`
+	ProviderName     string       `json:"provider_name"`
 	Status           HealthStatus `json:"status"`
-	LastChecked      time.Time `json:"last_checked"`
-	AvgLatencyMs     *int      `json:"avg_latency_ms,omitempty"`
-	SuccessRate      *float64  `json:"success_rate,omitempty"`
-	UptimePercentage *float64  `json:"uptime_percentage,omitempty"`
-	LastError        *string   `json:"last_error,omitempty"`
+	LastChecked      time.Time    `json:"last_checked"`
+	AvgLatencyMs     *int         `json:"avg_latency_ms,omitempty"`
+	SuccessRate      *float64     `json:"success_rate,omitempty"`
+	UptimePercentage *float64     `json:"uptime_percentage,omitempty"`
+	LastError        *string      `json:"last_error,omitempty"`
 }
 
 // ConnectionTestResult represents the result of testing a provider connection
 type ConnectionTestResult struct {
-	Success      bool      `json:"success"`
-	LatencyMs    int       `json:"latency_ms"`
-	Error        *string   `json:"error,omitempty"`
-	TestedAt     time.Time `json:"tested_at"`
+	Success      bool        `json:"success"`
+	LatencyMs    int         `json:"latency_ms"`
+	Error        *string     `json:"error,omitempty"`
+	TestedAt     time.Time   `json:"tested_at"`
 	ResponseData interface{} `json:"response_data,omitempty"`
 }
 

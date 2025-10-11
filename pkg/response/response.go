@@ -48,6 +48,9 @@ type Pagination struct {
 	HasPrev   bool  `json:"has_prev" example:"false" description:"Whether there are previous pages"`
 }
 
+// SuccessResponse and ErrorResponse are defined in swagger_models.go
+// as concrete types for proper Swagger documentation generation
+
 func Success(c *gin.Context, data interface{}) {
 	c.JSON(http.StatusOK, APIResponse{
 		Success: true,

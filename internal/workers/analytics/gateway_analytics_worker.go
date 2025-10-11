@@ -2,7 +2,6 @@ package analytics
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -37,7 +36,6 @@ type RequestMetric struct {
 	RequestID      ulid.ULID                  `json:"request_id"`
 	OrganizationID ulid.ULID                  `json:"organization_id"`
 	UserID         *ulid.ULID                 `json:"user_id,omitempty"`
-	Environment    gateway.Environment        `json:"environment"`
 	ProviderID     ulid.ULID                  `json:"provider_id"`
 	ProviderName   string                     `json:"provider_name"`
 	ModelID        ulid.ULID                  `json:"model_id"`
@@ -65,7 +63,6 @@ type RequestMetric struct {
 type UsageMetric struct {
 	ID               ulid.ULID           `json:"id"`
 	OrganizationID   ulid.ULID           `json:"organization_id"`
-	Environment      gateway.Environment `json:"environment"`
 	ProviderID       ulid.ULID           `json:"provider_id"`
 	ModelID          ulid.ULID           `json:"model_id"`
 	RequestType      gateway.RequestType `json:"request_type"`
@@ -92,7 +89,6 @@ type CostMetric struct {
 	ID               ulid.ULID           `json:"id"`
 	RequestID        ulid.ULID           `json:"request_id"`
 	OrganizationID   ulid.ULID           `json:"organization_id"`
-	Environment      gateway.Environment `json:"environment"`
 	ProviderID       ulid.ULID           `json:"provider_id"`
 	ModelID          ulid.ULID           `json:"model_id"`
 	RequestType      gateway.RequestType `json:"request_type"`
@@ -128,6 +124,7 @@ type BillingService interface {
 
 // BillingSummary represents a billing period summary
 type BillingSummary struct {
+	ID                ulid.ULID           `json:"id"`
 	OrganizationID    ulid.ULID           `json:"organization_id"`
 	Period            string              `json:"period"`
 	PeriodStart       time.Time           `json:"period_start"`
@@ -293,7 +290,6 @@ func (w *GatewayAnalyticsWorker) RecordRequest(ctx context.Context, metric *gate
 		RequestID:      requestID,
 		OrganizationID: metric.ProjectID, // Using ProjectID as OrganizationID
 		// UserID is not available in RequestMetrics, set to nil
-		Environment:    gateway.Environment(metric.Environment),
 		// ProviderID needs to be derived from provider name - use new ULID for now
 		// TODO: Add provider lookup service to get ProviderID from provider name
 		ProviderName:   metric.Provider,
@@ -338,7 +334,6 @@ func (w *GatewayAnalyticsWorker) RecordRequest(ctx context.Context, metric *gate
 		ID:               ulid.New(),
 		RequestID:        requestID,
 		OrganizationID:   metric.ProjectID,
-		Environment:      gateway.Environment(metric.Environment),
 		ProviderID:       providerID,
 		ModelID:          modelID,
 		RequestType:      gateway.RequestTypeChatCompletion, // Default

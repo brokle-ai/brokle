@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jmoiron/sqlx"
 	"github.com/sirupsen/logrus"
+	"gorm.io/gorm"
 
 	"brokle/internal/services/billing"
 	"brokle/internal/workers/analytics"
@@ -17,12 +17,12 @@ import (
 
 // Repository implements the billing repository using PostgreSQL
 type Repository struct {
-	db     *sqlx.DB
+	db     *gorm.DB
 	logger *logrus.Logger
 }
 
 // NewRepository creates a new billing repository instance
-func NewRepository(db *sqlx.DB, logger *logrus.Logger) *Repository {
+func NewRepository(db *gorm.DB, logger *logrus.Logger) *Repository {
 	return &Repository{
 		db:     db,
 		logger: logger,
@@ -39,13 +39,13 @@ func (r *Repository) InsertUsageRecord(ctx context.Context, record *billing.Usag
 			cost, currency, billing_tier, discounts, net_cost,
 			created_at, processed_at
 		) VALUES (
-			$1, $2, $3, $4, $5,
-			$6, $7, $8, $9,
-			$10, $11, $12, $13, $14,
-			$15, $16
+			?, ?, ?, ?, ?,
+			?, ?, ?, ?,
+			?, ?, ?, ?, ?,
+			?, ?
 		)`
 
-	_, err := r.db.ExecContext(ctx, query,
+	err := r.db.WithContext(ctx).Exec(query,
 		record.ID,
 		record.OrganizationID,
 		record.RequestID,
@@ -62,7 +62,7 @@ func (r *Repository) InsertUsageRecord(ctx context.Context, record *billing.Usag
 		record.NetCost,
 		record.CreatedAt,
 		record.ProcessedAt,
-	)
+	).Error
 
 	if err != nil {
 		r.logger.WithError(err).WithField("record_id", record.ID).Error("Failed to insert usage record")
@@ -80,71 +80,43 @@ func (r *Repository) InsertUsageRecord(ctx context.Context, record *billing.Usag
 
 func (r *Repository) GetUsageRecords(ctx context.Context, orgID ulid.ULID, start, end time.Time) ([]*billing.UsageRecord, error) {
 	query := `
-		SELECT 
+		SELECT
 			id, organization_id, request_id, provider_id, model_id,
 			request_type, input_tokens, output_tokens, total_tokens,
 			cost, currency, billing_tier, discounts, net_cost,
 			created_at, processed_at
-		FROM usage_records 
-		WHERE organization_id = $1 
-			AND created_at >= $2 
-			AND created_at < $3
+		FROM usage_records
+		WHERE organization_id = ?
+			AND created_at >= ?
+			AND created_at < ?
 		ORDER BY created_at DESC`
 
-	rows, err := r.db.QueryContext(ctx, query, orgID, start, end)
+	var records []*billing.UsageRecord
+	err := r.db.WithContext(ctx).Raw(query, orgID, start, end).Scan(&records).Error
 	if err != nil {
 		return nil, fmt.Errorf("failed to get usage records: %w", err)
 	}
-	defer rows.Close()
 
-	var records []*billing.UsageRecord
-	for rows.Next() {
-		record := &billing.UsageRecord{}
-		err := rows.Scan(
-			&record.ID,
-			&record.OrganizationID,
-			&record.RequestID,
-			&record.ProviderID,
-			&record.ModelID,
-			&record.RequestType,
-			&record.InputTokens,
-			&record.OutputTokens,
-			&record.TotalTokens,
-			&record.Cost,
-			&record.Currency,
-			&record.BillingTier,
-			&record.Discounts,
-			&record.NetCost,
-			&record.CreatedAt,
-			&record.ProcessedAt,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan usage record: %w", err)
-		}
-		records = append(records, record)
-	}
-
-	return records, rows.Err()
+	return records, nil
 }
 
 func (r *Repository) UpdateUsageRecord(ctx context.Context, recordID ulid.ULID, record *billing.UsageRecord) error {
 	query := `
-		UPDATE usage_records 
-		SET 
-			request_type = $2,
-			input_tokens = $3,
-			output_tokens = $4,
-			total_tokens = $5,
-			cost = $6,
-			currency = $7,
-			billing_tier = $8,
-			discounts = $9,
-			net_cost = $10,
-			processed_at = $11
-		WHERE id = $1`
+		UPDATE usage_records
+		SET
+			request_type = ?,
+			input_tokens = ?,
+			output_tokens = ?,
+			total_tokens = ?,
+			cost = ?,
+			currency = ?,
+			billing_tier = ?,
+			discounts = ?,
+			net_cost = ?,
+			processed_at = ?
+		WHERE id = ?`
 
-	result, err := r.db.ExecContext(ctx, query,
-		recordID,
+	result := r.db.WithContext(ctx).Exec(query,
 		record.RequestType,
 		record.InputTokens,
 		record.OutputTokens,
@@ -155,18 +127,14 @@ func (r *Repository) UpdateUsageRecord(ctx context.Context, recordID ulid.ULID, 
 		record.Discounts,
 		record.NetCost,
 		record.ProcessedAt,
+		recordID,
 	)
 
-	if err != nil {
-		return fmt.Errorf("failed to update usage record: %w", err)
+	if result.Error != nil {
+		return fmt.Errorf("failed to update usage record: %w", result.Error)
 	}
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
-	}
-
-	if rowsAffected == 0 {
+	if result.RowsAffected == 0 {
 		return fmt.Errorf("usage record not found: %s", recordID)
 	}
 
@@ -181,11 +149,11 @@ func (r *Repository) InsertBillingRecord(ctx context.Context, record *analytics.
 			id, organization_id, period, amount, currency,
 			status, transaction_id, payment_method, created_at, processed_at
 		) VALUES (
-			$1, $2, $3, $4, $5,
-			$6, $7, $8, $9, $10
+			?, ?, ?, ?, ?,
+			?, ?, ?, ?, ?
 		)`
 
-	_, err := r.db.ExecContext(ctx, query,
+	err := r.db.WithContext(ctx).Exec(query,
 		record.ID,
 		record.OrganizationID,
 		record.Period,
@@ -196,7 +164,7 @@ func (r *Repository) InsertBillingRecord(ctx context.Context, record *analytics.
 		record.PaymentMethod,
 		record.CreatedAt,
 		record.ProcessedAt,
-	)
+	).Error
 
 	if err != nil {
 		r.logger.WithError(err).WithField("record_id", record.ID).Error("Failed to insert billing record")
@@ -215,19 +183,18 @@ func (r *Repository) InsertBillingRecord(ctx context.Context, record *analytics.
 
 func (r *Repository) UpdateBillingRecord(ctx context.Context, recordID ulid.ULID, record *analytics.BillingRecord) error {
 	query := `
-		UPDATE billing_records 
-		SET 
-			period = $2,
-			amount = $3,
-			currency = $4,
-			status = $5,
-			transaction_id = $6,
-			payment_method = $7,
-			processed_at = $8
-		WHERE id = $1`
+		UPDATE billing_records
+		SET
+			period = ?,
+			amount = ?,
+			currency = ?,
+			status = ?,
+			transaction_id = ?,
+			payment_method = ?,
+			processed_at = ?
+		WHERE id = ?`
 
-	result, err := r.db.ExecContext(ctx, query,
-		recordID,
+	result := r.db.WithContext(ctx).Exec(query,
 		record.Period,
 		record.Amount,
 		record.Currency,
@@ -235,18 +202,14 @@ func (r *Repository) UpdateBillingRecord(ctx context.Context, recordID ulid.ULID
 		record.TransactionID,
 		record.PaymentMethod,
 		record.ProcessedAt,
+		recordID,
 	)
 
-	if err != nil {
-		return fmt.Errorf("failed to update billing record: %w", err)
+	if result.Error != nil {
+		return fmt.Errorf("failed to update billing record: %w", result.Error)
 	}
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("failed to get rows affected: %w", err)
-	}
-
-	if rowsAffected == 0 {
+	if result.RowsAffected == 0 {
 		return fmt.Errorf("billing record not found: %s", recordID)
 	}
 
@@ -255,28 +218,17 @@ func (r *Repository) UpdateBillingRecord(ctx context.Context, recordID ulid.ULID
 
 func (r *Repository) GetBillingRecord(ctx context.Context, recordID ulid.ULID) (*analytics.BillingRecord, error) {
 	query := `
-		SELECT 
+		SELECT
 			id, organization_id, period, amount, currency,
 			status, transaction_id, payment_method, created_at, processed_at
-		FROM billing_records 
-		WHERE id = $1`
+		FROM billing_records
+		WHERE id = ?`
 
 	record := &analytics.BillingRecord{}
-	err := r.db.QueryRowContext(ctx, query, recordID).Scan(
-		&record.ID,
-		&record.OrganizationID,
-		&record.Period,
-		&record.Amount,
-		&record.Currency,
-		&record.Status,
-		&record.TransactionID,
-		&record.PaymentMethod,
-		&record.CreatedAt,
-		&record.ProcessedAt,
-	)
+	err := r.db.WithContext(ctx).Raw(query, recordID).Scan(record).Error
 
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if err == gorm.ErrRecordNotFound {
 			return nil, fmt.Errorf("billing record not found: %s", recordID)
 		}
 		return nil, fmt.Errorf("failed to get billing record: %w", err)
@@ -287,43 +239,22 @@ func (r *Repository) GetBillingRecord(ctx context.Context, recordID ulid.ULID) (
 
 func (r *Repository) GetBillingHistory(ctx context.Context, orgID ulid.ULID, start, end time.Time) ([]*analytics.BillingRecord, error) {
 	query := `
-		SELECT 
+		SELECT
 			id, organization_id, period, amount, currency,
 			status, transaction_id, payment_method, created_at, processed_at
-		FROM billing_records 
-		WHERE organization_id = $1 
-			AND created_at >= $2 
-			AND created_at < $3
+		FROM billing_records
+		WHERE organization_id = ?
+			AND created_at >= ?
+			AND created_at < ?
 		ORDER BY created_at DESC`
 
-	rows, err := r.db.QueryContext(ctx, query, orgID, start, end)
+	var records []*analytics.BillingRecord
+	err := r.db.WithContext(ctx).Raw(query, orgID, start, end).Scan(&records).Error
 	if err != nil {
 		return nil, fmt.Errorf("failed to get billing history: %w", err)
 	}
-	defer rows.Close()
 
-	var records []*analytics.BillingRecord
-	for rows.Next() {
-		record := &analytics.BillingRecord{}
-		err := rows.Scan(
-			&record.ID,
-			&record.OrganizationID,
-			&record.Period,
-			&record.Amount,
-			&record.Currency,
-			&record.Status,
-			&record.TransactionID,
-			&record.PaymentMethod,
-			&record.CreatedAt,
-			&record.ProcessedAt,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan billing record: %w", err)
-		}
-		records = append(records, record)
-	}
-
-	return records, rows.Err()
+	return records, nil
 }
 
 // Billing summary operations
@@ -346,12 +277,12 @@ func (r *Repository) InsertBillingSummary(ctx context.Context, summary *analytic
 			provider_breakdown, model_breakdown, discounts, net_cost,
 			status, generated_at
 		) VALUES (
-			$1, $2, $3, $4, $5,
-			$6, $7, $8, $9,
-			$10, $11, $12, $13,
-			$14, $15
+			?, ?, ?, ?, ?,
+			?, ?, ?, ?,
+			?, ?, ?, ?,
+			?, ?
 		)
-		ON CONFLICT (organization_id, period, period_start) 
+		ON CONFLICT (organization_id, period, period_start)
 		DO UPDATE SET
 			total_requests = EXCLUDED.total_requests,
 			total_tokens = EXCLUDED.total_tokens,
@@ -368,7 +299,7 @@ func (r *Repository) InsertBillingSummary(ctx context.Context, summary *analytic
 		summary.ID = ulid.New()
 	}
 
-	_, err = r.db.ExecContext(ctx, query,
+	err = r.db.WithContext(ctx).Exec(query,
 		summary.ID,
 		summary.OrganizationID,
 		summary.Period,
@@ -384,7 +315,7 @@ func (r *Repository) InsertBillingSummary(ctx context.Context, summary *analytic
 		summary.NetCost,
 		summary.Status,
 		summary.GeneratedAt,
-	)
+	).Error
 
 	if err != nil {
 		r.logger.WithError(err).WithField("summary_id", summary.ID).Error("Failed to insert billing summary")
@@ -403,50 +334,71 @@ func (r *Repository) InsertBillingSummary(ctx context.Context, summary *analytic
 
 func (r *Repository) GetBillingSummary(ctx context.Context, orgID ulid.ULID, period string) (*analytics.BillingSummary, error) {
 	query := `
-		SELECT 
+		SELECT
 			id, organization_id, period, period_start, period_end,
 			total_requests, total_tokens, total_cost, currency,
 			provider_breakdown, model_breakdown, discounts, net_cost,
 			status, generated_at
-		FROM billing_summaries 
-		WHERE organization_id = $1 AND period = $2
+		FROM billing_summaries
+		WHERE organization_id = ? AND period = ?
 		ORDER BY period_start DESC
 		LIMIT 1`
 
-	var providerBreakdownJSON, modelBreakdownJSON []byte
-	summary := &analytics.BillingSummary{}
+	type BillingSummaryRow struct {
+		ID                   ulid.ULID
+		OrganizationID       ulid.ULID
+		Period               string
+		PeriodStart          time.Time
+		PeriodEnd            time.Time
+		TotalRequests        int64
+		TotalTokens          int64
+		TotalCost            float64
+		Currency             string
+		ProviderBreakdownRaw []byte `gorm:"column:provider_breakdown"`
+		ModelBreakdownRaw    []byte `gorm:"column:model_breakdown"`
+		Discounts            float64
+		NetCost              float64
+		Status               string
+		GeneratedAt          time.Time
+	}
 
-	err := r.db.QueryRowContext(ctx, query, orgID, period).Scan(
-		&summary.ID,
-		&summary.OrganizationID,
-		&summary.Period,
-		&summary.PeriodStart,
-		&summary.PeriodEnd,
-		&summary.TotalRequests,
-		&summary.TotalTokens,
-		&summary.TotalCost,
-		&summary.Currency,
-		&providerBreakdownJSON,
-		&modelBreakdownJSON,
-		&summary.Discounts,
-		&summary.NetCost,
-		&summary.Status,
-		&summary.GeneratedAt,
-	)
+	var row BillingSummaryRow
+	err := r.db.WithContext(ctx).Raw(query, orgID, period).Scan(&row).Error
 
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if err == gorm.ErrRecordNotFound || err == sql.ErrNoRows {
 			return nil, fmt.Errorf("billing summary not found for organization %s and period %s", orgID, period)
 		}
 		return nil, fmt.Errorf("failed to get billing summary: %w", err)
 	}
 
+	// Check if we got empty result
+	if row.ID.IsZero() {
+		return nil, fmt.Errorf("billing summary not found for organization %s and period %s", orgID, period)
+	}
+
+	summary := &analytics.BillingSummary{
+		ID:             row.ID,
+		OrganizationID: row.OrganizationID,
+		Period:         row.Period,
+		PeriodStart:    row.PeriodStart,
+		PeriodEnd:      row.PeriodEnd,
+		TotalRequests:  row.TotalRequests,
+		TotalTokens:    row.TotalTokens,
+		TotalCost:      row.TotalCost,
+		Currency:       row.Currency,
+		Discounts:      row.Discounts,
+		NetCost:        row.NetCost,
+		Status:         row.Status,
+		GeneratedAt:    row.GeneratedAt,
+	}
+
 	// Unmarshal JSON fields
-	if err := json.Unmarshal(providerBreakdownJSON, &summary.ProviderBreakdown); err != nil {
+	if err := json.Unmarshal(row.ProviderBreakdownRaw, &summary.ProviderBreakdown); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal provider breakdown: %w", err)
 	}
 
-	if err := json.Unmarshal(modelBreakdownJSON, &summary.ModelBreakdown); err != nil {
+	if err := json.Unmarshal(row.ModelBreakdownRaw, &summary.ModelBreakdown); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal model breakdown: %w", err)
 	}
 
@@ -455,95 +407,98 @@ func (r *Repository) GetBillingSummary(ctx context.Context, orgID ulid.ULID, per
 
 func (r *Repository) GetBillingSummaryHistory(ctx context.Context, orgID ulid.ULID, start, end time.Time) ([]*analytics.BillingSummary, error) {
 	query := `
-		SELECT 
+		SELECT
 			id, organization_id, period, period_start, period_end,
 			total_requests, total_tokens, total_cost, currency,
 			provider_breakdown, model_breakdown, discounts, net_cost,
 			status, generated_at
-		FROM billing_summaries 
-		WHERE organization_id = $1 
-			AND period_start >= $2 
-			AND period_start < $3
+		FROM billing_summaries
+		WHERE organization_id = ?
+			AND period_start >= ?
+			AND period_start < ?
 		ORDER BY period_start DESC`
 
-	rows, err := r.db.QueryContext(ctx, query, orgID, start, end)
+	type BillingSummaryRow struct {
+		ID                   ulid.ULID
+		OrganizationID       ulid.ULID
+		Period               string
+		PeriodStart          time.Time
+		PeriodEnd            time.Time
+		TotalRequests        int64
+		TotalTokens          int64
+		TotalCost            float64
+		Currency             string
+		ProviderBreakdownRaw []byte `gorm:"column:provider_breakdown"`
+		ModelBreakdownRaw    []byte `gorm:"column:model_breakdown"`
+		Discounts            float64
+		NetCost              float64
+		Status               string
+		GeneratedAt          time.Time
+	}
+
+	var rows []BillingSummaryRow
+	err := r.db.WithContext(ctx).Raw(query, orgID, start, end).Scan(&rows).Error
 	if err != nil {
 		return nil, fmt.Errorf("failed to get billing summary history: %w", err)
 	}
-	defer rows.Close()
 
 	var summaries []*analytics.BillingSummary
-	for rows.Next() {
-		var providerBreakdownJSON, modelBreakdownJSON []byte
-		summary := &analytics.BillingSummary{}
-
-		err := rows.Scan(
-			&summary.ID,
-			&summary.OrganizationID,
-			&summary.Period,
-			&summary.PeriodStart,
-			&summary.PeriodEnd,
-			&summary.TotalRequests,
-			&summary.TotalTokens,
-			&summary.TotalCost,
-			&summary.Currency,
-			&providerBreakdownJSON,
-			&modelBreakdownJSON,
-			&summary.Discounts,
-			&summary.NetCost,
-			&summary.Status,
-			&summary.GeneratedAt,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan billing summary: %w", err)
+	for _, row := range rows {
+		summary := &analytics.BillingSummary{
+			ID:             row.ID,
+			OrganizationID: row.OrganizationID,
+			Period:         row.Period,
+			PeriodStart:    row.PeriodStart,
+			PeriodEnd:      row.PeriodEnd,
+			TotalRequests:  row.TotalRequests,
+			TotalTokens:    row.TotalTokens,
+			TotalCost:      row.TotalCost,
+			Currency:       row.Currency,
+			Discounts:      row.Discounts,
+			NetCost:        row.NetCost,
+			Status:         row.Status,
+			GeneratedAt:    row.GeneratedAt,
 		}
 
 		// Unmarshal JSON fields
-		if err := json.Unmarshal(providerBreakdownJSON, &summary.ProviderBreakdown); err != nil {
+		if err := json.Unmarshal(row.ProviderBreakdownRaw, &summary.ProviderBreakdown); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal provider breakdown: %w", err)
 		}
 
-		if err := json.Unmarshal(modelBreakdownJSON, &summary.ModelBreakdown); err != nil {
+		if err := json.Unmarshal(row.ModelBreakdownRaw, &summary.ModelBreakdown); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal model breakdown: %w", err)
 		}
 
 		summaries = append(summaries, summary)
 	}
 
-	return summaries, rows.Err()
+	return summaries, nil
 }
 
 // Usage quota operations
 
 func (r *Repository) GetUsageQuota(ctx context.Context, orgID ulid.ULID) (*billing.UsageQuota, error) {
 	query := `
-		SELECT 
+		SELECT
 			organization_id, billing_tier, monthly_request_limit, monthly_token_limit,
 			monthly_cost_limit, current_requests, current_tokens, current_cost,
 			currency, reset_date, last_updated
-		FROM usage_quotas 
-		WHERE organization_id = $1`
+		FROM usage_quotas
+		WHERE organization_id = ?`
 
 	quota := &billing.UsageQuota{}
-	err := r.db.QueryRowContext(ctx, query, orgID).Scan(
-		&quota.OrganizationID,
-		&quota.BillingTier,
-		&quota.MonthlyRequestLimit,
-		&quota.MonthlyTokenLimit,
-		&quota.MonthlyCostLimit,
-		&quota.CurrentRequests,
-		&quota.CurrentTokens,
-		&quota.CurrentCost,
-		&quota.Currency,
-		&quota.ResetDate,
-		&quota.LastUpdated,
-	)
+	err := r.db.WithContext(ctx).Raw(query, orgID).Scan(quota).Error
 
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if err == gorm.ErrRecordNotFound || err == sql.ErrNoRows {
 			return nil, nil // No quota found, return nil without error
 		}
 		return nil, fmt.Errorf("failed to get usage quota: %w", err)
+	}
+
+	// Check if we got empty result
+	if quota.OrganizationID.IsZero() {
+		return nil, nil
 	}
 
 	return quota, nil
@@ -556,11 +511,11 @@ func (r *Repository) UpdateUsageQuota(ctx context.Context, orgID ulid.ULID, quot
 			monthly_cost_limit, current_requests, current_tokens, current_cost,
 			currency, reset_date, last_updated
 		) VALUES (
-			$1, $2, $3, $4,
-			$5, $6, $7, $8,
-			$9, $10, $11
+			?, ?, ?, ?,
+			?, ?, ?, ?,
+			?, ?, ?
 		)
-		ON CONFLICT (organization_id) 
+		ON CONFLICT (organization_id)
 		DO UPDATE SET
 			billing_tier = EXCLUDED.billing_tier,
 			monthly_request_limit = EXCLUDED.monthly_request_limit,
@@ -573,7 +528,7 @@ func (r *Repository) UpdateUsageQuota(ctx context.Context, orgID ulid.ULID, quot
 			reset_date = EXCLUDED.reset_date,
 			last_updated = EXCLUDED.last_updated`
 
-	_, err := r.db.ExecContext(ctx, query,
+	err := r.db.WithContext(ctx).Exec(query,
 		quota.OrganizationID,
 		quota.BillingTier,
 		quota.MonthlyRequestLimit,
@@ -585,7 +540,7 @@ func (r *Repository) UpdateUsageQuota(ctx context.Context, orgID ulid.ULID, quot
 		quota.Currency,
 		quota.ResetDate,
 		quota.LastUpdated,
-	)
+	).Error
 
 	if err != nil {
 		r.logger.WithError(err).WithField("org_id", orgID).Error("Failed to update usage quota")
@@ -604,16 +559,15 @@ func (r *Repository) UpdateUsageQuota(ctx context.Context, orgID ulid.ULID, quot
 
 // Health check
 func (r *Repository) GetHealth(ctx context.Context) error {
-	query := "SELECT 1"
 	var result int
-	
+
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	
-	err := r.db.QueryRowContext(ctx, query).Scan(&result)
+
+	err := r.db.WithContext(ctx).Raw("SELECT 1").Scan(&result).Error
 	if err != nil {
 		return fmt.Errorf("billing repository health check failed: %w", err)
 	}
-	
+
 	return nil
 }

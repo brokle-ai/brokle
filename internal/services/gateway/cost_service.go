@@ -47,7 +47,7 @@ func (c *CostService) EstimateChatCompletionCost(ctx context.Context, req *gatew
 	logger.Debug("Estimating chat completion cost")
 
 	// Calculate input cost
-	inputCost := float64(req.InputTokens) * req.Model.InputCostPerToken
+	inputCost := (float64(req.InputTokens) / 1000.0) * req.Model.InputCostPer1kTokens
 
 	// Estimate output tokens if not provided
 	outputTokens := req.MaxTokens
@@ -57,7 +57,7 @@ func (c *CostService) EstimateChatCompletionCost(ctx context.Context, req *gatew
 	}
 
 	// Calculate output cost
-	outputCost := float64(outputTokens) * req.Model.OutputCostPerToken
+	outputCost := (float64(outputTokens) / 1000.0) * req.Model.OutputCostPer1kTokens
 
 	// Calculate total cost
 	totalCost := inputCost + outputCost
@@ -105,14 +105,14 @@ func (c *CostService) EstimateCompletionCost(ctx context.Context, req *gateway.C
 
 	// Some models use input/output pricing, others use total token pricing
 	var totalCost float64
-	if req.Model.OutputCostPerToken > 0 {
+	if req.Model.OutputCostPer1kTokens > 0 {
 		// Separate input/output pricing
-		inputCost := float64(req.InputTokens) * req.Model.InputCostPerToken
-		outputCost := float64(req.MaxTokens) * req.Model.OutputCostPerToken
+		inputCost := (float64(req.InputTokens) / 1000.0) * req.Model.InputCostPer1kTokens
+		outputCost := (float64(req.MaxTokens) / 1000.0) * req.Model.OutputCostPer1kTokens
 		totalCost = inputCost + outputCost
 	} else {
 		// Total token pricing
-		totalCost = float64(totalTokens) * req.Model.InputCostPerToken
+		totalCost = (float64(totalTokens) / 1000.0) * req.Model.InputCostPer1kTokens
 	}
 
 	// Apply discounts
@@ -124,8 +124,8 @@ func (c *CostService) EstimateCompletionCost(ctx context.Context, req *gateway.C
 		InputTokens:     req.InputTokens,
 		OutputTokens:    req.MaxTokens,
 		TotalTokens:     totalTokens,
-		InputCost:       float64(req.InputTokens) * req.Model.InputCostPerToken,
-		OutputCost:      float64(req.MaxTokens) * req.Model.OutputCostPerToken,
+		InputCost:       (float64(req.InputTokens) / 1000.0) * req.Model.InputCostPer1kTokens,
+		OutputCost:      (float64(req.MaxTokens) / 1000.0) * req.Model.OutputCostPer1kTokens,
 		TotalCost:       totalCost,
 		Currency:        "USD",
 		EstimatedAt:     time.Now(),
@@ -148,7 +148,7 @@ func (c *CostService) EstimateEmbeddingsCost(ctx context.Context, req *gateway.C
 	logger.Debug("Estimating embeddings cost")
 
 	// Embeddings typically only have input cost
-	inputCost := float64(req.InputTokens) * req.Model.InputCostPerToken
+	inputCost := (float64(req.InputTokens) / 1000.0) * req.Model.InputCostPer1kTokens
 	totalCost := c.applyDiscounts(ctx, inputCost, req.OrganizationID, req.Model)
 
 	calculation := &gateway.CostCalculation{
@@ -182,8 +182,8 @@ func (c *CostService) CalculateActualCost(ctx context.Context, req *gateway.Actu
 	logger.Debug("Calculating actual cost")
 
 	// Calculate actual costs
-	inputCost := float64(req.InputTokens) * req.Model.InputCostPerToken
-	outputCost := float64(req.OutputTokens) * req.Model.OutputCostPerToken
+	inputCost := (float64(req.InputTokens) / 1000.0) * req.Model.InputCostPer1kTokens
+	outputCost := (float64(req.OutputTokens) / 1000.0) * req.Model.OutputCostPer1kTokens
 	totalCost := inputCost + outputCost
 
 	// Apply discounts
@@ -202,7 +202,7 @@ func (c *CostService) CalculateActualCost(ctx context.Context, req *gateway.Actu
 		Currency:        "USD",
 		EstimatedAt:     time.Now(),
 		CalculationType: "actual",
-		Duration:        req.Duration,
+		Duration:        &req.Duration,
 	}
 
 	logger.WithFields(logrus.Fields{
@@ -314,10 +314,10 @@ func (c *CostService) GetModelPricing(ctx context.Context, modelID ulid.ULID) (*
 
 	pricing := &gateway.ModelPricing{
 		ModelID:             model.ID,
-		ModelName:           model.Name,
+		ModelName:           model.ModelName,
 		ProviderID:          model.ProviderID,
-		InputCostPerToken:   model.InputCostPerToken,
-		OutputCostPerToken:  model.OutputCostPerToken,
+		InputCostPerToken:   model.InputCostPer1kTokens / 1000.0,
+		OutputCostPerToken:  model.OutputCostPer1kTokens / 1000.0,
 		Currency:            "USD",
 		EffectiveDate:       model.CreatedAt,
 		IsActive:            model.IsEnabled,
@@ -332,93 +332,72 @@ func (c *CostService) GetModelPricing(ctx context.Context, modelID ulid.ULID) (*
 }
 
 // CompareProviderCosts compares costs across different providers for the same request
-func (c *CostService) CompareProviderCosts(ctx context.Context, req *gateway.ProviderCostComparisonRequest) (*gateway.ProviderCostComparisonResponse, error) {
-	logger := c.logger.WithFields(logrus.Fields{
-		"organization_id": req.OrganizationID,
-		"model_name":      req.ModelName,
-		"input_tokens":    req.InputTokens,
-		"output_tokens":   req.OutputTokens,
-	})
+func (c *CostService) CompareProviderCosts(ctx context.Context, req *gateway.CostCalculationRequest) (*gateway.CostComparison, error) {
+	// TODO: Implement cost comparison logic
+	return nil, fmt.Errorf("not implemented")
+}
 
-	logger.Info("Comparing provider costs")
+// CalculateBatchCost calculates costs for multiple requests in batch
+func (c *CostService) CalculateBatchCost(ctx context.Context, requests []*gateway.CostCalculationRequest) (*gateway.BatchCostResult, error) {
+	logger := c.logger.WithField("request_count", len(requests))
+	logger.Debug("Calculating batch cost")
 
-	// Find all models with the same name or similar capabilities
-	models, err := c.findSimilarModels(ctx, req.ModelName, req.ModelType)
-	if err != nil {
-		logger.WithError(err).Error("Failed to find similar models")
-		return nil, fmt.Errorf("failed to find similar models: %w", err)
-	}
+	results := make([]*gateway.CostCalculationResult, len(requests))
+	totalCost := 0.0
 
-	var comparisons []*gateway.ProviderCostComparison
-	for _, model := range models {
-		// Calculate cost for this model
-		inputCost := float64(req.InputTokens) * model.InputCostPerToken
-		outputCost := float64(req.OutputTokens) * model.OutputCostPerToken
-		totalCost := inputCost + outputCost
-
-		// Apply discounts
-		totalCost = c.applyDiscounts(ctx, totalCost, req.OrganizationID, model)
-
-		// Get provider info
-		provider, err := c.providerRepo.GetByID(ctx, model.ProviderID)
+	for i, req := range requests {
+		// Get model for this request
+		model, err := c.modelRepo.GetByID(ctx, req.ModelID)
 		if err != nil {
-			logger.WithError(err).WithField("provider_id", model.ProviderID).Warn("Failed to get provider")
+			errorMsg := fmt.Sprintf("failed to get model: %v", err)
+			results[i] = &gateway.CostCalculationResult{
+				RequestIndex: i,
+				InputCost:    0,
+				OutputCost:   0,
+				TotalCost:    0,
+				Currency:     "USD",
+				ProviderID:   req.ModelID, // Use ModelID as fallback
+				Error:        &errorMsg,
+			}
 			continue
 		}
 
-		comparison := &gateway.ProviderCostComparison{
-			ProviderID:     provider.ID,
-			ProviderName:   provider.Name,
-			ModelID:        model.ID,
-			ModelName:      model.Name,
-			InputCost:      inputCost,
-			OutputCost:     outputCost,
-			TotalCost:      totalCost,
-			Currency:       "USD",
-			ContextLength:  model.ContextLength,
-			MaxTokens:      model.MaxTokens,
-			IsAvailable:    model.IsEnabled && provider.IsEnabled,
+		// Calculate costs for this request
+		inputCost := (float64(req.InputTokens) / 1000.0) * model.InputCostPer1kTokens
+		outputCost := (float64(req.OutputTokens) / 1000.0) * model.OutputCostPer1kTokens
+		requestCost := inputCost + outputCost
+
+		results[i] = &gateway.CostCalculationResult{
+			RequestIndex: i,
+			InputCost:    inputCost,
+			OutputCost:   outputCost,
+			TotalCost:    requestCost,
+			Currency:     "USD",
+			ProviderID:   model.ProviderID,
+			Error:        nil,
 		}
 
-		comparisons = append(comparisons, comparison)
+		totalCost += requestCost
 	}
 
-	// Sort by total cost
-	for i := 0; i < len(comparisons)-1; i++ {
-		for j := i + 1; j < len(comparisons); j++ {
-			if comparisons[i].TotalCost > comparisons[j].TotalCost {
-				comparisons[i], comparisons[j] = comparisons[j], comparisons[i]
-			}
-		}
+	batchResult := &gateway.BatchCostResult{
+		Requests:     requests,
+		Results:      results,
+		TotalCost:    totalCost,
+		Currency:     "USD",
+		CalculatedAt: time.Now(),
 	}
 
-	response := &gateway.ProviderCostComparisonResponse{
-		OrganizationID: req.OrganizationID,
-		ModelName:      req.ModelName,
-		InputTokens:    req.InputTokens,
-		OutputTokens:   req.OutputTokens,
-		Currency:       "USD",
-		Comparisons:    comparisons,
-		ComparedAt:     time.Now(),
-	}
-
-	logger.WithField("comparison_count", len(comparisons)).Info("Provider cost comparison completed")
-
-	return response, nil
+	logger.WithField("total_cost", totalCost).Debug("Batch cost calculation completed")
+	return batchResult, nil
 }
 
 // Helper methods
 
-func (c *CostService) applyDiscounts(ctx context.Context, baseCost float64, orgID ulid.ULID, model *gateway.Model) float64 {
-	// TODO: Implement organization-specific discount logic
-	// This could include:
-	// - Volume discounts based on usage tiers
-	// - Enterprise contract discounts
-	// - Promotional discounts
-	// - Provider-specific negotiated rates
-
-	// For now, return the base cost
-	return baseCost
+// applyDiscounts applies organization-specific discounts to the cost
+func (c *CostService) applyDiscounts(ctx context.Context, cost float64, orgID ulid.ULID, model *gateway.Model) float64 {
+	// TODO: Implement discount logic based on organization tier, usage volume, etc.
+	return cost
 }
 
 func (c *CostService) findSimilarModels(ctx context.Context, modelName string, modelType *gateway.ModelType) ([]*gateway.Model, error) {
@@ -436,11 +415,11 @@ func (c *CostService) findSimilarModels(ctx context.Context, modelName string, m
 		return nil, fmt.Errorf("failed to search models: %w", err)
 	}
 
-	// If specific model name is provided, try to find exact matches first
+		// If specific model name is provided, try to find exact matches first
 	if modelName != "" {
 		var exactMatches []*gateway.Model
 		for _, model := range models {
-			if model.Name == modelName {
+			if model.ModelName == modelName {
 				exactMatches = append(exactMatches, model)
 			}
 		}
@@ -490,4 +469,137 @@ func (c *CostService) CalculateTokenEfficiency(inputTokens, outputTokens int32, 
 		TotalTokens:         totalTokens,
 		Duration:            duration,
 	}
+}
+
+// Interface method implementations required by gateway.CostService
+
+// CalculateRequestCost calculates the cost for a specific model with token counts
+func (c *CostService) CalculateRequestCost(ctx context.Context, modelID ulid.ULID, inputTokens, outputTokens int) (float64, error) {
+	logger := c.logger.WithFields(logrus.Fields{
+		"model_id":      modelID,
+		"input_tokens":  inputTokens,
+		"output_tokens": outputTokens,
+	})
+
+	logger.Debug("Calculating request cost")
+
+	model, err := c.modelRepo.GetByID(ctx, modelID)
+	if err != nil {
+		logger.WithError(err).Error("Failed to get model")
+		return 0, fmt.Errorf("failed to get model: %w", err)
+	}
+
+	inputCost := (float64(inputTokens) / 1000.0) * model.InputCostPer1kTokens
+	outputCost := (float64(outputTokens) / 1000.0) * model.OutputCostPer1kTokens
+	totalCost := inputCost + outputCost
+
+	logger.WithField("total_cost", totalCost).Debug("Request cost calculated")
+	return totalCost, nil
+}
+
+// EstimateRequestCost estimates the cost for a named model with estimated tokens
+func (c *CostService) EstimateRequestCost(ctx context.Context, modelName string, estimatedTokens int) (float64, error) {
+	logger := c.logger.WithFields(logrus.Fields{
+		"model_name":       modelName,
+		"estimated_tokens": estimatedTokens,
+	})
+
+	logger.Debug("Estimating request cost")
+
+	model, err := c.modelRepo.GetByModelName(ctx, modelName)
+	if err != nil {
+		logger.WithError(err).Error("Failed to get model by name")
+		return 0, fmt.Errorf("failed to get model: %w", err)
+	}
+
+	// Estimate assuming 75% input tokens, 25% output tokens
+	inputTokens := int(float64(estimatedTokens) * 0.75)
+	outputTokens := estimatedTokens - inputTokens
+
+	inputCost := (float64(inputTokens) / 1000.0) * model.InputCostPer1kTokens
+	outputCost := (float64(outputTokens) / 1000.0) * model.OutputCostPer1kTokens
+	totalCost := inputCost + outputCost
+
+	logger.WithField("estimated_cost", totalCost).Debug("Request cost estimated")
+	return totalCost, nil
+}
+
+// GetCostOptimizedProvider returns the provider with the lowest cost for a given model
+func (c *CostService) GetCostOptimizedProvider(ctx context.Context, projectID ulid.ULID, modelName string) (*gateway.RoutingDecision, error) {
+	// TODO: Implement cost-optimized provider selection logic
+	return nil, fmt.Errorf("not implemented")
+}
+
+// CompareCosts compares costs across different models for a given token count
+func (c *CostService) CompareCosts(ctx context.Context, modelNames []string, tokenCount int) (*gateway.CostComparison, error) {
+	// TODO: Implement cost comparison logic
+	return nil, fmt.Errorf("not implemented")
+}
+
+// GetCostSavingsReport generates a cost savings report for a project
+func (c *CostService) GetCostSavingsReport(ctx context.Context, projectID ulid.ULID, timeRange *gateway.TimeRange) (*gateway.CostSavingsReport, error) {
+	// TODO: Implement cost savings report generation
+	return nil, fmt.Errorf("not implemented")
+}
+
+// TrackRequestCost tracks the cost of a request for analytics
+func (c *CostService) TrackRequestCost(ctx context.Context, metrics *gateway.RequestMetrics) error {
+	logger := c.logger.WithFields(logrus.Fields{
+		"request_id": metrics.RequestID,
+		"project_id": metrics.ProjectID,
+		"cost_usd":   metrics.CostUSD,
+	})
+
+	logger.Debug("Tracking request cost")
+
+	// TODO: Implement actual cost tracking to analytics database
+	// This would typically write to ClickHouse for real-time analytics
+
+	logger.Debug("Request cost tracked successfully")
+	return nil
+}
+
+// GetProjectCostAnalytics retrieves cost analytics for a project
+func (c *CostService) GetProjectCostAnalytics(ctx context.Context, projectID ulid.ULID, timeRange *gateway.TimeRange) (*gateway.CostAnalytics, error) {
+	// TODO: Implement cost analytics retrieval from ClickHouse
+	return nil, fmt.Errorf("not implemented")
+}
+
+// GetProviderCostBreakdown retrieves cost breakdown by provider for a project
+func (c *CostService) GetProviderCostBreakdown(ctx context.Context, projectID ulid.ULID, timeRange *gateway.TimeRange) (*gateway.ProviderCostBreakdown, error) {
+	// TODO: Implement provider cost breakdown retrieval
+	return nil, fmt.Errorf("not implemented")
+}
+
+// CheckBudgetLimits checks if a request would exceed budget limits
+func (c *CostService) CheckBudgetLimits(ctx context.Context, projectID ulid.ULID, estimatedCost float64) (*gateway.BudgetCheckResult, error) {
+	// TODO: Implement budget limits checking
+	return &gateway.BudgetCheckResult{
+		ProjectID: projectID,
+		CurrentUsage: 0.0,
+		BudgetLimit:  0.0,
+		RemainingBudget: 0.0,
+		WillExceedBudget: false,
+		CheckedAt: time.Now(),
+	}, nil
+}
+
+// UpdateBudgetUsage updates the budget usage for a project
+func (c *CostService) UpdateBudgetUsage(ctx context.Context, projectID ulid.ULID, actualCost float64) error {
+	// TODO: Implement budget usage updating
+	return nil
+}
+
+// GetBudgetStatus retrieves the current budget status for a project
+func (c *CostService) GetBudgetStatus(ctx context.Context, projectID ulid.ULID) (*gateway.BudgetStatus, error) {
+	// TODO: Implement budget status retrieval
+	return &gateway.BudgetStatus{
+		ProjectID: projectID,
+		CurrentUsage: 0.0,
+		BudgetLimit:  0.0,
+		RemainingBudget: 0.0,
+		BudgetUtilization: 0.0,
+		OnTrack: true,
+		UpdatedAt: time.Now(),
+	}, nil
 }

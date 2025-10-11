@@ -18,16 +18,16 @@ CREATE TABLE IF NOT EXISTS usage_records (
     discounts DECIMAL(12, 6) NOT NULL DEFAULT 0.0,
     net_cost DECIMAL(12, 6) NOT NULL DEFAULT 0.0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    processed_at TIMESTAMPTZ,
-
-    -- Indexes for performance
-    INDEX idx_usage_records_org_created (organization_id, created_at DESC),
-    INDEX idx_usage_records_org_tier (organization_id, billing_tier),
-    INDEX idx_usage_records_request (request_id),
-    INDEX idx_usage_records_provider (provider_id),
-    INDEX idx_usage_records_model (model_id),
-    INDEX idx_usage_records_processed (processed_at) WHERE processed_at IS NOT NULL
+    processed_at TIMESTAMPTZ
 );
+
+-- Indexes for usage_records
+CREATE INDEX idx_usage_records_org_created ON usage_records(organization_id, created_at DESC);
+CREATE INDEX idx_usage_records_org_tier ON usage_records(organization_id, billing_tier);
+CREATE INDEX idx_usage_records_request ON usage_records(request_id);
+CREATE INDEX idx_usage_records_provider ON usage_records(provider_id);
+CREATE INDEX idx_usage_records_model ON usage_records(model_id);
+CREATE INDEX idx_usage_records_processed ON usage_records(processed_at) WHERE processed_at IS NOT NULL;
 
 -- Usage quotas table for organization limits
 CREATE TABLE IF NOT EXISTS usage_quotas (
@@ -65,16 +65,16 @@ CREATE TABLE IF NOT EXISTS billing_records (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     processed_at TIMESTAMPTZ,
 
-    -- Indexes for performance
-    INDEX idx_billing_records_org_period (organization_id, period),
-    INDEX idx_billing_records_status (status),
-    INDEX idx_billing_records_created (created_at DESC),
-    INDEX idx_billing_records_transaction (transaction_id) WHERE transaction_id IS NOT NULL,
-
     -- Constraints
     CONSTRAINT chk_billing_amount CHECK (amount >= 0),
     CONSTRAINT chk_billing_status CHECK (status IN ('pending', 'paid', 'failed', 'cancelled', 'refunded'))
 );
+
+-- Indexes for billing_records
+CREATE INDEX idx_billing_records_org_period ON billing_records(organization_id, period);
+CREATE INDEX idx_billing_records_status ON billing_records(status);
+CREATE INDEX idx_billing_records_created ON billing_records(created_at DESC);
+CREATE INDEX idx_billing_records_transaction ON billing_records(transaction_id) WHERE transaction_id IS NOT NULL;
 
 -- Billing summaries table for period summaries
 CREATE TABLE IF NOT EXISTS billing_summaries (
@@ -95,12 +95,7 @@ CREATE TABLE IF NOT EXISTS billing_summaries (
     generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
     -- Unique constraint to prevent duplicate summaries
-    UNIQUE (organization_id, period, period_start),
-    
-    -- Indexes for performance
-    INDEX idx_billing_summaries_org_period (organization_id, period),
-    INDEX idx_billing_summaries_period_start (period_start DESC),
-    INDEX idx_billing_summaries_status (status),
+    CONSTRAINT uq_billing_summaries_org_period_start UNIQUE (organization_id, period, period_start),
 
     -- Constraints
     CONSTRAINT chk_billing_summary_cost CHECK (total_cost >= 0),
@@ -108,6 +103,11 @@ CREATE TABLE IF NOT EXISTS billing_summaries (
     CONSTRAINT chk_billing_summary_dates CHECK (period_end > period_start),
     CONSTRAINT chk_billing_summary_status CHECK (status IN ('pending', 'finalized', 'invoiced', 'paid', 'cancelled'))
 );
+
+-- Indexes for billing_summaries
+CREATE INDEX idx_billing_summaries_org_period ON billing_summaries(organization_id, period);
+CREATE INDEX idx_billing_summaries_period_start ON billing_summaries(period_start DESC);
+CREATE INDEX idx_billing_summaries_status ON billing_summaries(status);
 
 -- Discount rules table for promotional pricing
 CREATE TABLE IF NOT EXISTS discount_rules (
@@ -129,13 +129,6 @@ CREATE TABLE IF NOT EXISTS discount_rules (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
-    -- Indexes for performance
-    INDEX idx_discount_rules_org (organization_id) WHERE organization_id IS NOT NULL,
-    INDEX idx_discount_rules_active_priority (is_active, priority DESC) WHERE is_active = true,
-    INDEX idx_discount_rules_valid_from (valid_from),
-    INDEX idx_discount_rules_valid_until (valid_until) WHERE valid_until IS NOT NULL,
-    INDEX idx_discount_rules_type (type),
-
     -- Constraints
     CONSTRAINT chk_discount_value CHECK (value >= 0),
     CONSTRAINT chk_discount_minimum_amount CHECK (minimum_amount >= 0),
@@ -145,6 +138,13 @@ CREATE TABLE IF NOT EXISTS discount_rules (
     CONSTRAINT chk_discount_type CHECK (type IN ('percentage', 'fixed', 'tiered')),
     CONSTRAINT chk_discount_dates CHECK (valid_until IS NULL OR valid_until > valid_from)
 );
+
+-- Indexes for discount_rules
+CREATE INDEX idx_discount_rules_org ON discount_rules(organization_id) WHERE organization_id IS NOT NULL;
+CREATE INDEX idx_discount_rules_active_priority ON discount_rules(is_active, priority DESC) WHERE is_active = true;
+CREATE INDEX idx_discount_rules_valid_from ON discount_rules(valid_from);
+CREATE INDEX idx_discount_rules_valid_until ON discount_rules(valid_until) WHERE valid_until IS NOT NULL;
+CREATE INDEX idx_discount_rules_type ON discount_rules(type);
 
 -- Invoices table for invoice management
 CREATE TABLE IF NOT EXISTS invoices (
@@ -171,14 +171,6 @@ CREATE TABLE IF NOT EXISTS invoices (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     paid_at TIMESTAMPTZ,
 
-    -- Indexes for performance
-    INDEX idx_invoices_org_period (organization_id, period),
-    INDEX idx_invoices_number (invoice_number),
-    INDEX idx_invoices_status (status),
-    INDEX idx_invoices_due_date (due_date),
-    INDEX idx_invoices_issue_date (issue_date DESC),
-    INDEX idx_invoices_paid_at (paid_at) WHERE paid_at IS NOT NULL,
-
     -- Constraints
     CONSTRAINT chk_invoice_subtotal CHECK (subtotal >= 0),
     CONSTRAINT chk_invoice_tax_amount CHECK (tax_amount >= 0),
@@ -187,6 +179,14 @@ CREATE TABLE IF NOT EXISTS invoices (
     CONSTRAINT chk_invoice_dates CHECK (period_end > period_start AND due_date >= issue_date),
     CONSTRAINT chk_invoice_status CHECK (status IN ('draft', 'sent', 'paid', 'overdue', 'cancelled', 'refunded'))
 );
+
+-- Indexes for invoices
+CREATE INDEX idx_invoices_org_period ON invoices(organization_id, period);
+CREATE INDEX idx_invoices_number ON invoices(invoice_number);
+CREATE INDEX idx_invoices_status ON invoices(status);
+CREATE INDEX idx_invoices_due_date ON invoices(due_date);
+CREATE INDEX idx_invoices_issue_date ON invoices(issue_date DESC);
+CREATE INDEX idx_invoices_paid_at ON invoices(paid_at) WHERE paid_at IS NOT NULL;
 
 -- Invoice line items table for detailed billing breakdown
 CREATE TABLE IF NOT EXISTS invoice_line_items (
@@ -205,11 +205,6 @@ CREATE TABLE IF NOT EXISTS invoice_line_items (
     requests BIGINT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
-    -- Indexes for performance
-    INDEX idx_invoice_line_items_invoice (invoice_id),
-    INDEX idx_invoice_line_items_provider (provider_id) WHERE provider_id IS NOT NULL,
-    INDEX idx_invoice_line_items_model (model_id) WHERE model_id IS NOT NULL,
-
     -- Constraints
     CONSTRAINT chk_line_item_quantity CHECK (quantity > 0),
     CONSTRAINT chk_line_item_unit_price CHECK (unit_price >= 0),
@@ -217,6 +212,11 @@ CREATE TABLE IF NOT EXISTS invoice_line_items (
     CONSTRAINT chk_line_item_tokens CHECK (tokens IS NULL OR tokens >= 0),
     CONSTRAINT chk_line_item_requests CHECK (requests IS NULL OR requests >= 0)
 );
+
+-- Indexes for invoice_line_items
+CREATE INDEX idx_invoice_line_items_invoice ON invoice_line_items(invoice_id);
+CREATE INDEX idx_invoice_line_items_provider ON invoice_line_items(provider_id) WHERE provider_id IS NOT NULL;
+CREATE INDEX idx_invoice_line_items_model ON invoice_line_items(model_id) WHERE model_id IS NOT NULL;
 
 -- Payment methods table for organization payment information
 CREATE TABLE IF NOT EXISTS payment_methods (
@@ -232,20 +232,19 @@ CREATE TABLE IF NOT EXISTS payment_methods (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
-    -- Unique constraint to prevent multiple defaults per organization
-    UNIQUE (organization_id, is_default) WHERE is_default = true,
-
-    -- Indexes for performance
-    INDEX idx_payment_methods_org (organization_id),
-    INDEX idx_payment_methods_external (provider, external_id),
-    INDEX idx_payment_methods_default (organization_id, is_default) WHERE is_default = true,
-
     -- Constraints
     CONSTRAINT chk_payment_method_type CHECK (type IN ('card', 'bank_transfer', 'paypal', 'other')),
     CONSTRAINT chk_payment_method_last_4 CHECK (last_4 IS NULL OR length(last_4) = 4),
     CONSTRAINT chk_payment_method_expiry_month CHECK (expiry_month IS NULL OR (expiry_month >= 1 AND expiry_month <= 12)),
     CONSTRAINT chk_payment_method_expiry_year CHECK (expiry_year IS NULL OR expiry_year >= date_part('year', NOW()))
 );
+
+-- Indexes for payment_methods
+CREATE INDEX idx_payment_methods_org ON payment_methods(organization_id);
+CREATE INDEX idx_payment_methods_external ON payment_methods(provider, external_id);
+
+-- Partial unique index to prevent multiple defaults per organization (only enforce when is_default = true)
+CREATE UNIQUE INDEX idx_payment_methods_org_default_unique ON payment_methods(organization_id) WHERE is_default = true;
 
 -- Add trigger to automatically update updated_at timestamps
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -256,20 +255,20 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
-CREATE TRIGGER update_usage_quotas_updated_at 
-    BEFORE UPDATE ON usage_quotas 
+CREATE TRIGGER update_usage_quotas_updated_at
+    BEFORE UPDATE ON usage_quotas
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER update_discount_rules_updated_at 
-    BEFORE UPDATE ON discount_rules 
+CREATE TRIGGER update_discount_rules_updated_at
+    BEFORE UPDATE ON discount_rules
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER update_invoices_updated_at 
-    BEFORE UPDATE ON invoices 
+CREATE TRIGGER update_invoices_updated_at
+    BEFORE UPDATE ON invoices
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER update_payment_methods_updated_at 
-    BEFORE UPDATE ON payment_methods 
+CREATE TRIGGER update_payment_methods_updated_at
+    BEFORE UPDATE ON payment_methods
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Add comments for documentation

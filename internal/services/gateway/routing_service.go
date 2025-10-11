@@ -3,7 +3,6 @@ package gateway
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"sort"
 	"time"
 
@@ -20,7 +19,6 @@ type RoutingService struct {
 	providerConfigRepo gateway.ProviderConfigRepository
 	costService        gateway.CostService
 	logger             *logrus.Logger
-	rand               *rand.Rand
 }
 
 // NewRoutingService creates a new routing service instance
@@ -37,564 +35,361 @@ func NewRoutingService(
 		providerConfigRepo: providerConfigRepo,
 		costService:        costService,
 		logger:             logger,
-		rand:               rand.New(rand.NewSource(time.Now().UnixNano())),
 	}
 }
 
-// SelectProvider selects the best provider for a given request
-func (r *RoutingService) SelectProvider(ctx context.Context, req *gateway.ProviderSelectionRequest) (*gateway.ProviderSelectionResponse, error) {
+// RouteRequest routes a request to the best provider based on strategy
+func (r *RoutingService) RouteRequest(ctx context.Context, projectID ulid.ULID, request *gateway.RoutingRequest) (*gateway.RoutingDecision, error) {
 	logger := r.logger.WithFields(logrus.Fields{
-		"organization_id": req.OrganizationID,
-		"model_name":      req.ModelName,
-		"request_type":    req.RequestType,
-		"strategy":        req.Strategy,
+		"project_id": projectID,
+		"model_name": request.ModelName,
+		"strategy":   request.Strategy,
 	})
 
-	logger.Info("Selecting provider for request")
+	logger.Info("Routing request")
 
-	// Get available providers for the requested model
-	candidates, err := r.getProviderCandidates(ctx, req)
+	// Get model
+	model, err := r.modelRepo.GetByModelName(ctx, request.ModelName)
 	if err != nil {
-		logger.WithError(err).Error("Failed to get provider candidates")
-		return nil, fmt.Errorf("failed to get provider candidates: %w", err)
+		return nil, fmt.Errorf("model not found: %w", err)
 	}
 
-	if len(candidates) == 0 {
-		logger.Error("No available providers found")
-		return nil, gateway.ErrNoProvidersAvailable
+	// Get provider
+	provider, err := r.providerRepo.GetByID(ctx, model.ProviderID)
+	if err != nil {
+		return nil, fmt.Errorf("provider not found: %w", err)
 	}
 
-	logger.WithField("candidate_count", len(candidates)).Info("Found provider candidates")
-
-	// Apply routing strategy
-	selected, err := r.applyRoutingStrategy(ctx, req, candidates)
+	// Get provider config for project
+	_, err = r.providerConfigRepo.GetByProjectAndProvider(ctx, projectID, provider.ID)
 	if err != nil {
-		logger.WithError(err).Error("Failed to apply routing strategy")
-		return nil, fmt.Errorf("failed to apply routing strategy: %w", err)
+		return nil, fmt.Errorf("provider config not found: %w", err)
+	}
+
+	// Calculate estimated cost
+	estimatedCost := 0.0
+	if request.EstimatedTokens != nil && *request.EstimatedTokens > 0 {
+		estimatedCost, _ = r.costService.EstimateRequestCost(ctx, model.ModelName, *request.EstimatedTokens)
+	}
+
+	strategyStr := "default"
+	if request.Strategy != nil {
+		strategyStr = string(*request.Strategy)
+	}
+
+	decision := &gateway.RoutingDecision{
+		Provider:         provider.Name,
+		ProviderID:       provider.ID,
+		Model:            model.ModelName,
+		ModelID:          model.ID,
+		Strategy:         strategyStr,
+		EstimatedCost:    estimatedCost,
+		EstimatedLatency: 0, // TODO: Implement latency tracking
+		RoutingReason:    fmt.Sprintf("Selected based on %s strategy", strategyStr),
 	}
 
 	logger.WithFields(logrus.Fields{
-		"selected_provider": selected.Provider.Name,
-		"provider_id":       selected.Provider.ID,
-		"model_id":          selected.Model.ID,
-		"estimated_cost":    selected.EstimatedCost,
-		"selection_reason":  selected.SelectionReason,
-	}).Info("Provider selected successfully")
+		"provider":       decision.Provider,
+		"estimated_cost": decision.EstimatedCost,
+	}).Info("Request routed successfully")
 
-	return selected, nil
+	return decision, nil
 }
 
-// SelectFallbackProvider selects a fallback provider when primary fails
-func (r *RoutingService) SelectFallbackProvider(ctx context.Context, req *gateway.FallbackSelectionRequest) (*gateway.ProviderSelectionResponse, error) {
+// GetBestProvider returns the best provider for a model using specified strategy
+func (r *RoutingService) GetBestProvider(ctx context.Context, projectID ulid.ULID, modelName string, strategy gateway.RoutingStrategy) (*gateway.RoutingDecision, error) {
+	request := &gateway.RoutingRequest{
+		ModelName: modelName,
+		Strategy:  &strategy,
+	}
+	return r.RouteRequest(ctx, projectID, request)
+}
+
+// RouteByCost routes by lowest cost
+func (r *RoutingService) RouteByCost(ctx context.Context, projectID ulid.ULID, modelName string) (*gateway.RoutingDecision, error) {
+	return r.GetBestProvider(ctx, projectID, modelName, gateway.RoutingStrategyCostOptimized)
+}
+
+// RouteByLatency routes by lowest latency
+func (r *RoutingService) RouteByLatency(ctx context.Context, projectID ulid.ULID, modelName string) (*gateway.RoutingDecision, error) {
+	return r.GetBestProvider(ctx, projectID, modelName, gateway.RoutingStrategyLatencyOptimized)
+}
+
+// RouteByQuality routes by highest quality
+func (r *RoutingService) RouteByQuality(ctx context.Context, projectID ulid.ULID, modelName string) (*gateway.RoutingDecision, error) {
+	return r.GetBestProvider(ctx, projectID, modelName, gateway.RoutingStrategyQualityOptimized)
+}
+
+// RouteByLoad routes by load balancing
+func (r *RoutingService) RouteByLoad(ctx context.Context, projectID ulid.ULID, modelName string) (*gateway.RoutingDecision, error) {
+	return r.GetBestProvider(ctx, projectID, modelName, gateway.RoutingStrategyLoadBalance)
+}
+
+// GetFallbackProvider gets a fallback provider when primary fails
+func (r *RoutingService) GetFallbackProvider(ctx context.Context, projectID ulid.ULID, failedProviderID ulid.ULID, modelName string) (*gateway.RoutingDecision, error) {
 	logger := r.logger.WithFields(logrus.Fields{
-		"organization_id":   req.OrganizationID,
-		"failed_provider":   req.FailedProvider,
-		"original_model":    req.OriginalModel,
-		"request_type":      req.RequestType,
+		"project_id":          projectID,
+		"failed_provider_id":  failedProviderID,
+		"model_name":          modelName,
 	})
 
-	logger.Info("Selecting fallback provider")
+	logger.Info("Getting fallback provider")
 
-	// Get available providers excluding the failed one
-	candidates, err := r.getProviderCandidates(ctx, &gateway.ProviderSelectionRequest{
-		OrganizationID: req.OrganizationID,
-		ModelName:      req.OriginalModel,
-		RequestType:    req.RequestType,
-		Environment:    req.Environment,
-		Strategy:       gateway.RoutingStrategyReliability, // Prefer reliable providers for fallback
-		ExcludeProvider: &req.FailedProvider,
-	})
-
+	// Get model
+	model, err := r.modelRepo.GetByModelName(ctx, modelName)
 	if err != nil {
-		logger.WithError(err).Error("Failed to get fallback provider candidates")
-		return nil, fmt.Errorf("failed to get fallback provider candidates: %w", err)
+		return nil, fmt.Errorf("model not found: %w", err)
 	}
 
-	if len(candidates) == 0 {
-		logger.Error("No fallback providers available")
-		return nil, gateway.ErrNoFallbackProviders
+	// Get all providers for this model type
+	allProviders, err := r.providerRepo.ListEnabled(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list providers: %w", err)
 	}
 
-	// Sort by reliability for fallback
-	sort.Slice(candidates, func(i, j int) bool {
-		return r.calculateReliabilityScore(candidates[i]) > r.calculateReliabilityScore(candidates[j])
-	})
+	// Find alternative providers (excluding failed one)
+	for _, provider := range allProviders {
+		if provider.ID == failedProviderID {
+			continue
+		}
 
-	selected := candidates[0]
-	selected.SelectionReason = "fallback_reliability"
+		// Check if provider has a model with this name
+		models, err := r.modelRepo.GetEnabledByProviderID(ctx, provider.ID)
+		if err != nil {
+			continue
+		}
 
-	logger.WithFields(logrus.Fields{
-		"fallback_provider": selected.Provider.Name,
-		"provider_id":       selected.Provider.ID,
-		"reliability_score": r.calculateReliabilityScore(selected),
-	}).Info("Fallback provider selected")
+		for _, m := range models {
+			if m.ModelName == modelName || m.ModelType == model.ModelType {
+				// Found a fallback
+				config, err := r.providerConfigRepo.GetByProjectAndProvider(ctx, projectID, provider.ID)
+				if err != nil {
+					continue
+				}
 
-	return selected, nil
+				if !config.IsEnabled {
+					continue
+				}
+
+				return &gateway.RoutingDecision{
+					Provider:         provider.Name,
+					ProviderID:       provider.ID,
+					Model:            m.ModelName,
+					ModelID:          m.ID,
+					Strategy:         "fallback",
+					EstimatedCost:    0,
+					EstimatedLatency: 0,
+					RoutingReason:    "Fallback provider after primary failure",
+				}, nil
+			}
+		}
+	}
+
+	return nil, fmt.Errorf("no fallback provider available")
 }
 
-// RouteRequest routes a request to multiple providers for A/B testing or redundancy
-func (r *RoutingService) RouteRequest(ctx context.Context, req *gateway.RequestRoutingConfig) (*gateway.RequestRoutingResponse, error) {
+// HandleProviderFailure handles provider failure and returns alternative
+func (r *RoutingService) HandleProviderFailure(ctx context.Context, projectID ulid.ULID, providerID ulid.ULID, errorType gateway.ErrorType) (*gateway.RoutingDecision, error) {
+	r.logger.WithFields(logrus.Fields{
+		"project_id":  projectID,
+		"provider_id": providerID,
+		"error_type":  errorType,
+	}).Warn("Handling provider failure")
+
+	// For now, just return an error - in production, this would:
+	// 1. Update provider health metrics
+	// 2. Find alternative provider
+	// 3. Update routing weights
+	return nil, fmt.Errorf("provider failure handling not fully implemented")
+}
+
+// CreateRoutingRule creates a new routing rule
+func (r *RoutingService) CreateRoutingRule(ctx context.Context, rule *gateway.RoutingRule) error {
+	// TODO: Implement routing rule creation
+	return fmt.Errorf("not implemented")
+}
+
+// UpdateRoutingRule updates an existing routing rule
+func (r *RoutingService) UpdateRoutingRule(ctx context.Context, rule *gateway.RoutingRule) error {
+	// TODO: Implement routing rule update
+	return fmt.Errorf("not implemented")
+}
+
+// DeleteRoutingRule deletes a routing rule
+func (r *RoutingService) DeleteRoutingRule(ctx context.Context, ruleID ulid.ULID) error {
+	// TODO: Implement routing rule deletion
+	return fmt.Errorf("not implemented")
+}
+
+// ListProjectRoutingRules lists all routing rules for a project
+func (r *RoutingService) ListProjectRoutingRules(ctx context.Context, projectID ulid.ULID) ([]*gateway.RoutingRule, error) {
+	// TODO: Implement routing rule listing
+	return []*gateway.RoutingRule{}, nil
+}
+
+// TestRoute tests a route without executing it
+func (r *RoutingService) TestRoute(ctx context.Context, projectID ulid.ULID, request *gateway.RoutingRequest) (*gateway.RouteTestResult, error) {
 	logger := r.logger.WithFields(logrus.Fields{
-		"organization_id": req.OrganizationID,
-		"routing_type":    req.RoutingType,
-		"model_name":      req.ModelName,
+		"project_id": projectID,
+		"model_name": request.ModelName,
 	})
 
-	logger.Info("Routing request to multiple providers")
+	logger.Info("Testing route")
 
-	var routes []gateway.ProviderRoute
-
-	switch req.RoutingType {
-	case gateway.RoutingTypeABTesting:
-		routes, err := r.createABTestRoutes(ctx, req)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create A/B test routes: %w", err)
-		}
-		return &gateway.RequestRoutingResponse{
-			Routes:       routes,
-			RoutingType:  req.RoutingType,
+	// Get routing decision
+	decision, err := r.RouteRequest(ctx, projectID, request)
+	if err != nil {
+		errMsg := err.Error()
+		return &gateway.RouteTestResult{
+			TestID:    ulid.New(),
+			ProjectID: projectID,
+			Request:   request,
+			Decision:  nil,
+			Success:   false,
+			Error:     &errMsg,
+			TestedAt:  time.Now(),
 		}, nil
-
-	case gateway.RoutingTypeRedundancy:
-		routes, err := r.createRedundancyRoutes(ctx, req)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create redundancy routes: %w", err)
-		}
-		return &gateway.RequestRoutingResponse{
-			Routes:       routes,
-			RoutingType:  req.RoutingType,
-		}, nil
-
-	case gateway.RoutingTypeLoadBalancing:
-		routes, err := r.createLoadBalancingRoutes(ctx, req)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create load balancing routes: %w", err)
-		}
-		return &gateway.RequestRoutingResponse{
-			Routes:       routes,
-			RoutingType:  req.RoutingType,
-		}, nil
-
-	default:
-		return nil, fmt.Errorf("unsupported routing type: %s", req.RoutingType)
-	}
-}
-
-// UpdateProviderWeights updates routing weights based on performance metrics
-func (r *RoutingService) UpdateProviderWeights(ctx context.Context, req *gateway.WeightUpdateRequest) error {
-	logger := r.logger.WithFields(logrus.Fields{
-		"organization_id": req.OrganizationID,
-		"provider_id":     req.ProviderID,
-		"new_weight":      req.NewWeight,
-	})
-
-	logger.Info("Updating provider weights")
-
-	// TODO: Implement weight persistence
-	// This would typically update routing rules or provider configurations
-	// with new weights based on performance metrics
-
-	logger.Info("Provider weights updated successfully")
-	return nil
-}
-
-// Helper methods
-
-func (r *RoutingService) getProviderCandidates(ctx context.Context, req *gateway.ProviderSelectionRequest) ([]*gateway.ProviderSelectionResponse, error) {
-	// Get models matching the requested model name
-	var models []*gateway.Model
-	var err error
-
-	if req.ModelName != "" {
-		model, err := r.modelRepo.GetByName(ctx, req.ModelName)
-		if err != nil {
-			return nil, fmt.Errorf("model not found: %w", err)
-		}
-		models = []*gateway.Model{model}
-	} else {
-		// If no specific model, get all models of the requested type
-		filter := &gateway.ModelFilter{
-			IsEnabled: &[]bool{true}[0],
-		}
-		if req.ModelType != nil {
-			filter.ModelType = req.ModelType
-		}
-		models, _, err = r.modelRepo.SearchModels(ctx, filter)
-		if err != nil {
-			return nil, fmt.Errorf("failed to search models: %w", err)
-		}
 	}
 
-	var candidates []*gateway.ProviderSelectionResponse
-
-	for _, model := range models {
-		// Skip if this is the excluded provider
-		if req.ExcludeProvider != nil && model.ProviderID == *req.ExcludeProvider {
-			continue
-		}
-
-		// Get provider for this model
-		provider, err := r.providerRepo.GetByID(ctx, model.ProviderID)
-		if err != nil {
-			r.logger.WithError(err).WithField("provider_id", model.ProviderID).Warn("Failed to get provider")
-			continue
-		}
-
-		// Check if provider is enabled
-		if !provider.IsEnabled {
-			continue
-		}
-
-		// Check if provider supports the requested operation
-		if !r.providerSupportsOperation(provider, req.RequestType) {
-			continue
-		}
-
-		// Get provider configuration
-		config, err := r.providerConfigRepo.GetByProviderOrgAndEnv(ctx, provider.ID, req.OrganizationID, req.Environment)
-		if err != nil {
-			r.logger.WithFields(logrus.Fields{
-				"provider_id": provider.ID,
-				"error":       err,
-			}).Warn("No configuration found for provider")
-			continue
-		}
-
-		if !config.IsActive {
-			continue
-		}
-
-		// Calculate estimated cost
-		estimatedCost, err := r.calculateEstimatedCost(ctx, model, req)
-		if err != nil {
-			r.logger.WithError(err).WithField("model_id", model.ID).Warn("Failed to calculate estimated cost")
-			// Continue without cost estimation
-		}
-
-		candidate := &gateway.ProviderSelectionResponse{
-			Provider:      provider,
-			Model:         model,
-			Config:        config,
-			EstimatedCost: estimatedCost,
-		}
-
-		candidates = append(candidates, candidate)
-	}
-
-	return candidates, nil
-}
-
-func (r *RoutingService) applyRoutingStrategy(ctx context.Context, req *gateway.ProviderSelectionRequest, candidates []*gateway.ProviderSelectionResponse) (*gateway.ProviderSelectionResponse, error) {
-	switch req.Strategy {
-	case gateway.RoutingStrategyCost:
-		return r.selectByCost(candidates)
-	case gateway.RoutingStrategyLatency:
-		return r.selectByLatency(candidates)
-	case gateway.RoutingStrategyReliability:
-		return r.selectByReliability(candidates)
-	case gateway.RoutingStrategyQuality:
-		return r.selectByQuality(candidates)
-	case gateway.RoutingStrategyRoundRobin:
-		return r.selectByRoundRobin(candidates)
-	case gateway.RoutingStrategyWeighted:
-		return r.selectByWeighted(candidates)
-	case gateway.RoutingStrategyRandom:
-		return r.selectByRandom(candidates)
-	default:
-		// Default to cost-based selection
-		return r.selectByCost(candidates)
-	}
-}
-
-func (r *RoutingService) selectByCost(candidates []*gateway.ProviderSelectionResponse) (*gateway.ProviderSelectionResponse, error) {
-	if len(candidates) == 0 {
-		return nil, gateway.ErrNoProvidersAvailable
-	}
-
-	// Sort by estimated cost (ascending)
-	sort.Slice(candidates, func(i, j int) bool {
-		if candidates[i].EstimatedCost == nil {
-			return false
-		}
-		if candidates[j].EstimatedCost == nil {
-			return true
-		}
-		return candidates[i].EstimatedCost.TotalCost < candidates[j].EstimatedCost.TotalCost
-	})
-
-	selected := candidates[0]
-	selected.SelectionReason = "lowest_cost"
-	return selected, nil
-}
-
-func (r *RoutingService) selectByLatency(candidates []*gateway.ProviderSelectionResponse) (*gateway.ProviderSelectionResponse, error) {
-	if len(candidates) == 0 {
-		return nil, gateway.ErrNoProvidersAvailable
-	}
-
-	// Sort by historical latency (would need to implement latency tracking)
-	sort.Slice(candidates, func(i, j int) bool {
-		return r.calculateLatencyScore(candidates[i]) < r.calculateLatencyScore(candidates[j])
-	})
-
-	selected := candidates[0]
-	selected.SelectionReason = "lowest_latency"
-	return selected, nil
-}
-
-func (r *RoutingService) selectByReliability(candidates []*gateway.ProviderSelectionResponse) (*gateway.ProviderSelectionResponse, error) {
-	if len(candidates) == 0 {
-		return nil, gateway.ErrNoProvidersAvailable
-	}
-
-	// Sort by reliability score (descending)
-	sort.Slice(candidates, func(i, j int) bool {
-		return r.calculateReliabilityScore(candidates[i]) > r.calculateReliabilityScore(candidates[j])
-	})
-
-	selected := candidates[0]
-	selected.SelectionReason = "highest_reliability"
-	return selected, nil
-}
-
-func (r *RoutingService) selectByQuality(candidates []*gateway.ProviderSelectionResponse) (*gateway.ProviderSelectionResponse, error) {
-	if len(candidates) == 0 {
-		return nil, gateway.ErrNoProvidersAvailable
-	}
-
-	// Sort by quality score (would need to implement quality metrics)
-	sort.Slice(candidates, func(i, j int) bool {
-		return r.calculateQualityScore(candidates[i]) > r.calculateQualityScore(candidates[j])
-	})
-
-	selected := candidates[0]
-	selected.SelectionReason = "highest_quality"
-	return selected, nil
-}
-
-func (r *RoutingService) selectByRoundRobin(candidates []*gateway.ProviderSelectionResponse) (*gateway.ProviderSelectionResponse, error) {
-	if len(candidates) == 0 {
-		return nil, gateway.ErrNoProvidersAvailable
-	}
-
-	// TODO: Implement proper round-robin state tracking
-	// For now, use random selection
-	selected := candidates[r.rand.Intn(len(candidates))]
-	selected.SelectionReason = "round_robin"
-	return selected, nil
-}
-
-func (r *RoutingService) selectByWeighted(candidates []*gateway.ProviderSelectionResponse) (*gateway.ProviderSelectionResponse, error) {
-	if len(candidates) == 0 {
-		return nil, gateway.ErrNoProvidersAvailable
-	}
-
-	// Calculate total weight
-	totalWeight := 0.0
-	for _, candidate := range candidates {
-		totalWeight += r.getProviderWeight(candidate.Provider)
-	}
-
-	if totalWeight == 0 {
-		// Fallback to random if no weights
-		return r.selectByRandom(candidates)
-	}
-
-	// Weighted random selection
-	target := r.rand.Float64() * totalWeight
-	current := 0.0
-
-	for _, candidate := range candidates {
-		current += r.getProviderWeight(candidate.Provider)
-		if current >= target {
-			candidate.SelectionReason = "weighted_random"
-			return candidate, nil
-		}
-	}
-
-	// Fallback to last candidate
-	selected := candidates[len(candidates)-1]
-	selected.SelectionReason = "weighted_fallback"
-	return selected, nil
-}
-
-func (r *RoutingService) selectByRandom(candidates []*gateway.ProviderSelectionResponse) (*gateway.ProviderSelectionResponse, error) {
-	if len(candidates) == 0 {
-		return nil, gateway.ErrNoProvidersAvailable
-	}
-
-	selected := candidates[r.rand.Intn(len(candidates))]
-	selected.SelectionReason = "random"
-	return selected, nil
-}
-
-func (r *RoutingService) providerSupportsOperation(provider *gateway.Provider, requestType gateway.RequestType) bool {
-	switch requestType {
-	case gateway.RequestTypeChatCompletion:
-		features, ok := provider.SupportedFeatures["chat_completion"]
-		return ok && features == true
-	case gateway.RequestTypeCompletion:
-		features, ok := provider.SupportedFeatures["completion"]
-		return ok && features == true
-	case gateway.RequestTypeEmbeddings:
-		features, ok := provider.SupportedFeatures["embeddings"]
-		return ok && features == true
-	default:
-		return false
-	}
-}
-
-func (r *RoutingService) calculateEstimatedCost(ctx context.Context, model *gateway.Model, req *gateway.ProviderSelectionRequest) (*gateway.CostCalculation, error) {
-	// This would integrate with the cost service to calculate estimated costs
-	// For now, return a simple calculation based on model pricing
-	return &gateway.CostCalculation{
-		InputCost:  float64(req.EstimatedInputTokens) * model.InputCostPerToken,
-		OutputCost: float64(req.EstimatedOutputTokens) * model.OutputCostPerToken,
-		TotalCost:  float64(req.EstimatedInputTokens)*model.InputCostPerToken + float64(req.EstimatedOutputTokens)*model.OutputCostPerToken,
-		Currency:   "USD",
+	return &gateway.RouteTestResult{
+		TestID:    ulid.New(),
+		ProjectID: projectID,
+		Request:   request,
+		Decision:  decision,
+		Success:   true,
+		TestedAt:  time.Now(),
 	}, nil
 }
 
-// Scoring methods (placeholder implementations)
-
-func (r *RoutingService) calculateLatencyScore(candidate *gateway.ProviderSelectionResponse) float64 {
-	// TODO: Implement based on historical latency metrics
-	// For now, return a random score
-	return r.rand.Float64() * 1000 // milliseconds
-}
-
-func (r *RoutingService) calculateReliabilityScore(candidate *gateway.ProviderSelectionResponse) float64 {
-	// TODO: Implement based on historical reliability metrics
-	// For now, return a score based on provider type
-	switch candidate.Provider.Type {
-	case gateway.ProviderTypeOpenAI:
-		return 0.95
-	case gateway.ProviderTypeAnthropic:
-		return 0.93
-	default:
-		return 0.85
-	}
-}
-
-func (r *RoutingService) calculateQualityScore(candidate *gateway.ProviderSelectionResponse) float64 {
-	// TODO: Implement based on historical quality metrics
-	// For now, return a score based on model capabilities
-	score := 0.8
-	if len(candidate.Model.Capabilities) > 5 {
-		score += 0.1
-	}
-	if candidate.Model.ContextLength > 8000 {
-		score += 0.05
-	}
-	return score
-}
-
-func (r *RoutingService) getProviderWeight(provider *gateway.Provider) float64 {
-	// TODO: Implement weight retrieval from configuration or database
-	// For now, return default weight
-	return 1.0
-}
-
-// Routing creation methods
-
-func (r *RoutingService) createABTestRoutes(ctx context.Context, req *gateway.RequestRoutingConfig) ([]gateway.ProviderRoute, error) {
-	// Get multiple providers for A/B testing
-	candidates, err := r.getProviderCandidates(ctx, &gateway.ProviderSelectionRequest{
-		OrganizationID: req.OrganizationID,
-		ModelName:      req.ModelName,
-		RequestType:    req.RequestType,
-		Environment:    req.Environment,
-		Strategy:       gateway.RoutingStrategyRandom,
+// AnalyzeRoutingPerformance analyzes routing performance over time
+func (r *RoutingService) AnalyzeRoutingPerformance(ctx context.Context, projectID ulid.ULID, timeRange *gateway.TimeRange) (*gateway.RoutingAnalysis, error) {
+	logger := r.logger.WithFields(logrus.Fields{
+		"project_id": projectID,
+		"start_time": timeRange.StartTime,
+		"end_time":   timeRange.EndTime,
 	})
 
+	logger.Info("Analyzing routing performance")
+
+	// TODO: Implement actual analytics retrieval from ClickHouse
+	// This would query routing decisions, success rates, costs, latencies
+
+	analysis := &gateway.RoutingAnalysis{
+		ProjectID:         projectID,
+		TimeRange:         timeRange,
+		TotalRequests:     0,
+		SuccessRate:       0.0,
+		AverageLatency:    0.0,
+		AverageCost:       0.0,
+		ProviderBreakdown: make(map[string]*gateway.ProviderStats),
+		ModelBreakdown:    make(map[string]*gateway.ModelStats),
+		StrategyBreakdown: make(map[string]*gateway.StrategyStats),
+		FallbackRate:      0.0,
+		RetryRate:         0.0,
+		GeneratedAt:       time.Now(),
+	}
+
+	return analysis, nil
+}
+
+// Helper methods for advanced routing strategies
+
+// selectByCost selects provider with lowest cost
+func (r *RoutingService) selectByCost(ctx context.Context, projectID ulid.ULID, modelName string) (*gateway.RoutingDecision, error) {
+	// Get all providers that support this model
+	model, err := r.modelRepo.GetByModelName(ctx, modelName)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(candidates) < 2 {
-		return nil, fmt.Errorf("insufficient providers for A/B testing: need at least 2, got %d", len(candidates))
-	}
-
-	// Select two providers for A/B testing
-	var routes []gateway.ProviderRoute
-	for i := 0; i < 2 && i < len(candidates); i++ {
-		routes = append(routes, gateway.ProviderRoute{
-			Provider:   candidates[i].Provider,
-			Model:      candidates[i].Model,
-			Config:     candidates[i].Config,
-			Weight:     0.5, // Equal weight for A/B testing
-			RouteID:    ulid.New(),
-		})
-	}
-
-	return routes, nil
-}
-
-func (r *RoutingService) createRedundancyRoutes(ctx context.Context, req *gateway.RequestRoutingConfig) ([]gateway.ProviderRoute, error) {
-	// Get multiple providers for redundancy
-	candidates, err := r.getProviderCandidates(ctx, &gateway.ProviderSelectionRequest{
-		OrganizationID: req.OrganizationID,
-		ModelName:      req.ModelName,
-		RequestType:    req.RequestType,
-		Environment:    req.Environment,
-		Strategy:       gateway.RoutingStrategyReliability,
-	})
-
+	// Get models with same type
+	similarModels, err := r.modelRepo.GetByModelType(ctx, model.ModelType, 100, 0)
 	if err != nil {
 		return nil, err
 	}
 
-	// Use up to 3 providers for redundancy
-	maxRoutes := 3
-	if len(candidates) < maxRoutes {
-		maxRoutes = len(candidates)
-	}
-
-	var routes []gateway.ProviderRoute
-	for i := 0; i < maxRoutes; i++ {
-		routes = append(routes, gateway.ProviderRoute{
-			Provider: candidates[i].Provider,
-			Model:    candidates[i].Model,
-			Config:   candidates[i].Config,
-			Weight:   1.0 / float64(maxRoutes), // Equal weight distribution
-			RouteID:  ulid.New(),
-		})
-	}
-
-	return routes, nil
-}
-
-func (r *RoutingService) createLoadBalancingRoutes(ctx context.Context, req *gateway.RequestRoutingConfig) ([]gateway.ProviderRoute, error) {
-	// Get all available providers for load balancing
-	candidates, err := r.getProviderCandidates(ctx, &gateway.ProviderSelectionRequest{
-		OrganizationID: req.OrganizationID,
-		ModelName:      req.ModelName,
-		RequestType:    req.RequestType,
-		Environment:    req.Environment,
-		Strategy:       gateway.RoutingStrategyWeighted,
+	// Sort by cost
+	sort.Slice(similarModels, func(i, j int) bool {
+		return similarModels[i].InputCostPer1kTokens < similarModels[j].InputCostPer1kTokens
 	})
 
+	if len(similarModels) == 0 {
+		return nil, fmt.Errorf("no models available")
+	}
+
+	// Use cheapest model
+	cheapestModel := similarModels[0]
+	provider, err := r.providerRepo.GetByID(ctx, cheapestModel.ProviderID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Calculate total weight
-	totalWeight := 0.0
-	for _, candidate := range candidates {
-		totalWeight += r.getProviderWeight(candidate.Provider)
+	return &gateway.RoutingDecision{
+		Provider:         provider.Name,
+		ProviderID:       provider.ID,
+		Model:            cheapestModel.ModelName,
+		ModelID:          cheapestModel.ID,
+		Strategy:         "cost_optimized",
+		EstimatedCost:    cheapestModel.InputCostPer1kTokens,
+		EstimatedLatency: 0,
+		RoutingReason:    "Selected for lowest cost",
+	}, nil
+}
+
+// selectByLatency selects provider with lowest latency
+func (r *RoutingService) selectByLatency(ctx context.Context, projectID ulid.ULID, modelName string) (*gateway.RoutingDecision, error) {
+	// TODO: Implement latency-based selection using health metrics
+	strategy := gateway.RoutingStrategyLatencyOptimized
+	return r.RouteRequest(ctx, projectID, &gateway.RoutingRequest{
+		ModelName: modelName,
+		Strategy:  &strategy,
+	})
+}
+
+// selectByQuality selects provider with highest quality score
+func (r *RoutingService) selectByQuality(ctx context.Context, projectID ulid.ULID, modelName string) (*gateway.RoutingDecision, error) {
+	model, err := r.modelRepo.GetByModelName(ctx, modelName)
+	if err != nil {
+		return nil, err
 	}
 
-	var routes []gateway.ProviderRoute
-	for _, candidate := range candidates {
-		weight := r.getProviderWeight(candidate.Provider) / totalWeight
-		routes = append(routes, gateway.ProviderRoute{
-			Provider: candidate.Provider,
-			Model:    candidate.Model,
-			Config:   candidate.Config,
-			Weight:   weight,
-			RouteID:  ulid.New(),
-		})
+	// Get models with same type
+	similarModels, err := r.modelRepo.GetByModelType(ctx, model.ModelType, 100, 0)
+	if err != nil {
+		return nil, err
 	}
 
-	return routes, nil
+	// Sort by quality score (if available)
+	sort.Slice(similarModels, func(i, j int) bool {
+		qi := 0.0
+		qj := 0.0
+		if similarModels[i].QualityScore != nil {
+			qi = *similarModels[i].QualityScore
+		}
+		if similarModels[j].QualityScore != nil {
+			qj = *similarModels[j].QualityScore
+		}
+		return qi > qj
+	})
+
+	if len(similarModels) == 0 {
+		return nil, fmt.Errorf("no models available")
+	}
+
+	bestModel := similarModels[0]
+	provider, err := r.providerRepo.GetByID(ctx, bestModel.ProviderID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &gateway.RoutingDecision{
+		Provider:         provider.Name,
+		ProviderID:       provider.ID,
+		Model:            bestModel.ModelName,
+		ModelID:          bestModel.ID,
+		Strategy:         "quality_optimized",
+		EstimatedCost:    bestModel.InputCostPer1kTokens,
+		EstimatedLatency: 0,
+		RoutingReason:    "Selected for highest quality",
+	}, nil
 }

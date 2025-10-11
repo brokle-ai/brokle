@@ -324,7 +324,7 @@ func (p *OpenAIProvider) GetModel(ctx context.Context, modelName string) (*provi
 	ctx, cancel := context.WithTimeout(ctx, p.timeout)
 	defer cancel()
 
-	model, err := p.client.RetrieveModel(ctx, modelName)
+	model, err := p.client.GetModel(ctx, modelName)
 	if err != nil {
 		return nil, p.transformError(err)
 	}

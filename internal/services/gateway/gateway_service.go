@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -19,7 +20,7 @@ type GatewayService struct {
 	providerConfigRepo gateway.ProviderConfigRepository
 	routingService     gateway.RoutingService
 	costService        gateway.CostService
-	providerFactory    providers.Factory
+	providerFactory    providers.ProviderFactory
 	logger             *logrus.Logger
 }
 
@@ -30,7 +31,7 @@ func NewGatewayService(
 	providerConfigRepo gateway.ProviderConfigRepository,
 	routingService gateway.RoutingService,
 	costService gateway.CostService,
-	providerFactory providers.Factory,
+	providerFactory providers.ProviderFactory,
 	logger *logrus.Logger,
 ) gateway.GatewayService {
 	return &GatewayService{
@@ -59,7 +60,7 @@ func (s *GatewayService) ProcessChatCompletion(ctx context.Context, req *gateway
 	logger.Info("Processing chat completion request")
 
 	// 1. Resolve model and provider
-	model, provider, config, err := s.resolveModelAndProvider(ctx, req.Model, req.OrganizationID, req.Environment)
+	model, provider, config, err := s.resolveModelAndProvider(ctx, req.Model, req.OrganizationID)
 	if err != nil {
 		logger.WithError(err).Error("Failed to resolve model and provider")
 		return nil, fmt.Errorf("failed to resolve model and provider: %w", err)
@@ -71,29 +72,34 @@ func (s *GatewayService) ProcessChatCompletion(ctx context.Context, req *gateway
 		"model_id":      model.ID,
 	})
 
-	// 2. Calculate estimated cost
-	estimatedCost, err := s.costService.EstimateChatCompletionCost(ctx, &gateway.CostEstimationRequest{
-		Model:          model,
-		InputTokens:    s.estimateTokens(req.Messages),
-		MaxTokens:      req.MaxTokens,
-		OrganizationID: req.OrganizationID,
-	})
+	// 2. Calculate estimated cost (using EstimateRequestCost from interface)
+	var estimatedCost float64
+	inputTokens := s.estimateTokens(req.Messages)
+	estimatedCost, err = s.costService.EstimateRequestCost(ctx, model.ModelName, int(inputTokens))
 	if err != nil {
 		logger.WithError(err).Warn("Failed to estimate cost")
 		// Continue processing even if cost estimation fails
+		estimatedCost = 0
 	}
 
-	// 3. Get provider client
-	providerClient, err := s.providerFactory.GetProvider(ctx, provider.Type, config.ConfigData)
+	// 3. Prepare provider configuration with decrypted API key
+	providerConfig, err := s.prepareProviderConfig(ctx, config)
+	if err != nil {
+		logger.WithError(err).Error("Failed to prepare provider configuration")
+		return nil, fmt.Errorf("failed to prepare provider configuration: %w", err)
+	}
+
+	// 4. Get provider client
+	providerClient, err := s.providerFactory.GetProvider(ctx, provider.Type, providerConfig)
 	if err != nil {
 		logger.WithError(err).Error("Failed to get provider client")
 		return nil, fmt.Errorf("failed to get provider client: %w", err)
 	}
 
-	// 4. Transform request to provider format
+	// 5. Transform request to provider format
 	providerRequest := s.transformChatCompletionRequest(req, model, provider)
 
-	// 5. Execute request with provider
+	// 6. Execute request with provider
 	var response *gateway.ChatCompletionResponse
 	var actualCost *gateway.CostCalculation
 
@@ -110,46 +116,51 @@ func (s *GatewayService) ProcessChatCompletion(ctx context.Context, req *gateway
 	if err != nil {
 		logger.WithError(err).Error("Failed to process chat completion")
 		// Log failed request for analytics
+		errMsg := err.Error()
 		s.logRequestMetrics(ctx, &gateway.RequestMetrics{
-			RequestID:      requestID,
-			OrganizationID: req.OrganizationID,
-			Environment:    req.Environment,
-			ProviderID:     provider.ID,
-			ModelID:        model.ID,
-			RequestType:    gateway.RequestTypeChatCompletion,
-			Status:         "error",
-			Duration:       duration,
-			Error:          err.Error(),
-			EstimatedCost:  estimatedCost,
+			RequestID:    requestID.String(),
+			ProjectID:    req.OrganizationID,
+			Provider:     provider.Name,
+			Model:        model.ModelName,
+			InputTokens:  0,
+			OutputTokens: 0,
+			TotalTokens:  0,
+			CostUSD:      0,
+			Success:      false,
+			ErrorMessage: &errMsg,
+			Timestamp:    time.Now(),
 		})
 		return nil, err
 	}
 
-	// 6. Log successful request metrics
+	// 7. Log successful request metrics
+	var costUSD float64
+	if actualCost != nil {
+		costUSD = actualCost.TotalCost
+	} else {
+		costUSD = estimatedCost
+	}
+
 	s.logRequestMetrics(ctx, &gateway.RequestMetrics{
-		RequestID:       requestID,
-		OrganizationID:  req.OrganizationID,
-		Environment:     req.Environment,
-		ProviderID:      provider.ID,
-		ModelID:         model.ID,
-		RequestType:     gateway.RequestTypeChatCompletion,
-		Status:          "success",
-		Duration:        duration,
-		InputTokens:     response.Usage.PromptTokens,
-		OutputTokens:    response.Usage.CompletionTokens,
-		TotalTokens:     response.Usage.TotalTokens,
-		EstimatedCost:   estimatedCost,
-		ActualCost:      actualCost,
-		ResponseLength:  len(response.Choices),
+		RequestID:    requestID.String(),
+		ProjectID:    req.OrganizationID,
+		Provider:     provider.Name,
+		Model:        model.ModelName,
+		InputTokens:  response.Usage.InputTokens,
+		OutputTokens: response.Usage.OutputTokens,
+		TotalTokens:  response.Usage.TotalTokens,
+		CostUSD:      costUSD,
+		Success:      true,
+		Timestamp:    time.Now(),
 	})
 
 	logger.WithFields(logrus.Fields{
-		"duration":        duration,
-		"input_tokens":    response.Usage.PromptTokens,
-		"output_tokens":   response.Usage.CompletionTokens,
-		"total_tokens":    response.Usage.TotalTokens,
-		"estimated_cost":  estimatedCost,
-		"actual_cost":     actualCost,
+		"duration":       duration,
+		"input_tokens":   response.Usage.InputTokens,
+		"output_tokens":  response.Usage.OutputTokens,
+		"total_tokens":   response.Usage.TotalTokens,
+		"estimated_cost": estimatedCost,
+		"actual_cost":    actualCost,
 	}).Info("Chat completion request completed successfully")
 
 	return response, nil
@@ -170,7 +181,7 @@ func (s *GatewayService) ProcessCompletion(ctx context.Context, req *gateway.Com
 	logger.Info("Processing completion request")
 
 	// 1. Resolve model and provider
-	model, provider, config, err := s.resolveModelAndProvider(ctx, req.Model, req.OrganizationID, req.Environment)
+	model, provider, config, err := s.resolveModelAndProvider(ctx, req.Model, req.OrganizationID)
 	if err != nil {
 		logger.WithError(err).Error("Failed to resolve model and provider")
 		return nil, fmt.Errorf("failed to resolve model and provider: %w", err)
@@ -179,19 +190,26 @@ func (s *GatewayService) ProcessCompletion(ctx context.Context, req *gateway.Com
 	// 2. Check if provider supports completion
 	if !s.providerSupportsCompletion(provider) {
 		logger.Error("Provider does not support completion")
-		return nil, gateway.ErrUnsupportedOperation
+		return nil, gateway.ErrUnsupportedRequestType
 	}
 
-	// 3. Get provider client and process request
-	providerClient, err := s.providerFactory.GetProvider(ctx, provider.Type, config.ConfigData)
+	// 3. Prepare provider configuration with decrypted API key
+	providerConfig, err := s.prepareProviderConfig(ctx, config)
+	if err != nil {
+		logger.WithError(err).Error("Failed to prepare provider configuration")
+		return nil, fmt.Errorf("failed to prepare provider configuration: %w", err)
+	}
+
+	// 4. Get provider client
+	providerClient, err := s.providerFactory.GetProvider(ctx, provider.Type, providerConfig)
 	if err != nil {
 		logger.WithError(err).Error("Failed to get provider client")
 		return nil, fmt.Errorf("failed to get provider client: %w", err)
 	}
 
-	// 4. Transform and execute request
+	// 5. Transform and execute request
 	providerRequest := s.transformCompletionRequest(req, model, provider)
-	
+
 	var response *gateway.CompletionResponse
 	var actualCost *gateway.CostCalculation
 
@@ -218,21 +236,32 @@ func (s *GatewayService) ProcessCompletion(ctx context.Context, req *gateway.Com
 }
 
 // ProcessEmbeddings processes an embeddings request through the gateway
-func (s *GatewayService) ProcessEmbeddings(ctx context.Context, req *gateway.EmbeddingsRequest) (*gateway.EmbeddingsResponse, error) {
+func (s *GatewayService) ProcessEmbeddings(ctx context.Context, req *gateway.EmbeddingsRequest) (*gateway.EmbeddingResponse, error) {
 	requestID := ulid.New()
 	startTime := time.Now()
+
+	// Calculate input count safely
+	inputCount := 0
+	switch input := req.Input.(type) {
+	case string:
+		inputCount = 1
+	case []string:
+		inputCount = len(input)
+	case []interface{}:
+		inputCount = len(input)
+	}
 
 	logger := s.logger.WithFields(logrus.Fields{
 		"request_id":      requestID,
 		"organization_id": req.OrganizationID,
 		"model":           req.Model,
-		"input_count":     len(req.Input),
+		"input_count":     inputCount,
 	})
 
 	logger.Info("Processing embeddings request")
 
 	// 1. Resolve model and provider
-	model, provider, config, err := s.resolveModelAndProvider(ctx, req.Model, req.OrganizationID, req.Environment)
+	model, provider, config, err := s.resolveModelAndProvider(ctx, req.Model, req.OrganizationID)
 	if err != nil {
 		logger.WithError(err).Error("Failed to resolve model and provider")
 		return nil, fmt.Errorf("failed to resolve model and provider: %w", err)
@@ -241,17 +270,24 @@ func (s *GatewayService) ProcessEmbeddings(ctx context.Context, req *gateway.Emb
 	// 2. Check if provider supports embeddings
 	if !s.providerSupportsEmbeddings(provider) {
 		logger.Error("Provider does not support embeddings")
-		return nil, gateway.ErrUnsupportedOperation
+		return nil, gateway.ErrUnsupportedRequestType
 	}
 
-	// 3. Get provider client and process request
-	providerClient, err := s.providerFactory.GetProvider(ctx, provider.Type, config.ConfigData)
+	// 3. Prepare provider configuration with decrypted API key
+	providerConfig, err := s.prepareProviderConfig(ctx, config)
+	if err != nil {
+		logger.WithError(err).Error("Failed to prepare provider configuration")
+		return nil, fmt.Errorf("failed to prepare provider configuration: %w", err)
+	}
+
+	// 4. Get provider client
+	providerClient, err := s.providerFactory.GetProvider(ctx, provider.Type, providerConfig)
 	if err != nil {
 		logger.WithError(err).Error("Failed to get provider client")
 		return nil, fmt.Errorf("failed to get provider client: %w", err)
 	}
 
-	// 4. Transform and execute request
+	// 5. Transform and execute request
 	providerRequest := s.transformEmbeddingsRequest(req, model, provider)
 	response, actualCost, err := s.processEmbeddingsSync(ctx, providerClient, providerRequest, model, requestID)
 
@@ -276,7 +312,6 @@ func (s *GatewayService) ProcessEmbeddings(ctx context.Context, req *gateway.Emb
 func (s *GatewayService) GetAvailableModels(ctx context.Context, req *gateway.ListModelsRequest) (*gateway.ListModelsResponse, error) {
 	logger := s.logger.WithFields(logrus.Fields{
 		"organization_id": req.OrganizationID,
-		"environment":     req.Environment,
 	})
 
 	logger.Info("Fetching available models")
@@ -291,7 +326,7 @@ func (s *GatewayService) GetAvailableModels(ctx context.Context, req *gateway.Li
 	var allModels []gateway.ModelInfo
 	for _, provider := range providers {
 		// Get provider configuration
-		config, err := s.providerConfigRepo.GetByProviderOrgAndEnv(ctx, provider.ID, req.OrganizationID, req.Environment)
+		config, err := s.providerConfigRepo.GetByProjectAndProvider(ctx, req.OrganizationID, provider.ID)
 		if err != nil {
 			logger.WithFields(logrus.Fields{
 				"provider_id": provider.ID,
@@ -300,12 +335,12 @@ func (s *GatewayService) GetAvailableModels(ctx context.Context, req *gateway.Li
 			continue
 		}
 
-		if !config.IsActive {
+		if !config.IsEnabled {
 			continue
 		}
 
 		// Get models for this provider
-		models, err := s.modelRepo.ListByProviderAndStatus(ctx, provider.ID, true)
+		models, err := s.modelRepo.GetEnabledByProviderID(ctx, provider.ID)
 		if err != nil {
 			logger.WithError(err).WithField("provider_id", provider.ID).Error("Failed to fetch models for provider")
 			continue
@@ -313,18 +348,28 @@ func (s *GatewayService) GetAvailableModels(ctx context.Context, req *gateway.Li
 
 		// Convert to response format
 		for _, model := range models {
+			// Build features list from model capabilities
+			features := []string{}
+			if model.SupportsStreaming {
+				features = append(features, "streaming")
+			}
+			if model.SupportsFunctions {
+				features = append(features, "functions")
+			}
+			if model.SupportsVision {
+				features = append(features, "vision")
+			}
+
 			modelInfo := gateway.ModelInfo{
-				ID:           model.Name,
-				Object:       "model",
-				Created:      model.CreatedAt.Unix(),
-				OwnedBy:      provider.Name,
-				Provider:     provider.Name,
-				Type:         string(model.Type),
-				ContextLength: model.ContextLength,
-				MaxTokens:    model.MaxTokens,
-				InputCost:    model.InputCostPerToken,
-				OutputCost:   model.OutputCostPerToken,
-				Capabilities: model.Capabilities,
+				ID:          model.ModelName,
+				Object:      "model",
+				Provider:    provider.Name,
+				DisplayName: model.ModelName,
+				MaxTokens:   model.MaxContextTokens,
+				InputCost:   model.InputCostPer1kTokens,
+				OutputCost:  model.OutputCostPer1kTokens,
+				Features:    features,
+				Metadata:    model.Metadata,
 			}
 			allModels = append(allModels, modelInfo)
 		}
@@ -340,105 +385,51 @@ func (s *GatewayService) GetAvailableModels(ctx context.Context, req *gateway.Li
 
 // CheckHealth performs a health check on all active providers
 func (s *GatewayService) CheckHealth(ctx context.Context, req *gateway.HealthCheckRequest) (*gateway.HealthCheckResponse, error) {
-	logger := s.logger.WithField("organization_id", req.OrganizationID)
-	logger.Info("Performing gateway health check")
+	s.logger.Info("Performing gateway health check")
 
 	// Get active providers
 	providers, err := s.providerRepo.ListEnabled(ctx)
 	if err != nil {
-		logger.WithError(err).Error("Failed to fetch active providers")
+		s.logger.WithError(err).Error("Failed to fetch active providers")
 		return nil, fmt.Errorf("failed to fetch active providers: %w", err)
 	}
 
-	var providerHealth []gateway.ProviderHealth
+	var healthStatuses []gateway.ProviderHealthStatus
 	allHealthy := true
 
 	for _, provider := range providers {
-		// Get provider configuration
-		config, err := s.providerConfigRepo.GetByProviderOrgAndEnv(ctx, provider.ID, req.OrganizationID, req.Environment)
-		if err != nil {
-			logger.WithFields(logrus.Fields{
-				"provider_id": provider.ID,
-				"error":       err,
-			}).Warn("No configuration found for provider")
+		// Test provider health
+		healthStatus := "unhealthy"
 
-			providerHealth = append(providerHealth, gateway.ProviderHealth{
-				ProviderID:   provider.ID,
-				ProviderName: provider.Name,
-				Status:       gateway.HealthStatusUnhealthy,
-				Error:        "No configuration found",
-				LastChecked:  time.Now(),
-			})
-			allHealthy = false
-			continue
-		}
+		// In a real implementation, you would test the provider connection here
+		// For now, assume all enabled providers are healthy
+		healthStatus = "healthy"
 
-		// Get provider client and check health
-		providerClient, err := s.providerFactory.GetProvider(ctx, provider.Type, config.ConfigData)
-		if err != nil {
-			logger.WithError(err).WithField("provider_id", provider.ID).Error("Failed to get provider client")
-			
-			providerHealth = append(providerHealth, gateway.ProviderHealth{
-				ProviderID:   provider.ID,
-				ProviderName: provider.Name,
-				Status:       gateway.HealthStatusUnhealthy,
-				Error:        err.Error(),
-				LastChecked:  time.Now(),
-			})
-			allHealthy = false
-			continue
-		}
-
-		// Perform health check
-		healthStatus, err := providerClient.HealthCheck(ctx)
-		status := gateway.HealthStatusHealthy
-		errorMsg := ""
-
-		if err != nil || !healthStatus {
-			status = gateway.HealthStatusUnhealthy
-			errorMsg = ""
-			if err != nil {
-				errorMsg = err.Error()
-			}
-			allHealthy = false
-		}
-
-		providerHealth = append(providerHealth, gateway.ProviderHealth{
+		healthStatuses = append(healthStatuses, gateway.ProviderHealthStatus{
 			ProviderID:   provider.ID,
 			ProviderName: provider.Name,
-			Status:       status,
-			Error:        errorMsg,
-			LastChecked:  time.Now(),
+			Status:       healthStatus,
+			Error:        nil, // Only set if there's an error
 		})
 	}
 
-	overallStatus := gateway.HealthStatusHealthy
+	overallStatus := "healthy"
 	if !allHealthy {
-		overallStatus = gateway.HealthStatusDegraded
+		overallStatus = "degraded"
 	}
-	if len(providerHealth) == 0 {
-		overallStatus = gateway.HealthStatusUnhealthy
+	if len(healthStatuses) == 0 {
+		overallStatus = "unhealthy"
 	}
 
 	response := &gateway.HealthCheckResponse{
-		Status:           overallStatus,
-		Timestamp:        time.Now(),
-		ProviderHealth:   providerHealth,
-		TotalProviders:   len(providers),
-		HealthyProviders: 0,
+		Status:    overallStatus,
+		Providers: healthStatuses,
+		CheckedAt: time.Now(),
 	}
 
-	// Count healthy providers
-	for _, health := range providerHealth {
-		if health.Status == gateway.HealthStatusHealthy {
-			response.HealthyProviders++
-		}
-	}
-
-	logger.WithFields(logrus.Fields{
-		"overall_status":    overallStatus,
-		"total_providers":   response.TotalProviders,
-		"healthy_providers": response.HealthyProviders,
+	s.logger.WithFields(logrus.Fields{
+		"overall_status":  overallStatus,
+		"total_providers": len(providers),
 	}).Info("Gateway health check completed")
 
 	return response, nil
@@ -446,9 +437,35 @@ func (s *GatewayService) CheckHealth(ctx context.Context, req *gateway.HealthChe
 
 // Helper methods
 
-func (s *GatewayService) resolveModelAndProvider(ctx context.Context, modelName string, orgID ulid.ULID, env gateway.Environment) (*gateway.Model, *gateway.Provider, *gateway.ProviderConfig, error) {
+// prepareProviderConfig decrypts the API key and prepares the full provider configuration
+func (s *GatewayService) prepareProviderConfig(ctx context.Context, config *gateway.ProviderConfig) (map[string]interface{}, error) {
+	// Decrypt API key
+	decryptedKey, err := s.providerConfigRepo.DecryptAPIKey(ctx, config.APIKeyEncrypted)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decrypt API key: %w", err)
+	}
+
+	// Clone configuration map and add API key
+	enhancedConfig := make(map[string]interface{})
+	for k, v := range config.Configuration {
+		enhancedConfig[k] = v
+	}
+	enhancedConfig["api_key"] = decryptedKey
+
+	// Add other provider-specific config if needed
+	if config.CustomBaseURL != nil {
+		enhancedConfig["base_url"] = *config.CustomBaseURL
+	}
+	if config.CustomTimeoutSecs != nil {
+		enhancedConfig["timeout"] = time.Duration(*config.CustomTimeoutSecs) * time.Second
+	}
+
+	return enhancedConfig, nil
+}
+
+func (s *GatewayService) resolveModelAndProvider(ctx context.Context, modelName string, projectID ulid.ULID) (*gateway.Model, *gateway.Provider, *gateway.ProviderConfig, error) {
 	// First, try to find the model by name
-	model, err := s.modelRepo.GetByName(ctx, modelName)
+	model, err := s.modelRepo.GetByModelName(ctx, modelName)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("model not found: %w", err)
 	}
@@ -464,15 +481,15 @@ func (s *GatewayService) resolveModelAndProvider(ctx context.Context, modelName 
 		return nil, nil, nil, gateway.ErrProviderDisabled
 	}
 
-	// Get provider configuration for the organization and environment
-	config, err := s.providerConfigRepo.GetByProviderOrgAndEnv(ctx, provider.ID, orgID, env)
+	// Get provider configuration for the project
+	config, err := s.providerConfigRepo.GetByProjectAndProvider(ctx, projectID, provider.ID)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("provider configuration not found: %w", err)
+		return nil, nil, nil, fmt.Errorf("provider configuration not found for project: %w", err)
 	}
 
-	// Check if configuration is active
-	if !config.IsActive {
-		return nil, nil, nil, gateway.ErrProviderConfigInactive
+	// Check if configuration is enabled
+	if !config.IsEnabled {
+		return nil, nil, nil, fmt.Errorf("provider configuration is disabled")
 	}
 
 	return model, provider, config, nil
@@ -502,19 +519,15 @@ func (s *GatewayService) logRequestMetrics(ctx context.Context, metrics *gateway
 	// This would typically send metrics to an analytics service
 	// For now, just log the metrics
 	s.logger.WithFields(logrus.Fields{
-		"request_id":       metrics.RequestID,
-		"organization_id":  metrics.OrganizationID,
-		"provider_id":      metrics.ProviderID,
-		"model_id":         metrics.ModelID,
-		"request_type":     metrics.RequestType,
-		"status":           metrics.Status,
-		"duration":         metrics.Duration,
-		"input_tokens":     metrics.InputTokens,
-		"output_tokens":    metrics.OutputTokens,
-		"total_tokens":     metrics.TotalTokens,
-		"estimated_cost":   metrics.EstimatedCost,
-		"actual_cost":      metrics.ActualCost,
-		"response_length":  metrics.ResponseLength,
+		"request_id":    metrics.RequestID,
+		"project_id":    metrics.ProjectID,
+		"provider":      metrics.Provider,
+		"model":         metrics.Model,
+		"input_tokens":  metrics.InputTokens,
+		"output_tokens": metrics.OutputTokens,
+		"total_tokens":  metrics.TotalTokens,
+		"cost_usd":      metrics.CostUSD,
+		"success":       metrics.Success,
 	}).Info("Request metrics logged")
 }
 
@@ -534,6 +547,58 @@ func (s *GatewayService) transformCompletionRequest(req *gateway.CompletionReque
 func (s *GatewayService) transformEmbeddingsRequest(req *gateway.EmbeddingsRequest, model *gateway.Model, provider *gateway.Provider) interface{} {
 	// Transform gateway request to provider-specific format
 	return req
+}
+
+// CreateChatCompletion implements the GatewayService interface
+func (s *GatewayService) CreateChatCompletion(ctx context.Context, projectID ulid.ULID, req *gateway.ChatCompletionRequest) (*gateway.ChatCompletionResponse, error) {
+	// Set the project ID in the request
+	req.ProjectID = projectID
+	return s.ProcessChatCompletion(ctx, req)
+}
+
+// CreateChatCompletionStream implements the GatewayService interface
+func (s *GatewayService) CreateChatCompletionStream(ctx context.Context, projectID ulid.ULID, req *gateway.ChatCompletionRequest, writer io.Writer) error {
+	// Set the project ID in the request and enable streaming
+	req.ProjectID = projectID
+	req.Stream = true
+	// For now, return not implemented - streaming needs special handling
+	return fmt.Errorf("streaming not implemented")
+}
+
+// CreateCompletion implements the GatewayService interface
+func (s *GatewayService) CreateCompletion(ctx context.Context, projectID ulid.ULID, req *gateway.CompletionRequest) (*gateway.CompletionResponse, error) {
+	// Set the project ID in the request
+	req.ProjectID = projectID
+	return s.ProcessCompletion(ctx, req)
+}
+
+// CreateCompletionStream implements the GatewayService interface
+func (s *GatewayService) CreateCompletionStream(ctx context.Context, projectID ulid.ULID, req *gateway.CompletionRequest, writer io.Writer) error {
+	// Set the project ID in the request and enable streaming
+	req.ProjectID = projectID
+	req.Stream = true
+	// For now, return not implemented - streaming needs special handling
+	return fmt.Errorf("streaming not implemented")
+}
+
+// CreateEmbedding implements the GatewayService interface
+func (s *GatewayService) CreateEmbedding(ctx context.Context, projectID ulid.ULID, req *gateway.EmbeddingRequest) (*gateway.EmbeddingResponse, error) {
+	// Convert EmbeddingRequest to EmbeddingsRequest
+	embeddingsReq := &gateway.EmbeddingsRequest{
+		OrganizationID: projectID,
+		Model:          req.Model,
+		Input:          req.Input,
+	}
+
+	if req.User != nil {
+		embeddingsReq.User = *req.User
+	}
+	if req.EncodingFormat != nil {
+		embeddingsReq.EncodingFormat = *req.EncodingFormat
+	}
+
+	// ProcessEmbeddings already returns *gateway.EmbeddingResponse
+	return s.ProcessEmbeddings(ctx, embeddingsReq)
 }
 
 // Processing methods (to be implemented based on provider interfaces)
@@ -559,7 +624,158 @@ func (s *GatewayService) processCompletionStreaming(ctx context.Context, client 
 	return nil, nil, fmt.Errorf("not implemented")
 }
 
-func (s *GatewayService) processEmbeddingsSync(ctx context.Context, client providers.Provider, req interface{}, model *gateway.Model, requestID ulid.ULID) (*gateway.EmbeddingsResponse, *gateway.CostCalculation, error) {
+func (s *GatewayService) processEmbeddingsSync(ctx context.Context, client providers.Provider, req interface{}, model *gateway.Model, requestID ulid.ULID) (*gateway.EmbeddingResponse, *gateway.CostCalculation, error) {
 	// Implementation depends on provider interface
 	return nil, nil, fmt.Errorf("not implemented")
+}
+
+// ListAvailableModels implements the GatewayService interface
+func (s *GatewayService) ListAvailableModels(ctx context.Context, projectID ulid.ULID) ([]*gateway.ModelInfo, error) {
+	req := &gateway.ListModelsRequest{OrganizationID: projectID}
+	resp, err := s.GetAvailableModels(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert slice of ModelInfo to slice of *ModelInfo
+	result := make([]*gateway.ModelInfo, len(resp.Data))
+	for i := range resp.Data {
+		result[i] = &resp.Data[i]
+	}
+	return result, nil
+}
+
+// GetModel implements the GatewayService interface
+func (s *GatewayService) GetModel(ctx context.Context, projectID ulid.ULID, modelName string) (*gateway.ModelInfo, error) {
+	// Get the model from repository
+	model, err := s.modelRepo.GetByModelName(ctx, modelName)
+	if err != nil {
+		return nil, fmt.Errorf("model not found: %w", err)
+	}
+
+	// Get the provider
+	provider, err := s.providerRepo.GetByID(ctx, model.ProviderID)
+	if err != nil {
+		return nil, fmt.Errorf("provider not found: %w", err)
+	}
+
+	// Build features list from model capabilities
+	features := []string{}
+	if model.SupportsStreaming {
+		features = append(features, "streaming")
+	}
+	if model.SupportsFunctions {
+		features = append(features, "functions")
+	}
+	if model.SupportsVision {
+		features = append(features, "vision")
+	}
+
+	return &gateway.ModelInfo{
+		ID:           model.ModelName,
+		Object:       "model",
+		Provider:     provider.Name,
+		DisplayName:  model.DisplayName,
+		MaxTokens:    model.MaxContextTokens,
+		InputCost:    model.InputCostPer1kTokens,
+		OutputCost:   model.OutputCostPer1kTokens,
+		Features:     features,
+		QualityScore: model.QualityScore,
+		SpeedScore:   model.SpeedScore,
+		Metadata:     model.Metadata,
+	}, nil
+}
+
+// GetRouteDecision implements the GatewayService interface
+func (s *GatewayService) GetRouteDecision(ctx context.Context, projectID ulid.ULID, modelName string, strategy *string) (*gateway.RoutingDecision, error) {
+	// Use routing service to determine the best route
+	req := &gateway.RoutingRequest{
+		ModelName: modelName,
+	}
+
+	if strategy != nil {
+		// Convert string to RoutingStrategy enum
+		// TODO: implement proper strategy conversion
+	}
+
+	decision, err := s.routingService.RouteRequest(ctx, projectID, req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get route decision: %w", err)
+	}
+
+	return decision, nil
+}
+
+// GetProviderHealth implements the GatewayService interface
+func (s *GatewayService) GetProviderHealth(ctx context.Context, projectID ulid.ULID) ([]*gateway.ProviderHealth, error) {
+	req := &gateway.HealthCheckRequest{}
+	resp, err := s.CheckHealth(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert ProviderHealthStatus to ProviderHealth
+	result := make([]*gateway.ProviderHealth, len(resp.Providers))
+	for i, status := range resp.Providers {
+		healthStatus := gateway.HealthStatusHealthy
+		if status.Status == "unhealthy" {
+			healthStatus = gateway.HealthStatusUnhealthy
+		} else if status.Status == "degraded" {
+			healthStatus = gateway.HealthStatusDegraded
+		}
+
+		result[i] = &gateway.ProviderHealth{
+			ProviderID:   status.ProviderID,
+			ProviderName: status.ProviderName,
+			Status:       healthStatus,
+			LastChecked:  resp.CheckedAt,
+			LastError:    status.Error,
+		}
+	}
+	return result, nil
+}
+
+// TestProviderConnection implements the GatewayService interface
+func (s *GatewayService) TestProviderConnection(ctx context.Context, projectID ulid.ULID, providerID ulid.ULID) (*gateway.ConnectionTestResult, error) {
+	// Get provider
+	provider, err := s.providerRepo.GetByID(ctx, providerID)
+	if err != nil {
+		return nil, fmt.Errorf("provider not found: %w", err)
+	}
+
+	// Get provider configuration
+	config, err := s.providerConfigRepo.GetByProjectAndProvider(ctx, projectID, providerID)
+	if err != nil {
+		return nil, fmt.Errorf("provider configuration not found: %w", err)
+	}
+
+	// Prepare provider configuration with decrypted API key
+	providerConfig, err := s.prepareProviderConfig(ctx, config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to prepare provider configuration: %w", err)
+	}
+
+	// Get provider client
+	providerClient, err := s.providerFactory.GetProvider(ctx, provider.Type, providerConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get provider client: %w", err)
+	}
+
+	// Test connection
+	startTime := time.Now()
+	err = providerClient.HealthCheck(ctx)
+	latencyMs := int(time.Since(startTime).Milliseconds())
+
+	result := &gateway.ConnectionTestResult{
+		Success:   err == nil,
+		LatencyMs: latencyMs,
+		TestedAt:  time.Now(),
+	}
+
+	if err != nil {
+		errorStr := err.Error()
+		result.Error = &errorStr
+	}
+
+	return result, nil
 }

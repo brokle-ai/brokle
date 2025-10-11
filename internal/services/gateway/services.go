@@ -19,7 +19,7 @@ type Services struct {
 // Dependencies holds the dependencies required to create gateway services
 type Dependencies struct {
 	DB              *gorm.DB
-	ProviderFactory providers.Factory
+	ProviderFactory providers.ProviderFactory
 	Logger          *logrus.Logger
 }
 
@@ -64,7 +64,7 @@ func NewServices(deps *Dependencies) *Services {
 // NewGatewayServices creates gateway-specific services for dependency injection
 func NewGatewayServices(
 	db *gorm.DB,
-	providerFactory providers.Factory,
+	providerFactory providers.ProviderFactory,
 	logger *logrus.Logger,
 ) (
 	gateway.GatewayService,
@@ -117,7 +117,7 @@ func DefaultServiceConfig() *ServiceConfig {
 		EnableProviderComparison:   true,
 		
 		// Routing settings
-		DefaultRoutingStrategy:     gateway.RoutingStrategyCost,
+		DefaultRoutingStrategy:     gateway.RoutingStrategyCostOptimized,
 		EnableFallbackRouting:      true,
 		EnableLoadBalancing:        true,
 		EnableABTesting:            false,

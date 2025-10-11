@@ -12,6 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"brokle/internal/config"
+	_ "brokle/pkg/response" // Import for Swagger documentation types
 )
 
 // Handler handles WebSocket connections

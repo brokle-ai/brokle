@@ -258,15 +258,15 @@ func createTestChatRequest() *gateway.ChatCompletionRequest {
 
 func createTestRoutingDecision() *gateway.RoutingDecision {
 	return &gateway.RoutingDecision{
-		ProviderID:   ulid.New(),
-		ProviderName: "openai",
-		ModelID:      ulid.New(),
-		ModelName:    "gpt-3.5-turbo",
-		Strategy:     gateway.RoutingStrategyCostOptimized,
-		Reason:       "Lowest cost provider available",
-		Confidence:   0.95,
+		ProviderID:    ulid.New(),
+		ProviderName:  "openai",
+		ModelID:       ulid.New(),
+		ModelName:     "gpt-3.5-turbo",
+		Strategy:      gateway.RoutingStrategyCostOptimized,
+		Reason:        "Lowest cost provider available",
+		Confidence:    0.95,
 		EstimatedCost: 0.002,
-		DecisionTime: time.Now(),
+		DecisionTime:  time.Now(),
 	}
 }
 
@@ -292,12 +292,12 @@ func TestGatewayService_CreateChatCompletion(t *testing.T) {
 					ModelName: "gpt-3.5-turbo",
 				}
 				routingService.On("RouteRequest", mock.Anything, mock.Anything, routingRequest).Return(decision, nil)
-				
+
 				// Setup provider response
 				response := &gateway.ChatCompletionResponse{
-					ID:      "chatcmpl-123",
-					Object:  "chat.completion",
-					Model:   "gpt-3.5-turbo",
+					ID:     "chatcmpl-123",
+					Object: "chat.completion",
+					Model:  "gpt-3.5-turbo",
 					Choices: []gateway.ChatChoice{
 						{
 							Index: 0,
@@ -315,10 +315,10 @@ func TestGatewayService_CreateChatCompletion(t *testing.T) {
 					},
 				}
 				providerClient.On("CreateChatCompletion", mock.Anything, mock.Anything).Return(response, nil)
-				
+
 				// Setup cost calculation
 				costService.On("CalculateRequestCost", decision.ModelID, 10, 15).Return(0.002, nil)
-				
+
 				// Setup cost tracking
 				costService.On("TrackRequestCost", mock.Anything, mock.AnythingOfType("*gateway.RequestMetrics")).Return(nil)
 			},
@@ -347,7 +347,7 @@ func TestGatewayService_CreateChatCompletion(t *testing.T) {
 					ModelName: "gpt-3.5-turbo",
 				}
 				routingService.On("RouteRequest", mock.Anything, mock.Anything, routingRequest).Return(decision, nil)
-				
+
 				providerClient.On("CreateChatCompletion", mock.Anything, mock.Anything).Return(nil, errors.New("provider API error"))
 			},
 			expectedError: "failed to create chat completion",
@@ -385,7 +385,7 @@ func TestGatewayService_CreateChatCompletion(t *testing.T) {
 
 			// Execute test
 			ctx := context.Background()
-			response, err := service.CreateChatCompletion(ctx, tt.projectID, tt.environment, tt.request)
+			response, err := service.CreateChatCompletion(ctx, tt.projectID, tt.request)
 
 			// Verify results
 			if tt.expectedError != "" {
@@ -425,7 +425,7 @@ func TestGatewayService_CreateChatCompletionStream(t *testing.T) {
 		ModelName: "gpt-3.5-turbo",
 	}
 	routingService.On("RouteRequest", mock.Anything, mock.Anything, routingRequest).Return(decision, nil)
-	
+
 	var writer strings.Builder
 	providerClient.On("CreateChatCompletionStream", mock.Anything, mock.Anything, mock.AnythingOfType("*strings.Builder")).Return(nil)
 
@@ -452,7 +452,7 @@ func TestGatewayService_CreateChatCompletionStream(t *testing.T) {
 	request := createTestChatRequest()
 	request.Stream = boolPtr(true)
 
-	err := service.CreateChatCompletionStream(ctx, ulid.New(), "production", request, &writer)
+	err := service.CreateChatCompletionStream(ctx, ulid.New(), request, &writer)
 
 	// Verify results
 	assert.NoError(t, err)
@@ -603,7 +603,7 @@ func BenchmarkGatewayService_CreateChatCompletion(b *testing.B) {
 
 	decision := createTestRoutingDecision()
 	routingService.On("RouteRequest", mock.Anything, mock.Anything, mock.Anything).Return(decision, nil)
-	
+
 	response := &gateway.ChatCompletionResponse{
 		ID:     "chatcmpl-123",
 		Object: "chat.completion",
@@ -650,7 +650,7 @@ func BenchmarkGatewayService_CreateChatCompletion(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := service.CreateChatCompletion(ctx, projectID, "production", request)
+		_, err := service.CreateChatCompletion(ctx, projectID, request)
 		if err != nil {
 			b.Fatal(err)
 		}
