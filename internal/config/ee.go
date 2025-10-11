@@ -23,7 +23,7 @@ type LicenseConfig struct {
 	Key           string    `mapstructure:"key"`
 	Type          string    `mapstructure:"type"`          // free, pro, business, enterprise
 	ValidUntil    time.Time `mapstructure:"valid_until"`
-	MaxRequests   int64     `mapstructure:"max_requests"`
+	MaxRequests   int       `mapstructure:"max_requests"` // Changed from int64 to int for consistency with OSS
 	MaxUsers      int       `mapstructure:"max_users"`
 	MaxProjects   int       `mapstructure:"max_projects"`
 	Features      []string  `mapstructure:"features"`      // Enabled enterprise features

@@ -48,6 +48,9 @@ type Pagination struct {
 	HasPrev   bool  `json:"has_prev" example:"false" description:"Whether there are previous pages"`
 }
 
+// SuccessResponse and ErrorResponse are defined in swagger_models.go
+// as concrete types for proper Swagger documentation generation
+
 func Success(c *gin.Context, data interface{}) {
 	c.JSON(http.StatusOK, APIResponse{
 		Success: true,
@@ -226,6 +229,21 @@ func ServiceUnavailable(c *gin.Context, message string) {
 		message = "Service temporarily unavailable"
 	}
 	ErrorWithStatus(c, http.StatusServiceUnavailable, string(appErrors.ServiceUnavailable), message, "")
+}
+
+// ErrorWithCode creates an error response using predefined error codes
+func ErrorWithCode(c *gin.Context, statusCode int, code string, details string) {
+	appErr := appErrors.NewErrorWithCode(code, details)
+	c.JSON(statusCode, APIResponse{
+		Success: false,
+		Error: &APIError{
+			Code:    code,
+			Message: appErr.Message,
+			Details: details,
+			Type:    string(appErr.Type),
+		},
+		Meta: getMeta(c),
+	})
 }
 
 func getMeta(c *gin.Context) *Meta {

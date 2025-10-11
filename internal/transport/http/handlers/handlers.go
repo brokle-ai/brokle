@@ -5,6 +5,7 @@ import (
 
 	"brokle/internal/config"
 	"brokle/internal/core/domain/auth"
+	"brokle/internal/core/domain/gateway"
 	"brokle/internal/core/domain/organization"
 	"brokle/internal/core/domain/user"
 	obsServices "brokle/internal/services/observability"
@@ -63,6 +64,10 @@ func NewHandlers(
 	permissionService auth.PermissionService,
 	organizationMemberService auth.OrganizationMemberService,
 	observabilityServices *obsServices.ServiceRegistry,
+	// Gateway services
+	gatewayService gateway.GatewayService,
+	routingService gateway.RoutingService,
+	costService gateway.CostService,
 	// Add other service dependencies as they're implemented
 ) *Handlers {
 	return &Handlers{
@@ -76,7 +81,7 @@ func NewHandlers(
 		Analytics:    analytics.NewHandler(cfg, logger),
 		Logs:         logs.NewHandler(cfg, logger),
 		Billing:      billing.NewHandler(cfg, logger),
-		AI:           ai.NewHandler(cfg, logger),
+		AI:           ai.NewHandler(cfg, logger, gatewayService, routingService, costService),
 		WebSocket:    websocket.NewHandler(cfg, logger),
 		Admin:         admin.NewTokenAdminHandler(authService, blacklistedTokens, logger),
 		RBAC:          rbac.NewHandler(cfg, logger, roleService, permissionService, organizationMemberService),

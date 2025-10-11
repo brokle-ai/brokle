@@ -23,7 +23,6 @@ type Config struct {
 	Database      DatabaseConfig   `mapstructure:"database"`
 	ClickHouse    ClickHouseConfig `mapstructure:"clickhouse"`
 	Redis         RedisConfig      `mapstructure:"redis"`
-	JWT           JWTConfig        `mapstructure:"jwt"`
 	Auth          AuthConfig       `mapstructure:"auth"`
 	Logging       LoggingConfig    `mapstructure:"logging"`
 	External      ExternalConfig   `mapstructure:"external"`
@@ -105,17 +104,6 @@ type RedisConfig struct {
 	MinIdleConns int           `mapstructure:"min_idle_conns"`
 	IdleTimeout  time.Duration `mapstructure:"idle_timeout"`
 	MaxRetries   int           `mapstructure:"max_retries"`
-}
-
-// JWTConfig contains JWT token configuration.
-type JWTConfig struct {
-	PrivateKey      string        `mapstructure:"private_key"`
-	PublicKey       string        `mapstructure:"public_key"`
-	Issuer          string        `mapstructure:"issuer"`
-	AccessTokenTTL  time.Duration `mapstructure:"access_token_ttl"`
-	RefreshTokenTTL time.Duration `mapstructure:"refresh_token_ttl"`
-	APIKeyTokenTTL  time.Duration `mapstructure:"api_key_token_ttl"`
-	Algorithm       string        `mapstructure:"algorithm"`
 }
 
 // LoggingConfig contains logging configuration.
@@ -231,10 +219,6 @@ func (c *Config) Validate() error {
 
 	if err := c.Redis.Validate(); err != nil {
 		return fmt.Errorf("redis config validation failed: %w", err)
-	}
-
-	if err := c.JWT.Validate(); err != nil {
-		return fmt.Errorf("jwt config validation failed: %w", err)
 	}
 
 	if err := c.Auth.Validate(); err != nil {
@@ -383,43 +367,6 @@ func (rc *RedisConfig) Validate() error {
 
 	if rc.PoolSize < 0 {
 		return fmt.Errorf("pool_size cannot be negative")
-	}
-
-	return nil
-}
-
-// Validate validates JWT configuration.
-func (jc *JWTConfig) Validate() error {
-	if jc.PrivateKey == "" {
-		return fmt.Errorf("private_key is required")
-	}
-
-	if jc.PublicKey == "" {
-		return fmt.Errorf("public_key is required")
-	}
-
-	if jc.Issuer == "" {
-		return fmt.Errorf("issuer is required")
-	}
-
-	if jc.AccessTokenTTL <= 0 {
-		return fmt.Errorf("access_token_ttl must be positive")
-	}
-
-	if jc.RefreshTokenTTL <= 0 {
-		return fmt.Errorf("refresh_token_ttl must be positive")
-	}
-
-	validAlgorithms := []string{"RS256", "RS384", "RS512", "HS256", "HS384", "HS512"}
-	isValid := false
-	for _, alg := range validAlgorithms {
-		if jc.Algorithm == alg {
-			isValid = true
-			break
-		}
-	}
-	if !isValid {
-		return fmt.Errorf("invalid algorithm: %s (must be one of %v)", jc.Algorithm, validAlgorithms)
 	}
 
 	return nil
@@ -655,12 +602,7 @@ func Load() (*Config, error) {
 	viper.BindEnv("external.stripe.publishable_key", "STRIPE_PUBLISHABLE_KEY")
 	viper.BindEnv("external.stripe.webhook_secret", "STRIPE_WEBHOOK_SECRET")
 
-	// JWT keys (standard names)
-	viper.BindEnv("jwt.private_key", "JWT_PRIVATE_KEY")
-	viper.BindEnv("jwt.public_key", "JWT_PUBLIC_KEY")
-	viper.BindEnv("jwt.secret", "JWT_SECRET")
-
-	// Auth configuration (new flexible JWT configuration)
+	// Auth configuration (flexible JWT configuration - HS256 or RS256)
 	viper.BindEnv("auth.access_token_ttl", "ACCESS_TOKEN_TTL")
 	viper.BindEnv("auth.refresh_token_ttl", "REFRESH_TOKEN_TTL")
 	viper.BindEnv("auth.token_rotation_enabled", "TOKEN_ROTATION_ENABLED")
@@ -797,16 +739,7 @@ func setDefaults() {
 	viper.SetDefault("redis.idle_timeout", "5m")
 	viper.SetDefault("redis.max_retries", 3)
 
-	// JWT defaults
-	viper.SetDefault("jwt.issuer", "brokle-platform")
-	viper.SetDefault("jwt.access_token_ttl", "15m")
-	viper.SetDefault("jwt.refresh_token_ttl", "168h")  // 7 days
-	viper.SetDefault("jwt.api_key_token_ttl", "8760h") // 1 year
-	viper.SetDefault("jwt.algorithm", "RS256")
-	viper.SetDefault("jwt.private_key", "") // Must be set in environment
-	viper.SetDefault("jwt.public_key", "")  // Must be set in environment
-
-	// Auth defaults (new flexible JWT and rate limiting configuration)
+	// Auth defaults (flexible JWT and rate limiting configuration)
 	viper.SetDefault("auth.access_token_ttl", "15m")
 	viper.SetDefault("auth.refresh_token_ttl", "168h") // 7 days
 	viper.SetDefault("auth.token_rotation_enabled", true)

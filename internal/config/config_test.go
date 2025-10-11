@@ -91,11 +91,15 @@ func TestConfig_BusinessTier(t *testing.T) {
 }
 
 func TestConfig_LoadDefaults(t *testing.T) {
-	// Temporarily clear environment variables
+	// Temporarily save environment variables
 	oldEnv := os.Getenv("BROKLE_ENTERPRISE_LICENSE_TYPE")
-	oldPrivateKey := os.Getenv("BROKLE_JWT_PRIVATE_KEY")
-	oldPublicKey := os.Getenv("BROKLE_JWT_PUBLIC_KEY")
-	
+	oldPrivateKey := os.Getenv("JWT_PRIVATE_KEY")
+	oldPublicKey := os.Getenv("JWT_PUBLIC_KEY")
+	oldJWTSecret := os.Getenv("JWT_SECRET")
+	oldDBURL := os.Getenv("DATABASE_URL")
+	oldClickHouseURL := os.Getenv("CLICKHOUSE_URL")
+	oldRedisURL := os.Getenv("REDIS_URL")
+
 	defer func() {
 		if oldEnv != "" {
 			os.Setenv("BROKLE_ENTERPRISE_LICENSE_TYPE", oldEnv)
@@ -103,23 +107,49 @@ func TestConfig_LoadDefaults(t *testing.T) {
 			os.Unsetenv("BROKLE_ENTERPRISE_LICENSE_TYPE")
 		}
 		if oldPrivateKey != "" {
-			os.Setenv("BROKLE_JWT_PRIVATE_KEY", oldPrivateKey)
+			os.Setenv("JWT_PRIVATE_KEY", oldPrivateKey)
 		} else {
-			os.Unsetenv("BROKLE_JWT_PRIVATE_KEY")
+			os.Unsetenv("JWT_PRIVATE_KEY")
 		}
 		if oldPublicKey != "" {
-			os.Setenv("BROKLE_JWT_PUBLIC_KEY", oldPublicKey)
+			os.Setenv("JWT_PUBLIC_KEY", oldPublicKey)
 		} else {
-			os.Unsetenv("BROKLE_JWT_PUBLIC_KEY")
+			os.Unsetenv("JWT_PUBLIC_KEY")
+		}
+		if oldJWTSecret != "" {
+			os.Setenv("JWT_SECRET", oldJWTSecret)
+		} else {
+			os.Unsetenv("JWT_SECRET")
+		}
+		if oldDBURL != "" {
+			os.Setenv("DATABASE_URL", oldDBURL)
+		} else {
+			os.Unsetenv("DATABASE_URL")
+		}
+		if oldClickHouseURL != "" {
+			os.Setenv("CLICKHOUSE_URL", oldClickHouseURL)
+		} else {
+			os.Unsetenv("CLICKHOUSE_URL")
+		}
+		if oldRedisURL != "" {
+			os.Setenv("REDIS_URL", oldRedisURL)
+		} else {
+			os.Unsetenv("REDIS_URL")
 		}
 	}()
 
 	// Clear the env vars for this test
 	os.Unsetenv("BROKLE_ENTERPRISE_LICENSE_TYPE")
-	
-	// Set dummy JWT keys to satisfy validation
-	os.Setenv("BROKLE_JWT_PRIVATE_KEY", "dummy-private-key")
-	os.Setenv("BROKLE_JWT_PUBLIC_KEY", "dummy-public-key")
+
+	// Set dummy JWT keys to satisfy validation (config binds JWT_PRIVATE_KEY, not BROKLE_JWT_PRIVATE_KEY)
+	os.Setenv("JWT_PRIVATE_KEY", "dummy-private-key-for-testing-purposes-only")
+	os.Setenv("JWT_PUBLIC_KEY", "dummy-public-key-for-testing-purposes-only")
+	os.Setenv("JWT_SECRET", "dummy-jwt-secret-for-testing-purposes-only-min-32-chars")
+
+	// Set database URLs to satisfy validation (URL-first approach)
+	os.Setenv("DATABASE_URL", "postgres://brokle:password@localhost:5432/brokle_test?sslmode=disable")
+	os.Setenv("CLICKHOUSE_URL", "clickhouse://default:password@localhost:9000/brokle_test")
+	os.Setenv("REDIS_URL", "redis://localhost:6379/0")
 
 	// Load configuration (should use defaults)
 	cfg, err := Load()
@@ -127,7 +157,7 @@ func TestConfig_LoadDefaults(t *testing.T) {
 
 	// Verify default values
 	assert.Equal(t, "free", cfg.Enterprise.License.Type)
-	assert.Equal(t, int64(10000), cfg.Enterprise.License.MaxRequests)
+	assert.Equal(t, 10000, cfg.Enterprise.License.MaxRequests) // int type consistent across OSS and Enterprise
 	assert.Equal(t, 5, cfg.Enterprise.License.MaxUsers)
 	assert.Equal(t, 2, cfg.Enterprise.License.MaxProjects)
 	assert.False(t, cfg.Enterprise.SSO.Enabled)

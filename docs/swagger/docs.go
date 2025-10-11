@@ -1482,7 +1482,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/billing.Invoice"
+                                                "$ref": "#/definitions/internal_transport_http_handlers_billing.Invoice"
                                             }
                                         },
                                         "meta": {
@@ -5019,7 +5019,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "Authentication"
+                    "SDK - Authentication"
                 ],
                 "summary": "Validate API key",
                 "parameters": [
@@ -7194,130 +7194,6 @@ const docTemplate = `{
                 }
             }
         },
-        "billing.Invoice": {
-            "type": "object",
-            "properties": {
-                "billing_period": {
-                    "$ref": "#/definitions/billing.BillingPeriod"
-                },
-                "currency": {
-                    "type": "string",
-                    "example": "USD"
-                },
-                "download_url": {
-                    "type": "string",
-                    "example": "https://invoices.brokle.ai/inv_1234567890.pdf"
-                },
-                "due_date": {
-                    "type": "string",
-                    "example": "2024-02-15T23:59:59Z"
-                },
-                "id": {
-                    "type": "string",
-                    "example": "inv_1234567890"
-                },
-                "invoice_number": {
-                    "type": "string",
-                    "example": "INV-2024-001"
-                },
-                "issue_date": {
-                    "type": "string",
-                    "example": "2024-02-01T00:00:00Z"
-                },
-                "line_items": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/billing.InvoiceLineItem"
-                    }
-                },
-                "organization_id": {
-                    "type": "string",
-                    "example": "org_1234567890"
-                },
-                "paid_date": {
-                    "type": "string",
-                    "example": "2024-02-10T14:30:00Z"
-                },
-                "payment_method": {
-                    "type": "string",
-                    "example": "credit_card"
-                },
-                "status": {
-                    "type": "string",
-                    "example": "paid"
-                },
-                "subtotal": {
-                    "type": "number",
-                    "example": 1250.75
-                },
-                "tax_amount": {
-                    "type": "number",
-                    "example": 125.08
-                },
-                "total": {
-                    "type": "number",
-                    "example": 1375.83
-                }
-            }
-        },
-        "billing.InvoiceLineItem": {
-            "type": "object",
-            "properties": {
-                "amount": {
-                    "type": "number",
-                    "example": 1250
-                },
-                "description": {
-                    "type": "string",
-                    "example": "OpenAI GPT-4 Usage"
-                },
-                "model": {
-                    "type": "string",
-                    "example": "gpt-4"
-                },
-                "provider": {
-                    "type": "string",
-                    "example": "openai"
-                },
-                "quantity": {
-                    "type": "integer",
-                    "example": 50000
-                },
-                "unit_price": {
-                    "type": "number",
-                    "example": 0.025
-                }
-            }
-        },
-        "billing.PaymentMethod": {
-            "type": "object",
-            "properties": {
-                "brand": {
-                    "type": "string",
-                    "example": "visa"
-                },
-                "default": {
-                    "type": "boolean",
-                    "example": true
-                },
-                "expiry": {
-                    "type": "string",
-                    "example": "12/2025"
-                },
-                "id": {
-                    "type": "string",
-                    "example": "pm_1234567890"
-                },
-                "last4": {
-                    "type": "string",
-                    "example": "1234"
-                },
-                "type": {
-                    "type": "string",
-                    "example": "credit_card"
-                }
-            }
-        },
         "billing.ProjectUsage": {
             "type": "object",
             "properties": {
@@ -7456,7 +7332,7 @@ const docTemplate = `{
                     "example": "org_1234567890"
                 },
                 "payment_method": {
-                    "$ref": "#/definitions/billing.PaymentMethod"
+                    "$ref": "#/definitions/internal_transport_http_handlers_billing.PaymentMethod"
                 },
                 "plan": {
                     "$ref": "#/definitions/billing.SubscriptionPlan"
@@ -7734,6 +7610,130 @@ const docTemplate = `{
                 "timezone": {
                     "type": "string",
                     "example": "UTC"
+                }
+            }
+        },
+        "internal_transport_http_handlers_billing.Invoice": {
+            "type": "object",
+            "properties": {
+                "billing_period": {
+                    "$ref": "#/definitions/billing.BillingPeriod"
+                },
+                "currency": {
+                    "type": "string",
+                    "example": "USD"
+                },
+                "download_url": {
+                    "type": "string",
+                    "example": "https://invoices.brokle.ai/inv_1234567890.pdf"
+                },
+                "due_date": {
+                    "type": "string",
+                    "example": "2024-02-15T23:59:59Z"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "inv_1234567890"
+                },
+                "invoice_number": {
+                    "type": "string",
+                    "example": "INV-2024-001"
+                },
+                "issue_date": {
+                    "type": "string",
+                    "example": "2024-02-01T00:00:00Z"
+                },
+                "line_items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_transport_http_handlers_billing.InvoiceLineItem"
+                    }
+                },
+                "organization_id": {
+                    "type": "string",
+                    "example": "org_1234567890"
+                },
+                "paid_date": {
+                    "type": "string",
+                    "example": "2024-02-10T14:30:00Z"
+                },
+                "payment_method": {
+                    "type": "string",
+                    "example": "credit_card"
+                },
+                "status": {
+                    "type": "string",
+                    "example": "paid"
+                },
+                "subtotal": {
+                    "type": "number",
+                    "example": 1250.75
+                },
+                "tax_amount": {
+                    "type": "number",
+                    "example": 125.08
+                },
+                "total": {
+                    "type": "number",
+                    "example": 1375.83
+                }
+            }
+        },
+        "internal_transport_http_handlers_billing.InvoiceLineItem": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "number",
+                    "example": 1250
+                },
+                "description": {
+                    "type": "string",
+                    "example": "OpenAI GPT-4 Usage"
+                },
+                "model": {
+                    "type": "string",
+                    "example": "gpt-4"
+                },
+                "provider": {
+                    "type": "string",
+                    "example": "openai"
+                },
+                "quantity": {
+                    "type": "integer",
+                    "example": 50000
+                },
+                "unit_price": {
+                    "type": "number",
+                    "example": 0.025
+                }
+            }
+        },
+        "internal_transport_http_handlers_billing.PaymentMethod": {
+            "type": "object",
+            "properties": {
+                "brand": {
+                    "type": "string",
+                    "example": "visa"
+                },
+                "default": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "expiry": {
+                    "type": "string",
+                    "example": "12/2025"
+                },
+                "id": {
+                    "type": "string",
+                    "example": "pm_1234567890"
+                },
+                "last4": {
+                    "type": "string",
+                    "example": "1234"
+                },
+                "type": {
+                    "type": "string",
+                    "example": "credit_card"
                 }
             }
         },

@@ -713,96 +713,6 @@ definitions:
         example: 2000000
         type: integer
     type: object
-  billing.Invoice:
-    properties:
-      billing_period:
-        $ref: '#/definitions/billing.BillingPeriod'
-      currency:
-        example: USD
-        type: string
-      download_url:
-        example: https://invoices.brokle.ai/inv_1234567890.pdf
-        type: string
-      due_date:
-        example: "2024-02-15T23:59:59Z"
-        type: string
-      id:
-        example: inv_1234567890
-        type: string
-      invoice_number:
-        example: INV-2024-001
-        type: string
-      issue_date:
-        example: "2024-02-01T00:00:00Z"
-        type: string
-      line_items:
-        items:
-          $ref: '#/definitions/billing.InvoiceLineItem'
-        type: array
-      organization_id:
-        example: org_1234567890
-        type: string
-      paid_date:
-        example: "2024-02-10T14:30:00Z"
-        type: string
-      payment_method:
-        example: credit_card
-        type: string
-      status:
-        example: paid
-        type: string
-      subtotal:
-        example: 1250.75
-        type: number
-      tax_amount:
-        example: 125.08
-        type: number
-      total:
-        example: 1375.83
-        type: number
-    type: object
-  billing.InvoiceLineItem:
-    properties:
-      amount:
-        example: 1250
-        type: number
-      description:
-        example: OpenAI GPT-4 Usage
-        type: string
-      model:
-        example: gpt-4
-        type: string
-      provider:
-        example: openai
-        type: string
-      quantity:
-        example: 50000
-        type: integer
-      unit_price:
-        example: 0.025
-        type: number
-    type: object
-  billing.PaymentMethod:
-    properties:
-      brand:
-        example: visa
-        type: string
-      default:
-        example: true
-        type: boolean
-      expiry:
-        example: 12/2025
-        type: string
-      id:
-        example: pm_1234567890
-        type: string
-      last4:
-        example: "1234"
-        type: string
-      type:
-        example: credit_card
-        type: string
-    type: object
   billing.ProjectUsage:
     properties:
       cost:
@@ -903,7 +813,7 @@ definitions:
         example: org_1234567890
         type: string
       payment_method:
-        $ref: '#/definitions/billing.PaymentMethod'
+        $ref: '#/definitions/internal_transport_http_handlers_billing.PaymentMethod'
       plan:
         $ref: '#/definitions/billing.SubscriptionPlan'
       status:
@@ -1103,6 +1013,96 @@ definitions:
     - first_name
     - last_name
     - password
+    type: object
+  internal_transport_http_handlers_billing.Invoice:
+    properties:
+      billing_period:
+        $ref: '#/definitions/billing.BillingPeriod'
+      currency:
+        example: USD
+        type: string
+      download_url:
+        example: https://invoices.brokle.ai/inv_1234567890.pdf
+        type: string
+      due_date:
+        example: "2024-02-15T23:59:59Z"
+        type: string
+      id:
+        example: inv_1234567890
+        type: string
+      invoice_number:
+        example: INV-2024-001
+        type: string
+      issue_date:
+        example: "2024-02-01T00:00:00Z"
+        type: string
+      line_items:
+        items:
+          $ref: '#/definitions/internal_transport_http_handlers_billing.InvoiceLineItem'
+        type: array
+      organization_id:
+        example: org_1234567890
+        type: string
+      paid_date:
+        example: "2024-02-10T14:30:00Z"
+        type: string
+      payment_method:
+        example: credit_card
+        type: string
+      status:
+        example: paid
+        type: string
+      subtotal:
+        example: 1250.75
+        type: number
+      tax_amount:
+        example: 125.08
+        type: number
+      total:
+        example: 1375.83
+        type: number
+    type: object
+  internal_transport_http_handlers_billing.InvoiceLineItem:
+    properties:
+      amount:
+        example: 1250
+        type: number
+      description:
+        example: OpenAI GPT-4 Usage
+        type: string
+      model:
+        example: gpt-4
+        type: string
+      provider:
+        example: openai
+        type: string
+      quantity:
+        example: 50000
+        type: integer
+      unit_price:
+        example: 0.025
+        type: number
+    type: object
+  internal_transport_http_handlers_billing.PaymentMethod:
+    properties:
+      brand:
+        example: visa
+        type: string
+      default:
+        example: true
+        type: boolean
+      expiry:
+        example: 12/2025
+        type: string
+      id:
+        example: pm_1234567890
+        type: string
+      last4:
+        example: "1234"
+        type: string
+      type:
+        example: credit_card
+        type: string
     type: object
   internal_transport_http_handlers_observability.TelemetryBatchRequest:
     description: High-performance batch request for telemetry events with ULID-based
@@ -3280,7 +3280,7 @@ paths:
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/billing.Invoice'
+                    $ref: '#/definitions/internal_transport_http_handlers_billing.Invoice'
                   type: array
                 meta:
                   allOf:
@@ -5565,7 +5565,7 @@ paths:
             $ref: '#/definitions/response.ErrorResponse'
       summary: Validate API key
       tags:
-      - Authentication
+      - SDK - Authentication
   /v1/cache/invalidate:
     post:
       consumes:
