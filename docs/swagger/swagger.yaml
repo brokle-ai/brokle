@@ -1106,12 +1106,10 @@ definitions:
     type: object
   internal_transport_http_handlers_observability.TelemetryBatchRequest:
     description: High-performance batch request for telemetry events with ULID-based
-      deduplication
+      deduplication (always enabled with 24h TTL)
     properties:
       async:
         type: boolean
-      deduplication:
-        $ref: '#/definitions/observability.DeduplicationConfigRequest'
       environment:
         example: production
         type: string
@@ -1533,21 +1531,6 @@ definitions:
         example: 100
         type: integer
     type: object
-  observability.DeduplicationConfigRequest:
-    description: Configuration for event deduplication behavior
-    properties:
-      enabled:
-        example: true
-        type: boolean
-      fail_on_duplicate:
-        type: boolean
-      ttl:
-        example: 3600
-        type: integer
-      use_redis_cache:
-        example: true
-        type: boolean
-    type: object
   observability.ListTracesResponse:
     properties:
       limit:
@@ -1652,34 +1635,6 @@ definitions:
       uptime:
         example: 24h0m0s
         type: string
-    type: object
-  observability.TelemetryBatchStatusResponse:
-    description: Status information for a telemetry batch
-    properties:
-      batch_id:
-        example: 01ABCDEFGHIJKLMNOPQRSTUVWXYZ
-        type: string
-      completed_at:
-        example: "2023-12-01T10:30:05Z"
-        type: string
-      created_at:
-        example: "2023-12-01T10:30:00Z"
-        type: string
-      failed_events:
-        example: 5
-        type: integer
-      processed_events:
-        example: 95
-        type: integer
-      processing_time_ms:
-        example: 1234
-        type: integer
-      status:
-        example: completed
-        type: string
-      total_events:
-        example: 100
-        type: integer
     type: object
   observability.TelemetryHealthResponse:
     description: Health status of telemetry processing system
@@ -5859,8 +5814,9 @@ paths:
     post:
       consumes:
       - application/json
-      description: Process a batch of telemetry events with ULID-based deduplication
-        and 5x performance optimization
+      description: Process a batch of telemetry events asynchronously with ULID-based
+        deduplication and Redis Streams. Returns 202 Accepted immediately while events
+        are processed in the background.
       parameters:
       - description: Telemetry batch data
         in: body
@@ -5871,8 +5827,8 @@ paths:
       produces:
       - application/json
       responses:
-        "201":
-          description: Batch processed successfully
+        "202":
+          description: Batch accepted for async processing
           schema:
             allOf:
             - $ref: '#/definitions/response.APIResponse'
@@ -5927,69 +5883,7 @@ paths:
               type: object
       security:
       - ApiKeyAuth: []
-      summary: Process high-throughput telemetry batch
-      tags:
-      - SDK - Telemetry
-  /v1/telemetry/batch/{batch_id}:
-    get:
-      description: Get status and details for a specific telemetry batch
-      parameters:
-      - description: Batch ID (ULID format)
-        in: path
-        name: batch_id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Batch status retrieved successfully
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/observability.TelemetryBatchStatusResponse'
-              type: object
-        "400":
-          description: Invalid batch ID format
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-        "401":
-          description: Invalid or missing API key
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-        "404":
-          description: Batch not found
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-        "500":
-          description: Internal server error
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-      security:
-      - ApiKeyAuth: []
-      summary: Get telemetry batch status
+      summary: Process high-throughput telemetry batch (async via Redis Streams)
       tags:
       - SDK - Telemetry
   /v1/telemetry/health:

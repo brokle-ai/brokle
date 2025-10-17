@@ -32,15 +32,7 @@ func ValidateTelemetryBatchRequest(req *TelemetryBatchRequest) []string {
 		}
 	}
 
-	// Validate deduplication config if provided
-	if req.Deduplication != nil {
-		if req.Deduplication.TTL < 0 {
-			errors = append(errors, "Deduplication TTL cannot be negative")
-		}
-		if req.Deduplication.TTL > 86400 { // Max 24 hours
-			errors = append(errors, "Deduplication TTL cannot exceed 24 hours (86400 seconds)")
-		}
-	}
+	// Note: Deduplication is always enforced with server-controlled 24h TTL (production-grade pattern)
 
 	return errors
 }

@@ -5540,7 +5540,7 @@ const docTemplate = `{
                         "ApiKeyAuth": []
                     }
                 ],
-                "description": "Process a batch of telemetry events with ULID-based deduplication and 5x performance optimization",
+                "description": "Process a batch of telemetry events asynchronously with ULID-based deduplication and Redis Streams. Returns 202 Accepted immediately while events are processed in the background.",
                 "consumes": [
                     "application/json"
                 ],
@@ -5550,7 +5550,7 @@ const docTemplate = `{
                 "tags": [
                     "SDK - Telemetry"
                 ],
-                "summary": "Process high-throughput telemetry batch",
+                "summary": "Process high-throughput telemetry batch (async via Redis Streams)",
                 "parameters": [
                     {
                         "description": "Telemetry batch data",
@@ -5563,8 +5563,8 @@ const docTemplate = `{
                     }
                 ],
                 "responses": {
-                    "201": {
-                        "description": "Batch processed successfully",
+                    "202": {
+                        "description": "Batch accepted for async processing",
                         "schema": {
                             "allOf": [
                                 {
@@ -5637,124 +5637,6 @@ const docTemplate = `{
                     },
                     "429": {
                         "description": "Rate limit exceeded",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                }
-            }
-        },
-        "/v1/telemetry/batch/{batch_id}": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Get status and details for a specific telemetry batch",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "SDK - Telemetry"
-                ],
-                "summary": "Get telemetry batch status",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Batch ID (ULID format)",
-                        "name": "batch_id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Batch status retrieved successfully",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/observability.TelemetryBatchStatusResponse"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid batch ID format",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "401": {
-                        "description": "Invalid or missing API key",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "404": {
-                        "description": "Batch not found",
                         "schema": {
                             "allOf": [
                                 {
@@ -7738,7 +7620,7 @@ const docTemplate = `{
             }
         },
         "internal_transport_http_handlers_observability.TelemetryBatchRequest": {
-            "description": "High-performance batch request for telemetry events with ULID-based deduplication",
+            "description": "High-performance batch request for telemetry events with ULID-based deduplication (always enabled with 24h TTL)",
             "type": "object",
             "required": [
                 "events"
@@ -7746,9 +7628,6 @@ const docTemplate = `{
             "properties": {
                 "async": {
                     "type": "boolean"
-                },
-                "deduplication": {
-                    "$ref": "#/definitions/observability.DeduplicationConfigRequest"
                 },
                 "environment": {
                     "type": "string",
@@ -8324,27 +8203,6 @@ const docTemplate = `{
                 }
             }
         },
-        "observability.DeduplicationConfigRequest": {
-            "description": "Configuration for event deduplication behavior",
-            "type": "object",
-            "properties": {
-                "enabled": {
-                    "type": "boolean",
-                    "example": true
-                },
-                "fail_on_duplicate": {
-                    "type": "boolean"
-                },
-                "ttl": {
-                    "type": "integer",
-                    "example": 3600
-                },
-                "use_redis_cache": {
-                    "type": "boolean",
-                    "example": true
-                }
-            }
-        },
         "observability.ListTracesResponse": {
             "type": "object",
             "properties": {
@@ -8495,44 +8353,6 @@ const docTemplate = `{
                 "uptime": {
                     "type": "string",
                     "example": "24h0m0s"
-                }
-            }
-        },
-        "observability.TelemetryBatchStatusResponse": {
-            "description": "Status information for a telemetry batch",
-            "type": "object",
-            "properties": {
-                "batch_id": {
-                    "type": "string",
-                    "example": "01ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-                },
-                "completed_at": {
-                    "type": "string",
-                    "example": "2023-12-01T10:30:05Z"
-                },
-                "created_at": {
-                    "type": "string",
-                    "example": "2023-12-01T10:30:00Z"
-                },
-                "failed_events": {
-                    "type": "integer",
-                    "example": 5
-                },
-                "processed_events": {
-                    "type": "integer",
-                    "example": 95
-                },
-                "processing_time_ms": {
-                    "type": "integer",
-                    "example": 1234
-                },
-                "status": {
-                    "type": "string",
-                    "example": "completed"
-                },
-                "total_events": {
-                    "type": "integer",
-                    "example": 100
                 }
             }
         },

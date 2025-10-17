@@ -249,7 +249,6 @@ type TelemetryBatchRequest struct {
 	Metadata     map[string]any                 `json:"metadata"`
 	Events       []*TelemetryEventRequest       `json:"events"`
 	Async        bool                           `json:"async"`
-	Deduplication *DeduplicationConfig          `json:"deduplication,omitempty"`
 }
 
 // TelemetryEventRequest represents an individual telemetry event in a batch
@@ -270,14 +269,6 @@ type TelemetryBatchResponse struct {
 	Errors            []TelemetryEventError       `json:"errors,omitempty"`
 	DuplicateEventIDs []ulid.ULID                 `json:"duplicate_event_ids,omitempty"`
 	JobID             *string                     `json:"job_id,omitempty"` // For async processing
-}
-
-// DeduplicationConfig represents deduplication configuration
-type DeduplicationConfig struct {
-	Enabled          bool          `json:"enabled"`
-	TTL             time.Duration `json:"ttl"`
-	UseRedisCache   bool          `json:"use_redis_cache"`
-	FailOnDuplicate bool          `json:"fail_on_duplicate"`
 }
 
 // TelemetryEventError represents an error processing a telemetry event

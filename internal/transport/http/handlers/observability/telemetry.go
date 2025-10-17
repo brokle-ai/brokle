@@ -13,13 +13,12 @@ import (
 )
 
 // TelemetryBatchRequest represents the high-throughput telemetry batch request
-// @Description High-performance batch request for telemetry events with ULID-based deduplication
+// @Description High-performance batch request for telemetry events with ULID-based deduplication (always enabled with 24h TTL)
 type TelemetryBatchRequest struct {
 	Environment   *string                      `json:"environment,omitempty" example:"production" description:"Environment tag (optional)"`
 	Metadata      map[string]interface{}       `json:"metadata,omitempty" description:"Batch-level metadata"`
 	Events        []*TelemetryEventRequest     `json:"events" binding:"required,min=1,max=1000" description:"Array of telemetry events (max 1000)"`
 	Async         bool                         `json:"async,omitempty" description:"Process batch asynchronously"`
-	Deduplication *DeduplicationConfigRequest  `json:"deduplication,omitempty" description:"Deduplication configuration"`
 }
 
 // TelemetryEventRequest represents an individual telemetry event in a batch
@@ -29,15 +28,6 @@ type TelemetryEventRequest struct {
 	EventType string                 `json:"event_type" binding:"required" example:"trace_create" description:"Type of telemetry event"`
 	Payload   map[string]interface{} `json:"payload" binding:"required" description:"Event payload data"`
 	Timestamp *int64                 `json:"timestamp,omitempty" example:"1677610602" description:"Unix timestamp (defaults to current time)"`
-}
-
-// DeduplicationConfigRequest represents deduplication configuration
-// @Description Configuration for event deduplication behavior
-type DeduplicationConfigRequest struct {
-	Enabled          bool `json:"enabled" example:"true" description:"Enable deduplication"`
-	TTL              int  `json:"ttl,omitempty" example:"3600" description:"Deduplication TTL in seconds"`
-	UseRedisCache    bool `json:"use_redis_cache" example:"true" description:"Use Redis cache for deduplication"`
-	FailOnDuplicate  bool `json:"fail_on_duplicate,omitempty" description:"Fail request on duplicate detection"`
 }
 
 // TelemetryBatchResponse represents the response for telemetry batch processing
@@ -233,6 +223,7 @@ func (h *Handler) ProcessTelemetryBatch(c *gin.Context) {
 	}
 
 	// Build domain request with sanitized metadata
+	// Note: Deduplication is always enforced with server-controlled 24h TTL (production-grade pattern)
 	domainReq := &observability.TelemetryBatchRequest{
 		ProjectID:   *projectID,
 		Environment: func() *string {
@@ -244,16 +235,6 @@ func (h *Handler) ProcessTelemetryBatch(c *gin.Context) {
 		Metadata: SanitizeMetadata(req.Metadata),
 		Events:   domainEvents,
 		Async:    req.Async,
-	}
-
-	// Add deduplication config if provided
-	if req.Deduplication != nil {
-		domainReq.Deduplication = &observability.DeduplicationConfig{
-			Enabled:         req.Deduplication.Enabled,
-			TTL:            time.Duration(req.Deduplication.TTL) * time.Second,
-			UseRedisCache:  req.Deduplication.UseRedisCache,
-			FailOnDuplicate: req.Deduplication.FailOnDuplicate,
-		}
 	}
 
 	// Process batch through telemetry service
