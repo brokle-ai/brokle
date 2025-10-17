@@ -489,11 +489,27 @@ func (c *TelemetryStreamConsumer) processMessage(ctx context.Context, streamKey 
 	// Max retries exceeded - move to DLQ
 	if err := c.moveToDLQ(ctx, streamKey, msg, &batch, lastErr); err != nil {
 		c.logger.WithError(err).Error("Failed to move message to DLQ")
-		// DLQ write failed - return error so message stays pending for retry
+		// DLQ write failed - keep claims held, message stays pending
 		return fmt.Errorf("max retries exceeded AND failed to move to DLQ: %w", lastErr)
 	}
 
-	// Successfully moved to DLQ - return sentinel so message can be safely acknowledged
+	// DLQ write succeeded - release claims so client retries can proceed
+	if len(batch.ClaimedEventIDs) > 0 {
+		if releaseErr := c.deduplicationSvc.ReleaseEvents(ctx, batch.ClaimedEventIDs); releaseErr != nil {
+			c.logger.WithError(releaseErr).WithFields(logrus.Fields{
+				"batch_id":    batch.BatchID.String(),
+				"event_count": len(batch.ClaimedEventIDs),
+			}).Error("Failed to release claims after DLQ write")
+			// Don't fail - DLQ write succeeded, worst case: 24h TTL expires
+		} else {
+			c.logger.WithFields(logrus.Fields{
+				"batch_id":    batch.BatchID.String(),
+				"event_count": len(batch.ClaimedEventIDs),
+			}).Info("Released claims after moving batch to DLQ")
+		}
+	}
+
+	// Successfully moved to DLQ and released claims
 	return ErrMovedToDLQ
 }
 
@@ -541,22 +557,9 @@ func (c *TelemetryStreamConsumer) processBatch(ctx context.Context, batch *strea
 		return fmt.Errorf("failed to insert telemetry batch: %w", err)
 	}
 
-	// ✅ Register events as processed ONLY after successful ClickHouse persistence
-	// This prevents data loss if the worker fails before processing completes
-	eventIDs := make([]ulid.ULID, len(batch.Events))
-	for i, event := range batch.Events {
-		eventIDs[i] = event.EventID
-	}
-
-	if err := c.deduplicationSvc.RegisterProcessedEventsBatch(ctx, batch.ProjectID, batch.BatchID, eventIDs); err != nil {
-		c.logger.WithError(err).WithFields(logrus.Fields{
-			"batch_id":    batch.BatchID.String(),
-			"project_id":  batch.ProjectID.String(),
-			"event_count": len(eventIDs),
-		}).Warn("Failed to register events for deduplication - duplicates may be accepted on retry")
-		// Don't fail the batch - data is already safely persisted in ClickHouse
-		// Worst case: duplicate events might be accepted if SDK retries
-	}
+	// ✅ Deduplication already handled synchronously in HTTP handler via ClaimEvents
+	// Events are claimed atomically before publishing to stream, so no async registration needed
+	// This eliminates the race condition where duplicate check happens before async registration completes
 
 	return nil
 }

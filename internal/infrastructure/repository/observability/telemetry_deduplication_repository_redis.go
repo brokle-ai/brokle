@@ -25,6 +25,84 @@ func NewTelemetryDeduplicationRepositoryRedis(redis *database.RedisDB) *Telemetr
 	}
 }
 
+// ClaimEvents atomically claims event IDs using Redis SET NX (set if not exists)
+// Returns: (claimedIDs, duplicateIDs, error)
+func (r *TelemetryDeduplicationRepositoryRedis) ClaimEvents(ctx context.Context, projectID, batchID ulid.ULID, eventIDs []ulid.ULID, ttl time.Duration) ([]ulid.ULID, []ulid.ULID, error) {
+	if len(eventIDs) == 0 {
+		return nil, nil, nil
+	}
+
+	if projectID.IsZero() {
+		return nil, nil, fmt.Errorf("project ID cannot be zero")
+	}
+
+	if batchID.IsZero() {
+		return nil, nil, fmt.Errorf("batch ID cannot be zero")
+	}
+
+	// Use Redis pipeline with SetNX for atomic claim
+	pipe := r.redis.Client.Pipeline()
+	cmds := make([]*redis.BoolCmd, len(eventIDs))
+
+	for i, eventID := range eventIDs {
+		redisKey := r.buildRedisKey(eventID)
+		// SetNX returns true if key was set (didn't exist), false if key already exists
+		cmds[i] = pipe.SetNX(ctx, redisKey, batchID.String(), ttl)
+	}
+
+	// Execute pipeline
+	_, err := pipe.Exec(ctx)
+	if err != nil && err != redis.Nil {
+		return nil, nil, fmt.Errorf("failed to claim events: %w", err)
+	}
+
+	// Collect results - claimed vs duplicates
+	claimed := make([]ulid.ULID, 0, len(eventIDs))
+	duplicates := make([]ulid.ULID, 0)
+
+	for i, cmd := range cmds {
+		success, cmdErr := cmd.Result()
+		if cmdErr != nil {
+			// On error, treat as not claimed (safe default)
+			duplicates = append(duplicates, eventIDs[i])
+			continue
+		}
+
+		if success {
+			// SetNX succeeded - we claimed this event
+			claimed = append(claimed, eventIDs[i])
+		} else {
+			// SetNX failed - event already exists (duplicate)
+			duplicates = append(duplicates, eventIDs[i])
+		}
+	}
+
+	return claimed, duplicates, nil
+}
+
+// ReleaseEvents removes claimed event IDs (for rollback on publish failure)
+func (r *TelemetryDeduplicationRepositoryRedis) ReleaseEvents(ctx context.Context, eventIDs []ulid.ULID) error {
+	if len(eventIDs) == 0 {
+		return nil
+	}
+
+	// Use Redis pipeline for batch deletion
+	pipe := r.redis.Client.Pipeline()
+
+	for _, eventID := range eventIDs {
+		redisKey := r.buildRedisKey(eventID)
+		pipe.Del(ctx, redisKey)
+	}
+
+	// Execute pipeline
+	_, err := pipe.Exec(ctx)
+	if err != nil && err != redis.Nil {
+		return fmt.Errorf("failed to release events: %w", err)
+	}
+
+	return nil
+}
+
 // Create creates a new telemetry event deduplication entry in Redis with auto-expiry
 func (r *TelemetryDeduplicationRepositoryRedis) Create(ctx context.Context, dedup *observability.TelemetryEventDeduplication) error {
 	if dedup == nil {

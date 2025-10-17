@@ -141,7 +141,11 @@ type IngestionService interface {
 
 // TelemetryDeduplicationService defines the interface for ULID-based deduplication
 type TelemetryDeduplicationService interface {
-	// Deduplication operations
+	// Atomic deduplication operations
+	ClaimEvents(ctx context.Context, projectID, batchID ulid.ULID, eventIDs []ulid.ULID, ttl time.Duration) (claimedIDs, duplicateIDs []ulid.ULID, err error)
+	ReleaseEvents(ctx context.Context, eventIDs []ulid.ULID) error
+
+	// Legacy deduplication operations (deprecated - use ClaimEvents instead)
 	CheckDuplicate(ctx context.Context, eventID ulid.ULID) (bool, error)
 	CheckBatchDuplicates(ctx context.Context, eventIDs []ulid.ULID) ([]ulid.ULID, error)
 	RegisterEvent(ctx context.Context, eventID ulid.ULID, batchID ulid.ULID, projectID ulid.ULID, ttl time.Duration) error

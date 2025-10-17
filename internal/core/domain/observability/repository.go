@@ -137,6 +137,10 @@ type AnalyticsRepository interface {
 
 // TelemetryDeduplicationRepository defines the interface for deduplication data access
 type TelemetryDeduplicationRepository interface {
+	// Atomic deduplication operations
+	ClaimEvents(ctx context.Context, projectID, batchID ulid.ULID, eventIDs []ulid.ULID, ttl time.Duration) (claimedIDs, duplicateIDs []ulid.ULID, err error)
+	ReleaseEvents(ctx context.Context, eventIDs []ulid.ULID) error
+
 	// Basic CRUD operations
 	Create(ctx context.Context, dedup *TelemetryEventDeduplication) error
 	GetByEventID(ctx context.Context, eventID ulid.ULID) (*TelemetryEventDeduplication, error)

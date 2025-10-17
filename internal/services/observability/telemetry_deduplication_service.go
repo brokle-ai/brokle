@@ -60,6 +60,51 @@ func (s *telemetryDeduplicationService) CheckBatchDuplicates(ctx context.Context
 	return duplicates, nil
 }
 
+// ClaimEvents atomically claims event IDs for processing
+// Returns: (claimedIDs, duplicateIDs, error)
+func (s *telemetryDeduplicationService) ClaimEvents(ctx context.Context, projectID, batchID ulid.ULID, eventIDs []ulid.ULID, ttl time.Duration) ([]ulid.ULID, []ulid.ULID, error) {
+	if len(eventIDs) == 0 {
+		return nil, nil, nil
+	}
+
+	if projectID.IsZero() {
+		return nil, nil, fmt.Errorf("project ID cannot be zero")
+	}
+
+	if batchID.IsZero() {
+		return nil, nil, fmt.Errorf("batch ID cannot be zero")
+	}
+
+	// Validate event IDs
+	for i, eventID := range eventIDs {
+		if eventID.IsZero() {
+			return nil, nil, fmt.Errorf("event ID at index %d cannot be zero", i)
+		}
+	}
+
+	// Delegate to repository for atomic claim operation
+	claimedIDs, duplicateIDs, err := s.deduplicationRepo.ClaimEvents(ctx, projectID, batchID, eventIDs, ttl)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to claim events: %w", err)
+	}
+
+	return claimedIDs, duplicateIDs, nil
+}
+
+// ReleaseEvents removes claimed event IDs (for rollback on publish failure)
+func (s *telemetryDeduplicationService) ReleaseEvents(ctx context.Context, eventIDs []ulid.ULID) error {
+	if len(eventIDs) == 0 {
+		return nil
+	}
+
+	// Delegate to repository for batch deletion
+	if err := s.deduplicationRepo.ReleaseEvents(ctx, eventIDs); err != nil {
+		return fmt.Errorf("failed to release events: %w", err)
+	}
+
+	return nil
+}
+
 // RegisterEvent registers a new event for deduplication with ULID-based TTL
 func (s *telemetryDeduplicationService) RegisterEvent(ctx context.Context, eventID ulid.ULID, batchID ulid.ULID, projectID ulid.ULID, ttl time.Duration) error {
 	if eventID.IsZero() {

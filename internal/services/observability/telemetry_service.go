@@ -59,40 +59,23 @@ func (s *telemetryService) ProcessTelemetryBatch(ctx context.Context, request *o
 	// Generate batch ID
 	batchID := ulid.New()
 
-	// Extract event IDs for deduplication check
+	// Extract event IDs for atomic claim operation
 	eventIDs := make([]ulid.ULID, len(request.Events))
 	for i, event := range request.Events {
 		eventIDs[i] = event.EventID
 	}
 
-	// Check for duplicates using Redis deduplication service
-	duplicateIDs, err := s.deduplicationService.CheckBatchDuplicates(ctx, eventIDs)
+	// ✅ Atomic claim: Check and register events in single operation (eliminates race condition)
+	claimedIDs, duplicateIDs, err := s.deduplicationService.ClaimEvents(ctx, request.ProjectID, batchID, eventIDs, 24*time.Hour)
 	if err != nil {
-		return nil, fmt.Errorf("deduplication check failed: %w", err)
-	}
-
-	// Filter out duplicate events
-	uniqueEventData := make([]streams.TelemetryEventData, 0, len(request.Events)-len(duplicateIDs))
-	duplicateMap := make(map[ulid.ULID]bool)
-	for _, id := range duplicateIDs {
-		duplicateMap[id] = true
-	}
-
-	for _, eventReq := range request.Events {
-		if !duplicateMap[eventReq.EventID] {
-			uniqueEventData = append(uniqueEventData, streams.TelemetryEventData{
-				EventID:      eventReq.EventID,
-				EventType:    string(eventReq.EventType),
-				EventPayload: eventReq.Payload,
-			})
-		}
+		return nil, fmt.Errorf("failed to claim events for deduplication: %w", err)
 	}
 
 	// Skip batch entirely if all events are duplicates
-	if len(uniqueEventData) == 0 {
+	if len(claimedIDs) == 0 {
 		s.logger.WithFields(logrus.Fields{
-			"batch_id":       batchID.String(),
-			"total_events":   len(request.Events),
+			"batch_id":        batchID.String(),
+			"total_events":    len(request.Events),
 			"duplicate_count": len(duplicateIDs),
 		}).Info("All events are duplicates, skipping batch processing")
 
@@ -106,20 +89,44 @@ func (s *telemetryService) ProcessTelemetryBatch(ctx context.Context, request *o
 		}, nil
 	}
 
-	// Publish batch to Redis Streams for async processing
-	// Note: Deduplication registration happens in the stream consumer AFTER successful ClickHouse write
-	// This prevents data loss if the worker fails before processing completes
-	streamMessage := &streams.TelemetryStreamMessage{
-		BatchID:     batchID,
-		ProjectID:   request.ProjectID,
-		Environment: s.extractEnvironment(request),
-		Events:      uniqueEventData,
-		Metadata:    request.Metadata,
-		Timestamp:   time.Now(),
+	// Build event data for ONLY claimed events (not duplicates)
+	claimedMap := make(map[ulid.ULID]bool)
+	for _, id := range claimedIDs {
+		claimedMap[id] = true
 	}
 
+	claimedEventData := make([]streams.TelemetryEventData, 0, len(claimedIDs))
+	for _, eventReq := range request.Events {
+		if claimedMap[eventReq.EventID] {
+			claimedEventData = append(claimedEventData, streams.TelemetryEventData{
+				EventID:      eventReq.EventID,
+				EventType:    string(eventReq.EventType),
+				EventPayload: eventReq.Payload,
+			})
+		}
+	}
+
+	// Build stream message with claimed events
+	streamMessage := &streams.TelemetryStreamMessage{
+		BatchID:         batchID,
+		ProjectID:       request.ProjectID,
+		Environment:     s.extractEnvironment(request),
+		Events:          claimedEventData,
+		ClaimedEventIDs: claimedIDs, // Pass claimed IDs for consumer claim release
+		Metadata:        request.Metadata,
+		Timestamp:       time.Now(),
+	}
+
+	// Publish batch to Redis Streams
 	streamID, err := s.streamProducer.PublishBatch(ctx, streamMessage)
 	if err != nil {
+		// ⚠️ CRITICAL: Rollback claimed events on publish failure
+		if rollbackErr := s.deduplicationService.ReleaseEvents(ctx, claimedIDs); rollbackErr != nil {
+			s.logger.WithError(rollbackErr).WithFields(logrus.Fields{
+				"batch_id":     batchID.String(),
+				"claimed_count": len(claimedIDs),
+			}).Error("CRITICAL: Failed to rollback claimed events after publish failure - manual cleanup may be needed")
+		}
 		return nil, fmt.Errorf("failed to publish batch to stream: %w", err)
 	}
 
@@ -127,7 +134,7 @@ func (s *telemetryService) ProcessTelemetryBatch(ctx context.Context, request *o
 		"batch_id":      batchID.String(),
 		"stream_id":     streamID,
 		"project_id":    request.ProjectID.String(),
-		"unique_events": len(uniqueEventData),
+		"claimed_events": len(claimedIDs),
 		"duplicates":    len(duplicateIDs),
 	}).Info("Batch published to Redis Stream for async processing")
 
@@ -137,7 +144,7 @@ func (s *telemetryService) ProcessTelemetryBatch(ctx context.Context, request *o
 	// Build response (202 Accepted - async processing)
 	response := &observability.TelemetryBatchResponse{
 		BatchID:           batchID,
-		ProcessedEvents:   len(uniqueEventData), // Events accepted (not yet processed)
+		ProcessedEvents:   len(claimedIDs), // Events claimed and accepted for processing
 		DuplicateEvents:   len(duplicateIDs),
 		FailedEvents:      0,
 		ProcessingTimeMs:  int(time.Since(startTime).Milliseconds()),

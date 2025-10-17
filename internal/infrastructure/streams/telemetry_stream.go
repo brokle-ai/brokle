@@ -15,12 +15,13 @@ import (
 
 // TelemetryStreamMessage represents a telemetry batch message in Redis Stream
 type TelemetryStreamMessage struct {
-	BatchID     ulid.ULID              `json:"batch_id"`
-	ProjectID   ulid.ULID              `json:"project_id"`
-	Environment string                 `json:"environment,omitempty"`
-	Events      []TelemetryEventData   `json:"events"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
-	Timestamp   time.Time              `json:"timestamp"`
+	BatchID         ulid.ULID              `json:"batch_id"`
+	ProjectID       ulid.ULID              `json:"project_id"`
+	Environment     string                 `json:"environment,omitempty"`
+	Events          []TelemetryEventData   `json:"events"`
+	ClaimedEventIDs []ulid.ULID            `json:"claimed_event_ids"` // Event IDs claimed via atomic deduplication
+	Metadata        map[string]interface{} `json:"metadata,omitempty"`
+	Timestamp       time.Time              `json:"timestamp"`
 }
 
 // TelemetryEventData represents individual event data in the stream message
