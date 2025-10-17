@@ -9,16 +9,16 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"brokle/internal/core/domain/observability"
+	"brokle/internal/infrastructure/streams"
 	"brokle/internal/workers"
 	"brokle/pkg/ulid"
 	appErrors "brokle/pkg/errors"
 )
 
-// telemetryService aggregates all telemetry-related services with high-performance batch processing
+// telemetryService aggregates all telemetry-related services with Redis Streams-based async processing
 type telemetryService struct {
-	batchService         observability.TelemetryBatchService
-	eventService         observability.TelemetryEventService
 	deduplicationService observability.TelemetryDeduplicationService
+	streamProducer       *streams.TelemetryStreamProducer
 	analyticsWorker      *workers.TelemetryAnalyticsWorker
 	logger              *logrus.Logger
 
@@ -30,25 +30,24 @@ type telemetryService struct {
 	avgProcessingTime  time.Duration
 }
 
-// NewTelemetryService creates a new telemetry service with all sub-services
+// NewTelemetryService creates a new telemetry service with Redis Streams and deduplication
 func NewTelemetryService(
-	batchService observability.TelemetryBatchService,
-	eventService observability.TelemetryEventService,
 	deduplicationService observability.TelemetryDeduplicationService,
+	streamProducer *streams.TelemetryStreamProducer,
 	analyticsWorker *workers.TelemetryAnalyticsWorker,
 	logger *logrus.Logger,
 ) observability.TelemetryService {
 	return &telemetryService{
-		batchService:         batchService,
-		eventService:         eventService,
 		deduplicationService: deduplicationService,
+		streamProducer:       streamProducer,
 		analyticsWorker:      analyticsWorker,
 		logger:              logger,
 		lastProcessingTime:   time.Now(),
 	}
 }
 
-// ProcessTelemetryBatch processes a batch of telemetry events with comprehensive validation and deduplication
+// ProcessTelemetryBatch processes a batch of telemetry events using Redis Streams (async)
+// Returns 202 Accepted for async processing with batch ID for tracking
 func (s *telemetryService) ProcessTelemetryBatch(ctx context.Context, request *observability.TelemetryBatchRequest) (*observability.TelemetryBatchResponse, error) {
 	startTime := time.Now()
 
@@ -66,14 +65,14 @@ func (s *telemetryService) ProcessTelemetryBatch(ctx context.Context, request *o
 		eventIDs[i] = event.EventID
 	}
 
-	// Check for duplicates using deduplication service
+	// Check for duplicates using Redis deduplication service
 	duplicateIDs, err := s.deduplicationService.CheckBatchDuplicates(ctx, eventIDs)
 	if err != nil {
 		return nil, fmt.Errorf("deduplication check failed: %w", err)
 	}
 
-	// Filter out duplicate events and convert to domain events
-	uniqueEvents := make([]*observability.TelemetryEvent, 0, len(request.Events))
+	// Filter out duplicate events
+	uniqueEventData := make([]streams.TelemetryEventData, 0, len(request.Events)-len(duplicateIDs))
 	duplicateMap := make(map[ulid.ULID]bool)
 	for _, id := range duplicateIDs {
 		duplicateMap[id] = true
@@ -81,145 +80,71 @@ func (s *telemetryService) ProcessTelemetryBatch(ctx context.Context, request *o
 
 	for _, eventReq := range request.Events {
 		if !duplicateMap[eventReq.EventID] {
-			event := &observability.TelemetryEvent{
-				ID:           eventReq.EventID,
-				BatchID:      batchID,
-				EventType:    eventReq.EventType,
+			uniqueEventData = append(uniqueEventData, streams.TelemetryEventData{
+				EventID:      eventReq.EventID,
+				EventType:    string(eventReq.EventType),
 				EventPayload: eventReq.Payload,
-				CreatedAt:    time.Now(),
-			}
-			uniqueEvents = append(uniqueEvents, event)
+			})
 		}
 	}
 
-	// Create batch record
-	batch := &observability.TelemetryBatch{
-		ID:               batchID,
-		ProjectID:        request.ProjectID,
-		BatchMetadata:    request.Metadata,
-		TotalEvents:      len(request.Events),
-		ProcessedEvents:  0,
-		FailedEvents:     0,
-		Status:           observability.BatchStatusProcessing,
-		CreatedAt:        time.Now(),
+	// Skip batch entirely if all events are duplicates
+	if len(uniqueEventData) == 0 {
+		s.logger.WithFields(logrus.Fields{
+			"batch_id":       batchID.String(),
+			"total_events":   len(request.Events),
+			"duplicate_count": len(duplicateIDs),
+		}).Info("All events are duplicates, skipping batch processing")
+
+		return &observability.TelemetryBatchResponse{
+			BatchID:           batchID,
+			ProcessedEvents:   0,
+			DuplicateEvents:   len(duplicateIDs),
+			FailedEvents:      0,
+			ProcessingTimeMs:  int(time.Since(startTime).Milliseconds()),
+			DuplicateEventIDs: duplicateIDs,
+		}, nil
 	}
 
-	// COMPENSATION PATTERN: Create batch first, store events, compensate on failure
-	// Create batch record first (use returned persisted batch for consistency)
-	persistedBatch, err := s.batchService.CreateBatch(ctx, batch)
+	// Publish batch to Redis Streams for async processing
+	// Note: Deduplication registration happens in the stream consumer AFTER successful ClickHouse write
+	// This prevents data loss if the worker fails before processing completes
+	streamMessage := &streams.TelemetryStreamMessage{
+		BatchID:     batchID,
+		ProjectID:   request.ProjectID,
+		Environment: s.extractEnvironment(request),
+		Events:      uniqueEventData,
+		Metadata:    request.Metadata,
+		Timestamp:   time.Now(),
+	}
+
+	streamID, err := s.streamProducer.PublishBatch(ctx, streamMessage)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create batch: %w", err)
+		return nil, fmt.Errorf("failed to publish batch to stream: %w", err)
 	}
 
-	// Try to store events - if this fails, compensate by deleting the batch
-	if len(uniqueEvents) > 0 {
-		if err := s.eventService.CreateEventsBatch(ctx, uniqueEvents); err != nil {
-			// Compensation: delete the batch we just created (log but preserve original error)
-			if deleteErr := s.batchService.DeleteBatch(ctx, persistedBatch.ID); deleteErr != nil {
-				s.logger.WithError(deleteErr).Error("Failed to delete batch during compensation")
-			}
-			return nil, fmt.Errorf("failed to store events, batch deleted: %w", err)
-		}
-
-		s.logger.WithFields(logrus.Fields{
-			"batch_id":      persistedBatch.ID.String(),
-			"events_stored": len(uniqueEvents),
-		}).Info("Batch and events stored successfully")
-	} else {
-		s.logger.WithFields(logrus.Fields{
-			"batch_id": persistedBatch.ID.String(),
-		}).Info("Batch created with no unique events (all duplicates)")
-	}
-
-	// Process stored events and update batch status based on results
-	var processedCount, failedCount int
-	if len(uniqueEvents) > 0 {
-		result, err := s.eventService.ProcessEventsBatch(ctx, uniqueEvents)
-
-		// Always update event statuses based on processing results
-		s.updateEventStatuses(uniqueEvents, result)
-
-		// Update event statuses in database using bulk operation
-		if updateErr := s.eventService.UpdateEventsBatch(ctx, uniqueEvents); updateErr != nil {
-			s.logger.WithError(updateErr).Error("Failed to update event processing statuses")
-		}
-
-		if result != nil {
-			processedCount = result.ProcessedCount
-			failedCount = result.FailedCount
-
-			// Set batch status based on processing results:
-			// - Failed if ALL events errored
-			// - Partial if SOME events errored
-			// - Completed if NO events errored
-			if failedCount == len(uniqueEvents) {
-				persistedBatch.Status = observability.BatchStatusFailed
-			} else if failedCount > 0 {
-				persistedBatch.Status = observability.BatchStatusPartial
-			} else {
-				persistedBatch.Status = observability.BatchStatusCompleted
-			}
-
-			// Update persisted batch with final counts and status
-			persistedBatch.ProcessedEvents = processedCount
-			persistedBatch.FailedEvents = failedCount
-			if _, updateErr := s.batchService.UpdateBatch(ctx, persistedBatch); updateErr != nil {
-				s.logger.WithError(updateErr).Error("Failed to update batch status and counts")
-			}
-
-			// CRITICAL: Register ONLY successfully processed events with deduplication service
-			// Failed events must NOT be registered so they can be retried in future batches
-			if processedCount > 0 {
-				// Use the ProcessedEventIDs from enhanced result for precise tracking
-				if len(result.ProcessedEventIDs) > 0 {
-					if err := s.deduplicationService.RegisterProcessedEventsBatch(ctx, request.ProjectID, result.ProcessedEventIDs); err != nil {
-						s.logger.WithError(err).Warn("Failed to register processed events for deduplication - future duplicates may not be detected")
-						// Don't fail the request for deduplication registration errors, but log it
-					}
-				}
-			}
-		}
-
-		// Handle processing errors (but events are already stored)
-		if err != nil {
-			s.logger.WithError(err).Error("Event processing encountered errors, but raw events are preserved")
-			// Note: Don't return error here since batch and events are safely stored
-		}
-	} else {
-		// No events to process, mark batch as completed
-		persistedBatch.Status = observability.BatchStatusCompleted
-		if _, updateErr := s.batchService.UpdateBatch(ctx, persistedBatch); updateErr != nil {
-			s.logger.WithError(updateErr).Error("Failed to update batch status to completed")
-		}
-	}
-
-	// Queue analytics jobs for processed events and batch
-	s.queueAnalyticsJobs(ctx, request, persistedBatch, uniqueEvents, time.Since(startTime))
+	s.logger.WithFields(logrus.Fields{
+		"batch_id":      batchID.String(),
+		"stream_id":     streamID,
+		"project_id":    request.ProjectID.String(),
+		"unique_events": len(uniqueEventData),
+		"duplicates":    len(duplicateIDs),
+	}).Info("Batch published to Redis Stream for async processing")
 
 	// Update performance metrics
 	s.updatePerformanceMetrics(len(request.Events), time.Since(startTime))
 
-	// Build response
+	// Build response (202 Accepted - async processing)
 	response := &observability.TelemetryBatchResponse{
-		BatchID:           persistedBatch.ID,
-		ProcessedEvents:   processedCount,
+		BatchID:           batchID,
+		ProcessedEvents:   len(uniqueEventData), // Events accepted (not yet processed)
 		DuplicateEvents:   len(duplicateIDs),
-		FailedEvents:      failedCount,
+		FailedEvents:      0,
 		ProcessingTimeMs:  int(time.Since(startTime).Milliseconds()),
 		DuplicateEventIDs: duplicateIDs,
 	}
 
 	return response, nil
-}
-
-// Batch returns the batch service
-func (s *telemetryService) Batch() observability.TelemetryBatchService {
-	return s.batchService
-}
-
-// Event returns the event service
-func (s *telemetryService) Event() observability.TelemetryEventService {
-	return s.eventService
 }
 
 // Deduplication returns the deduplication service

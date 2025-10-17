@@ -23,22 +23,16 @@ func NewTelemetryDeduplicationService(
 	}
 }
 
-// CheckDuplicate checks if an event ID is a duplicate using Redis-first approach
+// CheckDuplicate checks if an event ID is a duplicate using Redis-only approach
 func (s *telemetryDeduplicationService) CheckDuplicate(ctx context.Context, eventID ulid.ULID) (bool, error) {
 	if eventID.IsZero() {
 		return false, fmt.Errorf("event ID cannot be zero")
 	}
 
-	// Use Redis-first approach with database fallback
-	exists, foundInRedis, err := s.deduplicationRepo.ExistsWithRedisCheck(ctx, eventID)
+	// Use Redis-only exists check (auto-expiry handles cleanup)
+	exists, err := s.deduplicationRepo.Exists(ctx, eventID)
 	if err != nil {
 		return false, fmt.Errorf("failed to check duplicate: %w", err)
-	}
-
-	// Log cache performance for monitoring (in production, this would be metrics)
-	if !foundInRedis && exists {
-		// Cache miss but found in database - indicates cache warming opportunity
-		_ = foundInRedis // Placeholder for cache miss metric
 	}
 
 	return exists, nil
@@ -83,10 +77,11 @@ func (s *telemetryDeduplicationService) RegisterEvent(ctx context.Context, event
 
 	// Create deduplication entry
 	dedup := &observability.TelemetryEventDeduplication{
-		EventID:   eventID,
-		BatchID:   batchID,
-		ProjectID: projectID,
-		ExpiresAt: expiresAt,
+		EventID:     eventID,
+		BatchID:     batchID,
+		ProjectID:   projectID,
+		FirstSeenAt: time.Now(),
+		ExpiresAt:   expiresAt,
 	}
 
 	// Validate the deduplication entry
@@ -104,9 +99,12 @@ func (s *telemetryDeduplicationService) RegisterEvent(ctx context.Context, event
 
 // RegisterProcessedEventsBatch registers multiple processed events for deduplication
 // Uses the default TTL from configuration (typically 24 hours for telemetry events)
-func (s *telemetryDeduplicationService) RegisterProcessedEventsBatch(ctx context.Context, projectID ulid.ULID, eventIDs []ulid.ULID) error {
+func (s *telemetryDeduplicationService) RegisterProcessedEventsBatch(ctx context.Context, projectID ulid.ULID, batchID ulid.ULID, eventIDs []ulid.ULID) error {
 	if projectID.IsZero() {
 		return fmt.Errorf("project ID cannot be zero")
+	}
+	if batchID.IsZero() {
+		return fmt.Errorf("batch ID cannot be zero")
 	}
 	if len(eventIDs) == 0 {
 		return nil // Nothing to register
@@ -126,10 +124,11 @@ func (s *telemetryDeduplicationService) RegisterProcessedEventsBatch(ctx context
 		expiresAt := s.GetExpirationTime(eventID, defaultTTL)
 
 		dedup := &observability.TelemetryEventDeduplication{
-			EventID:   eventID,
-			BatchID:   ulid.ULID{}, // Not required for processed event registration
-			ProjectID: projectID,
-			ExpiresAt: expiresAt,
+			EventID:     eventID,
+			BatchID:     batchID,
+			ProjectID:   projectID,
+			FirstSeenAt: time.Now(),
+			ExpiresAt:   expiresAt,
 		}
 
 		// Validate the deduplication entry
@@ -185,80 +184,38 @@ func (s *telemetryDeduplicationService) GetExpirationTime(eventID ulid.ULID, bas
 }
 
 // CleanupExpired removes expired deduplication entries
+// Note: With Redis-only approach, TTL handles auto-expiry, so manual cleanup is not needed
 func (s *telemetryDeduplicationService) CleanupExpired(ctx context.Context) (int64, error) {
-	deletedCount, err := s.deduplicationRepo.CleanupExpired(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("failed to cleanup expired entries: %w", err)
-	}
-
-	return deletedCount, nil
+	// Redis automatically expires entries based on TTL
+	// Return 0 to indicate no manual cleanup performed
+	return 0, nil
 }
 
 // CleanupByProject removes expired entries for a specific project
+// Note: With Redis-only approach, TTL handles auto-expiry per key
 func (s *telemetryDeduplicationService) CleanupByProject(ctx context.Context, projectID ulid.ULID, olderThan time.Time) (int64, error) {
 	if projectID.IsZero() {
 		return 0, fmt.Errorf("project ID cannot be zero")
 	}
 
-	deletedCount, err := s.deduplicationRepo.CleanupByProjectID(ctx, projectID, olderThan)
-	if err != nil {
-		return 0, fmt.Errorf("failed to cleanup entries for project: %w", err)
-	}
-
-	return deletedCount, nil
+	// Redis automatically expires entries based on TTL
+	// No project-scoped cleanup needed
+	return 0, nil
 }
 
 // BatchCleanup removes expired entries in batches for better performance
+// Note: With Redis-only approach, TTL handles auto-expiry, no batch cleanup needed
 func (s *telemetryDeduplicationService) BatchCleanup(ctx context.Context, olderThan time.Time, batchSize int) (int64, error) {
-	if batchSize <= 0 {
-		batchSize = 1000 // Default batch size
-	}
-	if batchSize > 10000 {
-		batchSize = 10000 // Maximum batch size for safety
-	}
-
-	totalDeleted, err := s.deduplicationRepo.BatchCleanup(ctx, olderThan, batchSize)
-	if err != nil {
-		return 0, fmt.Errorf("failed to batch cleanup entries: %w", err)
-	}
-
-	return totalDeleted, nil
+	// Redis automatically expires entries based on TTL
+	// No batch cleanup needed
+	return 0, nil
 }
 
 // SyncToRedis synchronizes deduplication entries to Redis cache
+// Note: With Redis-only approach, entries are already in Redis via Create/CreateBatch
 func (s *telemetryDeduplicationService) SyncToRedis(ctx context.Context, entries []*observability.TelemetryEventDeduplication) error {
-	if len(entries) == 0 {
-		return nil
-	}
-
-	// Validate entries
-	for i, entry := range entries {
-		if entry == nil {
-			return fmt.Errorf("entry at index %d cannot be nil", i)
-		}
-		if validationErrors := entry.Validate(); len(validationErrors) > 0 {
-			return fmt.Errorf("entry at index %d validation failed: %v", i, validationErrors)
-		}
-	}
-
-	// Store entries in Redis with appropriate TTL
-	for _, entry := range entries {
-		if entry.IsExpired() {
-			continue // Skip expired entries
-		}
-
-		ttl := entry.TimeUntilExpiry()
-		if ttl <= 0 {
-			continue // Skip entries that will expire immediately
-		}
-
-		if err := s.deduplicationRepo.StoreInRedis(ctx, entry.EventID, entry.BatchID, ttl); err != nil {
-			// Log error but continue with other entries
-			// In production, this would be a metric or log
-			_ = err
-		}
-	}
-
+	// Redis-only approach - entries are already in Redis
+	// No sync needed
 	return nil
 }
 
@@ -267,11 +224,19 @@ func (s *telemetryDeduplicationService) ValidateRedisHealth(ctx context.Context)
 	// Create a test key to measure latency
 	testKey := ulid.New()
 	testBatchID := ulid.New()
+	testProjectID := ulid.New()
 
 	start := time.Now()
 
-	// Test Redis operations
-	err := s.deduplicationRepo.StoreInRedis(ctx, testKey, testBatchID, time.Minute)
+	// Test Redis operations using Create
+	testEntry := &observability.TelemetryEventDeduplication{
+		EventID:   testKey,
+		BatchID:   testBatchID,
+		ProjectID: testProjectID,
+		ExpiresAt: time.Now().Add(time.Minute),
+	}
+
+	err := s.deduplicationRepo.Create(ctx, testEntry)
 	if err != nil {
 		errMsg := err.Error()
 		return &observability.RedisHealthStatus{
@@ -283,10 +248,18 @@ func (s *telemetryDeduplicationService) ValidateRedisHealth(ctx context.Context)
 	// Measure latency
 	latency := time.Since(start)
 
-	// Test retrieval
-	_, getErr := s.deduplicationRepo.GetFromRedis(ctx, testKey)
+	// Test retrieval using Exists
+	exists, getErr := s.deduplicationRepo.Exists(ctx, testKey)
 	if getErr != nil {
 		errMsg := getErr.Error()
+		return &observability.RedisHealthStatus{
+			Available: false,
+			LastError: &errMsg,
+		}, nil
+	}
+
+	if !exists {
+		errMsg := "test key not found after creation"
 		return &observability.RedisHealthStatus{
 			Available: false,
 			LastError: &errMsg,

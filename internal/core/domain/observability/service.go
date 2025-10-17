@@ -139,78 +139,13 @@ type IngestionService interface {
 	GetIngestionMetrics(ctx context.Context) (*IngestionMetrics, error)
 }
 
-// TelemetryBatchService defines the interface for telemetry batch processing with ULID-based deduplication
-type TelemetryBatchService interface {
-	// Batch operations
-	CreateBatch(ctx context.Context, batch *TelemetryBatch) (*TelemetryBatch, error)
-	GetBatch(ctx context.Context, id ulid.ULID) (*TelemetryBatch, error)
-	UpdateBatch(ctx context.Context, batch *TelemetryBatch) (*TelemetryBatch, error)
-	DeleteBatch(ctx context.Context, id ulid.ULID) error
-
-	// Batch queries
-	ListBatches(ctx context.Context, filter *TelemetryBatchFilter) ([]*TelemetryBatch, int, error)
-	GetBatchWithEvents(ctx context.Context, id ulid.ULID) (*TelemetryBatch, error)
-	GetActiveBatches(ctx context.Context, projectID ulid.ULID) ([]*TelemetryBatch, error)
-	GetProcessingBatches(ctx context.Context) ([]*TelemetryBatch, error)
-
-	// Batch processing
-	ProcessBatch(ctx context.Context, batchID ulid.ULID) (*BatchProcessingResult, error)
-	ProcessEventsBatch(ctx context.Context, events []*TelemetryEvent) (*BatchProcessingResult, error)
-	RetryFailedEvents(ctx context.Context, batchID ulid.ULID, maxRetries int) (*BatchProcessingResult, error)
-
-	// Batch analytics
-	GetBatchStats(ctx context.Context, id ulid.ULID) (*BatchStats, error)
-	GetBatchMetrics(ctx context.Context, filter *TelemetryBatchFilter) (*BatchProcessingMetrics, error)
-	GetThroughputStats(ctx context.Context, projectID ulid.ULID, timeWindow time.Duration) (*BatchThroughputStats, error)
-
-	// Batch lifecycle management
-	MarkBatchCompleted(ctx context.Context, batchID ulid.ULID, processingTimeMs int) error
-	MarkBatchFailed(ctx context.Context, batchID ulid.ULID, errorMessage string) error
-	MarkBatchPartial(ctx context.Context, batchID ulid.ULID, processingTimeMs int) error
-}
-
-// TelemetryEventService defines the interface for telemetry event processing
-type TelemetryEventService interface {
-	// Event operations
-	CreateEvent(ctx context.Context, event *TelemetryEvent) (*TelemetryEvent, error)
-	CreateEventsBatch(ctx context.Context, events []*TelemetryEvent) error
-	UpdateEventsBatch(ctx context.Context, events []*TelemetryEvent) error
-	GetEvent(ctx context.Context, id ulid.ULID) (*TelemetryEvent, error)
-	UpdateEvent(ctx context.Context, event *TelemetryEvent) (*TelemetryEvent, error)
-	DeleteEvent(ctx context.Context, id ulid.ULID) error
-
-	// Event queries
-	ListEvents(ctx context.Context, filter *TelemetryEventFilter) ([]*TelemetryEvent, int, error)
-	GetEventsByBatch(ctx context.Context, batchID ulid.ULID) ([]*TelemetryEvent, error)
-	GetUnprocessedEvents(ctx context.Context, batchID ulid.ULID) ([]*TelemetryEvent, error)
-	GetFailedEvents(ctx context.Context, batchID *ulid.ULID, limit, offset int) ([]*TelemetryEvent, error)
-
-	// Event processing
-	ProcessEvent(ctx context.Context, eventID ulid.ULID) error
-	ProcessEventsBatch(ctx context.Context, events []*TelemetryEvent) (*EventProcessingResult, error)
-	MarkEventProcessed(ctx context.Context, eventID ulid.ULID) error
-	MarkEventFailed(ctx context.Context, eventID ulid.ULID, errorMessage string) error
-
-	// Retry logic
-	RetryEvent(ctx context.Context, eventID ulid.ULID) error
-	GetEventsForRetry(ctx context.Context, maxRetries int, limit int) ([]*TelemetryEvent, error)
-	BulkRetryEvents(ctx context.Context, eventIDs []ulid.ULID) (*EventProcessingResult, error)
-
-	// Event analytics
-	GetEventStats(ctx context.Context, filter *TelemetryEventFilter) (*TelemetryEventStats, error)
-	GetEventTypeDistribution(ctx context.Context, batchID *ulid.ULID) (map[TelemetryEventType]int, error)
-
-	// Event cleanup
-	CleanupFailedEvents(ctx context.Context, olderThan time.Time) (int64, error)
-}
-
 // TelemetryDeduplicationService defines the interface for ULID-based deduplication
 type TelemetryDeduplicationService interface {
 	// Deduplication operations
 	CheckDuplicate(ctx context.Context, eventID ulid.ULID) (bool, error)
 	CheckBatchDuplicates(ctx context.Context, eventIDs []ulid.ULID) ([]ulid.ULID, error)
 	RegisterEvent(ctx context.Context, eventID ulid.ULID, batchID ulid.ULID, projectID ulid.ULID, ttl time.Duration) error
-	RegisterProcessedEventsBatch(ctx context.Context, projectID ulid.ULID, eventIDs []ulid.ULID) error
+	RegisterProcessedEventsBatch(ctx context.Context, projectID ulid.ULID, batchID ulid.ULID, eventIDs []ulid.ULID) error
 
 	// ULID-based TTL management
 	CalculateOptimalTTL(ctx context.Context, eventID ulid.ULID, defaultTTL time.Duration) (time.Duration, error)
@@ -237,8 +172,6 @@ type TelemetryService interface {
 	ProcessTelemetryBatch(ctx context.Context, request *TelemetryBatchRequest) (*TelemetryBatchResponse, error)
 
 	// Service access
-	Batch() TelemetryBatchService
-	Event() TelemetryEventService
 	Deduplication() TelemetryDeduplicationService
 
 	// Health and monitoring

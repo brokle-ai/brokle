@@ -9,7 +9,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
-	"brokle/internal/infrastructure/repository/clickhouse"
+	"brokle/internal/core/domain/observability"
 )
 
 // processTelemetryEvent processes a single telemetry event
@@ -17,20 +17,21 @@ func (w *TelemetryAnalyticsWorker) processTelemetryEvent(job *TelemetryEventJob)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Convert job to ClickHouse telemetry event format
-	event := &clickhouse.TelemetryEvent{
-		ID:          job.EventID.String(),
-		BatchID:     job.BatchID.String(),
-		ProjectID:   job.ProjectID.String(),
-		Environment: job.Environment,
-		EventType:   string(job.EventType),
-		EventData:   w.marshalEventData(job.EventData),
-		Timestamp:   job.Timestamp,
-		RetryCount:  job.RetryCount,
-		ProcessedAt: time.Now(),
+	// Convert job to domain telemetry event format WITH context from job
+	processedAt := time.Now()
+	event := &observability.TelemetryEvent{
+		ID:           job.EventID,
+		BatchID:      job.BatchID,
+		ProjectID:    job.ProjectID,    // From job
+		Environment:  job.Environment,  // From job
+		EventType:    job.EventType,
+		EventPayload: job.EventData,
+		CreatedAt:    job.Timestamp,
+		RetryCount:   job.RetryCount,
+		ProcessedAt:  &processedAt,
 	}
 
-	// Insert into ClickHouse
+	// Insert into ClickHouse using domain type (context carried in struct)
 	if err := w.repository.InsertTelemetryEvent(ctx, event); err != nil {
 		return fmt.Errorf("failed to insert telemetry event: %w", err)
 	}
@@ -43,22 +44,24 @@ func (w *TelemetryAnalyticsWorker) processTelemetryBatch(job *TelemetryBatchJob)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Convert job to ClickHouse telemetry batch format
-	batch := &clickhouse.TelemetryBatch{
-		ID:              job.BatchID.String(),
-		ProjectID:       job.ProjectID.String(),
-		Environment:     job.Environment,
-		Status:          string(job.Status),
-		TotalEvents:     job.TotalEvents,
-		ProcessedEvents: job.ProcessedEvents,
-		FailedEvents:    job.FailedEvents,
-		ProcessingTimeMs: int(job.ProcessingTime.Milliseconds()),
-		Metadata:        w.marshalEventData(job.Metadata),
-		Timestamp:       job.Timestamp,
-		ProcessedAt:     time.Now(),
+	// Convert job to domain telemetry batch format WITH context from job
+	processingTimeMs := int(job.ProcessingTime.Milliseconds())
+	completedAt := time.Now()
+	batch := &observability.TelemetryBatch{
+		ID:               job.BatchID,
+		ProjectID:        job.ProjectID,
+		Environment:      job.Environment,  // From job
+		BatchMetadata:    job.Metadata,
+		TotalEvents:      job.TotalEvents,
+		ProcessedEvents:  job.ProcessedEvents,
+		FailedEvents:     job.FailedEvents,
+		Status:           job.Status,
+		ProcessingTimeMs: &processingTimeMs,
+		CreatedAt:        job.Timestamp,
+		CompletedAt:      &completedAt,
 	}
 
-	// Insert into ClickHouse
+	// Insert into ClickHouse using domain type (context carried in struct)
 	if err := w.repository.InsertTelemetryBatch(ctx, batch); err != nil {
 		return fmt.Errorf("failed to insert telemetry batch: %w", err)
 	}
@@ -71,20 +74,27 @@ func (w *TelemetryAnalyticsWorker) processTelemetryMetric(job *TelemetryMetricJo
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Convert job to ClickHouse telemetry metric format
-	metric := &clickhouse.TelemetryMetric{
-		ProjectID:    job.ProjectID.String(),
-		Environment:  job.Environment,
-		MetricName:   job.MetricName,
-		MetricType:   string(job.MetricType),
-		MetricValue:  job.MetricValue,
-		Labels:       w.marshalLabels(job.Labels),
-		Metadata:     w.marshalEventData(job.Metadata),
-		Timestamp:    job.Timestamp,
-		ProcessedAt:  time.Now(),
+	// Convert labels from map[string]string to map[string]interface{}
+	labels := make(map[string]interface{}, len(job.Labels))
+	for k, v := range job.Labels {
+		labels[k] = v
 	}
 
-	// Insert into ClickHouse
+	// Convert job to domain telemetry metric format
+	processedAt := time.Now()
+	metric := &observability.TelemetryMetric{
+		ProjectID:   job.ProjectID,
+		Environment: job.Environment,
+		MetricName:  job.MetricName,
+		MetricType:  string(job.MetricType),
+		MetricValue: job.MetricValue,
+		Labels:      labels,
+		Metadata:    job.Metadata,
+		Timestamp:   job.Timestamp,
+		ProcessedAt: &processedAt,
+	}
+
+	// Insert into ClickHouse using domain type
 	if err := w.repository.InsertTelemetryMetric(ctx, metric); err != nil {
 		return fmt.Errorf("failed to insert telemetry metric: %w", err)
 	}
@@ -102,18 +112,21 @@ func (w *TelemetryAnalyticsWorker) processBulkOperations() {
 
 	// Process event buffer
 	if len(w.eventBuffer) > 0 {
-		events := make([]*clickhouse.TelemetryEvent, len(w.eventBuffer))
+		events := make([]*observability.TelemetryEvent, len(w.eventBuffer))
+		processedAt := time.Now()
+
+		// Each event carries its own project_id and environment from its job
 		for i, job := range w.eventBuffer {
-			events[i] = &clickhouse.TelemetryEvent{
-				ID:          job.EventID.String(),
-				BatchID:     job.BatchID.String(),
-				ProjectID:   job.ProjectID.String(),
-				Environment: job.Environment,
-				EventType:   string(job.EventType),
-				EventData:   w.marshalEventData(job.EventData),
-				Timestamp:   job.Timestamp,
-				RetryCount:  job.RetryCount,
-				ProcessedAt: time.Now(),
+			events[i] = &observability.TelemetryEvent{
+				ID:           job.EventID,
+				BatchID:      job.BatchID,
+				ProjectID:    job.ProjectID,    // Each event has its own project_id
+				Environment:  job.Environment,  // Each event has its own environment
+				EventType:    job.EventType,
+				EventPayload: job.EventData,
+				CreatedAt:    job.Timestamp,
+				RetryCount:   job.RetryCount,
+				ProcessedAt:  &processedAt,
 			}
 		}
 
@@ -131,20 +144,24 @@ func (w *TelemetryAnalyticsWorker) processBulkOperations() {
 
 	// Process batch buffer
 	if len(w.batchBuffer) > 0 {
-		batches := make([]*clickhouse.TelemetryBatch, len(w.batchBuffer))
+		batches := make([]*observability.TelemetryBatch, len(w.batchBuffer))
+		completedAt := time.Now()
+
+		// Each batch carries its own project_id and environment from its job
 		for i, job := range w.batchBuffer {
-			batches[i] = &clickhouse.TelemetryBatch{
-				ID:              job.BatchID.String(),
-				ProjectID:       job.ProjectID.String(),
-				Environment:     job.Environment,
-				Status:          string(job.Status),
-				TotalEvents:     job.TotalEvents,
-				ProcessedEvents: job.ProcessedEvents,
-				FailedEvents:    job.FailedEvents,
-				ProcessingTimeMs: int(job.ProcessingTime.Milliseconds()),
-				Metadata:        w.marshalEventData(job.Metadata),
-				Timestamp:       job.Timestamp,
-				ProcessedAt:     time.Now(),
+			processingTimeMs := int(job.ProcessingTime.Milliseconds())
+			batches[i] = &observability.TelemetryBatch{
+				ID:               job.BatchID,
+				ProjectID:        job.ProjectID,
+				Environment:      job.Environment,  // Each batch has its own environment
+				BatchMetadata:    job.Metadata,
+				TotalEvents:      job.TotalEvents,
+				ProcessedEvents:  job.ProcessedEvents,
+				FailedEvents:     job.FailedEvents,
+				Status:           job.Status,
+				ProcessingTimeMs: &processingTimeMs,
+				CreatedAt:        job.Timestamp,
+				CompletedAt:      &completedAt,
 			}
 		}
 
@@ -162,18 +179,25 @@ func (w *TelemetryAnalyticsWorker) processBulkOperations() {
 
 	// Process metrics buffer
 	if len(w.metricsBuffer) > 0 {
-		metrics := make([]*clickhouse.TelemetryMetric, len(w.metricsBuffer))
+		metrics := make([]*observability.TelemetryMetric, len(w.metricsBuffer))
+		processedAt := time.Now()
 		for i, job := range w.metricsBuffer {
-			metrics[i] = &clickhouse.TelemetryMetric{
-				ProjectID:    job.ProjectID.String(),
-				Environment:  job.Environment,
-				MetricName:   job.MetricName,
-				MetricType:   string(job.MetricType),
-				MetricValue:  job.MetricValue,
-				Labels:       w.marshalLabels(job.Labels),
-				Metadata:     w.marshalEventData(job.Metadata),
-				Timestamp:    job.Timestamp,
-				ProcessedAt:  time.Now(),
+			// Convert labels from map[string]string to map[string]interface{}
+			labels := make(map[string]interface{}, len(job.Labels))
+			for k, v := range job.Labels {
+				labels[k] = v
+			}
+
+			metrics[i] = &observability.TelemetryMetric{
+				ProjectID:   job.ProjectID,
+				Environment: job.Environment,
+				MetricName:  job.MetricName,
+				MetricType:  string(job.MetricType),
+				MetricValue: job.MetricValue,
+				Labels:      labels,
+				Metadata:    job.Metadata,
+				Timestamp:   job.Timestamp,
+				ProcessedAt: &processedAt,
 			}
 		}
 

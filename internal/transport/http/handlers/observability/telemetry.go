@@ -137,14 +137,14 @@ type TelemetryPerformanceStatsResponse struct {
 }
 
 // ProcessTelemetryBatch handles POST /v1/telemetry/batch
-// @Summary Process high-throughput telemetry batch
-// @Description Process a batch of telemetry events with ULID-based deduplication and 5x performance optimization
+// @Summary Process high-throughput telemetry batch (async via Redis Streams)
+// @Description Process a batch of telemetry events asynchronously with ULID-based deduplication and Redis Streams. Returns 202 Accepted immediately while events are processed in the background.
 // @Tags SDK - Telemetry
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
 // @Param request body TelemetryBatchRequest true "Telemetry batch data"
-// @Success 201 {object} response.APIResponse{data=TelemetryBatchResponse} "Batch processed successfully"
+// @Success 202 {object} response.APIResponse{data=TelemetryBatchResponse} "Batch accepted for async processing"
 // @Failure 400 {object} response.APIResponse{error=response.APIError} "Invalid request payload"
 // @Failure 401 {object} response.APIResponse{error=response.APIError} "Invalid or missing API key"
 // @Failure 422 {object} response.APIResponse{error=response.APIError} "Validation failed"
@@ -303,9 +303,10 @@ func (h *Handler) ProcessTelemetryBatch(c *gin.Context) {
 		"duplicate_events": apiResp.DuplicateEvents,
 		"failed_events":    apiResp.FailedEvents,
 		"processing_time":  apiResp.ProcessingTimeMs,
-	}).Info("Telemetry batch processed successfully")
+	}).Info("Telemetry batch accepted for async processing")
 
-	response.Created(c, apiResp)
+	// Return 202 Accepted for async processing via Redis Streams
+	response.Accepted(c, apiResp)
 }
 
 // GetTelemetryHealth handles GET /v1/telemetry/health
@@ -457,72 +458,6 @@ func (h *Handler) GetTelemetryPerformanceStats(c *gin.Context) {
 	}
 
 	response.Success(c, apiResp)
-}
-
-// GetBatchStatus handles GET /v1/telemetry/batch/:batch_id
-// @Summary Get telemetry batch status
-// @Description Get status and details for a specific telemetry batch
-// @Tags SDK - Telemetry
-// @Produce json
-// @Security ApiKeyAuth
-// @Param batch_id path string true "Batch ID (ULID format)"
-// @Success 200 {object} response.APIResponse{data=TelemetryBatchStatusResponse} "Batch status retrieved successfully"
-// @Failure 400 {object} response.APIResponse{error=response.APIError} "Invalid batch ID format"
-// @Failure 401 {object} response.APIResponse{error=response.APIError} "Invalid or missing API key"
-// @Failure 404 {object} response.APIResponse{error=response.APIError} "Batch not found"
-// @Failure 500 {object} response.APIResponse{error=response.APIError} "Internal server error"
-// @Router /v1/telemetry/batch/{batch_id} [get]
-func (h *Handler) GetBatchStatus(c *gin.Context) {
-	batchIDStr := c.Param("batch_id")
-	if batchIDStr == "" {
-		response.ValidationError(c, "Missing batch ID", "Batch ID is required")
-		return
-	}
-
-	// Parse batch ID
-	batchID, err := ulid.Parse(batchIDStr)
-	if err != nil {
-		response.ValidationError(c, "Invalid batch ID", "Batch ID must be a valid ULID")
-		return
-	}
-
-	// Get batch from service
-	batch, err := h.services.GetTelemetryService().Batch().GetBatch(c.Request.Context(), batchID)
-	if err != nil {
-		h.logger.WithError(err).WithField("batch_id", batchIDStr).Error("Failed to get batch status")
-		response.Error(c, err)
-		return
-	}
-
-	// Convert to response
-	apiResp := &TelemetryBatchStatusResponse{
-		BatchID:         batch.ID.String(),
-		Status:          string(batch.Status),
-		TotalEvents:     batch.TotalEvents,
-		ProcessedEvents: batch.ProcessedEvents,
-		FailedEvents:    batch.FailedEvents,
-		CreatedAt:       batch.CreatedAt,
-		CompletedAt:     batch.CompletedAt,
-	}
-
-	if batch.ProcessingTimeMs != nil {
-		apiResp.ProcessingTimeMs = batch.ProcessingTimeMs
-	}
-
-	response.Success(c, apiResp)
-}
-
-// TelemetryBatchStatusResponse represents batch status response
-// @Description Status information for a telemetry batch
-type TelemetryBatchStatusResponse struct {
-	BatchID          string     `json:"batch_id" example:"01ABCDEFGHIJKLMNOPQRSTUVWXYZ" description:"Batch identifier"`
-	Status           string     `json:"status" example:"completed" description:"Batch processing status"`
-	TotalEvents      int        `json:"total_events" example:"100" description:"Total events in batch"`
-	ProcessedEvents  int        `json:"processed_events" example:"95" description:"Successfully processed events"`
-	FailedEvents     int        `json:"failed_events" example:"5" description:"Failed events"`
-	ProcessingTimeMs *int       `json:"processing_time_ms,omitempty" example:"1234" description:"Processing time in milliseconds"`
-	CreatedAt        time.Time  `json:"created_at" example:"2023-12-01T10:30:00Z" description:"Batch creation timestamp"`
-	CompletedAt      *time.Time `json:"completed_at,omitempty" example:"2023-12-01T10:30:05Z" description:"Batch completion timestamp"`
 }
 
 // ValidateEvent handles POST /v1/telemetry/validate

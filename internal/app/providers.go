@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
@@ -32,6 +33,7 @@ import (
 	observabilityRepo "brokle/internal/infrastructure/repository/observability"
 	orgRepo "brokle/internal/infrastructure/repository/organization"
 	userRepo "brokle/internal/infrastructure/repository/user"
+	"brokle/internal/infrastructure/streams"
 	"brokle/internal/migration"
 	billingService "brokle/internal/services/billing"
 	gatewayService "brokle/internal/services/gateway"
@@ -61,8 +63,9 @@ type DatabaseContainer struct {
 
 // WorkerContainer holds all background worker instances
 type WorkerContainer struct {
-	TelemetryAnalytics *workers.TelemetryAnalyticsWorker
-	GatewayAnalytics   *gatewayAnalytics.GatewayAnalyticsWorker
+	TelemetryAnalytics  *workers.TelemetryAnalyticsWorker
+	TelemetryConsumer   *workers.TelemetryStreamConsumer
+	GatewayAnalytics    *gatewayAnalytics.GatewayAnalyticsWorker
 }
 
 // RepositoryContainer holds all repository instances organized by domain
@@ -136,8 +139,6 @@ type ObservabilityRepositories struct {
 	Trace                  observability.TraceRepository
 	Observation            observability.ObservationRepository
 	QualityScore           observability.QualityScoreRepository
-	TelemetryBatch         observability.TelemetryBatchRepository
-	TelemetryEvent         observability.TelemetryEventRepository
 	TelemetryDeduplication observability.TelemetryDeduplicationRepository
 }
 
@@ -223,10 +224,12 @@ func ProvideDatabases(cfg *config.Config, logger *logrus.Logger) (*DatabaseConta
 
 // ProvideWorkers initializes all background workers
 func ProvideWorkers(
-	cfg *config.Config, 
-	clickhouseDB *database.ClickHouseDB, 
+	cfg *config.Config,
+	clickhouseDB *database.ClickHouseDB,
+	redisDB *database.RedisDB,
 	analyticsRepo *analyticsRepo.Repository,
 	billingService *billingService.BillingService,
+	deduplicationRepo observability.TelemetryDeduplicationRepository,
 	logger *logrus.Logger,
 ) (*WorkerContainer, error) {
 	// Create analytics repository for worker (from clickhouse package)
@@ -234,7 +237,29 @@ func ProvideWorkers(
 
 	// Create telemetry analytics worker
 	telemetryWorker := workers.NewTelemetryAnalyticsWorker(cfg, logger, telemetryRepo)
-	
+
+	// Create deduplication service for stream consumer
+	deduplicationService := observabilityService.NewTelemetryDeduplicationService(deduplicationRepo)
+
+	// Create telemetry stream consumer for async processing
+	consumerConfig := &workers.TelemetryStreamConsumerConfig{
+		ConsumerGroup:     "telemetry-workers",
+		ConsumerID:        fmt.Sprintf("worker-%s", ulid.New().String()),
+		BatchSize:         50, // Optimized for lower latency and better worker utilization
+		BlockDuration:     time.Second,
+		MaxRetries:        3,
+		RetryBackoff:      500 * time.Millisecond,
+		DiscoveryInterval: 30 * time.Second, // Stream discovery every 30 seconds
+		MaxStreamsPerRead: 10,               // Read from max 10 streams at once
+	}
+	telemetryConsumer := workers.NewTelemetryStreamConsumer(
+		redisDB,
+		telemetryRepo,
+		deduplicationService,
+		logger,
+		consumerConfig,
+	)
+
 	// Create gateway analytics worker
 	gatewayAnalyticsWorker := gatewayAnalytics.NewGatewayAnalyticsWorker(
 		logger,
@@ -245,6 +270,7 @@ func ProvideWorkers(
 
 	return &WorkerContainer{
 		TelemetryAnalytics: telemetryWorker,
+		TelemetryConsumer:  telemetryConsumer,
 		GatewayAnalytics:   gatewayAnalyticsWorker,
 	}, nil
 }
@@ -288,9 +314,7 @@ func ProvideObservabilityRepositories(postgresDB *gorm.DB, clickhouseDB *databas
 		Trace:                  observabilityRepo.NewTraceRepository(postgresDB),
 		Observation:            observabilityRepo.NewObservationRepository(postgresDB),
 		QualityScore:           observabilityRepo.NewQualityScoreRepository(postgresDB),
-		TelemetryBatch:         observabilityRepo.NewTelemetryBatchRepository(postgresDB),
-		TelemetryEvent:         observabilityRepo.NewTelemetryEventRepository(postgresDB),
-		TelemetryDeduplication: observabilityRepo.NewTelemetryDeduplicationRepository(postgresDB, redisDB),
+		TelemetryDeduplication: observabilityRepo.NewTelemetryDeduplicationRepositoryRedis(redisDB),
 	}
 }
 
@@ -490,21 +514,25 @@ func ProvideOrganizationServices(
 // ProvideObservabilityServices creates all observability-related services
 func ProvideObservabilityServices(
 	observabilityRepos *ObservabilityRepositories,
+	redisDB *database.RedisDB,
 	workers *WorkerContainer,
 	logger *logrus.Logger,
 ) *observabilityService.ServiceRegistry {
 	// Create a simple event publisher for now
 	eventPublisher := &simpleEventPublisher{logger: logger}
 
+	// Create Redis Streams producer for telemetry
+	streamProducer := streams.NewTelemetryStreamProducer(redisDB, logger)
+
 	return observabilityService.NewServiceRegistry(
 		observabilityRepos.Trace,
 		observabilityRepos.Observation,
 		observabilityRepos.QualityScore,
 		eventPublisher,
-		// Telemetry repositories
-		observabilityRepos.TelemetryBatch,
-		observabilityRepos.TelemetryEvent,
+		// Telemetry - Redis-only deduplication (no PostgreSQL batch/event repos)
 		observabilityRepos.TelemetryDeduplication,
+		// Redis Streams producer
+		streamProducer,
 		// Analytics worker
 		workers.TelemetryAnalytics,
 		logger,
@@ -624,6 +652,7 @@ func (s *simpleBillingOrgService) GetPaymentMethod(ctx context.Context, orgID ul
 func ProvideServices(
 	cfg *config.Config,
 	repos *RepositoryContainer,
+	databases *DatabaseContainer,
 	workers *WorkerContainer,
 	gatewayServices *GatewayServices,
 	billingServices *BillingServices,
@@ -644,8 +673,8 @@ func ProvideServices(
 		logger,
 	)
 
-	// Create observability services (includes analytics worker integration)
-	observabilityServices := ProvideObservabilityServices(repos.Observability, workers, logger)
+	// Create observability services (includes analytics worker integration and Redis Streams)
+	observabilityServices := ProvideObservabilityServices(repos.Observability, databases.Redis, workers, logger)
 
 	return &ServiceContainer{
 		User:               userServices,
@@ -686,8 +715,8 @@ func ProvideAll(cfg *config.Config, logger *logrus.Logger) (*ProviderContainer, 
 	gatewayServices := ProvideGatewayServices(repos.Gateway, logger)
 	billingServices := ProvideBillingServices(repos.Billing, repos.Gateway, logger)
 
-	// Initialize workers (require ClickHouse for analytics and services for gateway analytics)
-	workers, err := ProvideWorkers(cfg, databases.ClickHouse, repos.Analytics.Analytics, billingServices.Billing, logger)
+	// Initialize workers (require ClickHouse + Redis for telemetry, and services for gateway analytics)
+	workers, err := ProvideWorkers(cfg, databases.ClickHouse, databases.Redis, repos.Analytics.Analytics, billingServices.Billing, repos.Observability.TelemetryDeduplication, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -695,12 +724,19 @@ func ProvideAll(cfg *config.Config, logger *logrus.Logger) (*ProviderContainer, 
 	// Start analytics workers
 	workers.TelemetryAnalytics.Start()
 	logger.Info("Telemetry analytics worker started")
-	
+
+	// Start telemetry stream consumer for async processing
+	if err := workers.TelemetryConsumer.Start(context.Background()); err != nil {
+		logger.WithError(err).Error("Failed to start telemetry stream consumer")
+		return nil, err
+	}
+	logger.Info("Telemetry stream consumer started")
+
 	workers.GatewayAnalytics.Start()
 	logger.Info("Gateway analytics worker started")
 
-	// Initialize services (includes worker integration)
-	services := ProvideServices(cfg, repos, workers, gatewayServices, billingServices, logger)
+	// Initialize services (includes worker integration and Redis Streams)
+	services := ProvideServices(cfg, repos, databases, workers, gatewayServices, billingServices, logger)
 
 	// Initialize enterprise services
 	enterprise := ProvideEnterpriseServices(cfg, logger)
@@ -844,7 +880,30 @@ func (pc *ProviderContainer) HealthCheck() map[string]string {
 			health["telemetry_analytics_worker"] = "unhealthy: queue depth exceeded or processing failed"
 		}
 	}
-	
+
+	if pc.Workers != nil && pc.Workers.TelemetryConsumer != nil {
+		stats := pc.Workers.TelemetryConsumer.GetStats()
+		// Consider healthy if: running (has stats) and error rate < 10% of processed batches
+		batchesProcessed := stats["batches_processed"]
+		errorsCount := stats["errors_count"]
+
+		if batchesProcessed == 0 && errorsCount == 0 {
+			// Newly started - healthy
+			health["telemetry_stream_consumer"] = "healthy (no activity yet)"
+		} else if batchesProcessed > 0 {
+			errorRate := float64(errorsCount) / float64(batchesProcessed)
+			if errorRate < 0.10 { // Less than 10% error rate
+				health["telemetry_stream_consumer"] = fmt.Sprintf("healthy (processed: %d, errors: %d, streams: %d)",
+					batchesProcessed, errorsCount, stats["active_streams"])
+			} else {
+				health["telemetry_stream_consumer"] = fmt.Sprintf("degraded (high error rate: %.1f%%)", errorRate*100)
+			}
+		} else {
+			// Errors but no successful processing
+			health["telemetry_stream_consumer"] = fmt.Sprintf("unhealthy (errors: %d, no successful processing)", errorsCount)
+		}
+	}
+
 	if pc.Workers != nil && pc.Workers.GatewayAnalytics != nil {
 		if pc.Workers.GatewayAnalytics.IsHealthy() {
 			health["gateway_analytics_worker"] = "healthy"
@@ -866,7 +925,13 @@ func (pc *ProviderContainer) Shutdown() error {
 		pc.Workers.TelemetryAnalytics.Stop()
 		pc.Logger.Info("Telemetry analytics worker stopped")
 	}
-	
+
+	if pc.Workers != nil && pc.Workers.TelemetryConsumer != nil {
+		pc.Logger.Info("Stopping telemetry stream consumer...")
+		pc.Workers.TelemetryConsumer.Stop()
+		pc.Logger.Info("Telemetry stream consumer stopped")
+	}
+
 	if pc.Workers != nil && pc.Workers.GatewayAnalytics != nil {
 		pc.Logger.Info("Stopping gateway analytics worker...")
 		pc.Workers.GatewayAnalytics.Stop()

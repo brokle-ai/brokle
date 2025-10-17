@@ -135,81 +135,6 @@ type AnalyticsRepository interface {
 	GetRealtimeMetrics(ctx context.Context, projectID ulid.ULID) (*RealtimeMetrics, error)
 }
 
-// TelemetryBatchRepository defines the interface for telemetry batch data access
-type TelemetryBatchRepository interface {
-	// Basic CRUD operations
-	Create(ctx context.Context, batch *TelemetryBatch) error
-	GetByID(ctx context.Context, id ulid.ULID) (*TelemetryBatch, error)
-	Update(ctx context.Context, batch *TelemetryBatch) error
-	Delete(ctx context.Context, id ulid.ULID) error
-
-	// Project-scoped queries
-	GetByProjectID(ctx context.Context, projectID ulid.ULID, limit, offset int) ([]*TelemetryBatch, error)
-	GetActiveByProjectID(ctx context.Context, projectID ulid.ULID) ([]*TelemetryBatch, error)
-
-	// Status-based queries
-	GetByStatus(ctx context.Context, status BatchStatus, limit, offset int) ([]*TelemetryBatch, error)
-	GetProcessingBatches(ctx context.Context) ([]*TelemetryBatch, error)
-	GetCompletedBatches(ctx context.Context, projectID ulid.ULID, limit, offset int) ([]*TelemetryBatch, error)
-
-	// Advanced queries
-	SearchBatches(ctx context.Context, filter *TelemetryBatchFilter) ([]*TelemetryBatch, int, error)
-	GetBatchWithEvents(ctx context.Context, id ulid.ULID) (*TelemetryBatch, error)
-	GetBatchStats(ctx context.Context, id ulid.ULID) (*BatchStats, error)
-
-	// Batch operations
-	CreateBatch(ctx context.Context, batches []*TelemetryBatch) error
-	UpdateBatch(ctx context.Context, batches []*TelemetryBatch) error
-	UpdateBatchStatus(ctx context.Context, id ulid.ULID, status BatchStatus, processingTimeMs *int) error
-
-	// Time-based queries
-	GetBatchesByTimeRange(ctx context.Context, projectID ulid.ULID, startTime, endTime time.Time, limit, offset int) ([]*TelemetryBatch, error)
-	CountBatches(ctx context.Context, filter *TelemetryBatchFilter) (int64, error)
-	GetRecentBatches(ctx context.Context, projectID ulid.ULID, limit int) ([]*TelemetryBatch, error)
-
-	// Performance monitoring
-	GetBatchThroughputStats(ctx context.Context, projectID ulid.ULID, timeWindow time.Duration) (*BatchThroughputStats, error)
-	GetBatchProcessingMetrics(ctx context.Context, filter *TelemetryBatchFilter) (*BatchProcessingMetrics, error)
-}
-
-// TelemetryEventRepository defines the interface for telemetry event data access
-type TelemetryEventRepository interface {
-	// Basic CRUD operations
-	Create(ctx context.Context, event *TelemetryEvent) error
-	GetByID(ctx context.Context, id ulid.ULID) (*TelemetryEvent, error)
-	Update(ctx context.Context, event *TelemetryEvent) error
-	Delete(ctx context.Context, id ulid.ULID) error
-
-	// Batch-scoped queries
-	GetByBatchID(ctx context.Context, batchID ulid.ULID) ([]*TelemetryEvent, error)
-	GetUnprocessedByBatchID(ctx context.Context, batchID ulid.ULID) ([]*TelemetryEvent, error)
-	GetFailedByBatchID(ctx context.Context, batchID ulid.ULID) ([]*TelemetryEvent, error)
-
-	// Type-based queries
-	GetByEventType(ctx context.Context, eventType TelemetryEventType, limit, offset int) ([]*TelemetryEvent, error)
-	GetUnprocessedByType(ctx context.Context, eventType TelemetryEventType, limit int) ([]*TelemetryEvent, error)
-
-	// Processing operations
-	MarkAsProcessed(ctx context.Context, id ulid.ULID, processedAt time.Time) error
-	MarkAsFailed(ctx context.Context, id ulid.ULID, errorMessage string) error
-	IncrementRetryCount(ctx context.Context, id ulid.ULID) error
-
-	// Batch operations
-	CreateBatch(ctx context.Context, events []*TelemetryEvent) error
-	UpdateBatch(ctx context.Context, events []*TelemetryEvent) error
-	ProcessBatch(ctx context.Context, batchID ulid.ULID, processor func([]*TelemetryEvent) error) error
-
-	// Retry and failure handling
-	GetEventsForRetry(ctx context.Context, maxRetries int, limit int) ([]*TelemetryEvent, error)
-	GetFailedEvents(ctx context.Context, batchID *ulid.ULID, limit, offset int) ([]*TelemetryEvent, error)
-	DeleteFailedEvents(ctx context.Context, olderThan time.Time) (int64, error)
-
-	// Analytics queries
-	GetEventStats(ctx context.Context, filter *TelemetryEventFilter) (*TelemetryEventStats, error)
-	GetEventTypeDistribution(ctx context.Context, batchID *ulid.ULID) (map[TelemetryEventType]int, error)
-	CountEvents(ctx context.Context, filter *TelemetryEventFilter) (int64, error)
-}
-
 // TelemetryDeduplicationRepository defines the interface for deduplication data access
 type TelemetryDeduplicationRepository interface {
 	// Basic CRUD operations
@@ -241,13 +166,26 @@ type TelemetryDeduplicationRepository interface {
 	CreateBatch(ctx context.Context, entries []*TelemetryEventDeduplication) error
 }
 
+// TelemetryAnalyticsRepository defines the interface for telemetry analytics data access (ClickHouse)
+type TelemetryAnalyticsRepository interface {
+	// Event operations (project_id and environment carried in TelemetryEvent domain type)
+	InsertTelemetryEvent(ctx context.Context, event *TelemetryEvent) error
+	InsertTelemetryEventsBatch(ctx context.Context, events []*TelemetryEvent) error
+
+	// Batch operations (project_id and environment carried in TelemetryBatch domain type)
+	InsertTelemetryBatch(ctx context.Context, batch *TelemetryBatch) error
+	InsertTelemetryBatchesBatch(ctx context.Context, batches []*TelemetryBatch) error
+
+	// Metric operations (project_id and environment carried in TelemetryMetric domain type)
+	InsertTelemetryMetric(ctx context.Context, metric *TelemetryMetric) error
+	InsertTelemetryMetricsBatch(ctx context.Context, metrics []*TelemetryMetric) error
+}
+
 // Repository aggregates all observability-related repositories
 type Repository interface {
 	Traces() TraceRepository
 	Observations() ObservationRepository
 	QualityScores() QualityScoreRepository
-	TelemetryBatches() TelemetryBatchRepository
-	TelemetryEvents() TelemetryEventRepository
 	TelemetryDeduplication() TelemetryDeduplicationRepository
 	Analytics() AnalyticsRepository
 }

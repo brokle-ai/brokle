@@ -360,7 +360,6 @@ func (s *Server) setupSDKRoutes(router *gin.RouterGroup) {
 		telemetry.GET("/health", s.handlers.Observability.GetTelemetryHealth)                // Health monitoring
 		telemetry.GET("/metrics", s.handlers.Observability.GetTelemetryMetrics)              // Performance metrics
 		telemetry.GET("/performance", s.handlers.Observability.GetTelemetryPerformanceStats) // Performance stats
-		telemetry.GET("/batch/:batch_id", s.handlers.Observability.GetBatchStatus)           // Batch status tracking
 		telemetry.POST("/validate", s.handlers.Observability.ValidateEvent)                  // Event validation
 	}
 

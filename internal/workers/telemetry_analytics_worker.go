@@ -1,7 +1,6 @@
 package workers
 
 import (
-	"context"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -10,26 +9,15 @@ import (
 
 	"brokle/internal/config"
 	"brokle/internal/core/domain/observability"
-	"brokle/internal/infrastructure/repository/clickhouse"
 	"brokle/pkg/ulid"
 )
-
-// TelemetryRepository interface for telemetry data storage
-type TelemetryRepository interface {
-	InsertTelemetryEvent(ctx context.Context, event *clickhouse.TelemetryEvent) error
-	InsertTelemetryEventsBatch(ctx context.Context, events []*clickhouse.TelemetryEvent) error
-	InsertTelemetryBatch(ctx context.Context, batch *clickhouse.TelemetryBatch) error
-	InsertTelemetryBatchesBatch(ctx context.Context, batches []*clickhouse.TelemetryBatch) error
-	InsertTelemetryMetric(ctx context.Context, metric *clickhouse.TelemetryMetric) error
-	InsertTelemetryMetricsBatch(ctx context.Context, metrics []*clickhouse.TelemetryMetric) error
-}
 
 // TelemetryAnalyticsWorker handles high-performance telemetry analytics processing
 // Designed for 10k events/sec throughput with comprehensive buffering and error handling
 type TelemetryAnalyticsWorker struct {
 	config     *config.Config
 	logger     *logrus.Logger
-	repository TelemetryRepository
+	repository observability.TelemetryAnalyticsRepository
 
 	// Channel-based queue system with configurable buffers
 	eventQueue    chan *TelemetryEventJob
@@ -160,7 +148,7 @@ type HealthMetrics struct {
 func NewTelemetryAnalyticsWorker(
 	config *config.Config,
 	logger *logrus.Logger,
-	repository TelemetryRepository,
+	repository observability.TelemetryAnalyticsRepository,
 ) *TelemetryAnalyticsWorker {
 	// Configure worker parameters for high throughput
 	maxWorkers := config.Workers.AnalyticsWorkers

@@ -318,6 +318,7 @@ type QualityScoreAggregation struct {
 type TelemetryBatch struct {
 	ID               ulid.ULID              `json:"id" db:"id"`
 	ProjectID        ulid.ULID              `json:"project_id" db:"project_id"`
+	Environment      string                 `json:"environment,omitempty" db:"environment"`
 	BatchMetadata    map[string]interface{} `json:"batch_metadata" db:"batch_metadata"`
 	TotalEvents      int                    `json:"total_events" db:"total_events"`
 	ProcessedEvents  int                    `json:"processed_events" db:"processed_events"`
@@ -333,6 +334,8 @@ type TelemetryBatch struct {
 type TelemetryEvent struct {
 	ID           ulid.ULID               `json:"id" db:"id"`
 	BatchID      ulid.ULID               `json:"batch_id" db:"batch_id"`
+	ProjectID    ulid.ULID               `json:"project_id" db:"project_id"`
+	Environment  string                  `json:"environment,omitempty" db:"environment"`
 	EventType    TelemetryEventType      `json:"event_type" db:"event_type"`
 	EventPayload map[string]interface{}  `json:"event_payload" db:"event_payload"`
 	ProcessedAt  *time.Time              `json:"processed_at,omitempty" db:"processed_at"`
@@ -348,6 +351,19 @@ type TelemetryEventDeduplication struct {
 	ProjectID    ulid.ULID `json:"project_id" db:"project_id"`
 	FirstSeenAt  time.Time `json:"first_seen_at" db:"first_seen_at"`
 	ExpiresAt    time.Time `json:"expires_at" db:"expires_at"`
+}
+
+// TelemetryMetric represents a telemetry metric for performance and analytics tracking
+type TelemetryMetric struct {
+	ProjectID   ulid.ULID              `json:"project_id" db:"project_id"`
+	Environment string                 `json:"environment,omitempty" db:"environment"`
+	MetricName  string                 `json:"metric_name" db:"metric_name"`
+	MetricType  string                 `json:"metric_type" db:"metric_type"`
+	MetricValue float64                `json:"metric_value" db:"metric_value"`
+	Labels      map[string]interface{} `json:"labels,omitempty" db:"labels"`
+	Metadata    map[string]interface{} `json:"metadata,omitempty" db:"metadata"`
+	Timestamp   time.Time              `json:"timestamp" db:"timestamp"`
+	ProcessedAt *time.Time             `json:"processed_at,omitempty" db:"processed_at"`
 }
 
 // BatchStatus defines the status of a telemetry batch
@@ -575,4 +591,37 @@ func (ted *TelemetryEventDeduplication) TimeUntilExpiry() time.Duration {
 		return 0
 	}
 	return ted.ExpiresAt.Sub(time.Now())
+}
+
+// ValidateTelemetryMetric validates a telemetry metric entity
+func (tm *TelemetryMetric) Validate() []ValidationError {
+	var errors []ValidationError
+
+	if tm.MetricName == "" {
+		errors = append(errors, ValidationError{
+			Field:   "metric_name",
+			Message: "metric name is required",
+		})
+	}
+
+	if tm.MetricType == "" {
+		errors = append(errors, ValidationError{
+			Field:   "metric_type",
+			Message: "metric type is required",
+		})
+	}
+
+	if tm.Timestamp.IsZero() {
+		errors = append(errors, ValidationError{
+			Field:   "timestamp",
+			Message: "timestamp is required",
+		})
+	}
+
+	return errors
+}
+
+// IsProcessed checks if the metric has been processed
+func (tm *TelemetryMetric) IsProcessed() bool {
+	return tm.ProcessedAt != nil && !tm.ProcessedAt.IsZero()
 }

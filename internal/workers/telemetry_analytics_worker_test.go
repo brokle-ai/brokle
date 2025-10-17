@@ -15,41 +15,40 @@ import (
 
 	"brokle/internal/config"
 	"brokle/internal/core/domain/observability"
-	"brokle/internal/infrastructure/repository/clickhouse"
 	"brokle/pkg/ulid"
 )
 
-// MockAnalyticsRepository mocks the ClickHouse analytics repository
+// MockAnalyticsRepository mocks the domain analytics repository
 type MockAnalyticsRepository struct {
 	mock.Mock
 }
 
-func (m *MockAnalyticsRepository) InsertTelemetryEvent(ctx context.Context, event *clickhouse.TelemetryEvent) error {
+func (m *MockAnalyticsRepository) InsertTelemetryEvent(ctx context.Context, event *observability.TelemetryEvent) error {
 	args := m.Called(ctx, event)
 	return args.Error(0)
 }
 
-func (m *MockAnalyticsRepository) InsertTelemetryEventsBatch(ctx context.Context, events []*clickhouse.TelemetryEvent) error {
+func (m *MockAnalyticsRepository) InsertTelemetryEventsBatch(ctx context.Context, events []*observability.TelemetryEvent) error {
 	args := m.Called(ctx, events)
 	return args.Error(0)
 }
 
-func (m *MockAnalyticsRepository) InsertTelemetryBatch(ctx context.Context, batch *clickhouse.TelemetryBatch) error {
+func (m *MockAnalyticsRepository) InsertTelemetryBatch(ctx context.Context, batch *observability.TelemetryBatch) error {
 	args := m.Called(ctx, batch)
 	return args.Error(0)
 }
 
-func (m *MockAnalyticsRepository) InsertTelemetryBatchesBatch(ctx context.Context, batches []*clickhouse.TelemetryBatch) error {
+func (m *MockAnalyticsRepository) InsertTelemetryBatchesBatch(ctx context.Context, batches []*observability.TelemetryBatch) error {
 	args := m.Called(ctx, batches)
 	return args.Error(0)
 }
 
-func (m *MockAnalyticsRepository) InsertTelemetryMetric(ctx context.Context, metric *clickhouse.TelemetryMetric) error {
+func (m *MockAnalyticsRepository) InsertTelemetryMetric(ctx context.Context, metric *observability.TelemetryMetric) error {
 	args := m.Called(ctx, metric)
 	return args.Error(0)
 }
 
-func (m *MockAnalyticsRepository) InsertTelemetryMetricsBatch(ctx context.Context, metrics []*clickhouse.TelemetryMetric) error {
+func (m *MockAnalyticsRepository) InsertTelemetryMetricsBatch(ctx context.Context, metrics []*observability.TelemetryMetric) error {
 	args := m.Called(ctx, metrics)
 	return args.Error(0)
 }
@@ -63,10 +62,10 @@ func TestTelemetryAnalyticsWorker_QueueProcessing(t *testing.T) {
 		// Setup
 		eventJob := createTestEventJob()
 
-		mockRepo.On("InsertTelemetryEvent", mock.Anything, mock.MatchedBy(func(event *clickhouse.TelemetryEvent) bool {
-			return event.ID == eventJob.EventID.String() &&
-				   event.ProjectID == eventJob.ProjectID.String() &&
-				   event.EventType == string(eventJob.EventType)
+		mockRepo.On("InsertTelemetryEvent", mock.Anything, mock.MatchedBy(func(event *observability.TelemetryEvent) bool {
+			return event.ID == eventJob.EventID &&
+				   event.BatchID == eventJob.BatchID &&
+				   event.EventType == eventJob.EventType
 		})).Return(nil).Once()
 
 		// Execute
@@ -89,10 +88,10 @@ func TestTelemetryAnalyticsWorker_QueueProcessing(t *testing.T) {
 		// Setup
 		batchJob := createTestBatchJob()
 
-		mockRepo.On("InsertTelemetryBatch", mock.Anything, mock.MatchedBy(func(batch *clickhouse.TelemetryBatch) bool {
-			return batch.ID == batchJob.BatchID.String() &&
-				   batch.ProjectID == batchJob.ProjectID.String() &&
-				   batch.Status == string(batchJob.Status)
+		mockRepo.On("InsertTelemetryBatch", mock.Anything, mock.MatchedBy(func(batch *observability.TelemetryBatch) bool {
+			return batch.ID == batchJob.BatchID &&
+				   batch.ProjectID == batchJob.ProjectID &&
+				   batch.Status == batchJob.Status
 		})).Return(nil).Once()
 
 		// Execute
@@ -114,8 +113,8 @@ func TestTelemetryAnalyticsWorker_QueueProcessing(t *testing.T) {
 		// Setup
 		metricJob := createTestMetricJob()
 
-		mockRepo.On("InsertTelemetryMetric", mock.Anything, mock.MatchedBy(func(metric *clickhouse.TelemetryMetric) bool {
-			return metric.ProjectID == metricJob.ProjectID.String() &&
+		mockRepo.On("InsertTelemetryMetric", mock.Anything, mock.MatchedBy(func(metric *observability.TelemetryMetric) bool {
+			return metric.ProjectID == metricJob.ProjectID &&
 				   metric.MetricName == metricJob.MetricName &&
 				   metric.MetricType == string(metricJob.MetricType)
 		})).Return(nil).Once()
@@ -139,7 +138,7 @@ func TestTelemetryAnalyticsWorker_QueueProcessing(t *testing.T) {
 		// Setup
 		const jobCount = 10
 
-		mockRepo.On("InsertTelemetryEvent", mock.Anything, mock.AnythingOfType("*clickhouse.TelemetryEvent")).
+		mockRepo.On("InsertTelemetryEvent", mock.Anything, mock.AnythingOfType("*observability.TelemetryEvent")).
 			Return(nil).Times(jobCount)
 
 		// Execute concurrently
@@ -170,9 +169,9 @@ func TestTelemetryAnalyticsWorker_RetryLogic(t *testing.T) {
 		retryError := errors.New("temporary database error")
 
 		// First call fails, second succeeds
-		mockRepo.On("InsertTelemetryEvent", mock.Anything, mock.AnythingOfType("*clickhouse.TelemetryEvent")).
+		mockRepo.On("InsertTelemetryEvent", mock.Anything, mock.AnythingOfType("*observability.TelemetryEvent")).
 			Return(retryError).Once()
-		mockRepo.On("InsertTelemetryEvent", mock.Anything, mock.AnythingOfType("*clickhouse.TelemetryEvent")).
+		mockRepo.On("InsertTelemetryEvent", mock.Anything, mock.AnythingOfType("*observability.TelemetryEvent")).
 			Return(nil).Once()
 
 		// Execute
@@ -197,7 +196,7 @@ func TestTelemetryAnalyticsWorker_RetryLogic(t *testing.T) {
 		persistentError := errors.New("persistent database error")
 
 		// All attempts fail (initial + maxRetries = 4 total calls)
-		mockRepo.On("InsertTelemetryEvent", mock.Anything, mock.AnythingOfType("*clickhouse.TelemetryEvent")).
+		mockRepo.On("InsertTelemetryEvent", mock.Anything, mock.AnythingOfType("*observability.TelemetryEvent")).
 			Return(persistentError).Times(4)
 
 		// Execute
@@ -283,7 +282,7 @@ func TestTelemetryAnalyticsWorker_DropPaths(t *testing.T) {
 		worker, mockRepo := setupTestWorker(t)
 
 		// Set up mock to handle any processing that might occur during shutdown
-		mockRepo.On("InsertTelemetryEvent", mock.Anything, mock.AnythingOfType("*clickhouse.TelemetryEvent")).
+		mockRepo.On("InsertTelemetryEvent", mock.Anything, mock.AnythingOfType("*observability.TelemetryEvent")).
 			Return(nil).Maybe()
 
 		// Setup
@@ -314,7 +313,7 @@ func TestTelemetryAnalyticsWorker_HealthMetrics(t *testing.T) {
 		// Setup
 		eventJob := createTestEventJob()
 
-		mockRepo.On("InsertTelemetryEvent", mock.Anything, mock.AnythingOfType("*clickhouse.TelemetryEvent")).
+		mockRepo.On("InsertTelemetryEvent", mock.Anything, mock.AnythingOfType("*observability.TelemetryEvent")).
 			Return(nil).Once()
 
 		// Execute
@@ -342,7 +341,7 @@ func TestTelemetryAnalyticsWorker_HealthMetrics(t *testing.T) {
 		persistentError := errors.New("persistent error")
 
 		// All attempts fail
-		mockRepo.On("InsertTelemetryEvent", mock.Anything, mock.AnythingOfType("*clickhouse.TelemetryEvent")).
+		mockRepo.On("InsertTelemetryEvent", mock.Anything, mock.AnythingOfType("*observability.TelemetryEvent")).
 			Return(persistentError).Times(4) // Initial + 3 retries
 
 		// Execute
@@ -375,7 +374,7 @@ func TestTelemetryAnalyticsWorker_HealthMetrics(t *testing.T) {
 
 		// Setup
 		eventJob := createTestEventJob()
-		mockRepo.On("InsertTelemetryEvent", mock.Anything, mock.AnythingOfType("*clickhouse.TelemetryEvent")).
+		mockRepo.On("InsertTelemetryEvent", mock.Anything, mock.AnythingOfType("*observability.TelemetryEvent")).
 			Return(nil).Once()
 
 		// Execute

@@ -143,3 +143,50 @@ func (r *RedisDB) IncrementBy(ctx context.Context, key string, value int64) (int
 func (r *RedisDB) GetStats() *redis.PoolStats {
 	return r.Client.PoolStats()
 }
+
+// Redis Streams Methods
+
+// XAdd adds a message to a Redis Stream
+func (r *RedisDB) XAdd(ctx context.Context, args *redis.XAddArgs) (string, error) {
+	return r.Client.XAdd(ctx, args).Result()
+}
+
+// XReadGroup reads messages from a Redis Stream using consumer groups
+func (r *RedisDB) XReadGroup(ctx context.Context, args *redis.XReadGroupArgs) ([]redis.XStream, error) {
+	return r.Client.XReadGroup(ctx, args).Result()
+}
+
+// XAck acknowledges message processing in a consumer group
+func (r *RedisDB) XAck(ctx context.Context, stream, group string, ids ...string) error {
+	return r.Client.XAck(ctx, stream, group, ids...).Err()
+}
+
+// XGroupCreate creates a consumer group for a stream
+func (r *RedisDB) XGroupCreate(ctx context.Context, stream, group, start string) error {
+	return r.Client.XGroupCreate(ctx, stream, group, start).Err()
+}
+
+// XGroupCreateMkStream creates a consumer group and the stream if it doesn't exist
+func (r *RedisDB) XGroupCreateMkStream(ctx context.Context, stream, group, start string) error {
+	return r.Client.XGroupCreateMkStream(ctx, stream, group, start).Err()
+}
+
+// XLen returns the number of entries in a stream
+func (r *RedisDB) XLen(ctx context.Context, stream string) (int64, error) {
+	return r.Client.XLen(ctx, stream).Result()
+}
+
+// XInfoStream returns information about a stream
+func (r *RedisDB) XInfoStream(ctx context.Context, stream string) (*redis.XInfoStream, error) {
+	return r.Client.XInfoStream(ctx, stream).Result()
+}
+
+// XInfoGroups returns information about consumer groups for a stream
+func (r *RedisDB) XInfoGroups(ctx context.Context, stream string) ([]redis.XInfoGroup, error) {
+	return r.Client.XInfoGroups(ctx, stream).Result()
+}
+
+// XPending returns pending messages for a consumer group
+func (r *RedisDB) XPending(ctx context.Context, stream, group string) (*redis.XPending, error) {
+	return r.Client.XPending(ctx, stream, group).Result()
+}

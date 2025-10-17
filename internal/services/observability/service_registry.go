@@ -2,6 +2,7 @@ package observability
 
 import (
 	"brokle/internal/core/domain/observability"
+	"brokle/internal/infrastructure/streams"
 	"brokle/internal/workers"
 	"github.com/sirupsen/logrus"
 )
@@ -20,10 +21,10 @@ func NewServiceRegistry(
 	observationRepo observability.ObservationRepository,
 	qualityScoreRepo observability.QualityScoreRepository,
 	eventPublisher observability.EventPublisher,
-	// Telemetry repositories
-	telemetryBatchRepo observability.TelemetryBatchRepository,
-	telemetryEventRepo observability.TelemetryEventRepository,
+	// Telemetry - Redis-only (no PostgreSQL)
 	telemetryDeduplicationRepo observability.TelemetryDeduplicationRepository,
+	// Redis Streams producer
+	streamProducer *streams.TelemetryStreamProducer,
 	// Analytics worker
 	analyticsWorker *workers.TelemetryAnalyticsWorker,
 	logger *logrus.Logger,
@@ -37,16 +38,13 @@ func NewServiceRegistry(
 	// Create quality service
 	qualityService := NewQualityService(qualityScoreRepo, traceRepo, observationRepo, eventPublisher)
 
-	// Create telemetry sub-services
-	telemetryBatchService := NewTelemetryBatchService(telemetryBatchRepo, telemetryEventRepo, telemetryDeduplicationRepo)
-	telemetryEventService := NewTelemetryEventService(telemetryEventRepo, telemetryBatchRepo)
+	// Create deduplication service (Redis-only)
 	telemetryDeduplicationService := NewTelemetryDeduplicationService(telemetryDeduplicationRepo)
 
-	// Create main telemetry service
+	// Create main telemetry service with Redis Streams support (no PostgreSQL)
 	telemetryService := NewTelemetryService(
-		telemetryBatchService,
-		telemetryEventService,
 		telemetryDeduplicationService,
+		streamProducer,
 		analyticsWorker,
 		logger,
 	)
