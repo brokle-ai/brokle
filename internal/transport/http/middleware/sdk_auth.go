@@ -57,15 +57,10 @@ func (m *SDKAuthMiddleware) RequireSDKAuth() gin.HandlerFunc {
 			return
 		}
 
-		// Extract optional environment from X-Environment header
-		environment := c.GetHeader("X-Environment")
-
 		// Validate API key (self-contained, extracts project ID automatically)
 		validateResp, err := m.apiKeyService.ValidateAPIKey(c.Request.Context(), apiKey)
 		if err != nil {
-			m.logger.WithError(err).WithFields(logrus.Fields{
-				"has_env": environment != "",
-			}).Warn("API key validation failed")
+			m.logger.WithError(err).Warn("API key validation failed")
 			response.Error(c, err) // Properly propagate AppError status codes (401, 403, etc.)
 			c.Abort()
 			return
@@ -77,13 +72,11 @@ func (m *SDKAuthMiddleware) RequireSDKAuth() gin.HandlerFunc {
 		// Store project ID as pointer to match GetProjectID() expectations
 		projectID := validateResp.ProjectID
 		c.Set(ProjectIDKey, &projectID)
-		c.Set(EnvironmentKey, environment) // From optional X-Environment header
 
 		// Log successful SDK authentication
 		m.logger.WithFields(logrus.Fields{
 			"api_key_id": validateResp.AuthContext.APIKeyID,
 			"project_id": validateResp.ProjectID,
-			"environment": environment,
 		}).Debug("SDK authentication successful")
 
 		c.Next()

@@ -323,7 +323,7 @@ bk_{40_char_random_secret}
 - **Secure Storage**: SHA-256 hashing (deterministic, enables O(1) lookup)
 - **O(1) Validation**: Direct hash lookup with unique database index
 - **Project Association**: Project ID stored in database, not embedded in key
-- **Environment Support**: Optional `X-Environment` header for environment tagging
+- **Environment Support**: Environment tags sent in request body (not headers)
 - **Security Best Practice**: No sensitive data embedded in key
 
 #### SDK Authentication Flow
@@ -344,7 +344,6 @@ validateResp, err := apiKeyService.ValidateAPIKey(ctx, apiKey)
 // 4. Store authentication context (project_id comes from database)
 c.Set("project_id", &validateResp.ProjectID)
 c.Set("api_key_id", validateResp.AuthContext.APIKeyID)
-c.Set("environment", c.GetHeader("X-Environment"))
 ```
 
 ### Middleware Architecture
@@ -975,11 +974,12 @@ GET /api/v1/analytics/observations/:id/quality-scores // Quality scores by obser
 The platform now uses environment tags instead of environment entities:
 
 ```go
-// Environment passed via header (optional)
-environment := c.GetHeader("X-Environment") // "production", "staging", "development"
-
-// Stored in context for telemetry and analytics
-c.Set("environment", environment)
+// Environment passed in request body (optional)
+// Example in telemetry batch request:
+// {
+//   "environment": "production",  // Optional environment tag
+//   "events": [...]
+// }
 
 // Used in observability and routing decisions
 telemetryData := TelemetryData{
@@ -1093,10 +1093,9 @@ curl -X POST http://localhost:8080/v1/auth/validate-key \
 curl -X GET http://localhost:8080/v1/models \
   -H "X-API-Key: bk_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789AbCd"
 
-# Test with environment header
+# Test SDK endpoint (environment in body for telemetry endpoints)
 curl -X POST http://localhost:8080/v1/chat/completions \
   -H "X-API-Key: your_api_key" \
-  -H "X-Environment: production" \
   -H "Content-Type: application/json" \
   -d '{"model": "gpt-3.5-turbo", "messages": [{"role": "user", "content": "Hello"}]}'
 ```

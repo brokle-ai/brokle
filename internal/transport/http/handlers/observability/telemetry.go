@@ -178,14 +178,12 @@ func (h *Handler) ProcessTelemetryBatch(c *gin.Context) {
 		return
 	}
 
-	// Get optional environment from header with validation
-	environment := c.GetHeader("X-Environment")
-	if environment == "" && req.Environment != nil {
+	// Get optional environment from request body only
+	var environment string
+	if req.Environment != nil {
 		environment = *req.Environment
-	}
 
-	// Validate environment tag if provided
-	if environment != "" {
+		// Validate environment tag if provided
 		if err := ValidateEnvironmentTag(environment); err != nil {
 			h.logger.WithError(err).WithField("environment", environment).Error("Invalid environment tag")
 			response.ValidationError(c, "Invalid environment tag", err.Error())
