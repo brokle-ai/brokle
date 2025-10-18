@@ -376,16 +376,17 @@ const (
 	BatchStatusPartial    BatchStatus = "partial"
 )
 
-// TelemetryEventType defines the type of telemetry event
+// TelemetryEventType defines the type of telemetry event (immutable event types)
 type TelemetryEventType string
 
 const (
-	TelemetryEventTypeTraceCreate        TelemetryEventType = "trace_create"
-	TelemetryEventTypeTraceUpdate        TelemetryEventType = "trace_update"
-	TelemetryEventTypeObservationCreate  TelemetryEventType = "observation_create"
-	TelemetryEventTypeObservationUpdate  TelemetryEventType = "observation_update"
-	TelemetryEventTypeObservationComplete TelemetryEventType = "observation_complete"
-	TelemetryEventTypeQualityScoreCreate TelemetryEventType = "quality_score_create"
+	// Generic events
+	TelemetryEventTypeEvent TelemetryEventType = "event"
+
+	// Structured observability (immutable events only)
+	TelemetryEventTypeTrace        TelemetryEventType = "trace"
+	TelemetryEventTypeObservation  TelemetryEventType = "observation"
+	TelemetryEventTypeQualityScore TelemetryEventType = "quality_score"
 )
 
 // BatchStats represents aggregated statistics for a telemetry batch
@@ -521,12 +522,10 @@ func (te *TelemetryEvent) Validate() []ValidationError {
 // isValidEventType checks if the event type is valid
 func (te *TelemetryEvent) isValidEventType() bool {
 	validTypes := []TelemetryEventType{
-		TelemetryEventTypeTraceCreate,
-		TelemetryEventTypeTraceUpdate,
-		TelemetryEventTypeObservationCreate,
-		TelemetryEventTypeObservationUpdate,
-		TelemetryEventTypeObservationComplete,
-		TelemetryEventTypeQualityScoreCreate,
+		TelemetryEventTypeEvent,
+		TelemetryEventTypeTrace,
+		TelemetryEventTypeObservation,
+		TelemetryEventTypeQualityScore,
 	}
 
 	for _, validType := range validTypes {

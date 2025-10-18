@@ -79,12 +79,10 @@ func validateTelemetryEvent(event *TelemetryEventRequest, index int) []string {
 // isValidTelemetryEventType checks if the event type is valid
 func isValidTelemetryEventType(eventType string) bool {
 	validTypes := []string{
-		string(observability.TelemetryEventTypeTraceCreate),
-		string(observability.TelemetryEventTypeTraceUpdate),
-		string(observability.TelemetryEventTypeObservationCreate),
-		string(observability.TelemetryEventTypeObservationUpdate),
-		string(observability.TelemetryEventTypeObservationComplete),
-		string(observability.TelemetryEventTypeQualityScoreCreate),
+		string(observability.TelemetryEventTypeEvent),
+		string(observability.TelemetryEventTypeTrace),
+		string(observability.TelemetryEventTypeObservation),
+		string(observability.TelemetryEventTypeQualityScore),
 	}
 
 	for _, validType := range validTypes {
@@ -98,12 +96,10 @@ func isValidTelemetryEventType(eventType string) bool {
 // GetValidTelemetryEventTypes returns a list of valid telemetry event types
 func GetValidTelemetryEventTypes() []string {
 	return []string{
-		string(observability.TelemetryEventTypeTraceCreate),
-		string(observability.TelemetryEventTypeTraceUpdate),
-		string(observability.TelemetryEventTypeObservationCreate),
-		string(observability.TelemetryEventTypeObservationUpdate),
-		string(observability.TelemetryEventTypeObservationComplete),
-		string(observability.TelemetryEventTypeQualityScoreCreate),
+		string(observability.TelemetryEventTypeEvent),
+		string(observability.TelemetryEventTypeTrace),
+		string(observability.TelemetryEventTypeObservation),
+		string(observability.TelemetryEventTypeQualityScore),
 	}
 }
 

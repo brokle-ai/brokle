@@ -7721,7 +7721,7 @@ const docTemplate = `{
                 },
                 "event_type": {
                     "type": "string",
-                    "example": "trace_create"
+                    "example": "trace"
                 },
                 "payload": {
                     "type": "object",
@@ -8515,7 +8515,7 @@ const docTemplate = `{
                 },
                 "event_type": {
                     "type": "string",
-                    "example": "trace_create"
+                    "example": "trace"
                 },
                 "message": {
                     "type": "string",

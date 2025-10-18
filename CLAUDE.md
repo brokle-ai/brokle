@@ -922,18 +922,23 @@ POST /v1/telemetry/validate        // Event validation
   "events": [
     {
       "event_id": "01ABCDEFGHIJKLMNOPQRSTUVWXYZ",
-      "event_type": "trace_create",
+      "event_type": "trace",
       "payload": {"name": "my-trace", "user_id": "user_123"}
     },
     {
       "event_id": "01BCDEFGHIJKLMNOPQRSTUVWXYZ0",
-      "event_type": "observation_create",
+      "event_type": "observation",
       "payload": {"trace_id": "...", "type": "llm"}
     },
     {
       "event_id": "01CDEFGHIJKLMNOPQRSTUVWXYZ01",
-      "event_type": "quality_score_create",
+      "event_type": "quality_score",
       "payload": {"trace_id": "...", "score": 0.95}
+    },
+    {
+      "event_id": "01DEFGHIJKLMNOPQRSTUVWXYZ012",
+      "event_type": "event",
+      "payload": {"event_name": "user_action", "metadata": {...}}
     }
   ],
   "deduplication": {

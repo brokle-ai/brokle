@@ -458,7 +458,7 @@ func createTestEventJob() *TelemetryEventJob {
 		BatchID:     ulid.New(),
 		ProjectID:   ulid.New(),
 		Environment: "test",
-		EventType:   observability.TelemetryEventTypeTraceCreate,
+		EventType:   observability.TelemetryEventTypeTrace,
 		EventData: map[string]interface{}{
 			"trace_id":  uuid.New().String(),
 			"operation": "test_operation",

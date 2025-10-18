@@ -493,9 +493,9 @@ func (s *telemetryService) extractEnvironment(request *observability.TelemetryBa
 // isCriticalEventType determines if an event type should be processed with high priority
 func (s *telemetryService) isCriticalEventType(eventType observability.TelemetryEventType) bool {
 	criticalTypes := []observability.TelemetryEventType{
-		observability.TelemetryEventTypeTraceCreate,
-		observability.TelemetryEventTypeObservationComplete,
-		observability.TelemetryEventTypeQualityScoreCreate,
+		observability.TelemetryEventTypeTrace,
+		observability.TelemetryEventTypeObservation,
+		observability.TelemetryEventTypeQualityScore,
 	}
 
 	for _, criticalType := range criticalTypes {

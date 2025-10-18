@@ -25,7 +25,7 @@ type TelemetryBatchRequest struct {
 // @Description Individual telemetry event using envelope pattern for high throughput
 type TelemetryEventRequest struct {
 	EventID   string                 `json:"event_id" binding:"required" example:"01ABCDEFGHIJKLMNOPQRSTUVWXYZ" description:"ULID event identifier"`
-	EventType string                 `json:"event_type" binding:"required" example:"trace_create" description:"Type of telemetry event"`
+	EventType string                 `json:"event_type" binding:"required" example:"trace" description:"Type of telemetry event (event, trace, observation, quality_score)"`
 	Payload   map[string]interface{} `json:"payload" binding:"required" description:"Event payload data"`
 	Timestamp *int64                 `json:"timestamp,omitempty" example:"1677610602" description:"Unix timestamp (defaults to current time)"`
 }
@@ -472,12 +472,10 @@ func (h *Handler) ValidateEvent(c *gin.Context) {
 	// Validate event type
 	eventType := observability.TelemetryEventType(req.EventType)
 	validTypes := []observability.TelemetryEventType{
-		observability.TelemetryEventTypeTraceCreate,
-		observability.TelemetryEventTypeTraceUpdate,
-		observability.TelemetryEventTypeObservationCreate,
-		observability.TelemetryEventTypeObservationUpdate,
-		observability.TelemetryEventTypeObservationComplete,
-		observability.TelemetryEventTypeQualityScoreCreate,
+		observability.TelemetryEventTypeEvent,
+		observability.TelemetryEventTypeTrace,
+		observability.TelemetryEventTypeObservation,
+		observability.TelemetryEventTypeQualityScore,
 	}
 
 	isValidType := false
@@ -515,7 +513,7 @@ func (h *Handler) ValidateEvent(c *gin.Context) {
 type TelemetryValidationResponse struct {
 	Valid     bool   `json:"valid" example:"true" description:"Whether the event is valid"`
 	EventID   string `json:"event_id" example:"01ABCDEFGHIJKLMNOPQRSTUVWXYZ" description:"Validated event ID"`
-	EventType string `json:"event_type" example:"trace_create" description:"Validated event type"`
+	EventType string `json:"event_type" example:"trace" description:"Validated event type"`
 	Message   string `json:"message" example:"Event structure is valid" description:"Validation result message"`
 	Errors    []string `json:"errors,omitempty" description:"Validation errors if any"`
 }

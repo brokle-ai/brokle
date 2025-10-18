@@ -1174,7 +1174,7 @@ definitions:
         example: 01ABCDEFGHIJKLMNOPQRSTUVWXYZ
         type: string
       event_type:
-        example: trace_create
+        example: trace
         type: string
       payload:
         additionalProperties: true
@@ -1752,7 +1752,7 @@ definitions:
         example: 01ABCDEFGHIJKLMNOPQRSTUVWXYZ
         type: string
       event_type:
-        example: trace_create
+        example: trace
         type: string
       message:
         example: Event structure is valid
