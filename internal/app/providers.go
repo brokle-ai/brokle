@@ -25,10 +25,8 @@ import (
 	"brokle/internal/infrastructure/database"
 	"brokle/internal/infrastructure/providers"
 	_ "brokle/internal/infrastructure/providers/openai" // Import for side-effect (provider registration)
-	analyticsRepo "brokle/internal/infrastructure/repository/analytics"
 	authRepo "brokle/internal/infrastructure/repository/auth"
 	billingRepo "brokle/internal/infrastructure/repository/billing"
-	clickhouseRepo "brokle/internal/infrastructure/repository/clickhouse"
 	gatewayRepo "brokle/internal/infrastructure/repository/gateway"
 	observabilityRepo "brokle/internal/infrastructure/repository/observability"
 	orgRepo "brokle/internal/infrastructure/repository/organization"
@@ -76,7 +74,6 @@ type RepositoryContainer struct {
 	Observability *ObservabilityRepositories
 	Gateway       *GatewayRepositories
 	Billing       *BillingRepositories
-	Analytics     *AnalyticsRepositories
 }
 
 // ServiceContainer holds all service instances organized by domain
@@ -140,6 +137,7 @@ type ObservabilityRepositories struct {
 	Observation            observability.ObservationRepository
 	QualityScore           observability.QualityScoreRepository
 	TelemetryDeduplication observability.TelemetryDeduplicationRepository
+	TelemetryAnalytics     *observabilityRepo.AnalyticsRepository
 }
 
 // GatewayRepositories contains all gateway-related repositories
@@ -147,16 +145,12 @@ type GatewayRepositories struct {
 	Provider       gateway.ProviderRepository
 	Model          gateway.ModelRepository
 	ProviderConfig gateway.ProviderConfigRepository
+	Analytics      *gatewayRepo.Repository
 }
 
 // BillingRepositories contains all billing-related repositories
 type BillingRepositories struct {
 	Billing *billingRepo.Repository
-}
-
-// AnalyticsRepositories contains all analytics-related repositories
-type AnalyticsRepositories struct {
-	Analytics *analyticsRepo.Repository
 }
 
 // Domain-specific service containers
@@ -225,15 +219,15 @@ func ProvideDatabases(cfg *config.Config, logger *logrus.Logger) (*DatabaseConta
 // ProvideWorkers initializes all background workers
 func ProvideWorkers(
 	cfg *config.Config,
-	clickhouseDB *database.ClickHouseDB,
+	observabilityRepos *ObservabilityRepositories,
 	redisDB *database.RedisDB,
-	analyticsRepo *analyticsRepo.Repository,
+	gatewayAnalyticsRepo *gatewayRepo.Repository,
 	billingService *billingService.BillingService,
 	deduplicationRepo observability.TelemetryDeduplicationRepository,
 	logger *logrus.Logger,
 ) (*WorkerContainer, error) {
-	// Create analytics repository for worker (from clickhouse package)
-	telemetryRepo := clickhouseRepo.NewAnalyticsRepository(clickhouseDB)
+	// Use telemetry analytics repository from observability package
+	telemetryRepo := observabilityRepos.TelemetryAnalytics
 
 	// Create telemetry analytics worker
 	telemetryWorker := workers.NewTelemetryAnalyticsWorker(cfg, logger, telemetryRepo)
@@ -264,7 +258,7 @@ func ProvideWorkers(
 	gatewayAnalyticsWorker := gatewayAnalytics.NewGatewayAnalyticsWorker(
 		logger,
 		nil, // config - use defaults
-		analyticsRepo,
+		gatewayAnalyticsRepo,
 		billingService,
 	)
 
@@ -315,15 +309,17 @@ func ProvideObservabilityRepositories(postgresDB *gorm.DB, clickhouseDB *databas
 		Observation:            observabilityRepo.NewObservationRepository(postgresDB),
 		QualityScore:           observabilityRepo.NewQualityScoreRepository(postgresDB),
 		TelemetryDeduplication: observabilityRepo.NewTelemetryDeduplicationRepositoryRedis(redisDB),
+		TelemetryAnalytics:     observabilityRepo.NewTelemetryAnalyticsRepository(clickhouseDB),
 	}
 }
 
 // ProvideGatewayRepositories creates all gateway-related repositories
-func ProvideGatewayRepositories(db *gorm.DB) *GatewayRepositories {
+func ProvideGatewayRepositories(db *gorm.DB, conn clickhouse.Conn, logger *logrus.Logger) *GatewayRepositories {
 	return &GatewayRepositories{
 		Provider:       gatewayRepo.NewProviderRepository(db),
 		Model:          gatewayRepo.NewModelRepository(db),
 		ProviderConfig: gatewayRepo.NewProviderConfigRepository(db),
+		Analytics:      gatewayRepo.NewRepository(conn, logger),
 	}
 }
 
@@ -334,13 +330,6 @@ func ProvideBillingRepositories(db *gorm.DB, logger *logrus.Logger) *BillingRepo
 	}
 }
 
-// ProvideAnalyticsRepositories creates all analytics-related repositories
-func ProvideAnalyticsRepositories(conn clickhouse.Conn, logger *logrus.Logger) *AnalyticsRepositories {
-	return &AnalyticsRepositories{
-		Analytics: analyticsRepo.NewRepository(conn, logger),
-	}
-}
-
 // ProvideRepositories creates all repository containers
 func ProvideRepositories(dbs *DatabaseContainer, logger *logrus.Logger) *RepositoryContainer {
 	return &RepositoryContainer{
@@ -348,9 +337,8 @@ func ProvideRepositories(dbs *DatabaseContainer, logger *logrus.Logger) *Reposit
 		Auth:          ProvideAuthRepositories(dbs.Postgres.DB),
 		Organization:  ProvideOrganizationRepositories(dbs.Postgres.DB),
 		Observability: ProvideObservabilityRepositories(dbs.Postgres.DB, dbs.ClickHouse, dbs.Redis),
-		Gateway:       ProvideGatewayRepositories(dbs.Postgres.DB),
+		Gateway:       ProvideGatewayRepositories(dbs.Postgres.DB, dbs.ClickHouse.Conn, logger),
 		Billing:       ProvideBillingRepositories(dbs.Postgres.DB, logger),
-		Analytics:     ProvideAnalyticsRepositories(dbs.ClickHouse.Conn, logger),
 	}
 }
 
@@ -716,7 +704,7 @@ func ProvideAll(cfg *config.Config, logger *logrus.Logger) (*ProviderContainer, 
 	billingServices := ProvideBillingServices(repos.Billing, repos.Gateway, logger)
 
 	// Initialize workers (require ClickHouse + Redis for telemetry, and services for gateway analytics)
-	workers, err := ProvideWorkers(cfg, databases.ClickHouse, databases.Redis, repos.Analytics.Analytics, billingServices.Billing, repos.Observability.TelemetryDeduplication, logger)
+	workers, err := ProvideWorkers(cfg, repos.Observability, databases.Redis, repos.Gateway.Analytics, billingServices.Billing, repos.Observability.TelemetryDeduplication, logger)
 	if err != nil {
 		return nil, err
 	}

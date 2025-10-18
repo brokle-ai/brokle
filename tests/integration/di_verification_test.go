@@ -20,8 +20,8 @@ func TestDependencyInjectionSetup(t *testing.T) {
 	require.NoError(t, err, "Should be able to load configuration")
 
 	// Override configuration for testing
-	cfg.Database.PostgreSQL.Database = cfg.Database.PostgreSQL.Database + "_test"
-	cfg.Database.ClickHouse.Database = cfg.Database.ClickHouse.Database + "_test"
+	cfg.Database.Database = cfg.Database.Database + "_test"
+	cfg.ClickHouse.Database = cfg.ClickHouse.Database + "_test"
 	cfg.Server.Port = 0 // Use random port for testing
 
 	// Create application instance
@@ -65,14 +65,17 @@ func TestDependencyInjectionSetup(t *testing.T) {
 		assert.NotNil(t, repos.Gateway.Provider, "Provider repository should exist")
 		assert.NotNil(t, repos.Gateway.Model, "Model repository should exist")
 		assert.NotNil(t, repos.Gateway.ProviderConfig, "Provider config repository should exist")
+		assert.NotNil(t, repos.Gateway.Analytics, "Gateway analytics repository should exist")
+
+		// Verify observability repositories
+		assert.NotNil(t, repos.Observability, "Observability repositories should exist")
+		assert.NotNil(t, repos.Observability.TelemetryAnalytics, "Telemetry analytics repository should exist")
 
 		// Verify other repositories
 		assert.NotNil(t, repos.User, "User repositories should exist")
 		assert.NotNil(t, repos.Auth, "Auth repositories should exist")
 		assert.NotNil(t, repos.Organization, "Organization repositories should exist")
-		assert.NotNil(t, repos.Observability, "Observability repositories should exist")
 		assert.NotNil(t, repos.Billing, "Billing repositories should exist")
-		assert.NotNil(t, repos.Analytics, "Analytics repositories should exist")
 	})
 
 	t.Run("Service Dependencies", func(t *testing.T) {
@@ -177,8 +180,8 @@ func TestHealthCheckIntegration(t *testing.T) {
 	require.NoError(t, err)
 
 	// Override configuration for testing
-	cfg.Database.PostgreSQL.Database = cfg.Database.PostgreSQL.Database + "_test"
-	cfg.Database.ClickHouse.Database = cfg.Database.ClickHouse.Database + "_test"
+	cfg.Database.Database = cfg.Database.Database + "_test"
+	cfg.ClickHouse.Database = cfg.ClickHouse.Database + "_test"
 	cfg.Server.Port = 0
 
 	// Create and start application

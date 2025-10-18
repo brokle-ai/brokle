@@ -9,14 +9,14 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"brokle/internal/config"
-	"brokle/internal/infrastructure/repository/clickhouse"
+	"brokle/internal/infrastructure/repository/observability"
 )
 
 // AnalyticsWorker handles async analytics data processing
 type AnalyticsWorker struct {
 	config     *config.Config
 	logger     *logrus.Logger
-	repository *clickhouse.AnalyticsRepository
+	repository *observability.AnalyticsRepository
 	queue      chan AnalyticsJob
 	quit       chan bool
 }
@@ -67,7 +67,7 @@ type MetricJob struct {
 func NewAnalyticsWorker(
 	config *config.Config,
 	logger *logrus.Logger,
-	repository *clickhouse.AnalyticsRepository,
+	repository *observability.AnalyticsRepository,
 ) *AnalyticsWorker {
 	return &AnalyticsWorker{
 		config:     config,
@@ -206,7 +206,7 @@ func (w *AnalyticsWorker) processRequestLog(ctx context.Context, data interface{
 	}
 
 	// Convert to ClickHouse format
-	log := &clickhouse.RequestLog{
+	log := &observability.RequestLog{
 		ID:             jobData.RequestID,
 		UserID:         jobData.UserID,
 		OrganizationID: jobData.OrganizationID,
@@ -261,7 +261,7 @@ func (w *AnalyticsWorker) processMetric(ctx context.Context, data interface{}) e
 	}
 
 	// Convert to ClickHouse format
-	metric := &clickhouse.MetricPoint{
+	metric := &observability.MetricPoint{
 		Timestamp:      jobData.Timestamp,
 		OrganizationID: jobData.OrganizationID,
 		ProjectID:      jobData.ProjectID,
@@ -279,8 +279,8 @@ func (w *AnalyticsWorker) batchProcessor() {
 	ticker := time.NewTicker(10 * time.Second) // Batch every 10 seconds
 	defer ticker.Stop()
 
-	var requestLogs []*clickhouse.RequestLog
-	var metrics []*clickhouse.MetricPoint
+	var requestLogs []*observability.RequestLog
+	var metrics []*observability.MetricPoint
 
 	for {
 		select {
@@ -302,7 +302,7 @@ func (w *AnalyticsWorker) batchProcessor() {
 }
 
 // processBatches processes batched data
-func (w *AnalyticsWorker) processBatches(requestLogs []*clickhouse.RequestLog, metrics []*clickhouse.MetricPoint) {
+func (w *AnalyticsWorker) processBatches(requestLogs []*observability.RequestLog, metrics []*observability.MetricPoint) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 

@@ -1,4 +1,4 @@
-package clickhouse
+package observability
 
 import (
 	"context"
@@ -10,13 +10,13 @@ import (
 	"brokle/internal/infrastructure/database"
 )
 
-// AnalyticsRepository handles analytics data operations in ClickHouse
+// AnalyticsRepository handles telemetry analytics data operations in ClickHouse
 type AnalyticsRepository struct {
 	db *database.ClickHouseDB
 }
 
-// NewAnalyticsRepository creates a new analytics repository
-func NewAnalyticsRepository(db *database.ClickHouseDB) *AnalyticsRepository {
+// NewTelemetryAnalyticsRepository creates a new telemetry analytics repository
+func NewTelemetryAnalyticsRepository(db *database.ClickHouseDB) *AnalyticsRepository {
 	return &AnalyticsRepository{
 		db: db,
 	}
