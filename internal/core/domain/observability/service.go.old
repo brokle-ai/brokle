@@ -7,113 +7,9 @@ import (
 	"brokle/pkg/ulid"
 )
 
-// NOTE: Service interfaces are defined here to avoid circular imports between
-// internal/workers and internal/services/observability packages.
-// Concrete implementations are in internal/services/observability/.
-
-// TraceService defines the comprehensive interface for trace operations
-// Used by both workers (CreateTrace) and handlers (GetTraceByID, GetTraceWithObservations, etc.)
-type TraceService interface {
-	// Create operations
-	CreateTrace(ctx context.Context, trace *Trace) error
-	CreateTraceBatch(ctx context.Context, traces []*Trace) error
-
-	// Read operations
-	GetTraceByID(ctx context.Context, id ulid.ULID) (*Trace, error)
-	GetTraceWithObservations(ctx context.Context, id ulid.ULID) (*Trace, error)
-	GetTraceWithScores(ctx context.Context, id ulid.ULID) (*Trace, error)
-	GetTracesByProjectID(ctx context.Context, projectID ulid.ULID, filter *TraceFilter) ([]*Trace, error)
-	GetTracesBySessionID(ctx context.Context, sessionID ulid.ULID) ([]*Trace, error)
-	GetTracesByUserID(ctx context.Context, userID ulid.ULID, filter *TraceFilter) ([]*Trace, error)
-	GetChildTraces(ctx context.Context, parentTraceID ulid.ULID) ([]*Trace, error)
-
-	// Update operations
-	UpdateTrace(ctx context.Context, trace *Trace) error
-
-	// Delete operations
-	DeleteTrace(ctx context.Context, id ulid.ULID) error
-
-	// Analytics operations
-	CountTraces(ctx context.Context, filter *TraceFilter) (int64, error)
-}
-
-// ObservationService defines the comprehensive interface for observation operations
-// Used by both workers (CreateObservation) and handlers (GetObservationsByFilter, etc.)
-type ObservationService interface {
-	// Create operations
-	CreateObservation(ctx context.Context, observation *Observation) error
-	CreateObservationBatch(ctx context.Context, observations []*Observation) error
-
-	// Read operations
-	GetObservationByID(ctx context.Context, id ulid.ULID) (*Observation, error)
-	GetObservationsByTraceID(ctx context.Context, traceID ulid.ULID) ([]*Observation, error)
-	GetObservationTreeByTraceID(ctx context.Context, traceID ulid.ULID) ([]*Observation, error)
-	GetChildObservations(ctx context.Context, parentObservationID ulid.ULID) ([]*Observation, error)
-	GetObservationsByFilter(ctx context.Context, filter *ObservationFilter) ([]*Observation, error)
-
-	// Update operations
-	UpdateObservation(ctx context.Context, observation *Observation) error
-	SetObservationCost(ctx context.Context, observationID ulid.ULID, inputCost, outputCost float64) error
-	SetObservationUsage(ctx context.Context, observationID ulid.ULID, promptTokens, completionTokens uint64) error
-
-	// Delete operations
-	DeleteObservation(ctx context.Context, id ulid.ULID) error
-
-	// Analytics operations
-	CountObservations(ctx context.Context, filter *ObservationFilter) (int64, error)
-	CalculateTraceCost(ctx context.Context, traceID ulid.ULID) (float64, error)
-	CalculateTraceTokens(ctx context.Context, traceID ulid.ULID) (uint64, error)
-}
-
-// ScoreService defines the comprehensive interface for quality score operations
-// Used by both workers (CreateScore) and handlers (GetScoresByTraceID, etc.)
-type ScoreService interface {
-	// Create operations
-	CreateScore(ctx context.Context, score *Score) error
-	CreateScoreBatch(ctx context.Context, scores []*Score) error
-
-	// Read operations
-	GetScoreByID(ctx context.Context, id ulid.ULID) (*Score, error)
-	GetScoresByTraceID(ctx context.Context, traceID ulid.ULID) ([]*Score, error)
-	GetScoresByObservationID(ctx context.Context, observationID ulid.ULID) ([]*Score, error)
-	GetScoresBySessionID(ctx context.Context, sessionID ulid.ULID) ([]*Score, error)
-	GetScoresByFilter(ctx context.Context, filter *ScoreFilter) ([]*Score, error)
-
-	// Update operations
-	UpdateScore(ctx context.Context, score *Score) error
-
-	// Delete operations
-	DeleteScore(ctx context.Context, id ulid.ULID) error
-
-	// Analytics operations
-	CountScores(ctx context.Context, filter *ScoreFilter) (int64, error)
-}
-
-// SessionService defines the comprehensive interface for session operations
-// Used by both workers (CreateSession) and handlers (GetSessionWithTraces, etc.)
-type SessionService interface {
-	// Create operations
-	CreateSession(ctx context.Context, session *Session) error
-
-	// Read operations
-	GetSessionByID(ctx context.Context, id ulid.ULID) (*Session, error)
-	GetSessionWithTraces(ctx context.Context, id ulid.ULID) (*Session, error)
-	GetSessionWithScores(ctx context.Context, id ulid.ULID) (*Session, error)
-	GetSessionsByProjectID(ctx context.Context, projectID ulid.ULID, filter *SessionFilter) ([]*Session, error)
-	GetSessionsByUserID(ctx context.Context, userID ulid.ULID) ([]*Session, error)
-
-	// Update operations
-	UpdateSession(ctx context.Context, sessionID ulid.ULID, updateReq *UpdateSessionRequest) error
-	ToggleBookmark(ctx context.Context, id ulid.ULID) error
-	TogglePublic(ctx context.Context, id ulid.ULID) error
-	UpdateSessionMetadata(ctx context.Context, id ulid.ULID, metadata map[string]string) error
-
-	// Delete operations
-	DeleteSession(ctx context.Context, id ulid.ULID) error
-
-	// Analytics operations
-	CountSessions(ctx context.Context, filter *SessionFilter) (int64, error)
-}
+// NOTE: The old TraceService, ObservationService, QualityService, AnalyticsService,
+// and IngestionService interfaces have been removed. We now use concrete service
+// implementations in internal/services/observability/ instead of interfaces.
 
 // TelemetryDeduplicationService defines the interface for ULID-based deduplication
 type TelemetryDeduplicationService interface {
@@ -166,7 +62,7 @@ type QualityEvaluator interface {
 	Version() string
 	Description() string
 	SupportedTypes() []ObservationType
-	Evaluate(ctx context.Context, input *EvaluationInput) (*Score, error)
+	Evaluate(ctx context.Context, input *EvaluationInput) (*QualityScore, error)
 	ValidateInput(input *EvaluationInput) error
 }
 
@@ -377,7 +273,7 @@ type ObservationBatchRequest struct {
 // QualityScoreBatchRequest represents a batch quality score ingestion request
 type QualityScoreBatchRequest struct {
 	ProjectID     ulid.ULID       `json:"project_id"`
-	QualityScores []*Score `json:"quality_scores"`
+	QualityScores []*QualityScore `json:"quality_scores"`
 	Async         bool            `json:"async"`
 }
 
@@ -401,7 +297,7 @@ type BulkEvaluationRequest struct {
 type BulkEvaluationResult struct {
 	ProcessedCount int                     `json:"processed_count"`
 	FailedCount    int                     `json:"failed_count"`
-	Scores         []*Score         `json:"scores,omitempty"`
+	Scores         []*QualityScore         `json:"scores,omitempty"`
 	Errors         []BulkEvaluationError   `json:"errors,omitempty"`
 	JobID          *string                 `json:"job_id,omitempty"`
 }
@@ -591,18 +487,4 @@ type Report struct {
 	GeneratedAt time.Time              `json:"generated_at"`
 	Format      ExportFormat           `json:"format"`
 	DownloadURL string                 `json:"download_url,omitempty"`
-}
-// ==================================
-// Legacy/Placeholder Types (not actively used in clean implementation)
-// ==================================
-
-// AnalyticsFilter - placeholder for analytics filtering (not actively used)
-type AnalyticsFilter struct {
-	// Placeholder - will be implemented when analytics features are added
-}
-
-// TimeSeriesPoint - placeholder for time series data (not actively used)
-type TimeSeriesPoint struct {
-	Timestamp time.Time `json:"timestamp"`
-	Value     float64   `json:"value"`
 }

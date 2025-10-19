@@ -147,6 +147,23 @@ func (r *TelemetryDeduplicationRepositoryRedis) Exists(ctx context.Context, even
 	return exists > 0, nil
 }
 
+// CheckDuplicate checks if an event ID is a duplicate (alias for Exists for interface compatibility)
+func (r *TelemetryDeduplicationRepositoryRedis) CheckDuplicate(ctx context.Context, eventID ulid.ULID) (bool, error) {
+	return r.Exists(ctx, eventID)
+}
+
+// RegisterEvent registers a new event for deduplication (alias for Create with simplified params)
+func (r *TelemetryDeduplicationRepositoryRedis) RegisterEvent(ctx context.Context, eventID, batchID, projectID ulid.ULID, ttl time.Duration) error {
+	dedup := &observability.TelemetryEventDeduplication{
+		EventID:     eventID,
+		BatchID:     batchID,
+		ProjectID:   projectID,
+		FirstSeenAt: time.Now(),
+		ExpiresAt:   time.Now().Add(ttl),
+	}
+	return r.Create(ctx, dedup)
+}
+
 // CheckBatchDuplicates checks for duplicate event IDs in a batch using Redis pipeline
 func (r *TelemetryDeduplicationRepositoryRedis) CheckBatchDuplicates(ctx context.Context, eventIDs []ulid.ULID) ([]ulid.ULID, error) {
 	if len(eventIDs) == 0 {

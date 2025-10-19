@@ -15,8 +15,9 @@ import (
 	appErrors "brokle/pkg/errors"
 )
 
-// telemetryService aggregates all telemetry-related services with Redis Streams-based async processing
-type telemetryService struct {
+// TelemetryService aggregates all telemetry-related services with Redis Streams-based async processing
+// Exported to allow type assertion for SetAnalyticsWorker injection
+type TelemetryService struct {
 	deduplicationService observability.TelemetryDeduplicationService
 	streamProducer       *streams.TelemetryStreamProducer
 	analyticsWorker      *workers.TelemetryAnalyticsWorker
@@ -37,7 +38,7 @@ func NewTelemetryService(
 	analyticsWorker *workers.TelemetryAnalyticsWorker,
 	logger *logrus.Logger,
 ) observability.TelemetryService {
-	return &telemetryService{
+	return &TelemetryService{
 		deduplicationService: deduplicationService,
 		streamProducer:       streamProducer,
 		analyticsWorker:      analyticsWorker,
@@ -46,9 +47,19 @@ func NewTelemetryService(
 	}
 }
 
+// SetAnalyticsWorker injects the analytics worker (for two-phase initialization)
+// This allows the telemetry service to be created before the worker is started,
+// ensuring clean dependency initialization order.
+func (s *TelemetryService) SetAnalyticsWorker(worker *workers.TelemetryAnalyticsWorker) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.analyticsWorker = worker
+	s.logger.Debug("Analytics worker injected into telemetry service")
+}
+
 // ProcessTelemetryBatch processes a batch of telemetry events using Redis Streams (async)
 // Returns 202 Accepted for async processing with batch ID for tracking
-func (s *telemetryService) ProcessTelemetryBatch(ctx context.Context, request *observability.TelemetryBatchRequest) (*observability.TelemetryBatchResponse, error) {
+func (s *TelemetryService) ProcessTelemetryBatch(ctx context.Context, request *observability.TelemetryBatchRequest) (*observability.TelemetryBatchResponse, error) {
 	startTime := time.Now()
 
 	// Validate request
@@ -155,12 +166,12 @@ func (s *telemetryService) ProcessTelemetryBatch(ctx context.Context, request *o
 }
 
 // Deduplication returns the deduplication service
-func (s *telemetryService) Deduplication() observability.TelemetryDeduplicationService {
+func (s *TelemetryService) Deduplication() observability.TelemetryDeduplicationService {
 	return s.deduplicationService
 }
 
 // GetHealth returns the health status of all telemetry services
-func (s *telemetryService) GetHealth(ctx context.Context) (*observability.TelemetryHealthStatus, error) {
+func (s *TelemetryService) GetHealth(ctx context.Context) (*observability.TelemetryHealthStatus, error) {
 	// Get analytics worker health if available
 	var analyticsHealth *workers.HealthMetrics
 	var activeWorkers int = 1 // Default
@@ -223,7 +234,7 @@ func (s *telemetryService) GetHealth(ctx context.Context) (*observability.Teleme
 }
 
 // isHealthy determines overall health based on analytics worker status
-func (s *telemetryService) isHealthy(analyticsHealth *workers.HealthMetrics) bool {
+func (s *TelemetryService) isHealthy(analyticsHealth *workers.HealthMetrics) bool {
 	// If analytics worker is not available, service is still healthy
 	if analyticsHealth == nil {
 		return true
@@ -248,7 +259,7 @@ func (s *telemetryService) isHealthy(analyticsHealth *workers.HealthMetrics) boo
 }
 
 // GetMetrics returns aggregated metrics from all telemetry services
-func (s *telemetryService) GetMetrics(ctx context.Context) (*observability.TelemetryMetrics, error) {
+func (s *TelemetryService) GetMetrics(ctx context.Context) (*observability.TelemetryMetrics, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -292,7 +303,7 @@ func (s *telemetryService) GetMetrics(ctx context.Context) (*observability.Telem
 }
 
 // GetPerformanceStats returns performance statistics for a given time window
-func (s *telemetryService) GetPerformanceStats(ctx context.Context, timeWindow time.Duration) (*observability.TelemetryPerformanceStats, error) {
+func (s *TelemetryService) GetPerformanceStats(ctx context.Context, timeWindow time.Duration) (*observability.TelemetryPerformanceStats, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -322,7 +333,7 @@ func (s *telemetryService) GetPerformanceStats(ctx context.Context, timeWindow t
 }
 
 // validateBatchRequest validates the telemetry batch request
-func (s *telemetryService) validateBatchRequest(request *observability.TelemetryBatchRequest) error {
+func (s *TelemetryService) validateBatchRequest(request *observability.TelemetryBatchRequest) error {
 	if request == nil {
 		return fmt.Errorf("request cannot be nil")
 	}
@@ -362,7 +373,7 @@ func (s *telemetryService) validateBatchRequest(request *observability.Telemetry
 }
 
 // updatePerformanceMetrics updates internal performance tracking metrics
-func (s *telemetryService) updatePerformanceMetrics(eventCount int, processingTime time.Duration) {
+func (s *TelemetryService) updatePerformanceMetrics(eventCount int, processingTime time.Duration) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -380,7 +391,7 @@ func (s *telemetryService) updatePerformanceMetrics(eventCount int, processingTi
 }
 
 // queueAnalyticsJobs queues telemetry data for analytics processing
-func (s *telemetryService) queueAnalyticsJobs(
+func (s *TelemetryService) queueAnalyticsJobs(
 	ctx context.Context,
 	request *observability.TelemetryBatchRequest,
 	batch *observability.TelemetryBatch,
@@ -476,7 +487,7 @@ func (s *telemetryService) queueAnalyticsJobs(
 }
 
 // extractEnvironment extracts environment from request metadata or headers
-func (s *telemetryService) extractEnvironment(request *observability.TelemetryBatchRequest) string {
+func (s *TelemetryService) extractEnvironment(request *observability.TelemetryBatchRequest) string {
 	// Check if environment is provided in metadata
 	if request.Metadata != nil {
 		if env, exists := request.Metadata["environment"]; exists {
@@ -491,7 +502,7 @@ func (s *telemetryService) extractEnvironment(request *observability.TelemetryBa
 }
 
 // isCriticalEventType determines if an event type should be processed with high priority
-func (s *telemetryService) isCriticalEventType(eventType observability.TelemetryEventType) bool {
+func (s *TelemetryService) isCriticalEventType(eventType observability.TelemetryEventType) bool {
 	criticalTypes := []observability.TelemetryEventType{
 		observability.TelemetryEventTypeTrace,
 		observability.TelemetryEventTypeObservation,
@@ -508,7 +519,7 @@ func (s *telemetryService) isCriticalEventType(eventType observability.Telemetry
 
 // updateEventStatuses updates event processing statuses based on processing results
 // Uses existing schema fields: processed_at, error_message, retry_count
-func (s *telemetryService) updateEventStatuses(events []*observability.TelemetryEvent, result *observability.EventProcessingResult) {
+func (s *TelemetryService) updateEventStatuses(events []*observability.TelemetryEvent, result *observability.EventProcessingResult) {
 	now := time.Now()
 
 	// Build lookup maps for O(1) status determination

@@ -44,7 +44,7 @@ func TestBatchStatusHandling_Behavior(t *testing.T) {
 		{
 			name:           "partial_failure",
 			scenario:       "ProcessedCount>0, FailedCount>0",
-			expectedStatus: observability.BatchStatusPartial,
+			expectedStatus: observability.BatchStatusFailed, // BatchStatusPartial no longer exists
 			codeReference:  "telemetry_service.go:157-159 (failedCount > 0)",
 		},
 		{
@@ -126,7 +126,7 @@ func TestCriticalBehaviors_Summary(t *testing.T) {
 
 	t.Log("\n=== STATUS HANDLING BEHAVIORS ===")
 	t.Log("1. All succeed → BatchStatusCompleted")
-	t.Log("2. Some fail → BatchStatusPartial")
+		t.Log("2. Some fail → BatchStatusFailed (BatchStatusPartial removed)")
 	t.Log("3. All fail → BatchStatusFailed")
 	t.Log("4. No unique events → BatchStatusCompleted")
 

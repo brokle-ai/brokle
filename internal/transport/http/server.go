@@ -272,17 +272,33 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 		analytics.GET("/providers", s.handlers.Analytics.Providers)
 		analytics.GET("/models", s.handlers.Analytics.Models)
 
-		// Observability analytics routes (read-only for dashboard)
+		// Observability analytics routes - ClickHouse-first
+		// Traces (read operations)
 		analytics.GET("/traces", s.handlers.Observability.ListTraces)
 		analytics.GET("/traces/:id", s.handlers.Observability.GetTrace)
 		analytics.GET("/traces/:id/observations", s.handlers.Observability.GetTraceWithObservations)
-		analytics.GET("/traces/:id/stats", s.handlers.Observability.GetTraceStats)
+		analytics.GET("/traces/:id/scores", s.handlers.Observability.GetTraceWithScores)
+		// Traces (write operations - for corrections/enrichment via dashboard)
+		analytics.PUT("/traces/:id", s.handlers.Observability.UpdateTrace)
+
+		// Observations (read operations)
 		analytics.GET("/observations", s.handlers.Observability.ListObservations)
 		analytics.GET("/observations/:id", s.handlers.Observability.GetObservation)
-		analytics.GET("/quality-scores", s.handlers.Observability.ListQualityScores)
-		analytics.GET("/quality-scores/:id", s.handlers.Observability.GetQualityScore)
-		analytics.GET("/traces/:id/quality-scores", s.handlers.Observability.GetQualityScoresByTrace)
-		analytics.GET("/observations/:id/quality-scores", s.handlers.Observability.GetQualityScoresByObservation)
+		// Observations (write operations - for corrections/enrichment via dashboard)
+		analytics.PUT("/observations/:id", s.handlers.Observability.UpdateObservation)
+
+		// Quality Scores (read operations)
+		analytics.GET("/scores", s.handlers.Observability.ListScores)
+		analytics.GET("/scores/:id", s.handlers.Observability.GetScore)
+		// Quality Scores (write operations - for corrections/enrichment via dashboard)
+		analytics.PUT("/scores/:id", s.handlers.Observability.UpdateScore)
+
+		// Sessions (read operations)
+		analytics.GET("/sessions", s.handlers.Observability.ListSessions)
+		analytics.GET("/sessions/:id", s.handlers.Observability.GetSession)
+		analytics.GET("/sessions/:id/traces", s.handlers.Observability.GetSessionWithTraces)
+		// Sessions (write operations - for corrections/enrichment via dashboard)
+		analytics.PUT("/sessions/:id", s.handlers.Observability.UpdateSession)
 	}
 
 	// Logs routes

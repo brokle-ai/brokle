@@ -195,4 +195,5 @@ google_ai_key
 *.bak
 *.backup
 sdk/competetors/
+competetors/
 

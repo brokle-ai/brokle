@@ -34,13 +34,7 @@ func (m *MockTraceRepository) GetByID(ctx context.Context, id ulid.ULID) (*obser
 	return args.Get(0).(*observability.Trace), args.Error(1)
 }
 
-func (m *MockTraceRepository) GetByExternalTraceID(ctx context.Context, externalTraceID string) (*observability.Trace, error) {
-	args := m.Called(ctx, externalTraceID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*observability.Trace), args.Error(1)
-}
+// Removed after refactor: GetByExternalTraceID method removed
 
 func (m *MockTraceRepository) Update(ctx context.Context, trace *observability.Trace) error {
 	args := m.Called(ctx, trace)
@@ -52,21 +46,9 @@ func (m *MockTraceRepository) Delete(ctx context.Context, id ulid.ULID) error {
 	return args.Error(0)
 }
 
-func (m *MockTraceRepository) GetByProjectID(ctx context.Context, projectID ulid.ULID, limit, offset int) ([]*observability.Trace, error) {
-	args := m.Called(ctx, projectID, limit, offset)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*observability.Trace), args.Error(1)
-}
+// Removed after refactor: old GetByProjectID signature removed
 
-func (m *MockTraceRepository) GetByUserID(ctx context.Context, userID ulid.ULID, limit, offset int) ([]*observability.Trace, error) {
-	args := m.Called(ctx, userID, limit, offset)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*observability.Trace), args.Error(1)
-}
+// Removed after refactor: old GetByUserID signature removed
 
 func (m *MockTraceRepository) GetBySessionID(ctx context.Context, sessionID ulid.ULID) ([]*observability.Trace, error) {
 	args := m.Called(ctx, sessionID)
@@ -76,29 +58,11 @@ func (m *MockTraceRepository) GetBySessionID(ctx context.Context, sessionID ulid
 	return args.Get(0).([]*observability.Trace), args.Error(1)
 }
 
-func (m *MockTraceRepository) SearchTraces(ctx context.Context, filter *observability.TraceFilter) ([]*observability.Trace, int, error) {
-	args := m.Called(ctx, filter)
-	if args.Get(0) == nil {
-		return nil, args.Int(1), args.Error(2)
-	}
-	return args.Get(0).([]*observability.Trace), args.Int(1), args.Error(2)
-}
+// Removed after refactor: SearchTraces method removed
 
-func (m *MockTraceRepository) GetTraceWithObservations(ctx context.Context, id ulid.ULID) (*observability.Trace, error) {
-	args := m.Called(ctx, id)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*observability.Trace), args.Error(1)
-}
+// Removed after refactor: GetTraceWithObservations method removed
 
-func (m *MockTraceRepository) GetTraceStats(ctx context.Context, id ulid.ULID) (*observability.TraceStats, error) {
-	args := m.Called(ctx, id)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*observability.TraceStats), args.Error(1)
-}
+// Removed after refactor: GetTraceStats method and TraceStats type removed
 
 func (m *MockTraceRepository) CreateBatch(ctx context.Context, traces []*observability.Trace) error {
 	args := m.Called(ctx, traces)
@@ -115,21 +79,51 @@ func (m *MockTraceRepository) DeleteBatch(ctx context.Context, ids []ulid.ULID) 
 	return args.Error(0)
 }
 
-func (m *MockTraceRepository) GetTracesByTimeRange(ctx context.Context, projectID ulid.ULID, startTime, endTime time.Time, limit, offset int) ([]*observability.Trace, error) {
-	args := m.Called(ctx, projectID, startTime, endTime, limit, offset)
+// Removed after refactor: GetTracesByTimeRange method removed
+
+// Removed after refactor: CountTraces method removed, now using Count
+
+// Removed after refactor: GetRecentTraces method removed
+
+func (m *MockTraceRepository) Count(ctx context.Context, filter *observability.TraceFilter) (int64, error) {
+	args := m.Called(ctx, filter)
+	return args.Get(0).(int64), args.Error(1)
+}
+
+func (m *MockTraceRepository) GetByProjectID(ctx context.Context, projectID ulid.ULID, filter *observability.TraceFilter) ([]*observability.Trace, error) {
+	args := m.Called(ctx, projectID, filter)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]*observability.Trace), args.Error(1)
 }
 
-func (m *MockTraceRepository) CountTraces(ctx context.Context, filter *observability.TraceFilter) (int64, error) {
-	args := m.Called(ctx, filter)
-	return args.Get(0).(int64), args.Error(1)
+func (m *MockTraceRepository) GetChildren(ctx context.Context, parentTraceID ulid.ULID) ([]*observability.Trace, error) {
+	args := m.Called(ctx, parentTraceID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*observability.Trace), args.Error(1)
 }
 
-func (m *MockTraceRepository) GetRecentTraces(ctx context.Context, projectID ulid.ULID, limit int) ([]*observability.Trace, error) {
-	args := m.Called(ctx, projectID, limit)
+func (m *MockTraceRepository) GetWithObservations(ctx context.Context, id ulid.ULID) (*observability.Trace, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*observability.Trace), args.Error(1)
+}
+
+func (m *MockTraceRepository) GetWithScores(ctx context.Context, id ulid.ULID) (*observability.Trace, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*observability.Trace), args.Error(1)
+}
+
+func (m *MockTraceRepository) GetByUserID(ctx context.Context, userID ulid.ULID, filter *observability.TraceFilter) ([]*observability.Trace, error) {
+	args := m.Called(ctx, userID, filter)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -153,13 +147,7 @@ func (m *MockObservationRepository) GetByID(ctx context.Context, id ulid.ULID) (
 	return args.Get(0).(*observability.Observation), args.Error(1)
 }
 
-func (m *MockObservationRepository) GetByExternalObservationID(ctx context.Context, externalObservationID string) (*observability.Observation, error) {
-	args := m.Called(ctx, externalObservationID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*observability.Observation), args.Error(1)
-}
+// Removed after refactor: GetByExternalObservationID method removed
 
 func (m *MockObservationRepository) Update(ctx context.Context, observation *observability.Observation) error {
 	args := m.Called(ctx, observation)
@@ -179,53 +167,17 @@ func (m *MockObservationRepository) GetByTraceID(ctx context.Context, traceID ul
 	return args.Get(0).([]*observability.Observation), args.Error(1)
 }
 
-func (m *MockObservationRepository) GetByParentObservationID(ctx context.Context, parentID ulid.ULID) ([]*observability.Observation, error) {
-	args := m.Called(ctx, parentID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*observability.Observation), args.Error(1)
-}
+// Removed after refactor: GetByParentObservationID renamed to GetChildren
 
-func (m *MockObservationRepository) GetByType(ctx context.Context, obsType observability.ObservationType, limit, offset int) ([]*observability.Observation, error) {
-	args := m.Called(ctx, obsType, limit, offset)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*observability.Observation), args.Error(1)
-}
+// Removed after refactor: GetByType method removed
 
-func (m *MockObservationRepository) GetByProvider(ctx context.Context, provider string, limit, offset int) ([]*observability.Observation, error) {
-	args := m.Called(ctx, provider, limit, offset)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*observability.Observation), args.Error(1)
-}
+// Removed after refactor: GetByProvider method removed
 
-func (m *MockObservationRepository) GetByModel(ctx context.Context, provider, model string, limit, offset int) ([]*observability.Observation, error) {
-	args := m.Called(ctx, provider, model, limit, offset)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*observability.Observation), args.Error(1)
-}
+// Removed after refactor: GetByModel method removed
 
-func (m *MockObservationRepository) SearchObservations(ctx context.Context, filter *observability.ObservationFilter) ([]*observability.Observation, int, error) {
-	args := m.Called(ctx, filter)
-	if args.Get(0) == nil {
-		return nil, args.Int(1), args.Error(2)
-	}
-	return args.Get(0).([]*observability.Observation), args.Int(1), args.Error(2)
-}
+// Removed after refactor: SearchObservations method removed
 
-func (m *MockObservationRepository) GetObservationStats(ctx context.Context, filter *observability.ObservationFilter) (*observability.ObservationStats, error) {
-	args := m.Called(ctx, filter)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*observability.ObservationStats), args.Error(1)
-}
+// Removed after refactor: GetObservationStats method and ObservationStats type removed
 
 func (m *MockObservationRepository) CreateBatch(ctx context.Context, observations []*observability.Observation) error {
 	args := m.Called(ctx, observations)
@@ -242,30 +194,41 @@ func (m *MockObservationRepository) DeleteBatch(ctx context.Context, ids []ulid.
 	return args.Error(0)
 }
 
-func (m *MockObservationRepository) CompleteObservation(ctx context.Context, id ulid.ULID, endTime time.Time, output any, cost *float64) error {
-	args := m.Called(ctx, id, endTime, output, cost)
-	return args.Error(0)
-}
+// Removed after refactor: CompleteObservation method removed
 
-func (m *MockObservationRepository) GetIncompleteObservations(ctx context.Context, projectID ulid.ULID) ([]*observability.Observation, error) {
-	args := m.Called(ctx, projectID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*observability.Observation), args.Error(1)
-}
+// Removed after refactor: GetIncompleteObservations method removed
 
-func (m *MockObservationRepository) GetObservationsByTimeRange(ctx context.Context, filter *observability.ObservationFilter, startTime, endTime time.Time) ([]*observability.Observation, error) {
-	args := m.Called(ctx, filter, startTime, endTime)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).([]*observability.Observation), args.Error(1)
-}
+// Removed after refactor: GetObservationsByTimeRange method removed
 
-func (m *MockObservationRepository) CountObservations(ctx context.Context, filter *observability.ObservationFilter) (int64, error) {
+// Removed after refactor: CountObservations method removed, now using Count
+
+func (m *MockObservationRepository) Count(ctx context.Context, filter *observability.ObservationFilter) (int64, error) {
 	args := m.Called(ctx, filter)
 	return args.Get(0).(int64), args.Error(1)
+}
+
+func (m *MockObservationRepository) GetByFilter(ctx context.Context, filter *observability.ObservationFilter) ([]*observability.Observation, error) {
+	args := m.Called(ctx, filter)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*observability.Observation), args.Error(1)
+}
+
+func (m *MockObservationRepository) GetChildren(ctx context.Context, parentObservationID ulid.ULID) ([]*observability.Observation, error) {
+	args := m.Called(ctx, parentObservationID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*observability.Observation), args.Error(1)
+}
+
+func (m *MockObservationRepository) GetTreeByTraceID(ctx context.Context, traceID ulid.ULID) ([]*observability.Observation, error) {
+	args := m.Called(ctx, traceID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*observability.Observation), args.Error(1)
 }
 
 type MockEventPublisher struct {
@@ -282,6 +245,8 @@ func (m *MockEventPublisher) PublishBatch(ctx context.Context, events []*observa
 	return args.Error(0)
 }
 
+// MockScoreRepository is defined in observation_service_test.go
+
 // ============================================================================
 // CreateTrace Tests
 // ============================================================================
@@ -291,6 +256,8 @@ func (m *MockEventPublisher) PublishBatch(ctx context.Context, events []*observa
 // HIGH-VALUE TESTS: Complex Business Logic & Orchestration
 // ============================================================================
 
+// Removed after refactor: CreateTraceWithObservations method no longer exists
+/*
 func TestTraceService_CreateTraceWithObservations(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -302,21 +269,18 @@ func TestTraceService_CreateTraceWithObservations(t *testing.T) {
 		{
 			name: "success - trace with observations",
 			trace: &observability.Trace{
-				ProjectID:       ulid.New(),
-				ExternalTraceID: "ext-trace-with-obs",
-				Name:            "Trace with Observations",
-				Observations: []observability.Observation{
+				ProjectID: ulid.New(),
+				Name:      "Trace with Observations",
+				Observations: []*observability.Observation{
 					{
-						ExternalObservationID: "obs-1",
-						Type:                  observability.ObservationTypeLLM,
-						Name:                  "LLM Call 1",
-						StartTime:             time.Now(),
+						Type:      observability.ObservationTypeLLM,
+						Name:      "LLM Call 1",
+						StartTime: time.Now(),
 					},
 					{
-						ExternalObservationID: "obs-2",
-						Type:                  observability.ObservationTypeSpan,
-						Name:                  "Span 1",
-						StartTime:             time.Now(),
+						Type:      observability.ObservationTypeSpan,
+						Name:      "Span 1",
+						StartTime: time.Now(),
 					},
 				},
 			},
@@ -338,9 +302,8 @@ func TestTraceService_CreateTraceWithObservations(t *testing.T) {
 		{
 			name: "success - trace without observations",
 			trace: &observability.Trace{
-				ProjectID:       ulid.New(),
-				ExternalTraceID: "ext-trace-no-obs",
-				Name:            "Trace without Observations",
+				ProjectID: ulid.New(),
+				Name:      "Trace without Observations",
 			},
 			mockSetup: func(traceRepo *MockTraceRepository, obsRepo *MockObservationRepository, publisher *MockEventPublisher) {
 				traceRepo.On("Create", mock.Anything, mock.AnythingOfType("*observability.Trace")).
@@ -368,15 +331,13 @@ func TestTraceService_CreateTraceWithObservations(t *testing.T) {
 		{
 			name: "error - observation creation failure",
 			trace: &observability.Trace{
-				ProjectID:       ulid.New(),
-				ExternalTraceID: "ext-trace-obs-fail",
-				Name:            "Trace Obs Fail",
-				Observations: []observability.Observation{
+				ProjectID: ulid.New(),
+				Name:      "Trace Obs Fail",
+				Observations: []*observability.Observation{
 					{
-						ExternalObservationID: "obs-fail",
-						Type:                  observability.ObservationTypeLLM,
-						Name:                  "Failing Observation",
-						StartTime:             time.Now(),
+						Type:      observability.ObservationTypeLLM,
+						Name:      "Failing Observation",
+						StartTime: time.Now(),
 					},
 				},
 			},
@@ -428,6 +389,8 @@ func TestTraceService_CreateTraceWithObservations(t *testing.T) {
 // GetTrace Tests
 // ============================================================================
 
+*/
+
 func TestTraceService_GetTraceWithObservations(t *testing.T) {
 	traceID := ulid.New()
 
@@ -444,26 +407,24 @@ func TestTraceService_GetTraceWithObservations(t *testing.T) {
 			mockSetup: func(traceRepo *MockTraceRepository, obsRepo *MockObservationRepository) {
 				// GetTraceWithObservations calls GetTrace which calls GetByID
 				traceRepo.On("GetByID", mock.Anything, traceID).
-					Return(&observability.Trace{
-						ID:              traceID,
-						ProjectID:       ulid.New(),
-						ExternalTraceID: "ext-123",
-						Name:            "Test Trace",
-					}, nil)
+				Return(&observability.Trace{
+					ID:        traceID,
+					ProjectID: ulid.New(),
+					Name:      "Test Trace",
+				}, nil)
 
 				// Then it calls GetByTraceID to get observations
 				observations := []*observability.Observation{
 					{
-						ID:                    ulid.New(),
-						TraceID:               traceID,
-						ExternalObservationID: "obs-1",
-						Type:                  observability.ObservationTypeLLM,
-						Name:                  "LLM Call",
-						StartTime:             time.Now(),
+						ID:        ulid.New(),
+						TraceID:   traceID,
+						Type:      observability.ObservationTypeLLM,
+						Name:      "LLM Call",
+						StartTime: time.Now(),
 					},
 				}
-				obsRepo.On("GetByTraceID", mock.Anything, traceID).
-					Return(observations, nil)
+			obsRepo.On("GetTreeByTraceID", mock.Anything, traceID).
+				Return(observations, nil)
 			},
 			expectedErr: nil,
 			checkResult: func(t *testing.T, trace *observability.Trace) {
@@ -476,12 +437,12 @@ func TestTraceService_GetTraceWithObservations(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockRepo := new(MockTraceRepository)
-			mockObsRepo := new(MockObservationRepository)
-			mockPublisher := new(MockEventPublisher)
+		mockObsRepo := new(MockObservationRepository)
 
-			tt.mockSetup(mockRepo, mockObsRepo)
+		tt.mockSetup(mockRepo, mockObsRepo)
 
-			service := NewTraceService(mockRepo, mockObsRepo, mockPublisher)
+			mockScoreRepo := &MockScoreRepository{}
+			service := NewTraceService(mockRepo, mockObsRepo, mockScoreRepo)
 
 			result, err := service.GetTraceWithObservations(context.Background(), tt.id)
 
@@ -506,6 +467,8 @@ func TestTraceService_GetTraceWithObservations(t *testing.T) {
 // CreateTracesBatch Tests
 // ============================================================================
 
+// Removed after refactor: CreateTracesBatch method no longer exists
+/*
 func TestTraceService_CreateTracesBatch(t *testing.T) {
 	projectID := ulid.New()
 
@@ -520,14 +483,12 @@ func TestTraceService_CreateTracesBatch(t *testing.T) {
 			name: "success - create batch of traces",
 			traces: []*observability.Trace{
 				{
-					ProjectID:       projectID,
-					ExternalTraceID: "ext-1",
-					Name:            "Trace 1",
+					ProjectID: projectID,
+					Name:      "Trace 1",
 				},
 				{
-					ProjectID:       projectID,
-					ExternalTraceID: "ext-2",
-					Name:            "Trace 2",
+					ProjectID: projectID,
+					Name:      "Trace 2",
 				},
 			},
 			mockSetup: func(repo *MockTraceRepository, publisher *MockEventPublisher) {
@@ -563,9 +524,8 @@ func TestTraceService_CreateTracesBatch(t *testing.T) {
 			name: "error - validation failure in batch",
 			traces: []*observability.Trace{
 				{
-					ProjectID:       projectID,
-					ExternalTraceID: "ext-1",
-					Name:            "",  // Missing name
+					ProjectID: projectID,
+					Name:      "",  // Missing name
 				},
 			},
 			mockSetup: func(repo *MockTraceRepository, publisher *MockEventPublisher) {
@@ -580,9 +540,8 @@ func TestTraceService_CreateTracesBatch(t *testing.T) {
 			name: "error - repository batch failure",
 			traces: []*observability.Trace{
 				{
-					ProjectID:       projectID,
-					ExternalTraceID: "ext-1",
-					Name:            "Trace 1",
+					ProjectID: projectID,
+					Name:      "Trace 1",
 				},
 			},
 			mockSetup: func(repo *MockTraceRepository, publisher *MockEventPublisher) {
@@ -625,207 +584,9 @@ func TestTraceService_CreateTracesBatch(t *testing.T) {
 	}
 }
 
-// ============================================================================
-// IngestTraceBatch Tests
-// ============================================================================
+// Removed after refactor: IngestTraceBatch tests removed - BatchIngestRequest and BatchIngestResult types no longer exist
 
-func TestTraceService_IngestTraceBatch(t *testing.T) {
-	projectID := ulid.New()
+*/
 
-	tests := []struct {
-		name        string
-		request     *observability.BatchIngestRequest
-		mockSetup   func(*MockTraceRepository, *MockEventPublisher)
-		expectedErr error
-		checkResult func(*testing.T, *observability.BatchIngestResult)
-	}{
-		{
-			name: "success - ingest batch",
-			request: &observability.BatchIngestRequest{
-				Traces: []*observability.Trace{
-					{
-						ProjectID:       projectID,
-						ExternalTraceID: "ext-1",
-						Name:            "Trace 1",
-					},
-					{
-						ProjectID:       projectID,
-						ExternalTraceID: "ext-2",
-						Name:            "Trace 2",
-					},
-				},
-			},
-			mockSetup: func(repo *MockTraceRepository, publisher *MockEventPublisher) {
-				repo.On("CreateBatch", mock.Anything, mock.AnythingOfType("[]*observability.Trace")).
-					Return(nil)
-				publisher.On("PublishBatch", mock.Anything, mock.AnythingOfType("[]*observability.Event")).
-					Return(nil)
-			},
-			expectedErr: nil,
-			checkResult: func(t *testing.T, result *observability.BatchIngestResult) {
-				assert.NotNil(t, result)
-				assert.Equal(t, 2, result.ProcessedCount)
-				assert.Equal(t, 0, result.FailedCount)
-				assert.Len(t, result.Errors, 0)
-			},
-		},
-		{
-			name: "error - batch processing failure",
-			request: &observability.BatchIngestRequest{
-				Traces: []*observability.Trace{
-					{
-						ProjectID:       projectID,
-						ExternalTraceID: "ext-1",
-						Name:            "",  // Invalid
-					},
-				},
-			},
-			mockSetup: func(repo *MockTraceRepository, publisher *MockEventPublisher) {
-				// No calls expected
-			},
-			expectedErr: observability.NewObservabilityError(
-				observability.ErrCodeValidationFailed,
-				"validation failed",
-			),
-			checkResult: func(t *testing.T, result *observability.BatchIngestResult) {
-				assert.NotNil(t, result)
-				assert.Equal(t, 0, result.ProcessedCount)
-				assert.Equal(t, 1, result.FailedCount)
-				assert.Len(t, result.Errors, 1)
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			mockRepo := new(MockTraceRepository)
-			mockObsRepo := new(MockObservationRepository)
-			mockPublisher := new(MockEventPublisher)
-
-			tt.mockSetup(mockRepo, mockPublisher)
-
-			service := NewTraceService(mockRepo, mockObsRepo, mockPublisher)
-
-			result, err := service.IngestTraceBatch(context.Background(), tt.request)
-
-			if tt.expectedErr != nil {
-				assert.Error(t, err)
-				assert.Contains(t, err.Error(), tt.expectedErr.Error())
-			} else {
-				assert.NoError(t, err)
-			}
-
-			if tt.checkResult != nil {
-				tt.checkResult(t, result)
-			}
-
-			mockRepo.AssertExpectations(t)
-			mockPublisher.AssertExpectations(t)
-		})
-	}
-}
-
-// ============================================================================
-// SearchTraces Tests
-// ============================================================================
-
-func TestTraceService_GetTracesByTimeRange(t *testing.T) {
-	projectID := ulid.New()
-	now := time.Now()
-	startTime := now.Add(-24 * time.Hour)
-	endTime := now
-
-	tests := []struct {
-		name        string
-		projectID   ulid.ULID
-		startTime   time.Time
-		endTime     time.Time
-		limit       int
-		offset      int
-		mockSetup   func(*MockTraceRepository)
-		expectedErr error
-		checkResult func(*testing.T, []*observability.Trace)
-	}{
-		{
-			name:      "success - get traces by time range",
-			projectID: projectID,
-			startTime: startTime,
-			endTime:   endTime,
-			limit:     10,
-			offset:    0,
-			mockSetup: func(repo *MockTraceRepository) {
-				traces := []*observability.Trace{
-					{ID: ulid.New(), Name: "Recent 1"},
-					{ID: ulid.New(), Name: "Recent 2"},
-				}
-				repo.On("GetTracesByTimeRange", mock.Anything, projectID, startTime, endTime, 10, 0).
-					Return(traces, nil)
-			},
-			expectedErr: nil,
-			checkResult: func(t *testing.T, traces []*observability.Trace) {
-				assert.NotNil(t, traces)
-				assert.Len(t, traces, 2)
-			},
-		},
-		{
-			name:      "error - empty project ID",
-			projectID: ulid.ULID{},
-			startTime: startTime,
-			endTime:   endTime,
-			limit:     10,
-			offset:    0,
-			mockSetup: func(repo *MockTraceRepository) {
-				// No calls expected
-			},
-			expectedErr: errors.New("project ID cannot be empty"),
-			checkResult: func(t *testing.T, traces []*observability.Trace) {
-				assert.Nil(t, traces)
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			mockRepo := new(MockTraceRepository)
-			mockObsRepo := new(MockObservationRepository)
-			mockPublisher := new(MockEventPublisher)
-
-			tt.mockSetup(mockRepo)
-
-			service := NewTraceService(mockRepo, mockObsRepo, mockPublisher)
-
-			result, err := service.GetTracesByTimeRange(
-				context.Background(),
-				tt.projectID,
-				tt.startTime,
-				tt.endTime,
-				tt.limit,
-				tt.offset,
-			)
-
-			if tt.expectedErr != nil {
-				assert.Error(t, err)
-				assert.Contains(t, err.Error(), tt.expectedErr.Error())
-			} else {
-				assert.NoError(t, err)
-			}
-
-			if tt.checkResult != nil {
-				tt.checkResult(t, result)
-			}
-
-			mockRepo.AssertExpectations(t)
-		})
-	}
-}
-
-// ============================================================================
-// GetRecentTraces Tests (Already exists, adding more comprehensive version)
-// ============================================================================
-
-// GetRecentTraces already has basic tests above
-
-// ============================================================================
-// GetTraceAnalytics Tests
-// ============================================================================
+// Removed after refactor: GetTracesByTimeRange, GetRecentTraces, and GetTraceAnalytics methods no longer exist
 

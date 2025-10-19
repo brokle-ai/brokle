@@ -2,481 +2,309 @@ package observability
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
-	"time"
 
 	"brokle/internal/core/domain/observability"
+	appErrors "brokle/pkg/errors"
 	"brokle/pkg/ulid"
 )
 
-// traceService implements the TraceService interface
-type traceService struct {
+// TraceService implements business logic for trace management
+type TraceService struct {
 	traceRepo       observability.TraceRepository
 	observationRepo observability.ObservationRepository
-	eventPublisher  observability.EventPublisher
+	scoreRepo       observability.ScoreRepository
 }
 
-// NewTraceService creates a new trace service
+// NewTraceService creates a new trace service instance
 func NewTraceService(
 	traceRepo observability.TraceRepository,
 	observationRepo observability.ObservationRepository,
-	eventPublisher observability.EventPublisher,
-) observability.TraceService {
-	return &traceService{
+	scoreRepo observability.ScoreRepository,
+) *TraceService {
+	return &TraceService{
 		traceRepo:       traceRepo,
 		observationRepo: observationRepo,
-		eventPublisher:  eventPublisher,
+		scoreRepo:       scoreRepo,
 	}
 }
 
-// CreateTrace creates a new trace
-func (s *traceService) CreateTrace(ctx context.Context, trace *observability.Trace) (*observability.Trace, error) {
-	if trace == nil {
-		return nil, observability.NewObservabilityError(
-			observability.ErrCodeValidationFailed,
-			"trace cannot be nil",
-		)
+// CreateTrace creates a new trace with validation
+func (s *TraceService) CreateTrace(ctx context.Context, trace *observability.Trace) error {
+	// Validate required fields
+	if trace.ProjectID.IsZero() {
+		return appErrors.NewValidationError("project_id is required", "trace must have a valid project_id")
+	}
+	if trace.Name == "" {
+		return appErrors.NewValidationError("name is required", "trace name cannot be empty")
 	}
 
-	// Generate ID if not provided
+	// Generate new ID if not provided
 	if trace.ID.IsZero() {
 		trace.ID = ulid.New()
 	}
 
-	// Validate required fields
-	if err := s.validateTrace(trace); err != nil {
-		return nil, err
-	}
-
-	// Set timestamps
-	now := time.Now()
-	if trace.CreatedAt.IsZero() {
-		trace.CreatedAt = now
-	}
-	trace.UpdatedAt = now
-
-	// Create trace in repository
-	if err := s.traceRepo.Create(ctx, trace); err != nil {
-		return nil, fmt.Errorf("failed to create trace: %w", err)
-	}
-
-	// Publish trace created event
-	event := observability.NewTraceCreatedEvent(trace, trace.UserID)
-	if publishErr := s.eventPublisher.Publish(ctx, event); publishErr != nil {
-		// Log error but don't fail the operation
-		// In production, this might be logged or sent to a monitoring system
-		_ = publishErr
-	}
-
-	return trace, nil
-}
-
-// CreateTraceWithObservations creates a trace with its initial observations
-func (s *traceService) CreateTraceWithObservations(ctx context.Context, trace *observability.Trace) (*observability.Trace, error) {
-	if trace == nil {
-		return nil, observability.NewObservabilityError(
-			observability.ErrCodeValidationFailed,
-			"trace cannot be nil",
-		)
-	}
-
-	// Create the trace first
-	createdTrace, err := s.CreateTrace(ctx, trace)
-	if err != nil {
-		return nil, err
-	}
-
-	// Create associated observations if any
-	if len(trace.Observations) > 0 {
-		for _, obs := range trace.Observations {
-			obs.TraceID = createdTrace.ID
-			if obs.ID.IsZero() {
-				obs.ID = ulid.New()
-			}
-		}
-
-		var obsPointers []*observability.Observation
-		for i := range trace.Observations {
-			obsPointers = append(obsPointers, &trace.Observations[i])
-		}
-
-		err := s.observationRepo.CreateBatch(ctx, obsPointers)
+	// Validate parent trace exists if provided
+	if trace.ParentTraceID != nil && !trace.ParentTraceID.IsZero() {
+		_, err := s.traceRepo.GetByID(ctx, *trace.ParentTraceID)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create observations: %w", err)
+			return appErrors.NewNotFoundError(fmt.Sprintf("parent trace %s", trace.ParentTraceID.String()))
 		}
-		// The observations are updated in place, so we don't need to reassign
 	}
 
-	return createdTrace, nil
-}
-
-// GetTrace retrieves a trace by ID
-func (s *traceService) GetTrace(ctx context.Context, id ulid.ULID) (*observability.Trace, error) {
-	if id.IsZero() {
-		return nil, observability.NewObservabilityError(
-			observability.ErrCodeInvalidTraceID,
-			"trace ID cannot be empty",
-		)
+	// Create trace
+	if err := s.traceRepo.Create(ctx, trace); err != nil {
+		return appErrors.NewInternalError("failed to create trace", err)
 	}
 
-	trace, err := s.traceRepo.GetByID(ctx, id)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get trace: %w", err)
-	}
-
-	return trace, nil
-}
-
-// GetTraceByExternalID retrieves a trace by external ID
-func (s *traceService) GetTraceByExternalID(ctx context.Context, externalTraceID string) (*observability.Trace, error) {
-	if externalTraceID == "" {
-		return nil, observability.NewObservabilityError(
-			observability.ErrCodeValidationFailed,
-			"external trace ID cannot be empty",
-		)
-	}
-
-	trace, err := s.traceRepo.GetByExternalTraceID(ctx, externalTraceID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get trace by external ID: %w", err)
-	}
-
-	return trace, nil
+	return nil
 }
 
 // UpdateTrace updates an existing trace
-func (s *traceService) UpdateTrace(ctx context.Context, trace *observability.Trace) (*observability.Trace, error) {
-	if trace == nil {
-		return nil, observability.NewObservabilityError(
-			observability.ErrCodeValidationFailed,
-			"trace cannot be nil",
-		)
-	}
-
-	if trace.ID.IsZero() {
-		return nil, observability.NewObservabilityError(
-			observability.ErrCodeInvalidTraceID,
-			"trace ID cannot be empty",
-		)
-	}
-
-	// Validate trace data
-	if err := s.validateTrace(trace); err != nil {
-		return nil, err
-	}
-
-	// Get original trace for change detection
-	originalTrace, err := s.traceRepo.GetByID(ctx, trace.ID)
+func (s *TraceService) UpdateTrace(ctx context.Context, trace *observability.Trace) error {
+	// Validate trace exists
+	existing, err := s.traceRepo.GetByID(ctx, trace.ID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get original trace: %w", err)
-	}
-
-	// Update timestamp
-	trace.UpdatedAt = time.Now()
-
-	// Update in repository
-	if err := s.traceRepo.Update(ctx, trace); err != nil {
-		return nil, fmt.Errorf("failed to update trace: %w", err)
-	}
-
-	// Detect changes and publish event
-	changes := s.detectTraceChanges(originalTrace, trace)
-	if len(changes) > 0 {
-		event := observability.NewTraceUpdatedEvent(trace, trace.UserID, changes)
-		if publishErr := s.eventPublisher.Publish(ctx, event); publishErr != nil {
-			_ = publishErr
+		if errors.Is(err, sql.ErrNoRows) {
+			return appErrors.NewNotFoundError(fmt.Sprintf("trace %s", trace.ID.String()))
 		}
+		return appErrors.NewInternalError("failed to get trace", err)
 	}
 
-	return trace, nil
-}
+	// Merge non-zero fields from incoming trace into existing
+	mergeTraceFields(existing, trace)
 
-// DeleteTrace deletes a trace by ID
-func (s *traceService) DeleteTrace(ctx context.Context, id ulid.ULID) error {
-	if id.IsZero() {
-		return observability.NewObservabilityError(
-			observability.ErrCodeInvalidTraceID,
-			"trace ID cannot be empty",
-		)
-	}
+	// Preserve version for increment in repository layer
+	existing.Version = existing.Version
 
-	// Get trace for event publishing
-	trace, err := s.traceRepo.GetByID(ctx, id)
-	if err != nil {
-		return fmt.Errorf("failed to get trace for deletion: %w", err)
-	}
-
-	// Delete from repository
-	if err := s.traceRepo.Delete(ctx, id); err != nil {
-		return fmt.Errorf("failed to delete trace: %w", err)
-	}
-
-	// Publish deletion event
-	event := observability.NewTraceDeletedEvent(id, trace.ProjectID, trace.UserID)
-	if publishErr := s.eventPublisher.Publish(ctx, event); publishErr != nil {
-		_ = publishErr
+	// Update trace
+	if err := s.traceRepo.Update(ctx, existing); err != nil {
+		return appErrors.NewInternalError("failed to update trace", err)
 	}
 
 	return nil
 }
 
-// ListTraces retrieves traces based on filter criteria
-func (s *traceService) ListTraces(ctx context.Context, filter *observability.TraceFilter) ([]*observability.Trace, int, error) {
-	if filter == nil {
-		filter = &observability.TraceFilter{}
-	}
+// mergeTraceFields merges non-zero fields from src into dst
+// This prevents zero-value corruption from partial JSON updates
+func mergeTraceFields(dst *observability.Trace, src *observability.Trace) {
+	// Immutable fields (never update):
+	// - ID (primary key)
+	// - ProjectID (security boundary)
+	// - Version (managed by repository)
+	// - EventTs (managed by repository)
+	// - IsDeleted (managed by Delete method)
 
-	// Set default pagination if not provided
-	if filter.Limit <= 0 {
-		filter.Limit = 50
+	// Update optional fields only if non-zero
+	if src.Name != "" {
+		dst.Name = src.Name
 	}
-	if filter.Limit > 1000 {
-		filter.Limit = 1000
+	if src.UserID != nil && !src.UserID.IsZero() {
+		dst.UserID = src.UserID
 	}
-
-	traces, total, err := s.traceRepo.SearchTraces(ctx, filter)
-	if err != nil {
-		return nil, 0, fmt.Errorf("failed to list traces: %w", err)
+	if src.SessionID != nil && !src.SessionID.IsZero() {
+		dst.SessionID = src.SessionID
 	}
-
-	return traces, total, nil
+	if src.ParentTraceID != nil && !src.ParentTraceID.IsZero() {
+		dst.ParentTraceID = src.ParentTraceID
+	}
+	if src.Input != nil {
+		dst.Input = src.Input
+	}
+	if src.Output != nil {
+		dst.Output = src.Output
+	}
+	// Allow clearing metadata/tags by sending empty map/slice
+	// nil = not sent (preserve), {} or [] = clear, {...} = update
+	if src.Metadata != nil {
+		dst.Metadata = src.Metadata
+	}
+	if src.Tags != nil {
+		dst.Tags = src.Tags
+	}
+	if src.Environment != "" {
+		dst.Environment = src.Environment
+	}
+	if src.Release != nil {
+		dst.Release = src.Release
+	}
+	if !src.Timestamp.IsZero() {
+		dst.Timestamp = src.Timestamp
+	}
 }
 
-// GetTraceWithObservations retrieves a trace with all its observations
-func (s *traceService) GetTraceWithObservations(ctx context.Context, id ulid.ULID) (*observability.Trace, error) {
-	trace, err := s.GetTrace(ctx, id)
+// DeleteTrace soft deletes a trace
+func (s *TraceService) DeleteTrace(ctx context.Context, id ulid.ULID) error {
+	// Validate trace exists
+	_, err := s.traceRepo.GetByID(ctx, id)
 	if err != nil {
-		return nil, err
+		if errors.Is(err, sql.ErrNoRows) {
+			return appErrors.NewNotFoundError(fmt.Sprintf("trace %s", id.String()))
+		}
+		return appErrors.NewInternalError("failed to get trace", err)
 	}
 
-	// Get all observations for this trace
-	observations, err := s.observationRepo.GetByTraceID(ctx, id)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get trace observations: %w", err)
+	// Delete trace
+	if err := s.traceRepo.Delete(ctx, id); err != nil {
+		return appErrors.NewInternalError("failed to delete trace", err)
 	}
 
-	// Convert pointers to values for the trace
-	var obsValues []observability.Observation
-	for _, obs := range observations {
-		obsValues = append(obsValues, *obs)
+	return nil
+}
+
+// GetTraceByID retrieves a trace by ID
+func (s *TraceService) GetTraceByID(ctx context.Context, id ulid.ULID) (*observability.Trace, error) {
+	trace, err := s.traceRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, appErrors.NewNotFoundError(fmt.Sprintf("trace %s", id.String()))
 	}
-	trace.Observations = obsValues
+
 	return trace, nil
 }
 
-// GetTraceStats retrieves statistics for a trace
-func (s *traceService) GetTraceStats(ctx context.Context, id ulid.ULID) (*observability.TraceStats, error) {
-	// This would typically aggregate statistics from the observations
-	// For now, return a basic implementation
-	trace, err := s.GetTraceWithObservations(ctx, id)
+// GetTraceWithObservations retrieves a trace with all its observations in hierarchical tree structure
+func (s *TraceService) GetTraceWithObservations(ctx context.Context, id ulid.ULID) (*observability.Trace, error) {
+	// Get trace
+	trace, err := s.traceRepo.GetByID(ctx, id)
 	if err != nil {
-		return nil, err
+		return nil, appErrors.NewNotFoundError(fmt.Sprintf("trace %s", id.String()))
 	}
 
-	stats := &observability.TraceStats{
-		TraceID:     id,
-		TotalCost:   0,
-		TotalTokens: 0,
+	// Get observations tree
+	observations, err := s.observationRepo.GetTreeByTraceID(ctx, id)
+	if err != nil {
+		return nil, appErrors.NewInternalError("failed to get observations", err)
 	}
 
-	// Calculate aggregated stats from observations
-	if len(trace.Observations) > 0 {
-		var startTime, endTime *time.Time
+	trace.Observations = observations
 
-		for _, obs := range trace.Observations {
-			// Aggregate costs
-			if obs.TotalCost != nil {
-				stats.TotalCost += *obs.TotalCost
-			}
-
-			// Aggregate tokens
-			stats.TotalTokens += obs.TotalTokens
-
-			// Track time bounds
-			if startTime == nil || obs.StartTime.Before(*startTime) {
-				startTime = &obs.StartTime
-			}
-			if obs.EndTime != nil && (endTime == nil || obs.EndTime.After(*endTime)) {
-				endTime = obs.EndTime
-			}
-		}
-
-		// Calculate duration if we have both start and end times
-		if startTime != nil && endTime != nil {
-			// Duration would be calculated here if needed in stats
-		}
-	}
-
-	return stats, nil
+	return trace, nil
 }
 
-// GetRecentTraces retrieves recent traces for a project
-func (s *traceService) GetRecentTraces(ctx context.Context, projectID ulid.ULID, limit int) ([]*observability.Trace, error) {
-	if projectID.IsZero() {
-		return nil, observability.NewObservabilityError(
-			observability.ErrCodeInvalidProjectID,
-			"project ID cannot be empty",
-		)
-	}
-
-	if limit <= 0 || limit > 1000 {
-		limit = 50
-	}
-
-	traces, err := s.traceRepo.GetRecentTraces(ctx, projectID, limit)
+// GetTraceWithScores retrieves a trace with all its quality scores
+func (s *TraceService) GetTraceWithScores(ctx context.Context, id ulid.ULID) (*observability.Trace, error) {
+	// Get trace
+	trace, err := s.traceRepo.GetByID(ctx, id)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get recent traces: %w", err)
+		return nil, appErrors.NewNotFoundError(fmt.Sprintf("trace %s", id.String()))
+	}
+
+	// Get scores
+	scores, err := s.scoreRepo.GetByTraceID(ctx, id)
+	if err != nil {
+		return nil, appErrors.NewInternalError("failed to get scores", err)
+	}
+
+	trace.Scores = scores
+
+	return trace, nil
+}
+
+// GetTracesByProjectID retrieves traces for a project with optional filtering
+func (s *TraceService) GetTracesByProjectID(ctx context.Context, projectID ulid.ULID, filter *observability.TraceFilter) ([]*observability.Trace, error) {
+	if projectID.IsZero() {
+		return nil, appErrors.NewValidationError("project_id is required", "traces query requires a valid project_id")
+	}
+
+	traces, err := s.traceRepo.GetByProjectID(ctx, projectID, filter)
+	if err != nil {
+		return nil, appErrors.NewInternalError("failed to get traces", err)
 	}
 
 	return traces, nil
 }
 
-// CreateTracesBatch creates multiple traces in a batch operation
-func (s *traceService) CreateTracesBatch(ctx context.Context, traces []*observability.Trace) ([]*observability.Trace, error) {
-	if len(traces) == 0 {
-		return []*observability.Trace{}, nil
+// GetTracesBySessionID retrieves all traces in a session
+func (s *TraceService) GetTracesBySessionID(ctx context.Context, sessionID ulid.ULID) ([]*observability.Trace, error) {
+	if sessionID.IsZero() {
+		return nil, appErrors.NewValidationError("session_id is required", "traces query requires a valid session_id")
 	}
 
-	// Validate and prepare traces
-	now := time.Now()
-	for _, trace := range traces {
+	traces, err := s.traceRepo.GetBySessionID(ctx, sessionID)
+	if err != nil {
+		return nil, appErrors.NewInternalError("failed to get traces", err)
+	}
+
+	return traces, nil
+}
+
+// GetChildTraces retrieves child traces of a parent trace
+func (s *TraceService) GetChildTraces(ctx context.Context, parentTraceID ulid.ULID) ([]*observability.Trace, error) {
+	if parentTraceID.IsZero() {
+		return nil, appErrors.NewValidationError("parent_trace_id is required", "parent_trace_id cannot be empty")
+	}
+
+	// Validate parent exists
+	_, err := s.traceRepo.GetByID(ctx, parentTraceID)
+	if err != nil {
+		return nil, appErrors.NewNotFoundError(fmt.Sprintf("parent trace %s", parentTraceID.String()))
+	}
+
+	traces, err := s.traceRepo.GetChildren(ctx, parentTraceID)
+	if err != nil {
+		return nil, appErrors.NewInternalError("failed to get child traces", err)
+	}
+
+	return traces, nil
+}
+
+// GetTracesByUserID retrieves traces for a user with optional filtering
+func (s *TraceService) GetTracesByUserID(ctx context.Context, userID ulid.ULID, filter *observability.TraceFilter) ([]*observability.Trace, error) {
+	if userID.IsZero() {
+		return nil, appErrors.NewValidationError("user_id is required", "traces query requires a valid user_id")
+	}
+
+	traces, err := s.traceRepo.GetByUserID(ctx, userID, filter)
+	if err != nil {
+		return nil, appErrors.NewInternalError("failed to get traces", err)
+	}
+
+	return traces, nil
+}
+
+// CreateTraceBatch creates multiple traces in a single batch operation
+func (s *TraceService) CreateTraceBatch(ctx context.Context, traces []*observability.Trace) error {
+	if len(traces) == 0 {
+		return appErrors.NewValidationError("traces array cannot be empty", "batch create requires at least one trace")
+	}
+
+	// Validate all traces
+	for i, trace := range traces {
+		if trace.ProjectID.IsZero() {
+			return appErrors.NewValidationError(
+				fmt.Sprintf("trace[%d]: project_id is required", i),
+				"all traces must have valid project_id",
+			)
+		}
+		if trace.Name == "" {
+			return appErrors.NewValidationError(
+				fmt.Sprintf("trace[%d]: name is required", i),
+				"all traces must have a name",
+			)
+		}
+
+		// Generate ID if not provided
 		if trace.ID.IsZero() {
 			trace.ID = ulid.New()
 		}
-
-		if err := s.validateTrace(trace); err != nil {
-			return nil, err
-		}
-
-		if trace.CreatedAt.IsZero() {
-			trace.CreatedAt = now
-		}
-		trace.UpdatedAt = now
 	}
 
-	// Create batch in repository
+	// Create batch
 	if err := s.traceRepo.CreateBatch(ctx, traces); err != nil {
-		return nil, fmt.Errorf("failed to create traces batch: %w", err)
-	}
-
-	// Publish events for created traces
-	var events []*observability.Event
-	for _, trace := range traces {
-		event := observability.NewTraceCreatedEvent(trace, trace.UserID)
-		events = append(events, event)
-	}
-
-	if len(events) > 0 {
-		if publishErr := s.eventPublisher.PublishBatch(ctx, events); publishErr != nil {
-			_ = publishErr
-		}
-	}
-
-	return traces, nil
-}
-
-// IngestTraceBatch ingests a batch of traces (implementation placeholder)
-func (s *traceService) IngestTraceBatch(ctx context.Context, request *observability.BatchIngestRequest) (*observability.BatchIngestResult, error) {
-	// This would implement high-throughput ingestion logic
-	// For now, delegate to CreateTracesBatch
-	startTime := time.Now()
-
-	createdTraces, err := s.CreateTracesBatch(ctx, request.Traces)
-	if err != nil {
-		return &observability.BatchIngestResult{
-			ProcessedCount: 0,
-			FailedCount:    len(request.Traces),
-			Duration:       time.Since(startTime),
-			Errors: []observability.BatchIngestionError{
-				{
-					Index:   0,
-					Error:   err.Error(),
-					Details: nil,
-				},
-			},
-		}, err
-	}
-
-	return &observability.BatchIngestResult{
-		ProcessedCount: len(createdTraces),
-		FailedCount:    0,
-		Duration:       time.Since(startTime),
-		Errors:         []observability.BatchIngestionError{},
-	}, nil
-}
-
-// SearchTraces searches traces by query string (implementation placeholder)
-func (s *traceService) SearchTraces(ctx context.Context, query string, filter *observability.TraceFilter) ([]*observability.Trace, int, error) {
-	// This would implement full-text search logic
-	// For now, delegate to ListTraces
-	return s.ListTraces(ctx, filter)
-}
-
-// GetTracesByTimeRange retrieves traces within a time range
-func (s *traceService) GetTracesByTimeRange(ctx context.Context, projectID ulid.ULID, startTime, endTime time.Time, limit, offset int) ([]*observability.Trace, error) {
-	if projectID.IsZero() {
-		return nil, observability.NewObservabilityError(
-			observability.ErrCodeInvalidProjectID,
-			"project ID cannot be empty",
-		)
-	}
-
-	traces, err := s.traceRepo.GetTracesByTimeRange(ctx, projectID, startTime, endTime, limit, offset)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get traces by time range: %w", err)
-	}
-
-	return traces, nil
-}
-
-// GetTraceAnalytics retrieves analytics data for traces (implementation placeholder)
-func (s *traceService) GetTraceAnalytics(ctx context.Context, filter *observability.AnalyticsFilter) (*observability.TraceAnalytics, error) {
-	// This would implement analytics aggregation logic
-	// Return placeholder for now
-	return &observability.TraceAnalytics{
-		TotalTraces: 0,
-	}, nil
-}
-
-// Helper methods
-
-// validateTrace validates a trace object
-func (s *traceService) validateTrace(trace *observability.Trace) error {
-	if trace.ProjectID.IsZero() {
-		return observability.NewValidationError("project_id", "project ID is required")
-	}
-
-	if trace.ExternalTraceID == "" {
-		return observability.NewValidationError("external_trace_id", "external trace ID is required")
-	}
-
-	if trace.Name == "" {
-		return observability.NewValidationError("name", "trace name is required")
+		return appErrors.NewInternalError("failed to create trace batch", err)
 	}
 
 	return nil
 }
 
-// detectTraceChanges compares two traces and returns a map of changes
-func (s *traceService) detectTraceChanges(original, updated *observability.Trace) map[string]any {
-	changes := make(map[string]any)
-
-	if original.Name != updated.Name {
-		changes["name"] = map[string]string{
-			"from": original.Name,
-			"to":   updated.Name,
-		}
+// CountTraces returns the count of traces matching the filter
+func (s *TraceService) CountTraces(ctx context.Context, filter *observability.TraceFilter) (int64, error) {
+	count, err := s.traceRepo.Count(ctx, filter)
+	if err != nil {
+		return 0, appErrors.NewInternalError("failed to count traces", err)
 	}
 
-	if (original.UserID == nil) != (updated.UserID == nil) ||
-		(original.UserID != nil && updated.UserID != nil && *original.UserID != *updated.UserID) {
-		changes["user_id"] = map[string]any{
-			"from": original.UserID,
-			"to":   updated.UserID,
-		}
-	}
-
-	// Add more change detection logic as needed
-
-	return changes
+	return count, nil
 }

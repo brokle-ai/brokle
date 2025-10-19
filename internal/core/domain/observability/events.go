@@ -117,7 +117,6 @@ func NewTraceCreatedEvent(trace *Trace, userID *ulid.ULID) *Event {
 		UserID:    userID,
 		Data: map[string]any{
 			"trace_id":          trace.ID,
-			"external_trace_id": trace.ExternalTraceID,
 			"name":              trace.Name,
 			"session_id":        trace.SessionID,
 			"observation_count": len(trace.Observations),
@@ -146,13 +145,10 @@ func NewTraceUpdatedEvent(trace *Trace, userID *ulid.ULID, changes map[string]an
 		ProjectID: trace.ProjectID,
 		UserID:    userID,
 		Data: map[string]any{
-			"trace_id":          trace.ID,
-			"external_trace_id": trace.ExternalTraceID,
-			"changes":           changes,
+			"trace_id": trace.ID,
+			"changes":  changes,
 		},
-		Metadata: map[string]any{
-			"updated_at": trace.UpdatedAt,
-		},
+		Metadata: map[string]any{},
 		Timestamp: time.Now(),
 		Version:   "1.0",
 		Correlation: &CorrelationInfo{
@@ -191,16 +187,14 @@ func NewObservationCreatedEvent(observation *Observation, userID *ulid.ULID) *Ev
 		Type:      EventTypeObservationCreated,
 		Source:    "observability.observation_service",
 		Subject:   observation.ID.String(),
-		ProjectID: getProjectIDFromContext(observation.TraceID), // This would need to be resolved
+		ProjectID: getProjectIDFromContext(&observation.TraceID), // This would need to be resolved
 		UserID:    userID,
 		Data: map[string]any{
-			"observation_id":          observation.ID,
-			"external_observation_id": observation.ExternalObservationID,
-			"trace_id":                observation.TraceID,
-			"type":                    observation.Type,
-			"name":                    observation.Name,
-			"provider":                observation.Provider,
-			"model":                   observation.Model,
+			"observation_id": observation.ID,
+			"trace_id":       observation.TraceID,
+			"type":           observation.Type,
+			"name":           observation.Name,
+			"model":          observation.Model,
 		},
 		Metadata: map[string]any{
 			"start_time": observation.StartTime,
@@ -229,18 +223,14 @@ func NewObservationCompletedEvent(observation *Observation, userID *ulid.ULID) *
 		Type:      EventTypeObservationCompleted,
 		Source:    "observability.observation_service",
 		Subject:   observation.ID.String(),
-		ProjectID: getProjectIDFromContext(observation.TraceID),
+		ProjectID: getProjectIDFromContext(&observation.TraceID),
 		UserID:    userID,
 		Data: map[string]any{
-			"observation_id":    observation.ID,
-			"trace_id":          observation.TraceID,
-			"type":              observation.Type,
-			"provider":          observation.Provider,
-			"model":             observation.Model,
-			"latency_ms":        latency,
-			"total_tokens":      observation.TotalTokens,
-			"total_cost":        observation.TotalCost,
-			"quality_score":     observation.QualityScore,
+			"observation_id": observation.ID,
+			"trace_id":       observation.TraceID,
+			"type":           observation.Type,
+			"model":          observation.Model,
+			"latency_ms":     latency,
 		},
 		Metadata: map[string]any{
 			"start_time": observation.StartTime,
@@ -257,7 +247,7 @@ func NewObservationCompletedEvent(observation *Observation, userID *ulid.ULID) *
 }
 
 // NewQualityScoreAddedEvent creates a new quality score added event
-func NewQualityScoreAddedEvent(score *QualityScore, userID *ulid.ULID) *Event {
+func NewQualityScoreAddedEvent(score *Score, userID *ulid.ULID) *Event {
 	return &Event{
 		ID:        ulid.New(),
 		Type:      EventTypeQualityScoreAdded,
@@ -266,15 +256,14 @@ func NewQualityScoreAddedEvent(score *QualityScore, userID *ulid.ULID) *Event {
 		ProjectID: getProjectIDFromContext(score.TraceID),
 		UserID:    userID,
 		Data: map[string]any{
-			"score_id":        score.ID,
-			"trace_id":        score.TraceID,
-			"observation_id":  score.ObservationID,
-			"score_name":      score.ScoreName,
-			"score_value":     score.ScoreValue,
-			"string_value":    score.StringValue,
-			"data_type":       score.DataType,
-			"source":          score.Source,
-			"evaluator_name":  score.EvaluatorName,
+			"score_id":       score.ID,
+			"trace_id":       score.TraceID,
+			"observation_id": score.ObservationID,
+			"name":           score.Name,
+			"value":          score.Value,
+			"string_value":   score.StringValue,
+			"data_type":      score.DataType,
+			"source":         score.Source,
 		},
 		Metadata: map[string]any{
 			"evaluator_version": score.EvaluatorVersion,
@@ -283,7 +272,7 @@ func NewQualityScoreAddedEvent(score *QualityScore, userID *ulid.ULID) *Event {
 		Timestamp: time.Now(),
 		Version:   "1.0",
 		Correlation: &CorrelationInfo{
-			TraceID:       &score.TraceID,
+			TraceID:       score.TraceID,
 			ObservationID: score.ObservationID,
 			UserID:        score.AuthorUserID,
 		},
@@ -383,7 +372,11 @@ func NewThresholdExceededEvent(projectID ulid.ULID, metric, threshold string, cu
 
 // getProjectIDFromContext is a placeholder function that would resolve project ID from trace ID
 // In a real implementation, this would query the database or use a cache
-func getProjectIDFromContext(traceID ulid.ULID) ulid.ULID {
+func getProjectIDFromContext(traceID *ulid.ULID) ulid.ULID {
+	// Handle nil trace ID
+	if traceID == nil {
+		return ulid.ULID{}
+	}
 	// This would be implemented to resolve the project ID from the trace ID
 	// For now, return a zero ULID as a placeholder
 	return ulid.ULID{}

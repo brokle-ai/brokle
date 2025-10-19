@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -40,10 +41,17 @@ const (
 
 // TelemetryStreamConsumer consumes telemetry batches from Redis Streams and writes to ClickHouse
 type TelemetryStreamConsumer struct {
-	redis               *database.RedisDB
-	clickhouseRepo      observability.TelemetryAnalyticsRepository
-	deduplicationSvc    observability.TelemetryDeduplicationService
-	logger              *logrus.Logger
+	redis            *database.RedisDB
+	clickhouseRepo   observability.TelemetryAnalyticsRepository // Keep for generic events
+	deduplicationSvc observability.TelemetryDeduplicationService
+	logger           *logrus.Logger
+
+	// New: Observability services for structured events (ClickHouse-first)
+	traceService       observability.TraceService
+	observationService observability.ObservationService
+	scoreService       observability.ScoreService
+	sessionService     observability.SessionService
+
 	consumerGroup       string
 	consumerID          string
 	batchSize           int
@@ -86,6 +94,11 @@ func NewTelemetryStreamConsumer(
 	deduplicationSvc observability.TelemetryDeduplicationService,
 	logger *logrus.Logger,
 	config *TelemetryStreamConsumerConfig,
+	// New: Observability services for structured events
+	traceService observability.TraceService,
+	observationService observability.ObservationService,
+	scoreService observability.ScoreService,
+	sessionService observability.SessionService,
 ) *TelemetryStreamConsumer {
 	if config == nil {
 		config = &TelemetryStreamConsumerConfig{
@@ -105,6 +118,10 @@ func NewTelemetryStreamConsumer(
 		clickhouseRepo:      clickhouseRepo,
 		deduplicationSvc:    deduplicationSvc,
 		logger:              logger,
+		traceService:        traceService,
+		observationService:  observationService,
+		scoreService:        scoreService,
+		sessionService:      sessionService,
 		consumerGroup:       config.ConsumerGroup,
 		consumerID:          config.ConsumerID,
 		batchSize:           config.BatchSize,
@@ -259,7 +276,8 @@ func (c *TelemetryStreamConsumer) ensureConsumerGroups(ctx context.Context, stre
 		}
 
 		// Create consumer group (idempotent operation)
-		err := c.redis.Client.XGroupCreateMkStream(ctx, streamKey, c.consumerGroup, "$").Err()
+		// Use "0" to read from beginning, ensuring we don't miss messages that arrived before consumer started
+		err := c.redis.Client.XGroupCreateMkStream(ctx, streamKey, c.consumerGroup, "0").Err()
 		if err != nil {
 			// Ignore BUSYGROUP error (group already exists)
 			if !strings.Contains(err.Error(), "BUSYGROUP") {
@@ -394,9 +412,10 @@ func (c *TelemetryStreamConsumer) consumeBatch(ctx context.Context) error {
 
 	if err != nil {
 		if err == redis.Nil {
-			// No messages available - normal condition
+			// No messages available - normal condition (this is expected most of the time)
 			return nil
 		}
+		c.logger.WithError(err).Error("XReadGroup failed")
 		return err
 	}
 
@@ -513,48 +532,271 @@ func (c *TelemetryStreamConsumer) processMessage(ctx context.Context, streamKey 
 	return ErrMovedToDLQ
 }
 
-// processBatch writes batch data to ClickHouse using domain types
-func (c *TelemetryStreamConsumer) processBatch(ctx context.Context, batch *streams.TelemetryStreamMessage) error {
-	// Convert stream events to domain TelemetryEvent types WITH context from stream message
-	domainEvents := make([]*observability.TelemetryEvent, len(batch.Events))
-	for i, event := range batch.Events {
-		domainEvents[i] = &observability.TelemetryEvent{
-			ID:           event.EventID,
-			BatchID:      batch.BatchID,
-			ProjectID:    batch.ProjectID,    // From stream message
-			Environment:  batch.Environment,  // From stream message
-			EventType:    observability.TelemetryEventType(event.EventType),
-			EventPayload: event.EventPayload,
-			CreatedAt:    batch.Timestamp,
-			RetryCount:   0,
-			ProcessedAt:  ptrTime(time.Now()),
+// sortEventsByDependency sorts events to ensure dependencies are processed first
+// Order: trace → session → observation → quality_score
+// This prevents "parent not found" errors during batch processing
+func (c *TelemetryStreamConsumer) sortEventsByDependency(events []streams.TelemetryEventData) []streams.TelemetryEventData {
+	// Define processing priority (lower = processed first)
+	eventPriority := map[observability.TelemetryEventType]int{
+		observability.TelemetryEventTypeTrace:        1, // Traces first (parents)
+		observability.TelemetryEventTypeSession:      2, // Sessions second
+		observability.TelemetryEventTypeObservation:  3, // Observations third (require traces)
+		observability.TelemetryEventTypeQualityScore: 4, // Scores last (require traces/observations)
+		observability.TelemetryEventTypeEvent:        5, // Generic events last
+	}
+
+	// Create a copy to avoid modifying original slice
+	sorted := make([]streams.TelemetryEventData, len(events))
+	copy(sorted, events)
+
+	// Stable sort by priority
+	sort.SliceStable(sorted, func(i, j int) bool {
+		typeI := observability.TelemetryEventType(sorted[i].EventType)
+		typeJ := observability.TelemetryEventType(sorted[j].EventType)
+
+		priorityI := eventPriority[typeI]
+		priorityJ := eventPriority[typeJ]
+
+		// Unknown types get lowest priority (processed last)
+		if priorityI == 0 {
+			priorityI = 999
 		}
+		if priorityJ == 0 {
+			priorityJ = 999
+		}
+
+		return priorityI < priorityJ
+	})
+
+	return sorted
+}
+
+// processTraceEvent processes a trace event using TraceService
+func (c *TelemetryStreamConsumer) processTraceEvent(ctx context.Context, eventData *streams.TelemetryEventData, projectID ulid.ULID, environment string) error {
+	// Map event payload to Trace struct
+	var trace observability.Trace
+	if err := mapToStruct(eventData.EventPayload, &trace); err != nil {
+		return fmt.Errorf("failed to unmarshal trace payload: %w", err)
 	}
 
-	// Batch insert events to ClickHouse using domain types (context carried in structs)
-	if err := c.clickhouseRepo.InsertTelemetryEventsBatch(ctx, domainEvents); err != nil {
-		return fmt.Errorf("failed to insert telemetry events: %w", err)
+	// Set context from stream message (these fields come from batch, not payload)
+	trace.ProjectID = projectID
+	trace.Environment = environment
+
+	// Use service layer (handles validation, business logic, and repository)
+	if err := c.traceService.CreateTrace(ctx, &trace); err != nil {
+		return fmt.Errorf("failed to create trace via service: %w", err)
 	}
 
-	// Create batch record in ClickHouse using domain types WITH context from stream message
+	return nil
+}
+
+// processSessionEvent processes a session event using SessionService
+func (c *TelemetryStreamConsumer) processSessionEvent(ctx context.Context, eventData *streams.TelemetryEventData, projectID ulid.ULID) error {
+	// Map event payload to Session struct
+	var session observability.Session
+	if err := mapToStruct(eventData.EventPayload, &session); err != nil {
+		return fmt.Errorf("failed to unmarshal session payload: %w", err)
+	}
+
+	// Set context from stream message
+	session.ProjectID = projectID
+
+	// Use service layer
+	if err := c.sessionService.CreateSession(ctx, &session); err != nil {
+		return fmt.Errorf("failed to create session via service: %w", err)
+	}
+
+	return nil
+}
+
+// processObservationEvent processes an observation event using ObservationService
+func (c *TelemetryStreamConsumer) processObservationEvent(ctx context.Context, eventData *streams.TelemetryEventData, projectID ulid.ULID) error {
+	// Debug: Log payload structure to identify ULID format issues
+	c.logger.WithFields(logrus.Fields{
+		"event_id": eventData.EventID.String(),
+		"payload_keys": func() []string {
+			keys := make([]string, 0, len(eventData.EventPayload))
+			for k := range eventData.EventPayload {
+				keys = append(keys, k)
+			}
+			return keys
+		}(),
+	}).Debug("Processing observation payload")
+
+	// Map event payload to Observation struct
+	var observation observability.Observation
+	if err := mapToStruct(eventData.EventPayload, &observation); err != nil {
+		// Log detailed error with sample payload data
+		c.logger.WithFields(logrus.Fields{
+			"event_id":     eventData.EventID.String(),
+			"trace_id_raw": eventData.EventPayload["trace_id"],
+			"id_raw":       eventData.EventPayload["id"],
+			"error":        err.Error(),
+		}).Error("Failed to unmarshal observation - payload debug")
+		return fmt.Errorf("failed to unmarshal observation payload: %w", err)
+	}
+
+	// Set context from stream message
+	observation.ProjectID = projectID
+
+	// Use service layer
+	if err := c.observationService.CreateObservation(ctx, &observation); err != nil {
+		return fmt.Errorf("failed to create observation via service: %w", err)
+	}
+
+	return nil
+}
+
+// processScoreEvent processes a quality score event using ScoreService
+func (c *TelemetryStreamConsumer) processScoreEvent(ctx context.Context, eventData *streams.TelemetryEventData, projectID ulid.ULID) error {
+	// Map event payload to Score struct
+	var score observability.Score
+	if err := mapToStruct(eventData.EventPayload, &score); err != nil {
+		return fmt.Errorf("failed to unmarshal score payload: %w", err)
+	}
+
+	// Set context from stream message
+	score.ProjectID = projectID
+
+	// Use service layer
+	if err := c.scoreService.CreateScore(ctx, &score); err != nil {
+		return fmt.Errorf("failed to create score via service: %w", err)
+	}
+
+	return nil
+}
+
+// mapToStruct converts map[string]interface{} to a struct using JSON marshaling
+// This is a type-safe way to convert event payloads to domain types
+func mapToStruct(input map[string]interface{}, output interface{}) error {
+	// Marshal map to JSON
+	jsonData, err := json.Marshal(input)
+	if err != nil {
+		return fmt.Errorf("failed to marshal map: %w", err)
+	}
+
+	// Unmarshal JSON to struct
+	if err := json.Unmarshal(jsonData, output); err != nil {
+		return fmt.Errorf("failed to unmarshal to struct: %w", err)
+	}
+
+	return nil
+}
+
+// processBatch processes a batch of telemetry events by routing to appropriate services based on event type
+// This is the main orchestration method that decides how to handle each event
+func (c *TelemetryStreamConsumer) processBatch(ctx context.Context, batch *streams.TelemetryStreamMessage) error {
+	// Track processing stats
+	var (
+		processedCount int
+		failedCount    int
+		lastError      error
+	)
+
+	// Sort events by dependency order: traces → sessions → observations → scores
+	// This ensures parent entities exist before children are created
+	sortedEvents := c.sortEventsByDependency(batch.Events)
+
+	// Process each event based on its type
+	for _, event := range sortedEvents {
+		var err error
+
+		// Route event to appropriate service based on event_type
+		switch observability.TelemetryEventType(event.EventType) {
+		case observability.TelemetryEventTypeTrace:
+			// Structured trace event → TraceService → traces table
+			err = c.processTraceEvent(ctx, &event, batch.ProjectID, batch.Environment)
+
+		case observability.TelemetryEventTypeSession:
+			// Structured session event → SessionService → sessions table
+			err = c.processSessionEvent(ctx, &event, batch.ProjectID)
+
+		case observability.TelemetryEventTypeObservation:
+			// Structured observation event → ObservationService → observations table
+			err = c.processObservationEvent(ctx, &event, batch.ProjectID)
+
+		case observability.TelemetryEventTypeQualityScore:
+			// Structured score event → ScoreService → scores table
+			err = c.processScoreEvent(ctx, &event, batch.ProjectID)
+
+		case observability.TelemetryEventTypeEvent:
+			// Generic event → TelemetryAnalyticsRepository (backward compatibility)
+			domainEvent := &observability.TelemetryEvent{
+				ID:           event.EventID,
+				BatchID:      batch.BatchID,
+				ProjectID:    batch.ProjectID,
+				Environment:  batch.Environment,
+				EventType:    observability.TelemetryEventType(event.EventType),
+				EventPayload: event.EventPayload,
+				CreatedAt:    batch.Timestamp,
+				RetryCount:   0,
+				ProcessedAt:  ptrTime(time.Now()),
+			}
+			err = c.clickhouseRepo.InsertTelemetryEvent(ctx, domainEvent)
+
+		default:
+			// Unknown event type - log warning and skip
+			c.logger.WithFields(logrus.Fields{
+				"event_id":   event.EventID.String(),
+				"event_type": event.EventType,
+				"batch_id":   batch.BatchID.String(),
+			}).Warn("Unknown event type, skipping")
+			failedCount++
+			continue
+		}
+
+		if err != nil {
+			// Log error but continue processing other events (partial success model)
+			c.logger.WithError(err).WithFields(logrus.Fields{
+				"event_id":   event.EventID.String(),
+				"event_type": event.EventType,
+				"batch_id":   batch.BatchID.String(),
+			}).Error("Failed to process event")
+			failedCount++
+			lastError = err
+			continue
+		}
+
+		processedCount++
+	}
+
+	// Record batch completion metadata (for analytics and debugging)
 	processingTimeMs := 0 // TODO: Calculate actual processing time
 	domainBatch := &observability.TelemetryBatch{
 		ID:               batch.BatchID,
 		ProjectID:        batch.ProjectID,
-		Environment:      batch.Environment,  // From stream message
+		Environment:      batch.Environment,
 		BatchMetadata:    batch.Metadata,
 		TotalEvents:      len(batch.Events),
-		ProcessedEvents:  len(batch.Events),
-		FailedEvents:     0,
+		ProcessedEvents:  processedCount,
+		FailedEvents:     failedCount,
 		Status:           observability.BatchStatusCompleted,
 		ProcessingTimeMs: &processingTimeMs,
 		CreatedAt:        batch.Timestamp,
 		CompletedAt:      ptrTime(time.Now()),
 	}
 
-	// Insert batch (context carried in domain struct)
+	// Insert batch record (best-effort, don't fail if this errors)
 	if err := c.clickhouseRepo.InsertTelemetryBatch(ctx, domainBatch); err != nil {
-		return fmt.Errorf("failed to insert telemetry batch: %w", err)
+		c.logger.WithError(err).WithFields(logrus.Fields{
+			"batch_id": batch.BatchID.String(),
+		}).Warn("Failed to insert batch metadata (non-critical)")
+	}
+
+	// Determine success: At least one event processed successfully
+	if processedCount == 0 && failedCount > 0 {
+		return fmt.Errorf("batch processing failed: 0/%d events processed, last error: %w", len(batch.Events), lastError)
+	}
+
+	// Log partial failures
+	if failedCount > 0 {
+		c.logger.WithFields(logrus.Fields{
+			"batch_id":        batch.BatchID.String(),
+			"total_events":    len(batch.Events),
+			"processed_count": processedCount,
+			"failed_count":    failedCount,
+		}).Warn("Batch processed with partial failures")
 	}
 
 	// ✅ Deduplication already handled synchronously in HTTP handler via ClaimEvents
@@ -601,16 +843,16 @@ func (c *TelemetryStreamConsumer) moveToDLQ(ctx context.Context, streamKey strin
 
 	// Serialize DLQ entry with error metadata
 	dlqData := map[string]interface{}{
-		"original_stream":  streamKey,
-		"original_msg_id":  msg.ID,
-		"batch_id":         batch.BatchID.String(),
-		"project_id":       batch.ProjectID.String(),
-		"environment":      batch.Environment,
-		"event_count":      len(batch.Events),
-		"error_message":    err.Error(),
-		"failed_at":        time.Now().Unix(),
-		"retry_count":      c.maxRetries,
-		"original_data":    msg.Values["data"], // Preserve original message data
+		"original_stream": streamKey,
+		"original_msg_id": msg.ID,
+		"batch_id":        batch.BatchID.String(),
+		"project_id":      batch.ProjectID.String(),
+		"environment":     batch.Environment,
+		"event_count":     len(batch.Events),
+		"error_message":   err.Error(),
+		"failed_at":       time.Now().Unix(),
+		"retry_count":     c.maxRetries,
+		"original_data":   msg.Values["data"], // Preserve original message data
 	}
 
 	// Add to DLQ stream with trimming and TTL
@@ -634,12 +876,12 @@ func (c *TelemetryStreamConsumer) moveToDLQ(ctx context.Context, streamKey strin
 	atomic.AddInt64(&c.dlqMessagesCount, 1)
 
 	c.logger.WithFields(logrus.Fields{
-		"dlq_id":        result,
-		"dlq_key":       dlqKey,
-		"batch_id":      batch.BatchID.String(),
-		"project_id":    batch.ProjectID.String(),
-		"error":         err.Error(),
-		"retry_count":   c.maxRetries,
+		"dlq_id":      result,
+		"dlq_key":     dlqKey,
+		"batch_id":    batch.BatchID.String(),
+		"project_id":  batch.ProjectID.String(),
+		"error":       err.Error(),
+		"retry_count": c.maxRetries,
 	}).Warn("Moved failed batch to Dead Letter Queue")
 
 	return nil

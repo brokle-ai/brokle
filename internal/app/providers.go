@@ -135,7 +135,8 @@ type OrganizationRepositories struct {
 type ObservabilityRepositories struct {
 	Trace                  observability.TraceRepository
 	Observation            observability.ObservationRepository
-	QualityScore           observability.QualityScoreRepository
+	Score                  observability.ScoreRepository
+	Session                observability.SessionRepository
 	TelemetryDeduplication observability.TelemetryDeduplicationRepository
 	TelemetryAnalytics     *observabilityRepo.AnalyticsRepository
 }
@@ -224,6 +225,7 @@ func ProvideWorkers(
 	gatewayAnalyticsRepo *gatewayRepo.Repository,
 	billingService *billingService.BillingService,
 	deduplicationRepo observability.TelemetryDeduplicationRepository,
+	observabilityServices *observabilityService.ServiceRegistry,
 	logger *logrus.Logger,
 ) (*WorkerContainer, error) {
 	// Use telemetry analytics repository from observability package
@@ -252,6 +254,11 @@ func ProvideWorkers(
 		deduplicationService,
 		logger,
 		consumerConfig,
+		// Inject observability services for structured events (ClickHouse-first)
+		observabilityServices.TraceService,
+		observabilityServices.ObservationService,
+		observabilityServices.ScoreService,
+		observabilityServices.SessionService,
 	)
 
 	// Create gateway analytics worker
@@ -303,11 +310,12 @@ func ProvideOrganizationRepositories(db *gorm.DB) *OrganizationRepositories {
 }
 
 // ProvideObservabilityRepositories creates all observability-related repositories
-func ProvideObservabilityRepositories(postgresDB *gorm.DB, clickhouseDB *database.ClickHouseDB, redisDB *database.RedisDB) *ObservabilityRepositories {
+func ProvideObservabilityRepositories(clickhouseDB *database.ClickHouseDB, redisDB *database.RedisDB) *ObservabilityRepositories {
 	return &ObservabilityRepositories{
-		Trace:                  observabilityRepo.NewTraceRepository(postgresDB),
-		Observation:            observabilityRepo.NewObservationRepository(postgresDB),
-		QualityScore:           observabilityRepo.NewQualityScoreRepository(postgresDB),
+		Trace:                  observabilityRepo.NewTraceRepository(clickhouseDB.Conn),
+		Observation:            observabilityRepo.NewObservationRepository(clickhouseDB.Conn),
+		Score:                  observabilityRepo.NewScoreRepository(clickhouseDB.Conn),
+		Session:                observabilityRepo.NewSessionRepository(clickhouseDB.Conn),
 		TelemetryDeduplication: observabilityRepo.NewTelemetryDeduplicationRepositoryRedis(redisDB),
 		TelemetryAnalytics:     observabilityRepo.NewTelemetryAnalyticsRepository(clickhouseDB),
 	}
@@ -336,7 +344,7 @@ func ProvideRepositories(dbs *DatabaseContainer, logger *logrus.Logger) *Reposit
 		User:          ProvideUserRepositories(dbs.Postgres.DB),
 		Auth:          ProvideAuthRepositories(dbs.Postgres.DB),
 		Organization:  ProvideOrganizationRepositories(dbs.Postgres.DB),
-		Observability: ProvideObservabilityRepositories(dbs.Postgres.DB, dbs.ClickHouse, dbs.Redis),
+		Observability: ProvideObservabilityRepositories(dbs.ClickHouse, dbs.Redis),
 		Gateway:       ProvideGatewayRepositories(dbs.Postgres.DB, dbs.ClickHouse.Conn, logger),
 		Billing:       ProvideBillingRepositories(dbs.Postgres.DB, logger),
 	}
@@ -500,29 +508,34 @@ func ProvideOrganizationServices(
 }
 
 // ProvideObservabilityServices creates all observability-related services
+// Note: TelemetryService is created without analytics worker (nil).
+// The worker must be injected later via SetAnalyticsWorker() after it's started.
 func ProvideObservabilityServices(
 	observabilityRepos *ObservabilityRepositories,
 	redisDB *database.RedisDB,
-	workers *WorkerContainer,
 	logger *logrus.Logger,
 ) *observabilityService.ServiceRegistry {
-	// Create a simple event publisher for now
-	eventPublisher := &simpleEventPublisher{logger: logger}
+	// Create deduplication service for telemetry
+	deduplicationService := observabilityService.NewTelemetryDeduplicationService(observabilityRepos.TelemetryDeduplication)
 
 	// Create Redis Streams producer for telemetry
 	streamProducer := streams.NewTelemetryStreamProducer(redisDB, logger)
 
+	// Create telemetry service without analytics worker (two-phase initialization)
+	// Worker will be injected after it's created and started in ProvideWorkers
+	telemetryService := observabilityService.NewTelemetryService(
+		deduplicationService,
+		streamProducer,
+		nil, // Analytics worker injected later
+		logger,
+	)
+
 	return observabilityService.NewServiceRegistry(
 		observabilityRepos.Trace,
 		observabilityRepos.Observation,
-		observabilityRepos.QualityScore,
-		eventPublisher,
-		// Telemetry - Redis-only deduplication (no PostgreSQL batch/event repos)
-		observabilityRepos.TelemetryDeduplication,
-		// Redis Streams producer
-		streamProducer,
-		// Analytics worker
-		workers.TelemetryAnalytics,
+		observabilityRepos.Score,
+		observabilityRepos.Session,
+		telemetryService,
 		logger,
 	)
 }
@@ -644,6 +657,7 @@ func ProvideServices(
 	workers *WorkerContainer,
 	gatewayServices *GatewayServices,
 	billingServices *BillingServices,
+	observabilityServices *observabilityService.ServiceRegistry,
 	logger *logrus.Logger,
 ) *ServiceContainer {
 	// Create auth services first (other services depend on them)
@@ -661,8 +675,7 @@ func ProvideServices(
 		logger,
 	)
 
-	// Create observability services (includes analytics worker integration and Redis Streams)
-	observabilityServices := ProvideObservabilityServices(repos.Observability, databases.Redis, workers, logger)
+	// NOTE: observabilityServices is now passed as a parameter (created earlier to avoid circular dependencies)
 
 	return &ServiceContainer{
 		User:               userServices,
@@ -703,15 +716,28 @@ func ProvideAll(cfg *config.Config, logger *logrus.Logger) (*ProviderContainer, 
 	gatewayServices := ProvideGatewayServices(repos.Gateway, logger)
 	billingServices := ProvideBillingServices(repos.Billing, repos.Gateway, logger)
 
-	// Initialize workers (require ClickHouse + Redis for telemetry, and services for gateway analytics)
-	workers, err := ProvideWorkers(cfg, repos.Observability, databases.Redis, repos.Gateway.Analytics, billingServices.Billing, repos.Observability.TelemetryDeduplication, logger)
+	// Create observability services EARLY (needed by workers)
+	// Note: Analytics worker will be injected later after it's created and started
+	observabilityServices := ProvideObservabilityServices(repos.Observability, databases.Redis, logger)
+
+	// Initialize workers (require observability services for stream consumer)
+	workers, err := ProvideWorkers(cfg, repos.Observability, databases.Redis, repos.Gateway.Analytics, billingServices.Billing, repos.Observability.TelemetryDeduplication, observabilityServices, logger)
 	if err != nil {
 		return nil, err
 	}
 
-	// Start analytics workers
+	// Start telemetry analytics worker
 	workers.TelemetryAnalytics.Start()
 	logger.Info("Telemetry analytics worker started")
+
+	// Inject started worker into telemetry service (two-phase initialization complete)
+	// Type assert to access the concrete SetAnalyticsWorker method
+	if telemetrySvc, ok := observabilityServices.TelemetryService.(*observabilityService.TelemetryService); ok {
+		telemetrySvc.SetAnalyticsWorker(workers.TelemetryAnalytics)
+		logger.Info("Analytics worker injected into telemetry service")
+	} else {
+		logger.Warn("Failed to inject analytics worker: telemetry service type assertion failed")
+	}
 
 	// Start telemetry stream consumer for async processing
 	if err := workers.TelemetryConsumer.Start(context.Background()); err != nil {
@@ -724,7 +750,7 @@ func ProvideAll(cfg *config.Config, logger *logrus.Logger) (*ProviderContainer, 
 	logger.Info("Gateway analytics worker started")
 
 	// Initialize services (includes worker integration and Redis Streams)
-	services := ProvideServices(cfg, repos, databases, workers, gatewayServices, billingServices, logger)
+	services := ProvideServices(cfg, repos, databases, workers, gatewayServices, billingServices, observabilityServices, logger)
 
 	// Initialize enterprise services
 	enterprise := ProvideEnterpriseServices(cfg, logger)

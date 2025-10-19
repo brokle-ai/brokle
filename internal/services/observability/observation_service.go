@@ -2,474 +2,404 @@ package observability
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
-	"time"
 
 	"brokle/internal/core/domain/observability"
+	appErrors "brokle/pkg/errors"
 	"brokle/pkg/ulid"
 )
 
-// observationService implements the ObservationService interface
-type observationService struct {
+// ObservationService implements business logic for observation management with cost calculation
+type ObservationService struct {
 	observationRepo observability.ObservationRepository
 	traceRepo       observability.TraceRepository
-	eventPublisher  observability.EventPublisher
+	scoreRepo       observability.ScoreRepository
 }
 
-// NewObservationService creates a new observation service
+// NewObservationService creates a new observation service instance
 func NewObservationService(
 	observationRepo observability.ObservationRepository,
 	traceRepo observability.TraceRepository,
-	eventPublisher observability.EventPublisher,
-) observability.ObservationService {
-	return &observationService{
+	scoreRepo observability.ScoreRepository,
+) *ObservationService {
+	return &ObservationService{
 		observationRepo: observationRepo,
 		traceRepo:       traceRepo,
-		eventPublisher:  eventPublisher,
+		scoreRepo:       scoreRepo,
 	}
 }
 
-// CreateObservation creates a new observation
-func (s *observationService) CreateObservation(ctx context.Context, observation *observability.Observation) (*observability.Observation, error) {
-	if observation == nil {
-		return nil, observability.NewObservabilityError(
-			observability.ErrCodeValidationFailed,
-			"observation cannot be nil",
-		)
-	}
-
-	// Generate ID if not provided
-	if observation.ID.IsZero() {
-		observation.ID = ulid.New()
-	}
-
+// CreateObservation creates a new observation with validation
+func (s *ObservationService) CreateObservation(ctx context.Context, obs *observability.Observation) error {
 	// Validate required fields
-	if err := s.validateObservation(observation); err != nil {
-		return nil, err
+	if obs.TraceID.IsZero() {
+		return appErrors.NewValidationError("trace_id is required", "observation must be linked to a trace")
+	}
+	if obs.ProjectID.IsZero() {
+		return appErrors.NewValidationError("project_id is required", "observation must have a valid project_id")
+	}
+	if obs.Name == "" {
+		return appErrors.NewValidationError("name is required", "observation name cannot be empty")
 	}
 
-	// Verify trace exists
-	if _, err := s.traceRepo.GetByID(ctx, observation.TraceID); err != nil {
-		return nil, observability.NewObservabilityError(
-			observability.ErrCodeObservationTraceNotFound,
-			"trace not found for observation",
-		).WithDetail("trace_id", observation.TraceID.String())
+	// Generate new ID if not provided
+	if obs.ID.IsZero() {
+		obs.ID = ulid.New()
 	}
 
-	// Set timestamps
-	now := time.Now()
-	if observation.CreatedAt.IsZero() {
-		observation.CreatedAt = now
-	}
-	observation.UpdatedAt = now
-
-	// Create observation in repository
-	if err := s.observationRepo.Create(ctx, observation); err != nil {
-		return nil, fmt.Errorf("failed to create observation: %w", err)
-	}
-
-	// Publish observation created event
-	event := observability.NewObservationCreatedEvent(observation, nil)
-	if publishErr := s.eventPublisher.Publish(ctx, event); publishErr != nil {
-		_ = publishErr
-	}
-
-	return observation, nil
-}
-
-// GetObservation retrieves an observation by ID
-func (s *observationService) GetObservation(ctx context.Context, id ulid.ULID) (*observability.Observation, error) {
-	if id.IsZero() {
-		return nil, observability.NewObservabilityError(
-			observability.ErrCodeInvalidObservationID,
-			"observation ID cannot be empty",
-		)
-	}
-
-	observation, err := s.observationRepo.GetByID(ctx, id)
+	// Validate trace exists
+	_, err := s.traceRepo.GetByID(ctx, obs.TraceID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get observation: %w", err)
+		return appErrors.NewNotFoundError(fmt.Sprintf("trace %s", obs.TraceID.String()))
 	}
 
-	return observation, nil
-}
-
-// GetObservationByExternalID retrieves an observation by external ID
-func (s *observationService) GetObservationByExternalID(ctx context.Context, externalObservationID string) (*observability.Observation, error) {
-	if externalObservationID == "" {
-		return nil, observability.NewObservabilityError(
-			observability.ErrCodeValidationFailed,
-			"external observation ID cannot be empty",
-		)
+	// Validate parent observation exists if provided
+	if obs.ParentObservationID != nil && !obs.ParentObservationID.IsZero() {
+		_, err := s.observationRepo.GetByID(ctx, *obs.ParentObservationID)
+		if err != nil {
+			return appErrors.NewNotFoundError(fmt.Sprintf("parent observation %s", obs.ParentObservationID.String()))
+		}
 	}
 
-	observation, err := s.observationRepo.GetByExternalObservationID(ctx, externalObservationID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get observation by external ID: %w", err)
-	}
+	// Calculate total cost and tokens if details provided
+	s.calculateAggregates(obs)
 
-	return observation, nil
-}
-
-// UpdateObservation updates an existing observation
-func (s *observationService) UpdateObservation(ctx context.Context, observation *observability.Observation) (*observability.Observation, error) {
-	if observation == nil {
-		return nil, observability.NewObservabilityError(
-			observability.ErrCodeValidationFailed,
-			"observation cannot be nil",
-		)
-	}
-
-	if observation.ID.IsZero() {
-		return nil, observability.NewObservabilityError(
-			observability.ErrCodeInvalidObservationID,
-			"observation ID cannot be empty",
-		)
-	}
-
-	// Validate observation data
-	if err := s.validateObservation(observation); err != nil {
-		return nil, err
-	}
-
-	// Update timestamp
-	observation.UpdatedAt = time.Now()
-
-	// Update in repository
-	if err := s.observationRepo.Update(ctx, observation); err != nil {
-		return nil, fmt.Errorf("failed to update observation: %w", err)
-	}
-
-	return observation, nil
-}
-
-// CompleteObservation completes an observation with final data
-func (s *observationService) CompleteObservation(ctx context.Context, id ulid.ULID, completionData *observability.ObservationCompletion) (*observability.Observation, error) {
-	if id.IsZero() {
-		return nil, observability.NewObservabilityError(
-			observability.ErrCodeInvalidObservationID,
-			"observation ID cannot be empty",
-		)
-	}
-
-	if completionData == nil {
-		return nil, observability.NewObservabilityError(
-			observability.ErrCodeValidationFailed,
-			"completion data cannot be nil",
-		)
-	}
-
-	// Get current observation
-	observation, err := s.observationRepo.GetByID(ctx, id)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get observation: %w", err)
-	}
-
-	// Check if already completed
-	if observation.EndTime != nil {
-		return nil, observability.NewObservabilityError(
-			observability.ErrCodeObservationAlreadyCompleted,
-			"observation is already completed",
-		)
-	}
-
-	// Apply completion data
-	observation.EndTime = &completionData.EndTime
-	observation.UpdatedAt = time.Now()
-
-	if completionData.Output != nil {
-		observation.Output = completionData.Output
-	}
-
-	if completionData.Usage != nil {
-		observation.PromptTokens = completionData.Usage.PromptTokens
-		observation.CompletionTokens = completionData.Usage.CompletionTokens
-		observation.TotalTokens = completionData.Usage.TotalTokens
-	}
-
-	if completionData.Cost != nil {
-		inputCost := completionData.Cost.InputCost
-		outputCost := completionData.Cost.OutputCost
-		totalCost := completionData.Cost.TotalCost
-
-		observation.InputCost = &inputCost
-		observation.OutputCost = &outputCost
-		observation.TotalCost = &totalCost
-	}
-
-	if completionData.QualityScore != nil {
-		observation.QualityScore = completionData.QualityScore
-	}
-
-	if completionData.StatusMessage != nil {
-		observation.StatusMessage = completionData.StatusMessage
-	}
-
-	// Calculate latency automatically (will be handled by database trigger, but set here too)
-	if observation.EndTime != nil {
-		latency := int(completionData.EndTime.Sub(observation.StartTime).Milliseconds())
-		observation.LatencyMs = &latency
-	}
-
-	// Update in repository
-	if err := s.observationRepo.Update(ctx, observation); err != nil {
-		return nil, fmt.Errorf("failed to complete observation: %w", err)
-	}
-
-	// Publish observation completed event
-	event := observability.NewObservationCompletedEvent(observation, nil)
-	if publishErr := s.eventPublisher.Publish(ctx, event); publishErr != nil {
-		_ = publishErr
-	}
-
-	return observation, nil
-}
-
-// DeleteObservation deletes an observation by ID
-func (s *observationService) DeleteObservation(ctx context.Context, id ulid.ULID) error {
-	if id.IsZero() {
-		return observability.NewObservabilityError(
-			observability.ErrCodeInvalidObservationID,
-			"observation ID cannot be empty",
-		)
-	}
-
-	// Delete from repository
-	if err := s.observationRepo.Delete(ctx, id); err != nil {
-		return fmt.Errorf("failed to delete observation: %w", err)
+	// Create observation
+	if err := s.observationRepo.Create(ctx, obs); err != nil {
+		return appErrors.NewInternalError("failed to create observation", err)
 	}
 
 	return nil
 }
 
-// ListObservations retrieves observations based on filter criteria
-func (s *observationService) ListObservations(ctx context.Context, filter *observability.ObservationFilter) ([]*observability.Observation, int, error) {
-	if filter == nil {
-		filter = &observability.ObservationFilter{}
-	}
-
-	// Set default pagination if not provided
-	if filter.Limit <= 0 {
-		filter.Limit = 50
-	}
-	if filter.Limit > 1000 {
-		filter.Limit = 1000
-	}
-
-	observations, total, err := s.observationRepo.SearchObservations(ctx, filter)
+// UpdateObservation updates an existing observation
+func (s *ObservationService) UpdateObservation(ctx context.Context, obs *observability.Observation) error {
+	// Validate observation exists
+	existing, err := s.observationRepo.GetByID(ctx, obs.ID)
 	if err != nil {
-		return nil, 0, fmt.Errorf("failed to list observations: %w", err)
+		if errors.Is(err, sql.ErrNoRows) {
+			return appErrors.NewNotFoundError(fmt.Sprintf("observation %s", obs.ID.String()))
+		}
+		return appErrors.NewInternalError("failed to get observation", err)
 	}
 
-	return observations, total, nil
+	// Merge non-zero fields from incoming observation into existing
+	mergeObservationFields(existing, obs)
+
+	// Preserve version for increment in repository layer
+	existing.Version = existing.Version
+
+	// Recalculate aggregates if cost/usage details changed
+	s.calculateAggregates(existing)
+
+	// Update observation
+	if err := s.observationRepo.Update(ctx, existing); err != nil {
+		return appErrors.NewInternalError("failed to update observation", err)
+	}
+
+	return nil
 }
 
-// GetObservationsByTrace retrieves all observations for a specific trace
-func (s *observationService) GetObservationsByTrace(ctx context.Context, traceID ulid.ULID) ([]*observability.Observation, error) {
+// mergeObservationFields merges non-zero fields from src into dst
+// This prevents zero-value corruption from partial JSON updates
+func mergeObservationFields(dst *observability.Observation, src *observability.Observation) {
+	// Immutable fields (never update):
+	// - ID (primary key)
+	// - TraceID (foreign key, security boundary)
+	// - ProjectID (security boundary)
+	// - Version (managed by repository)
+	// - EventTs (managed by repository)
+	// - IsDeleted (managed by Delete method)
+
+	// Update optional fields only if non-zero
+	if src.ParentObservationID != nil && !src.ParentObservationID.IsZero() {
+		dst.ParentObservationID = src.ParentObservationID
+	}
+	if src.Type != "" {
+		dst.Type = src.Type
+	}
+	if src.Name != "" {
+		dst.Name = src.Name
+	}
+	if !src.StartTime.IsZero() {
+		dst.StartTime = src.StartTime
+	}
+	if src.EndTime != nil && !src.EndTime.IsZero() {
+		dst.EndTime = src.EndTime
+	}
+	if src.Model != nil {
+		dst.Model = src.Model
+	}
+	// Allow clearing maps by sending empty map {}
+	// nil = not sent (preserve), {} = clear, {...} = update
+	if src.ModelParameters != nil {
+		dst.ModelParameters = src.ModelParameters
+	}
+	if src.Input != nil {
+		dst.Input = src.Input
+	}
+	if src.Output != nil {
+		dst.Output = src.Output
+	}
+	if src.Metadata != nil {
+		dst.Metadata = src.Metadata
+	}
+	if src.CostDetails != nil {
+		dst.CostDetails = src.CostDetails
+	}
+	if src.UsageDetails != nil {
+		dst.UsageDetails = src.UsageDetails
+	}
+	if src.Level != "" {
+		dst.Level = src.Level
+	}
+	if src.StatusMessage != nil {
+		dst.StatusMessage = src.StatusMessage
+	}
+	if src.CompletionStartTime != nil && !src.CompletionStartTime.IsZero() {
+		dst.CompletionStartTime = src.CompletionStartTime
+	}
+	if src.TimeToFirstTokenMs != nil {
+		dst.TimeToFirstTokenMs = src.TimeToFirstTokenMs
+	}
+}
+
+// DeleteObservation soft deletes an observation
+func (s *ObservationService) DeleteObservation(ctx context.Context, id ulid.ULID) error {
+	// Validate observation exists
+	_, err := s.observationRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return appErrors.NewNotFoundError(fmt.Sprintf("observation %s", id.String()))
+		}
+		return appErrors.NewInternalError("failed to get observation", err)
+	}
+
+	// Delete observation
+	if err := s.observationRepo.Delete(ctx, id); err != nil {
+		return appErrors.NewInternalError("failed to delete observation", err)
+	}
+
+	return nil
+}
+
+// GetObservationByID retrieves an observation by ID
+func (s *ObservationService) GetObservationByID(ctx context.Context, id ulid.ULID) (*observability.Observation, error) {
+	obs, err := s.observationRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, appErrors.NewNotFoundError(fmt.Sprintf("observation %s", id.String()))
+	}
+
+	return obs, nil
+}
+
+// GetObservationsByTraceID retrieves all observations for a trace
+func (s *ObservationService) GetObservationsByTraceID(ctx context.Context, traceID ulid.ULID) ([]*observability.Observation, error) {
 	if traceID.IsZero() {
-		return nil, observability.NewObservabilityError(
-			observability.ErrCodeInvalidTraceID,
-			"trace ID cannot be empty",
-		)
+		return nil, appErrors.NewValidationError("trace_id is required", "observations query requires a valid trace_id")
 	}
 
 	observations, err := s.observationRepo.GetByTraceID(ctx, traceID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get observations by trace: %w", err)
+		return nil, appErrors.NewInternalError("failed to get observations", err)
 	}
 
 	return observations, nil
 }
 
-// GetChildObservations retrieves child observations for a parent observation
-func (s *observationService) GetChildObservations(ctx context.Context, parentID ulid.ULID) ([]*observability.Observation, error) {
-	if parentID.IsZero() {
-		return nil, observability.NewObservabilityError(
-			observability.ErrCodeInvalidObservationID,
-			"parent observation ID cannot be empty",
-		)
+// GetObservationTreeByTraceID retrieves observations in hierarchical tree structure
+func (s *ObservationService) GetObservationTreeByTraceID(ctx context.Context, traceID ulid.ULID) ([]*observability.Observation, error) {
+	if traceID.IsZero() {
+		return nil, appErrors.NewValidationError("trace_id is required", "observation tree query requires a valid trace_id")
 	}
 
-	observations, err := s.observationRepo.GetByParentObservationID(ctx, parentID)
+	// Validate trace exists
+	_, err := s.traceRepo.GetByID(ctx, traceID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get child observations: %w", err)
+		return nil, appErrors.NewNotFoundError(fmt.Sprintf("trace %s", traceID.String()))
+	}
+
+	observations, err := s.observationRepo.GetTreeByTraceID(ctx, traceID)
+	if err != nil {
+		return nil, appErrors.NewInternalError("failed to get observation tree", err)
 	}
 
 	return observations, nil
 }
 
-// CreateObservationsBatch creates multiple observations in a batch operation
-func (s *observationService) CreateObservationsBatch(ctx context.Context, observations []*observability.Observation) ([]*observability.Observation, error) {
-	if len(observations) == 0 {
-		return []*observability.Observation{}, nil
+// GetChildObservations retrieves child observations of a parent
+func (s *ObservationService) GetChildObservations(ctx context.Context, parentObservationID ulid.ULID) ([]*observability.Observation, error) {
+	if parentObservationID.IsZero() {
+		return nil, appErrors.NewValidationError("parent_observation_id is required", "parent_observation_id cannot be empty")
 	}
 
-	// Validate and prepare observations
-	now := time.Now()
-	for _, obs := range observations {
+	// Validate parent exists
+	_, err := s.observationRepo.GetByID(ctx, parentObservationID)
+	if err != nil {
+		return nil, appErrors.NewNotFoundError(fmt.Sprintf("parent observation %s", parentObservationID.String()))
+	}
+
+	observations, err := s.observationRepo.GetChildren(ctx, parentObservationID)
+	if err != nil {
+		return nil, appErrors.NewInternalError("failed to get child observations", err)
+	}
+
+	return observations, nil
+}
+
+// GetObservationsByFilter retrieves observations matching filter criteria
+func (s *ObservationService) GetObservationsByFilter(ctx context.Context, filter *observability.ObservationFilter) ([]*observability.Observation, error) {
+	observations, err := s.observationRepo.GetByFilter(ctx, filter)
+	if err != nil {
+		return nil, appErrors.NewInternalError("failed to get observations by filter", err)
+	}
+
+	return observations, nil
+}
+
+// CreateObservationBatch creates multiple observations in a single batch operation
+func (s *ObservationService) CreateObservationBatch(ctx context.Context, observations []*observability.Observation) error {
+	if len(observations) == 0 {
+		return appErrors.NewValidationError("observations array cannot be empty", "batch create requires at least one observation")
+	}
+
+	// Validate all observations
+	for i, obs := range observations {
+		if obs.TraceID.IsZero() {
+			return appErrors.NewValidationError(
+				fmt.Sprintf("observation[%d]: trace_id is required", i),
+				"all observations must be linked to a trace",
+			)
+		}
+		if obs.ProjectID.IsZero() {
+			return appErrors.NewValidationError(
+				fmt.Sprintf("observation[%d]: project_id is required", i),
+				"all observations must have valid project_id",
+			)
+		}
+		if obs.Name == "" {
+			return appErrors.NewValidationError(
+				fmt.Sprintf("observation[%d]: name is required", i),
+				"all observations must have a name",
+			)
+		}
+
+		// Generate ID if not provided
 		if obs.ID.IsZero() {
 			obs.ID = ulid.New()
 		}
 
-		if err := s.validateObservation(obs); err != nil {
-			return nil, err
-		}
-
-		if obs.CreatedAt.IsZero() {
-			obs.CreatedAt = now
-		}
-		obs.UpdatedAt = now
+		// Calculate aggregates
+		s.calculateAggregates(obs)
 	}
 
-	// Create batch in repository
+	// Create batch
 	if err := s.observationRepo.CreateBatch(ctx, observations); err != nil {
-		return nil, fmt.Errorf("failed to create observations batch: %w", err)
+		return appErrors.NewInternalError("failed to create observation batch", err)
 	}
 
-	// Publish events for created observations
-	var events []*observability.Event
+	return nil
+}
+
+// CountObservations returns the count of observations matching the filter
+func (s *ObservationService) CountObservations(ctx context.Context, filter *observability.ObservationFilter) (int64, error) {
+	count, err := s.observationRepo.Count(ctx, filter)
+	if err != nil {
+		return 0, appErrors.NewInternalError("failed to count observations", err)
+	}
+
+	return count, nil
+}
+
+// SetObservationCost sets cost details for an observation with automatic total calculation
+func (s *ObservationService) SetObservationCost(ctx context.Context, observationID ulid.ULID, inputCost, outputCost float64) error {
+	// Get observation
+	obs, err := s.observationRepo.GetByID(ctx, observationID)
+	if err != nil {
+		return appErrors.NewNotFoundError(fmt.Sprintf("observation %s", observationID.String()))
+	}
+
+	// Set cost details using domain helper
+	obs.SetCostDetails(inputCost, outputCost)
+
+	// Update observation
+	if err := s.observationRepo.Update(ctx, obs); err != nil {
+		return appErrors.NewInternalError("failed to update observation cost", err)
+	}
+
+	return nil
+}
+
+// SetObservationUsage sets usage details for an observation with automatic total calculation
+func (s *ObservationService) SetObservationUsage(ctx context.Context, observationID ulid.ULID, promptTokens, completionTokens uint64) error {
+	// Get observation
+	obs, err := s.observationRepo.GetByID(ctx, observationID)
+	if err != nil {
+		return appErrors.NewNotFoundError(fmt.Sprintf("observation %s", observationID.String()))
+	}
+
+	// Set usage details using domain helper
+	obs.SetUsageDetails(promptTokens, completionTokens)
+
+	// Update observation
+	if err := s.observationRepo.Update(ctx, obs); err != nil {
+		return appErrors.NewInternalError("failed to update observation usage", err)
+	}
+
+	return nil
+}
+
+// CalculateTraceCost aggregates total cost from all observations in a trace
+func (s *ObservationService) CalculateTraceCost(ctx context.Context, traceID ulid.ULID) (float64, error) {
+	observations, err := s.observationRepo.GetByTraceID(ctx, traceID)
+	if err != nil {
+		return 0, appErrors.NewInternalError("failed to get observations for cost calculation", err)
+	}
+
+	var totalCost float64
 	for _, obs := range observations {
-		event := observability.NewObservationCreatedEvent(obs, nil)
-		events = append(events, event)
+		totalCost += obs.GetTotalCost()
 	}
 
-	if len(events) > 0 {
-		if publishErr := s.eventPublisher.PublishBatch(ctx, events); publishErr != nil {
-			_ = publishErr
-		}
-	}
-
-	return observations, nil
+	return totalCost, nil
 }
 
-// UpdateObservationsBatch updates multiple observations in a batch operation
-func (s *observationService) UpdateObservationsBatch(ctx context.Context, observations []*observability.Observation) ([]*observability.Observation, error) {
-	if len(observations) == 0 {
-		return []*observability.Observation{}, nil
+// CalculateTraceTokens aggregates total tokens from all observations in a trace
+func (s *ObservationService) CalculateTraceTokens(ctx context.Context, traceID ulid.ULID) (uint64, error) {
+	observations, err := s.observationRepo.GetByTraceID(ctx, traceID)
+	if err != nil {
+		return 0, appErrors.NewInternalError("failed to get observations for token calculation", err)
 	}
 
-	// Validate observations
-	now := time.Now()
+	var totalTokens uint64
 	for _, obs := range observations {
-		if obs.ID.IsZero() {
-			return nil, observability.NewObservabilityError(
-				observability.ErrCodeInvalidObservationID,
-				"observation ID cannot be empty",
-			)
-		}
-
-		if err := s.validateObservation(obs); err != nil {
-			return nil, err
-		}
-
-		obs.UpdatedAt = now
+		totalTokens += obs.GetTotalTokens()
 	}
 
-	// Update batch in repository
-	if err := s.observationRepo.UpdateBatch(ctx, observations); err != nil {
-		return nil, fmt.Errorf("failed to update observations batch: %w", err)
-	}
-
-	return observations, nil
-}
-
-// GetObservationStats retrieves statistics for observations (implementation placeholder)
-func (s *observationService) GetObservationStats(ctx context.Context, filter *observability.ObservationFilter) (*observability.ObservationStats, error) {
-	// This would implement stats aggregation logic
-	return &observability.ObservationStats{}, nil
-}
-
-// GetObservationAnalytics retrieves analytics data for observations (implementation placeholder)
-func (s *observationService) GetObservationAnalytics(ctx context.Context, filter *observability.AnalyticsFilter) (*observability.ObservationAnalytics, error) {
-	// This would implement analytics aggregation logic
-	return &observability.ObservationAnalytics{}, nil
-}
-
-// CalculateCost calculates the cost for an observation (implementation placeholder)
-func (s *observationService) CalculateCost(ctx context.Context, observation *observability.Observation) (*observability.CostCalculation, error) {
-	// This would implement cost calculation logic based on provider, model, and token usage
-	provider := ""
-	model := ""
-	if observation.Provider != nil {
-		provider = *observation.Provider
-	}
-	if observation.Model != nil {
-		model = *observation.Model
-	}
-
-	return &observability.CostCalculation{
-		Currency: "USD",
-		Provider: provider,
-		Model:    model,
-	}, nil
-}
-
-// GetCostBreakdown retrieves cost breakdown data (implementation placeholder)
-func (s *observationService) GetCostBreakdown(ctx context.Context, filter *observability.AnalyticsFilter) ([]*observability.CostBreakdown, error) {
-	// This would implement cost breakdown aggregation logic
-	return []*observability.CostBreakdown{}, nil
-}
-
-// GetLatencyPercentiles retrieves latency percentile data (implementation placeholder)
-func (s *observationService) GetLatencyPercentiles(ctx context.Context, filter *observability.ObservationFilter) (*observability.LatencyPercentiles, error) {
-	// This would implement latency percentile calculation
-	return &observability.LatencyPercentiles{}, nil
-}
-
-// GetThroughputMetrics retrieves throughput metrics (implementation placeholder)
-func (s *observationService) GetThroughputMetrics(ctx context.Context, filter *observability.AnalyticsFilter) (*observability.ThroughputMetrics, error) {
-	// This would implement throughput calculation
-	return &observability.ThroughputMetrics{}, nil
+	return totalTokens, nil
 }
 
 // Helper methods
 
-// validateObservation validates an observation object
-func (s *observationService) validateObservation(observation *observability.Observation) error {
-	if observation.TraceID.IsZero() {
-		return observability.NewValidationError("trace_id", "trace ID is required")
-	}
-
-	if observation.ExternalObservationID == "" {
-		return observability.NewValidationError("external_observation_id", "external observation ID is required")
-	}
-
-	if observation.Name == "" {
-		return observability.NewValidationError("name", "observation name is required")
-	}
-
-	if observation.Type == "" {
-		return observability.NewValidationError("type", "observation type is required")
-	}
-
-	// Validate observation type
-	validTypes := []observability.ObservationType{
-		observability.ObservationTypeLLM,
-		observability.ObservationTypeSpan,
-		observability.ObservationTypeEvent,
-		observability.ObservationTypeGeneration,
-		observability.ObservationTypeRetrieval,
-		observability.ObservationTypeEmbedding,
-		observability.ObservationTypeAgent,
-		observability.ObservationTypeTool,
-		observability.ObservationTypeChain,
-	}
-
-	isValidType := false
-	for _, validType := range validTypes {
-		if observation.Type == validType {
-			isValidType = true
-			break
+// calculateAggregates ensures cost and usage totals are calculated from details maps
+func (s *ObservationService) calculateAggregates(obs *observability.Observation) {
+	// Calculate total cost if individual costs provided
+	if obs.CostDetails != nil {
+		if _, hasTotal := obs.CostDetails["total"]; !hasTotal {
+			inputCost := obs.CostDetails["input"]
+			outputCost := obs.CostDetails["output"]
+			obs.CostDetails["total"] = inputCost + outputCost
 		}
 	}
 
-	if !isValidType {
-		return observability.NewValidationError("type", "invalid observation type")
+	// Calculate total tokens if individual counts provided
+	if obs.UsageDetails != nil {
+		if _, hasTotal := obs.UsageDetails["total_tokens"]; !hasTotal {
+			promptTokens := obs.UsageDetails["prompt_tokens"]
+			completionTokens := obs.UsageDetails["completion_tokens"]
+			obs.UsageDetails["total_tokens"] = promptTokens + completionTokens
+		}
 	}
-
-	if observation.StartTime.IsZero() {
-		return observability.NewValidationError("start_time", "start time is required")
-	}
-
-	return nil
 }

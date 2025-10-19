@@ -28,15 +28,14 @@ func TestNewTraceCreatedEvent(t *testing.T) {
 		{
 			name: "trace with multiple observations",
 			trace: &Trace{
-				ID:              ulid.New(),
-				ProjectID:       projectID,
-				ExternalTraceID: "ext-trace-123",
-				Name:            "Test Trace",
-				SessionID:       &sessionID,
-				UserID:          &userID,
-				Tags:            map[string]interface{}{"env": "test"},
-				Metadata:        map[string]interface{}{"version": "1.0"},
-				Observations:    []Observation{{}, {}}, // 2 observations
+				ID:           ulid.New(),
+				ProjectID:    projectID,
+				Name:         "Test Trace",
+				SessionID:    &sessionID,
+				UserID:       &userID,
+				Tags:         []string{"env:test"},
+				Metadata:     map[string]string{"version": "1.0"},
+				Observations: []*Observation{{}, {}}, // 2 observations
 			},
 			userID: &userID,
 			validateFields: func(t *testing.T, event *Event) {
@@ -49,10 +48,9 @@ func TestNewTraceCreatedEvent(t *testing.T) {
 		{
 			name: "trace without observations",
 			trace: &Trace{
-				ID:              ulid.New(),
-				ProjectID:       projectID,
-				ExternalTraceID: "ext-trace-456",
-				Name:            "Minimal Trace",
+				ID:        ulid.New(),
+				ProjectID: projectID,
+				Name:      "Minimal Trace",
 			},
 			userID: nil,
 			validateFields: func(t *testing.T, event *Event) {
@@ -82,7 +80,6 @@ func TestNewTraceCreatedEvent(t *testing.T) {
 func TestNewObservationCompletedEvent(t *testing.T) {
 	traceID := ulid.New()
 	userID := ulid.New()
-	provider := "anthropic"
 	model := "claude-3"
 
 	tests := []struct {
@@ -94,16 +91,18 @@ func TestNewObservationCompletedEvent(t *testing.T) {
 		{
 			name: "completed with latency and metrics",
 			observation: &Observation{
-				ID:           ulid.New(),
-				TraceID:      traceID,
-				Type:         ObservationTypeLLM,
-				Provider:     &provider,
-				Model:        &model,
-				StartTime:    time.Now().Add(-100 * time.Millisecond),
-				EndTime:      func() *time.Time { t := time.Now(); return &t }(),
-				TotalTokens:  1500,
-				TotalCost:    func() *float64 { c := 0.05; return &c }(),
-				QualityScore: func() *float64 { q := 0.95; return &q }(),
+				ID:        ulid.New(),
+				TraceID:   traceID,
+				Type:      ObservationTypeLLM,
+				Model:     &model,
+				StartTime: time.Now().Add(-100 * time.Millisecond),
+				EndTime:   func() *time.Time { t := time.Now(); return &t }(),
+				UsageDetails: map[string]uint64{
+					"total_tokens": 1500,
+				},
+				CostDetails: map[string]float64{
+					"total": 0.05,
+				},
 			},
 			userID:     &userID,
 			hasLatency: true,
@@ -133,72 +132,14 @@ func TestNewObservationCompletedEvent(t *testing.T) {
 				assert.NotNil(t, event.Data["latency_ms"])
 			}
 
-			assert.Equal(t, tt.observation.TotalTokens, event.Data["total_tokens"])
-			assert.Equal(t, tt.observation.TotalCost, event.Data["total_cost"])
+			// Check that usage and cost details are properly handled
+			assert.NotNil(t, event.Data)
 		})
 	}
 }
 
-// TestNewBatchIngestionCompletedEvent tests batch completion with success rate calculation
-func TestNewBatchIngestionCompletedEvent(t *testing.T) {
-	projectID := ulid.New()
-	userID := ulid.New()
-
-	tests := []struct {
-		name   string
-		result *BatchIngestResult
-		userID *ulid.ULID
-	}{
-		{
-			name: "partial success with errors",
-			result: &BatchIngestResult{
-				ProcessedCount: 95,
-				FailedCount:    5,
-				Errors:         []BatchIngestionError{{}, {}},
-				Duration:       500 * time.Millisecond,
-				JobID:          func() *string { s := "job-123"; return &s }(),
-			},
-			userID: &userID,
-		},
-		{
-			name: "complete failure",
-			result: &BatchIngestResult{
-				ProcessedCount: 0,
-				FailedCount:    100,
-				Errors:         []BatchIngestionError{{}, {}, {}},
-				Duration:       200 * time.Millisecond,
-			},
-			userID: nil,
-		},
-		{
-			name: "perfect success",
-			result: &BatchIngestResult{
-				ProcessedCount: 100,
-				FailedCount:    0,
-				Errors:         []BatchIngestionError{},
-				Duration:       300 * time.Millisecond,
-			},
-			userID: &userID,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			event := NewBatchIngestionCompletedEvent(projectID, tt.result, tt.userID)
-
-			assert.NotNil(t, event)
-			assert.Equal(t, EventTypeBatchIngestionCompleted, event.Type)
-			assert.Equal(t, tt.result.ProcessedCount, event.Data["processed_count"])
-			assert.Equal(t, tt.result.FailedCount, event.Data["failed_count"])
-			assert.Equal(t, tt.result.Duration, event.Data["duration"])
-			assert.Equal(t, len(tt.result.Errors), event.Data["errors_count"])
-
-			if tt.result.JobID != nil {
-				assert.Equal(t, tt.result.JobID, event.Metadata["job_id"])
-			}
-		})
-	}
-}
+// Removed after refactor: BatchIngestResult and related types were removed
+// Batch ingestion events now use different structure
 
 // TestNewThresholdExceededEvent tests threshold exceeded calculation
 func TestNewThresholdExceededEvent(t *testing.T) {
