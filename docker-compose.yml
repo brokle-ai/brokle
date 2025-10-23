@@ -24,7 +24,7 @@ services:
     image: clickhouse/clickhouse-server:24.12-alpine
     container_name: brokle-clickhouse
     environment:
-      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-brokle_analytics}
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-default}
       CLICKHOUSE_USER: ${CLICKHOUSE_USER:-brokle}
       CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-brokle_password}
@@ -102,7 +102,7 @@ services:
     environment:
       - ENV=${ENV:-production}
       - DATABASE_URL=${DATABASE_URL:-postgres://brokle:brokle_password@postgres:5432/brokle_prod?sslmode=disable}
-      - CLICKHOUSE_URL=${CLICKHOUSE_URL:-http://brokle:brokle_password@clickhouse:8123/brokle_analytics}
+      - CLICKHOUSE_URL=${CLICKHOUSE_URL:-http://brokle:brokle_password@clickhouse:8123/default}
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
       - KAFKA_BROKERS=${KAFKA_BROKERS:-kafka:9092}
       - JWT_SECRET=${JWT_SECRET}

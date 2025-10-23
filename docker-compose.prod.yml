@@ -70,7 +70,7 @@ services:
   # Production ClickHouse
   clickhouse:
     environment:
-      - CLICKHOUSE_DB=${CLICKHOUSE_DB:-brokle_analytics}
+      - CLICKHOUSE_DB=${CLICKHOUSE_DB:-default}
       - CLICKHOUSE_USER=${CLICKHOUSE_USER:-brokle}
       - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD}
     volumes:

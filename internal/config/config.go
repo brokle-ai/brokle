@@ -721,7 +721,7 @@ func setDefaults() {
 	viper.SetDefault("clickhouse.host", "localhost")
 	viper.SetDefault("clickhouse.port", 9000)
 	viper.SetDefault("clickhouse.user", "default")
-	viper.SetDefault("clickhouse.database", "brokle_analytics")
+	viper.SetDefault("clickhouse.database", "default")
 	viper.SetDefault("clickhouse.max_open_conns", 50)
 	viper.SetDefault("clickhouse.max_idle_conns", 5)
 	viper.SetDefault("clickhouse.conn_max_lifetime", "1h")

@@ -11,7 +11,7 @@ services:
 
   clickhouse:
     environment:
-      CLICKHOUSE_DB: brokle_analytics
+      CLICKHOUSE_DB: default
       CLICKHOUSE_USER: brokle
       CLICKHOUSE_PASSWORD: brokle_password
 
