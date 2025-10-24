@@ -50,7 +50,6 @@ type TelemetryStreamConsumer struct {
 	traceService       observability.TraceService
 	observationService observability.ObservationService
 	scoreService       observability.ScoreService
-	sessionService     observability.SessionService
 
 	consumerGroup       string
 	consumerID          string
@@ -98,7 +97,6 @@ func NewTelemetryStreamConsumer(
 	traceService observability.TraceService,
 	observationService observability.ObservationService,
 	scoreService observability.ScoreService,
-	sessionService observability.SessionService,
 ) *TelemetryStreamConsumer {
 	if config == nil {
 		config = &TelemetryStreamConsumerConfig{
@@ -121,7 +119,6 @@ func NewTelemetryStreamConsumer(
 		traceService:        traceService,
 		observationService:  observationService,
 		scoreService:        scoreService,
-		sessionService:      sessionService,
 		consumerGroup:       config.ConsumerGroup,
 		consumerID:          config.ConsumerID,
 		batchSize:           config.BatchSize,
@@ -580,31 +577,12 @@ func (c *TelemetryStreamConsumer) processTraceEvent(ctx context.Context, eventDa
 	}
 
 	// Set context from stream message (these fields come from batch, not payload)
-	trace.ProjectID = projectID
+	trace.ProjectID = projectID.String()
 	trace.Environment = environment
 
 	// Use service layer (handles validation, business logic, and repository)
 	if err := c.traceService.CreateTrace(ctx, &trace); err != nil {
 		return fmt.Errorf("failed to create trace via service: %w", err)
-	}
-
-	return nil
-}
-
-// processSessionEvent processes a session event using SessionService
-func (c *TelemetryStreamConsumer) processSessionEvent(ctx context.Context, eventData *streams.TelemetryEventData, projectID ulid.ULID) error {
-	// Map event payload to Session struct
-	var session observability.Session
-	if err := mapToStruct(eventData.EventPayload, &session); err != nil {
-		return fmt.Errorf("failed to unmarshal session payload: %w", err)
-	}
-
-	// Set context from stream message
-	session.ProjectID = projectID
-
-	// Use service layer
-	if err := c.sessionService.CreateSession(ctx, &session); err != nil {
-		return fmt.Errorf("failed to create session via service: %w", err)
 	}
 
 	return nil
@@ -638,7 +616,7 @@ func (c *TelemetryStreamConsumer) processObservationEvent(ctx context.Context, e
 	}
 
 	// Set context from stream message
-	observation.ProjectID = projectID
+	observation.ProjectID = projectID.String()
 
 	// Use service layer
 	if err := c.observationService.CreateObservation(ctx, &observation); err != nil {
@@ -657,7 +635,7 @@ func (c *TelemetryStreamConsumer) processScoreEvent(ctx context.Context, eventDa
 	}
 
 	// Set context from stream message
-	score.ProjectID = projectID
+	score.ProjectID = projectID.String()
 
 	// Use service layer
 	if err := c.scoreService.CreateScore(ctx, &score); err != nil {
@@ -708,9 +686,7 @@ func (c *TelemetryStreamConsumer) processBatch(ctx context.Context, batch *strea
 			// Structured trace event → TraceService → traces table
 			err = c.processTraceEvent(ctx, &event, batch.ProjectID, batch.Environment)
 
-		case observability.TelemetryEventTypeSession:
-			// Structured session event → SessionService → sessions table
-			err = c.processSessionEvent(ctx, &event, batch.ProjectID)
+		// Session events removed - sessions are now virtual groupings via session_id attribute
 
 		case observability.TelemetryEventTypeObservation:
 			// Structured observation event → ObservationService → observations table

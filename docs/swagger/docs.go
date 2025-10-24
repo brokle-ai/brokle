@@ -1464,404 +1464,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/analytics/sessions": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Retrieve paginated list of sessions",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Dashboard - Analytics"
-                ],
-                "summary": "List sessions with filtering",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Project ID",
-                        "name": "project_id",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Filter by user ID",
-                        "name": "user_id",
-                        "in": "query"
-                    },
-                    {
-                        "type": "boolean",
-                        "description": "Filter by bookmarked",
-                        "name": "bookmarked",
-                        "in": "query"
-                    },
-                    {
-                        "type": "boolean",
-                        "description": "Filter by public",
-                        "name": "public",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Limit (default 50, max 1000)",
-                        "name": "limit",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Offset (default 0)",
-                        "name": "offset",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "List of sessions",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "$ref": "#/definitions/observability.Session"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid parameters",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/analytics/sessions/{id}": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Retrieve detailed session information",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Dashboard - Analytics"
-                ],
-                "summary": "Get session by ID",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Session ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Session details",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/observability.Session"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "404": {
-                        "description": "Session not found",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                }
-            },
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Update an existing session (for corrections/enrichment after initial creation). Supports partial updates - only send fields you want to change.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Dashboard - Analytics"
-                ],
-                "summary": "Update session by ID",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Session ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Session fields to update (partial)",
-                        "name": "updateReq",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/observability.UpdateSessionRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Updated session",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/observability.Session"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "404": {
-                        "description": "Session not found",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/analytics/sessions/{id}/traces": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Retrieve session with all associated traces",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Dashboard - Analytics"
-                ],
-                "summary": "Get session with traces",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Session ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Session with traces",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/observability.Session"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "404": {
-                        "description": "Session not found",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                }
-            }
-        },
         "/api/v1/analytics/traces": {
             "get": {
                 "security": [
@@ -7236,6 +6838,113 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/traces": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Accepts OpenTelemetry Protocol (OTLP) traces in JSON or Protobuf format",
+                "consumes": [
+                    "application/json",
+                    "application/x-protobuf"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SDK - OTLP"
+                ],
+                "summary": "OTLP trace ingestion endpoint (OpenTelemetry spec compliant)",
+                "parameters": [
+                    {
+                        "description": "OTLP trace export request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/observability.OTLPRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Traces accepted",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "additionalProperties": true
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid OTLP request",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid or missing API key",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
         "/ws": {
             "get": {
                 "security": [
@@ -9406,26 +9115,69 @@ const docTemplate = `{
                 }
             }
         },
+        "observability.Event": {
+            "type": "object",
+            "properties": {
+                "attributes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/observability.KeyValue"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                },
+                "timeUnixNano": {}
+            }
+        },
+        "observability.KeyValue": {
+            "type": "object",
+            "properties": {
+                "key": {
+                    "type": "string"
+                },
+                "value": {
+                    "description": "Can be stringValue, intValue, boolValue, arrayValue, etc."
+                }
+            }
+        },
+        "observability.OTLPRequest": {
+            "type": "object",
+            "properties": {
+                "resourceSpans": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/observability.ResourceSpan"
+                    }
+                }
+            }
+        },
         "observability.Observation": {
             "type": "object",
             "properties": {
+                "attributes": {
+                    "description": "OTEL attributes (JSON string for flexible key-value pairs)",
+                    "type": "string"
+                },
                 "child_observations": {
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/observability.Observation"
                     }
                 },
-                "completion_start_time": {
-                    "description": "Completion tracking for streaming responses",
-                    "type": "string"
-                },
                 "cost_details": {
-                    "description": "Cost tracking (keys: input, output, total - all in USD)",
                     "type": "object",
                     "additionalProperties": {
                         "type": "number",
                         "format": "float64"
                     }
+                },
+                "created_at": {
+                    "description": "Timestamps",
+                    "type": "string"
+                },
+                "duration_ms": {
+                    "type": "integer"
                 },
                 "end_time": {
                     "type": "string"
@@ -9434,27 +9186,30 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "id": {
-                    "description": "Identifiers",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/ulid.ULID"
-                        }
-                    ]
+                    "description": "OTEL identifiers",
+                    "type": "string"
                 },
                 "input": {
-                    "description": "Data (stored as JSON strings in ClickHouse with ZSTD compression)",
+                    "description": "Input/Output",
+                    "type": "string"
+                },
+                "input_blob_storage_id": {
+                    "description": "Blob storage references (Brokle innovation)",
+                    "type": "string"
+                },
+                "input_preview": {
+                    "description": "Preview fields (ALWAYS populated - type-aware, adaptive 300-800 chars)",
+                    "type": "string"
+                },
+                "internal_model_id": {
                     "type": "string"
                 },
                 "is_deleted": {
                     "type": "boolean"
                 },
                 "level": {
-                    "description": "Status and logging",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/observability.ObservationLevel"
-                        }
-                    ]
+                    "description": "DEBUG, INFO, WARNING, ERROR, DEFAULT",
+                    "type": "string"
                 },
                 "metadata": {
                     "type": "object",
@@ -9462,27 +9217,61 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
-                "model": {
-                    "description": "Model information",
+                "model_name": {
+                    "description": "Universal model fields",
                     "type": "string"
                 },
                 "model_parameters": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
+                    "description": "JSON string",
+                    "type": "string"
                 },
                 "name": {
+                    "description": "Span data",
                     "type": "string"
                 },
                 "output": {
                     "type": "string"
                 },
+                "output_blob_storage_id": {
+                    "type": "string"
+                },
+                "output_preview": {
+                    "type": "string"
+                },
                 "parent_observation_id": {
-                    "$ref": "#/definitions/ulid.ULID"
+                    "description": "NULL for root spans",
+                    "type": "string"
                 },
                 "project_id": {
-                    "$ref": "#/definitions/ulid.ULID"
+                    "type": "string"
+                },
+                "prompt_id": {
+                    "description": "Prompt management",
+                    "type": "string"
+                },
+                "prompt_name": {
+                    "type": "string"
+                },
+                "prompt_version": {
+                    "type": "integer"
+                },
+                "provided_cost_details": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "number",
+                        "format": "float64"
+                    }
+                },
+                "provided_usage_details": {
+                    "description": "Usage \u0026 Cost Maps (Pattern: provided + calculated)",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer",
+                        "format": "int64"
+                    }
+                },
+                "provider": {
+                    "type": "string"
                 },
                 "scores": {
                     "description": "Populated from joins (not in ClickHouse)",
@@ -9491,28 +9280,35 @@ const docTemplate = `{
                         "$ref": "#/definitions/observability.Score"
                     }
                 },
+                "span_kind": {
+                    "description": "OTEL: INTERNAL, SERVER, CLIENT, PRODUCER, CONSUMER",
+                    "type": "string"
+                },
                 "start_time": {
+                    "type": "string"
+                },
+                "status_code": {
+                    "description": "OTEL status",
                     "type": "string"
                 },
                 "status_message": {
                     "type": "string"
                 },
-                "time_to_first_token_ms": {
-                    "type": "integer"
+                "total_cost": {
+                    "type": "number"
                 },
                 "trace_id": {
-                    "$ref": "#/definitions/ulid.ULID"
+                    "description": "OTEL trace_id",
+                    "type": "string"
                 },
                 "type": {
-                    "description": "Observation metadata",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/observability.ObservationType"
-                        }
-                    ]
+                    "description": "Brokle: span, generation, event, tool, agent, chain",
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
                 },
                 "usage_details": {
-                    "description": "Token usage (keys: prompt_tokens, completion_tokens, total_tokens)",
                     "type": "object",
                     "additionalProperties": {
                         "type": "integer",
@@ -9524,48 +9320,6 @@ const docTemplate = `{
                     "type": "integer"
                 }
             }
-        },
-        "observability.ObservationLevel": {
-            "type": "string",
-            "enum": [
-                "DEBUG",
-                "INFO",
-                "WARN",
-                "ERROR",
-                "DEFAULT"
-            ],
-            "x-enum-varnames": [
-                "ObservationLevelDebug",
-                "ObservationLevelInfo",
-                "ObservationLevelWarn",
-                "ObservationLevelError",
-                "ObservationLevelDefault"
-            ]
-        },
-        "observability.ObservationType": {
-            "type": "string",
-            "enum": [
-                "LLM",
-                "SPAN",
-                "EVENT",
-                "GENERATION",
-                "RETRIEVAL",
-                "EMBEDDING",
-                "AGENT",
-                "TOOL",
-                "CHAIN"
-            ],
-            "x-enum-varnames": [
-                "ObservationTypeLLM",
-                "ObservationTypeSpan",
-                "ObservationTypeEvent",
-                "ObservationTypeGeneration",
-                "ObservationTypeRetrieval",
-                "ObservationTypeEmbedding",
-                "ObservationTypeAgent",
-                "ObservationTypeTool",
-                "ObservationTypeChain"
-            ]
         },
         "observability.QueueHealthResponse": {
             "description": "Processing queue status and performance",
@@ -9614,22 +9368,74 @@ const docTemplate = `{
                 }
             }
         },
+        "observability.Resource": {
+            "type": "object",
+            "properties": {
+                "attributes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/observability.KeyValue"
+                    }
+                }
+            }
+        },
+        "observability.ResourceSpan": {
+            "type": "object",
+            "properties": {
+                "resource": {
+                    "$ref": "#/definitions/observability.Resource"
+                },
+                "scopeSpans": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/observability.ScopeSpan"
+                    }
+                }
+            }
+        },
+        "observability.Scope": {
+            "type": "object",
+            "properties": {
+                "attributes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/observability.KeyValue"
+                    }
+                },
+                "name": {
+                    "type": "string"
+                },
+                "version": {
+                    "type": "string"
+                }
+            }
+        },
+        "observability.ScopeSpan": {
+            "type": "object",
+            "properties": {
+                "scope": {
+                    "$ref": "#/definitions/observability.Scope"
+                },
+                "spans": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/observability.Span"
+                    }
+                }
+            }
+        },
         "observability.Score": {
             "type": "object",
             "properties": {
                 "author_user_id": {
-                    "description": "Author tracking (for HUMAN source)",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/ulid.ULID"
-                        }
-                    ]
+                    "type": "string"
                 },
                 "comment": {
                     "type": "string"
                 },
                 "data_type": {
-                    "$ref": "#/definitions/observability.ScoreDataType"
+                    "description": "NUMERIC, CATEGORICAL, BOOLEAN",
+                    "type": "string"
                 },
                 "evaluator_config": {
                     "type": "object",
@@ -9648,12 +9454,8 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "id": {
-                    "description": "Identifiers (at least one of trace_id, observation_id, or session_id must be set)",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/ulid.ULID"
-                        }
-                    ]
+                    "description": "Identifiers",
+                    "type": "string"
                 },
                 "is_deleted": {
                     "type": "boolean"
@@ -9663,21 +9465,15 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "observation_id": {
-                    "$ref": "#/definitions/ulid.ULID"
+                    "description": "OTEL span_id",
+                    "type": "string"
                 },
                 "project_id": {
-                    "$ref": "#/definitions/ulid.ULID"
-                },
-                "session_id": {
-                    "$ref": "#/definitions/ulid.ULID"
+                    "type": "string"
                 },
                 "source": {
-                    "description": "Source and metadata",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/observability.ScoreSource"
-                        }
-                    ]
+                    "description": "Metadata",
+                    "type": "string"
                 },
                 "string_value": {
                     "type": "string"
@@ -9687,7 +9483,8 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "trace_id": {
-                    "$ref": "#/definitions/ulid.ULID"
+                    "description": "OTEL trace_id",
+                    "type": "string"
                 },
                 "value": {
                     "type": "number"
@@ -9698,91 +9495,55 @@ const docTemplate = `{
                 }
             }
         },
-        "observability.ScoreDataType": {
-            "type": "string",
-            "enum": [
-                "NUMERIC",
-                "CATEGORICAL",
-                "BOOLEAN"
-            ],
-            "x-enum-varnames": [
-                "ScoreDataTypeNumeric",
-                "ScoreDataTypeCategorical",
-                "ScoreDataTypeBoolean"
-            ]
-        },
-        "observability.ScoreSource": {
-            "type": "string",
-            "enum": [
-                "API",
-                "AUTO",
-                "HUMAN",
-                "EVAL"
-            ],
-            "x-enum-varnames": [
-                "ScoreSourceAPI",
-                "ScoreSourceAuto",
-                "ScoreSourceHuman",
-                "ScoreSourceEval"
-            ]
-        },
-        "observability.Session": {
+        "observability.Span": {
             "type": "object",
             "properties": {
-                "bookmarked": {
-                    "description": "Feature flags",
-                    "type": "boolean"
-                },
-                "created_at": {
-                    "description": "Timestamps",
-                    "type": "string"
-                },
-                "event_ts": {
-                    "type": "string"
-                },
-                "id": {
-                    "description": "Identifiers",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/ulid.ULID"
-                        }
-                    ]
-                },
-                "is_deleted": {
-                    "type": "boolean"
-                },
-                "metadata": {
-                    "description": "Session metadata",
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
-                },
-                "project_id": {
-                    "$ref": "#/definitions/ulid.ULID"
-                },
-                "public": {
-                    "type": "boolean"
-                },
-                "scores": {
+                "attributes": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/observability.Score"
+                        "$ref": "#/definitions/observability.KeyValue"
                     }
                 },
-                "traces": {
-                    "description": "Populated from joins (not in ClickHouse)",
+                "endTimeUnixNano": {},
+                "events": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/observability.Trace"
+                        "$ref": "#/definitions/observability.Event"
                     }
                 },
-                "user_id": {
-                    "$ref": "#/definitions/ulid.ULID"
-                },
-                "version": {
-                    "description": "ReplacingMergeTree fields",
+                "kind": {
+                    "description": "0=UNSPECIFIED, 1=INTERNAL, 2=SERVER, 3=CLIENT, 4=PRODUCER, 5=CONSUMER",
                     "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "parentSpanId": {
+                    "description": "Can be Buffer or hex string"
+                },
+                "spanId": {
+                    "description": "Can be Buffer or hex string"
+                },
+                "startTimeUnixNano": {
+                    "description": "Can be int64 or {low, high}"
+                },
+                "status": {
+                    "$ref": "#/definitions/observability.Status"
+                },
+                "traceId": {
+                    "description": "Can be Buffer or hex string"
+                }
+            }
+        },
+        "observability.Status": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "0=UNSET, 1=OK, 2=ERROR",
+                    "type": "integer"
+                },
+                "message": {
+                    "type": "string"
                 }
             }
         },
@@ -9960,23 +9721,45 @@ const docTemplate = `{
         "observability.Trace": {
             "type": "object",
             "properties": {
+                "attributes": {
+                    "description": "OTEL attributes (JSON string for flexible key-value pairs)",
+                    "type": "string"
+                },
+                "bookmarked": {
+                    "description": "Flags (moved from sessions table)",
+                    "type": "boolean"
+                },
+                "created_at": {
+                    "description": "Timestamps",
+                    "type": "string"
+                },
+                "duration_ms": {
+                    "type": "integer"
+                },
+                "end_time": {
+                    "type": "string"
+                },
                 "environment": {
-                    "description": "Environment and versioning",
+                    "description": "OTEL resource attributes",
                     "type": "string"
                 },
                 "event_ts": {
                     "type": "string"
                 },
                 "id": {
-                    "description": "Identifiers",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/ulid.ULID"
-                        }
-                    ]
+                    "description": "OTEL identifiers",
+                    "type": "string"
                 },
                 "input": {
-                    "description": "Data (stored as JSON strings in ClickHouse with ZSTD compression)",
+                    "description": "Input/Output (trace-level data)",
+                    "type": "string"
+                },
+                "input_blob_storage_id": {
+                    "description": "Blob storage (S3 offloading for large payloads \u003e10KB)",
+                    "type": "string"
+                },
+                "input_preview": {
+                    "description": "Preview fields (ALWAYS populated - type-aware, adaptive 300-800 chars)",
                     "type": "string"
                 },
                 "is_deleted": {
@@ -9990,8 +9773,11 @@ const docTemplate = `{
                     }
                 },
                 "name": {
-                    "description": "Basic information",
+                    "description": "Trace metadata",
                     "type": "string"
+                },
+                "observation_count": {
+                    "type": "integer"
                 },
                 "observations": {
                     "description": "Populated from joins (not in ClickHouse)",
@@ -10003,11 +9789,18 @@ const docTemplate = `{
                 "output": {
                     "type": "string"
                 },
-                "parent_trace_id": {
-                    "$ref": "#/definitions/ulid.ULID"
+                "output_blob_storage_id": {
+                    "type": "string"
+                },
+                "output_preview": {
+                    "type": "string"
                 },
                 "project_id": {
-                    "$ref": "#/definitions/ulid.ULID"
+                    "description": "Brokle project context",
+                    "type": "string"
+                },
+                "public": {
+                    "type": "boolean"
                 },
                 "release": {
                     "type": "string"
@@ -10018,8 +9811,26 @@ const docTemplate = `{
                         "$ref": "#/definitions/observability.Score"
                     }
                 },
+                "service_name": {
+                    "type": "string"
+                },
+                "service_version": {
+                    "type": "string"
+                },
                 "session_id": {
-                    "$ref": "#/definitions/ulid.ULID"
+                    "description": "Virtual session (attribute only, not FK)",
+                    "type": "string"
+                },
+                "start_time": {
+                    "description": "Timing",
+                    "type": "string"
+                },
+                "status_code": {
+                    "description": "OTEL status",
+                    "type": "string"
+                },
+                "status_message": {
+                    "type": "string"
                 },
                 "tags": {
                     "type": "array",
@@ -10027,37 +9838,22 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
-                "timestamp": {
+                "total_cost": {
+                    "description": "Aggregate metrics (calculated from observations)",
+                    "type": "number"
+                },
+                "total_tokens": {
+                    "type": "integer"
+                },
+                "updated_at": {
                     "type": "string"
                 },
                 "user_id": {
-                    "$ref": "#/definitions/ulid.ULID"
+                    "type": "string"
                 },
                 "version": {
                     "description": "ReplacingMergeTree fields",
                     "type": "integer"
-                }
-            }
-        },
-        "observability.UpdateSessionRequest": {
-            "type": "object",
-            "properties": {
-                "bookmarked": {
-                    "description": "nil = not sent, preserve existing",
-                    "type": "boolean"
-                },
-                "metadata": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
-                },
-                "public": {
-                    "description": "nil = not sent, preserve existing",
-                    "type": "boolean"
-                },
-                "user_id": {
-                    "$ref": "#/definitions/ulid.ULID"
                 }
             }
         },
@@ -10442,10 +10238,6 @@ const docTemplate = `{
                     "example": true
                 }
             }
-        },
-        "ulid.ULID": {
-            "description": "ULID (Universally Unique Lexicographically Sortable Identifier)",
-            "type": "object"
         },
         "user.OnboardingQuestionsResponse": {
             "description": "Complete onboarding question information including user's current response",

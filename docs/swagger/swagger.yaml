@@ -1531,120 +1531,151 @@ definitions:
         example: 100
         type: integer
     type: object
+  observability.Event:
+    properties:
+      attributes:
+        items:
+          $ref: '#/definitions/observability.KeyValue'
+        type: array
+      name:
+        type: string
+      timeUnixNano: {}
+    type: object
+  observability.KeyValue:
+    properties:
+      key:
+        type: string
+      value:
+        description: Can be stringValue, intValue, boolValue, arrayValue, etc.
+    type: object
+  observability.OTLPRequest:
+    properties:
+      resourceSpans:
+        items:
+          $ref: '#/definitions/observability.ResourceSpan'
+        type: array
+    type: object
   observability.Observation:
     properties:
+      attributes:
+        description: OTEL attributes (JSON string for flexible key-value pairs)
+        type: string
       child_observations:
         items:
           $ref: '#/definitions/observability.Observation'
         type: array
-      completion_start_time:
-        description: Completion tracking for streaming responses
-        type: string
       cost_details:
         additionalProperties:
           format: float64
           type: number
-        description: 'Cost tracking (keys: input, output, total - all in USD)'
         type: object
+      created_at:
+        description: Timestamps
+        type: string
+      duration_ms:
+        type: integer
       end_time:
         type: string
       event_ts:
         type: string
       id:
-        allOf:
-        - $ref: '#/definitions/ulid.ULID'
-        description: Identifiers
+        description: OTEL identifiers
+        type: string
       input:
-        description: Data (stored as JSON strings in ClickHouse with ZSTD compression)
+        description: Input/Output
+        type: string
+      input_blob_storage_id:
+        description: Blob storage references (Brokle innovation)
+        type: string
+      input_preview:
+        description: Preview fields (ALWAYS populated - type-aware, adaptive 300-800
+          chars)
+        type: string
+      internal_model_id:
         type: string
       is_deleted:
         type: boolean
       level:
-        allOf:
-        - $ref: '#/definitions/observability.ObservationLevel'
-        description: Status and logging
+        description: DEBUG, INFO, WARNING, ERROR, DEFAULT
+        type: string
       metadata:
         additionalProperties:
           type: string
         type: object
-      model:
-        description: Model information
+      model_name:
+        description: Universal model fields
         type: string
       model_parameters:
-        additionalProperties:
-          type: string
-        type: object
+        description: JSON string
+        type: string
       name:
+        description: Span data
         type: string
       output:
         type: string
+      output_blob_storage_id:
+        type: string
+      output_preview:
+        type: string
       parent_observation_id:
-        $ref: '#/definitions/ulid.ULID'
+        description: NULL for root spans
+        type: string
       project_id:
-        $ref: '#/definitions/ulid.ULID'
+        type: string
+      prompt_id:
+        description: Prompt management
+        type: string
+      prompt_name:
+        type: string
+      prompt_version:
+        type: integer
+      provided_cost_details:
+        additionalProperties:
+          format: float64
+          type: number
+        type: object
+      provided_usage_details:
+        additionalProperties:
+          format: int64
+          type: integer
+        description: 'Usage & Cost Maps (Pattern: provided + calculated)'
+        type: object
+      provider:
+        type: string
       scores:
         description: Populated from joins (not in ClickHouse)
         items:
           $ref: '#/definitions/observability.Score'
         type: array
+      span_kind:
+        description: 'OTEL: INTERNAL, SERVER, CLIENT, PRODUCER, CONSUMER'
+        type: string
       start_time:
+        type: string
+      status_code:
+        description: OTEL status
         type: string
       status_message:
         type: string
-      time_to_first_token_ms:
-        type: integer
+      total_cost:
+        type: number
       trace_id:
-        $ref: '#/definitions/ulid.ULID'
+        description: OTEL trace_id
+        type: string
       type:
-        allOf:
-        - $ref: '#/definitions/observability.ObservationType'
-        description: Observation metadata
+        description: 'Brokle: span, generation, event, tool, agent, chain'
+        type: string
+      updated_at:
+        type: string
       usage_details:
         additionalProperties:
           format: int64
           type: integer
-        description: 'Token usage (keys: prompt_tokens, completion_tokens, total_tokens)'
         type: object
       version:
         description: ReplacingMergeTree fields
         type: integer
     type: object
-  observability.ObservationLevel:
-    enum:
-    - DEBUG
-    - INFO
-    - WARN
-    - ERROR
-    - DEFAULT
-    type: string
-    x-enum-varnames:
-    - ObservationLevelDebug
-    - ObservationLevelInfo
-    - ObservationLevelWarn
-    - ObservationLevelError
-    - ObservationLevelDefault
-  observability.ObservationType:
-    enum:
-    - LLM
-    - SPAN
-    - EVENT
-    - GENERATION
-    - RETRIEVAL
-    - EMBEDDING
-    - AGENT
-    - TOOL
-    - CHAIN
-    type: string
-    x-enum-varnames:
-    - ObservationTypeLLM
-    - ObservationTypeSpan
-    - ObservationTypeEvent
-    - ObservationTypeGeneration
-    - ObservationTypeRetrieval
-    - ObservationTypeEmbedding
-    - ObservationTypeAgent
-    - ObservationTypeTool
-    - ObservationTypeChain
   observability.QueueHealthResponse:
     description: Processing queue status and performance
     properties:
@@ -1679,16 +1710,51 @@ definitions:
         example: 24h0m0s
         type: string
     type: object
+  observability.Resource:
+    properties:
+      attributes:
+        items:
+          $ref: '#/definitions/observability.KeyValue'
+        type: array
+    type: object
+  observability.ResourceSpan:
+    properties:
+      resource:
+        $ref: '#/definitions/observability.Resource'
+      scopeSpans:
+        items:
+          $ref: '#/definitions/observability.ScopeSpan'
+        type: array
+    type: object
+  observability.Scope:
+    properties:
+      attributes:
+        items:
+          $ref: '#/definitions/observability.KeyValue'
+        type: array
+      name:
+        type: string
+      version:
+        type: string
+    type: object
+  observability.ScopeSpan:
+    properties:
+      scope:
+        $ref: '#/definitions/observability.Scope'
+      spans:
+        items:
+          $ref: '#/definitions/observability.Span'
+        type: array
+    type: object
   observability.Score:
     properties:
       author_user_id:
-        allOf:
-        - $ref: '#/definitions/ulid.ULID'
-        description: Author tracking (for HUMAN source)
+        type: string
       comment:
         type: string
       data_type:
-        $ref: '#/definitions/observability.ScoreDataType'
+        description: NUMERIC, CATEGORICAL, BOOLEAN
+        type: string
       evaluator_config:
         additionalProperties:
           type: string
@@ -1701,99 +1767,69 @@ definitions:
       event_ts:
         type: string
       id:
-        allOf:
-        - $ref: '#/definitions/ulid.ULID'
-        description: Identifiers (at least one of trace_id, observation_id, or session_id
-          must be set)
+        description: Identifiers
+        type: string
       is_deleted:
         type: boolean
       name:
         description: Score data
         type: string
       observation_id:
-        $ref: '#/definitions/ulid.ULID'
+        description: OTEL span_id
+        type: string
       project_id:
-        $ref: '#/definitions/ulid.ULID'
-      session_id:
-        $ref: '#/definitions/ulid.ULID'
+        type: string
       source:
-        allOf:
-        - $ref: '#/definitions/observability.ScoreSource'
-        description: Source and metadata
+        description: Metadata
+        type: string
       string_value:
         type: string
       timestamp:
         description: Timestamp
         type: string
       trace_id:
-        $ref: '#/definitions/ulid.ULID'
+        description: OTEL trace_id
+        type: string
       value:
         type: number
       version:
         description: ReplacingMergeTree fields
         type: integer
     type: object
-  observability.ScoreDataType:
-    enum:
-    - NUMERIC
-    - CATEGORICAL
-    - BOOLEAN
-    type: string
-    x-enum-varnames:
-    - ScoreDataTypeNumeric
-    - ScoreDataTypeCategorical
-    - ScoreDataTypeBoolean
-  observability.ScoreSource:
-    enum:
-    - API
-    - AUTO
-    - HUMAN
-    - EVAL
-    type: string
-    x-enum-varnames:
-    - ScoreSourceAPI
-    - ScoreSourceAuto
-    - ScoreSourceHuman
-    - ScoreSourceEval
-  observability.Session:
+  observability.Span:
     properties:
-      bookmarked:
-        description: Feature flags
-        type: boolean
-      created_at:
-        description: Timestamps
-        type: string
-      event_ts:
-        type: string
-      id:
-        allOf:
-        - $ref: '#/definitions/ulid.ULID'
-        description: Identifiers
-      is_deleted:
-        type: boolean
-      metadata:
-        additionalProperties:
-          type: string
-        description: Session metadata
-        type: object
-      project_id:
-        $ref: '#/definitions/ulid.ULID'
-      public:
-        type: boolean
-      scores:
+      attributes:
         items:
-          $ref: '#/definitions/observability.Score'
+          $ref: '#/definitions/observability.KeyValue'
         type: array
-      traces:
-        description: Populated from joins (not in ClickHouse)
+      endTimeUnixNano: {}
+      events:
         items:
-          $ref: '#/definitions/observability.Trace'
+          $ref: '#/definitions/observability.Event'
         type: array
-      user_id:
-        $ref: '#/definitions/ulid.ULID'
-      version:
-        description: ReplacingMergeTree fields
+      kind:
+        description: 0=UNSPECIFIED, 1=INTERNAL, 2=SERVER, 3=CLIENT, 4=PRODUCER, 5=CONSUMER
         type: integer
+      name:
+        type: string
+      parentSpanId:
+        description: Can be Buffer or hex string
+      spanId:
+        description: Can be Buffer or hex string
+      startTimeUnixNano:
+        description: Can be int64 or {low, high}
+      status:
+        $ref: '#/definitions/observability.Status'
+      traceId:
+        description: Can be Buffer or hex string
+    type: object
+  observability.Status:
+    properties:
+      code:
+        description: 0=UNSET, 1=OK, 2=ERROR
+        type: integer
+      message:
+        type: string
     type: object
   observability.TelemetryHealthResponse:
     description: Health status of telemetry processing system
@@ -1922,17 +1958,36 @@ definitions:
     type: object
   observability.Trace:
     properties:
+      attributes:
+        description: OTEL attributes (JSON string for flexible key-value pairs)
+        type: string
+      bookmarked:
+        description: Flags (moved from sessions table)
+        type: boolean
+      created_at:
+        description: Timestamps
+        type: string
+      duration_ms:
+        type: integer
+      end_time:
+        type: string
       environment:
-        description: Environment and versioning
+        description: OTEL resource attributes
         type: string
       event_ts:
         type: string
       id:
-        allOf:
-        - $ref: '#/definitions/ulid.ULID'
-        description: Identifiers
+        description: OTEL identifiers
+        type: string
       input:
-        description: Data (stored as JSON strings in ClickHouse with ZSTD compression)
+        description: Input/Output (trace-level data)
+        type: string
+      input_blob_storage_id:
+        description: Blob storage (S3 offloading for large payloads >10KB)
+        type: string
+      input_preview:
+        description: Preview fields (ALWAYS populated - type-aware, adaptive 300-800
+          chars)
         type: string
       is_deleted:
         type: boolean
@@ -1942,8 +1997,10 @@ definitions:
         description: Metadata and tags
         type: object
       name:
-        description: Basic information
+        description: Trace metadata
         type: string
+      observation_count:
+        type: integer
       observations:
         description: Populated from joins (not in ClickHouse)
         items:
@@ -1951,44 +2008,52 @@ definitions:
         type: array
       output:
         type: string
-      parent_trace_id:
-        $ref: '#/definitions/ulid.ULID'
+      output_blob_storage_id:
+        type: string
+      output_preview:
+        type: string
       project_id:
-        $ref: '#/definitions/ulid.ULID'
+        description: Brokle project context
+        type: string
+      public:
+        type: boolean
       release:
         type: string
       scores:
         items:
           $ref: '#/definitions/observability.Score'
         type: array
+      service_name:
+        type: string
+      service_version:
+        type: string
       session_id:
-        $ref: '#/definitions/ulid.ULID'
+        description: Virtual session (attribute only, not FK)
+        type: string
+      start_time:
+        description: Timing
+        type: string
+      status_code:
+        description: OTEL status
+        type: string
+      status_message:
+        type: string
       tags:
         items:
           type: string
         type: array
-      timestamp:
+      total_cost:
+        description: Aggregate metrics (calculated from observations)
+        type: number
+      total_tokens:
+        type: integer
+      updated_at:
         type: string
       user_id:
-        $ref: '#/definitions/ulid.ULID'
+        type: string
       version:
         description: ReplacingMergeTree fields
         type: integer
-    type: object
-  observability.UpdateSessionRequest:
-    properties:
-      bookmarked:
-        description: nil = not sent, preserve existing
-        type: boolean
-      metadata:
-        additionalProperties:
-          type: string
-        type: object
-      public:
-        description: nil = not sent, preserve existing
-        type: boolean
-      user_id:
-        $ref: '#/definitions/ulid.ULID'
     type: object
   organization.BulkSettingsRequest:
     properties:
@@ -2265,9 +2330,6 @@ definitions:
       success:
         example: true
         type: boolean
-    type: object
-  ulid.ULID:
-    description: ULID (Universally Unique Lexicographically Sortable Identifier)
     type: object
   user.OnboardingQuestionsResponse:
     description: Complete onboarding question information including user's current
@@ -3332,227 +3394,6 @@ paths:
       security:
       - BearerAuth: []
       summary: Update quality score by ID
-      tags:
-      - Dashboard - Analytics
-  /api/v1/analytics/sessions:
-    get:
-      consumes:
-      - application/json
-      description: Retrieve paginated list of sessions
-      parameters:
-      - description: Project ID
-        in: query
-        name: project_id
-        required: true
-        type: string
-      - description: Filter by user ID
-        in: query
-        name: user_id
-        type: string
-      - description: Filter by bookmarked
-        in: query
-        name: bookmarked
-        type: boolean
-      - description: Filter by public
-        in: query
-        name: public
-        type: boolean
-      - description: Limit (default 50, max 1000)
-        in: query
-        name: limit
-        type: integer
-      - description: Offset (default 0)
-        in: query
-        name: offset
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: List of sessions
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                data:
-                  items:
-                    $ref: '#/definitions/observability.Session'
-                  type: array
-              type: object
-        "400":
-          description: Invalid parameters
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-        "500":
-          description: Internal server error
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-      security:
-      - BearerAuth: []
-      summary: List sessions with filtering
-      tags:
-      - Dashboard - Analytics
-  /api/v1/analytics/sessions/{id}:
-    get:
-      consumes:
-      - application/json
-      description: Retrieve detailed session information
-      parameters:
-      - description: Session ID
-        in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Session details
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/observability.Session'
-              type: object
-        "404":
-          description: Session not found
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-        "500":
-          description: Internal server error
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-      security:
-      - BearerAuth: []
-      summary: Get session by ID
-      tags:
-      - Dashboard - Analytics
-    put:
-      consumes:
-      - application/json
-      description: Update an existing session (for corrections/enrichment after initial
-        creation). Supports partial updates - only send fields you want to change.
-      parameters:
-      - description: Session ID
-        in: path
-        name: id
-        required: true
-        type: string
-      - description: Session fields to update (partial)
-        in: body
-        name: updateReq
-        required: true
-        schema:
-          $ref: '#/definitions/observability.UpdateSessionRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Updated session
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/observability.Session'
-              type: object
-        "400":
-          description: Invalid request
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-        "404":
-          description: Session not found
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-        "500":
-          description: Internal server error
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-      security:
-      - BearerAuth: []
-      summary: Update session by ID
-      tags:
-      - Dashboard - Analytics
-  /api/v1/analytics/sessions/{id}/traces:
-    get:
-      consumes:
-      - application/json
-      description: Retrieve session with all associated traces
-      parameters:
-      - description: Session ID
-        in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Session with traces
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/observability.Session'
-              type: object
-        "404":
-          description: Session not found
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-        "500":
-          description: Internal server error
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-      security:
-      - BearerAuth: []
-      summary: Get session with traces
       tags:
       - Dashboard - Analytics
   /api/v1/analytics/traces:
@@ -6894,6 +6735,65 @@ paths:
       summary: Validate telemetry event structure
       tags:
       - SDK - Telemetry
+  /v1/traces:
+    post:
+      consumes:
+      - application/json
+      - application/x-protobuf
+      description: Accepts OpenTelemetry Protocol (OTLP) traces in JSON or Protobuf
+        format
+      parameters:
+      - description: OTLP trace export request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/observability.OTLPRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Traces accepted
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  additionalProperties: true
+                  type: object
+              type: object
+        "400":
+          description: Invalid OTLP request
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "401":
+          description: Invalid or missing API key
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - ApiKeyAuth: []
+      summary: OTLP trace ingestion endpoint (OpenTelemetry spec compliant)
+      tags:
+      - SDK - OTLP
   /ws:
     get:
       consumes:

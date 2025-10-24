@@ -8,7 +8,6 @@ import (
 
 	"brokle/internal/core/domain/observability"
 	"brokle/pkg/response"
-	"brokle/pkg/ulid"
 )
 
 // Analytics Handlers for Dashboard (JWT-authenticated, read-only queries)
@@ -36,38 +35,22 @@ import (
 // @Router /api/v1/analytics/traces [get]
 func (h *Handler) ListTraces(c *gin.Context) {
 	// Get project ID from query
-	projectIDStr := c.Query("project_id")
-	if projectIDStr == "" {
+	projectID := c.Query("project_id")
+	if projectID == "" {
 		response.ValidationError(c, "project_id is required", "project_id query parameter is required")
-		return
-	}
-
-	projectID, err := ulid.Parse(projectIDStr)
-	if err != nil {
-		response.ValidationError(c, "invalid project_id", "project_id must be a valid ULID")
 		return
 	}
 
 	// Build filter from query parameters
 	filter := &observability.TraceFilter{}
 
-	// Session ID filter
-	if sessionIDStr := c.Query("session_id"); sessionIDStr != "" {
-		sessionID, err := ulid.Parse(sessionIDStr)
-		if err != nil {
-			response.ValidationError(c, "invalid session_id", "session_id must be a valid ULID")
-			return
-		}
+	// Session ID filter (virtual session)
+	if sessionID := c.Query("session_id"); sessionID != "" {
 		filter.SessionID = &sessionID
 	}
 
 	// User ID filter
-	if userIDStr := c.Query("user_id"); userIDStr != "" {
-		userID, err := ulid.Parse(userIDStr)
-		if err != nil {
-			response.ValidationError(c, "invalid user_id", "user_id must be a valid ULID")
-			return
-		}
+	if userID := c.Query("user_id"); userID != "" {
 		filter.UserID = &userID
 	}
 
@@ -139,10 +122,9 @@ func (h *Handler) ListTraces(c *gin.Context) {
 // @Failure 500 {object} response.APIResponse{error=response.APIError} "Internal server error"
 // @Router /api/v1/analytics/traces/{id} [get]
 func (h *Handler) GetTrace(c *gin.Context) {
-	traceIDStr := c.Param("id")
-	traceID, err := ulid.Parse(traceIDStr)
-	if err != nil {
-		response.ValidationError(c, "invalid trace_id", "trace_id must be a valid ULID")
+	traceID := c.Param("id")
+	if traceID == "" {
+		response.ValidationError(c, "invalid trace_id", "trace_id is required")
 		return
 	}
 
@@ -169,10 +151,9 @@ func (h *Handler) GetTrace(c *gin.Context) {
 // @Failure 500 {object} response.APIResponse{error=response.APIError} "Internal server error"
 // @Router /api/v1/analytics/traces/{id}/observations [get]
 func (h *Handler) GetTraceWithObservations(c *gin.Context) {
-	traceIDStr := c.Param("id")
-	traceID, err := ulid.Parse(traceIDStr)
-	if err != nil {
-		response.ValidationError(c, "invalid trace_id", "trace_id must be a valid ULID")
+	traceID := c.Param("id")
+	if traceID == "" {
+		response.ValidationError(c, "invalid trace_id", "trace_id is required")
 		return
 	}
 
@@ -199,10 +180,9 @@ func (h *Handler) GetTraceWithObservations(c *gin.Context) {
 // @Failure 500 {object} response.APIResponse{error=response.APIError} "Internal server error"
 // @Router /api/v1/analytics/traces/{id}/scores [get]
 func (h *Handler) GetTraceWithScores(c *gin.Context) {
-	traceIDStr := c.Param("id")
-	traceID, err := ulid.Parse(traceIDStr)
-	if err != nil {
-		response.ValidationError(c, "invalid trace_id", "trace_id must be a valid ULID")
+	traceID := c.Param("id")
+	if traceID == "" {
+		response.ValidationError(c, "invalid trace_id", "trace_id is required")
 		return
 	}
 
@@ -239,18 +219,12 @@ func (h *Handler) ListObservations(c *gin.Context) {
 	filter := &observability.ObservationFilter{}
 
 	// Trace ID filter
-	if traceIDStr := c.Query("trace_id"); traceIDStr != "" {
-		traceID, err := ulid.Parse(traceIDStr)
-		if err != nil {
-			response.ValidationError(c, "invalid trace_id", "trace_id must be a valid ULID")
-			return
-		}
+	if traceID := c.Query("trace_id"); traceID != "" {
 		filter.TraceID = &traceID
 	}
 
 	// Type filter
-	if typeStr := c.Query("type"); typeStr != "" {
-		obsType := observability.ObservationType(typeStr)
+	if obsType := c.Query("type"); obsType != "" {
 		filter.Type = &obsType
 	}
 
@@ -260,8 +234,7 @@ func (h *Handler) ListObservations(c *gin.Context) {
 	}
 
 	// Level filter
-	if levelStr := c.Query("level"); levelStr != "" {
-		level := observability.ObservationLevel(levelStr)
+	if level := c.Query("level"); level != "" {
 		filter.Level = &level
 	}
 
@@ -311,10 +284,9 @@ func (h *Handler) ListObservations(c *gin.Context) {
 // @Failure 500 {object} response.APIResponse{error=response.APIError} "Internal server error"
 // @Router /api/v1/analytics/observations/{id} [get]
 func (h *Handler) GetObservation(c *gin.Context) {
-	observationIDStr := c.Param("id")
-	observationID, err := ulid.Parse(observationIDStr)
-	if err != nil {
-		response.ValidationError(c, "invalid observation_id", "observation_id must be a valid ULID")
+	observationID := c.Param("id")
+	if observationID == "" {
+		response.ValidationError(c, "invalid observation_id", "observation_id is required")
 		return
 	}
 
@@ -353,33 +325,13 @@ func (h *Handler) ListScores(c *gin.Context) {
 	filter := &observability.ScoreFilter{}
 
 	// Trace ID filter
-	if traceIDStr := c.Query("trace_id"); traceIDStr != "" {
-		traceID, err := ulid.Parse(traceIDStr)
-		if err != nil {
-			response.ValidationError(c, "invalid trace_id", "trace_id must be a valid ULID")
-			return
-		}
+	if traceID := c.Query("trace_id"); traceID != "" {
 		filter.TraceID = &traceID
 	}
 
 	// Observation ID filter
-	if observationIDStr := c.Query("observation_id"); observationIDStr != "" {
-		observationID, err := ulid.Parse(observationIDStr)
-		if err != nil {
-			response.ValidationError(c, "invalid observation_id", "observation_id must be a valid ULID")
-			return
-		}
+	if observationID := c.Query("observation_id"); observationID != "" {
 		filter.ObservationID = &observationID
-	}
-
-	// Session ID filter
-	if sessionIDStr := c.Query("session_id"); sessionIDStr != "" {
-		sessionID, err := ulid.Parse(sessionIDStr)
-		if err != nil {
-			response.ValidationError(c, "invalid session_id", "session_id must be a valid ULID")
-			return
-		}
-		filter.SessionID = &sessionID
 	}
 
 	// Name filter
@@ -388,14 +340,12 @@ func (h *Handler) ListScores(c *gin.Context) {
 	}
 
 	// Source filter
-	if sourceStr := c.Query("source"); sourceStr != "" {
-		source := observability.ScoreSource(sourceStr)
+	if source := c.Query("source"); source != "" {
 		filter.Source = &source
 	}
 
 	// Data type filter
-	if dataTypeStr := c.Query("data_type"); dataTypeStr != "" {
-		dataType := observability.ScoreDataType(dataTypeStr)
+	if dataType := c.Query("data_type"); dataType != "" {
 		filter.DataType = &dataType
 	}
 
@@ -445,10 +395,9 @@ func (h *Handler) ListScores(c *gin.Context) {
 // @Failure 500 {object} response.APIResponse{error=response.APIError} "Internal server error"
 // @Router /api/v1/analytics/scores/{id} [get]
 func (h *Handler) GetScore(c *gin.Context) {
-	scoreIDStr := c.Param("id")
-	scoreID, err := ulid.Parse(scoreIDStr)
-	if err != nil {
-		response.ValidationError(c, "invalid score_id", "score_id must be a valid ULID")
+	scoreID := c.Param("id")
+	if scoreID == "" {
+		response.ValidationError(c, "invalid score_id", "score_id is required")
 		return
 	}
 
@@ -460,164 +409,6 @@ func (h *Handler) GetScore(c *gin.Context) {
 	}
 
 	response.Success(c, score)
-}
-
-// ===== Session Analytics =====
-
-// ListSessions handles GET /api/v1/analytics/sessions
-// @Summary List sessions with filtering
-// @Description Retrieve paginated list of sessions
-// @Tags Dashboard - Analytics
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param project_id query string true "Project ID"
-// @Param user_id query string false "Filter by user ID"
-// @Param bookmarked query bool false "Filter by bookmarked"
-// @Param public query bool false "Filter by public"
-// @Param limit query int false "Limit (default 50, max 1000)"
-// @Param offset query int false "Offset (default 0)"
-// @Success 200 {object} response.APIResponse{data=[]observability.Session} "List of sessions"
-// @Failure 400 {object} response.APIResponse{error=response.APIError} "Invalid parameters"
-// @Failure 500 {object} response.APIResponse{error=response.APIError} "Internal server error"
-// @Router /api/v1/analytics/sessions [get]
-func (h *Handler) ListSessions(c *gin.Context) {
-	// Get project ID from query
-	projectIDStr := c.Query("project_id")
-	if projectIDStr == "" {
-		response.ValidationError(c, "project_id is required", "project_id query parameter is required")
-		return
-	}
-
-	projectID, err := ulid.Parse(projectIDStr)
-	if err != nil {
-		response.ValidationError(c, "invalid project_id", "project_id must be a valid ULID")
-		return
-	}
-
-	filter := &observability.SessionFilter{}
-
-	// User ID filter
-	if userIDStr := c.Query("user_id"); userIDStr != "" {
-		userID, err := ulid.Parse(userIDStr)
-		if err != nil {
-			response.ValidationError(c, "invalid user_id", "user_id must be a valid ULID")
-			return
-		}
-		filter.UserID = &userID
-	}
-
-	// Bookmarked filter
-	if bookmarkedStr := c.Query("bookmarked"); bookmarkedStr != "" {
-		bookmarked, err := strconv.ParseBool(bookmarkedStr)
-		if err != nil {
-			response.ValidationError(c, "invalid bookmarked", "bookmarked must be a boolean")
-			return
-		}
-		filter.Bookmarked = &bookmarked
-	}
-
-	// Public filter
-	if publicStr := c.Query("public"); publicStr != "" {
-		public, err := strconv.ParseBool(publicStr)
-		if err != nil {
-			response.ValidationError(c, "invalid public", "public must be a boolean")
-			return
-		}
-		filter.Public = &public
-	}
-
-	// Pagination
-	limit := 50
-	if limitStr := c.Query("limit"); limitStr != "" {
-		l, err := strconv.Atoi(limitStr)
-		if err != nil || l < 1 || l > 1000 {
-			response.ValidationError(c, "invalid limit", "limit must be between 1 and 1000")
-			return
-		}
-		limit = l
-	}
-	filter.Limit = limit
-
-	offset := 0
-	if offsetStr := c.Query("offset"); offsetStr != "" {
-		o, err := strconv.Atoi(offsetStr)
-		if err != nil || o < 0 {
-			response.ValidationError(c, "invalid offset", "offset must be >= 0")
-			return
-		}
-		offset = o
-	}
-	filter.Offset = offset
-
-	sessions, err := h.services.GetSessionService().GetSessionsByProjectID(c.Request.Context(), projectID, filter)
-	if err != nil {
-		h.logger.WithError(err).Error("Failed to list sessions")
-		response.Error(c, err)
-		return
-	}
-
-	response.Success(c, sessions)
-}
-
-// GetSession handles GET /api/v1/analytics/sessions/:id
-// @Summary Get session by ID
-// @Description Retrieve detailed session information
-// @Tags Dashboard - Analytics
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Session ID"
-// @Success 200 {object} response.APIResponse{data=observability.Session} "Session details"
-// @Failure 404 {object} response.APIResponse{error=response.APIError} "Session not found"
-// @Failure 500 {object} response.APIResponse{error=response.APIError} "Internal server error"
-// @Router /api/v1/analytics/sessions/{id} [get]
-func (h *Handler) GetSession(c *gin.Context) {
-	sessionIDStr := c.Param("id")
-	sessionID, err := ulid.Parse(sessionIDStr)
-	if err != nil {
-		response.ValidationError(c, "invalid session_id", "session_id must be a valid ULID")
-		return
-	}
-
-	session, err := h.services.GetSessionService().GetSessionByID(c.Request.Context(), sessionID)
-	if err != nil {
-		h.logger.WithError(err).Error("Failed to get session")
-		response.Error(c, err)
-		return
-	}
-
-	response.Success(c, session)
-}
-
-// GetSessionWithTraces handles GET /api/v1/analytics/sessions/:id/traces
-// @Summary Get session with traces
-// @Description Retrieve session with all associated traces
-// @Tags Dashboard - Analytics
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Session ID"
-// @Success 200 {object} response.APIResponse{data=observability.Session} "Session with traces"
-// @Failure 404 {object} response.APIResponse{error=response.APIError} "Session not found"
-// @Failure 500 {object} response.APIResponse{error=response.APIError} "Internal server error"
-// @Router /api/v1/analytics/sessions/{id}/traces [get]
-func (h *Handler) GetSessionWithTraces(c *gin.Context) {
-	sessionIDStr := c.Param("id")
-	sessionID, err := ulid.Parse(sessionIDStr)
-	if err != nil {
-		response.ValidationError(c, "invalid session_id", "session_id must be a valid ULID")
-		return
-	}
-
-	session, err := h.services.GetSessionService().GetSessionWithTraces(c.Request.Context(), sessionID)
-	if err != nil {
-		h.logger.WithError(err).Error("Failed to get session with traces")
-		response.Error(c, err)
-		return
-	}
-
-	response.Success(c, session)
 }
 
 // ===== Update Endpoints (Mutable Operations via REST API) =====
@@ -637,10 +428,9 @@ func (h *Handler) GetSessionWithTraces(c *gin.Context) {
 // @Failure 500 {object} response.APIResponse{error=response.APIError} "Internal server error"
 // @Router /api/v1/analytics/traces/{id} [put]
 func (h *Handler) UpdateTrace(c *gin.Context) {
-	traceIDStr := c.Param("id")
-	traceID, err := ulid.Parse(traceIDStr)
-	if err != nil {
-		response.ValidationError(c, "invalid trace_id", "trace_id must be a valid ULID")
+	traceID := c.Param("id")
+	if traceID == "" {
+		response.ValidationError(c, "invalid trace_id", "trace_id is required")
 		return
 	}
 
@@ -686,10 +476,9 @@ func (h *Handler) UpdateTrace(c *gin.Context) {
 // @Failure 500 {object} response.APIResponse{error=response.APIError} "Internal server error"
 // @Router /api/v1/analytics/observations/{id} [put]
 func (h *Handler) UpdateObservation(c *gin.Context) {
-	observationIDStr := c.Param("id")
-	observationID, err := ulid.Parse(observationIDStr)
-	if err != nil {
-		response.ValidationError(c, "invalid observation_id", "observation_id must be a valid ULID")
+	observationID := c.Param("id")
+	if observationID == "" {
+		response.ValidationError(c, "invalid observation_id", "observation_id is required")
 		return
 	}
 
@@ -735,10 +524,9 @@ func (h *Handler) UpdateObservation(c *gin.Context) {
 // @Failure 500 {object} response.APIResponse{error=response.APIError} "Internal server error"
 // @Router /api/v1/analytics/scores/{id} [put]
 func (h *Handler) UpdateScore(c *gin.Context) {
-	scoreIDStr := c.Param("id")
-	scoreID, err := ulid.Parse(scoreIDStr)
-	if err != nil {
-		response.ValidationError(c, "invalid score_id", "score_id must be a valid ULID")
+	scoreID := c.Param("id")
+	if scoreID == "" {
+		response.ValidationError(c, "invalid score_id", "score_id is required")
 		return
 	}
 
@@ -769,49 +557,3 @@ func (h *Handler) UpdateScore(c *gin.Context) {
 	response.Success(c, updated)
 }
 
-// UpdateSession handles PUT /api/v1/analytics/sessions/:id
-// @Summary Update session by ID
-// @Description Update an existing session (for corrections/enrichment after initial creation). Supports partial updates - only send fields you want to change.
-// @Tags Dashboard - Analytics
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Session ID"
-// @Param updateReq body observability.UpdateSessionRequest true "Session fields to update (partial)"
-// @Success 200 {object} response.APIResponse{data=observability.Session} "Updated session"
-// @Failure 400 {object} response.APIResponse{error=response.APIError} "Invalid request"
-// @Failure 404 {object} response.APIResponse{error=response.APIError} "Session not found"
-// @Failure 500 {object} response.APIResponse{error=response.APIError} "Internal server error"
-// @Router /api/v1/analytics/sessions/{id} [put]
-func (h *Handler) UpdateSession(c *gin.Context) {
-	sessionIDStr := c.Param("id")
-	sessionID, err := ulid.Parse(sessionIDStr)
-	if err != nil {
-		response.ValidationError(c, "invalid session_id", "session_id must be a valid ULID")
-		return
-	}
-
-	// Bind to update request DTO (uses pointers to track field presence)
-	var updateReq observability.UpdateSessionRequest
-	if err := c.ShouldBindJSON(&updateReq); err != nil {
-		response.ValidationError(c, "invalid request body", err.Error())
-		return
-	}
-
-	// Update via service with session ID and update request
-	if err := h.services.GetSessionService().UpdateSession(c.Request.Context(), sessionID, &updateReq); err != nil {
-		h.logger.WithError(err).Error("Failed to update session")
-		response.Error(c, err)
-		return
-	}
-
-	// Fetch updated session
-	updated, err := h.services.GetSessionService().GetSessionByID(c.Request.Context(), sessionID)
-	if err != nil {
-		h.logger.WithError(err).Error("Failed to fetch updated session")
-		response.Error(c, err)
-		return
-	}
-
-	response.Success(c, updated)
-}

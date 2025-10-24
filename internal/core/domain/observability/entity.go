@@ -7,30 +7,63 @@ import (
 	"brokle/pkg/ulid"
 )
 
-// Trace represents a complete operation trace with hierarchy and session support
+// Trace represents an OTEL trace (root span) with trace-level context
 type Trace struct {
-	// Identifiers
-	ID            ulid.ULID  `json:"id" db:"id"`
-	ProjectID     ulid.ULID  `json:"project_id" db:"project_id"`
-	SessionID     *ulid.ULID `json:"session_id,omitempty" db:"session_id"`
-	ParentTraceID *ulid.ULID `json:"parent_trace_id,omitempty" db:"parent_trace_id"`
+	// OTEL identifiers
+	ID        string `json:"id" db:"id"`                 // OTEL trace_id (32 hex chars)
+	ProjectID string `json:"project_id" db:"project_id"` // Brokle project context
 
-	// Basic information
-	Name      string     `json:"name" db:"name"`
-	UserID    *ulid.ULID `json:"user_id,omitempty" db:"user_id"`
-	Timestamp time.Time  `json:"timestamp" db:"timestamp"`
+	// Trace metadata
+	Name      string  `json:"name" db:"name"`
+	UserID    *string `json:"user_id,omitempty" db:"user_id"`
+	SessionID *string `json:"session_id,omitempty" db:"session_id"` // Virtual session (attribute only, not FK)
 
-	// Data (stored as JSON strings in ClickHouse with ZSTD compression)
+	// Timing
+	StartTime  time.Time  `json:"start_time" db:"start_time"`
+	EndTime    *time.Time `json:"end_time,omitempty" db:"end_time"`
+	DurationMs *uint32    `json:"duration_ms,omitempty" db:"duration_ms"`
+
+	// OTEL status
+	StatusCode    string  `json:"status_code" db:"status_code"` // OK, ERROR, UNSET
+	StatusMessage *string `json:"status_message,omitempty" db:"status_message"`
+
+	// OTEL attributes (JSON string for flexible key-value pairs)
+	Attributes string `json:"attributes" db:"attributes"`
+
+	// Input/Output (trace-level data)
 	Input  *string `json:"input,omitempty" db:"input"`
 	Output *string `json:"output,omitempty" db:"output"`
+
+	// Blob storage (S3 offloading for large payloads >10KB)
+	InputBlobStorageID  *string `json:"input_blob_storage_id,omitempty" db:"input_blob_storage_id"`
+	OutputBlobStorageID *string `json:"output_blob_storage_id,omitempty" db:"output_blob_storage_id"`
+
+	// Preview fields (ALWAYS populated - type-aware, adaptive 300-800 chars)
+	InputPreview  *string `json:"input_preview,omitempty" db:"input_preview"`
+	OutputPreview *string `json:"output_preview,omitempty" db:"output_preview"`
 
 	// Metadata and tags
 	Metadata map[string]string `json:"metadata" db:"metadata"`
 	Tags     []string          `json:"tags" db:"tags"`
 
-	// Environment and versioning
-	Environment string  `json:"environment" db:"environment"`
-	Release     *string `json:"release,omitempty" db:"release"`
+	// OTEL resource attributes
+	Environment    string  `json:"environment" db:"environment"`
+	ServiceName    *string `json:"service_name,omitempty" db:"service_name"`
+	ServiceVersion *string `json:"service_version,omitempty" db:"service_version"`
+	Release        *string `json:"release,omitempty" db:"release"`
+
+	// Aggregate metrics (calculated from observations)
+	TotalCost        *float64 `json:"total_cost,omitempty" db:"total_cost"`
+	TotalTokens      *uint32  `json:"total_tokens,omitempty" db:"total_tokens"`
+	ObservationCount *uint32  `json:"observation_count,omitempty" db:"observation_count"`
+
+	// Flags (moved from sessions table)
+	Bookmarked bool `json:"bookmarked" db:"bookmarked"`
+	Public     bool `json:"public" db:"public"`
+
+	// Timestamps
+	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
 
 	// ReplacingMergeTree fields
 	Version   uint32    `json:"version" db:"version"`
@@ -42,42 +75,65 @@ type Trace struct {
 	Scores       []*Score       `json:"scores,omitempty" db:"-"`
 }
 
-// Observation represents a span/event/generation within a trace
+// Observation represents an OTEL span with Gen AI semantic conventions and Brokle extensions
 type Observation struct {
-	// Identifiers
-	ID                  ulid.ULID  `json:"id" db:"id"`
-	TraceID             ulid.ULID  `json:"trace_id" db:"trace_id"`
-	ParentObservationID *ulid.ULID `json:"parent_observation_id,omitempty" db:"parent_observation_id"`
-	ProjectID           ulid.ULID  `json:"project_id" db:"project_id"`
+	// OTEL identifiers
+	ID                  string  `json:"id" db:"id"`                                                 // OTEL span_id (16 hex chars)
+	TraceID             string  `json:"trace_id" db:"trace_id"`                                     // OTEL trace_id
+	ParentObservationID *string `json:"parent_observation_id,omitempty" db:"parent_observation_id"` // NULL for root spans
+	ProjectID           string  `json:"project_id" db:"project_id"`
 
-	// Observation metadata
-	Type      ObservationType `json:"type" db:"type"`
-	Name      string          `json:"name" db:"name"`
-	StartTime time.Time       `json:"start_time" db:"start_time"`
-	EndTime   *time.Time      `json:"end_time,omitempty" db:"end_time"`
+	// Span data
+	Name       string     `json:"name" db:"name"`
+	SpanKind   string     `json:"span_kind" db:"span_kind"` // OTEL: INTERNAL, SERVER, CLIENT, PRODUCER, CONSUMER
+	Type       string     `json:"type" db:"type"`           // Brokle: span, generation, event, tool, agent, chain
+	StartTime  time.Time  `json:"start_time" db:"start_time"`
+	EndTime    *time.Time `json:"end_time,omitempty" db:"end_time"`
+	DurationMs *uint32    `json:"duration_ms,omitempty" db:"duration_ms"`
 
-	// Model information
-	Model           *string           `json:"model,omitempty" db:"model"`
-	ModelParameters map[string]string `json:"model_parameters" db:"model_parameters"`
+	// OTEL status
+	StatusCode    string  `json:"status_code" db:"status_code"` // OK, ERROR, UNSET
+	StatusMessage *string `json:"status_message,omitempty" db:"status_message"`
 
-	// Data (stored as JSON strings in ClickHouse with ZSTD compression)
-	Input    *string           `json:"input,omitempty" db:"input"`
-	Output   *string           `json:"output,omitempty" db:"output"`
+	// OTEL attributes (JSON string for flexible key-value pairs)
+	Attributes string `json:"attributes" db:"attributes"`
+
+	// Input/Output
+	Input  *string `json:"input,omitempty" db:"input"`
+	Output *string `json:"output,omitempty" db:"output"`
+
+	// Preview fields (ALWAYS populated - type-aware, adaptive 300-800 chars)
+	InputPreview  *string `json:"input_preview,omitempty" db:"input_preview"`
+	OutputPreview *string `json:"output_preview,omitempty" db:"output_preview"`
+
 	Metadata map[string]string `json:"metadata" db:"metadata"`
+	Level    string            `json:"level" db:"level"` // DEBUG, INFO, WARNING, ERROR, DEFAULT
 
-	// Cost tracking (keys: input, output, total - all in USD)
-	CostDetails map[string]float64 `json:"cost_details" db:"cost_details"`
+	// Universal model fields
+	ModelName       *string `json:"model_name,omitempty" db:"model_name"`
+	Provider        string  `json:"provider" db:"provider"`
+	InternalModelID *string `json:"internal_model_id,omitempty" db:"internal_model_id"`
+	ModelParameters *string `json:"model_parameters,omitempty" db:"model_parameters"` // JSON string
 
-	// Token usage (keys: prompt_tokens, completion_tokens, total_tokens)
-	UsageDetails map[string]uint64 `json:"usage_details" db:"usage_details"`
+	// Usage & Cost Maps (Pattern: provided + calculated)
+	ProvidedUsageDetails map[string]uint64  `json:"provided_usage_details,omitempty" db:"provided_usage_details"`
+	UsageDetails         map[string]uint64  `json:"usage_details,omitempty" db:"usage_details"`
+	ProvidedCostDetails  map[string]float64 `json:"provided_cost_details,omitempty" db:"provided_cost_details"`
+	CostDetails          map[string]float64 `json:"cost_details,omitempty" db:"cost_details"`
+	TotalCost            *float64           `json:"total_cost,omitempty" db:"total_cost"`
 
-	// Status and logging
-	Level         ObservationLevel `json:"level" db:"level"`
-	StatusMessage *string          `json:"status_message,omitempty" db:"status_message"`
+	// Prompt management
+	PromptID      *string `json:"prompt_id,omitempty" db:"prompt_id"`
+	PromptName    *string `json:"prompt_name,omitempty" db:"prompt_name"`
+	PromptVersion *uint16 `json:"prompt_version,omitempty" db:"prompt_version"`
 
-	// Completion tracking for streaming responses
-	CompletionStartTime *time.Time `json:"completion_start_time,omitempty" db:"completion_start_time"`
-	TimeToFirstTokenMs  *uint32    `json:"time_to_first_token_ms,omitempty" db:"time_to_first_token_ms"`
+	// Blob storage references (Brokle innovation)
+	InputBlobStorageID  *string `json:"input_blob_storage_id,omitempty" db:"input_blob_storage_id"`
+	OutputBlobStorageID *string `json:"output_blob_storage_id,omitempty" db:"output_blob_storage_id"`
+
+	// Timestamps
+	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
 
 	// ReplacingMergeTree fields
 	Version   uint32    `json:"version" db:"version"`
@@ -89,32 +145,29 @@ type Observation struct {
 	ChildObservations []*Observation `json:"child_observations,omitempty" db:"-"`
 }
 
-// Score represents a quality evaluation score
+// Score represents a quality evaluation score linked to traces and observations
 type Score struct {
-	// Identifiers (at least one of trace_id, observation_id, or session_id must be set)
-	ID            ulid.ULID  `json:"id" db:"id"`
-	ProjectID     ulid.ULID  `json:"project_id" db:"project_id"`
-	TraceID       *ulid.ULID `json:"trace_id,omitempty" db:"trace_id"`
-	ObservationID *ulid.ULID `json:"observation_id,omitempty" db:"observation_id"`
-	SessionID     *ulid.ULID `json:"session_id,omitempty" db:"session_id"`
+	// Identifiers
+	ID            string `json:"id" db:"id"`
+	ProjectID     string `json:"project_id" db:"project_id"`
+	TraceID       string `json:"trace_id" db:"trace_id"`             // OTEL trace_id
+	ObservationID string `json:"observation_id" db:"observation_id"` // OTEL span_id
 
 	// Score data
-	Name        string        `json:"name" db:"name"`
-	Value       *float64      `json:"value,omitempty" db:"value"`
-	StringValue *string       `json:"string_value,omitempty" db:"string_value"`
-	DataType    ScoreDataType `json:"data_type" db:"data_type"`
+	Name        string   `json:"name" db:"name"`
+	Value       *float64 `json:"value,omitempty" db:"value"`
+	StringValue *string  `json:"string_value,omitempty" db:"string_value"`
+	DataType    string   `json:"data_type" db:"data_type"` // NUMERIC, CATEGORICAL, BOOLEAN
 
-	// Source and metadata
-	Source  ScoreSource `json:"source" db:"source"`
-	Comment *string     `json:"comment,omitempty" db:"comment"`
+	// Metadata
+	Source  string  `json:"source" db:"source"` // API, ANNOTATION, EVAL
+	Comment *string `json:"comment,omitempty" db:"comment"`
 
 	// Evaluator information
 	EvaluatorName    *string           `json:"evaluator_name,omitempty" db:"evaluator_name"`
 	EvaluatorVersion *string           `json:"evaluator_version,omitempty" db:"evaluator_version"`
 	EvaluatorConfig  map[string]string `json:"evaluator_config" db:"evaluator_config"`
-
-	// Author tracking (for HUMAN source)
-	AuthorUserID *ulid.ULID `json:"author_user_id,omitempty" db:"author_user_id"`
+	AuthorUserID     *string           `json:"author_user_id,omitempty" db:"author_user_id"`
 
 	// Timestamp
 	Timestamp time.Time `json:"timestamp" db:"timestamp"`
@@ -125,85 +178,119 @@ type Score struct {
 	IsDeleted bool      `json:"is_deleted" db:"is_deleted"`
 }
 
-// Session represents a user journey grouping multiple traces
-type Session struct {
+// BlobStorageFileLog represents a reference to S3-stored large payload
+// Used when payload > 10KB threshold
+type BlobStorageFileLog struct {
 	// Identifiers
-	ID        ulid.ULID  `json:"id" db:"id"`
-	ProjectID ulid.ULID  `json:"project_id" db:"project_id"`
-	UserID    *ulid.ULID `json:"user_id,omitempty" db:"user_id"`
+	ID        string `json:"id" db:"id"`
+	ProjectID string `json:"project_id" db:"project_id"`
 
-	// Session metadata
-	Metadata map[string]string `json:"metadata" db:"metadata"`
+	// Entity reference
+	EntityType string `json:"entity_type" db:"entity_type"` // 'trace', 'observation', 'score'
+	EntityID   string `json:"entity_id" db:"entity_id"`     // trace_id or span_id
+	EventID    string `json:"event_id" db:"event_id"`       // Event ULID
 
-	// Feature flags
-	Bookmarked bool `json:"bookmarked" db:"bookmarked"`
-	Public     bool `json:"public" db:"public"`
+	// Storage location
+	BucketName string `json:"bucket_name" db:"bucket_name"`
+	BucketPath string `json:"bucket_path" db:"bucket_path"`
+
+	// Metadata
+	FileSizeBytes *uint64 `json:"file_size_bytes,omitempty" db:"file_size_bytes"`
+	ContentType   *string `json:"content_type,omitempty" db:"content_type"`
+	Compression   *string `json:"compression,omitempty" db:"compression"` // 'gzip', 'zstd', null
 
 	// Timestamps
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
 
 	// ReplacingMergeTree fields
 	Version   uint32    `json:"version" db:"version"`
 	EventTs   time.Time `json:"event_ts" db:"event_ts"`
 	IsDeleted bool      `json:"is_deleted" db:"is_deleted"`
-
-	// Populated from joins (not in ClickHouse)
-	Traces []*Trace `json:"traces,omitempty" db:"-"`
-	Scores []*Score `json:"scores,omitempty" db:"-"`
 }
 
-// UpdateSessionRequest represents fields that can be updated in a session
-// Uses pointers to distinguish between "not sent" (nil) and "explicitly set"
-type UpdateSessionRequest struct {
-	UserID     *ulid.ULID        `json:"user_id,omitempty"`
-	Metadata   map[string]string `json:"metadata,omitempty"`
-	Bookmarked *bool             `json:"bookmarked,omitempty"` // nil = not sent, preserve existing
-	Public     *bool             `json:"public,omitempty"`     // nil = not sent, preserve existing
+// Model represents an LLM/API model with pricing information (PostgreSQL)
+// Used for cost calculation via internal_model_id lookup
+type Model struct {
+	// Identifiers
+	ID        string  `json:"id" db:"id"`
+	ProjectID *string `json:"project_id,omitempty" db:"project_id"` // NULL = global model
+
+	// Model identification
+	ModelName    string `json:"model_name" db:"model_name"`       // gpt-4-turbo, claude-3-opus, etc.
+	MatchPattern string `json:"match_pattern" db:"match_pattern"` // Regex for model aliases
+	Provider     string `json:"provider" db:"provider"`           // openai, anthropic, google, etc.
+
+	// Pricing (per 1k tokens by default)
+	InputPrice  *float64 `json:"input_price,omitempty" db:"input_price"`
+	OutputPrice *float64 `json:"output_price,omitempty" db:"output_price"`
+	TotalPrice  *float64 `json:"total_price,omitempty" db:"total_price"` // Fallback for non-token pricing
+	Unit        string   `json:"unit" db:"unit"`                         // TOKENS, CHARACTERS, REQUESTS, etc.
+
+	// Versioning
+	StartDate    *time.Time `json:"start_date,omitempty" db:"start_date"`
+	IsDeprecated bool       `json:"is_deprecated" db:"is_deprecated"`
+
+	// Tokenizer config (optional)
+	TokenizerID     *string `json:"tokenizer_id,omitempty" db:"tokenizer_id"`
+	TokenizerConfig *string `json:"tokenizer_config,omitempty" db:"tokenizer_config"` // JSONB
+
+	// Timestamps
+	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
 }
 
-// ObservationType defines the type of observation
-type ObservationType string
-
+// OTEL SpanKind constants
 const (
-	ObservationTypeLLM        ObservationType = "LLM"
-	ObservationTypeSpan       ObservationType = "SPAN"
-	ObservationTypeEvent      ObservationType = "EVENT"
-	ObservationTypeGeneration ObservationType = "GENERATION"
-	ObservationTypeRetrieval  ObservationType = "RETRIEVAL"
-	ObservationTypeEmbedding  ObservationType = "EMBEDDING"
-	ObservationTypeAgent      ObservationType = "AGENT"
-	ObservationTypeTool       ObservationType = "TOOL"
-	ObservationTypeChain      ObservationType = "CHAIN"
+	SpanKindInternal SpanKind = "INTERNAL"
+	SpanKindServer   SpanKind = "SERVER"
+	SpanKindClient   SpanKind = "CLIENT"
+	SpanKindProducer SpanKind = "PRODUCER"
+	SpanKindConsumer SpanKind = "CONSUMER"
 )
 
-// ObservationLevel defines the log level for observations
-type ObservationLevel string
+type SpanKind string
 
+// Brokle observation type constants (stored in attributes but also as dedicated field)
 const (
-	ObservationLevelDebug   ObservationLevel = "DEBUG"
-	ObservationLevelInfo    ObservationLevel = "INFO"
-	ObservationLevelWarn    ObservationLevel = "WARN"
-	ObservationLevelError   ObservationLevel = "ERROR"
-	ObservationLevelDefault ObservationLevel = "DEFAULT"
+	ObservationTypeSpan       = "span"
+	ObservationTypeGeneration = "generation"
+	ObservationTypeEvent      = "event"
+	ObservationTypeTool       = "tool"
+	ObservationTypeAgent      = "agent"
+	ObservationTypeChain      = "chain"
+	ObservationTypeRetrieval  = "retrieval"
+	ObservationTypeEmbedding  = "embedding"
 )
 
-// ScoreDataType defines the data type of a quality score
-type ScoreDataType string
-
+// OTEL StatusCode constants
 const (
-	ScoreDataTypeNumeric     ScoreDataType = "NUMERIC"
-	ScoreDataTypeCategorical ScoreDataType = "CATEGORICAL"
-	ScoreDataTypeBoolean     ScoreDataType = "BOOLEAN"
+	StatusCodeUnset = "UNSET"
+	StatusCodeOK    = "OK"
+	StatusCodeError = "ERROR"
 )
 
-// ScoreSource defines the source of a quality score
-type ScoreSource string
-
+// Observation level constants
 const (
-	ScoreSourceAPI   ScoreSource = "API"
-	ScoreSourceAuto  ScoreSource = "AUTO"
-	ScoreSourceHuman ScoreSource = "HUMAN"
-	ScoreSourceEval  ScoreSource = "EVAL"
+	ObservationLevelDebug   = "DEBUG"
+	ObservationLevelInfo    = "INFO"
+	ObservationLevelWarning = "WARNING"
+	ObservationLevelError   = "ERROR"
+	ObservationLevelDefault = "DEFAULT"
+)
+
+// Score data type constants
+const (
+	ScoreDataTypeNumeric     = "NUMERIC"
+	ScoreDataTypeCategorical = "CATEGORICAL"
+	ScoreDataTypeBoolean     = "BOOLEAN"
+)
+
+// Score source constants
+const (
+	ScoreSourceAPI        = "API"
+	ScoreSourceAnnotation = "ANNOTATION"
+	ScoreSourceEval       = "EVAL"
 )
 
 // ===== Custom JSON Unmarshaling =====
@@ -288,26 +375,25 @@ func normalizeJSONField(raw json.RawMessage) *string {
 
 // ===== Trace Helper Methods =====
 
-// IsRootTrace checks if this trace has no parent
-func (t *Trace) IsRootTrace() bool {
-	return t.ParentTraceID == nil
+// HasSession checks if this trace belongs to a virtual session
+func (t *Trace) HasSession() bool {
+	return t.SessionID != nil && *t.SessionID != ""
 }
 
-// HasSession checks if this trace belongs to a session
-func (t *Trace) HasSession() bool {
-	return t.SessionID != nil
+// IsCompleted checks if the trace has ended
+func (t *Trace) IsCompleted() bool {
+	return t.EndTime != nil
+}
+
+// CalculateDuration calculates and sets the duration if not already set
+func (t *Trace) CalculateDuration() {
+	if t.EndTime != nil && t.DurationMs == nil {
+		duration := uint32(t.EndTime.Sub(t.StartTime).Milliseconds())
+		t.DurationMs = &duration
+	}
 }
 
 // ===== Observation Helper Methods =====
-
-// CalculateLatencyMs calculates the latency in milliseconds
-func (o *Observation) CalculateLatencyMs() *uint32 {
-	if o.EndTime == nil {
-		return nil
-	}
-	latency := uint32(o.EndTime.Sub(o.StartTime).Milliseconds())
-	return &latency
-}
 
 // IsCompleted checks if the observation has ended
 func (o *Observation) IsCompleted() bool {
@@ -316,43 +402,68 @@ func (o *Observation) IsCompleted() bool {
 
 // HasParent checks if this observation has a parent observation
 func (o *Observation) HasParent() bool {
-	return o.ParentObservationID != nil
+	return o.ParentObservationID != nil && *o.ParentObservationID != ""
 }
 
-// GetTotalCost returns the total cost, calculated from cost_details map
+// IsRootSpan checks if this is a root span (no parent)
+func (o *Observation) IsRootSpan() bool {
+	return o.ParentObservationID == nil || *o.ParentObservationID == ""
+}
+
+// CalculateDuration calculates and sets the duration if not already set
+func (o *Observation) CalculateDuration() {
+	if o.EndTime != nil && o.DurationMs == nil {
+		duration := uint32(o.EndTime.Sub(o.StartTime).Milliseconds())
+		o.DurationMs = &duration
+	}
+}
+
+// GetTotalCost returns the total cost from TotalCost field or calculated from cost details map
 func (o *Observation) GetTotalCost() float64 {
+	// Prefer denormalized TotalCost field
+	if o.TotalCost != nil {
+		return *o.TotalCost
+	}
+	// Fallback to cost details map
 	if total, ok := o.CostDetails["total"]; ok {
 		return total
 	}
+	// Calculate from input + output
 	return o.CostDetails["input"] + o.CostDetails["output"]
 }
 
-// GetTotalTokens returns the total tokens, calculated from usage_details map
+// GetTotalTokens returns the total tokens from usage details map
 func (o *Observation) GetTotalTokens() uint64 {
-	if total, ok := o.UsageDetails["total_tokens"]; ok {
+	// Check total in usage details
+	if total, ok := o.UsageDetails["total"]; ok {
 		return total
 	}
-	return o.UsageDetails["prompt_tokens"] + o.UsageDetails["completion_tokens"]
+	// Calculate from input + output
+	return o.UsageDetails["input"] + o.UsageDetails["output"]
 }
 
-// SetCostDetails sets the cost details with input, output, and calculated total
+// SetCostDetails sets the cost details map with input, output, and total
 func (o *Observation) SetCostDetails(inputCost, outputCost float64) {
 	if o.CostDetails == nil {
 		o.CostDetails = make(map[string]float64)
 	}
 	o.CostDetails["input"] = inputCost
 	o.CostDetails["output"] = outputCost
-	o.CostDetails["total"] = inputCost + outputCost
+	total := inputCost + outputCost
+	o.CostDetails["total"] = total
+
+	// Set denormalized field for fast queries
+	o.TotalCost = &total
 }
 
-// SetUsageDetails sets the usage details with prompt, completion, and calculated total tokens
-func (o *Observation) SetUsageDetails(promptTokens, completionTokens uint64) {
+// SetUsageDetails sets the usage details map with input, output, and total tokens
+func (o *Observation) SetUsageDetails(inputTokens, outputTokens uint64) {
 	if o.UsageDetails == nil {
 		o.UsageDetails = make(map[string]uint64)
 	}
-	o.UsageDetails["prompt_tokens"] = promptTokens
-	o.UsageDetails["completion_tokens"] = completionTokens
-	o.UsageDetails["total_tokens"] = promptTokens + completionTokens
+	o.UsageDetails["input"] = inputTokens
+	o.UsageDetails["output"] = outputTokens
+	o.UsageDetails["total"] = inputTokens + outputTokens
 }
 
 // ===== Score Helper Methods =====
@@ -392,6 +503,18 @@ func (s *Score) IsCategorical() bool {
 // IsBoolean checks if the score is boolean
 func (s *Score) IsBoolean() bool {
 	return s.DataType == ScoreDataTypeBoolean
+}
+
+// ===== BlobStorageFileLog Helper Methods =====
+
+// GetS3URI returns the full S3 URI
+func (b *BlobStorageFileLog) GetS3URI() string {
+	return "s3://" + b.BucketName + "/" + b.BucketPath
+}
+
+// IsCompressed checks if the content is compressed
+func (b *BlobStorageFileLog) IsCompressed() bool {
+	return b.Compression != nil && *b.Compression != ""
 }
 
 // ==================================

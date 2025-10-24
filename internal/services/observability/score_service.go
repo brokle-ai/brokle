@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"brokle/internal/core/domain/observability"
 	appErrors "brokle/pkg/errors"
@@ -16,7 +17,6 @@ type ScoreService struct {
 	scoreRepo       observability.ScoreRepository
 	traceRepo       observability.TraceRepository
 	observationRepo observability.ObservationRepository
-	sessionRepo     observability.SessionRepository
 }
 
 // NewScoreService creates a new score service instance
@@ -24,32 +24,30 @@ func NewScoreService(
 	scoreRepo observability.ScoreRepository,
 	traceRepo observability.TraceRepository,
 	observationRepo observability.ObservationRepository,
-	sessionRepo observability.SessionRepository,
 ) *ScoreService {
 	return &ScoreService{
 		scoreRepo:       scoreRepo,
 		traceRepo:       traceRepo,
 		observationRepo: observationRepo,
-		sessionRepo:     sessionRepo,
 	}
 }
 
 // CreateScore creates a new quality score with validation
 func (s *ScoreService) CreateScore(ctx context.Context, score *observability.Score) error {
 	// Validate required fields
-	if score.ProjectID.IsZero() {
+	if score.ProjectID == "" {
 		return appErrors.NewValidationError("project_id is required", "score must have a valid project_id")
 	}
 	if score.Name == "" {
 		return appErrors.NewValidationError("name is required", "score name cannot be empty")
 	}
 
-	// Validate at least one target is set (trace, observation, or session)
-	if score.TraceID == nil && score.ObservationID == nil && score.SessionID == nil {
-		return appErrors.NewValidationError(
-			"target is required",
-			"score must be attached to trace_id, observation_id, or session_id",
-		)
+	// Validate trace and observation IDs are set
+	if score.TraceID == "" {
+		return appErrors.NewValidationError("trace_id is required", "score must have a trace_id")
+	}
+	if score.ObservationID == "" {
+		return appErrors.NewValidationError("observation_id is required", "score must have an observation_id")
 	}
 
 	// Validate data type and value consistency
@@ -58,8 +56,13 @@ func (s *ScoreService) CreateScore(ctx context.Context, score *observability.Sco
 	}
 
 	// Generate new ID if not provided
-	if score.ID.IsZero() {
-		score.ID = ulid.New()
+	if score.ID == "" {
+		score.ID = ulid.New().String()
+	}
+
+	// Set timestamp if not provided
+	if score.Timestamp.IsZero() {
+		score.Timestamp = time.Now()
 	}
 
 	// Validate targets exist
@@ -80,9 +83,8 @@ func (s *ScoreService) UpdateScore(ctx context.Context, score *observability.Sco
 	// Validate score exists
 	existing, err := s.scoreRepo.GetByID(ctx, score.ID)
 	if err != nil {
-		// Only convert sql.ErrNoRows to 404, propagate infrastructure errors as 500
 		if errors.Is(err, sql.ErrNoRows) {
-			return appErrors.NewNotFoundError(fmt.Sprintf("score %s", score.ID.String()))
+			return appErrors.NewNotFoundError(fmt.Sprintf("score %s", score.ID))
 		}
 		return appErrors.NewInternalError("failed to get score", err)
 	}
@@ -107,18 +109,7 @@ func (s *ScoreService) UpdateScore(ctx context.Context, score *observability.Sco
 }
 
 // mergeScoreFields merges non-zero fields from src into dst
-// This prevents zero-value corruption from partial JSON updates
 func mergeScoreFields(dst *observability.Score, src *observability.Score) {
-	// Immutable fields (never update):
-	// - ID (primary key)
-	// - ProjectID (security boundary)
-	// - TraceID (foreign key, typically immutable)
-	// - ObservationID (foreign key, typically immutable)
-	// - SessionID (foreign key, typically immutable)
-	// - Version (managed by repository)
-	// - EventTs (managed by repository)
-	// - IsDeleted (managed by Delete method)
-
 	// Update optional fields only if non-zero
 	if src.Name != "" {
 		dst.Name = src.Name
@@ -144,12 +135,10 @@ func mergeScoreFields(dst *observability.Score, src *observability.Score) {
 	if src.EvaluatorVersion != nil {
 		dst.EvaluatorVersion = src.EvaluatorVersion
 	}
-	// Allow clearing evaluator config by sending empty map {}
-	// nil = not sent (preserve), {} = clear, {...} = update
 	if src.EvaluatorConfig != nil {
 		dst.EvaluatorConfig = src.EvaluatorConfig
 	}
-	if src.AuthorUserID != nil && !src.AuthorUserID.IsZero() {
+	if src.AuthorUserID != nil && *src.AuthorUserID != "" {
 		dst.AuthorUserID = src.AuthorUserID
 	}
 	if !src.Timestamp.IsZero() {
@@ -158,12 +147,12 @@ func mergeScoreFields(dst *observability.Score, src *observability.Score) {
 }
 
 // DeleteScore soft deletes a score
-func (s *ScoreService) DeleteScore(ctx context.Context, id ulid.ULID) error {
+func (s *ScoreService) DeleteScore(ctx context.Context, id string) error {
 	// Validate score exists
 	_, err := s.scoreRepo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return appErrors.NewNotFoundError(fmt.Sprintf("score %s", id.String()))
+			return appErrors.NewNotFoundError(fmt.Sprintf("score %s", id))
 		}
 		return appErrors.NewInternalError("failed to get score", err)
 	}
@@ -177,18 +166,18 @@ func (s *ScoreService) DeleteScore(ctx context.Context, id ulid.ULID) error {
 }
 
 // GetScoreByID retrieves a score by ID
-func (s *ScoreService) GetScoreByID(ctx context.Context, id ulid.ULID) (*observability.Score, error) {
+func (s *ScoreService) GetScoreByID(ctx context.Context, id string) (*observability.Score, error) {
 	score, err := s.scoreRepo.GetByID(ctx, id)
 	if err != nil {
-		return nil, appErrors.NewNotFoundError(fmt.Sprintf("score %s", id.String()))
+		return nil, appErrors.NewNotFoundError(fmt.Sprintf("score %s", id))
 	}
 
 	return score, nil
 }
 
 // GetScoresByTraceID retrieves all scores for a trace
-func (s *ScoreService) GetScoresByTraceID(ctx context.Context, traceID ulid.ULID) ([]*observability.Score, error) {
-	if traceID.IsZero() {
+func (s *ScoreService) GetScoresByTraceID(ctx context.Context, traceID string) ([]*observability.Score, error) {
+	if traceID == "" {
 		return nil, appErrors.NewValidationError("trace_id is required", "scores query requires a valid trace_id")
 	}
 
@@ -201,26 +190,12 @@ func (s *ScoreService) GetScoresByTraceID(ctx context.Context, traceID ulid.ULID
 }
 
 // GetScoresByObservationID retrieves all scores for an observation
-func (s *ScoreService) GetScoresByObservationID(ctx context.Context, observationID ulid.ULID) ([]*observability.Score, error) {
-	if observationID.IsZero() {
+func (s *ScoreService) GetScoresByObservationID(ctx context.Context, observationID string) ([]*observability.Score, error) {
+	if observationID == "" {
 		return nil, appErrors.NewValidationError("observation_id is required", "scores query requires a valid observation_id")
 	}
 
 	scores, err := s.scoreRepo.GetByObservationID(ctx, observationID)
-	if err != nil {
-		return nil, appErrors.NewInternalError("failed to get scores", err)
-	}
-
-	return scores, nil
-}
-
-// GetScoresBySessionID retrieves all scores for a session
-func (s *ScoreService) GetScoresBySessionID(ctx context.Context, sessionID ulid.ULID) ([]*observability.Score, error) {
-	if sessionID.IsZero() {
-		return nil, appErrors.NewValidationError("session_id is required", "scores query requires a valid session_id")
-	}
-
-	scores, err := s.scoreRepo.GetBySessionID(ctx, sessionID)
 	if err != nil {
 		return nil, appErrors.NewInternalError("failed to get scores", err)
 	}
@@ -246,7 +221,7 @@ func (s *ScoreService) CreateScoreBatch(ctx context.Context, scores []*observabi
 
 	// Validate all scores
 	for i, score := range scores {
-		if score.ProjectID.IsZero() {
+		if score.ProjectID == "" {
 			return appErrors.NewValidationError(
 				fmt.Sprintf("score[%d]: project_id is required", i),
 				"all scores must have valid project_id",
@@ -259,11 +234,17 @@ func (s *ScoreService) CreateScoreBatch(ctx context.Context, scores []*observabi
 			)
 		}
 
-		// Validate at least one target
-		if score.TraceID == nil && score.ObservationID == nil && score.SessionID == nil {
+		// Validate trace and observation IDs are set
+		if score.TraceID == "" {
 			return appErrors.NewValidationError(
-				fmt.Sprintf("score[%d]: target is required", i),
-				"all scores must be attached to trace_id, observation_id, or session_id",
+				fmt.Sprintf("score[%d]: trace_id is required", i),
+				"all scores must have trace_id",
+			)
+		}
+		if score.ObservationID == "" {
+			return appErrors.NewValidationError(
+				fmt.Sprintf("score[%d]: observation_id is required", i),
+				"all scores must have observation_id",
 			)
 		}
 
@@ -273,8 +254,13 @@ func (s *ScoreService) CreateScoreBatch(ctx context.Context, scores []*observabi
 		}
 
 		// Generate ID if not provided
-		if score.ID.IsZero() {
-			score.ID = ulid.New()
+		if score.ID == "" {
+			score.ID = ulid.New().String()
+		}
+
+		// Set timestamp if not provided
+		if score.Timestamp.IsZero() {
+			score.Timestamp = time.Now()
 		}
 	}
 
@@ -337,27 +323,19 @@ func (s *ScoreService) validateScoreData(score *observability.Score) error {
 
 // validateScoreTargets validates that score targets exist
 func (s *ScoreService) validateScoreTargets(ctx context.Context, score *observability.Score) error {
-	// Validate trace if provided
-	if score.TraceID != nil && !score.TraceID.IsZero() {
-		_, err := s.traceRepo.GetByID(ctx, *score.TraceID)
+	// Validate trace exists
+	if score.TraceID != "" {
+		_, err := s.traceRepo.GetByID(ctx, score.TraceID)
 		if err != nil {
-			return appErrors.NewNotFoundError(fmt.Sprintf("trace %s", score.TraceID.String()))
+			return appErrors.NewNotFoundError(fmt.Sprintf("trace %s", score.TraceID))
 		}
 	}
 
-	// Validate observation if provided
-	if score.ObservationID != nil && !score.ObservationID.IsZero() {
-		_, err := s.observationRepo.GetByID(ctx, *score.ObservationID)
+	// Validate observation exists
+	if score.ObservationID != "" {
+		_, err := s.observationRepo.GetByID(ctx, score.ObservationID)
 		if err != nil {
-			return appErrors.NewNotFoundError(fmt.Sprintf("observation %s", score.ObservationID.String()))
-		}
-	}
-
-	// Validate session if provided
-	if score.SessionID != nil && !score.SessionID.IsZero() {
-		_, err := s.sessionRepo.GetByID(ctx, *score.SessionID)
-		if err != nil {
-			return appErrors.NewNotFoundError(fmt.Sprintf("session %s", score.SessionID.String()))
+			return appErrors.NewNotFoundError(fmt.Sprintf("observation %s", score.ObservationID))
 		}
 	}
 

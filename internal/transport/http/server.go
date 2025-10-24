@@ -293,12 +293,7 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 		// Quality Scores (write operations - for corrections/enrichment via dashboard)
 		analytics.PUT("/scores/:id", s.handlers.Observability.UpdateScore)
 
-		// Sessions (read operations)
-		analytics.GET("/sessions", s.handlers.Observability.ListSessions)
-		analytics.GET("/sessions/:id", s.handlers.Observability.GetSession)
-		analytics.GET("/sessions/:id/traces", s.handlers.Observability.GetSessionWithTraces)
-		// Sessions (write operations - for corrections/enrichment via dashboard)
-		analytics.PUT("/sessions/:id", s.handlers.Observability.UpdateSession)
+		// Sessions removed - now virtual groupings via session_id attribute on traces
 	}
 
 	// Logs routes
@@ -369,15 +364,17 @@ func (s *Server) setupSDKRoutes(router *gin.RouterGroup) {
 	// AI routing decisions
 	router.POST("/route", s.handlers.AI.RouteRequest)
 
-	// High-performance unified telemetry batch system with ULID-based deduplication
-	telemetry := router.Group("/telemetry")
+	// Brokle native ingestion endpoints (envelope-based event format)
+	ingest := router.Group("/ingest")
 	{
-		telemetry.POST("/batch", s.handlers.Observability.ProcessTelemetryBatch)             // Batch processing (main endpoint)
-		telemetry.GET("/health", s.handlers.Observability.GetTelemetryHealth)                // Health monitoring
-		telemetry.GET("/metrics", s.handlers.Observability.GetTelemetryMetrics)              // Performance metrics
-		telemetry.GET("/performance", s.handlers.Observability.GetTelemetryPerformanceStats) // Performance stats
-		telemetry.POST("/validate", s.handlers.Observability.ValidateEvent)                  // Event validation
+		ingest.POST("/batch", s.handlers.Observability.ProcessTelemetryBatch) // Batch event ingestion
 	}
+
+	// OTLP (OpenTelemetry Protocol) ingestion - 100% spec compliant
+	router.POST("/traces", s.handlers.OTLP.HandleTraces) // OTLP trace ingestion (converts to Brokle format)
+	// Future OTLP endpoints:
+	// router.POST("/metrics", s.handlers.OTLP.HandleMetrics) // OTLP metrics ingestion
+	// router.POST("/logs", s.handlers.OTLP.HandleLogs)       // OTLP logs ingestion
 
 	// Cache management endpoints
 	cache := router.Group("/cache")

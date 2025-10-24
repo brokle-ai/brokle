@@ -126,7 +126,7 @@ type TelemetryPerformanceStatsResponse struct {
 	RetryRate            float64 `json:"retry_rate" example:"0.02" description:"Retry rate (0.0-1.0)"`
 }
 
-// ProcessTelemetryBatch handles POST /v1/telemetry/batch
+// ProcessTelemetryBatch handles POST /v1/ingest/batch
 // @Summary Process high-throughput telemetry batch (async via Redis Streams)
 // @Description Process a batch of telemetry events asynchronously with ULID-based deduplication and Redis Streams. Returns 202 Accepted immediately while events are processed in the background.
 // @Tags SDK - Telemetry
@@ -140,7 +140,7 @@ type TelemetryPerformanceStatsResponse struct {
 // @Failure 422 {object} response.APIResponse{error=response.APIError} "Validation failed"
 // @Failure 429 {object} response.APIResponse{error=response.APIError} "Rate limit exceeded"
 // @Failure 500 {object} response.APIResponse{error=response.APIError} "Internal server error"
-// @Router /v1/telemetry/batch [post]
+// @Router /v1/ingest/batch [post]
 func (h *Handler) ProcessTelemetryBatch(c *gin.Context) {
 	var req TelemetryBatchRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

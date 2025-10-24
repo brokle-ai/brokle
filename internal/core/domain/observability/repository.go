@@ -12,18 +12,17 @@ type TraceRepository interface {
 	// Basic operations (ReplacingMergeTree pattern)
 	Create(ctx context.Context, trace *Trace) error
 	Update(ctx context.Context, trace *Trace) error // Inserts with higher version
-	Delete(ctx context.Context, id ulid.ULID) error // Soft delete
-	GetByID(ctx context.Context, id ulid.ULID) (*Trace, error)
+	Delete(ctx context.Context, id string) error // Soft delete (OTEL trace_id)
+	GetByID(ctx context.Context, id string) (*Trace, error)
 
 	// Queries
-	GetByProjectID(ctx context.Context, projectID ulid.ULID, filter *TraceFilter) ([]*Trace, error)
-	GetBySessionID(ctx context.Context, sessionID ulid.ULID) ([]*Trace, error)
-	GetChildren(ctx context.Context, parentTraceID ulid.ULID) ([]*Trace, error)
-	GetByUserID(ctx context.Context, userID ulid.ULID, filter *TraceFilter) ([]*Trace, error)
+	GetByProjectID(ctx context.Context, projectID string, filter *TraceFilter) ([]*Trace, error)
+	GetBySessionID(ctx context.Context, sessionID string) ([]*Trace, error) // Virtual session analytics
+	GetByUserID(ctx context.Context, userID string, filter *TraceFilter) ([]*Trace, error)
 
 	// With relations
-	GetWithObservations(ctx context.Context, id ulid.ULID) (*Trace, error)
-	GetWithScores(ctx context.Context, id ulid.ULID) (*Trace, error)
+	GetWithObservations(ctx context.Context, id string) (*Trace, error)
+	GetWithScores(ctx context.Context, id string) (*Trace, error)
 
 	// Batch operations
 	CreateBatch(ctx context.Context, traces []*Trace) error
@@ -37,13 +36,14 @@ type ObservationRepository interface {
 	// Basic operations (ReplacingMergeTree pattern)
 	Create(ctx context.Context, obs *Observation) error
 	Update(ctx context.Context, obs *Observation) error
-	Delete(ctx context.Context, id ulid.ULID) error
-	GetByID(ctx context.Context, id ulid.ULID) (*Observation, error)
+	Delete(ctx context.Context, id string) error // Soft delete (OTEL span_id)
+	GetByID(ctx context.Context, id string) (*Observation, error)
 
 	// Queries
-	GetByTraceID(ctx context.Context, traceID ulid.ULID) ([]*Observation, error)
-	GetChildren(ctx context.Context, parentObservationID ulid.ULID) ([]*Observation, error)
-	GetTreeByTraceID(ctx context.Context, traceID ulid.ULID) ([]*Observation, error) // Recursive tree
+	GetByTraceID(ctx context.Context, traceID string) ([]*Observation, error)
+	GetRootSpan(ctx context.Context, traceID string) (*Observation, error) // Get span with parent_observation_id IS NULL
+	GetChildren(ctx context.Context, parentObservationID string) ([]*Observation, error)
+	GetTreeByTraceID(ctx context.Context, traceID string) ([]*Observation, error) // Recursive tree
 
 	// Filters
 	GetByFilter(ctx context.Context, filter *ObservationFilter) ([]*Observation, error)
@@ -60,13 +60,12 @@ type ScoreRepository interface {
 	// Basic operations (ReplacingMergeTree pattern)
 	Create(ctx context.Context, score *Score) error
 	Update(ctx context.Context, score *Score) error
-	Delete(ctx context.Context, id ulid.ULID) error
-	GetByID(ctx context.Context, id ulid.ULID) (*Score, error)
+	Delete(ctx context.Context, id string) error
+	GetByID(ctx context.Context, id string) (*Score, error)
 
 	// Queries
-	GetByTraceID(ctx context.Context, traceID ulid.ULID) ([]*Score, error)
-	GetByObservationID(ctx context.Context, observationID ulid.ULID) ([]*Score, error)
-	GetBySessionID(ctx context.Context, sessionID ulid.ULID) ([]*Score, error)
+	GetByTraceID(ctx context.Context, traceID string) ([]*Score, error)
+	GetByObservationID(ctx context.Context, observationID string) ([]*Score, error)
 
 	// Filters
 	GetByFilter(ctx context.Context, filter *ScoreFilter) ([]*Score, error)
@@ -78,45 +77,46 @@ type ScoreRepository interface {
 	Count(ctx context.Context, filter *ScoreFilter) (int64, error)
 }
 
-// SessionRepository defines the interface for session data access (ClickHouse)
-type SessionRepository interface {
+// BlobStorageRepository defines the interface for blob storage file log data access (ClickHouse)
+type BlobStorageRepository interface {
 	// Basic operations (ReplacingMergeTree pattern)
-	Create(ctx context.Context, session *Session) error
-	Update(ctx context.Context, session *Session) error
-	Delete(ctx context.Context, id ulid.ULID) error
-	GetByID(ctx context.Context, id ulid.ULID) (*Session, error)
+	Create(ctx context.Context, blob *BlobStorageFileLog) error
+	Update(ctx context.Context, blob *BlobStorageFileLog) error
+	Delete(ctx context.Context, id string) error
+	GetByID(ctx context.Context, id string) (*BlobStorageFileLog, error)
 
 	// Queries
-	GetByProjectID(ctx context.Context, projectID ulid.ULID, filter *SessionFilter) ([]*Session, error)
-	GetByUserID(ctx context.Context, userID ulid.ULID) ([]*Session, error)
-
-	// With relations
-	GetWithTraces(ctx context.Context, id ulid.ULID) (*Session, error)
+	GetByEntityID(ctx context.Context, entityType, entityID string) ([]*BlobStorageFileLog, error)
+	GetByProjectID(ctx context.Context, projectID string, filter *BlobStorageFilter) ([]*BlobStorageFileLog, error)
 
 	// Count
-	Count(ctx context.Context, filter *SessionFilter) (int64, error)
+	Count(ctx context.Context, filter *BlobStorageFilter) (int64, error)
 }
 
 // Filter types
 
 // TraceFilter represents filters for trace queries
 type TraceFilter struct {
-	UserID      *ulid.ULID
-	SessionID   *ulid.ULID
-	ParentID    *ulid.ULID
-	StartTime   *time.Time
-	EndTime     *time.Time
-	Tags        []string
-	Environment *string
-	Limit       int
-	Offset      int
+	UserID        *string
+	SessionID     *string // Virtual session filtering
+	StartTime     *time.Time
+	EndTime       *time.Time
+	Tags          []string
+	Environment   *string
+	ServiceName   *string
+	StatusCode    *string
+	Bookmarked    *bool
+	Public        *bool
+	Limit         int
+	Offset        int
 }
 
 // ObservationFilter represents filters for observation queries
 type ObservationFilter struct {
-	TraceID         *ulid.ULID
-	ParentID        *ulid.ULID
-	Type            *ObservationType
+	TraceID         *string
+	ParentID        *string
+	Type            *string
+	SpanKind        *string
 	Model           *string
 	StartTime       *time.Time
 	EndTime         *time.Time
@@ -124,7 +124,7 @@ type ObservationFilter struct {
 	MaxLatencyMs    *uint32
 	MinCost         *float64
 	MaxCost         *float64
-	Level           *ObservationLevel
+	Level           *string
 	IsCompleted     *bool
 	Limit           int
 	Offset          int
@@ -132,12 +132,11 @@ type ObservationFilter struct {
 
 // ScoreFilter represents filters for score queries
 type ScoreFilter struct {
-	TraceID         *ulid.ULID
-	ObservationID   *ulid.ULID
-	SessionID       *ulid.ULID
+	TraceID         *string
+	ObservationID   *string
 	Name            *string
-	Source          *ScoreSource
-	DataType        *ScoreDataType
+	Source          *string
+	DataType        *string
 	EvaluatorName   *string
 	MinValue        *float64
 	MaxValue        *float64
@@ -147,15 +146,15 @@ type ScoreFilter struct {
 	Offset          int
 }
 
-// SessionFilter represents filters for session queries
-type SessionFilter struct {
-	UserID      *ulid.ULID
-	Bookmarked  *bool
-	Public      *bool
-	StartTime   *time.Time
-	EndTime     *time.Time
-	Limit       int
-	Offset      int
+// BlobStorageFilter represents filters for blob storage queries
+type BlobStorageFilter struct {
+	EntityType    *string
+	StartTime     *time.Time
+	EndTime       *time.Time
+	MinSizeBytes  *uint64
+	MaxSizeBytes  *uint64
+	Limit         int
+	Offset        int
 }
 
 

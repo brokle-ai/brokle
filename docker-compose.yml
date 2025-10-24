@@ -213,6 +213,27 @@ services:
     networks:
       - brokle-network
 
+  # MinIO for local S3-compatible blob storage
+  minio:
+    image: minio/minio:latest
+    container_name: brokle-minio
+    ports:
+      - "9100:9000"   # S3 API
+      - "9101:9001"   # Console
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - brokle-network
+
 volumes:
   postgres_data:
   clickhouse_data:
@@ -223,6 +244,7 @@ volumes:
   grafana_data:
   alertmanager_data:
   nginx_logs:
+  minio_data:
 
 networks:
   brokle-network:

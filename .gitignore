@@ -192,8 +192,8 @@ anthropic_key
 google_ai_key
 
 # Backup files
-*.bak
-*.backup
+# *.bak
+# *.backup
 sdk/competetors/
 competetors/
 

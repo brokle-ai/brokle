@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"brokle/internal/core/domain/observability"
-	"brokle/pkg/ulid"
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 )
@@ -20,46 +19,70 @@ func NewObservationRepository(db clickhouse.Conn) observability.ObservationRepos
 	return &observationRepository{db: db}
 }
 
-// Create inserts a new observation into ClickHouse
+// Create inserts a new OTEL observation (span) into ClickHouse
 func (r *observationRepository) Create(ctx context.Context, obs *observability.Observation) error {
 	// Set version and event_ts for new observations
-	// Only set version to 1 if it's currently 0 (new record)
-	// This allows Update() to increment version without being reset
 	if obs.Version == 0 {
 		obs.Version = 1
 	}
 	obs.EventTs = time.Now()
+	obs.UpdatedAt = time.Now()
+
+	// Calculate duration if not set
+	obs.CalculateDuration()
 
 	query := `
 		INSERT INTO observations (
-			id, trace_id, parent_observation_id, project_id, type, name,
-			start_time, end_time, model, model_parameters, input, output, metadata,
-			cost_details, usage_details, level, status_message,
-			completion_start_time, time_to_first_token_ms,
+			id, trace_id, parent_observation_id, project_id,
+			name, span_kind, type, start_time, end_time, duration_ms,
+			status_code, status_message,
+			attributes, input, output, input_preview, output_preview, metadata, level,
+			model_name, provider, internal_model_id, model_parameters,
+			provided_usage_details, usage_details,
+			provided_cost_details, cost_details, total_cost,
+			prompt_id, prompt_name, prompt_version,
+			input_blob_storage_id, output_blob_storage_id,
+			created_at, updated_at,
 			version, event_ts, is_deleted
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	return r.db.Exec(ctx, query,
-		obs.ID.String(),
-		obs.TraceID.String(),
-		ulidPtrToString(obs.ParentObservationID),
-		obs.ProjectID.String(),
-		string(obs.Type),
+		obs.ID,
+		obs.TraceID,
+		obs.ParentObservationID,
+		obs.ProjectID,
 		obs.Name,
+		obs.SpanKind,
+		obs.Type,
 		obs.StartTime,
 		obs.EndTime,
-		obs.Model,
-		obs.ModelParameters,
+		obs.DurationMs,
+		obs.StatusCode,
+		obs.StatusMessage,
+		obs.Attributes,
 		obs.Input,
 		obs.Output,
+		obs.InputPreview,
+		obs.OutputPreview,
 		obs.Metadata,
-		obs.CostDetails,
+		obs.Level,
+		obs.ModelName,
+		obs.Provider,
+		obs.InternalModelID,
+		obs.ModelParameters,
+		obs.ProvidedUsageDetails,
 		obs.UsageDetails,
-		string(obs.Level),
-		obs.StatusMessage,
-		obs.CompletionStartTime,
-		obs.TimeToFirstTokenMs,
+		obs.ProvidedCostDetails,
+		obs.CostDetails,
+		obs.TotalCost,
+		obs.PromptID,
+		obs.PromptName,
+		obs.PromptVersion,
+		obs.InputBlobStorageID,
+		obs.OutputBlobStorageID,
+		obs.CreatedAt,
+		obs.UpdatedAt,
 		obs.Version,
 		obs.EventTs,
 		boolToUint8(obs.IsDeleted),
@@ -71,20 +94,30 @@ func (r *observationRepository) Update(ctx context.Context, obs *observability.O
 	// ReplacingMergeTree pattern: increment version and update event_ts
 	obs.Version++
 	obs.EventTs = time.Now()
+	obs.UpdatedAt = time.Now()
+
+	// Calculate duration if not set
+	obs.CalculateDuration()
 
 	// Same INSERT query as Create - ClickHouse will handle merging
 	return r.Create(ctx, obs)
 }
 
 // Delete performs soft deletion by inserting a record with is_deleted = true
-func (r *observationRepository) Delete(ctx context.Context, id ulid.ULID) error {
+func (r *observationRepository) Delete(ctx context.Context, id string) error {
 	query := `
 		INSERT INTO observations
 		SELECT
-			id, trace_id, parent_observation_id, project_id, type, name,
-			start_time, end_time, model, model_parameters, input, output, metadata,
-			cost_details, usage_details, level, status_message,
-			completion_start_time, time_to_first_token_ms,
+			id, trace_id, parent_observation_id, project_id,
+			name, span_kind, type, start_time, end_time, duration_ms,
+			status_code, status_message,
+			attributes, input, output, input_preview, output_preview, metadata, level,
+			model_name, provider, internal_model_id, model_parameters,
+			provided_usage_details, usage_details,
+			provided_cost_details, cost_details, total_cost,
+			prompt_id, prompt_name, prompt_version,
+			input_blob_storage_id, output_blob_storage_id,
+			created_at, updated_at,
 			version + 1 as version,
 			now64() as event_ts,
 			1 as is_deleted
@@ -94,17 +127,23 @@ func (r *observationRepository) Delete(ctx context.Context, id ulid.ULID) error 
 		LIMIT 1
 	`
 
-	return r.db.Exec(ctx, query, id.String())
+	return r.db.Exec(ctx, query, id)
 }
 
-// GetByID retrieves an observation by its ID (returns latest version)
-func (r *observationRepository) GetByID(ctx context.Context, id ulid.ULID) (*observability.Observation, error) {
+// GetByID retrieves an observation by its OTEL span_id (returns latest version)
+func (r *observationRepository) GetByID(ctx context.Context, id string) (*observability.Observation, error) {
 	query := `
 		SELECT
-			id, trace_id, parent_observation_id, project_id, type, name,
-			start_time, end_time, model, model_parameters, input, output, metadata,
-			cost_details, usage_details, level, status_message,
-			completion_start_time, time_to_first_token_ms,
+			id, trace_id, parent_observation_id, project_id,
+			name, span_kind, type, start_time, end_time, duration_ms,
+			status_code, status_message,
+			attributes, input, output, input_preview, output_preview, metadata, level,
+			model_name, provider, internal_model_id, model_parameters,
+			provided_usage_details, usage_details,
+			provided_cost_details, cost_details, total_cost,
+			prompt_id, prompt_name, prompt_version,
+			input_blob_storage_id, output_blob_storage_id,
+			created_at, updated_at,
 			version, event_ts, is_deleted
 		FROM observations
 		WHERE id = ? AND is_deleted = 0
@@ -112,25 +151,31 @@ func (r *observationRepository) GetByID(ctx context.Context, id ulid.ULID) (*obs
 		LIMIT 1
 	`
 
-	row := r.db.QueryRow(ctx, query, id.String())
-	return r.scanObservation(row)
+	row := r.db.QueryRow(ctx, query, id)
+	return r.scanObservationRow(row)
 }
 
 // GetByTraceID retrieves all observations for a trace
-func (r *observationRepository) GetByTraceID(ctx context.Context, traceID ulid.ULID) ([]*observability.Observation, error) {
+func (r *observationRepository) GetByTraceID(ctx context.Context, traceID string) ([]*observability.Observation, error) {
 	query := `
 		SELECT
-			id, trace_id, parent_observation_id, project_id, type, name,
-			start_time, end_time, model, model_parameters, input, output, metadata,
-			cost_details, usage_details, level, status_message,
-			completion_start_time, time_to_first_token_ms,
+			id, trace_id, parent_observation_id, project_id,
+			name, span_kind, type, start_time, end_time, duration_ms,
+			status_code, status_message,
+			attributes, input, output, input_preview, output_preview, metadata, level,
+			model_name, provider, internal_model_id, model_parameters,
+			provided_usage_details, usage_details,
+			provided_cost_details, cost_details, total_cost,
+			prompt_id, prompt_name, prompt_version,
+			input_blob_storage_id, output_blob_storage_id,
+			created_at, updated_at,
 			version, event_ts, is_deleted
 		FROM observations
 		WHERE trace_id = ? AND is_deleted = 0
 		ORDER BY start_time ASC
 	`
 
-	rows, err := r.db.Query(ctx, query, traceID.String())
+	rows, err := r.db.Query(ctx, query, traceID)
 	if err != nil {
 		return nil, fmt.Errorf("query observations by trace: %w", err)
 	}
@@ -139,21 +184,52 @@ func (r *observationRepository) GetByTraceID(ctx context.Context, traceID ulid.U
 	return r.scanObservations(rows)
 }
 
-// GetChildren retrieves child observations of a parent observation
-func (r *observationRepository) GetChildren(ctx context.Context, parentObservationID ulid.ULID) ([]*observability.Observation, error) {
+// GetRootSpan retrieves the root span for a trace (parent_observation_id IS NULL)
+func (r *observationRepository) GetRootSpan(ctx context.Context, traceID string) (*observability.Observation, error) {
 	query := `
 		SELECT
-			id, trace_id, parent_observation_id, project_id, type, name,
-			start_time, end_time, model, model_parameters, input, output, metadata,
-			cost_details, usage_details, level, status_message,
-			completion_start_time, time_to_first_token_ms,
+			id, trace_id, parent_observation_id, project_id,
+			name, span_kind, type, start_time, end_time, duration_ms,
+			status_code, status_message,
+			attributes, input, output, input_preview, output_preview, metadata, level,
+			model_name, provider, internal_model_id, model_parameters,
+			provided_usage_details, usage_details,
+			provided_cost_details, cost_details, total_cost,
+			prompt_id, prompt_name, prompt_version,
+			input_blob_storage_id, output_blob_storage_id,
+			created_at, updated_at,
+			version, event_ts, is_deleted
+		FROM observations
+		WHERE trace_id = ? AND parent_observation_id IS NULL AND is_deleted = 0
+		ORDER BY event_ts DESC
+		LIMIT 1
+	`
+
+	row := r.db.QueryRow(ctx, query, traceID)
+	return r.scanObservationRow(row)
+}
+
+// GetChildren retrieves child observations of a parent observation
+func (r *observationRepository) GetChildren(ctx context.Context, parentObservationID string) ([]*observability.Observation, error) {
+	query := `
+		SELECT
+			id, trace_id, parent_observation_id, project_id,
+			name, span_kind, type, start_time, end_time, duration_ms,
+			status_code, status_message,
+			attributes, input, output, input_preview, output_preview, metadata, level,
+			model_name, provider, internal_model_id, model_parameters,
+			provided_usage_details, usage_details,
+			provided_cost_details, cost_details, total_cost,
+			prompt_id, prompt_name, prompt_version,
+			input_blob_storage_id, output_blob_storage_id,
+			created_at, updated_at,
 			version, event_ts, is_deleted
 		FROM observations
 		WHERE parent_observation_id = ? AND is_deleted = 0
 		ORDER BY start_time ASC
 	`
 
-	rows, err := r.db.Query(ctx, query, parentObservationID.String())
+	rows, err := r.db.Query(ctx, query, parentObservationID)
 	if err != nil {
 		return nil, fmt.Errorf("query child observations: %w", err)
 	}
@@ -162,49 +238,26 @@ func (r *observationRepository) GetChildren(ctx context.Context, parentObservati
 	return r.scanObservations(rows)
 }
 
-// GetTreeByTraceID retrieves all observations for a trace and builds a hierarchical tree
-func (r *observationRepository) GetTreeByTraceID(ctx context.Context, traceID ulid.ULID) ([]*observability.Observation, error) {
-	// Get all observations for the trace
-	observations, err := r.GetByTraceID(ctx, traceID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Build a map for quick lookup
-	obsMap := make(map[string]*observability.Observation)
-	for _, obs := range observations {
-		obsMap[obs.ID.String()] = obs
-	}
-
-	// Build the tree by linking children to parents
-	var rootObservations []*observability.Observation
-	for _, obs := range observations {
-		if obs.ParentObservationID == nil {
-			// This is a root observation
-			rootObservations = append(rootObservations, obs)
-		} else {
-			// This is a child - link it to its parent
-			parent, exists := obsMap[obs.ParentObservationID.String()]
-			if exists {
-				if parent.ChildObservations == nil {
-					parent.ChildObservations = make([]*observability.Observation, 0)
-				}
-				parent.ChildObservations = append(parent.ChildObservations, obs)
-			}
-		}
-	}
-
-	return rootObservations, nil
+// GetTreeByTraceID retrieves all observations for a trace (recursive tree)
+func (r *observationRepository) GetTreeByTraceID(ctx context.Context, traceID string) ([]*observability.Observation, error) {
+	// Return all observations in start_time order (building tree is done in service layer)
+	return r.GetByTraceID(ctx, traceID)
 }
 
-// GetByFilter retrieves observations matching the filter
+// GetByFilter retrieves observations by filter criteria
 func (r *observationRepository) GetByFilter(ctx context.Context, filter *observability.ObservationFilter) ([]*observability.Observation, error) {
 	query := `
 		SELECT
-			id, trace_id, parent_observation_id, project_id, type, name,
-			start_time, end_time, model, model_parameters, input, output, metadata,
-			cost_details, usage_details, level, status_message,
-			completion_start_time, time_to_first_token_ms,
+			id, trace_id, parent_observation_id, project_id,
+			name, span_kind, type, start_time, end_time, duration_ms,
+			status_code, status_message,
+			attributes, input, output, input_preview, output_preview, metadata, level,
+			model_name, provider, internal_model_id, model_parameters,
+			provided_usage_details, usage_details,
+			provided_cost_details, cost_details, total_cost,
+			prompt_id, prompt_name, prompt_version,
+			input_blob_storage_id, output_blob_storage_id,
+			created_at, updated_at,
 			version, event_ts, is_deleted
 		FROM observations
 		WHERE is_deleted = 0
@@ -212,26 +265,31 @@ func (r *observationRepository) GetByFilter(ctx context.Context, filter *observa
 
 	args := []interface{}{}
 
+	// Apply filters
 	if filter != nil {
 		if filter.TraceID != nil {
 			query += " AND trace_id = ?"
-			args = append(args, filter.TraceID.String())
+			args = append(args, *filter.TraceID)
 		}
 		if filter.ParentID != nil {
 			query += " AND parent_observation_id = ?"
-			args = append(args, filter.ParentID.String())
+			args = append(args, *filter.ParentID)
 		}
 		if filter.Type != nil {
 			query += " AND type = ?"
-			args = append(args, string(*filter.Type))
+			args = append(args, *filter.Type)
+		}
+		if filter.SpanKind != nil {
+			query += " AND span_kind = ?"
+			args = append(args, *filter.SpanKind)
 		}
 		if filter.Model != nil {
-			query += " AND model = ?"
+			query += " AND model_name = ?"
 			args = append(args, *filter.Model)
 		}
 		if filter.Level != nil {
 			query += " AND level = ?"
-			args = append(args, string(*filter.Level))
+			args = append(args, *filter.Level)
 		}
 		if filter.StartTime != nil {
 			query += " AND start_time >= ?"
@@ -240,6 +298,22 @@ func (r *observationRepository) GetByFilter(ctx context.Context, filter *observa
 		if filter.EndTime != nil {
 			query += " AND start_time <= ?"
 			args = append(args, *filter.EndTime)
+		}
+		if filter.MinLatencyMs != nil {
+			query += " AND duration_ms >= ?"
+			args = append(args, *filter.MinLatencyMs)
+		}
+		if filter.MaxLatencyMs != nil {
+			query += " AND duration_ms <= ?"
+			args = append(args, *filter.MaxLatencyMs)
+		}
+		if filter.MinCost != nil {
+			query += " AND total_cost >= ?"
+			args = append(args, *filter.MinCost)
+		}
+		if filter.MaxCost != nil {
+			query += " AND total_cost <= ?"
+			args = append(args, *filter.MaxCost)
 		}
 		if filter.IsCompleted != nil {
 			if *filter.IsCompleted {
@@ -250,7 +324,7 @@ func (r *observationRepository) GetByFilter(ctx context.Context, filter *observa
 		}
 	}
 
-	// Order by start_time
+	// Order by start_time descending
 	query += " ORDER BY start_time DESC"
 
 	// Apply limit and offset
@@ -282,10 +356,16 @@ func (r *observationRepository) CreateBatch(ctx context.Context, observations []
 
 	batch, err := r.db.PrepareBatch(ctx, `
 		INSERT INTO observations (
-			id, trace_id, parent_observation_id, project_id, type, name,
-			start_time, end_time, model, model_parameters, input, output, metadata,
-			cost_details, usage_details, level, status_message,
-			completion_start_time, time_to_first_token_ms,
+			id, trace_id, parent_observation_id, project_id,
+			name, span_kind, type, start_time, end_time, duration_ms,
+			status_code, status_message,
+			attributes, input, output, input_preview, output_preview, metadata, level,
+			model_name, provider, internal_model_id, model_parameters,
+			provided_usage_details, usage_details,
+			provided_cost_details, cost_details, total_cost,
+			prompt_id, prompt_name, prompt_version,
+			input_blob_storage_id, output_blob_storage_id,
+			created_at, updated_at,
 			version, event_ts, is_deleted
 		)
 	`)
@@ -299,27 +379,49 @@ func (r *observationRepository) CreateBatch(ctx context.Context, observations []
 			obs.Version = 1
 			obs.EventTs = time.Now()
 		}
+		if obs.UpdatedAt.IsZero() {
+			obs.UpdatedAt = time.Now()
+		}
+
+		// Calculate duration if not set
+		obs.CalculateDuration()
 
 		err = batch.Append(
-			obs.ID.String(),
-			obs.TraceID.String(),
-			ulidPtrToString(obs.ParentObservationID),
-			obs.ProjectID.String(),
-			string(obs.Type),
+			obs.ID,
+			obs.TraceID,
+			obs.ParentObservationID,
+			obs.ProjectID,
 			obs.Name,
+			obs.SpanKind,
+			obs.Type,
 			obs.StartTime,
 			obs.EndTime,
-			obs.Model,
-			obs.ModelParameters,
+			obs.DurationMs,
+			obs.StatusCode,
+			obs.StatusMessage,
+			obs.Attributes,
 			obs.Input,
 			obs.Output,
+			obs.InputPreview,
+			obs.OutputPreview,
 			obs.Metadata,
-			obs.CostDetails,
+			obs.Level,
+			obs.ModelName,
+			obs.Provider,
+			obs.InternalModelID,
+			obs.ModelParameters,
+			obs.ProvidedUsageDetails,
 			obs.UsageDetails,
-			string(obs.Level),
-			obs.StatusMessage,
-			obs.CompletionStartTime,
-			obs.TimeToFirstTokenMs,
+			obs.ProvidedCostDetails,
+			obs.CostDetails,
+			obs.TotalCost,
+			obs.PromptID,
+			obs.PromptName,
+			obs.PromptVersion,
+			obs.InputBlobStorageID,
+			obs.OutputBlobStorageID,
+			obs.CreatedAt,
+			obs.UpdatedAt,
 			obs.Version,
 			obs.EventTs,
 			boolToUint8(obs.IsDeleted),
@@ -340,11 +442,11 @@ func (r *observationRepository) Count(ctx context.Context, filter *observability
 	if filter != nil {
 		if filter.TraceID != nil {
 			query += " AND trace_id = ?"
-			args = append(args, filter.TraceID.String())
+			args = append(args, *filter.TraceID)
 		}
 		if filter.Type != nil {
 			query += " AND type = ?"
-			args = append(args, string(*filter.Type))
+			args = append(args, *filter.Type)
 		}
 		if filter.StartTime != nil {
 			query += " AND start_time >= ?"
@@ -361,44 +463,49 @@ func (r *observationRepository) Count(ctx context.Context, filter *observability
 	return count, err
 }
 
-// Helper function to scan a single observation
-func (r *observationRepository) scanObservation(row driver.Row) (*observability.Observation, error) {
+// Helper function to scan a single observation from query row
+func (r *observationRepository) scanObservationRow(row driver.Row) (*observability.Observation, error) {
 	var obs observability.Observation
-	var (
-		idStr, traceID, parentObsID, projectID, obsType, name           *string
-		model, input, output, statusMessage                             *string
-		modelParams, metadata                                           map[string]string
-		costDetails                                                     map[string]float64
-		usageDetails                                                    map[string]uint64
-		level                                                           string
-		startTime, eventTs                                              time.Time
-		endTime, completionStartTime                                    *time.Time
-		timeToFirstTokenMs                                              *uint32
-		version, isDeleted                                              uint32
-	)
+	var isDeleted uint8
 
 	err := row.Scan(
-		&idStr,
-		&traceID,
-		&parentObsID,
-		&projectID,
-		&obsType,
-		&name,
-		&startTime,
-		&endTime,
-		&model,
-		&modelParams,
-		&input,
-		&output,
-		&metadata,
-		&costDetails,
-		&usageDetails,
-		&level,
-		&statusMessage,
-		&completionStartTime,
-		&timeToFirstTokenMs,
-		&version,
-		&eventTs,
+		&obs.ID,
+		&obs.TraceID,
+		&obs.ParentObservationID,
+		&obs.ProjectID,
+		&obs.Name,
+		&obs.SpanKind,
+		&obs.Type,
+		&obs.StartTime,
+		&obs.EndTime,
+		&obs.DurationMs,
+		&obs.StatusCode,
+		&obs.StatusMessage,
+		&obs.Attributes,
+		&obs.Input,
+		&obs.Output,
+		&obs.InputPreview,
+		&obs.OutputPreview,
+		&obs.Metadata,
+		&obs.Level,
+		&obs.ModelName,
+		&obs.Provider,
+		&obs.InternalModelID,
+		&obs.ModelParameters,
+		&obs.ProvidedUsageDetails,
+		&obs.UsageDetails,
+		&obs.ProvidedCostDetails,
+		&obs.CostDetails,
+		&obs.TotalCost,
+		&obs.PromptID,
+		&obs.PromptName,
+		&obs.PromptVersion,
+		&obs.InputBlobStorageID,
+		&obs.OutputBlobStorageID,
+		&obs.CreatedAt,
+		&obs.UpdatedAt,
+		&obs.Version,
+		&obs.EventTs,
 		&isDeleted,
 	)
 
@@ -406,129 +513,64 @@ func (r *observationRepository) scanObservation(row driver.Row) (*observability.
 		return nil, fmt.Errorf("scan observation: %w", err)
 	}
 
-	// Parse ULIDs and strings
-	if idStr != nil {
-		parsedID, _ := ulid.Parse(*idStr)
-		obs.ID = parsedID
-	}
-	if traceID != nil {
-		parsedTraceID, _ := ulid.Parse(*traceID)
-		obs.TraceID = parsedTraceID
-	}
-	if projectID != nil {
-		parsedProjectID, _ := ulid.Parse(*projectID)
-		obs.ProjectID = parsedProjectID
-	}
-	obs.ParentObservationID = stringToUlidPtr(parentObsID)
-	if obsType != nil {
-		obs.Type = observability.ObservationType(*obsType)
-	}
-	if name != nil {
-		obs.Name = *name
-	}
-	obs.StartTime = startTime
-	obs.EndTime = endTime
-	obs.Model = model
-	obs.ModelParameters = modelParams
-	obs.Input = input
-	obs.Output = output
-	obs.Metadata = metadata
-	obs.CostDetails = costDetails
-	obs.UsageDetails = usageDetails
-	obs.Level = observability.ObservationLevel(level)
-	obs.StatusMessage = statusMessage
-	obs.CompletionStartTime = completionStartTime
-	obs.TimeToFirstTokenMs = timeToFirstTokenMs
-	obs.Version = version
-	obs.EventTs = eventTs
 	obs.IsDeleted = isDeleted != 0
 
 	return &obs, nil
 }
 
-// Helper function to scan multiple observations from rows
+// Helper function to scan observations from query rows
 func (r *observationRepository) scanObservations(rows driver.Rows) ([]*observability.Observation, error) {
 	var observations []*observability.Observation
 
 	for rows.Next() {
 		var obs observability.Observation
-		var (
-			idStr, traceID, parentObsID, projectID, obsType, name       *string
-			model, input, output, statusMessage                         *string
-			modelParams, metadata                                       map[string]string
-			costDetails                                                 map[string]float64
-			usageDetails                                                map[string]uint64
-			level                                                       string
-			startTime, eventTs                                          time.Time
-			endTime, completionStartTime                                *time.Time
-			timeToFirstTokenMs                                          *uint32
-			version, isDeleted                                          uint32
-		)
+		var isDeleted uint8
 
 		err := rows.Scan(
-			&idStr,
-			&traceID,
-			&parentObsID,
-			&projectID,
-			&obsType,
-			&name,
-			&startTime,
-			&endTime,
-			&model,
-			&modelParams,
-			&input,
-			&output,
-			&metadata,
-			&costDetails,
-			&usageDetails,
-			&level,
-			&statusMessage,
-			&completionStartTime,
-			&timeToFirstTokenMs,
-			&version,
-			&eventTs,
+			&obs.ID,
+			&obs.TraceID,
+			&obs.ParentObservationID,
+			&obs.ProjectID,
+			&obs.Name,
+			&obs.SpanKind,
+			&obs.Type,
+			&obs.StartTime,
+			&obs.EndTime,
+			&obs.DurationMs,
+			&obs.StatusCode,
+			&obs.StatusMessage,
+			&obs.Attributes,
+			&obs.Input,
+			&obs.Output,
+			&obs.InputPreview,
+			&obs.OutputPreview,
+			&obs.Metadata,
+			&obs.Level,
+			&obs.ModelName,
+			&obs.Provider,
+			&obs.InternalModelID,
+			&obs.ModelParameters,
+			&obs.ProvidedUsageDetails,
+			&obs.UsageDetails,
+			&obs.ProvidedCostDetails,
+			&obs.CostDetails,
+			&obs.TotalCost,
+			&obs.PromptID,
+			&obs.PromptName,
+			&obs.PromptVersion,
+			&obs.InputBlobStorageID,
+			&obs.OutputBlobStorageID,
+			&obs.CreatedAt,
+			&obs.UpdatedAt,
+			&obs.Version,
+			&obs.EventTs,
 			&isDeleted,
 		)
 
 		if err != nil {
-			return nil, fmt.Errorf("scan observation row: %w", err)
+			return nil, fmt.Errorf("scan observation: %w", err)
 		}
 
-		// Parse ULIDs and strings
-		if idStr != nil {
-			parsedID, _ := ulid.Parse(*idStr)
-			obs.ID = parsedID
-		}
-		if traceID != nil {
-			parsedTraceID, _ := ulid.Parse(*traceID)
-			obs.TraceID = parsedTraceID
-		}
-		if projectID != nil {
-			parsedProjectID, _ := ulid.Parse(*projectID)
-			obs.ProjectID = parsedProjectID
-		}
-		obs.ParentObservationID = stringToUlidPtr(parentObsID)
-		if obsType != nil {
-			obs.Type = observability.ObservationType(*obsType)
-		}
-		if name != nil {
-			obs.Name = *name
-		}
-		obs.StartTime = startTime
-		obs.EndTime = endTime
-		obs.Model = model
-		obs.ModelParameters = modelParams
-		obs.Input = input
-		obs.Output = output
-		obs.Metadata = metadata
-		obs.CostDetails = costDetails
-		obs.UsageDetails = usageDetails
-		obs.Level = observability.ObservationLevel(level)
-		obs.StatusMessage = statusMessage
-		obs.CompletionStartTime = completionStartTime
-		obs.TimeToFirstTokenMs = timeToFirstTokenMs
-		obs.Version = version
-		obs.EventTs = eventTs
 		obs.IsDeleted = isDeleted != 0
 
 		observations = append(observations, &obs)

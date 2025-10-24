@@ -5,17 +5,23 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
+
+	"github.com/sirupsen/logrus"
 
 	"brokle/internal/core/domain/observability"
 	appErrors "brokle/pkg/errors"
+	"brokle/pkg/preview"
 	"brokle/pkg/ulid"
 )
 
 // TraceService implements business logic for trace management
 type TraceService struct {
-	traceRepo       observability.TraceRepository
-	observationRepo observability.ObservationRepository
-	scoreRepo       observability.ScoreRepository
+	traceRepo          observability.TraceRepository
+	observationRepo    observability.ObservationRepository
+	scoreRepo          observability.ScoreRepository
+	blobStorageService *BlobStorageService
+	logger             *logrus.Logger
 }
 
 // NewTraceService creates a new trace service instance
@@ -23,38 +29,116 @@ func NewTraceService(
 	traceRepo observability.TraceRepository,
 	observationRepo observability.ObservationRepository,
 	scoreRepo observability.ScoreRepository,
+	blobStorageService *BlobStorageService,
+	logger *logrus.Logger,
 ) *TraceService {
 	return &TraceService{
-		traceRepo:       traceRepo,
-		observationRepo: observationRepo,
-		scoreRepo:       scoreRepo,
+		traceRepo:          traceRepo,
+		observationRepo:    observationRepo,
+		scoreRepo:          scoreRepo,
+		blobStorageService: blobStorageService,
+		logger:             logger,
 	}
 }
 
-// CreateTrace creates a new trace with validation
+// CreateTrace creates a new OTEL trace with validation
 func (s *TraceService) CreateTrace(ctx context.Context, trace *observability.Trace) error {
 	// Validate required fields
-	if trace.ProjectID.IsZero() {
+	if trace.ProjectID == "" {
 		return appErrors.NewValidationError("project_id is required", "trace must have a valid project_id")
 	}
 	if trace.Name == "" {
 		return appErrors.NewValidationError("name is required", "trace name cannot be empty")
 	}
-
-	// Generate new ID if not provided
-	if trace.ID.IsZero() {
-		trace.ID = ulid.New()
+	if trace.ID == "" {
+		return appErrors.NewValidationError("id is required", "trace must have OTEL trace_id")
 	}
 
-	// Validate parent trace exists if provided
-	if trace.ParentTraceID != nil && !trace.ParentTraceID.IsZero() {
-		_, err := s.traceRepo.GetByID(ctx, *trace.ParentTraceID)
-		if err != nil {
-			return appErrors.NewNotFoundError(fmt.Sprintf("parent trace %s", trace.ParentTraceID.String()))
+	// Validate OTEL trace_id format (32 hex chars)
+	if len(trace.ID) != 32 {
+		return appErrors.NewValidationError("invalid trace_id", "OTEL trace_id must be 32 hex characters")
+	}
+
+	// Set defaults
+	if trace.StatusCode == "" {
+		trace.StatusCode = observability.StatusCodeUnset
+	}
+	if trace.Environment == "" {
+		trace.Environment = "production"
+	}
+	if trace.Attributes == "" {
+		trace.Attributes = "{}"
+	}
+	if trace.CreatedAt.IsZero() {
+		trace.CreatedAt = time.Now()
+	}
+
+	// Calculate duration if not set
+	trace.CalculateDuration()
+
+	// Handle input: Always generate preview, conditionally offload to S3
+	if trace.Input != nil && *trace.Input != "" {
+		// Generate type-aware preview (always, regardless of size)
+		inputPreview := preview.GeneratePreview(*trace.Input)
+		trace.InputPreview = &inputPreview
+
+		// Check if payload is large enough to offload
+		if s.blobStorageService != nil && s.blobStorageService.ShouldOffload(*trace.Input) {
+			blob, _, err := s.blobStorageService.UploadToS3WithPreview(
+				ctx,
+				*trace.Input,
+				trace.ProjectID,
+				"trace",
+				trace.ID,
+				ulid.New().String(),
+			)
+			if err != nil {
+				s.logger.WithError(err).WithField("trace_id", trace.ID).Warn("Failed to upload trace input to S3, storing inline")
+			} else {
+				s.logger.WithFields(logrus.Fields{
+					"trace_id":   trace.ID,
+					"blob_id":    blob.ID,
+					"size_bytes": len(*trace.Input),
+				}).Info("Offloaded trace input to S3")
+				trace.InputBlobStorageID = &blob.ID
+				trace.Input = nil // NULL in ClickHouse
+				// InputPreview already set above
+			}
+		}
+		// else: small payload stays inline, preview still populated
+	}
+
+	// Handle output (same pattern)
+	if trace.Output != nil && *trace.Output != "" {
+		// Generate type-aware preview (always)
+		outputPreview := preview.GeneratePreview(*trace.Output)
+		trace.OutputPreview = &outputPreview
+
+		// Check if payload is large enough to offload
+		if s.blobStorageService != nil && s.blobStorageService.ShouldOffload(*trace.Output) {
+			blob, _, err := s.blobStorageService.UploadToS3WithPreview(
+				ctx,
+				*trace.Output,
+				trace.ProjectID,
+				"trace",
+				trace.ID,
+				ulid.New().String(),
+			)
+			if err != nil {
+				s.logger.WithError(err).WithField("trace_id", trace.ID).Warn("Failed to upload trace output to S3, storing inline")
+			} else {
+				s.logger.WithFields(logrus.Fields{
+					"trace_id":   trace.ID,
+					"blob_id":    blob.ID,
+					"size_bytes": len(*trace.Output),
+				}).Info("Offloaded trace output to S3")
+				trace.OutputBlobStorageID = &blob.ID
+				trace.Output = nil
+			}
 		}
 	}
 
-	// Create trace
+	// Create trace (with blob references if offloaded)
 	if err := s.traceRepo.Create(ctx, trace); err != nil {
 		return appErrors.NewInternalError("failed to create trace", err)
 	}
@@ -68,7 +152,7 @@ func (s *TraceService) UpdateTrace(ctx context.Context, trace *observability.Tra
 	existing, err := s.traceRepo.GetByID(ctx, trace.ID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return appErrors.NewNotFoundError(fmt.Sprintf("trace %s", trace.ID.String()))
+			return appErrors.NewNotFoundError(fmt.Sprintf("trace %s", trace.ID))
 		}
 		return appErrors.NewInternalError("failed to get trace", err)
 	}
@@ -82,6 +166,27 @@ func (s *TraceService) UpdateTrace(ctx context.Context, trace *observability.Tra
 	// Update trace
 	if err := s.traceRepo.Update(ctx, existing); err != nil {
 		return appErrors.NewInternalError("failed to update trace", err)
+	}
+
+	return nil
+}
+
+// UpdateTraceMetrics updates aggregate metrics for a trace (called after observation changes)
+func (s *TraceService) UpdateTraceMetrics(ctx context.Context, traceID string, totalCost float64, totalTokens, observationCount uint32) error {
+	// Get existing trace
+	trace, err := s.traceRepo.GetByID(ctx, traceID)
+	if err != nil {
+		return appErrors.NewNotFoundError(fmt.Sprintf("trace %s", traceID))
+	}
+
+	// Update aggregate metrics
+	trace.TotalCost = &totalCost
+	trace.TotalTokens = &totalTokens
+	trace.ObservationCount = &observationCount
+
+	// Update trace
+	if err := s.traceRepo.Update(ctx, trace); err != nil {
+		return appErrors.NewInternalError("failed to update trace metrics", err)
 	}
 
 	return nil
@@ -101,14 +206,11 @@ func mergeTraceFields(dst *observability.Trace, src *observability.Trace) {
 	if src.Name != "" {
 		dst.Name = src.Name
 	}
-	if src.UserID != nil && !src.UserID.IsZero() {
+	if src.UserID != nil && *src.UserID != "" {
 		dst.UserID = src.UserID
 	}
-	if src.SessionID != nil && !src.SessionID.IsZero() {
+	if src.SessionID != nil && *src.SessionID != "" {
 		dst.SessionID = src.SessionID
-	}
-	if src.ParentTraceID != nil && !src.ParentTraceID.IsZero() {
-		dst.ParentTraceID = src.ParentTraceID
 	}
 	if src.Input != nil {
 		dst.Input = src.Input
@@ -116,8 +218,6 @@ func mergeTraceFields(dst *observability.Trace, src *observability.Trace) {
 	if src.Output != nil {
 		dst.Output = src.Output
 	}
-	// Allow clearing metadata/tags by sending empty map/slice
-	// nil = not sent (preserve), {} or [] = clear, {...} = update
 	if src.Metadata != nil {
 		dst.Metadata = src.Metadata
 	}
@@ -130,18 +230,50 @@ func mergeTraceFields(dst *observability.Trace, src *observability.Trace) {
 	if src.Release != nil {
 		dst.Release = src.Release
 	}
-	if !src.Timestamp.IsZero() {
-		dst.Timestamp = src.Timestamp
+	if !src.StartTime.IsZero() {
+		dst.StartTime = src.StartTime
 	}
+	if src.EndTime != nil {
+		dst.EndTime = src.EndTime
+		// Recalculate duration when end time is updated
+		dst.CalculateDuration()
+	}
+	if src.StatusCode != "" {
+		dst.StatusCode = src.StatusCode
+	}
+	if src.StatusMessage != nil {
+		dst.StatusMessage = src.StatusMessage
+	}
+	if src.Attributes != "" {
+		dst.Attributes = src.Attributes
+	}
+	if src.ServiceName != nil {
+		dst.ServiceName = src.ServiceName
+	}
+	if src.ServiceVersion != nil {
+		dst.ServiceVersion = src.ServiceVersion
+	}
+	if src.TotalCost != nil {
+		dst.TotalCost = src.TotalCost
+	}
+	if src.TotalTokens != nil {
+		dst.TotalTokens = src.TotalTokens
+	}
+	if src.ObservationCount != nil {
+		dst.ObservationCount = src.ObservationCount
+	}
+	// Bookmarked and Public are bool, so always update
+	dst.Bookmarked = src.Bookmarked
+	dst.Public = src.Public
 }
 
 // DeleteTrace soft deletes a trace
-func (s *TraceService) DeleteTrace(ctx context.Context, id ulid.ULID) error {
+func (s *TraceService) DeleteTrace(ctx context.Context, id string) error {
 	// Validate trace exists
 	_, err := s.traceRepo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return appErrors.NewNotFoundError(fmt.Sprintf("trace %s", id.String()))
+			return appErrors.NewNotFoundError(fmt.Sprintf("trace %s", id))
 		}
 		return appErrors.NewInternalError("failed to get trace", err)
 	}
@@ -154,26 +286,32 @@ func (s *TraceService) DeleteTrace(ctx context.Context, id ulid.ULID) error {
 	return nil
 }
 
-// GetTraceByID retrieves a trace by ID
-func (s *TraceService) GetTraceByID(ctx context.Context, id ulid.ULID) (*observability.Trace, error) {
+// GetTraceByID retrieves a trace by its OTEL trace_id
+func (s *TraceService) GetTraceByID(ctx context.Context, id string) (*observability.Trace, error) {
 	trace, err := s.traceRepo.GetByID(ctx, id)
 	if err != nil {
-		return nil, appErrors.NewNotFoundError(fmt.Sprintf("trace %s", id.String()))
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, appErrors.NewNotFoundError(fmt.Sprintf("trace %s", id))
+		}
+		return nil, appErrors.NewInternalError("failed to get trace", err)
 	}
 
 	return trace, nil
 }
 
-// GetTraceWithObservations retrieves a trace with all its observations in hierarchical tree structure
-func (s *TraceService) GetTraceWithObservations(ctx context.Context, id ulid.ULID) (*observability.Trace, error) {
+// GetTraceWithObservations retrieves a trace with all its observations
+func (s *TraceService) GetTraceWithObservations(ctx context.Context, id string) (*observability.Trace, error) {
 	// Get trace
 	trace, err := s.traceRepo.GetByID(ctx, id)
 	if err != nil {
-		return nil, appErrors.NewNotFoundError(fmt.Sprintf("trace %s", id.String()))
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, appErrors.NewNotFoundError(fmt.Sprintf("trace %s", id))
+		}
+		return nil, appErrors.NewInternalError("failed to get trace", err)
 	}
 
-	// Get observations tree
-	observations, err := s.observationRepo.GetTreeByTraceID(ctx, id)
+	// Get observations
+	observations, err := s.observationRepo.GetByTraceID(ctx, id)
 	if err != nil {
 		return nil, appErrors.NewInternalError("failed to get observations", err)
 	}
@@ -183,12 +321,15 @@ func (s *TraceService) GetTraceWithObservations(ctx context.Context, id ulid.ULI
 	return trace, nil
 }
 
-// GetTraceWithScores retrieves a trace with all its quality scores
-func (s *TraceService) GetTraceWithScores(ctx context.Context, id ulid.ULID) (*observability.Trace, error) {
+// GetTraceWithScores retrieves a trace with all its scores
+func (s *TraceService) GetTraceWithScores(ctx context.Context, id string) (*observability.Trace, error) {
 	// Get trace
 	trace, err := s.traceRepo.GetByID(ctx, id)
 	if err != nil {
-		return nil, appErrors.NewNotFoundError(fmt.Sprintf("trace %s", id.String()))
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, appErrors.NewNotFoundError(fmt.Sprintf("trace %s", id))
+		}
+		return nil, appErrors.NewInternalError("failed to get trace", err)
 	}
 
 	// Get scores
@@ -202,12 +343,8 @@ func (s *TraceService) GetTraceWithScores(ctx context.Context, id ulid.ULID) (*o
 	return trace, nil
 }
 
-// GetTracesByProjectID retrieves traces for a project with optional filtering
-func (s *TraceService) GetTracesByProjectID(ctx context.Context, projectID ulid.ULID, filter *observability.TraceFilter) ([]*observability.Trace, error) {
-	if projectID.IsZero() {
-		return nil, appErrors.NewValidationError("project_id is required", "traces query requires a valid project_id")
-	}
-
+// GetTracesByProjectID retrieves traces by project ID with optional filters
+func (s *TraceService) GetTracesByProjectID(ctx context.Context, projectID string, filter *observability.TraceFilter) ([]*observability.Trace, error) {
 	traces, err := s.traceRepo.GetByProjectID(ctx, projectID, filter)
 	if err != nil {
 		return nil, appErrors.NewInternalError("failed to get traces", err)
@@ -216,79 +353,60 @@ func (s *TraceService) GetTracesByProjectID(ctx context.Context, projectID ulid.
 	return traces, nil
 }
 
-// GetTracesBySessionID retrieves all traces in a session
-func (s *TraceService) GetTracesBySessionID(ctx context.Context, sessionID ulid.ULID) ([]*observability.Trace, error) {
-	if sessionID.IsZero() {
-		return nil, appErrors.NewValidationError("session_id is required", "traces query requires a valid session_id")
-	}
-
+// GetTracesBySessionID retrieves all traces in a virtual session
+func (s *TraceService) GetTracesBySessionID(ctx context.Context, sessionID string) ([]*observability.Trace, error) {
 	traces, err := s.traceRepo.GetBySessionID(ctx, sessionID)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to get traces", err)
+		return nil, appErrors.NewInternalError("failed to get traces by session", err)
 	}
 
 	return traces, nil
 }
 
-// GetChildTraces retrieves child traces of a parent trace
-func (s *TraceService) GetChildTraces(ctx context.Context, parentTraceID ulid.ULID) ([]*observability.Trace, error) {
-	if parentTraceID.IsZero() {
-		return nil, appErrors.NewValidationError("parent_trace_id is required", "parent_trace_id cannot be empty")
-	}
-
-	// Validate parent exists
-	_, err := s.traceRepo.GetByID(ctx, parentTraceID)
-	if err != nil {
-		return nil, appErrors.NewNotFoundError(fmt.Sprintf("parent trace %s", parentTraceID.String()))
-	}
-
-	traces, err := s.traceRepo.GetChildren(ctx, parentTraceID)
-	if err != nil {
-		return nil, appErrors.NewInternalError("failed to get child traces", err)
-	}
-
-	return traces, nil
-}
-
-// GetTracesByUserID retrieves traces for a user with optional filtering
-func (s *TraceService) GetTracesByUserID(ctx context.Context, userID ulid.ULID, filter *observability.TraceFilter) ([]*observability.Trace, error) {
-	if userID.IsZero() {
-		return nil, appErrors.NewValidationError("user_id is required", "traces query requires a valid user_id")
-	}
-
+// GetTracesByUserID retrieves traces by user ID
+func (s *TraceService) GetTracesByUserID(ctx context.Context, userID string, filter *observability.TraceFilter) ([]*observability.Trace, error) {
 	traces, err := s.traceRepo.GetByUserID(ctx, userID, filter)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to get traces", err)
+		return nil, appErrors.NewInternalError("failed to get traces by user", err)
 	}
 
 	return traces, nil
 }
 
-// CreateTraceBatch creates multiple traces in a single batch operation
+// CreateTraceBatch creates multiple traces in a batch
 func (s *TraceService) CreateTraceBatch(ctx context.Context, traces []*observability.Trace) error {
 	if len(traces) == 0 {
-		return appErrors.NewValidationError("traces array cannot be empty", "batch create requires at least one trace")
+		return nil
 	}
 
 	// Validate all traces
 	for i, trace := range traces {
-		if trace.ProjectID.IsZero() {
-			return appErrors.NewValidationError(
-				fmt.Sprintf("trace[%d]: project_id is required", i),
-				"all traces must have valid project_id",
-			)
+		if trace.ProjectID == "" {
+			return appErrors.NewValidationError(fmt.Sprintf("trace[%d].project_id", i), "project_id is required")
 		}
 		if trace.Name == "" {
-			return appErrors.NewValidationError(
-				fmt.Sprintf("trace[%d]: name is required", i),
-				"all traces must have a name",
-			)
+			return appErrors.NewValidationError(fmt.Sprintf("trace[%d].name", i), "name is required")
+		}
+		if trace.ID == "" {
+			return appErrors.NewValidationError(fmt.Sprintf("trace[%d].id", i), "OTEL trace_id is required")
 		}
 
-		// Generate ID if not provided
-		if trace.ID.IsZero() {
-			trace.ID = ulid.New()
+		// Set defaults
+		if trace.StatusCode == "" {
+			trace.StatusCode = observability.StatusCodeUnset
 		}
+		if trace.Environment == "" {
+			trace.Environment = "production"
+		}
+		if trace.Attributes == "" {
+			trace.Attributes = "{}"
+		}
+		if trace.CreatedAt.IsZero() {
+			trace.CreatedAt = time.Now()
+		}
+
+		// Calculate duration
+		trace.CalculateDuration()
 	}
 
 	// Create batch
@@ -307,4 +425,49 @@ func (s *TraceService) CountTraces(ctx context.Context, filter *observability.Tr
 	}
 
 	return count, nil
+}
+
+// GetTraceWithFullContent retrieves a trace and loads full content from S3 if offloaded
+// Falls back to preview if S3 fetch fails (graceful degradation)
+func (s *TraceService) GetTraceWithFullContent(ctx context.Context, id string) (*observability.Trace, error) {
+	// 1. Fetch trace from ClickHouse (includes preview fields)
+	trace, err := s.traceRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, appErrors.NewNotFoundError(fmt.Sprintf("trace %s", id))
+		}
+		return nil, appErrors.NewInternalError("failed to get trace", err)
+	}
+
+	// 2. Load input from S3 if offloaded
+	if trace.InputBlobStorageID != nil && trace.Input == nil {
+		content, err := s.blobStorageService.DownloadFromS3(ctx, *trace.InputBlobStorageID)
+		if err != nil {
+			s.logger.WithError(err).WithFields(logrus.Fields{
+				"trace_id": trace.ID,
+				"blob_id":  *trace.InputBlobStorageID,
+			}).Warn("Failed to fetch trace input from S3, using preview")
+			// Graceful fallback to preview
+			trace.Input = trace.InputPreview
+		} else {
+			trace.Input = &content
+		}
+	}
+
+	// 3. Load output from S3 if offloaded
+	if trace.OutputBlobStorageID != nil && trace.Output == nil {
+		content, err := s.blobStorageService.DownloadFromS3(ctx, *trace.OutputBlobStorageID)
+		if err != nil {
+			s.logger.WithError(err).WithFields(logrus.Fields{
+				"trace_id": trace.ID,
+				"blob_id":  *trace.OutputBlobStorageID,
+			}).Warn("Failed to fetch trace output from S3, using preview")
+			// Graceful fallback to preview
+			trace.Output = trace.OutputPreview
+		} else {
+			trace.Output = &content
+		}
+	}
+
+	return trace, nil
 }

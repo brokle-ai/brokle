@@ -271,11 +271,11 @@ The platform implements a clean separation between SDK and Dashboard routes:
 - `POST /v1/route` - AI routing decisions
 
 **Unified Telemetry Batch System (SDK Observability)**:
-- `POST /v1/telemetry/batch` - High-performance batch processing for all telemetry events (traces, observations, quality scores)
+- `POST /v1/ingest/batch` - High-performance batch processing for all telemetry events (traces, observations, quality scores)
 - `GET /v1/telemetry/health` - Telemetry service health monitoring
 - `GET /v1/telemetry/metrics` - Telemetry performance metrics
 - `GET /v1/telemetry/performance` - Performance statistics
-- `GET /v1/telemetry/batch/:batch_id` - Batch status tracking
+- `GET /v1/ingest/batch/:batch_id` - Batch status tracking
 - `POST /v1/telemetry/validate` - Event validation
 
 **Cache Management**:
@@ -906,11 +906,11 @@ The SDK sends all telemetry data (traces, observations, quality scores, events) 
 
 ```go
 // SDK telemetry ingestion (require API key authentication)
-POST /v1/telemetry/batch           // Unified batch processing for all event types
+POST /v1/ingest/batch           // Unified batch processing for all event types
 GET  /v1/telemetry/health          // Service health monitoring
 GET  /v1/telemetry/metrics         // Performance metrics
 GET  /v1/telemetry/performance     // Performance statistics
-GET  /v1/telemetry/batch/:batch_id // Batch status tracking
+GET  /v1/ingest/batch/:batch_id // Batch status tracking
 POST /v1/telemetry/validate        // Event validation
 ```
 

@@ -19,19 +19,19 @@ type TraceService interface {
 	CreateTraceBatch(ctx context.Context, traces []*Trace) error
 
 	// Read operations
-	GetTraceByID(ctx context.Context, id ulid.ULID) (*Trace, error)
-	GetTraceWithObservations(ctx context.Context, id ulid.ULID) (*Trace, error)
-	GetTraceWithScores(ctx context.Context, id ulid.ULID) (*Trace, error)
-	GetTracesByProjectID(ctx context.Context, projectID ulid.ULID, filter *TraceFilter) ([]*Trace, error)
-	GetTracesBySessionID(ctx context.Context, sessionID ulid.ULID) ([]*Trace, error)
-	GetTracesByUserID(ctx context.Context, userID ulid.ULID, filter *TraceFilter) ([]*Trace, error)
-	GetChildTraces(ctx context.Context, parentTraceID ulid.ULID) ([]*Trace, error)
+	GetTraceByID(ctx context.Context, id string) (*Trace, error)
+	GetTraceWithObservations(ctx context.Context, id string) (*Trace, error)
+	GetTraceWithScores(ctx context.Context, id string) (*Trace, error)
+	GetTracesByProjectID(ctx context.Context, projectID string, filter *TraceFilter) ([]*Trace, error)
+	GetTracesBySessionID(ctx context.Context, sessionID string) ([]*Trace, error) // Virtual session analytics
+	GetTracesByUserID(ctx context.Context, userID string, filter *TraceFilter) ([]*Trace, error)
 
 	// Update operations
 	UpdateTrace(ctx context.Context, trace *Trace) error
+	UpdateTraceMetrics(ctx context.Context, traceID string, totalCost float64, totalTokens, observationCount uint32) error
 
 	// Delete operations
-	DeleteTrace(ctx context.Context, id ulid.ULID) error
+	DeleteTrace(ctx context.Context, id string) error
 
 	// Analytics operations
 	CountTraces(ctx context.Context, filter *TraceFilter) (int64, error)
@@ -45,24 +45,25 @@ type ObservationService interface {
 	CreateObservationBatch(ctx context.Context, observations []*Observation) error
 
 	// Read operations
-	GetObservationByID(ctx context.Context, id ulid.ULID) (*Observation, error)
-	GetObservationsByTraceID(ctx context.Context, traceID ulid.ULID) ([]*Observation, error)
-	GetObservationTreeByTraceID(ctx context.Context, traceID ulid.ULID) ([]*Observation, error)
-	GetChildObservations(ctx context.Context, parentObservationID ulid.ULID) ([]*Observation, error)
+	GetObservationByID(ctx context.Context, id string) (*Observation, error)
+	GetObservationsByTraceID(ctx context.Context, traceID string) ([]*Observation, error)
+	GetRootSpan(ctx context.Context, traceID string) (*Observation, error)
+	GetObservationTreeByTraceID(ctx context.Context, traceID string) ([]*Observation, error)
+	GetChildObservations(ctx context.Context, parentObservationID string) ([]*Observation, error)
 	GetObservationsByFilter(ctx context.Context, filter *ObservationFilter) ([]*Observation, error)
 
 	// Update operations
 	UpdateObservation(ctx context.Context, observation *Observation) error
-	SetObservationCost(ctx context.Context, observationID ulid.ULID, inputCost, outputCost float64) error
-	SetObservationUsage(ctx context.Context, observationID ulid.ULID, promptTokens, completionTokens uint64) error
+	SetObservationCost(ctx context.Context, observationID string, inputCost, outputCost float64) error
+	SetObservationUsage(ctx context.Context, observationID string, promptTokens, completionTokens uint32) error
 
 	// Delete operations
-	DeleteObservation(ctx context.Context, id ulid.ULID) error
+	DeleteObservation(ctx context.Context, id string) error
 
 	// Analytics operations
 	CountObservations(ctx context.Context, filter *ObservationFilter) (int64, error)
-	CalculateTraceCost(ctx context.Context, traceID ulid.ULID) (float64, error)
-	CalculateTraceTokens(ctx context.Context, traceID ulid.ULID) (uint64, error)
+	CalculateTraceCost(ctx context.Context, traceID string) (float64, error)
+	CalculateTraceTokens(ctx context.Context, traceID string) (uint32, error)
 }
 
 // ScoreService defines the comprehensive interface for quality score operations
@@ -73,46 +74,44 @@ type ScoreService interface {
 	CreateScoreBatch(ctx context.Context, scores []*Score) error
 
 	// Read operations
-	GetScoreByID(ctx context.Context, id ulid.ULID) (*Score, error)
-	GetScoresByTraceID(ctx context.Context, traceID ulid.ULID) ([]*Score, error)
-	GetScoresByObservationID(ctx context.Context, observationID ulid.ULID) ([]*Score, error)
-	GetScoresBySessionID(ctx context.Context, sessionID ulid.ULID) ([]*Score, error)
+	GetScoreByID(ctx context.Context, id string) (*Score, error)
+	GetScoresByTraceID(ctx context.Context, traceID string) ([]*Score, error)
+	GetScoresByObservationID(ctx context.Context, observationID string) ([]*Score, error)
 	GetScoresByFilter(ctx context.Context, filter *ScoreFilter) ([]*Score, error)
 
 	// Update operations
 	UpdateScore(ctx context.Context, score *Score) error
 
 	// Delete operations
-	DeleteScore(ctx context.Context, id ulid.ULID) error
+	DeleteScore(ctx context.Context, id string) error
 
 	// Analytics operations
 	CountScores(ctx context.Context, filter *ScoreFilter) (int64, error)
 }
 
-// SessionService defines the comprehensive interface for session operations
-// Used by both workers (CreateSession) and handlers (GetSessionWithTraces, etc.)
-type SessionService interface {
+// BlobStorageService defines the comprehensive interface for blob storage operations
+type BlobStorageService interface {
 	// Create operations
-	CreateSession(ctx context.Context, session *Session) error
+	CreateBlobReference(ctx context.Context, blob *BlobStorageFileLog) error
 
 	// Read operations
-	GetSessionByID(ctx context.Context, id ulid.ULID) (*Session, error)
-	GetSessionWithTraces(ctx context.Context, id ulid.ULID) (*Session, error)
-	GetSessionWithScores(ctx context.Context, id ulid.ULID) (*Session, error)
-	GetSessionsByProjectID(ctx context.Context, projectID ulid.ULID, filter *SessionFilter) ([]*Session, error)
-	GetSessionsByUserID(ctx context.Context, userID ulid.ULID) ([]*Session, error)
+	GetBlobByID(ctx context.Context, id string) (*BlobStorageFileLog, error)
+	GetBlobsByEntityID(ctx context.Context, entityType, entityID string) ([]*BlobStorageFileLog, error)
+	GetBlobsByProjectID(ctx context.Context, projectID string, filter *BlobStorageFilter) ([]*BlobStorageFileLog, error)
 
 	// Update operations
-	UpdateSession(ctx context.Context, sessionID ulid.ULID, updateReq *UpdateSessionRequest) error
-	ToggleBookmark(ctx context.Context, id ulid.ULID) error
-	TogglePublic(ctx context.Context, id ulid.ULID) error
-	UpdateSessionMetadata(ctx context.Context, id ulid.ULID, metadata map[string]string) error
+	UpdateBlobReference(ctx context.Context, blob *BlobStorageFileLog) error
 
 	// Delete operations
-	DeleteSession(ctx context.Context, id ulid.ULID) error
+	DeleteBlobReference(ctx context.Context, id string) error
+
+	// Storage operations
+	ShouldOffload(content string) bool
+	UploadToS3(ctx context.Context, content string, entityType, entityID, eventID string) (*BlobStorageFileLog, error)
+	DownloadFromS3(ctx context.Context, blobID string) (string, error)
 
 	// Analytics operations
-	CountSessions(ctx context.Context, filter *SessionFilter) (int64, error)
+	CountBlobs(ctx context.Context, filter *BlobStorageFilter) (int64, error)
 }
 
 // TelemetryDeduplicationService defines the interface for ULID-based deduplication
@@ -165,7 +164,7 @@ type QualityEvaluator interface {
 	Name() string
 	Version() string
 	Description() string
-	SupportedTypes() []ObservationType
+	SupportedTypes() []string // Observation types: span, generation, event, tool, etc.
 	Evaluate(ctx context.Context, input *EvaluationInput) (*Score, error)
 	ValidateInput(input *EvaluationInput) error
 }
@@ -424,12 +423,12 @@ type EvaluationInput struct {
 
 // QualityEvaluatorInfo represents information about a quality evaluator
 type QualityEvaluatorInfo struct {
-	Name            string              `json:"name"`
-	Version         string              `json:"version"`
-	Description     string              `json:"description"`
-	SupportedTypes  []ObservationType   `json:"supported_types"`
-	IsBuiltIn       bool                `json:"is_built_in"`
-	Configuration   map[string]any      `json:"configuration,omitempty"`
+	Name            string         `json:"name"`
+	Version         string         `json:"version"`
+	Description     string         `json:"description"`
+	SupportedTypes  []string       `json:"supported_types"` // Observation types
+	IsBuiltIn       bool           `json:"is_built_in"`
+	Configuration   map[string]any `json:"configuration,omitempty"`
 }
 
 // Dashboard and reporting types

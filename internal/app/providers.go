@@ -31,6 +31,7 @@ import (
 	observabilityRepo "brokle/internal/infrastructure/repository/observability"
 	orgRepo "brokle/internal/infrastructure/repository/organization"
 	userRepo "brokle/internal/infrastructure/repository/user"
+	"brokle/internal/infrastructure/storage"
 	"brokle/internal/infrastructure/streams"
 	"brokle/internal/migration"
 	billingService "brokle/internal/services/billing"
@@ -136,7 +137,7 @@ type ObservabilityRepositories struct {
 	Trace                  observability.TraceRepository
 	Observation            observability.ObservationRepository
 	Score                  observability.ScoreRepository
-	Session                observability.SessionRepository
+	BlobStorage            observability.BlobStorageRepository
 	TelemetryDeduplication observability.TelemetryDeduplicationRepository
 	TelemetryAnalytics     *observabilityRepo.AnalyticsRepository
 }
@@ -258,7 +259,6 @@ func ProvideWorkers(
 		observabilityServices.TraceService,
 		observabilityServices.ObservationService,
 		observabilityServices.ScoreService,
-		observabilityServices.SessionService,
 	)
 
 	// Create gateway analytics worker
@@ -315,7 +315,7 @@ func ProvideObservabilityRepositories(clickhouseDB *database.ClickHouseDB, redis
 		Trace:                  observabilityRepo.NewTraceRepository(clickhouseDB.Conn),
 		Observation:            observabilityRepo.NewObservationRepository(clickhouseDB.Conn),
 		Score:                  observabilityRepo.NewScoreRepository(clickhouseDB.Conn),
-		Session:                observabilityRepo.NewSessionRepository(clickhouseDB.Conn),
+		BlobStorage:            observabilityRepo.NewBlobStorageRepository(clickhouseDB.Conn),
 		TelemetryDeduplication: observabilityRepo.NewTelemetryDeduplicationRepositoryRedis(redisDB),
 		TelemetryAnalytics:     observabilityRepo.NewTelemetryAnalyticsRepository(clickhouseDB),
 	}
@@ -513,6 +513,7 @@ func ProvideOrganizationServices(
 func ProvideObservabilityServices(
 	observabilityRepos *ObservabilityRepositories,
 	redisDB *database.RedisDB,
+	cfg *config.Config,
 	logger *logrus.Logger,
 ) *observabilityService.ServiceRegistry {
 	// Create deduplication service for telemetry
@@ -530,11 +531,23 @@ func ProvideObservabilityServices(
 		logger,
 	)
 
+	// Create S3 client for blob storage (pass nil if not configured)
+	var s3Client *storage.S3Client
+	if cfg.BlobStorage.Provider != "" && cfg.BlobStorage.BucketName != "" {
+		var err error
+		s3Client, err = storage.NewS3Client(&cfg.BlobStorage, logger)
+		if err != nil {
+			logger.WithError(err).Warn("Failed to initialize S3 client, blob storage will be disabled")
+		}
+	}
+
 	return observabilityService.NewServiceRegistry(
 		observabilityRepos.Trace,
 		observabilityRepos.Observation,
 		observabilityRepos.Score,
-		observabilityRepos.Session,
+		observabilityRepos.BlobStorage,
+		s3Client,
+		&cfg.BlobStorage,
 		telemetryService,
 		logger,
 	)
@@ -606,28 +619,7 @@ func ProvideBillingServices(
 	}
 }
 
-// simpleEventPublisher is a simple implementation of EventPublisher for initial integration
-type simpleEventPublisher struct {
-	logger *logrus.Logger
-}
-
-func (p *simpleEventPublisher) Publish(ctx context.Context, event *observability.Event) error {
-	p.logger.WithFields(logrus.Fields{
-		"event_type": event.Type,
-		"subject":    event.Subject,
-		"project_id": event.ProjectID.String(),
-	}).Debug("publishing event")
-	return nil
-}
-
-func (p *simpleEventPublisher) PublishBatch(ctx context.Context, events []*observability.Event) error {
-	for _, event := range events {
-		if err := p.Publish(ctx, event); err != nil {
-			return err
-		}
-	}
-	return nil
-}
+// Event publisher removed - events system deleted (not part of OTEL architecture)
 
 // simpleBillingOrgService is a simple implementation of BillingOrganizationService
 type simpleBillingOrgService struct {
@@ -718,7 +710,7 @@ func ProvideAll(cfg *config.Config, logger *logrus.Logger) (*ProviderContainer, 
 
 	// Create observability services EARLY (needed by workers)
 	// Note: Analytics worker will be injected later after it's created and started
-	observabilityServices := ProvideObservabilityServices(repos.Observability, databases.Redis, logger)
+	observabilityServices := ProvideObservabilityServices(repos.Observability, databases.Redis, cfg, logger)
 
 	// Initialize workers (require observability services for stream consumer)
 	workers, err := ProvideWorkers(cfg, repos.Observability, databases.Redis, repos.Gateway.Analytics, billingServices.Billing, repos.Observability.TelemetryDeduplication, observabilityServices, logger)

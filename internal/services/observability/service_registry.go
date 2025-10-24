@@ -1,17 +1,22 @@
 package observability
 
 import (
+	"brokle/internal/config"
 	"brokle/internal/core/domain/observability"
+	"brokle/internal/infrastructure/storage"
 	"github.com/sirupsen/logrus"
 )
 
 // ServiceRegistry holds all observability services
 type ServiceRegistry struct {
-	// New ClickHouse-first services
+	// ClickHouse-first services
 	TraceService       *TraceService
 	ObservationService *ObservationService
 	ScoreService       *ScoreService
-	SessionService     *SessionService
+	BlobStorageService *BlobStorageService
+
+	// OTLP conversion service
+	OTLPConverterService *OTLPConverterService
 
 	// Existing telemetry service (Redis Streams + async processing)
 	TelemetryService observability.TelemetryService
@@ -23,25 +28,35 @@ func NewServiceRegistry(
 	traceRepo observability.TraceRepository,
 	observationRepo observability.ObservationRepository,
 	scoreRepo observability.ScoreRepository,
-	sessionRepo observability.SessionRepository,
+	blobStorageRepo observability.BlobStorageRepository,
+
+	// Blob storage dependencies
+	s3Client *storage.S3Client,
+	blobConfig *config.BlobStorageConfig,
 
 	// Telemetry system (keep existing)
 	telemetryService observability.TelemetryService,
 
 	logger *logrus.Logger,
 ) *ServiceRegistry {
-	// Create new ClickHouse-first services
-	traceService := NewTraceService(traceRepo, observationRepo, scoreRepo)
-	observationService := NewObservationService(observationRepo, traceRepo, scoreRepo)
-	scoreService := NewScoreService(scoreRepo, traceRepo, observationRepo, sessionRepo)
-	sessionService := NewSessionService(sessionRepo, traceRepo, scoreRepo)
+	// Create blob storage service first (needed by trace and observation services)
+	blobStorageService := NewBlobStorageService(blobStorageRepo, s3Client, blobConfig, logger)
+
+	// Create OTLP converter service
+	otlpConverterService := NewOTLPConverterService(logger)
+
+	// Create ClickHouse-first services with blob storage dependency
+	traceService := NewTraceService(traceRepo, observationRepo, scoreRepo, blobStorageService, logger)
+	observationService := NewObservationService(observationRepo, traceRepo, scoreRepo, blobStorageService, logger)
+	scoreService := NewScoreService(scoreRepo, traceRepo, observationRepo)
 
 	return &ServiceRegistry{
-		TraceService:       traceService,
-		ObservationService: observationService,
-		ScoreService:       scoreService,
-		SessionService:     sessionService,
-		TelemetryService:   telemetryService,
+		TraceService:         traceService,
+		ObservationService:   observationService,
+		ScoreService:         scoreService,
+		BlobStorageService:   blobStorageService,
+		OTLPConverterService: otlpConverterService,
+		TelemetryService:     telemetryService,
 	}
 }
 
@@ -60,9 +75,14 @@ func (r *ServiceRegistry) GetScoreService() *ScoreService {
 	return r.ScoreService
 }
 
-// GetSessionService returns the session service
-func (r *ServiceRegistry) GetSessionService() *SessionService {
-	return r.SessionService
+// GetBlobStorageService returns the blob storage service
+func (r *ServiceRegistry) GetBlobStorageService() *BlobStorageService {
+	return r.BlobStorageService
+}
+
+// GetOTLPConverterService returns the OTLP converter service
+func (r *ServiceRegistry) GetOTLPConverterService() *OTLPConverterService {
+	return r.OTLPConverterService
 }
 
 // GetTelemetryService returns the telemetry service

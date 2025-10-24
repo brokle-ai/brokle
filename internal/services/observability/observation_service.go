@@ -5,17 +5,23 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
+
+	"github.com/sirupsen/logrus"
 
 	"brokle/internal/core/domain/observability"
 	appErrors "brokle/pkg/errors"
+	"brokle/pkg/preview"
 	"brokle/pkg/ulid"
 )
 
-// ObservationService implements business logic for observation management with cost calculation
+// ObservationService implements business logic for OTEL observation (span) management
 type ObservationService struct {
-	observationRepo observability.ObservationRepository
-	traceRepo       observability.TraceRepository
-	scoreRepo       observability.ScoreRepository
+	observationRepo    observability.ObservationRepository
+	traceRepo          observability.TraceRepository
+	scoreRepo          observability.ScoreRepository
+	blobStorageService *BlobStorageService
+	logger             *logrus.Logger
 }
 
 // NewObservationService creates a new observation service instance
@@ -23,50 +29,165 @@ func NewObservationService(
 	observationRepo observability.ObservationRepository,
 	traceRepo observability.TraceRepository,
 	scoreRepo observability.ScoreRepository,
+	blobStorageService *BlobStorageService,
+	logger *logrus.Logger,
 ) *ObservationService {
 	return &ObservationService{
-		observationRepo: observationRepo,
-		traceRepo:       traceRepo,
-		scoreRepo:       scoreRepo,
+		observationRepo:    observationRepo,
+		traceRepo:          traceRepo,
+		scoreRepo:          scoreRepo,
+		blobStorageService: blobStorageService,
+		logger:             logger,
 	}
 }
 
-// CreateObservation creates a new observation with validation
+// CreateObservation creates a new OTEL observation (span) with validation
 func (s *ObservationService) CreateObservation(ctx context.Context, obs *observability.Observation) error {
 	// Validate required fields
-	if obs.TraceID.IsZero() {
+	if obs.TraceID == "" {
 		return appErrors.NewValidationError("trace_id is required", "observation must be linked to a trace")
 	}
-	if obs.ProjectID.IsZero() {
+	if obs.ProjectID == "" {
 		return appErrors.NewValidationError("project_id is required", "observation must have a valid project_id")
 	}
 	if obs.Name == "" {
 		return appErrors.NewValidationError("name is required", "observation name cannot be empty")
 	}
+	if obs.ID == "" {
+		return appErrors.NewValidationError("id is required", "observation must have OTEL span_id")
+	}
 
-	// Generate new ID if not provided
-	if obs.ID.IsZero() {
-		obs.ID = ulid.New()
+	// Validate OTEL span_id format (16 hex chars)
+	if len(obs.ID) != 16 {
+		return appErrors.NewValidationError("invalid span_id", "OTEL span_id must be 16 hex characters")
 	}
 
 	// Validate trace exists
 	_, err := s.traceRepo.GetByID(ctx, obs.TraceID)
 	if err != nil {
-		return appErrors.NewNotFoundError(fmt.Sprintf("trace %s", obs.TraceID.String()))
+		return appErrors.NewNotFoundError(fmt.Sprintf("trace %s", obs.TraceID))
 	}
 
-	// Validate parent observation exists if provided
-	if obs.ParentObservationID != nil && !obs.ParentObservationID.IsZero() {
-		_, err := s.observationRepo.GetByID(ctx, *obs.ParentObservationID)
-		if err != nil {
-			return appErrors.NewNotFoundError(fmt.Sprintf("parent observation %s", obs.ParentObservationID.String()))
+	// Note: We do NOT validate parent observation existence here
+	// Async processing means parent may arrive after children - eventual consistency model
+	// Database foreign key relationship will be preserved
+
+	// Set defaults
+	if obs.StatusCode == "" {
+		obs.StatusCode = observability.StatusCodeUnset
+	}
+	if obs.SpanKind == "" {
+		obs.SpanKind = string(observability.SpanKindInternal)
+	}
+	if obs.Type == "" {
+		obs.Type = observability.ObservationTypeSpan
+	}
+	if obs.Level == "" {
+		obs.Level = observability.ObservationLevelDefault
+	}
+	if obs.Attributes == "" {
+		obs.Attributes = "{}"
+	}
+	if obs.Provider == "" {
+		obs.Provider = ""
+	}
+	if obs.CreatedAt.IsZero() {
+		obs.CreatedAt = time.Now()
+	}
+
+	// Initialize maps if nil
+	if obs.Metadata == nil {
+		obs.Metadata = make(map[string]string)
+	}
+	if obs.ProvidedUsageDetails == nil {
+		obs.ProvidedUsageDetails = make(map[string]uint64)
+	}
+	if obs.UsageDetails == nil {
+		obs.UsageDetails = make(map[string]uint64)
+	}
+	if obs.ProvidedCostDetails == nil {
+		obs.ProvidedCostDetails = make(map[string]float64)
+	}
+	if obs.CostDetails == nil {
+		obs.CostDetails = make(map[string]float64)
+	}
+
+	// Calculate duration if not set
+	obs.CalculateDuration()
+
+	// Auto-offload large payloads to S3 with type-aware preview generation
+	// CRITICAL: Preview is ALWAYS generated and stored, regardless of offloading
+	if s.blobStorageService != nil {
+		// Handle input: Always generate preview, conditionally offload
+		if obs.Input != nil && *obs.Input != "" {
+			// Generate type-aware preview (always)
+			inputPreview := preview.GeneratePreview(*obs.Input)
+			obs.InputPreview = &inputPreview
+
+			// Check if payload is large enough to offload
+			if s.blobStorageService.ShouldOffload(*obs.Input) {
+				// Large payload - upload to S3
+				blob, _, err := s.blobStorageService.UploadToS3WithPreview(
+					ctx,
+					*obs.Input,
+					obs.ProjectID,
+					"observation",
+					obs.ID,
+					ulid.New().String(),
+				)
+				if err != nil {
+					s.logger.WithError(err).WithField("observation_id", obs.ID).Warn("Failed to upload input to S3, storing inline")
+				} else {
+					s.logger.WithFields(logrus.Fields{
+						"observation_id": obs.ID,
+						"blob_id":        blob.ID,
+						"original_size":  len(*obs.Input),
+						"preview_size":   len(inputPreview),
+					}).Info("Offloaded input to S3 with preview")
+					obs.InputBlobStorageID = &blob.ID
+					obs.Input = nil // NULL in ClickHouse
+					// InputPreview already set above
+				}
+			}
+			// else: small payload stays inline, preview still populated
+		}
+
+		// Handle output: Always generate preview, conditionally offload
+		if obs.Output != nil && *obs.Output != "" {
+			// Generate type-aware preview (always)
+			outputPreview := preview.GeneratePreview(*obs.Output)
+			obs.OutputPreview = &outputPreview
+
+			// Check if payload is large enough to offload
+			if s.blobStorageService.ShouldOffload(*obs.Output) {
+				// Large payload - upload to S3
+				blob, _, err := s.blobStorageService.UploadToS3WithPreview(
+					ctx,
+					*obs.Output,
+					obs.ProjectID,
+					"observation",
+					obs.ID,
+					ulid.New().String(),
+				)
+				if err != nil {
+					s.logger.WithError(err).WithField("observation_id", obs.ID).Warn("Failed to upload output to S3, storing inline")
+				} else {
+					s.logger.WithFields(logrus.Fields{
+						"observation_id": obs.ID,
+						"blob_id":        blob.ID,
+						"original_size":  len(*obs.Output),
+						"preview_size":   len(outputPreview),
+					}).Info("Offloaded output to S3 with preview")
+					obs.OutputBlobStorageID = &blob.ID
+					obs.Output = nil // NULL in ClickHouse
+					// OutputPreview already set above
+				}
+			}
+			// else: small payload stays inline, preview still populated
 		}
 	}
 
-	// Calculate total cost and tokens if details provided
-	s.calculateAggregates(obs)
-
-	// Create observation
+	// Create observation (with blob references if offloaded)
 	if err := s.observationRepo.Create(ctx, obs); err != nil {
 		return appErrors.NewInternalError("failed to create observation", err)
 	}
@@ -80,7 +201,7 @@ func (s *ObservationService) UpdateObservation(ctx context.Context, obs *observa
 	existing, err := s.observationRepo.GetByID(ctx, obs.ID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return appErrors.NewNotFoundError(fmt.Sprintf("observation %s", obs.ID.String()))
+			return appErrors.NewNotFoundError(fmt.Sprintf("observation %s", obs.ID))
 		}
 		return appErrors.NewInternalError("failed to get observation", err)
 	}
@@ -91,8 +212,44 @@ func (s *ObservationService) UpdateObservation(ctx context.Context, obs *observa
 	// Preserve version for increment in repository layer
 	existing.Version = existing.Version
 
-	// Recalculate aggregates if cost/usage details changed
-	s.calculateAggregates(existing)
+	// Calculate duration if end time updated
+	existing.CalculateDuration()
+
+	// Auto-offload large payloads on update with preview generation
+	if s.blobStorageService != nil {
+		// Handle output if newly added or updated
+		if existing.Output != nil && *existing.Output != "" && existing.OutputBlobStorageID == nil {
+			// Generate type-aware preview (always)
+			outputPreview := preview.GeneratePreview(*existing.Output)
+			existing.OutputPreview = &outputPreview
+
+			// Check if payload is large enough to offload
+			if s.blobStorageService.ShouldOffload(*existing.Output) {
+				blob, _, err := s.blobStorageService.UploadToS3WithPreview(
+					ctx,
+					*existing.Output,
+					existing.ProjectID,
+					"observation",
+					existing.ID,
+					ulid.New().String(),
+				)
+				if err != nil {
+					s.logger.WithError(err).WithField("observation_id", existing.ID).Warn("Failed to upload output to S3 on update, storing inline")
+				} else {
+					s.logger.WithFields(logrus.Fields{
+						"observation_id": existing.ID,
+						"blob_id":        blob.ID,
+						"original_size":  len(*existing.Output),
+						"preview_size":   len(outputPreview),
+					}).Info("Offloaded output to S3 on update with preview")
+					existing.OutputBlobStorageID = &blob.ID
+					existing.Output = nil
+					// OutputPreview already set above
+				}
+			}
+			// else: small payload stays inline, preview still populated
+		}
+	}
 
 	// Update observation
 	if err := s.observationRepo.Update(ctx, existing); err != nil {
@@ -102,40 +259,68 @@ func (s *ObservationService) UpdateObservation(ctx context.Context, obs *observa
 	return nil
 }
 
-// mergeObservationFields merges non-zero fields from src into dst
-// This prevents zero-value corruption from partial JSON updates
-func mergeObservationFields(dst *observability.Observation, src *observability.Observation) {
-	// Immutable fields (never update):
-	// - ID (primary key)
-	// - TraceID (foreign key, security boundary)
-	// - ProjectID (security boundary)
-	// - Version (managed by repository)
-	// - EventTs (managed by repository)
-	// - IsDeleted (managed by Delete method)
+// SetObservationCost sets cost details for an observation
+func (s *ObservationService) SetObservationCost(ctx context.Context, observationID string, inputCost, outputCost float64) error {
+	obs, err := s.observationRepo.GetByID(ctx, observationID)
+	if err != nil {
+		return appErrors.NewNotFoundError(fmt.Sprintf("observation %s", observationID))
+	}
 
+	// Set cost details (updates both Maps and Brokle extension fields)
+	obs.SetCostDetails(inputCost, outputCost)
+
+	// Update observation
+	if err := s.observationRepo.Update(ctx, obs); err != nil {
+		return appErrors.NewInternalError("failed to update observation cost", err)
+	}
+
+	return nil
+}
+
+// SetObservationUsage sets usage details for an observation
+func (s *ObservationService) SetObservationUsage(ctx context.Context, observationID string, promptTokens, completionTokens uint32) error {
+	obs, err := s.observationRepo.GetByID(ctx, observationID)
+	if err != nil {
+		return appErrors.NewNotFoundError(fmt.Sprintf("observation %s", observationID))
+	}
+
+	// Set usage details (populates usage_details Map)
+	obs.SetUsageDetails(uint64(promptTokens), uint64(completionTokens))
+
+	// Update observation
+	if err := s.observationRepo.Update(ctx, obs); err != nil {
+		return appErrors.NewInternalError("failed to update observation usage", err)
+	}
+
+	return nil
+}
+
+// mergeObservationFields merges non-zero fields from src into dst
+func mergeObservationFields(dst *observability.Observation, src *observability.Observation) {
 	// Update optional fields only if non-zero
-	if src.ParentObservationID != nil && !src.ParentObservationID.IsZero() {
-		dst.ParentObservationID = src.ParentObservationID
+	if src.Name != "" {
+		dst.Name = src.Name
+	}
+	if src.SpanKind != "" {
+		dst.SpanKind = src.SpanKind
 	}
 	if src.Type != "" {
 		dst.Type = src.Type
 	}
-	if src.Name != "" {
-		dst.Name = src.Name
-	}
 	if !src.StartTime.IsZero() {
 		dst.StartTime = src.StartTime
 	}
-	if src.EndTime != nil && !src.EndTime.IsZero() {
+	if src.EndTime != nil {
 		dst.EndTime = src.EndTime
 	}
-	if src.Model != nil {
-		dst.Model = src.Model
+	if src.StatusCode != "" {
+		dst.StatusCode = src.StatusCode
 	}
-	// Allow clearing maps by sending empty map {}
-	// nil = not sent (preserve), {} = clear, {...} = update
-	if src.ModelParameters != nil {
-		dst.ModelParameters = src.ModelParameters
+	if src.StatusMessage != nil {
+		dst.StatusMessage = src.StatusMessage
+	}
+	if src.Attributes != "" {
+		dst.Attributes = src.Attributes
 	}
 	if src.Input != nil {
 		dst.Input = src.Input
@@ -146,33 +331,68 @@ func mergeObservationFields(dst *observability.Observation, src *observability.O
 	if src.Metadata != nil {
 		dst.Metadata = src.Metadata
 	}
-	if src.CostDetails != nil {
-		dst.CostDetails = src.CostDetails
+	if src.Level != "" {
+		dst.Level = src.Level
+	}
+
+	// Model fields
+	if src.ModelName != nil {
+		dst.ModelName = src.ModelName
+	}
+	if src.Provider != "" {
+		dst.Provider = src.Provider
+	}
+	if src.InternalModelID != nil {
+		dst.InternalModelID = src.InternalModelID
+	}
+	if src.ModelParameters != nil {
+		dst.ModelParameters = src.ModelParameters
+	}
+
+	// Usage & Cost Maps
+	if src.ProvidedUsageDetails != nil {
+		dst.ProvidedUsageDetails = src.ProvidedUsageDetails
 	}
 	if src.UsageDetails != nil {
 		dst.UsageDetails = src.UsageDetails
 	}
-	if src.Level != "" {
-		dst.Level = src.Level
+	if src.ProvidedCostDetails != nil {
+		dst.ProvidedCostDetails = src.ProvidedCostDetails
 	}
-	if src.StatusMessage != nil {
-		dst.StatusMessage = src.StatusMessage
+	if src.CostDetails != nil {
+		dst.CostDetails = src.CostDetails
 	}
-	if src.CompletionStartTime != nil && !src.CompletionStartTime.IsZero() {
-		dst.CompletionStartTime = src.CompletionStartTime
+	if src.TotalCost != nil {
+		dst.TotalCost = src.TotalCost
 	}
-	if src.TimeToFirstTokenMs != nil {
-		dst.TimeToFirstTokenMs = src.TimeToFirstTokenMs
+
+	// Prompt management
+	if src.PromptID != nil {
+		dst.PromptID = src.PromptID
+	}
+	if src.PromptName != nil {
+		dst.PromptName = src.PromptName
+	}
+	if src.PromptVersion != nil {
+		dst.PromptVersion = src.PromptVersion
+	}
+
+	// Blob storage references
+	if src.InputBlobStorageID != nil {
+		dst.InputBlobStorageID = src.InputBlobStorageID
+	}
+	if src.OutputBlobStorageID != nil {
+		dst.OutputBlobStorageID = src.OutputBlobStorageID
 	}
 }
 
 // DeleteObservation soft deletes an observation
-func (s *ObservationService) DeleteObservation(ctx context.Context, id ulid.ULID) error {
+func (s *ObservationService) DeleteObservation(ctx context.Context, id string) error {
 	// Validate observation exists
 	_, err := s.observationRepo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return appErrors.NewNotFoundError(fmt.Sprintf("observation %s", id.String()))
+			return appErrors.NewNotFoundError(fmt.Sprintf("observation %s", id))
 		}
 		return appErrors.NewInternalError("failed to get observation", err)
 	}
@@ -185,22 +405,21 @@ func (s *ObservationService) DeleteObservation(ctx context.Context, id ulid.ULID
 	return nil
 }
 
-// GetObservationByID retrieves an observation by ID
-func (s *ObservationService) GetObservationByID(ctx context.Context, id ulid.ULID) (*observability.Observation, error) {
+// GetObservationByID retrieves an observation by its OTEL span_id
+func (s *ObservationService) GetObservationByID(ctx context.Context, id string) (*observability.Observation, error) {
 	obs, err := s.observationRepo.GetByID(ctx, id)
 	if err != nil {
-		return nil, appErrors.NewNotFoundError(fmt.Sprintf("observation %s", id.String()))
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, appErrors.NewNotFoundError(fmt.Sprintf("observation %s", id))
+		}
+		return nil, appErrors.NewInternalError("failed to get observation", err)
 	}
 
 	return obs, nil
 }
 
 // GetObservationsByTraceID retrieves all observations for a trace
-func (s *ObservationService) GetObservationsByTraceID(ctx context.Context, traceID ulid.ULID) ([]*observability.Observation, error) {
-	if traceID.IsZero() {
-		return nil, appErrors.NewValidationError("trace_id is required", "observations query requires a valid trace_id")
-	}
-
+func (s *ObservationService) GetObservationsByTraceID(ctx context.Context, traceID string) ([]*observability.Observation, error) {
 	observations, err := s.observationRepo.GetByTraceID(ctx, traceID)
 	if err != nil {
 		return nil, appErrors.NewInternalError("failed to get observations", err)
@@ -209,18 +428,21 @@ func (s *ObservationService) GetObservationsByTraceID(ctx context.Context, trace
 	return observations, nil
 }
 
-// GetObservationTreeByTraceID retrieves observations in hierarchical tree structure
-func (s *ObservationService) GetObservationTreeByTraceID(ctx context.Context, traceID ulid.ULID) ([]*observability.Observation, error) {
-	if traceID.IsZero() {
-		return nil, appErrors.NewValidationError("trace_id is required", "observation tree query requires a valid trace_id")
-	}
-
-	// Validate trace exists
-	_, err := s.traceRepo.GetByID(ctx, traceID)
+// GetRootSpan retrieves the root span for a trace (parent_observation_id IS NULL)
+func (s *ObservationService) GetRootSpan(ctx context.Context, traceID string) (*observability.Observation, error) {
+	rootSpan, err := s.observationRepo.GetRootSpan(ctx, traceID)
 	if err != nil {
-		return nil, appErrors.NewNotFoundError(fmt.Sprintf("trace %s", traceID.String()))
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, appErrors.NewNotFoundError(fmt.Sprintf("root span for trace %s", traceID))
+		}
+		return nil, appErrors.NewInternalError("failed to get root span", err)
 	}
 
+	return rootSpan, nil
+}
+
+// GetObservationTreeByTraceID retrieves all observations in a tree structure
+func (s *ObservationService) GetObservationTreeByTraceID(ctx context.Context, traceID string) ([]*observability.Observation, error) {
 	observations, err := s.observationRepo.GetTreeByTraceID(ctx, traceID)
 	if err != nil {
 		return nil, appErrors.NewInternalError("failed to get observation tree", err)
@@ -230,17 +452,7 @@ func (s *ObservationService) GetObservationTreeByTraceID(ctx context.Context, tr
 }
 
 // GetChildObservations retrieves child observations of a parent
-func (s *ObservationService) GetChildObservations(ctx context.Context, parentObservationID ulid.ULID) ([]*observability.Observation, error) {
-	if parentObservationID.IsZero() {
-		return nil, appErrors.NewValidationError("parent_observation_id is required", "parent_observation_id cannot be empty")
-	}
-
-	// Validate parent exists
-	_, err := s.observationRepo.GetByID(ctx, parentObservationID)
-	if err != nil {
-		return nil, appErrors.NewNotFoundError(fmt.Sprintf("parent observation %s", parentObservationID.String()))
-	}
-
+func (s *ObservationService) GetChildObservations(ctx context.Context, parentObservationID string) ([]*observability.Observation, error) {
 	observations, err := s.observationRepo.GetChildren(ctx, parentObservationID)
 	if err != nil {
 		return nil, appErrors.NewInternalError("failed to get child observations", err)
@@ -249,50 +461,76 @@ func (s *ObservationService) GetChildObservations(ctx context.Context, parentObs
 	return observations, nil
 }
 
-// GetObservationsByFilter retrieves observations matching filter criteria
+// GetObservationsByFilter retrieves observations by filter criteria
 func (s *ObservationService) GetObservationsByFilter(ctx context.Context, filter *observability.ObservationFilter) ([]*observability.Observation, error) {
 	observations, err := s.observationRepo.GetByFilter(ctx, filter)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to get observations by filter", err)
+		return nil, appErrors.NewInternalError("failed to get observations", err)
 	}
 
 	return observations, nil
 }
 
-// CreateObservationBatch creates multiple observations in a single batch operation
+// CreateObservationBatch creates multiple observations in a batch
 func (s *ObservationService) CreateObservationBatch(ctx context.Context, observations []*observability.Observation) error {
 	if len(observations) == 0 {
-		return appErrors.NewValidationError("observations array cannot be empty", "batch create requires at least one observation")
+		return nil
 	}
 
 	// Validate all observations
 	for i, obs := range observations {
-		if obs.TraceID.IsZero() {
-			return appErrors.NewValidationError(
-				fmt.Sprintf("observation[%d]: trace_id is required", i),
-				"all observations must be linked to a trace",
-			)
+		if obs.TraceID == "" {
+			return appErrors.NewValidationError(fmt.Sprintf("observation[%d].trace_id", i), "trace_id is required")
 		}
-		if obs.ProjectID.IsZero() {
-			return appErrors.NewValidationError(
-				fmt.Sprintf("observation[%d]: project_id is required", i),
-				"all observations must have valid project_id",
-			)
+		if obs.ProjectID == "" {
+			return appErrors.NewValidationError(fmt.Sprintf("observation[%d].project_id", i), "project_id is required")
 		}
 		if obs.Name == "" {
-			return appErrors.NewValidationError(
-				fmt.Sprintf("observation[%d]: name is required", i),
-				"all observations must have a name",
-			)
+			return appErrors.NewValidationError(fmt.Sprintf("observation[%d].name", i), "name is required")
+		}
+		if obs.ID == "" {
+			return appErrors.NewValidationError(fmt.Sprintf("observation[%d].id", i), "OTEL span_id is required")
 		}
 
-		// Generate ID if not provided
-		if obs.ID.IsZero() {
-			obs.ID = ulid.New()
+		// Set defaults
+		if obs.StatusCode == "" {
+			obs.StatusCode = observability.StatusCodeUnset
+		}
+		if obs.SpanKind == "" {
+			obs.SpanKind = string(observability.SpanKindInternal)
+		}
+		if obs.Type == "" {
+			obs.Type = observability.ObservationTypeSpan
+		}
+		if obs.Level == "" {
+			obs.Level = observability.ObservationLevelDefault
+		}
+		if obs.Attributes == "" {
+			obs.Attributes = "{}"
+		}
+		if obs.CreatedAt.IsZero() {
+			obs.CreatedAt = time.Now()
 		}
 
-		// Calculate aggregates
-		s.calculateAggregates(obs)
+		// Initialize maps if nil
+		if obs.Metadata == nil {
+			obs.Metadata = make(map[string]string)
+		}
+		if obs.ProvidedUsageDetails == nil {
+			obs.ProvidedUsageDetails = make(map[string]uint64)
+		}
+		if obs.UsageDetails == nil {
+			obs.UsageDetails = make(map[string]uint64)
+		}
+		if obs.ProvidedCostDetails == nil {
+			obs.ProvidedCostDetails = make(map[string]float64)
+		}
+		if obs.CostDetails == nil {
+			obs.CostDetails = make(map[string]float64)
+		}
+
+		// Calculate duration
+		obs.CalculateDuration()
 	}
 
 	// Create batch
@@ -313,49 +551,11 @@ func (s *ObservationService) CountObservations(ctx context.Context, filter *obse
 	return count, nil
 }
 
-// SetObservationCost sets cost details for an observation with automatic total calculation
-func (s *ObservationService) SetObservationCost(ctx context.Context, observationID ulid.ULID, inputCost, outputCost float64) error {
-	// Get observation
-	obs, err := s.observationRepo.GetByID(ctx, observationID)
-	if err != nil {
-		return appErrors.NewNotFoundError(fmt.Sprintf("observation %s", observationID.String()))
-	}
-
-	// Set cost details using domain helper
-	obs.SetCostDetails(inputCost, outputCost)
-
-	// Update observation
-	if err := s.observationRepo.Update(ctx, obs); err != nil {
-		return appErrors.NewInternalError("failed to update observation cost", err)
-	}
-
-	return nil
-}
-
-// SetObservationUsage sets usage details for an observation with automatic total calculation
-func (s *ObservationService) SetObservationUsage(ctx context.Context, observationID ulid.ULID, promptTokens, completionTokens uint64) error {
-	// Get observation
-	obs, err := s.observationRepo.GetByID(ctx, observationID)
-	if err != nil {
-		return appErrors.NewNotFoundError(fmt.Sprintf("observation %s", observationID.String()))
-	}
-
-	// Set usage details using domain helper
-	obs.SetUsageDetails(promptTokens, completionTokens)
-
-	// Update observation
-	if err := s.observationRepo.Update(ctx, obs); err != nil {
-		return appErrors.NewInternalError("failed to update observation usage", err)
-	}
-
-	return nil
-}
-
-// CalculateTraceCost aggregates total cost from all observations in a trace
-func (s *ObservationService) CalculateTraceCost(ctx context.Context, traceID ulid.ULID) (float64, error) {
+// CalculateTraceCost calculates total cost for all observations in a trace
+func (s *ObservationService) CalculateTraceCost(ctx context.Context, traceID string) (float64, error) {
 	observations, err := s.observationRepo.GetByTraceID(ctx, traceID)
 	if err != nil {
-		return 0, appErrors.NewInternalError("failed to get observations for cost calculation", err)
+		return 0, appErrors.NewInternalError("failed to get observations", err)
 	}
 
 	var totalCost float64
@@ -366,11 +566,11 @@ func (s *ObservationService) CalculateTraceCost(ctx context.Context, traceID uli
 	return totalCost, nil
 }
 
-// CalculateTraceTokens aggregates total tokens from all observations in a trace
-func (s *ObservationService) CalculateTraceTokens(ctx context.Context, traceID ulid.ULID) (uint64, error) {
+// CalculateTraceTokens calculates total tokens for all observations in a trace
+func (s *ObservationService) CalculateTraceTokens(ctx context.Context, traceID string) (uint32, error) {
 	observations, err := s.observationRepo.GetByTraceID(ctx, traceID)
 	if err != nil {
-		return 0, appErrors.NewInternalError("failed to get observations for token calculation", err)
+		return 0, appErrors.NewInternalError("failed to get observations", err)
 	}
 
 	var totalTokens uint64
@@ -378,28 +578,63 @@ func (s *ObservationService) CalculateTraceTokens(ctx context.Context, traceID u
 		totalTokens += obs.GetTotalTokens()
 	}
 
-	return totalTokens, nil
+	return uint32(totalTokens), nil
 }
 
-// Helper methods
+// GetObservationWithFullContent fetches observation and loads full content from S3 if needed
+// This method should be used for detail views where full content is required
+// For list views, use GetObservationByID which returns previews only
+func (s *ObservationService) GetObservationWithFullContent(ctx context.Context, id string) (*observability.Observation, error) {
+	// 1. Fetch observation from ClickHouse (includes preview fields)
+	obs, err := s.observationRepo.GetByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, appErrors.NewNotFoundError(fmt.Sprintf("observation %s", id))
+		}
+		return nil, appErrors.NewInternalError("failed to get observation", err)
+	}
 
-// calculateAggregates ensures cost and usage totals are calculated from details maps
-func (s *ObservationService) calculateAggregates(obs *observability.Observation) {
-	// Calculate total cost if individual costs provided
-	if obs.CostDetails != nil {
-		if _, hasTotal := obs.CostDetails["total"]; !hasTotal {
-			inputCost := obs.CostDetails["input"]
-			outputCost := obs.CostDetails["output"]
-			obs.CostDetails["total"] = inputCost + outputCost
+	// 2. Load input from S3 if offloaded
+	if obs.InputBlobStorageID != nil && obs.Input == nil {
+		if s.blobStorageService != nil {
+			content, err := s.blobStorageService.DownloadFromS3(ctx, *obs.InputBlobStorageID)
+			if err != nil {
+				s.logger.WithError(err).WithFields(logrus.Fields{
+					"observation_id": obs.ID,
+					"blob_id":        *obs.InputBlobStorageID,
+				}).Warn("Failed to fetch input from S3, using preview")
+				// Graceful fallback to preview
+				obs.Input = obs.InputPreview
+			} else {
+				obs.Input = &content
+			}
+		} else {
+			// S3 client not initialized, fallback to preview
+			s.logger.WithField("observation_id", obs.ID).Warn("S3 client not initialized, using input preview")
+			obs.Input = obs.InputPreview
 		}
 	}
 
-	// Calculate total tokens if individual counts provided
-	if obs.UsageDetails != nil {
-		if _, hasTotal := obs.UsageDetails["total_tokens"]; !hasTotal {
-			promptTokens := obs.UsageDetails["prompt_tokens"]
-			completionTokens := obs.UsageDetails["completion_tokens"]
-			obs.UsageDetails["total_tokens"] = promptTokens + completionTokens
+	// 3. Load output from S3 if offloaded
+	if obs.OutputBlobStorageID != nil && obs.Output == nil {
+		if s.blobStorageService != nil {
+			content, err := s.blobStorageService.DownloadFromS3(ctx, *obs.OutputBlobStorageID)
+			if err != nil {
+				s.logger.WithError(err).WithFields(logrus.Fields{
+					"observation_id": obs.ID,
+					"blob_id":        *obs.OutputBlobStorageID,
+				}).Warn("Failed to fetch output from S3, using preview")
+				// Graceful fallback to preview
+				obs.Output = obs.OutputPreview
+			} else {
+				obs.Output = &content
+			}
+		} else {
+			// S3 client not initialized, fallback to preview
+			s.logger.WithField("observation_id", obs.ID).Warn("S3 client not initialized, using output preview")
+			obs.Output = obs.OutputPreview
 		}
 	}
+
+	return obs, nil
 }

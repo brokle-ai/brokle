@@ -548,7 +548,7 @@ func (r *AnalyticsRepository) InsertTelemetryBatch(ctx context.Context, batch *o
 // insertTelemetryBatchClickHouse inserts a ClickHouse telemetry batch record (internal method)
 func (r *AnalyticsRepository) insertTelemetryBatchClickHouse(ctx context.Context, batch *TelemetryBatch) error {
 	query := `
-		INSERT INTO telemetry_batches (
+		INSERT INTO ingestion_batches (
 			id, project_id, environment, status, total_events,
 			processed_events, failed_events, processing_time_ms,
 			metadata, timestamp, processed_at
@@ -596,7 +596,7 @@ func (r *AnalyticsRepository) insertTelemetryBatchesBatchClickHouse(ctx context.
 	}
 
 	query := `
-		INSERT INTO telemetry_batches (
+		INSERT INTO ingestion_batches (
 			id, project_id, environment, status, total_events,
 			processed_events, failed_events, processing_time_ms,
 			metadata, timestamp, processed_at

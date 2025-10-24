@@ -1,0 +1,143 @@
+{
+  "resourceSpans": [
+    {
+      "resource": {
+        "attributes": [
+          {
+            "key": "service.name",
+            "value": {
+              "stringValue": "my-ai-app"
+            }
+          },
+          {
+            "key": "service.version",
+            "value": {
+              "stringValue": "1.0.0"
+            }
+          },
+          {
+            "key": "deployment.environment",
+            "value": {
+              "stringValue": "production"
+            }
+          }
+        ]
+      },
+      "scopeSpans": [
+        {
+          "scope": {
+            "name": "brokle-python-sdk",
+            "version": "1.0.0"
+          },
+          "spans": [
+            {
+              "traceId": "5b8efff798038103d269b633813fc60c",
+              "spanId": "eee19b7ec3c1b174",
+              "parentSpanId": null,
+              "name": "user-chat-request",
+              "kind": 1,
+              "startTimeUnixNano": 1729692000000000000,
+              "endTimeUnixNano": 1729692002500000000,
+              "attributes": [
+                {
+                  "key": "brokle.type",
+                  "value": {
+                    "stringValue": "generation"
+                  }
+                },
+                {
+                  "key": "gen_ai.system",
+                  "value": {
+                    "stringValue": "openai"
+                  }
+                },
+                {
+                  "key": "gen_ai.request.model",
+                  "value": {
+                    "stringValue": "gpt-4"
+                  }
+                },
+                {
+                  "key": "gen_ai.prompt",
+                  "value": {
+                    "stringValue": "What is the capital of France?"
+                  }
+                },
+                {
+                  "key": "gen_ai.completion",
+                  "value": {
+                    "stringValue": "The capital of France is Paris."
+                  }
+                },
+                {
+                  "key": "gen_ai.usage.prompt_tokens",
+                  "value": {
+                    "intValue": 12
+                  }
+                },
+                {
+                  "key": "gen_ai.usage.completion_tokens",
+                  "value": {
+                    "intValue": 8
+                  }
+                },
+                {
+                  "key": "gen_ai.usage.total_tokens",
+                  "value": {
+                    "intValue": 20
+                  }
+                },
+                {
+                  "key": "brokle.routing.provider",
+                  "value": {
+                    "stringValue": "anthropic"
+                  }
+                },
+                {
+                  "key": "brokle.routing.strategy",
+                  "value": {
+                    "stringValue": "cost_optimized"
+                  }
+                },
+                {
+                  "key": "brokle.cost.total",
+                  "value": {
+                    "doubleValue": 0.0024
+                  }
+                },
+                {
+                  "key": "brokle.cost.input",
+                  "value": {
+                    "doubleValue": 0.0012
+                  }
+                },
+                {
+                  "key": "brokle.cost.output",
+                  "value": {
+                    "doubleValue": 0.0012
+                  }
+                },
+                {
+                  "key": "brokle.cache.hit",
+                  "value": {
+                    "boolValue": false
+                  }
+                },
+                {
+                  "key": "user.id",
+                  "value": {
+                    "stringValue": "user_12345"
+                  }
+                }
+              ],
+              "status": {
+                "code": 1,
+                "message": ""
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
