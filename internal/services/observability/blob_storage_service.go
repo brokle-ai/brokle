@@ -167,12 +167,10 @@ func (s *BlobStorageService) GetBlobsByProjectID(ctx context.Context, projectID 
 }
 
 // ShouldOffload determines if content should be offloaded to S3 based on size
+// Threshold is configured via BLOB_STORAGE_THRESHOLD env var (default: 10KB)
 func (s *BlobStorageService) ShouldOffload(content string) bool {
-	threshold := s.config.Threshold
-	if threshold == 0 {
-		threshold = 10_000 // Default 10KB
-	}
-	return len(content) > threshold
+	// Config always has default from viper.SetDefault (10_000 bytes = 10KB)
+	return len(content) > s.config.Threshold
 }
 
 // UploadToS3 uploads content to S3 and creates a blob reference

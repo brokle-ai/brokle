@@ -251,6 +251,17 @@ Copy `.env.example` to `.env` and configure:
 - `SENDGRID_API_KEY` - Email notifications
 - `TWILIO_AUTH_TOKEN` - SMS notifications
 
+### Blob Storage (S3/MinIO)
+Large payload offloading for observability data (inputs/outputs >10KB):
+- `BLOB_STORAGE_PROVIDER` - Storage provider (default: "minio")
+- `BLOB_STORAGE_BUCKET_NAME` - Bucket name (default: "brokle")
+- `BLOB_STORAGE_REGION` - AWS region (default: "us-east-1")
+- `BLOB_STORAGE_ENDPOINT` - Endpoint URL (default: "http://localhost:9100" for MinIO)
+- `BLOB_STORAGE_ACCESS_KEY_ID` - Access key ID (MinIO default: "minioadmin")
+- `BLOB_STORAGE_SECRET_ACCESS_KEY` - Secret access key (MinIO default: "minioadmin")
+- `BLOB_STORAGE_USE_PATH_STYLE` - Use path-style URLs (default: true for MinIO)
+- `BLOB_STORAGE_THRESHOLD` - Size threshold in bytes for S3 offload (default: 10000 = 10KB)
+
 ## API Architecture
 
 ### Dual Route Architecture

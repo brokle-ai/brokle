@@ -17,11 +17,11 @@ import (
 
 // Config represents the complete application configuration.
 type Config struct {
-	Environment   string           `mapstructure:"environment"`
-	App           AppConfig        `mapstructure:"app"`
-	Server        ServerConfig     `mapstructure:"server"`
-	Database      DatabaseConfig   `mapstructure:"database"`
-	ClickHouse    ClickHouseConfig `mapstructure:"clickhouse"`
+	Environment   string              `mapstructure:"environment"`
+	App           AppConfig           `mapstructure:"app"`
+	Server        ServerConfig        `mapstructure:"server"`
+	Database      DatabaseConfig      `mapstructure:"database"`
+	ClickHouse    ClickHouseConfig    `mapstructure:"clickhouse"`
 	Redis         RedisConfig         `mapstructure:"redis"`
 	Auth          AuthConfig          `mapstructure:"auth"`
 	Logging       LoggingConfig       `mapstructure:"logging"`
@@ -207,7 +207,7 @@ type NotificationsConfig struct {
 // BlobStorageConfig contains blob storage configuration for large payload offloading
 type BlobStorageConfig struct {
 	Provider        string `mapstructure:"provider"`          // "s3", "minio", "gcs", "azure"
-	BucketName      string `mapstructure:"bucket_name"`       // "brokle-blobs"
+	BucketName      string `mapstructure:"bucket_name"`       // "brokle"
 	Region          string `mapstructure:"region"`            // "us-east-1"
 	Endpoint        string `mapstructure:"endpoint"`          // For MinIO: "http://localhost:9000"
 	AccessKeyID     string `mapstructure:"access_key_id"`     // AWS access key
@@ -839,6 +839,14 @@ func setDefaults() {
 	viper.SetDefault("enterprise.support.sla", "99.9%")
 	viper.SetDefault("enterprise.support.dedicated_manager", false)
 	viper.SetDefault("enterprise.support.on_call_support", false)
+
+	// Blob Storage defaults (S3/MinIO for large payload offloading)
+	viper.SetDefault("blob_storage.provider", "minio")
+	viper.SetDefault("blob_storage.bucket_name", "brokle")
+	viper.SetDefault("blob_storage.region", "us-east-1")
+	viper.SetDefault("blob_storage.endpoint", "http://localhost:9100")
+	viper.SetDefault("blob_storage.use_path_style", true)
+	viper.SetDefault("blob_storage.threshold", 10_000) // 10KB threshold for S3 offload
 }
 
 // GetServerAddress returns the server address string.
