@@ -43,10 +43,6 @@ CREATE TABLE IF NOT EXISTS observations (
     prompt_name Nullable(String),
     prompt_version Nullable(UInt16),
 
-    -- Blob storage
-    input_blob_storage_id Nullable(String),
-    output_blob_storage_id Nullable(String),
-
     -- System fields
     created_at DateTime64(3) DEFAULT now64(),
     updated_at DateTime64(3) DEFAULT now64(),

@@ -37,8 +37,8 @@ CREATE TABLE IF NOT EXISTS traces (
     observation_count Nullable(UInt32),
 
     -- Flags
-    bookmarked UInt8 DEFAULT 0,
-    public UInt8 DEFAULT 0,
+    bookmarked Bool DEFAULT false,
+    public Bool DEFAULT false,
 
     -- Timestamps
     created_at DateTime64(3) DEFAULT now64(),
@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS traces (
     INDEX idx_session_id session_id TYPE bloom_filter(0.001) GRANULARITY 1,
     INDEX idx_tags tags TYPE bloom_filter(0.01) GRANULARITY 1
 
-) ENGINE = ReplacingMergeTree(version)
+) ENGINE = ReplacingMergeTree(event_ts, is_deleted)
 PARTITION BY toYYYYMM(start_time)
 ORDER BY (project_id, toDate(start_time), id)
 TTL toDateTime(start_time) + INTERVAL 365 DAY

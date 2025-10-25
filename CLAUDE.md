@@ -252,7 +252,8 @@ Copy `.env.example` to `.env` and configure:
 - `TWILIO_AUTH_TOKEN` - SMS notifications
 
 ### Blob Storage (S3/MinIO)
-Large payload offloading for observability data (inputs/outputs >10KB):
+**Note**: LLM input/output data is stored directly in ClickHouse with ZSTD compression for optimal cost and performance (78% cheaper than S3 auto-offload). Blob storage is available for future features: scheduled exports, media files, raw event storage, etc.
+
 - `BLOB_STORAGE_PROVIDER` - Storage provider (default: "minio")
 - `BLOB_STORAGE_BUCKET_NAME` - Bucket name (default: "brokle")
 - `BLOB_STORAGE_REGION` - AWS region (default: "us-east-1")
@@ -260,7 +261,7 @@ Large payload offloading for observability data (inputs/outputs >10KB):
 - `BLOB_STORAGE_ACCESS_KEY_ID` - Access key ID (MinIO default: "minioadmin")
 - `BLOB_STORAGE_SECRET_ACCESS_KEY` - Secret access key (MinIO default: "minioadmin")
 - `BLOB_STORAGE_USE_PATH_STYLE` - Use path-style URLs (default: true for MinIO)
-- `BLOB_STORAGE_THRESHOLD` - Size threshold in bytes for S3 offload (default: 10000 = 10KB)
+- `BLOB_STORAGE_THRESHOLD` - **Deprecated** (no longer used for auto-offload)
 
 ## API Architecture
 

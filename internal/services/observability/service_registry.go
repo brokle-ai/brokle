@@ -39,15 +39,15 @@ func NewServiceRegistry(
 
 	logger *logrus.Logger,
 ) *ServiceRegistry {
-	// Create blob storage service first (needed by trace and observation services)
+	// Create blob storage service (kept for future use: exports, media files, raw events)
 	blobStorageService := NewBlobStorageService(blobStorageRepo, s3Client, blobConfig, logger)
 
 	// Create OTLP converter service
 	otlpConverterService := NewOTLPConverterService(logger)
 
-	// Create ClickHouse-first services with blob storage dependency
-	traceService := NewTraceService(traceRepo, observationRepo, scoreRepo, blobStorageService, logger)
-	observationService := NewObservationService(observationRepo, traceRepo, scoreRepo, blobStorageService, logger)
+	// Create ClickHouse-first services (no blob storage for LLM data - stored inline with ZSTD compression)
+	traceService := NewTraceService(traceRepo, observationRepo, scoreRepo, logger)
+	observationService := NewObservationService(observationRepo, traceRepo, scoreRepo, logger)
 	scoreService := NewScoreService(scoreRepo, traceRepo, observationRepo)
 
 	return &ServiceRegistry{

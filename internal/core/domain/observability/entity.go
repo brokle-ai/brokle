@@ -30,17 +30,9 @@ type Trace struct {
 	// OTEL attributes (JSON string for flexible key-value pairs)
 	Attributes string `json:"attributes" db:"attributes"`
 
-	// Input/Output (trace-level data)
+	// Input/Output (trace-level data stored in ClickHouse with ZSTD compression)
 	Input  *string `json:"input,omitempty" db:"input"`
 	Output *string `json:"output,omitempty" db:"output"`
-
-	// Blob storage (S3 offloading for large payloads >10KB)
-	InputBlobStorageID  *string `json:"input_blob_storage_id,omitempty" db:"input_blob_storage_id"`
-	OutputBlobStorageID *string `json:"output_blob_storage_id,omitempty" db:"output_blob_storage_id"`
-
-	// Preview fields (ALWAYS populated - type-aware, adaptive 300-800 chars)
-	InputPreview  *string `json:"input_preview,omitempty" db:"input_preview"`
-	OutputPreview *string `json:"output_preview,omitempty" db:"output_preview"`
 
 	// Metadata and tags
 	Metadata map[string]string `json:"metadata" db:"metadata"`
@@ -98,13 +90,9 @@ type Observation struct {
 	// OTEL attributes (JSON string for flexible key-value pairs)
 	Attributes string `json:"attributes" db:"attributes"`
 
-	// Input/Output
+	// Input/Output (stored in ClickHouse with ZSTD compression)
 	Input  *string `json:"input,omitempty" db:"input"`
 	Output *string `json:"output,omitempty" db:"output"`
-
-	// Preview fields (ALWAYS populated - type-aware, adaptive 300-800 chars)
-	InputPreview  *string `json:"input_preview,omitempty" db:"input_preview"`
-	OutputPreview *string `json:"output_preview,omitempty" db:"output_preview"`
 
 	Metadata map[string]string `json:"metadata" db:"metadata"`
 	Level    string            `json:"level" db:"level"` // DEBUG, INFO, WARNING, ERROR, DEFAULT
@@ -126,10 +114,6 @@ type Observation struct {
 	PromptID      *string `json:"prompt_id,omitempty" db:"prompt_id"`
 	PromptName    *string `json:"prompt_name,omitempty" db:"prompt_name"`
 	PromptVersion *uint16 `json:"prompt_version,omitempty" db:"prompt_version"`
-
-	// Blob storage references (Brokle innovation)
-	InputBlobStorageID  *string `json:"input_blob_storage_id,omitempty" db:"input_blob_storage_id"`
-	OutputBlobStorageID *string `json:"output_blob_storage_id,omitempty" db:"output_blob_storage_id"`
 
 	// Timestamps
 	CreatedAt time.Time `json:"created_at" db:"created_at"`

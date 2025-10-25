@@ -58,15 +58,57 @@
                   }
                 },
                 {
-                  "key": "gen_ai.prompt",
+                  "key": "gen_ai.input.messages",
                   "value": {
-                    "stringValue": "What is the capital of France?"
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "role",
+                                "value": {
+                                  "stringValue": "user"
+                                }
+                              },
+                              {
+                                "key": "content",
+                                "value": {
+                                  "stringValue": "What is the capital of France?"
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
                   }
                 },
                 {
-                  "key": "gen_ai.completion",
+                  "key": "gen_ai.output.messages",
                   "value": {
-                    "stringValue": "The capital of France is Paris."
+                    "arrayValue": {
+                      "values": [
+                        {
+                          "kvlistValue": {
+                            "values": [
+                              {
+                                "key": "role",
+                                "value": {
+                                  "stringValue": "assistant"
+                                }
+                              },
+                              {
+                                "key": "content",
+                                "value": {
+                                  "stringValue": "The capital of France is Paris."
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
                   }
                 },
                 {

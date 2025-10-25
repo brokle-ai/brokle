@@ -9,7 +9,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"brokle/internal/core/domain/observability"
-	"brokle/pkg/preview"
 	"brokle/pkg/ulid"
 )
 
@@ -181,15 +180,19 @@ func (s *OTLPConverterService) createTraceEvent(span observability.Span, resourc
 		payload["environment"] = env
 	}
 
-	// Extract trace-level input/output from root span's GenAI attributes (Langfuse pattern)
-	// This captures the user-facing conversation context at the trace level
-	if prompt, ok := allAttrs["gen_ai.prompt"].(string); ok {
-		payload["input"] = prompt
-		payload["input_preview"] = preview.GeneratePreview(prompt)
+	// Extract trace-level input/output using official OTel format
+	// Supports: gen_ai.input.messages and gen_ai.output.messages (OTel 1.28+)
+	// Note: Data stored directly in ClickHouse with ZSTD compression
+	if messages, ok := allAttrs["gen_ai.input.messages"].([]interface{}); ok {
+		if messagesJSON, err := json.Marshal(messages); err == nil {
+			payload["input"] = string(messagesJSON)
+		}
 	}
-	if completion, ok := allAttrs["gen_ai.completion"].(string); ok {
-		payload["output"] = completion
-		payload["output_preview"] = preview.GeneratePreview(completion)
+
+	if messages, ok := allAttrs["gen_ai.output.messages"].([]interface{}); ok {
+		if messagesJSON, err := json.Marshal(messages); err == nil {
+			payload["output"] = string(messagesJSON)
+		}
 	}
 
 	// Create trace event
@@ -513,19 +516,18 @@ func extractGenAIFields(attrs map[string]interface{}, payload map[string]interfa
 		payload["model_name"] = model // gpt-4, claude-3-opus
 	}
 
-	// Content → input/output with type-aware preview generation
-	if prompt, ok := attrs["gen_ai.prompt"].(string); ok {
-		payload["input"] = prompt // Map to universal input field
-		// Generate type-aware preview (always, regardless of size)
-		// Note: Actual offloading happens in observation service, not here
-		previewText := preview.GeneratePreview(prompt)
-		payload["input_preview"] = previewText
+	// Content → Store full OTel message arrays as JSON strings
+	// Official format: gen_ai.input.messages and gen_ai.output.messages (OTel 1.28+)
+	if messages, ok := attrs["gen_ai.input.messages"].([]interface{}); ok {
+		if messagesJSON, err := json.Marshal(messages); err == nil {
+			payload["input"] = string(messagesJSON)
+		}
 	}
-	if completion, ok := attrs["gen_ai.completion"].(string); ok {
-		payload["output"] = completion // Map to universal output field
-		// Generate type-aware preview (always, regardless of size)
-		previewText := preview.GeneratePreview(completion)
-		payload["output_preview"] = previewText
+
+	if messages, ok := attrs["gen_ai.output.messages"].([]interface{}); ok {
+		if messagesJSON, err := json.Marshal(messages); err == nil {
+			payload["output"] = string(messagesJSON)
+		}
 	}
 
 	// Token counts → usage_details Map

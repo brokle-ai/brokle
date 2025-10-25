@@ -11,17 +11,14 @@ import (
 
 	"brokle/internal/core/domain/observability"
 	appErrors "brokle/pkg/errors"
-	"brokle/pkg/preview"
-	"brokle/pkg/ulid"
 )
 
 // TraceService implements business logic for trace management
 type TraceService struct {
-	traceRepo          observability.TraceRepository
-	observationRepo    observability.ObservationRepository
-	scoreRepo          observability.ScoreRepository
-	blobStorageService *BlobStorageService
-	logger             *logrus.Logger
+	traceRepo       observability.TraceRepository
+	observationRepo observability.ObservationRepository
+	scoreRepo       observability.ScoreRepository
+	logger          *logrus.Logger
 }
 
 // NewTraceService creates a new trace service instance
@@ -29,15 +26,13 @@ func NewTraceService(
 	traceRepo observability.TraceRepository,
 	observationRepo observability.ObservationRepository,
 	scoreRepo observability.ScoreRepository,
-	blobStorageService *BlobStorageService,
 	logger *logrus.Logger,
 ) *TraceService {
 	return &TraceService{
-		traceRepo:          traceRepo,
-		observationRepo:    observationRepo,
-		scoreRepo:          scoreRepo,
-		blobStorageService: blobStorageService,
-		logger:             logger,
+		traceRepo:       traceRepo,
+		observationRepo: observationRepo,
+		scoreRepo:       scoreRepo,
+		logger:          logger,
 	}
 }
 
@@ -76,69 +71,7 @@ func (s *TraceService) CreateTrace(ctx context.Context, trace *observability.Tra
 	// Calculate duration if not set
 	trace.CalculateDuration()
 
-	// Handle input: Always generate preview, conditionally offload to S3
-	if trace.Input != nil && *trace.Input != "" {
-		// Generate type-aware preview (always, regardless of size)
-		inputPreview := preview.GeneratePreview(*trace.Input)
-		trace.InputPreview = &inputPreview
-
-		// Check if payload is large enough to offload
-		if s.blobStorageService != nil && s.blobStorageService.ShouldOffload(*trace.Input) {
-			blob, _, err := s.blobStorageService.UploadToS3WithPreview(
-				ctx,
-				*trace.Input,
-				trace.ProjectID,
-				"trace",
-				trace.ID,
-				ulid.New().String(),
-			)
-			if err != nil {
-				s.logger.WithError(err).WithField("trace_id", trace.ID).Warn("Failed to upload trace input to S3, storing inline")
-			} else {
-				s.logger.WithFields(logrus.Fields{
-					"trace_id":   trace.ID,
-					"blob_id":    blob.ID,
-					"size_bytes": len(*trace.Input),
-				}).Info("Offloaded trace input to S3")
-				trace.InputBlobStorageID = &blob.ID
-				trace.Input = nil // NULL in ClickHouse
-				// InputPreview already set above
-			}
-		}
-		// else: small payload stays inline, preview still populated
-	}
-
-	// Handle output (same pattern)
-	if trace.Output != nil && *trace.Output != "" {
-		// Generate type-aware preview (always)
-		outputPreview := preview.GeneratePreview(*trace.Output)
-		trace.OutputPreview = &outputPreview
-
-		// Check if payload is large enough to offload
-		if s.blobStorageService != nil && s.blobStorageService.ShouldOffload(*trace.Output) {
-			blob, _, err := s.blobStorageService.UploadToS3WithPreview(
-				ctx,
-				*trace.Output,
-				trace.ProjectID,
-				"trace",
-				trace.ID,
-				ulid.New().String(),
-			)
-			if err != nil {
-				s.logger.WithError(err).WithField("trace_id", trace.ID).Warn("Failed to upload trace output to S3, storing inline")
-			} else {
-				s.logger.WithFields(logrus.Fields{
-					"trace_id":   trace.ID,
-					"blob_id":    blob.ID,
-					"size_bytes": len(*trace.Output),
-				}).Info("Offloaded trace output to S3")
-				trace.OutputBlobStorageID = &blob.ID
-				trace.Output = nil
-			}
-		}
-	}
-
-	// Create trace (with blob references if offloaded)
+	// Store trace directly in ClickHouse (ZSTD compression handles all sizes)
 	if err := s.traceRepo.Create(ctx, trace); err != nil {
 		return appErrors.NewInternalError("failed to create trace", err)
 	}
@@ -425,49 +358,4 @@ func (s *TraceService) CountTraces(ctx context.Context, filter *observability.Tr
 	}
 
 	return count, nil
-}
-
-// GetTraceWithFullContent retrieves a trace and loads full content from S3 if offloaded
-// Falls back to preview if S3 fetch fails (graceful degradation)
-func (s *TraceService) GetTraceWithFullContent(ctx context.Context, id string) (*observability.Trace, error) {
-	// 1. Fetch trace from ClickHouse (includes preview fields)
-	trace, err := s.traceRepo.GetByID(ctx, id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("trace %s", id))
-		}
-		return nil, appErrors.NewInternalError("failed to get trace", err)
-	}
-
-	// 2. Load input from S3 if offloaded
-	if trace.InputBlobStorageID != nil && trace.Input == nil {
-		content, err := s.blobStorageService.DownloadFromS3(ctx, *trace.InputBlobStorageID)
-		if err != nil {
-			s.logger.WithError(err).WithFields(logrus.Fields{
-				"trace_id": trace.ID,
-				"blob_id":  *trace.InputBlobStorageID,
-			}).Warn("Failed to fetch trace input from S3, using preview")
-			// Graceful fallback to preview
-			trace.Input = trace.InputPreview
-		} else {
-			trace.Input = &content
-		}
-	}
-
-	// 3. Load output from S3 if offloaded
-	if trace.OutputBlobStorageID != nil && trace.Output == nil {
-		content, err := s.blobStorageService.DownloadFromS3(ctx, *trace.OutputBlobStorageID)
-		if err != nil {
-			s.logger.WithError(err).WithFields(logrus.Fields{
-				"trace_id": trace.ID,
-				"blob_id":  *trace.OutputBlobStorageID,
-			}).Warn("Failed to fetch trace output from S3, using preview")
-			// Graceful fallback to preview
-			trace.Output = trace.OutputPreview
-		} else {
-			trace.Output = &content
-		}
-	}
-
-	return trace, nil
 }

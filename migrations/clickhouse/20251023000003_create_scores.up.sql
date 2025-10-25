@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS scores (
     INDEX idx_trace_id trace_id TYPE bloom_filter(0.001) GRANULARITY 1,
     INDEX idx_observation_id observation_id TYPE bloom_filter(0.001) GRANULARITY 1
 
-) ENGINE = ReplacingMergeTree(version)
+) ENGINE = ReplacingMergeTree(event_ts, is_deleted)
 PARTITION BY toYYYYMM(timestamp)
 ORDER BY (project_id, toDate(timestamp), name, id)
 TTL toDateTime(timestamp) + INTERVAL 365 DAY;

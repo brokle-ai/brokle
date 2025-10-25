@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS blob_storage_file_log (
     INDEX idx_entity_id entity_id TYPE bloom_filter(0.001) GRANULARITY 1,
     INDEX idx_project_id project_id TYPE bloom_filter(0.001) GRANULARITY 1
 
-) ENGINE = ReplacingMergeTree(version)
+) ENGINE = ReplacingMergeTree(event_ts, is_deleted)
 PARTITION BY toYYYYMM(created_at)
 ORDER BY (project_id, entity_type, entity_id, created_at)
 TTL toDateTime(created_at) + INTERVAL 365 DAY

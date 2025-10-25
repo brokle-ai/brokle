@@ -60,37 +60,6 @@ services:
     networks:
       - brokle-network
 
-  # Message Queue
-  kafka:
-    image: confluentinc/cp-kafka:7.7.1
-    container_name: brokle-kafka
-    environment:
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
-    ports:
-      - "9092:9092"
-    depends_on:
-      - zookeeper
-    volumes:
-      - kafka_data:/var/lib/kafka/data
-    networks:
-      - brokle-network
-
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.7.1
-    container_name: brokle-zookeeper
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
-    ports:
-      - "2181:2181"
-    volumes:
-      - zookeeper_data:/var/lib/zookeeper/data
-    networks:
-      - brokle-network
-
   # Main API Service
   api:
     build:
@@ -101,10 +70,9 @@ services:
       - "8080:8080"
     environment:
       - ENV=${ENV:-production}
-      - DATABASE_URL=${DATABASE_URL:-postgres://brokle:brokle_password@postgres:5432/brokle_prod?sslmode=disable}
-      - CLICKHOUSE_URL=${CLICKHOUSE_URL:-http://brokle:brokle_password@clickhouse:8123/default}
-      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
-      - KAFKA_BROKERS=${KAFKA_BROKERS:-kafka:9092}
+      - DATABASE_URL=postgres://brokle:brokle_password@postgres:5432/brokle_prod?sslmode=disable
+      - CLICKHOUSE_URL=http://brokle:brokle_password@clickhouse:8123/default
+      - REDIS_URL=redis://redis:6379/0
       - JWT_SECRET=${JWT_SECRET}
       - LOG_LEVEL=${LOG_LEVEL:-info}
     depends_on:
@@ -143,76 +111,6 @@ services:
     networks:
       - brokle-network
 
-  # Monitoring Services
-  prometheus:
-    image: prom/prometheus:v2.55.1
-    container_name: brokle-prometheus
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./configs/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
-      - ./configs/prometheus/alert.rules:/etc/prometheus/alert.rules
-      - prometheus_data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/etc/prometheus/console_libraries'
-      - '--web.console.templates=/etc/prometheus/consoles'
-      - '--storage.tsdb.retention.time=200h'
-      - '--web.enable-lifecycle'
-      - '--web.enable-admin-api'
-    networks:
-      - brokle-network
-
-  grafana:
-    image: grafana/grafana:11.3.0
-    container_name: brokle-grafana
-    ports:
-      - "3001:3000"
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-      - GF_USERS_ALLOW_SIGN_UP=false
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./configs/grafana/provisioning:/etc/grafana/provisioning
-      - ./configs/grafana/dashboards:/var/lib/grafana/dashboards
-    depends_on:
-      - prometheus
-    networks:
-      - brokle-network
-
-  alertmanager:
-    image: prom/alertmanager:v0.27.0
-    container_name: brokle-alertmanager
-    ports:
-      - "9093:9093"
-    volumes:
-      - ./configs/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml
-      - alertmanager_data:/alertmanager
-    command:
-      - '--config.file=/etc/alertmanager/alertmanager.yml'
-      - '--storage.path=/alertmanager'
-      - '--web.external-url=http://localhost:9093'
-    networks:
-      - brokle-network
-
-  # Reverse Proxy & Load Balancer
-  nginx:
-    image: nginx:1.27-alpine
-    container_name: brokle-nginx
-    ports:
-      - "8000:80"
-      - "8443:443"
-    volumes:
-      - ./configs/nginx/nginx.conf:/etc/nginx/nginx.conf
-      - ./configs/nginx/ssl:/etc/nginx/ssl
-      - nginx_logs:/var/log/nginx
-    depends_on:
-      - api
-      - dashboard
-    networks:
-      - brokle-network
-
   # MinIO for local S3-compatible blob storage
   minio:
     image: minio/minio:latest
@@ -238,12 +136,6 @@ volumes:
   postgres_data:
   clickhouse_data:
   redis_data:
-  kafka_data:
-  zookeeper_data:
-  prometheus_data:
-  grafana_data:
-  alertmanager_data:
-  nginx_logs:
   minio_data:
 
 networks:
