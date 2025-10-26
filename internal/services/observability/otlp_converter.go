@@ -508,42 +508,117 @@ func marshalAttributes(attrs map[string]interface{}) string {
 
 // extractGenAIFields extracts Gen AI semantic conventions from attributes
 func extractGenAIFields(attrs map[string]interface{}, payload map[string]interface{}) {
-	// Model identification → model_name and provider
-	if system, ok := attrs["gen_ai.system"].(string); ok {
-		payload["provider"] = system // openai, anthropic, google
-	}
-	if model, ok := attrs["gen_ai.request.model"].(string); ok {
-		payload["model_name"] = model // gpt-4, claude-3-opus
+	// ========== OTEL GenAI 1.28+ Attributes ==========
+	// Strategy: Use existing schema columns + attributes JSON
+	// - provider column (indexed, fast queries)
+	// - model_name column (indexed, fast queries)
+	// - input/output columns (messages, ZSTD compressed)
+	// - model_parameters column (JSON for request params)
+	// - usage_details Map (token counts)
+	// - attributes JSON column (ALL OTEL attributes, ZSTD compressed)
+
+	// ========== Provider (existing column) ==========
+	if provider, ok := attrs["gen_ai.provider.name"].(string); ok {
+		payload["provider"] = provider
 	}
 
-	// Content → Store full OTel message arrays as JSON strings
-	// Official format: gen_ai.input.messages and gen_ai.output.messages (OTel 1.28+)
-	if messages, ok := attrs["gen_ai.input.messages"].([]interface{}); ok {
+	// ========== Model (existing column) ==========
+	// Prefer response model (authoritative) over request model
+	if responseModel, ok := attrs["gen_ai.response.model"].(string); ok {
+		payload["model_name"] = responseModel
+	} else if requestModel, ok := attrs["gen_ai.request.model"].(string); ok {
+		payload["model_name"] = requestModel
+	}
+
+	// ========== Messages → existing input/output columns ==========
+	// Input messages (excluding system)
+	if messages, ok := attrs["gen_ai.input.messages"].(string); ok {
+		payload["input"] = messages
+	} else if messages, ok := attrs["gen_ai.input.messages"].([]interface{}); ok {
 		if messagesJSON, err := json.Marshal(messages); err == nil {
 			payload["input"] = string(messagesJSON)
 		}
 	}
 
-	if messages, ok := attrs["gen_ai.output.messages"].([]interface{}); ok {
+	// Output messages
+	if messages, ok := attrs["gen_ai.output.messages"].(string); ok {
+		payload["output"] = messages
+	} else if messages, ok := attrs["gen_ai.output.messages"].([]interface{}); ok {
 		if messagesJSON, err := json.Marshal(messages); err == nil {
 			payload["output"] = string(messagesJSON)
 		}
 	}
 
-	// Token counts → usage_details Map
+	// ========== Model Parameters → existing model_parameters JSON ==========
+	modelParams := make(map[string]interface{})
+
+	// Extract standard OTEL GenAI request parameters
+	if temp, ok := attrs["gen_ai.request.temperature"].(float64); ok {
+		modelParams["temperature"] = temp
+	}
+	if maxTokens, ok := attrs["gen_ai.request.max_tokens"].(float64); ok {
+		modelParams["max_tokens"] = int(maxTokens)
+	} else if maxTokens, ok := attrs["gen_ai.request.max_tokens"].(int64); ok {
+		modelParams["max_tokens"] = int(maxTokens)
+	}
+	if topP, ok := attrs["gen_ai.request.top_p"].(float64); ok {
+		modelParams["top_p"] = topP
+	}
+	if topK, ok := attrs["gen_ai.request.top_k"].(float64); ok {
+		modelParams["top_k"] = int(topK)
+	} else if topK, ok := attrs["gen_ai.request.top_k"].(int64); ok {
+		modelParams["top_k"] = int(topK)
+	}
+	if freqPenalty, ok := attrs["gen_ai.request.frequency_penalty"].(float64); ok {
+		modelParams["frequency_penalty"] = freqPenalty
+	}
+	if presPenalty, ok := attrs["gen_ai.request.presence_penalty"].(float64); ok {
+		modelParams["presence_penalty"] = presPenalty
+	}
+
+	// Store model parameters as JSON
+	if len(modelParams) > 0 {
+		if paramsJSON, err := json.Marshal(modelParams); err == nil {
+			payload["model_parameters"] = string(paramsJSON)
+		}
+	}
+
+	// ========== Usage Tokens → existing usage_details Map ==========
 	usageDetails := make(map[string]uint64)
-	if promptTokens, ok := attrs["gen_ai.usage.prompt_tokens"].(int64); ok {
-		usageDetails["input"] = uint64(promptTokens)
+
+	// OTEL 1.28+ standard attributes (input_tokens, output_tokens)
+	if inputTokens, ok := attrs["gen_ai.usage.input_tokens"].(float64); ok {
+		usageDetails["input"] = uint64(inputTokens)
+	} else if inputTokens, ok := attrs["gen_ai.usage.input_tokens"].(int64); ok {
+		usageDetails["input"] = uint64(inputTokens)
 	}
-	if completionTokens, ok := attrs["gen_ai.usage.completion_tokens"].(int64); ok {
-		usageDetails["output"] = uint64(completionTokens)
+
+	if outputTokens, ok := attrs["gen_ai.usage.output_tokens"].(float64); ok {
+		usageDetails["output"] = uint64(outputTokens)
+	} else if outputTokens, ok := attrs["gen_ai.usage.output_tokens"].(int64); ok {
+		usageDetails["output"] = uint64(outputTokens)
 	}
-	if totalTokens, ok := attrs["gen_ai.usage.total_tokens"].(int64); ok {
+
+	// Brokle convenience attribute (brokle.usage.total_tokens)
+	if totalTokens, ok := attrs["brokle.usage.total_tokens"].(float64); ok {
+		usageDetails["total"] = uint64(totalTokens)
+	} else if totalTokens, ok := attrs["brokle.usage.total_tokens"].(int64); ok {
 		usageDetails["total"] = uint64(totalTokens)
 	}
+
 	if len(usageDetails) > 0 {
 		payload["usage_details"] = usageDetails
 	}
+
+	// Note: ALL OTEL GenAI attributes (including operation, response_id, finish_reasons, etc.)
+	// are already stored in the "attributes" JSON column via marshalAttributes(allAttrs).
+	// This includes:
+	// - gen_ai.operation.name
+	// - gen_ai.response.id
+	// - gen_ai.response.finish_reasons
+	// - gen_ai.system_instructions
+	// - All provider-specific attributes (openai.*, anthropic.*, etc.)
+	// No need to duplicate them in separate columns!
 }
 
 // extractBrokleFields extracts Brokle extension fields from attributes

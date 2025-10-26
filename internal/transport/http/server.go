@@ -371,10 +371,14 @@ func (s *Server) setupSDKRoutes(router *gin.RouterGroup) {
 	}
 
 	// OTLP (OpenTelemetry Protocol) ingestion - 100% spec compliant
-	router.POST("/traces", s.handlers.OTLP.HandleTraces) // OTLP trace ingestion (converts to Brokle format)
+	// Standard OTLP endpoint (OpenTelemetry convention)
+	router.POST("/otlp/traces", s.handlers.OTLP.HandleTraces) // Primary OTLP endpoint (supports Protobuf + JSON)
+	// Legacy endpoint (maintained for backward compatibility)
+	router.POST("/traces", s.handlers.OTLP.HandleTraces) // Alias for /otlp/traces
+
 	// Future OTLP endpoints:
-	// router.POST("/metrics", s.handlers.OTLP.HandleMetrics) // OTLP metrics ingestion
-	// router.POST("/logs", s.handlers.OTLP.HandleLogs)       // OTLP logs ingestion
+	// router.POST("/otlp/metrics", s.handlers.OTLP.HandleMetrics) // OTLP metrics ingestion
+	// router.POST("/otlp/logs", s.handlers.OTLP.HandleLogs)       // OTLP logs ingestion
 
 	// Cache management endpoints
 	cache := router.Group("/cache")

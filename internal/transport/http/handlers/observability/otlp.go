@@ -1,8 +1,16 @@
 package observability
 
 import (
+	"encoding/hex"
+	"io"
+	"strings"
+
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	coltracepb "go.opentelemetry.io/proto/otlp/collector/trace/v1"
+	commonpb "go.opentelemetry.io/proto/otlp/common/v1"
+	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 
 	"brokle/internal/core/domain/observability"
 	obsServices "brokle/internal/services/observability"
@@ -59,13 +67,54 @@ func (h *OTLPHandler) HandleTraces(c *gin.Context) {
 	// Get environment from context (optional)
 	environment, _ := middleware.GetEnvironment(c)
 
-	// Parse OTLP request (JSON format)
-	// TODO: Add protobuf support later
-	var otlpReq observability.OTLPRequest
-	if err := c.ShouldBindJSON(&otlpReq); err != nil {
-		h.logger.WithError(err).Error("Failed to parse OTLP request")
-		response.ValidationError(c, "invalid OTLP request", err.Error())
+	// Read raw request body
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		h.logger.WithError(err).Error("Failed to read OTLP request body")
+		response.BadRequest(c, "invalid request", "Failed to read request body")
 		return
+	}
+
+	// Detect content type and parse accordingly
+	contentType := c.GetHeader("Content-Type")
+	var otlpReq observability.OTLPRequest
+
+	if strings.Contains(contentType, "application/x-protobuf") {
+		// Parse Protobuf format (more efficient)
+		h.logger.Debug("Parsing OTLP Protobuf request")
+
+		var protoReq coltracepb.ExportTraceServiceRequest
+		if err := proto.Unmarshal(body, &protoReq); err != nil {
+			h.logger.WithError(err).Error("Failed to unmarshal OTLP protobuf")
+			response.ValidationError(c, "invalid OTLP protobuf", err.Error())
+			return
+		}
+
+		// Convert protobuf to internal format
+		otlpReq, err = convertProtoToInternal(&protoReq)
+		if err != nil {
+			h.logger.WithError(err).Error("Failed to convert protobuf to internal format")
+			response.InternalServerError(c, "Failed to process OTLP protobuf")
+			return
+		}
+	} else {
+		// Parse JSON format (default, for debugging)
+		h.logger.Debug("Parsing OTLP JSON request")
+
+		var protoReq coltracepb.ExportTraceServiceRequest
+		if err := protojson.Unmarshal(body, &protoReq); err != nil {
+			h.logger.WithError(err).Error("Failed to parse OTLP JSON")
+			response.ValidationError(c, "invalid OTLP JSON", err.Error())
+			return
+		}
+
+		// Convert protobuf to internal format (same as Protobuf path)
+		otlpReq, err = convertProtoToInternal(&protoReq)
+		if err != nil {
+			h.logger.WithError(err).Error("Failed to convert JSON to internal format")
+			response.InternalServerError(c, "Failed to process OTLP JSON")
+			return
+		}
 	}
 
 	// Validate request has resource spans
@@ -137,4 +186,145 @@ func countSpans(req *observability.OTLPRequest) int {
 		}
 	}
 	return count
+}
+
+// convertProtoToInternal converts official OTLP protobuf to internal format
+func convertProtoToInternal(protoReq *coltracepb.ExportTraceServiceRequest) (observability.OTLPRequest, error) {
+	var internalReq observability.OTLPRequest
+
+	for _, protoRS := range protoReq.ResourceSpans {
+		internalRS := observability.ResourceSpan{}
+
+		// Convert Resource
+		if protoRS.Resource != nil {
+			internalResource := &observability.Resource{}
+			for _, attr := range protoRS.Resource.Attributes {
+				internalResource.Attributes = append(internalResource.Attributes, observability.KeyValue{
+					Key:   attr.Key,
+					Value: convertProtoAnyValue(attr.Value),
+				})
+			}
+			internalRS.Resource = internalResource
+		}
+
+		// Convert ScopeSpans
+		for _, protoSS := range protoRS.ScopeSpans {
+			internalSS := observability.ScopeSpan{}
+
+			// Convert Scope
+			if protoSS.Scope != nil {
+				internalScope := &observability.Scope{
+					Name:    protoSS.Scope.Name,
+					Version: protoSS.Scope.Version,
+				}
+				for _, attr := range protoSS.Scope.Attributes {
+					internalScope.Attributes = append(internalScope.Attributes, observability.KeyValue{
+						Key:   attr.Key,
+						Value: convertProtoAnyValue(attr.Value),
+					})
+				}
+				internalSS.Scope = internalScope
+			}
+
+			// Convert Spans
+			for _, protoSpan := range protoSS.Spans {
+				// Convert byte arrays to hex strings for internal format
+				traceIDHex := hex.EncodeToString(protoSpan.TraceId)
+				spanIDHex := hex.EncodeToString(protoSpan.SpanId)
+				var parentSpanIDHex interface{}
+				if len(protoSpan.ParentSpanId) > 0 {
+					parentSpanIDHex = hex.EncodeToString(protoSpan.ParentSpanId)
+				}
+
+				internalSpan := observability.Span{
+					TraceID:           traceIDHex,
+					SpanID:            spanIDHex,
+					ParentSpanID:      parentSpanIDHex,
+					Name:              protoSpan.Name,
+					Kind:              int(protoSpan.Kind),
+					StartTimeUnixNano: int64(protoSpan.StartTimeUnixNano),
+					EndTimeUnixNano:   int64(protoSpan.EndTimeUnixNano),
+				}
+
+				// Convert Attributes
+				for _, attr := range protoSpan.Attributes {
+					internalSpan.Attributes = append(internalSpan.Attributes, observability.KeyValue{
+						Key:   attr.Key,
+						Value: convertProtoAnyValue(attr.Value),
+					})
+				}
+
+				// Convert Status
+				if protoSpan.Status != nil {
+					internalSpan.Status = &observability.Status{
+						Code:    int(protoSpan.Status.Code),
+						Message: protoSpan.Status.Message,
+					}
+				}
+
+				// Convert Events
+				for _, protoEvent := range protoSpan.Events {
+					internalEvent := observability.Event{
+						TimeUnixNano: int64(protoEvent.TimeUnixNano),
+						Name:         protoEvent.Name,
+					}
+					for _, attr := range protoEvent.Attributes {
+						internalEvent.Attributes = append(internalEvent.Attributes, observability.KeyValue{
+							Key:   attr.Key,
+							Value: convertProtoAnyValue(attr.Value),
+						})
+					}
+					internalSpan.Events = append(internalSpan.Events, internalEvent)
+				}
+
+				internalSS.Spans = append(internalSS.Spans, internalSpan)
+			}
+
+			internalRS.ScopeSpans = append(internalRS.ScopeSpans, internalSS)
+		}
+
+		internalReq.ResourceSpans = append(internalReq.ResourceSpans, internalRS)
+	}
+
+	return internalReq, nil
+}
+
+// convertProtoAnyValue converts protobuf AnyValue to interface{}
+func convertProtoAnyValue(value *commonpb.AnyValue) interface{} {
+	if value == nil {
+		return nil
+	}
+
+	switch v := value.Value.(type) {
+	case *commonpb.AnyValue_StringValue:
+		return v.StringValue
+	case *commonpb.AnyValue_BoolValue:
+		return v.BoolValue
+	case *commonpb.AnyValue_IntValue:
+		return v.IntValue
+	case *commonpb.AnyValue_DoubleValue:
+		return v.DoubleValue
+	case *commonpb.AnyValue_ArrayValue:
+		if v.ArrayValue == nil {
+			return nil
+		}
+		arr := make([]interface{}, len(v.ArrayValue.Values))
+		for i, item := range v.ArrayValue.Values {
+			arr[i] = convertProtoAnyValue(item)
+		}
+		return arr
+	case *commonpb.AnyValue_KvlistValue:
+		if v.KvlistValue == nil {
+			return nil
+		}
+		m := make(map[string]interface{})
+		for _, kv := range v.KvlistValue.Values {
+			m[kv.Key] = convertProtoAnyValue(kv.Value)
+		}
+		return m
+	case *commonpb.AnyValue_BytesValue:
+		return v.BytesValue
+	default:
+		return nil
+	}
 }
