@@ -1,6 +1,8 @@
 package observability
 
 import (
+	"bytes"
+	"compress/gzip"
 	"encoding/hex"
 	"io"
 	"strings"
@@ -73,6 +75,35 @@ func (h *OTLPHandler) HandleTraces(c *gin.Context) {
 		h.logger.WithError(err).Error("Failed to read OTLP request body")
 		response.BadRequest(c, "invalid request", "Failed to read request body")
 		return
+	}
+
+	// Decompress if Content-Encoding is gzip
+	contentEncoding := c.GetHeader("Content-Encoding")
+	originalSize := len(body)
+
+	if strings.Contains(contentEncoding, "gzip") {
+		h.logger.Debug("Decompressing gzip-encoded OTLP request")
+
+		gzipReader, err := gzip.NewReader(bytes.NewReader(body))
+		if err != nil {
+			h.logger.WithError(err).Error("Failed to create gzip reader")
+			response.BadRequest(c, "invalid encoding", "Failed to decompress gzip data")
+			return
+		}
+		defer gzipReader.Close()
+
+		body, err = io.ReadAll(gzipReader)
+		if err != nil {
+			h.logger.WithError(err).Error("Failed to decompress gzip data")
+			response.BadRequest(c, "invalid encoding", "Failed to read decompressed data")
+			return
+		}
+
+		h.logger.WithFields(logrus.Fields{
+			"original_size":     originalSize,
+			"decompressed_size": len(body),
+			"compression_ratio": float64(originalSize) / float64(len(body)),
+		}).Info("Gzip decompression successful")
 	}
 
 	// Detect content type and parse accordingly
