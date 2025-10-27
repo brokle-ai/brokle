@@ -21,10 +21,7 @@ func NewTraceRepository(db clickhouse.Conn) observability.TraceRepository {
 
 // Create inserts a new OTEL trace into ClickHouse
 func (r *traceRepository) Create(ctx context.Context, trace *observability.Trace) error {
-	// Set version and event_ts for new traces
-	if trace.Version == 0 {
-		trace.Version = 1
-	}
+	// Set event_ts for ReplacingMergeTree deduplication
 	trace.EventTs = time.Now()
 	trace.UpdatedAt = time.Now()
 
@@ -76,10 +73,9 @@ func (r *traceRepository) Create(ctx context.Context, trace *observability.Trace
 	)
 }
 
-// Update performs an update using ReplacingMergeTree pattern (insert with higher version)
+// Update performs an update using ReplacingMergeTree pattern (insert with new event_ts)
 func (r *traceRepository) Update(ctx context.Context, trace *observability.Trace) error {
-	// ReplacingMergeTree pattern: increment version and update event_ts
-	trace.Version++
+	// ReplacingMergeTree pattern: update event_ts for deduplication
 	trace.EventTs = time.Now()
 	trace.UpdatedAt = time.Now()
 
@@ -101,7 +97,7 @@ func (r *traceRepository) Delete(ctx context.Context, id string) error {
 			environment, service_name, service_version, release,
 			total_cost, total_tokens, observation_count,
 			bookmarked, public, created_at, updated_at,
-			version + 1 as version,
+			version,
 			now64() as event_ts,
 			1 as is_deleted
 		FROM traces
@@ -322,9 +318,8 @@ func (r *traceRepository) CreateBatch(ctx context.Context, traces []*observabili
 	}
 
 	for _, trace := range traces {
-		// Set version and event_ts for new traces
-		if trace.Version == 0 {
-			trace.Version = 1
+		// Set event_ts for ReplacingMergeTree
+		if trace.EventTs.IsZero() {
 			trace.EventTs = time.Now()
 		}
 		if trace.UpdatedAt.IsZero() {

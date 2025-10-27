@@ -89,7 +89,7 @@ func (s *ObservationService) CreateObservation(ctx context.Context, obs *observa
 
 	// Initialize maps if nil
 	if obs.Metadata == nil {
-		obs.Metadata = make(map[string]string)
+		obs.Metadata = make(map[string]interface{})
 	}
 	if obs.ProvidedUsageDetails == nil {
 		obs.ProvidedUsageDetails = make(map[string]uint64)
@@ -390,7 +390,7 @@ func (s *ObservationService) CreateObservationBatch(ctx context.Context, observa
 
 		// Initialize maps if nil
 		if obs.Metadata == nil {
-			obs.Metadata = make(map[string]string)
+			obs.Metadata = make(map[string]interface{})
 		}
 		if obs.ProvidedUsageDetails == nil {
 			obs.ProvidedUsageDetails = make(map[string]uint64)

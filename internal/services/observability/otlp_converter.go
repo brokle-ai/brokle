@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -111,7 +112,7 @@ func (s *OTLPConverterService) ConvertOTLPToBrokleEvents(otlpReq *observability.
 
 				// If root span and we haven't created a trace event yet, create it
 				if isRootSpan && !tracesCreated[traceID] {
-					traceEvent, err := s.createTraceEvent(span, resourceAttrs, scopeAttrs, traceID)
+					traceEvent, err := s.createTraceEvent(span, resourceAttrs, scopeAttrs, scopeSpan.Scope, traceID)
 					if err != nil {
 						return nil, fmt.Errorf("failed to create trace event: %w", err)
 					}
@@ -120,7 +121,7 @@ func (s *OTLPConverterService) ConvertOTLPToBrokleEvents(otlpReq *observability.
 				}
 
 				// Convert OTLP span to Brokle observation event
-				obsEvent, err := s.convertSpanToEvent(span, resourceAttrs, scopeAttrs)
+				obsEvent, err := s.convertSpanToEvent(span, resourceAttrs, scopeAttrs, scopeSpan.Scope)
 				if err != nil {
 					return nil, fmt.Errorf("failed to convert span: %w", err)
 				}
@@ -134,7 +135,7 @@ func (s *OTLPConverterService) ConvertOTLPToBrokleEvents(otlpReq *observability.
 }
 
 // createTraceEvent creates a trace event from a root span
-func (s *OTLPConverterService) createTraceEvent(span observability.Span, resourceAttrs, scopeAttrs map[string]interface{}, traceID string) (*brokleEvent, error) {
+func (s *OTLPConverterService) createTraceEvent(span observability.Span, resourceAttrs, scopeAttrs map[string]interface{}, scope *observability.Scope, traceID string) (*brokleEvent, error) {
 	// Extract span attributes
 	spanAttrs := extractAttributesFromKeyValues(span.Attributes)
 
@@ -175,11 +176,6 @@ func (s *OTLPConverterService) createTraceEvent(span observability.Span, resourc
 		payload["service_version"] = serviceVersion
 	}
 
-	// Extract environment
-	if env, ok := allAttrs["deployment.environment"].(string); ok {
-		payload["environment"] = env
-	}
-
 	// Extract trace-level input/output using official OTel format
 	// Supports: gen_ai.input.messages and gen_ai.output.messages (OTel 1.28+)
 	// Note: Data stored directly in ClickHouse with ZSTD compression
@@ -195,6 +191,37 @@ func (s *OTLPConverterService) createTraceEvent(span observability.Span, resourc
 		}
 	}
 
+	// Extract user_id (OTEL standard: user.id)
+	if userID, ok := allAttrs["user.id"].(string); ok && userID != "" {
+		payload["user_id"] = userID
+	}
+
+	// Extract session_id (OTEL standard: session.id)
+	if sessionID, ok := allAttrs["session.id"].(string); ok && sessionID != "" {
+		payload["session_id"] = sessionID
+	}
+
+	// Extract environment (default to "default" if not set)
+	environment := "default"
+	if env, ok := allAttrs["brokle.environment"].(string); ok && env != "" {
+		environment = env
+	}
+	payload["environment"] = environment
+
+	// Extract release (optional)
+	if release, ok := allAttrs["brokle.release"].(string); ok && release != "" {
+		payload["release"] = release
+	}
+
+	// Extract version (optional)
+	if version, ok := allAttrs["brokle.version"].(string); ok && version != "" {
+		payload["version"] = version
+	}
+
+	// Add OTEL metadata (resource attributes + instrumentation scope)
+	otelMetadata := buildOTELMetadata(resourceAttrs, scopeAttrs, scope)
+	payload["metadata"] = otelMetadata
+
 	// Create trace event
 	return &brokleEvent{
 		EventID:   ulid.New().String(),
@@ -208,7 +235,7 @@ func (s *OTLPConverterService) createTraceEvent(span observability.Span, resourc
 }
 
 // convertSpanToEvent converts a single OTLP span to a Brokle telemetry event
-func (s *OTLPConverterService) convertSpanToEvent(span observability.Span, resourceAttrs, scopeAttrs map[string]interface{}) (*brokleEvent, error) {
+func (s *OTLPConverterService) convertSpanToEvent(span observability.Span, resourceAttrs, scopeAttrs map[string]interface{}, scope *observability.Scope) (*brokleEvent, error) {
 	// Convert OTLP IDs to hex strings
 	traceID, err := convertTraceID(span.TraceID)
 	if err != nil {
@@ -275,6 +302,15 @@ func (s *OTLPConverterService) convertSpanToEvent(span observability.Span, resou
 
 	// Extract Brokle extensions from attributes
 	extractBrokleFields(allAttrs, payload)
+
+	// Extract version (optional application version) - OBSERVATIONS
+	if version, ok := allAttrs["brokle.version"].(string); ok && version != "" {
+		payload["version"] = version
+	}
+
+	// Add OTEL metadata (resource attributes + instrumentation scope)
+	otelMetadata := buildOTELMetadata(resourceAttrs, scopeAttrs, scope)
+	payload["metadata"] = otelMetadata
 
 	// Create observation event
 	event := &brokleEvent{
@@ -506,6 +542,37 @@ func marshalAttributes(attrs map[string]interface{}) string {
 	return string(jsonBytes)
 }
 
+// buildOTELMetadata builds OTEL metadata structure
+// Contains resource attributes and instrumentation scope information
+func buildOTELMetadata(resourceAttrs, scopeAttrs map[string]interface{}, scope *observability.Scope) map[string]interface{} {
+	metadata := make(map[string]interface{})
+
+	// Filter out brokle.* attributes from resource attributes
+	// These are SDK-internal attributes, not standard OTEL resource attributes
+	filteredResourceAttrs := make(map[string]interface{})
+	for k, v := range resourceAttrs {
+		if !strings.HasPrefix(k, "brokle.") {
+			filteredResourceAttrs[k] = v
+		}
+	}
+
+	// Add filtered resource attributes (pure OTEL only)
+	metadata["resourceAttributes"] = filteredResourceAttrs
+
+	// Add instrumentation scope
+	scopeInfo := make(map[string]interface{})
+	if scope != nil {
+		scopeInfo["name"] = scope.Name
+		scopeInfo["version"] = scope.Version
+		if len(scopeAttrs) > 0 {
+			scopeInfo["attributes"] = scopeAttrs
+		}
+	}
+	metadata["scope"] = scopeInfo
+
+	return metadata
+}
+
 // extractGenAIFields extracts Gen AI semantic conventions from attributes
 func extractGenAIFields(attrs map[string]interface{}, payload map[string]interface{}) {
 	// ========== OTEL GenAI 1.28+ Attributes ==========
@@ -623,17 +690,8 @@ func extractGenAIFields(attrs map[string]interface{}, payload map[string]interfa
 
 // extractBrokleFields extracts Brokle extension fields from attributes
 func extractBrokleFields(attrs map[string]interface{}, payload map[string]interface{}) {
-	// Initialize Maps
-	metadata := make(map[string]string)
+	// Initialize cost details map
 	costDetails := make(map[string]float64)
-
-	// Routing → metadata Map
-	if provider, ok := attrs["brokle.routing.provider"].(string); ok {
-		metadata["brokle.routing.provider"] = provider
-	}
-	if strategy, ok := attrs["brokle.routing.strategy"].(string); ok {
-		metadata["brokle.routing.strategy"] = strategy
-	}
 
 	// Cost → cost_details Map
 	if costTotal, ok := attrs["brokle.cost.total"].(float64); ok {
@@ -647,30 +705,6 @@ func extractBrokleFields(attrs map[string]interface{}, payload map[string]interf
 		costDetails["output"] = costOutput
 	}
 
-	// Cache → metadata Map
-	if cacheHit, ok := attrs["brokle.cache.hit"].(bool); ok {
-		if cacheHit {
-			metadata["brokle.cache.hit"] = "true"
-		} else {
-			metadata["brokle.cache.hit"] = "false"
-		}
-	}
-	if similarity, ok := attrs["brokle.cache.similarity"].(float64); ok {
-		metadata["brokle.cache.similarity"] = fmt.Sprintf("%.2f", similarity)
-	}
-
-	// Governance → metadata Map
-	if passed, ok := attrs["brokle.governance.passed"].(bool); ok {
-		if passed {
-			metadata["brokle.governance.passed"] = "true"
-		} else {
-			metadata["brokle.governance.passed"] = "false"
-		}
-	}
-	if policy, ok := attrs["brokle.governance.policy"].(string); ok {
-		metadata["brokle.governance.policy"] = policy
-	}
-
 	// Prompt management (keep as dedicated fields)
 	if promptID, ok := attrs["brokle.prompt.id"].(string); ok {
 		payload["prompt_id"] = promptID
@@ -682,13 +716,13 @@ func extractBrokleFields(attrs map[string]interface{}, payload map[string]interf
 		payload["prompt_version"] = uint16(promptVersion)
 	}
 
-	// Add Maps to payload
-	if len(metadata) > 0 {
-		payload["metadata"] = metadata
-	}
+	// Add cost details map to payload
 	if len(costDetails) > 0 {
 		payload["cost_details"] = costDetails
 	}
+
+	// Note: Brokle-specific data (routing, cache, governance) is stored in attributes column
+	// with brokle.* namespace, following OTEL-native patterns
 }
 
 // Helper function to convert byte array to hex

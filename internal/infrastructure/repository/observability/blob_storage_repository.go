@@ -22,9 +22,7 @@ func NewBlobStorageRepository(db clickhouse.Conn) observability.BlobStorageRepos
 // Create inserts a new blob storage reference into ClickHouse
 func (r *blobStorageRepository) Create(ctx context.Context, blob *observability.BlobStorageFileLog) error {
 	// Set version and event_ts for new blob references
-	if blob.Version == 0 {
-		blob.Version = 1
-	}
+	// Version is now optional application version
 	blob.EventTs = time.Now()
 	blob.UpdatedAt = time.Now()
 
@@ -60,7 +58,7 @@ func (r *blobStorageRepository) Create(ctx context.Context, blob *observability.
 // Update performs an update using ReplacingMergeTree pattern (insert with higher version)
 func (r *blobStorageRepository) Update(ctx context.Context, blob *observability.BlobStorageFileLog) error {
 	// ReplacingMergeTree pattern: increment version and update event_ts
-	blob.Version++
+	// Version is now optional application version (not auto-incremented)
 	blob.EventTs = time.Now()
 	blob.UpdatedAt = time.Now()
 

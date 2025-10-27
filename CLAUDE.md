@@ -57,15 +57,80 @@ brokle/
 │   └── websocket/         # WebSocket utilities
 ├── migrations/            # Database migration files
 ├── web/                   # Next.js frontend
-└── docs/                  # Documentation
+└── docs/                  # Public OSS documentation only
+```
+
+### Documentation Organization
+
+**IMPORTANT**: This project maintains a strict separation between public and internal documentation:
+
+#### Public Documentation (`docs/`)
+**Location**: `brokle/docs/` (committed to OSS repository)
+**Purpose**: User-facing documentation for OSS contributors and users
+**Contents**:
+- API documentation and reference
+- Architecture overview for contributors
+- Development guides and coding standards
+- Enterprise feature documentation
+- Testing guides and best practices
+- Deployment instructions
+
+#### Internal Documentation (`internal-docs/`)
+**Location**: Separate private repository
+**Purpose**: Internal research, planning, and exploration
+**Contents**:
+- `research/` - Competitor analysis, technology evaluations, market research
+- `migrations/` - Migration documentation (e.g., OpenTelemetry migration)
+- `planning/` - Feature planning, roadmaps, priorities
+- `decisions/` - Architecture Decision Records (ADRs), RFCs
+- `data/` - CSV files, analysis scripts, data exports
+
+**Documentation Workflow**:
+1. **Research/Exploration** → Create in `internal-docs/`
+2. **Implementation** → Implementation guides in `internal-docs/` during development
+3. **Public Release** → Only user-facing docs move to `brokle/docs/`
+4. **Never commit** internal docs to main OSS repository
+
+**What Goes Where**:
+```
+✅ OSS Repo (brokle/docs/)          ❌ Internal Docs Only (internal-docs/)
+- API reference                     - Competitor analysis
+- Architecture guides               - Migration research
+- Development workflows             - Technical explorations
+- Testing standards                 - Feature planning
+- Enterprise features               - Decision records
+- Deployment guides                 - Data analysis
+                                    - Internal roadmaps
 ```
 
 ### Domain-Driven Architecture
-The codebase follows DDD patterns with:
-- **Domain Layer** (`internal/core/domain/`): Entities, repositories, services
-- **Infrastructure Layer** (`internal/infrastructure/`): Database, external APIs
-- **Transport Layer** (`internal/transport/`): HTTP handlers, WebSocket
-- **Application Layer** (`internal/app/`): Dependency injection, bootstrap
+The codebase follows DDD patterns with clear separation of concerns:
+
+#### Layer Organization
+- **Domain Layer** (`internal/core/domain/`): Core business concepts
+  - Entities: Domain models and business rules
+  - Repository Interfaces: Data access contracts
+  - Service Interfaces: Business operation contracts
+
+- **Service Implementation Layer** (`internal/services/`):
+  - Concrete implementations of domain service interfaces
+  - Business logic orchestration
+  - Example: `internal/services/observability/` implements interfaces from `internal/core/domain/observability/`
+
+- **Infrastructure Layer** (`internal/infrastructure/`): External integrations
+  - Database connections and configurations
+  - Repository implementations (`internal/infrastructure/repository/`)
+  - External API clients
+
+- **Transport Layer** (`internal/transport/`): Request/Response handling
+  - HTTP handlers and routing
+  - WebSocket connections
+  - Middleware components
+
+- **Application Layer** (`internal/app/`): Application bootstrap
+  - Dependency injection container
+  - Service registry and wiring
+  - Graceful shutdown coordination
 
 ## Development Commands
 
@@ -173,12 +238,7 @@ go run cmd/migrate/main.go -dry-run up          # Preview migrations without exe
 
 #### Migration Architecture
 - **PostgreSQL**: Single comprehensive schema migration (user management, auth, organizations)
-- **ClickHouse**: 5 separate table migrations for better granularity:
-  - `metrics` - Real-time platform metrics (90 day TTL)
-  - `events` - Business/system events (180 day TTL)  
-  - `traces` - Distributed tracing (30 day TTL)
-  - `request_logs` - API request logging (60 day TTL)
-  - `ai_routing_metrics` - AI provider routing decisions (365 day TTL)
+- **ClickHouse**: Enhanced observability schema with recent updates (Oct 2024):
 
 ### Testing & Quality
 ```bash
@@ -290,6 +350,23 @@ The platform implements a clean separation between SDK and Dashboard routes:
 - `GET /v1/ingest/batch/:batch_id` - Batch status tracking
 - `POST /v1/telemetry/validate` - Event validation
 
+**OpenTelemetry Protocol (OTLP) Native Support** (Added Oct 2024):
+- `POST /v1/otlp/traces` - OTLP traces ingestion endpoint
+- `POST /v1/traces` - Alternative OTLP traces endpoint
+- **Format Support**: Protobuf (binary) and JSON payloads
+- **Compression**: Automatic gzip decompression via Content-Encoding header
+- **Smart Processing**: OTLPConverterService with intelligent root span detection
+- **Multi-Exporter Compatible**: Handles spans from various OTLP exporters
+
+**Three Parallel Ingestion Systems**:
+1. **Brokle Native Batch** (`/v1/ingest/batch`) - High-performance batch processing optimized for Brokle SDKs
+   - ULID-based deduplication, mixed event types, Redis caching
+   - Supports traces, observations, quality scores, and events in single batch
+2. **OpenTelemetry Protocol** (OTLP endpoints above) - Industry-standard compatibility
+3. **Redis Streams Backend** (`TelemetryStreamConsumer` worker) - Async high-throughput processing
+
+All systems converge at `internal/services/observability/` for unified processing.
+
 **Cache Management**:
 - `GET /v1/cache/status` - Cache health status
 - `POST /v1/cache/invalidate` - Cache invalidation
@@ -339,49 +416,19 @@ bk_{40_char_random_secret}
 - **Security Best Practice**: No sensitive data embedded in key
 
 #### SDK Authentication Flow
-```go
-// 1. Extract API key from X-API-Key or Authorization header
-apiKey := c.GetHeader("X-API-Key")
-// Fallback: Authorization: Bearer {api_key}
-
-// 2. Validate API key format (bk_{40_chars})
-if err := auth.ValidateAPIKeyFormat(apiKey); err != nil {
-    return errors.New("invalid API key format")
-}
-
-// 3. Validate against database with SHA-256 hash lookup (O(1))
-validateResp, err := apiKeyService.ValidateAPIKey(ctx, apiKey)
-// This does: SHA-256(apiKey) -> database lookup -> return project_id + auth context
-
-// 4. Store authentication context (project_id comes from database)
-c.Set("project_id", &validateResp.ProjectID)
-c.Set("api_key_id", validateResp.AuthContext.APIKeyID)
-```
+1. Extract API key from `X-API-Key` or `Authorization` header
+2. Validate format: `bk_{40_char_random}`
+3. SHA-256 hash lookup in database (O(1) performance)
+4. Store authentication context with project ID
 
 ### Middleware Architecture
 
-#### SDKAuthMiddleware
-Located in `internal/transport/http/middleware/sdk_auth.go`:
+#### Middleware Components
 
-```go
-type SDKAuthMiddleware struct {
-    apiKeyService auth.APIKeyService
-    logger        *logrus.Logger
-}
-
-// RequireSDKAuth validates API keys for SDK routes
-func (m *SDKAuthMiddleware) RequireSDKAuth() gin.HandlerFunc {
-    // Extracts and validates API key
-    // Stores authentication context in Gin context
-    // Handles both X-API-Key and Authorization headers
-}
-```
-
-**Context Keys**:
-- `SDKAuthContextKey` - Full authentication context
-- `APIKeyIDKey` - API key identifier
-- `ProjectIDKey` - Project ID (stored as pointer)
-- `EnvironmentKey` - Environment tag from header
+**SDKAuthMiddleware** (`internal/transport/http/middleware/sdk_auth.go`):
+- Validates API keys for SDK routes
+- Stores authentication context in request
+- Context keys: `SDKAuthContextKey`, `APIKeyIDKey`, `ProjectIDKey`, `EnvironmentKey`
 
 #### Rate Limiting Strategy
 ```go
@@ -396,23 +443,9 @@ protectedRoutes.Use(rateLimitMiddleware.RateLimitByUser())
 ```
 
 ### Server Route Setup
-The HTTP server implements clean route separation in `internal/transport/http/server.go`:
-
-```go
-// SDK routes (/v1) - API Key authentication
-sdk := engine.Group("/v1")
-sdk.Use(sdkAuthMiddleware.RequireSDKAuth())
-sdk.Use(rateLimitMiddleware.RateLimitByAPIKey())
-setupSDKRoutes(sdk)
-
-// Dashboard routes (/api/v1) - JWT authentication
-dashboard := engine.Group("/api/v1")
-dashboard.Use(rateLimitMiddleware.RateLimitByIP()) // Global IP limiting
-protected := dashboard.Group("")
-protected.Use(authMiddleware.RequireAuth())       // JWT auth
-protected.Use(rateLimitMiddleware.RateLimitByUser()) // User limiting
-setupDashboardRoutes(protected)
-```
+Routes are configured in `internal/transport/http/server.go`:
+- **SDK routes** (`/v1`): API key auth + API key rate limiting
+- **Dashboard routes** (`/api/v1`): JWT auth + IP/user rate limiting
 
 ## Data Architecture
 
@@ -426,12 +459,33 @@ Single database with domain-separated tables:
 - `billing_usage` - Usage tracking and billing
 
 ### Analytics Database (ClickHouse)
-Time-series data optimized for analytical queries:
-- Request/response logs with full tracing
-- AI routing decision metrics
-- Performance and latency metrics  
-- Cost tracking and optimization data
-- Quality scores and ML model performance
+Time-series data optimized for analytical queries with TTL-based retention:
+
+#### Observability Tables
+- **observations** - LLM call observations with request/response data
+  - `attributes` (String) - All OTEL + Brokle attributes with namespace prefixes
+  - `metadata` (String) - OTEL metadata (resourceAttributes + instrumentation scope)
+  - `version` (Nullable(String)) - Application version for A/B testing
+  - ZSTD compression for input/output fields (78% cost reduction vs S3)
+  - **OTEL-native**: Brokle data stored in attributes with `brokle.*` namespace
+
+- **traces** - Distributed tracing data (30 day TTL)
+  - `attributes` (String) - All OTEL + Brokle attributes with namespace prefixes
+  - `metadata` (String) - OTEL metadata (resourceAttributes + scope)
+  - `version` (Nullable(String)) - Application version for experiment tracking
+  - Hierarchical trace organization with parent/child relationships
+  - **OTEL-native**: Follows OpenTelemetry standard
+
+- **quality_scores** - Model performance metrics
+  - Links to traces and observations for evaluation context
+
+- **request_logs** - API request logging (60 day TTL)
+
+#### Performance Metrics
+- AI routing decision metrics (365 day TTL)
+- Performance and latency tracking
+- Cost optimization data
+- ML model performance scores
 
 ### Cache Layer (Redis)  
 - JWT token and session storage
@@ -442,160 +496,34 @@ Time-series data optimized for analytical queries:
 
 ## Development Patterns
 
-### API Key Management Utilities
-The platform includes industry-standard API key utilities in `internal/core/domain/auth/apikey_utils.go`:
+### API Key Management
+**Utilities** (`internal/core/domain/auth/apikey_utils.go`):
+- `GenerateAPIKey()` - Creates new `bk_{40_char}` key
+- `ValidateAPIKeyFormat()` - Validates key format
+- `CreateKeyPreview()` - Creates secure preview (`bk_AbCd...XyZa`)
+- SHA-256 hashing for secure storage
 
-```go
-// Generate new industry-standard API key (pure random)
-fullKey, err := auth.GenerateAPIKey()
-// Returns: "bk_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789AbCd" (43 chars total)
+### Authentication Patterns
 
-// Validate API key format (bk_{40_chars})
-err := auth.ValidateAPIKeyFormat(fullKey)
-// Returns error if format is invalid
-
-// Create preview for display (security best practice - GitHub pattern)
-preview := auth.CreateKeyPreview(fullKey)
-// Returns: "bk_AbCd...AbCd" (shows bk_ + first 4 + ... + last 4 chars)
-
-// Example: Creating and storing an API key
-fullKey, err := auth.GenerateAPIKey()
-keyHash := sha256.Sum256([]byte(fullKey))
-keyHashHex := hex.EncodeToString(keyHash[:])
-keyPreview := auth.CreateKeyPreview(fullKey)
-
-// Store in database: keyHashHex, keyPreview, project_id
-// Return to user: fullKey (ONLY ONCE), keyPreview
-
-// Example: Validating an API key
-hash := sha256.Sum256([]byte(incomingKey))
-hashHex := hex.EncodeToString(hash[:])
-apiKey, err := repo.GetByKeyHash(ctx, hashHex) // O(1) with unique index
-```
-
-### Authentication Middleware Patterns
-
-#### SDK Authentication (API Keys)
-```go
-// For SDK routes requiring API key authentication
-func (h *Handler) SDKEndpoint(c *gin.Context) {
-    // Get authentication context from middleware
-    authCtx, exists := middleware.GetSDKAuthContext(c)
-    if !exists {
-        response.Unauthorized(c, "Authentication required")
-        return
-    }
-
-    // Get project ID (stored as pointer)
-    projectID, exists := middleware.GetProjectID(c)
-    if !exists {
-        response.InternalServerError(c, "Project context missing")
-        return
-    }
-
-    // Optional environment tag
-    environment, _ := middleware.GetEnvironment(c)
-
-    // Use authentication context
-    log.Printf("Project: %s, Environment: %s", projectID.String(), environment)
-}
-```
-
-#### Dashboard Authentication (JWT)
-```go
-// For dashboard routes requiring JWT authentication
-func (h *Handler) DashboardEndpoint(c *gin.Context) {
-    // Get user context from JWT middleware
-    userID, exists := middleware.GetUserID(c)
-    if !exists {
-        response.Unauthorized(c, "Authentication required")
-        return
-    }
-
-    // Get organization context (if required)
-    orgID, exists := middleware.GetOrganizationID(c)
-    // Handle organization-scoped operations
-}
-```
+**SDK Routes**: Use `middleware.GetSDKAuthContext()` to access API key context
+**Dashboard Routes**: Use `middleware.GetUserID()` for JWT-authenticated requests
+**Context Access**: Project ID, environment, and organization available via middleware helpers
 
 ### Clean Architecture
-Follow repository → service → handler pattern:
-
-```go
-// Repository layer
-type UserRepository interface {
-    Create(ctx context.Context, user *models.User) error
-    GetByID(ctx context.Context, id string) (*models.User, error)
-}
-
-// Service layer  
-type UserService struct {
-    repo UserRepository
-}
-
-func (s *UserService) CreateUser(ctx context.Context, req *CreateUserRequest) error {
-    // Business logic here
-    user := &models.User{...}
-    return s.repo.Create(ctx, user)
-}
-
-// Handler layer
-func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
-    // HTTP handling
-    err := h.service.CreateUser(r.Context(), req)
-    // Response handling
-}
-```
+Follow the repository → service → handler pattern as described in the Domain-Driven Architecture section above.
 
 ### Error Handling
 
-**📖 CRITICAL**: Use the comprehensive **[Development Error Handling Guides](docs/development/)** for all error handling implementations:
+**📖 See Error Handling Guides in `docs/development/`**:
+- `ERROR_HANDLING_GUIDE.md` - Complete patterns
+- `DOMAIN_ALIAS_PATTERNS.md` - Import patterns
+- `ERROR_HANDLING_QUICK_REFERENCE.md` - Quick reference
 
-- **[ERROR_HANDLING_GUIDE.md](docs/development/ERROR_HANDLING_GUIDE.md)** - Complete industrial patterns across all layers
-- **[DOMAIN_ALIAS_PATTERNS.md](docs/development/DOMAIN_ALIAS_PATTERNS.md)** - Professional import patterns  
-- **[ERROR_HANDLING_QUICK_REFERENCE.md](docs/development/ERROR_HANDLING_QUICK_REFERENCE.md)** - Developer cheat sheet
-
-The platform follows **industrial Go best practices** with structured error handling:
-
-**Clean Architecture Error Flow:**
-```
-Repository (Domain Errors) → Service (AppErrors) → Handler (HTTP Response)
-```
-
-**Core Principles:**
-- **Repository Layer**: Domain errors with proper wrapping
-- **Service Layer**: AppError constructors (NewUnauthorizedError, NewNotFoundError, etc.)
-- **Handler Layer**: Centralized `response.Error(c, err)` handling
-- **Decorator Pattern**: Cross-cutting concerns (audit, logging) handled separately
-- **Zero Logging**: Core services focus on pure business logic
-
-**Example Implementation:**
-```go
-// Repository layer - Domain errors
-if errors.Is(err, gorm.ErrRecordNotFound) {
-    return nil, fmt.Errorf("get user by email %s: %w", email, user.ErrNotFound)
-}
-
-// Service layer - AppError constructors  
-if errors.Is(err, user.ErrNotFound) {
-    return nil, appErrors.NewUnauthorizedError("Invalid email or password")
-}
-
-// Handler layer - Centralized error handling
-resp, err := h.authService.Login(ctx, req)
-if err != nil {
-    response.Error(c, err) // Automatic HTTP status mapping
-    return
-}
-response.Success(c, resp)
-```
-
-**Key Requirements:**
-- ❌ **No fmt.Errorf/errors.New** in services - use AppError constructors
-- ❌ **No logging** in core services - use decorator pattern  
-- ✅ **Domain error mapping** at repository layer
-- ✅ **Structured AppErrors** at service layer
-- ✅ **Clean separation** of business logic and cross-cutting concerns
+**Key Points**:
+- Repository → Service → Handler error flow
+- Use AppError constructors in services
+- Centralized `response.Error()` in handlers
+- No logging in core services (use decorators)
 
 ### Logging
 Use structured logging with correlation IDs:
@@ -612,30 +540,8 @@ logger.Info("user created successfully", "user_id", user.ID)
 ```
 
 ### Configuration
-The application uses Viper for configuration management:
-
-```go
-// Configuration is loaded from:
-// 1. Environment variables
-// 2. .env file
-// 3. Default values
-
-type Config struct {
-    Server struct {
-        Port int `mapstructure:"port"`
-        Host string `mapstructure:"host"`
-    }
-    Database struct {
-        PostgresURL   string `mapstructure:"postgres_url"`
-        ClickHouseURL string `mapstructure:"clickhouse_url"`
-        RedisURL      string `mapstructure:"redis_url"`
-    }
-    // Enterprise features controlled by build tags
-    Enterprise struct {
-        Enabled bool `mapstructure:"enterprise_enabled"`
-    }
-}
-```
+Uses Viper for configuration management. Loads from environment variables, `.env` file, and defaults.
+See `.env.example` for all configuration options.
 
 ### Enterprise Edition Pattern
 The codebase uses build tags for enterprise features:
@@ -892,6 +798,50 @@ fix(gateway): resolve provider routing issue
 docs: update API documentation
 ```
 
+### Documentation Guidelines
+
+**CRITICAL**: Always create documentation in the correct location:
+
+#### Creating New Documentation
+
+1. **Determine the audience**:
+   - OSS contributors/users → `brokle/docs/`
+   - Internal team only → `internal-docs/` (separate repo)
+
+2. **Choose the category** (for internal docs):
+   - Research/exploration → `internal-docs/research/`
+   - Migration documentation → `internal-docs/migrations/`
+   - Feature planning → `internal-docs/planning/`
+   - Technical decisions → `internal-docs/decisions/`
+   - Data analysis → `internal-docs/data/`
+
+3. **File naming conventions**:
+   - Use descriptive, kebab-case names: `feature-implementation-guide.md`
+   - Avoid generic names: ❌ `notes.md` → ✅ `otel-migration-notes.md`
+   - Include context in filename when useful
+
+4. **Never commit to main repo root**:
+   - ❌ Root-level .md files (except README.md, CLAUDE.md, CONTRIBUTING.md, SECURITY.md)
+   - ❌ Exploration/research docs in OSS repo
+   - ❌ Internal planning docs in OSS repo
+   - ✅ All internal docs go to `internal-docs/` repo
+
+#### Internal Documentation Best Practices
+
+**For internal-docs repository**:
+- Use clear directory structure (research/, migrations/, planning/, decisions/, data/)
+- Add README files to explain directory contents
+- Link related documents together
+- Archive outdated documents (don't delete immediately)
+- Use date prefixes for time-sensitive docs: `2024-10-27-otel-migration.md`
+
+**For OSS documentation**:
+- Focus on user value and contributor guidance
+- Keep examples practical and tested
+- Update when features change
+- Link to relevant code sections
+- Use clear headings and structure
+
 ## Common Tasks
 
 ### Adding New Domain
@@ -910,97 +860,6 @@ docs: update API documentation
 4. Add monitoring metrics
 5. Write integration tests
 
-### Working with SDK Observability
-The platform uses a unified high-performance telemetry batch system for all SDK observability operations.
-
-#### Unified Telemetry Batch Endpoint
-The SDK sends all telemetry data (traces, observations, quality scores, events) through a single batch endpoint:
-
-```go
-// SDK telemetry ingestion (require API key authentication)
-POST /v1/ingest/batch           // Unified batch processing for all event types
-GET  /v1/telemetry/health          // Service health monitoring
-GET  /v1/telemetry/metrics         // Performance metrics
-GET  /v1/telemetry/performance     // Performance statistics
-GET  /v1/ingest/batch/:batch_id // Batch status tracking
-POST /v1/telemetry/validate        // Event validation
-```
-
-**Example Telemetry Batch Request**:
-```json
-{
-  "environment": "production",
-  "events": [
-    {
-      "event_id": "01ABCDEFGHIJKLMNOPQRSTUVWXYZ",
-      "event_type": "trace",
-      "payload": {"name": "my-trace", "user_id": "user_123"}
-    },
-    {
-      "event_id": "01BCDEFGHIJKLMNOPQRSTUVWXYZ0",
-      "event_type": "observation",
-      "payload": {"trace_id": "...", "type": "llm"}
-    },
-    {
-      "event_id": "01CDEFGHIJKLMNOPQRSTUVWXYZ01",
-      "event_type": "quality_score",
-      "payload": {"trace_id": "...", "score": 0.95}
-    },
-    {
-      "event_id": "01DEFGHIJKLMNOPQRSTUVWXYZ012",
-      "event_type": "event",
-      "payload": {"event_name": "user_action", "metadata": {...}}
-    }
-  ],
-  "deduplication": {
-    "enabled": true,
-    "ttl": 3600,
-    "use_redis_cache": true
-  }
-}
-```
-
-**Key Features**:
-- ✅ ULID-based deduplication (prevents duplicate events)
-- ✅ High-throughput batch processing (1000+ events per request)
-- ✅ Mixed event types in single request
-- ✅ Async processing support
-- ✅ Redis-backed caching for performance
-
-#### Dashboard Analytics (Read-only)
-```go
-// Dashboard routes for viewing telemetry (require JWT authentication)
-GET /api/v1/analytics/traces                      // List traces
-GET /api/v1/analytics/traces/:id                  // Get specific trace
-GET /api/v1/analytics/traces/:id/observations     // Get trace with observations
-GET /api/v1/analytics/traces/:id/stats            // Trace statistics
-GET /api/v1/analytics/observations                // List observations
-GET /api/v1/analytics/observations/:id            // Get observation details
-GET /api/v1/analytics/quality-scores              // List quality scores
-GET /api/v1/analytics/quality-scores/:id          // Get quality score
-GET /api/v1/analytics/traces/:id/quality-scores   // Quality scores by trace
-GET /api/v1/analytics/observations/:id/quality-scores // Quality scores by observation
-```
-
-### Environment Tag System
-The platform now uses environment tags instead of environment entities:
-
-```go
-// Environment passed in request body (optional)
-// Example in telemetry batch request:
-// {
-//   "environment": "production",  // Optional environment tag
-//   "events": [...]
-// }
-
-// Used in observability and routing decisions
-telemetryData := TelemetryData{
-    ProjectID:   projectID,
-    Environment: environment, // Optional tag
-    // ... other fields
-}
-```
-
 ### Database Changes
 1. Create migration file in `migrations/`
 2. Update models in relevant domain
@@ -1017,13 +876,7 @@ The app uses a centralized DI container in `internal/app/app.go`:
 - Health check aggregation
 
 ### Industrial Error Handling Pattern
-**📖 See [INDUSTRIAL_ERROR_HANDLING_GUIDE.md](INDUSTRIAL_ERROR_HANDLING_GUIDE.md) for complete implementation guide.**
-
-The platform implements clean architecture error handling:
-- **Core Services**: Pure business logic with AppError constructors
-- **Decorator Pattern**: Cross-cutting concerns (audit logging) handled separately
-- **Zero Logging**: Business logic services have no logging dependencies
-- **Structured Flow**: Repository → Service → Handler with proper error transformation
+See error handling documentation in `docs/development/` for complete patterns.
 
 ### Enterprise Feature Toggle
 Enterprise features use interface-based design with build tags:
@@ -1064,29 +917,6 @@ cd web && pnpm test
 
 ## Troubleshooting
 
-### Service Health Checks
-```bash
-# Check all services
-make health
-
-# Check specific services
-curl http://localhost:8080/health
-curl http://localhost:8080/health/db
-curl http://localhost:8080/health/cache
-```
-
-### Docker Development
-```bash
-# Start with Docker Compose
-make docker-dev
-
-# Production Docker build
-make docker-prod
-
-# Clean Docker resources
-make docker-clean
-```
-
 ### Common Issues
 - **Port conflicts**: Check with `lsof -ti:8080` and kill processes
 - **Database migrations**: Run `go run cmd/migrate/main.go status` for detailed health check
@@ -1100,40 +930,3 @@ make docker-clean
 curl -X POST http://localhost:8080/v1/auth/validate-key \
   -H "Content-Type: application/json" \
   -d '{"api_key": "bk_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789AbCd"}'
-
-# Test SDK endpoint with API key
-curl -X GET http://localhost:8080/v1/models \
-  -H "X-API-Key: bk_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789AbCd"
-
-# Test SDK endpoint (environment in body for telemetry endpoints)
-curl -X POST http://localhost:8080/v1/chat/completions \
-  -H "X-API-Key: your_api_key" \
-  -H "Content-Type: application/json" \
-  -d '{"model": "gpt-3.5-turbo", "messages": [{"role": "user", "content": "Hello"}]}'
-```
-
-### API Key Debugging
-```go
-// Validate API key format
-if err := auth.ValidateAPIKeyFormat(apiKey); err != nil {
-    log.Printf("Invalid format: %v", err)
-    return
-}
-
-// Generate key preview for logging (security best practice - GitHub pattern)
-preview := auth.CreateKeyPreview(apiKey)
-log.Printf("Key preview: %s", preview) // "bk_rvOJ...yym0"
-
-// Hash API key for database lookup
-hash := sha256.Sum256([]byte(apiKey))
-hashHex := hex.EncodeToString(hash[:])
-log.Printf("Key hash: %s", hashHex[:16]+"...") // Partial hash for debugging
-
-// Validate and retrieve API key from database
-apiKey, err := repo.GetByKeyHash(ctx, hashHex)
-if err != nil {
-    log.Printf("Key not found or invalid: %v", err)
-    return
-}
-log.Printf("Project ID: %s", apiKey.ProjectID.String()) // Retrieved from database
-```

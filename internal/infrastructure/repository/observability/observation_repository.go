@@ -21,10 +21,7 @@ func NewObservationRepository(db clickhouse.Conn) observability.ObservationRepos
 
 // Create inserts a new OTEL observation (span) into ClickHouse
 func (r *observationRepository) Create(ctx context.Context, obs *observability.Observation) error {
-	// Set version and event_ts for new observations
-	if obs.Version == 0 {
-		obs.Version = 1
-	}
+	// Set event_ts for ReplacingMergeTree deduplication
 	obs.EventTs = time.Now()
 	obs.UpdatedAt = time.Now()
 
@@ -87,7 +84,6 @@ func (r *observationRepository) Create(ctx context.Context, obs *observability.O
 // Update performs an update using ReplacingMergeTree pattern (insert with higher version)
 func (r *observationRepository) Update(ctx context.Context, obs *observability.Observation) error {
 	// ReplacingMergeTree pattern: increment version and update event_ts
-	obs.Version++
 	obs.EventTs = time.Now()
 	obs.UpdatedAt = time.Now()
 
@@ -112,7 +108,7 @@ func (r *observationRepository) Delete(ctx context.Context, id string) error {
 			provided_cost_details, cost_details, total_cost,
 			prompt_id, prompt_name, prompt_version,
 			created_at, updated_at,
-			version + 1 as version,
+			version,
 			now64() as event_ts,
 			1 as is_deleted
 		FROM observations
@@ -362,9 +358,8 @@ func (r *observationRepository) CreateBatch(ctx context.Context, observations []
 	}
 
 	for _, obs := range observations {
-		// Set version and event_ts for new observations
-		if obs.Version == 0 {
-			obs.Version = 1
+		// Set event_ts for ReplacingMergeTree
+		if obs.EventTs.IsZero() {
 			obs.EventTs = time.Now()
 		}
 		if obs.UpdatedAt.IsZero() {

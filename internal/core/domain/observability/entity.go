@@ -34,9 +34,10 @@ type Trace struct {
 	Input  *string `json:"input,omitempty" db:"input"`
 	Output *string `json:"output,omitempty" db:"output"`
 
-	// Metadata and tags
-	Metadata map[string]string `json:"metadata" db:"metadata"`
-	Tags     []string          `json:"tags" db:"tags"`
+	// OTEL metadata (resource attributes + instrumentation scope)
+	Metadata map[string]interface{} `json:"metadata" db:"metadata"`
+	// Tags for categorization
+	Tags []string `json:"tags" db:"tags"`
 
 	// OTEL resource attributes
 	Environment    string  `json:"environment" db:"environment"`
@@ -57,8 +58,10 @@ type Trace struct {
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
 
-	// ReplacingMergeTree fields
-	Version   uint32    `json:"version" db:"version"`
+	// Application versioning (experiment tracking)
+	Version *string `json:"version,omitempty" db:"version"`
+
+	// ReplacingMergeTree fields (using event_ts for deduplication)
 	EventTs   time.Time `json:"event_ts" db:"event_ts"`
 	IsDeleted bool      `json:"is_deleted" db:"is_deleted"`
 
@@ -94,8 +97,10 @@ type Observation struct {
 	Input  *string `json:"input,omitempty" db:"input"`
 	Output *string `json:"output,omitempty" db:"output"`
 
-	Metadata map[string]string `json:"metadata" db:"metadata"`
-	Level    string            `json:"level" db:"level"` // DEBUG, INFO, WARNING, ERROR, DEFAULT
+	// OTEL metadata (resource attributes + instrumentation scope)
+	Metadata map[string]interface{} `json:"metadata" db:"metadata"`
+
+	Level string `json:"level" db:"level"` // DEBUG, INFO, WARNING, ERROR, DEFAULT
 
 	// Universal model fields
 	ModelName       *string `json:"model_name,omitempty" db:"model_name"`
@@ -119,8 +124,10 @@ type Observation struct {
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
 
-	// ReplacingMergeTree fields
-	Version   uint32    `json:"version" db:"version"`
+	// Application versioning (experiment tracking)
+	Version *string `json:"version,omitempty" db:"version"`
+
+	// ReplacingMergeTree fields (using event_ts for deduplication)
 	EventTs   time.Time `json:"event_ts" db:"event_ts"`
 	IsDeleted bool      `json:"is_deleted" db:"is_deleted"`
 
@@ -156,8 +163,10 @@ type Score struct {
 	// Timestamp
 	Timestamp time.Time `json:"timestamp" db:"timestamp"`
 
-	// ReplacingMergeTree fields
-	Version   uint32    `json:"version" db:"version"`
+	// Application versioning (experiment tracking)
+	Version *string `json:"version,omitempty" db:"version"`
+
+	// ReplacingMergeTree fields (using event_ts for deduplication)
 	EventTs   time.Time `json:"event_ts" db:"event_ts"`
 	IsDeleted bool      `json:"is_deleted" db:"is_deleted"`
 }
@@ -187,8 +196,10 @@ type BlobStorageFileLog struct {
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
 
-	// ReplacingMergeTree fields
-	Version   uint32    `json:"version" db:"version"`
+	// Application versioning (experiment tracking)
+	Version *string `json:"version,omitempty" db:"version"`
+
+	// ReplacingMergeTree fields (using event_ts for deduplication)
 	EventTs   time.Time `json:"event_ts" db:"event_ts"`
 	IsDeleted bool      `json:"is_deleted" db:"is_deleted"`
 }

@@ -22,9 +22,7 @@ func NewScoreRepository(db clickhouse.Conn) observability.ScoreRepository {
 // Create inserts a new score into ClickHouse
 func (r *scoreRepository) Create(ctx context.Context, score *observability.Score) error {
 	// Set version and event_ts for new scores
-	if score.Version == 0 {
-		score.Version = 1
-	}
+	// Version is now optional application version (not row version)
 	score.EventTs = time.Now()
 
 	query := `
@@ -62,7 +60,7 @@ func (r *scoreRepository) Create(ctx context.Context, score *observability.Score
 // Update performs an update using ReplacingMergeTree pattern (insert with higher version)
 func (r *scoreRepository) Update(ctx context.Context, score *observability.Score) error {
 	// ReplacingMergeTree pattern: increment version and update event_ts
-	score.Version++
+	// Version is now optional application version (not auto-incremented)
 	score.EventTs = time.Now()
 
 	// Same INSERT query as Create - ClickHouse will handle merging
@@ -258,8 +256,8 @@ func (r *scoreRepository) CreateBatch(ctx context.Context, scores []*observabili
 
 	for _, score := range scores {
 		// Set version and event_ts for new scores
-		if score.Version == 0 {
-			score.Version = 1
+		// Version is now optional application version
+		if score.EventTs.IsZero() {
 			score.EventTs = time.Now()
 		}
 

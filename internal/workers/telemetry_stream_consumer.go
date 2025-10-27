@@ -576,9 +576,10 @@ func (c *TelemetryStreamConsumer) processTraceEvent(ctx context.Context, eventDa
 		return fmt.Errorf("failed to unmarshal trace payload: %w", err)
 	}
 
-	// Set context from stream message (these fields come from batch, not payload)
+	// Set context from stream message
+	// Note: environment comes from payload (extracted from span attributes), already set by mapToStruct
+	// Only override project_id which comes from authentication
 	trace.ProjectID = projectID.String()
-	trace.Environment = environment
 
 	// Use service layer (handles validation, business logic, and repository)
 	if err := c.traceService.CreateTrace(ctx, &trace); err != nil {
