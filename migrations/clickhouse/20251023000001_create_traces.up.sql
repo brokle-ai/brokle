@@ -44,8 +44,10 @@ CREATE TABLE IF NOT EXISTS traces (
     created_at DateTime64(3) DEFAULT now64(),
     updated_at DateTime64(3) DEFAULT now64(),
 
-    -- ReplacingMergeTree
-    version UInt32,
+    -- Application version (for A/B testing and experiment tracking)
+    version Nullable(String),
+
+    -- ReplacingMergeTree fields
     event_ts DateTime64(3),
     is_deleted UInt8 DEFAULT 0,
 

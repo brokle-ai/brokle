@@ -1,1 +1,0 @@
-ALTER TABLE observations DROP COLUMN IF EXISTS version;
