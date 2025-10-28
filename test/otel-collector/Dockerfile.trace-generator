@@ -1,0 +1,34 @@
+# Multi-stage build for OpenTelemetry trace generator
+
+# Stage 1: Build
+FROM golang:1.23-alpine AS builder
+
+WORKDIR /build
+
+# Copy go.mod and go.sum from test directory
+# Note: We'll need to create a simple go.mod for this test app
+COPY go.mod go.sum* ./
+COPY trace-generator.go ./
+
+# Download dependencies
+RUN go mod download
+
+# Build the binary
+RUN CGO_ENABLED=0 GOOS=linux go build -o trace-generator .
+
+# Stage 2: Runtime
+FROM alpine:3.19
+
+WORKDIR /app
+
+# Copy binary from builder
+COPY --from=builder /build/trace-generator /app/trace-generator
+
+# Run as non-root user
+RUN addgroup -g 1000 appuser && \
+    adduser -D -u 1000 -G appuser appuser && \
+    chown -R appuser:appuser /app
+
+USER appuser
+
+ENTRYPOINT ["/app/trace-generator"]

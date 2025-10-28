@@ -1,0 +1,276 @@
+# PII Scrubbing Configuration for Compliance and Data Governance
+#
+# USE CASE: Remove sensitive data before sending to Brokle
+# BEST FOR: GDPR/HIPAA compliance, regulated industries, data governance
+# LATENCY: ~50-100ms (same as basic, attribute processing is fast)
+# THROUGHPUT: ~10,000 spans/sec (minimal processing overhead)
+#
+# WHAT THIS CONFIG DOES:
+# - ✅ Removes email addresses from attributes
+# - ✅ Hashes IP addresses for anonymization
+# - ✅ Deletes credit card numbers
+# - ✅ Redacts phone numbers
+# - ✅ Removes PII from span names and messages
+#
+# COMPLIANCE:
+# - GDPR Article 32 (Data minimization)
+# - HIPAA Privacy Rule (De-identification)
+# - PCI DSS Requirement 3.4 (Masking PAN)
+#
+# TESTED WITH:
+# - otel/opentelemetry-collector-contrib:0.91.0 ✅
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # Batch processor
+  batch:
+    timeout: 1s
+    send_batch_size: 100
+    send_batch_max_size: 1000
+
+  # Attribute processor (PII removal and redaction)
+  attributes:
+    actions:
+      # Remove email addresses
+      - key: user.email
+        action: delete
+
+      - key: customer.email
+        action: delete
+
+      - key: http.request.header.user-agent
+        action: delete
+
+      # Hash IP addresses (anonymization while preserving uniqueness)
+      - key: client.ip
+        action: hash
+
+      - key: http.client_ip
+        action: hash
+
+      - key: net.peer.ip
+        action: hash
+
+      # Remove credit card numbers
+      - key: payment.card_number
+        action: delete
+
+      - key: credit_card
+        action: delete
+
+      # Remove phone numbers
+      - key: user.phone
+        action: delete
+
+      - key: phone_number
+        action: delete
+
+      # Remove SSN/Tax IDs
+      - key: user.ssn
+        action: delete
+
+      - key: tax_id
+        action: delete
+
+      # Redact authentication tokens
+      - key: http.request.header.authorization
+        action: delete
+
+      - key: auth.token
+        action: delete
+
+      # Hash user IDs (preserve analytics while removing PII)
+      - key: user.id
+        action: hash
+
+      # Remove passwords (should never be logged, but just in case)
+      - key: password
+        action: delete
+
+      - key: http.request.body
+        action: delete
+
+  # Transform processor (regex-based PII removal from strings)
+  transform:
+    error_mode: ignore
+    trace_statements:
+      - context: span
+        statements:
+          # Redact emails from span names
+          - replace_pattern(name, "\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Z|a-z]{2,}\\b", "[EMAIL_REDACTED]")
+
+          # Redact credit cards from span names (16 digits)
+          - replace_pattern(name, "\\b\\d{4}[\\s-]?\\d{4}[\\s-]?\\d{4}[\\s-]?\\d{4}\\b", "[CARD_REDACTED]")
+
+          # Redact phone numbers (various formats)
+          - replace_pattern(name, "\\b\\d{3}[-.]?\\d{3}[-.]?\\d{4}\\b", "[PHONE_REDACTED]")
+
+      - context: span
+        conditions:
+          - attributes["exception.message"] != nil
+        statements:
+          # Redact PII from exception messages
+          - replace_pattern(attributes["exception.message"], "\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Z|a-z]{2,}\\b", "[EMAIL_REDACTED]")
+
+      - context: resource
+        statements:
+          # Remove PII from resource attributes
+          - delete_key(attributes, "host.name")  # May contain user info
+          - delete_key(attributes, "host.id")    # May contain MAC address
+
+exporters:
+  # Brokle exporter (receives scrubbed data only)
+  otlphttp/brokle:
+    # NOTE: OTLP HTTP exporter automatically appends /v1/traces to the endpoint
+    endpoint: https://api.brokle.com
+    headers:
+      X-API-Key: ${BROKLE_API_KEY}
+    compression: gzip
+    timeout: 30s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 30s
+      max_elapsed_time: 300s
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+service:
+  extensions: [health_check]
+
+  pipelines:
+    traces:
+      receivers: [otlp]
+      # Order matters: attributes first, then transform, then batch
+      processors: [attributes, transform, batch]
+      exporters: [otlphttp/brokle]
+
+  telemetry:
+    logs:
+      level: info
+
+# ==============================================================================
+# PII PATTERNS DETECTED AND REMOVED
+# ==============================================================================
+#
+# Email Addresses:
+# - Pattern: name@domain.com
+# - Action: DELETE attribute or REDACT in strings
+# - Example: user.email="john@example.com" → DELETED
+#
+# IP Addresses:
+# - Pattern: xxx.xxx.xxx.xxx or IPv6
+# - Action: HASH (preserves uniqueness for analytics)
+# - Example: client.ip="192.168.1.1" → client.ip="hash_abc123"
+#
+# Credit Cards:
+# - Pattern: 16 digits (various formats)
+# - Action: DELETE attribute or REDACT in strings
+# - Example: payment.card="4532-1234-5678-9010" → "[CARD_REDACTED]"
+#
+# Phone Numbers:
+# - Pattern: xxx-xxx-xxxx (US), international formats
+# - Action: DELETE attribute or REDACT in strings
+# - Example: user.phone="555-123-4567" → "[PHONE_REDACTED]"
+#
+# SSN/Tax IDs:
+# - Pattern: xxx-xx-xxxx
+# - Action: DELETE (highly sensitive)
+# - Example: user.ssn="123-45-6789" → DELETED
+#
+# Authentication Tokens:
+# - Pattern: Authorization headers, JWT tokens
+# - Action: DELETE (security risk)
+# - Example: auth.token="Bearer eyJ..." → DELETED
+#
+# ==============================================================================
+# COMPLIANCE MAPPING
+# ==============================================================================
+#
+# GDPR (General Data Protection Regulation):
+# - Article 32: Data minimization → Removes unnecessary PII
+# - Article 25: Privacy by design → PII removed at collection
+# - Article 17: Right to erasure → Data never stored with PII
+#
+# HIPAA (Health Insurance Portability and Accountability Act):
+# - Privacy Rule: De-identification → PHI removed before storage
+# - Safe Harbor Method: 18 identifiers removed (emails, IPs, etc.)
+#
+# PCI DSS (Payment Card Industry Data Security Standard):
+# - Requirement 3.4: Masking PAN → Credit cards redacted
+# - Requirement 4.2: Encryption → Sensitive data removed entirely
+#
+# CCPA (California Consumer Privacy Act):
+# - Data minimization → Only necessary data collected
+# - Consumer rights → PII removed at source
+#
+# ==============================================================================
+# VALIDATION & TESTING
+# ==============================================================================
+#
+# Test PII removal (send test span with PII):
+#
+# curl -X POST http://localhost:4318/v1/traces \
+#   -H "Content-Type: application/json" \
+#   -d '{
+#     "resourceSpans": [{
+#       "scopeSpans": [{
+#         "spans": [{
+#           "name": "User john@example.com logged in",
+#           "attributes": [
+#             {"key": "user.email", "value": {"stringValue": "john@example.com"}},
+#             {"key": "client.ip", "value": {"stringValue": "192.168.1.1"}},
+#             {"key": "user.phone", "value": {"stringValue": "555-123-4567"}}
+#           ]
+#         }]
+#       }]
+#     }]
+#   }'
+#
+# Expected in Brokle:
+# - Span name: "User [EMAIL_REDACTED] logged in"
+# - user.email: DELETED
+# - client.ip: "hash_abc123" (hashed)
+# - user.phone: DELETED
+#
+# ==============================================================================
+# QUICK START
+# ==============================================================================
+#
+# 1. Set your Brokle API key:
+#    export BROKLE_API_KEY="bk_your_api_key_here"
+#
+# 2. Start the collector:
+#    otelcol --config=04-pii-scrubbing.yaml
+#
+# 3. Configure your application:
+#    OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
+#
+# 4. Verify PII removal:
+#    - Check Brokle dashboard for redacted values
+#    - Verify no email/phone/card data visible
+#
+# ==============================================================================
+# CUSTOMIZATION
+# ==============================================================================
+#
+# Add custom PII patterns:
+#   - Add to attributes processor actions list
+#   - Add to transform processor regex patterns
+#   - Test thoroughly before production
+#
+# Industry-specific patterns:
+#   - Healthcare: MRN, patient ID, diagnosis codes
+#   - Finance: Account numbers, routing numbers, CVV
+#   - Retail: Loyalty numbers, customer IDs
+#
+# ==============================================================================

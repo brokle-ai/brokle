@@ -44,6 +44,9 @@ COPY --from=builder /app/bin/migrate /migrate
 # Copy configuration files
 COPY --from=builder /app/configs /configs
 
+# Copy migrations for database initialization
+COPY --from=builder /app/migrations /migrations
+
 # Expose port
 EXPOSE 8080
 

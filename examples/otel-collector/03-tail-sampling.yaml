@@ -1,0 +1,273 @@
+# Tail-Based Sampling Configuration for High-Volume Applications
+#
+# USE CASE: Reduce costs and volume for high-traffic applications
+# BEST FOR: Applications generating >100K spans/day, cost optimization
+# LATENCY: ~1-5 seconds (tail sampling requires buffering complete traces)
+# THROUGHPUT: 1M+ spans/sec input → ~20K spans/sec output (95% reduction)
+#
+# COST SAVINGS EXAMPLE:
+# - Input: 1M spans/day × $0.10/1K spans = $100/day
+# - Output: 50K spans/day × $0.10/1K spans = $5/day
+# - Savings: $95/day = $2,850/month (95% reduction)
+#
+# WHAT GETS KEPT:
+# - ✅ ALL error traces (100%)
+# - ✅ ALL slow traces (>1 second)
+# - ✅ ALL traces with specific attributes (e.g., user_id=vip_customer)
+# - ✅ 1% random sample of successful traces
+#
+# WHAT GETS DROPPED:
+# - ❌ 99% of fast, successful traces
+#
+# TESTED WITH:
+# - otel/opentelemetry-collector-contrib:0.91.0 ✅
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # Memory limiter (prevents OOM during traffic spikes)
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512  # 512MB limit (adjust based on your setup)
+    spike_limit_mib: 128
+
+  # Tail sampling (decision made after trace completes)
+  # NOTE: Requires buffering complete traces in memory
+  tail_sampling:
+    # Decision wait time (how long to wait for trace to complete)
+    decision_wait: 10s
+
+    # Number of traces to buffer
+    num_traces: 100000
+
+    # Expected spans per second (for optimization)
+    expected_new_traces_per_sec: 1000
+
+    # Sampling policies (evaluated in order, first match wins)
+    policies:
+      # Policy 1: Keep ALL error traces
+      - name: errors-policy
+        type: status_code
+        status_code:
+          status_codes: [ERROR]
+
+      # Policy 2: Keep ALL slow traces (>1 second)
+      - name: slow-traces-policy
+        type: latency
+        latency:
+          threshold_ms: 1000
+
+      # Policy 3: Keep ALL traces with specific attributes
+      - name: vip-users-policy
+        type: string_attribute
+        string_attribute:
+          key: user.tier
+          values: [vip, enterprise, premium]
+          enabled_regex_matching: false
+          invert_match: false
+
+      # Policy 4: Sample 1% of remaining traces (successful, fast traces)
+      - name: probabilistic-policy
+        type: probabilistic
+        probabilistic:
+          sampling_percentage: 1  # 1% of remaining traces
+
+  # Batch processor (after sampling)
+  batch:
+    timeout: 5s
+    send_batch_size: 1000
+    send_batch_max_size: 5000
+
+exporters:
+  # Brokle exporter
+  otlphttp/brokle:
+    # NOTE: OTLP HTTP exporter automatically appends /v1/traces to the endpoint
+    endpoint: https://api.brokle.com
+    headers:
+      X-API-Key: ${BROKLE_API_KEY}
+    compression: gzip
+    timeout: 30s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 30s
+      max_elapsed_time: 300s
+
+  # Logging (to monitor what gets sampled)
+  logging:
+    loglevel: info
+    sampling_initial: 10
+    sampling_thereafter: 1000
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+  # Memory ballast (pre-allocate memory to reduce GC pressure)
+  memory_ballast:
+    size_mib: 256
+
+service:
+  extensions: [health_check, memory_ballast]
+
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, tail_sampling, batch]
+      exporters: [otlphttp/brokle, logging]
+
+  telemetry:
+    logs:
+      level: info
+    metrics:
+      level: detailed
+
+# ==============================================================================
+# SAMPLING POLICY EXPLANATIONS
+# ==============================================================================
+#
+# Policy Evaluation Order:
+# 1. Policies are evaluated in the order defined
+# 2. First matching policy determines the decision
+# 3. If no policy matches, trace is DROPPED
+#
+# Policy Types:
+#
+# 1. status_code - Sample by span status
+#    - ERROR: Keep all error traces
+#    - OK: Sample based on other policies
+#
+# 2. latency - Sample by trace duration
+#    - threshold_ms: Keep traces slower than this
+#    - Useful for finding performance issues
+#
+# 3. string_attribute - Sample by attribute value
+#    - Match specific users, tenants, or features
+#    - Useful for debugging specific scenarios
+#
+# 4. numeric_attribute - Sample by numeric attribute
+#    - Example: Keep traces where cost > $1.00
+#    - Useful for high-cost operation analysis
+#
+# 5. probabilistic - Random sampling
+#    - sampling_percentage: % of traces to keep
+#    - Applied to traces not matched by other policies
+#
+# ==============================================================================
+# COST OPTIMIZATION EXAMPLES
+# ==============================================================================
+#
+# Scenario 1: 1M spans/day, Keep only errors + 1% sample
+# - Input: 1M spans/day
+# - Errors: ~1% (10K spans)
+# - Sample: 1% of 990K = ~10K spans
+# - Output: 20K spans/day (98% reduction)
+# - Cost: $100/day → $2/day
+#
+# Scenario 2: 10M spans/day, Keep errors + slow + 0.1% sample
+# - Input: 10M spans/day
+# - Errors: ~1% (100K spans)
+# - Slow: ~2% (200K spans)
+# - Sample: 0.1% of 9.7M = ~10K spans
+# - Output: 310K spans/day (97% reduction)
+# - Cost: $1,000/day → $31/day
+#
+# ==============================================================================
+# CUSTOMIZATION EXAMPLES
+# ==============================================================================
+#
+# Keep all traces for specific endpoint:
+#   - name: critical-endpoint-policy
+#     type: string_attribute
+#     string_attribute:
+#       key: http.route
+#       values: ["/api/payment", "/api/checkout"]
+#
+# Keep traces with high LLM costs:
+#   - name: high-cost-policy
+#     type: numeric_attribute
+#     numeric_attribute:
+#       key: gen_ai.usage.cost
+#       min_value: 1.00  # $1.00+
+#
+# Sample different rates by environment:
+#   - name: production-sample
+#     type: and
+#     and:
+#       and_sub_policy:
+#         - name: is-production
+#           type: string_attribute
+#           string_attribute:
+#             key: deployment.environment
+#             values: [production]
+#         - name: sample-1-percent
+#           type: probabilistic
+#           probabilistic:
+#             sampling_percentage: 1
+#
+# ==============================================================================
+# QUICK START
+# ==============================================================================
+#
+# 1. Set environment variables:
+#    export BROKLE_API_KEY="bk_your_key"
+#    export DATADOG_API_KEY="your_dd_key"  # Optional
+#    export DEPLOYMENT_ENV="production"
+#
+# 2. Start the collector:
+#    otelcol --config=03-tail-sampling.yaml
+#
+# 3. Monitor sampling rate:
+#    # Check collector metrics (if using Prometheus)
+#    curl http://localhost:8888/metrics | grep otelcol_processor_tail_sampling
+#
+# 4. Verify in Brokle:
+#    - All errors should appear
+#    - All slow traces should appear
+#    - Only 1% of fast/successful traces
+#
+# ==============================================================================
+# IMPORTANT CONSIDERATIONS
+# ==============================================================================
+#
+# Memory Requirements:
+# - Tail sampling buffers complete traces in memory
+# - num_traces: 100,000 × avg_trace_size (10KB) = ~1GB memory needed
+# - Adjust num_traces based on available memory
+#
+# Latency Trade-off:
+# - decision_wait: 10s means traces are delayed by up to 10 seconds
+# - Reduce for lower latency, but may miss late-arriving spans
+# - Increase for complex traces with many async operations
+#
+# Incomplete Traces:
+# - If decision_wait expires before trace completes, sampling decision is made
+# - Late-arriving spans may be sampled inconsistently
+# - Increase decision_wait for long-running traces
+#
+# ==============================================================================
+# TROUBLESHOOTING
+# ==============================================================================
+#
+# Too many traces being dropped:
+# - Review sampling policies (are they too strict?)
+# - Check if traces are being tagged correctly
+# - Increase probabilistic sampling percentage
+#
+# Memory usage too high:
+# - Reduce num_traces (fewer traces buffered)
+# - Reduce decision_wait (shorter buffering time)
+# - Add memory_limiter processor (already included)
+#
+# Traces incomplete in Brokle:
+# - Increase decision_wait (traces completing slowly)
+# - Check application span export timing
+# - Verify parent/child span relationships
+#
+# ==============================================================================

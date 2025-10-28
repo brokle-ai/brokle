@@ -496,6 +496,83 @@ OpenAI-compatible embeddings endpoint.
 
 List available models across all providers.
 
+---
+
+## OpenTelemetry Protocol (OTLP) Endpoints
+
+Brokle natively supports the OpenTelemetry Protocol for trace ingestion, enabling integration with OTEL Collectors and OTEL SDKs.
+
+### POST /v1/traces
+
+**OTLP trace ingestion endpoint** (OpenTelemetry spec compliant)
+
+**Supported Formats:**
+- `Content-Type: application/x-protobuf` - Binary protobuf (most efficient)
+- `Content-Type: application/json` - JSON protobuf
+- `Content-Encoding: gzip` - Automatic decompression
+
+**Authentication**: API Key via `X-API-Key` header
+
+**Request (Protobuf):**
+```bash
+curl -X POST https://api.brokle.com/v1/traces \
+  -H "Content-Type: application/x-protobuf" \
+  -H "Content-Encoding: gzip" \
+  -H "X-API-Key: bk_your_api_key" \
+  --data-binary @traces.pb
+```
+
+**Request (JSON):**
+```bash
+curl -X POST https://api.brokle.com/v1/traces \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: bk_your_api_key" \
+  -d '{
+    "resourceSpans": [{
+      "scopeSpans": [{
+        "spans": [{
+          "traceId": "5b8efff798038103d269b633813fc60c",
+          "spanId": "eee19b7ec3c1b174",
+          "name": "test-operation",
+          "startTimeUnixNano": "1698768000000000000",
+          "endTimeUnixNano": "1698768001000000000"
+        }]
+      }]
+    }]
+  }'
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "batch_id": "01HFXYZ...",
+    "processed_events": 1,
+    "duplicate_events": 0
+  }
+}
+```
+
+**Use cases:**
+- Integration with OpenTelemetry Collector
+- Direct OTLP export from applications
+- Vendor-agnostic observability
+
+**Documentation**: [OTEL Collector Integration](./integrations/opentelemetry-collector.md)
+
+---
+
+### POST /v1/otlp/traces
+
+**Alternative OTLP endpoint** (same functionality as `/v1/traces`)
+
+This endpoint provides compatibility with OTEL tools that expect the `/otlp/` path prefix.
+
+**All features identical to `/v1/traces`** - use either endpoint based on your preference.
+
+---
+
 ## Analytics & Observability
 
 ### GET /analytics/metrics

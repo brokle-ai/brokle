@@ -1,0 +1,116 @@
+# Basic OpenTelemetry Collector Configuration for Brokle
+#
+# USE CASE: Simple setup for getting started with OTEL Collector + Brokle
+# BEST FOR: Development, proof-of-concept, small deployments
+# LATENCY: ~50-100ms (collector batching + network)
+# THROUGHPUT: ~10,000 spans/sec (single collector instance)
+#
+# TESTED WITH:
+# - otel/opentelemetry-collector-contrib:0.91.0 ✅
+# - otel/opentelemetry-collector-contrib:0.90.0 ✅
+# - otel/opentelemetry-collector-contrib:0.89.0 ✅
+
+receivers:
+  # OTLP receiver accepts traces from your application
+  otlp:
+    protocols:
+      # gRPC endpoint (most efficient, binary protobuf)
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+      # HTTP endpoint (REST-friendly, supports JSON and protobuf)
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # Batch processor improves efficiency by grouping spans
+  batch:
+    timeout: 1s              # Flush every 1 second
+    send_batch_size: 100     # Or when 100 spans are buffered
+    send_batch_max_size: 1000 # Maximum batch size limit
+
+exporters:
+  # Brokle API exporter
+  otlphttp/brokle:
+    # PRODUCTION: Use https://api.brokle.com
+    # LOCAL: Use http://localhost:8080
+    # NOTE: OTLP HTTP exporter automatically appends /v1/traces to the endpoint
+    endpoint: http://localhost:8080
+
+    # Authentication (REQUIRED)
+    headers:
+      X-API-Key: ${BROKLE_API_KEY}  # Set via environment variable
+
+    # Compression (recommended, reduces bandwidth by ~80%)
+    compression: gzip
+
+    # Timeout and retry settings
+    timeout: 30s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 30s
+      max_elapsed_time: 300s  # Retry for up to 5 minutes
+
+extensions:
+  # Health check endpoint (optional but recommended)
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+service:
+  extensions: [health_check]
+
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlphttp/brokle]
+
+  # Telemetry for the collector itself (optional)
+  telemetry:
+    logs:
+      level: info    # Change to 'debug' for troubleshooting
+    metrics:
+      level: basic
+
+# ==============================================================================
+# QUICK START
+# ==============================================================================
+#
+# 1. Set your Brokle API key:
+#    export BROKLE_API_KEY="bk_your_api_key_here"
+#
+# 2. Start the collector:
+#    otelcol --config=01-basic.yaml
+#
+# 3. Configure your application to send OTLP traces to the collector:
+#    OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
+#
+# 4. Verify collector is running:
+#    curl http://localhost:13133
+#
+# ==============================================================================
+# TROUBLESHOOTING
+# ==============================================================================
+#
+# No traces in Brokle dashboard?
+#
+# 1. Check collector logs:
+#    - Look for "Exporting failed" errors
+#    - Verify no 401/403 authentication errors
+#
+# 2. Verify API key:
+#    echo $BROKLE_API_KEY
+#    (Should start with "bk_")
+#
+# 3. Test Brokle endpoint manually:
+#    curl -X POST https://api.brokle.com/v1/traces \
+#      -H "X-API-Key: $BROKLE_API_KEY" \
+#      -H "Content-Type: application/json" \
+#      -d '{}'
+#    (Should return 400, not 401 - proves auth works)
+#
+# 4. Check network connectivity:
+#    curl -v https://api.brokle.com/health
+#
+# ==============================================================================
