@@ -71,7 +71,6 @@ type TelemetryEvent struct {
 	ID          string    `ch:"id"`
 	BatchID     string    `ch:"batch_id"`
 	ProjectID   string    `ch:"project_id"`
-	Environment string    `ch:"environment"`
 	EventType   string    `ch:"event_type"`
 	EventData   string    `ch:"event_data"`
 	Timestamp   time.Time `ch:"timestamp"`
@@ -83,7 +82,6 @@ type TelemetryEvent struct {
 type TelemetryBatch struct {
 	ID               string    `ch:"id"`
 	ProjectID        string    `ch:"project_id"`
-	Environment      string    `ch:"environment"`
 	Status           string    `ch:"status"`
 	TotalEvents      int       `ch:"total_events"`
 	ProcessedEvents  int       `ch:"processed_events"`
@@ -97,7 +95,6 @@ type TelemetryBatch struct {
 // TelemetryMetric represents a telemetry metric in ClickHouse
 type TelemetryMetric struct {
 	ProjectID    string    `ch:"project_id"`
-	Environment  string    `ch:"environment"`
 	MetricName   string    `ch:"metric_name"`
 	MetricType   string    `ch:"metric_type"`
 	MetricValue  float64   `ch:"metric_value"`
@@ -477,12 +474,12 @@ func (r *AnalyticsRepository) InsertTelemetryEvent(ctx context.Context, event *o
 func (r *AnalyticsRepository) insertClickHouseEvent(ctx context.Context, event *TelemetryEvent) error {
 	query := `
 		INSERT INTO telemetry_events (
-			id, batch_id, project_id, environment, event_type,
+			id, batch_id, project_id, event_type,
 			event_data, timestamp, retry_count, processed_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 
 	return r.db.Execute(ctx, query,
-		event.ID, event.BatchID, event.ProjectID, event.Environment, event.EventType,
+		event.ID, event.BatchID, event.ProjectID, event.EventType,
 		event.EventData, event.Timestamp, event.RetryCount, event.ProcessedAt,
 	)
 }
@@ -515,16 +512,16 @@ func (r *AnalyticsRepository) insertTelemetryEventsBatchClickHouse(ctx context.C
 	batchRows := make([][]interface{}, len(events))
 	for i, event := range events {
 		batchRows[i] = []interface{}{
-			event.ID, event.BatchID, event.ProjectID, event.Environment, event.EventType,
+			event.ID, event.BatchID, event.ProjectID, event.EventType,
 			event.EventData, event.Timestamp, event.RetryCount, event.ProcessedAt,
 		}
 	}
 
 	query := `
 		INSERT INTO telemetry_events (
-			id, batch_id, project_id, environment, event_type,
+			id, batch_id, project_id, event_type,
 			event_data, timestamp, retry_count, processed_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 
 	for _, row := range batchRows {
 		if err := r.db.Execute(ctx, query, row...); err != nil {
@@ -549,13 +546,13 @@ func (r *AnalyticsRepository) InsertTelemetryBatch(ctx context.Context, batch *o
 func (r *AnalyticsRepository) insertTelemetryBatchClickHouse(ctx context.Context, batch *TelemetryBatch) error {
 	query := `
 		INSERT INTO ingestion_batches (
-			id, project_id, environment, status, total_events,
+			id, project_id, status, total_events,
 			processed_events, failed_events, processing_time_ms,
 			metadata, timestamp, processed_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	return r.db.Execute(ctx, query,
-		batch.ID, batch.ProjectID, batch.Environment, batch.Status, batch.TotalEvents,
+		batch.ID, batch.ProjectID, batch.Status, batch.TotalEvents,
 		batch.ProcessedEvents, batch.FailedEvents, batch.ProcessingTimeMs,
 		batch.Metadata, batch.Timestamp, batch.ProcessedAt,
 	)
@@ -589,7 +586,7 @@ func (r *AnalyticsRepository) insertTelemetryBatchesBatchClickHouse(ctx context.
 	batchRows := make([][]interface{}, len(batches))
 	for i, batch := range batches {
 		batchRows[i] = []interface{}{
-			batch.ID, batch.ProjectID, batch.Environment, batch.Status, batch.TotalEvents,
+			batch.ID, batch.ProjectID, batch.Status, batch.TotalEvents,
 			batch.ProcessedEvents, batch.FailedEvents, batch.ProcessingTimeMs,
 			batch.Metadata, batch.Timestamp, batch.ProcessedAt,
 		}
@@ -597,10 +594,10 @@ func (r *AnalyticsRepository) insertTelemetryBatchesBatchClickHouse(ctx context.
 
 	query := `
 		INSERT INTO ingestion_batches (
-			id, project_id, environment, status, total_events,
+			id, project_id, status, total_events,
 			processed_events, failed_events, processing_time_ms,
 			metadata, timestamp, processed_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 	for _, row := range batchRows {
 		if err := r.db.Execute(ctx, query, row...); err != nil {
@@ -625,12 +622,12 @@ func (r *AnalyticsRepository) InsertTelemetryMetric(ctx context.Context, metric 
 func (r *AnalyticsRepository) insertTelemetryMetricClickHouse(ctx context.Context, metric *TelemetryMetric) error {
 	query := `
 		INSERT INTO telemetry_metrics (
-			project_id, environment, metric_name, metric_type, metric_value,
+			project_id, metric_name, metric_type, metric_value,
 			labels, metadata, timestamp, processed_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 
 	return r.db.Execute(ctx, query,
-		metric.ProjectID, metric.Environment, metric.MetricName, metric.MetricType, metric.MetricValue,
+		metric.ProjectID, metric.MetricName, metric.MetricType, metric.MetricValue,
 		metric.Labels, metric.Metadata, metric.Timestamp, metric.ProcessedAt,
 	)
 }
@@ -663,16 +660,16 @@ func (r *AnalyticsRepository) insertTelemetryMetricsBatchClickHouse(ctx context.
 	batchRows := make([][]interface{}, len(metrics))
 	for i, metric := range metrics {
 		batchRows[i] = []interface{}{
-			metric.ProjectID, metric.Environment, metric.MetricName, metric.MetricType, metric.MetricValue,
+			metric.ProjectID, metric.MetricName, metric.MetricType, metric.MetricValue,
 			metric.Labels, metric.Metadata, metric.Timestamp, metric.ProcessedAt,
 		}
 	}
 
 	query := `
 		INSERT INTO telemetry_metrics (
-			project_id, environment, metric_name, metric_type, metric_value,
+			project_id, metric_name, metric_type, metric_value,
 			labels, metadata, timestamp, processed_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
 
 	for _, row := range batchRows {
 		if err := r.db.Execute(ctx, query, row...); err != nil {
@@ -701,8 +698,7 @@ func domainEventToClickHouse(event *observability.TelemetryEvent) (*TelemetryEve
 	return &TelemetryEvent{
 		ID:          event.ID.String(),
 		BatchID:     event.BatchID.String(),
-		ProjectID:   event.ProjectID.String(),   // Read from domain struct
-		Environment: event.Environment,           // Read from domain struct
+		ProjectID:   event.ProjectID.String(),
 		EventType:   string(event.EventType),
 		EventData:   string(eventDataJSON),
 		Timestamp:   event.CreatedAt,
@@ -731,7 +727,6 @@ func domainBatchToClickHouse(batch *observability.TelemetryBatch) (*TelemetryBat
 	return &TelemetryBatch{
 		ID:               batch.ID.String(),
 		ProjectID:        batch.ProjectID.String(),
-		Environment:      batch.Environment,  // Read from domain struct
 		Status:           string(batch.Status),
 		TotalEvents:      batch.TotalEvents,
 		ProcessedEvents:  batch.ProcessedEvents,
@@ -762,7 +757,6 @@ func domainMetricToClickHouse(metric *observability.TelemetryMetric) (*Telemetry
 
 	return &TelemetryMetric{
 		ProjectID:   metric.ProjectID.String(),
-		Environment: metric.Environment,
 		MetricName:  metric.MetricName,
 		MetricType:  metric.MetricType,
 		MetricValue: metric.MetricValue,

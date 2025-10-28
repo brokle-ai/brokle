@@ -22,8 +22,7 @@ func (w *TelemetryAnalyticsWorker) processTelemetryEvent(job *TelemetryEventJob)
 	event := &observability.TelemetryEvent{
 		ID:           job.EventID,
 		BatchID:      job.BatchID,
-		ProjectID:    job.ProjectID,    // From job
-		Environment:  job.Environment,  // From job
+		ProjectID:    job.ProjectID,
 		EventType:    job.EventType,
 		EventPayload: job.EventData,
 		CreatedAt:    job.Timestamp,
@@ -50,7 +49,6 @@ func (w *TelemetryAnalyticsWorker) processTelemetryBatch(job *TelemetryBatchJob)
 	batch := &observability.TelemetryBatch{
 		ID:               job.BatchID,
 		ProjectID:        job.ProjectID,
-		Environment:      job.Environment,  // From job
 		BatchMetadata:    job.Metadata,
 		TotalEvents:      job.TotalEvents,
 		ProcessedEvents:  job.ProcessedEvents,
@@ -84,7 +82,6 @@ func (w *TelemetryAnalyticsWorker) processTelemetryMetric(job *TelemetryMetricJo
 	processedAt := time.Now()
 	metric := &observability.TelemetryMetric{
 		ProjectID:   job.ProjectID,
-		Environment: job.Environment,
 		MetricName:  job.MetricName,
 		MetricType:  string(job.MetricType),
 		MetricValue: job.MetricValue,
@@ -115,13 +112,12 @@ func (w *TelemetryAnalyticsWorker) processBulkOperations() {
 		events := make([]*observability.TelemetryEvent, len(w.eventBuffer))
 		processedAt := time.Now()
 
-		// Each event carries its own project_id and environment from its job
+		// Each event carries its own project_id from its job
 		for i, job := range w.eventBuffer {
 			events[i] = &observability.TelemetryEvent{
 				ID:           job.EventID,
 				BatchID:      job.BatchID,
-				ProjectID:    job.ProjectID,    // Each event has its own project_id
-				Environment:  job.Environment,  // Each event has its own environment
+				ProjectID:    job.ProjectID,
 				EventType:    job.EventType,
 				EventPayload: job.EventData,
 				CreatedAt:    job.Timestamp,
@@ -147,13 +143,12 @@ func (w *TelemetryAnalyticsWorker) processBulkOperations() {
 		batches := make([]*observability.TelemetryBatch, len(w.batchBuffer))
 		completedAt := time.Now()
 
-		// Each batch carries its own project_id and environment from its job
+		// Each batch carries its own project_id from its job
 		for i, job := range w.batchBuffer {
 			processingTimeMs := int(job.ProcessingTime.Milliseconds())
 			batches[i] = &observability.TelemetryBatch{
 				ID:               job.BatchID,
 				ProjectID:        job.ProjectID,
-				Environment:      job.Environment,  // Each batch has its own environment
 				BatchMetadata:    job.Metadata,
 				TotalEvents:      job.TotalEvents,
 				ProcessedEvents:  job.ProcessedEvents,
@@ -190,7 +185,6 @@ func (w *TelemetryAnalyticsWorker) processBulkOperations() {
 
 			metrics[i] = &observability.TelemetryMetric{
 				ProjectID:   job.ProjectID,
-				Environment: job.Environment,
 				MetricName:  job.MetricName,
 				MetricType:  string(job.MetricType),
 				MetricValue: job.MetricValue,

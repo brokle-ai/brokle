@@ -2,7 +2,6 @@
 CREATE TABLE IF NOT EXISTS ingestion_batches (
     id String,
     project_id String,
-    environment String DEFAULT 'default',
     status LowCardinality(String),
     total_events UInt32,
     processed_events UInt32,

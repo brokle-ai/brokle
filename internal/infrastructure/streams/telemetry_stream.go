@@ -17,7 +17,6 @@ import (
 type TelemetryStreamMessage struct {
 	BatchID         ulid.ULID              `json:"batch_id"`
 	ProjectID       ulid.ULID              `json:"project_id"`
-	Environment     string                 `json:"environment,omitempty"`
 	Events          []TelemetryEventData   `json:"events"`
 	ClaimedEventIDs []ulid.ULID            `json:"claimed_event_ids"` // Event IDs claimed via atomic deduplication
 	Metadata        map[string]interface{} `json:"metadata,omitempty"`
@@ -77,7 +76,6 @@ func (p *TelemetryStreamProducer) PublishBatch(ctx context.Context, batch *Telem
 		Values: map[string]interface{}{
 			"batch_id":    batch.BatchID.String(),
 			"project_id":  batch.ProjectID.String(),
-			"environment": batch.Environment,
 			"event_count": len(batch.Events),
 			"data":        string(eventData),
 			"timestamp":   batch.Timestamp.Unix(),

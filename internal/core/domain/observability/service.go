@@ -220,7 +220,6 @@ type BatchIngestResult struct {
 // TelemetryBatchRequest represents a high-throughput telemetry batch request
 type TelemetryBatchRequest struct {
 	ProjectID    ulid.ULID                      `json:"project_id"`
-	Environment  *string                        `json:"environment,omitempty"`
 	Metadata     map[string]any                 `json:"metadata"`
 	Events       []*TelemetryEventRequest       `json:"events"`
 	Async        bool                           `json:"async"`

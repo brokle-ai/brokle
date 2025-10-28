@@ -116,30 +116,6 @@ func FormatValidationErrors(errors []string) string {
 	return strings.Join(errors, "; ")
 }
 
-// ValidateEnvironmentTag validates the environment tag format
-func ValidateEnvironmentTag(environment string) error {
-	if environment == "" {
-		return nil // Environment is optional
-	}
-
-	// Environment tag validation rules
-	if len(environment) > 50 {
-		return fmt.Errorf("environment tag cannot exceed 50 characters")
-	}
-
-	// Allow alphanumeric, hyphens, underscores, and dots
-	for _, char := range environment {
-		if !((char >= 'a' && char <= 'z') ||
-			 (char >= 'A' && char <= 'Z') ||
-			 (char >= '0' && char <= '9') ||
-			 char == '-' || char == '_' || char == '.') {
-			return fmt.Errorf("environment tag contains invalid character: %c", char)
-		}
-	}
-
-	return nil
-}
-
 // ValidateULIDString validates a ULID string format
 func ValidateULIDString(ulidStr string) error {
 	if ulidStr == "" {
@@ -189,11 +165,6 @@ func CalculateRequestSize(req *TelemetryBatchRequest) int {
 	}
 
 	size := 0
-
-	// Environment string
-	if req.Environment != nil {
-		size += len(*req.Environment)
-	}
 
 	// Metadata (rough estimation)
 	for key, value := range req.Metadata {

@@ -457,7 +457,6 @@ func createTestEventJob() *TelemetryEventJob {
 		EventID:     ulid.New(),
 		BatchID:     ulid.New(),
 		ProjectID:   ulid.New(),
-		Environment: "test",
 		EventType:   observability.TelemetryEventTypeTrace,
 		EventData: map[string]interface{}{
 			"trace_id":  uuid.New().String(),
@@ -474,7 +473,6 @@ func createTestBatchJob() *TelemetryBatchJob {
 	return &TelemetryBatchJob{
 		BatchID:         ulid.New(),
 		ProjectID:       ulid.New(),
-		Environment:     "test",
 		Status:          observability.BatchStatusCompleted,
 		TotalEvents:     10,
 		ProcessedEvents: 10,
@@ -493,7 +491,6 @@ func createTestBatchJob() *TelemetryBatchJob {
 func createTestMetricJob() *TelemetryMetricJob {
 	return &TelemetryMetricJob{
 		ProjectID:   ulid.New(),
-		Environment: "test",
 		MetricName:  "test_metric",
 		MetricType:  MetricTypeCounter,
 		MetricValue: 1.0,

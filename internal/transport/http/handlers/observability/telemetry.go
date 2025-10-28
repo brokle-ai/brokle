@@ -15,7 +15,6 @@ import (
 // TelemetryBatchRequest represents the high-throughput telemetry batch request
 // @Description High-performance batch request for telemetry events with ULID-based deduplication (always enabled with 24h TTL)
 type TelemetryBatchRequest struct {
-	Environment   *string                      `json:"environment,omitempty" example:"production" description:"Environment tag (optional)"`
 	Metadata      map[string]interface{}       `json:"metadata,omitempty" description:"Batch-level metadata"`
 	Events        []*TelemetryEventRequest     `json:"events" binding:"required,min=1,max=1000" description:"Array of telemetry events (max 1000)"`
 	Async         bool                         `json:"async,omitempty" description:"Process batch asynchronously"`
@@ -178,19 +177,6 @@ func (h *Handler) ProcessTelemetryBatch(c *gin.Context) {
 		return
 	}
 
-	// Get optional environment from request body only
-	var environment string
-	if req.Environment != nil {
-		environment = *req.Environment
-
-		// Validate environment tag if provided
-		if err := ValidateEnvironmentTag(environment); err != nil {
-			h.logger.WithError(err).WithField("environment", environment).Error("Invalid environment tag")
-			response.ValidationError(c, "Invalid environment tag", err.Error())
-			return
-		}
-	}
-
 	// Convert request to domain request
 	domainEvents := make([]*observability.TelemetryEventRequest, len(req.Events))
 	for i, event := range req.Events {
@@ -224,12 +210,6 @@ func (h *Handler) ProcessTelemetryBatch(c *gin.Context) {
 	// Note: Deduplication is always enforced with server-controlled 24h TTL (production-grade pattern)
 	domainReq := &observability.TelemetryBatchRequest{
 		ProjectID:   *projectID,
-		Environment: func() *string {
-			if environment != "" {
-				return &environment
-			}
-			return nil
-		}(),
 		Metadata: SanitizeMetadata(req.Metadata),
 		Events:   domainEvents,
 		Async:    req.Async,

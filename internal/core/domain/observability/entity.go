@@ -589,7 +589,6 @@ const (
 type TelemetryBatch struct {
 	ID               ulid.ULID              `json:"id" db:"id"`
 	ProjectID        ulid.ULID              `json:"project_id" db:"project_id"`
-	Environment      string                 `json:"environment,omitempty" db:"environment"`
 	BatchMetadata    map[string]interface{} `json:"batch_metadata" db:"batch_metadata"`
 	TotalEvents      int                    `json:"total_events" db:"total_events"`
 	ProcessedEvents  int                    `json:"processed_events" db:"processed_events"`
@@ -606,7 +605,6 @@ type TelemetryEvent struct {
 	ID           ulid.ULID              `json:"id" db:"id"`
 	BatchID      ulid.ULID              `json:"batch_id" db:"batch_id"`
 	ProjectID    ulid.ULID              `json:"project_id" db:"project_id"`
-	Environment  string                 `json:"environment,omitempty" db:"environment"`
 	EventType    TelemetryEventType     `json:"event_type" db:"event_type"`
 	EventPayload map[string]interface{} `json:"event_payload" db:"event_payload"`
 	ProcessedAt  *time.Time             `json:"processed_at,omitempty" db:"processed_at"`
@@ -618,7 +616,6 @@ type TelemetryEvent struct {
 // TelemetryMetric represents a telemetry metric for performance and analytics tracking
 type TelemetryMetric struct {
 	ProjectID   ulid.ULID              `json:"project_id" db:"project_id"`
-	Environment string                 `json:"environment,omitempty" db:"environment"`
 	MetricName  string                 `json:"metric_name" db:"metric_name"`
 	MetricType  string                 `json:"metric_type" db:"metric_type"`
 	MetricValue float64                `json:"metric_value" db:"metric_value"`

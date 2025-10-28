@@ -569,16 +569,14 @@ func (c *TelemetryStreamConsumer) sortEventsByDependency(events []streams.Teleme
 }
 
 // processTraceEvent processes a trace event using TraceService
-func (c *TelemetryStreamConsumer) processTraceEvent(ctx context.Context, eventData *streams.TelemetryEventData, projectID ulid.ULID, environment string) error {
+func (c *TelemetryStreamConsumer) processTraceEvent(ctx context.Context, eventData *streams.TelemetryEventData, projectID ulid.ULID) error {
 	// Map event payload to Trace struct
 	var trace observability.Trace
 	if err := mapToStruct(eventData.EventPayload, &trace); err != nil {
 		return fmt.Errorf("failed to unmarshal trace payload: %w", err)
 	}
 
-	// Set context from stream message
-	// Note: environment comes from payload (extracted from span attributes), already set by mapToStruct
-	// Only override project_id which comes from authentication
+	// Set project_id from authentication context
 	trace.ProjectID = projectID.String()
 
 	// Use service layer (handles validation, business logic, and repository)
@@ -685,7 +683,7 @@ func (c *TelemetryStreamConsumer) processBatch(ctx context.Context, batch *strea
 		switch observability.TelemetryEventType(event.EventType) {
 		case observability.TelemetryEventTypeTrace:
 			// Structured trace event → TraceService → traces table
-			err = c.processTraceEvent(ctx, &event, batch.ProjectID, batch.Environment)
+			err = c.processTraceEvent(ctx, &event, batch.ProjectID)
 
 		// Session events removed - sessions are now virtual groupings via session_id attribute
 
@@ -703,7 +701,6 @@ func (c *TelemetryStreamConsumer) processBatch(ctx context.Context, batch *strea
 				ID:           event.EventID,
 				BatchID:      batch.BatchID,
 				ProjectID:    batch.ProjectID,
-				Environment:  batch.Environment,
 				EventType:    observability.TelemetryEventType(event.EventType),
 				EventPayload: event.EventPayload,
 				CreatedAt:    batch.Timestamp,
@@ -743,7 +740,6 @@ func (c *TelemetryStreamConsumer) processBatch(ctx context.Context, batch *strea
 	domainBatch := &observability.TelemetryBatch{
 		ID:               batch.BatchID,
 		ProjectID:        batch.ProjectID,
-		Environment:      batch.Environment,
 		BatchMetadata:    batch.Metadata,
 		TotalEvents:      len(batch.Events),
 		ProcessedEvents:  processedCount,
@@ -824,7 +820,6 @@ func (c *TelemetryStreamConsumer) moveToDLQ(ctx context.Context, streamKey strin
 		"original_msg_id": msg.ID,
 		"batch_id":        batch.BatchID.String(),
 		"project_id":      batch.ProjectID.String(),
-		"environment":     batch.Environment,
 		"event_count":     len(batch.Events),
 		"error_message":   err.Error(),
 		"failed_at":       time.Now().Unix(),

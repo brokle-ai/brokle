@@ -60,7 +60,6 @@ type TelemetryEventJob struct {
 	BatchID     ulid.ULID                        `json:"batch_id"`
 	EventID     ulid.ULID                        `json:"event_id"`
 	ProjectID   ulid.ULID                        `json:"project_id"`
-	Environment string                           `json:"environment,omitempty"`
 	EventType   observability.TelemetryEventType `json:"event_type"`
 	EventData   map[string]interface{}           `json:"event_data"`
 	Timestamp   time.Time                        `json:"timestamp"`
@@ -72,7 +71,6 @@ type TelemetryEventJob struct {
 type TelemetryBatchJob struct {
 	BatchID         ulid.ULID                    `json:"batch_id"`
 	ProjectID       ulid.ULID                    `json:"project_id"`
-	Environment     string                       `json:"environment,omitempty"`
 	Status          observability.BatchStatus    `json:"status"`
 	TotalEvents     int                          `json:"total_events"`
 	ProcessedEvents int                          `json:"processed_events"`
@@ -87,7 +85,6 @@ type TelemetryBatchJob struct {
 // TelemetryMetricJob represents a telemetry metric processing job
 type TelemetryMetricJob struct {
 	ProjectID      ulid.ULID              `json:"project_id"`
-	Environment    string                 `json:"environment,omitempty"`
 	MetricName     string                 `json:"metric_name"`
 	MetricType     MetricType             `json:"metric_type"`
 	MetricValue    float64                `json:"metric_value"`

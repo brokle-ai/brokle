@@ -66,9 +66,6 @@ func (h *OTLPHandler) HandleTraces(c *gin.Context) {
 	}
 	projectID := projectIDPtr.String()
 
-	// Get environment from context (optional)
-	environment, _ := middleware.GetEnvironment(c)
-
 	// Read raw request body
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
@@ -176,7 +173,6 @@ func (h *OTLPHandler) HandleTraces(c *gin.Context) {
 	// Construct Brokle telemetry batch request
 	batchReq := &observability.TelemetryBatchRequest{
 		ProjectID:   *projectIDPtr,
-		Environment: &environment,
 		Events:      brokleEvents,
 		Metadata: map[string]interface{}{
 			"source":         "otlp",

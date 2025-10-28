@@ -121,7 +121,6 @@ func (s *TelemetryService) ProcessTelemetryBatch(ctx context.Context, request *o
 	streamMessage := &streams.TelemetryStreamMessage{
 		BatchID:         batchID,
 		ProjectID:       request.ProjectID,
-		Environment:     s.extractEnvironment(request),
 		Events:          claimedEventData,
 		ClaimedEventIDs: claimedIDs, // Pass claimed IDs for consumer claim release
 		Metadata:        request.Metadata,
@@ -409,7 +408,6 @@ func (s *TelemetryService) queueAnalyticsJobs(
 			BatchID:     batch.ID,
 			EventID:     event.ID,
 			ProjectID:   batch.ProjectID,
-			Environment: s.extractEnvironment(request),
 			EventType:   event.EventType,
 			EventData:   event.EventPayload,
 			Timestamp:   event.CreatedAt,
@@ -435,7 +433,6 @@ func (s *TelemetryService) queueAnalyticsJobs(
 	batchJob := &workers.TelemetryBatchJob{
 		BatchID:         batch.ID,
 		ProjectID:       batch.ProjectID,
-		Environment:     s.extractEnvironment(request),
 		Status:          batch.Status,
 		TotalEvents:     batch.TotalEvents,
 		ProcessedEvents: batch.ProcessedEvents,
@@ -455,7 +452,6 @@ func (s *TelemetryService) queueAnalyticsJobs(
 	// Queue performance metrics
 	metricsJob := &workers.TelemetryMetricJob{
 		ProjectID:   batch.ProjectID,
-		Environment: s.extractEnvironment(request),
 		MetricName:  "batch_processing_time",
 		MetricType:  workers.MetricTypeHistogram,
 		MetricValue: float64(processingTime.Milliseconds()),
@@ -484,21 +480,6 @@ func (s *TelemetryService) queueAnalyticsJobs(
 		"events_queued": len(events),
 		"metrics_queued": 1,
 	}).Debug("Successfully queued telemetry data for analytics")
-}
-
-// extractEnvironment extracts environment from request metadata or headers
-func (s *TelemetryService) extractEnvironment(request *observability.TelemetryBatchRequest) string {
-	// Check if environment is provided in metadata
-	if request.Metadata != nil {
-		if env, exists := request.Metadata["environment"]; exists {
-			if envStr, ok := env.(string); ok {
-				return envStr
-			}
-		}
-	}
-
-	// Default to production if not specified
-	return "production"
 }
 
 // isCriticalEventType determines if an event type should be processed with high priority
