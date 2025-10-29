@@ -27,7 +27,14 @@ func NewOTLPConverterService(logger *logrus.Logger) *OTLPConverterService {
 
 // brokleEvent represents an internal converted event (before domain conversion)
 type brokleEvent struct {
+	// Internal tracking
 	EventID   string                 `json:"event_id"`
+
+	// OTLP identity (for deduplication)
+	SpanID    string                 `json:"span_id"`
+	TraceID   string                 `json:"trace_id"`
+
+	// Event data
 	EventType string                 `json:"event_type"` // "trace", "observation"
 	Payload   map[string]interface{} `json:"payload"`
 	Timestamp *int64                 `json:"timestamp,omitempty"`
@@ -223,15 +230,19 @@ func (s *OTLPConverterService) createTraceEvent(span observability.Span, resourc
 	payload["metadata"] = otelMetadata
 
 	// Create trace event
-	return &brokleEvent{
+	event := &brokleEvent{
 		EventID:   ulid.New().String(),
+		SpanID:    "",        // Traces don't have span_id
+		TraceID:   traceID,   // OTLP trace_id (32 hex chars)
 		EventType: "trace",
 		Payload:   payload,
 		Timestamp: func() *int64 {
 			ts := startTime.Unix()
 			return &ts
 		}(),
-	}, nil
+	}
+
+	return event, nil
 }
 
 // convertSpanToEvent converts a single OTLP span to a Brokle telemetry event
@@ -315,6 +326,8 @@ func (s *OTLPConverterService) convertSpanToEvent(span observability.Span, resou
 	// Create observation event
 	event := &brokleEvent{
 		EventID:   ulid.New().String(),
+		SpanID:    spanID,    // OTLP span_id (16 hex chars)
+		TraceID:   traceID,   // OTLP trace_id (32 hex chars)
 		EventType: "observation",
 		Payload:   payload,
 		Timestamp: func() *int64 {
@@ -743,6 +756,8 @@ func convertToDomainEvents(events []*brokleEvent) []*observability.TelemetryEven
 		eventID, _ := ulid.Parse(e.EventID)
 		result[i] = &observability.TelemetryEventRequest{
 			EventID:   eventID,
+			SpanID:    e.SpanID,    // OTLP span_id (populated from brokleEvent)
+			TraceID:   e.TraceID,   // OTLP trace_id (populated from brokleEvent)
 			EventType: observability.TelemetryEventType(e.EventType),
 			Payload:   e.Payload,
 			Timestamp: func() *time.Time {

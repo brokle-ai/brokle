@@ -530,9 +530,9 @@ const (
 // TelemetryEventDeduplication represents a deduplication entry for telemetry events
 // Internal type used by deduplication repository implementation
 type TelemetryEventDeduplication struct {
-	EventID     ulid.ULID `json:"event_id" db:"event_id"`
-	BatchID     ulid.ULID `json:"batch_id" db:"batch_id"`
-	ProjectID   ulid.ULID `json:"project_id" db:"project_id"`
+	EventID     string    `json:"event_id" db:"event_id"`      // Composite OTLP ID: "trace_id:span_id"
+	BatchID     ulid.ULID `json:"batch_id" db:"batch_id"`      // Brokle batch ULID
+	ProjectID   ulid.ULID `json:"project_id" db:"project_id"`  // Brokle project ULID
 	FirstSeenAt time.Time `json:"first_seen_at" db:"first_seen_at"`
 	ExpiresAt   time.Time `json:"expires_at" db:"expires_at"`
 }
@@ -551,7 +551,7 @@ func (d *TelemetryEventDeduplication) TimeUntilExpiry() time.Duration {
 func (d *TelemetryEventDeduplication) Validate() []ValidationError {
 	var errors []ValidationError
 
-	if d.EventID.IsZero() {
+	if d.EventID == "" {
 		errors = append(errors, ValidationError{
 			Field:   "event_id",
 			Message: "event_id is required",

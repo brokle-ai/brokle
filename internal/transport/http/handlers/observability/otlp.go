@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"strings"
 	"time"
@@ -178,60 +179,118 @@ func (h *OTLPHandler) HandleTraces(c *gin.Context) {
 
 	// OTLP-native processing: deduplication + Redis Streams publishing
 
-	// 1. Extract event IDs from converted events
-	eventIDs := make([]ulid.ULID, len(brokleEvents))
+	// 1. Extract composite dedup IDs for observations (trace_id:span_id)
+	dedupIDs := make([]string, 0, len(brokleEvents))
+	dedupIDToFirstIndex := make(map[string]int) // Track first occurrence index for intra-batch deduplication
+
 	for i, event := range brokleEvents {
-		eventIDs[i] = event.EventID
+		// Only deduplicate observations (spans have unique span_id)
+		if event.EventType == observability.TelemetryEventTypeObservation {
+			if event.SpanID == "" {
+				h.logger.WithFields(logrus.Fields{
+					"event_id":   event.EventID.String(),
+					"trace_id":   event.TraceID,
+					"event_type": event.EventType,
+				}).Error("Observation missing span_id, skipping deduplication")
+				continue
+			}
+
+			// Build composite key: trace_id:span_id (prevents cross-trace collisions)
+			dedupID := fmt.Sprintf("%s:%s", event.TraceID, event.SpanID)
+			dedupIDs = append(dedupIDs, dedupID)
+
+			// Track first occurrence index within this batch (for intra-batch deduplication)
+			if _, exists := dedupIDToFirstIndex[dedupID]; !exists {
+				dedupIDToFirstIndex[dedupID] = i
+			}
+		}
 	}
 
-	// 2. Claim events atomically (24h TTL, prevents duplicates)
+	// 2. Claim observations atomically (24h TTL, prevents duplicates)
 	batchID := ulid.New()
-	claimedIDs, duplicateIDs, err := h.deduplicationService.ClaimEvents(
-		ctx, *projectIDPtr, batchID, eventIDs, 24*time.Hour,
-	)
-	if err != nil {
-		h.logger.WithError(err).Error("Failed to claim OTLP events for deduplication")
-		response.InternalServerError(c, "Failed to claim events for deduplication")
-		return
+	var claimedIDs, duplicateIDs []string
+
+	if len(dedupIDs) > 0 {
+		claimedIDs, duplicateIDs, err = h.deduplicationService.ClaimEvents(
+			ctx, *projectIDPtr, batchID, dedupIDs, 24*time.Hour,
+		)
+		if err != nil {
+			h.logger.WithError(err).Error("Failed to claim OTLP observations for deduplication")
+			response.InternalServerError(c, "Failed to claim events for deduplication")
+			return
+		}
 	}
 
-	// 3. Skip if all duplicates
-	if len(claimedIDs) == 0 {
+	// 3. Skip if all observations were duplicates and no traces
+	hasTraces := false
+	for _, event := range brokleEvents {
+		if event.EventType == observability.TelemetryEventTypeTrace {
+			hasTraces = true
+			break
+		}
+	}
+
+	if len(claimedIDs) == 0 && !hasTraces {
 		h.logger.WithFields(logrus.Fields{
 			"project_id":  projectID,
 			"duplicates":  len(duplicateIDs),
-		}).Info("All OTLP events were duplicates, skipping")
+		}).Info("All OTLP observations were duplicates, skipping")
 
 		response.Success(c, map[string]interface{}{
-			"status":     "all_duplicates",
-			"duplicates": len(duplicateIDs),
+			"status":          "all_duplicates",
+			"duplicate_spans": len(duplicateIDs),
 		})
 		return
 	}
 
-	// 4. Build claimed events only (filter by claimed IDs)
-	claimedSet := make(map[ulid.ULID]bool, len(claimedIDs))
+	// 4. Filter to claimed observations + all traces
+	claimedSet := make(map[string]bool, len(claimedIDs))
 	for _, id := range claimedIDs {
 		claimedSet[id] = true
 	}
 
-	claimedEventData := make([]streams.TelemetryEventData, 0, len(claimedIDs))
-	for _, event := range brokleEvents {
-		if claimedSet[event.EventID] {
+	claimedEventData := make([]streams.TelemetryEventData, 0, len(brokleEvents))
+	for i, event := range brokleEvents {
+		// Always include traces (no dedup)
+		if event.EventType == observability.TelemetryEventTypeTrace {
 			claimedEventData = append(claimedEventData, streams.TelemetryEventData{
 				EventID:      event.EventID,
+				SpanID:       event.SpanID,
+				TraceID:      event.TraceID,
 				EventType:    string(event.EventType),
 				EventPayload: event.Payload,
 			})
+			continue
+		}
+
+		// Observations: include ONLY if (1) first occurrence in batch AND (2) claimed
+		if event.EventType == observability.TelemetryEventTypeObservation {
+			dedupID := fmt.Sprintf("%s:%s", event.TraceID, event.SpanID)
+			firstIndex := dedupIDToFirstIndex[dedupID]
+			isFirstOccurrence := (i == firstIndex)
+
+			// Two-level deduplication:
+			// 1. Intra-batch: only process first occurrence within this batch
+			// 2. Inter-batch: only process if claimed by Redis (not a global duplicate)
+			if isFirstOccurrence && claimedSet[dedupID] {
+				claimedEventData = append(claimedEventData, streams.TelemetryEventData{
+					EventID:      event.EventID,
+					SpanID:       event.SpanID,
+					TraceID:      event.TraceID,
+					EventType:    string(event.EventType),
+					EventPayload: event.Payload,
+				})
+			}
 		}
 	}
 
 	// 5. Publish to Redis Streams for async processing
 	streamMsg := &streams.TelemetryStreamMessage{
-		BatchID:         batchID,
-		ProjectID:       *projectIDPtr,
-		Events:          claimedEventData,
-		ClaimedEventIDs: claimedIDs,
+		BatchID:          batchID,
+		ProjectID:        *projectIDPtr,
+		Events:           claimedEventData,
+		ClaimedSpanIDs:   claimedIDs,
+		DuplicateSpanIDs: duplicateIDs,
 		Metadata: map[string]interface{}{
 			"source":         "otlp",
 			"content_type":   contentType,

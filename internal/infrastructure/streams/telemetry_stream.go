@@ -15,17 +15,25 @@ import (
 
 // TelemetryStreamMessage represents a telemetry batch message in Redis Stream
 type TelemetryStreamMessage struct {
-	BatchID         ulid.ULID              `json:"batch_id"`
-	ProjectID       ulid.ULID              `json:"project_id"`
-	Events          []TelemetryEventData   `json:"events"`
-	ClaimedEventIDs []ulid.ULID            `json:"claimed_event_ids"` // Event IDs claimed via atomic deduplication
-	Metadata        map[string]interface{} `json:"metadata,omitempty"`
-	Timestamp       time.Time              `json:"timestamp"`
+	BatchID          ulid.ULID              `json:"batch_id"`   // Brokle batch ULID
+	ProjectID        ulid.ULID              `json:"project_id"` // Brokle project ULID
+	Events           []TelemetryEventData   `json:"events"`
+	ClaimedSpanIDs   []string               `json:"claimed_span_ids"`   // Composite OTLP IDs that were claimed
+	DuplicateSpanIDs []string               `json:"duplicate_span_ids,omitempty"` // Composite OTLP IDs that were duplicates
+	Metadata         map[string]interface{} `json:"metadata,omitempty"`
+	Timestamp        time.Time              `json:"timestamp"`
 }
 
 // TelemetryEventData represents individual event data in the stream message
 type TelemetryEventData struct {
+	// Internal tracking
 	EventID      ulid.ULID              `json:"event_id"`
+
+	// OTLP identity (for deduplication)
+	SpanID       string                 `json:"span_id"`   // OTLP span_id (16 hex)
+	TraceID      string                 `json:"trace_id"`  // OTLP trace_id (32 hex)
+
+	// Event data
 	EventType    string                 `json:"event_type"`
 	EventPayload map[string]interface{} `json:"event_payload"`
 }
@@ -110,7 +118,7 @@ func (p *TelemetryStreamProducer) GetStreamInfo(ctx context.Context, projectID u
 	info, err := p.redis.Client.XInfoStream(ctx, streamKey).Result()
 	if err != nil {
 		if err == redis.Nil {
-			return nil, fmt.Errorf("stream not found for project %s", projectID.String())
+			return nil, fmt.Errorf("stream not found for project %s", projectID)
 		}
 		return nil, fmt.Errorf("failed to get stream info: %w", err)
 	}
@@ -142,7 +150,7 @@ func (p *TelemetryStreamProducer) SetStreamTTL(ctx context.Context, projectID ul
 	}
 
 	p.logger.WithFields(logrus.Fields{
-		"project_id": projectID.String(),
+		"project_id": projectID,
 		"stream_key": streamKey,
 		"ttl_hours":  ttl.Hours(),
 	}).Debug("Set stream TTL for GDPR compliance")

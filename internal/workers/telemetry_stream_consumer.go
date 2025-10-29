@@ -507,17 +507,17 @@ func (c *TelemetryStreamConsumer) processMessage(ctx context.Context, streamKey 
 	}
 
 	// DLQ write succeeded - release claims so client retries can proceed
-	if len(batch.ClaimedEventIDs) > 0 {
-		if releaseErr := c.deduplicationSvc.ReleaseEvents(ctx, batch.ClaimedEventIDs); releaseErr != nil {
+	if len(batch.ClaimedSpanIDs) > 0 {
+		if releaseErr := c.deduplicationSvc.ReleaseEvents(ctx, batch.ClaimedSpanIDs); releaseErr != nil {
 			c.logger.WithError(releaseErr).WithFields(logrus.Fields{
 				"batch_id":    batch.BatchID.String(),
-				"event_count": len(batch.ClaimedEventIDs),
+				"event_count": len(batch.ClaimedSpanIDs),
 			}).Error("Failed to release claims after DLQ write")
 			// Don't fail - DLQ write succeeded, worst case: 24h TTL expires
 		} else {
 			c.logger.WithFields(logrus.Fields{
 				"batch_id":    batch.BatchID.String(),
-				"event_count": len(batch.ClaimedEventIDs),
+				"event_count": len(batch.ClaimedSpanIDs),
 			}).Info("Released claims after moving batch to DLQ")
 		}
 	}
@@ -562,6 +562,25 @@ func (c *TelemetryStreamConsumer) sortEventsByDependency(events []streams.Teleme
 	})
 
 	return sorted
+}
+
+// safeExtractFromPayload safely extracts string from payload map (nil-safe)
+func safeExtractFromPayload(payload map[string]interface{}, key string) string {
+	if payload == nil {
+		return ""
+	}
+
+	val, ok := payload[key]
+	if !ok {
+		return ""
+	}
+
+	strVal, ok := val.(string)
+	if !ok {
+		return ""
+	}
+
+	return strVal
 }
 
 // processTraceEvent processes a trace event using TraceService
@@ -660,6 +679,9 @@ func mapToStruct(input map[string]interface{}, output interface{}) error {
 // processBatch processes a batch of telemetry events by routing to appropriate services based on event type
 // This is the main orchestration method that decides how to handle each event
 func (c *TelemetryStreamConsumer) processBatch(ctx context.Context, batch *streams.TelemetryStreamMessage) error {
+	// batch.ProjectID is already ulid.ULID type
+	projectID := batch.ProjectID
+
 	// Track processing stats
 	var (
 		processedCount int
@@ -679,17 +701,17 @@ func (c *TelemetryStreamConsumer) processBatch(ctx context.Context, batch *strea
 		switch observability.TelemetryEventType(event.EventType) {
 		case observability.TelemetryEventTypeTrace:
 			// Structured trace event → TraceService → traces table
-			err = c.processTraceEvent(ctx, &event, batch.ProjectID)
+			err = c.processTraceEvent(ctx, &event, projectID)
 
 		// Session events removed - sessions are now virtual groupings via session_id attribute
 
 		case observability.TelemetryEventTypeObservation:
 			// Structured observation event → ObservationService → observations table
-			err = c.processObservationEvent(ctx, &event, batch.ProjectID)
+			err = c.processObservationEvent(ctx, &event, projectID)
 
 		case observability.TelemetryEventTypeQualityScore:
 			// Structured score event → ScoreService → scores table
-			err = c.processScoreEvent(ctx, &event, batch.ProjectID)
+			err = c.processScoreEvent(ctx, &event, projectID)
 
 		default:
 			// Unknown event type - log warning and skip

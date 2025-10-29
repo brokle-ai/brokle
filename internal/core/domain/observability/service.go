@@ -2,6 +2,7 @@ package observability
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"brokle/pkg/ulid"
@@ -116,19 +117,19 @@ type BlobStorageService interface {
 
 // TelemetryDeduplicationService defines the interface for ULID-based deduplication
 type TelemetryDeduplicationService interface {
-	// Atomic deduplication operations
-	ClaimEvents(ctx context.Context, projectID, batchID ulid.ULID, eventIDs []ulid.ULID, ttl time.Duration) (claimedIDs, duplicateIDs []ulid.ULID, err error)
-	ReleaseEvents(ctx context.Context, eventIDs []ulid.ULID) error
+	// Atomic deduplication operations (uses composite OTLP IDs: trace_id:span_id)
+	ClaimEvents(ctx context.Context, projectID ulid.ULID, batchID ulid.ULID, dedupIDs []string, ttl time.Duration) (claimedIDs, duplicateIDs []string, err error)
+	ReleaseEvents(ctx context.Context, dedupIDs []string) error
 
 	// Legacy deduplication operations (deprecated - use ClaimEvents instead)
-	CheckDuplicate(ctx context.Context, eventID ulid.ULID) (bool, error)
-	CheckBatchDuplicates(ctx context.Context, eventIDs []ulid.ULID) ([]ulid.ULID, error)
-	RegisterEvent(ctx context.Context, eventID ulid.ULID, batchID ulid.ULID, projectID ulid.ULID, ttl time.Duration) error
-	RegisterProcessedEventsBatch(ctx context.Context, projectID ulid.ULID, batchID ulid.ULID, eventIDs []ulid.ULID) error
+	CheckDuplicate(ctx context.Context, dedupID string) (bool, error)
+	CheckBatchDuplicates(ctx context.Context, dedupIDs []string) ([]string, error)
+	RegisterEvent(ctx context.Context, dedupID string, batchID ulid.ULID, projectID ulid.ULID, ttl time.Duration) error
+	RegisterProcessedEventsBatch(ctx context.Context, projectID ulid.ULID, batchID ulid.ULID, dedupIDs []string) error
 
-	// ULID-based TTL management
-	CalculateOptimalTTL(ctx context.Context, eventID ulid.ULID, defaultTTL time.Duration) (time.Duration, error)
-	GetExpirationTime(eventID ulid.ULID, baseTTL time.Duration) time.Time
+	// TTL management (string-based for composite IDs)
+	CalculateOptimalTTL(ctx context.Context, dedupID string, defaultTTL time.Duration) (time.Duration, error)
+	GetExpirationTime(dedupID string, baseTTL time.Duration) time.Time
 
 	// Cleanup operations
 	CleanupExpired(ctx context.Context) (int64, error)
@@ -224,10 +225,28 @@ type TelemetryBatchRequest struct {
 
 // TelemetryEventRequest represents an individual telemetry event in a batch
 type TelemetryEventRequest struct {
+	// Internal tracking (Brokle-specific)
 	EventID      ulid.ULID                      `json:"event_id"`
+
+	// OTLP identity (for deduplication)
+	SpanID       string                         `json:"span_id"`   // OTLP span_id (16 hex) - empty for traces
+	TraceID      string                         `json:"trace_id"`  // OTLP trace_id (32 hex) - required
+
+	// Event data
 	EventType    TelemetryEventType             `json:"event_type"`
 	Payload      map[string]any                 `json:"payload"`
 	Timestamp    *time.Time                     `json:"timestamp,omitempty"`
+}
+
+// Validate validates the event request
+func (e *TelemetryEventRequest) Validate() error {
+	if e.EventType == TelemetryEventTypeObservation && e.SpanID == "" {
+		return fmt.Errorf("observation events must have non-empty span_id")
+	}
+	if e.TraceID == "" {
+		return fmt.Errorf("trace_id is required for all events")
+	}
+	return nil
 }
 
 // TelemetryBatchResponse represents the response for telemetry batch processing

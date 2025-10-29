@@ -161,18 +161,18 @@ type BlobStorageFilter struct {
 // TelemetryDeduplicationRepository defines methods for telemetry deduplication
 type TelemetryDeduplicationRepository interface {
 	// Atomic claim operations for deduplication
-	ClaimEvents(ctx context.Context, projectID, batchID ulid.ULID, eventIDs []ulid.ULID, ttl time.Duration) (claimed []ulid.ULID, duplicates []ulid.ULID, err error)
-	ReleaseEvents(ctx context.Context, eventIDs []ulid.ULID) error
+	ClaimEvents(ctx context.Context, projectID ulid.ULID, batchID ulid.ULID, dedupIDs []string, ttl time.Duration) (claimed []string, duplicates []string, err error)
+	ReleaseEvents(ctx context.Context, dedupIDs []string) error
 
 	// Individual operations
-	CheckDuplicate(ctx context.Context, eventID ulid.ULID) (bool, error)
-	RegisterEvent(ctx context.Context, eventID, batchID, projectID ulid.ULID, ttl time.Duration) error
-	Exists(ctx context.Context, eventID ulid.ULID) (bool, error)
+	CheckDuplicate(ctx context.Context, dedupID string) (bool, error)
+	RegisterEvent(ctx context.Context, dedupID string, batchID ulid.ULID, projectID ulid.ULID, ttl time.Duration) error
+	Exists(ctx context.Context, dedupID string) (bool, error)
 	Create(ctx context.Context, dedup *TelemetryEventDeduplication) error
-	Delete(ctx context.Context, eventID ulid.ULID) error
+	Delete(ctx context.Context, dedupID string) error
 
 	// Batch operations
-	CheckBatchDuplicates(ctx context.Context, eventIDs []ulid.ULID) ([]ulid.ULID, error)
+	CheckBatchDuplicates(ctx context.Context, dedupIDs []string) ([]string, error)
 	CreateBatch(ctx context.Context, dedups []*TelemetryEventDeduplication) error
 
 	// Statistics
