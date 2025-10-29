@@ -310,7 +310,7 @@ func (r *TelemetryDeduplicationRepositoryRedis) GetStats(ctx context.Context) (m
 	var count int64
 
 	// Sample first 100 keys matching the pattern
-	keys, _, err := r.redis.Client.Scan(ctx, cursor, "telemetry_dedup:*", 100).Result()
+	keys, _, err := r.redis.Client.Scan(ctx, cursor, "dedup:span:*", 100).Result()
 	if err != nil {
 		return nil, fmt.Errorf("failed to scan keys: %w", err)
 	}
@@ -319,7 +319,7 @@ func (r *TelemetryDeduplicationRepositoryRedis) GetStats(ctx context.Context) (m
 
 	return map[string]interface{}{
 		"approximate_count": count,
-		"pattern":          "telemetry_dedup:*",
+		"pattern":          "dedup:span:*",
 		"storage":          "redis",
 		"auto_expiry":      true,
 	}, nil
