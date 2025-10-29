@@ -2,7 +2,6 @@ package observability
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -10,17 +9,12 @@ import (
 
 	"brokle/internal/core/domain/observability"
 	"brokle/internal/infrastructure/streams"
-	"brokle/internal/workers"
-	"brokle/pkg/ulid"
-	appErrors "brokle/pkg/errors"
 )
 
 // TelemetryService aggregates all telemetry-related services with Redis Streams-based async processing
-// Exported to allow type assertion for SetAnalyticsWorker injection
 type TelemetryService struct {
 	deduplicationService observability.TelemetryDeduplicationService
 	streamProducer       *streams.TelemetryStreamProducer
-	analyticsWorker      *workers.TelemetryAnalyticsWorker
 	logger              *logrus.Logger
 
 	// Performance tracking
@@ -35,133 +29,14 @@ type TelemetryService struct {
 func NewTelemetryService(
 	deduplicationService observability.TelemetryDeduplicationService,
 	streamProducer *streams.TelemetryStreamProducer,
-	analyticsWorker *workers.TelemetryAnalyticsWorker,
 	logger *logrus.Logger,
 ) observability.TelemetryService {
 	return &TelemetryService{
 		deduplicationService: deduplicationService,
 		streamProducer:       streamProducer,
-		analyticsWorker:      analyticsWorker,
 		logger:              logger,
 		lastProcessingTime:   time.Now(),
 	}
-}
-
-// SetAnalyticsWorker injects the analytics worker (for two-phase initialization)
-// This allows the telemetry service to be created before the worker is started,
-// ensuring clean dependency initialization order.
-func (s *TelemetryService) SetAnalyticsWorker(worker *workers.TelemetryAnalyticsWorker) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.analyticsWorker = worker
-	s.logger.Debug("Analytics worker injected into telemetry service")
-}
-
-// ProcessTelemetryBatch processes a batch of telemetry events using Redis Streams (async)
-// Returns 202 Accepted for async processing with batch ID for tracking
-func (s *TelemetryService) ProcessTelemetryBatch(ctx context.Context, request *observability.TelemetryBatchRequest) (*observability.TelemetryBatchResponse, error) {
-	startTime := time.Now()
-
-	// Validate request
-	if err := s.validateBatchRequest(request); err != nil {
-		return nil, appErrors.NewValidationError("batch_request", fmt.Sprintf("Invalid batch request: %v", err))
-	}
-
-	// Generate batch ID
-	batchID := ulid.New()
-
-	// Extract event IDs for atomic claim operation
-	eventIDs := make([]ulid.ULID, len(request.Events))
-	for i, event := range request.Events {
-		eventIDs[i] = event.EventID
-	}
-
-	// ✅ Atomic claim: Check and register events in single operation (eliminates race condition)
-	claimedIDs, duplicateIDs, err := s.deduplicationService.ClaimEvents(ctx, request.ProjectID, batchID, eventIDs, 24*time.Hour)
-	if err != nil {
-		return nil, fmt.Errorf("failed to claim events for deduplication: %w", err)
-	}
-
-	// Skip batch entirely if all events are duplicates
-	if len(claimedIDs) == 0 {
-		s.logger.WithFields(logrus.Fields{
-			"batch_id":        batchID.String(),
-			"total_events":    len(request.Events),
-			"duplicate_count": len(duplicateIDs),
-		}).Info("All events are duplicates, skipping batch processing")
-
-		return &observability.TelemetryBatchResponse{
-			BatchID:           batchID,
-			ProcessedEvents:   0,
-			DuplicateEvents:   len(duplicateIDs),
-			FailedEvents:      0,
-			ProcessingTimeMs:  int(time.Since(startTime).Milliseconds()),
-			DuplicateEventIDs: duplicateIDs,
-		}, nil
-	}
-
-	// Build event data for ONLY claimed events (not duplicates)
-	claimedMap := make(map[ulid.ULID]bool)
-	for _, id := range claimedIDs {
-		claimedMap[id] = true
-	}
-
-	claimedEventData := make([]streams.TelemetryEventData, 0, len(claimedIDs))
-	for _, eventReq := range request.Events {
-		if claimedMap[eventReq.EventID] {
-			claimedEventData = append(claimedEventData, streams.TelemetryEventData{
-				EventID:      eventReq.EventID,
-				EventType:    string(eventReq.EventType),
-				EventPayload: eventReq.Payload,
-			})
-		}
-	}
-
-	// Build stream message with claimed events
-	streamMessage := &streams.TelemetryStreamMessage{
-		BatchID:         batchID,
-		ProjectID:       request.ProjectID,
-		Events:          claimedEventData,
-		ClaimedEventIDs: claimedIDs, // Pass claimed IDs for consumer claim release
-		Metadata:        request.Metadata,
-		Timestamp:       time.Now(),
-	}
-
-	// Publish batch to Redis Streams
-	streamID, err := s.streamProducer.PublishBatch(ctx, streamMessage)
-	if err != nil {
-		// ⚠️ CRITICAL: Rollback claimed events on publish failure
-		if rollbackErr := s.deduplicationService.ReleaseEvents(ctx, claimedIDs); rollbackErr != nil {
-			s.logger.WithError(rollbackErr).WithFields(logrus.Fields{
-				"batch_id":     batchID.String(),
-				"claimed_count": len(claimedIDs),
-			}).Error("CRITICAL: Failed to rollback claimed events after publish failure - manual cleanup may be needed")
-		}
-		return nil, fmt.Errorf("failed to publish batch to stream: %w", err)
-	}
-
-	s.logger.WithFields(logrus.Fields{
-		"batch_id":      batchID.String(),
-		"stream_id":     streamID,
-		"project_id":    request.ProjectID.String(),
-		"claimed_events": len(claimedIDs),
-		"duplicates":    len(duplicateIDs),
-	}).Info("Batch published to Redis Stream for async processing")
-
-	// Update performance metrics
-	s.updatePerformanceMetrics(len(request.Events), time.Since(startTime))
-
-	// Build response (202 Accepted - async processing)
-	response := &observability.TelemetryBatchResponse{
-		BatchID:           batchID,
-		ProcessedEvents:   len(claimedIDs), // Events claimed and accepted for processing
-		DuplicateEvents:   len(duplicateIDs),
-		FailedEvents:      0,
-		ProcessingTimeMs:  int(time.Since(startTime).Milliseconds()),
-		DuplicateEventIDs: duplicateIDs,
-	}
-
-	return response, nil
 }
 
 // Deduplication returns the deduplication service
@@ -171,17 +46,9 @@ func (s *TelemetryService) Deduplication() observability.TelemetryDeduplicationS
 
 // GetHealth returns the health status of all telemetry services
 func (s *TelemetryService) GetHealth(ctx context.Context) (*observability.TelemetryHealthStatus, error) {
-	// Get analytics worker health if available
-	var analyticsHealth *workers.HealthMetrics
-	var activeWorkers int = 1 // Default
-	if s.analyticsWorker != nil {
-		analyticsHealth = s.analyticsWorker.GetHealth()
-		activeWorkers = analyticsHealth.ActiveWorkers
-	}
-
 	health := &observability.TelemetryHealthStatus{
-		Healthy:               s.isHealthy(analyticsHealth),
-		ActiveWorkers:         activeWorkers,
+		Healthy:               true, // Stream consumer health monitored separately
+		ActiveWorkers:         1,    // Stream consumer
 		AverageProcessingTime: float64(s.avgProcessingTime.Milliseconds()),
 		ThroughputPerMinute:   float64(s.eventsProcessed) / time.Since(s.lastProcessingTime).Minutes(),
 	}
@@ -203,58 +70,22 @@ func (s *TelemetryService) GetHealth(ctx context.Context) (*observability.Teleme
 		Uptime:      time.Hour * 24, // Default uptime
 	}
 
-	// Add processing queue health from analytics worker
-	if analyticsHealth != nil {
-		health.ProcessingQueue = &observability.QueueHealth{
-			Size:             int64(analyticsHealth.QueueDepth),
-			ProcessingRate:   float64(s.eventsProcessed),
-			AverageWaitTime:  10.0, // Default value
-			OldestMessageAge: 0,
-		}
-	} else {
-		health.ProcessingQueue = &observability.QueueHealth{
-			Size:             0,
-			ProcessingRate:   float64(s.eventsProcessed),
-			AverageWaitTime:  10.0, // Default value
-			OldestMessageAge: 0,
-		}
+	// Processing queue health (stream consumer)
+	health.ProcessingQueue = &observability.QueueHealth{
+		Size:             0,    // Stream consumer processes real-time
+		ProcessingRate:   float64(s.eventsProcessed),
+		AverageWaitTime:  10.0, // Default value
+		OldestMessageAge: 0,
 	}
 
-	// Calculate error rate from analytics worker if available
+	// Set default error rate
 	s.mu.RLock()
-	if analyticsHealth != nil {
-		health.ErrorRate = analyticsHealth.ErrorRate
-	} else if s.eventsProcessed > 0 {
-		health.ErrorRate = 0.01 // 1% default error rate
+	if s.eventsProcessed > 0 {
+		health.ErrorRate = 0.01 // 1% default error rate (actual errors tracked in stream consumer)
 	}
 	s.mu.RUnlock()
 
 	return health, nil
-}
-
-// isHealthy determines overall health based on analytics worker status
-func (s *TelemetryService) isHealthy(analyticsHealth *workers.HealthMetrics) bool {
-	// If analytics worker is not available, service is still healthy
-	if analyticsHealth == nil {
-		return true
-	}
-
-	// Check analytics worker health
-	if !analyticsHealth.Healthy {
-		return false
-	}
-
-	// Check if error rate is acceptable (< 5%)
-	if analyticsHealth.ErrorRate > 0.05 {
-		return false
-	}
-
-	// Check if queue is not severely backed up (< 1000 items)
-	if analyticsHealth.QueueDepth > 1000 {
-		return false
-	}
-
-	return true
 }
 
 // GetMetrics returns aggregated metrics from all telemetry services
@@ -329,46 +160,6 @@ func (s *TelemetryService) GetPerformanceStats(ctx context.Context, timeWindow t
 	}
 
 	return stats, nil
-}
-
-// validateBatchRequest validates the telemetry batch request
-func (s *TelemetryService) validateBatchRequest(request *observability.TelemetryBatchRequest) error {
-	if request == nil {
-		return fmt.Errorf("request cannot be nil")
-	}
-
-	if request.ProjectID == (ulid.ULID{}) {
-		return fmt.Errorf("project ID is required")
-	}
-
-	if len(request.Events) == 0 {
-		return fmt.Errorf("events list cannot be empty")
-	}
-
-	if len(request.Events) > 1000 { // Reasonable batch size limit
-		return fmt.Errorf("batch size exceeds maximum limit of 1000 events")
-	}
-
-	// Validate each event
-	for i, event := range request.Events {
-		if event == nil {
-			return fmt.Errorf("event at index %d cannot be nil", i)
-		}
-
-		if event.EventID == (ulid.ULID{}) {
-			return fmt.Errorf("event at index %d has invalid event ID", i)
-		}
-
-		if event.EventType == "" {
-			return fmt.Errorf("event at index %d has empty event type", i)
-		}
-
-		if len(event.Payload) == 0 {
-			return fmt.Errorf("event at index %d has empty payload", i)
-		}
-	}
-
-	return nil
 }
 
 // updatePerformanceMetrics updates internal performance tracking metrics

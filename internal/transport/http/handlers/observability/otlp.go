@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -15,28 +16,33 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"brokle/internal/core/domain/observability"
+	"brokle/internal/infrastructure/streams"
 	obsServices "brokle/internal/services/observability"
 	"brokle/internal/transport/http/middleware"
 	"brokle/pkg/response"
+	"brokle/pkg/ulid"
 )
 
 // OTLPHandler handles OTLP HTTP requests
 type OTLPHandler struct {
-	telemetryService observability.TelemetryService
-	otlpConverter    *obsServices.OTLPConverterService
-	logger           *logrus.Logger
+	streamProducer       *streams.TelemetryStreamProducer
+	deduplicationService observability.TelemetryDeduplicationService
+	otlpConverter        *obsServices.OTLPConverterService
+	logger               *logrus.Logger
 }
 
 // NewOTLPHandler creates a new OTLP handler
 func NewOTLPHandler(
-	telemetryService observability.TelemetryService,
+	streamProducer *streams.TelemetryStreamProducer,
+	deduplicationService observability.TelemetryDeduplicationService,
 	otlpConverter *obsServices.OTLPConverterService,
 	logger *logrus.Logger,
 ) *OTLPHandler {
 	return &OTLPHandler{
-		telemetryService: telemetryService,
-		otlpConverter:    otlpConverter,
-		logger:           logger,
+		streamProducer:       streamProducer,
+		deduplicationService: deduplicationService,
+		otlpConverter:        otlpConverter,
+		logger:               logger,
 	}
 }
 
@@ -170,37 +176,100 @@ func (h *OTLPHandler) HandleTraces(c *gin.Context) {
 		"brokle_events": len(brokleEvents),
 	}).Debug("Converted OTLP spans to Brokle events")
 
-	// Construct Brokle telemetry batch request
-	batchReq := &observability.TelemetryBatchRequest{
-		ProjectID:   *projectIDPtr,
-		Events:      brokleEvents,
-		Metadata: map[string]interface{}{
-			"source":         "otlp",
-			"otlp_version":   "1.0",
-			"resource_spans": len(otlpReq.ResourceSpans),
-		},
-		Async: false, // Process synchronously for OTLP (low latency)
+	// OTLP-native processing: deduplication + Redis Streams publishing
+
+	// 1. Extract event IDs from converted events
+	eventIDs := make([]ulid.ULID, len(brokleEvents))
+	for i, event := range brokleEvents {
+		eventIDs[i] = event.EventID
 	}
 
-	// Process batch using existing telemetry service infrastructure
-	batchResp, err := h.telemetryService.ProcessTelemetryBatch(ctx, batchReq)
+	// 2. Claim events atomically (24h TTL, prevents duplicates)
+	batchID := ulid.New()
+	claimedIDs, duplicateIDs, err := h.deduplicationService.ClaimEvents(
+		ctx, *projectIDPtr, batchID, eventIDs, 24*time.Hour,
+	)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to process telemetry batch")
-		response.Error(c, err)
+		h.logger.WithError(err).Error("Failed to claim OTLP events for deduplication")
+		response.InternalServerError(c, "Failed to claim events for deduplication")
+		return
+	}
+
+	// 3. Skip if all duplicates
+	if len(claimedIDs) == 0 {
+		h.logger.WithFields(logrus.Fields{
+			"project_id":  projectID,
+			"duplicates":  len(duplicateIDs),
+		}).Info("All OTLP events were duplicates, skipping")
+
+		response.Success(c, map[string]interface{}{
+			"status":     "all_duplicates",
+			"duplicates": len(duplicateIDs),
+		})
+		return
+	}
+
+	// 4. Build claimed events only (filter by claimed IDs)
+	claimedSet := make(map[ulid.ULID]bool, len(claimedIDs))
+	for _, id := range claimedIDs {
+		claimedSet[id] = true
+	}
+
+	claimedEventData := make([]streams.TelemetryEventData, 0, len(claimedIDs))
+	for _, event := range brokleEvents {
+		if claimedSet[event.EventID] {
+			claimedEventData = append(claimedEventData, streams.TelemetryEventData{
+				EventID:      event.EventID,
+				EventType:    string(event.EventType),
+				EventPayload: event.Payload,
+			})
+		}
+	}
+
+	// 5. Publish to Redis Streams for async processing
+	streamMsg := &streams.TelemetryStreamMessage{
+		BatchID:         batchID,
+		ProjectID:       *projectIDPtr,
+		Events:          claimedEventData,
+		ClaimedEventIDs: claimedIDs,
+		Metadata: map[string]interface{}{
+			"source":         "otlp",
+			"content_type":   contentType,
+			"resource_spans": len(otlpReq.ResourceSpans),
+			"total_spans":    countSpans(&otlpReq),
+		},
+		Timestamp: time.Now(),
+	}
+
+	streamID, err := h.streamProducer.PublishBatch(ctx, streamMsg)
+	if err != nil {
+		// CRITICAL: Rollback claimed events on publish failure
+		if rollbackErr := h.deduplicationService.ReleaseEvents(ctx, claimedIDs); rollbackErr != nil {
+			h.logger.WithFields(logrus.Fields{
+				"rollback_error": rollbackErr.Error(),
+				"original_error": err.Error(),
+				"batch_id":       batchID.String(),
+			}).Error("CRITICAL: Failed to rollback OTLP deduplication claims after publish failure")
+		}
+		response.InternalServerError(c, "Failed to publish events to stream")
 		return
 	}
 
 	h.logger.WithFields(logrus.Fields{
-		"batch_id":         batchResp.BatchID,
-		"processed_events": batchResp.ProcessedEvents,
-		"duplicate_events": batchResp.DuplicateEvents,
-	}).Info("OTLP traces processed successfully")
+		"batch_id":       batchID.String(),
+		"stream_id":      streamID,
+		"claimed_events": len(claimedIDs),
+		"duplicates":     len(duplicateIDs),
+		"project_id":     projectID,
+	}).Info("OTLP traces published to stream successfully")
 
-	// Return OTLP-compatible success response
+	// 6. Return OTLP-compatible success response (using standard APIResponse envelope)
 	response.Success(c, map[string]interface{}{
-		"status":          "success",
-		"batch_id":        batchResp.BatchID,
-		"processed_spans": batchResp.ProcessedEvents,
+		"status":          "accepted",
+		"batch_id":        batchID.String(),
+		"stream_id":       streamID,
+		"processed_spans": len(claimedIDs),
+		"duplicate_spans": len(duplicateIDs),
 	})
 }
 

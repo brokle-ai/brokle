@@ -42,11 +42,10 @@ const (
 // TelemetryStreamConsumer consumes telemetry batches from Redis Streams and writes to ClickHouse
 type TelemetryStreamConsumer struct {
 	redis            *database.RedisDB
-	clickhouseRepo   observability.TelemetryAnalyticsRepository // Keep for generic events
 	deduplicationSvc observability.TelemetryDeduplicationService
 	logger           *logrus.Logger
 
-	// New: Observability services for structured events (ClickHouse-first)
+	// Observability services for structured events (ClickHouse-first)
 	traceService       observability.TraceService
 	observationService observability.ObservationService
 	scoreService       observability.ScoreService
@@ -89,11 +88,10 @@ type TelemetryStreamConsumerConfig struct {
 // NewTelemetryStreamConsumer creates a new telemetry stream consumer
 func NewTelemetryStreamConsumer(
 	redis *database.RedisDB,
-	clickhouseRepo observability.TelemetryAnalyticsRepository,
 	deduplicationSvc observability.TelemetryDeduplicationService,
 	logger *logrus.Logger,
 	config *TelemetryStreamConsumerConfig,
-	// New: Observability services for structured events
+	// Observability services for structured events
 	traceService observability.TraceService,
 	observationService observability.ObservationService,
 	scoreService observability.ScoreService,
@@ -113,7 +111,6 @@ func NewTelemetryStreamConsumer(
 
 	return &TelemetryStreamConsumer{
 		redis:               redis,
-		clickhouseRepo:      clickhouseRepo,
 		deduplicationSvc:    deduplicationSvc,
 		logger:              logger,
 		traceService:        traceService,
@@ -718,28 +715,6 @@ func (c *TelemetryStreamConsumer) processBatch(ctx context.Context, batch *strea
 		}
 
 		processedCount++
-	}
-
-	// Record batch completion metadata (for analytics and debugging)
-	processingTimeMs := 0 // TODO: Calculate actual processing time
-	domainBatch := &observability.TelemetryBatch{
-		ID:               batch.BatchID,
-		ProjectID:        batch.ProjectID,
-		BatchMetadata:    batch.Metadata,
-		TotalEvents:      len(batch.Events),
-		ProcessedEvents:  processedCount,
-		FailedEvents:     failedCount,
-		Status:           observability.BatchStatusCompleted,
-		ProcessingTimeMs: &processingTimeMs,
-		CreatedAt:        batch.Timestamp,
-		CompletedAt:      ptrTime(time.Now()),
-	}
-
-	// Insert batch record (best-effort, don't fail if this errors)
-	if err := c.clickhouseRepo.InsertTelemetryBatch(ctx, domainBatch); err != nil {
-		c.logger.WithError(err).WithFields(logrus.Fields{
-			"batch_id": batch.BatchID.String(),
-		}).Warn("Failed to insert batch metadata (non-critical)")
 	}
 
 	// Determine success: At least one event processed successfully

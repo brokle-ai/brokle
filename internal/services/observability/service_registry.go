@@ -4,6 +4,7 @@ import (
 	"brokle/internal/config"
 	"brokle/internal/core/domain/observability"
 	"brokle/internal/infrastructure/storage"
+	"brokle/internal/infrastructure/streams"
 	"github.com/sirupsen/logrus"
 )
 
@@ -17,6 +18,10 @@ type ServiceRegistry struct {
 
 	// OTLP conversion service
 	OTLPConverterService *OTLPConverterService
+
+	// Stream infrastructure (for OTLP direct access)
+	StreamProducer       *streams.TelemetryStreamProducer
+	DeduplicationService observability.TelemetryDeduplicationService
 
 	// Existing telemetry service (Redis Streams + async processing)
 	TelemetryService observability.TelemetryService
@@ -33,6 +38,10 @@ func NewServiceRegistry(
 	// Blob storage dependencies
 	s3Client *storage.S3Client,
 	blobConfig *config.BlobStorageConfig,
+
+	// Stream infrastructure (for OTLP)
+	streamProducer *streams.TelemetryStreamProducer,
+	deduplicationService observability.TelemetryDeduplicationService,
 
 	// Telemetry system (keep existing)
 	telemetryService observability.TelemetryService,
@@ -56,6 +65,8 @@ func NewServiceRegistry(
 		ScoreService:         scoreService,
 		BlobStorageService:   blobStorageService,
 		OTLPConverterService: otlpConverterService,
+		StreamProducer:       streamProducer,
+		DeduplicationService: deduplicationService,
 		TelemetryService:     telemetryService,
 	}
 }

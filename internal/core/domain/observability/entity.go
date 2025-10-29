@@ -528,6 +528,7 @@ const (
 )
 
 // TelemetryEventDeduplication represents a deduplication entry for telemetry events
+// Internal type used by deduplication repository implementation
 type TelemetryEventDeduplication struct {
 	EventID     ulid.ULID `json:"event_id" db:"event_id"`
 	BatchID     ulid.ULID `json:"batch_id" db:"batch_id"`
@@ -572,38 +573,3 @@ func (d *TelemetryEventDeduplication) Validate() []ValidationError {
 	return errors
 }
 
-// BatchStatus defines the status of a telemetry batch
-type BatchStatus string
-
-const (
-	BatchStatusPending    BatchStatus = "pending"
-	BatchStatusProcessing BatchStatus = "processing"
-	BatchStatusCompleted  BatchStatus = "completed"
-	BatchStatusFailed     BatchStatus = "failed"
-)
-
-// TelemetryBatch represents a batch of telemetry events
-type TelemetryBatch struct {
-	ID               ulid.ULID              `json:"id" db:"id"`
-	ProjectID        ulid.ULID              `json:"project_id" db:"project_id"`
-	BatchMetadata    map[string]interface{} `json:"batch_metadata" db:"batch_metadata"`
-	TotalEvents      int                    `json:"total_events" db:"total_events"`
-	ProcessedEvents  int                    `json:"processed_events" db:"processed_events"`
-	FailedEvents     int                    `json:"failed_events" db:"failed_events"`
-	Status           BatchStatus            `json:"status" db:"status"`
-	ProcessingTimeMs *int                   `json:"processing_time_ms,omitempty" db:"processing_time_ms"`
-	CreatedAt        time.Time              `json:"created_at" db:"created_at"`
-	CompletedAt      *time.Time             `json:"completed_at,omitempty" db:"completed_at"`
-}
-
-// TelemetryMetric represents a telemetry metric for performance and analytics tracking
-type TelemetryMetric struct {
-	ProjectID   ulid.ULID              `json:"project_id" db:"project_id"`
-	MetricName  string                 `json:"metric_name" db:"metric_name"`
-	MetricType  string                 `json:"metric_type" db:"metric_type"`
-	MetricValue float64                `json:"metric_value" db:"metric_value"`
-	Labels      map[string]interface{} `json:"labels,omitempty" db:"labels"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty" db:"metadata"`
-	Timestamp   time.Time              `json:"timestamp" db:"timestamp"`
-	ProcessedAt *time.Time             `json:"processed_at,omitempty" db:"processed_at"`
-}

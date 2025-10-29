@@ -145,11 +145,8 @@ type TelemetryDeduplicationService interface {
 	GetFallbackRate(ctx context.Context, timeWindow time.Duration) (float64, error)
 }
 
-// TelemetryService aggregates all telemetry-related services with high-performance batch processing
+// TelemetryService aggregates all telemetry-related services for health monitoring
 type TelemetryService interface {
-	// High-throughput batch endpoint
-	ProcessTelemetryBatch(ctx context.Context, request *TelemetryBatchRequest) (*TelemetryBatchResponse, error)
-
 	// Service access
 	Deduplication() TelemetryDeduplicationService
 

@@ -364,12 +364,6 @@ func (s *Server) setupSDKRoutes(router *gin.RouterGroup) {
 	// AI routing decisions
 	router.POST("/route", s.handlers.AI.RouteRequest)
 
-	// Brokle native ingestion endpoints (envelope-based event format)
-	ingest := router.Group("/ingest")
-	{
-		ingest.POST("/batch", s.handlers.Observability.ProcessTelemetryBatch) // Batch event ingestion
-	}
-
 	// OTLP (OpenTelemetry Protocol) ingestion - 100% spec compliant
 	// Standard OTLP endpoint (OpenTelemetry convention)
 	router.POST("/otlp/traces", s.handlers.OTLP.HandleTraces) // Primary OTLP endpoint (supports Protobuf + JSON)

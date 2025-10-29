@@ -87,6 +87,6 @@ func NewHandlers(
 		Admin:         admin.NewTokenAdminHandler(authService, blacklistedTokens, logger),
 		RBAC:          rbac.NewHandler(cfg, logger, roleService, permissionService, organizationMemberService),
 		Observability: observability.NewHandler(cfg, logger, observabilityServices),
-		OTLP:          observability.NewOTLPHandler(observabilityServices.TelemetryService, observabilityServices.OTLPConverterService, logger),
+		OTLP:          observability.NewOTLPHandler(observabilityServices.StreamProducer, observabilityServices.DeduplicationService, observabilityServices.OTLPConverterService, logger),
 	}
 }

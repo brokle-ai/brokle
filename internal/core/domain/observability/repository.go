@@ -179,13 +179,3 @@ type TelemetryDeduplicationRepository interface {
 	CountByProjectID(ctx context.Context, projectID ulid.ULID) (int64, error)
 }
 
-// TelemetryAnalyticsRepository defines methods for storing telemetry data in ClickHouse
-type TelemetryAnalyticsRepository interface {
-	// Telemetry batch operations
-	InsertTelemetryBatch(ctx context.Context, batch *TelemetryBatch) error
-	InsertTelemetryBatchesBatch(ctx context.Context, batches []*TelemetryBatch) error
-
-	// Telemetry metric operations
-	InsertTelemetryMetric(ctx context.Context, metric *TelemetryMetric) error
-	InsertTelemetryMetricsBatch(ctx context.Context, metrics []*TelemetryMetric) error
-}
