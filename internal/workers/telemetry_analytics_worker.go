@@ -20,13 +20,11 @@ type TelemetryAnalyticsWorker struct {
 	repository observability.TelemetryAnalyticsRepository
 
 	// Channel-based queue system with configurable buffers
-	eventQueue    chan *TelemetryEventJob
 	batchQueue    chan *TelemetryBatchJob
 	metricsQueue  chan *TelemetryMetricJob
 	quit          chan bool
 
 	// Buffering system for batch processing
-	eventBuffer   []*TelemetryEventJob
 	batchBuffer   []*TelemetryBatchJob
 	metricsBuffer []*TelemetryMetricJob
 	bufferMutex   sync.RWMutex
@@ -45,7 +43,6 @@ type TelemetryAnalyticsWorker struct {
 	retryBackoff    time.Duration
 
 	// Actual worker counts (after minimum constraints)
-	eventWorkers   int
 	batchWorkers   int
 	metricsWorkers int
 
@@ -53,18 +50,6 @@ type TelemetryAnalyticsWorker struct {
 	workerWg    sync.WaitGroup
 	running     int64
 	lifecycleMu sync.Mutex // Protects start/stop operations
-}
-
-// TelemetryEventJob represents a telemetry event processing job
-type TelemetryEventJob struct {
-	BatchID     ulid.ULID                        `json:"batch_id"`
-	EventID     ulid.ULID                        `json:"event_id"`
-	ProjectID   ulid.ULID                        `json:"project_id"`
-	EventType   observability.TelemetryEventType `json:"event_type"`
-	EventData   map[string]interface{}           `json:"event_data"`
-	Timestamp   time.Time                        `json:"timestamp"`
-	RetryCount  int                              `json:"retry_count"`
-	Priority    JobPriority                      `json:"priority"`
 }
 
 // TelemetryBatchJob represents a telemetry batch processing job
@@ -165,13 +150,11 @@ func NewTelemetryAnalyticsWorker(
 		repository: repository,
 
 		// High-capacity queues for 10k events/sec
-		eventQueue:   make(chan *TelemetryEventJob, bufferSize),
 		batchQueue:   make(chan *TelemetryBatchJob, bufferSize/10), // Fewer batches than events
 		metricsQueue: make(chan *TelemetryMetricJob, bufferSize/5), // Metrics in between
 		quit:         make(chan bool),
 
 		// Pre-allocated buffers for batch processing
-		eventBuffer:   make([]*TelemetryEventJob, 0, bufferSize),
 		batchBuffer:   make([]*TelemetryBatchJob, 0, bufferSize/10),
 		metricsBuffer: make([]*TelemetryMetricJob, 0, bufferSize/5),
 
@@ -207,22 +190,16 @@ func (w *TelemetryAnalyticsWorker) Start() {
 	atomic.StoreInt64(&w.running, 1)
 
 	// Calculate actual worker counts with minimum constraints
-	// Ensure at least 1 batch and 1 metrics worker to prevent queue starvation
-	// in small deployments (e.g., maxWorkers=1-3 would cause 0 batch/metrics workers)
-	w.eventWorkers = w.maxWorkers
-	w.batchWorkers = w.maxWorkers / 2
-	if w.batchWorkers == 0 {
+	// 70/30 batch-heavy split prioritizes batch processing over metrics
+	// Ensure at least 1 worker of each type to prevent queue starvation
+	w.batchWorkers = int(float64(w.maxWorkers) * 0.7)
+	if w.batchWorkers < 1 {
 		w.batchWorkers = 1 // Minimum 1 to drain batch queue
 	}
-	w.metricsWorkers = w.maxWorkers / 4
-	if w.metricsWorkers == 0 {
-		w.metricsWorkers = 1 // Minimum 1 to drain metrics queue
-	}
 
-	// Start event processing workers
-	for i := 0; i < w.eventWorkers; i++ {
-		w.workerWg.Add(1)
-		go w.eventWorker(i)
+	w.metricsWorkers = int(float64(w.maxWorkers) * 0.3)
+	if w.metricsWorkers < 1 {
+		w.metricsWorkers = 1 // Minimum 1 to drain metrics queue
 	}
 
 	// Start batch processing workers
@@ -278,39 +255,6 @@ func (w *TelemetryAnalyticsWorker) Stop() {
 	w.logger.WithFields(finalStats).Info("Telemetry analytics worker stopped")
 }
 
-// QueueTelemetryEvent queues a telemetry event for processing
-func (w *TelemetryAnalyticsWorker) QueueTelemetryEvent(job *TelemetryEventJob) bool {
-	if atomic.LoadInt64(&w.running) == 0 {
-		return false
-	}
-
-	select {
-	case w.eventQueue <- job:
-		w.logger.WithFields(logrus.Fields{
-			"batch_id":   job.BatchID.String(),
-			"event_id":   job.EventID.String(),
-			"event_type": job.EventType,
-			"priority":   job.Priority,
-		}).Debug("Telemetry event queued")
-		return true
-	default:
-		// Queue is full, handle based on priority
-		if job.Priority >= PriorityHigh {
-			// Try to drop a lower priority job
-			return w.tryPriorityDrop(job)
-		}
-
-		atomic.AddInt64(&w.stats.EventsDropped, 1)
-		w.logger.WithFields(logrus.Fields{
-			"batch_id":   job.BatchID.String(),
-			"event_id":   job.EventID.String(),
-			"event_type": job.EventType,
-			"queue_size": len(w.eventQueue),
-		}).Warn("Event queue full, dropping telemetry event")
-		return false
-	}
-}
-
 // QueueTelemetryBatch queues a telemetry batch for processing
 func (w *TelemetryAnalyticsWorker) QueueTelemetryBatch(job *TelemetryBatchJob) bool {
 	if atomic.LoadInt64(&w.running) == 0 {
@@ -358,32 +302,6 @@ func (w *TelemetryAnalyticsWorker) QueueTelemetryMetric(job *TelemetryMetricJob)
 			"queue_size":  len(w.metricsQueue),
 		}).Warn("Metrics queue full, dropping telemetry metric")
 		return false
-	}
-}
-
-// eventWorker processes telemetry events from the queue
-func (w *TelemetryAnalyticsWorker) eventWorker(id int) {
-	defer w.workerWg.Done()
-
-	logger := w.logger.WithField("worker_type", "event").WithField("worker_id", id)
-	logger.Info("Event worker started")
-
-	for {
-		select {
-		case job := <-w.eventQueue:
-			startTime := time.Now()
-
-			if err := w.processTelemetryEvent(job); err != nil {
-				w.handleEventError(job, err, logger)
-			} else {
-				atomic.AddInt64(&w.stats.EventsProcessed, 1)
-				w.updateLatencyStats(time.Since(startTime))
-			}
-
-		case <-w.quit:
-			logger.Info("Event worker stopping")
-			return
-		}
 	}
 }
 
@@ -485,44 +403,6 @@ func (w *TelemetryAnalyticsWorker) healthMonitor() {
 	}
 }
 
-// tryPriorityDrop attempts to drop a lower priority job to make room for a high priority one
-func (w *TelemetryAnalyticsWorker) tryPriorityDrop(newJob *TelemetryEventJob) bool {
-	// This is a simplified version - in production, you might want a more sophisticated priority queue
-	select {
-	case oldJob := <-w.eventQueue:
-		if oldJob.Priority < newJob.Priority {
-			// Drop the old job and queue the new one
-			select {
-			case w.eventQueue <- newJob:
-				atomic.AddInt64(&w.stats.EventsDropped, 1)
-				w.logger.WithFields(logrus.Fields{
-					"dropped_event_id": oldJob.EventID.String(),
-					"new_event_id":     newJob.EventID.String(),
-				}).Debug("Dropped lower priority event for higher priority")
-				return true
-			default:
-				// Put the old job back and fail
-				select {
-				case w.eventQueue <- oldJob:
-				default:
-					atomic.AddInt64(&w.stats.EventsDropped, 1)
-				}
-				return false
-			}
-		} else {
-			// Put the old job back
-			select {
-			case w.eventQueue <- oldJob:
-			default:
-				atomic.AddInt64(&w.stats.EventsDropped, 1)
-			}
-			return false
-		}
-	default:
-		return false
-	}
-}
-
 // updateLatencyStats updates latency statistics (thread-safe)
 func (w *TelemetryAnalyticsWorker) updateLatencyStats(duration time.Duration) {
 	w.statsMutex.Lock()
@@ -542,8 +422,8 @@ func (w *TelemetryAnalyticsWorker) updateLatencyStats(duration time.Duration) {
 // updateHealthMetrics updates health metrics (thread-safe)
 func (w *TelemetryAnalyticsWorker) updateHealthMetrics() {
 	// Calculate queue metrics (no locking needed for channel length operations)
-	queueDepth := len(w.eventQueue) + len(w.batchQueue) + len(w.metricsQueue)
-	activeWorkers := w.eventWorkers + w.batchWorkers + w.metricsWorkers + 1
+	queueDepth := len(w.batchQueue) + len(w.metricsQueue)
+	activeWorkers := w.batchWorkers + w.metricsWorkers + 1
 	bufferUtilization := float64(queueDepth) / float64(w.bufferSize) * 100
 
 	// Access stats with proper locking
@@ -601,7 +481,6 @@ func (w *TelemetryAnalyticsWorker) GetHealth() *HealthMetrics {
 // GetQueueDepths returns current queue depths for monitoring
 func (w *TelemetryAnalyticsWorker) GetQueueDepths() map[string]int {
 	return map[string]int{
-		"events":  len(w.eventQueue),
 		"batches": len(w.batchQueue),
 		"metrics": len(w.metricsQueue),
 	}

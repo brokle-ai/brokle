@@ -520,9 +520,6 @@ func (b *BlobStorageFileLog) IsCompressed() bool {
 type TelemetryEventType string
 
 const (
-	// Generic events
-	TelemetryEventTypeEvent TelemetryEventType = "event"
-
 	// Structured observability (immutable events only)
 	TelemetryEventTypeTrace        TelemetryEventType = "trace"
 	TelemetryEventTypeSession      TelemetryEventType = "session"
@@ -597,20 +594,6 @@ type TelemetryBatch struct {
 	ProcessingTimeMs *int                   `json:"processing_time_ms,omitempty" db:"processing_time_ms"`
 	CreatedAt        time.Time              `json:"created_at" db:"created_at"`
 	CompletedAt      *time.Time             `json:"completed_at,omitempty" db:"completed_at"`
-	Events           []TelemetryEvent       `json:"events,omitempty" db:"-"`
-}
-
-// TelemetryEvent represents an individual telemetry event within a batch
-type TelemetryEvent struct {
-	ID           ulid.ULID              `json:"id" db:"id"`
-	BatchID      ulid.ULID              `json:"batch_id" db:"batch_id"`
-	ProjectID    ulid.ULID              `json:"project_id" db:"project_id"`
-	EventType    TelemetryEventType     `json:"event_type" db:"event_type"`
-	EventPayload map[string]interface{} `json:"event_payload" db:"event_payload"`
-	ProcessedAt  *time.Time             `json:"processed_at,omitempty" db:"processed_at"`
-	ErrorMessage *string                `json:"error_message,omitempty" db:"error_message"`
-	RetryCount   int                    `json:"retry_count" db:"retry_count"`
-	CreatedAt    time.Time              `json:"created_at" db:"created_at"`
 }
 
 // TelemetryMetric represents a telemetry metric for performance and analytics tracking

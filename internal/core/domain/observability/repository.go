@@ -181,10 +181,6 @@ type TelemetryDeduplicationRepository interface {
 
 // TelemetryAnalyticsRepository defines methods for storing telemetry data in ClickHouse
 type TelemetryAnalyticsRepository interface {
-	// Telemetry event operations
-	InsertTelemetryEvent(ctx context.Context, event *TelemetryEvent) error
-	InsertTelemetryEventsBatch(ctx context.Context, events []*TelemetryEvent) error
-
 	// Telemetry batch operations
 	InsertTelemetryBatch(ctx context.Context, batch *TelemetryBatch) error
 	InsertTelemetryBatchesBatch(ctx context.Context, batches []*TelemetryBatch) error

@@ -12,32 +12,6 @@ import (
 	"brokle/internal/core/domain/observability"
 )
 
-// processTelemetryEvent processes a single telemetry event
-func (w *TelemetryAnalyticsWorker) processTelemetryEvent(job *TelemetryEventJob) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	// Convert job to domain telemetry event format WITH context from job
-	processedAt := time.Now()
-	event := &observability.TelemetryEvent{
-		ID:           job.EventID,
-		BatchID:      job.BatchID,
-		ProjectID:    job.ProjectID,
-		EventType:    job.EventType,
-		EventPayload: job.EventData,
-		CreatedAt:    job.Timestamp,
-		RetryCount:   job.RetryCount,
-		ProcessedAt:  &processedAt,
-	}
-
-	// Insert into ClickHouse using domain type (context carried in struct)
-	if err := w.repository.InsertTelemetryEvent(ctx, event); err != nil {
-		return fmt.Errorf("failed to insert telemetry event: %w", err)
-	}
-
-	return nil
-}
-
 // processTelemetryBatch processes a telemetry batch record
 func (w *TelemetryAnalyticsWorker) processTelemetryBatch(job *TelemetryBatchJob) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -106,37 +80,6 @@ func (w *TelemetryAnalyticsWorker) processBulkOperations() {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-
-	// Process event buffer
-	if len(w.eventBuffer) > 0 {
-		events := make([]*observability.TelemetryEvent, len(w.eventBuffer))
-		processedAt := time.Now()
-
-		// Each event carries its own project_id from its job
-		for i, job := range w.eventBuffer {
-			events[i] = &observability.TelemetryEvent{
-				ID:           job.EventID,
-				BatchID:      job.BatchID,
-				ProjectID:    job.ProjectID,
-				EventType:    job.EventType,
-				EventPayload: job.EventData,
-				CreatedAt:    job.Timestamp,
-				RetryCount:   job.RetryCount,
-				ProcessedAt:  &processedAt,
-			}
-		}
-
-		if err := w.repository.InsertTelemetryEventsBatch(ctx, events); err != nil {
-			w.logger.WithError(err).WithField("count", len(events)).Error("Failed to insert telemetry events batch")
-			// Retry individual events
-			w.retryBulkEvents(w.eventBuffer)
-		} else {
-			w.logger.WithField("count", len(events)).Debug("Telemetry events batch processed")
-		}
-
-		// Clear buffer
-		w.eventBuffer = w.eventBuffer[:0]
-	}
 
 	// Process batch buffer
 	if len(w.batchBuffer) > 0 {
@@ -215,10 +158,6 @@ func (w *TelemetryAnalyticsWorker) flushBuffers() {
 	// Process remaining items in queues
 	for {
 		select {
-		case job := <-w.eventQueue:
-			if err := w.processTelemetryEvent(job); err != nil {
-				w.logger.WithError(err).Error("Failed to process event during flush")
-			}
 		case job := <-w.batchQueue:
 			if err := w.processTelemetryBatch(job); err != nil {
 				w.logger.WithError(err).Error("Failed to process batch during flush")
@@ -236,42 +175,6 @@ func (w *TelemetryAnalyticsWorker) flushBuffers() {
 }
 
 // Error handling methods
-
-// handleEventError handles errors in event processing with retry logic
-func (w *TelemetryAnalyticsWorker) handleEventError(job *TelemetryEventJob, err error, logger *logrus.Entry) {
-	logger.WithError(err).WithFields(logrus.Fields{
-		"event_id":    job.EventID.String(),
-		"batch_id":    job.BatchID.String(),
-		"retry_count": job.RetryCount,
-	}).Error("Failed to process telemetry event")
-
-	// Implement retry logic
-	if job.RetryCount < w.maxRetries {
-		// Create a copy of the job for retry to avoid race conditions
-		retryJob := *job
-		retryJob.RetryCount++
-
-		// Exponential backoff
-		backoffDelay := w.retryBackoff * time.Duration(1<<uint(retryJob.RetryCount-1))
-
-		go func() {
-			time.Sleep(backoffDelay)
-			if !w.QueueTelemetryEvent(&retryJob) {
-				logger.WithField("event_id", retryJob.EventID.String()).Error("Failed to requeue event after backoff")
-			}
-		}()
-
-		atomic.AddInt64(&w.stats.EventsRetried, 1)
-		logger.WithFields(logrus.Fields{
-			"event_id":     retryJob.EventID.String(),
-			"retry_count":  retryJob.RetryCount,
-			"backoff_delay": backoffDelay,
-		}).Info("Retrying telemetry event")
-	} else {
-		atomic.AddInt64(&w.stats.EventsFailed, 1)
-		logger.WithField("event_id", job.EventID.String()).Error("Max retries exceeded for telemetry event")
-	}
-}
 
 // handleBatchError handles errors in batch processing with retry logic
 func (w *TelemetryAnalyticsWorker) handleBatchError(job *TelemetryBatchJob, err error, logger *logrus.Entry) {
@@ -345,24 +248,6 @@ func (w *TelemetryAnalyticsWorker) handleMetricError(job *TelemetryMetricJob, er
 
 // Bulk retry methods
 
-// retryBulkEvents retries individual events from a failed bulk operation (thread-safe)
-func (w *TelemetryAnalyticsWorker) retryBulkEvents(jobs []*TelemetryEventJob) {
-	for _, job := range jobs {
-		// Create a copy to avoid race conditions
-		retryJob := *job
-		retryJob.RetryCount++
-		if retryJob.RetryCount <= w.maxRetries {
-			go func(j TelemetryEventJob) {
-				backoffDelay := w.retryBackoff * time.Duration(1<<uint(j.RetryCount-1))
-				time.Sleep(backoffDelay)
-				w.QueueTelemetryEvent(&j)
-			}(retryJob)
-		} else {
-			atomic.AddInt64(&w.stats.EventsFailed, 1)
-		}
-	}
-}
-
 // retryBulkBatches retries individual batches from a failed bulk operation (thread-safe)
 func (w *TelemetryAnalyticsWorker) retryBulkBatches(jobs []*TelemetryBatchJob) {
 	for _, job := range jobs {
@@ -401,21 +286,6 @@ func (w *TelemetryAnalyticsWorker) retryBulkMetrics(jobs []*TelemetryMetricJob) 
 
 // Utility methods
 
-// marshalEventData marshals event data to JSON string for ClickHouse storage
-func (w *TelemetryAnalyticsWorker) marshalEventData(data map[string]interface{}) string {
-	if data == nil || len(data) == 0 {
-		return "{}"
-	}
-
-	jsonBytes, err := json.Marshal(data)
-	if err != nil {
-		w.logger.WithError(err).Warn("Failed to marshal event data")
-		return "{}"
-	}
-
-	return string(jsonBytes)
-}
-
 // marshalLabels marshals labels to JSON string for ClickHouse storage
 func (w *TelemetryAnalyticsWorker) marshalLabels(labels map[string]string) string {
 	if labels == nil || len(labels) == 0 {
@@ -429,19 +299,6 @@ func (w *TelemetryAnalyticsWorker) marshalLabels(labels map[string]string) strin
 	}
 
 	return string(jsonBytes)
-}
-
-// bufferEvent adds an event to the buffer for bulk processing
-func (w *TelemetryAnalyticsWorker) bufferEvent(job *TelemetryEventJob) {
-	w.bufferMutex.Lock()
-	defer w.bufferMutex.Unlock()
-
-	w.eventBuffer = append(w.eventBuffer, job)
-
-	// Trigger batch processing if buffer is full
-	if len(w.eventBuffer) >= w.bufferSize {
-		go w.processBulkOperations()
-	}
 }
 
 // bufferBatch adds a batch to the buffer for bulk processing

@@ -450,7 +450,6 @@ func (h *Handler) ValidateEvent(c *gin.Context) {
 	// Validate event type
 	eventType := observability.TelemetryEventType(req.EventType)
 	validTypes := []observability.TelemetryEventType{
-		observability.TelemetryEventTypeEvent,
 		observability.TelemetryEventTypeTrace,
 		observability.TelemetryEventTypeObservation,
 		observability.TelemetryEventTypeQualityScore,

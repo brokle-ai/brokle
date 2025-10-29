@@ -66,18 +66,6 @@ type ProviderHealth struct {
 	Timestamp      time.Time `ch:"timestamp"`
 }
 
-// TelemetryEvent represents a telemetry event in ClickHouse
-type TelemetryEvent struct {
-	ID          string    `ch:"id"`
-	BatchID     string    `ch:"batch_id"`
-	ProjectID   string    `ch:"project_id"`
-	EventType   string    `ch:"event_type"`
-	EventData   string    `ch:"event_data"`
-	Timestamp   time.Time `ch:"timestamp"`
-	RetryCount  int       `ch:"retry_count"`
-	ProcessedAt time.Time `ch:"processed_at"`
-}
-
 // TelemetryBatch represents a telemetry batch in ClickHouse
 type TelemetryBatch struct {
 	ID               string    `ch:"id"`
@@ -460,78 +448,6 @@ type CostBreakdown struct {
 
 // Telemetry-specific insert methods
 
-// InsertTelemetryEvent inserts a single telemetry event (domain interface implementation)
-func (r *AnalyticsRepository) InsertTelemetryEvent(ctx context.Context, event *observability.TelemetryEvent) error {
-	chEvent, err := domainEventToClickHouse(event)
-	if err != nil {
-		return fmt.Errorf("failed to convert domain event to ClickHouse: %w", err)
-	}
-
-	return r.insertClickHouseEvent(ctx, chEvent)
-}
-
-// insertClickHouseEvent inserts a ClickHouse telemetry event (internal method)
-func (r *AnalyticsRepository) insertClickHouseEvent(ctx context.Context, event *TelemetryEvent) error {
-	query := `
-		INSERT INTO telemetry_events (
-			id, batch_id, project_id, event_type,
-			event_data, timestamp, retry_count, processed_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-
-	return r.db.Execute(ctx, query,
-		event.ID, event.BatchID, event.ProjectID, event.EventType,
-		event.EventData, event.Timestamp, event.RetryCount, event.ProcessedAt,
-	)
-}
-
-// InsertTelemetryEventsBatch inserts multiple telemetry events efficiently (domain interface implementation)
-func (r *AnalyticsRepository) InsertTelemetryEventsBatch(ctx context.Context, events []*observability.TelemetryEvent) error {
-	if len(events) == 0 {
-		return nil
-	}
-
-	// Convert domain events to ClickHouse events (context carried in domain structs)
-	chEvents := make([]*TelemetryEvent, len(events))
-	for i, event := range events {
-		chEvent, err := domainEventToClickHouse(event)
-		if err != nil {
-			return fmt.Errorf("failed to convert domain event %d to ClickHouse: %w", i, err)
-		}
-		chEvents[i] = chEvent
-	}
-
-	return r.insertTelemetryEventsBatchClickHouse(ctx, chEvents)
-}
-
-// insertTelemetryEventsBatchClickHouse inserts multiple ClickHouse telemetry events (internal method)
-func (r *AnalyticsRepository) insertTelemetryEventsBatchClickHouse(ctx context.Context, events []*TelemetryEvent) error {
-	if len(events) == 0 {
-		return nil
-	}
-
-	batchRows := make([][]interface{}, len(events))
-	for i, event := range events {
-		batchRows[i] = []interface{}{
-			event.ID, event.BatchID, event.ProjectID, event.EventType,
-			event.EventData, event.Timestamp, event.RetryCount, event.ProcessedAt,
-		}
-	}
-
-	query := `
-		INSERT INTO telemetry_events (
-			id, batch_id, project_id, event_type,
-			event_data, timestamp, retry_count, processed_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-
-	for _, row := range batchRows {
-		if err := r.db.Execute(ctx, query, row...); err != nil {
-			return fmt.Errorf("failed to insert telemetry event batch: %w", err)
-		}
-	}
-
-	return nil
-}
-
 // InsertTelemetryBatch inserts a single telemetry batch record (domain interface implementation)
 func (r *AnalyticsRepository) InsertTelemetryBatch(ctx context.Context, batch *observability.TelemetryBatch) error {
 	chBatch, err := domainBatchToClickHouse(batch)
@@ -682,30 +598,6 @@ func (r *AnalyticsRepository) insertTelemetryMetricsBatchClickHouse(ctx context.
 
 // Domain to ClickHouse conversion layer for clean architecture
 // These methods convert rich domain types to ClickHouse-optimized DTOs
-
-// domainEventToClickHouse converts a domain TelemetryEvent to ClickHouse TelemetryEvent
-func domainEventToClickHouse(event *observability.TelemetryEvent) (*TelemetryEvent, error) {
-	eventDataJSON, err := json.Marshal(event.EventPayload)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal event payload: %w", err)
-	}
-
-	processedAt := time.Time{}
-	if event.ProcessedAt != nil {
-		processedAt = *event.ProcessedAt
-	}
-
-	return &TelemetryEvent{
-		ID:          event.ID.String(),
-		BatchID:     event.BatchID.String(),
-		ProjectID:   event.ProjectID.String(),
-		EventType:   string(event.EventType),
-		EventData:   string(eventDataJSON),
-		Timestamp:   event.CreatedAt,
-		RetryCount:  event.RetryCount,
-		ProcessedAt: processedAt,
-	}, nil
-}
 
 // domainBatchToClickHouse converts a domain TelemetryBatch to ClickHouse TelemetryBatch
 func domainBatchToClickHouse(batch *observability.TelemetryBatch) (*TelemetryBatch, error) {

@@ -539,7 +539,6 @@ func (c *TelemetryStreamConsumer) sortEventsByDependency(events []streams.Teleme
 		observability.TelemetryEventTypeSession:      2, // Sessions second
 		observability.TelemetryEventTypeObservation:  3, // Observations third (require traces)
 		observability.TelemetryEventTypeQualityScore: 4, // Scores last (require traces/observations)
-		observability.TelemetryEventTypeEvent:        5, // Generic events last
 	}
 
 	// Create a copy to avoid modifying original slice
@@ -694,20 +693,6 @@ func (c *TelemetryStreamConsumer) processBatch(ctx context.Context, batch *strea
 		case observability.TelemetryEventTypeQualityScore:
 			// Structured score event → ScoreService → scores table
 			err = c.processScoreEvent(ctx, &event, batch.ProjectID)
-
-		case observability.TelemetryEventTypeEvent:
-			// Generic event → TelemetryAnalyticsRepository (backward compatibility)
-			domainEvent := &observability.TelemetryEvent{
-				ID:           event.EventID,
-				BatchID:      batch.BatchID,
-				ProjectID:    batch.ProjectID,
-				EventType:    observability.TelemetryEventType(event.EventType),
-				EventPayload: event.EventPayload,
-				CreatedAt:    batch.Timestamp,
-				RetryCount:   0,
-				ProcessedAt:  ptrTime(time.Now()),
-			}
-			err = c.clickhouseRepo.InsertTelemetryEvent(ctx, domainEvent)
 
 		default:
 			// Unknown event type - log warning and skip
