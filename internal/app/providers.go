@@ -304,7 +304,7 @@ func ProvideObservabilityRepositories(clickhouseDB *database.ClickHouseDB, redis
 		Observation:            observabilityRepo.NewObservationRepository(clickhouseDB.Conn),
 		Score:                  observabilityRepo.NewScoreRepository(clickhouseDB.Conn),
 		BlobStorage:            observabilityRepo.NewBlobStorageRepository(clickhouseDB.Conn),
-		TelemetryDeduplication: observabilityRepo.NewTelemetryDeduplicationRepositoryRedis(redisDB),
+		TelemetryDeduplication: observabilityRepo.NewTelemetryDeduplicationRepository(redisDB),
 	}
 }
 
