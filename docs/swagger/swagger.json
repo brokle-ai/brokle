@@ -498,6 +498,318 @@
                 }
             }
         },
+        "/api/v1/analytics/observations": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Retrieve paginated list of observations",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Dashboard - Analytics"
+                ],
+                "summary": "List observations with filtering",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Filter by trace ID",
+                        "name": "trace_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by observation type",
+                        "name": "type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by model",
+                        "name": "model",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by level",
+                        "name": "level",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Limit (default 50, max 1000)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Offset (default 0)",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "List of observations",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/observability.Observation"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid parameters",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/analytics/observations/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Retrieve detailed observation information",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Dashboard - Analytics"
+                ],
+                "summary": "Get observation by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Observation ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Observation details",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/observability.Observation"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "Observation not found",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Update an existing observation (for corrections/enrichment after initial creation)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Dashboard - Analytics"
+                ],
+                "summary": "Update observation by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Observation ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Updated observation data",
+                        "name": "observation",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/observability.Observation"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Updated observation",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/observability.Observation"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "Observation not found",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/analytics/overview": {
             "get": {
                 "security": [
@@ -820,6 +1132,839 @@
                         "description": "Internal server error",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/analytics/scores": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Retrieve paginated list of quality scores",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Dashboard - Analytics"
+                ],
+                "summary": "List quality scores with filtering",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Filter by trace ID",
+                        "name": "trace_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by observation ID",
+                        "name": "observation_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by session ID",
+                        "name": "session_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by score name",
+                        "name": "name",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by source (API, AUTO, HUMAN, EVAL)",
+                        "name": "source",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by data type (NUMERIC, CATEGORICAL, BOOLEAN)",
+                        "name": "data_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Limit (default 50, max 1000)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Offset (default 0)",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "List of scores",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/observability.Score"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid parameters",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/analytics/scores/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Retrieve detailed score information",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Dashboard - Analytics"
+                ],
+                "summary": "Get quality score by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Score ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Score details",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/observability.Score"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "Score not found",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Update an existing score (for corrections/enrichment after initial creation)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Dashboard - Analytics"
+                ],
+                "summary": "Update quality score by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Score ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Updated score data",
+                        "name": "score",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/observability.Score"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Updated score",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/observability.Score"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "Score not found",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/analytics/traces": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Retrieve paginated list of traces with optional filtering",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Dashboard - Analytics"
+                ],
+                "summary": "List traces for a project",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project ID",
+                        "name": "project_id",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by session ID",
+                        "name": "session_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by user ID",
+                        "name": "user_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "format": "int64",
+                        "description": "Start time (Unix timestamp)",
+                        "name": "start_time",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "format": "int64",
+                        "description": "End time (Unix timestamp)",
+                        "name": "end_time",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Limit (default 50, max 1000)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Offset (default 0)",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "List of traces",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/observability.Trace"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid parameters",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/analytics/traces/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Retrieve detailed trace information",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Dashboard - Analytics"
+                ],
+                "summary": "Get trace by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Trace ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Trace details",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/observability.Trace"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "Trace not found",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Update an existing trace (for corrections/enrichment after initial creation)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Dashboard - Analytics"
+                ],
+                "summary": "Update trace by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Trace ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Updated trace data",
+                        "name": "trace",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/observability.Trace"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Updated trace",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/observability.Trace"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "Trace not found",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/analytics/traces/{id}/observations": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Retrieve trace with all observations in hierarchical structure",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Dashboard - Analytics"
+                ],
+                "summary": "Get trace with observations tree",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Trace ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Trace with observations",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/observability.Trace"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "Trace not found",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/analytics/traces/{id}/scores": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Retrieve trace with all associated quality scores",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Dashboard - Analytics"
+                ],
+                "summary": "Get trace with quality scores",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Trace ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Trace with scores",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/observability.Trace"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "Trace not found",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     }
                 }
@@ -2236,346 +3381,6 @@
                     },
                     "404": {
                         "description": "Request not found",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/observability/traces": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Get a paginated list of LLM observability traces with filtering options",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Observability - Traces"
-                ],
-                "summary": "List traces",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Project ID filter",
-                        "name": "project_id",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "User ID filter",
-                        "name": "user_id",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Session ID filter",
-                        "name": "session_id",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Trace name filter",
-                        "name": "name",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "External trace ID filter",
-                        "name": "external_trace_id",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Start time filter (RFC3339 format)",
-                        "name": "start_time",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "End time filter (RFC3339 format)",
-                        "name": "end_time",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "default": 50,
-                        "description": "Maximum number of results",
-                        "name": "limit",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "default": 0,
-                        "description": "Number of results to skip",
-                        "name": "offset",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "default": "created_at",
-                        "description": "Sort field",
-                        "name": "sort_by",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "default": "desc",
-                        "description": "Sort order (asc/desc)",
-                        "name": "sort_order",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Traces retrieved successfully",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/observability.ListTracesResponse"
-                                        },
-                                        "meta": {
-                                            "allOf": [
-                                                {
-                                                    "$ref": "#/definitions/response.Meta"
-                                                },
-                                                {
-                                                    "type": "object",
-                                                    "properties": {
-                                                        "pagination": {
-                                                            "$ref": "#/definitions/response.Pagination"
-                                                        }
-                                                    }
-                                                }
-                                            ]
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid filter parameters",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/observability/traces/{id}": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Retrieve a specific LLM observability trace by its unique identifier",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Observability - Traces"
-                ],
-                "summary": "Get trace by ID",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Trace ID (ULID format)",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Trace retrieved successfully",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.SuccessResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/observability.TraceResponse"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid trace ID format",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Trace not found",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/observability/traces/{id}/observations": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Retrieve a trace along with all its associated observations (LLM calls, spans, events)",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Observability - Traces"
-                ],
-                "summary": "Get trace with observations",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Trace ID (ULID format)",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Trace with observations retrieved successfully",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.SuccessResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/observability.TraceWithObservationsResponse"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid trace ID format",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Trace not found",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/observability/traces/{id}/stats": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Retrieve aggregated statistics for a specific LLM trace (cost, tokens, latency, etc.)",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Observability - Traces"
-                ],
-                "summary": "Get trace statistics",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Trace ID (ULID format)",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Trace statistics retrieved successfully",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.SuccessResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/observability.TraceStatsResponse"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid trace ID format",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Trace not found",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorResponse"
                         }
@@ -5368,6 +6173,147 @@
                 }
             }
         },
+        "/v1/ingest/batch": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Process a batch of telemetry events asynchronously with ULID-based deduplication and Redis Streams. Returns 202 Accepted immediately while events are processed in the background.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SDK - Telemetry"
+                ],
+                "summary": "Process high-throughput telemetry batch (async via Redis Streams)",
+                "parameters": [
+                    {
+                        "description": "Telemetry batch data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_transport_http_handlers_observability.TelemetryBatchRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "202": {
+                        "description": "Batch accepted for async processing",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/internal_transport_http_handlers_observability.TelemetryBatchResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request payload",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid or missing API key",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "422": {
+                        "description": "Validation failed",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "429": {
+                        "description": "Rate limit exceeded",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
         "/v1/models": {
             "get": {
                 "security": [
@@ -5525,265 +6471,6 @@
                         "description": "Internal server error",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/v1/telemetry/batch": {
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Process a batch of telemetry events with ULID-based deduplication and 5x performance optimization",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "SDK - Telemetry"
-                ],
-                "summary": "Process high-throughput telemetry batch",
-                "parameters": [
-                    {
-                        "description": "Telemetry batch data",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/internal_transport_http_handlers_observability.TelemetryBatchRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Batch processed successfully",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/internal_transport_http_handlers_observability.TelemetryBatchResponse"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request payload",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "401": {
-                        "description": "Invalid or missing API key",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "422": {
-                        "description": "Validation failed",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "429": {
-                        "description": "Rate limit exceeded",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                }
-            }
-        },
-        "/v1/telemetry/batch/{batch_id}": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Get status and details for a specific telemetry batch",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "SDK - Telemetry"
-                ],
-                "summary": "Get telemetry batch status",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Batch ID (ULID format)",
-                        "name": "batch_id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Batch status retrieved successfully",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/observability.TelemetryBatchStatusResponse"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid batch ID format",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "401": {
-                        "description": "Invalid or missing API key",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "404": {
-                        "description": "Batch not found",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
                         }
                     }
                 }
@@ -6129,6 +6816,113 @@
                     },
                     "422": {
                         "description": "Validation failed",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/traces": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Accepts OpenTelemetry Protocol (OTLP) traces in JSON or Protobuf format",
+                "consumes": [
+                    "application/json",
+                    "application/x-protobuf"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SDK - OTLP"
+                ],
+                "summary": "OTLP trace ingestion endpoint (OpenTelemetry spec compliant)",
+                "parameters": [
+                    {
+                        "description": "OTLP trace export request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/observability.OTLPRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Traces accepted",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "additionalProperties": true
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid OTLP request",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid or missing API key",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
                         "schema": {
                             "allOf": [
                                 {
@@ -7735,7 +8529,7 @@
             }
         },
         "internal_transport_http_handlers_observability.TelemetryBatchRequest": {
-            "description": "High-performance batch request for telemetry events with ULID-based deduplication",
+            "description": "High-performance batch request for telemetry events with ULID-based deduplication (always enabled with 24h TTL)",
             "type": "object",
             "required": [
                 "events"
@@ -7743,9 +8537,6 @@
             "properties": {
                 "async": {
                     "type": "boolean"
-                },
-                "deduplication": {
-                    "$ref": "#/definitions/observability.DeduplicationConfigRequest"
                 },
                 "environment": {
                     "type": "string",
@@ -7839,7 +8630,7 @@
                 },
                 "event_type": {
                     "type": "string",
-                    "example": "trace_create"
+                    "example": "trace"
                 },
                 "payload": {
                     "type": "object",
@@ -8321,108 +9112,166 @@
                 }
             }
         },
-        "observability.DeduplicationConfigRequest": {
-            "description": "Configuration for event deduplication behavior",
+        "observability.Event": {
             "type": "object",
             "properties": {
-                "enabled": {
-                    "type": "boolean",
-                    "example": true
-                },
-                "fail_on_duplicate": {
-                    "type": "boolean"
-                },
-                "ttl": {
-                    "type": "integer",
-                    "example": 3600
-                },
-                "use_redis_cache": {
-                    "type": "boolean",
-                    "example": true
-                }
-            }
-        },
-        "observability.ListTracesResponse": {
-            "type": "object",
-            "properties": {
-                "limit": {
-                    "type": "integer"
-                },
-                "offset": {
-                    "type": "integer"
-                },
-                "total": {
-                    "type": "integer"
-                },
-                "traces": {
+                "attributes": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/definitions/observability.TraceResponse"
+                        "$ref": "#/definitions/observability.KeyValue"
                     }
-                }
-            }
-        },
-        "observability.ObservationResponse": {
-            "type": "object",
-            "properties": {
-                "completion_tokens": {
-                    "type": "integer"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "end_time": {
-                    "type": "string"
-                },
-                "external_observation_id": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "input": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "input_cost": {
-                    "type": "number"
-                },
-                "latency_ms": {
-                    "type": "integer"
-                },
-                "level": {
-                    "type": "string"
-                },
-                "model": {
-                    "type": "string"
-                },
-                "model_parameters": {
-                    "type": "object",
-                    "additionalProperties": true
                 },
                 "name": {
                     "type": "string"
                 },
-                "output": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "output_cost": {
-                    "type": "number"
-                },
-                "parent_observation_id": {
+                "timeUnixNano": {}
+            }
+        },
+        "observability.KeyValue": {
+            "type": "object",
+            "properties": {
+                "key": {
                     "type": "string"
                 },
-                "prompt_tokens": {
+                "value": {
+                    "description": "Can be stringValue, intValue, boolValue, arrayValue, etc."
+                }
+            }
+        },
+        "observability.OTLPRequest": {
+            "type": "object",
+            "properties": {
+                "resourceSpans": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/observability.ResourceSpan"
+                    }
+                }
+            }
+        },
+        "observability.Observation": {
+            "type": "object",
+            "properties": {
+                "attributes": {
+                    "description": "OTEL attributes (JSON string for flexible key-value pairs)",
+                    "type": "string"
+                },
+                "child_observations": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/observability.Observation"
+                    }
+                },
+                "cost_details": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "number",
+                        "format": "float64"
+                    }
+                },
+                "created_at": {
+                    "description": "Timestamps",
+                    "type": "string"
+                },
+                "duration_ms": {
                     "type": "integer"
+                },
+                "end_time": {
+                    "type": "string"
+                },
+                "event_ts": {
+                    "type": "string"
+                },
+                "id": {
+                    "description": "OTEL identifiers",
+                    "type": "string"
+                },
+                "input": {
+                    "description": "Input/Output (stored in ClickHouse with ZSTD compression)",
+                    "type": "string"
+                },
+                "internal_model_id": {
+                    "type": "string"
+                },
+                "is_deleted": {
+                    "type": "boolean"
+                },
+                "level": {
+                    "description": "DEBUG, INFO, WARNING, ERROR, DEFAULT",
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "model_name": {
+                    "description": "Universal model fields",
+                    "type": "string"
+                },
+                "model_parameters": {
+                    "description": "JSON string",
+                    "type": "string"
+                },
+                "name": {
+                    "description": "Span data",
+                    "type": "string"
+                },
+                "output": {
+                    "type": "string"
+                },
+                "parent_observation_id": {
+                    "description": "NULL for root spans",
+                    "type": "string"
+                },
+                "project_id": {
+                    "type": "string"
+                },
+                "prompt_id": {
+                    "description": "Prompt management",
+                    "type": "string"
+                },
+                "prompt_name": {
+                    "type": "string"
+                },
+                "prompt_version": {
+                    "type": "integer"
+                },
+                "provided_cost_details": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "number",
+                        "format": "float64"
+                    }
+                },
+                "provided_usage_details": {
+                    "description": "Usage \u0026 Cost Maps (Pattern: provided + calculated)",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer",
+                        "format": "int64"
+                    }
                 },
                 "provider": {
                     "type": "string"
                 },
-                "quality_score": {
-                    "type": "number"
+                "scores": {
+                    "description": "Populated from joins (not in ClickHouse)",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/observability.Score"
+                    }
+                },
+                "span_kind": {
+                    "description": "OTEL: INTERNAL, SERVER, CLIENT, PRODUCER, CONSUMER",
+                    "type": "string"
                 },
                 "start_time": {
+                    "type": "string"
+                },
+                "status_code": {
+                    "description": "OTEL status",
                     "type": "string"
                 },
                 "status_message": {
@@ -8431,20 +9280,27 @@
                 "total_cost": {
                     "type": "number"
                 },
-                "total_tokens": {
-                    "type": "integer"
-                },
                 "trace_id": {
+                    "description": "OTEL trace_id",
                     "type": "string"
                 },
                 "type": {
+                    "description": "Brokle: span, generation, event, tool, agent, chain",
                     "type": "string"
                 },
                 "updated_at": {
                     "type": "string"
                 },
+                "usage_details": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "integer",
+                        "format": "int64"
+                    }
+                },
                 "version": {
-                    "type": "string"
+                    "description": "ReplacingMergeTree fields",
+                    "type": "integer"
                 }
             }
         },
@@ -8495,41 +9351,182 @@
                 }
             }
         },
-        "observability.TelemetryBatchStatusResponse": {
-            "description": "Status information for a telemetry batch",
+        "observability.Resource": {
             "type": "object",
             "properties": {
-                "batch_id": {
-                    "type": "string",
-                    "example": "01ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                "attributes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/observability.KeyValue"
+                    }
+                }
+            }
+        },
+        "observability.ResourceSpan": {
+            "type": "object",
+            "properties": {
+                "resource": {
+                    "$ref": "#/definitions/observability.Resource"
                 },
-                "completed_at": {
-                    "type": "string",
-                    "example": "2023-12-01T10:30:05Z"
+                "scopeSpans": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/observability.ScopeSpan"
+                    }
+                }
+            }
+        },
+        "observability.Scope": {
+            "type": "object",
+            "properties": {
+                "attributes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/observability.KeyValue"
+                    }
                 },
-                "created_at": {
-                    "type": "string",
-                    "example": "2023-12-01T10:30:00Z"
+                "name": {
+                    "type": "string"
                 },
-                "failed_events": {
-                    "type": "integer",
-                    "example": 5
+                "version": {
+                    "type": "string"
+                }
+            }
+        },
+        "observability.ScopeSpan": {
+            "type": "object",
+            "properties": {
+                "scope": {
+                    "$ref": "#/definitions/observability.Scope"
                 },
-                "processed_events": {
-                    "type": "integer",
-                    "example": 95
+                "spans": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/observability.Span"
+                    }
+                }
+            }
+        },
+        "observability.Score": {
+            "type": "object",
+            "properties": {
+                "author_user_id": {
+                    "type": "string"
                 },
-                "processing_time_ms": {
-                    "type": "integer",
-                    "example": 1234
+                "comment": {
+                    "type": "string"
+                },
+                "data_type": {
+                    "description": "NUMERIC, CATEGORICAL, BOOLEAN",
+                    "type": "string"
+                },
+                "evaluator_config": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "evaluator_name": {
+                    "description": "Evaluator information",
+                    "type": "string"
+                },
+                "evaluator_version": {
+                    "type": "string"
+                },
+                "event_ts": {
+                    "type": "string"
+                },
+                "id": {
+                    "description": "Identifiers",
+                    "type": "string"
+                },
+                "is_deleted": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "description": "Score data",
+                    "type": "string"
+                },
+                "observation_id": {
+                    "description": "OTEL span_id",
+                    "type": "string"
+                },
+                "project_id": {
+                    "type": "string"
+                },
+                "source": {
+                    "description": "Metadata",
+                    "type": "string"
+                },
+                "string_value": {
+                    "type": "string"
+                },
+                "timestamp": {
+                    "description": "Timestamp",
+                    "type": "string"
+                },
+                "trace_id": {
+                    "description": "OTEL trace_id",
+                    "type": "string"
+                },
+                "value": {
+                    "type": "number"
+                },
+                "version": {
+                    "description": "ReplacingMergeTree fields",
+                    "type": "integer"
+                }
+            }
+        },
+        "observability.Span": {
+            "type": "object",
+            "properties": {
+                "attributes": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/observability.KeyValue"
+                    }
+                },
+                "endTimeUnixNano": {},
+                "events": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/observability.Event"
+                    }
+                },
+                "kind": {
+                    "description": "0=UNSPECIFIED, 1=INTERNAL, 2=SERVER, 3=CLIENT, 4=PRODUCER, 5=CONSUMER",
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "parentSpanId": {
+                    "description": "Can be Buffer or hex string"
+                },
+                "spanId": {
+                    "description": "Can be Buffer or hex string"
+                },
+                "startTimeUnixNano": {
+                    "description": "Can be int64 or {low, high}"
                 },
                 "status": {
-                    "type": "string",
-                    "example": "completed"
+                    "$ref": "#/definitions/observability.Status"
                 },
-                "total_events": {
-                    "type": "integer",
-                    "example": 100
+                "traceId": {
+                    "description": "Can be Buffer or hex string"
+                }
+            }
+        },
+        "observability.Status": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "description": "0=UNSET, 1=OK, 2=ERROR",
+                    "type": "integer"
+                },
+                "message": {
+                    "type": "string"
                 }
             }
         },
@@ -8692,7 +9689,7 @@
                 },
                 "event_type": {
                     "type": "string",
-                    "example": "trace_create"
+                    "example": "trace"
                 },
                 "message": {
                     "type": "string",
@@ -8704,103 +9701,128 @@
                 }
             }
         },
-        "observability.TraceResponse": {
+        "observability.Trace": {
             "type": "object",
             "properties": {
-                "created_at": {
+                "attributes": {
+                    "description": "OTEL attributes (JSON string for flexible key-value pairs)",
                     "type": "string"
                 },
-                "external_trace_id": {
+                "bookmarked": {
+                    "description": "Flags (moved from sessions table)",
+                    "type": "boolean"
+                },
+                "created_at": {
+                    "description": "Timestamps",
+                    "type": "string"
+                },
+                "duration_ms": {
+                    "type": "integer"
+                },
+                "end_time": {
+                    "type": "string"
+                },
+                "environment": {
+                    "description": "OTEL resource attributes",
+                    "type": "string"
+                },
+                "event_ts": {
                     "type": "string"
                 },
                 "id": {
+                    "description": "OTEL identifiers",
                     "type": "string"
+                },
+                "input": {
+                    "description": "Input/Output (trace-level data stored in ClickHouse with ZSTD compression)",
+                    "type": "string"
+                },
+                "is_deleted": {
+                    "type": "boolean"
                 },
                 "metadata": {
+                    "description": "Metadata and tags",
                     "type": "object",
-                    "additionalProperties": true
+                    "additionalProperties": {
+                        "type": "string"
+                    }
                 },
                 "name": {
+                    "description": "Trace metadata",
                     "type": "string"
                 },
-                "parent_trace_id": {
+                "observation_count": {
+                    "type": "integer"
+                },
+                "observations": {
+                    "description": "Populated from joins (not in ClickHouse)",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/observability.Observation"
+                    }
+                },
+                "output": {
                     "type": "string"
                 },
                 "project_id": {
+                    "description": "Brokle project context",
+                    "type": "string"
+                },
+                "public": {
+                    "type": "boolean"
+                },
+                "release": {
+                    "type": "string"
+                },
+                "scores": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/observability.Score"
+                    }
+                },
+                "service_name": {
+                    "type": "string"
+                },
+                "service_version": {
                     "type": "string"
                 },
                 "session_id": {
+                    "description": "Virtual session (attribute only, not FK)",
+                    "type": "string"
+                },
+                "start_time": {
+                    "description": "Timing",
+                    "type": "string"
+                },
+                "status_code": {
+                    "description": "OTEL status",
+                    "type": "string"
+                },
+                "status_message": {
                     "type": "string"
                 },
                 "tags": {
-                    "type": "object",
-                    "additionalProperties": true
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 },
-                "updated_at": {
-                    "type": "string"
-                },
-                "user_id": {
-                    "type": "string"
-                }
-            }
-        },
-        "observability.TraceStatsResponse": {
-            "type": "object",
-            "properties": {
                 "total_cost": {
+                    "description": "Aggregate metrics (calculated from observations)",
                     "type": "number"
                 },
                 "total_tokens": {
                     "type": "integer"
                 },
-                "trace_id": {
-                    "type": "string"
-                }
-            }
-        },
-        "observability.TraceWithObservationsResponse": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "external_trace_id": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "metadata": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "name": {
-                    "type": "string"
-                },
-                "observations": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/observability.ObservationResponse"
-                    }
-                },
-                "parent_trace_id": {
-                    "type": "string"
-                },
-                "project_id": {
-                    "type": "string"
-                },
-                "session_id": {
-                    "type": "string"
-                },
-                "tags": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
                 "updated_at": {
                     "type": "string"
                 },
                 "user_id": {
                     "type": "string"
+                },
+                "version": {
+                    "description": "ReplacingMergeTree fields",
+                    "type": "integer"
                 }
             }
         },

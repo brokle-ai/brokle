@@ -12,23 +12,83 @@ The Brokle API provides comprehensive access to AI infrastructure management, ob
 
 ## Authentication
 
-### API Key Authentication
+The Brokle API implements a **dual route architecture** with separate authentication mechanisms for SDK and Dashboard access.
 
+### Dual Route Architecture
+
+#### SDK Routes (`/v1/*`) - API Key Authentication
+**Authentication**: Industry-standard API keys (`bk_{40_char_random}`)
+**Rate Limiting**: API key-based rate limiting
+**Target Users**: SDK integration, programmatic access
+
+**Endpoints:**
+- `POST /v1/chat/completions` - OpenAI-compatible chat completions
+- `POST /v1/completions` - OpenAI-compatible text completions
+- `POST /v1/embeddings` - OpenAI-compatible embeddings
+- `GET /v1/models` - Available AI models
+- `POST /v1/ingest/batch` - Unified telemetry batch processing
+- `POST /v1/route` - AI routing decisions
+
+**Example:**
 ```bash
-curl -H "X-API-Key: bk_live_..." https://api.brokle.com/api/users/me
+curl -H "X-API-Key: bk_..." https://api.brokle.com/v1/models
+# Alternative: Authorization: Bearer bk_...
+```
+
+#### Dashboard Routes (`/api/v1/*`) - JWT Authentication
+**Authentication**: Bearer JWT tokens with session management
+**Rate Limiting**: IP-based and user-based rate limiting
+**Target Users**: Web dashboard, administrative access
+
+**Endpoints:**
+- `/api/v1/auth/*` - Authentication & session management
+- `/api/v1/users/*` - User profile management
+- `/api/v1/organizations/*` - Organization management with RBAC
+- `/api/v1/projects/*` - Project and API key management
+- `/api/v1/analytics/*` - Metrics & reporting
+- `/api/v1/billing/*` - Usage & billing management
+
+**Example:**
+```bash
+curl -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIs..." https://api.brokle.com/api/v1/users/me
+```
+
+### API Key Format
+
+Brokle uses industry-standard API keys (following GitHub/Stripe/OpenAI patterns):
+
+```
+bk_{40_character_random_secret}
+```
+
+**Features:**
+- **Prefix**: `bk_` (Brokle identifier)
+- **Secret**: 40 characters of cryptographically secure random data
+- **Security**: SHA-256 hashed storage with O(1) validation
+- **Preview**: `bk_AbCd...yym0` (first 4 + last 4 chars for display)
+
+**Example:**
+```bash
+curl -H "X-API-Key: bk_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789AbCd" \
+  https://api.brokle.com/v1/models
 ```
 
 ### JWT Token Authentication
 
+Dashboard routes use Bearer JWT tokens:
+
 ```bash
-curl -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIs..." https://api.brokle.com/api/users/me
+curl -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIs..." \
+  https://api.brokle.com/api/v1/users/me
 ```
 
 ### Authentication Flow
 
-1. **Login** - Get JWT token with credentials
-2. **API Key** - Generate long-lived API keys for services
+1. **Login** - Get JWT token with credentials (`POST /api/v1/auth/login`)
+2. **API Key** - Generate project-scoped API keys for SDK access
 3. **Session** - Maintain session with refresh tokens
+
+📖 **See Also:** [PATTERNS.md](development/PATTERNS.md) for detailed authentication patterns
 
 ## Standard Response Format
 
@@ -435,6 +495,83 @@ OpenAI-compatible embeddings endpoint.
 ### GET /v1/models
 
 List available models across all providers.
+
+---
+
+## OpenTelemetry Protocol (OTLP) Endpoints
+
+Brokle natively supports the OpenTelemetry Protocol for trace ingestion, enabling integration with OTEL Collectors and OTEL SDKs.
+
+### POST /v1/traces
+
+**OTLP trace ingestion endpoint** (OpenTelemetry spec compliant)
+
+**Supported Formats:**
+- `Content-Type: application/x-protobuf` - Binary protobuf (most efficient)
+- `Content-Type: application/json` - JSON protobuf
+- `Content-Encoding: gzip` - Automatic decompression
+
+**Authentication**: API Key via `X-API-Key` header
+
+**Request (Protobuf):**
+```bash
+curl -X POST https://api.brokle.com/v1/traces \
+  -H "Content-Type: application/x-protobuf" \
+  -H "Content-Encoding: gzip" \
+  -H "X-API-Key: bk_your_api_key" \
+  --data-binary @traces.pb
+```
+
+**Request (JSON):**
+```bash
+curl -X POST https://api.brokle.com/v1/traces \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: bk_your_api_key" \
+  -d '{
+    "resourceSpans": [{
+      "scopeSpans": [{
+        "spans": [{
+          "traceId": "5b8efff798038103d269b633813fc60c",
+          "spanId": "eee19b7ec3c1b174",
+          "name": "test-operation",
+          "startTimeUnixNano": "1698768000000000000",
+          "endTimeUnixNano": "1698768001000000000"
+        }]
+      }]
+    }]
+  }'
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "batch_id": "01HFXYZ...",
+    "processed_events": 1,
+    "duplicate_events": 0
+  }
+}
+```
+
+**Use cases:**
+- Integration with OpenTelemetry Collector
+- Direct OTLP export from applications
+- Vendor-agnostic observability
+
+**Documentation**: [OTEL Collector Integration](./integrations/opentelemetry-collector.md)
+
+---
+
+### POST /v1/otlp/traces
+
+**Alternative OTLP endpoint** (same functionality as `/v1/traces`)
+
+This endpoint provides compatibility with OTEL tools that expect the `/otlp/` path prefix.
+
+**All features identical to `/v1/traces`** - use either endpoint based on your preference.
+
+---
 
 ## Analytics & Observability
 

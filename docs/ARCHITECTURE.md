@@ -150,6 +150,114 @@ This allows for:
 - **Future Extraction** - Services can be extracted to microservices
 - **Clean Dependencies** - Core business logic independent of infrastructure
 
+## Telemetry Ingestion Architecture
+
+Brokle supports three integration paths for sending observability data:
+
+### Path 1: Brokle SDK (Recommended)
+
+**Direct integration** with built-in batching and retry logic.
+
+```
+Application (Brokle SDK) → Brokle API → Redis Streams → Workers → ClickHouse
+```
+
+**Characteristics:**
+- Latency: ~5-10ms (p99)
+- Throughput: ~100K spans/sec
+- Best for: Most users, lowest latency
+
+**Documentation**: [Direct SDK Integration](../integrations/direct-sdk.md)
+
+---
+
+### Path 2: Customer-Managed OTEL Collector (Enterprise)
+
+**Customer runs collector** in their infrastructure for advanced processing.
+
+```
+Application (OTEL SDK) → Customer's Collector → Brokle API → Redis Streams → Workers → ClickHouse
+                                ↓
+                        [Datadog, Jaeger, etc.]
+```
+
+**Characteristics:**
+- Latency: ~50-100ms (p99) - collector batching overhead
+- Throughput: ~10K spans/sec per collector
+- Best for: Enterprises, multi-backend, compliance needs
+
+**Use cases:**
+- Tail-based sampling (95% cost reduction)
+- PII scrubbing (GDPR/HIPAA compliance)
+- Multi-backend fan-out (Brokle + Datadog + Jaeger)
+- Advanced filtering and transformation
+
+**Documentation**: [OTEL Collector Integration](../integrations/opentelemetry-collector.md)
+
+---
+
+### Path 3: Direct OTLP (Vendor-Agnostic)
+
+**Use OpenTelemetry SDK** directly without Brokle SDK.
+
+```
+Application (OTEL SDK) → Brokle API → Redis Streams → Workers → ClickHouse
+```
+
+**Characteristics:**
+- Latency: ~5-10ms (p99)
+- Throughput: ~100K spans/sec
+- Best for: OTEL-native users, no vendor lock-in
+
+**Documentation**: [Direct OTLP Integration](../integrations/direct-otlp.md)
+
+---
+
+### Why Brokle Doesn't Run a Collector
+
+Brokle uses **Redis Streams** for internal queuing (not OTEL Collector) because:
+
+1. **Lower Latency** - 1 network hop instead of 2
+2. **Simpler Operations** - No separate service to manage
+3. **Already Running Redis** - No new infrastructure needed
+4. **Same Reliability** - Consumer groups provide same guarantees as collector
+5. **Better Performance** - Direct integration vs additional hop
+
+**Customer collectors are still supported** - Brokle is OTLP-compatible and works as a backend for any OTEL Collector configuration.
+
+---
+
+### Internal Processing Pipeline
+
+Once data reaches Brokle API (via any path above):
+
+```
+Brokle API (OTLP Receiver)
+    ↓
+TelemetryService
+    ↓
+Deduplication (ULID, 24h TTL, atomic claim)
+    ↓
+Redis Streams Producer
+    ↓
+Stream: telemetry:batches:{project_id}
+    ↓
+TelemetryStreamConsumer (in-process worker)
+    ↓
+Process Events (traces, observations, scores)
+    ↓
+ClickHouse Analytics Database
+```
+
+**Key features:**
+- ✅ ULID-based deduplication (24h TTL, atomic operations)
+- ✅ Redis Streams with consumer groups (horizontal scaling)
+- ✅ Dead Letter Queue (DLQ) for failed messages
+- ✅ Batch size: 50 events / 1s block (optimized for low latency)
+- ✅ In-process consumer (simpler than separate worker service)
+
+---
+
 ## Data Flow Patterns
 
 ### 1. Request/Response Flow

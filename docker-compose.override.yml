@@ -11,7 +11,7 @@ services:
 
   clickhouse:
     environment:
-      CLICKHOUSE_DB: brokle_analytics
+      CLICKHOUSE_DB: default
       CLICKHOUSE_USER: brokle
       CLICKHOUSE_PASSWORD: brokle_password
 
@@ -37,44 +37,3 @@ services:
       - /app/node_modules
       - /app/.next
 
-  # Optional monitoring for development
-  prometheus:
-    image: prom/prometheus:v2.55.1
-    container_name: brokle-prometheus
-    ports:
-      - "9090:9090"
-    volumes:
-      - ./configs/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
-      - ./configs/prometheus/alert.rules:/etc/prometheus/alert.rules
-      - prometheus_data:/prometheus
-    command:
-      - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/etc/prometheus/console_libraries'
-      - '--web.console.templates=/etc/prometheus/consoles'
-      - '--storage.tsdb.retention.time=200h'
-      - '--web.enable-lifecycle'
-      - '--web.enable-admin-api'
-    networks:
-      - brokle-network
-
-  grafana:
-    image: grafana/grafana:11.3.0
-    container_name: brokle-grafana
-    ports:
-      - "3001:3000"
-    environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
-      - GF_USERS_ALLOW_SIGN_UP=false
-    volumes:
-      - grafana_data:/var/lib/grafana
-      - ./configs/grafana/provisioning:/etc/grafana/provisioning
-      - ./configs/grafana/dashboards:/var/lib/grafana/dashboards
-    depends_on:
-      - prometheus
-    networks:
-      - brokle-network
-
-volumes:
-  prometheus_data:
-  grafana_data:

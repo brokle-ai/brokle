@@ -147,6 +147,12 @@ func NewObservationNotFoundError(observationID string) *ObservabilityError {
 		WithDetail("observation_id", observationID)
 }
 
+// ValidationError represents a field validation error
+type ValidationError struct {
+	Field   string `json:"field"`
+	Message string `json:"message"`
+}
+
 // NewValidationError creates a validation error with field details
 func NewValidationError(field, message string) *ObservabilityError {
 	return NewObservabilityError(ErrCodeValidationFailed, "validation failed").

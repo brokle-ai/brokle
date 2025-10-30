@@ -466,15 +466,9 @@ func ResolveContext(c *gin.Context, contextTypes ...ContextType) *ContextResolve
 	
 	// Resolve environment tag if requested
 	if typeSet[ContextEnv] {
-		// Try X-Environment header first
-		if envHeader := c.GetHeader("X-Environment"); envHeader != "" {
-			resolver.Environment = envHeader
-		}
-		// Try environment query parameter if header failed
-		if resolver.Environment == "" {
-			if envParam := c.Query("environment"); envParam != "" {
-				resolver.Environment = envParam
-			}
+		// Try environment query parameter
+		if envParam := c.Query("environment"); envParam != "" {
+			resolver.Environment = envParam
 		}
 		// Default to "default" if no environment specified
 		if resolver.Environment == "" {

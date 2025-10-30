@@ -272,17 +272,28 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 		analytics.GET("/providers", s.handlers.Analytics.Providers)
 		analytics.GET("/models", s.handlers.Analytics.Models)
 
-		// Observability analytics routes (read-only for dashboard)
+		// Observability analytics routes - ClickHouse-first
+		// Traces (read operations)
 		analytics.GET("/traces", s.handlers.Observability.ListTraces)
 		analytics.GET("/traces/:id", s.handlers.Observability.GetTrace)
 		analytics.GET("/traces/:id/observations", s.handlers.Observability.GetTraceWithObservations)
-		analytics.GET("/traces/:id/stats", s.handlers.Observability.GetTraceStats)
+		analytics.GET("/traces/:id/scores", s.handlers.Observability.GetTraceWithScores)
+		// Traces (write operations - for corrections/enrichment via dashboard)
+		analytics.PUT("/traces/:id", s.handlers.Observability.UpdateTrace)
+
+		// Observations (read operations)
 		analytics.GET("/observations", s.handlers.Observability.ListObservations)
 		analytics.GET("/observations/:id", s.handlers.Observability.GetObservation)
-		analytics.GET("/quality-scores", s.handlers.Observability.ListQualityScores)
-		analytics.GET("/quality-scores/:id", s.handlers.Observability.GetQualityScore)
-		analytics.GET("/traces/:id/quality-scores", s.handlers.Observability.GetQualityScoresByTrace)
-		analytics.GET("/observations/:id/quality-scores", s.handlers.Observability.GetQualityScoresByObservation)
+		// Observations (write operations - for corrections/enrichment via dashboard)
+		analytics.PUT("/observations/:id", s.handlers.Observability.UpdateObservation)
+
+		// Quality Scores (read operations)
+		analytics.GET("/scores", s.handlers.Observability.ListScores)
+		analytics.GET("/scores/:id", s.handlers.Observability.GetScore)
+		// Quality Scores (write operations - for corrections/enrichment via dashboard)
+		analytics.PUT("/scores/:id", s.handlers.Observability.UpdateScore)
+
+		// Sessions removed - now virtual groupings via session_id attribute on traces
 	}
 
 	// Logs routes
@@ -353,16 +364,15 @@ func (s *Server) setupSDKRoutes(router *gin.RouterGroup) {
 	// AI routing decisions
 	router.POST("/route", s.handlers.AI.RouteRequest)
 
-	// High-performance unified telemetry batch system with ULID-based deduplication
-	telemetry := router.Group("/telemetry")
-	{
-		telemetry.POST("/batch", s.handlers.Observability.ProcessTelemetryBatch)             // Batch processing (main endpoint)
-		telemetry.GET("/health", s.handlers.Observability.GetTelemetryHealth)                // Health monitoring
-		telemetry.GET("/metrics", s.handlers.Observability.GetTelemetryMetrics)              // Performance metrics
-		telemetry.GET("/performance", s.handlers.Observability.GetTelemetryPerformanceStats) // Performance stats
-		telemetry.GET("/batch/:batch_id", s.handlers.Observability.GetBatchStatus)           // Batch status tracking
-		telemetry.POST("/validate", s.handlers.Observability.ValidateEvent)                  // Event validation
-	}
+	// OTLP (OpenTelemetry Protocol) ingestion - 100% spec compliant
+	// Standard OTLP endpoint (OpenTelemetry convention)
+	router.POST("/otlp/traces", s.handlers.OTLP.HandleTraces) // Primary OTLP endpoint (supports Protobuf + JSON)
+	// Legacy endpoint (maintained for backward compatibility)
+	router.POST("/traces", s.handlers.OTLP.HandleTraces) // Alias for /otlp/traces
+
+	// Future OTLP endpoints:
+	// router.POST("/otlp/metrics", s.handlers.OTLP.HandleMetrics) // OTLP metrics ingestion
+	// router.POST("/otlp/logs", s.handlers.OTLP.HandleLogs)       // OTLP logs ingestion
 
 	// Cache management endpoints
 	cache := router.Group("/cache")

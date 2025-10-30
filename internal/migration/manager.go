@@ -36,15 +36,17 @@ func NewManager(cfg *config.Config) (*Manager, error) {
 
 // NewManagerWithDatabases creates a new migration manager with only specified databases
 func NewManagerWithDatabases(cfg *config.Config, databases []DatabaseType) (*Manager, error) {
-	// Initialize logger
+	// Initialize logger with clean text output for CLI
 	logger := logrus.New()
-	logger.SetFormatter(&logrus.JSONFormatter{})
+	logger.SetFormatter(&logrus.TextFormatter{
+		DisableTimestamp: true,
+		DisableColors:    false,
+	})
 
-	level, err := logrus.ParseLevel(cfg.Logging.Level)
-	if err != nil {
-		level = logrus.InfoLevel
-	}
-	logger.SetLevel(level)
+	// Force WarnLevel for migration CLI to keep output clean
+	// Migration CLI should only show errors and warnings, not info/debug messages
+	// This ensures clean output regardless of LOG_LEVEL environment variable
+	logger.SetLevel(logrus.WarnLevel)
 
 	manager := &Manager{
 		config: cfg,

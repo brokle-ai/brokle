@@ -21,7 +21,7 @@ func TestClickHouseConnectionPoolingConfig(t *testing.T) {
 	// Test configuration parsing and validation without requiring actual ClickHouse
 	cfg := &config.Config{
 		ClickHouse: config.ClickHouseConfig{
-			URL: "clickhouse://brokle:brokle_password@localhost:9000/brokle_analytics",
+			URL: "clickhouse://brokle:brokle_password@localhost:9000/default",
 		},
 	}
 
@@ -63,7 +63,7 @@ func TestClickHouseConnectionPooling(t *testing.T) {
 	// Skip this test if ClickHouse is not available
 	cfg := &config.Config{
 		ClickHouse: config.ClickHouseConfig{
-			URL: "clickhouse://brokle:brokle_password@localhost:9000/brokle_analytics",
+			URL: "clickhouse://brokle:brokle_password@localhost:9000/default",
 		},
 	}
 
@@ -209,7 +209,7 @@ func TestClickHouseConnectionRecovery(t *testing.T) {
 
 	cfg := &config.Config{
 		ClickHouse: config.ClickHouseConfig{
-			URL: "clickhouse://brokle:brokle_password@localhost:9000/brokle_analytics",
+			URL: "clickhouse://brokle:brokle_password@localhost:9000/default",
 		},
 	}
 

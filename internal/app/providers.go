@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
@@ -24,14 +25,14 @@ import (
 	"brokle/internal/infrastructure/database"
 	"brokle/internal/infrastructure/providers"
 	_ "brokle/internal/infrastructure/providers/openai" // Import for side-effect (provider registration)
-	analyticsRepo "brokle/internal/infrastructure/repository/analytics"
 	authRepo "brokle/internal/infrastructure/repository/auth"
 	billingRepo "brokle/internal/infrastructure/repository/billing"
-	clickhouseRepo "brokle/internal/infrastructure/repository/clickhouse"
 	gatewayRepo "brokle/internal/infrastructure/repository/gateway"
 	observabilityRepo "brokle/internal/infrastructure/repository/observability"
 	orgRepo "brokle/internal/infrastructure/repository/organization"
 	userRepo "brokle/internal/infrastructure/repository/user"
+	"brokle/internal/infrastructure/storage"
+	"brokle/internal/infrastructure/streams"
 	"brokle/internal/migration"
 	billingService "brokle/internal/services/billing"
 	gatewayService "brokle/internal/services/gateway"
@@ -61,8 +62,8 @@ type DatabaseContainer struct {
 
 // WorkerContainer holds all background worker instances
 type WorkerContainer struct {
-	TelemetryAnalytics *workers.TelemetryAnalyticsWorker
-	GatewayAnalytics   *gatewayAnalytics.GatewayAnalyticsWorker
+	TelemetryConsumer   *workers.TelemetryStreamConsumer
+	GatewayAnalytics    *gatewayAnalytics.GatewayAnalyticsWorker
 }
 
 // RepositoryContainer holds all repository instances organized by domain
@@ -73,7 +74,6 @@ type RepositoryContainer struct {
 	Observability *ObservabilityRepositories
 	Gateway       *GatewayRepositories
 	Billing       *BillingRepositories
-	Analytics     *AnalyticsRepositories
 }
 
 // ServiceContainer holds all service instances organized by domain
@@ -135,9 +135,8 @@ type OrganizationRepositories struct {
 type ObservabilityRepositories struct {
 	Trace                  observability.TraceRepository
 	Observation            observability.ObservationRepository
-	QualityScore           observability.QualityScoreRepository
-	TelemetryBatch         observability.TelemetryBatchRepository
-	TelemetryEvent         observability.TelemetryEventRepository
+	Score                  observability.ScoreRepository
+	BlobStorage            observability.BlobStorageRepository
 	TelemetryDeduplication observability.TelemetryDeduplicationRepository
 }
 
@@ -146,16 +145,12 @@ type GatewayRepositories struct {
 	Provider       gateway.ProviderRepository
 	Model          gateway.ModelRepository
 	ProviderConfig gateway.ProviderConfigRepository
+	Analytics      *gatewayRepo.Repository
 }
 
 // BillingRepositories contains all billing-related repositories
 type BillingRepositories struct {
 	Billing *billingRepo.Repository
-}
-
-// AnalyticsRepositories contains all analytics-related repositories
-type AnalyticsRepositories struct {
-	Analytics *analyticsRepo.Repository
 }
 
 // Domain-specific service containers
@@ -223,28 +218,48 @@ func ProvideDatabases(cfg *config.Config, logger *logrus.Logger) (*DatabaseConta
 
 // ProvideWorkers initializes all background workers
 func ProvideWorkers(
-	cfg *config.Config, 
-	clickhouseDB *database.ClickHouseDB, 
-	analyticsRepo *analyticsRepo.Repository,
+	redisDB *database.RedisDB,
+	gatewayAnalyticsRepo *gatewayRepo.Repository,
 	billingService *billingService.BillingService,
+	deduplicationRepo observability.TelemetryDeduplicationRepository,
+	observabilityServices *observabilityService.ServiceRegistry,
 	logger *logrus.Logger,
 ) (*WorkerContainer, error) {
-	// Create analytics repository for worker (from clickhouse package)
-	telemetryRepo := clickhouseRepo.NewAnalyticsRepository(clickhouseDB)
+	// Create deduplication service for stream consumer
+	deduplicationService := observabilityService.NewTelemetryDeduplicationService(deduplicationRepo)
 
-	// Create telemetry analytics worker
-	telemetryWorker := workers.NewTelemetryAnalyticsWorker(cfg, logger, telemetryRepo)
-	
+	// Create telemetry stream consumer for async processing
+	consumerConfig := &workers.TelemetryStreamConsumerConfig{
+		ConsumerGroup:     "telemetry-workers",
+		ConsumerID:        fmt.Sprintf("worker-%s", ulid.New().String()),
+		BatchSize:         50, // Optimized for lower latency and better worker utilization
+		BlockDuration:     time.Second,
+		MaxRetries:        3,
+		RetryBackoff:      500 * time.Millisecond,
+		DiscoveryInterval: 30 * time.Second, // Stream discovery every 30 seconds
+		MaxStreamsPerRead: 10,               // Read from max 10 streams at once
+	}
+	telemetryConsumer := workers.NewTelemetryStreamConsumer(
+		redisDB,
+		deduplicationService,
+		logger,
+		consumerConfig,
+		// Inject observability services for structured events (ClickHouse-first)
+		observabilityServices.TraceService,
+		observabilityServices.ObservationService,
+		observabilityServices.ScoreService,
+	)
+
 	// Create gateway analytics worker
 	gatewayAnalyticsWorker := gatewayAnalytics.NewGatewayAnalyticsWorker(
 		logger,
 		nil, // config - use defaults
-		analyticsRepo,
+		gatewayAnalyticsRepo,
 		billingService,
 	)
 
 	return &WorkerContainer{
-		TelemetryAnalytics: telemetryWorker,
+		TelemetryConsumer:  telemetryConsumer,
 		GatewayAnalytics:   gatewayAnalyticsWorker,
 	}, nil
 }
@@ -283,23 +298,23 @@ func ProvideOrganizationRepositories(db *gorm.DB) *OrganizationRepositories {
 }
 
 // ProvideObservabilityRepositories creates all observability-related repositories
-func ProvideObservabilityRepositories(postgresDB *gorm.DB, clickhouseDB *database.ClickHouseDB, redisDB *database.RedisDB) *ObservabilityRepositories {
+func ProvideObservabilityRepositories(clickhouseDB *database.ClickHouseDB, redisDB *database.RedisDB) *ObservabilityRepositories {
 	return &ObservabilityRepositories{
-		Trace:                  observabilityRepo.NewTraceRepository(postgresDB),
-		Observation:            observabilityRepo.NewObservationRepository(postgresDB),
-		QualityScore:           observabilityRepo.NewQualityScoreRepository(postgresDB),
-		TelemetryBatch:         observabilityRepo.NewTelemetryBatchRepository(postgresDB),
-		TelemetryEvent:         observabilityRepo.NewTelemetryEventRepository(postgresDB),
-		TelemetryDeduplication: observabilityRepo.NewTelemetryDeduplicationRepository(postgresDB, redisDB),
+		Trace:                  observabilityRepo.NewTraceRepository(clickhouseDB.Conn),
+		Observation:            observabilityRepo.NewObservationRepository(clickhouseDB.Conn),
+		Score:                  observabilityRepo.NewScoreRepository(clickhouseDB.Conn),
+		BlobStorage:            observabilityRepo.NewBlobStorageRepository(clickhouseDB.Conn),
+		TelemetryDeduplication: observabilityRepo.NewTelemetryDeduplicationRepository(redisDB),
 	}
 }
 
 // ProvideGatewayRepositories creates all gateway-related repositories
-func ProvideGatewayRepositories(db *gorm.DB) *GatewayRepositories {
+func ProvideGatewayRepositories(db *gorm.DB, conn clickhouse.Conn, logger *logrus.Logger) *GatewayRepositories {
 	return &GatewayRepositories{
 		Provider:       gatewayRepo.NewProviderRepository(db),
 		Model:          gatewayRepo.NewModelRepository(db),
 		ProviderConfig: gatewayRepo.NewProviderConfigRepository(db),
+		Analytics:      gatewayRepo.NewRepository(conn, logger),
 	}
 }
 
@@ -310,23 +325,15 @@ func ProvideBillingRepositories(db *gorm.DB, logger *logrus.Logger) *BillingRepo
 	}
 }
 
-// ProvideAnalyticsRepositories creates all analytics-related repositories
-func ProvideAnalyticsRepositories(conn clickhouse.Conn, logger *logrus.Logger) *AnalyticsRepositories {
-	return &AnalyticsRepositories{
-		Analytics: analyticsRepo.NewRepository(conn, logger),
-	}
-}
-
 // ProvideRepositories creates all repository containers
 func ProvideRepositories(dbs *DatabaseContainer, logger *logrus.Logger) *RepositoryContainer {
 	return &RepositoryContainer{
 		User:          ProvideUserRepositories(dbs.Postgres.DB),
 		Auth:          ProvideAuthRepositories(dbs.Postgres.DB),
 		Organization:  ProvideOrganizationRepositories(dbs.Postgres.DB),
-		Observability: ProvideObservabilityRepositories(dbs.Postgres.DB, dbs.ClickHouse, dbs.Redis),
-		Gateway:       ProvideGatewayRepositories(dbs.Postgres.DB),
+		Observability: ProvideObservabilityRepositories(dbs.ClickHouse, dbs.Redis),
+		Gateway:       ProvideGatewayRepositories(dbs.Postgres.DB, dbs.ClickHouse.Conn, logger),
 		Billing:       ProvideBillingRepositories(dbs.Postgres.DB, logger),
-		Analytics:     ProvideAnalyticsRepositories(dbs.ClickHouse.Conn, logger),
 	}
 }
 
@@ -488,25 +495,47 @@ func ProvideOrganizationServices(
 }
 
 // ProvideObservabilityServices creates all observability-related services
+// Note: TelemetryService is created without analytics worker (nil).
+// The worker must be injected later via SetAnalyticsWorker() after it's started.
 func ProvideObservabilityServices(
 	observabilityRepos *ObservabilityRepositories,
-	workers *WorkerContainer,
+	redisDB *database.RedisDB,
+	cfg *config.Config,
 	logger *logrus.Logger,
 ) *observabilityService.ServiceRegistry {
-	// Create a simple event publisher for now
-	eventPublisher := &simpleEventPublisher{logger: logger}
+	// Create deduplication service for telemetry
+	deduplicationService := observabilityService.NewTelemetryDeduplicationService(observabilityRepos.TelemetryDeduplication)
+
+	// Create Redis Streams producer for telemetry
+	streamProducer := streams.NewTelemetryStreamProducer(redisDB, logger)
+
+	// Create telemetry service (health/metrics monitoring only)
+	telemetryService := observabilityService.NewTelemetryService(
+		deduplicationService,
+		streamProducer,
+		logger,
+	)
+
+	// Create S3 client for blob storage (pass nil if not configured)
+	var s3Client *storage.S3Client
+	if cfg.BlobStorage.Provider != "" && cfg.BlobStorage.BucketName != "" {
+		var err error
+		s3Client, err = storage.NewS3Client(&cfg.BlobStorage, logger)
+		if err != nil {
+			logger.WithError(err).Warn("Failed to initialize S3 client, blob storage will be disabled")
+		}
+	}
 
 	return observabilityService.NewServiceRegistry(
 		observabilityRepos.Trace,
 		observabilityRepos.Observation,
-		observabilityRepos.QualityScore,
-		eventPublisher,
-		// Telemetry repositories
-		observabilityRepos.TelemetryBatch,
-		observabilityRepos.TelemetryEvent,
-		observabilityRepos.TelemetryDeduplication,
-		// Analytics worker
-		workers.TelemetryAnalytics,
+		observabilityRepos.Score,
+		observabilityRepos.BlobStorage,
+		s3Client,
+		&cfg.BlobStorage,
+		streamProducer,
+		deduplicationService,
+		telemetryService,
 		logger,
 	)
 }
@@ -577,28 +606,7 @@ func ProvideBillingServices(
 	}
 }
 
-// simpleEventPublisher is a simple implementation of EventPublisher for initial integration
-type simpleEventPublisher struct {
-	logger *logrus.Logger
-}
-
-func (p *simpleEventPublisher) Publish(ctx context.Context, event *observability.Event) error {
-	p.logger.WithFields(logrus.Fields{
-		"event_type": event.Type,
-		"subject":    event.Subject,
-		"project_id": event.ProjectID.String(),
-	}).Debug("publishing event")
-	return nil
-}
-
-func (p *simpleEventPublisher) PublishBatch(ctx context.Context, events []*observability.Event) error {
-	for _, event := range events {
-		if err := p.Publish(ctx, event); err != nil {
-			return err
-		}
-	}
-	return nil
-}
+// Event publisher removed - events system deleted (not part of OTEL architecture)
 
 // simpleBillingOrgService is a simple implementation of BillingOrganizationService
 type simpleBillingOrgService struct {
@@ -624,9 +632,11 @@ func (s *simpleBillingOrgService) GetPaymentMethod(ctx context.Context, orgID ul
 func ProvideServices(
 	cfg *config.Config,
 	repos *RepositoryContainer,
+	databases *DatabaseContainer,
 	workers *WorkerContainer,
 	gatewayServices *GatewayServices,
 	billingServices *BillingServices,
+	observabilityServices *observabilityService.ServiceRegistry,
 	logger *logrus.Logger,
 ) *ServiceContainer {
 	// Create auth services first (other services depend on them)
@@ -644,8 +654,7 @@ func ProvideServices(
 		logger,
 	)
 
-	// Create observability services (includes analytics worker integration)
-	observabilityServices := ProvideObservabilityServices(repos.Observability, workers, logger)
+	// NOTE: observabilityServices is now passed as a parameter (created earlier to avoid circular dependencies)
 
 	return &ServiceContainer{
 		User:               userServices,
@@ -686,21 +695,28 @@ func ProvideAll(cfg *config.Config, logger *logrus.Logger) (*ProviderContainer, 
 	gatewayServices := ProvideGatewayServices(repos.Gateway, logger)
 	billingServices := ProvideBillingServices(repos.Billing, repos.Gateway, logger)
 
-	// Initialize workers (require ClickHouse for analytics and services for gateway analytics)
-	workers, err := ProvideWorkers(cfg, databases.ClickHouse, repos.Analytics.Analytics, billingServices.Billing, logger)
+	// Create observability services EARLY (needed by workers)
+	// Note: Analytics worker will be injected later after it's created and started
+	observabilityServices := ProvideObservabilityServices(repos.Observability, databases.Redis, cfg, logger)
+
+	// Initialize workers (require observability services for stream consumer)
+	workers, err := ProvideWorkers(databases.Redis, repos.Gateway.Analytics, billingServices.Billing, repos.Observability.TelemetryDeduplication, observabilityServices, logger)
 	if err != nil {
 		return nil, err
 	}
 
-	// Start analytics workers
-	workers.TelemetryAnalytics.Start()
-	logger.Info("Telemetry analytics worker started")
-	
+	// Start telemetry stream consumer for async processing
+	if err := workers.TelemetryConsumer.Start(context.Background()); err != nil {
+		logger.WithError(err).Error("Failed to start telemetry stream consumer")
+		return nil, err
+	}
+	logger.Info("Telemetry stream consumer started")
+
 	workers.GatewayAnalytics.Start()
 	logger.Info("Gateway analytics worker started")
 
-	// Initialize services (includes worker integration)
-	services := ProvideServices(cfg, repos, workers, gatewayServices, billingServices, logger)
+	// Initialize services (includes worker integration and Redis Streams)
+	services := ProvideServices(cfg, repos, databases, workers, gatewayServices, billingServices, observabilityServices, logger)
 
 	// Initialize enterprise services
 	enterprise := ProvideEnterpriseServices(cfg, logger)
@@ -836,15 +852,29 @@ func (pc *ProviderContainer) HealthCheck() map[string]string {
 	}
 
 	// Check worker health
-	if pc.Workers != nil && pc.Workers.TelemetryAnalytics != nil {
-		workerHealth := pc.Workers.TelemetryAnalytics.GetHealth()
-		if workerHealth.Healthy {
-			health["telemetry_analytics_worker"] = "healthy"
+	if pc.Workers != nil && pc.Workers.TelemetryConsumer != nil {
+		stats := pc.Workers.TelemetryConsumer.GetStats()
+		// Consider healthy if: running (has stats) and error rate < 10% of processed batches
+		batchesProcessed := stats["batches_processed"]
+		errorsCount := stats["errors_count"]
+
+		if batchesProcessed == 0 && errorsCount == 0 {
+			// Newly started - healthy
+			health["telemetry_stream_consumer"] = "healthy (no activity yet)"
+		} else if batchesProcessed > 0 {
+			errorRate := float64(errorsCount) / float64(batchesProcessed)
+			if errorRate < 0.10 { // Less than 10% error rate
+				health["telemetry_stream_consumer"] = fmt.Sprintf("healthy (processed: %d, errors: %d, streams: %d)",
+					batchesProcessed, errorsCount, stats["active_streams"])
+			} else {
+				health["telemetry_stream_consumer"] = fmt.Sprintf("degraded (high error rate: %.1f%%)", errorRate*100)
+			}
 		} else {
-			health["telemetry_analytics_worker"] = "unhealthy: queue depth exceeded or processing failed"
+			// Errors but no successful processing
+			health["telemetry_stream_consumer"] = fmt.Sprintf("unhealthy (errors: %d, no successful processing)", errorsCount)
 		}
 	}
-	
+
 	if pc.Workers != nil && pc.Workers.GatewayAnalytics != nil {
 		if pc.Workers.GatewayAnalytics.IsHealthy() {
 			health["gateway_analytics_worker"] = "healthy"
@@ -861,12 +891,12 @@ func (pc *ProviderContainer) Shutdown() error {
 	var lastErr error
 
 	// Stop background workers first
-	if pc.Workers != nil && pc.Workers.TelemetryAnalytics != nil {
-		pc.Logger.Info("Stopping telemetry analytics worker...")
-		pc.Workers.TelemetryAnalytics.Stop()
-		pc.Logger.Info("Telemetry analytics worker stopped")
+	if pc.Workers != nil && pc.Workers.TelemetryConsumer != nil {
+		pc.Logger.Info("Stopping telemetry stream consumer...")
+		pc.Workers.TelemetryConsumer.Stop()
+		pc.Logger.Info("Telemetry stream consumer stopped")
 	}
-	
+
 	if pc.Workers != nil && pc.Workers.GatewayAnalytics != nil {
 		pc.Logger.Info("Stopping gateway analytics worker...")
 		pc.Workers.GatewayAnalytics.Stop()

@@ -28,13 +28,13 @@ import (
 
 // Handlers contains all HTTP handlers
 type Handlers struct {
-	Health       *health.Handler
-	Metrics      *metrics.Handler
-	Auth         *authHandler.Handler
-	User         *userHandler.Handler
-	Organization *organizationHandler.Handler
-	Project      *project.Handler
-	APIKey       *apikey.Handler
+	Health        *health.Handler
+	Metrics       *metrics.Handler
+	Auth          *authHandler.Handler
+	User          *userHandler.Handler
+	Organization  *organizationHandler.Handler
+	Project       *project.Handler
+	APIKey        *apikey.Handler
 	Analytics     *analytics.Handler
 	Logs          *logs.Handler
 	Billing       *billing.Handler
@@ -43,6 +43,7 @@ type Handlers struct {
 	Admin         *admin.TokenAdminHandler
 	RBAC          *rbac.Handler
 	Observability *observability.Handler
+	OTLP          *observability.OTLPHandler
 }
 
 // NewHandlers creates a new handlers instance with all dependencies
@@ -71,20 +72,21 @@ func NewHandlers(
 	// Add other service dependencies as they're implemented
 ) *Handlers {
 	return &Handlers{
-		Health:       health.NewHandler(cfg, logger),
-		Metrics:      metrics.NewHandler(cfg, logger),
-		Auth:         authHandler.NewHandler(cfg, logger, authService, apiKeyService, userService),
-		User:         userHandler.NewHandler(cfg, logger, userService, profileService, onboardingService),
-		Organization: organizationHandler.NewHandler(cfg, logger, organizationService, memberService, projectService, invitationService, settingsService, userService, roleService),
-		Project:      project.NewHandler(cfg, logger, projectService, organizationService, memberService),
-		APIKey:       apikey.NewHandler(cfg, logger, apiKeyService),
-		Analytics:    analytics.NewHandler(cfg, logger),
-		Logs:         logs.NewHandler(cfg, logger),
-		Billing:      billing.NewHandler(cfg, logger),
-		AI:           ai.NewHandler(cfg, logger, gatewayService, routingService, costService),
-		WebSocket:    websocket.NewHandler(cfg, logger),
+		Health:        health.NewHandler(cfg, logger),
+		Metrics:       metrics.NewHandler(cfg, logger),
+		Auth:          authHandler.NewHandler(cfg, logger, authService, apiKeyService, userService),
+		User:          userHandler.NewHandler(cfg, logger, userService, profileService, onboardingService),
+		Organization:  organizationHandler.NewHandler(cfg, logger, organizationService, memberService, projectService, invitationService, settingsService, userService, roleService),
+		Project:       project.NewHandler(cfg, logger, projectService, organizationService, memberService),
+		APIKey:        apikey.NewHandler(cfg, logger, apiKeyService),
+		Analytics:     analytics.NewHandler(cfg, logger),
+		Logs:          logs.NewHandler(cfg, logger),
+		Billing:       billing.NewHandler(cfg, logger),
+		AI:            ai.NewHandler(cfg, logger, gatewayService, routingService, costService),
+		WebSocket:     websocket.NewHandler(cfg, logger),
 		Admin:         admin.NewTokenAdminHandler(authService, blacklistedTokens, logger),
 		RBAC:          rbac.NewHandler(cfg, logger, roleService, permissionService, organizationMemberService),
 		Observability: observability.NewHandler(cfg, logger, observabilityServices),
+		OTLP:          observability.NewOTLPHandler(observabilityServices.StreamProducer, observabilityServices.DeduplicationService, observabilityServices.OTLPConverterService, logger),
 	}
 }

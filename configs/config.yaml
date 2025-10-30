@@ -63,7 +63,7 @@ clickhouse:
   port: 9000
   user: default
   password: ""
-  database: brokle_analytics
+  database: default
   # Connection pool settings
   max_open_conns: 50
   max_idle_conns: 5

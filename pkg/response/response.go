@@ -106,6 +106,14 @@ func Created(c *gin.Context, data interface{}) {
 	})
 }
 
+func Accepted(c *gin.Context, data interface{}) {
+	c.JSON(http.StatusAccepted, APIResponse{
+		Success: true,
+		Data:    data,
+		Meta:    getMeta(c),
+	})
+}
+
 func NoContent(c *gin.Context) {
 	c.JSON(http.StatusNoContent, APIResponse{
 		Success: true,

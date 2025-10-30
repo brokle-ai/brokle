@@ -1,0 +1,103 @@
+services:
+  # OpenTelemetry Collector
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.91.0
+    container_name: test-otel-collector
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./collector-config.yaml:/etc/otel-collector-config.yaml
+    ports:
+      - "4317:4317"  # OTLP gRPC
+      - "4318:4318"  # OTLP HTTP
+      - "13133:13133" # Health check
+    environment:
+      - BROKLE_TEST_KEY=test_bk_1234567890abcdef
+    depends_on:
+      - brokle-api
+
+  # Brokle API
+  brokle-api:
+    container_name: test-brokle-api
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - DATABASE_URL=postgres://brokle:test@postgres:5432/brokle_test?sslmode=disable
+      - CLICKHOUSE_URL=clickhouse://brokle:test@clickhouse:9000/default
+      - REDIS_URL=redis://redis:6379/0
+      - LOG_LEVEL=debug
+      - ENV=test
+      - JWT_SECRET=test-jwt-secret-key-at-least-32-characters-long-for-security
+      - API_KEY_PREFIX=bk_
+      - DATABASE_MIGRATIONS_PATH=/migrations/postgres
+      - CLICKHOUSE_MIGRATIONS_PATH=/migrations/clickhouse
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    depends_on:
+      postgres:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  # PostgreSQL
+  postgres:
+    container_name: test-postgres
+    image: postgres:17-alpine
+    ports:
+      - "5433:5432"  # Expose for seeding from host
+    environment:
+      POSTGRES_DB: brokle_test
+      POSTGRES_USER: brokle
+      POSTGRES_PASSWORD: test
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U brokle -d brokle_test"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ClickHouse
+  clickhouse:
+    container_name: test-clickhouse
+    image: clickhouse/clickhouse-server:24.12-alpine
+    ports:
+      - "9001:9000"  # Native protocol (for seeding)
+      - "8124:8123"  # HTTP interface (for queries)
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: brokle
+      CLICKHOUSE_PASSWORD: test
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--user", "brokle", "--password", "test", "--query", "SELECT 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Redis
+  redis:
+    container_name: test-redis
+    image: redis:7.4-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Trace Generator
+  trace-generator:
+    container_name: test-trace-generator
+    build:
+      context: .
+      dockerfile: Dockerfile.trace-generator
+    environment:
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://test-otel-collector:4318
+      - TEST_MODE=${TEST_MODE:-success}
+    depends_on:
+      - otel-collector

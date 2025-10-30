@@ -2,517 +2,219 @@ package observability
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
-	"strings"
 	"time"
 
-	"github.com/lib/pq"
 	"github.com/redis/go-redis/v9"
-	"gorm.io/gorm"
 
 	"brokle/internal/core/domain/observability"
 	"brokle/internal/infrastructure/database"
 	"brokle/pkg/ulid"
 )
 
-// TelemetryDeduplicationRepository implements the observability.TelemetryDeduplicationRepository interface
-// with Redis fallback strategies for high-performance deduplication
-type TelemetryDeduplicationRepository struct {
-	db    *gorm.DB
+// telemetryDeduplicationRepository implements Redis-based deduplication for OTLP telemetry
+// Uses Redis SET NX for atomic claims and TTL for auto-expiry (no PostgreSQL dependency)
+type telemetryDeduplicationRepository struct {
 	redis *database.RedisDB
 }
 
-// NewTelemetryDeduplicationRepository creates a new telemetry deduplication repository instance
-func NewTelemetryDeduplicationRepository(db *gorm.DB, redis *database.RedisDB) *TelemetryDeduplicationRepository {
-	return &TelemetryDeduplicationRepository{
-		db:    db,
+// NewTelemetryDeduplicationRepository creates a new Redis-based deduplication repository
+func NewTelemetryDeduplicationRepository(redis *database.RedisDB) *telemetryDeduplicationRepository {
+	return &telemetryDeduplicationRepository{
 		redis: redis,
 	}
 }
 
-// Create creates a new telemetry event deduplication entry in the database
-func (r *TelemetryDeduplicationRepository) Create(ctx context.Context, dedup *observability.TelemetryEventDeduplication) error {
-	query := `
-		INSERT INTO telemetry_event_deduplication (
-			event_id, batch_id, project_id, first_seen_at, expires_at
-		) VALUES ($1, $2, $3, $4, $5)
-		ON CONFLICT (event_id) DO NOTHING
-	`
+// ClaimEvents atomically claims dedup IDs using Redis SET NX (set if not exists)
+// Returns: (claimedIDs, duplicateIDs, error)
+func (r *telemetryDeduplicationRepository) ClaimEvents(ctx context.Context, projectID ulid.ULID, batchID ulid.ULID, dedupIDs []string, ttl time.Duration) ([]string, []string, error) {
+	if len(dedupIDs) == 0 {
+		return nil, nil, nil
+	}
 
+	if projectID.IsZero() {
+		return nil, nil, fmt.Errorf("project ID cannot be zero")
+	}
+
+	if batchID.IsZero() {
+		return nil, nil, fmt.Errorf("batch ID cannot be zero")
+	}
+
+	// Use Redis pipeline with SetNX for atomic claim
+	pipe := r.redis.Client.Pipeline()
+	cmds := make([]*redis.BoolCmd, len(dedupIDs))
+
+	for i, dedupID := range dedupIDs {
+		redisKey := r.buildRedisKey(dedupID)
+		// SetNX returns true if key was set (didn't exist), false if key already exists
+		// Store batch ID as string value
+		cmds[i] = pipe.SetNX(ctx, redisKey, batchID.String(), ttl)
+	}
+
+	// Execute pipeline
+	_, err := pipe.Exec(ctx)
+	if err != nil && err != redis.Nil {
+		return nil, nil, fmt.Errorf("failed to claim events: %w", err)
+	}
+
+	// Collect results - claimed vs duplicates
+	claimed := make([]string, 0, len(dedupIDs))
+	duplicates := make([]string, 0)
+
+	for i, cmd := range cmds {
+		success, cmdErr := cmd.Result()
+		if cmdErr != nil {
+			// On error, treat as not claimed (safe default)
+			duplicates = append(duplicates, dedupIDs[i])
+			continue
+		}
+
+		if success {
+			// SetNX succeeded - we claimed this event
+			claimed = append(claimed, dedupIDs[i])
+		} else {
+			// SetNX failed - event already exists (duplicate)
+			duplicates = append(duplicates, dedupIDs[i])
+		}
+	}
+
+	return claimed, duplicates, nil
+}
+
+// ReleaseEvents removes claimed dedup IDs (for rollback on publish failure)
+func (r *telemetryDeduplicationRepository) ReleaseEvents(ctx context.Context, dedupIDs []string) error {
+	if len(dedupIDs) == 0 {
+		return nil
+	}
+
+	// Use Redis pipeline for batch deletion
+	pipe := r.redis.Client.Pipeline()
+
+	for _, dedupID := range dedupIDs {
+		redisKey := r.buildRedisKey(dedupID)
+		pipe.Del(ctx, redisKey)
+	}
+
+	// Execute pipeline
+	_, err := pipe.Exec(ctx)
+	if err != nil && err != redis.Nil {
+		return fmt.Errorf("failed to release events: %w", err)
+	}
+
+	return nil
+}
+
+// Create creates a new telemetry event deduplication entry in Redis with auto-expiry
+func (r *telemetryDeduplicationRepository) Create(ctx context.Context, dedup *observability.TelemetryEventDeduplication) error {
+	if dedup == nil {
+		return fmt.Errorf("dedup entry cannot be nil")
+	}
+
+	if dedup.EventID == "" {
+		return fmt.Errorf("event ID is required")
+	}
+
+	if dedup.BatchID.IsZero() {
+		return fmt.Errorf("batch ID is required")
+	}
+
+	// Calculate TTL
 	now := time.Now()
-	dedup.FirstSeenAt = now
-
-	result := r.db.WithContext(ctx).Exec(query,
-		dedup.EventID,
-		dedup.BatchID,
-		dedup.ProjectID,
-		dedup.FirstSeenAt,
-		dedup.ExpiresAt,
-	)
-
-	if result.Error != nil {
-		return fmt.Errorf("failed to create telemetry event deduplication: %w", result.Error)
-	}
-
-	// Also store in Redis for fast lookups with TTL
 	ttl := dedup.ExpiresAt.Sub(now)
-	if ttl > 0 {
-		redisKey := r.buildRedisKey(dedup.EventID)
-		err := r.redis.Set(ctx, redisKey, dedup.BatchID.String(), ttl)
-		if err != nil {
-			// Log Redis error but don't fail the operation
-			// The database entry is the source of truth
-			fmt.Printf("Warning: Failed to store deduplication entry in Redis: %v\n", err)
-		}
+
+	if ttl <= 0 {
+		return fmt.Errorf("deduplication entry already expired")
+	}
+
+	// Store in Redis with auto-expiry (SETEX)
+	// Store batch ID as string value
+	redisKey := r.buildRedisKey(dedup.EventID)
+	err := r.redis.Set(ctx, redisKey, dedup.BatchID.String(), ttl)
+	if err != nil {
+		return fmt.Errorf("failed to create deduplication entry: %w", err)
 	}
 
 	return nil
 }
 
-// GetByEventID retrieves a telemetry event deduplication entry by event ID
-func (r *TelemetryDeduplicationRepository) GetByEventID(ctx context.Context, eventID ulid.ULID) (*observability.TelemetryEventDeduplication, error) {
-	var dedup observability.TelemetryEventDeduplication
-
-	query := `
-		SELECT event_id, batch_id, project_id, first_seen_at, expires_at
-		FROM telemetry_event_deduplication
-		WHERE event_id = $1
-	`
-
-	row := r.db.WithContext(ctx).Raw(query, eventID).Row()
-
-	err := row.Scan(
-		&dedup.EventID,
-		&dedup.BatchID,
-		&dedup.ProjectID,
-		&dedup.FirstSeenAt,
-		&dedup.ExpiresAt,
-	)
-
-	if err != nil {
-		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("telemetry event deduplication entry with event ID %s not found", eventID.String())
-		}
-		return nil, fmt.Errorf("failed to get telemetry event deduplication by ID: %w", err)
-	}
-
-	return &dedup, nil
-}
-
-// Delete deletes a telemetry event deduplication entry by event ID
-func (r *TelemetryDeduplicationRepository) Delete(ctx context.Context, eventID ulid.ULID) error {
-	// Delete from database
-	query := `DELETE FROM telemetry_event_deduplication WHERE event_id = $1`
-
-	result := r.db.WithContext(ctx).Exec(query, eventID)
-	if result.Error != nil {
-		return fmt.Errorf("failed to delete telemetry event deduplication: %w", result.Error)
-	}
-
-	// Also delete from Redis
-	redisKey := r.buildRedisKey(eventID)
-	err := r.redis.Delete(ctx, redisKey)
-	if err != nil {
-		// Log Redis error but don't fail the operation
-		fmt.Printf("Warning: Failed to delete deduplication entry from Redis: %v\n", err)
-	}
-
-	if result.RowsAffected == 0 {
-		return fmt.Errorf("telemetry event deduplication entry with event ID %s not found", eventID.String())
-	}
-
-	return nil
-}
-
-// Exists checks if a telemetry event deduplication entry exists for the given event ID
-func (r *TelemetryDeduplicationRepository) Exists(ctx context.Context, eventID ulid.ULID) (bool, error) {
-	query := `SELECT EXISTS(SELECT 1 FROM telemetry_event_deduplication WHERE event_id = $1)`
-
-	var exists bool
-	err := r.db.WithContext(ctx).Raw(query, eventID).Scan(&exists).Error
-	if err != nil {
-		return false, fmt.Errorf("failed to check if telemetry event deduplication exists: %w", err)
-	}
-
-	return exists, nil
-}
-
-// ExistsInBatch checks if a telemetry event deduplication entry exists for the given event ID and batch ID
-func (r *TelemetryDeduplicationRepository) ExistsInBatch(ctx context.Context, eventID ulid.ULID, batchID ulid.ULID) (bool, error) {
-	query := `SELECT EXISTS(SELECT 1 FROM telemetry_event_deduplication WHERE event_id = $1 AND batch_id = $2)`
-
-	var exists bool
-	err := r.db.WithContext(ctx).Raw(query, eventID, batchID).Scan(&exists).Error
-	if err != nil {
-		return false, fmt.Errorf("failed to check if telemetry event deduplication exists in batch: %w", err)
-	}
-
-	return exists, nil
-}
-
-// ExistsWithRedisCheck performs a fast Redis check first, then falls back to database
-// Returns (exists, foundInRedis, error)
-func (r *TelemetryDeduplicationRepository) ExistsWithRedisCheck(ctx context.Context, eventID ulid.ULID) (bool, bool, error) {
+// Exists checks if a deduplication entry exists for the given event ID
+func (r *telemetryDeduplicationRepository) Exists(ctx context.Context, eventID string) (bool, error) {
 	redisKey := r.buildRedisKey(eventID)
 
-	// First check Redis for fast lookup
 	exists, err := r.redis.Exists(ctx, redisKey)
-	if err == nil && exists > 0 {
-		// Found in Redis, return immediately
-		return true, true, nil
-	}
-
-	// Redis miss or error, fallback to database
-	dbExists, err := r.Exists(ctx, eventID)
 	if err != nil {
-		return false, false, err
+		return false, fmt.Errorf("failed to check existence: %w", err)
 	}
 
-	// If found in database but not in Redis, update Redis cache
-	if dbExists {
-		// Get the entry to extract batch ID and TTL
-		dedup, err := r.GetByEventID(ctx, eventID)
-		if err == nil && !dedup.IsExpired() {
-			// Update Redis with remaining TTL
-			ttl := dedup.TimeUntilExpiry()
-			if ttl > 0 {
-				_ = r.redis.Set(ctx, redisKey, dedup.BatchID.String(), ttl)
-			}
-		}
-	}
-
-	return dbExists, false, nil
+	return exists > 0, nil
 }
 
-// StoreInRedis stores a deduplication entry in Redis with TTL
-func (r *TelemetryDeduplicationRepository) StoreInRedis(ctx context.Context, eventID ulid.ULID, batchID ulid.ULID, ttl time.Duration) error {
-	redisKey := r.buildRedisKey(eventID)
-
-	err := r.redis.Set(ctx, redisKey, batchID.String(), ttl)
-	if err != nil {
-		return fmt.Errorf("failed to store deduplication entry in Redis: %w", err)
-	}
-
-	return nil
+// CheckDuplicate checks if an event ID is a duplicate (alias for Exists for interface compatibility)
+func (r *telemetryDeduplicationRepository) CheckDuplicate(ctx context.Context, eventID string) (bool, error) {
+	return r.Exists(ctx, eventID)
 }
 
-// GetFromRedis retrieves the batch ID for an event from Redis
-func (r *TelemetryDeduplicationRepository) GetFromRedis(ctx context.Context, eventID ulid.ULID) (*ulid.ULID, error) {
-	redisKey := r.buildRedisKey(eventID)
-
-	batchIDStr, err := r.redis.Get(ctx, redisKey)
-	if err != nil {
-		if err == redis.Nil {
-			return nil, nil // Not found
-		}
-		return nil, fmt.Errorf("failed to get deduplication entry from Redis: %w", err)
+// RegisterEvent registers a new event for deduplication (alias for Create with simplified params)
+func (r *telemetryDeduplicationRepository) RegisterEvent(ctx context.Context, dedupID string, batchID ulid.ULID, projectID ulid.ULID, ttl time.Duration) error {
+	dedup := &observability.TelemetryEventDeduplication{
+		EventID:     dedupID,
+		BatchID:     batchID,
+		ProjectID:   projectID,
+		FirstSeenAt: time.Now(),
+		ExpiresAt:   time.Now().Add(ttl),
 	}
-
-	batchID, err := ulid.Parse(batchIDStr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse batch ID from Redis: %w", err)
-	}
-
-	return &batchID, nil
+	return r.Create(ctx, dedup)
 }
 
-// CleanupExpired removes expired telemetry event deduplication entries
-func (r *TelemetryDeduplicationRepository) CleanupExpired(ctx context.Context) (int64, error) {
-	query := `
-		DELETE FROM telemetry_event_deduplication
-		WHERE expires_at < NOW()
-	`
-
-	result := r.db.WithContext(ctx).Exec(query)
-	if result.Error != nil {
-		return 0, fmt.Errorf("failed to cleanup expired telemetry event deduplication entries: %w", result.Error)
-	}
-
-	return result.RowsAffected, nil
-}
-
-// GetExpiredEntries retrieves expired telemetry event deduplication entries
-func (r *TelemetryDeduplicationRepository) GetExpiredEntries(ctx context.Context, limit int) ([]*observability.TelemetryEventDeduplication, error) {
-	if limit <= 0 {
-		limit = 100
-	}
-	if limit > 1000 {
-		limit = 1000
-	}
-
-	query := `
-		SELECT event_id, batch_id, project_id, first_seen_at, expires_at
-		FROM telemetry_event_deduplication
-		WHERE expires_at < NOW()
-		ORDER BY expires_at ASC
-		LIMIT $1
-	`
-
-	rows, err := r.db.WithContext(ctx).Raw(query, limit).Rows()
-	if err != nil {
-		return nil, fmt.Errorf("failed to query expired telemetry event deduplication entries: %w", err)
-	}
-	defer rows.Close()
-
-	return r.scanTelemetryEventDeduplication(rows)
-}
-
-// BatchCleanup removes expired entries in batches for better performance
-func (r *TelemetryDeduplicationRepository) BatchCleanup(ctx context.Context, olderThan time.Time, batchSize int) (int64, error) {
-	if batchSize <= 0 {
-		batchSize = 1000
-	}
-	if batchSize > 10000 {
-		batchSize = 10000
-	}
-
-	var totalDeleted int64
-
-	for {
-		query := `
-			DELETE FROM telemetry_event_deduplication
-			WHERE event_id IN (
-				SELECT event_id
-				FROM telemetry_event_deduplication
-				WHERE expires_at < $1
-				LIMIT $2
-			)
-		`
-
-		result := r.db.WithContext(ctx).Exec(query, olderThan, batchSize)
-		if result.Error != nil {
-			return totalDeleted, fmt.Errorf("failed to batch cleanup telemetry event deduplication: %w", result.Error)
-		}
-
-		deleted := result.RowsAffected
-		totalDeleted += deleted
-
-		// If we deleted fewer than the batch size, we're done
-		if deleted < int64(batchSize) {
-			break
-		}
-	}
-
-	return totalDeleted, nil
-}
-
-// GetByProjectID retrieves telemetry event deduplication entries by project ID with pagination
-func (r *TelemetryDeduplicationRepository) GetByProjectID(ctx context.Context, projectID ulid.ULID, limit, offset int) ([]*observability.TelemetryEventDeduplication, error) {
-	if limit <= 0 {
-		limit = 50
-	}
-	if limit > 1000 {
-		limit = 1000
-	}
-
-	query := `
-		SELECT event_id, batch_id, project_id, first_seen_at, expires_at
-		FROM telemetry_event_deduplication
-		WHERE project_id = $1
-		ORDER BY first_seen_at DESC
-		LIMIT $2 OFFSET $3
-	`
-
-	rows, err := r.db.WithContext(ctx).Raw(query, projectID, limit, offset).Rows()
-	if err != nil {
-		return nil, fmt.Errorf("failed to query telemetry event deduplication by project ID: %w", err)
-	}
-	defer rows.Close()
-
-	return r.scanTelemetryEventDeduplication(rows)
-}
-
-// CountByProjectID counts telemetry event deduplication entries by project ID
-func (r *TelemetryDeduplicationRepository) CountByProjectID(ctx context.Context, projectID ulid.ULID) (int64, error) {
-	query := `SELECT COUNT(*) FROM telemetry_event_deduplication WHERE project_id = $1`
-
-	var count int64
-	err := r.db.WithContext(ctx).Raw(query, projectID).Scan(&count).Error
-	if err != nil {
-		return 0, fmt.Errorf("failed to count telemetry event deduplication by project ID: %w", err)
-	}
-
-	return count, nil
-}
-
-// CleanupByProjectID removes expired entries for a specific project
-func (r *TelemetryDeduplicationRepository) CleanupByProjectID(ctx context.Context, projectID ulid.ULID, olderThan time.Time) (int64, error) {
-	query := `
-		DELETE FROM telemetry_event_deduplication
-		WHERE project_id = $1 AND expires_at < $2
-	`
-
-	result := r.db.WithContext(ctx).Exec(query, projectID, olderThan)
-	if result.Error != nil {
-		return 0, fmt.Errorf("failed to cleanup telemetry event deduplication by project ID: %w", result.Error)
-	}
-
-	return result.RowsAffected, nil
-}
-
-// CheckBatchDuplicates checks for duplicate event IDs in a batch and returns the duplicates
-func (r *TelemetryDeduplicationRepository) CheckBatchDuplicates(ctx context.Context, eventIDs []ulid.ULID) ([]ulid.ULID, error) {
-	if len(eventIDs) == 0 {
+// CheckBatchDuplicates checks for duplicate dedup IDs in a batch using Redis pipeline
+func (r *telemetryDeduplicationRepository) CheckBatchDuplicates(ctx context.Context, dedupIDs []string) ([]string, error) {
+	if len(dedupIDs) == 0 {
 		return nil, nil
 	}
 
-	// For small batches, use Redis pipeline for fast lookup
-	if len(eventIDs) <= 100 {
-		return r.checkBatchDuplicatesRedis(ctx, eventIDs)
-	}
-
-	// For larger batches, use database query
-	return r.checkBatchDuplicatesDB(ctx, eventIDs)
-}
-
-// CreateBatch creates multiple telemetry event deduplication entries in a single transaction
-func (r *TelemetryDeduplicationRepository) CreateBatch(ctx context.Context, entries []*observability.TelemetryEventDeduplication) error {
-	if len(entries) == 0 {
-		return nil
-	}
-
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// Prepare batch insert
-		valueStrings := make([]string, 0, len(entries))
-		valueArgs := make([]interface{}, 0, len(entries)*5)
-
-		now := time.Now()
-
-		for i, entry := range entries {
-			valueStrings = append(valueStrings, fmt.Sprintf("($%d, $%d, $%d, $%d, $%d)",
-				i*5+1, i*5+2, i*5+3, i*5+4, i*5+5))
-
-			entry.FirstSeenAt = now
-
-			valueArgs = append(valueArgs,
-				entry.EventID,
-				entry.BatchID,
-				entry.ProjectID,
-				entry.FirstSeenAt,
-				entry.ExpiresAt,
-			)
-		}
-
-		query := fmt.Sprintf(`
-			INSERT INTO telemetry_event_deduplication (
-				event_id, batch_id, project_id, first_seen_at, expires_at
-			) VALUES %s
-			ON CONFLICT (event_id) DO NOTHING
-		`, strings.Join(valueStrings, ", "))
-
-		err := tx.WithContext(ctx).Exec(query, valueArgs...).Error
-		if err != nil {
-			return fmt.Errorf("failed to batch create telemetry event deduplication: %w", err)
-		}
-
-		// Also store in Redis for fast lookups
-		go r.storeBatchInRedis(context.Background(), entries)
-
-		return nil
-	})
-}
-
-// Helper methods
-
-// buildRedisKey builds a Redis key for deduplication
-func (r *TelemetryDeduplicationRepository) buildRedisKey(eventID ulid.ULID) string {
-	return fmt.Sprintf("telemetry_dedup:%s", eventID.String())
-}
-
-// checkBatchDuplicatesRedis checks for duplicates using Redis pipeline
-func (r *TelemetryDeduplicationRepository) checkBatchDuplicatesRedis(ctx context.Context, eventIDs []ulid.ULID) ([]ulid.ULID, error) {
+	// Use Redis pipeline for efficient batch checking
 	pipe := r.redis.Client.Pipeline()
 
-	// Create commands for each event ID
-	cmds := make([]*redis.IntCmd, len(eventIDs))
-	for i, eventID := range eventIDs {
-		redisKey := r.buildRedisKey(eventID)
+	// Create EXISTS commands for each dedup ID
+	cmds := make([]*redis.IntCmd, len(dedupIDs))
+	for i, dedupID := range dedupIDs {
+		redisKey := r.buildRedisKey(dedupID)
 		cmds[i] = pipe.Exists(ctx, redisKey)
 	}
 
 	// Execute pipeline
 	_, err := pipe.Exec(ctx)
 	if err != nil && err != redis.Nil {
-		// Fallback to database check on Redis error
-		return r.checkBatchDuplicatesDB(ctx, eventIDs)
+		return nil, fmt.Errorf("failed to check batch duplicates: %w", err)
 	}
 
 	// Collect duplicates
-	var duplicates []ulid.ULID
-	var redisMisses []ulid.ULID
-
+	var duplicates []string
 	for i, cmd := range cmds {
 		exists, err := cmd.Result()
 		if err != nil {
-			// On individual command error, add to misses for DB check
-			redisMisses = append(redisMisses, eventIDs[i])
+			// Skip on error, treat as not found
 			continue
 		}
 
 		if exists > 0 {
-			duplicates = append(duplicates, eventIDs[i])
-		} else {
-			redisMisses = append(redisMisses, eventIDs[i])
+			duplicates = append(duplicates, dedupIDs[i])
 		}
-	}
-
-	// Check Redis misses in database
-	if len(redisMisses) > 0 {
-		dbDuplicates, err := r.checkBatchDuplicatesDB(ctx, redisMisses)
-		if err != nil {
-			return duplicates, err // Return Redis results even if DB check fails
-		}
-		duplicates = append(duplicates, dbDuplicates...)
 	}
 
 	return duplicates, nil
 }
 
-// checkBatchDuplicatesDB checks for duplicates using database query
-func (r *TelemetryDeduplicationRepository) checkBatchDuplicatesDB(ctx context.Context, eventIDs []ulid.ULID) ([]ulid.ULID, error) {
-	// Convert ULIDs to strings for PostgreSQL array
-	idStrings := make([]string, len(eventIDs))
-	for i, id := range eventIDs {
-		idStrings[i] = id.String()
+// CreateBatch creates multiple deduplication entries in Redis using pipeline
+func (r *telemetryDeduplicationRepository) CreateBatch(ctx context.Context, entries []*observability.TelemetryEventDeduplication) error {
+	if len(entries) == 0 {
+		return nil
 	}
 
-	query := `
-		SELECT event_id
-		FROM telemetry_event_deduplication
-		WHERE event_id = ANY($1)
-	`
-
-	rows, err := r.db.WithContext(ctx).Raw(query, pq.Array(idStrings)).Rows()
-	if err != nil {
-		return nil, fmt.Errorf("failed to check batch duplicates: %w", err)
-	}
-	defer rows.Close()
-
-	var duplicates []ulid.ULID
-	for rows.Next() {
-		var eventIDStr string
-		err := rows.Scan(&eventIDStr)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan duplicate event ID: %w", err)
-		}
-
-		eventID, err := ulid.Parse(eventIDStr)
-		if err != nil {
-			continue // Skip invalid ULIDs
-		}
-
-		duplicates = append(duplicates, eventID)
-	}
-
-	return duplicates, nil
-}
-
-// storeBatchInRedis stores multiple entries in Redis asynchronously
-func (r *TelemetryDeduplicationRepository) storeBatchInRedis(ctx context.Context, entries []*observability.TelemetryEventDeduplication) {
+	// Use Redis pipeline for efficient batch creation
 	pipe := r.redis.Client.Pipeline()
-
 	now := time.Now()
+
 	for _, entry := range entries {
 		if entry.IsExpired() {
 			continue // Skip expired entries
@@ -527,30 +229,163 @@ func (r *TelemetryDeduplicationRepository) storeBatchInRedis(ctx context.Context
 		pipe.Set(ctx, redisKey, entry.BatchID.String(), ttl)
 	}
 
-	// Execute pipeline asynchronously - errors are not critical
-	_, _ = pipe.Exec(ctx)
-}
-
-// scanTelemetryEventDeduplication scans multiple telemetry event deduplication entries from SQL rows
-func (r *TelemetryDeduplicationRepository) scanTelemetryEventDeduplication(rows *sql.Rows) ([]*observability.TelemetryEventDeduplication, error) {
-	var entries []*observability.TelemetryEventDeduplication
-
-	for rows.Next() {
-		var entry observability.TelemetryEventDeduplication
-
-		err := rows.Scan(
-			&entry.EventID,
-			&entry.BatchID,
-			&entry.ProjectID,
-			&entry.FirstSeenAt,
-			&entry.ExpiresAt,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan telemetry event deduplication: %w", err)
-		}
-
-		entries = append(entries, &entry)
+	// Execute pipeline
+	_, err := pipe.Exec(ctx)
+	if err != nil && err != redis.Nil {
+		return fmt.Errorf("failed to batch create deduplication entries: %w", err)
 	}
 
-	return entries, nil
+	return nil
+}
+
+// Delete deletes a deduplication entry from Redis
+func (r *telemetryDeduplicationRepository) Delete(ctx context.Context, dedupID string) error {
+	redisKey := r.buildRedisKey(dedupID)
+
+	err := r.redis.Delete(ctx, redisKey)
+	if err != nil {
+		return fmt.Errorf("failed to delete deduplication entry: %w", err)
+	}
+
+	return nil
+}
+
+// GetByEventID retrieves batch ID for a dedup ID from Redis
+func (r *telemetryDeduplicationRepository) GetByEventID(ctx context.Context, dedupID string) (*observability.TelemetryEventDeduplication, error) {
+	redisKey := r.buildRedisKey(dedupID)
+
+	batchIDStr, err := r.redis.Get(ctx, redisKey)
+	if err != nil {
+		if err == redis.Nil {
+			return nil, fmt.Errorf("deduplication entry not found for dedup ID %s", dedupID)
+		}
+		return nil, fmt.Errorf("failed to get deduplication entry: %w", err)
+	}
+
+	// Get TTL to reconstruct expires_at
+	ttl, err := r.redis.Client.TTL(ctx, redisKey).Result()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get TTL: %w", err)
+	}
+
+	now := time.Now()
+	expiresAt := now.Add(ttl)
+
+	// Parse batch ID from string
+	batchID, err := ulid.Parse(batchIDStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid batch ID stored in Redis: %w", err)
+	}
+
+	return &observability.TelemetryEventDeduplication{
+		EventID:     dedupID,
+		BatchID:     batchID,
+		ProjectID:   ulid.ULID{}, // Not stored in Redis (optimization)
+		FirstSeenAt: now.Add(-time.Hour), // Approximate (not critical for dedup)
+		ExpiresAt:   expiresAt,
+	}, nil
+}
+
+// CountByProjectID returns count (not supported in Redis-only, returns 0)
+// This method is kept for interface compatibility but returns 0 as Redis doesn't store project-level counts
+func (r *telemetryDeduplicationRepository) CountByProjectID(ctx context.Context, projectID ulid.ULID) (int64, error) {
+	// Not supported in Redis-only mode (would require scanning all keys)
+	// Return 0 for compatibility
+	return 0, nil
+}
+
+// Helper methods
+
+// buildRedisKey builds a Redis key for deduplication (now accepts OTLP hex IDs)
+func (r *telemetryDeduplicationRepository) buildRedisKey(dedupID string) string {
+	// dedupID is now OTLP composite ID (trace_id:span_id)
+	// Use single prefix for all OTLP IDs (globally unique)
+	return fmt.Sprintf("dedup:span:%s", dedupID)
+}
+
+// GetStats returns statistics about deduplication cache (approximate)
+func (r *telemetryDeduplicationRepository) GetStats(ctx context.Context) (map[string]interface{}, error) {
+	// Get approximate count using SCAN (non-blocking)
+	var cursor uint64
+	var count int64
+
+	// Sample first 100 keys matching the pattern
+	keys, _, err := r.redis.Client.Scan(ctx, cursor, "dedup:span:*", 100).Result()
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan keys: %w", err)
+	}
+
+	count = int64(len(keys))
+
+	return map[string]interface{}{
+		"approximate_count": count,
+		"pattern":          "dedup:span:*",
+		"storage":          "redis",
+		"auto_expiry":      true,
+	}, nil
+}
+
+// Interface compatibility methods (not supported in Redis-only mode)
+
+// ExistsInBatch checks if event exists in specific batch (not supported in Redis-only)
+func (r *telemetryDeduplicationRepository) ExistsInBatch(ctx context.Context, eventID string, batchID string) (bool, error) {
+	// Not supported - would need to store batch_id in Redis value
+	return false, fmt.Errorf("ExistsInBatch not supported in Redis-only mode")
+}
+
+// ExistsWithRedisCheck checks existence with Redis flag (Redis-only always uses Redis)
+func (r *telemetryDeduplicationRepository) ExistsWithRedisCheck(ctx context.Context, dedupID string) (bool, bool, error) {
+	exists, err := r.Exists(ctx, dedupID)
+	// Second return value indicates "found in Redis" - always true for Redis-only
+	return exists, exists, err
+}
+
+// StoreInRedis stores event in Redis (equivalent to Create)
+func (r *telemetryDeduplicationRepository) StoreInRedis(ctx context.Context, dedupID string, batchID ulid.ULID, ttl time.Duration) error {
+	dedup := &observability.TelemetryEventDeduplication{
+		EventID:   dedupID,
+		BatchID:   batchID,
+		ProjectID: ulid.ULID{}, // Not required for Redis storage
+		ExpiresAt: time.Now().Add(ttl),
+	}
+	return r.Create(ctx, dedup)
+}
+
+// GetFromRedis retrieves batch ID from Redis
+func (r *telemetryDeduplicationRepository) GetFromRedis(ctx context.Context, dedupID string) (*ulid.ULID, error) {
+	dedup, err := r.GetByEventID(ctx, dedupID)
+	if err != nil {
+		return nil, err
+	}
+	return &dedup.BatchID, nil
+}
+
+// CleanupExpired removes expired entries (not needed - Redis handles auto-expiry)
+func (r *telemetryDeduplicationRepository) CleanupExpired(ctx context.Context) (int64, error) {
+	// Redis handles auto-expiry via TTL
+	return 0, nil
+}
+
+// GetExpiredEntries returns expired entries (not supported - Redis auto-expires)
+func (r *telemetryDeduplicationRepository) GetExpiredEntries(ctx context.Context, limit int) ([]*observability.TelemetryEventDeduplication, error) {
+	// Not supported - Redis auto-expires entries
+	return nil, nil
+}
+
+// BatchCleanup batch cleanup (not needed - Redis handles auto-expiry)
+func (r *telemetryDeduplicationRepository) BatchCleanup(ctx context.Context, olderThan time.Time, batchSize int) (int64, error) {
+	// Redis handles auto-expiry via TTL
+	return 0, nil
+}
+
+// GetByProjectID retrieves entries by project (not supported efficiently in Redis-only)
+func (r *telemetryDeduplicationRepository) GetByProjectID(ctx context.Context, projectID string, limit, offset int) ([]*observability.TelemetryEventDeduplication, error) {
+	// Not supported - would require scanning all keys
+	return nil, fmt.Errorf("GetByProjectID not supported in Redis-only mode")
+}
+
+// CleanupByProjectID cleanup by project (not needed - Redis handles auto-expiry)
+func (r *telemetryDeduplicationRepository) CleanupByProjectID(ctx context.Context, projectID string, olderThan time.Time) (int64, error) {
+	// Redis handles auto-expiry via TTL
+	return 0, nil
 }

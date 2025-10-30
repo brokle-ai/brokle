@@ -17,20 +17,21 @@ import (
 
 // Config represents the complete application configuration.
 type Config struct {
-	Environment   string           `mapstructure:"environment"`
-	App           AppConfig        `mapstructure:"app"`
-	Server        ServerConfig     `mapstructure:"server"`
-	Database      DatabaseConfig   `mapstructure:"database"`
-	ClickHouse    ClickHouseConfig `mapstructure:"clickhouse"`
-	Redis         RedisConfig      `mapstructure:"redis"`
-	Auth          AuthConfig       `mapstructure:"auth"`
-	Logging       LoggingConfig    `mapstructure:"logging"`
-	External      ExternalConfig   `mapstructure:"external"`
-	Features      FeatureConfig    `mapstructure:"features"`
-	Monitoring    MonitoringConfig `mapstructure:"monitoring"`
-	Enterprise    EnterpriseConfig `mapstructure:"enterprise"`
-	Workers       WorkersConfig    `mapstructure:"workers"`
+	Environment   string              `mapstructure:"environment"`
+	App           AppConfig           `mapstructure:"app"`
+	Server        ServerConfig        `mapstructure:"server"`
+	Database      DatabaseConfig      `mapstructure:"database"`
+	ClickHouse    ClickHouseConfig    `mapstructure:"clickhouse"`
+	Redis         RedisConfig         `mapstructure:"redis"`
+	Auth          AuthConfig          `mapstructure:"auth"`
+	Logging       LoggingConfig       `mapstructure:"logging"`
+	External      ExternalConfig      `mapstructure:"external"`
+	Features      FeatureConfig       `mapstructure:"features"`
+	Monitoring    MonitoringConfig    `mapstructure:"monitoring"`
+	Enterprise    EnterpriseConfig    `mapstructure:"enterprise"`
+	Workers       WorkersConfig       `mapstructure:"workers"`
 	Notifications NotificationsConfig `mapstructure:"notifications"`
+	BlobStorage   BlobStorageConfig   `mapstructure:"blob_storage"`
 }
 
 // AppConfig contains application-level configuration.
@@ -201,6 +202,18 @@ type WorkersConfig struct {
 // NotificationsConfig contains notification system configuration.
 type NotificationsConfig struct {
 	AlertWebhookURL string `mapstructure:"alert_webhook_url"`
+}
+
+// BlobStorageConfig contains blob storage configuration for large payload offloading
+type BlobStorageConfig struct {
+	Provider        string `mapstructure:"provider"`          // "s3", "minio", "gcs", "azure"
+	BucketName      string `mapstructure:"bucket_name"`       // "brokle"
+	Region          string `mapstructure:"region"`            // "us-east-1"
+	Endpoint        string `mapstructure:"endpoint"`          // For MinIO: "http://localhost:9000"
+	AccessKeyID     string `mapstructure:"access_key_id"`     // AWS access key
+	SecretAccessKey string `mapstructure:"secret_access_key"` // AWS secret
+	UsePathStyle    bool   `mapstructure:"use_path_style"`    // true for MinIO
+	Threshold       int    `mapstructure:"threshold"`         // 10000 (10KB)
 }
 
 // Validate validates the main configuration and all sub-configurations.
@@ -599,6 +612,16 @@ func Load() (*Config, error) {
 	viper.BindEnv("external.anthropic.api_key", "ANTHROPIC_API_KEY")
 	viper.BindEnv("external.cohere.api_key", "COHERE_API_KEY")
 	viper.BindEnv("external.stripe.secret_key", "STRIPE_SECRET_KEY")
+
+	// Blob Storage configuration (for large payload offloading)
+	viper.BindEnv("blob_storage.provider", "BLOB_STORAGE_PROVIDER")
+	viper.BindEnv("blob_storage.bucket_name", "BLOB_STORAGE_BUCKET_NAME")
+	viper.BindEnv("blob_storage.region", "BLOB_STORAGE_REGION")
+	viper.BindEnv("blob_storage.endpoint", "BLOB_STORAGE_ENDPOINT")
+	viper.BindEnv("blob_storage.access_key_id", "BLOB_STORAGE_ACCESS_KEY_ID")
+	viper.BindEnv("blob_storage.secret_access_key", "BLOB_STORAGE_SECRET_ACCESS_KEY")
+	viper.BindEnv("blob_storage.use_path_style", "BLOB_STORAGE_USE_PATH_STYLE")
+	viper.BindEnv("blob_storage.threshold", "BLOB_STORAGE_THRESHOLD")
 	viper.BindEnv("external.stripe.publishable_key", "STRIPE_PUBLISHABLE_KEY")
 	viper.BindEnv("external.stripe.webhook_secret", "STRIPE_WEBHOOK_SECRET")
 
@@ -628,9 +651,12 @@ func Load() (*Config, error) {
 
 	// Database migration configuration
 	viper.BindEnv("database.auto_migrate", "DB_AUTO_MIGRATE")
-	viper.BindEnv("database.migrations_path", "DB_MIGRATIONS_PATH")
+	viper.BindEnv("database.migrations_path", "DATABASE_MIGRATIONS_PATH")
 	viper.BindEnv("database.username", "DB_USERNAME")
 	viper.BindEnv("database.migrations_table", "DB_MIGRATIONS_TABLE")
+
+	// ClickHouse migration configuration
+	viper.BindEnv("clickhouse.migrations_path", "CLICKHOUSE_MIGRATIONS_PATH")
 	viper.BindEnv("clickhouse.migrations_engine", "CLICKHOUSE_MIGRATIONS_ENGINE")
 
 	// Keep BROKLE_ prefix for Brokle-specific variables
@@ -721,7 +747,7 @@ func setDefaults() {
 	viper.SetDefault("clickhouse.host", "localhost")
 	viper.SetDefault("clickhouse.port", 9000)
 	viper.SetDefault("clickhouse.user", "default")
-	viper.SetDefault("clickhouse.database", "brokle_analytics")
+	viper.SetDefault("clickhouse.database", "default")
 	viper.SetDefault("clickhouse.max_open_conns", 50)
 	viper.SetDefault("clickhouse.max_idle_conns", 5)
 	viper.SetDefault("clickhouse.conn_max_lifetime", "1h")
@@ -813,6 +839,14 @@ func setDefaults() {
 	viper.SetDefault("enterprise.support.sla", "99.9%")
 	viper.SetDefault("enterprise.support.dedicated_manager", false)
 	viper.SetDefault("enterprise.support.on_call_support", false)
+
+	// Blob Storage defaults (S3/MinIO for large payload offloading)
+	viper.SetDefault("blob_storage.provider", "minio")
+	viper.SetDefault("blob_storage.bucket_name", "brokle")
+	viper.SetDefault("blob_storage.region", "us-east-1")
+	viper.SetDefault("blob_storage.endpoint", "http://localhost:9100")
+	viper.SetDefault("blob_storage.use_path_style", true)
+	viper.SetDefault("blob_storage.threshold", 10_000) // 10KB threshold for S3 offload
 }
 
 // GetServerAddress returns the server address string.

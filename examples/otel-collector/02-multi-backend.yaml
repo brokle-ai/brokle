@@ -1,0 +1,189 @@
+# Multi-Backend OpenTelemetry Collector Configuration
+#
+# USE CASE: Send traces to multiple observability platforms simultaneously
+# BEST FOR: A/B testing, gradual migration, compliance requirements
+# LATENCY: ~50-100ms (same as basic, fan-out is parallel)
+# THROUGHPUT: ~10,000 spans/sec (limited by slowest exporter)
+#
+# EXAMPLE SCENARIO:
+# - Migrating from Datadog to Brokle (run both during transition)
+# - Compliance requires local Jaeger + cloud Brokle
+# - Evaluating Brokle alongside existing tools
+#
+# TESTED WITH:
+# - otel/opentelemetry-collector-contrib:0.91.0 ✅
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # Batch processor (shared by all exporters)
+  batch:
+    timeout: 1s
+    send_batch_size: 100
+    send_batch_max_size: 1000
+
+  # Optional: Add resource attributes for multi-backend correlation
+  resource:
+    attributes:
+      - key: deployment.environment
+        value: ${DEPLOYMENT_ENV}
+        action: upsert
+
+exporters:
+  # Exporter 1: Brokle (AI observability + routing)
+  otlphttp/brokle:
+    # NOTE: OTLP HTTP exporter automatically appends /v1/traces to the endpoint
+    endpoint: https://api.brokle.com
+    headers:
+      X-API-Key: ${BROKLE_API_KEY}
+    compression: gzip
+    timeout: 30s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 30s
+      max_elapsed_time: 300s
+
+  # Exporter 2: Datadog (existing APM platform)
+  otlp/datadog:
+    endpoint: https://api.datadoghq.com:443
+    headers:
+      DD-API-KEY: ${DATADOG_API_KEY}
+    compression: gzip
+    timeout: 30s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 30s
+
+  # Exporter 3: Jaeger (local/on-prem tracing)
+  otlp/jaeger:
+    endpoint: jaeger:4317  # gRPC endpoint
+    tls:
+      insecure: true  # Use TLS in production
+    timeout: 10s
+
+  # Exporter 4: Logging (for debugging)
+  logging:
+    loglevel: info
+    sampling_initial: 5       # Log first 5 spans
+    sampling_thereafter: 100  # Then 1 in 100
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+service:
+  extensions: [health_check]
+
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch, resource]
+      # Fan out to all backends in parallel
+      exporters: [otlphttp/brokle, otlp/datadog, otlp/jaeger, logging]
+
+  telemetry:
+    logs:
+      level: info
+    metrics:
+      level: detailed  # Track per-exporter metrics
+
+# ==============================================================================
+# CONFIGURATION NOTES
+# ==============================================================================
+#
+# Environment Variables Required:
+# - BROKLE_API_KEY: Your Brokle API key (starts with "bk_")
+# - DATADOG_API_KEY: Your Datadog API key (if using Datadog)
+# - DEPLOYMENT_ENV: Environment name (dev, staging, prod)
+#
+# Optional Environment Variables:
+# - JAEGER_ENDPOINT: Override Jaeger endpoint (default: jaeger:4317)
+#
+# ==============================================================================
+# PERFORMANCE CHARACTERISTICS
+# ==============================================================================
+#
+# Fan-out behavior:
+# - Spans are exported to ALL backends in parallel
+# - If one backend fails, others continue (independent pipelines)
+# - Overall latency = slowest exporter latency
+#
+# Cost considerations:
+# - Each span is sent to EVERY backend (3x network bandwidth)
+# - Each backend bills for the same span (3x ingestion costs)
+# - Use tail sampling (see 03-tail-sampling.yaml) to reduce costs
+#
+# ==============================================================================
+# QUICK START
+# ==============================================================================
+#
+# 1. Set environment variables:
+#    export BROKLE_API_KEY="bk_your_key_here"
+#    export DATADOG_API_KEY="your_dd_key_here"
+#    export DEPLOYMENT_ENV="production"
+#
+# 2. Start the collector:
+#    otelcol --config=02-multi-backend.yaml
+#
+# 3. Verify collector is running:
+#    curl http://localhost:13133
+#
+# 4. Send test trace:
+#    # Your app sends OTLP to localhost:4318
+#    # Collector fans out to Brokle, Datadog, and Jaeger
+#
+# 5. Verify in all backends:
+#    - Brokle dashboard: https://app.brokle.com
+#    - Datadog APM: https://app.datadoghq.com/apm/traces
+#    - Jaeger UI: http://localhost:16686
+#
+# ==============================================================================
+# MIGRATION STRATEGY
+# ==============================================================================
+#
+# Gradual migration from Datadog to Brokle:
+#
+# Phase 1 (Week 1): Add Brokle alongside Datadog
+#   exporters: [otlp/datadog, otlphttp/brokle]
+#   - Both receive 100% of traces
+#   - Compare dashboards side-by-side
+#
+# Phase 2 (Week 2-4): Validate Brokle
+#   - Build dashboards in Brokle
+#   - Train team on Brokle UI
+#   - Ensure feature parity
+#
+# Phase 3 (Week 5+): Gradual cutover
+#   exporters: [otlphttp/brokle]
+#   - Remove Datadog exporter
+#   - Monitor for issues
+#   - Keep config for easy rollback
+#
+# ==============================================================================
+# TROUBLESHOOTING
+# ==============================================================================
+#
+# One backend fails, others succeed:
+# - This is expected behavior (independent pipelines)
+# - Check failed backend's logs specifically
+# - Verify credentials for that backend
+#
+# All backends fail:
+# - Check collector is receiving spans
+# - Verify batch processor is configured
+# - Check network connectivity to all backends
+#
+# High latency:
+# - Latency = max(brokle_latency, datadog_latency, jaeger_latency)
+# - Check which exporter is slowest in collector logs
+# - Consider removing slow exporters
+#
+# ==============================================================================

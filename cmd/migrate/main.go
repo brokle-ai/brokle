@@ -34,18 +34,82 @@ import (
 	"brokle/internal/seeder"
 )
 
+// MigrateFlags holds all parsed command-line flags
+type MigrateFlags struct {
+	Database    string
+	Steps       int
+	Version     int
+	Name        string
+	DryRun      bool
+	Environment string
+	Reset       bool
+	Verbose     bool
+}
+
+// parseFlags parses flags from arguments, supporting flags before or after the command
+func parseFlags(args []string) (*MigrateFlags, string, error) {
+	// Check for help first
+	for _, arg := range args {
+		if arg == "-h" || arg == "--help" || arg == "help" {
+			return nil, "help", nil
+		}
+	}
+
+	if len(args) == 0 {
+		return nil, "", fmt.Errorf("no command specified")
+	}
+
+	// Create a new flag set for parsing
+	fs := flag.NewFlagSet("migrate", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+
+	// Define all flags
+	flags := &MigrateFlags{}
+	fs.StringVar(&flags.Database, "db", "all", "Database to migrate: all, postgres, clickhouse")
+	fs.IntVar(&flags.Steps, "steps", 0, "Number of migration steps (0 = all)")
+	fs.IntVar(&flags.Version, "version", 0, "Target version for goto/force commands")
+	fs.StringVar(&flags.Name, "name", "", "Migration name for create command")
+	fs.BoolVar(&flags.DryRun, "dry-run", false, "Show what would be migrated without executing")
+	fs.StringVar(&flags.Environment, "env", "development", "Environment for seeding: development, demo, test")
+	fs.BoolVar(&flags.Reset, "reset", false, "Reset existing data before seeding")
+	fs.BoolVar(&flags.Verbose, "verbose", false, "Verbose output for seeding")
+
+	// Parse all arguments - fs.Parse will stop at the first non-flag arg
+	if err := fs.Parse(args); err != nil {
+		return nil, "", err
+	}
+
+	// The command is the first remaining argument after flag parsing
+	remainingArgs := fs.Args()
+	if len(remainingArgs) == 0 {
+		return nil, "", fmt.Errorf("no command specified")
+	}
+
+	command := remainingArgs[0]
+
+	// If there are more args after the command, they might be additional flags
+	// Parse them as well
+	if len(remainingArgs) > 1 {
+		if err := fs.Parse(remainingArgs[1:]); err != nil {
+			return nil, "", err
+		}
+	}
+
+	return flags, command, nil
+}
+
 func main() {
-	var (
-		database    = flag.String("db", "all", "Database to migrate: all, postgres, clickhouse")
-		steps       = flag.Int("steps", 0, "Number of migration steps (0 = all)")
-		version     = flag.Int("version", 0, "Target version for goto/force commands")
-		name        = flag.String("name", "", "Migration name for create command")
-		dryRun      = flag.Bool("dry-run", false, "Show what would be migrated without executing")
-		environment = flag.String("env", "development", "Environment for seeding: development, demo, test")
-		reset       = flag.Bool("reset", false, "Reset existing data before seeding")
-		verbose     = flag.Bool("verbose", false, "Verbose output for seeding")
-	)
-	flag.Parse()
+	// Parse flags and extract command (supports flags before or after command)
+	flags, command, err := parseFlags(os.Args[1:])
+	if err != nil {
+		log.Fatalf("Error parsing flags: %v", err)
+	}
+
+	// Handle help command
+	if command == "help" || command == "" {
+		printUsage()
+		return
+	}
 
 	// Load configuration
 	cfg, err := config.Load()
@@ -54,7 +118,7 @@ func main() {
 	}
 
 	// Parse database selection
-	databases, err := parseDatabaseSelection(*database)
+	databases, err := parseDatabaseSelection(flags.Database)
 	if err != nil {
 		log.Fatalf("Invalid database selection: %v", err)
 	}
@@ -69,23 +133,16 @@ func main() {
 	ctx := context.Background()
 
 	// Handle different commands
-	args := flag.Args()
-	if len(args) == 0 {
-		printUsage()
-		return
-	}
-
-	command := args[0]
 	switch command {
 	case "up":
-		if err := runMigrations(ctx, manager, *database, "up", *steps, *dryRun); err != nil {
+		if err := runMigrations(ctx, manager, flags.Database, "up", flags.Steps, flags.DryRun); err != nil {
 			log.Fatalf("Migration failed: %v", err)
 		}
 		fmt.Println("✅ Migrations completed successfully")
 
 	case "down":
 		// Default to 1 step if no -steps flag provided
-		downSteps := *steps
+		downSteps := flags.Steps
 		if downSteps == 0 {
 			downSteps = 1
 		}
@@ -94,64 +151,64 @@ func main() {
 			fmt.Println("Operation cancelled")
 			return
 		}
-		if err := runMigrations(ctx, manager, *database, "down", downSteps, *dryRun); err != nil {
+		if err := runMigrations(ctx, manager, flags.Database, "down", downSteps, flags.DryRun); err != nil {
 			log.Fatalf("Migration failed: %v", err)
 		}
 		fmt.Println("✅ Rollback completed successfully")
 
 	case "status":
-		if err := showStatus(ctx, manager, *database); err != nil {
+		if err := showStatus(ctx, manager, flags.Database); err != nil {
 			log.Fatalf("Failed to show status: %v", err)
 		}
 
 	case "goto":
-		if *version == 0 {
+		if flags.Version == 0 {
 			log.Fatal("Version must be specified for goto command (use -version flag)")
 		}
-		if !confirmDestructiveOperation(fmt.Sprintf("migrate to version %d", *version)) {
+		if !confirmDestructiveOperation(fmt.Sprintf("migrate to version %d", flags.Version)) {
 			fmt.Println("Operation cancelled")
 			return
 		}
-		if err := gotoVersion(manager, *database, uint(*version)); err != nil {
-			log.Fatalf("Failed to migrate to version %d: %v", *version, err)
+		if err := gotoVersion(manager, flags.Database, uint(flags.Version)); err != nil {
+			log.Fatalf("Failed to migrate to version %d: %v", flags.Version, err)
 		}
-		fmt.Printf("✅ Migrated to version %d successfully\n", *version)
+		fmt.Printf("✅ Migrated to version %d successfully\n", flags.Version)
 
 	case "force":
-		if *version == 0 {
+		if flags.Version == 0 {
 			log.Fatal("Version must be specified for force command (use -version flag)")
 		}
-		if !confirmDestructiveOperation(fmt.Sprintf("FORCE migration to version %d (DANGEROUS)", *version)) {
+		if !confirmDestructiveOperation(fmt.Sprintf("FORCE migration to version %d (DANGEROUS)", flags.Version)) {
 			fmt.Println("Operation cancelled")
 			return
 		}
-		if err := forceVersion(manager, *database, *version); err != nil {
-			log.Fatalf("Failed to force migration to version %d: %v", *version, err)
+		if err := forceVersion(manager, flags.Database, flags.Version); err != nil {
+			log.Fatalf("Failed to force migration to version %d: %v", flags.Version, err)
 		}
-		fmt.Printf("⚠️  Forced migration to version %d successfully\n", *version)
+		fmt.Printf("⚠️  Forced migration to version %d successfully\n", flags.Version)
 
 	case "drop":
 		if !confirmDestructiveOperation("DROP ALL TABLES (PERMANENT DATA LOSS)") {
 			fmt.Println("Operation cancelled")
 			return
 		}
-		if err := dropTables(manager, *database); err != nil {
+		if err := dropTables(manager, flags.Database); err != nil {
 			log.Fatalf("Failed to drop tables: %v", err)
 		}
 		fmt.Println("⚠️  Tables dropped successfully")
 
 	case "steps":
-		if *steps == 0 {
+		if flags.Steps == 0 {
 			log.Fatal("Steps must be specified for steps command (use -steps flag)")
 		}
-		if *steps < 0 && !confirmDestructiveOperation(fmt.Sprintf("rollback %d migration steps", -*steps)) {
+		if flags.Steps < 0 && !confirmDestructiveOperation(fmt.Sprintf("rollback %d migration steps", -flags.Steps)) {
 			fmt.Println("Operation cancelled")
 			return
 		}
-		if err := runSteps(manager, *database, *steps); err != nil {
-			log.Fatalf("Failed to run %d migration steps: %v", *steps, err)
+		if err := runSteps(manager, flags.Database, flags.Steps); err != nil {
+			log.Fatalf("Failed to run %d migration steps: %v", flags.Steps, err)
 		}
-		fmt.Printf("✅ Ran %d migration steps successfully\n", *steps)
+		fmt.Printf("✅ Ran %d migration steps successfully\n", flags.Steps)
 
 	case "info":
 		if err := showDetailedInfo(manager); err != nil {
@@ -159,18 +216,18 @@ func main() {
 		}
 
 	case "create":
-		if *name == "" {
+		if flags.Name == "" {
 			log.Fatal("Migration name is required for create command (use -name flag)")
 		}
-		if err := createMigration(manager, *database, *name); err != nil {
+		if err := createMigration(manager, flags.Database, flags.Name); err != nil {
 			log.Fatalf("Failed to create migration: %v", err)
 		}
 
 	case "seed":
-		if err := runSeeding(ctx, cfg, *environment, *reset, *dryRun, *verbose); err != nil {
+		if err := runSeeding(ctx, cfg, flags.Environment, flags.Reset, flags.DryRun, flags.Verbose); err != nil {
 			log.Fatalf("Seeding failed: %v", err)
 		}
-		fmt.Printf("✅ Seeding completed successfully with environment: %s\n", *environment)
+		fmt.Printf("✅ Seeding completed successfully with environment: %s\n", flags.Environment)
 
 	default:
 		fmt.Printf("❌ Unknown command: %s\n", command)
@@ -443,21 +500,25 @@ func printUsage() {
 	fmt.Println()
 	fmt.Println("EXAMPLES:")
 	fmt.Println("  migrate up                              # Run all pending migrations")
-	fmt.Println("  migrate -db postgres up                 # Run PostgreSQL migrations only")
+	fmt.Println("  migrate status -db postgres             # Show PostgreSQL status only")
+	fmt.Println("  migrate status -db clickhouse           # Show ClickHouse status only")
+	fmt.Println("  migrate up -db postgres                 # Run PostgreSQL migrations only")
 	fmt.Println("  migrate down                            # Rollback 1 migration")
 	fmt.Println("  migrate down -steps 5                   # Rollback 5 migrations")
+	fmt.Println("  migrate down -db postgres -steps 3      # Rollback 3 PostgreSQL migrations")
 	fmt.Println("  migrate goto -version 5                 # Go to version 5 with confirmation")
 	fmt.Println("  migrate steps -steps 2                  # Run 2 migration steps")
-	fmt.Println("  migrate steps -steps -1                 # Rollback 1 migration step")
 	fmt.Println("  migrate create -name 'add_users'        # Create new migration")
-	fmt.Println("  migrate status                          # Show migration status")
 	fmt.Println("  migrate info                            # Show detailed information")
-	fmt.Println("  migrate -dry-run up                     # Preview migrations")
+	fmt.Println("  migrate up -dry-run                     # Preview migrations")
 	fmt.Println("  migrate seed                            # Seed with development data")
 	fmt.Println("  migrate seed -env demo                  # Seed with demo data")
-	fmt.Println("  migrate seed -env test                  # Seed with test data")
-	fmt.Println("  migrate seed -reset -verbose            # Reset and seed with verbose output")
-	fmt.Println("  migrate seed -dry-run                   # Preview seeding plan")
+	fmt.Println("  migrate seed -env test -reset -verbose  # Reset and seed with verbose output")
+	fmt.Println()
+	fmt.Println("NOTE:")
+	fmt.Println("  Flags can be placed before or after the command:")
+	fmt.Println("  migrate status -db postgres    (recommended)")
+	fmt.Println("  migrate -db postgres status    (also works)")
 	fmt.Println()
 	fmt.Println("SAFETY:")
 	fmt.Println("  🛡️  Destructive operations require explicit 'yes' confirmation")

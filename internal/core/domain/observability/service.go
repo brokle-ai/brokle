@@ -2,219 +2,134 @@ package observability
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"brokle/pkg/ulid"
 )
 
-// TraceService defines the interface for trace business logic
+// NOTE: Service interfaces are defined here to avoid circular imports between
+// internal/workers and internal/services/observability packages.
+// Concrete implementations are in internal/services/observability/.
+
+// TraceService defines the comprehensive interface for trace operations
+// Used by both workers (CreateTrace) and handlers (GetTraceByID, GetTraceWithObservations, etc.)
 type TraceService interface {
-	// Core trace operations
-	CreateTrace(ctx context.Context, trace *Trace) (*Trace, error)
-	CreateTraceWithObservations(ctx context.Context, trace *Trace) (*Trace, error)
-	GetTrace(ctx context.Context, id ulid.ULID) (*Trace, error)
-	GetTraceByExternalID(ctx context.Context, externalTraceID string) (*Trace, error)
-	UpdateTrace(ctx context.Context, trace *Trace) (*Trace, error)
-	DeleteTrace(ctx context.Context, id ulid.ULID) error
+	// Create operations
+	CreateTrace(ctx context.Context, trace *Trace) error
+	CreateTraceBatch(ctx context.Context, traces []*Trace) error
 
-	// Trace queries
-	ListTraces(ctx context.Context, filter *TraceFilter) ([]*Trace, int, error)
-	GetTraceWithObservations(ctx context.Context, id ulid.ULID) (*Trace, error)
-	GetTraceStats(ctx context.Context, id ulid.ULID) (*TraceStats, error)
-	GetRecentTraces(ctx context.Context, projectID ulid.ULID, limit int) ([]*Trace, error)
+	// Read operations
+	GetTraceByID(ctx context.Context, id string) (*Trace, error)
+	GetTraceWithObservations(ctx context.Context, id string) (*Trace, error)
+	GetTraceWithScores(ctx context.Context, id string) (*Trace, error)
+	GetTracesByProjectID(ctx context.Context, projectID string, filter *TraceFilter) ([]*Trace, error)
+	GetTracesBySessionID(ctx context.Context, sessionID string) ([]*Trace, error) // Virtual session analytics
+	GetTracesByUserID(ctx context.Context, userID string, filter *TraceFilter) ([]*Trace, error)
 
-	// Batch operations
-	CreateTracesBatch(ctx context.Context, traces []*Trace) ([]*Trace, error)
-	IngestTraceBatch(ctx context.Context, request *BatchIngestRequest) (*BatchIngestResult, error)
+	// Update operations
+	UpdateTrace(ctx context.Context, trace *Trace) error
+	UpdateTraceMetrics(ctx context.Context, traceID string, totalCost float64, totalTokens, observationCount uint32) error
 
-	// Search and filtering
-	SearchTraces(ctx context.Context, query string, filter *TraceFilter) ([]*Trace, int, error)
-	GetTracesByTimeRange(ctx context.Context, projectID ulid.ULID, startTime, endTime time.Time, limit, offset int) ([]*Trace, error)
+	// Delete operations
+	DeleteTrace(ctx context.Context, id string) error
 
-	// Analytics integration
-	GetTraceAnalytics(ctx context.Context, filter *AnalyticsFilter) (*TraceAnalytics, error)
+	// Analytics operations
+	CountTraces(ctx context.Context, filter *TraceFilter) (int64, error)
 }
 
-// ObservationService defines the interface for observation business logic
+// ObservationService defines the comprehensive interface for observation operations
+// Used by both workers (CreateObservation) and handlers (GetObservationsByFilter, etc.)
 type ObservationService interface {
-	// Core observation operations
-	CreateObservation(ctx context.Context, observation *Observation) (*Observation, error)
-	GetObservation(ctx context.Context, id ulid.ULID) (*Observation, error)
-	GetObservationByExternalID(ctx context.Context, externalObservationID string) (*Observation, error)
-	UpdateObservation(ctx context.Context, observation *Observation) (*Observation, error)
-	CompleteObservation(ctx context.Context, id ulid.ULID, completionData *ObservationCompletion) (*Observation, error)
-	DeleteObservation(ctx context.Context, id ulid.ULID) error
+	// Create operations
+	CreateObservation(ctx context.Context, observation *Observation) error
+	CreateObservationBatch(ctx context.Context, observations []*Observation) error
 
-	// Observation queries
-	ListObservations(ctx context.Context, filter *ObservationFilter) ([]*Observation, int, error)
-	GetObservationsByTrace(ctx context.Context, traceID ulid.ULID) ([]*Observation, error)
-	GetChildObservations(ctx context.Context, parentID ulid.ULID) ([]*Observation, error)
+	// Read operations
+	GetObservationByID(ctx context.Context, id string) (*Observation, error)
+	GetObservationsByTraceID(ctx context.Context, traceID string) ([]*Observation, error)
+	GetRootSpan(ctx context.Context, traceID string) (*Observation, error)
+	GetObservationTreeByTraceID(ctx context.Context, traceID string) ([]*Observation, error)
+	GetChildObservations(ctx context.Context, parentObservationID string) ([]*Observation, error)
+	GetObservationsByFilter(ctx context.Context, filter *ObservationFilter) ([]*Observation, error)
 
-	// Batch operations
-	CreateObservationsBatch(ctx context.Context, observations []*Observation) ([]*Observation, error)
-	UpdateObservationsBatch(ctx context.Context, observations []*Observation) ([]*Observation, error)
+	// Update operations
+	UpdateObservation(ctx context.Context, observation *Observation) error
+	SetObservationCost(ctx context.Context, observationID string, inputCost, outputCost float64) error
+	SetObservationUsage(ctx context.Context, observationID string, promptTokens, completionTokens uint32) error
 
-	// Analytics and stats
-	GetObservationStats(ctx context.Context, filter *ObservationFilter) (*ObservationStats, error)
-	GetObservationAnalytics(ctx context.Context, filter *AnalyticsFilter) (*ObservationAnalytics, error)
+	// Delete operations
+	DeleteObservation(ctx context.Context, id string) error
 
-	// Cost and token tracking
-	CalculateCost(ctx context.Context, observation *Observation) (*CostCalculation, error)
-	GetCostBreakdown(ctx context.Context, filter *AnalyticsFilter) ([]*CostBreakdown, error)
-
-	// Performance monitoring
-	GetLatencyPercentiles(ctx context.Context, filter *ObservationFilter) (*LatencyPercentiles, error)
-	GetThroughputMetrics(ctx context.Context, filter *AnalyticsFilter) (*ThroughputMetrics, error)
+	// Analytics operations
+	CountObservations(ctx context.Context, filter *ObservationFilter) (int64, error)
+	CalculateTraceCost(ctx context.Context, traceID string) (float64, error)
+	CalculateTraceTokens(ctx context.Context, traceID string) (uint32, error)
 }
 
-// QualityService defines the interface for quality evaluation and scoring
-type QualityService interface {
-	// Quality scoring operations
-	CreateQualityScore(ctx context.Context, score *QualityScore) (*QualityScore, error)
-	GetQualityScore(ctx context.Context, id ulid.ULID) (*QualityScore, error)
-	UpdateQualityScore(ctx context.Context, score *QualityScore) (*QualityScore, error)
-	DeleteQualityScore(ctx context.Context, id ulid.ULID) error
+// ScoreService defines the comprehensive interface for quality score operations
+// Used by both workers (CreateScore) and handlers (GetScoresByTraceID, etc.)
+type ScoreService interface {
+	// Create operations
+	CreateScore(ctx context.Context, score *Score) error
+	CreateScoreBatch(ctx context.Context, scores []*Score) error
 
-	// Score queries
-	GetQualityScoresByTrace(ctx context.Context, traceID ulid.ULID) ([]*QualityScore, error)
-	GetQualityScoresByObservation(ctx context.Context, observationID ulid.ULID) ([]*QualityScore, error)
-	ListQualityScores(ctx context.Context, filter *QualityScoreFilter) ([]*QualityScore, int, error)
+	// Read operations
+	GetScoreByID(ctx context.Context, id string) (*Score, error)
+	GetScoresByTraceID(ctx context.Context, traceID string) ([]*Score, error)
+	GetScoresByObservationID(ctx context.Context, observationID string) ([]*Score, error)
+	GetScoresByFilter(ctx context.Context, filter *ScoreFilter) ([]*Score, error)
 
-	// Evaluation operations
-	EvaluateTrace(ctx context.Context, traceID ulid.ULID, evaluatorName string) (*QualityScore, error)
-	EvaluateObservation(ctx context.Context, observationID ulid.ULID, evaluatorName string) (*QualityScore, error)
-	BulkEvaluate(ctx context.Context, request *BulkEvaluationRequest) (*BulkEvaluationResult, error)
+	// Update operations
+	UpdateScore(ctx context.Context, score *Score) error
 
-	// Evaluator management
-	RegisterEvaluator(ctx context.Context, evaluator QualityEvaluator) error
-	GetEvaluator(ctx context.Context, name string) (QualityEvaluator, error)
-	ListEvaluators(ctx context.Context) ([]QualityEvaluatorInfo, error)
+	// Delete operations
+	DeleteScore(ctx context.Context, id string) error
 
-	// Quality analytics
-	GetQualityAnalytics(ctx context.Context, filter *AnalyticsFilter) (*QualityAnalytics, error)
-	GetQualityTrends(ctx context.Context, filter *AnalyticsFilter, interval string) ([]*QualityTrendPoint, error)
-	GetScoreDistribution(ctx context.Context, scoreName string, filter *QualityScoreFilter) (map[string]int, error)
+	// Analytics operations
+	CountScores(ctx context.Context, filter *ScoreFilter) (int64, error)
 }
 
-// AnalyticsService defines the interface for analytics and reporting
-type AnalyticsService interface {
-	// Dashboard analytics
-	GetDashboardOverview(ctx context.Context, projectID ulid.ULID, timeRange TimeRange) (*DashboardOverview, error)
-	GetRealtimeMetrics(ctx context.Context, projectID ulid.ULID) (*RealtimeMetrics, error)
+// BlobStorageService defines the comprehensive interface for blob storage operations
+type BlobStorageService interface {
+	// Create operations
+	CreateBlobReference(ctx context.Context, blob *BlobStorageFileLog) error
 
-	// Cost analytics
-	GetCostAnalytics(ctx context.Context, filter *AnalyticsFilter) (*CostAnalytics, error)
-	GetCostOptimizationSuggestions(ctx context.Context, filter *AnalyticsFilter) ([]*OptimizationSuggestion, error)
-	GetCostTrends(ctx context.Context, filter *AnalyticsFilter, interval string) ([]*TimeSeriesPoint, error)
+	// Read operations
+	GetBlobByID(ctx context.Context, id string) (*BlobStorageFileLog, error)
+	GetBlobsByEntityID(ctx context.Context, entityType, entityID string) ([]*BlobStorageFileLog, error)
+	GetBlobsByProjectID(ctx context.Context, projectID string, filter *BlobStorageFilter) ([]*BlobStorageFileLog, error)
 
-	// Performance analytics
-	GetPerformanceAnalytics(ctx context.Context, filter *AnalyticsFilter) (*PerformanceAnalytics, error)
-	GetProviderComparison(ctx context.Context, filter *AnalyticsFilter) (*ProviderComparison, error)
-	GetLatencyHeatmap(ctx context.Context, filter *AnalyticsFilter) (*LatencyHeatmap, error)
+	// Update operations
+	UpdateBlobReference(ctx context.Context, blob *BlobStorageFileLog) error
 
-	// Time series analytics
-	GetTimeSeries(ctx context.Context, filter *AnalyticsFilter, metric string, interval string) ([]*TimeSeriesPoint, error)
-	GetCustomMetrics(ctx context.Context, projectID ulid.ULID, metricNames []string, timeRange TimeRange) (map[string][]*TimeSeriesPoint, error)
+	// Delete operations
+	DeleteBlobReference(ctx context.Context, id string) error
 
-	// Export and reporting
-	ExportTraces(ctx context.Context, filter *TraceFilter, format ExportFormat) (*ExportResult, error)
-	GenerateReport(ctx context.Context, reportType ReportType, filter *AnalyticsFilter) (*Report, error)
-}
+	// Storage operations
+	ShouldOffload(content string) bool
+	UploadToS3(ctx context.Context, content string, entityType, entityID, eventID string) (*BlobStorageFileLog, error)
+	DownloadFromS3(ctx context.Context, blobID string) (string, error)
 
-// IngestionService defines the interface for high-throughput data ingestion
-type IngestionService interface {
-	// Batch ingestion
-	IngestTraceBatch(ctx context.Context, request *BatchIngestRequest) (*BatchIngestResult, error)
-	IngestObservationBatch(ctx context.Context, request *ObservationBatchRequest) (*BatchIngestResult, error)
-	IngestQualityScoreBatch(ctx context.Context, request *QualityScoreBatchRequest) (*BatchIngestResult, error)
-
-	// Queue management
-	GetQueueStatus(ctx context.Context) (*QueueStatus, error)
-	FlushQueue(ctx context.Context) error
-	PauseIngestion(ctx context.Context) error
-	ResumeIngestion(ctx context.Context) error
-
-	// Health and monitoring
-	GetIngestionHealth(ctx context.Context) (*IngestionHealth, error)
-	GetIngestionMetrics(ctx context.Context) (*IngestionMetrics, error)
-}
-
-// TelemetryBatchService defines the interface for telemetry batch processing with ULID-based deduplication
-type TelemetryBatchService interface {
-	// Batch operations
-	CreateBatch(ctx context.Context, batch *TelemetryBatch) (*TelemetryBatch, error)
-	GetBatch(ctx context.Context, id ulid.ULID) (*TelemetryBatch, error)
-	UpdateBatch(ctx context.Context, batch *TelemetryBatch) (*TelemetryBatch, error)
-	DeleteBatch(ctx context.Context, id ulid.ULID) error
-
-	// Batch queries
-	ListBatches(ctx context.Context, filter *TelemetryBatchFilter) ([]*TelemetryBatch, int, error)
-	GetBatchWithEvents(ctx context.Context, id ulid.ULID) (*TelemetryBatch, error)
-	GetActiveBatches(ctx context.Context, projectID ulid.ULID) ([]*TelemetryBatch, error)
-	GetProcessingBatches(ctx context.Context) ([]*TelemetryBatch, error)
-
-	// Batch processing
-	ProcessBatch(ctx context.Context, batchID ulid.ULID) (*BatchProcessingResult, error)
-	ProcessEventsBatch(ctx context.Context, events []*TelemetryEvent) (*BatchProcessingResult, error)
-	RetryFailedEvents(ctx context.Context, batchID ulid.ULID, maxRetries int) (*BatchProcessingResult, error)
-
-	// Batch analytics
-	GetBatchStats(ctx context.Context, id ulid.ULID) (*BatchStats, error)
-	GetBatchMetrics(ctx context.Context, filter *TelemetryBatchFilter) (*BatchProcessingMetrics, error)
-	GetThroughputStats(ctx context.Context, projectID ulid.ULID, timeWindow time.Duration) (*BatchThroughputStats, error)
-
-	// Batch lifecycle management
-	MarkBatchCompleted(ctx context.Context, batchID ulid.ULID, processingTimeMs int) error
-	MarkBatchFailed(ctx context.Context, batchID ulid.ULID, errorMessage string) error
-	MarkBatchPartial(ctx context.Context, batchID ulid.ULID, processingTimeMs int) error
-}
-
-// TelemetryEventService defines the interface for telemetry event processing
-type TelemetryEventService interface {
-	// Event operations
-	CreateEvent(ctx context.Context, event *TelemetryEvent) (*TelemetryEvent, error)
-	CreateEventsBatch(ctx context.Context, events []*TelemetryEvent) error
-	UpdateEventsBatch(ctx context.Context, events []*TelemetryEvent) error
-	GetEvent(ctx context.Context, id ulid.ULID) (*TelemetryEvent, error)
-	UpdateEvent(ctx context.Context, event *TelemetryEvent) (*TelemetryEvent, error)
-	DeleteEvent(ctx context.Context, id ulid.ULID) error
-
-	// Event queries
-	ListEvents(ctx context.Context, filter *TelemetryEventFilter) ([]*TelemetryEvent, int, error)
-	GetEventsByBatch(ctx context.Context, batchID ulid.ULID) ([]*TelemetryEvent, error)
-	GetUnprocessedEvents(ctx context.Context, batchID ulid.ULID) ([]*TelemetryEvent, error)
-	GetFailedEvents(ctx context.Context, batchID *ulid.ULID, limit, offset int) ([]*TelemetryEvent, error)
-
-	// Event processing
-	ProcessEvent(ctx context.Context, eventID ulid.ULID) error
-	ProcessEventsBatch(ctx context.Context, events []*TelemetryEvent) (*EventProcessingResult, error)
-	MarkEventProcessed(ctx context.Context, eventID ulid.ULID) error
-	MarkEventFailed(ctx context.Context, eventID ulid.ULID, errorMessage string) error
-
-	// Retry logic
-	RetryEvent(ctx context.Context, eventID ulid.ULID) error
-	GetEventsForRetry(ctx context.Context, maxRetries int, limit int) ([]*TelemetryEvent, error)
-	BulkRetryEvents(ctx context.Context, eventIDs []ulid.ULID) (*EventProcessingResult, error)
-
-	// Event analytics
-	GetEventStats(ctx context.Context, filter *TelemetryEventFilter) (*TelemetryEventStats, error)
-	GetEventTypeDistribution(ctx context.Context, batchID *ulid.ULID) (map[TelemetryEventType]int, error)
-
-	// Event cleanup
-	CleanupFailedEvents(ctx context.Context, olderThan time.Time) (int64, error)
+	// Analytics operations
+	CountBlobs(ctx context.Context, filter *BlobStorageFilter) (int64, error)
 }
 
 // TelemetryDeduplicationService defines the interface for ULID-based deduplication
 type TelemetryDeduplicationService interface {
-	// Deduplication operations
-	CheckDuplicate(ctx context.Context, eventID ulid.ULID) (bool, error)
-	CheckBatchDuplicates(ctx context.Context, eventIDs []ulid.ULID) ([]ulid.ULID, error)
-	RegisterEvent(ctx context.Context, eventID ulid.ULID, batchID ulid.ULID, projectID ulid.ULID, ttl time.Duration) error
-	RegisterProcessedEventsBatch(ctx context.Context, projectID ulid.ULID, eventIDs []ulid.ULID) error
+	// Atomic deduplication operations (uses composite OTLP IDs: trace_id:span_id)
+	ClaimEvents(ctx context.Context, projectID ulid.ULID, batchID ulid.ULID, dedupIDs []string, ttl time.Duration) (claimedIDs, duplicateIDs []string, err error)
+	ReleaseEvents(ctx context.Context, dedupIDs []string) error
 
-	// ULID-based TTL management
-	CalculateOptimalTTL(ctx context.Context, eventID ulid.ULID, defaultTTL time.Duration) (time.Duration, error)
-	GetExpirationTime(eventID ulid.ULID, baseTTL time.Duration) time.Time
+	// Legacy deduplication operations (deprecated - use ClaimEvents instead)
+	CheckDuplicate(ctx context.Context, dedupID string) (bool, error)
+	CheckBatchDuplicates(ctx context.Context, dedupIDs []string) ([]string, error)
+	RegisterEvent(ctx context.Context, dedupID string, batchID ulid.ULID, projectID ulid.ULID, ttl time.Duration) error
+	RegisterProcessedEventsBatch(ctx context.Context, projectID ulid.ULID, batchID ulid.ULID, dedupIDs []string) error
+
+	// TTL management (string-based for composite IDs)
+	CalculateOptimalTTL(ctx context.Context, dedupID string, defaultTTL time.Duration) (time.Duration, error)
+	GetExpirationTime(dedupID string, baseTTL time.Duration) time.Time
 
 	// Cleanup operations
 	CleanupExpired(ctx context.Context) (int64, error)
@@ -231,14 +146,9 @@ type TelemetryDeduplicationService interface {
 	GetFallbackRate(ctx context.Context, timeWindow time.Duration) (float64, error)
 }
 
-// TelemetryService aggregates all telemetry-related services with high-performance batch processing
+// TelemetryService aggregates all telemetry-related services for health monitoring
 type TelemetryService interface {
-	// High-throughput batch endpoint
-	ProcessTelemetryBatch(ctx context.Context, request *TelemetryBatchRequest) (*TelemetryBatchResponse, error)
-
 	// Service access
-	Batch() TelemetryBatchService
-	Event() TelemetryEventService
 	Deduplication() TelemetryDeduplicationService
 
 	// Health and monitoring
@@ -252,8 +162,8 @@ type QualityEvaluator interface {
 	Name() string
 	Version() string
 	Description() string
-	SupportedTypes() []ObservationType
-	Evaluate(ctx context.Context, input *EvaluationInput) (*QualityScore, error)
+	SupportedTypes() []string // Observation types: span, generation, event, tool, etc.
+	Evaluate(ctx context.Context, input *EvaluationInput) (*Score, error)
 	ValidateInput(input *EvaluationInput) error
 }
 
@@ -308,19 +218,35 @@ type BatchIngestResult struct {
 // TelemetryBatchRequest represents a high-throughput telemetry batch request
 type TelemetryBatchRequest struct {
 	ProjectID    ulid.ULID                      `json:"project_id"`
-	Environment  *string                        `json:"environment,omitempty"`
 	Metadata     map[string]any                 `json:"metadata"`
 	Events       []*TelemetryEventRequest       `json:"events"`
 	Async        bool                           `json:"async"`
-	Deduplication *DeduplicationConfig          `json:"deduplication,omitempty"`
 }
 
 // TelemetryEventRequest represents an individual telemetry event in a batch
 type TelemetryEventRequest struct {
+	// Internal tracking (Brokle-specific)
 	EventID      ulid.ULID                      `json:"event_id"`
+
+	// OTLP identity (for deduplication)
+	SpanID       string                         `json:"span_id"`   // OTLP span_id (16 hex) - empty for traces
+	TraceID      string                         `json:"trace_id"`  // OTLP trace_id (32 hex) - required
+
+	// Event data
 	EventType    TelemetryEventType             `json:"event_type"`
 	Payload      map[string]any                 `json:"payload"`
 	Timestamp    *time.Time                     `json:"timestamp,omitempty"`
+}
+
+// Validate validates the event request
+func (e *TelemetryEventRequest) Validate() error {
+	if e.EventType == TelemetryEventTypeObservation && e.SpanID == "" {
+		return fmt.Errorf("observation events must have non-empty span_id")
+	}
+	if e.TraceID == "" {
+		return fmt.Errorf("trace_id is required for all events")
+	}
+	return nil
 }
 
 // TelemetryBatchResponse represents the response for telemetry batch processing
@@ -333,14 +259,6 @@ type TelemetryBatchResponse struct {
 	Errors            []TelemetryEventError       `json:"errors,omitempty"`
 	DuplicateEventIDs []ulid.ULID                 `json:"duplicate_event_ids,omitempty"`
 	JobID             *string                     `json:"job_id,omitempty"` // For async processing
-}
-
-// DeduplicationConfig represents deduplication configuration
-type DeduplicationConfig struct {
-	Enabled          bool          `json:"enabled"`
-	TTL             time.Duration `json:"ttl"`
-	UseRedisCache   bool          `json:"use_redis_cache"`
-	FailOnDuplicate bool          `json:"fail_on_duplicate"`
 }
 
 // TelemetryEventError represents an error processing a telemetry event
@@ -473,7 +391,7 @@ type ObservationBatchRequest struct {
 // QualityScoreBatchRequest represents a batch quality score ingestion request
 type QualityScoreBatchRequest struct {
 	ProjectID     ulid.ULID       `json:"project_id"`
-	QualityScores []*QualityScore `json:"quality_scores"`
+	QualityScores []*Score `json:"quality_scores"`
 	Async         bool            `json:"async"`
 }
 
@@ -497,7 +415,7 @@ type BulkEvaluationRequest struct {
 type BulkEvaluationResult struct {
 	ProcessedCount int                     `json:"processed_count"`
 	FailedCount    int                     `json:"failed_count"`
-	Scores         []*QualityScore         `json:"scores,omitempty"`
+	Scores         []*Score         `json:"scores,omitempty"`
 	Errors         []BulkEvaluationError   `json:"errors,omitempty"`
 	JobID          *string                 `json:"job_id,omitempty"`
 }
@@ -520,12 +438,12 @@ type EvaluationInput struct {
 
 // QualityEvaluatorInfo represents information about a quality evaluator
 type QualityEvaluatorInfo struct {
-	Name            string              `json:"name"`
-	Version         string              `json:"version"`
-	Description     string              `json:"description"`
-	SupportedTypes  []ObservationType   `json:"supported_types"`
-	IsBuiltIn       bool                `json:"is_built_in"`
-	Configuration   map[string]any      `json:"configuration,omitempty"`
+	Name            string         `json:"name"`
+	Version         string         `json:"version"`
+	Description     string         `json:"description"`
+	SupportedTypes  []string       `json:"supported_types"` // Observation types
+	IsBuiltIn       bool           `json:"is_built_in"`
+	Configuration   map[string]any `json:"configuration,omitempty"`
 }
 
 // Dashboard and reporting types
@@ -687,4 +605,18 @@ type Report struct {
 	GeneratedAt time.Time              `json:"generated_at"`
 	Format      ExportFormat           `json:"format"`
 	DownloadURL string                 `json:"download_url,omitempty"`
+}
+// ==================================
+// Legacy/Placeholder Types (not actively used in clean implementation)
+// ==================================
+
+// AnalyticsFilter - placeholder for analytics filtering (not actively used)
+type AnalyticsFilter struct {
+	// Placeholder - will be implemented when analytics features are added
+}
+
+// TimeSeriesPoint - placeholder for time series data (not actively used)
+type TimeSeriesPoint struct {
+	Timestamp time.Time `json:"timestamp"`
+	Value     float64   `json:"value"`
 }
