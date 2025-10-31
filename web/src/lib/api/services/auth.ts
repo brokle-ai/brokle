@@ -42,7 +42,7 @@ export const login = async (credentials: LoginCredentials): Promise<AuthResponse
     createdAt: userResponse.created_at,
     updatedAt: userResponse.created_at,
     isEmailVerified: userResponse.is_email_verified,
-    onboardingCompleted: userResponse.onboarding_completed,
+    onboardingCompletedAt: userResponse.onboarding_completed_at,
   }
 
   // Get organization from backend
@@ -137,7 +137,7 @@ export const signup = async (credentials: SignUpCredentials): Promise<AuthRespon
     createdAt: userResponse.created_at,
     updatedAt: userResponse.created_at,
     isEmailVerified: userResponse.is_email_verified,
-    onboardingCompleted: userResponse.onboarding_completed,
+    onboardingCompletedAt: userResponse.onboarding_completed_at,
   }
 
   // Get organization from backend
@@ -215,7 +215,7 @@ export const getCurrentUser = async (): Promise<User> => {
     createdAt: userResponse.created_at,
     updatedAt: userResponse.created_at,
     isEmailVerified: userResponse.is_email_verified,
-    onboardingCompleted: userResponse.onboarding_completed,
+    onboardingCompletedAt: userResponse.onboarding_completed_at,
   }
 }
 
@@ -240,7 +240,7 @@ export const updateProfile = async (data: Partial<User>): Promise<User> => {
     createdAt: userResponse.created_at,
     updatedAt: userResponse.created_at,
     isEmailVerified: userResponse.is_email_verified,
-    onboardingCompleted: userResponse.onboarding_completed,
+    onboardingCompletedAt: userResponse.onboarding_completed_at,
   }
 }
 
@@ -304,11 +304,5 @@ export const getCurrentOrganization = async (): Promise<Organization> => {
 export const setDefaultOrganization = async (organizationId: string): Promise<void> => {
   await client.patch('/v1/users/me', { 
     default_organization_id: organizationId 
-  })
-}
-
-export const completeOnboarding = async (): Promise<void> => {
-  await client.patch('/v1/users/me', {
-    onboarding_completed: true
   })
 }

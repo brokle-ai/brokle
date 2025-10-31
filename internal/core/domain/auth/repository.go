@@ -138,7 +138,7 @@ type PermissionRepository interface {
 	GetByResourceAction(ctx context.Context, resource, action string) (*Permission, error)
 	Update(ctx context.Context, permission *Permission) error
 	Delete(ctx context.Context, id ulid.ULID) error
-	
+
 	// Permission queries
 	GetAllPermissions(ctx context.Context) ([]*Permission, error)
 	GetByResource(ctx context.Context, resource string) ([]*Permission, error)
@@ -146,18 +146,24 @@ type PermissionRepository interface {
 	GetByResourceActions(ctx context.Context, resourceActions []string) ([]*Permission, error)
 	ListPermissions(ctx context.Context, limit, offset int) ([]*Permission, int, error)
 	SearchPermissions(ctx context.Context, query string, limit, offset int) ([]*Permission, int, error)
-	
+
+	// Scope-level queries (NEW)
+	GetByScopeLevel(ctx context.Context, scopeLevel ScopeLevel) ([]*Permission, error)
+	GetByCategory(ctx context.Context, category string) ([]*Permission, error)
+	GetByScopeLevelAndCategory(ctx context.Context, scopeLevel ScopeLevel, category string) ([]*Permission, error)
+
 	// Resource and action queries
 	GetAvailableResources(ctx context.Context) ([]string, error)
 	GetActionsForResource(ctx context.Context, resource string) ([]string, error)
-	
+	GetAvailableCategories(ctx context.Context) ([]string, error)
+
 	// Role permissions
 	GetPermissionsByRoleID(ctx context.Context, roleID ulid.ULID) ([]*Permission, error)
-	
+
 	// Permission validation
 	PermissionExists(ctx context.Context, resource, action string) (bool, error)
 	BulkPermissionExists(ctx context.Context, resourceActions []string) (map[string]bool, error)
-	
+
 	// Bulk operations
 	BulkCreate(ctx context.Context, permissions []*Permission) error
 }

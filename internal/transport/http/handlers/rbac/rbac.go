@@ -19,6 +19,7 @@ type Handler struct {
 	roleService               auth.RoleService
 	permissionService         auth.PermissionService
 	organizationMemberService auth.OrganizationMemberService
+	scopeService              auth.ScopeService
 }
 
 // NewHandler creates a new clean RBAC handler
@@ -28,6 +29,7 @@ func NewHandler(
 	roleService auth.RoleService,
 	permissionService auth.PermissionService,
 	organizationMemberService auth.OrganizationMemberService,
+	scopeService auth.ScopeService,
 ) *Handler {
 	return &Handler{
 		config:                    config,
@@ -35,6 +37,7 @@ func NewHandler(
 		roleService:               roleService,
 		permissionService:         permissionService,
 		organizationMemberService: organizationMemberService,
+		scopeService:              scopeService,
 	}
 }
 
@@ -661,6 +664,178 @@ func (h *Handler) DeleteCustomRole(c *gin.Context) {
 
 	h.logger.WithField("role_id", roleID).Info("Custom role deleted successfully")
 	response.Success(c, gin.H{"message": "Custom role deleted successfully"})
+}
+
+// ========================================
+// NEW: SCOPE-BASED AUTHORIZATION ENDPOINTS
+// ========================================
+
+// CheckUserScopesRequest represents a request to check user scopes
+type CheckUserScopesRequest struct {
+	OrganizationID *string  `json:"organization_id"`
+	ProjectID      *string  `json:"project_id"`
+	Scopes         []string `json:"scopes" binding:"required,min=1"`
+}
+
+// CheckUserScopes handles POST /rbac/users/{userId}/scopes/check
+func (h *Handler) CheckUserScopes(c *gin.Context) {
+	userIDStr := c.Param("userId")
+	userID, err := ulid.Parse(userIDStr)
+	if err != nil {
+		h.logger.WithError(err).WithField("user_id", userIDStr).Error("Invalid user ID")
+		response.BadRequest(c, "Invalid user ID", err.Error())
+		return
+	}
+
+	var req CheckUserScopesRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.WithError(err).Error("Invalid check scopes request")
+		response.BadRequest(c, "Invalid request payload", err.Error())
+		return
+	}
+
+	// Parse organization ID
+	var orgID *ulid.ULID
+	if req.OrganizationID != nil && *req.OrganizationID != "" {
+		parsedOrgID, err := ulid.Parse(*req.OrganizationID)
+		if err != nil {
+			response.BadRequest(c, "Invalid organization ID", err.Error())
+			return
+		}
+		orgID = &parsedOrgID
+	}
+
+	// Parse project ID
+	var projectID *ulid.ULID
+	if req.ProjectID != nil && *req.ProjectID != "" {
+		parsedProjectID, err := ulid.Parse(*req.ProjectID)
+		if err != nil {
+			response.BadRequest(c, "Invalid project ID", err.Error())
+			return
+		}
+		projectID = &parsedProjectID
+	}
+
+	// Check each scope and build result map
+	result := make(map[string]bool)
+	for _, scope := range req.Scopes {
+		hasScope, err := h.scopeService.HasScope(c.Request.Context(), userID, scope, orgID, projectID)
+		if err != nil {
+			h.logger.WithError(err).WithFields(logrus.Fields{
+				"user_id": userID,
+				"scope":   scope,
+			}).Error("Failed to check scope")
+			// On error, mark as false (safe default)
+			result[scope] = false
+			continue
+		}
+		result[scope] = hasScope
+	}
+
+	h.logger.WithFields(logrus.Fields{
+		"user_id":      userID,
+		"org_id":       orgID,
+		"project_id":   projectID,
+		"scopes_count": len(req.Scopes),
+	}).Info("User scopes checked successfully")
+
+	response.Success(c, result)
+}
+
+// GetUserScopes handles GET /rbac/users/{userId}/scopes
+func (h *Handler) GetUserScopes(c *gin.Context) {
+	userIDStr := c.Param("userId")
+	userID, err := ulid.Parse(userIDStr)
+	if err != nil {
+		h.logger.WithError(err).WithField("user_id", userIDStr).Error("Invalid user ID")
+		response.BadRequest(c, "Invalid user ID", err.Error())
+		return
+	}
+
+	// Parse organization ID from query
+	var orgID *ulid.ULID
+	if orgIDStr := c.Query("organization_id"); orgIDStr != "" {
+		parsedOrgID, err := ulid.Parse(orgIDStr)
+		if err != nil {
+			response.BadRequest(c, "Invalid organization ID", err.Error())
+			return
+		}
+		orgID = &parsedOrgID
+	}
+
+	// Parse project ID from query
+	var projectID *ulid.ULID
+	if projectIDStr := c.Query("project_id"); projectIDStr != "" {
+		parsedProjectID, err := ulid.Parse(projectIDStr)
+		if err != nil {
+			response.BadRequest(c, "Invalid project ID", err.Error())
+			return
+		}
+		projectID = &parsedProjectID
+	}
+
+	// Get user scopes
+	scopeResolution, err := h.scopeService.GetUserScopes(c.Request.Context(), userID, orgID, projectID)
+	if err != nil {
+		h.logger.WithError(err).WithFields(logrus.Fields{
+			"user_id":    userID,
+			"org_id":     orgID,
+			"project_id": projectID,
+		}).Error("Failed to get user scopes")
+		response.InternalServerError(c, "Failed to get user scopes")
+		return
+	}
+
+	h.logger.WithFields(logrus.Fields{
+		"user_id":         userID,
+		"org_id":          orgID,
+		"project_id":      projectID,
+		"effective_count": len(scopeResolution.EffectiveScopes),
+	}).Info("User scopes retrieved successfully")
+
+	response.Success(c, scopeResolution)
+}
+
+// GetScopeCategories handles GET /rbac/scopes/categories
+func (h *Handler) GetScopeCategories(c *gin.Context) {
+	categories, err := h.scopeService.GetScopesByCategory(c.Request.Context())
+	if err != nil {
+		h.logger.WithError(err).Error("Failed to get scope categories")
+		response.InternalServerError(c, "Failed to get scope categories")
+		return
+	}
+
+	h.logger.WithField("categories_count", len(categories)).Info("Scope categories retrieved successfully")
+	response.Success(c, categories)
+}
+
+// GetAvailableScopes handles GET /rbac/scopes?level=organization
+func (h *Handler) GetAvailableScopes(c *gin.Context) {
+	levelStr := c.Query("level")
+	var level auth.ScopeLevel
+
+	if levelStr != "" {
+		level = auth.ScopeLevel(levelStr)
+		// Validate scope level
+		if level != auth.ScopeLevelOrganization && level != auth.ScopeLevelProject && level != auth.ScopeLevelGlobal {
+			response.BadRequest(c, "Invalid scope level", "level must be 'organization', 'project', or 'global'")
+			return
+		}
+	}
+
+	scopes, err := h.scopeService.GetAvailableScopes(c.Request.Context(), level)
+	if err != nil {
+		h.logger.WithError(err).WithField("level", level).Error("Failed to get available scopes")
+		response.InternalServerError(c, "Failed to get available scopes")
+		return
+	}
+
+	h.logger.WithFields(logrus.Fields{
+		"level":        level,
+		"scopes_count": len(scopes),
+	}).Info("Available scopes retrieved successfully")
+
+	response.Success(c, scopes)
 }
 
 // parseQueryInt parses an integer query parameter with a default value

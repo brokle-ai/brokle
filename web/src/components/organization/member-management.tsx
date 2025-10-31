@@ -1,12 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { 
-  Users, 
-  UserPlus, 
-  Crown, 
-  Shield, 
-  User, 
+import {
+  Users,
+  UserPlus,
+  Crown,
+  Shield,
+  User,
   Eye,
   MoreVertical,
   Mail,
@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { useOrganization } from '@/context/org-context'
 import { useAuth } from '@/context/auth-context'
+import { useHasAccess } from '@/hooks/rbac/use-has-access'
 import {
   Table,
   TableBody,
@@ -66,17 +67,18 @@ interface MemberManagementProps {
 export function MemberManagement({ className }: MemberManagementProps) {
   const { user } = useAuth()
   const { currentOrganization } = useOrganization()
-  
+
   const [searchTerm, setSearchTerm] = useState('')
   const [roleFilter, setRoleFilter] = useState<OrganizationRole | 'all'>('all')
+
+  // Scope-based permission checks
+  const canInviteMembers = useHasAccess({ scope: "members:invite" })
+  const canUpdateMembers = useHasAccess({ scope: "members:update" })
+  const canRemoveMembers = useHasAccess({ scope: "members:remove" })
 
   if (!currentOrganization || !user) {
     return null
   }
-
-  // TODO: Implement backend permission checking for 'members:manage'
-  // For now, assume user can manage members if they can access this page
-  const canManageMembers = true
 
   const filteredMembers = currentOrganization.members.filter(member => {
     const matchesSearch = member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -136,10 +138,10 @@ export function MemberManagement({ className }: MemberManagementProps) {
   }
 
   const canEditMember = (member: OrganizationMember) => {
-    if (!canManageMembers) return false
+    // Need either update or remove permissions to show actions menu
+    if (!canUpdateMembers && !canRemoveMembers) return false
     if (member.email === user.email) return false // Can't edit yourself
     if (member.role === 'owner') return false // Can't edit owner
-    if (currentUserRole === 'admin' && member.role === 'admin') return false // Admin can't edit other admins
     return true
   }
 
@@ -158,8 +160,8 @@ export function MemberManagement({ className }: MemberManagementProps) {
               </CardDescription>
             </div>
             
-            {canManageMembers && (
-              <InviteMemberModal 
+            {canInviteMembers && (
+              <InviteMemberModal
                 trigger={
                   <Button>
                     <UserPlus className="mr-2 h-4 w-4" />
@@ -265,9 +267,8 @@ export function MemberManagement({ className }: MemberManagementProps) {
                               Change Role
                             </DropdownMenuLabel>
                             
-                            {(['viewer', 'developer', 'admin'] as OrganizationRole[])
+                            {canUpdateMembers && (['viewer', 'developer', 'admin'] as OrganizationRole[])
                               .filter(role => role !== member.role)
-                              .filter(role => currentUserRole === 'owner' || role !== 'admin')
                               .map((role) => (
                                 <DropdownMenuItem
                                   key={role}
@@ -291,35 +292,37 @@ export function MemberManagement({ className }: MemberManagementProps) {
                             </DropdownMenuItem>
                             
                             <DropdownMenuSeparator />
-                            
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <DropdownMenuItem 
-                                  className="text-destructive"
-                                  onSelect={(e) => e.preventDefault()}
-                                >
-                                  Remove from Organization
-                                </DropdownMenuItem>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Remove Member</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Are you sure you want to remove <strong>{member.name}</strong> from {currentOrganization.name}? 
-                                    They will lose access to all projects and data in this organization.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                  <AlertDialogAction
-                                    onClick={() => handleRemoveMember(member.id, member.name)}
-                                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+
+                            {canRemoveMembers && (
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <DropdownMenuItem
+                                    className="text-destructive"
+                                    onSelect={(e) => e.preventDefault()}
                                   >
-                                    Remove Member
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
+                                    Remove from Organization
+                                  </DropdownMenuItem>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Remove Member</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Are you sure you want to remove <strong>{member.name}</strong> from {currentOrganization.name}?
+                                      They will lose access to all projects and data in this organization.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => handleRemoveMember(member.id, member.name)}
+                                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                    >
+                                      Remove Member
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            )}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       )}

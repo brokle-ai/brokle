@@ -72,7 +72,7 @@ type OnboardingStatusResponse struct {
 	CompletedQuestions  int  `json:"completed_questions" example:"3" description:"Number of completed questions"`
 	SkippedQuestions    int  `json:"skipped_questions" example:"1" description:"Number of skipped questions"`
 	RemainingQuestions  int  `json:"remaining_questions" example:"1" description:"Number of remaining questions"`
-	OnboardingCompleted bool `json:"onboarding_completed" example:"false" description:"Whether onboarding is completed"`
+	OnboardingCompleted bool `json:"onboarding_completed" example:"false" description:"Whether onboarding is completed (computed from onboarding_completed_at)"`
 	CurrentStep         int  `json:"current_step" example:"2" description:"Current step number"`
 }
 
@@ -216,18 +216,11 @@ func (h *OnboardingHandler) SubmitResponses(c *gin.Context) {
 		})
 	}
 
-	// Submit responses
 	err := h.onboardingService.SubmitMultipleResponses(c.Request.Context(), userID, domainResponses)
 	if err != nil {
 		h.logger.WithError(err).WithField("user_id", userID).Error("Failed to submit onboarding responses")
 		response.InternalServerError(c, "Failed to submit responses")
 		return
-	}
-
-	// Check if onboarding should be marked complete
-	status, err := h.onboardingService.GetOnboardingStatus(c.Request.Context(), userID)
-	if err == nil && status.IsComplete {
-		_ = h.onboardingService.CompleteOnboarding(c.Request.Context(), userID)
 	}
 
 	h.logger.WithField("user_id", userID).WithField("response_count", len(req.Responses)).Info("Onboarding responses submitted successfully")
@@ -280,6 +273,43 @@ func (h *OnboardingHandler) SkipQuestion(c *gin.Context) {
 
 	h.logger.WithField("user_id", userID).WithField("question_id", questionID).Info("Onboarding question skipped successfully")
 	response.Success(c, gin.H{"message": "Question skipped successfully"})
+}
+
+// CompleteOnboarding handles POST /api/v1/onboarding/complete
+// @Summary Complete onboarding
+// @Description Mark the user's onboarding as completed
+// @Tags Onboarding
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.APIResponse "Onboarding completed successfully"
+// @Failure 401 {object} response.ErrorResponse "Unauthorized"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /api/v1/onboarding/complete [post]
+func (h *OnboardingHandler) CompleteOnboarding(c *gin.Context) {
+	userIDInterface, exists := c.Get("user_id")
+	if !exists {
+		h.logger.Error("User ID not found in request context")
+		response.Unauthorized(c, "Authentication required")
+		return
+	}
+
+	userID, ok := userIDInterface.(ulid.ULID)
+	if !ok {
+		h.logger.Error("Invalid user ID type in context")
+		response.InternalServerError(c, "Authentication error")
+		return
+	}
+
+	err := h.onboardingService.CompleteOnboarding(c.Request.Context(), userID)
+	if err != nil {
+		h.logger.WithError(err).WithField("user_id", userID).Error("Failed to complete onboarding")
+		response.InternalServerError(c, "Failed to complete onboarding")
+		return
+	}
+
+	h.logger.WithField("user_id", userID).Info("Onboarding completed successfully")
+	response.Success(c, gin.H{"message": "Onboarding completed successfully"})
 }
 
 // GetStatus handles GET /api/v1/onboarding/status

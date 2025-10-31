@@ -84,7 +84,7 @@ type ListFilters struct {
 	IsActive             *bool      `json:"is_active,omitempty"`
 	IsVerified           *bool      `json:"is_verified,omitempty"`
 	IsEmailVerified      *bool      `json:"is_email_verified,omitempty"`
-	OnboardingCompleted  *bool      `json:"onboarding_completed,omitempty"`
+	OnboardingCompleted  *bool      `json:"onboarding_completed,omitempty"` // Computed from OnboardingCompletedAt
 	CreatedAfter         *time.Time `json:"created_after,omitempty"`    // Date filter
 	CreatedBefore        *time.Time `json:"created_before,omitempty"`   // Date filter
 	LastLoginAfter       *time.Time `json:"last_login_after,omitempty"` // Last login filter

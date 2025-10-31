@@ -7,6 +7,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
+import { ArrowRight, ArrowLeft } from 'lucide-react'
 import type { OnboardingQuestion } from '@/types/onboarding'
 
 interface QuestionCardProps {
@@ -35,9 +36,19 @@ export function QuestionCard({
   const [singleChoiceValue, setSingleChoiceValue] = useState<string>(
     question.user_answer as string || ''
   )
-  const [multipleChoiceValues, setMultipleChoiceValues] = useState<string[]>(
-    Array.isArray(question.user_answer) ? question.user_answer : []
-  )
+  const [multipleChoiceValues, setMultipleChoiceValues] = useState<string[]>(() => {
+    if (!question.user_answer) return []
+    if (Array.isArray(question.user_answer)) return question.user_answer
+    if (typeof question.user_answer === 'string') {
+      try {
+        const parsed = JSON.parse(question.user_answer)
+        return Array.isArray(parsed) ? parsed : []
+      } catch {
+        return []
+      }
+    }
+    return []
+  })
   const [textValue, setTextValue] = useState<string>(
     question.user_answer as string || ''
   )
@@ -54,10 +65,21 @@ export function QuestionCard({
   useEffect(() => {
     if (question.is_skipped) {
       setMultipleChoiceValues([])
+    } else if (question.user_answer) {
+      if (Array.isArray(question.user_answer)) {
+        setMultipleChoiceValues(question.user_answer)
+      } else if (typeof question.user_answer === 'string') {
+        try {
+          const parsed = JSON.parse(question.user_answer)
+          setMultipleChoiceValues(Array.isArray(parsed) ? parsed : [])
+        } catch {
+          setMultipleChoiceValues([])
+        }
+      } else {
+        setMultipleChoiceValues([])
+      }
     } else {
-      setMultipleChoiceValues(
-        Array.isArray(question.user_answer) ? question.user_answer : []
-      )
+      setMultipleChoiceValues([])
     }
   }, [question.user_answer, question.id, question.is_skipped])
 
@@ -144,168 +166,115 @@ export function QuestionCard({
     return hasAnswer
   }
 
-  // Progress dots component
-  const ProgressDots = () => (
-    <div className="flex justify-center space-x-2">
-      {Array.from({ length: totalQuestions }, (_, index) => (
-        <div
-          key={index}
-          className={`w-2 h-2 rounded-full ${
-            index < currentStep ? 'bg-black' : 'bg-gray-300'
-          }`}
-        />
-      ))}
-    </div>
-  )
 
   return (
     <div className="w-full max-w-lg mx-auto">
-      <Card className="border border-gray-200 shadow-sm">
-        <CardContent className="p-6">
-          <div className="text-center space-y-6">
-            <h2 className="text-xl font-medium text-gray-900">
-              {question.title}
-            </h2>
+      <Card className="min-h-[400px] border border-gray-200 shadow-sm transition-all duration-200">
+        <CardContent className="p-6 min-h-[400px] flex flex-col">
+          <div className="flex-1 space-y-6">
+            {/* Progress Indicator */}
+            <div className="text-center">
+              <div className="text-sm text-muted-foreground mb-2">
+                Question {currentStep} of {totalQuestions}
+              </div>
+              <h2 className="text-xl font-medium text-gray-900">
+                {question.title}
+              </h2>
+              {question.description && (
+                <p className="text-sm text-muted-foreground mt-2">
+                  {question.description}
+                </p>
+              )}
+            </div>
             
             {/* Single Choice Questions */}
             {question.question_type === 'single_choice' && question.options && (
-              <div className="space-y-4">
-                <RadioGroup 
-                  value={singleChoiceValue} 
-                  onValueChange={handleSingleChoiceChange}
-                  disabled={isSubmitting}
-                  className="space-y-3"
-                >
-                  {question.options.map((option) => (
-                    <div key={option} className="flex items-center space-x-3 text-left">
-                      <RadioGroupItem value={option} id={option} />
-                      <Label 
-                        htmlFor={option} 
-                        className="text-base text-gray-700 cursor-pointer flex-1"
-                      >
-                        {option}
-                      </Label>
-                    </div>
-                  ))}
-                </RadioGroup>
-                {isLastQuestion ? (
-                  <Button 
-                    onClick={handleFinishWithSubmit}
-                    disabled={isSubmitting || !canSubmit()}
-                    className="bg-black text-white hover:bg-gray-800 w-full"
-                  >
-                    Finish
-                  </Button>
-                ) : (
-                  <Button 
-                    onClick={handleSubmit}
-                    disabled={isSubmitting || !canSubmit()}
-                    className="w-full"
-                  >
-                    Submit Answer
-                  </Button>
-                )}
-              </div>
+              <RadioGroup
+                value={singleChoiceValue}
+                onValueChange={handleSingleChoiceChange}
+                disabled={isSubmitting}
+                className="space-y-3"
+              >
+                {question.options.map((option) => (
+                  <div key={option} className="flex items-center space-x-3 text-left">
+                    <RadioGroupItem value={option} id={option} />
+                    <Label
+                      htmlFor={option}
+                      className="text-base text-gray-700 cursor-pointer flex-1"
+                    >
+                      {option}
+                    </Label>
+                  </div>
+                ))}
+              </RadioGroup>
             )}
 
             {/* Multiple Choice Questions */}
             {question.question_type === 'multiple_choice' && question.options && (
-              <div className="space-y-4">
-                <div className="space-y-3">
-                  {question.options.map((option) => (
-                    <div key={option} className="flex items-center space-x-3 text-left">
-                      <Checkbox
-                        id={option}
-                        checked={multipleChoiceValues.includes(option)}
-                        onCheckedChange={() => handleMultipleChoiceChange(option)}
-                        disabled={isSubmitting}
-                      />
-                      <Label 
-                        htmlFor={option}
-                        className="text-base text-gray-700 cursor-pointer flex-1"
-                      >
-                        {option}
-                      </Label>
-                    </div>
-                  ))}
-                </div>
-                {isLastQuestion ? (
-                  <Button 
-                    onClick={handleFinishWithSubmit}
-                    disabled={isSubmitting || !canSubmit()}
-                    className="bg-black text-white hover:bg-gray-800 w-full"
-                  >
-                    Finish
-                  </Button>
-                ) : (
-                  <Button 
-                    onClick={handleSubmit}
-                    disabled={isSubmitting || !canSubmit()}
-                    className="w-full"
-                  >
-                    Submit Answer
-                  </Button>
-                )}
+              <div className="space-y-3">
+                {question.options.map((option) => (
+                  <div key={option} className="flex items-center space-x-3 text-left">
+                    <Checkbox
+                      id={option}
+                      checked={multipleChoiceValues.includes(option)}
+                      onCheckedChange={() => handleMultipleChoiceChange(option)}
+                      disabled={isSubmitting}
+                    />
+                    <Label
+                      htmlFor={option}
+                      className="text-base text-gray-700 cursor-pointer flex-1"
+                    >
+                      {option}
+                    </Label>
+                  </div>
+                ))}
               </div>
             )}
 
             {/* Text Questions */}
             {question.question_type === 'text' && (
-              <div className="space-y-4">
-                <Textarea
-                  placeholder="Enter your answer here..."
-                  value={textValue}
-                  onChange={(e) => setTextValue(e.target.value)}
-                  disabled={isSubmitting}
-                  className="min-h-[120px]"
-                />
-                {isLastQuestion ? (
-                  <Button 
-                    onClick={handleFinishWithSubmit}
-                    disabled={isSubmitting || !canSubmit()}
-                    className="bg-black text-white hover:bg-gray-800 w-full"
-                  >
-                    Finish
-                  </Button>
-                ) : (
-                  <Button 
-                    onClick={handleSubmit}
-                    disabled={isSubmitting || !canSubmit()}
-                    className="w-full"
-                  >
-                    Submit Answer
-                  </Button>
-                )}
-              </div>
+              <Textarea
+                placeholder="Enter your answer here..."
+                value={textValue}
+                onChange={(e) => setTextValue(e.target.value)}
+                disabled={isSubmitting}
+                className="min-h-[120px]"
+              />
             )}
 
-            {/* Progress Indicator */}
-            <div className="pt-3">
-              <ProgressDots />
-            </div>
-
-            {/* Bottom Navigation */}
-            <div className="flex justify-between items-center pt-3">
-              <Button 
+            {/* Unified Navigation Footer */}
+            <div className="flex items-center justify-between pt-6 mt-6 border-t">
+              {/* Left: Back */}
+              <Button
                 variant="ghost"
                 onClick={onPrevious}
                 disabled={!canGoBack || isSubmitting}
-                className="text-gray-500 hover:text-gray-700"
+                className="gap-2"
               >
+                <ArrowLeft className="h-4 w-4" />
                 Back
               </Button>
-              
-              {/* Skip button - visible for optional questions, but never on last question */}
-              {!question.is_required && !isLastQuestion && (
-                <Button 
-                  variant="ghost" 
-                  onClick={handleSkip}
-                  disabled={isSubmitting}
-                  className="text-gray-500 hover:text-gray-700"
+
+              {/* Right: Skip + Continue */}
+              <div className="flex items-center gap-2">
+                {!question.is_required && !isLastQuestion && (
+                  <Button
+                    variant="ghost"
+                    onClick={handleSkip}
+                    disabled={isSubmitting}
+                  >
+                    Skip
+                  </Button>
+                )}
+                <Button
+                  onClick={isLastQuestion ? handleFinishWithSubmit : handleSubmit}
+                  disabled={isSubmitting || !canSubmit()}
+                  className="gap-2"
                 >
-                  Skip
+                  {isLastQuestion ? 'Finish' : 'Continue'}
+                  <ArrowRight className="h-4 w-4" />
                 </Button>
-              )}
+              </div>
             </div>
           </div>
         </CardContent>

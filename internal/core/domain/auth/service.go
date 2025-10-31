@@ -295,6 +295,27 @@ type APIKeyFilters struct {
 
 // Statistics types - AuditLogStats is defined in repository.go
 
+// ScopeService defines the scope-based authorization service interface.
+type ScopeService interface {
+	// Scope resolution (context-aware)
+	GetUserScopes(ctx context.Context, userID ulid.ULID, orgID *ulid.ULID, projectID *ulid.ULID) (*ScopeResolution, error)
+	GetUserScopesInOrganization(ctx context.Context, userID, orgID ulid.ULID) (*ScopeResolution, error)
+	GetUserScopesInProject(ctx context.Context, userID, orgID, projectID ulid.ULID) (*ScopeResolution, error)
+
+	// Scope checking (boolean checks)
+	HasScope(ctx context.Context, userID ulid.ULID, scope string, orgID *ulid.ULID, projectID *ulid.ULID) (bool, error)
+	HasAnyScope(ctx context.Context, userID ulid.ULID, scopes []string, orgID *ulid.ULID, projectID *ulid.ULID) (bool, error)
+	HasAllScopes(ctx context.Context, userID ulid.ULID, scopes []string, orgID *ulid.ULID, projectID *ulid.ULID) (bool, error)
+
+	// Scope validation
+	ValidateScope(ctx context.Context, scope string) error
+	GetScopeLevel(ctx context.Context, scope string) (ScopeLevel, error)
+
+	// Scope listing for UI
+	GetAvailableScopes(ctx context.Context, level ScopeLevel) ([]string, error)
+	GetScopesByCategory(ctx context.Context) ([]ScopeCategory, error)
+}
+
 // AuthServices aggregates all authentication-related services (normalized version).
 type AuthServices interface {
 	Auth() AuthService
@@ -306,4 +327,5 @@ type AuthServices interface {
 	JWT() JWTService
 	BlacklistedTokens() BlacklistedTokenService
 	AuditLogs() AuditLogService
+	Scopes() ScopeService
 }

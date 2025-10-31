@@ -59,8 +59,34 @@ func (rs *RBACSeeder) SeedPermissions(ctx context.Context, permissionSeeds []Per
 			continue
 		}
 
-		// Create new normalized permission
-		permission := auth.NewPermission(resource, action, permSeed.Description)
+		// Determine scope level from resource name
+		// Project-level resources: traces, analytics, models, providers, costs, prompts
+		// Everything else: organization-level
+		scopeLevel := auth.ScopeLevelOrganization
+		category := resource
+
+		projectResources := map[string]bool{
+			"traces":    true,
+			"analytics": true,
+			"models":    true,
+			"providers": true,
+			"costs":     true,
+			"prompts":   true,
+		}
+
+		if projectResources[resource] {
+			scopeLevel = auth.ScopeLevelProject
+
+			// Categorize project resources
+			if resource == "traces" || resource == "analytics" || resource == "costs" {
+				category = "observability"
+			} else {
+				category = "gateway"
+			}
+		}
+
+		// Create new normalized permission with scope level
+		permission := auth.NewPermissionWithScope(resource, action, permSeed.Description, scopeLevel, category)
 
 		if err := rs.permissionRepo.Create(ctx, permission); err != nil {
 			return fmt.Errorf("failed to create permission %s: %w", permSeed.Name, err)

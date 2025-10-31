@@ -1,16 +1,14 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/context/auth-context'
 import { OrganizationSelector } from '@/components/organization/organization-selector'
 import { Skeleton } from '@/components/ui/skeleton'
-import { getCurrentUser } from '@/lib/api'
 
 export default function RootPage() {
   const router = useRouter()
   const { user, isLoading: authLoading } = useAuth()
-  const [checkingOnboarding, setCheckingOnboarding] = useState(true)
 
   // Derive authentication state from user presence
   const isAuthenticated = !!user
@@ -20,31 +18,10 @@ export default function RootPage() {
 
     if (!isAuthenticated) {
       router.push('/auth/signin')
-      return
     }
-
-    // Check onboarding status first
-    const checkOnboardingStatus = async () => {
-      try {
-        setCheckingOnboarding(true)
-        const user = await getCurrentUser()
-        
-        // If user hasn't completed onboarding, redirect to onboarding
-        if (!user.onboardingCompleted) {
-          router.push('/onboarding')
-          return
-        }
-      } catch (error) {
-        console.error('Error checking onboarding status:', error)
-      } finally {
-        setCheckingOnboarding(false)
-      }
-    }
-
-    checkOnboardingStatus()
   }, [authLoading, isAuthenticated, router])
 
-  if (authLoading || checkingOnboarding) {
+  if (authLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="space-y-4 text-center">

@@ -15,7 +15,7 @@ export interface OnboardingStatus {
   completed_questions: number
   skipped_questions: number
   remaining_questions: number
-  onboarding_completed: boolean
+  onboarding_completed: boolean // Computed from backend
   current_step: number
 }
 

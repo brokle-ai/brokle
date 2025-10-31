@@ -202,6 +202,7 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 		onboarding.GET("/questions", s.handlers.User.Onboarding.GetQuestions)
 		onboarding.POST("/responses", s.handlers.User.Onboarding.SubmitResponses)
 		onboarding.POST("/skip/:id", s.handlers.User.Onboarding.SkipQuestion)
+		onboarding.POST("/complete", s.handlers.User.Onboarding.CompleteOnboarding)
 		onboarding.GET("/status", s.handlers.User.Onboarding.GetStatus)
 	}
 
@@ -331,9 +332,21 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 		rbac.GET("/users/:userId/organizations/:orgId/role", s.handlers.RBAC.GetUserRole)
 		rbac.POST("/users/:userId/organizations/:orgId/role", s.handlers.RBAC.AssignOrganizationRole)
 
-		// Permission checking
+		// Permission checking (legacy)
 		rbac.GET("/users/:userId/organizations/:orgId/permissions", s.handlers.RBAC.GetUserPermissions)
 		rbac.POST("/users/:userId/organizations/:orgId/permissions/check", s.handlers.RBAC.CheckUserPermissions)
+
+		// ========================================
+		// NEW: Scope-Based Authorization Routes
+		// ========================================
+
+		// Scope checking
+		rbac.POST("/users/:userId/scopes/check", s.handlers.RBAC.CheckUserScopes)
+		rbac.GET("/users/:userId/scopes", s.handlers.RBAC.GetUserScopes)
+
+		// Scope metadata
+		rbac.GET("/scopes", s.handlers.RBAC.GetAvailableScopes)
+		rbac.GET("/scopes/categories", s.handlers.RBAC.GetScopeCategories)
 	}
 
 	// Admin routes (require admin permissions)

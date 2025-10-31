@@ -3397,6 +3397,46 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/onboarding/complete": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Mark the user's onboarding as completed",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Onboarding"
+                ],
+                "summary": "Complete onboarding",
+                "responses": {
+                    "200": {
+                        "description": "Onboarding completed successfully",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/onboarding/questions": {
             "get": {
                 "security": [
@@ -9567,9 +9607,9 @@ const docTemplate = `{
                     "type": "string",
                     "example": "John Doe"
                 },
-                "onboarding_completed": {
-                    "type": "boolean",
-                    "example": true
+                "onboarding_completed_at": {
+                    "type": "string",
+                    "example": "2024-10-31T12:00:00Z"
                 },
                 "profile": {
                     "$ref": "#/definitions/user.UserProfileData"

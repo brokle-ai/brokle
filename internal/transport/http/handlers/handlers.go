@@ -64,6 +64,7 @@ func NewHandlers(
 	roleService auth.RoleService,
 	permissionService auth.PermissionService,
 	organizationMemberService auth.OrganizationMemberService,
+	scopeService auth.ScopeService,
 	observabilityServices *obsServices.ServiceRegistry,
 	// Gateway services
 	gatewayService gateway.GatewayService,
@@ -85,7 +86,7 @@ func NewHandlers(
 		AI:            ai.NewHandler(cfg, logger, gatewayService, routingService, costService),
 		WebSocket:     websocket.NewHandler(cfg, logger),
 		Admin:         admin.NewTokenAdminHandler(authService, blacklistedTokens, logger),
-		RBAC:          rbac.NewHandler(cfg, logger, roleService, permissionService, organizationMemberService),
+		RBAC:          rbac.NewHandler(cfg, logger, roleService, permissionService, organizationMemberService, scopeService),
 		Observability: observability.NewHandler(cfg, logger, observabilityServices),
 		OTLP:          observability.NewOTLPHandler(observabilityServices.StreamProducer, observabilityServices.DeduplicationService, observabilityServices.OTLPConverterService, logger),
 	}

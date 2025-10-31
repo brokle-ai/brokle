@@ -144,10 +144,7 @@ func (r *userRepository) CompleteOnboarding(ctx context.Context, userID ulid.ULI
 	return r.db.WithContext(ctx).
 		Model(&userDomain.User{}).
 		Where("id = ?", userID).
-		Updates(map[string]interface{}{
-			"onboarding_completed": true,
-			"onboarding_completed_at": time.Now(),
-		}).Error
+		Update("onboarding_completed_at", time.Now()).Error
 }
 
 // GetActiveUsers returns active users (those who have logged in recently)
@@ -286,7 +283,11 @@ func (r *userRepository) GetByFilters(ctx context.Context, filters *userDomain.U
 		query = query.Where("is_email_verified = ?", *filters.IsEmailVerified)
 	}
 	if filters.OnboardingCompleted != nil {
-		query = query.Where("onboarding_completed = ?", *filters.OnboardingCompleted)
+		if *filters.OnboardingCompleted {
+			query = query.Where("onboarding_completed_at IS NOT NULL")
+		} else {
+			query = query.Where("onboarding_completed_at IS NULL")
+		}
 	}
 	if filters.CreatedAfter != nil {
 		query = query.Where("created_at > ?", *filters.CreatedAfter)
@@ -381,11 +382,11 @@ func (r *userRepository) ReactivateUser(ctx context.Context, userID ulid.ULID) e
 
 func (r *userRepository) IsOnboardingCompleted(ctx context.Context, userID ulid.ULID) (bool, error) {
 	var u userDomain.User
-	err := r.db.WithContext(ctx).Select("onboarding_completed").Where("id = ?", userID).First(&u).Error
+	err := r.db.WithContext(ctx).Select("onboarding_completed_at").Where("id = ?", userID).First(&u).Error
 	if err != nil {
 		return false, err
 	}
-	return u.OnboardingCompleted, nil
+	return u.OnboardingCompletedAt != nil, nil
 }
 
 func (r *userRepository) GetNewUsersCount(ctx context.Context, since time.Time) (int64, error) {
