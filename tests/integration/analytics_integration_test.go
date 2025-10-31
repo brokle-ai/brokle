@@ -7,6 +7,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -144,6 +145,10 @@ func (m *MockBillingService) GetBillingHistory(ctx context.Context, orgID ulid.U
 func (suite *AnalyticsIntegrationTestSuite) SetupSuite() {
 	suite.ctx = context.Background()
 
+	// Set server mode and JWT secret for config validation
+	os.Setenv("APP_MODE", "server")
+	os.Setenv("JWT_SECRET", "test-jwt-secret-for-integration-tests-32-characters-long")
+
 	// Load test configuration
 	cfg, err := config.Load()
 	require.NoError(suite.T(), err)
@@ -186,6 +191,10 @@ func (suite *AnalyticsIntegrationTestSuite) SetupSuite() {
 
 // TearDownSuite cleans up after the test suite
 func (suite *AnalyticsIntegrationTestSuite) TearDownSuite() {
+	// Clean up environment variables
+	os.Unsetenv("APP_MODE")
+	os.Unsetenv("JWT_SECRET")
+
 	// Stop the analytics worker if running
 	if suite.gatewayWorker != nil {
 		_ = suite.gatewayWorker.Stop()

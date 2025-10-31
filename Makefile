@@ -43,7 +43,7 @@ dev: ## Start full stack (server + worker)
 
 dev-server: ## Start HTTP server with hot reload
 	@echo "🔥 Starting HTTP server with hot reload..."
-	air -c .air.server.toml
+	air -c .air.toml
 
 dev-worker: ## Start workers with hot reload
 	@echo "🔥 Starting workers with hot reload..."

@@ -6,6 +6,7 @@ services:
   # Production Backend API
   backend:
     environment:
+      APP_MODE: server  # Server mode - validates JWT_SECRET
       ENV: production  # Override to production
       LOG_LEVEL: info  # Override to info
       DATABASE_URL: ${DATABASE_URL}  # Production database URL
@@ -30,6 +31,7 @@ services:
   # Production Workers
   worker:
     environment:
+      APP_MODE: worker  # Worker mode - skips JWT validation
       ENV: production  # Override to production
       LOG_LEVEL: info  # Override to info
       DATABASE_URL: ${DATABASE_URL}  # Production database URL

@@ -7,6 +7,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
@@ -40,6 +41,10 @@ type DatabaseIntegrationTestSuite struct {
 func (suite *DatabaseIntegrationTestSuite) SetupSuite() {
 	suite.ctx = context.Background()
 
+	// Set server mode and JWT secret for config validation
+	os.Setenv("APP_MODE", "server")
+	os.Setenv("JWT_SECRET", "test-jwt-secret-for-integration-tests-32-characters-long")
+
 	// Load test configuration
 	cfg, err := config.Load()
 	require.NoError(suite.T(), err)
@@ -71,6 +76,10 @@ func (suite *DatabaseIntegrationTestSuite) SetupSuite() {
 
 // TearDownSuite cleans up after the test suite
 func (suite *DatabaseIntegrationTestSuite) TearDownSuite() {
+	// Clean up environment variables
+	os.Unsetenv("APP_MODE")
+	os.Unsetenv("JWT_SECRET")
+
 	// Clean up test data
 	suite.cleanupTestData()
 

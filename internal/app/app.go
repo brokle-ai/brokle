@@ -3,12 +3,13 @@ package app
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"sync"
 
 	"github.com/sirupsen/logrus"
 
 	"brokle/internal/config"
-	"brokle/internal/transport/http"
+	httpTransport "brokle/internal/transport/http"
 )
 
 // App represents the main application
@@ -17,7 +18,7 @@ type App struct {
 	config     *config.Config
 	logger     *logrus.Logger
 	providers  *ProviderContainer
-	httpServer *http.Server // nil in worker mode
+	httpServer *httpTransport.Server // nil in worker mode
 }
 
 // NewServer creates a new API server application (HTTP only, no workers)
@@ -113,7 +114,10 @@ func (a *App) Start() error {
 		// Start HTTP server
 		go func() {
 			if err := a.httpServer.Start(); err != nil {
-				a.logger.WithError(err).Fatal("HTTP server failed")
+				// http.ErrServerClosed is expected during graceful shutdown
+				if err != http.ErrServerClosed {
+					a.logger.WithError(err).Error("HTTP server failed")
+				}
 			}
 		}()
 		a.logger.WithField("port", a.config.Server.Port).Info("Brokle Platform started successfully")

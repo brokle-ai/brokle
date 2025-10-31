@@ -68,6 +68,7 @@ services:
     ports:
       - "8080:8080"
     environment:
+      - APP_MODE=server  # Server mode - validates JWT_SECRET
       - ENV=${ENV:-development}
       - DB_AUTO_MIGRATE=false  # Server owns migrations
       - DATABASE_URL=postgres://brokle:brokle_password@postgres:5432/brokle_dev?sslmode=disable
@@ -95,6 +96,7 @@ services:
       dockerfile: Dockerfile.worker
     container_name: brokle-worker
     environment:
+      - APP_MODE=worker  # Worker mode - skips JWT validation
       - ENV=${ENV:-development}
       - DB_AUTO_MIGRATE=false  # Workers don't run migrations
       - DATABASE_URL=postgres://brokle:brokle_password@postgres:5432/brokle_dev?sslmode=disable

@@ -39,6 +39,9 @@ type GatewayIntegrationTestSuite struct {
 
 // SetupSuite sets up the test suite with a real application instance
 func (suite *GatewayIntegrationTestSuite) SetupSuite() {
+	// Set server mode for config validation
+	os.Setenv("APP_MODE", "server")
+
 	// Set Gin to test mode
 	gin.SetMode(gin.TestMode)
 

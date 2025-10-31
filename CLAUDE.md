@@ -31,15 +31,19 @@ This project represents a **scalable monolith** architecture with **separate ser
 ### Deployment Architecture
 
 **Server Process** (`cmd/server/main.go`):
+- Set `APP_MODE=server` in environment
 - HTTP API endpoints and WebSocket connections
 - Runs database migrations (server owns migrations)
+- Requires JWT_SECRET for authentication
 - Port: 8080
 - Scales independently (3-5 instances typical)
 
 **Worker Process** (`cmd/worker/main.go`):
+- Set `APP_MODE=worker` in environment
 - Telemetry stream processing from Redis
 - Gateway analytics aggregation
 - Batch job processing
+- No JWT_SECRET needed (doesn't handle auth)
 - Scales independently (10-50+ instances at scale)
 
 **Shared Infrastructure**:
@@ -348,8 +352,14 @@ make build-dev-enterprise
 
 Copy `.env.example` to `.env` and configure:
 
+### Application Mode
+- `APP_MODE` - Deployment mode (`server` or `worker`)
+  - **server**: API server mode (requires JWT_SECRET, runs migrations, handles HTTP)
+  - **worker**: Background worker mode (no JWT needed, processes telemetry streams)
+  - Default: `server`
+
 ### Core Services
-- `PORT` - HTTP server port (default: 8080)
+- `PORT` - HTTP server port (default: 8080, server mode only)
 - `DATABASE_URL` - PostgreSQL connection
 - `REDIS_URL` - Redis connection
 - `CLICKHOUSE_URL` - ClickHouse analytics database

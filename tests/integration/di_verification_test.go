@@ -5,6 +5,7 @@ package integration
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
@@ -17,6 +18,10 @@ import (
 
 // TestDIContainer_ServerMode verifies server-only mode dependencies
 func TestDIContainer_ServerMode(t *testing.T) {
+	// Set server mode for config validation
+	os.Setenv("APP_MODE", "server")
+	defer os.Unsetenv("APP_MODE")
+
 	// Load configuration
 	cfg, err := config.Load()
 	require.NoError(t, err, "Should be able to load configuration")
@@ -150,6 +155,10 @@ func TestDIContainer_ServerMode(t *testing.T) {
 
 // TestDIContainer_WorkerMode verifies worker-only mode dependencies
 func TestDIContainer_WorkerMode(t *testing.T) {
+	// Set worker mode for config validation
+	os.Setenv("APP_MODE", "worker")
+	defer os.Unsetenv("APP_MODE")
+
 	// Load configuration
 	cfg, err := config.Load()
 	require.NoError(t, err, "Should be able to load configuration")
@@ -247,6 +256,9 @@ func TestDIContainer_WorkerMode(t *testing.T) {
 
 // TestHealthCheckIntegration_ServerMode verifies server health check
 func TestHealthCheckIntegration_ServerMode(t *testing.T) {
+	os.Setenv("APP_MODE", "server")
+	defer os.Unsetenv("APP_MODE")
+
 	cfg, err := config.Load()
 	require.NoError(t, err)
 
@@ -291,6 +303,9 @@ func TestHealthCheckIntegration_ServerMode(t *testing.T) {
 
 // TestHealthCheckIntegration_WorkerMode verifies worker health check
 func TestHealthCheckIntegration_WorkerMode(t *testing.T) {
+	os.Setenv("APP_MODE", "worker")
+	defer os.Unsetenv("APP_MODE")
+
 	cfg, err := config.Load()
 	require.NoError(t, err)
 

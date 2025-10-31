@@ -4,9 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"github.com/gin-contrib/cors"
@@ -117,16 +114,12 @@ func (s *Server) Start() error {
 		IdleTimeout:  time.Duration(s.config.Server.IdleTimeout) * time.Second,
 	}
 
-	// Start server in goroutine
-	go func() {
-		s.logger.WithField("port", s.config.Server.Port).Info("Starting HTTP server")
-		if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			s.logger.WithError(err).Fatal("Failed to start HTTP server")
-		}
-	}()
-
-	// Wait for interrupt signal
-	return s.waitForShutdown()
+	// Start server (blocking - signal handling done by cmd/server/main.go)
+	s.logger.WithField("port", s.config.Server.Port).Info("Starting HTTP server")
+	if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		return err
+	}
+	return nil
 }
 
 // setupRoutes configures all HTTP routes
@@ -383,28 +376,6 @@ func (s *Server) setupSDKRoutes(router *gin.RouterGroup) {
 		cache.GET("/status", s.handlers.AI.CacheStatus)          // Cache health
 		cache.POST("/invalidate", s.handlers.AI.InvalidateCache) // Cache management
 	}
-}
-
-// waitForShutdown waits for interrupt signal and gracefully shuts down the server
-func (s *Server) waitForShutdown() error {
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
-
-	s.logger.Info("Shutting down HTTP server...")
-
-	// Create shutdown context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	// Shutdown server
-	if err := s.server.Shutdown(ctx); err != nil {
-		s.logger.WithError(err).Error("Server forced to shutdown")
-		return err
-	}
-
-	s.logger.Info("HTTP server stopped gracefully")
-	return nil
 }
 
 // Shutdown gracefully shuts down the server
