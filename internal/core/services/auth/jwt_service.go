@@ -52,6 +52,14 @@ func NewJWTService(authConfig *config.AuthConfig) (authDomain.JWTService, error)
 func (s *jwtService) loadKeys() error {
 	switch s.config.JWTSigningMethod {
 	case "HS256":
+		// SECURITY: Strict validation when creating JWT service
+		if s.config.JWTSecret == "" {
+			return appErrors.NewValidationError("JWT_SECRET", "JWT_SECRET is required for HS256 signing method - cannot create JWT service")
+		}
+		if len(s.config.JWTSecret) < 32 {
+			return appErrors.NewValidationError("JWT_SECRET", fmt.Sprintf("JWT_SECRET must be at least 32 characters for security, got %d characters", len(s.config.JWTSecret)))
+		}
+
 		// For HMAC, use the secret as both signing and verification key
 		s.privateKey = []byte(s.config.JWTSecret)
 		s.publicKey = []byte(s.config.JWTSecret)

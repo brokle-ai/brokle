@@ -180,11 +180,15 @@ run_security_tests() {
         
         # Build images first
         docker-compose build
-        
-        # Scan main API image
-        trivy image --format json --output $TEST_RESULTS_DIR/trivy-api.json brokle-api:latest
-        trivy image brokle-api:latest
-        
+
+        # Scan backend image
+        trivy image --format json --output $TEST_RESULTS_DIR/trivy-backend.json brokle/server:latest
+        trivy image brokle/server:latest
+
+        # Scan worker image
+        trivy image --format json --output $TEST_RESULTS_DIR/trivy-worker.json brokle/worker:latest
+        trivy image brokle/worker:latest
+
         print_success "Docker security scan completed"
     else
         print_warning "Trivy not found for Docker security scanning"

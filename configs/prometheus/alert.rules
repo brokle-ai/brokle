@@ -36,15 +36,15 @@ groups:
   # Application Health Alerts
   - name: application_health
     rules:
-      - alert: BrokleAPIDown
-        expr: up{job="brokle-api"} == 0
+      - alert: BrokleBackendDown
+        expr: up{job="brokle-backend"} == 0
         for: 1m
         labels:
           severity: critical
-          service: api
+          service: backend
         annotations:
-          summary: "Brokle API is down"
-          description: "Brokle API has been down for more than 1 minute"
+          summary: "Brokle backend is down"
+          description: "Brokle backend has been down for more than 1 minute"
 
       - alert: BrokleDashboardDown
         expr: up{job="brokle-dashboard"} == 0

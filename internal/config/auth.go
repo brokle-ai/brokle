@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"os"
 	"time"
 )
 
@@ -45,9 +46,17 @@ func (c *AuthConfig) Validate() error {
 		return errors.New("refresh_token_ttl must be longer than access_token_ttl")
 	}
 
-	// Validate JWT signing method and keys
+	// Validate JWT signing method and keys (mode-aware)
 	switch c.JWTSigningMethod {
 	case "HS256":
+		// Check deployment mode - workers don't need JWT
+		appMode := os.Getenv("APP_MODE")
+		if appMode == "worker" {
+			// Worker mode: skip JWT validation (worker never creates JWT service)
+			break
+		}
+
+		// Server mode: strict JWT validation (SECURITY)
 		if c.JWTSecret == "" {
 			return errors.New("JWT_SECRET required for HS256 signing method")
 		}

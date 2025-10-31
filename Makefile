@@ -33,17 +33,21 @@ install-deps: ## Install Go and Node.js dependencies
 
 setup-databases: ## Start databases with Docker Compose
 	@echo "🗄️ Starting databases..."
-	docker-compose up -d postgres clickhouse redis
+	docker compose up -d postgres clickhouse redis
 	@echo "⏳ Waiting for databases to be ready..."
 	@sleep 10
 
-dev: ## Start full stack development (Go API + Next.js)
+dev: ## Start full stack (server + worker)
 	@echo "🔥 Starting full stack development..."
-	@$(MAKE) -j2 dev-backend dev-frontend
+	@$(MAKE) -j2 dev-server dev-worker
 
-dev-backend: ## Start Go API server with hot reload
-	@echo "🔥 Starting Go API server with hot reload..."
+dev-server: ## Start HTTP server with hot reload
+	@echo "🔥 Starting HTTP server with hot reload..."
 	air -c .air.toml
+
+dev-worker: ## Start workers with hot reload
+	@echo "🔥 Starting workers with hot reload..."
+	air -c .air.worker.toml
 
 dev-frontend: ## Start Next.js development server only
 	@echo "⚛️ Starting Next.js development server..."
@@ -51,44 +55,46 @@ dev-frontend: ## Start Next.js development server only
 
 ##@ Building
 
-build: build-oss ## Build OSS version by default
+build: build-server-oss build-worker-oss ## Build both server and worker (OSS)
 
-build-oss: build-backend-oss build-frontend ## Build OSS backend and frontend
-	@echo "✅ OSS build complete!"
-
-build-enterprise: build-backend-enterprise build-frontend ## Build Enterprise backend and frontend
-	@echo "✅ Enterprise build complete!"
-
-build-backend: build-backend-oss ## Build OSS backend by default
-
-build-backend-oss: ## Build Go API server (OSS version)
-	@echo "🔨 Building Go API server (OSS)..."
+build-server-oss: ## Build HTTP server (OSS version)
+	@echo "🔨 Building HTTP server (OSS)..."
 	mkdir -p bin
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o bin/brokle-oss cmd/server/main.go
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o bin/brokle-server cmd/server/main.go
 
-build-backend-enterprise: ## Build Go API server (Enterprise version)
-	@echo "🔨 Building Go API server (Enterprise)..."
+build-server-enterprise: ## Build HTTP server (Enterprise version)
+	@echo "🔨 Building HTTP server (Enterprise)..."
 	mkdir -p bin
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -tags="enterprise" -ldflags="-w -s" -o bin/brokle-enterprise cmd/server/main.go
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -tags="enterprise" -ldflags="-w -s" -o bin/brokle-server-enterprise cmd/server/main.go
+
+build-worker-oss: ## Build worker process (OSS version)
+	@echo "🔨 Building worker process (OSS)..."
+	mkdir -p bin
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o bin/brokle-worker cmd/worker/main.go
+
+build-worker-enterprise: ## Build worker process (Enterprise version)
+	@echo "🔨 Building worker process (Enterprise)..."
+	mkdir -p bin
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -tags="enterprise" -ldflags="-w -s" -o bin/brokle-worker-enterprise cmd/worker/main.go
 
 build-frontend: ## Build Next.js for production
 	@echo "🔨 Building Next.js frontend..."
 	cd web && pnpm run build
 
-build-dev: build-dev-oss ## Build OSS for development by default
-
-build-dev-oss: ## Build OSS for development (faster, with debug info)
-	@echo "🔨 Building OSS for development..."
-	mkdir -p bin
-	go build -o bin/brokle-dev-oss cmd/server/main.go
-
-build-dev-enterprise: ## Build Enterprise for development (faster, with debug info)
-	@echo "🔨 Building Enterprise for development..."
-	mkdir -p bin
-	go build -tags="enterprise" -o bin/brokle-dev-enterprise cmd/server/main.go
-
-build-all: build-oss build-enterprise ## Build both OSS and Enterprise versions
+build-all: build-server-oss build-worker-oss build-server-enterprise build-worker-enterprise ## Build all variants
 	@echo "✅ All builds complete!"
+
+build-dev: build-dev-server ## Build server for development (default)
+
+build-dev-server: ## Build server for development (faster, with debug info)
+	@echo "🔨 Building server for development..."
+	mkdir -p bin
+	go build -o bin/brokle-dev-server cmd/server/main.go
+
+build-dev-worker: ## Build worker for development (faster, with debug info)
+	@echo "🔨 Building worker for development..."
+	mkdir -p bin
+	go build -o bin/brokle-dev-worker cmd/worker/main.go
 
 ##@ Database Operations
 
@@ -185,32 +191,48 @@ security-scan: ## Run security scans
 
 ##@ Docker
 
-docker-build: ## Build production Docker images
-	@echo "🐳 Building production Docker images..."
-	docker build -f Dockerfile -t brokle/api:latest .
+docker-build-server: ## Build server Docker image
+	@echo "🐳 Building server Docker image..."
+	docker build -t brokle/server:latest .
+
+docker-build-worker: ## Build worker Docker image
+	@echo "🐳 Building worker Docker image..."
+	docker build -f Dockerfile.worker -t brokle/worker:latest .
+
+docker-build: docker-build-server docker-build-worker ## Build all Docker images
+	@echo "🐳 Building dashboard Docker image..."
 	docker build -f web/Dockerfile -t brokle/dashboard:latest ./web
+	@echo "✅ All Docker images built!"
 
-docker-build-dev: ## Build development Docker images
-	@echo "🔧 Building development Docker images..."
-	docker build -f Dockerfile.dev -t brokle/api:dev .
-	docker build -f web/Dockerfile.dev -t brokle/dashboard:dev ./web
+docker-up: ## Start all services with docker compose
+	@echo "🐳 Starting all services..."
+	docker compose up -d --build
 
-docker-dev: ## Start development environment with Docker (auto-loads override.yml)
-	@echo "🐳 Starting development environment with Docker..."
-	docker-compose up -d --build
+docker-prod: ## Start production environment with scaling
+	@echo "🐳 Starting production environment (3 backends + 10 workers)..."
+	docker compose -f docker compose.yml -f docker compose.prod.yml up -d --build
 
-docker-prod: ## Start production environment with Docker
-	@echo "🐳 Starting production environment with Docker..."
-	docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
-
-docker-stop: ## Stop all Docker containers
+docker-down: ## Stop all Docker containers
 	@echo "🐳 Stopping Docker containers..."
-	docker-compose down
+	docker compose down
+
+docker-stop: docker-down ## Alias for docker-down
 
 docker-clean: ## Clean up Docker resources
 	@echo "🐳 Cleaning up Docker resources..."
-	docker-compose down -v --remove-orphans
+	docker compose down -v --remove-orphans
 	docker system prune -f
+
+docker-logs-backend: ## Show backend logs
+	@echo "📋 Backend logs:"
+	docker compose logs -f backend
+
+docker-logs-worker: ## Show worker logs
+	@echo "📋 Worker logs:"
+	docker compose logs -f worker
+
+docker-logs: ## Show all logs
+	docker compose logs -f
 
 ##@ Health & Status
 
@@ -221,27 +243,27 @@ health: ## Check health of all services
 	@echo "Next.js Dashboard:"
 	@curl -f http://localhost:3000 || echo "❌ Dashboard not responding"
 	@echo "PostgreSQL:"
-	@docker exec -it $$(docker-compose ps -q postgres) pg_isready -U brokle || echo "❌ PostgreSQL not ready"
+	@docker exec -it $$(docker compose ps -q postgres) pg_isready -U brokle || echo "❌ PostgreSQL not ready"
 	@echo "ClickHouse:"
-	@docker exec -it $$(docker-compose ps -q clickhouse) clickhouse-client --query "SELECT 1" || echo "❌ ClickHouse not ready"
+	@docker exec -it $$(docker compose ps -q clickhouse) clickhouse-client --query "SELECT 1" || echo "❌ ClickHouse not ready"
 	@echo "Redis:"
-	@docker exec -it $$(docker-compose ps -q redis) redis-cli ping || echo "❌ Redis not ready"
+	@docker exec -it $$(docker compose ps -q redis) redis-cli ping || echo "❌ Redis not ready"
 
 status: ## Show status of all services
 	@echo "📊 Service Status:"
-	docker-compose ps
+	@docker compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
 
 logs: ## Show logs for all services
-	docker-compose logs -f
+	docker compose logs -f
 
-logs-api: ## Show API server logs
-	docker-compose logs -f brokle-api
+logs-backend: ## Show backend logs
+	docker compose logs -f backend
 
-logs-dashboard: ## Show dashboard logs
-	docker-compose logs -f brokle-dashboard
+logs-frontend: ## Show frontend logs
+	docker compose logs -f frontend
 
 logs-db: ## Show database logs
-	docker-compose logs -f postgres clickhouse redis
+	docker compose logs -f postgres clickhouse redis
 
 ##@ Deployment
 
@@ -321,17 +343,17 @@ docs-generate: ## Generate API documentation
 	@echo "📚 Generating API documentation..."
 	swag init -g cmd/server/main.go --output docs/swagger
 
-shell-api: ## Get shell access to API container
-	docker-compose exec brokle-api sh
+shell-backend: ## Get shell access to backend container
+	docker compose exec backend sh
 
 shell-db: ## Get shell access to PostgreSQL
-	docker-compose exec postgres psql -U brokle -d brokle
+	docker compose exec postgres psql -U brokle -d brokle
 
 shell-redis: ## Get shell access to Redis
-	docker-compose exec redis redis-cli
+	docker compose exec redis redis-cli
 
 shell-clickhouse: ## Get shell access to ClickHouse
-	docker-compose exec clickhouse clickhouse-client
+	docker compose exec clickhouse clickhouse-client
 
 ##@ Monitoring
 

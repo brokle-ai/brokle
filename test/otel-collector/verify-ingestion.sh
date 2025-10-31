@@ -26,7 +26,7 @@ if curl -f http://localhost:8080/health > /dev/null 2>&1; then
     echo "  OK: Brokle API is healthy"
 else
     echo "  FAIL: Brokle API health check failed"
-    echo "  Try: docker compose -f docker-compose.test.yml logs brokle-api"
+    echo "  Try: docker compose -f docker-compose.test.yml logs brokle-backend"
     exit 1
 fi
 
@@ -81,7 +81,7 @@ else
     echo "   Look for: 'Exporting failed' or '401/403 errors'"
     echo ""
     echo "2. Check API logs:"
-    echo "   docker compose -f docker-compose.test.yml logs brokle-api"
+    echo "   docker compose -f docker-compose.test.yml logs brokle-backend"
     echo "   Look for: 'OTLP' or 'trace' related messages"
     echo ""
     echo "3. Check Redis streams:"

@@ -3,25 +3,23 @@
 # Adds production-specific optimizations: resource limits, secrets, restart policies
 
 services:
-  # Production API build
-  api:
-    build:
-      context: .
-      dockerfile: Dockerfile
+  # Production Backend API
+  backend:
     environment:
-      - ENV=production
-      - LOG_LEVEL=info
-      - JWT_SECRET=${JWT_SECRET}
-      - DATABASE_URL=${DATABASE_URL}
-      - CLICKHOUSE_URL=${CLICKHOUSE_URL}
-      - REDIS_URL=${REDIS_URL}
-      - KAFKA_BROKERS=${KAFKA_BROKERS}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - GOOGLE_AI_API_KEY=${GOOGLE_AI_API_KEY}
-      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      APP_MODE: server  # Server mode - validates JWT_SECRET
+      ENV: production  # Override to production
+      LOG_LEVEL: info  # Override to info
+      DATABASE_URL: ${DATABASE_URL}  # Production database URL
+      CLICKHOUSE_URL: ${CLICKHOUSE_URL}  # Production ClickHouse URL
+      REDIS_URL: ${REDIS_URL}  # Production Redis URL
+      JWT_SECRET: ${JWT_SECRET}  # Production JWT secret
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      GOOGLE_AI_API_KEY: ${GOOGLE_AI_API_KEY}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
     restart: unless-stopped
     deploy:
+      replicas: 3  # 3 server instances for API traffic
       resources:
         limits:
           cpus: '2'
@@ -30,15 +28,32 @@ services:
           cpus: '0.5'
           memory: 512M
 
-  # Production dashboard build
-  dashboard:
-    build:
-      context: ./web
-      dockerfile: Dockerfile
+  # Production Workers
+  worker:
     environment:
-      - NODE_ENV=production
-      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
-      - NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL}
+      APP_MODE: worker  # Worker mode - skips JWT validation
+      ENV: production  # Override to production
+      LOG_LEVEL: info  # Override to info
+      DATABASE_URL: ${DATABASE_URL}  # Production database URL
+      CLICKHOUSE_URL: ${CLICKHOUSE_URL}  # Production ClickHouse URL
+      REDIS_URL: ${REDIS_URL}  # Production Redis URL
+    restart: unless-stopped
+    deploy:
+      replicas: 10  # 10 worker instances for background processing
+      resources:
+        limits:
+          cpus: '4'      # Workers need more CPU for batch processing
+          memory: 4G     # Workers need more memory
+        reservations:
+          cpus: '1'
+          memory: 1G
+
+  # Production frontend
+  frontend:
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL}  # Production API URL
+      NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL}    # Production WebSocket URL
     restart: unless-stopped
     deploy:
       resources:
@@ -52,9 +67,9 @@ services:
   # Production database configuration
   postgres:
     environment:
-      - POSTGRES_DB=${POSTGRES_DB:-brokle_prod}
-      - POSTGRES_USER=${POSTGRES_USER:-brokle}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-brokle_prod}  # Override to production DB
+      POSTGRES_USER: ${POSTGRES_USER:-brokle}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}  # Require secure password
     volumes:
       - postgres_prod_data:/var/lib/postgresql/data
     restart: unless-stopped
@@ -98,23 +113,6 @@ services:
         reservations:
           cpus: '0.1'
           memory: 128M
-
-  # Production Kafka
-  kafka:
-    environment:
-      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://${KAFKA_HOST:-kafka}:9092
-      - KAFKA_HEAP_OPTS=-Xmx2G -Xms1G
-    volumes:
-      - kafka_prod_data:/var/lib/kafka/data
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 3G
-        reservations:
-          cpus: '0.25'
-          memory: 1G
 
   # Production monitoring
   prometheus:
@@ -165,6 +163,5 @@ volumes:
   postgres_prod_data:
   clickhouse_prod_data:
   redis_prod_data:
-  kafka_prod_data:
   prometheus_prod_data:
   grafana_prod_data:

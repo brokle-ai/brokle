@@ -4,7 +4,7 @@ services:
     image: postgres:17-alpine
     container_name: brokle-postgres
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-brokle_prod}
+      POSTGRES_DB: ${POSTGRES_DB:-brokle_dev}
       POSTGRES_USER: ${POSTGRES_USER:-brokle}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-brokle_password}
     ports:
@@ -60,21 +60,22 @@ services:
     networks:
       - brokle-network
 
-  # Main API Service
-  api:
+  # Backend API
+  backend:
     build:
       context: .
-      dockerfile: Dockerfile
-    container_name: brokle-api
+    container_name: brokle-backend
     ports:
       - "8080:8080"
     environment:
-      - ENV=${ENV:-production}
-      - DATABASE_URL=postgres://brokle:brokle_password@postgres:5432/brokle_prod?sslmode=disable
-      - CLICKHOUSE_URL=http://brokle:brokle_password@clickhouse:8123/default
+      - APP_MODE=server  # Server mode - validates JWT_SECRET
+      - ENV=${ENV:-development}
+      - DB_AUTO_MIGRATE=false  # Server owns migrations
+      - DATABASE_URL=postgres://brokle:brokle_password@postgres:5432/brokle_dev?sslmode=disable
+      - CLICKHOUSE_URL=clickhouse://brokle:brokle_password@clickhouse:9000/default
       - REDIS_URL=redis://redis:6379/0
-      - JWT_SECRET=${JWT_SECRET}
-      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - JWT_SECRET=${JWT_SECRET:-dev-jwt-secret-change-in-production}
+      - LOG_LEVEL=${LOG_LEVEL:-debug}
     depends_on:
       postgres:
         condition: service_healthy
@@ -85,29 +86,52 @@ services:
     volumes:
       - ./configs:/app/configs
       - ./logs:/app/logs
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+    networks:
+      - brokle-network
+
+  # Background Workers
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: brokle-worker
+    environment:
+      - APP_MODE=worker  # Worker mode - skips JWT validation
+      - ENV=${ENV:-development}
+      - DB_AUTO_MIGRATE=false  # Workers don't run migrations
+      - DATABASE_URL=postgres://brokle:brokle_password@postgres:5432/brokle_dev?sslmode=disable
+      - CLICKHOUSE_URL=clickhouse://brokle:brokle_password@clickhouse:9000/default
+      - REDIS_URL=redis://redis:6379/0
+      - LOG_LEVEL=${LOG_LEVEL:-debug}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+      backend:
+        condition: service_healthy  # Wait for backend migrations
+    volumes:
+      - ./configs:/app/configs
+      - ./logs:/app/logs
     networks:
       - brokle-network
 
   # Frontend Dashboard
-  dashboard:
+  frontend:
     build:
       context: ./web
       dockerfile: Dockerfile
-    container_name: brokle-dashboard
+    container_name: brokle-frontend
     ports:
       - "3000:3000"
     environment:
-      - NODE_ENV=${NODE_ENV:-production}
+      - NODE_ENV=${NODE_ENV:-development}
       - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8080}
       - NEXT_PUBLIC_WS_URL=${NEXT_PUBLIC_WS_URL:-ws://localhost:8080}
-    # Production: no volume mounts (static build)
     depends_on:
-      - api
+      - backend
     networks:
       - brokle-network
 

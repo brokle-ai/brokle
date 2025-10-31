@@ -1,6 +1,7 @@
 'use client'
 
 import { Separator } from '@/components/ui/separator'
+import { SidebarProvider } from '@/components/ui/sidebar'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
 import { TopNav } from '@/components/layout/top-nav'
@@ -30,7 +31,7 @@ export default function SettingsLayout({
   children: React.ReactNode
 }) {
   return (
-    <>
+    <SidebarProvider>
       {/* ===== Top Heading ===== */}
       <Header>
         <TopNav links={topNav} />
@@ -61,6 +62,6 @@ export default function SettingsLayout({
           </div>
         </div>
       </Main>
-    </>
+    </SidebarProvider>
   )
 }
