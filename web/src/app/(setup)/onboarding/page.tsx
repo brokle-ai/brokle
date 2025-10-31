@@ -1,11 +1,15 @@
 'use client'
 
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { useAuth } from '@/context/auth-context'
 import { useOnboardingForm } from '@/features/onboarding/hooks/useOnboardingForm'
 import { QuestionCard } from '@/components/onboarding/question-card'
+import { PageLoader } from '@/components/shared/loading'
 
 export default function OnboardingPage() {
-  const { user } = useAuth()
+  const router = useRouter()
+  const { user, isLoading: authLoading } = useAuth()
   const {
     state,
     currentQuestion,
@@ -17,15 +21,21 @@ export default function OnboardingPage() {
     handleFinish,
   } = useOnboardingForm()
 
-  // Loading state
+  // Guard: Redirect if already completed onboarding
+  useEffect(() => {
+    if (authLoading) return
+
+    if (user?.onboardingCompletedAt) {
+      router.push('/')
+    }
+  }, [user, authLoading, router])
+
+  if (authLoading || (user && user.onboardingCompletedAt)) {
+    return <PageLoader message="Loading..." />
+  }
+
   if (!currentQuestion) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-muted-foreground">Loading onboarding...</div>
-        </div>
-      </div>
-    )
+    return <PageLoader message="Loading onboarding questions..." type="spinner" />
   }
 
   return (
