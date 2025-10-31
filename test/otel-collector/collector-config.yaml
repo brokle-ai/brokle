@@ -24,7 +24,7 @@ processors:
 exporters:
   # Brokle API exporter
   otlphttp/brokle:
-    endpoint: http://test-brokle-api:8080  # OTLP exporter auto-appends /v1/traces
+    endpoint: http://test-brokle-backend:8080  # OTLP exporter auto-appends /v1/traces
     headers:
       X-API-Key: bk_fzwUZlCBIE3Z0QfGnfAIKjZ4DuK4ChJHf3mPnnbV  # Test API key
     compression: gzip

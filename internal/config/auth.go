@@ -46,14 +46,13 @@ func (c *AuthConfig) Validate() error {
 	}
 
 	// Validate JWT signing method and keys
+	// Note: JWT_SECRET is optional at config level - will fail when creating JWT service if needed
 	switch c.JWTSigningMethod {
 	case "HS256":
-		if c.JWTSecret == "" {
-			return errors.New("JWT_SECRET required for HS256 signing method")
-		}
-		if len(c.JWTSecret) < 32 {
+		if c.JWTSecret != "" && len(c.JWTSecret) < 32 {
 			return errors.New("JWT_SECRET must be at least 32 characters for security")
 		}
+		// If empty, JWT service creation will fail (only server needs JWT service)
 	case "RS256":
 		hasPath := c.JWTPrivateKeyPath != "" && c.JWTPublicKeyPath != ""
 		hasBase64 := c.JWTPrivateKeyBase64 != "" && c.JWTPublicKeyBase64 != ""

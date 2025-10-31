@@ -9,23 +9,19 @@ import (
 
 	"brokle/internal/config"
 	"brokle/internal/transport/http"
-	"brokle/internal/transport/http/handlers"
 )
 
 // App represents the main application
 type App struct {
+	mode       DeploymentMode
 	config     *config.Config
 	logger     *logrus.Logger
 	providers  *ProviderContainer
-	httpServer *http.Server
+	httpServer *http.Server // nil in worker mode
 }
 
-// Application is an alias for App for compatibility
-type Application = App
-
-// New creates a new application instance
-func New(cfg *config.Config) (*App, error) {
-
+// NewServer creates a new API server application (HTTP only, no workers)
+func NewServer(cfg *config.Config) (*App, error) {
 	// Setup logger
 	logger := logrus.New()
 	logger.SetFormatter(&logrus.JSONFormatter{})
@@ -36,91 +32,144 @@ func New(cfg *config.Config) (*App, error) {
 	}
 	logger.SetLevel(level)
 
+	// Initialize core infrastructure
+	core, err := ProvideCore(cfg, logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize core: %w", err)
+	}
+
+	// Create ALL services for server
+	core.Services = ProvideServerServices(core)
+	core.Enterprise = ProvideEnterpriseServices(cfg, logger)
+
+	// Initialize HTTP server
+	server, err := ProvideServer(core)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize server: %w", err)
+	}
+
 	return &App{
-		config: cfg,
-		logger: logger,
+		mode:       ModeServer,
+		config:     cfg,
+		logger:     logger,
+		httpServer: server.HTTPServer,
+		providers: &ProviderContainer{
+			Core:    core,
+			Server:  server,
+			Workers: nil, // No workers in server mode
+			Mode:    ModeServer,
+		},
+	}, nil
+}
+
+// NewWorker creates a new worker application (background workers only, no HTTP)
+func NewWorker(cfg *config.Config) (*App, error) {
+	// Setup logger
+	logger := logrus.New()
+	logger.SetFormatter(&logrus.JSONFormatter{})
+
+	level, err := logrus.ParseLevel(cfg.Logging.Level)
+	if err != nil {
+		level = logrus.InfoLevel
+	}
+	logger.SetLevel(level)
+
+	// Initialize core infrastructure
+	core, err := ProvideCore(cfg, logger)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize core: %w", err)
+	}
+
+	// Create ONLY worker services (minimal - no auth)
+	core.Services = ProvideWorkerServices(core)
+	core.Enterprise = nil  // Worker doesn't need enterprise
+
+	// Initialize workers
+	workers, err := ProvideWorkers(core)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize workers: %w", err)
+	}
+
+	return &App{
+		mode:       ModeWorker,
+		config:     cfg,
+		logger:     logger,
+		httpServer: nil, // No HTTP server in worker mode
+		providers: &ProviderContainer{
+			Core:    core,
+			Server:  nil, // No HTTP in worker mode
+			Workers: workers,
+			Mode:    ModeWorker,
+		},
 	}, nil
 }
 
 // Start starts the application and returns immediately without blocking on shutdown signals
 func (a *App) Start() error {
-	a.logger.Info("Starting Brokle Platform...")
+	a.logger.WithField("mode", a.mode).Info("Starting Brokle Platform...")
 
-	// Initialize all providers using modular DI
-	providers, err := ProvideAll(a.config, a.logger)
-	if err != nil {
-		return fmt.Errorf("failed to initialize providers: %w", err)
-	}
-	a.providers = providers
+	switch a.mode {
+	case ModeServer:
+		// Start HTTP server
+		go func() {
+			if err := a.httpServer.Start(); err != nil {
+				a.logger.WithError(err).Fatal("HTTP server failed")
+			}
+		}()
+		a.logger.WithField("port", a.config.Server.Port).Info("Brokle Platform started successfully")
 
-	// Initialize HTTP handlers with direct service injection
-	httpHandlers := handlers.NewHandlers(
-		a.config,
-		a.logger,
-		providers.Services.Auth.Auth,                   // Auth service from modular DI
-		providers.Services.Auth.APIKey,                 // API key service for authentication
-		providers.Services.Auth.BlacklistedTokens,     // Blacklisted tokens service
-		providers.Services.User.User,                   // User service from modular DI
-		providers.Services.User.Profile,                // Profile service from modular DI
-		providers.Services.User.Onboarding,             // Onboarding service from modular DI
-		providers.Services.OrganizationService,         // Direct organization service
-		providers.Services.MemberService,               // Direct member service
-		providers.Services.ProjectService,              // Direct project service
-		providers.Services.InvitationService,           // Direct invitation service
-		providers.Services.SettingsService,             // Direct settings service
-		providers.Services.Auth.Role,                   // Role service for RBAC
-		providers.Services.Auth.Permission,             // Permission service for RBAC
-		providers.Services.Auth.OrganizationMembers,    // Organization member service for normalized RBAC
-		providers.Services.Observability,               // Observability service registry
-		providers.Services.Gateway.Gateway,             // Gateway service for AI API endpoints
-		providers.Services.Gateway.Routing,             // Routing service for AI gateway
-		providers.Services.Gateway.Cost,                // Cost service for AI gateway
-		// All enterprise services available through providers.Enterprise
-	)
-
-	// Initialize HTTP server with auth services
-	a.httpServer = http.NewServer(
-		a.config,
-		a.logger,
-		httpHandlers,
-		providers.Services.Auth.JWT,
-		providers.Services.Auth.BlacklistedTokens,
-		providers.Services.Auth.OrganizationMembers,
-		providers.Services.Auth.APIKey,
-		providers.Databases.Redis.Client,
-	)
-
-	// Start HTTP server in goroutine
-	go func() {
-		if err := a.httpServer.Start(); err != nil {
-			a.logger.WithError(err).Fatal("HTTP server failed")
+	case ModeWorker:
+		// Start telemetry stream consumer
+		if err := a.providers.Workers.TelemetryConsumer.Start(context.Background()); err != nil {
+			a.logger.WithError(err).Error("Failed to start telemetry stream consumer")
+			return err
 		}
-	}()
+		a.logger.Info("Telemetry stream consumer started")
 
-	a.logger.WithField("port", a.config.Server.Port).Info("Brokle Platform started successfully")
+		// Start gateway analytics worker
+		a.providers.Workers.GatewayAnalytics.Start()
+		a.logger.Info("Gateway analytics worker started")
+	}
 
 	return nil
 }
 
 // Shutdown gracefully shuts down the application
 func (a *App) Shutdown(ctx context.Context) error {
-	a.logger.Info("Shutting down Brokle Platform...")
+	a.logger.WithField("mode", a.mode).Info("Shutting down Brokle Platform...")
 
-	// Shutdown components gracefully
 	var wg sync.WaitGroup
 
-	// Shutdown HTTP server
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		if a.httpServer != nil {
-			if err := a.httpServer.Shutdown(ctx); err != nil {
-				a.logger.WithError(err).Error("Failed to shutdown HTTP server")
+	switch a.mode {
+	case ModeServer:
+		// Shutdown HTTP server
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if a.httpServer != nil {
+				if err := a.httpServer.Shutdown(ctx); err != nil {
+					a.logger.WithError(err).Error("Failed to shutdown HTTP server")
+				}
 			}
-		}
-	}()
+		}()
 
-	// Shutdown all providers
+	case ModeWorker:
+		// Shutdown workers
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if a.providers.Workers != nil {
+				if a.providers.Workers.TelemetryConsumer != nil {
+					a.providers.Workers.TelemetryConsumer.Stop()
+				}
+				if a.providers.Workers.GatewayAnalytics != nil {
+					a.providers.Workers.GatewayAnalytics.Stop()
+				}
+			}
+		}()
+	}
+
+	// Shutdown all providers (databases)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -131,7 +180,7 @@ func (a *App) Shutdown(ctx context.Context) error {
 		}
 	}()
 
-	// Wait for all shutdowns to complete or timeout
+	// Wait for all shutdowns
 	done := make(chan struct{})
 	go func() {
 		wg.Wait()
@@ -153,22 +202,6 @@ func (a *App) GetProviders() *ProviderContainer {
 	return a.providers
 }
 
-// GetServices returns all services for backward compatibility
-func (a *App) GetServices() *Services {
-	if a.providers == nil {
-		return nil
-	}
-	return a.providers.GetAllServices()
-}
-
-// GetRepositories returns all repositories for backward compatibility
-func (a *App) GetRepositories() *Repositories {
-	if a.providers == nil {
-		return nil
-	}
-	return a.providers.GetAllRepositories()
-}
-
 // Health returns the health status of all components using providers
 func (a *App) Health() map[string]string {
 	if a.providers != nil {
@@ -182,10 +215,10 @@ func (a *App) Health() map[string]string {
 
 // GetGatewayServices returns the gateway services for AI API operations
 func (a *App) GetGatewayServices() *GatewayServices {
-	if a.providers == nil || a.providers.Services == nil {
+	if a.providers == nil || a.providers.Core == nil || a.providers.Core.Services == nil {
 		return nil
 	}
-	return a.providers.Services.Gateway
+	return a.providers.Core.Services.Gateway
 }
 
 // GetWorkers returns the worker container for background processing
@@ -208,18 +241,8 @@ func (a *App) GetConfig() *config.Config {
 
 // GetDatabases returns the database connections
 func (a *App) GetDatabases() *DatabaseContainer {
-	if a.providers == nil {
+	if a.providers == nil || a.providers.Core == nil {
 		return nil
 	}
-	return a.providers.Databases
-}
-
-// Services is an alias for GetServices for compatibility
-func (a *App) Services() *Services {
-	return a.GetServices()
-}
-
-// Logger is an alias for GetLogger for compatibility  
-func (a *App) Logger() *logrus.Logger {
-	return a.GetLogger()
+	return a.providers.Core.Databases
 }

@@ -33,24 +33,45 @@ import (
 	userRepo "brokle/internal/infrastructure/repository/user"
 	"brokle/internal/infrastructure/storage"
 	"brokle/internal/infrastructure/streams"
-	"brokle/internal/migration"
 	billingService "brokle/internal/services/billing"
 	gatewayService "brokle/internal/services/gateway"
 	observabilityService "brokle/internal/services/observability"
+	"brokle/internal/transport/http"
+	"brokle/internal/transport/http/handlers"
 	"brokle/internal/workers"
 	gatewayAnalytics "brokle/internal/workers/analytics"
 	"brokle/pkg/ulid"
 )
 
-// ProviderContainer holds all provider instances for dependency injection
-type ProviderContainer struct {
+// DeploymentMode tracks which mode the app is running in
+type DeploymentMode string
+
+const (
+	ModeServer DeploymentMode = "server"
+	ModeWorker DeploymentMode = "worker"
+)
+
+// CoreContainer holds shared infrastructure (databases, repos, services)
+type CoreContainer struct {
 	Config     *config.Config
 	Logger     *logrus.Logger
 	Databases  *DatabaseContainer
 	Repos      *RepositoryContainer
-	Workers    *WorkerContainer
 	Services   *ServiceContainer
 	Enterprise *EnterpriseContainer
+}
+
+// ServerContainer holds HTTP server components
+type ServerContainer struct {
+	HTTPServer *http.Server
+}
+
+// ProviderContainer holds all provider instances for dependency injection
+type ProviderContainer struct {
+	Core    *CoreContainer
+	Server  *ServerContainer  // nil in worker mode
+	Workers *WorkerContainer  // nil in server mode
+	Mode    DeploymentMode
 }
 
 // DatabaseContainer holds all database connections
@@ -216,51 +237,176 @@ func ProvideDatabases(cfg *config.Config, logger *logrus.Logger) (*DatabaseConta
 	}, nil
 }
 
-// ProvideWorkers initializes all background workers
-func ProvideWorkers(
-	redisDB *database.RedisDB,
-	gatewayAnalyticsRepo *gatewayRepo.Repository,
-	billingService *billingService.BillingService,
-	deduplicationRepo observability.TelemetryDeduplicationRepository,
-	observabilityServices *observabilityService.ServiceRegistry,
-	logger *logrus.Logger,
-) (*WorkerContainer, error) {
-	// Create deduplication service for stream consumer
-	deduplicationService := observabilityService.NewTelemetryDeduplicationService(deduplicationRepo)
+// ProvideWorkers creates workers using shared core infrastructure
+func ProvideWorkers(core *CoreContainer) (*WorkerContainer, error) {
+	// Create deduplication service
+	deduplicationService := observabilityService.NewTelemetryDeduplicationService(
+		core.Repos.Observability.TelemetryDeduplication,
+	)
 
-	// Create telemetry stream consumer for async processing
+	// Create telemetry stream consumer
 	consumerConfig := &workers.TelemetryStreamConsumerConfig{
 		ConsumerGroup:     "telemetry-workers",
 		ConsumerID:        fmt.Sprintf("worker-%s", ulid.New().String()),
-		BatchSize:         50, // Optimized for lower latency and better worker utilization
+		BatchSize:         50,
 		BlockDuration:     time.Second,
 		MaxRetries:        3,
 		RetryBackoff:      500 * time.Millisecond,
-		DiscoveryInterval: 30 * time.Second, // Stream discovery every 30 seconds
-		MaxStreamsPerRead: 10,               // Read from max 10 streams at once
+		DiscoveryInterval: 30 * time.Second,
+		MaxStreamsPerRead: 10,
 	}
+
 	telemetryConsumer := workers.NewTelemetryStreamConsumer(
-		redisDB,
+		core.Databases.Redis,
 		deduplicationService,
-		logger,
+		core.Logger,
 		consumerConfig,
-		// Inject observability services for structured events (ClickHouse-first)
-		observabilityServices.TraceService,
-		observabilityServices.ObservationService,
-		observabilityServices.ScoreService,
+		core.Services.Observability.TraceService,
+		core.Services.Observability.ObservationService,
+		core.Services.Observability.ScoreService,
 	)
 
 	// Create gateway analytics worker
 	gatewayAnalyticsWorker := gatewayAnalytics.NewGatewayAnalyticsWorker(
-		logger,
-		nil, // config - use defaults
-		gatewayAnalyticsRepo,
-		billingService,
+		core.Logger,
+		nil,
+		core.Repos.Gateway.Analytics,
+		core.Services.Billing.Billing,
 	)
 
 	return &WorkerContainer{
-		TelemetryConsumer:  telemetryConsumer,
-		GatewayAnalytics:   gatewayAnalyticsWorker,
+		TelemetryConsumer: telemetryConsumer,
+		GatewayAnalytics:  gatewayAnalyticsWorker,
+	}, nil
+}
+
+// ProvideCore creates shared infrastructure (used by both server and worker)
+func ProvideCore(cfg *config.Config, logger *logrus.Logger) (*CoreContainer, error) {
+	// Initialize databases
+	databases, err := ProvideDatabases(cfg, logger)
+	if err != nil {
+		return nil, err
+	}
+
+	// Initialize repositories
+	repos := ProvideRepositories(databases, logger)
+
+	return &CoreContainer{
+		Config:     cfg,
+		Logger:     logger,
+		Databases:  databases,
+		Repos:      repos,
+		Services:   nil,  // Populated by mode-specific provider
+		Enterprise: nil,  // Populated by mode-specific provider
+	}, nil
+}
+
+// ProvideServerServices creates ALL services for server mode
+func ProvideServerServices(core *CoreContainer) *ServiceContainer {
+	cfg := core.Config
+	logger := core.Logger
+	repos := core.Repos
+	databases := core.Databases
+
+	// Create gateway and billing services
+	gatewayServices := ProvideGatewayServices(repos.Gateway, logger)
+	billingServices := ProvideBillingServices(repos.Billing, repos.Gateway, logger)
+
+	// Create observability services
+	observabilityServices := ProvideObservabilityServices(repos.Observability, databases.Redis, cfg, logger)
+
+	// Create auth services
+	authServices := ProvideAuthServices(cfg, repos.User, repos.Auth, logger)
+
+	// Create user services
+	userServices := ProvideUserServices(repos.User, repos.Auth, logger)
+
+	// Create organization services
+	orgService, memberService, projectService, invitationService, settingsService :=
+		ProvideOrganizationServices(repos.User, repos.Auth, repos.Organization, authServices, logger)
+
+	return &ServiceContainer{
+		User:                userServices,
+		Auth:                authServices,
+		OrganizationService: orgService,
+		MemberService:       memberService,
+		ProjectService:      projectService,
+		InvitationService:   invitationService,
+		SettingsService:     settingsService,
+		Observability:       observabilityServices,
+		Gateway:             gatewayServices,
+		Billing:             billingServices,
+	}
+}
+
+// ProvideWorkerServices creates ONLY services worker needs (no auth)
+func ProvideWorkerServices(core *CoreContainer) *ServiceContainer {
+	cfg := core.Config
+	logger := core.Logger
+	repos := core.Repos
+	databases := core.Databases
+
+	// Only services worker uses for processing
+	gatewayServices := ProvideGatewayServices(repos.Gateway, logger)
+	billingServices := ProvideBillingServices(repos.Billing, repos.Gateway, logger)
+	observabilityServices := ProvideObservabilityServices(repos.Observability, databases.Redis, cfg, logger)
+
+	return &ServiceContainer{
+		// Worker doesn't need auth/user/org services
+		User:                nil,
+		Auth:                nil,
+		OrganizationService: nil,
+		MemberService:       nil,
+		ProjectService:      nil,
+		InvitationService:   nil,
+		SettingsService:     nil,
+		// Worker only needs these
+		Observability:       observabilityServices,
+		Gateway:             gatewayServices,
+		Billing:             billingServices,
+	}
+}
+
+// ProvideServer creates HTTP server using shared core
+func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
+	// Initialize HTTP handlers
+	httpHandlers := handlers.NewHandlers(
+		core.Config,
+		core.Logger,
+		core.Services.Auth.Auth,
+		core.Services.Auth.APIKey,
+		core.Services.Auth.BlacklistedTokens,
+		core.Services.User.User,
+		core.Services.User.Profile,
+		core.Services.User.Onboarding,
+		core.Services.OrganizationService,
+		core.Services.MemberService,
+		core.Services.ProjectService,
+		core.Services.InvitationService,
+		core.Services.SettingsService,
+		core.Services.Auth.Role,
+		core.Services.Auth.Permission,
+		core.Services.Auth.OrganizationMembers,
+		core.Services.Observability,
+		core.Services.Gateway.Gateway,
+		core.Services.Gateway.Routing,
+		core.Services.Gateway.Cost,
+	)
+
+	// Initialize HTTP server
+	httpServer := http.NewServer(
+		core.Config,
+		core.Logger,
+		httpHandlers,
+		core.Services.Auth.JWT,
+		core.Services.Auth.BlacklistedTokens,
+		core.Services.Auth.OrganizationMembers,
+		core.Services.Auth.APIKey,
+		core.Databases.Redis.Client,
+	)
+
+	return &ServerContainer{
+		HTTPServer: httpServer,
 	}, nil
 }
 
@@ -628,48 +774,6 @@ func (s *simpleBillingOrgService) GetPaymentMethod(ctx context.Context, orgID ul
 	return nil, nil
 }
 
-// ProvideServices creates all service containers with proper dependency resolution
-func ProvideServices(
-	cfg *config.Config,
-	repos *RepositoryContainer,
-	databases *DatabaseContainer,
-	workers *WorkerContainer,
-	gatewayServices *GatewayServices,
-	billingServices *BillingServices,
-	observabilityServices *observabilityService.ServiceRegistry,
-	logger *logrus.Logger,
-) *ServiceContainer {
-	// Create auth services first (other services depend on them)
-	authServices := ProvideAuthServices(cfg, repos.User, repos.Auth, logger)
-
-	// Create user services
-	userServices := ProvideUserServices(repos.User, repos.Auth, logger)
-
-	// Create organization services (depends on auth services)
-	orgService, memberService, projectService, invitationService, settingsService := ProvideOrganizationServices(
-		repos.User,
-		repos.Auth,
-		repos.Organization,
-		authServices,
-		logger,
-	)
-
-	// NOTE: observabilityServices is now passed as a parameter (created earlier to avoid circular dependencies)
-
-	return &ServiceContainer{
-		User:               userServices,
-		Auth:               authServices,
-		OrganizationService: orgService,
-		MemberService:      memberService,
-		ProjectService:     projectService,
-		InvitationService:  invitationService,
-		SettingsService:    settingsService,
-		Observability:      observabilityServices,
-		Gateway:            gatewayServices,
-		Billing:            billingServices,
-	}
-}
-
 // ProvideEnterpriseServices creates all enterprise services using build tags
 func ProvideEnterpriseServices(cfg *config.Config, logger *logrus.Logger) *EnterpriseContainer {
 	return &EnterpriseContainer{
@@ -680,174 +784,34 @@ func ProvideEnterpriseServices(cfg *config.Config, logger *logrus.Logger) *Enter
 	}
 }
 
-// ProvideAll creates the complete provider container with all dependencies
-func ProvideAll(cfg *config.Config, logger *logrus.Logger) (*ProviderContainer, error) {
-	// Initialize databases
-	databases, err := ProvideDatabases(cfg, logger)
-	if err != nil {
-		return nil, err
-	}
-
-	// Initialize repositories
-	repos := ProvideRepositories(databases, logger)
-
-	// Create gateway and billing services before workers
-	gatewayServices := ProvideGatewayServices(repos.Gateway, logger)
-	billingServices := ProvideBillingServices(repos.Billing, repos.Gateway, logger)
-
-	// Create observability services EARLY (needed by workers)
-	// Note: Analytics worker will be injected later after it's created and started
-	observabilityServices := ProvideObservabilityServices(repos.Observability, databases.Redis, cfg, logger)
-
-	// Initialize workers (require observability services for stream consumer)
-	workers, err := ProvideWorkers(databases.Redis, repos.Gateway.Analytics, billingServices.Billing, repos.Observability.TelemetryDeduplication, observabilityServices, logger)
-	if err != nil {
-		return nil, err
-	}
-
-	// Start telemetry stream consumer for async processing
-	if err := workers.TelemetryConsumer.Start(context.Background()); err != nil {
-		logger.WithError(err).Error("Failed to start telemetry stream consumer")
-		return nil, err
-	}
-	logger.Info("Telemetry stream consumer started")
-
-	workers.GatewayAnalytics.Start()
-	logger.Info("Gateway analytics worker started")
-
-	// Initialize services (includes worker integration and Redis Streams)
-	services := ProvideServices(cfg, repos, databases, workers, gatewayServices, billingServices, observabilityServices, logger)
-
-	// Initialize enterprise services
-	enterprise := ProvideEnterpriseServices(cfg, logger)
-
-	// Initialize and run auto-migration if enabled
-	if cfg.Database.AutoMigrate {
-		logger.Info("Auto-migration is enabled, running database migrations...")
-
-		migrationManager, err := migration.NewManager(cfg)
-		if err != nil {
-			logger.WithError(err).Error("Failed to initialize migration manager for auto-migration")
-		} else {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-			defer cancel()
-
-			if err := migrationManager.AutoMigrate(ctx); err != nil {
-				logger.WithError(err).Error("Auto-migration failed - continuing with startup")
-			} else {
-				logger.Info("Auto-migration completed successfully")
-			}
-
-			// Close migration manager after use
-			if err := migrationManager.Shutdown(); err != nil {
-				logger.WithError(err).Warn("Failed to shutdown migration manager after auto-migration")
-			}
-		}
-	} else {
-		logger.Debug("Auto-migration is disabled")
-	}
-
-	return &ProviderContainer{
-		Config:     cfg,
-		Logger:     logger,
-		Databases:  databases,
-		Repos:      repos,
-		Workers:    workers,
-		Services:   services,
-		Enterprise: enterprise,
-	}, nil
-}
-
-// Backward compatibility types
-
-// Repositories provides a flattened view of all repositories
-type Repositories struct {
-	UserRepository              user.Repository
-	OrganizationRepository      organization.OrganizationRepository
-	MemberRepository            organization.MemberRepository
-	ProjectRepository           organization.ProjectRepository
-	InvitationRepository        organization.InvitationRepository
-	OrganizationSettingsRepository organization.OrganizationSettingsRepository
-	UserSessionRepository       auth.UserSessionRepository
-	PasswordResetTokenRepository auth.PasswordResetTokenRepository
-	APIKeyRepository            auth.APIKeyRepository
-	RoleRepository              auth.RoleRepository
-	PermissionRepository        auth.PermissionRepository
-	RolePermissionRepository    auth.RolePermissionRepository
-	AuditLogRepository          auth.AuditLogRepository
-}
-
-// Services provides a flattened view of all services
-type Services struct {
-	AuthService                   auth.AuthService
-	OrganizationService          organization.OrganizationService
-	OrganizationSettingsService  organization.OrganizationSettingsService
-	ComplianceService            compliance.Compliance
-	SSOService                   sso.SSOProvider
-	RBACService                  rbac.RBACManager
-	EnterpriseAnalytics          analytics.EnterpriseAnalytics
-}
-
-// Convenience accessors for backward compatibility
-
-// GetAllRepositories returns a flattened view of all repositories (for backward compatibility)
-func (pc *ProviderContainer) GetAllRepositories() *Repositories {
-	return &Repositories{
-		UserRepository:                 pc.Repos.User.User,
-		OrganizationRepository:         pc.Repos.Organization.Organization,
-		MemberRepository:               pc.Repos.Organization.Member,
-		ProjectRepository:              pc.Repos.Organization.Project,
-		InvitationRepository:           pc.Repos.Organization.Invitation,
-		OrganizationSettingsRepository: pc.Repos.Organization.Settings,
-		UserSessionRepository:          pc.Repos.Auth.UserSession,
-		PasswordResetTokenRepository:   pc.Repos.Auth.PasswordResetToken,
-		APIKeyRepository:               pc.Repos.Auth.APIKey,
-		RoleRepository:                 pc.Repos.Auth.Role,
-		PermissionRepository:           pc.Repos.Auth.Permission,
-		RolePermissionRepository:       pc.Repos.Auth.RolePermission,
-		AuditLogRepository:             pc.Repos.Auth.AuditLog,
-	}
-}
-
-// GetAllServices returns a flattened view of all services (for backward compatibility)
-func (pc *ProviderContainer) GetAllServices() *Services {
-	return &Services{
-		AuthService:                 pc.Services.Auth.Auth,
-		OrganizationService:        pc.Services.OrganizationService,
-		OrganizationSettingsService: pc.Services.SettingsService,
-		ComplianceService:          pc.Enterprise.Compliance,
-		SSOService:                 pc.Enterprise.SSO,
-		RBACService:                pc.Enterprise.RBAC,
-		EnterpriseAnalytics:        pc.Enterprise.Analytics,
-	}
-}
-
-// Health checking for all providers
+// Health checking for all providers (mode-aware)
 func (pc *ProviderContainer) HealthCheck() map[string]string {
 	health := make(map[string]string)
 
-	// Check database connections
-	if pc.Databases.Postgres != nil {
-		if err := pc.Databases.Postgres.Health(); err != nil {
-			health["postgres"] = "unhealthy: " + err.Error()
-		} else {
-			health["postgres"] = "healthy"
+	// Check core databases
+	if pc.Core != nil && pc.Core.Databases != nil {
+		if pc.Core.Databases.Postgres != nil {
+			if err := pc.Core.Databases.Postgres.Health(); err != nil {
+				health["postgres"] = "unhealthy: " + err.Error()
+			} else {
+				health["postgres"] = "healthy"
+			}
 		}
-	}
 
-	if pc.Databases.Redis != nil {
-		if err := pc.Databases.Redis.Health(); err != nil {
-			health["redis"] = "unhealthy: " + err.Error()
-		} else {
-			health["redis"] = "healthy"
+		if pc.Core.Databases.Redis != nil {
+			if err := pc.Core.Databases.Redis.Health(); err != nil {
+				health["redis"] = "unhealthy: " + err.Error()
+			} else {
+				health["redis"] = "healthy"
+			}
 		}
-	}
 
-	if pc.Databases.ClickHouse != nil {
-		if err := pc.Databases.ClickHouse.Health(); err != nil {
-			health["clickhouse"] = "unhealthy: " + err.Error()
-		} else {
-			health["clickhouse"] = "healthy"
+		if pc.Core.Databases.ClickHouse != nil {
+			if err := pc.Core.Databases.ClickHouse.Health(); err != nil {
+				health["clickhouse"] = "unhealthy: " + err.Error()
+			} else {
+				health["clickhouse"] = "healthy"
+			}
 		}
 	}
 
@@ -883,6 +847,9 @@ func (pc *ProviderContainer) HealthCheck() map[string]string {
 		}
 	}
 
+	// Add deployment mode
+	health["mode"] = string(pc.Mode)
+
 	return health
 }
 
@@ -890,38 +857,42 @@ func (pc *ProviderContainer) HealthCheck() map[string]string {
 func (pc *ProviderContainer) Shutdown() error {
 	var lastErr error
 
-	// Stop background workers first
+	logger := pc.Core.Logger
+
+	// Stop background workers first (if present)
 	if pc.Workers != nil && pc.Workers.TelemetryConsumer != nil {
-		pc.Logger.Info("Stopping telemetry stream consumer...")
+		logger.Info("Stopping telemetry stream consumer...")
 		pc.Workers.TelemetryConsumer.Stop()
-		pc.Logger.Info("Telemetry stream consumer stopped")
+		logger.Info("Telemetry stream consumer stopped")
 	}
 
 	if pc.Workers != nil && pc.Workers.GatewayAnalytics != nil {
-		pc.Logger.Info("Stopping gateway analytics worker...")
+		logger.Info("Stopping gateway analytics worker...")
 		pc.Workers.GatewayAnalytics.Stop()
-		pc.Logger.Info("Gateway analytics worker stopped")
+		logger.Info("Gateway analytics worker stopped")
 	}
 
 	// Close database connections
-	if pc.Databases.Postgres != nil {
-		if err := pc.Databases.Postgres.Close(); err != nil {
-			pc.Logger.WithError(err).Error("Failed to close PostgreSQL connection")
-			lastErr = err
+	if pc.Core != nil && pc.Core.Databases != nil {
+		if pc.Core.Databases.Postgres != nil {
+			if err := pc.Core.Databases.Postgres.Close(); err != nil {
+				logger.WithError(err).Error("Failed to close PostgreSQL connection")
+				lastErr = err
+			}
 		}
-	}
 
-	if pc.Databases.Redis != nil {
-		if err := pc.Databases.Redis.Close(); err != nil {
-			pc.Logger.WithError(err).Error("Failed to close Redis connection")
-			lastErr = err
+		if pc.Core.Databases.Redis != nil {
+			if err := pc.Core.Databases.Redis.Close(); err != nil {
+				logger.WithError(err).Error("Failed to close Redis connection")
+				lastErr = err
+			}
 		}
-	}
 
-	if pc.Databases.ClickHouse != nil {
-		if err := pc.Databases.ClickHouse.Close(); err != nil {
-			pc.Logger.WithError(err).Error("Failed to close ClickHouse connection")
-			lastErr = err
+		if pc.Core.Databases.ClickHouse != nil {
+			if err := pc.Core.Databases.ClickHouse.Close(); err != nil {
+				logger.WithError(err).Error("Failed to close ClickHouse connection")
+				lastErr = err
+			}
 		}
 	}
 

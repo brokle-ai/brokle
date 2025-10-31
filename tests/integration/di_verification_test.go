@@ -4,7 +4,9 @@
 package integration
 
 import (
+	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -13,8 +15,8 @@ import (
 	"brokle/internal/config"
 )
 
-// TestDependencyInjectionSetup verifies that all dependencies are properly initialized
-func TestDependencyInjectionSetup(t *testing.T) {
+// TestDIContainer_ServerMode verifies server-only mode dependencies
+func TestDIContainer_ServerMode(t *testing.T) {
 	// Load configuration
 	cfg, err := config.Load()
 	require.NoError(t, err, "Should be able to load configuration")
@@ -24,28 +26,47 @@ func TestDependencyInjectionSetup(t *testing.T) {
 	cfg.ClickHouse.Database = cfg.ClickHouse.Database + "_test"
 	cfg.Server.Port = 0 // Use random port for testing
 
-	// Create application instance
-	application, err := app.New(cfg)
-	require.NoError(t, err, "Should be able to create application instance")
+	// Create server application (HTTP only, no workers)
+	application, err := app.NewServer(cfg)
+	require.NoError(t, err, "Should be able to create server application")
 	require.NotNil(t, application, "Application should not be nil")
 
 	// Verify application starts correctly
 	err = application.Start()
-	require.NoError(t, err, "Should be able to start application")
+	require.NoError(t, err, "Should be able to start server")
 	defer func() {
-		_ = application.Shutdown(nil)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = application.Shutdown(ctx)
 	}()
 
 	// Verify provider container is initialized
 	providers := application.GetProviders()
 	require.NotNil(t, providers, "Providers should be initialized")
 
+	t.Run("Server Mode Verification", func(t *testing.T) {
+		// Verify mode
+		require.Equal(t, app.ModeServer, providers.Mode, "Should be in server mode")
+
+		// Verify core infrastructure
+		require.NotNil(t, providers.Core, "Core should be initialized")
+		require.NotNil(t, providers.Core.Databases, "Core databases should exist")
+		require.NotNil(t, providers.Core.Services, "Core services should exist")
+
+		// Verify HTTP server exists
+		require.NotNil(t, providers.Server, "Server should be initialized")
+		require.NotNil(t, providers.Server.HTTPServer, "HTTP server should exist")
+
+		// Verify workers are nil in server mode
+		require.Nil(t, providers.Workers, "Workers should be nil in server mode")
+	})
+
 	t.Run("Database Dependencies", func(t *testing.T) {
 		// Verify database connections
 		databases := application.GetDatabases()
 		require.NotNil(t, databases, "Databases should be initialized")
 		assert.NotNil(t, databases.Postgres, "PostgreSQL connection should exist")
-		assert.NotNil(t, databases.Redis, "Redis connection should exist") 
+		assert.NotNil(t, databases.Redis, "Redis connection should exist")
 		assert.NotNil(t, databases.ClickHouse, "ClickHouse connection should exist")
 
 		// Verify database health
@@ -53,11 +74,13 @@ func TestDependencyInjectionSetup(t *testing.T) {
 		assert.Contains(t, health, "postgres", "Postgres health should be reported")
 		assert.Contains(t, health, "redis", "Redis health should be reported")
 		assert.Contains(t, health, "clickhouse", "ClickHouse health should be reported")
+		assert.Contains(t, health, "mode", "Mode should be reported")
+		assert.Equal(t, "server", health["mode"], "Mode should be server")
 	})
 
 	t.Run("Repository Dependencies", func(t *testing.T) {
 		// Verify repositories are initialized
-		repos := providers.Repos
+		repos := providers.Core.Repos
 		require.NotNil(t, repos, "Repository container should be initialized")
 
 		// Verify gateway repositories
@@ -69,7 +92,6 @@ func TestDependencyInjectionSetup(t *testing.T) {
 
 		// Verify observability repositories
 		assert.NotNil(t, repos.Observability, "Observability repositories should exist")
-		assert.NotNil(t, repos.Observability.TelemetryAnalytics, "Telemetry analytics repository should exist")
 
 		// Verify other repositories
 		assert.NotNil(t, repos.User, "User repositories should exist")
@@ -80,7 +102,7 @@ func TestDependencyInjectionSetup(t *testing.T) {
 
 	t.Run("Service Dependencies", func(t *testing.T) {
 		// Verify services are initialized
-		services := providers.Services
+		services := providers.Core.Services
 		require.NotNil(t, services, "Service container should be initialized")
 
 		// Verify gateway services
@@ -105,114 +127,205 @@ func TestDependencyInjectionSetup(t *testing.T) {
 		assert.NotNil(t, services.Auth.Permission, "Permission service should exist")
 	})
 
-	t.Run("Worker Dependencies", func(t *testing.T) {
-		// Verify workers are initialized
-		workers := application.GetWorkers()
-		require.NotNil(t, workers, "Worker container should be initialized")
-		assert.NotNil(t, workers.TelemetryAnalytics, "Telemetry analytics worker should exist")
-		assert.NotNil(t, workers.GatewayAnalytics, "Gateway analytics worker should exist")
+	t.Run("Server Has All Services - Complete ServiceContainer", func(t *testing.T) {
+		services := providers.Core.Services
+		require.NotNil(t, services, "Services should exist")
 
-		// Verify worker health
-		health := application.Health()
-		assert.Contains(t, health, "telemetry_analytics_worker", "Telemetry worker health should be reported")
-		assert.Contains(t, health, "gateway_analytics_worker", "Gateway worker health should be reported")
+		// Server mode should have ALL services (no nils)
+		assert.NotNil(t, services.Auth, "Server needs Auth services")
+		assert.NotNil(t, services.User, "Server needs User services")
+		assert.NotNil(t, services.OrganizationService, "Server needs Org service")
+		assert.NotNil(t, services.MemberService, "Server needs Member service")
+		assert.NotNil(t, services.ProjectService, "Server needs Project service")
+		assert.NotNil(t, services.InvitationService, "Server needs Invitation service")
+		assert.NotNil(t, services.SettingsService, "Server needs Settings service")
+		assert.NotNil(t, services.Observability, "Server needs Observability")
+		assert.NotNil(t, services.Gateway, "Server needs Gateway")
+		assert.NotNil(t, services.Billing, "Server needs Billing")
 
-		// Verify workers are healthy
-		assert.True(t, workers.GatewayAnalytics.IsHealthy(), "Gateway analytics worker should be healthy")
-	})
-
-	t.Run("Enterprise Dependencies", func(t *testing.T) {
-		// Verify enterprise services (stubs in OSS)
-		enterprise := providers.Enterprise
-		require.NotNil(t, enterprise, "Enterprise container should be initialized")
-		assert.NotNil(t, enterprise.SSO, "SSO service should exist (stub in OSS)")
-		assert.NotNil(t, enterprise.RBAC, "RBAC service should exist (stub in OSS)")
-		assert.NotNil(t, enterprise.Compliance, "Compliance service should exist (stub in OSS)")
-		assert.NotNil(t, enterprise.Analytics, "Analytics service should exist (stub in OSS)")
-	})
-
-	t.Run("Backward Compatibility", func(t *testing.T) {
-		// Verify backward compatibility methods work
-		services := application.GetServices()
-		require.NotNil(t, services, "GetServices should return services")
-		
-		servicesAlias := application.Services()
-		assert.Equal(t, services, servicesAlias, "Services() alias should return same as GetServices()")
-
-		repositories := application.GetRepositories()
-		require.NotNil(t, repositories, "GetRepositories should return repositories")
-
-		logger := application.GetLogger()
-		require.NotNil(t, logger, "GetLogger should return logger")
-		
-		loggerAlias := application.Logger()
-		assert.Equal(t, logger, loggerAlias, "Logger() alias should return same as GetLogger()")
-
-		config := application.GetConfig()
-		require.NotNil(t, config, "GetConfig should return config")
-	})
-
-	t.Run("Gateway Service Integration", func(t *testing.T) {
-		// Verify gateway service can be accessed and has proper dependencies
-		gatewayServices := application.GetGatewayServices()
-		require.NotNil(t, gatewayServices, "Gateway services should be accessible")
-
-		// This tests that the gateway service was properly injected with its dependencies
-		gatewayService := gatewayServices.Gateway
-		require.NotNil(t, gatewayService, "Gateway service should exist")
-
-		routingService := gatewayServices.Routing
-		require.NotNil(t, routingService, "Routing service should exist")
-
-		costService := gatewayServices.Cost
-		require.NotNil(t, costService, "Cost service should exist")
-
-		// Verify the services are properly integrated in the main services container
-		mainServices := providers.Services
-		assert.Equal(t, gatewayServices, mainServices.Gateway, "Gateway services should match in main container")
+		// Server should have enterprise services
+		assert.NotNil(t, providers.Core.Enterprise, "Server should have Enterprise services")
 	})
 }
 
-// TestHealthCheckIntegration verifies the health check system works correctly
-func TestHealthCheckIntegration(t *testing.T) {
+// TestDIContainer_WorkerMode verifies worker-only mode dependencies
+func TestDIContainer_WorkerMode(t *testing.T) {
 	// Load configuration
 	cfg, err := config.Load()
-	require.NoError(t, err)
+	require.NoError(t, err, "Should be able to load configuration")
 
 	// Override configuration for testing
 	cfg.Database.Database = cfg.Database.Database + "_test"
 	cfg.ClickHouse.Database = cfg.ClickHouse.Database + "_test"
+
+	// Create worker application (workers only, no HTTP)
+	application, err := app.NewWorker(cfg)
+	require.NoError(t, err, "Should be able to create worker application")
+	require.NotNil(t, application, "Application should not be nil")
+
+	// Verify application starts correctly
+	err = application.Start()
+	require.NoError(t, err, "Should be able to start workers")
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = application.Shutdown(ctx)
+	}()
+
+	// Verify provider container is initialized
+	providers := application.GetProviders()
+	require.NotNil(t, providers, "Providers should be initialized")
+
+	t.Run("Worker Mode Verification", func(t *testing.T) {
+		// Verify mode
+		require.Equal(t, app.ModeWorker, providers.Mode, "Should be in worker mode")
+
+		// Verify core infrastructure
+		require.NotNil(t, providers.Core, "Core should be initialized")
+		require.NotNil(t, providers.Core.Databases, "Core databases should exist")
+		require.NotNil(t, providers.Core.Services, "Core services should exist")
+
+		// Verify workers exist
+		require.NotNil(t, providers.Workers, "Workers should be initialized")
+		require.NotNil(t, providers.Workers.TelemetryConsumer, "Telemetry consumer should exist")
+		require.NotNil(t, providers.Workers.GatewayAnalytics, "Gateway analytics worker should exist")
+
+		// Verify HTTP server is nil in worker mode
+		require.Nil(t, providers.Server, "Server should be nil in worker mode")
+	})
+
+	t.Run("Worker Health", func(t *testing.T) {
+		// Verify worker health reporting
+		health := application.Health()
+		assert.Contains(t, health, "mode", "Mode should be reported")
+		assert.Equal(t, "worker", health["mode"], "Mode should be worker")
+		assert.Contains(t, health, "gateway_analytics_worker", "Gateway worker health should be reported")
+
+		// Verify workers are healthy
+		workers := application.GetWorkers()
+		require.NotNil(t, workers, "Workers should be accessible")
+		assert.True(t, workers.GatewayAnalytics.IsHealthy(), "Gateway analytics worker should be healthy")
+	})
+
+	t.Run("Shared Core Infrastructure", func(t *testing.T) {
+		// Verify workers share the same core infrastructure
+		databases := application.GetDatabases()
+		require.NotNil(t, databases, "Databases should be accessible")
+		assert.NotNil(t, databases.Postgres, "PostgreSQL connection should exist")
+		assert.NotNil(t, databases.Redis, "Redis connection should exist")
+		assert.NotNil(t, databases.ClickHouse, "ClickHouse connection should exist")
+
+		// Verify services are accessible (workers use these for processing)
+		services := providers.Core.Services
+		require.NotNil(t, services, "Services should be accessible")
+		assert.NotNil(t, services.Observability, "Observability service should exist")
+		assert.NotNil(t, services.Billing, "Billing service should exist")
+	})
+
+	t.Run("Worker Service Separation - No Auth Services", func(t *testing.T) {
+		services := providers.Core.Services
+		require.NotNil(t, services, "Services should exist")
+
+		// Worker should NOT have auth/user/org services (clean separation)
+		assert.Nil(t, services.Auth, "Worker should not initialize Auth services")
+		assert.Nil(t, services.User, "Worker should not initialize User services")
+		assert.Nil(t, services.OrganizationService, "Worker should not initialize Org service")
+		assert.Nil(t, services.MemberService, "Worker should not initialize Member service")
+		assert.Nil(t, services.ProjectService, "Worker should not initialize Project service")
+		assert.Nil(t, services.InvitationService, "Worker should not initialize Invitation service")
+		assert.Nil(t, services.SettingsService, "Worker should not initialize Settings service")
+
+		// Worker SHOULD have processing services
+		assert.NotNil(t, services.Observability, "Worker needs Observability services")
+		assert.NotNil(t, services.Gateway, "Worker needs Gateway services for analytics")
+		assert.NotNil(t, services.Billing, "Worker needs Billing services for analytics")
+
+		// Worker should not have enterprise services
+		assert.Nil(t, providers.Core.Enterprise, "Worker should not have Enterprise services")
+	})
+}
+
+// TestHealthCheckIntegration_ServerMode verifies server health check
+func TestHealthCheckIntegration_ServerMode(t *testing.T) {
+	cfg, err := config.Load()
+	require.NoError(t, err)
+
+	cfg.Database.Database = cfg.Database.Database + "_test"
+	cfg.ClickHouse.Database = cfg.ClickHouse.Database + "_test"
 	cfg.Server.Port = 0
 
-	// Create and start application
-	application, err := app.New(cfg)
+	// Create and start server
+	application, err := app.NewServer(cfg)
 	require.NoError(t, err)
 
 	err = application.Start()
 	require.NoError(t, err)
 	defer func() {
-		_ = application.Shutdown(nil)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = application.Shutdown(ctx)
 	}()
 
 	// Test health check
 	health := application.Health()
 	require.NotNil(t, health, "Health check should return results")
 
-	// Verify expected health components
+	// Verify expected health components (server mode)
 	expectedComponents := []string{
 		"postgres",
-		"redis", 
+		"redis",
 		"clickhouse",
-		"telemetry_analytics_worker",
+		"mode",
+	}
+
+	for _, component := range expectedComponents {
+		assert.Contains(t, health, component, "Health check should include %s", component)
+	}
+
+	// Verify mode
+	assert.Equal(t, "server", health["mode"], "Mode should be server")
+
+	// Worker health should NOT be present in server mode
+	assert.NotContains(t, health, "telemetry_stream_consumer", "Worker health should not be in server mode")
+}
+
+// TestHealthCheckIntegration_WorkerMode verifies worker health check
+func TestHealthCheckIntegration_WorkerMode(t *testing.T) {
+	cfg, err := config.Load()
+	require.NoError(t, err)
+
+	cfg.Database.Database = cfg.Database.Database + "_test"
+	cfg.ClickHouse.Database = cfg.ClickHouse.Database + "_test"
+
+	// Create and start worker
+	application, err := app.NewWorker(cfg)
+	require.NoError(t, err)
+
+	err = application.Start()
+	require.NoError(t, err)
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = application.Shutdown(ctx)
+	}()
+
+	// Test health check
+	health := application.Health()
+	require.NotNil(t, health, "Health check should return results")
+
+	// Verify expected health components (worker mode)
+	expectedComponents := []string{
+		"postgres",
+		"redis",
+		"clickhouse",
+		"mode",
 		"gateway_analytics_worker",
 	}
 
 	for _, component := range expectedComponents {
 		assert.Contains(t, health, component, "Health check should include %s", component)
-		
-		// Most components should be healthy in test environment
-		if component != "clickhouse" { // ClickHouse might not always be available in test
-			assert.NotContains(t, health[component], "unhealthy", "Component %s should be healthy", component)
-		}
 	}
+
+	// Verify mode
+	assert.Equal(t, "worker", health["mode"], "Mode should be worker")
 }

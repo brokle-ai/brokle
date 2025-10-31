@@ -1,10 +1,10 @@
 // Package main provides the main entry point for the Brokle API server.
 //
-// This is the single monolith server that handles:
+// This is the HTTP API server that handles:
 // - HTTP API endpoints
 // - WebSocket real-time connections
-// - Background job processing
 // - Multi-database operations (PostgreSQL + ClickHouse)
+// - Database migrations (server owns migrations)
 package main
 
 import (
@@ -19,6 +19,7 @@ import (
 	_ "brokle/docs/swagger" // swagger docs
 	"brokle/internal/app"
 	"brokle/internal/config"
+	"brokle/internal/migration"
 )
 
 // @title Brokle AI Control Plane API
@@ -55,16 +56,39 @@ func main() {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
-	// Initialize application with all dependencies
-	application, err := app.New(cfg)
+	// SERVER OWNS MIGRATIONS - Run before app initialization
+	if cfg.Database.AutoMigrate {
+		log.Println("Running database migrations...")
+
+		migrationManager, err := migration.NewManager(cfg)
+		if err != nil {
+			log.Fatalf("Failed to initialize migration manager: %v", err)
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+		defer cancel()
+
+		if err := migrationManager.AutoMigrate(ctx); err != nil {
+			log.Fatalf("Auto-migration failed: %v", err)
+		}
+
+		if err := migrationManager.Shutdown(); err != nil {
+			log.Printf("Warning: failed to shutdown migration manager: %v", err)
+		}
+
+		log.Println("Migrations completed successfully")
+	}
+
+	// Initialize server application (HTTP only, no workers)
+	application, err := app.NewServer(cfg)
 	if err != nil {
-		log.Fatalf("Failed to initialize application: %v", err)
+		log.Fatalf("Failed to initialize server: %v", err)
 	}
 	defer application.Shutdown(context.Background())
 
-	// Start the application (HTTP server + WebSocket + background workers)
+	// Start the HTTP server
 	if err := application.Start(); err != nil {
-		log.Fatalf("Failed to start application: %v", err)
+		log.Fatalf("Failed to start server: %v", err)
 	}
 
 	// Wait for shutdown signal

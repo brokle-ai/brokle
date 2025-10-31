@@ -1,4 +1,4 @@
-# Multi-stage build for Brokle API
+# Multi-stage build for Brokle Worker
 FROM golang:1.25-alpine AS builder
 
 # Install dependencies
@@ -14,12 +14,11 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Build the application
-# Development build - faster compilation
+# Build the worker binary
 RUN CGO_ENABLED=0 GOOS=linux go build \
     -ldflags='-w -s' \
-    -o bin/brokle \
-    ./cmd/server
+    -o bin/brokle-worker \
+    ./cmd/worker
 
 # Final stage
 FROM alpine:latest
@@ -34,7 +33,7 @@ RUN adduser -D -s /bin/sh brokle
 WORKDIR /app
 
 # Copy binary from builder stage
-COPY --from=builder /app/bin/brokle .
+COPY --from=builder /app/bin/brokle-worker ./brokle-worker
 
 # Copy configuration files
 COPY --from=builder /app/configs ./configs
@@ -45,12 +44,5 @@ RUN mkdir -p logs tmp && chown -R brokle:brokle /app
 # Switch to non-root user
 USER brokle
 
-# Expose port
-EXPOSE 8080
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
-
 # Run the binary
-CMD ["./brokle"]
+CMD ["./brokle-worker"]

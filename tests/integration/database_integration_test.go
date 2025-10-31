@@ -16,8 +16,7 @@ import (
 
 	"brokle/internal/config"
 	"brokle/internal/core/domain/gateway"
-	"brokle/internal/core/domain/providers"
-	"brokle/internal/infrastructure/repository"
+	gatewayRepo "brokle/internal/infrastructure/repository/gateway"
 	"brokle/pkg/database"
 	"brokle/pkg/ulid"
 )
@@ -28,9 +27,9 @@ type DatabaseIntegrationTestSuite struct {
 	cfg                      *config.Config
 	pgDB                     *sql.DB
 	chDB                     *sql.DB
-	providerRepo             *repository.ProviderRepository
-	modelRepo                *repository.ModelRepository
-	providerConfigRepo       *repository.ProviderConfigRepository
+	providerRepo             gateway.ProviderRepository
+	modelRepo                gateway.ModelRepository
+	providerConfigRepo       gateway.ProviderConfigRepository
 	ctx                      context.Context
 	testProviderID           ulid.ULID
 	testModelID              ulid.ULID
@@ -59,9 +58,9 @@ func (suite *DatabaseIntegrationTestSuite) SetupSuite() {
 	require.NoError(suite.T(), err)
 
 	// Initialize repositories
-	suite.providerRepo = repository.NewProviderRepository(suite.pgDB)
-	suite.modelRepo = repository.NewModelRepository(suite.pgDB)
-	suite.providerConfigRepo = repository.NewProviderConfigRepository(suite.pgDB)
+	suite.providerRepo = gatewayRepo.NewProviderRepository(suite.pgDB)
+	suite.modelRepo = gatewayRepo.NewModelRepository(suite.pgDB)
+	suite.providerConfigRepo = gatewayRepo.NewProviderConfigRepository(suite.pgDB)
 
 	// Verify database connectivity
 	suite.verifyDatabaseConnectivity()

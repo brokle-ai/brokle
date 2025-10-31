@@ -137,10 +137,13 @@ func (s *Server) setupRoutes() {
 	s.engine.Use(middleware.Recovery(s.logger))
 	s.engine.Use(middleware.Metrics())
 
-	// Health check (no auth required)
+	// Health check (no auth required, support both GET and HEAD for Docker)
 	s.engine.GET("/health", s.handlers.Health.Check)
+	s.engine.HEAD("/health", s.handlers.Health.Check)
 	s.engine.GET("/health/ready", s.handlers.Health.Ready)
+	s.engine.HEAD("/health/ready", s.handlers.Health.Ready)
 	s.engine.GET("/health/live", s.handlers.Health.Live)
+	s.engine.HEAD("/health/live", s.handlers.Health.Live)
 
 	// Metrics endpoint (restricted)
 	s.engine.GET("/metrics", s.handlers.Metrics.Handler)

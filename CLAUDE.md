@@ -16,22 +16,43 @@ See Everything. Control Everything. Build the unified open-source control plane 
 - **Production Scale**: Multi-tenant architecture with enterprise-grade governance
 - **Cost Intelligence**: 30-50% reduction in LLM costs through smart routing and optimization
 
-## Architecture: Scalable Monolith
+## Architecture: Scalable Monolith with Independent Scaling
 
-This project represents a **scalable monolith** architecture, migrated from microservices for better development velocity and open source adoption.
+This project represents a **scalable monolith** architecture with **separate server and worker binaries** for independent scaling, migrated from microservices for better development velocity and open source adoption.
 
 ### High-Level Architecture
-- **Single Go Binary** with HTTP server at `:8080`
+- **Separate Binaries**: HTTP server + Background workers (independent scaling)
+- **Shared Codebase**: Single codebase with modular DI container
 - **Multi-Database Strategy**: PostgreSQL (transactional) + ClickHouse (analytics) + Redis (cache/queues)
 - **Domain-Driven Design** with clean separation of concerns
 - **Enterprise Edition** toggle via build tags (`go build -tags="enterprise"`)
 - **Transport Layer Pattern** for HTTP/WebSocket handling
 
+### Deployment Architecture
+
+**Server Process** (`cmd/server/main.go`):
+- HTTP API endpoints and WebSocket connections
+- Runs database migrations (server owns migrations)
+- Port: 8080
+- Scales independently (3-5 instances typical)
+
+**Worker Process** (`cmd/worker/main.go`):
+- Telemetry stream processing from Redis
+- Gateway analytics aggregation
+- Batch job processing
+- Scales independently (10-50+ instances at scale)
+
+**Shared Infrastructure**:
+- Same database connections (PostgreSQL, ClickHouse, Redis)
+- Same service layer (reused via DI container)
+- Different resource profiles (APIs: low latency, Workers: high throughput)
+
 ### Application Structure
 ```
 brokle/
 ├── cmd/                    # Application entry points
-│   ├── server/main.go     # Main HTTP server
+│   ├── server/main.go     # HTTP server (API endpoints)
+│   ├── worker/main.go     # Background workers (telemetry processing)
 │   ├── migrate/main.go    # Database migration runner
 │   └── seed/main.go       # Database seeding tool
 ├── internal/              # Private application code
@@ -139,24 +160,57 @@ The codebase follows DDD patterns with clear separation of concerns:
 # First time setup (installs deps, starts DBs, runs migrations, seeds data)
 make setup
 
-# Start full development stack (Go API + Next.js frontend)
-make dev
+# Start full development stack (Server + Worker)
+make dev              # Starts both server and worker with hot reload
 
-# Start backend only
-make dev-backend
-
-# Start frontend only  
-make dev-frontend
+# Start individual components
+make dev-server       # HTTP server only (with hot reload)
+make dev-worker       # Workers only (with hot reload)
+make dev-frontend     # Next.js frontend only
 
 # Run all tests
 make test
 
 # Build for development (faster builds)
-make build-dev
+make build-dev-server    # Build server for development
+make build-dev-worker    # Build worker for development
 
-# Build production (OSS and Enterprise)
-make build-oss        # Default OSS build
-make build-enterprise  # Enterprise build with all features
+# Build production binaries
+make build-server-oss         # HTTP server (OSS)
+make build-worker-oss         # Workers (OSS)
+make build-server-enterprise  # HTTP server (Enterprise)
+make build-worker-enterprise  # Workers (Enterprise)
+make build-all               # Build all variants
+```
+
+### Production Deployment
+
+```bash
+# Server (3-5 instances for API traffic)
+./bin/brokle-server
+# Runs migrations on startup (if DB_AUTO_MIGRATE=true)
+# Serves HTTP on :8080
+
+# Worker (10-50+ instances for background processing)
+./bin/brokle-worker
+# Processes telemetry streams from Redis
+# No HTTP server, no migrations
+
+# Docker Compose Example
+services:
+  server:
+    image: brokle-server:latest
+    replicas: 3
+    ports:
+      - "8080:8080"
+    environment:
+      - DB_AUTO_MIGRATE=true  # First server instance runs migrations
+
+  worker:
+    image: brokle-worker:latest
+    replicas: 10
+    environment:
+      - DB_AUTO_MIGRATE=false  # Workers never run migrations
 ```
 
 ### Database Operations

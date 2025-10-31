@@ -23,7 +23,6 @@ import (
 	"brokle/internal/app"
 	"brokle/internal/config"
 	"brokle/internal/core/domain/gateway"
-	"brokle/internal/core/domain/providers"
 	"brokle/internal/transport/http/handlers/ai"
 	"brokle/pkg/ulid"
 )
@@ -31,7 +30,7 @@ import (
 // GatewayIntegrationTestSuite provides a comprehensive test suite for the gateway
 type GatewayIntegrationTestSuite struct {
 	suite.Suite
-	app        *app.Application
+	app        *app.App
 	router     *gin.Engine
 	server     *httptest.Server
 	testOrgID  ulid.ULID
@@ -52,8 +51,12 @@ func (suite *GatewayIntegrationTestSuite) SetupSuite() {
 	cfg.Database.PostgreSQL.Database = cfg.Database.PostgreSQL.Database + "_test"
 	cfg.Database.ClickHouse.Database = cfg.Database.ClickHouse.Database + "_test"
 
-	// Initialize application
-	suite.app, err = app.New(cfg)
+	// Initialize application (use NewServer for gateway tests - HTTP only)
+	suite.app, err = app.NewServer(cfg)
+	require.NoError(suite.T(), err)
+
+	// Start the server
+	err = suite.app.Start()
 	require.NoError(suite.T(), err)
 
 	// Set up router
@@ -90,9 +93,13 @@ func (suite *GatewayIntegrationTestSuite) setupRoutes() {
 	// AI API endpoints
 	aiGroup := suite.router.Group("/v1")
 	{
-		aiHandler := ai.NewAIHandler(
-			suite.app.Services.Gateway,
-			suite.app.Logger,
+		gatewayServices := suite.app.GetGatewayServices()
+		aiHandler := ai.NewHandler(
+			suite.app.GetConfig(),
+			suite.app.GetLogger(),
+			gatewayServices.Gateway,
+			gatewayServices.Routing,
+			gatewayServices.Cost,
 		)
 
 		aiGroup.POST("/chat/completions", aiHandler.ChatCompletions)

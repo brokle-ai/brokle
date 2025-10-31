@@ -13,11 +13,11 @@ services:
     environment:
       - BROKLE_TEST_KEY=test_bk_1234567890abcdef
     depends_on:
-      - brokle-api
+      - brokle-backend
 
   # Brokle API
-  brokle-api:
-    container_name: test-brokle-api
+  brokle-backend:
+    container_name: test-brokle-backend
     build:
       context: ../..
       dockerfile: Dockerfile
