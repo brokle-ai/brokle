@@ -18,8 +18,14 @@ export default function RootPage() {
 
     if (!isAuthenticated) {
       router.push('/auth/signin')
+      return
     }
-  }, [authLoading, isAuthenticated, router])
+
+    // Check onboarding completion
+    if (user && !user.onboardingCompletedAt) {
+      router.push('/onboarding')
+    }
+  }, [authLoading, isAuthenticated, user, router])
 
   if (authLoading) {
     return <PageLoader message="Loading your workspace..." />

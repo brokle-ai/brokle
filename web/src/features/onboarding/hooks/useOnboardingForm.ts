@@ -162,7 +162,9 @@ export function useOnboardingForm(): UseOnboardingFormReturn {
       const { completeOnboarding } = await import('@/lib/api/services/onboarding')
       await completeOnboarding()
       toast.success('Onboarding completed!')
-      router.push('/')
+
+      // Redirect to setup wizard (create org → invite → project)
+      router.push('/setup/wizard')
     } catch (error) {
       console.error('Failed to complete onboarding:', error)
       toast.error('Failed to complete onboarding')
