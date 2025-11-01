@@ -135,7 +135,20 @@ export interface SignUpCredentials {
   password: string
   firstName: string
   lastName: string
+  role: string
   organizationName?: string
+  referralSource?: string
+  invitationToken?: string
+}
+
+export interface InvitationDetails {
+  organizationName: string
+  organizationId: string
+  inviterName: string
+  role: string
+  email: string
+  expiresAt: string
+  isExpired: boolean
 }
 
 export interface AuthResponse {

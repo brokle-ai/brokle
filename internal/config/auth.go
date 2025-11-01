@@ -31,6 +31,14 @@ type AuthConfig struct {
 	JWTPublicKeyPath    string `mapstructure:"jwt_public_key_path"`
 	JWTPrivateKeyBase64 string `mapstructure:"jwt_private_key_base64"`
 	JWTPublicKeyBase64  string `mapstructure:"jwt_public_key_base64"`
+
+	// OAuth Configuration (Google/GitHub Signup)
+	GoogleClientID     string `mapstructure:"google_client_id"`
+	GoogleClientSecret string `mapstructure:"google_client_secret"`
+	GoogleRedirectURL  string `mapstructure:"google_redirect_url"`
+	GitHubClientID     string `mapstructure:"github_client_id"`
+	GitHubClientSecret string `mapstructure:"github_client_secret"`
+	GitHubRedirectURL  string `mapstructure:"github_redirect_url"`
 }
 
 // Validate ensures the auth configuration is valid and complete.

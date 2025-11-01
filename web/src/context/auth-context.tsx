@@ -2,9 +2,10 @@
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
-import { 
+import {
   login as apiLogin,
   signup as apiSignup,
+  completeOAuthSignup as apiCompleteOAuthSignup,
   logout as apiLogout,
   getCurrentUser,
   updateProfile as apiUpdateProfile,
@@ -28,10 +29,16 @@ export interface AuthContextValue {
   // Actions
   login: (credentials: LoginCredentials) => Promise<AuthResponse>
   signup: (credentials: SignUpCredentials) => Promise<AuthResponse>
+  completeOAuthSignup: (data: {
+    sessionId: string
+    role: string
+    organizationName?: string
+    referralSource?: string
+  }) => Promise<AuthResponse>
   logout: () => Promise<void>
   refreshToken: () => Promise<void>
   clearError: () => void
-  
+
   // User management
   updateUser: (data: Partial<User>) => Promise<User>
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>
@@ -193,15 +200,45 @@ export function AuthProvider({ children, serverUser }: AuthProviderProps) {
       setError(null)
 
       const response = await apiSignup(credentials)
-      
+
       // Store tokens and user
       TokenStorage.setTokens(response.accessToken, response.refreshToken, response.expiresIn)
       TokenStorage.setUser(response.user)
-      
+
       // Update state
       setUser(response.user)
       setAccessToken(response.accessToken)
-      
+
+      return response
+    } catch (error) {
+      const errorMessage = getErrorMessage(error)
+      setError(errorMessage)
+      throw error
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const completeOAuthSignup = async (data: {
+    sessionId: string
+    role: string
+    organizationName?: string
+    referralSource?: string
+  }): Promise<AuthResponse> => {
+    try {
+      setIsLoading(true)
+      setError(null)
+
+      const response = await apiCompleteOAuthSignup(data)
+
+      // Store tokens and user (same pattern as signup/login)
+      TokenStorage.setTokens(response.accessToken, response.refreshToken, response.expiresIn)
+      TokenStorage.setUser(response.user)
+
+      // Update state
+      setUser(response.user)
+      setAccessToken(response.accessToken)
+
       return response
     } catch (error) {
       const errorMessage = getErrorMessage(error)
@@ -302,6 +339,7 @@ export function AuthProvider({ children, serverUser }: AuthProviderProps) {
     // Actions
     login,
     signup,
+    completeOAuthSignup,
     logout,
     refreshToken,
     clearError,

@@ -3,7 +3,6 @@
 
 organizations:
   - name: "Test Organization"
-    slug: "test-org"
     billing_email: "test@test.com"
     plan: "free"
     subscription_status: "active"
@@ -37,10 +36,8 @@ rbac:
 
   roles:
     - name: "owner"
-      display_name: "Owner"
       description: "Full access"
-      is_system_role: false
-      organization_slug: "test-org"
+      scope_type: "organization"
       permissions:
         - "organizations:read"
         - "projects:read"
@@ -48,20 +45,21 @@ rbac:
 
   memberships:
     - user_email: "test@test.com"
-      organization_slug: "test-org"
+      organization_name: "Test Organization"
       role_name: "owner"
+      scope_type: "organization"
 
 projects:
   - name: "Test Project"
     description: "Test project for validation"
-    organization_slug: "test-org"
+    organization_name: "Test Organization"
     environments:
       - name: "Test"
         slug: "test"
 
 api_keys:
   - name: "Test Key"
-    organization_slug: "test-org"
+    organization_name: "Test Organization"
     project_name: "Test Project"
     environment_name: "Test"
     rate_limit_per_minute: 60

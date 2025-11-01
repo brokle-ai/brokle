@@ -91,6 +91,17 @@ export function SignInForm({ className, ...props }: SignInFormProps) {
     }
   }
 
+  // OAuth button handlers
+  const handleGoogleLogin = () => {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
+    window.location.href = `${apiUrl}/api/v1/auth/google`
+  }
+
+  const handleGitHubLogin = () => {
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'
+    window.location.href = `${apiUrl}/api/v1/auth/github`
+  }
+
   return (
     <Form {...form}>
       <form
@@ -182,11 +193,21 @@ export function SignInForm({ className, ...props }: SignInFormProps) {
         </div>
 
         <div className='grid grid-cols-2 gap-2'>
-          <Button variant='outline' type='button' disabled={loginMutation.isPending || isRedirecting}>
+          <Button
+            variant='outline'
+            type='button'
+            disabled={loginMutation.isPending || isRedirecting}
+            onClick={handleGitHubLogin}
+          >
             <IconGithub className='h-4 w-4' /> GitHub
           </Button>
-          <Button variant='outline' type='button' disabled={loginMutation.isPending || isRedirecting}>
-            <IconFacebook className='h-4 w-4' /> Facebook
+          <Button
+            variant='outline'
+            type='button'
+            disabled={loginMutation.isPending || isRedirecting}
+            onClick={handleGoogleLogin}
+          >
+            <IconFacebook className='h-4 w-4' /> Google
           </Button>
         </div>
         

@@ -178,11 +178,23 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 	{
 		auth.POST("/login", s.handlers.Auth.Login)
 		auth.POST("/signup", s.handlers.Auth.Signup)
+		auth.POST("/complete-oauth-signup", s.handlers.Auth.CompleteOAuthSignup) // OAuth Step 2
+		auth.POST("/exchange-session/:session_id", s.handlers.Auth.ExchangeLoginSession) // OAuth token exchange
 		auth.POST("/refresh", s.handlers.Auth.RefreshToken)
 		auth.POST("/forgot-password", s.handlers.Auth.ForgotPassword)
 		auth.POST("/reset-password", s.handlers.Auth.ResetPassword)
+
+		// OAuth routes (Google/GitHub signup)
+		auth.GET("/google", s.handlers.Auth.InitiateGoogleOAuth)
+		auth.GET("/google/callback", s.handlers.Auth.GoogleCallback)
+		auth.GET("/github", s.handlers.Auth.InitiateGitHubOAuth)
+		auth.GET("/github/callback", s.handlers.Auth.GitHubCallback)
+
 		// Note: validate-key moved to SDK routes (/v1/auth/validate-key)
 	}
+
+	// Public invitation validation (no auth required, rate limited)
+	router.GET("/invitations/validate/:token", s.handlers.Organization.ValidateInvitationToken)
 
 	// Protected routes (require JWT auth)
 	protected := router.Group("")

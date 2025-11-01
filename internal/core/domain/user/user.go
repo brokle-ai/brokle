@@ -38,6 +38,15 @@ type User struct {
 	// Default Organization
 	DefaultOrganizationID *ulid.ULID `json:"default_organization_id,omitempty" gorm:"type:char(26)"`
 
+	// Signup information
+	Role           string  `json:"role" gorm:"size:100;not null"`
+	ReferralSource *string `json:"referral_source,omitempty" gorm:"size:100"`
+
+	// Authentication method tracking
+	AuthMethod      string  `json:"auth_method" gorm:"size:20;default:'password'"`       // password | oauth
+	OAuthProvider   *string `json:"oauth_provider,omitempty" gorm:"size:50"`             // google | github | etc
+	OAuthProviderID *string `json:"-" gorm:"size:255"`                                    // Provider's unique user ID (hidden from JSON)
+
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `json:"deleted_at,omitempty" gorm:"index"`
@@ -211,12 +220,13 @@ func (u *User) Reactivate() {
 }
 
 // NewUser creates a new user with default values.
-func NewUser(email, firstName, lastName string) *User {
+func NewUser(email, firstName, lastName, role string) *User {
 	return &User{
 		ID:                    ulid.New(),
 		Email:                 email,
 		FirstName:             firstName,
 		LastName:              lastName,
+		Role:                  role,
 		IsActive:              true,
 		IsEmailVerified:       false,
 		OnboardingCompletedAt: nil,

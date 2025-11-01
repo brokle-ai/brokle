@@ -641,6 +641,14 @@ func Load() (*Config, error) {
 	viper.BindEnv("auth.jwt_private_key_base64", "JWT_PRIVATE_KEY_BASE64")
 	viper.BindEnv("auth.jwt_public_key_base64", "JWT_PUBLIC_KEY_BASE64")
 
+	// OAuth configuration (Google/GitHub Signup)
+	viper.BindEnv("auth.google_client_id", "GOOGLE_CLIENT_ID")
+	viper.BindEnv("auth.google_client_secret", "GOOGLE_CLIENT_SECRET")
+	viper.BindEnv("auth.google_redirect_url", "GOOGLE_REDIRECT_URL")
+	viper.BindEnv("auth.github_client_id", "GITHUB_CLIENT_ID")
+	viper.BindEnv("auth.github_client_secret", "GITHUB_CLIENT_SECRET")
+	viper.BindEnv("auth.github_redirect_url", "GITHUB_REDIRECT_URL")
+
 	// Database configuration (granular environment variables)
 	viper.BindEnv("database.host", "DB_HOST")
 	viper.BindEnv("database.port", "DB_PORT")
@@ -780,6 +788,14 @@ func setDefaults() {
 	viper.SetDefault("auth.jwt_public_key_path", "")
 	viper.SetDefault("auth.jwt_private_key_base64", "")
 	viper.SetDefault("auth.jwt_public_key_base64", "")
+
+	// OAuth defaults (optional - only needed if OAuth signup is enabled)
+	viper.SetDefault("auth.google_client_id", "")
+	viper.SetDefault("auth.google_client_secret", "")
+	viper.SetDefault("auth.google_redirect_url", "")
+	viper.SetDefault("auth.github_client_id", "")
+	viper.SetDefault("auth.github_client_secret", "")
+	viper.SetDefault("auth.github_redirect_url", "")
 
 	// Logging defaults
 	viper.SetDefault("logging.level", "info")

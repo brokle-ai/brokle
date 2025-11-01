@@ -11,27 +11,41 @@ import (
 	"brokle/internal/config"
 	"brokle/internal/core/domain/auth"
 	"brokle/internal/core/domain/user"
+	authService "brokle/internal/core/services/auth"
+	"brokle/internal/core/services/registration"
 	"brokle/pkg/response"
 	"brokle/pkg/ulid"
 )
 
 // Handler handles authentication endpoints
 type Handler struct {
-	config        *config.Config
-	logger        *logrus.Logger
-	authService   auth.AuthService
-	apiKeyService auth.APIKeyService
-	userService   user.UserService
+	config              *config.Config
+	logger              *logrus.Logger
+	authService         auth.AuthService
+	apiKeyService       auth.APIKeyService
+	userService         user.UserService
+	registrationService registration.RegistrationService
+	oauthProvider       *authService.OAuthProviderService
 }
 
 // NewHandler creates a new auth handler
-func NewHandler(config *config.Config, logger *logrus.Logger, authService auth.AuthService, apiKeyService auth.APIKeyService, userService user.UserService) *Handler {
+func NewHandler(
+	config *config.Config,
+	logger *logrus.Logger,
+	authService auth.AuthService,
+	apiKeyService auth.APIKeyService,
+	userService user.UserService,
+	registrationService registration.RegistrationService,
+	oauthProvider *authService.OAuthProviderService,
+) *Handler {
 	return &Handler{
-		config:        config,
-		logger:        logger,
-		authService:   authService,
-		apiKeyService: apiKeyService,
-		userService:   userService,
+		config:              config,
+		logger:              logger,
+		authService:         authService,
+		apiKeyService:       apiKeyService,
+		userService:         userService,
+		registrationService: registrationService,
+		oauthProvider:       oauthProvider,
 	}
 }
 
@@ -85,17 +99,19 @@ func (h *Handler) Login(c *gin.Context) {
 // RegisterRequest represents the registration request payload
 // @Description User registration information
 type RegisterRequest struct {
-	Email     string `json:"email" binding:"required,email" example:"user@example.com" description:"User email address"`
-	FirstName string `json:"first_name" binding:"required,min=1,max=100" example:"John" description:"User first name"`
-	LastName  string `json:"last_name" binding:"required,min=1,max=100" example:"Doe" description:"User last name"`
-	Password  string `json:"password" binding:"required,min=8" example:"password123" description:"User password (minimum 8 characters)"`
-	Timezone  string `json:"timezone,omitempty" example:"UTC" description:"User timezone (optional)"`
-	Language  string `json:"language,omitempty" example:"en" description:"User language preference (optional)"`
+	Email            string  `json:"email" binding:"required,email" example:"user@example.com" description:"User email address"`
+	FirstName        string  `json:"first_name" binding:"required,min=1,max=100" example:"John" description:"User first name"`
+	LastName         string  `json:"last_name" binding:"required,min=1,max=100" example:"Doe" description:"User last name"`
+	Password         string  `json:"password" binding:"required,min=8" example:"password123" description:"User password (minimum 8 characters)"`
+	Role             string  `json:"role" binding:"required,oneof=engineer product designer executive other" example:"engineer" description:"User role (engineer, product, designer, executive, other)"`
+	OrganizationName *string `json:"organization_name,omitempty" example:"Acme Corp" description:"Organization name (required for fresh signup, omitted for invitation)"`
+	ReferralSource   *string `json:"referral_source,omitempty" example:"search" description:"Where did you hear about us (optional)"`
+	InvitationToken  *string `json:"invitation_token,omitempty" example:"01HX..." description:"Invitation token (for invitation-based signup)"`
 }
 
 // Signup handles user registration
 // @Summary User registration
-// @Description Register a new user account
+// @Description Register a new user account with organization or invitation
 // @Tags Authentication
 // @Accept json
 // @Produce json
@@ -113,26 +129,212 @@ func (h *Handler) Signup(c *gin.Context) {
 		return
 	}
 
-	// Create auth register request
-	authReq := &auth.RegisterRequest{
-		Email:     req.Email,
-		FirstName: req.FirstName,
-		LastName:  req.LastName,
-		Password:  req.Password,
-		Timezone:  req.Timezone,
-		Language:  req.Language,
+	// Validation: must have either org name or invitation token
+	if req.InvitationToken == nil && req.OrganizationName == nil {
+		h.logger.Error("Registration requires either organization_name or invitation_token")
+		response.BadRequest(c, "organization_name required for fresh signups", "")
+		return
 	}
 
-	// Register user and auto-login (returns tokens)
-	loginResp, err := h.authService.Register(c.Request.Context(), authReq)
+	// Create registration request
+	regReq := &registration.RegisterRequest{
+		Email:            req.Email,
+		Password:         req.Password,
+		FirstName:        req.FirstName,
+		LastName:         req.LastName,
+		Role:             req.Role,
+		ReferralSource:   req.ReferralSource,
+		OrganizationName: req.OrganizationName,
+		InvitationToken:  req.InvitationToken,
+		IsOAuthUser:      false, // Email/password signup
+	}
+
+	// Route to appropriate registration method
+	var regResp *registration.RegistrationResponse
+	var err error
+
+	if req.InvitationToken != nil {
+		// Invitation-based signup
+		regResp, err = h.registrationService.RegisterWithInvitation(c.Request.Context(), regReq)
+	} else {
+		// Fresh signup with organization
+		regResp, err = h.registrationService.RegisterWithOrganization(c.Request.Context(), regReq)
+	}
+
 	if err != nil {
 		h.logger.WithError(err).WithField("email", req.Email).Error("Registration failed")
 		response.Error(c, err)
 		return
 	}
 
-	h.logger.WithField("email", req.Email).Info("User registered and logged in successfully")
-	response.Success(c, loginResp)
+	h.logger.WithFields(logrus.Fields{
+		"email":  req.Email,
+		"org_id": regResp.Organization.ID,
+	}).Info("User registered successfully")
+
+	// Return login tokens
+	response.Success(c, regResp.LoginTokens)
+}
+
+// CompleteOAuthSignupRequest represents the OAuth signup completion request
+// @Description Complete OAuth signup with additional user information
+type CompleteOAuthSignupRequest struct {
+	SessionID        string  `json:"session_id" binding:"required" example:"01HX..." description:"OAuth session ID from redirect"`
+	Role             string  `json:"role" binding:"required" example:"engineer" description:"User role"`
+	OrganizationName *string `json:"organization_name,omitempty" example:"Acme Corp" description:"Organization name (required for fresh signup)"`
+	ReferralSource   *string `json:"referral_source,omitempty" example:"search" description:"Where did you hear about us"`
+}
+
+// CompleteOAuthSignup handles OAuth signup completion (Step 2)
+// @Summary Complete OAuth signup
+// @Description Complete OAuth-based registration with additional user information
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Param request body CompleteOAuthSignupRequest true "OAuth signup completion data"
+// @Success 200 {object} response.SuccessResponse "OAuth signup completed successfully"
+// @Failure 400 {object} response.ErrorResponse "Invalid request payload"
+// @Failure 404 {object} response.ErrorResponse "Session not found or expired"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /api/v1/auth/complete-oauth-signup [post]
+func (h *Handler) CompleteOAuthSignup(c *gin.Context) {
+	var req CompleteOAuthSignupRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.WithError(err).Error("Invalid OAuth signup completion request")
+		response.BadRequest(c, "Invalid request payload", err.Error())
+		return
+	}
+
+	// Get OAuth session from Redis
+	sessionInterface, err := h.authService.GetOAuthSession(c.Request.Context(), req.SessionID)
+	if err != nil {
+		h.logger.WithError(err).Error("Failed to get OAuth session")
+		response.Error(c, err)
+		return
+	}
+
+	// Type assert to *OAuthSession (correct type from oauth_session.go)
+	session, ok := sessionInterface.(*authService.OAuthSession)
+	if !ok {
+		h.logger.Error("Invalid OAuth session type")
+		response.BadRequest(c, "Invalid session data", "")
+		return
+	}
+
+	// Validate required fields
+	if session.Email == "" {
+		h.logger.Error("Missing email in OAuth session")
+		response.BadRequest(c, "Invalid session: missing email", "")
+		return
+	}
+	if session.FirstName == "" {
+		h.logger.Error("Missing first name in OAuth session")
+		response.BadRequest(c, "Invalid session: missing first name", "")
+		return
+	}
+	if session.LastName == "" {
+		h.logger.Error("Missing last name in OAuth session")
+		response.BadRequest(c, "Invalid session: missing last name", "")
+		return
+	}
+	if session.Provider == "" {
+		h.logger.Error("Missing provider in OAuth session")
+		response.BadRequest(c, "Invalid session: missing provider", "")
+		return
+	}
+	if session.ProviderID == "" {
+		h.logger.Error("Missing provider ID in OAuth session")
+		response.BadRequest(c, "Invalid session: missing provider ID", "")
+		return
+	}
+
+	// Create OAuth registration request with validated session data
+	oauthReq := &registration.OAuthRegistrationRequest{
+		Email:            session.Email,
+		FirstName:        session.FirstName,
+		LastName:         session.LastName,
+		Role:             req.Role,
+		Provider:         session.Provider,
+		ProviderID:       session.ProviderID,
+		ReferralSource:   req.ReferralSource,
+		OrganizationName: req.OrganizationName,
+		InvitationToken:  session.InvitationToken,
+	}
+
+	// Complete OAuth registration
+	regResp, err := h.registrationService.CompleteOAuthRegistration(c.Request.Context(), oauthReq)
+	if err != nil {
+		h.logger.WithError(err).WithField("email", session.Email).Error("OAuth registration failed")
+		response.Error(c, err)
+		return
+	}
+
+	// Delete OAuth session (cleanup)
+	_ = h.authService.DeleteOAuthSession(c.Request.Context(), req.SessionID)
+
+	h.logger.WithFields(logrus.Fields{
+		"email":    session.Email,
+		"provider": session.Provider,
+		"org_id":   regResp.Organization.ID,
+	}).Info("OAuth registration completed successfully")
+
+	// Return login tokens
+	response.Success(c, regResp.LoginTokens)
+}
+
+// ExchangeLoginSession exchanges a one-time session ID for login tokens
+// @Summary Exchange login session
+// @Description Exchange OAuth login session for access tokens (existing user OAuth login)
+// @Tags Authentication
+// @Param session_id path string true "Login session ID"
+// @Success 200 {object} response.SuccessResponse "Login tokens"
+// @Failure 404 {object} response.ErrorResponse "Session not found or expired"
+// @Failure 400 {object} response.ErrorResponse "Invalid session data"
+// @Router /api/v1/auth/exchange-session/{session_id} [post]
+func (h *Handler) ExchangeLoginSession(c *gin.Context) {
+	sessionID := c.Param("session_id")
+
+	// Get login tokens from session (one-time use)
+	sessionData, err := h.authService.GetLoginTokenSession(c.Request.Context(), sessionID)
+	if err != nil {
+		h.logger.WithError(err).Error("Failed to get login session")
+		response.Error(c, err)
+		return
+	}
+
+	// Extract and validate tokens
+	accessToken, ok := sessionData["access_token"].(string)
+	if !ok || accessToken == "" {
+		h.logger.Error("Missing access_token in login session")
+		response.BadRequest(c, "Invalid session data: missing access token", "")
+		return
+	}
+
+	refreshToken, ok := sessionData["refresh_token"].(string)
+	if !ok || refreshToken == "" {
+		h.logger.Error("Missing refresh_token in login session")
+		response.BadRequest(c, "Invalid session data: missing refresh token", "")
+		return
+	}
+
+	// JSON unmarshaling uses float64 for numbers, not int64
+	expiresInFloat, ok := sessionData["expires_in"].(float64)
+	if !ok {
+		h.logger.Error("Missing or invalid expires_in in login session")
+		response.BadRequest(c, "Invalid session data: missing expiration", "")
+		return
+	}
+	expiresIn := int64(expiresInFloat)
+
+	h.logger.Info("Login session exchanged successfully")
+
+	// Return tokens
+	response.Success(c, map[string]interface{}{
+		"access_token":  accessToken,
+		"refresh_token": refreshToken,
+		"token_type":    "Bearer",
+		"expires_in":    expiresIn,
+	})
 }
 
 // RefreshTokenRequest represents the refresh token request payload

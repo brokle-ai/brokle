@@ -69,43 +69,6 @@ func (a *auditDecorator) Login(ctx context.Context, req *authDomain.LoginRequest
 	return resp, err
 }
 
-// Register handles user registration with audit logging
-func (a *auditDecorator) Register(ctx context.Context, req *authDomain.RegisterRequest) (*authDomain.LoginResponse, error) {
-	resp, err := a.authService.Register(ctx, req)
-	
-	// Audit based on result
-	if err != nil {
-		var reason string
-		if appErr, ok := appErrors.IsAppError(err); ok {
-			switch appErr.Type {
-			case appErrors.ConflictError:
-				reason = "email_already_exists"
-			case appErrors.ValidationError:
-				reason = "validation_failed"
-			default:
-				reason = "system_error"
-			}
-		} else {
-			reason = "system_error"
-		}
-		
-		auditLog := authDomain.NewAuditLog(nil, nil, "auth.register.failed", "user", "", 
-			fmt.Sprintf(`{"email": "%s", "reason": "%s"}`, req.Email, reason), "", "")
-		if createErr := a.auditRepo.Create(ctx, auditLog); createErr != nil {
-			a.logger.WithError(createErr).Error("Failed to create register failure audit log")
-		}
-	} else {
-		// Success audit
-		auditLog := authDomain.NewAuditLog(nil, nil, "auth.register.success", "user", "",
-			fmt.Sprintf(`{"email": "%s"}`, req.Email), "", "")
-		if createErr := a.auditRepo.Create(ctx, auditLog); createErr != nil {
-			a.logger.WithError(createErr).Error("Failed to create register success audit log")
-		}
-	}
-	
-	return resp, err
-}
-
 // RefreshToken handles token refresh with audit logging
 func (a *auditDecorator) RefreshToken(ctx context.Context, req *authDomain.RefreshTokenRequest) (*authDomain.LoginResponse, error) {
 	resp, err := a.authService.RefreshToken(ctx, req)
@@ -215,4 +178,31 @@ func (a *auditDecorator) IsTokenRevoked(ctx context.Context, jti string) (bool, 
 
 func (a *auditDecorator) GetAuthContext(ctx context.Context, token string) (*authDomain.AuthContext, error) {
 	return a.authService.GetAuthContext(ctx, token)
+}
+
+// OAuth session methods - delegate without audit
+func (a *auditDecorator) CreateOAuthSession(ctx context.Context, session interface{}) (string, error) {
+	return a.authService.CreateOAuthSession(ctx, session)
+}
+
+func (a *auditDecorator) GetOAuthSession(ctx context.Context, sessionID string) (interface{}, error) {
+	return a.authService.GetOAuthSession(ctx, sessionID)
+}
+
+func (a *auditDecorator) DeleteOAuthSession(ctx context.Context, sessionID string) error {
+	return a.authService.DeleteOAuthSession(ctx, sessionID)
+}
+
+// GenerateTokensForUser delegates to wrapped service (no audit - same as Login success)
+func (a *auditDecorator) GenerateTokensForUser(ctx context.Context, userID ulid.ULID) (*authDomain.LoginResponse, error) {
+	return a.authService.GenerateTokensForUser(ctx, userID)
+}
+
+// OAuth login token session methods - delegate without audit
+func (a *auditDecorator) CreateLoginTokenSession(ctx context.Context, accessToken, refreshToken string, expiresIn int64, userID ulid.ULID) (string, error) {
+	return a.authService.CreateLoginTokenSession(ctx, accessToken, refreshToken, expiresIn, userID)
+}
+
+func (a *auditDecorator) GetLoginTokenSession(ctx context.Context, sessionID string) (map[string]interface{}, error) {
+	return a.authService.GetLoginTokenSession(ctx, sessionID)
 }

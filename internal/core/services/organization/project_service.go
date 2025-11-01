@@ -37,14 +37,8 @@ func (s *projectService) CreateProject(ctx context.Context, orgID ulid.ULID, req
 		return nil, appErrors.NewNotFoundError("Organization not found")
 	}
 
-	// Check if project with slug already exists in organization
-	existing, _ := s.projectRepo.GetBySlug(ctx, orgID, req.Slug)
-	if existing != nil {
-		return nil, appErrors.NewConflictError("Project with this slug already exists in organization")
-	}
-
-	// Create project
-	project := orgDomain.NewProject(orgID, req.Name, req.Slug, req.Description)
+	// Create project (no slug - use ULID only)
+	project := orgDomain.NewProject(orgID, req.Name, req.Description)
 	err = s.projectRepo.Create(ctx, project)
 	if err != nil {
 		return nil, appErrors.NewInternalError("Failed to create project", err)

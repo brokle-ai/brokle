@@ -343,28 +343,6 @@ func (s *UserService) userCacheKey(userID interface{}) string {
 	return fmt.Sprintf("user:%s", userID)
 }
 
-// Register creates a new user account
-func (s *UserService) Register(ctx context.Context, req *user.CreateUserRequest) (*user.User, error) {
-	s.logger.WithField("email", req.Email).Info("Registering new user")
-
-	// Create user from request
-	u := user.NewUser(req.Email, req.FirstName, req.LastName)
-
-	// Hash password
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
-	if err != nil {
-		return nil, fmt.Errorf("failed to hash password: %w", err)
-	}
-	u.Password = string(hashedPassword)
-
-	// Create user
-	if err := s.Create(ctx, u); err != nil {
-		return nil, err
-	}
-
-	return u, nil
-}
-
 // GetUser retrieves a user by ID
 func (s *UserService) GetUser(ctx context.Context, userID ulid.ULID) (*user.User, error) {
 	return s.GetByID(ctx, userID.String())

@@ -35,7 +35,6 @@ type Handler struct {
 type Organization struct {
 	ID          string    `json:"id" example:"org_1234567890" description:"Unique organization identifier"`
 	Name        string    `json:"name" example:"Acme Corporation" description:"Organization name"`
-	Slug        string    `json:"slug" example:"acme-corp" description:"URL-friendly organization identifier"`
 	Description string    `json:"description,omitempty" example:"Leading AI solutions provider" description:"Optional organization description"`
 	Plan        string    `json:"plan" example:"pro" description:"Subscription plan (free, pro, business, enterprise)"`
 	Status      string    `json:"status" example:"active" description:"Organization status (active, suspended, deleted)"`
@@ -47,7 +46,6 @@ type Organization struct {
 // CreateOrganizationRequest represents the request to create an organization
 type CreateOrganizationRequest struct {
 	Name        string `json:"name" binding:"required,min=2,max=100" example:"Acme Corporation" description:"Organization name (2-100 characters)"`
-	Slug        string `json:"slug,omitempty" binding:"omitempty,min=2,max=50" example:"acme-corp" description:"Optional URL-friendly identifier (auto-generated if not provided)"`
 	Description string `json:"description,omitempty" binding:"omitempty,max=500" example:"Leading AI solutions provider" description:"Optional description (max 500 characters)"`
 }
 
@@ -180,8 +178,7 @@ func (h *Handler) List(c *gin.Context) {
 	for _, org := range organizations {
 		// Apply search filter if provided
 		if req.Search != "" {
-			if !strings.Contains(strings.ToLower(org.Name), strings.ToLower(req.Search)) &&
-				!strings.Contains(strings.ToLower(org.Slug), strings.ToLower(req.Search)) {
+			if !strings.Contains(strings.ToLower(org.Name), strings.ToLower(req.Search)) {
 				continue
 			}
 		}
@@ -189,8 +186,7 @@ func (h *Handler) List(c *gin.Context) {
 		filteredOrgs = append(filteredOrgs, Organization{
 			ID:        org.ID.String(),
 			Name:      org.Name,
-			Slug:      org.Slug,
-			Plan:      org.Plan,
+				Plan:      org.Plan,
 			Status:    org.SubscriptionStatus,
 			CreatedAt: org.CreatedAt,
 			UpdatedAt: org.UpdatedAt,
@@ -264,7 +260,6 @@ func (h *Handler) Create(c *gin.Context) {
 	// Create organization request
 	createReq := &organization.CreateOrganizationRequest{
 		Name:         req.Name,
-		Slug:         req.Slug,
 		BillingEmail: "", // Will be set from user email or provided
 	}
 
@@ -274,12 +269,11 @@ func (h *Handler) Create(c *gin.Context) {
 		h.logger.WithError(err).WithFields(logrus.Fields{
 			"user_id": userID,
 			"name":    req.Name,
-			"slug":    req.Slug,
 		}).Error("Failed to create organization")
 
 		// Handle specific errors
 		if strings.Contains(err.Error(), "already exists") || strings.Contains(err.Error(), "duplicate") {
-			response.Conflict(c, "Organization slug already exists")
+			response.Conflict(c, "Organization name already exists")
 			return
 		}
 
@@ -291,7 +285,6 @@ func (h *Handler) Create(c *gin.Context) {
 	responseData := Organization{
 		ID:        org.ID.String(),
 		Name:      org.Name,
-		Slug:      org.Slug,
 		Plan:      org.Plan,
 		Status:    org.SubscriptionStatus,
 		CreatedAt: org.CreatedAt,
@@ -303,7 +296,6 @@ func (h *Handler) Create(c *gin.Context) {
 		"user_id":         userID,
 		"organization_id": org.ID,
 		"name":            org.Name,
-		"slug":            org.Slug,
 	}).Info("Organization created successfully")
 
 	c.Header("Location", fmt.Sprintf("/api/v1/organizations/%s", org.ID))
@@ -393,7 +385,6 @@ func (h *Handler) Get(c *gin.Context) {
 	responseData := Organization{
 		ID:        org.ID.String(),
 		Name:      org.Name,
-		Slug:      org.Slug,
 		Plan:      org.Plan,
 		Status:    org.SubscriptionStatus,
 		CreatedAt: org.CreatedAt,
@@ -511,7 +502,6 @@ func (h *Handler) Update(c *gin.Context) {
 	responseData := Organization{
 		ID:        org.ID.String(),
 		Name:      org.Name,
-		Slug:      org.Slug,
 		Plan:      org.Plan,
 		Status:    org.SubscriptionStatus,
 		CreatedAt: org.CreatedAt,
@@ -1011,3 +1001,88 @@ func (h *Handler) BulkCreateSettings(c *gin.Context) { h.Settings.BulkCreateSett
 func (h *Handler) ExportSettings(c *gin.Context)     { h.Settings.ExportSettings(c) }
 func (h *Handler) ImportSettings(c *gin.Context)     { h.Settings.ImportSettings(c) }
 func (h *Handler) ResetToDefaults(c *gin.Context)    { h.Settings.ResetToDefaults(c) }
+
+// InvitationDetailsResponse represents invitation details for validation
+type InvitationDetailsResponse struct {
+	OrganizationName string    `json:"organization_name" example:"Acme Corp"`
+	OrganizationID   string    `json:"organization_id" example:"01HX..."`
+	InviterName      string    `json:"inviter_name" example:"John"`
+	Role             string    `json:"role" example:"developer"`
+	Email            string    `json:"email" example:"user@example.com"`
+	ExpiresAt        time.Time `json:"expires_at"`
+	IsExpired        bool      `json:"is_expired"`
+}
+
+// ValidateInvitationToken validates an invitation token (PUBLIC endpoint)
+// @Summary Validate invitation token
+// @Description Validate an invitation token and return invitation details
+// @Tags Invitations
+// @Produce json
+// @Param token path string true "Invitation token"
+// @Success 200 {object} InvitationDetailsResponse "Valid invitation"
+// @Failure 404 {object} response.ErrorResponse "Invalid or not found"
+// @Failure 410 {object} response.ErrorResponse "Invitation expired"
+// @Router /api/v1/invitations/validate/{token} [get]
+func (h *Handler) ValidateInvitationToken(c *gin.Context) {
+	token := c.Param("token")
+
+	// Get invitation by token
+	invitation, err := h.invitationService.GetInvitationByToken(c.Request.Context(), token)
+	if err != nil {
+		h.logger.WithError(err).Error("Failed to get invitation")
+		response.Error(c, err)
+		return
+	}
+
+	// Check if expired or not pending
+	isExpired := time.Now().After(invitation.ExpiresAt) ||
+		invitation.Status != organization.InvitationStatusPending
+
+	if isExpired {
+		response.ErrorWithStatus(c, 410, "invitation_expired", "Invitation has expired or is no longer valid", "")
+		return
+	}
+
+	// Get organization details
+	org, err := h.organizationService.GetOrganization(c.Request.Context(), invitation.OrganizationID)
+	if err != nil {
+		h.logger.WithError(err).Error("Failed to get organization")
+		response.Error(c, err)
+		return
+	}
+
+	// Get inviter details
+	inviter, err := h.userService.GetUser(c.Request.Context(), invitation.InvitedByID)
+	if err != nil {
+		h.logger.WithError(err).Warn("Failed to get inviter details")
+		// Non-critical - continue with unknown inviter
+	}
+
+	// Get role details
+	role, err := h.roleService.GetRoleByID(c.Request.Context(), invitation.RoleID)
+	if err != nil {
+		h.logger.WithError(err).Warn("Failed to get role details")
+	}
+
+	inviterName := "Unknown"
+	if inviter != nil {
+		inviterName = inviter.FirstName // Only first name for privacy
+	}
+
+	roleName := "Member"
+	if role != nil {
+		roleName = role.Name
+	}
+
+	resp := InvitationDetailsResponse{
+		OrganizationName: org.Name,
+		OrganizationID:   org.ID.String(),
+		InviterName:      inviterName,
+		Role:             roleName,
+		Email:            invitation.Email,
+		ExpiresAt:        invitation.ExpiresAt,
+		IsExpired:        isExpired,
+	}
+
+	response.Success(c, resp)
+}

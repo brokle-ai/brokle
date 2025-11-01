@@ -172,9 +172,9 @@ func (rs *RBACSeeder) SeedOrganizationMemberships(ctx context.Context, membershi
 		}
 
 		// Find organization
-		orgID, exists := entityMaps.Organizations[membershipSeed.OrganizationSlug]
+		orgID, exists := entityMaps.Organizations[membershipSeed.OrganizationName]
 		if !exists {
-			return fmt.Errorf("organization not found: %s", membershipSeed.OrganizationSlug)
+			return fmt.Errorf("organization not found: %s", membershipSeed.OrganizationName)
 		}
 
 		// Find template role
@@ -188,23 +188,23 @@ func (rs *RBACSeeder) SeedOrganizationMemberships(ctx context.Context, membershi
 		existing, err := rs.orgMemberRepo.GetByUserAndOrganization(ctx, userID, orgID)
 		if err == nil && existing != nil {
 			if verbose {
-				log.Printf("   Membership already exists for %s in %s, skipping", 
-					membershipSeed.UserEmail, membershipSeed.OrganizationSlug)
+				log.Printf("   Membership already exists for %s in %s, skipping",
+					membershipSeed.UserEmail, membershipSeed.OrganizationName)
 			}
 			continue
 		}
 
 		// Create organization membership with single role
 		member := auth.NewOrganizationMember(userID, orgID, roleID, nil)
-		
+
 		if err := rs.orgMemberRepo.Create(ctx, member); err != nil {
-			return fmt.Errorf("failed to create membership for %s in %s: %w", 
-				membershipSeed.UserEmail, membershipSeed.OrganizationSlug, err)
+			return fmt.Errorf("failed to create membership for %s in %s: %w",
+				membershipSeed.UserEmail, membershipSeed.OrganizationName, err)
 		}
 
 		if verbose {
-			log.Printf("   ✓ Added %s to %s with role %s", 
-				membershipSeed.UserEmail, membershipSeed.OrganizationSlug, membershipSeed.RoleName)
+			log.Printf("   ✓ Added %s to %s with role %s",
+				membershipSeed.UserEmail, membershipSeed.OrganizationName, membershipSeed.RoleName)
 		}
 	}
 

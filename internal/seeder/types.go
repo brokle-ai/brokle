@@ -14,7 +14,6 @@ type SeedData struct {
 // OrganizationSeed represents seed data for organizations
 type OrganizationSeed struct {
 	Name               string `yaml:"name"`
-	Slug               string `yaml:"slug"`
 	BillingEmail       string `yaml:"billing_email"`
 	Plan               string `yaml:"plan"`
 	SubscriptionStatus string `yaml:"subscription_status"`
@@ -58,7 +57,7 @@ type MembershipSeed struct {
 	UserEmail        string `yaml:"user_email"`
 	RoleName         string `yaml:"role_name"`
 	ScopeType        string `yaml:"scope_type"`                   // 'system' | 'organization' | 'project'
-	OrganizationSlug string `yaml:"organization_slug,omitempty"`  // Only for org/project scopes
+	OrganizationName string `yaml:"organization_name,omitempty"`  // Only for org/project scopes (changed from slug)
 	ProjectName      string `yaml:"project_name,omitempty"`       // Only for project scope
 }
 
@@ -66,7 +65,7 @@ type MembershipSeed struct {
 type ProjectSeed struct {
 	Name             string `yaml:"name"`
 	Description      string `yaml:"description"`
-	OrganizationSlug string `yaml:"organization_slug"`
+	OrganizationName string `yaml:"organization_name"` // Changed from slug to name
 }
 
 
@@ -92,11 +91,11 @@ type Options struct {
 
 // Internal maps for tracking created entities by their keys
 type EntityMaps struct {
-	Organizations map[string]ulid.ULID // slug -> organization ID
+	Organizations map[string]ulid.ULID // name -> organization ID
 	Users         map[string]ulid.ULID // email -> user ID
-	Roles         map[string]ulid.ULID // org_slug:role_name -> role ID
+	Roles         map[string]ulid.ULID // org_name:role_name -> role ID
 	Permissions   map[string]ulid.ULID // permission name -> permission ID
-	Projects      map[string]ulid.ULID // org_slug:project_name -> project ID
+	Projects      map[string]ulid.ULID // org_name:project_name -> project ID
 }
 
 // NewEntityMaps creates a new EntityMaps instance with initialized maps
