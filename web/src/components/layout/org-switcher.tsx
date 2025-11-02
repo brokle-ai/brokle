@@ -4,7 +4,7 @@ import React from 'react'
 import { useRouter } from 'next/navigation'
 import { Building2, Check, ChevronsUpDown, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { buildOrgUrl } from '@/lib/utils/slug-utils'
+import { buildOrgUrl, generateCompositeSlug } from '@/lib/utils/slug-utils'
 import { Button } from '@/components/ui/button'
 import {
   Command,
@@ -79,7 +79,7 @@ export function OrgSwitcher({ currentOrganization, organizations = [] }: OrgSwit
               {organizations.map((org) => (
                 <CommandItem
                   key={org.id}
-                  value={org.slug}
+                  value={org.id}
                   onSelect={() => handleSelect(org)}
                 >
                   <Building2 className="mr-2 h-4 w-4" />
@@ -92,7 +92,7 @@ export function OrgSwitcher({ currentOrganization, organizations = [] }: OrgSwit
                   <Check
                     className={cn(
                       "ml-auto h-4 w-4",
-                      currentOrganization?.slug === org.slug
+                      currentOrganization?.id === org.id
                         ? "opacity-100"
                         : "opacity-0"
                     )}

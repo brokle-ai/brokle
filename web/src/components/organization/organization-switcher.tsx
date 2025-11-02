@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ChevronsUpDown, Plus, Building2, FolderOpen, Settings, Users } from 'lucide-react'
 import { useOrganization } from '@/context/org-context'
+import { generateCompositeSlug } from '@/lib/utils/slug-utils'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -50,12 +51,17 @@ export function OrganizationSwitcher({
   const [isOrgLoading, setIsOrgLoading] = useState(false)
   const [isProjectLoading, setIsProjectLoading] = useState(false)
 
-  const handleOrgSwitch = async (orgSlug: string) => {
-    if (isOrgLoading || orgSlug === currentOrganization?.slug) return
-    
+  const handleOrgSwitch = async (compositeSlug: string) => {
+    // Generate current org composite slug for comparison
+    const currentCompositeSlug = currentOrganization
+      ? generateCompositeSlug(currentOrganization.name, currentOrganization.id)
+      : null
+
+    if (isOrgLoading || compositeSlug === currentCompositeSlug) return
+
     try {
       setIsOrgLoading(true)
-      await switchOrganization(orgSlug)
+      await switchOrganization(compositeSlug)
     } catch (error) {
       console.error('Failed to switch organization:', error)
     } finally {
@@ -63,12 +69,17 @@ export function OrganizationSwitcher({
     }
   }
 
-  const handleProjectSwitch = async (projectSlug: string) => {
-    if (isProjectLoading || projectSlug === currentProject?.slug) return
-    
+  const handleProjectSwitch = async (compositeSlug: string) => {
+    // Generate current project composite slug for comparison
+    const currentCompositeSlug = currentProject
+      ? generateCompositeSlug(currentProject.name, currentProject.id)
+      : null
+
+    if (isProjectLoading || compositeSlug === currentCompositeSlug) return
+
     try {
       setIsProjectLoading(true)
-      await switchProject(projectSlug)
+      await switchProject(compositeSlug)
     } catch (error) {
       console.error('Failed to switch project:', error)
     } finally {
@@ -150,9 +161,9 @@ export function OrganizationSwitcher({
               disabled={isOrgLoading}
             >
               <Avatar className="h-8 w-8">
-                <AvatarImage 
-                  src={`/api/organizations/${currentOrganization.slug}/avatar`} 
-                  alt={currentOrganization.name} 
+                <AvatarImage
+                  src={`/api/organizations/${currentOrganization.id}/avatar`}
+                  alt={currentOrganization.name}
                 />
                 <AvatarFallback className="bg-primary text-primary-foreground text-xs font-semibold">
                   {getInitials(currentOrganization.name)}
@@ -197,14 +208,21 @@ export function OrganizationSwitcher({
             {organizations.map((org, index) => (
               <DropdownMenuItem
                 key={org.id}
-                onClick={() => handleOrgSwitch(org.slug)}
+                onClick={() => {
+                  try {
+                    const compositeSlug = generateCompositeSlug(org.name, org.id)
+                    handleOrgSwitch(compositeSlug)
+                  } catch (error) {
+                    console.error('[OrgSwitcher] Failed to generate composite slug for org:', org.name, error)
+                  }
+                }}
                 className="gap-2 p-2 cursor-pointer"
                 disabled={isOrgLoading}
               >
                 <Avatar className="h-6 w-6">
-                  <AvatarImage 
-                    src={`/api/organizations/${org.slug}/avatar`} 
-                    alt={org.name} 
+                  <AvatarImage
+                    src={`/api/organizations/${org.id}/avatar`}
+                    alt={org.name}
                   />
                   <AvatarFallback className="text-xs">
                     {getInitials(org.name)}
@@ -240,7 +258,14 @@ export function OrganizationSwitcher({
                 {projects.slice(0, 5).map((project) => (
                   <DropdownMenuItem
                     key={project.id}
-                    onClick={() => handleProjectSwitch(project.slug)}
+                    onClick={() => {
+                      try {
+                        const compositeSlug = generateCompositeSlug(project.name, project.id)
+                        handleProjectSwitch(compositeSlug)
+                      } catch (error) {
+                        console.error('[OrgSwitcher] Failed to generate composite slug for project:', project.name, error)
+                      }
+                    }}
                     className="gap-2 p-2 cursor-pointer"
                     disabled={isProjectLoading}
                   >

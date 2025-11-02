@@ -58,14 +58,19 @@ export function OrgSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
     <Sidebar {...props} collapsible="icon" variant="sidebar">
       <SidebarHeader>
-        <SidebarGroup className="py-2">
-          <div className="flex items-center gap-2 px-2 py-1">
-            <BrokleLogo className="h-6 w-6" />
-            <span className="text-lg font-semibold group-data-[collapsible=icon]:hidden">
-              Brokle
-            </span>
-          </div>
-        </SidebarGroup>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              size='lg'
+              className='gap-2 hover:bg-transparent active:bg-transparent'
+            >
+              <div className='flex aspect-square size-8 items-center justify-center'>
+                <BrokleLogo className='size-6' />
+              </div>
+              <span className='text-lg font-semibold'>Brokle</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
         <SidebarSeparator />
       </SidebarHeader>
       

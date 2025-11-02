@@ -1,13 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { exchangeLoginSession } from '@/lib/api/services/auth'
 
 // OAuth callback page for handling token exchange after OAuth login
-export default function OAuthCallbackPage() {
+function OAuthCallbackContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
@@ -67,5 +67,19 @@ export default function OAuthCallbackPage() {
       <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       <p className="mt-4 text-sm text-muted-foreground">Completing authentication...</p>
     </div>
+  )
+}
+
+export default function OAuthCallbackPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      }
+    >
+      <OAuthCallbackContent />
+    </Suspense>
   )
 }

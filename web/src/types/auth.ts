@@ -27,7 +27,6 @@ export interface User {
 export interface Organization {
   id: string
   name: string
-  slug: string
   plan: SubscriptionPlan
   members: OrganizationMember[]
   apiKeys: ApiKey[]
@@ -46,7 +45,6 @@ export interface OrganizationMember {
 export interface Project {
   id: string
   name: string
-  slug: string
   organizationId: string
   environment: ProjectEnvironment
   apiKeys: ApiKey[]

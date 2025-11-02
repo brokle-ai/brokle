@@ -51,7 +51,6 @@ export const login = async (credentials: LoginCredentials): Promise<AuthResponse
     const orgResponse = await client.get<Array<{
       id: string
       name: string
-      slug: string
       billing_email: string
       subscription_plan: 'free' | 'pro' | 'business' | 'enterprise'
       created_at: string
@@ -61,24 +60,23 @@ export const login = async (credentials: LoginCredentials): Promise<AuthResponse
         'Authorization': `Bearer ${backendResponse.access_token}`
       }
     })
-    
+
     const firstOrg = Array.isArray(orgResponse) && orgResponse.length > 0 ? orgResponse[0] : null
-    
+
     if (!firstOrg) {
       throw new Error('No organizations found for user')
     }
-    
+
     organization = {
       id: firstOrg.id,
       name: firstOrg.name,
-      slug: firstOrg.slug,
       plan: firstOrg.subscription_plan,
       members: [{
         userId: user.id,
         user: user,
         role: 'owner',
         joinedAt: new Date().toISOString(),
-      }], 
+      }],
       apiKeys: [],
       usage: {
         requestsThisMonth: 0,
@@ -150,7 +148,6 @@ export const signup = async (credentials: SignUpCredentials): Promise<AuthRespon
     const orgResponse = await client.get<Array<{
       id: string
       name: string
-      slug: string
       billing_email: string
       subscription_plan: 'free' | 'pro' | 'business' | 'enterprise'
       created_at: string
@@ -160,16 +157,15 @@ export const signup = async (credentials: SignUpCredentials): Promise<AuthRespon
         'Authorization': `Bearer ${backendResponse.access_token}`
       }
     })
-    
+
     const firstOrg = Array.isArray(orgResponse) && orgResponse.length > 0 ? orgResponse[0] : null
     if (!firstOrg) {
       throw new Error('No organizations found for user')
     }
-    
+
     organization = {
       id: firstOrg.id,
       name: firstOrg.name,
-      slug: firstOrg.slug,
       plan: firstOrg.subscription_plan,
       members: [],
       apiKeys: [],
@@ -272,22 +268,20 @@ export const getCurrentOrganization = async (): Promise<Organization> => {
     const orgResponse = await client.get<Array<{
       id: string
       name: string
-      slug: string
       billing_email: string
       subscription_plan: 'free' | 'pro' | 'business' | 'enterprise'
       created_at: string
       updated_at: string
     }>>('/v1/organizations')
-    
+
     const firstOrg = Array.isArray(orgResponse) && orgResponse.length > 0 ? orgResponse[0] : null
     if (!firstOrg) {
       throw new Error('No organizations found for user')
     }
-    
+
     return {
       id: firstOrg.id,
       name: firstOrg.name,
-      slug: firstOrg.slug,
       plan: firstOrg.subscription_plan,
       members: [],
       apiKeys: [],
@@ -381,7 +375,6 @@ export const completeOAuthSignup = async (data: {
   const orgResponse = await client.get<Array<{
     id: string
     name: string
-    slug: string
     billing_email: string
     subscription_plan: 'free' | 'pro' | 'business' | 'enterprise'
     created_at: string
@@ -400,7 +393,6 @@ export const completeOAuthSignup = async (data: {
   const organization: Organization = {
     id: firstOrg.id,
     name: firstOrg.name,
-    slug: firstOrg.slug,
     plan: firstOrg.subscription_plan,
     members: [],
     apiKeys: [],

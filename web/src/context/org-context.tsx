@@ -8,9 +8,10 @@ import {
   getOrganizationProjects,
   createOrganization as apiCreateOrganization
 } from '@/lib/api'
-import { 
-  extractIdFromCompositeSlug, 
-  isValidCompositeSlug 
+import {
+  extractIdFromCompositeSlug,
+  generateCompositeSlug,
+  isValidCompositeSlug
 } from '@/lib/utils/slug-utils'
 import type { 
   Organization, 
@@ -63,7 +64,8 @@ interface OrgContextValue {
 
   // Actions
   loadOrganizationByCompositeSlug: (compositeSlug: string) => Promise<void>
-  switchOrganization: (orgSlug: string) => Promise<void>
+  switchOrganization: (compositeSlug: string) => Promise<void>
+  switchProject: (compositeSlug: string) => Promise<void>
   setCurrentOrganizationId: (organizationId: string | null) => void
   createOrganization: (data: CreateOrganizationData) => Promise<Organization>
   clearError: () => void
@@ -198,15 +200,18 @@ export function OrgProvider({ children, compositeSlug }: OrgProviderProps) {
     }
   }
 
-  const switchOrganization = async (orgSlug: string, onProjectClear?: () => void) => {
+  const switchOrganization = async (compositeSlug: string, onProjectClear?: () => void) => {
     try {
       setIsLoading(true)
       setError(null)
 
-      // Find organization by slug (composite slug)
-      const org = organizations.find(o => o.slug === orgSlug)
+      // Extract ID from composite slug
+      const orgId = extractIdFromCompositeSlug(compositeSlug)
+
+      // Find organization by ID
+      const org = organizations.find(o => o.id === orgId)
       if (!org) {
-        throw new Error(`Organization not found: ${orgSlug}`)
+        throw new Error(`Organization not found for composite slug: ${compositeSlug}`)
       }
 
       // If it's the same organization, no need to switch
@@ -239,16 +244,50 @@ export function OrgProvider({ children, compositeSlug }: OrgProviderProps) {
     try {
       const newOrg = await apiCreateOrganization({
         name: data.name,
-        slug: data.slug,
-        billing_email: data.billing_email,
-        subscription_plan: data.plan,
+        description: data.description,
       })
 
       console.log('[OrgContext] Created organization:', newOrg.name)
-      
+
       return newOrg
     } catch (error) {
       console.error('[OrgContext] Organization creation failed:', error)
+      throw error
+    }
+  }
+
+  const switchProject = async (compositeSlug: string) => {
+    try {
+      // Extract project ID from composite slug
+      const projectId = extractIdFromCompositeSlug(compositeSlug)
+
+      // Verify project exists in current projects list
+      const project = projects.find(p => p.id === projectId)
+      if (!project) {
+        throw new Error(`Project not found for composite slug: ${compositeSlug}`)
+      }
+
+      // Verify project belongs to current organization
+      if (!currentOrganization) {
+        throw new Error('Cannot switch project: no organization selected')
+      }
+
+      if (project.organizationId !== currentOrganization.id) {
+        throw new Error('Project does not belong to current organization')
+      }
+
+      // Navigate to project page (ProjectContext will handle loading project state)
+      const orgCompositeSlug = generateCompositeSlug(currentOrganization.name, currentOrganization.id)
+      const projectUrl = `/organizations/${orgCompositeSlug}/projects/${compositeSlug}`
+
+      console.log('[OrgContext] Switching to project:', project.name)
+
+      // Use Next.js router for navigation (imported at top of file if not already)
+      if (typeof window !== 'undefined') {
+        window.location.href = projectUrl
+      }
+    } catch (error) {
+      console.error('[OrgContext] Failed to switch project:', error)
       throw error
     }
   }
@@ -271,6 +310,7 @@ export function OrgProvider({ children, compositeSlug }: OrgProviderProps) {
     // Actions
     loadOrganizationByCompositeSlug,
     switchOrganization,
+    switchProject,
     setCurrentOrganizationId,
     createOrganization,
     clearError,

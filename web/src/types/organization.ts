@@ -1,7 +1,6 @@
 export interface Organization {
   id: string
   name: string
-  slug?: string
   plan: SubscriptionPlan
   billing_email?: string
   created_at: string
@@ -23,7 +22,6 @@ export interface OrganizationMember {
 export interface Project {
   id: string
   name: string
-  slug: string
   organizationId: string
   description?: string
   status: ProjectStatus
@@ -101,7 +99,6 @@ export interface CreateOrganizationData {
 
 export interface CreateProjectData {
   name: string
-  slug?: string
   organizationId: string
   description?: string
   environment?: ProjectEnvironment

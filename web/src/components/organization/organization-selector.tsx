@@ -175,9 +175,9 @@ export function OrganizationSelector({ className }: OrganizationSelectorProps) {
             <CardHeader className="pb-3">
               <div className="flex items-center gap-3">
                 <Avatar className="h-10 w-10">
-                  <AvatarImage 
-                    src={`/api/organizations/${org.slug}/avatar`} 
-                    alt={org.name} 
+                  <AvatarImage
+                    src={`/api/organizations/${org.id}/avatar`}
+                    alt={org.name}
                   />
                   <AvatarFallback className="bg-primary text-primary-foreground font-semibold">
                     {getInitials(org.name)}

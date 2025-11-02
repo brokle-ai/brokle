@@ -7,6 +7,7 @@ import { ChevronDown, Building2, Settings, Users, Plus } from 'lucide-react'
 import { useOrganization } from '@/context/org-context'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { getSmartRedirectUrl } from '@/lib/utils/smart-redirect'
+import { generateCompositeSlug, extractIdFromCompositeSlug } from '@/lib/utils/slug-utils'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,15 +36,22 @@ export function OrganizationSelector({ className }: OrganizationSelectorProps) {
   const router = useRouter()
   const isMobile = useIsMobile()
   const [isOrgLoading, setIsOrgLoading] = useState(false)
-  const isProjectPage = pathname.startsWith('/projects/')
 
-  const handleOrgSwitch = async (orgSlug: string) => {
-    if (isOrgLoading || orgSlug === currentOrganization?.slug) return
-    
-    // Find the organization object by slug
-    const targetOrg = organizations.find(org => org.slug === orgSlug)
+  const handleOrgSwitch = async (compositeSlug: string) => {
+    // Generate current composite slug for comparison
+    const currentCompositeSlug = currentOrganization
+      ? generateCompositeSlug(currentOrganization.name, currentOrganization.id)
+      : null
+
+    if (isOrgLoading || compositeSlug === currentCompositeSlug) return
+
+    // Extract ID from composite slug
+    const targetOrgId = extractIdFromCompositeSlug(compositeSlug)
+
+    // Find the organization object by ID
+    const targetOrg = organizations.find(org => org.id === targetOrgId)
     if (!targetOrg) {
-      console.error('Organization not found:', orgSlug)
+      console.error('Organization not found for composite slug:', compositeSlug)
       return
     }
     
@@ -53,27 +61,13 @@ export function OrganizationSelector({ className }: OrganizationSelectorProps) {
       // Use smart redirect to determine the appropriate URL
       const redirectUrl = getSmartRedirectUrl({
         currentPath: pathname,
-        targetOrgSlug: targetOrg.slug,
+        targetOrgSlug: compositeSlug,
         targetOrgId: targetOrg.id,
         targetOrgName: targetOrg.name
       })
-      
-      // On project pages, clear project context before navigation
-      if (isProjectPage) {
-        // Import project context dynamically to clear it
-        try {
-          const { useProject } = require('@/context/project-context')
-          const { setCurrentProject } = useProject()
-          
-          // Clear project context before navigation
-          setCurrentProject(null)
-        } catch (error) {
-          // Project context not available, that's fine
-          console.log('Project context not available for clearing')
-        }
-      }
-      
+
       // Navigate to smart redirect URL
+      // Next.js handles context cleanup automatically during navigation
       router.push(redirectUrl)
     } catch (error) {
       console.error('Failed to switch organization:', error)
@@ -126,9 +120,9 @@ export function OrganizationSelector({ className }: OrganizationSelectorProps) {
           disabled={isOrgLoading}
         >
           <Avatar className="h-4 w-4">
-            <AvatarImage 
-              src={`/api/organizations/${currentOrganization.slug}/avatar`} 
-              alt={currentOrganization.name} 
+            <AvatarImage
+              src={`/api/organizations/${currentOrganization.id}/avatar`}
+              alt={currentOrganization.name}
             />
             <AvatarFallback className="bg-primary text-primary-foreground text-xs font-semibold">
               {getInitials(currentOrganization.name)}
@@ -157,9 +151,9 @@ export function OrganizationSelector({ className }: OrganizationSelectorProps) {
         <div className="px-2 py-2 border-b mb-1">
           <div className="flex items-center gap-2">
             <Avatar className="h-6 w-6">
-              <AvatarImage 
-                src={`/api/organizations/${currentOrganization.slug}/avatar`} 
-                alt={currentOrganization.name} 
+              <AvatarImage
+                src={`/api/organizations/${currentOrganization.id}/avatar`}
+                alt={currentOrganization.name}
               />
               <AvatarFallback className="text-xs">
                 {getInitials(currentOrganization.name)}
@@ -188,14 +182,17 @@ export function OrganizationSelector({ className }: OrganizationSelectorProps) {
             {organizations && organizations.filter(org => org.id !== currentOrganization.id).map((org) => (
               <DropdownMenuItem
                 key={org.id}
-                onClick={() => handleOrgSwitch(org.slug)}
+                onClick={() => {
+                  const compositeSlug = generateCompositeSlug(org.name, org.id)
+                  handleOrgSwitch(compositeSlug)
+                }}
                 className="gap-2 p-2 cursor-pointer"
                 disabled={isOrgLoading}
               >
                 <Avatar className="h-5 w-5">
-                  <AvatarImage 
-                    src={`/api/organizations/${org.slug}/avatar`} 
-                    alt={org.name} 
+                  <AvatarImage
+                    src={`/api/organizations/${org.id}/avatar`}
+                    alt={org.name}
                   />
                   <AvatarFallback className="text-xs">
                     {getInitials(org.name)}
