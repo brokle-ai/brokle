@@ -1,11 +1,7 @@
-import type { Metadata } from 'next'
+'use client'
+
 import { ShieldOff } from 'lucide-react'
 import { ErrorPage } from '@/components/error-page'
-
-export const metadata: Metadata = {
-  title: '403 - Forbidden | Brokle',
-  description: 'You do not have permission to access this page',
-}
 
 /**
  * 403 Forbidden Error Page

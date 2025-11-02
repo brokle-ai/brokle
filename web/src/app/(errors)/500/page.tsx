@@ -1,11 +1,7 @@
-import type { Metadata } from 'next'
+'use client'
+
 import { ServerCrash } from 'lucide-react'
 import { ErrorPage } from '@/components/error-page'
-
-export const metadata: Metadata = {
-  title: '500 - Internal Server Error | Brokle',
-  description: 'An internal server error occurred',
-}
 
 /**
  * 500 Internal Server Error Page

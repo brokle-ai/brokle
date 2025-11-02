@@ -1,11 +1,7 @@
-import type { Metadata } from 'next'
+'use client'
+
 import { Construction } from 'lucide-react'
 import { ErrorPage } from '@/components/error-page'
-
-export const metadata: Metadata = {
-  title: '503 - Service Unavailable | Brokle',
-  description: 'Service is temporarily unavailable for maintenance',
-}
 
 /**
  * 503 Service Unavailable / Maintenance Page

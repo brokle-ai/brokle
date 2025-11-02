@@ -1,11 +1,7 @@
-import type { Metadata } from 'next'
+'use client'
+
 import { ShieldAlert } from 'lucide-react'
 import { ErrorPage } from '@/components/error-page'
-
-export const metadata: Metadata = {
-  title: '401 - Unauthorized | Brokle',
-  description: 'Authentication required to access this page',
-}
 
 /**
  * 401 Unauthorized Error Page

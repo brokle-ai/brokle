@@ -1,11 +1,7 @@
-import type { Metadata } from 'next'
+'use client'
+
 import { FileQuestion } from 'lucide-react'
 import { ErrorPage } from '@/components/error-page'
-
-export const metadata: Metadata = {
-  title: '404 - Page Not Found | Brokle',
-  description: 'The page you are looking for does not exist',
-}
 
 /**
  * Global 404 Not Found Page
