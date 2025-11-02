@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAuth } from '@/context/auth-context'
+import { useAuth } from '@/hooks/auth/use-auth'
 import { useCurrentOrganization } from '@/hooks/api/use-auth-queries'
 import { PageLoader } from '@/components/shared/loading'
 import { buildOrgUrl } from '@/lib/utils/slug-utils'

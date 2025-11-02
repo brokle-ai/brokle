@@ -2,22 +2,22 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { NavigationProgress } from "@/components/navigation-progress";
 import { Toaster } from "@/components/ui/sonner";
+import { toast } from "sonner";
 import { ThemeProvider } from "@/context/theme-context";
 import { SearchProvider } from "@/context/search-context";
 import { DirectionProvider } from "@/context/direction-context";
-import { AuthProvider } from '@/context/auth-context'
 import { ErrorBoundary } from './error-boundary'
-import type { User } from '@/types/auth'
 
 interface ClientProvidersProps {
   children: React.ReactNode
-  serverUser?: User | null
 }
 
-export function ClientProviders({ children, serverUser }: ClientProvidersProps) {
+export function ClientProviders({ children }: ClientProvidersProps) {
+  const router = useRouter()
   const [queryClient] = useState(() => new QueryClient({
     defaultOptions: {
       queries: {
@@ -44,19 +44,31 @@ export function ClientProviders({ children, serverUser }: ClientProvidersProps) 
     },
   }))
 
+  // Session expiry event listener
+  useEffect(() => {
+    const handleSessionExpired = () => {
+      toast.error('Session expired. Please log in again.')
+      router.push('/auth/signin?session=expired')
+    }
+
+    window.addEventListener('auth:session-expired', handleSessionExpired)
+
+    return () => {
+      window.removeEventListener('auth:session-expired', handleSessionExpired)
+    }
+  }, [router])
+
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <DirectionProvider>
           <ThemeProvider>
-            <AuthProvider serverUser={serverUser}>
-              <SearchProvider>
-                <NavigationProgress />
-                <Toaster duration={5000} />
-                {children}
-                <ReactQueryDevtools initialIsOpen={false} />
-              </SearchProvider>
-            </AuthProvider>
+            <SearchProvider>
+              <NavigationProgress />
+              <Toaster duration={5000} />
+              {children}
+              <ReactQueryDevtools initialIsOpen={false} />
+            </SearchProvider>
           </ThemeProvider>
         </DirectionProvider>
       </QueryClientProvider>
