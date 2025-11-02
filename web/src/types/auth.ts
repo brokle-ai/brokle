@@ -154,9 +154,8 @@ export interface InvitationDetails {
 export interface AuthResponse {
   user: User
   organization: Organization
-  accessToken: string
-  refreshToken: string
-  expiresIn: number
+  expiresAt: number  // Unix timestamp in milliseconds (when token expires)
+  expiresIn: number  // Duration in milliseconds (time until expiry)
 }
 
 export interface RefreshTokenRequest {

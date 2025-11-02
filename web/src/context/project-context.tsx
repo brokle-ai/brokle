@@ -1,7 +1,7 @@
 'use client'
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
-import { useAuth } from '@/context/auth-context'
+import { useAuth } from '@/hooks/auth/use-auth'
 import { useOrganization } from '@/context/org-context'
 import { 
   getProjectById,

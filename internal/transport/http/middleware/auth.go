@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"errors"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -322,22 +321,12 @@ func (m *AuthMiddleware) OptionalAuth() gin.HandlerFunc {
 	})
 }
 
-// extractToken extracts JWT token from Authorization header
+// extractToken extracts JWT token from httpOnly cookie
 func (m *AuthMiddleware) extractToken(c *gin.Context) (string, error) {
-	authHeader := c.GetHeader("Authorization")
-	if authHeader == "" {
-		return "", errors.New("authorization header missing")
-	}
-
-	// Check for Bearer token format
-	const bearerPrefix = "Bearer "
-	if !strings.HasPrefix(authHeader, bearerPrefix) {
-		return "", errors.New("invalid authorization header format")
-	}
-
-	token := strings.TrimPrefix(authHeader, bearerPrefix)
-	if token == "" {
-		return "", errors.New("token missing in authorization header")
+	// Read token from httpOnly cookie only (secure, XSS-protected)
+	token, err := c.Cookie("access_token")
+	if err != nil || token == "" {
+		return "", errors.New("authentication token required in cookie")
 	}
 
 	return token, nil

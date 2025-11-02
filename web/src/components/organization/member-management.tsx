@@ -15,7 +15,7 @@ import {
   Filter
 } from 'lucide-react'
 import { useOrganization } from '@/context/org-context'
-import { useAuth } from '@/context/auth-context'
+import { useAuth } from '@/hooks/auth/use-auth'
 import { useHasAccess } from '@/hooks/rbac/use-has-access'
 import {
   Table,

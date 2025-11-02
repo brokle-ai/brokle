@@ -22,6 +22,8 @@ export interface BrokleClientConfig extends APIClientConfig {
 // Request options extending axios config
 export interface RequestOptions extends Omit<AxiosRequestConfig, 'url' | 'method' | 'data'> {
   skipAuth?: boolean
+  skipRefreshInterceptor?: boolean  // Bypass refresh interceptor (for /auth/refresh itself)
+  _retry?: boolean  // Internal flag for tracking retry attempts
   retries?: number
   // Context header options (opt-in only)
   includeOrgContext?: boolean
@@ -59,7 +61,7 @@ export interface APIErrorResponse {
   }
 }
 
-// Custom API Error class
+// Custom API Error class that preserves full response data
 export class BrokleAPIError extends Error {
   public readonly statusCode: number
   public readonly code: string
@@ -67,6 +69,7 @@ export class BrokleAPIError extends Error {
   public readonly details?: Record<string, any>
   public readonly timestamp: string
   public readonly originalError: AxiosError
+  public readonly response?: AxiosResponse  // CRITICAL: Preserve response for downstream handlers
 
   constructor(axiosError: AxiosError) {
     const response = axiosError.response
@@ -92,6 +95,7 @@ export class BrokleAPIError extends Error {
     this.details = errorData?.details
     this.timestamp = errorData?.meta?.timestamp || new Date().toISOString()
     this.originalError = axiosError
+    this.response = response  // Preserve full response for downstream error handling
 
     // Maintain proper stack trace
     Object.setPrototypeOf(this, BrokleAPIError.prototype)

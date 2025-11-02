@@ -14,40 +14,54 @@ import type {
 const client = new BrokleAPIClient('/api')
 
 export const login = async (credentials: LoginCredentials): Promise<AuthResponse> => {
-  // Get token data from backend
-  const backendResponse = await client.post<LoginResponse>(
+  console.log('[AuthAPI] Login called with credentials:', { email: credentials.email })
+
+  // Backend now returns: { user, expires_at, expires_in } (tokens in httpOnly cookies)
+  const backendResponse = await client.post<{
+    user: UserResponse
+    expires_at: number  // Milliseconds
+    expires_in: number  // Milliseconds
+  }>(
     '/v1/auth/login',
-    credentials, 
+    credentials,
     { skipAuth: true }
   )
 
-  // Get user details using the new token
-  const userResponse = await client.get<UserResponse>('/v1/users/me', undefined, {
-    headers: {
-      'Authorization': `Bearer ${backendResponse.access_token}`
-    }
+  console.log('[AuthAPI] Login response received:', {
+    hasUser: !!backendResponse.user,
+    hasExpiresAt: !!backendResponse.expires_at,
+    backendResponse
   })
+
+  // Defensive check
+  if (!backendResponse || !backendResponse.user) {
+    console.error('[AuthAPI] Invalid login response - missing user:', backendResponse)
+    throw new Error('Login response missing user data')
+  }
 
   // Map backend user response to frontend format
   const user: User = {
-    id: userResponse.id,
-    email: userResponse.email,
-    firstName: userResponse.first_name,
-    lastName: userResponse.last_name,
-    name: `${userResponse.first_name} ${userResponse.last_name}`.trim(),
+    id: backendResponse.user.id,
+    email: backendResponse.user.email,
+    firstName: backendResponse.user.first_name,
+    lastName: backendResponse.user.last_name,
+    name: `${backendResponse.user.first_name} ${backendResponse.user.last_name}`.trim(),
     role: 'user',
     organizationId: '',
-    defaultOrganizationId: userResponse.default_organization_id,
+    defaultOrganizationId: backendResponse.user.default_organization_id,
     projects: [],
-    createdAt: userResponse.created_at,
-    updatedAt: userResponse.created_at,
-    isEmailVerified: userResponse.is_email_verified,
-    onboardingCompletedAt: userResponse.onboarding_completed_at,
+    createdAt: backendResponse.user.created_at,
+    updatedAt: backendResponse.user.created_at,
+    isEmailVerified: backendResponse.user.is_email_verified,
+    onboardingCompletedAt: backendResponse.user.onboarding_completed_at,
   }
 
-  // Get organization from backend
+  console.log('[AuthAPI] User mapped:', { userId: user.id, email: user.email })
+
+  // Get organization from backend (cookies sent automatically, no manual auth header)
   let organization: Organization
   try {
+    console.log('[AuthAPI] Fetching organizations...')
     const orgResponse = await client.get<Array<{
       id: string
       name: string
@@ -56,18 +70,23 @@ export const login = async (credentials: LoginCredentials): Promise<AuthResponse
       subscription_plan: 'free' | 'pro' | 'business' | 'enterprise'
       created_at: string
       updated_at: string
-    }>>('/v1/organizations', undefined, {
-      headers: {
-        'Authorization': `Bearer ${backendResponse.access_token}`
-      }
+    }>>('/v1/organizations')
+
+    console.log('[AuthAPI] Organization response:', {
+      isArray: Array.isArray(orgResponse),
+      length: Array.isArray(orgResponse) ? orgResponse.length : 0,
+      orgResponse
     })
-    
+
     const firstOrg = Array.isArray(orgResponse) && orgResponse.length > 0 ? orgResponse[0] : null
-    
+
     if (!firstOrg) {
+      console.error('[AuthAPI] No organizations found in response')
       throw new Error('No organizations found for user')
     }
-    
+
+    console.log('[AuthAPI] First organization:', { id: firstOrg.id, name: firstOrg.name })
+
     organization = {
       id: firstOrg.id,
       name: firstOrg.name,
@@ -78,7 +97,7 @@ export const login = async (credentials: LoginCredentials): Promise<AuthResponse
         user: user,
         role: 'owner',
         joinedAt: new Date().toISOString(),
-      }], 
+      }],
       apiKeys: [],
       usage: {
         requestsThisMonth: 0,
@@ -93,13 +112,21 @@ export const login = async (credentials: LoginCredentials): Promise<AuthResponse
     throw orgError
   }
 
-  return {
+  const authResponse = {
     user,
     organization,
-    accessToken: backendResponse.access_token,
-    refreshToken: backendResponse.refresh_token,
-    expiresIn: backendResponse.expires_in,
+    expiresAt: backendResponse.expires_at,  // Milliseconds
+    expiresIn: backendResponse.expires_in,  // Milliseconds
   }
+
+  console.log('[AuthAPI] Login complete, returning:', {
+    hasUser: !!authResponse.user,
+    hasOrg: !!authResponse.organization,
+    userId: authResponse.user?.id,
+    orgId: authResponse.organization?.id
+  })
+
+  return authResponse
 }
 
 export const signup = async (credentials: SignUpCredentials): Promise<AuthResponse> => {
@@ -115,36 +142,35 @@ export const signup = async (credentials: SignUpCredentials): Promise<AuthRespon
     invitation_token: credentials.invitationToken,
   }
 
-  const backendResponse = await client.post<LoginResponse>(
+  // Backend now returns: { user, expires_at, expires_in } (tokens in httpOnly cookies)
+  const backendResponse = await client.post<{
+    user: UserResponse
+    expires_at: number  // Milliseconds
+    expires_in: number  // Milliseconds
+  }>(
     '/v1/auth/signup',
     backendPayload,
     { skipAuth: true }
   )
 
-  // Get user details
-  const userResponse = await client.get<UserResponse>('/v1/users/me', undefined, {
-    headers: {
-      'Authorization': `Bearer ${backendResponse.access_token}`
-    }
-  })
-
+  // Map backend user response to frontend format
   const user: User = {
-    id: userResponse.id,
-    email: userResponse.email,
-    firstName: userResponse.first_name,
-    lastName: userResponse.last_name,
-    name: `${userResponse.first_name} ${userResponse.last_name}`.trim(),
+    id: backendResponse.user.id,
+    email: backendResponse.user.email,
+    firstName: backendResponse.user.first_name,
+    lastName: backendResponse.user.last_name,
+    name: `${backendResponse.user.first_name} ${backendResponse.user.last_name}`.trim(),
     role: 'user',
     organizationId: '',
-    defaultOrganizationId: userResponse.default_organization_id,
+    defaultOrganizationId: backendResponse.user.default_organization_id,
     projects: [],
-    createdAt: userResponse.created_at,
-    updatedAt: userResponse.created_at,
-    isEmailVerified: userResponse.is_email_verified,
-    onboardingCompletedAt: userResponse.onboarding_completed_at,
+    createdAt: backendResponse.user.created_at,
+    updatedAt: backendResponse.user.created_at,
+    isEmailVerified: backendResponse.user.is_email_verified,
+    onboardingCompletedAt: backendResponse.user.onboarding_completed_at,
   }
 
-  // Get organization from backend
+  // Get organization from backend (cookies sent automatically, no manual auth header)
   let organization: Organization
   try {
     const orgResponse = await client.get<Array<{
@@ -155,17 +181,13 @@ export const signup = async (credentials: SignUpCredentials): Promise<AuthRespon
       subscription_plan: 'free' | 'pro' | 'business' | 'enterprise'
       created_at: string
       updated_at: string
-    }>>('/v1/organizations', undefined, {
-      headers: {
-        'Authorization': `Bearer ${backendResponse.access_token}`
-      }
-    })
-    
+    }>>('/v1/organizations')
+
     const firstOrg = Array.isArray(orgResponse) && orgResponse.length > 0 ? orgResponse[0] : null
     if (!firstOrg) {
       throw new Error('No organizations found for user')
     }
-    
+
     organization = {
       id: firstOrg.id,
       name: firstOrg.name,
@@ -189,9 +211,8 @@ export const signup = async (credentials: SignUpCredentials): Promise<AuthRespon
   return {
     user,
     organization,
-    accessToken: backendResponse.access_token,
-    refreshToken: backendResponse.refresh_token,
-    expiresIn: backendResponse.expires_in,
+    expiresAt: backendResponse.expires_at,  // Milliseconds
+    expiresIn: backendResponse.expires_in,  // Milliseconds
   }
 }
 
@@ -326,12 +347,12 @@ export const validateInvitation = async (token: string) => {
 
 // Exchange OAuth login session for tokens (existing user OAuth login)
 export const exchangeLoginSession = async (sessionId: string) => {
+  // Backend now returns: { user, expires_at, expires_in } (tokens in httpOnly cookies)
   return await client.post<{
-    access_token: string
-    refresh_token: string
-    token_type: string
-    expires_in: number
-  }>(`/v1/auth/exchange-session/${sessionId}`, {}, { skipAuth: true })
+    user: UserResponse
+    expires_at: number  // Milliseconds
+    expires_in: number  // Milliseconds
+  }>(`/api/v1/auth/exchange-session/${sessionId}`, {}, { skipAuth: true })
 }
 
 // Complete OAuth signup (Step 2)
@@ -348,60 +369,49 @@ export const completeOAuthSignup = async (data: {
     referral_source: data.referralSource,
   }
 
-  const backendResponse = await client.post<LoginResponse>(
+  // Backend now returns: { user, organization, expires_at, expires_in } (tokens in httpOnly cookies)
+  const backendResponse = await client.post<{
+    user: UserResponse
+    organization: {
+      id: string
+      name: string
+      slug: string
+      billing_email: string
+      subscription_plan: 'free' | 'pro' | 'business' | 'enterprise'
+      created_at: string
+      updated_at: string
+    }
+    expires_at: number  // Milliseconds
+    expires_in: number  // Milliseconds
+  }>(
     '/v1/auth/complete-oauth-signup',
     backendPayload,
     { skipAuth: true }
   )
 
-  // Get user details
-  const userResponse = await client.get<UserResponse>('/v1/users/me', undefined, {
-    headers: {
-      'Authorization': `Bearer ${backendResponse.access_token}`
-    }
-  })
-
+  // Map user from response (no /me call needed)
   const user: User = {
-    id: userResponse.id,
-    email: userResponse.email,
-    firstName: userResponse.first_name,
-    lastName: userResponse.last_name,
-    name: `${userResponse.first_name} ${userResponse.last_name}`.trim(),
+    id: backendResponse.user.id,
+    email: backendResponse.user.email,
+    firstName: backendResponse.user.first_name,
+    lastName: backendResponse.user.last_name,
+    name: `${backendResponse.user.first_name} ${backendResponse.user.last_name}`.trim(),
     role: 'user',
     organizationId: '',
-    defaultOrganizationId: userResponse.default_organization_id,
+    defaultOrganizationId: backendResponse.user.default_organization_id,
     projects: [],
-    createdAt: userResponse.created_at,
-    updatedAt: userResponse.created_at,
-    isEmailVerified: userResponse.is_email_verified,
-    onboardingCompletedAt: userResponse.onboarding_completed_at,
+    createdAt: backendResponse.user.created_at,
+    updatedAt: backendResponse.user.created_at,
+    isEmailVerified: backendResponse.user.is_email_verified,
+    onboardingCompletedAt: backendResponse.user.onboarding_completed_at,
   }
 
-  // Get organization
-  const orgResponse = await client.get<Array<{
-    id: string
-    name: string
-    slug: string
-    billing_email: string
-    subscription_plan: 'free' | 'pro' | 'business' | 'enterprise'
-    created_at: string
-    updated_at: string
-  }>>('/v1/organizations', undefined, {
-    headers: {
-      'Authorization': `Bearer ${backendResponse.access_token}`
-    }
-  })
-
-  const firstOrg = Array.isArray(orgResponse) && orgResponse.length > 0 ? orgResponse[0] : null
-  if (!firstOrg) {
-    throw new Error('No organizations found for user')
-  }
-
+  // Map organization from response (no /organizations call needed)
   const organization: Organization = {
-    id: firstOrg.id,
-    name: firstOrg.name,
-    slug: firstOrg.slug,
-    plan: firstOrg.subscription_plan,
+    id: backendResponse.organization.id,
+    name: backendResponse.organization.name,
+    slug: backendResponse.organization.slug,
+    plan: backendResponse.organization.subscription_plan,
     members: [],
     apiKeys: [],
     usage: {
@@ -409,15 +419,14 @@ export const completeOAuthSignup = async (data: {
       costsThisMonth: 0,
       modelsUsed: 0,
     },
-    createdAt: firstOrg.created_at,
-    updatedAt: firstOrg.updated_at,
+    createdAt: backendResponse.organization.created_at,
+    updatedAt: backendResponse.organization.updated_at,
   }
 
   return {
     user,
     organization,
-    accessToken: backendResponse.access_token,
-    refreshToken: backendResponse.refresh_token,
-    expiresIn: backendResponse.expires_in,
+    expiresAt: backendResponse.expires_at,  // Milliseconds
+    expiresIn: backendResponse.expires_in,  // Milliseconds
   }
 }

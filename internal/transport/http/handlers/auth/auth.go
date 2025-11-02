@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -59,12 +60,12 @@ type LoginRequest struct {
 
 // Login handles user login
 // @Summary User login
-// @Description Authenticate user with email and password
+// @Description Authenticate user with email and password, sets httpOnly cookies
 // @Tags Authentication
 // @Accept json
 // @Produce json
 // @Param request body LoginRequest true "Login credentials"
-// @Success 200 {object} response.SuccessResponse "Login successful"
+// @Success 200 {object} response.SuccessResponse "Login successful with cookies set"
 // @Failure 400 {object} response.ErrorResponse "Invalid request payload"
 // @Failure 401 {object} response.ErrorResponse "Invalid credentials"
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
@@ -92,8 +93,39 @@ func (h *Handler) Login(c *gin.Context) {
 		return
 	}
 
-	h.logger.Info("User logged in successfully")
-	response.Success(c, loginResp)
+	// Fetch user data BEFORE setting cookies (atomic authentication)
+	userInterface, err := h.userService.GetUserByEmail(c.Request.Context(), req.Email)
+	if err != nil {
+		h.logger.WithError(err).WithField("email", req.Email).Error("Failed to get user data after login")
+		response.InternalServerError(c, "Failed to complete authentication")
+		return
+	}
+
+	// Generate CSRF token with error handling
+	csrfToken, err := generateCSRFToken()
+	if err != nil {
+		h.logger.WithError(err).Error("Failed to generate CSRF token")
+		response.InternalServerError(c, "Authentication setup failed")
+		return
+	}
+
+	// All data fetched successfully - NOW set httpOnly cookies (atomic)
+	setAuthCookies(c.Writer, loginResp.AccessToken, loginResp.RefreshToken, csrfToken)
+
+	// Calculate expiry times in milliseconds (unified timestamp format)
+	expiresAt := time.Now().Add(time.Duration(loginResp.ExpiresIn) * time.Second)
+	expiresAtMs := expiresAt.UnixMilli()
+	expiresInMs := loginResp.ExpiresIn * 1000
+
+	// Return metadata only (tokens in httpOnly cookies)
+	responseData := gin.H{
+		"user":       userInterface, // Always present (atomic authentication)
+		"expires_at": expiresAtMs,   // Milliseconds
+		"expires_in": expiresInMs,   // Milliseconds
+	}
+
+	h.logger.WithField("email", req.Email).Info("User logged in successfully")
+	response.Success(c, responseData)
 }
 
 // RegisterRequest represents the registration request payload
@@ -167,13 +199,43 @@ func (h *Handler) Signup(c *gin.Context) {
 		return
 	}
 
+	// Fetch user data BEFORE setting cookies (atomic authentication)
+	userInterface, err := h.userService.GetUserByEmail(c.Request.Context(), req.Email)
+	if err != nil {
+		h.logger.WithError(err).WithField("email", req.Email).Error("Failed to get user data after signup")
+		response.InternalServerError(c, "Failed to complete authentication")
+		return
+	}
+
+	// Generate CSRF token with error handling
+	csrfToken, err := generateCSRFToken()
+	if err != nil {
+		h.logger.WithError(err).Error("Failed to generate CSRF token during signup")
+		response.InternalServerError(c, "Authentication setup failed")
+		return
+	}
+
+	// All data fetched successfully - NOW set httpOnly cookies (atomic)
+	setAuthCookies(c.Writer, regResp.LoginTokens.AccessToken, regResp.LoginTokens.RefreshToken, csrfToken)
+
+	// Calculate expiry times in milliseconds (unified timestamp format)
+	expiresAt := time.Now().Add(time.Duration(regResp.LoginTokens.ExpiresIn) * time.Second)
+	expiresAtMs := expiresAt.UnixMilli()
+	expiresInMs := regResp.LoginTokens.ExpiresIn * 1000
+
+	// Return metadata only (tokens in httpOnly cookies)
+	responseData := gin.H{
+		"user":       userInterface, // Always present (atomic authentication)
+		"expires_at": expiresAtMs,   // Milliseconds
+		"expires_in": expiresInMs,   // Milliseconds
+	}
+
 	h.logger.WithFields(logrus.Fields{
 		"email":  req.Email,
 		"org_id": regResp.Organization.ID,
 	}).Info("User registered successfully")
 
-	// Return login tokens
-	response.Success(c, regResp.LoginTokens)
+	response.Success(c, responseData)
 }
 
 // CompleteOAuthSignupRequest represents the OAuth signup completion request
@@ -272,14 +334,45 @@ func (h *Handler) CompleteOAuthSignup(c *gin.Context) {
 	// Delete OAuth session (cleanup)
 	_ = h.authService.DeleteOAuthSession(c.Request.Context(), req.SessionID)
 
+	// Fetch user data BEFORE setting cookies (atomic authentication)
+	userInterface, err := h.userService.GetUserByEmail(c.Request.Context(), session.Email)
+	if err != nil {
+		h.logger.WithError(err).WithField("email", session.Email).Error("Failed to get user data after OAuth signup")
+		response.InternalServerError(c, "Failed to complete authentication")
+		return
+	}
+
+	// Generate CSRF token with error handling
+	csrfToken, err := generateCSRFToken()
+	if err != nil {
+		h.logger.WithError(err).Error("Failed to generate CSRF token during OAuth signup")
+		response.InternalServerError(c, "Authentication setup failed")
+		return
+	}
+
+	// All data fetched successfully - NOW set httpOnly cookies (atomic)
+	setAuthCookies(c.Writer, regResp.LoginTokens.AccessToken, regResp.LoginTokens.RefreshToken, csrfToken)
+
+	// Calculate expiry times in milliseconds (unified timestamp format)
+	expiresAt := time.Now().Add(time.Duration(regResp.LoginTokens.ExpiresIn) * time.Second)
+	expiresAtMs := expiresAt.UnixMilli()
+	expiresInMs := regResp.LoginTokens.ExpiresIn * 1000
+
+	// Return metadata with user and organization (tokens in httpOnly cookies)
+	responseData := gin.H{
+		"user":         userInterface,       // Always present (atomic authentication)
+		"organization": regResp.Organization, // Always present from registration
+		"expires_at":   expiresAtMs,         // Milliseconds
+		"expires_in":   expiresInMs,         // Milliseconds
+	}
+
 	h.logger.WithFields(logrus.Fields{
 		"email":    session.Email,
 		"provider": session.Provider,
 		"org_id":   regResp.Organization.ID,
 	}).Info("OAuth registration completed successfully")
 
-	// Return login tokens
-	response.Success(c, regResp.LoginTokens)
+	response.Success(c, responseData)
 }
 
 // ExchangeLoginSession exchanges a one-time session ID for login tokens
@@ -326,58 +419,191 @@ func (h *Handler) ExchangeLoginSession(c *gin.Context) {
 	}
 	expiresIn := int64(expiresInFloat)
 
-	h.logger.Info("Login session exchanged successfully")
+	// Extract user ID from session to fetch user data
+	userIDStr, ok := sessionData["user_id"].(string)
+	if !ok || userIDStr == "" {
+		h.logger.Error("Missing user_id in login session")
+		response.BadRequest(c, "Invalid session data: missing user ID", "")
+		return
+	}
 
-	// Return tokens
-	response.Success(c, map[string]interface{}{
-		"access_token":  accessToken,
-		"refresh_token": refreshToken,
-		"token_type":    "Bearer",
-		"expires_in":    expiresIn,
-	})
+	// Parse user ID
+	userID, err := ulid.Parse(userIDStr)
+	if err != nil {
+		h.logger.WithError(err).Error("Invalid user ID format in session")
+		response.BadRequest(c, "Invalid session data: malformed user ID", "")
+		return
+	}
+
+	// Fetch user data BEFORE setting cookies (atomic authentication)
+	userInterface, err := h.userService.GetUser(c.Request.Context(), userID)
+	if err != nil {
+		h.logger.WithError(err).WithField("user_id", userID).Error("Failed to get user data during session exchange")
+		response.InternalServerError(c, "Failed to complete authentication")
+		return
+	}
+
+	// Generate CSRF token with error handling
+	csrfToken, err := generateCSRFToken()
+	if err != nil {
+		h.logger.WithError(err).Error("Failed to generate CSRF token during session exchange")
+		response.InternalServerError(c, "Authentication setup failed")
+		return
+	}
+
+	// All data fetched successfully - NOW set httpOnly cookies (atomic)
+	setAuthCookies(c.Writer, accessToken, refreshToken, csrfToken)
+
+	// Calculate expiry times in milliseconds (unified timestamp format)
+	expiresAt := time.Now().Add(time.Duration(expiresIn) * time.Second)
+	expiresAtMs := expiresAt.UnixMilli()
+	expiresInMs := expiresIn * 1000
+
+	// Return metadata only (tokens in httpOnly cookies)
+	responseData := gin.H{
+		"user":       userInterface, // Always present (atomic authentication)
+		"expires_at": expiresAtMs,   // Milliseconds
+		"expires_in": expiresInMs,   // Milliseconds
+	}
+
+	h.logger.Info("Login session exchanged successfully")
+	response.Success(c, responseData)
 }
 
-// RefreshTokenRequest represents the refresh token request payload
+// RefreshTokenRequest represents the refresh token request payload (deprecated - now using cookies)
 // @Description Refresh token credentials
 type RefreshTokenRequest struct {
 	RefreshToken string `json:"refresh_token" binding:"required" example:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." description:"Valid refresh token"`
 }
 
-// RefreshToken handles token refresh
+// RefreshToken handles token refresh via httpOnly cookies
 // @Summary Refresh access token
-// @Description Get a new access token using a valid refresh token
+// @Description Get a new access token using refresh token from httpOnly cookie
 // @Tags Authentication
 // @Accept json
 // @Produce json
-// @Param request body RefreshTokenRequest true "Refresh token"
-// @Success 200 {object} response.SuccessResponse "Token refresh successful"
-// @Failure 400 {object} response.ErrorResponse "Invalid request payload"
-// @Failure 401 {object} response.ErrorResponse "Invalid refresh token"
+// @Success 200 {object} response.SuccessResponse "Token refresh successful with new cookies set"
+// @Failure 401 {object} response.ErrorResponse "Refresh token missing, invalid, or expired"
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /api/v1/auth/refresh [post]
 func (h *Handler) RefreshToken(c *gin.Context) {
-	var req RefreshTokenRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.WithError(err).Error("Invalid refresh token request")
-		response.BadRequest(c, "Invalid request payload", err.Error())
+	// Read refresh token from httpOnly cookie
+	refreshToken, err := c.Cookie("refresh_token")
+	if err != nil {
+		h.logger.WithError(err).Error("Refresh token cookie not found")
+		clearAuthCookies(c.Writer)
+		response.ErrorWithStatus(c, http.StatusUnauthorized, "REFRESH_EXPIRED", "Refresh token not found", "")
 		return
 	}
 
 	// Create auth refresh request
 	authReq := &auth.RefreshTokenRequest{
-		RefreshToken: req.RefreshToken,
+		RefreshToken: refreshToken,
 	}
 
 	// Refresh token
 	loginResp, err := h.authService.RefreshToken(c.Request.Context(), authReq)
 	if err != nil {
 		h.logger.WithError(err).Error("Token refresh failed")
-		response.Error(c, err)
+		clearAuthCookies(c.Writer)
+		response.ErrorWithStatus(c, http.StatusUnauthorized, "REFRESH_EXPIRED", "Refresh token invalid or expired", err.Error())
 		return
 	}
 
+	// Generate new CSRF token with error handling
+	csrfToken, err := generateCSRFToken()
+	if err != nil {
+		h.logger.WithError(err).Error("Failed to generate CSRF token during refresh")
+		clearAuthCookies(c.Writer)
+		response.InternalServerError(c, "Token refresh setup failed")
+		return
+	}
+
+	// Set new httpOnly cookies
+	setAuthCookies(c.Writer, loginResp.AccessToken, loginResp.RefreshToken, csrfToken)
+
+	// Get user ID from the refresh token JWT claims to fetch user data
+	// Note: We could extract user ID from the new access token, but for now we'll skip user data
+	// The frontend can call /me endpoint if it needs user data
+
+	// Calculate expiry times in milliseconds (unified timestamp format)
+	expiresAt := time.Now().Add(time.Duration(loginResp.ExpiresIn) * time.Second)
+	expiresAtMs := expiresAt.UnixMilli()
+	expiresInMs := loginResp.ExpiresIn * 1000
+
+	// Return metadata only (tokens in httpOnly cookies)
+	responseData := gin.H{
+		"expires_at": expiresAtMs, // Milliseconds
+		"expires_in": expiresInMs, // Milliseconds
+	}
+
 	h.logger.Info("Token refreshed successfully")
-	response.Success(c, loginResp)
+	response.Success(c, responseData)
+}
+
+// GetCurrentUser returns current authenticated user with token expiry metadata
+// @Summary Get current user
+// @Description Get current authenticated user information with token expiry for frontend initialization
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.SuccessResponse "Current user with metadata"
+// @Failure 401 {object} response.ErrorResponse "Unauthorized"
+// @Failure 404 {object} response.ErrorResponse "User not found"
+// @Router /api/v1/auth/me [get]
+func (h *Handler) GetCurrentUser(c *gin.Context) {
+	// Get user ID from context (set by auth middleware)
+	userIDValue, exists := c.Get("user_id")
+	if !exists {
+		h.logger.Error("User ID not found in context")
+		response.Unauthorized(c, "Authentication required")
+		return
+	}
+
+	userID, ok := userIDValue.(ulid.ULID)
+	if !ok {
+		h.logger.Error("Invalid user ID type in context")
+		response.InternalServerError(c, "Internal error")
+		return
+	}
+
+	// Get token claims for expiry information
+	claimsValue, exists := c.Get("token_claims")
+	if !exists {
+		h.logger.Error("Token claims not found in context")
+		response.Unauthorized(c, "Authentication required")
+		return
+	}
+
+	claims, ok := claimsValue.(*auth.JWTClaims)
+	if !ok {
+		h.logger.Error("Invalid token claims type in context")
+		response.InternalServerError(c, "Internal error")
+		return
+	}
+
+	// Get user data
+	user, err := h.userService.GetUser(c.Request.Context(), userID)
+	if err != nil {
+		h.logger.WithError(err).WithField("user_id", userID).Error("Failed to get user")
+		response.NotFound(c, "User")
+		return
+	}
+
+	// Calculate expiry times in milliseconds from JWT exp claim
+	// JWT exp is in seconds (Unix timestamp), convert to milliseconds
+	expiresAtMs := claims.ExpiresAt * 1000
+	expiresInMs := expiresAtMs - time.Now().UnixMilli()
+
+	// Return user with expiry metadata
+	responseData := gin.H{
+		"user":       user,
+		"expires_at": expiresAtMs, // Milliseconds
+		"expires_in": expiresInMs, // Milliseconds
+	}
+
+	response.Success(c, responseData)
 }
 
 // ForgotPasswordRequest represents the forgot password request payload
@@ -460,7 +686,7 @@ func (h *Handler) ResetPassword(c *gin.Context) {
 
 // Logout handles user logout
 // @Summary User logout
-// @Description Logout user and invalidate session
+// @Description Logout user, invalidate session, and clear httpOnly cookies
 // @Tags Authentication
 // @Accept json
 // @Produce json
@@ -474,6 +700,8 @@ func (h *Handler) Logout(c *gin.Context) {
 	claimsValue, exists := c.Get("token_claims")
 	if !exists {
 		h.logger.Error("Token claims not found in context")
+		// Clear cookies anyway even if no claims
+		clearAuthCookies(c.Writer)
 		response.Unauthorized(c, "Authentication required")
 		return
 	}
@@ -481,6 +709,7 @@ func (h *Handler) Logout(c *gin.Context) {
 	claims, ok := claimsValue.(*auth.JWTClaims)
 	if !ok {
 		h.logger.Error("Invalid token claims type in context")
+		clearAuthCookies(c.Writer)
 		response.InternalServerError(c, "Internal error")
 		return
 	}
@@ -492,9 +721,14 @@ func (h *Handler) Logout(c *gin.Context) {
 			"jti":     claims.JWTID,
 			"user_id": claims.UserID,
 		}).Error("Logout failed")
+		// Clear cookies even if logout fails (best effort)
+		clearAuthCookies(c.Writer)
 		response.ErrorWithStatus(c, http.StatusInternalServerError, "logout_failed", "Logout failed", err.Error())
 		return
 	}
+
+	// Clear httpOnly cookies
+	clearAuthCookies(c.Writer)
 
 	h.logger.WithFields(logrus.Fields{
 		"jti":     claims.JWTID,
