@@ -1,42 +1,81 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/context/auth-context'
-import { OrganizationSelector } from '@/components/organization/organization-selector'
+import { useCurrentOrganization } from '@/hooks/api/use-auth-queries'
 import { PageLoader } from '@/components/shared/loading'
+
+// Session storage key for redirect tracking
+const REDIRECT_KEY = 'org-redirect-initiated'
+
+// Helper to build organization URL with composite slug
+function buildOrgUrl(orgName: string, orgId: string): string {
+  const slug = orgName
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  return `/organizations/${slug}-${orgId}`
+}
 
 export default function RootPage() {
   const router = useRouter()
   const { user, isLoading: authLoading } = useAuth()
+  const { data: organization, isLoading: orgLoading, error: orgError } = useCurrentOrganization()
+  const [isRedirecting, setIsRedirecting] = useState(false)
 
-  // Derive authentication state from user presence
-  const isAuthenticated = !!user
+  const redirectToAppropriateLocation = useCallback(() => {
+    // Prevent duplicate calls using session storage
+    if (sessionStorage.getItem(REDIRECT_KEY)) return
+    sessionStorage.setItem(REDIRECT_KEY, 'true')
+    setIsRedirecting(true)
+
+    if (organization) {
+      // User has organization - redirect to it
+      const orgUrl = buildOrgUrl(organization.name, organization.id)
+      router.push(orgUrl)
+    } else {
+      // No organization found - redirect to creation wizard
+      router.push('/organizations/create')
+    }
+  }, [organization, router])
 
   useEffect(() => {
-    if (authLoading) return
+    if (authLoading || orgLoading) return
 
-    if (!isAuthenticated) {
+    if (!user) {
       router.push('/auth/signin')
       return
     }
 
-    // No onboarding check needed - completed during signup
-  }, [authLoading, isAuthenticated, user, router])
+    // Handle organization fetch error - likely means no org exists
+    if (orgError) {
+      sessionStorage.setItem(REDIRECT_KEY, 'true')
+      setIsRedirecting(true)
+      router.push('/organizations/create')
+      return
+    }
 
-  if (authLoading) {
+    // Trigger redirect once organization data is loaded
+    if (!isRedirecting) {
+      redirectToAppropriateLocation()
+    }
+  }, [authLoading, orgLoading, orgError, user, router, redirectToAppropriateLocation, isRedirecting])
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      sessionStorage.removeItem(REDIRECT_KEY)
+    }
+  }, [])
+
+  if (authLoading || orgLoading || isRedirecting) {
     return <PageLoader message="Loading your workspace..." />
   }
 
-  if (!isAuthenticated) {
+  if (!user) {
     return null // Will redirect to signin
   }
 
-  return (
-    <div className="flex h-screen items-center justify-center p-6">
-      <div className="w-full max-w-6xl">
-        <OrganizationSelector />
-      </div>
-    </div>
-  )
+  return <PageLoader message="Loading your workspace..." />
 }

@@ -43,9 +43,9 @@ type User struct {
 	ReferralSource *string `json:"referral_source,omitempty" gorm:"size:100"`
 
 	// Authentication method tracking
-	AuthMethod      string  `json:"auth_method" gorm:"size:20;default:'password'"`       // password | oauth
-	OAuthProvider   *string `json:"oauth_provider,omitempty" gorm:"size:50"`             // google | github | etc
-	OAuthProviderID *string `json:"-" gorm:"size:255"`                                    // Provider's unique user ID (hidden from JSON)
+	AuthMethod      string  `json:"auth_method" gorm:"column:auth_method;size:20;default:'password'"`       // password | oauth
+	OAuthProvider   *string `json:"oauth_provider,omitempty" gorm:"column:oauth_provider;size:50"`          // google | github | etc
+	OAuthProviderID *string `json:"-" gorm:"column:oauth_provider_id;size:255"`                             // Provider's unique user ID (hidden from JSON)
 
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`
