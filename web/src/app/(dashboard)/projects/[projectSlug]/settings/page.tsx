@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Settings, Save, RefreshCw, AlertCircle } from 'lucide-react'
 import { useOrganization } from '@/context/org-context'
+import { getOrgSlug, getProjectSlug } from '@/lib/utils/slug-utils'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -23,7 +24,7 @@ export default function ProjectGeneralSettingsPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [projectName, setProjectName] = useState(currentProject?.name || '')
   const [projectDescription, setProjectDescription] = useState(currentProject?.description || '')
-  const [projectSlug, setProjectSlug] = useState(currentProject?.slug || '')
+  const computedProjectSlug = currentProject ? getProjectSlug(currentProject) : ''
   const [projectStatus, setProjectStatus] = useState<ProjectStatus>(currentProject?.status || 'active')
   const [environment, setEnvironment] = useState<ProjectEnvironment>(currentProject?.environment || 'production')
   const [isPublic, setIsPublic] = useState(currentProject?.settings?.public || false)
@@ -119,7 +120,7 @@ export default function ProjectGeneralSettingsPage() {
                 placeholder="project-slug"
               />
               <p className="text-xs text-muted-foreground">
-                URL: /{currentOrganization.slug}/projects/{projectSlug}
+                URL: /organizations/{getOrgSlug(currentOrganization)}/projects/{computedProjectSlug}
               </p>
             </div>
           </div>

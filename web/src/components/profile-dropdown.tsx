@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { cn } from '@/lib/utils'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import {
@@ -14,11 +15,15 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 
-export function ProfileDropdown() {
+interface ProfileDropdownProps {
+  className?: string
+}
+
+export function ProfileDropdown({ className }: ProfileDropdownProps = {}) {
   return (
     <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
-        <Button variant='ghost' className='relative h-8 w-8 rounded-full'>
+        <Button variant='ghost' className={cn('relative h-8 w-8 rounded-full', className)}>
           <Avatar className='h-8 w-8'>
             <AvatarImage src='/avatars/01.png' alt='@shadcn' />
             <AvatarFallback>SN</AvatarFallback>

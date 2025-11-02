@@ -4,10 +4,11 @@ import * as React from 'react'
 import { useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { ChevronDown, FolderOpen, Plus, Settings } from 'lucide-react'
+import Link from 'next/link'
 import { useOrganization } from '@/context/org-context'
 import { useProject } from '@/context/project-context'
 import { useIsMobile } from '@/hooks/use-mobile'
-import { buildProjectUrl } from '@/lib/utils/slug-utils'
+import { buildProjectUrl, getProjectSlug } from '@/lib/utils/slug-utils'
 import { getSmartRedirectUrl } from '@/lib/utils/smart-redirect'
 import {
   DropdownMenu,
@@ -50,7 +51,7 @@ export function ProjectSelector({ className }: ProjectSelectorProps) {
       // Use smart redirect to determine the appropriate URL
       const redirectUrl = getSmartRedirectUrl({
         currentPath: pathname,
-        targetProjectSlug: project.slug || project.id, // fallback to id if no slug
+        targetProjectSlug: getProjectSlug(project),
         targetProjectId: project.id,
         targetProjectName: project.name
       })
@@ -92,24 +93,17 @@ export function ProjectSelector({ className }: ProjectSelectorProps) {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="outline"
-          className={cn(
-            "gap-2 justify-start text-left font-normal",
-            isMobile ? "max-w-[140px]" : "max-w-[180px]",
-            "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-          )}
-          disabled={isSwitchLoading}
-        >
-          <div className="bg-muted flex size-4 items-center justify-center rounded-sm">
-            <FolderOpen className="size-3" />
-          </div>
-          <span className="truncate text-sm">
-            {currentProject.name}
-          </span>
-          <ChevronDown className="ml-auto h-4 w-4 shrink-0" />
-        </Button>
+      <DropdownMenuTrigger
+        className={cn(
+          "flex items-center gap-1 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+          "text-sm text-primary hover:text-primary/80 transition-colors",
+          isSwitchLoading && "opacity-50 cursor-not-allowed",
+          className
+        )}
+        disabled={isSwitchLoading}
+      >
+        <span className="font-normal">{currentProject.name}</span>
+        <ChevronDown className="size-4" />
       </DropdownMenuTrigger>
       
       <DropdownMenuContent
@@ -118,84 +112,86 @@ export function ProjectSelector({ className }: ProjectSelectorProps) {
           isMobile ? "w-screen max-w-sm" : "w-64"
         )}
         align="start"
-        side="bottom"
-        sideOffset={4}
       >
-        {/* Current Project */}
-        <DropdownMenuLabel className="text-xs text-muted-foreground">
-          Current Project
-        </DropdownMenuLabel>
-        <div className="px-2 py-2 border-b mb-1">
-          <div className="flex items-center gap-2">
-            <div className="bg-muted flex size-6 items-center justify-center rounded-sm">
-              <FolderOpen className="size-3" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <span className="font-medium text-sm">{currentProject.name}</span>
-              {currentProject.status === 'active' && (
-                <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span>Active</span>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Go to Organization Overview */}
-        <DropdownMenuItem
-          onClick={handleGoToOrganization}
-          className="gap-2 p-2 cursor-pointer"
-          disabled={isSwitchLoading}
-        >
-          <div className="bg-muted flex size-5 items-center justify-center rounded-sm">
-            <FolderOpen className="size-3" />
-          </div>
-          <span className="text-sm">All Projects</span>
+        {/* Projects overview link */}
+        <DropdownMenuItem className="font-semibold" asChild>
+          <Link
+            href={`/organization/${currentOrganization.id}`}
+            className="cursor-pointer"
+          >
+            Projects
+          </Link>
         </DropdownMenuItem>
-
-        {/* Switch Project */}
-        {projects.filter(project => project.id !== currentProject.id).length > 0 && (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuLabel className="text-xs text-muted-foreground">
-              Switch Project
-            </DropdownMenuLabel>
-            
-            {projects.filter(project => project.id !== currentProject.id).map((project) => (
-              <DropdownMenuItem
-                key={project.id}
-                onClick={() => handleProjectSwitch(project)}
-                className="gap-2 p-2 cursor-pointer"
-                disabled={isSwitchLoading}
-              >
-                <div className="bg-muted flex size-5 items-center justify-center rounded-sm">
-                  <FolderOpen className="size-3" />
-                </div>
-                <span className="text-sm">{project.name}</span>
-                {project.status === 'active' && (
-                  <div className="w-2 h-2 bg-green-500 rounded-full ml-auto"></div>
-                )}
-              </DropdownMenuItem>
-            ))}
-          </>
-        )}
 
         <DropdownMenuSeparator />
-        
-        {/* Project Actions */}
-        <DropdownMenuItem className="gap-2 p-2 cursor-pointer">
-          <div className="bg-muted flex size-5 items-center justify-center rounded-sm">
-            <Settings className="size-3" />
-          </div>
-          <span className="text-sm">Project Settings</span>
-        </DropdownMenuItem>
 
-        <DropdownMenuItem className="gap-2 p-2 cursor-pointer">
-          <div className="bg-primary text-primary-foreground flex size-5 items-center justify-center rounded-sm">
-            <Plus className="size-3" />
-          </div>
-          <span className="text-sm font-medium">New Project</span>
+        {/* All projects list */}
+        <div className="max-h-36 overflow-y-auto">
+          {projects.map((project) => (
+            <DropdownMenuItem
+              key={project.id}
+              asChild
+            >
+              <Link
+                href={
+                  project.id === currentProject.id
+                    ? pathname
+                    : getSmartRedirectUrl({
+                        currentPath: pathname,
+                        targetProjectSlug: getProjectSlug(project),
+                        targetProjectId: project.id,
+                        targetProjectName: project.name
+                      })
+                }
+                className="flex cursor-pointer justify-between"
+                onClick={(e) => {
+                  if (project.id === currentProject.id) {
+                    e.preventDefault()
+                    return
+                  }
+                  setIsSwitchLoading(true)
+                }}
+              >
+                <span
+                  className="max-w-36 overflow-hidden overflow-ellipsis whitespace-nowrap"
+                  title={project.name}
+                >
+                  {project.name}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 hover:bg-background -my-1 ml-4"
+                  aria-label={`Open ${project.name} settings`}
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    router.push(`/project/${project.id}/settings`)
+                  }}
+                >
+                  <Settings className="h-3 w-3" />
+                  <span className="sr-only">Open {project.name} settings</span>
+                </Button>
+              </Link>
+            </DropdownMenuItem>
+          ))}
+        </div>
+
+        <DropdownMenuSeparator />
+
+        {/* Create new project */}
+        <DropdownMenuItem asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 w-full text-sm font-normal justify-start"
+            asChild
+          >
+            <Link href="/projects/create">
+              <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
+              New Project
+            </Link>
+          </Button>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

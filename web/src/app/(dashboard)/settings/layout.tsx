@@ -5,9 +5,9 @@ import { SidebarProvider } from '@/components/ui/sidebar'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
 import { TopNav } from '@/components/layout/top-nav'
-import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
+import { ProfileDropdown } from '@/components/profile-dropdown'
 import { SettingsNav } from '@/components/settings/settings-nav'
 
 const topNav = [
@@ -37,8 +37,8 @@ export default function SettingsLayout({
         <TopNav links={topNav} />
         <div className='ml-auto flex items-center space-x-4'>
           <Search />
-          <ThemeSwitch />
-          <ProfileDropdown />
+          <ThemeSwitch className="hidden sm:flex" />
+          <ProfileDropdown className="hidden sm:flex" />
         </div>
       </Header>
 

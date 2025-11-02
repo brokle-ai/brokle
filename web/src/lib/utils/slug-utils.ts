@@ -160,3 +160,21 @@ export function parsePathContext(pathname: string): {
   return { orgSlug, projectSlug }
 }
 
+/**
+ * Get or generate slug for an organization
+ * @param org - Organization object
+ * @returns Composite slug (uses org.slug if available, otherwise generates from name + id)
+ */
+export function getOrgSlug(org: { name: string; id: string; slug?: string }): string {
+  return org.slug || generateCompositeSlug(org.name, org.id)
+}
+
+/**
+ * Get or generate slug for a project
+ * @param project - Project object
+ * @returns Composite slug (uses project.slug if available, otherwise generates from name + id)
+ */
+export function getProjectSlug(project: { name: string; id: string; slug?: string }): string {
+  return project.slug || generateCompositeSlug(project.name, project.id)
+}
+

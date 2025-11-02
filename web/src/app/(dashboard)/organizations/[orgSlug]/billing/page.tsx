@@ -14,12 +14,9 @@ import {
   Zap
 } from 'lucide-react'
 import { useOrganization } from '@/context/org-context'
-import { Header } from '@/components/layout/header'
+import { DashboardHeader } from '@/components/layout/dashboard-header'
 import { Main } from '@/components/layout/main'
-import { ContextNavbar } from '@/components/layout/context-navbar'
-import { Search } from '@/components/search'
-import { ThemeSwitch } from '@/components/theme-switch'
-import { ProfileDropdown } from '@/components/profile-dropdown'
+import { getOrgSlug } from '@/lib/utils/slug-utils'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -105,13 +102,19 @@ const PLAN_FEATURES = {
 }
 
 export default function BillingSettingsPage() {
-  const params = useParams() as OrganizationParams
+  const params = useParams<OrganizationParams>()
   const router = useRouter()
-  const { 
+  const {
     currentOrganization,
     isLoading,
     error
   } = useOrganization()
+
+  // Validate params
+  if (!params?.orgSlug) {
+    console.error('Missing orgSlug parameter')
+    return null
+  }
   
   const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan>('pro')
 
@@ -121,14 +124,7 @@ export default function BillingSettingsPage() {
   if (isLoading) {
     return (
       <>
-        <Header>
-          <ContextNavbar />
-          <div className='ml-auto flex items-center space-x-4'>
-            <Search />
-            <ThemeSwitch />
-            <ProfileDropdown />
-          </div>
-        </Header>
+        <DashboardHeader />
         <Main className="space-y-6">
           <Skeleton className="h-6 w-96" />
           <div className="grid gap-6 md:grid-cols-2">
@@ -143,22 +139,15 @@ export default function BillingSettingsPage() {
   if (error || !currentOrganization) {
     return (
       <>
-        <Header>
-          <ContextNavbar />
-          <div className='ml-auto flex items-center space-x-4'>
-            <Search />
-            <ThemeSwitch />
-            <ProfileDropdown />
-          </div>
-        </Header>
+        <DashboardHeader />
         <Main>
           <div className="text-center py-12">
             <h2 className="text-xl font-semibold mb-2">Access Denied</h2>
             <p className="text-muted-foreground mb-4">
               You don't have permission to manage billing for this organization.
             </p>
-            <button 
-              onClick={() => router.push(currentOrganization ? `/${currentOrganization.slug}` : '/')}
+            <button
+              onClick={() => router.push(currentOrganization ? `/organizations/${getOrgSlug(currentOrganization)}` : '/')}
               className="text-primary hover:underline"
             >
               Go back
@@ -210,14 +199,7 @@ export default function BillingSettingsPage() {
 
   return (
     <>
-      <Header>
-        <ContextNavbar />
-        <div className='ml-auto flex items-center space-x-4'>
-          <Search />
-          <ThemeSwitch />
-          <ProfileDropdown />
-        </div>
-      </Header>
+      <DashboardHeader />
 
       <Main className="space-y-8">
         {/* Page Header */}

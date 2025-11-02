@@ -9,12 +9,8 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Header } from '@/components/layout/header'
+import { DashboardHeader } from '@/components/layout/dashboard-header'
 import { Main } from '@/components/layout/main'
-import { ContextNavbar } from '@/components/layout/context-navbar'
-import { Search } from '@/components/search'
-import { ThemeSwitch } from '@/components/theme-switch'
-import { ProfileDropdown } from '@/components/profile-dropdown'
 import { MetricCard } from '@/components/shared/metrics/metric-card'
 import { StatsGrid } from '@/components/shared/metrics/stats-grid'
 import { ProjectGrid } from '@/components/organization/project-grid'
@@ -84,14 +80,7 @@ export function OrganizationOverview() {
 
   return (
     <>
-      <Header>
-        <ContextNavbar />
-        <div className='ml-auto flex items-center space-x-4'>
-          <Search />
-          <ThemeSwitch />
-          <ProfileDropdown />
-        </div>
-      </Header>
+      <DashboardHeader />
 
       <Main>
         {/* Organization Header Section */}

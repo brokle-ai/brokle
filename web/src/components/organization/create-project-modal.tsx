@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, FolderOpen, Loader2 } from 'lucide-react'
 import { useOrganization } from '@/context/org-context'
+import { getOrgSlug, getProjectSlug } from '@/lib/utils/slug-utils'
 import {
   Dialog,
   DialogContent,
@@ -90,9 +91,9 @@ export function CreateProjectModal({ trigger, onSuccess }: CreateProjectModalPro
 
       // Navigate to new project or call callback
       if (onSuccess) {
-        onSuccess(newProject.slug)
+        onSuccess(getProjectSlug(newProject))
       } else {
-        router.push(`/${currentOrganization.slug}/${newProject.slug}`)
+        router.push(`/organizations/${getOrgSlug(currentOrganization)}/projects/${getProjectSlug(newProject)}`)
       }
     } catch (error) {
       console.error('Failed to create project:', error)
