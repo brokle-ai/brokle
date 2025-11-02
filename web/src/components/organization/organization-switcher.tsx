@@ -2,6 +2,7 @@
 
 import * as React from 'react'
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { ChevronsUpDown, Plus, Building2, FolderOpen, Settings, Users } from 'lucide-react'
 import { useOrganization } from '@/context/org-context'
 import {
@@ -29,14 +30,15 @@ interface OrganizationSwitcherProps {
   className?: string
 }
 
-export function OrganizationSwitcher({ 
+export function OrganizationSwitcher({
   showProjects = true,
   className
 }: OrganizationSwitcherProps) {
+  const router = useRouter()
   const { isMobile } = useSidebar()
-  const { 
-    organizations, 
-    currentOrganization, 
+  const {
+    organizations,
+    currentOrganization,
     currentProject,
     projects,
     switchOrganization,
@@ -285,7 +287,10 @@ export function OrganizationSwitcher({
 
             <DropdownMenuSeparator />
 
-            <DropdownMenuItem className="gap-2 p-2 cursor-pointer">
+            <DropdownMenuItem
+              className="gap-2 p-2 cursor-pointer"
+              onClick={() => router.push('/organizations/create')}
+            >
               <div className="bg-primary text-primary-foreground flex size-6 items-center justify-center rounded-sm">
                 <Plus className="size-3" />
               </div>

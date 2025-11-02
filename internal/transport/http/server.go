@@ -30,6 +30,7 @@ type Server struct {
 	authMiddleware      *middleware.AuthMiddleware
 	sdkAuthMiddleware   *middleware.SDKAuthMiddleware
 	rateLimitMiddleware *middleware.RateLimitMiddleware
+	csrfMiddleware      *middleware.CSRFMiddleware
 }
 
 // NewServer creates a new HTTP server instance
@@ -64,6 +65,9 @@ func NewServer(
 		logger,
 	)
 
+	// Create CSRF validation middleware
+	csrfMiddleware := middleware.NewCSRFMiddleware(logger)
+
 	return &Server{
 		config:              cfg,
 		logger:              logger,
@@ -71,6 +75,7 @@ func NewServer(
 		authMiddleware:      authMiddleware,
 		sdkAuthMiddleware:   sdkAuthMiddleware,
 		rateLimitMiddleware: rateLimitMiddleware,
+		csrfMiddleware:      csrfMiddleware,
 	}
 }
 
@@ -86,18 +91,33 @@ func (s *Server) Start() error {
 	// Create Gin engine
 	s.engine = gin.New()
 
-	// Setup CORS
+	// Setup CORS with security validation
 	corsConfig := cors.DefaultConfig()
 
-	// Handle wildcard origins gracefully
+	// Validate wildcard incompatibility with credentials
 	if len(s.config.Server.CORSAllowedOrigins) == 1 && s.config.Server.CORSAllowedOrigins[0] == "*" {
-		corsConfig.AllowAllOrigins = true
-	} else {
-		corsConfig.AllowOrigins = s.config.Server.CORSAllowedOrigins
+		// CRITICAL: Wildcard incompatible with AllowCredentials (cookies won't work)
+		s.logger.Fatal("CORS misconfiguration: cannot use wildcard (*) origins with AllowCredentials (httpOnly cookies require specific origins). " +
+			"Set specific origins in CORS_ALLOWED_ORIGINS environment variable.")
+		return fmt.Errorf("invalid CORS configuration: wildcard origins incompatible with credentials")
+	}
+
+	// Configure specific origins (only reached if not wildcard)
+	corsConfig.AllowOrigins = s.config.Server.CORSAllowedOrigins
+
+	// Validate at least one origin is configured
+	if len(s.config.Server.CORSAllowedOrigins) == 0 {
+		s.logger.Fatal("CORS misconfiguration: AllowCredentials requires specific AllowedOrigins. " +
+			"Set CORS_ALLOWED_ORIGINS environment variable.")
+		return fmt.Errorf("invalid CORS configuration: no origins specified")
 	}
 
 	corsConfig.AllowMethods = s.config.Server.CORSAllowedMethods
-	corsConfig.AllowHeaders = s.config.Server.CORSAllowedHeaders
+
+	// Ensure X-CSRF-Token is always allowed (required for CSRF protection)
+	allowedHeaders := s.config.Server.CORSAllowedHeaders
+	corsConfig.AllowHeaders = append(allowedHeaders, "X-CSRF-Token")
+
 	corsConfig.AllowCredentials = true
 	corsConfig.MaxAge = 5 * time.Minute
 	s.engine.Use(cors.New(corsConfig))
@@ -196,10 +216,11 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 	// Public invitation validation (no auth required, rate limited)
 	router.GET("/invitations/validate/:token", s.handlers.Organization.ValidateInvitationToken)
 
-	// Protected routes (require JWT auth)
+	// Protected routes (require JWT auth + CSRF validation)
 	protected := router.Group("")
-	protected.Use(s.authMiddleware.RequireAuth())
-	protected.Use(s.rateLimitMiddleware.RateLimitByUser()) // User-based rate limiting after auth
+	protected.Use(s.authMiddleware.RequireAuth())           // Step 1: Validate JWT from cookie
+	protected.Use(s.csrfMiddleware.ValidateCSRF())          // Step 2: Validate CSRF for mutations
+	protected.Use(s.rateLimitMiddleware.RateLimitByUser()) // Step 3: User-based rate limiting
 
 	// User routes
 	users := protected.Group("/users")
@@ -221,6 +242,7 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 	// Auth session management routes (protected)
 	authSessions := protected.Group("/auth")
 	{
+		authSessions.GET("/me", s.handlers.Auth.GetCurrentUser) // Get current user with token expiry metadata
 		authSessions.POST("/logout", s.handlers.Auth.Logout)
 		authSessions.GET("/sessions", s.handlers.Auth.ListSessions)
 		authSessions.GET("/sessions/:session_id", s.handlers.Auth.GetSession)

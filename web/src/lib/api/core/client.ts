@@ -13,8 +13,7 @@ import { BrokleAPIError as APIError } from './types'
 
 export class BrokleAPIClient {
   protected axiosInstance: AxiosInstance
-  private isRefreshing = false
-  private refreshPromise: Promise<string | null> | null = null
+  // Note: Refresh logic removed - auth store owns token refresh (single source of truth)
 
   constructor(
     basePath: string = '',
@@ -41,6 +40,7 @@ export class BrokleAPIClient {
       baseURL: finalConfig.baseURL,
       timeout: finalConfig.timeout,
       headers: finalConfig.headers,
+      withCredentials: true,  // CRITICAL: Required for httpOnly cookies
     })
 
     // Set base path for service-specific clients
@@ -138,21 +138,19 @@ export class BrokleAPIClient {
 
   // Setup axios interceptors
   private setupInterceptors(): void {
-    // Request interceptor - Add authentication and context headers
+    // Request interceptor - Add CSRF tokens and context headers
     this.axiosInstance.interceptors.request.use(
       async (config) => {
-        // Skip auth if explicitly requested
-        if ((config as any).skipAuth) {
-          return config
-        }
-
         // Initialize headers
         config.headers = config.headers || {}
 
-        // Add Bearer token for authenticated requests
-        const token = this.getAccessToken()
-        if (token) {
-          config.headers.Authorization = `Bearer ${token}`
+        // Add CSRF token for mutations (NOT for GET requests)
+        // httpOnly cookies are sent automatically by the browser
+        if (['post', 'put', 'patch', 'delete'].includes(config.method?.toLowerCase() || '')) {
+          const csrfToken = this.getCookie('csrf_token')
+          if (csrfToken) {
+            config.headers['X-CSRF-Token'] = csrfToken
+          }
         }
 
         // Add context headers based on explicit request options (URL-based, opt-in only)
@@ -264,42 +262,25 @@ export class BrokleAPIClient {
         return response
       },
       async (error) => {
-        const originalRequest = error.config
+        const originalRequest = error.config as RequestOptions
 
-        // Handle 401 errors with token refresh (but skip for requests that don't need auth)
-        if (error.response?.status === 401 && 
-            !originalRequest._retry && 
-            !originalRequest.skipAuth) {
+        // Handle 401 errors with token refresh
+        // Skip if: already retried, explicitly bypassed, or is the refresh endpoint itself
+        if (error.response?.status === 401 &&
+            !originalRequest._retry &&
+            !originalRequest.skipRefreshInterceptor) {
           originalRequest._retry = true
 
           try {
-            // Prevent multiple refresh attempts
-            if (!this.isRefreshing) {
-              this.isRefreshing = true
-              this.refreshPromise = this.refreshAccessToken()
-            }
+            // Delegate to auth store's refresh (single source of truth)
+            const { useAuthStore } = await import('@/stores/auth-store')
+            await useAuthStore.getState().refreshToken()
 
-            const newToken = await this.refreshPromise
-            
-            if (newToken) {
-              // Retry original request with new token
-              originalRequest.headers = originalRequest.headers || {}
-              originalRequest.headers.Authorization = `Bearer ${newToken}`
-              return this.axiosInstance.request(originalRequest)
-            }
+            // Cookies updated by store, retry the request
+            return this.axiosInstance.request(originalRequest)
           } catch (refreshError) {
-            // Refresh failed, clear tokens and redirect to login
-            this.clearTokens()
-            
-            // Broadcast session expired
-            if (typeof window !== 'undefined') {
-              window.dispatchEvent(new CustomEvent('auth:session-expired'))
-            }
-            
+            // Refresh failed - store already dispatched event and cleared state
             return Promise.reject(new APIError(error))
-          } finally {
-            this.isRefreshing = false
-            this.refreshPromise = null
           }
         }
 
@@ -351,13 +332,30 @@ export class BrokleAPIClient {
 
   // Extract data from API response wrapper
   private extractData<T>(response: AxiosResponse<APIResponse<T>>): T {
-    const { data, success } = response.data
+    const responseData = response.data
 
-    if (!success) {
+    // Defensive validation with helpful error messages
+    if (!responseData) {
+      console.error('[API] Response data is undefined:', response)
+      throw new Error('API response data is undefined')
+    }
+
+    if (responseData.success === undefined) {
+      console.error('[API] Response missing success field:', responseData)
+      throw new Error('API response missing success field')
+    }
+
+    if (!responseData.success) {
+      console.error('[API] Response indicates failure:', responseData)
       throw new Error('API response indicates failure but was not caught by error interceptor')
     }
 
-    return data
+    if (responseData.data === undefined) {
+      console.error('[API] Response missing data field:', responseData)
+      throw new Error('API response missing data field')
+    }
+
+    return responseData.data
   }
 
   // Convert backend pagination format to frontend format
@@ -546,52 +544,20 @@ export class BrokleAPIClient {
     return this.axiosInstance.defaults.baseURL || ''
   }
 
-  // Simple token management methods
-  private getAccessToken(): string | null {
-    if (typeof window === 'undefined') return null
-    return localStorage.getItem('access_token')
-  }
+  // Cookie helper method
+  private getCookie(name: string): string | null {
+    if (typeof document === 'undefined') return null
 
-  private getRefreshToken(): string | null {
-    if (typeof window === 'undefined') return null
-    return localStorage.getItem('refresh_token')
-  }
-
-  private clearTokens(): void {
-    if (typeof window === 'undefined') return
-    localStorage.removeItem('access_token')
-    localStorage.removeItem('refresh_token')
-    localStorage.removeItem('expires_at')
-    document.cookie = 'access_token=; path=/; max-age=0'
-  }
-
-  private async refreshAccessToken(): Promise<string | null> {
-    const refreshToken = this.getRefreshToken()
-    if (!refreshToken) {
-      throw new Error('No refresh token available')
+    const value = `; ${document.cookie}`
+    const parts = value.split(`; ${name}=`)
+    if (parts.length === 2) {
+      return parts.pop()?.split(';').shift() || null
     }
-
-    try {
-      const response = await this.axiosInstance.post('/v1/auth/refresh', {
-        refresh_token: refreshToken
-      }, { skipAuth: true } as any)
-
-      const { access_token, refresh_token: newRefreshToken, expires_in } = response.data.data
-      
-      // Store new tokens
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('access_token', access_token)
-        localStorage.setItem('refresh_token', newRefreshToken)
-        localStorage.setItem('expires_at', String(Date.now() + expires_in * 1000))
-        document.cookie = `access_token=${access_token}; path=/; max-age=${expires_in}; SameSite=Strict`
-      }
-
-      return access_token
-    } catch (error) {
-      console.error('Token refresh failed:', error)
-      throw error
-    }
+    return null
   }
+
+  // Note: Token refresh logic removed - auth store owns refresh (single source of truth)
+  // See web/src/stores/auth-store.ts for refresh implementation
 
   // Development helper
   debug(): void {
@@ -601,11 +567,12 @@ export class BrokleAPIClient {
     console.log('Base URL:', this.getBaseURL())
     console.log('Default Headers:', this.axiosInstance.defaults.headers)
     console.log('Timeout:', this.axiosInstance.defaults.timeout)
+    console.log('With Credentials:', this.axiosInstance.defaults.withCredentials)
     console.log('Retry Config:', {
       retries: this.config.retries,
       retryDelay: this.config.retryDelay
     })
-    console.log('Has Access Token:', !!this.getAccessToken())
+    console.log('Has CSRF Token:', !!this.getCookie('csrf_token'))
     console.groupEnd()
   }
 }

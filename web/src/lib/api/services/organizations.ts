@@ -10,7 +10,7 @@ import type { PaginatedResponse } from '../core/types'
 interface OrganizationAPIResponse {
   id: string
   name: string
-  slug: string
+  description?: string
   plan: 'free' | 'pro' | 'business' | 'enterprise'
   status: 'active' | 'inactive' | 'suspended'
   owner_id: string
@@ -149,11 +149,12 @@ export const getProjectMetrics = async (organizationId: string, projectId: strin
 
 export const createOrganization = async (data: {
     name: string
-    slug?: string
-    billing_email: string
-    subscription_plan?: 'free' | 'pro' | 'business' | 'enterprise'
+    description?: string
   }): Promise<Organization> => {
-    const response = await client.post<OrganizationAPIResponse>('/v2/organizations', data)
+    const response = await client.post<OrganizationAPIResponse>('/v1/organizations', {
+      name: data.name,
+      description: data.description || '',
+    })
     return mapOrganizationFromAPI(response)
   }
 
@@ -258,7 +259,7 @@ export const updateUserRole = async (organizationId: string, userId: string, rol
     if (!apiOrg) {
       throw new Error('Organization API response is null or undefined')
     }
-    
+
     if (!apiOrg.id) {
       console.error('[OrganizationAPI] Missing required fields in API response:', apiOrg)
       throw new Error('Organization API response missing required id field')
@@ -267,9 +268,7 @@ export const updateUserRole = async (organizationId: string, userId: string, rol
     return {
       id: apiOrg.id,
       name: apiOrg.name || '',
-      slug: apiOrg.slug || '',
       plan: apiOrg.plan || 'free',
-      billing_email: '', // Not provided in new API response
       created_at: apiOrg.created_at || '',
       updated_at: apiOrg.updated_at || '',
       members: [], // Will be populated separately if needed

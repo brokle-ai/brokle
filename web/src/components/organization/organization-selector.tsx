@@ -140,7 +140,7 @@ export function OrganizationSelector({ className }: OrganizationSelectorProps) {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Button className="w-full" onClick={() => router.push('/onboarding')}>
+              <Button className="w-full" onClick={() => router.push('/organizations/create')}>
                 <Plus className="mr-2 h-4 w-4" />
                 Create Organization
               </Button>
@@ -228,9 +228,9 @@ export function OrganizationSelector({ className }: OrganizationSelectorProps) {
         ))}
         
         {/* Create new organization card */}
-        <Card 
+        <Card
           className="cursor-pointer transition-all duration-200 hover:shadow-md hover:scale-[1.02] border-dashed"
-          onClick={() => router.push('/onboarding')}
+          onClick={() => router.push('/organizations/create')}
         >
           <CardHeader className="pb-3">
             <div className="flex items-center gap-3">

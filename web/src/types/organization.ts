@@ -1,9 +1,9 @@
 export interface Organization {
   id: string
   name: string
-  slug: string
+  slug?: string
   plan: SubscriptionPlan
-  billing_email: string
+  billing_email?: string
   created_at: string
   updated_at: string
   members: OrganizationMember[]
@@ -96,9 +96,7 @@ export interface OrganizationContext {
 
 export interface CreateOrganizationData {
   name: string
-  slug?: string
-  billing_email: string
-  plan?: SubscriptionPlan
+  description?: string
 }
 
 export interface CreateProjectData {

@@ -236,7 +236,10 @@ export function OrganizationSelector({ className }: OrganizationSelectorProps) {
 
         <DropdownMenuSeparator />
 
-        <DropdownMenuItem className="gap-2 p-2 cursor-pointer">
+        <DropdownMenuItem
+          className="gap-2 p-2 cursor-pointer"
+          onClick={() => router.push('/organizations/create')}
+        >
           <div className="bg-primary text-primary-foreground flex size-5 items-center justify-center rounded-sm">
             <Plus className="size-3" />
           </div>

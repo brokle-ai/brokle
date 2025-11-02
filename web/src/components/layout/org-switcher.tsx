@@ -105,7 +105,7 @@ export function OrgSwitcher({ currentOrganization, organizations = [] }: OrgSwit
               <CommandItem
                 onSelect={() => {
                   setOpen(false)
-                  router.push('/organizations')
+                  router.push('/organizations/create')
                 }}
               >
                 <Plus className="mr-2 h-4 w-4" />
