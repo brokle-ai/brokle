@@ -109,11 +109,15 @@ export const signup = async (credentials: SignUpCredentials): Promise<AuthRespon
     last_name: credentials.lastName,
     email: credentials.email,
     password: credentials.password,
+    role: credentials.role,
+    organization_name: credentials.organizationName,
+    referral_source: credentials.referralSource,
+    invitation_token: credentials.invitationToken,
   }
-  
+
   const backendResponse = await client.post<LoginResponse>(
-    '/v1/auth/signup', 
-    backendPayload, 
+    '/v1/auth/signup',
+    backendPayload,
     { skipAuth: true }
   )
 
@@ -302,7 +306,118 @@ export const getCurrentOrganization = async (): Promise<Organization> => {
 }
 
 export const setDefaultOrganization = async (organizationId: string): Promise<void> => {
-  await client.patch('/v1/users/me', { 
-    default_organization_id: organizationId 
+  await client.patch('/v1/users/me', {
+    default_organization_id: organizationId
   })
+}
+
+// Validate invitation token (public endpoint)
+export const validateInvitation = async (token: string) => {
+  return await client.get<{
+    organization_name: string
+    organization_id: string
+    inviter_name: string
+    role: string
+    email: string
+    expires_at: string
+    is_expired: boolean
+  }>(`/v1/invitations/validate/${token}`, undefined, { skipAuth: true })
+}
+
+// Exchange OAuth login session for tokens (existing user OAuth login)
+export const exchangeLoginSession = async (sessionId: string) => {
+  return await client.post<{
+    access_token: string
+    refresh_token: string
+    token_type: string
+    expires_in: number
+  }>(`/v1/auth/exchange-session/${sessionId}`, {}, { skipAuth: true })
+}
+
+// Complete OAuth signup (Step 2)
+export const completeOAuthSignup = async (data: {
+  sessionId: string
+  role: string
+  organizationName?: string
+  referralSource?: string
+}): Promise<AuthResponse> => {
+  const backendPayload = {
+    session_id: data.sessionId,
+    role: data.role,
+    organization_name: data.organizationName,
+    referral_source: data.referralSource,
+  }
+
+  const backendResponse = await client.post<LoginResponse>(
+    '/v1/auth/complete-oauth-signup',
+    backendPayload,
+    { skipAuth: true }
+  )
+
+  // Get user details
+  const userResponse = await client.get<UserResponse>('/v1/users/me', undefined, {
+    headers: {
+      'Authorization': `Bearer ${backendResponse.access_token}`
+    }
+  })
+
+  const user: User = {
+    id: userResponse.id,
+    email: userResponse.email,
+    firstName: userResponse.first_name,
+    lastName: userResponse.last_name,
+    name: `${userResponse.first_name} ${userResponse.last_name}`.trim(),
+    role: 'user',
+    organizationId: '',
+    defaultOrganizationId: userResponse.default_organization_id,
+    projects: [],
+    createdAt: userResponse.created_at,
+    updatedAt: userResponse.created_at,
+    isEmailVerified: userResponse.is_email_verified,
+    onboardingCompletedAt: userResponse.onboarding_completed_at,
+  }
+
+  // Get organization
+  const orgResponse = await client.get<Array<{
+    id: string
+    name: string
+    slug: string
+    billing_email: string
+    subscription_plan: 'free' | 'pro' | 'business' | 'enterprise'
+    created_at: string
+    updated_at: string
+  }>>('/v1/organizations', undefined, {
+    headers: {
+      'Authorization': `Bearer ${backendResponse.access_token}`
+    }
+  })
+
+  const firstOrg = Array.isArray(orgResponse) && orgResponse.length > 0 ? orgResponse[0] : null
+  if (!firstOrg) {
+    throw new Error('No organizations found for user')
+  }
+
+  const organization: Organization = {
+    id: firstOrg.id,
+    name: firstOrg.name,
+    slug: firstOrg.slug,
+    plan: firstOrg.subscription_plan,
+    members: [],
+    apiKeys: [],
+    usage: {
+      requestsThisMonth: 0,
+      costsThisMonth: 0,
+      modelsUsed: 0,
+    },
+    createdAt: firstOrg.created_at,
+    updatedAt: firstOrg.updated_at,
+  }
+
+  return {
+    user,
+    organization,
+    accessToken: backendResponse.access_token,
+    refreshToken: backendResponse.refresh_token,
+    expiresIn: backendResponse.expires_in,
+  }
 }

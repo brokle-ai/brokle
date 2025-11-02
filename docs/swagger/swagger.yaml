@@ -598,6 +598,25 @@ definitions:
     - current_password
     - new_password
     type: object
+  auth.CompleteOAuthSignupRequest:
+    description: Complete OAuth signup with additional user information
+    properties:
+      organization_name:
+        example: Acme Corp
+        type: string
+      referral_source:
+        example: search
+        type: string
+      role:
+        example: engineer
+        type: string
+      session_id:
+        example: 01HX...
+        type: string
+    required:
+    - role
+    - session_id
+    type: object
   auth.ForgotPasswordRequest:
     description: Email for password reset
     properties:
@@ -606,6 +625,51 @@ definitions:
         type: string
     required:
     - email
+    type: object
+  auth.RegisterRequest:
+    description: User registration information
+    properties:
+      email:
+        example: user@example.com
+        type: string
+      first_name:
+        example: John
+        maxLength: 100
+        minLength: 1
+        type: string
+      invitation_token:
+        example: 01HX...
+        type: string
+      last_name:
+        example: Doe
+        maxLength: 100
+        minLength: 1
+        type: string
+      organization_name:
+        example: Acme Corp
+        type: string
+      password:
+        example: password123
+        minLength: 8
+        type: string
+      referral_source:
+        example: search
+        type: string
+      role:
+        enum:
+        - engineer
+        - product
+        - designer
+        - executive
+        - other
+        example: engineer
+        type: string
+    required:
+    - email
+    - first_name
+    - last_name
+    - password
+    - role
     type: object
   auth.ResetPasswordRequest:
     description: Reset password with token
@@ -982,38 +1046,6 @@ definitions:
     required:
     - refresh_token
     type: object
-  internal_transport_http_handlers_auth.RegisterRequest:
-    description: User registration information
-    properties:
-      email:
-        example: user@example.com
-        type: string
-      first_name:
-        example: John
-        maxLength: 100
-        minLength: 1
-        type: string
-      language:
-        example: en
-        type: string
-      last_name:
-        example: Doe
-        maxLength: 100
-        minLength: 1
-        type: string
-      password:
-        example: password123
-        minLength: 8
-        type: string
-      timezone:
-        example: UTC
-        type: string
-    required:
-    - email
-    - first_name
-    - last_name
-    - password
-    type: object
   internal_transport_http_handlers_billing.Invoice:
     properties:
       billing_period:
@@ -1115,11 +1147,6 @@ definitions:
         maxLength: 100
         minLength: 2
         type: string
-      slug:
-        example: acme-corp
-        maxLength: 50
-        minLength: 2
-        type: string
     required:
     - name
     type: object
@@ -1142,9 +1169,6 @@ definitions:
         type: string
       plan:
         example: pro
-        type: string
-      slug:
-        example: acme-corp
         type: string
       status:
         example: active
@@ -1799,6 +1823,28 @@ definitions:
     - key
     - value
     type: object
+  organization.InvitationDetailsResponse:
+    properties:
+      email:
+        example: user@example.com
+        type: string
+      expires_at:
+        type: string
+      inviter_name:
+        example: John
+        type: string
+      is_expired:
+        type: boolean
+      organization_id:
+        example: 01HX...
+        type: string
+      organization_name:
+        example: Acme Corp
+        type: string
+      role:
+        example: developer
+        type: string
+    type: object
   organization.InviteMemberRequest:
     properties:
       email:
@@ -1898,11 +1944,6 @@ definitions:
       organization_id:
         example: org_1234567890
         type: string
-      slug:
-        example: ai-chatbot
-        maxLength: 50
-        minLength: 2
-        type: string
     required:
     - name
     - organization_id
@@ -1929,9 +1970,6 @@ definitions:
         type: string
       owner_id:
         example: usr_1234567890
-        type: string
-      slug:
-        example: ai-chatbot
         type: string
       status:
         example: active
@@ -3438,6 +3476,66 @@ paths:
       summary: Change password
       tags:
       - Authentication
+  /api/v1/auth/complete-oauth-signup:
+    post:
+      consumes:
+      - application/json
+      description: Complete OAuth-based registration with additional user information
+      parameters:
+      - description: OAuth signup completion data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.CompleteOAuthSignupRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OAuth signup completed successfully
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "400":
+          description: Invalid request payload
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Session not found or expired
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Complete OAuth signup
+      tags:
+      - Authentication
+  /api/v1/auth/exchange-session/{session_id}:
+    post:
+      description: Exchange OAuth login session for access tokens (existing user OAuth
+        login)
+      parameters:
+      - description: Login session ID
+        in: path
+        name: session_id
+        required: true
+        type: string
+      responses:
+        "200":
+          description: Login tokens
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "400":
+          description: Invalid session data
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Session not found or expired
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Exchange login session
+      tags:
+      - Authentication
   /api/v1/auth/forgot-password:
     post:
       consumes:
@@ -3466,6 +3564,82 @@ paths:
           schema:
             $ref: '#/definitions/response.ErrorResponse'
       summary: Request password reset
+      tags:
+      - Authentication
+  /api/v1/auth/github:
+    get:
+      description: Start GitHub OAuth authentication flow
+      parameters:
+      - description: Invitation token (if joining via invite)
+        in: query
+        name: invitation_token
+        type: string
+      responses:
+        "302":
+          description: Redirect to GitHub
+          schema:
+            type: string
+      summary: Initiate GitHub OAuth
+      tags:
+      - Authentication
+  /api/v1/auth/github/callback:
+    get:
+      description: Handle GitHub OAuth callback and create session
+      parameters:
+      - description: Authorization code from GitHub
+        in: query
+        name: code
+        required: true
+        type: string
+      - description: CSRF state token
+        in: query
+        name: state
+        required: true
+        type: string
+      responses:
+        "302":
+          description: Redirect to frontend
+          schema:
+            type: string
+      summary: GitHub OAuth callback
+      tags:
+      - Authentication
+  /api/v1/auth/google:
+    get:
+      description: Start Google OAuth authentication flow
+      parameters:
+      - description: Invitation token (if joining via invite)
+        in: query
+        name: invitation_token
+        type: string
+      responses:
+        "302":
+          description: Redirect to Google
+          schema:
+            type: string
+      summary: Initiate Google OAuth
+      tags:
+      - Authentication
+  /api/v1/auth/google/callback:
+    get:
+      description: Handle Google OAuth callback and create session
+      parameters:
+      - description: Authorization code from Google
+        in: query
+        name: code
+        required: true
+        type: string
+      - description: CSRF state token
+        in: query
+        name: state
+        required: true
+        type: string
+      responses:
+        "302":
+          description: Redirect to frontend
+          schema:
+            type: string
+      summary: Google OAuth callback
       tags:
       - Authentication
   /api/v1/auth/login:
@@ -3738,14 +3912,14 @@ paths:
     post:
       consumes:
       - application/json
-      description: Register a new user account
+      description: Register a new user account with organization or invitation
       parameters:
       - description: Registration information
         in: body
         name: request
         required: true
         schema:
-          $ref: '#/definitions/internal_transport_http_handlers_auth.RegisterRequest'
+          $ref: '#/definitions/auth.RegisterRequest'
       produces:
       - application/json
       responses:
@@ -4047,6 +4221,33 @@ paths:
       summary: Get organization usage metrics
       tags:
       - Billing
+  /api/v1/invitations/validate/{token}:
+    get:
+      description: Validate an invitation token and return invitation details
+      parameters:
+      - description: Invitation token
+        in: path
+        name: token
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Valid invitation
+          schema:
+            $ref: '#/definitions/organization.InvitationDetailsResponse'
+        "404":
+          description: Invalid or not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "410":
+          description: Invitation expired
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Validate invitation token
+      tags:
+      - Invitations
   /api/v1/logs/export:
     get:
       consumes:

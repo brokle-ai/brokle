@@ -40,14 +40,8 @@ func NewOrganizationService(
 
 // CreateOrganization creates a new organization with the user as owner
 func (s *organizationService) CreateOrganization(ctx context.Context, userID ulid.ULID, req *orgDomain.CreateOrganizationRequest) (*orgDomain.Organization, error) {
-	// Check if organization with slug already exists
-	existing, _ := s.orgRepo.GetBySlug(ctx, req.Slug)
-	if existing != nil {
-		return nil, appErrors.NewConflictError("Organization with this slug already exists")
-	}
-
-	// Create organization
-	org := orgDomain.NewOrganization(req.Name, req.Slug)
+	// Create organization (no slug - use ULID only)
+	org := orgDomain.NewOrganization(req.Name)
 	if req.BillingEmail != "" {
 		org.BillingEmail = req.BillingEmail
 	}

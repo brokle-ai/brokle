@@ -26,21 +26,10 @@ func (os *OrganizationSeeder) SeedOrganizations(ctx context.Context, orgSeeds []
 	}
 
 	for _, orgSeed := range orgSeeds {
-		// Check if organization already exists
-		existing, err := os.repo.GetBySlug(ctx, orgSeed.Slug)
-		if err == nil && existing != nil {
-			if verbose {
-				log.Printf("   Organization %s already exists, skipping", orgSeed.Slug)
-			}
-			entityMaps.Organizations[orgSeed.Slug] = existing.ID
-			continue
-		}
-
-		// Create organization entity
+		// Create organization entity (no slug - use ULID only)
 		orgEntity := &organization.Organization{
 			ID:                 ulid.New(),
 			Name:               orgSeed.Name,
-			Slug:               orgSeed.Slug,
 			BillingEmail:       orgSeed.BillingEmail,
 			Plan:               orgSeed.Plan,
 			SubscriptionStatus: orgSeed.SubscriptionStatus,
@@ -56,14 +45,14 @@ func (os *OrganizationSeeder) SeedOrganizations(ctx context.Context, orgSeeds []
 
 		// Create organization in database
 		if err := os.repo.Create(ctx, orgEntity); err != nil {
-			return fmt.Errorf("failed to create organization %s: %w", orgSeed.Slug, err)
+			return fmt.Errorf("failed to create organization %s: %w", orgSeed.Name, err)
 		}
 
-		// Store organization ID for later reference
-		entityMaps.Organizations[orgSeed.Slug] = orgEntity.ID
+		// Store organization ID for later reference (use name as key)
+		entityMaps.Organizations[orgSeed.Name] = orgEntity.ID
 
 		if verbose {
-			log.Printf("   ✅ Created organization: %s (%s) - Plan: %s", orgEntity.Name, orgEntity.Slug, orgEntity.Plan)
+			log.Printf("   ✅ Created organization: %s (ID: %s) - Plan: %s", orgEntity.Name, orgEntity.ID.String(), orgEntity.Plan)
 		}
 	}
 

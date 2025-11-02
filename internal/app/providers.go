@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
@@ -10,6 +11,7 @@ import (
 	"gorm.io/gorm"
 
 	"brokle/internal/config"
+	"brokle/internal/core/domain/common"
 	"brokle/internal/core/domain/auth"
 	"brokle/internal/core/domain/gateway"
 	"brokle/internal/core/domain/observability"
@@ -17,6 +19,7 @@ import (
 	"brokle/internal/core/domain/user"
 	authService "brokle/internal/core/services/auth"
 	orgService "brokle/internal/core/services/organization"
+	registrationService "brokle/internal/core/services/registration"
 	userService "brokle/internal/core/services/user"
 	"brokle/internal/ee/analytics"
 	"brokle/internal/ee/compliance"
@@ -57,6 +60,7 @@ type CoreContainer struct {
 	Logger     *logrus.Logger
 	Databases  *DatabaseContainer
 	Repos      *RepositoryContainer
+	TxManager  common.TransactionManager
 	Services   *ServiceContainer
 	Enterprise *EnterpriseContainer
 }
@@ -101,6 +105,7 @@ type RepositoryContainer struct {
 type ServiceContainer struct {
 	User               *UserServices
 	Auth               *AuthServices
+	Registration       registrationService.RegistrationService // Registration orchestrator
 	// Direct organization services - no wrapper
 	OrganizationService    organization.OrganizationService
 	MemberService         organization.MemberService
@@ -194,6 +199,7 @@ type AuthServices struct {
 	OrganizationMembers    auth.OrganizationMemberService
 	BlacklistedTokens      auth.BlacklistedTokenService
 	Scope                  auth.ScopeService
+	OAuthProvider          *authService.OAuthProviderService
 }
 
 // GatewayServices contains all gateway-related services
@@ -292,13 +298,17 @@ func ProvideCore(cfg *config.Config, logger *logrus.Logger) (*CoreContainer, err
 	// Initialize repositories
 	repos := ProvideRepositories(databases, logger)
 
+	// Initialize transaction manager (concrete → interface for dependency inversion)
+	txManager := database.NewTransactionManager(databases.Postgres.DB)
+
 	return &CoreContainer{
 		Config:     cfg,
 		Logger:     logger,
 		Databases:  databases,
 		Repos:      repos,
-		Services:   nil,  // Populated by mode-specific provider
-		Enterprise: nil,  // Populated by mode-specific provider
+		TxManager:  txManager, // Stored as common.TransactionManager interface
+		Services:   nil,       // Populated by mode-specific provider
+		Enterprise: nil,       // Populated by mode-specific provider
 	}, nil
 }
 
@@ -317,7 +327,7 @@ func ProvideServerServices(core *CoreContainer) *ServiceContainer {
 	observabilityServices := ProvideObservabilityServices(repos.Observability, databases.Redis, cfg, logger)
 
 	// Create auth services
-	authServices := ProvideAuthServices(cfg, repos.User, repos.Auth, logger)
+	authServices := ProvideAuthServices(cfg, repos.User, repos.Auth, databases, logger)
 
 	// Create user services
 	userServices := ProvideUserServices(repos.User, repos.Auth, logger)
@@ -326,9 +336,22 @@ func ProvideServerServices(core *CoreContainer) *ServiceContainer {
 	orgService, memberService, projectService, invitationService, settingsService :=
 		ProvideOrganizationServices(repos.User, repos.Auth, repos.Organization, authServices, logger)
 
+	// Create registration service (orchestrates user, org, project creation)
+	registrationSvc := registrationService.NewRegistrationService(
+		core.TxManager, // Transaction manager for atomic multi-repository operations
+		repos.User.User,
+		orgService,
+		projectService,
+		memberService,
+		invitationService,
+		authServices.Role,
+		authServices.Auth,
+	)
+
 	return &ServiceContainer{
 		User:                userServices,
 		Auth:                authServices,
+		Registration:        registrationSvc,
 		OrganizationService: orgService,
 		MemberService:       memberService,
 		ProjectService:      projectService,
@@ -356,6 +379,7 @@ func ProvideWorkerServices(core *CoreContainer) *ServiceContainer {
 		// Worker doesn't need auth/user/org services
 		User:                nil,
 		Auth:                nil,
+		Registration:        nil,
 		OrganizationService: nil,
 		MemberService:       nil,
 		ProjectService:      nil,
@@ -377,6 +401,8 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 		core.Services.Auth.Auth,
 		core.Services.Auth.APIKey,
 		core.Services.Auth.BlacklistedTokens,
+		core.Services.Registration, // Registration service for signup
+		core.Services.Auth.OAuthProvider, // OAuth provider for Google/GitHub signup
 		core.Services.User.User,
 		core.Services.User.Profile,
 		core.Services.User.Onboarding,
@@ -517,6 +543,7 @@ func ProvideAuthServices(
 	cfg *config.Config,
 	userRepos *UserRepositories,
 	authRepos *AuthRepositories,
+	databases *DatabaseContainer,
 	logger *logrus.Logger,
 ) *AuthServices {
 	// Create JWT service with auth config
@@ -571,6 +598,7 @@ func ProvideAuthServices(
 		roleService,
 		authRepos.PasswordResetToken,
 		blacklistedTokenService,
+		databases.Redis.Client, // Redis client for OAuth session storage
 	)
 
 	// Wrap with audit decorator for clean separation of concerns
@@ -583,6 +611,17 @@ func ProvideAuthServices(
 		authRepos.Permission,
 	)
 
+	// Create OAuth provider service (Google/GitHub signup)
+	frontendURL := "http://localhost:3000" // Default for development
+	if url := os.Getenv("NEXT_PUBLIC_APP_URL"); url != "" {
+		frontendURL = url
+	}
+	oauthProvider := authService.NewOAuthProviderService(
+		&cfg.Auth,
+		databases.Redis.Client,
+		frontendURL,
+	)
+
 	return &AuthServices{
 		Auth:                authSvc,
 		JWT:                 jwtService,
@@ -593,6 +632,7 @@ func ProvideAuthServices(
 		OrganizationMembers: orgMemberService,
 		BlacklistedTokens:   blacklistedTokenService,
 		Scope:               scopeService,
+		OAuthProvider:       oauthProvider,
 	}
 }
 

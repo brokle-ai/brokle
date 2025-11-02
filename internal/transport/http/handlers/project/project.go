@@ -58,7 +58,6 @@ type GetRequest struct {
 type Project struct {
 	ID             string    `json:"id" example:"proj_1234567890" description:"Unique project identifier"`
 	Name           string    `json:"name" example:"AI Chatbot" description:"Project name"`
-	Slug           string    `json:"slug" example:"ai-chatbot" description:"URL-friendly project identifier"`
 	Description    string    `json:"description,omitempty" example:"Customer support AI chatbot" description:"Optional project description"`
 	OrganizationID string    `json:"organization_id" example:"org_1234567890" description:"Organization ID this project belongs to"`
 	Status         string    `json:"status" example:"active" description:"Project status (active, paused, archived)"`
@@ -71,7 +70,6 @@ type Project struct {
 // CreateProjectRequest represents the request to create a project
 type CreateProjectRequest struct {
 	Name           string `json:"name" binding:"required,min=2,max=100" example:"AI Chatbot" description:"Project name (2-100 characters)"`
-	Slug           string `json:"slug,omitempty" binding:"omitempty,min=2,max=50" example:"ai-chatbot" description:"Optional URL-friendly identifier (auto-generated if not provided)"`
 	Description    string `json:"description,omitempty" binding:"omitempty,max=500" example:"Customer support AI chatbot" description:"Optional description (max 500 characters)"`
 	OrganizationID string `json:"organization_id" binding:"required" example:"org_1234567890" description:"Organization ID this project belongs to"`
 }
@@ -240,8 +238,7 @@ func (h *Handler) List(c *gin.Context) {
 		// Search filter
 		if req.Search != "" {
 			searchLower := strings.ToLower(req.Search)
-			if !strings.Contains(strings.ToLower(project.Name), searchLower) &&
-				!strings.Contains(strings.ToLower(project.Slug), searchLower) {
+			if !strings.Contains(strings.ToLower(project.Name), searchLower) {
 				continue
 			}
 		}
@@ -273,7 +270,6 @@ func (h *Handler) List(c *gin.Context) {
 		responseProjects[i] = Project{
 			ID:             proj.ID.String(),
 			Name:           proj.Name,
-			Slug:           proj.Slug,
 			Description:    proj.Description,
 			OrganizationID: proj.OrganizationID.String(),
 			Status:         "active", // Default status - extend when status field is added
@@ -385,35 +381,9 @@ func (h *Handler) Create(c *gin.Context) {
 		return
 	}
 
-	// Auto-generate slug if not provided
-	slug := req.Slug
-	if slug == "" {
-		// Generate slug from name (simplified version)
-		slug = strings.ToLower(strings.ReplaceAll(req.Name, " ", "-"))
-		slug = strings.ReplaceAll(slug, "_", "-")
-		// Remove special characters (basic implementation)
-		validChars := "abcdefghijklmnopqrstuvwxyz0123456789-"
-		var slugBuilder strings.Builder
-		for _, char := range slug {
-			if strings.ContainsRune(validChars, char) {
-				slugBuilder.WriteRune(char)
-			}
-		}
-		slug = slugBuilder.String()
-
-		// Ensure slug is not empty and not too long
-		if slug == "" {
-			slug = "project"
-		}
-		if len(slug) > 50 {
-			slug = slug[:50]
-		}
-	}
-
-	// Create project via service
+	// Create project via service (no slug needed)
 	createReq := &organization.CreateProjectRequest{
 		Name:        req.Name,
-		Slug:        slug,
 		Description: req.Description,
 	}
 
@@ -424,9 +394,9 @@ func (h *Handler) Create(c *gin.Context) {
 				"endpoint":        "Create",
 				"user_id":         userULID.String(),
 				"organization_id": req.OrganizationID,
-				"slug":            slug,
+				"name":            req.Name,
 				"error":           err.Error(),
-			}).Warn("Project slug already exists")
+			}).Warn("Project name already exists")
 			response.Conflict(c, "Project with this slug already exists in organization")
 			return
 		}
@@ -459,7 +429,6 @@ func (h *Handler) Create(c *gin.Context) {
 	responseProject := Project{
 		ID:             project.ID.String(),
 		Name:           project.Name,
-		Slug:           project.Slug,
 		Description:    project.Description,
 		OrganizationID: project.OrganizationID.String(),
 		Status:         "active", // Default status
@@ -477,7 +446,6 @@ func (h *Handler) Create(c *gin.Context) {
 		"organization_id": req.OrganizationID,
 		"project_id":      project.ID.String(),
 		"project_name":    project.Name,
-		"project_slug":    project.Slug,
 	}).Info("Project created successfully")
 }
 
@@ -594,7 +562,6 @@ func (h *Handler) Get(c *gin.Context) {
 	responseProject := Project{
 		ID:             project.ID.String(),
 		Name:           project.Name,
-		Slug:           project.Slug,
 		Description:    project.Description,
 		OrganizationID: project.OrganizationID.String(),
 		Status:         "active", // Default status
@@ -762,7 +729,6 @@ func (h *Handler) Update(c *gin.Context) {
 	responseProject := Project{
 		ID:             project.ID.String(),
 		Name:           project.Name,
-		Slug:           project.Slug,
 		Description:    project.Description,
 		OrganizationID: project.OrganizationID.String(),
 		Status:         req.Status,

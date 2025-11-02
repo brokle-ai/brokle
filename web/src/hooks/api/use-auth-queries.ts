@@ -1,18 +1,18 @@
 'use client'
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { 
+import {
   getCurrentUser,
   getCurrentOrganization,
   requestPasswordReset,
   confirmPasswordReset
 } from '@/lib/api'
 import { useAuth } from '@/hooks/auth/use-auth'
-import type { 
-  User, 
-  LoginCredentials, 
+import type {
+  User,
+  LoginCredentials,
   SignUpCredentials,
-  AuthResponse 
+  AuthResponse
 } from '@/types/auth'
 import { toast } from 'sonner'
 
@@ -104,6 +104,37 @@ export function useSignupMutation() {
     onError: (error: any) => {
       toast.error('Signup Failed', {
         description: error?.message || 'Failed to create account',
+      })
+    },
+  })
+}
+
+// Complete OAuth Signup mutation
+export function useCompleteOAuthSignupMutation() {
+  const queryClient = useQueryClient()
+  const { completeOAuthSignup } = useAuth()
+
+  return useMutation({
+    mutationFn: async (data: {
+      sessionId: string
+      role: string
+      organizationName?: string
+      referralSource?: string
+    }) => {
+      return completeOAuthSignup(data)
+    },
+    onSuccess: (data: AuthResponse) => {
+      // Update query cache
+      queryClient.setQueryData(authQueryKeys.user(), data.user)
+      queryClient.setQueryData(authQueryKeys.organization(), data.organization)
+
+      toast.success('Account Created!', {
+        description: `Welcome to Brokle, ${data.user.firstName || data.user.email}!`,
+      })
+    },
+    onError: (error: any) => {
+      toast.error('OAuth Signup Failed', {
+        description: error?.message || 'Failed to complete OAuth signup',
       })
     },
   })

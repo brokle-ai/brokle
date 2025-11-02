@@ -241,7 +241,7 @@ func (m *Manager) PrintSeedPlan(data *SeedData) {
 
 	fmt.Printf("Organizations: %d\n", len(data.Organizations))
 	for _, org := range data.Organizations {
-		fmt.Printf("  - %s (%s) - Plan: %s\n", org.Name, org.Slug, org.Plan)
+		fmt.Printf("  - %s - Plan: %s\n", org.Name, org.Plan)
 	}
 
 	fmt.Printf("\nUsers: %d\n", len(data.Users))
@@ -261,12 +261,12 @@ func (m *Manager) PrintSeedPlan(data *SeedData) {
 
 	fmt.Printf("\nProjects: %d\n", len(data.Projects))
 	for _, project := range data.Projects {
-		fmt.Printf("  - %s (%s)\n", project.Name, project.OrganizationSlug)
+		fmt.Printf("  - %s (Org: %s)\n", project.Name, project.OrganizationName)
 	}
 
 	fmt.Printf("\nMemberships: %d\n", len(data.RBAC.Memberships))
 	for _, membership := range data.RBAC.Memberships {
-		fmt.Printf("  - %s in %s as %s\n", membership.UserEmail, membership.OrganizationSlug, membership.RoleName)
+		fmt.Printf("  - %s in %s as %s\n", membership.UserEmail, membership.OrganizationName, membership.RoleName)
 	}
 
 	fmt.Printf("\nOnboarding Questions: %d\n", len(data.OnboardingQuestions))

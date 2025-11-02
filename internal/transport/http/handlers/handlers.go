@@ -8,6 +8,8 @@ import (
 	"brokle/internal/core/domain/gateway"
 	"brokle/internal/core/domain/organization"
 	"brokle/internal/core/domain/user"
+	authService "brokle/internal/core/services/auth"
+	"brokle/internal/core/services/registration"
 	obsServices "brokle/internal/services/observability"
 	"brokle/internal/transport/http/handlers/admin"
 	"brokle/internal/transport/http/handlers/ai"
@@ -53,6 +55,8 @@ func NewHandlers(
 	authService auth.AuthService,
 	apiKeyService auth.APIKeyService,
 	blacklistedTokens auth.BlacklistedTokenService,
+	registrationService registration.RegistrationService,
+	oauthProvider *authService.OAuthProviderService,
 	userService user.UserService,
 	profileService user.ProfileService,
 	onboardingService user.OnboardingService,
@@ -75,7 +79,7 @@ func NewHandlers(
 	return &Handlers{
 		Health:        health.NewHandler(cfg, logger),
 		Metrics:       metrics.NewHandler(cfg, logger),
-		Auth:          authHandler.NewHandler(cfg, logger, authService, apiKeyService, userService),
+		Auth:          authHandler.NewHandler(cfg, logger, authService, apiKeyService, userService, registrationService, oauthProvider),
 		User:          userHandler.NewHandler(cfg, logger, userService, profileService, onboardingService),
 		Organization:  organizationHandler.NewHandler(cfg, logger, organizationService, memberService, projectService, invitationService, settingsService, userService, roleService),
 		Project:       project.NewHandler(cfg, logger, projectService, organizationService, memberService),

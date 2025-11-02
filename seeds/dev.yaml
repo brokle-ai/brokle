@@ -3,19 +3,16 @@
 
 organizations:
   - name: "Brokle Technologies"
-    slug: "brokle-tech"
     billing_email: "billing@brokle.ai"
     plan: "enterprise"
     subscription_status: "active"
 
   - name: "Demo Organization"
-    slug: "demo-org"
     billing_email: "demo@example.com"
     plan: "pro"
     subscription_status: "active"
 
   - name: "Test Startup"
-    slug: "test-startup"
     billing_email: "test@startup.com"
     plan: "free"
     subscription_status: "active"
@@ -436,27 +433,27 @@ rbac:
     - user_email: "admin@brokle.ai"
       role_name: "owner"
       scope_type: "organization"
-      organization_slug: "brokle-tech"
+      organization_name: "Brokle Technologies"
 
     - user_email: "developer@brokle.ai"
       role_name: "developer"
       scope_type: "organization"
-      organization_slug: "brokle-tech"
+      organization_name: "Brokle Technologies"
 
     - user_email: "demo@example.com"
       role_name: "owner"
       scope_type: "organization"
-      organization_slug: "demo-org"
+      organization_name: "Demo Organization"
 
     - user_email: "test@startup.com"
       role_name: "owner"
       scope_type: "organization"
-      organization_slug: "test-startup"
+      organization_name: "Test Startup"
 
 projects:
   - name: "AI Gateway"
     description: "Primary AI gateway and routing service"
-    organization_slug: "brokle-tech"
+    organization_name: "Brokle Technologies"
     environments:
       - name: "Development"
         slug: "dev"
@@ -467,7 +464,7 @@ projects:
 
   - name: "Analytics Platform"
     description: "AI analytics and observability platform"
-    organization_slug: "brokle-tech"
+    organization_name: "Brokle Technologies"
     environments:
       - name: "Development"
         slug: "dev"
@@ -476,7 +473,7 @@ projects:
 
   - name: "Demo Application"
     description: "Demo application showcasing Brokle capabilities"
-    organization_slug: "demo-org"
+    organization_name: "Demo Organization"
     environments:
       - name: "Demo"
         slug: "demo"
@@ -485,14 +482,14 @@ projects:
 
   - name: "Test Project"
     description: "Simple test project for validation"
-    organization_slug: "test-startup"
+    organization_name: "Test Startup"
     environments:
       - name: "Test"
         slug: "test"
 
 api_keys:
   - name: "Development API Key"
-    organization_slug: "brokle-tech"
+    organization_name: "Brokle Technologies"
     project_name: "AI Gateway"
     environment_name: "Development"
     rate_limit_per_minute: 1000
@@ -505,7 +502,7 @@ api_keys:
     allowed_ips: []
 
   - name: "Production API Key"
-    organization_slug: "brokle-tech"
+    organization_name: "Brokle Technologies"
     project_name: "AI Gateway"
     environment_name: "Production"
     rate_limit_per_minute: 5000
@@ -518,7 +515,7 @@ api_keys:
     allowed_ips: ["203.0.113.0/24", "198.51.100.0/24"]
 
   - name: "Demo API Key"
-    organization_slug: "demo-org"
+    organization_name: "Demo Organization"
     project_name: "Demo Application"
     environment_name: "Demo"
     rate_limit_per_minute: 100
@@ -529,7 +526,7 @@ api_keys:
     allowed_ips: []
 
   - name: "Test API Key"
-    organization_slug: "test-startup"
+    organization_name: "Test Startup"
     project_name: "Test Project"
     environment_name: "Test"
     rate_limit_per_minute: 60

@@ -21,10 +21,7 @@ export default function RootPage() {
       return
     }
 
-    // Check onboarding completion
-    if (user && !user.onboardingCompletedAt) {
-      router.push('/onboarding')
-    }
+    // No onboarding check needed - completed during signup
   }, [authLoading, isAuthenticated, user, router])
 
   if (authLoading) {

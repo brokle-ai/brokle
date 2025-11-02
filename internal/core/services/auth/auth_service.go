@@ -8,6 +8,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
 
 	"brokle/internal/config"
@@ -26,6 +27,7 @@ type authService struct {
 	roleService       authDomain.RoleService
 	passwordResetRepo authDomain.PasswordResetTokenRepository
 	blacklistedTokens authDomain.BlacklistedTokenService
+	redis             *redis.Client // For OAuth session storage
 }
 
 // NewAuthService creates a new auth service instance
@@ -37,6 +39,7 @@ func NewAuthService(
 	roleService authDomain.RoleService,
 	passwordResetRepo authDomain.PasswordResetTokenRepository,
 	blacklistedTokens authDomain.BlacklistedTokenService,
+	redisClient *redis.Client,
 ) authDomain.AuthService {
 	return &authService{
 		authConfig:        authConfig,
@@ -46,6 +49,7 @@ func NewAuthService(
 		roleService:       roleService,
 		passwordResetRepo: passwordResetRepo,
 		blacklistedTokens: blacklistedTokens,
+		redis:             redisClient,
 	}
 }
 
@@ -65,10 +69,25 @@ func (s *authService) Login(ctx context.Context, req *authDomain.LoginRequest) (
 		return nil, appErrors.NewForbiddenError("Account is inactive")
 	}
 
-	// Verify password
-	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password))
-	if err != nil {
-		return nil, appErrors.NewUnauthorizedError("Invalid email or password")
+	// Block OAuth users from password login
+	if user.AuthMethod == "oauth" {
+		providerName := "OAuth"
+		if user.OAuthProvider != nil {
+			providerName = *user.OAuthProvider
+		}
+		return nil, appErrors.NewUnauthorizedError("This account uses " + providerName + " login - please sign in with " + providerName)
+	}
+
+	// Verify password (only for password-based accounts)
+	if user.AuthMethod == "password" {
+		if user.Password == "" {
+			return nil, appErrors.NewUnauthorizedError("Invalid email or password")
+		}
+
+		err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password))
+		if err != nil {
+			return nil, appErrors.NewUnauthorizedError("Invalid email or password")
+		}
 	}
 
 	// Get user effective permissions across all scopes
@@ -122,76 +141,37 @@ func (s *authService) Login(ctx context.Context, req *authDomain.LoginRequest) (
 	}, nil
 }
 
-// Register creates a new user account and auto-login (returns login tokens)
-func (s *authService) Register(ctx context.Context, req *authDomain.RegisterRequest) (*authDomain.LoginResponse, error) {
-	// Check if user already exists
-	existingUser, err := s.userRepo.GetByEmail(ctx, req.Email)
-	if err != nil && !errors.Is(err, userDomain.ErrNotFound) {
+// GenerateTokensForUser generates login tokens for a user without password validation.
+// Used for OAuth signup, email verification, trusted authentication flows, and existing OAuth user login.
+func (s *authService) GenerateTokensForUser(ctx context.Context, userID ulid.ULID) (*authDomain.LoginResponse, error) {
+	// Get user
+	user, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		if errors.Is(err, userDomain.ErrNotFound) {
+			return nil, appErrors.NewNotFoundError("User not found")
+		}
 		return nil, appErrors.NewInternalError("User lookup failed", err)
 	}
-	if existingUser != nil {
-		return nil, appErrors.NewConflictError("Email already exists")
+
+	// Check if user is active
+	if !user.IsActive {
+		return nil, appErrors.NewForbiddenError("Account is inactive")
 	}
 
-	// Hash password
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
-	if err != nil {
-		return nil, appErrors.NewInternalError("Failed to hash password", err)
-	}
-
-	// Create user using constructor
-	newUser := userDomain.NewUser(req.Email, req.FirstName, req.LastName)
-	newUser.SetPassword(string(hashedPassword))
-
-	// Set timezone and language from request if provided
-	if req.Timezone != "" {
-		newUser.Timezone = req.Timezone
-	}
-	if req.Language != "" {
-		newUser.Language = req.Language
-	}
-
-	// Create user and profile in a transaction to ensure atomicity
-	err = s.userRepo.Transaction(func(tx userDomain.Repository) error {
-		// Create user
-		if err := tx.Create(ctx, newUser); err != nil {
-			return appErrors.NewInternalError("Failed to create user", err)
-		}
-
-		// Create user profile with default values (fixes registration bug)
-		profile := userDomain.NewUserProfile(newUser.ID)
-		if req.Timezone != "" {
-			profile.Timezone = req.Timezone
-		}
-		if req.Language != "" {
-			profile.Language = req.Language
-		}
-		
-		if err := tx.CreateProfile(ctx, profile); err != nil {
-			return appErrors.NewInternalError("Failed to create user profile", err)
-		}
-		
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	// Auto-login: Generate tokens for the new user - get effective permissions
-	// Note: Permissions are now handled by OrganizationMemberService
+	// Get user effective permissions
 	permissions := []string{}
 
 	// Generate access token with JTI for session tracking
-	accessToken, jti, err := s.jwtService.GenerateAccessTokenWithJTI(ctx, newUser.ID, map[string]interface{}{
-		"email":          newUser.Email,
-		"organization_id": newUser.DefaultOrganizationID,
+	accessToken, jti, err := s.jwtService.GenerateAccessTokenWithJTI(ctx, user.ID, map[string]interface{}{
+		"email":           user.Email,
+		"organization_id": user.DefaultOrganizationID,
 		"permissions":     permissions,
 	})
 	if err != nil {
 		return nil, appErrors.NewInternalError("Failed to generate access token", err)
 	}
 
-	refreshToken, err := s.jwtService.GenerateRefreshToken(ctx, newUser.ID)
+	refreshToken, err := s.jwtService.GenerateRefreshToken(ctx, user.ID)
 	if err != nil {
 		return nil, appErrors.NewInternalError("Failed to generate refresh token", err)
 	}
@@ -203,20 +183,16 @@ func (s *authService) Register(ctx context.Context, req *authDomain.RegisterRequ
 	// Hash the refresh token for secure storage
 	refreshTokenHash := s.hashToken(refreshToken)
 
-	// Create secure session (NO ACCESS TOKEN STORED)
-	session := authDomain.NewUserSession(newUser.ID, refreshTokenHash, jti, expiresAt, refreshExpiresAt, nil, nil, nil)
+	// Create secure session
+	session := authDomain.NewUserSession(user.ID, refreshTokenHash, jti, expiresAt, refreshExpiresAt, nil, nil, nil)
 	err = s.sessionRepo.Create(ctx, session)
 	if err != nil {
 		return nil, appErrors.NewInternalError("Failed to create session", err)
 	}
 
-	// Update last login (for the auto-login)
-	err = s.userRepo.UpdateLastLogin(ctx, newUser.ID)
-	if err != nil {
-		// Non-critical error, continue with registration
-	}
+	// Update last login
+	_ = s.userRepo.UpdateLastLogin(ctx, user.ID)
 
-	// Return login tokens (same as login response)
 	return &authDomain.LoginResponse{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,

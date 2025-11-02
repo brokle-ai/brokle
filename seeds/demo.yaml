@@ -3,7 +3,6 @@
 
 organizations:
   - name: "Demo Company"
-    slug: "demo-company"
     billing_email: "demo@company.com"
     plan: "pro"
     subscription_status: "active"
@@ -52,10 +51,8 @@ rbac:
 
   roles:
     - name: "owner"
-      display_name: "Organization Owner"
       description: "Full access to organization"
-      is_system_role: false
-      organization_slug: "demo-company"
+      scope_type: "organization"
       permissions:
         - "organizations:read"
         - "projects:read"
@@ -66,13 +63,14 @@ rbac:
 
   memberships:
     - user_email: "demo@company.com"
-      organization_slug: "demo-company"
+      organization_name: "Demo Company"
       role_name: "owner"
+      scope_type: "organization"
 
 projects:
   - name: "AI Chat Bot"
     description: "Customer service AI chat bot"
-    organization_slug: "demo-company"
+    organization_name: "Demo Company"
     environments:
       - name: "Demo"
         slug: "demo"
@@ -81,7 +79,7 @@ projects:
 
 api_keys:
   - name: "Demo API Key"
-    organization_slug: "demo-company"
+    organization_name: "Demo Company"
     project_name: "AI Chat Bot"
     environment_name: "Demo"
     rate_limit_per_minute: 100

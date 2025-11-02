@@ -11,19 +11,28 @@ import (
 type AuthService interface {
 	// Authentication
 	Login(ctx context.Context, req *LoginRequest) (*LoginResponse, error)
-	Register(ctx context.Context, req *RegisterRequest) (*LoginResponse, error)
+	GenerateTokensForUser(ctx context.Context, userID ulid.ULID) (*LoginResponse, error) // Generate tokens without password validation
 	Logout(ctx context.Context, jti string, userID ulid.ULID) error
 	RefreshToken(ctx context.Context, req *RefreshTokenRequest) (*LoginResponse, error)
-	
+
+	// OAuth session management (for two-step OAuth signup)
+	CreateOAuthSession(ctx context.Context, session interface{}) (string, error)
+	GetOAuthSession(ctx context.Context, sessionID string) (interface{}, error)
+	DeleteOAuthSession(ctx context.Context, sessionID string) error
+
+	// OAuth login token sessions (for existing user OAuth login)
+	CreateLoginTokenSession(ctx context.Context, accessToken, refreshToken string, expiresIn int64, userID ulid.ULID) (string, error)
+	GetLoginTokenSession(ctx context.Context, sessionID string) (map[string]interface{}, error)
+
 	// Password management
 	ChangePassword(ctx context.Context, userID ulid.ULID, currentPassword, newPassword string) error
 	ResetPassword(ctx context.Context, email string) error
 	ConfirmPasswordReset(ctx context.Context, token, newPassword string) error
-	
+
 	// Email verification
 	SendEmailVerification(ctx context.Context, userID ulid.ULID) error
 	VerifyEmail(ctx context.Context, token string) error
-	
+
 	// Session management
 	GetUserSessions(ctx context.Context, userID ulid.ULID) ([]*UserSession, error)
 	RevokeSession(ctx context.Context, userID, sessionID ulid.ULID) error
@@ -245,15 +254,6 @@ type TokenClaims struct {
 }
 
 // Request/Response DTOs
-type RegisterRequest struct {
-	Email     string `json:"email" validate:"required,email"`
-	FirstName string `json:"first_name" validate:"required,min=1,max=100"`
-	LastName  string `json:"last_name" validate:"required,min=1,max=100"`
-	Password  string `json:"password" validate:"required,min=8"`
-	Timezone  string `json:"timezone,omitempty"`
-	Language  string `json:"language,omitempty"`
-}
-
 type UpdateProfileRequest struct {
 	FirstName *string `json:"first_name,omitempty" validate:"omitempty,min=1,max=100"`
 	LastName  *string `json:"last_name,omitempty" validate:"omitempty,min=1,max=100"`

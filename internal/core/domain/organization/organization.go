@@ -16,7 +16,6 @@ import (
 type Organization struct {
 	ID   ulid.ULID `json:"id" gorm:"type:char(26);primaryKey"`
 	Name string    `json:"name" gorm:"size:255;not null"`
-	Slug string    `json:"slug" gorm:"size:255;not null;uniqueIndex"`
 
 	// Business fields
 	BillingEmail       string     `json:"billing_email,omitempty" gorm:"size:255"`
@@ -57,7 +56,6 @@ type Project struct {
 	ID             ulid.ULID `json:"id" gorm:"type:char(26);primaryKey"`
 	OrganizationID ulid.ULID `json:"organization_id" gorm:"type:char(26);not null"`
 	Name           string    `json:"name" gorm:"size:255;not null"`
-	Slug           string    `json:"slug" gorm:"size:255;not null"`
 	Description    string    `json:"description,omitempty" gorm:"text"`
 
 	CreatedAt time.Time      `json:"created_at"`
@@ -93,7 +91,6 @@ type Invitation struct {
 // Request/Response DTOs
 type CreateOrganizationRequest struct {
 	Name         string `json:"name" validate:"required,min=1,max=100"`
-	Slug         string `json:"slug" validate:"required,min=1,max=50,slug"`
 	BillingEmail string `json:"billing_email" validate:"email"`
 }
 
@@ -105,7 +102,6 @@ type UpdateOrganizationRequest struct {
 
 type CreateProjectRequest struct {
 	Name        string `json:"name" validate:"required,min=1,max=100"`
-	Slug        string `json:"slug" validate:"required,min=1,max=50,slug"`
 	Description string `json:"description"`
 }
 
@@ -132,11 +128,10 @@ const (
 )
 
 // Constructor functions
-func NewOrganization(name, slug string) *Organization {
+func NewOrganization(name string) *Organization {
 	return &Organization{
 		ID:                 ulid.New(),
 		Name:               name,
-		Slug:               slug,
 		Plan:               "free",
 		SubscriptionStatus: "active",
 		CreatedAt:          time.Now(),
@@ -144,12 +139,11 @@ func NewOrganization(name, slug string) *Organization {
 	}
 }
 
-func NewProject(orgID ulid.ULID, name, slug, description string) *Project {
+func NewProject(orgID ulid.ULID, name, description string) *Project {
 	return &Project{
 		ID:             ulid.New(),
 		OrganizationID: orgID,
 		Name:           name,
-		Slug:           slug,
 		Description:    description,
 		CreatedAt:      time.Now(),
 		UpdatedAt:      time.Now(),

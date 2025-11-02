@@ -67,15 +67,15 @@ func (dl *DataLoader) LoadSeedData(mode string) (*SeedData, error) {
 // validateSeedData validates the seed data for consistency and required fields
 func (dl *DataLoader) validateSeedData(data *SeedData) error {
 	// Validate organizations
-	orgSlugs := make(map[string]bool)
+	orgNames := make(map[string]bool)
 	for _, org := range data.Organizations {
-		if org.Name == "" || org.Slug == "" {
-			return fmt.Errorf("organization missing required fields (name, slug)")
+		if org.Name == "" {
+			return fmt.Errorf("organization missing required field: name")
 		}
-		if orgSlugs[org.Slug] {
-			return fmt.Errorf("duplicate organization slug: %s", org.Slug)
+		if orgNames[org.Name] {
+			return fmt.Errorf("duplicate organization name: %s", org.Name)
 		}
-		orgSlugs[org.Slug] = true
+		orgNames[org.Name] = true
 	}
 
 	// Validate users
@@ -120,23 +120,23 @@ func (dl *DataLoader) validateSeedData(data *SeedData) error {
 		if !userEmails[membership.UserEmail] {
 			return fmt.Errorf("membership references unknown user: %s", membership.UserEmail)
 		}
-		if !orgSlugs[membership.OrganizationSlug] {
-			return fmt.Errorf("membership references unknown organization: %s", membership.OrganizationSlug)
+		if !orgNames[membership.OrganizationName] {
+			return fmt.Errorf("membership references unknown organization: %s", membership.OrganizationName)
 		}
 	}
 
 	// Validate projects reference valid organizations
-	projectKeys := make(map[string]bool) // org_slug:project_name
+	projectKeys := make(map[string]bool) // org_name:project_name
 	for _, project := range data.Projects {
-		if !orgSlugs[project.OrganizationSlug] {
-			return fmt.Errorf("project references unknown organization: %s", project.OrganizationSlug)
+		if !orgNames[project.OrganizationName] {
+			return fmt.Errorf("project references unknown organization: %s", project.OrganizationName)
 		}
 		if project.Name == "" {
 			return fmt.Errorf("project missing required field: name")
 		}
-		projectKey := fmt.Sprintf("%s:%s", project.OrganizationSlug, project.Name)
+		projectKey := fmt.Sprintf("%s:%s", project.OrganizationName, project.Name)
 		if projectKeys[projectKey] {
-			return fmt.Errorf("duplicate project: %s in organization %s", project.Name, project.OrganizationSlug)
+			return fmt.Errorf("duplicate project: %s in organization %s", project.Name, project.OrganizationName)
 		}
 		projectKeys[projectKey] = true
 	}

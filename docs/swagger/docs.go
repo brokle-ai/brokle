@@ -2030,6 +2030,96 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/auth/complete-oauth-signup": {
+            "post": {
+                "description": "Complete OAuth-based registration with additional user information",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Complete OAuth signup",
+                "parameters": [
+                    {
+                        "description": "OAuth signup completion data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/auth.CompleteOAuthSignupRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OAuth signup completed successfully",
+                        "schema": {
+                            "$ref": "#/definitions/response.SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request payload",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Session not found or expired",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/exchange-session/{session_id}": {
+            "post": {
+                "description": "Exchange OAuth login session for access tokens (existing user OAuth login)",
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Exchange login session",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Login session ID",
+                        "name": "session_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Login tokens",
+                        "schema": {
+                            "$ref": "#/definitions/response.SuccessResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid session data",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Session not found or expired",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/auth/forgot-password": {
             "post": {
                 "description": "Initiate password reset process by sending reset email",
@@ -2071,6 +2161,122 @@ const docTemplate = `{
                         "description": "Internal server error",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/github": {
+            "get": {
+                "description": "Start GitHub OAuth authentication flow",
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Initiate GitHub OAuth",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Invitation token (if joining via invite)",
+                        "name": "invitation_token",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "302": {
+                        "description": "Redirect to GitHub",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/github/callback": {
+            "get": {
+                "description": "Handle GitHub OAuth callback and create session",
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "GitHub OAuth callback",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Authorization code from GitHub",
+                        "name": "code",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "CSRF state token",
+                        "name": "state",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "302": {
+                        "description": "Redirect to frontend",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/google": {
+            "get": {
+                "description": "Start Google OAuth authentication flow",
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Initiate Google OAuth",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Invitation token (if joining via invite)",
+                        "name": "invitation_token",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "302": {
+                        "description": "Redirect to Google",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/google/callback": {
+            "get": {
+                "description": "Handle Google OAuth callback and create session",
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Google OAuth callback",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Authorization code from Google",
+                        "name": "code",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "CSRF state token",
+                        "name": "state",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "302": {
+                        "description": "Redirect to frontend",
+                        "schema": {
+                            "type": "string"
                         }
                     }
                 }
@@ -2491,7 +2697,7 @@ const docTemplate = `{
         },
         "/api/v1/auth/signup": {
             "post": {
-                "description": "Register a new user account",
+                "description": "Register a new user account with organization or invitation",
                 "consumes": [
                     "application/json"
                 ],
@@ -2509,7 +2715,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_transport_http_handlers_auth.RegisterRequest"
+                            "$ref": "#/definitions/auth.RegisterRequest"
                         }
                     }
                 ],
@@ -2969,6 +3175,47 @@ const docTemplate = `{
                     },
                     "500": {
                         "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/invitations/validate/{token}": {
+            "get": {
+                "description": "Validate an invitation token and return invitation details",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Invitations"
+                ],
+                "summary": "Validate invitation token",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Invitation token",
+                        "name": "token",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Valid invitation",
+                        "schema": {
+                            "$ref": "#/definitions/organization.InvitationDetailsResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Invalid or not found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "410": {
+                        "description": "Invitation expired",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorResponse"
                         }
@@ -7368,6 +7615,32 @@ const docTemplate = `{
                 }
             }
         },
+        "auth.CompleteOAuthSignupRequest": {
+            "description": "Complete OAuth signup with additional user information",
+            "type": "object",
+            "required": [
+                "role",
+                "session_id"
+            ],
+            "properties": {
+                "organization_name": {
+                    "type": "string",
+                    "example": "Acme Corp"
+                },
+                "referral_source": {
+                    "type": "string",
+                    "example": "search"
+                },
+                "role": {
+                    "type": "string",
+                    "example": "engineer"
+                },
+                "session_id": {
+                    "type": "string",
+                    "example": "01HX..."
+                }
+            }
+        },
         "auth.ForgotPasswordRequest": {
             "description": "Email for password reset",
             "type": "object",
@@ -7378,6 +7651,63 @@ const docTemplate = `{
                 "email": {
                     "type": "string",
                     "example": "user@example.com"
+                }
+            }
+        },
+        "auth.RegisterRequest": {
+            "description": "User registration information",
+            "type": "object",
+            "required": [
+                "email",
+                "first_name",
+                "last_name",
+                "password",
+                "role"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "example": "user@example.com"
+                },
+                "first_name": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 1,
+                    "example": "John"
+                },
+                "invitation_token": {
+                    "type": "string",
+                    "example": "01HX..."
+                },
+                "last_name": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 1,
+                    "example": "Doe"
+                },
+                "organization_name": {
+                    "type": "string",
+                    "example": "Acme Corp"
+                },
+                "password": {
+                    "type": "string",
+                    "minLength": 8,
+                    "example": "password123"
+                },
+                "referral_source": {
+                    "type": "string",
+                    "example": "search"
+                },
+                "role": {
+                    "type": "string",
+                    "enum": [
+                        "engineer",
+                        "product",
+                        "designer",
+                        "executive",
+                        "other"
+                    ],
+                    "example": "engineer"
                 }
             }
         },
@@ -7906,47 +8236,6 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_transport_http_handlers_auth.RegisterRequest": {
-            "description": "User registration information",
-            "type": "object",
-            "required": [
-                "email",
-                "first_name",
-                "last_name",
-                "password"
-            ],
-            "properties": {
-                "email": {
-                    "type": "string",
-                    "example": "user@example.com"
-                },
-                "first_name": {
-                    "type": "string",
-                    "maxLength": 100,
-                    "minLength": 1,
-                    "example": "John"
-                },
-                "language": {
-                    "type": "string",
-                    "example": "en"
-                },
-                "last_name": {
-                    "type": "string",
-                    "maxLength": 100,
-                    "minLength": 1,
-                    "example": "Doe"
-                },
-                "password": {
-                    "type": "string",
-                    "minLength": 8,
-                    "example": "password123"
-                },
-                "timezone": {
-                    "type": "string",
-                    "example": "UTC"
-                }
-            }
-        },
         "internal_transport_http_handlers_billing.Invoice": {
             "type": "object",
             "properties": {
@@ -8087,12 +8376,6 @@ const docTemplate = `{
                     "maxLength": 100,
                     "minLength": 2,
                     "example": "Acme Corporation"
-                },
-                "slug": {
-                    "type": "string",
-                    "maxLength": 50,
-                    "minLength": 2,
-                    "example": "acme-corp"
                 }
             }
         },
@@ -8122,10 +8405,6 @@ const docTemplate = `{
                 "plan": {
                     "type": "string",
                     "example": "pro"
-                },
-                "slug": {
-                    "type": "string",
-                    "example": "acme-corp"
                 },
                 "status": {
                     "type": "string",
@@ -9045,6 +9324,37 @@ const docTemplate = `{
                 }
             }
         },
+        "organization.InvitationDetailsResponse": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "example": "user@example.com"
+                },
+                "expires_at": {
+                    "type": "string"
+                },
+                "inviter_name": {
+                    "type": "string",
+                    "example": "John"
+                },
+                "is_expired": {
+                    "type": "boolean"
+                },
+                "organization_id": {
+                    "type": "string",
+                    "example": "01HX..."
+                },
+                "organization_name": {
+                    "type": "string",
+                    "example": "Acme Corp"
+                },
+                "role": {
+                    "type": "string",
+                    "example": "developer"
+                }
+            }
+        },
         "organization.InviteMemberRequest": {
             "type": "object",
             "required": [
@@ -9185,12 +9495,6 @@ const docTemplate = `{
                 "organization_id": {
                     "type": "string",
                     "example": "org_1234567890"
-                },
-                "slug": {
-                    "type": "string",
-                    "maxLength": 50,
-                    "minLength": 2,
-                    "example": "ai-chatbot"
                 }
             }
         },
@@ -9224,10 +9528,6 @@ const docTemplate = `{
                 "owner_id": {
                     "type": "string",
                     "example": "usr_1234567890"
-                },
-                "slug": {
-                    "type": "string",
-                    "example": "ai-chatbot"
                 },
                 "status": {
                     "type": "string",

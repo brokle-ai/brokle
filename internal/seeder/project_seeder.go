@@ -28,33 +28,17 @@ func (ps *ProjectSeeder) SeedProjects(ctx context.Context, projectSeeds []Projec
 	}
 
 	for _, projectSeed := range projectSeeds {
-		// Get organization ID
-		orgID, ok := entityMaps.Organizations[projectSeed.OrganizationSlug]
+		// Get organization ID (use name as key instead of slug)
+		orgID, ok := entityMaps.Organizations[projectSeed.OrganizationName]
 		if !ok {
-			return fmt.Errorf("organization %s not found for project %s", projectSeed.OrganizationSlug, projectSeed.Name)
+			return fmt.Errorf("organization %s not found for project %s", projectSeed.OrganizationName, projectSeed.Name)
 		}
 
-		// Check if project already exists by getting all projects and filtering
-		// Since there's no GetByNameAndOrganization method, we'll use a different approach
-		projectSlug := generateSlug(projectSeed.Name)
-		existing, err := ps.projectRepo.GetBySlug(ctx, orgID, projectSlug)
-		if err == nil && existing != nil {
-			if verbose {
-				log.Printf("   Project %s already exists, skipping", projectSeed.Name)
-			}
-			projectKey := fmt.Sprintf("%s:%s", projectSeed.OrganizationSlug, projectSeed.Name)
-			entityMaps.Projects[projectKey] = existing.ID
-			continue
-		}
-
-		// Project slug already generated above
-
-		// Create project entity
+		// Create project entity (no slug - use ULID only)
 		project := &organization.Project{
 			ID:             ulid.New(),
 			OrganizationID: orgID,
 			Name:           projectSeed.Name,
-			Slug:           projectSlug,
 			Description:    projectSeed.Description,
 		}
 
@@ -63,12 +47,12 @@ func (ps *ProjectSeeder) SeedProjects(ctx context.Context, projectSeeds []Projec
 			return fmt.Errorf("failed to create project %s: %w", projectSeed.Name, err)
 		}
 
-		// Store project ID for later reference
-		projectKey := fmt.Sprintf("%s:%s", projectSeed.OrganizationSlug, projectSeed.Name)
+		// Store project ID for later reference (use name as key)
+		projectKey := fmt.Sprintf("%s:%s", projectSeed.OrganizationName, projectSeed.Name)
 		entityMaps.Projects[projectKey] = project.ID
 
 		if verbose {
-			log.Printf("   ✅ Created project: %s (%s)", project.Name, projectSlug)
+			log.Printf("   ✅ Created project: %s (ID: %s)", project.Name, project.ID.String())
 		}
 	}
 
