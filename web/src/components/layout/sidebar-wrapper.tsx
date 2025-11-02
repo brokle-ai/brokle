@@ -1,6 +1,7 @@
 'use client'
 
 import { cn } from '@/lib/utils'
+import { getCookie } from '@/lib/utils/cookies'
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar'
 
 interface SidebarWrapperProps {
@@ -9,8 +10,11 @@ interface SidebarWrapperProps {
 }
 
 export function SidebarWrapper({ children, sidebar }: SidebarWrapperProps) {
+  // Read sidebar state from cookie to persist user preference
+  const defaultOpen = getCookie('sidebar_state') !== 'false'
+
   return (
-    <SidebarProvider>
+    <SidebarProvider defaultOpen={defaultOpen}>
       {sidebar}
       <SidebarInset
         id="content"
