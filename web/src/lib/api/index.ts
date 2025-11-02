@@ -3,12 +3,13 @@
 
 // Direct service exports - always use optimal backend version per endpoint
 export * from './services/auth'
-export * from './services/organizations' 
+export * from './services/organizations'
 export * from './services/analytics'
 export * from './services/users'
 export * from './services/onboarding'
 export * from './services/dashboard'
 export * from './services/public'
+export * from './services/rbac'
 
 // Core client and types
 export { BrokleAPIClient } from './core/client'

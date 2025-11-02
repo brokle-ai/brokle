@@ -2210,9 +2210,9 @@ definitions:
       name:
         example: John Doe
         type: string
-      onboarding_completed:
-        example: true
-        type: boolean
+      onboarding_completed_at:
+        example: "2024-10-31T12:00:00Z"
+        type: string
       profile:
         $ref: '#/definitions/user.UserProfileData'
     type: object
@@ -4327,6 +4327,31 @@ paths:
       summary: Get detailed request information
       tags:
       - Logs
+  /api/v1/onboarding/complete:
+    post:
+      consumes:
+      - application/json
+      description: Mark the user's onboarding as completed
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Onboarding completed successfully
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Complete onboarding
+      tags:
+      - Onboarding
   /api/v1/onboarding/questions:
     get:
       consumes:

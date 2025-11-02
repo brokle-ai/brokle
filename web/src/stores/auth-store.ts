@@ -9,10 +9,10 @@ interface AuthState {
   currentProject: Project | null
   isAuthenticated: boolean
   isLoading: boolean
-  
+
   // API keys
   apiKeys: ApiKey[]
-  
+
   // Actions
   setUser: (user: User | null) => void
   setOrganization: (organization: Organization | null) => void
@@ -21,11 +21,10 @@ interface AuthState {
   login: (user: User, organization: Organization) => void
   logout: () => void
   setLoading: (loading: boolean) => void
-  
-  // Computed values
-  hasPermission: (permission: string) => boolean
-  isOwner: () => boolean
-  isAdmin: () => boolean
+
+  // NOTE: Permission checks removed - use useHasAccess hook instead
+  // Old methods (hasPermission, isOwner, isAdmin) deprecated
+  // Use: const canInvite = useHasAccess({ scope: "members:invite" })
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -56,45 +55,21 @@ export const useAuthStore = create<AuthState>()(
           isLoading: false 
         }),
         
-        logout: () => set({ 
-          user: null, 
-          organization: null, 
+        logout: () => set({
+          user: null,
+          organization: null,
           currentProject: null,
           isAuthenticated: false,
           apiKeys: [],
-          isLoading: false 
+          isLoading: false
         }),
-        
+
         setLoading: (loading) => set({ isLoading: loading }),
 
-        // Computed values
-        hasPermission: (permission: string) => {
-          const { user } = get()
-          if (!user) return false
-          
-          // Super admin has all permissions
-          if (user.role === 'super_admin') return true
-          
-          // Check if user has specific permission via API keys or role
-          // This would be expanded based on your permission system
-          return true
-        },
-
-        isOwner: () => {
-          const { user, organization } = get()
-          if (!user || !organization) return false
-          
-          const member = organization.members.find(m => m.userId === user.id)
-          return member?.role === 'owner'
-        },
-
-        isAdmin: () => {
-          const { user, organization } = get()
-          if (!user || !organization) return false
-          
-          const member = organization.members.find(m => m.userId === user.id)
-          return member?.role === 'owner' || member?.role === 'admin'
-        },
+        // Deprecated: Permission checks removed
+        // Use useHasAccess hook instead:
+        //   const canInvite = useHasAccess({ scope: "members:invite" })
+        //   const canDelete = useHasAccess({ scope: "traces:delete", projectId })
       }),
       {
         name: 'brokle-auth-storage',

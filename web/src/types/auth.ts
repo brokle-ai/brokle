@@ -13,7 +13,7 @@ export interface User {
   updatedAt: string
   lastLoginAt?: string
   isEmailVerified: boolean
-  onboardingCompleted?: boolean
+  onboardingCompletedAt?: string | null
   
   // TODO: Add when implementing backend-integrated permission system
   // permissions?: Permission[]  // User's calculated permissions for current context
@@ -165,7 +165,7 @@ export interface UserResponse {
   first_name: string
   last_name: string
   is_email_verified: boolean
-  onboarding_completed: boolean
+  onboarding_completed_at: string | null
   onboarding_step: number
   timezone: string
   language: string

@@ -66,10 +66,14 @@ export const getNextQuestion = async (): Promise<OnboardingQuestion | null> => {
 
 export const getCompletionPercentage = async (): Promise<number> => {
     const status = await getStatus()
-    
+
     if (status.total_questions === 0) return 0
-    
+
     const answeredOrSkipped = status.completed_questions + status.skipped_questions
     return Math.round((answeredOrSkipped / status.total_questions) * 100)
+  }
+
+export const completeOnboarding = async (): Promise<void> => {
+    await client.post<{ message: string }>('/v1/onboarding/complete')
   }
 

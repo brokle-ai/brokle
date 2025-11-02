@@ -223,14 +223,30 @@ func (m *ProjectMember) Activate() {
 	m.Status = MemberStatusActive
 }
 
+// ScopeLevel defines where a scope applies in the hierarchy
+type ScopeLevel string
+
+const (
+	// ScopeLevelGlobal: Platform-wide scopes (system admin only, future feature)
+	ScopeLevelGlobal ScopeLevel = "global"
+
+	// ScopeLevelOrganization: Organization-wide scopes (apply to org + all its projects)
+	ScopeLevelOrganization ScopeLevel = "organization"
+
+	// ScopeLevelProject: Project-specific scopes (apply only within a specific project)
+	ScopeLevelProject ScopeLevel = "project"
+)
+
 // Permission represents a normalized permission using resource:action format
 type Permission struct {
-	ID          ulid.ULID `json:"id" gorm:"type:char(26);primaryKey"`
-	Name        string    `json:"name" gorm:"size:100;not null;uniqueIndex"`
-	Resource    string    `json:"resource" gorm:"size:50;not null;index"`
-	Action      string    `json:"action" gorm:"size:50;not null;index"`
-	Description string    `json:"description" gorm:"type:text"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID          ulid.ULID  `json:"id" gorm:"type:char(26);primaryKey"`
+	Name        string     `json:"name" gorm:"size:100;not null;uniqueIndex"`
+	Resource    string     `json:"resource" gorm:"size:50;not null;index"`
+	Action      string     `json:"action" gorm:"size:50;not null;index"`
+	Description string     `json:"description" gorm:"type:text"`
+	ScopeLevel  ScopeLevel `json:"scope_level" gorm:"size:20;not null;default:'organization';index"`  // organization, project, global
+	Category    string     `json:"category" gorm:"size:50;index"`                                     // grouping: organization, members, billing, etc.
+	CreatedAt   time.Time  `json:"created_at"`
 
 	// Relations
 	Roles []Role `json:"roles,omitempty" gorm:"many2many:role_permissions"`
@@ -330,7 +346,7 @@ type AuthUser struct {
 	Name                  string     `json:"name"`
 	AvatarURL             *string    `json:"avatar_url,omitempty"`
 	IsEmailVerified       bool       `json:"is_email_verified"`
-	OnboardingCompleted   bool       `json:"onboarding_completed"`
+	OnboardingCompletedAt *time.Time `json:"onboarding_completed_at,omitempty"`
 	DefaultOrganizationID *ulid.ULID `json:"default_organization_id,omitempty"`
 }
 
@@ -362,53 +378,10 @@ type AuthContext struct {
 	SessionID *ulid.ULID `json:"session_id,omitempty"` // Set if authenticated via session
 }
 
-// Standard permission scopes for the platform
-var StandardPermissions = []string{
-	// User management
-	"users.read",
-	"users.write",
-	"users.delete",
-	"users.admin",
-
-	// Organization management
-	"organizations.read",
-	"organizations.write",
-	"organizations.delete",
-	"organizations.admin",
-
-	// Project management
-	"projects.read",
-	"projects.write",
-	"projects.delete",
-	"projects.admin",
-
-	// Environment management
-	"environments.read",
-	"environments.write",
-	"environments.delete",
-	"environments.admin",
-
-	// API key management
-	"api_keys.read",
-	"api_keys.write",
-	"api_keys.delete",
-	"api_keys.admin",
-
-	// Role management
-	"roles.read",
-	"roles.write",
-	"roles.delete",
-	"roles.admin",
-
-	// Billing management
-	"billing.read",
-	"billing.write",
-	"billing.admin",
-
-	// System administration
-	"system.admin",
-	"audit_logs.read",
-}
+// Deprecated: StandardPermissions removed
+// Use scope-based permissions instead (see seeds/dev.yaml for full list)
+// Organization-level: organizations:*, members:*, billing:*, settings:*, etc.
+// Project-level: traces:*, analytics:*, models:*, providers:*, etc.
 
 // Blacklisted token types
 const (
@@ -416,26 +389,13 @@ const (
 	TokenTypeUserTimestamp = "user_wide_timestamp" // User-wide timestamp blacklisting (GDPR/SOC2)
 )
 
-// System roles that are pre-defined
-var SystemRoles = map[string][]string{
-	"owner": {
-		"users.admin", "organizations.admin", "projects.admin",
-		"environments.admin", "api_keys.admin", "roles.admin",
-		"billing.admin", "audit_logs.read",
-	},
-	"admin": {
-		"users.read", "users.write", "organizations.read", "organizations.write",
-		"projects.admin", "environments.admin", "api_keys.admin",
-		"roles.read", "roles.write", "billing.read",
-	},
-	"developer": {
-		"projects.read", "projects.write", "environments.read", "environments.write",
-		"api_keys.read", "api_keys.write",
-	},
-	"viewer": {
-		"projects.read", "environments.read", "api_keys.read",
-	},
-}
+// Deprecated: SystemRoles removed
+// Use scope-based role mappings instead (see seeds/dev.yaml)
+// Roles are now seeded with proper scope assignments:
+//   - owner: 63 scopes (full access)
+//   - admin: 61 scopes (no delete org/projects)
+//   - developer: 30 scopes (project workflows)
+//   - viewer: 15 scopes (read-only)
 
 // Constructor functions
 func NewUserSession(userID ulid.ULID, refreshTokenHash string, currentJTI string, expiresAt, refreshExpiresAt time.Time, ipAddress, userAgent *string, deviceInfo interface{}) *UserSession {
@@ -559,6 +519,24 @@ func NewPermission(resource, action, description string) *Permission {
 		Resource:    resource,
 		Action:      action,
 		Description: description,
+		ScopeLevel:  ScopeLevelOrganization, // Default to organization level
+		Category:    resource,                // Default category to resource name
+		CreatedAt:   time.Now(),
+	}
+}
+
+// NewPermissionWithScope creates a permission with explicit scope level and category
+func NewPermissionWithScope(resource, action, description string, scopeLevel ScopeLevel, category string) *Permission {
+	name := fmt.Sprintf("%s:%s", resource, action)
+
+	return &Permission{
+		ID:          ulid.New(),
+		Name:        name,
+		Resource:    resource,
+		Action:      action,
+		Description: description,
+		ScopeLevel:  scopeLevel,
+		Category:    category,
 		CreatedAt:   time.Now(),
 	}
 }

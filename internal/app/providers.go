@@ -193,6 +193,7 @@ type AuthServices struct {
 	Permission             auth.PermissionService
 	OrganizationMembers    auth.OrganizationMemberService
 	BlacklistedTokens      auth.BlacklistedTokenService
+	Scope                  auth.ScopeService
 }
 
 // GatewayServices contains all gateway-related services
@@ -387,6 +388,7 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 		core.Services.Auth.Role,
 		core.Services.Auth.Permission,
 		core.Services.Auth.OrganizationMembers,
+		core.Services.Auth.Scope,
 		core.Services.Observability,
 		core.Services.Gateway.Gateway,
 		core.Services.Gateway.Routing,
@@ -574,6 +576,13 @@ func ProvideAuthServices(
 	// Wrap with audit decorator for clean separation of concerns
 	authSvc := authService.NewAuditDecorator(coreAuthSvc, authRepos.AuditLog, logger)
 
+	// Create scope service for scope-based authorization
+	scopeService := authService.NewScopeService(
+		authRepos.OrganizationMember,
+		authRepos.Role,
+		authRepos.Permission,
+	)
+
 	return &AuthServices{
 		Auth:                authSvc,
 		JWT:                 jwtService,
@@ -583,6 +592,7 @@ func ProvideAuthServices(
 		Permission:          permissionService,
 		OrganizationMembers: orgMemberService,
 		BlacklistedTokens:   blacklistedTokenService,
+		Scope:               scopeService,
 	}
 }
 

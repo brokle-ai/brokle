@@ -370,3 +370,49 @@ func (r *permissionRepository) BulkDelete(ctx context.Context, permissionIDs []u
 		return nil
 	})
 }
+
+// ========================================
+// NEW: Scope-Level Query Methods
+// ========================================
+
+// GetByScopeLevel retrieves all permissions for a specific scope level
+func (r *permissionRepository) GetByScopeLevel(ctx context.Context, scopeLevel authDomain.ScopeLevel) ([]*authDomain.Permission, error) {
+	var permissions []*authDomain.Permission
+	err := r.db.WithContext(ctx).
+		Where("scope_level = ?", scopeLevel).
+		Order("category ASC, resource ASC, action ASC").
+		Find(&permissions).Error
+	return permissions, err
+}
+
+// GetByCategory retrieves all permissions for a specific category
+func (r *permissionRepository) GetByCategory(ctx context.Context, category string) ([]*authDomain.Permission, error) {
+	var permissions []*authDomain.Permission
+	err := r.db.WithContext(ctx).
+		Where("category = ?", category).
+		Order("resource ASC, action ASC").
+		Find(&permissions).Error
+	return permissions, err
+}
+
+// GetByScopeLevelAndCategory retrieves permissions filtered by both scope level and category
+func (r *permissionRepository) GetByScopeLevelAndCategory(ctx context.Context, scopeLevel authDomain.ScopeLevel, category string) ([]*authDomain.Permission, error) {
+	var permissions []*authDomain.Permission
+	err := r.db.WithContext(ctx).
+		Where("scope_level = ? AND category = ?", scopeLevel, category).
+		Order("resource ASC, action ASC").
+		Find(&permissions).Error
+	return permissions, err
+}
+
+// GetAvailableCategories returns all distinct categories
+func (r *permissionRepository) GetAvailableCategories(ctx context.Context) ([]string, error) {
+	var categories []string
+	err := r.db.WithContext(ctx).
+		Model(&authDomain.Permission{}).
+		Distinct("category").
+		Where("category IS NOT NULL AND category != ''").
+		Order("category ASC").
+		Pluck("category", &categories).Error
+	return categories, err
+}
