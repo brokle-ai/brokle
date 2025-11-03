@@ -3,7 +3,7 @@
 import React from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useAuth } from '@/context/auth-context'
+import { useAuth } from '@/hooks/auth/use-auth'
 import { BrokleLogo } from '@/assets/brokle-logo'
 import { OrgSwitcher } from './org-switcher'
 import { ProjectSwitcher } from './project-switcher'

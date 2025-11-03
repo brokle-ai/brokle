@@ -20,7 +20,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
-import { useAuth } from '@/context/auth-context'
+import { useAuth } from '@/hooks/auth/use-auth'
 
 interface Organization {
   id: string

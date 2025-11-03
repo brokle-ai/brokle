@@ -14,7 +14,9 @@ import type {
 const client = new BrokleAPIClient('/api')
 
 export const login = async (credentials: LoginCredentials): Promise<AuthResponse> => {
-  console.log('[AuthAPI] Login called with credentials:', { email: credentials.email })
+  if (process.env.NODE_ENV === 'development') {
+    console.debug('[AuthAPI] Login called with credentials:', { email: credentials.email })
+  }
 
   // Backend now returns: { user, expires_at, expires_in } (tokens in httpOnly cookies)
   const backendResponse = await client.post<{
@@ -27,11 +29,13 @@ export const login = async (credentials: LoginCredentials): Promise<AuthResponse
     { skipAuth: true }
   )
 
-  console.log('[AuthAPI] Login response received:', {
-    hasUser: !!backendResponse.user,
-    hasExpiresAt: !!backendResponse.expires_at,
-    backendResponse
-  })
+  if (process.env.NODE_ENV === 'development') {
+    console.debug('[AuthAPI] Login response received:', {
+      hasUser: !!backendResponse.user,
+      hasExpiresAt: !!backendResponse.expires_at,
+      backendResponse
+    })
+  }
 
   // Defensive check
   if (!backendResponse || !backendResponse.user) {
@@ -56,12 +60,17 @@ export const login = async (credentials: LoginCredentials): Promise<AuthResponse
     onboardingCompletedAt: backendResponse.user.onboarding_completed_at,
   }
 
-  console.log('[AuthAPI] User mapped:', { userId: user.id, email: user.email })
+  if (process.env.NODE_ENV === 'development') {
+    console.debug('[AuthAPI] User mapped:', { userId: user.id, email: user.email })
+  }
 
   // Get organization from backend (cookies sent automatically, no manual auth header)
   let organization: Organization
   try {
-    console.log('[AuthAPI] Fetching organizations...')
+    if (process.env.NODE_ENV === 'development') {
+      console.debug('[AuthAPI] Fetching organizations...')
+    }
+
     const orgResponse = await client.get<Array<{
       id: string
       name: string
@@ -71,11 +80,13 @@ export const login = async (credentials: LoginCredentials): Promise<AuthResponse
       updated_at: string
     }>>('/v1/organizations')
 
-    console.log('[AuthAPI] Organization response:', {
-      isArray: Array.isArray(orgResponse),
-      length: Array.isArray(orgResponse) ? orgResponse.length : 0,
-      orgResponse
-    })
+    if (process.env.NODE_ENV === 'development') {
+      console.debug('[AuthAPI] Organization response:', {
+        isArray: Array.isArray(orgResponse),
+        length: Array.isArray(orgResponse) ? orgResponse.length : 0,
+        orgResponse
+      })
+    }
 
     const firstOrg = Array.isArray(orgResponse) && orgResponse.length > 0 ? orgResponse[0] : null
 
@@ -84,7 +95,9 @@ export const login = async (credentials: LoginCredentials): Promise<AuthResponse
       throw new Error('No organizations found for user')
     }
 
-    console.log('[AuthAPI] First organization:', { id: firstOrg.id, name: firstOrg.name })
+    if (process.env.NODE_ENV === 'development') {
+      console.debug('[AuthAPI] First organization:', { id: firstOrg.id, name: firstOrg.name })
+    }
 
     organization = {
       id: firstOrg.id,
@@ -117,12 +130,14 @@ export const login = async (credentials: LoginCredentials): Promise<AuthResponse
     expiresIn: backendResponse.expires_in,  // Milliseconds
   }
 
-  console.log('[AuthAPI] Login complete, returning:', {
-    hasUser: !!authResponse.user,
-    hasOrg: !!authResponse.organization,
-    userId: authResponse.user?.id,
-    orgId: authResponse.organization?.id
-  })
+  if (process.env.NODE_ENV === 'development') {
+    console.debug('[AuthAPI] Login complete, returning:', {
+      hasUser: !!authResponse.user,
+      hasOrg: !!authResponse.organization,
+      userId: authResponse.user?.id,
+      orgId: authResponse.organization?.id
+    })
+  }
 
   return authResponse
 }
@@ -346,7 +361,7 @@ export const exchangeLoginSession = async (sessionId: string) => {
     user: UserResponse
     expires_at: number  // Milliseconds
     expires_in: number  // Milliseconds
-  }>(`/api/v1/auth/exchange-session/${sessionId}`, {}, { skipAuth: true })
+  }>(`/v1/auth/exchange-session/${sessionId}`, {}, { skipAuth: true })
 }
 
 // Complete OAuth signup (Step 2)
@@ -369,7 +384,6 @@ export const completeOAuthSignup = async (data: {
     organization: {
       id: string
       name: string
-      slug: string
       billing_email: string
       subscription_plan: 'free' | 'pro' | 'business' | 'enterprise'
       created_at: string

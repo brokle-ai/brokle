@@ -7,6 +7,12 @@ import {
   requestPasswordReset,
   confirmPasswordReset
 } from '@/lib/api'
+import {
+  signup as authSignup,
+  completeOAuthSignup as authCompleteOAuthSignup,
+  updateProfile as authUpdateProfile,
+  changePassword as authChangePassword
+} from '@/lib/api/services/auth'
 import { useAuth } from '@/hooks/auth/use-auth'
 import type {
   User,
@@ -86,11 +92,10 @@ export function useLoginMutation() {
 // Signup mutation
 export function useSignupMutation() {
   const queryClient = useQueryClient()
-  const { signup } = useAuth()
 
   return useMutation({
     mutationFn: async (credentials: SignUpCredentials) => {
-      return signup(credentials)
+      return authSignup(credentials)
     },
     onSuccess: (data: AuthResponse) => {
       // Update query cache with new user data
@@ -112,7 +117,6 @@ export function useSignupMutation() {
 // Complete OAuth Signup mutation
 export function useCompleteOAuthSignupMutation() {
   const queryClient = useQueryClient()
-  const { completeOAuthSignup } = useAuth()
 
   return useMutation({
     mutationFn: async (data: {
@@ -121,7 +125,7 @@ export function useCompleteOAuthSignupMutation() {
       organizationName?: string
       referralSource?: string
     }) => {
-      return completeOAuthSignup(data)
+      return authCompleteOAuthSignup(data)
     },
     onSuccess: (data: AuthResponse) => {
       // Update query cache
@@ -147,23 +151,39 @@ export function useLogoutMutation() {
 
   return useMutation({
     mutationFn: async () => {
+      // Show overlay
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('auth:logout-start'))
+      }
+
       await logout()
     },
     onSuccess: () => {
       // Clear all cached data
       queryClient.clear()
-      
-      toast.success('Logged out successfully', {
-        description: 'You have been securely logged out.',
-      })
+
+      // Hard redirect (toast shows on signin page)
+      if (typeof window !== 'undefined') {
+        window.location.href = '/auth/signin?logout=success'
+      }
     },
     onError: () => {
-      // Still clear cache even if API call fails
-      queryClient.clear()
-      
-      toast.warning('Logged out locally', {
-        description: 'Session cleared locally. You may need to refresh other tabs.',
-      })
+      try {
+        // Still clear cache even if API call fails
+        queryClient.clear()
+
+        // Hard redirect with error param
+        if (typeof window !== 'undefined') {
+          window.location.href = '/auth/signin?logout=error'
+        }
+      } catch (error) {
+        console.error('[Logout] Error during logout error handling:', error)
+      } finally {
+        // Ensure overlay clears even if redirect fails
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('auth:logout-end'))
+        }
+      }
     },
   })
 }
@@ -171,11 +191,10 @@ export function useLogoutMutation() {
 // Update profile mutation
 export function useUpdateProfileMutation() {
   const queryClient = useQueryClient()
-  const { updateUser } = useAuth()
 
   return useMutation({
     mutationFn: async (data: Partial<User>) => {
-      return updateUser(data)
+      return authUpdateProfile(data)
     },
     onSuccess: (updatedUser: User) => {
       // Update cache with new user data
@@ -195,11 +214,9 @@ export function useUpdateProfileMutation() {
 
 // Change password mutation
 export function useChangePasswordMutation() {
-  const { changePassword } = useAuth()
-
   return useMutation({
     mutationFn: async (data: { currentPassword: string; newPassword: string }) => {
-      await changePassword(data.currentPassword, data.newPassword)
+      await authChangePassword(data.currentPassword, data.newPassword)
     },
     onSuccess: () => {
       toast.success('Password Changed', {
