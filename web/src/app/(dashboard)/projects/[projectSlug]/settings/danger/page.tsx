@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AlertTriangle, Trash2, Shield, Download, Archive } from 'lucide-react'
-import { useOrganization } from '@/context/org-context'
+import { useWorkspace } from '@/context/workspace-context'
+import { getOrgSlug, getProjectSlug } from '@/lib/utils/slug-utils'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -17,7 +18,7 @@ import { toast } from 'sonner'
 
 export default function ProjectDangerPage() {
   const router = useRouter()
-  const { currentProject, currentOrganization } = useOrganization()
+  const { currentProject, currentOrganization } = useWorkspace()
   
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
   const [isArchiveOpen, setIsArchiveOpen] = useState(false)
@@ -50,7 +51,7 @@ export default function ProjectDangerPage() {
       await new Promise(resolve => setTimeout(resolve, 2000))
       
       toast.success('Project deleted successfully')
-      router.push(`/${currentOrganization.slug}`)
+      router.push(`/organizations/${getOrgSlug(currentOrganization)}`)
       setIsDeleteOpen(false)
     } catch (error) {
       console.error('Failed to delete project:', error)
@@ -73,7 +74,7 @@ export default function ProjectDangerPage() {
       await new Promise(resolve => setTimeout(resolve, 1500))
       
       toast.success('Project archived successfully')
-      router.push(`/${currentOrganization.slug}`)
+      router.push(`/organizations/${getOrgSlug(currentOrganization)}`)
       setIsArchiveOpen(false)
     } catch (error) {
       console.error('Failed to archive project:', error)
@@ -104,7 +105,7 @@ export default function ProjectDangerPage() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `${currentProject.slug}-export-${new Date().toISOString().split('T')[0]}.json`
+      a.download = `${getProjectSlug(currentProject)}-export-${new Date().toISOString().split('T')[0]}.json`
       a.click()
       URL.revokeObjectURL(url)
       

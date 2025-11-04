@@ -1,19 +1,31 @@
 'use client'
 
-import { SidebarProvider } from '@/components/ui/sidebar'
+import { cn } from '@/lib/utils'
+import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar'
 
 interface SidebarWrapperProps {
   children: React.ReactNode
   sidebar: React.ReactNode
+  defaultOpen?: boolean
 }
 
-export function SidebarWrapper({ children, sidebar }: SidebarWrapperProps) {
+export function SidebarWrapper({
+  children,
+  sidebar,
+  defaultOpen = true
+}: SidebarWrapperProps) {
   return (
-    <SidebarProvider>
+    <SidebarProvider defaultOpen={defaultOpen}>
       {sidebar}
-      <main className="flex-1 overflow-hidden peer-data-[state=collapsed]:w-[calc(100%-var(--sidebar-width-icon))] peer-data-[state=expanded]:w-[calc(100%-var(--sidebar-width))] transition-[width] duration-200 ease-linear">
+      <SidebarInset
+        id="content"
+        className={cn(
+          '@container/content',
+          'has-[[data-layout=fixed]]:h-svh'
+        )}
+      >
         {children}
-      </main>
+      </SidebarInset>
     </SidebarProvider>
   )
 }

@@ -1,7 +1,7 @@
 'use client'
 
 import { useParams } from 'next/navigation'
-import { useOrganization } from '@/context/org-context'
+import { useWorkspace } from '@/context/workspace-context'
 import { SettingsView } from '@/views/settings-view'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { OrganizationParams } from '@/types/organization'
@@ -12,7 +12,7 @@ export default function OrganizationSettingsPage() {
     currentOrganization,
     isLoading,
     error
-  } = useOrganization()
+  } = useWorkspace()
 
   // TODO: Implement proper permission-based access control with backend integration
   // This page should verify user has 'settings:write' permission for the organization

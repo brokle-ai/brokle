@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { Suspense, useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/hooks/auth/use-auth'
-import { useOrganization } from '@/context/org-context'
+import { useWorkspace } from '@/context/workspace-context'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { WizardProgress } from '@/components/wizard/wizard-progress'
@@ -11,13 +11,13 @@ import { CreateOrgForm } from '@/components/wizard/create-org-form'
 import { CreateProjectForm } from '@/components/wizard/create-project-form'
 import { InviteMemberModal } from '@/components/organization/invite-member-modal'
 import { PageLoader } from '@/components/shared/loading'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, Loader2 } from 'lucide-react'
 
-export default function SetupWizardPage() {
+function SetupWizardContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user } = useAuth()
-  const { organizations, isLoading: orgsLoading } = useOrganization()
+  const { organizations, isLoading: orgsLoading } = useWorkspace()
 
   const [orgId, setOrgId] = useState<string | null>(null)
 
@@ -153,5 +153,19 @@ export default function SetupWizardPage() {
         </p>
       </div>
     </div>
+  )
+}
+
+export default function SetupWizardPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      }
+    >
+      <SetupWizardContent />
+    </Suspense>
   )
 }

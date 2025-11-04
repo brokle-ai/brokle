@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import { UserPlus, Mail, Loader2, Copy, Check } from 'lucide-react'
-import { useOrganization } from '@/context/org-context'
+import { useWorkspace } from '@/context/workspace-context'
+import { getOrgSlug } from '@/lib/utils/slug-utils'
 import {
   Dialog,
   DialogContent,
@@ -29,7 +30,7 @@ interface InviteMemberModalProps {
 }
 
 export function InviteMemberModal({ trigger, onSuccess }: InviteMemberModalProps) {
-  const { currentOrganization } = useOrganization()
+  const { currentOrganization } = useWorkspace()
   
   const [isOpen, setIsOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
@@ -99,8 +100,8 @@ export function InviteMemberModal({ trigger, onSuccess }: InviteMemberModalProps
     try {
       // TODO: Implement API call to generate invite link
       await new Promise(resolve => setTimeout(resolve, 500)) // Simulate API call
-      
-      const mockLink = `https://app.brokle.com/invite/${currentOrganization.slug}?token=abc123def456&role=${role}`
+
+      const mockLink = `https://app.brokle.com/invite/${getOrgSlug(currentOrganization)}?token=abc123def456&role=${role}`
       setInviteLink(mockLink)
       toast.success('Invite link generated successfully')
     } catch (error) {

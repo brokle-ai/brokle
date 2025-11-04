@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { useProject } from '@/context/project-context'
+import { useProjectOnly } from '@/hooks/use-project-only'
 import { DashboardView } from '@/views/dashboard-view'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { ProjectParams } from '@/types/organization'
@@ -14,7 +14,7 @@ export default function ProjectPage() {
     currentProject,
     isLoading,
     error
-  } = useProject()
+  } = useProjectOnly()
 
   // No need for redirect logic anymore - direct ID lookup handles this
 

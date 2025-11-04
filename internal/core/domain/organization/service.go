@@ -20,6 +20,9 @@ type OrganizationService interface {
 	GetUserOrganizations(ctx context.Context, userID ulid.ULID) ([]*Organization, error)
 	GetUserDefaultOrganization(ctx context.Context, userID ulid.ULID) (*Organization, error)
 	SetUserDefaultOrganization(ctx context.Context, userID, orgID ulid.ULID) error
+
+	// Workspace hierarchy
+	GetUserOrganizationsWithProjects(ctx context.Context, userID ulid.ULID) ([]*OrganizationWithProjectsAndRole, error)
 }
 
 // MemberService defines the organization member management service interface.

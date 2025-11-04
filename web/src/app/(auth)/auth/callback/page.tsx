@@ -1,13 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { exchangeLoginSession } from '@/lib/api/services/auth'
 
 // OAuth callback page for handling token exchange after OAuth login
-export default function OAuthCallbackPage() {
+function OAuthCallbackContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
@@ -22,23 +22,51 @@ export default function OAuthCallbackPage() {
       return
     }
 
-    // Exchange session for tokens
+    // Exchange session for tokens (tokens set in httpOnly cookies automatically)
     exchangeLoginSession(session)
-      .then((tokenData) => {
-        const accessToken = tokenData.access_token
-        const refreshToken = tokenData.refresh_token
-        const expiresIn = tokenData.expires_in || 900
+      .then(async (response) => {
+        // Backend sets httpOnly cookies automatically
+        // Response contains: { user, expires_at, expires_in }
 
-        if (accessToken && refreshToken) {
-          // Store in localStorage
-          localStorage.setItem('access_token', accessToken)
-          localStorage.setItem('refresh_token', refreshToken)
-          localStorage.setItem('expires_at', String(Date.now() + expiresIn * 1000))
+        if (response && response.user) {
+          // Initialize auth store BEFORE redirecting (prevents loading flash)
+          const { useAuthStore } = await import('@/stores/auth-store')
 
-          // Set cookie for SSR/middleware
-          document.cookie = `access_token=${accessToken}; path=/; max-age=${expiresIn}; SameSite=Strict`
+          // Map user response to User type
+          const user = {
+            id: response.user.id,
+            email: response.user.email,
+            firstName: response.user.first_name,
+            lastName: response.user.last_name,
+            name: `${response.user.first_name} ${response.user.last_name}`.trim(),
+            role: 'user',
+            organizationId: '',
+            defaultOrganizationId: response.user.default_organization_id,
+            projects: [],
+            createdAt: response.user.created_at,
+            updatedAt: response.user.created_at,
+            isEmailVerified: response.user.is_email_verified,
+            onboardingCompletedAt: response.user.onboarding_completed_at,
+          }
 
-          // Redirect to dashboard
+          // Set auth state manually
+          const store = useAuthStore.getState()
+          store.setUser(user)
+          store.setLoading(false)
+
+          // Set expiry metadata and start timer
+          useAuthStore.setState({
+            expiresAt: response.expires_at,
+            expiresIn: response.expires_in,
+            isAuthenticated: true,
+          })
+
+          store.startRefreshTimer()
+
+          // Small delay to ensure state fully persists before redirect
+          await new Promise(resolve => setTimeout(resolve, 50))
+
+          // Now redirect (auth state fully settled)
           window.location.href = '/'
         } else {
           setError('Invalid session data. Please try again.')
@@ -67,5 +95,19 @@ export default function OAuthCallbackPage() {
       <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       <p className="mt-4 text-sm text-muted-foreground">Completing authentication...</p>
     </div>
+  )
+}
+
+export default function OAuthCallbackPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      }
+    >
+      <OAuthCallbackContent />
+    </Suspense>
   )
 }

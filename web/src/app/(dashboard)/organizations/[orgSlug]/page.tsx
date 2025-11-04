@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { useOrganization } from '@/context/org-context'
+import { useWorkspace } from '@/context/workspace-context'
 import { OrganizationOverview } from '@/views/organization-overview'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { OrganizationParams } from '@/types/organization'
@@ -10,11 +10,11 @@ import type { OrganizationParams } from '@/types/organization'
 export default function OrganizationPage() {
   const params = useParams() as OrganizationParams
   const router = useRouter()
-  const { 
+  const {
     currentOrganization,
     isLoading,
     error
-  } = useOrganization()
+  } = useWorkspace()
 
   // No need for redirect logic anymore - direct ID lookup handles this
 

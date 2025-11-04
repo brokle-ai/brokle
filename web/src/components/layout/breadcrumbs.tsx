@@ -4,7 +4,8 @@ import * as React from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { ChevronRight, Home, Building2, FolderOpen, Settings, Users, CreditCard } from 'lucide-react'
-import { useOrganization } from '@/context/org-context'
+import { useWorkspace } from '@/context/workspace-context'
+import { generateCompositeSlug, extractIdFromCompositeSlug } from '@/lib/utils/slug-utils'
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -21,7 +22,7 @@ interface BreadcrumbsProps {
 
 export function Breadcrumbs({ className }: BreadcrumbsProps) {
   const pathname = usePathname()
-  const { currentOrganization, currentProject } = useOrganization()
+  const { currentOrganization, currentProject } = useWorkspace()
 
   const getBreadcrumbItems = () => {
     const items = []
@@ -37,8 +38,9 @@ export function Breadcrumbs({ className }: BreadcrumbsProps) {
 
     // Organization
     if (currentOrganization) {
+      const orgCompositeSlug = generateCompositeSlug(currentOrganization.name, currentOrganization.id)
       items.push({
-        href: `/${currentOrganization.slug}`,
+        href: `/${orgCompositeSlug}`,
         label: currentOrganization.name,
         icon: Building2,
         isActive: segments.length === 1,
@@ -50,7 +52,7 @@ export function Breadcrumbs({ className }: BreadcrumbsProps) {
         
         if (secondSegment === 'settings') {
           items.push({
-            href: `/${currentOrganization.slug}/settings`,
+            href: `/${orgCompositeSlug}/settings`,
             label: 'Settings',
             icon: Settings,
             isActive: segments.length === 2,
@@ -67,7 +69,7 @@ export function Breadcrumbs({ className }: BreadcrumbsProps) {
 
             if (settingsPages[settingsPage]) {
               items.push({
-                href: `/${currentOrganization.slug}/settings/${settingsPage}`,
+                href: `/${orgCompositeSlug}/settings/${settingsPage}`,
                 label: settingsPages[settingsPage].label,
                 icon: settingsPages[settingsPage].icon,
                 isActive: true,
@@ -76,17 +78,21 @@ export function Breadcrumbs({ className }: BreadcrumbsProps) {
           }
         } else if (secondSegment === 'projects') {
           items.push({
-            href: `/${currentOrganization.slug}/projects`,
+            href: `/${orgCompositeSlug}/projects`,
             label: 'Projects',
             icon: FolderOpen,
             isActive: true,
           })
-        } else if (currentProject && currentProject.slug === secondSegment) {
-          // Project
-          items.push({
-            href: `/${currentOrganization.slug}/${currentProject.slug}`,
-            label: currentProject.name,
-            icon: FolderOpen,
+        } else if (currentProject) {
+          // Check if second segment matches project by extracting ID
+          const secondSegmentId = extractIdFromCompositeSlug(secondSegment)
+          if (secondSegmentId === currentProject.id) {
+            // Project
+            const projectCompositeSlug = generateCompositeSlug(currentProject.name, currentProject.id)
+            items.push({
+              href: `/${orgCompositeSlug}/${projectCompositeSlug}`,
+              label: currentProject.name,
+              icon: FolderOpen,
             isActive: segments.length === 2,
           })
 
@@ -104,12 +110,13 @@ export function Breadcrumbs({ className }: BreadcrumbsProps) {
 
             if (projectPages[projectPage]) {
               items.push({
-                href: `/${currentOrganization.slug}/${currentProject.slug}/${projectPage}`,
+                href: `/${orgCompositeSlug}/${projectCompositeSlug}/${projectPage}`,
                 label: projectPages[projectPage],
                 icon: undefined,
                 isActive: true,
               })
             }
+          }
           }
         }
       }

@@ -6,8 +6,8 @@
  */
 
 import { useRouter, usePathname } from 'next/navigation'
-import { useOrganization } from '@/context/org-context'
-import { parsePathContext } from '@/lib/utils/slug-utils'
+import { useWorkspace } from '@/context/workspace-context'
+import { parsePathContext, extractIdFromCompositeSlug, generateCompositeSlug } from '@/lib/utils/slug-utils'
 import type { Organization, Project } from '@/types/organization'
 
 export interface ContextNavigationHooks {
@@ -76,7 +76,7 @@ export interface ContextNavigationHooks {
  * ```
  */
 export function useContextNavigation(): ContextNavigationHooks {
-  const context = useOrganization()
+  const context = useWorkspace()
   const router = useRouter()
   const pathname = usePathname()
   const urlContext = parsePathContext(pathname)
@@ -86,8 +86,11 @@ export function useContextNavigation(): ContextNavigationHooks {
   }
 
   const navigateToProject = async (orgSlug: string, projectSlug: string) => {
+    // Extract ID from composite slug to compare
+    const targetOrgId = extractIdFromCompositeSlug(orgSlug)
+
     // Switch org first if needed
-    if (!context.currentOrganization || context.currentOrganization.slug !== orgSlug) {
+    if (!context.currentOrganization || context.currentOrganization.id !== targetOrgId) {
       await context.switchOrganization(orgSlug)
     }
     // Then switch project
@@ -105,9 +108,13 @@ export function useContextNavigation(): ContextNavigationHooks {
   const getProjectUrl = (orgSlug: string, projectSlug: string) => `/${orgSlug}/${projectSlug}`
 
   // Check if current URL context matches the current context state
-  const urlMatchesContext = 
-    urlContext.orgSlug === context.currentOrganization?.slug &&
-    urlContext.projectSlug === context.currentProject?.slug
+  // Extract IDs from composite slugs in URL and compare with current context
+  const urlOrgId = urlContext.orgSlug ? extractIdFromCompositeSlug(urlContext.orgSlug) : null
+  const urlProjectId = urlContext.projectSlug ? extractIdFromCompositeSlug(urlContext.projectSlug) : null
+
+  const urlMatchesContext =
+    urlOrgId === context.currentOrganization?.id &&
+    urlProjectId === context.currentProject?.id
 
   return {
     // Current context
@@ -182,27 +189,44 @@ export function useBreadcrumbNavigation() {
 
   // Add organization breadcrumb if we have one
   if (navigation.currentOrganization) {
-    breadcrumbs.push({
-      label: navigation.currentOrganization.name,
-      url: navigation.getOrganizationUrl(navigation.currentOrganization.slug),
-      isClickable: navigation.isOnProjectPage, // Can click if we're currently on project page
-      type: 'organization',
-      slug: navigation.currentOrganization.slug,
-    })
+    try {
+      const orgCompositeSlug = generateCompositeSlug(
+        navigation.currentOrganization.name,
+        navigation.currentOrganization.id
+      )
+      breadcrumbs.push({
+        label: navigation.currentOrganization.name,
+        url: navigation.getOrganizationUrl(orgCompositeSlug),
+        isClickable: navigation.isOnProjectPage, // Can click if we're currently on project page
+        type: 'organization',
+        slug: orgCompositeSlug,
+      })
+    } catch (error) {
+      console.error('[Breadcrumbs] Failed to generate org composite slug:', error)
+    }
   }
 
   // Add project breadcrumb if we have one
   if (navigation.currentProject && navigation.currentOrganization) {
-    breadcrumbs.push({
-      label: navigation.currentProject.name,
-      url: navigation.getProjectUrl(
-        navigation.currentOrganization.slug, 
-        navigation.currentProject.slug
-      ),
-      isClickable: false, // Current page, not clickable
-      type: 'project',
-      slug: navigation.currentProject.slug,
-    })
+    try {
+      const orgCompositeSlug = generateCompositeSlug(
+        navigation.currentOrganization.name,
+        navigation.currentOrganization.id
+      )
+      const projectCompositeSlug = generateCompositeSlug(
+        navigation.currentProject.name,
+        navigation.currentProject.id
+      )
+      breadcrumbs.push({
+        label: navigation.currentProject.name,
+        url: navigation.getProjectUrl(orgCompositeSlug, projectCompositeSlug),
+        isClickable: false, // Current page, not clickable
+        type: 'project',
+        slug: projectCompositeSlug,
+      })
+    } catch (error) {
+      console.error('[Breadcrumbs] Failed to generate project composite slug:', error)
+    }
   }
 
   const navigateToBreadcrumb = async (breadcrumb: Breadcrumb) => {
@@ -257,9 +281,12 @@ export function useContextAwareRouting() {
 
     // Build context-aware path
     if (navigation.currentProject && navigation.currentOrganization) {
-      return `/${navigation.currentOrganization.slug}/${navigation.currentProject.slug}/${relativePath}`
+      const orgSlug = generateCompositeSlug(navigation.currentOrganization.name, navigation.currentOrganization.id)
+      const projectSlug = generateCompositeSlug(navigation.currentProject.name, navigation.currentProject.id)
+      return `/${orgSlug}/${projectSlug}/${relativePath}`
     } else if (navigation.currentOrganization) {
-      return `/${navigation.currentOrganization.slug}/${relativePath}`
+      const orgSlug = generateCompositeSlug(navigation.currentOrganization.name, navigation.currentOrganization.id)
+      return `/${orgSlug}/${relativePath}`
     } else {
       return `/${relativePath}`
     }
@@ -293,8 +320,12 @@ export function useContextAwareRouting() {
     navigateWithinContext,
     
     // Context info for building routes
-    currentOrgSlug: navigation.currentOrganization?.slug || null,
-    currentProjectSlug: navigation.currentProject?.slug || null,
+    currentOrgSlug: navigation.currentOrganization
+      ? generateCompositeSlug(navigation.currentOrganization.name, navigation.currentOrganization.id)
+      : null,
+    currentProjectSlug: navigation.currentProject
+      ? generateCompositeSlug(navigation.currentProject.name, navigation.currentProject.id)
+      : null,
     hasFullContext: !!(navigation.currentOrganization && navigation.currentProject),
     hasOrgContext: !!navigation.currentOrganization,
   }

@@ -12,7 +12,7 @@ import {
   AlertCircle,
   ExternalLink
 } from 'lucide-react'
-import { useOrganization } from '@/context/org-context'
+import { useWorkspace } from '@/context/workspace-context'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -86,7 +86,7 @@ const AVAILABLE_INTEGRATIONS: Integration[] = [
 ]
 
 export default function ProjectIntegrationsSettingsPage() {
-  const { currentProject } = useOrganization()
+  const { currentProject } = useWorkspace()
   const [integrations, setIntegrations] = useState<Integration[]>(AVAILABLE_INTEGRATIONS)
   const [isAddOpen, setIsAddOpen] = useState(false)
   const [editingIntegration, setEditingIntegration] = useState<Integration | null>(null)

@@ -1,6 +1,8 @@
 'use client'
 
 import Link from 'next/link'
+import { LogOut } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import {
@@ -13,12 +15,19 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { useLogoutMutation } from '@/hooks/api/use-auth-queries'
 
-export function ProfileDropdown() {
+interface ProfileDropdownProps {
+  className?: string
+}
+
+export function ProfileDropdown({ className }: ProfileDropdownProps = {}) {
+  const { mutate: handleLogout, isPending: isLoggingOut } = useLogoutMutation()
+
   return (
     <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
-        <Button variant='ghost' className='relative h-8 w-8 rounded-full'>
+        <Button variant='ghost' className={cn('relative h-8 w-8 rounded-full', className)}>
           <Avatar className='h-8 w-8'>
             <AvatarImage src='/avatars/01.png' alt='@shadcn' />
             <AvatarFallback>SN</AvatarFallback>
@@ -57,8 +66,12 @@ export function ProfileDropdown() {
           <DropdownMenuItem>New Team</DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuItem>
-          Log out
+        <DropdownMenuItem
+          onClick={() => handleLogout()}
+          disabled={isLoggingOut}
+        >
+          <LogOut className="mr-2 h-4 w-4" />
+          {isLoggingOut ? 'Logging out...' : 'Log out'}
           <DropdownMenuShortcut>⇧⌘Q</DropdownMenuShortcut>
         </DropdownMenuItem>
       </DropdownMenuContent>

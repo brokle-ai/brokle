@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useAuth } from '@/context/auth-context'
+import { useAuth } from '@/hooks/auth/use-auth'
 
 interface PersistedContext {
   organizationSlug: string

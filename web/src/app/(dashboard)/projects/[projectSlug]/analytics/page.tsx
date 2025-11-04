@@ -1,6 +1,6 @@
 'use client'
 
-import { useProject } from '@/context/project-context'
+import { useProjectOnly } from '@/hooks/use-project-only'
 import { AnalyticsView } from '@/views/analytics-view'
 import { Skeleton } from '@/components/ui/skeleton'
 
@@ -9,7 +9,7 @@ export default function ProjectAnalyticsPage() {
     currentProject,
     isLoading,
     error
-  } = useProject()
+  } = useProjectOnly()
 
   if (isLoading) {
     return (

@@ -168,19 +168,19 @@ export class URLContextManager {
       
       const resolvedContext = {
         orgId: org.id,
-        orgSlug: org.slug,
+        orgSlug: orgCompositeSlug, // Store composite slug from URL
         projectId: project?.id,
-        projectSlug: project?.slug,
+        projectSlug: projectCompositeSlug, // Store composite slug from URL
         timestamp: Date.now(),
       }
-      
+
       if (this.DEBUG) console.debug('[URLContextManager] Successfully resolved context:', {
         orgSlug: resolvedContext.orgSlug,
         orgId: resolvedContext.orgId,
         projectSlug: resolvedContext.projectSlug,
         projectId: resolvedContext.projectId
       })
-      
+
       return resolvedContext
       
     } catch (error) {

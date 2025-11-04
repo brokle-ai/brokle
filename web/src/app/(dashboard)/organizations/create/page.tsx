@@ -26,15 +26,7 @@ import {
   CardFooter,
 } from '@/components/ui/card'
 import { useCreateOrganizationMutation } from '@/hooks/api/use-organization-queries'
-
-// Helper to build organization URL
-function buildOrgUrl(orgName: string, orgId: string): string {
-  const slug = orgName
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-  return `/organizations/${slug}-${orgId}`
-}
+import { buildOrgUrl } from '@/lib/utils/slug-utils'
 
 // Zod validation schema
 const createOrgSchema = z.object({
