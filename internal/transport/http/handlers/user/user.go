@@ -7,34 +7,30 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"brokle/internal/config"
-	"brokle/internal/core/domain/organization"
 	"brokle/internal/core/domain/user"
 	"brokle/pkg/response"
 	"brokle/pkg/ulid"
-	"brokle/pkg/utils"
 )
 
 // Handler handles user endpoints
 type Handler struct {
-	config              *config.Config
-	logger              *logrus.Logger
-	userService         user.UserService
-	profileService      user.ProfileService
-	onboardingService   user.OnboardingService
-	Onboarding          *OnboardingHandler
-	organizationService organization.OrganizationService
+	config            *config.Config
+	logger            *logrus.Logger
+	userService       user.UserService
+	profileService    user.ProfileService
+	onboardingService user.OnboardingService
+	Onboarding        *OnboardingHandler
 }
 
 // NewHandler creates a new user handler
-func NewHandler(config *config.Config, logger *logrus.Logger, userService user.UserService, profileService user.ProfileService, onboardingService user.OnboardingService, organizationService organization.OrganizationService) *Handler {
+func NewHandler(config *config.Config, logger *logrus.Logger, userService user.UserService, profileService user.ProfileService, onboardingService user.OnboardingService) *Handler {
 	return &Handler{
-		config:              config,
-		logger:              logger,
-		userService:         userService,
-		profileService:      profileService,
-		onboardingService:   onboardingService,
-		Onboarding:          NewOnboardingHandler(config, logger, onboardingService, userService),
-		organizationService: organizationService,
+		config:            config,
+		logger:            logger,
+		userService:       userService,
+		profileService:    profileService,
+		onboardingService: onboardingService,
+		Onboarding:        NewOnboardingHandler(config, logger, onboardingService, userService),
 	}
 }
 
@@ -69,35 +65,6 @@ type UserProfileData struct {
 	Timezone    string  `json:"timezone" example:"UTC" description:"User timezone preference"`
 	Language    string  `json:"language" example:"en" description:"User language preference"`
 	Theme       string  `json:"theme" example:"dark" description:"UI theme preference"`
-}
-
-// OrganizationWithProjects represents an organization with its nested projects
-type OrganizationWithProjects struct {
-	ID            string           `json:"id"`
-	Name          string           `json:"name"`
-	CompositeSlug string           `json:"composite_slug"`
-	Plan          string           `json:"plan"`
-	Role          string           `json:"role"`
-	CreatedAt     time.Time        `json:"created_at"`
-	UpdatedAt     time.Time        `json:"updated_at"`
-	Projects      []ProjectSummary `json:"projects"`
-}
-
-// ProjectSummary represents a summary of a project
-type ProjectSummary struct {
-	ID             string    `json:"id"`
-	Name           string    `json:"name"`
-	CompositeSlug  string    `json:"composite_slug"`
-	Description    string    `json:"description,omitempty"`
-	OrganizationID string    `json:"organization_id"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
-}
-
-// EnhancedUserProfileResponse extends UserProfileResponse with organizations hierarchy
-type EnhancedUserProfileResponse struct {
-	*UserProfileResponse                     // Embed pointer to preserve all existing fields
-	Organizations       []OrganizationWithProjects `json:"organizations"`
 }
 
 // GetProfile handles GET /users/me
@@ -193,58 +160,8 @@ func (h *Handler) GetProfile(c *gin.Context) {
 		profileResponse.Completeness = completeness.OverallScore
 	}
 
-	// Fetch user's organizations with nested projects
-	userOrgsWithProjects, err := h.organizationService.GetUserOrganizationsWithProjects(
-		c.Request.Context(),
-		userID,
-	)
-	if err != nil {
-		h.logger.WithError(err).Warn("Failed to load organizations hierarchy, returning empty array")
-		userOrgsWithProjects = []*organization.OrganizationWithProjectsAndRole{}
-	}
-
-	// Map to response format with composite slugs
-	organizationsWithProjects := make([]OrganizationWithProjects, 0, len(userOrgsWithProjects))
-	for _, orgData := range userOrgsWithProjects {
-		// Generate composite slug for organization
-		orgCompositeSlug := utils.GenerateCompositeSlug(orgData.Organization.Name, orgData.Organization.ID)
-
-		// Map projects with composite slugs
-		projectSummaries := make([]ProjectSummary, 0, len(orgData.Projects))
-		for _, proj := range orgData.Projects {
-			projectCompositeSlug := utils.GenerateCompositeSlug(proj.Name, proj.ID)
-
-			projectSummaries = append(projectSummaries, ProjectSummary{
-				ID:             proj.ID.String(),
-				Name:           proj.Name,
-				CompositeSlug:  projectCompositeSlug,
-				Description:    proj.Description,
-				OrganizationID: proj.OrganizationID.String(),
-				CreatedAt:      proj.CreatedAt,
-				UpdatedAt:      proj.UpdatedAt,
-			})
-		}
-
-		organizationsWithProjects = append(organizationsWithProjects, OrganizationWithProjects{
-			ID:            orgData.Organization.ID.String(),
-			Name:          orgData.Organization.Name,
-			CompositeSlug: orgCompositeSlug,
-			Plan:          orgData.Organization.Plan,
-			Role:          orgData.RoleName,
-			CreatedAt:     orgData.Organization.CreatedAt,
-			UpdatedAt:     orgData.Organization.UpdatedAt,
-			Projects:      projectSummaries,
-		})
-	}
-
-	// Build enhanced response
-	enhancedResponse := &EnhancedUserProfileResponse{
-		UserProfileResponse: profileResponse,
-		Organizations:       organizationsWithProjects,
-	}
-
 	h.logger.WithField("user_id", userID).Info("User profile retrieved successfully")
-	response.Success(c, enhancedResponse)
+	response.Success(c, profileResponse)
 }
 
 // UpdateProfileRequest represents the update profile request payload
@@ -331,96 +248,5 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 
 	// Re-fetch and return updated profile
 	h.GetProfile(c)
-}
-
-// SetDefaultOrgRequest represents the request to set default organization
-type SetDefaultOrgRequest struct {
-	OrganizationID string `json:"organization_id" binding:"required"`
-}
-
-// SetDefaultOrganization handles PUT /users/me/default-organization
-// @Summary Set user's default organization
-// @Description Set the default organization for the authenticated user
-// @Tags User
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param request body SetDefaultOrgRequest true "Organization ID to set as default"
-// @Success 200 {object} map[string]string "Default organization updated successfully"
-// @Failure 400 {object} response.ErrorResponse "Invalid request body or organization ID"
-// @Failure 401 {object} response.ErrorResponse "Unauthorized"
-// @Failure 403 {object} response.ErrorResponse "User is not a member of the organization"
-// @Failure 500 {object} response.ErrorResponse "Internal server error"
-// @Router /api/v1/users/me/default-organization [put]
-func (h *Handler) SetDefaultOrganization(c *gin.Context) {
-	// Get user ID from middleware
-	userIDInterface, exists := c.Get("user_id")
-	if !exists {
-		h.logger.Error("User ID not found in request")
-		response.Unauthorized(c, "Authentication required")
-		return
-	}
-
-	userID, ok := userIDInterface.(ulid.ULID)
-	if !ok {
-		h.logger.Error("Invalid user ID type")
-		response.InternalServerError(c, "Authentication error")
-		return
-	}
-
-	// Parse request body
-	var req SetDefaultOrgRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.WithError(err).Error("Invalid set default organization request")
-		response.BadRequest(c, "Invalid request body", err.Error())
-		return
-	}
-
-	// Parse organization ID
-	orgID, err := ulid.Parse(req.OrganizationID)
-	if err != nil {
-		h.logger.WithError(err).WithField("organization_id", req.OrganizationID).Error("Invalid organization ID format")
-		response.BadRequest(c, "Invalid organization ID format", err.Error())
-		return
-	}
-
-	// Validate that user is a member of the organization
-	isMember, err := h.userService.ValidateUserOrgMembership(c.Request.Context(), userID, orgID)
-	if err != nil {
-		h.logger.WithError(err).WithFields(logrus.Fields{
-			"user_id":         userID,
-			"organization_id": orgID,
-		}).Error("Failed to validate organization membership")
-		response.InternalServerError(c, "Failed to validate organization membership")
-		return
-	}
-
-	if !isMember {
-		h.logger.WithFields(logrus.Fields{
-			"user_id":         userID,
-			"organization_id": orgID,
-		}).Warn("User attempted to set default organization they are not a member of")
-		response.Forbidden(c, "You are not a member of this organization")
-		return
-	}
-
-	// Set default organization
-	if err := h.userService.SetDefaultOrganization(c.Request.Context(), userID, orgID); err != nil {
-		h.logger.WithError(err).WithFields(logrus.Fields{
-			"user_id":         userID,
-			"organization_id": orgID,
-		}).Error("Failed to update default organization")
-		response.InternalServerError(c, "Failed to update default organization")
-		return
-	}
-
-	h.logger.WithFields(logrus.Fields{
-		"user_id":         userID,
-		"organization_id": orgID,
-	}).Info("Default organization updated successfully")
-
-	response.Success(c, map[string]string{
-		"message": "Default organization updated successfully",
-	})
 }
 

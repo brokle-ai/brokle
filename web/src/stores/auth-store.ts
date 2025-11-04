@@ -67,27 +67,21 @@ export const useAuthStore = create<AuthState>()(
 
       // Login action
       login: async (credentials) => {
-        if (process.env.NODE_ENV === 'development') {
-          console.debug('[AuthStore] Login started')
-        }
+        console.log('[AuthStore] Login started')
         set({ isLoading: true, error: null })
 
         try {
           // Call auth service (sets httpOnly cookies, returns metadata)
-          if (process.env.NODE_ENV === 'development') {
-            console.debug('[AuthStore] Calling authApi.login...')
-          }
+          console.log('[AuthStore] Calling authApi.login...')
           const response = await authApi.login(credentials)
 
-          if (process.env.NODE_ENV === 'development') {
-            console.debug('[AuthStore] authApi.login returned:', {
-              hasResponse: !!response,
-              hasUser: !!response?.user,
-              hasOrg: !!response?.organization,
-              hasExpiresAt: !!response?.expiresAt,
-              response
-            })
-          }
+          console.log('[AuthStore] authApi.login returned:', {
+            hasResponse: !!response,
+            hasUser: !!response?.user,
+            hasOrg: !!response?.organization,
+            hasExpiresAt: !!response?.expiresAt,
+            response
+          })
 
           // Defensive check
           if (!response) {
@@ -105,7 +99,7 @@ export const useAuthStore = create<AuthState>()(
             throw new Error('Login response missing organization data')
           }
 
-          console.debug('[AuthStore] Setting auth state...')
+          console.log('[AuthStore] Setting auth state...')
           set({
             user: response.user,
             organization: response.organization,
@@ -116,11 +110,11 @@ export const useAuthStore = create<AuthState>()(
             error: null,
           })
 
-          console.debug('[AuthStore] Auth state set successfully')
+          console.log('[AuthStore] Auth state set successfully')
 
           // Start auto-refresh timer
           get().startRefreshTimer()
-          console.debug('[AuthStore] Login complete')
+          console.log('[AuthStore] Login complete')
 
           // Return the response for mutation hooks
           return response
@@ -151,11 +145,7 @@ export const useAuthStore = create<AuthState>()(
           // Signal other tabs
           if (typeof window !== 'undefined') {
             localStorage.setItem('logout_signal', Date.now().toString())
-
-            // Delay removal to ensure other tabs detect the signal
-            setTimeout(() => {
-              localStorage.removeItem('logout_signal')
-            }, 100)
+            localStorage.removeItem('logout_signal')
           }
         }
       },
@@ -195,7 +185,7 @@ export const useAuthStore = create<AuthState>()(
             get().startRefreshTimer()
 
             if (process.env.NODE_ENV === 'development') {
-              console.debug('[Auth] Token refreshed successfully')
+              console.log('[Auth] Token refreshed successfully')
             }
           } catch (error) {
             set({
@@ -205,7 +195,7 @@ export const useAuthStore = create<AuthState>()(
 
             // Check if refresh token expired
             if (error instanceof BrokleAPIError && error.code === 'REFRESH_EXPIRED') {
-              console.debug('[Auth] Refresh token expired, clearing session')
+              console.log('[Auth] Refresh token expired, clearing session')
               get().clearAuth()
 
               // Dispatch session expiry event
@@ -241,7 +231,7 @@ export const useAuthStore = create<AuthState>()(
         const timeUntilRefresh = refreshTime - now
 
         if (process.env.NODE_ENV === 'development') {
-          console.debug('[Auth] Refresh timer:', {
+          console.log('[Auth] Refresh timer:', {
             now,
             expiresAt,
             timeUntilRefresh,
@@ -252,7 +242,7 @@ export const useAuthStore = create<AuthState>()(
         if (timeUntilRefresh > 0) {
           const timerId = setTimeout(() => {
             if (process.env.NODE_ENV === 'development') {
-              console.debug('[Auth] Auto-refreshing token...')
+              console.log('[Auth] Auto-refreshing token...')
             }
             get().refreshToken().catch(console.error)
           }, timeUntilRefresh)
@@ -261,7 +251,7 @@ export const useAuthStore = create<AuthState>()(
         } else {
           // Token already expired or expires very soon - refresh immediately
           if (process.env.NODE_ENV === 'development') {
-            console.debug('[Auth] Token expired, refreshing immediately')
+            console.log('[Auth] Token expired, refreshing immediately')
           }
           get().refreshToken().catch(console.error)
         }
@@ -292,11 +282,6 @@ export const useAuthStore = create<AuthState>()(
           refreshPromise: null,
           error: null,
         })
-
-        // Clear persisted context data (privacy - prevent email leak on shared computers)
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem('brokle_last_context')
-        }
       },
 
       // Initialize auth on app load
@@ -332,6 +317,7 @@ export const useAuthStore = create<AuthState>()(
           const orgResponse = await client.get<Array<{
             id: string
             name: string
+            slug: string
             subscription_plan: 'free' | 'pro' | 'business' | 'enterprise'
             created_at: string
             updated_at: string
@@ -344,6 +330,7 @@ export const useAuthStore = create<AuthState>()(
             organization = {
               id: firstOrg.id,
               name: firstOrg.name,
+              slug: firstOrg.slug,
               plan: firstOrg.subscription_plan,
               members: [],
               apiKeys: [],
@@ -379,7 +366,7 @@ export const useAuthStore = create<AuthState>()(
             if (error.statusCode === 401) {
               // Auth error - expected when not logged in
               if (process.env.NODE_ENV === 'development') {
-                console.debug('[Auth] Not authenticated (expected)')
+                console.log('[Auth] Not authenticated (expected)')
               }
             } else if (error.isNetworkError()) {
               // Network error - user should be aware

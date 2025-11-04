@@ -521,7 +521,6 @@ func ProvideUserServices(
 	userSvc := userService.NewUserService(
 		userRepos.User,
 		nil, // AuthService - would need to be injected if needed
-		authRepos.OrganizationMember, // OrganizationMemberRepository for membership validation
 	)
 	
 	profileSvc := userService.NewProfileService(

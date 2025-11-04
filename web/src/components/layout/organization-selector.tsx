@@ -4,11 +4,9 @@ import * as React from 'react'
 import { useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { ChevronDown, Building2, Settings, Users, Plus } from 'lucide-react'
-import Link from 'next/link'
-import { useWorkspace } from '@/context/workspace-context'
+import { useOrganization } from '@/context/org-context'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { getSmartRedirectUrl } from '@/lib/utils/smart-redirect'
-import { generateCompositeSlug, extractIdFromCompositeSlug } from '@/lib/utils/slug-utils'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,41 +16,34 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 
 interface OrganizationSelectorProps {
   className?: string
-  showPlanBadge?: boolean
 }
 
-export function OrganizationSelector({ className, showPlanBadge = false }: OrganizationSelectorProps) {
-  const {
-    organizations,
+export function OrganizationSelector({ className }: OrganizationSelectorProps) {
+  const { 
+    organizations, 
     currentOrganization,
-    isInitialized,
-  } = useWorkspace()
+    isOrgReady,
+  } = useOrganization()
   
   const pathname = usePathname()
   const router = useRouter()
   const isMobile = useIsMobile()
   const [isOrgLoading, setIsOrgLoading] = useState(false)
+  const isProjectPage = pathname.startsWith('/projects/')
 
-  const handleOrgSwitch = async (compositeSlug: string) => {
-    // Generate current composite slug for comparison
-    const currentCompositeSlug = currentOrganization
-      ? generateCompositeSlug(currentOrganization.name, currentOrganization.id)
-      : null
-
-    if (isOrgLoading || compositeSlug === currentCompositeSlug) return
-
-    // Extract ID from composite slug
-    const targetOrgId = extractIdFromCompositeSlug(compositeSlug)
-
-    // Find the organization object by ID
-    const targetOrg = organizations.find(org => org.id === targetOrgId)
+  const handleOrgSwitch = async (orgSlug: string) => {
+    if (isOrgLoading || orgSlug === currentOrganization?.slug) return
+    
+    // Find the organization object by slug
+    const targetOrg = organizations.find(org => org.slug === orgSlug)
     if (!targetOrg) {
-      console.error('Organization not found for composite slug:', compositeSlug)
+      console.error('Organization not found:', orgSlug)
       return
     }
     
@@ -62,13 +53,27 @@ export function OrganizationSelector({ className, showPlanBadge = false }: Organ
       // Use smart redirect to determine the appropriate URL
       const redirectUrl = getSmartRedirectUrl({
         currentPath: pathname,
-        targetOrgSlug: compositeSlug,
+        targetOrgSlug: targetOrg.slug,
         targetOrgId: targetOrg.id,
         targetOrgName: targetOrg.name
       })
-
+      
+      // On project pages, clear project context before navigation
+      if (isProjectPage) {
+        // Import project context dynamically to clear it
+        try {
+          const { useProject } = require('@/context/project-context')
+          const { setCurrentProject } = useProject()
+          
+          // Clear project context before navigation
+          setCurrentProject(null)
+        } catch (error) {
+          // Project context not available, that's fine
+          console.log('Project context not available for clearing')
+        }
+      }
+      
       // Navigate to smart redirect URL
-      // Next.js handles context cleanup automatically during navigation
       router.push(redirectUrl)
     } catch (error) {
       console.error('Failed to switch organization:', error)
@@ -92,127 +97,153 @@ export function OrganizationSelector({ className, showPlanBadge = false }: Organ
     }
   }
 
-  // Loading state - show shimmer only if not initialized yet
-  if (!isInitialized) {
-    return (
-      <div className={cn("animate-pulse bg-muted rounded h-6 w-32", className)}></div>
-    )
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map(word => word[0])
+      .join('')
+      .substring(0, 2)
+      .toUpperCase()
   }
 
-  // Show nothing if no current organization after initialization
-  if (!currentOrganization) {
-    return null
+  // Loading state - use isOrgReady for better loading detection
+  if (!isOrgReady || !currentOrganization) {
+    return (
+      <div className={cn("animate-pulse bg-muted rounded h-8 w-32", className)}></div>
+    )
   }
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger
-        className={cn(
-          "flex items-center gap-1 [&_svg]:pointer-events-none [&_svg]:shrink-0",
-          "text-sm text-primary hover:text-primary/80 transition-colors",
-          isOrgLoading && "opacity-50 cursor-not-allowed",
-          className
-        )}
-        disabled={isOrgLoading}
-      >
-        <span className="font-normal">{currentOrganization.name}</span>
-        {showPlanBadge && currentOrganization.plan !== 'free' && (
-          <Badge
-            variant="secondary"
-            className={cn(
-              "ml-1 px-1 py-0 text-xs font-normal capitalize",
-              getPlanBadgeColor(currentOrganization.plan)
-            )}
-          >
-            {currentOrganization.plan}
-          </Badge>
-        )}
-        <ChevronDown className="size-4" />
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="outline"
+          className={cn(
+            "gap-2 justify-start text-left font-normal",
+            isMobile ? "max-w-[140px]" : "max-w-[180px]",
+            "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          )}
+          disabled={isOrgLoading}
+        >
+          <Avatar className="h-4 w-4">
+            <AvatarImage 
+              src={`/api/organizations/${currentOrganization.slug}/avatar`} 
+              alt={currentOrganization.name} 
+            />
+            <AvatarFallback className="bg-primary text-primary-foreground text-xs font-semibold">
+              {getInitials(currentOrganization.name)}
+            </AvatarFallback>
+          </Avatar>
+          <span className="truncate text-sm">
+            {currentOrganization.name}
+          </span>
+          <ChevronDown className="ml-auto h-4 w-4 shrink-0" />
+        </Button>
       </DropdownMenuTrigger>
       
       <DropdownMenuContent
         className={cn(
           "max-h-96 overflow-y-auto",
-          isMobile ? "w-screen max-w-sm" : "w-64"
+          isMobile ? "w-screen max-w-sm" : "w-72"
         )}
         align="start"
+        side="bottom"
+        sideOffset={4}
       >
-        {/* Organizations overview link */}
-        <DropdownMenuItem className="font-semibold" asChild>
-          <Link href="/" className="cursor-pointer">
-            Organizations
-          </Link>
+        {/* Current Organization */}
+        <DropdownMenuLabel className="text-xs text-muted-foreground">
+          Current Organization
+        </DropdownMenuLabel>
+        <div className="px-2 py-2 border-b mb-1">
+          <div className="flex items-center gap-2">
+            <Avatar className="h-6 w-6">
+              <AvatarImage 
+                src={`/api/organizations/${currentOrganization.slug}/avatar`} 
+                alt={currentOrganization.name} 
+              />
+              <AvatarFallback className="text-xs">
+                {getInitials(currentOrganization.name)}
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-sm">{currentOrganization.name}</span>
+                <Badge 
+                  variant="secondary" 
+                  className={cn("text-xs px-1 py-0 h-4", getPlanBadgeColor(currentOrganization.plan))}
+                >
+                  {currentOrganization.plan}
+                </Badge>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Switch Organization */}
+        {organizations && organizations.filter(org => org.id !== currentOrganization.id).length > 0 && (
+          <>
+            <DropdownMenuLabel className="text-xs text-muted-foreground">
+              Switch Organization
+            </DropdownMenuLabel>
+            {organizations && organizations.filter(org => org.id !== currentOrganization.id).map((org) => (
+              <DropdownMenuItem
+                key={org.id}
+                onClick={() => handleOrgSwitch(org.slug)}
+                className="gap-2 p-2 cursor-pointer"
+                disabled={isOrgLoading}
+              >
+                <Avatar className="h-5 w-5">
+                  <AvatarImage 
+                    src={`/api/organizations/${org.slug}/avatar`} 
+                    alt={org.name} 
+                  />
+                  <AvatarFallback className="text-xs">
+                    {getInitials(org.name)}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-sm">{org.name}</span>
+                    <Badge 
+                      variant="secondary" 
+                      className={cn("text-xs px-1 py-0 h-4", getPlanBadgeColor(org.plan))}
+                    >
+                      {org.plan}
+                    </Badge>
+                  </div>
+                </div>
+                <Building2 className="h-4 w-4 text-muted-foreground" />
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuSeparator />
+          </>
+        )}
+        
+        {/* Organization Actions */}
+        <DropdownMenuItem className="gap-2 p-2 cursor-pointer">
+          <div className="bg-muted flex size-5 items-center justify-center rounded-sm">
+            <Settings className="size-3" />
+          </div>
+          <span className="text-sm">Organization Settings</span>
+        </DropdownMenuItem>
+        
+        <DropdownMenuItem className="gap-2 p-2 cursor-pointer">
+          <div className="bg-muted flex size-5 items-center justify-center rounded-sm">
+            <Users className="size-3" />
+          </div>
+          <span className="text-sm">Manage Members</span>
         </DropdownMenuItem>
 
         <DropdownMenuSeparator />
 
-        {/* All organizations list */}
-        <div className="max-h-36 overflow-y-auto">
-          {organizations && organizations.map((org) => (
-            <DropdownMenuItem
-              key={org.id}
-              asChild
-            >
-              <Link
-                href={
-                  org.id === currentOrganization.id
-                    ? pathname
-                    : getSmartRedirectUrl({
-                        currentPath: pathname,
-                        targetOrgSlug: generateCompositeSlug(org.name, org.id),
-                        targetOrgId: org.id,
-                        targetOrgName: org.name
-                      })
-                }
-                className="flex cursor-pointer justify-between"
-                onClick={(e) => {
-                  if (org.id === currentOrganization.id) {
-                    e.preventDefault()
-                    return
-                  }
-                  setIsOrgLoading(true)
-                }}
-              >
-                <span
-                  className="max-w-36 overflow-hidden overflow-ellipsis whitespace-nowrap"
-                  title={org.name}
-                >
-                  {org.name}
-                </span>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 hover:bg-background -my-1 ml-4"
-                  aria-label={`Open ${org.name} settings`}
-                  onClick={(e) => {
-                    e.preventDefault()
-                    e.stopPropagation()
-                    router.push(`/organizations/${org.id}/settings`)
-                  }}
-                >
-                  <Settings className="h-3 w-3" />
-                  <span className="sr-only">Open {org.name} settings</span>
-                </Button>
-              </Link>
-            </DropdownMenuItem>
-          ))}
-        </div>
-
-        <DropdownMenuSeparator />
-
-        {/* Create new organization */}
-        <DropdownMenuItem asChild>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 w-full text-sm font-normal justify-start"
-            asChild
-          >
-            <Link href="/organizations/create">
-              <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
-              New Organization
-            </Link>
-          </Button>
+        <DropdownMenuItem
+          className="gap-2 p-2 cursor-pointer"
+          onClick={() => router.push('/organizations/create')}
+        >
+          <div className="bg-primary text-primary-foreground flex size-5 items-center justify-center rounded-sm">
+            <Plus className="size-3" />
+          </div>
+          <span className="text-sm font-medium">Create Organization</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

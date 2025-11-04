@@ -22,6 +22,7 @@ interface ProjectAPIResponse {
   id: string
   organization_id: string
   name: string
+  slug: string
   description?: string
   status: 'active' | 'inactive' | 'archived'
   owner_id: string
@@ -176,15 +177,13 @@ export const updateOrganization = async (organizationId: string, data: Partial<{
 
 export const createProject = async (organizationId: string, data: {
     name: string
+    slug?: string
     description?: string
   }): Promise<Project> => {
     const response = await client.post<ProjectAPIResponse>(
       `/organizations/${organizationId}/projects`,
-      {
-        name: data.name,
-        description: data.description,
-      },
-      {
+      data,
+      { 
         includeOrgContext: true,
         customOrgId: organizationId
       }
@@ -285,7 +284,7 @@ export const updateUserRole = async (organizationId: string, userId: string, rol
     if (!apiProject) {
       throw new Error('Project API response is null or undefined')
     }
-
+    
     if (!apiProject.id) {
       console.error('[OrganizationAPI] Missing required fields in project API response:', apiProject)
       throw new Error('Project API response missing required id field')
@@ -294,6 +293,7 @@ export const updateUserRole = async (organizationId: string, userId: string, rol
     return {
       id: apiProject.id,
       name: apiProject.name || '',
+      slug: apiProject.slug || '',
       organizationId: apiProject.organization_id || '',
       description: apiProject.description || '',
       status: apiProject.status || 'active',

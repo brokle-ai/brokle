@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Key, Plus, Copy, Eye, EyeOff, Trash2, Shield } from 'lucide-react'
-import { useWorkspace } from '@/context/workspace-context'
+import { useOrganization } from '@/context/org-context'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -73,7 +73,7 @@ const MOCK_API_KEYS: APIKey[] = [
 ]
 
 export default function ProjectAPIKeysPage() {
-  const { currentProject } = useWorkspace()
+  const { currentProject } = useOrganization()
   
   const [apiKeys, setApiKeys] = useState<APIKey[]>(MOCK_API_KEYS)
   const [visibleKeys, setVisibleKeys] = useState<Set<string>>(new Set())

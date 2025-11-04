@@ -80,7 +80,7 @@ func NewHandlers(
 		Health:        health.NewHandler(cfg, logger),
 		Metrics:       metrics.NewHandler(cfg, logger),
 		Auth:          authHandler.NewHandler(cfg, logger, authService, apiKeyService, userService, registrationService, oauthProvider),
-		User:          userHandler.NewHandler(cfg, logger, userService, profileService, onboardingService, organizationService),
+		User:          userHandler.NewHandler(cfg, logger, userService, profileService, onboardingService),
 		Organization:  organizationHandler.NewHandler(cfg, logger, organizationService, memberService, projectService, invitationService, settingsService, userService, roleService),
 		Project:       project.NewHandler(cfg, logger, projectService, organizationService, memberService),
 		APIKey:        apikey.NewHandler(cfg, logger, apiKeyService),

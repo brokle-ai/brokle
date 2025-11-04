@@ -18,9 +18,6 @@ type OrganizationRepository interface {
 	
 	// User context
 	GetOrganizationsByUserID(ctx context.Context, userID ulid.ULID) ([]*Organization, error)
-
-	// Batch operations for workspace context
-	GetUserOrganizationsWithProjectsBatch(ctx context.Context, userID ulid.ULID) ([]*OrganizationWithProjectsAndRole, error)
 }
 
 // MemberRepository defines the interface for organization member data access.

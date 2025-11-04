@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Loader2 } from 'lucide-react'
-import { useWorkspace } from '@/context/workspace-context'
+import { useOrganization } from '@/context/org-context'
 import { toast } from 'sonner'
 
 interface CreateOrgFormProps {
@@ -14,7 +14,7 @@ interface CreateOrgFormProps {
 }
 
 export function CreateOrgForm({ onSuccess }: CreateOrgFormProps) {
-  const { createOrganization } = useWorkspace()
+  const { createOrganization } = useOrganization()
   const [isLoading, setIsLoading] = useState(false)
   const [formData, setFormData] = useState({
     name: '',

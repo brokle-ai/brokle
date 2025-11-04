@@ -1,26 +1,24 @@
 'use client'
 
 import { useParams } from 'next/navigation'
-import { useWorkspace } from '@/context/workspace-context'
+import { useOrganization } from '@/context/org-context'
 import { MemberManagement } from '@/components/organization/member-management'
-import { DashboardHeader } from '@/components/layout/dashboard-header'
+import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
+import { ContextNavbar } from '@/components/layout/context-navbar'
+import { Search } from '@/components/search'
+import { ThemeSwitch } from '@/components/theme-switch'
+import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { OrganizationParams } from '@/types/organization'
 
 export default function MembersSettingsPage() {
-  const params = useParams<OrganizationParams>()
-  const {
+  const params = useParams() as OrganizationParams
+  const { 
     currentOrganization,
     isLoading,
     error
-  } = useWorkspace()
-
-  // Validate params
-  if (!params?.orgSlug) {
-    console.error('Missing orgSlug parameter')
-    return null
-  }
+  } = useOrganization()
 
   // TODO: Implement proper permission-based access control with backend integration
   // This page should verify user has 'members:manage' permission for the organization
@@ -28,7 +26,14 @@ export default function MembersSettingsPage() {
   if (isLoading) {
     return (
       <>
-        <DashboardHeader />
+        <Header>
+          <ContextNavbar />
+          <div className='ml-auto flex items-center space-x-4'>
+            <Search />
+            <ThemeSwitch />
+            <ProfileDropdown />
+          </div>
+        </Header>
         <Main className="space-y-6">
           <Skeleton className="h-6 w-96" />
           <div className="space-y-4">
@@ -44,7 +49,14 @@ export default function MembersSettingsPage() {
   if (error || !currentOrganization) {
     return (
       <>
-        <DashboardHeader />
+        <Header>
+          <ContextNavbar />
+          <div className='ml-auto flex items-center space-x-4'>
+            <Search />
+            <ThemeSwitch />
+            <ProfileDropdown />
+          </div>
+        </Header>
         <Main>
           <div className="text-center py-12">
             <h2 className="text-xl font-semibold mb-2">Organization Not Found</h2>
@@ -59,7 +71,14 @@ export default function MembersSettingsPage() {
 
   return (
     <>
-      <DashboardHeader />
+      <Header>
+        <ContextNavbar />
+        <div className='ml-auto flex items-center space-x-4'>
+          <Search />
+          <ThemeSwitch />
+          <ProfileDropdown />
+        </div>
+      </Header>
 
       <Main>
         <div className="mb-6">

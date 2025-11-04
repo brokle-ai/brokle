@@ -1,7 +1,7 @@
 'use client'
 
 import { useAuth } from '@/hooks/auth/use-auth'
-import { useAuthStore } from '@/stores/auth-store'
+import { useTokenRefresh } from '@/hooks/auth/use-token-refresh'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -15,17 +15,13 @@ interface AuthStatusProps {
   className?: string
 }
 
-export function AuthStatus({
+export function AuthStatus({ 
   variant = 'detailed',
   showTokenInfo = false,
-  className
+  className 
 }: AuthStatusProps) {
   const { user, organization, isAuthenticated, isLoading } = useAuth()
-  const expiresAt = useAuthStore(state => state.expiresAt)
-
-  // Calculate token time left and validity
-  const tokenTimeLeft = expiresAt ? expiresAt - Date.now() : 0
-  const isTokenValid = tokenTimeLeft > 0
+  const { tokenTimeLeft, isTokenValid } = useTokenRefresh()
 
   if (isLoading) {
     return (

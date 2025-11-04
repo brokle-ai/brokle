@@ -1,11 +1,22 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/auth/use-auth'
 import { useCurrentOrganization } from '@/hooks/api/use-auth-queries'
 import { PageLoader } from '@/components/shared/loading'
-import { buildOrgUrl } from '@/lib/utils/slug-utils'
+
+// Session storage key for redirect tracking
+const REDIRECT_KEY = 'org-redirect-initiated'
+
+// Helper to build organization URL with composite slug
+function buildOrgUrl(orgName: string, orgId: string): string {
+  const slug = orgName
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  return `/organizations/${slug}-${orgId}`
+}
 
 export default function RootPage() {
   const router = useRouter()
@@ -13,13 +24,10 @@ export default function RootPage() {
   const { data: organization, isLoading: orgLoading, error: orgError } = useCurrentOrganization()
   const [isRedirecting, setIsRedirecting] = useState(false)
 
-  // Use ref instead of session storage to prevent race conditions
-  const redirectInitiatedRef = useRef(false)
-
   const redirectToAppropriateLocation = useCallback(() => {
-    // Prevent duplicate calls using ref
-    if (redirectInitiatedRef.current) return
-    redirectInitiatedRef.current = true
+    // Prevent duplicate calls using session storage
+    if (sessionStorage.getItem(REDIRECT_KEY)) return
+    sessionStorage.setItem(REDIRECT_KEY, 'true')
     setIsRedirecting(true)
 
     if (organization) {
@@ -42,7 +50,7 @@ export default function RootPage() {
 
     // Handle organization fetch error - likely means no org exists
     if (orgError) {
-      redirectInitiatedRef.current = true
+      sessionStorage.setItem(REDIRECT_KEY, 'true')
       setIsRedirecting(true)
       router.push('/organizations/create')
       return
@@ -57,7 +65,7 @@ export default function RootPage() {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      redirectInitiatedRef.current = false
+      sessionStorage.removeItem(REDIRECT_KEY)
     }
   }, [])
 

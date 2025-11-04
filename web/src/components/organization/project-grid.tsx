@@ -18,7 +18,7 @@ import {
   CheckSquare,
   Square
 } from 'lucide-react'
-import { useWorkspace } from '@/context/workspace-context'
+import { useOrganization } from '@/context/org-context'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -51,7 +51,7 @@ interface ProjectGridProps {
 
 export function ProjectGrid({ className, showCreateButton = true }: ProjectGridProps) {
   const router = useRouter()
-  const { currentOrganization, projects, isLoadingProjects } = useWorkspace()
+  const { currentOrganization, projects, isLoadingProjects } = useOrganization()
   
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<ProjectStatus | 'all'>('all')

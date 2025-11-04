@@ -2,8 +2,7 @@
 
 import { useState } from 'react'
 import { Settings, Save, RefreshCw, AlertCircle } from 'lucide-react'
-import { useWorkspace } from '@/context/workspace-context'
-import { getOrgSlug, getProjectSlug } from '@/lib/utils/slug-utils'
+import { useOrganization } from '@/context/org-context'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,12 +18,12 @@ import { toast } from 'sonner'
 import type { ProjectStatus, ProjectEnvironment } from '@/types/organization'
 
 export default function ProjectGeneralSettingsPage() {
-  const { currentProject, currentOrganization } = useWorkspace()
+  const { currentProject, currentOrganization } = useOrganization()
   
   const [isLoading, setIsLoading] = useState(false)
   const [projectName, setProjectName] = useState(currentProject?.name || '')
   const [projectDescription, setProjectDescription] = useState(currentProject?.description || '')
-  const computedProjectSlug = currentProject ? getProjectSlug(currentProject) : ''
+  const [projectSlug, setProjectSlug] = useState(currentProject?.slug || '')
   const [projectStatus, setProjectStatus] = useState<ProjectStatus>(currentProject?.status || 'active')
   const [environment, setEnvironment] = useState<ProjectEnvironment>(currentProject?.environment || 'production')
   const [isPublic, setIsPublic] = useState(currentProject?.settings?.public || false)
@@ -120,7 +119,7 @@ export default function ProjectGeneralSettingsPage() {
                 placeholder="project-slug"
               />
               <p className="text-xs text-muted-foreground">
-                URL: /organizations/{getOrgSlug(currentOrganization)}/projects/{computedProjectSlug}
+                URL: /{currentOrganization.slug}/projects/{projectSlug}
               </p>
             </div>
           </div>

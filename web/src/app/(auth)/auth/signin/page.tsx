@@ -1,9 +1,7 @@
 import { Metadata } from 'next'
-import { Suspense } from 'react'
 import Link from 'next/link'
 import { AuthLayout } from '@/components/auth/auth-layout'
 import { SignInForm } from '@/components/auth/sign-in-form'
-import { SignInToastHandler } from '@/components/auth/signin-toast-handler'
 import { AuthFormWrapper } from '@/components/auth/auth-form-wrapper'
 import {
   Card,
@@ -22,9 +20,6 @@ export const metadata: Metadata = {
 export default function SignInPage() {
   return (
     <AuthLayout>
-      <Suspense fallback={null}>
-        <SignInToastHandler />
-      </Suspense>
       <Card className='gap-4'>
         <CardHeader>
           <CardTitle className='text-lg tracking-tight'>Login</CardTitle>

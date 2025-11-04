@@ -40,8 +40,7 @@ type UserService interface {
 	// Organization context
 	SetDefaultOrganization(ctx context.Context, userID, orgID ulid.ULID) error
 	GetDefaultOrganization(ctx context.Context, userID ulid.ULID) (*ulid.ULID, error)
-	ValidateUserOrgMembership(ctx context.Context, userID, orgID ulid.ULID) (bool, error)
-
+	
 	// User statistics
 	GetUserStats(ctx context.Context) (*UserStats, error)
 }

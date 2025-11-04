@@ -14,8 +14,7 @@ export interface User {
   lastLoginAt?: string
   isEmailVerified: boolean
   onboardingCompletedAt?: string | null
-  organizations?: OrganizationWithProjects[]  // NEW: Organizations with nested projects
-
+  
   // TODO: Add when implementing backend-integrated permission system
   // permissions?: Permission[]  // User's calculated permissions for current context
   // organizationMemberships?: Array<{
@@ -28,6 +27,7 @@ export interface User {
 export interface Organization {
   id: string
   name: string
+  slug: string
   plan: SubscriptionPlan
   members: OrganizationMember[]
   apiKeys: ApiKey[]
@@ -46,6 +46,7 @@ export interface OrganizationMember {
 export interface Project {
   id: string
   name: string
+  slug: string
   organizationId: string
   environment: ProjectEnvironment
   apiKeys: ApiKey[]
@@ -184,7 +185,6 @@ export interface UserResponse {
   login_count: number
   default_organization_id?: string
   created_at: string
-  organizations?: OrganizationWithProjects[]
 }
 
 interface ProjectSettings {
@@ -199,26 +199,4 @@ interface RoutingPreferences {
   prioritizeLatency: boolean
   prioritizeCost: boolean
   fallbackProviders: string[]
-}
-
-// Workspace context types for unified provider
-export interface OrganizationWithProjects {
-  id: string
-  name: string
-  compositeSlug: string
-  plan: SubscriptionPlan
-  role: OrganizationRole
-  createdAt: string
-  updatedAt: string
-  projects: ProjectSummary[]
-}
-
-export interface ProjectSummary {
-  id: string
-  name: string
-  compositeSlug: string
-  description: string
-  organizationId: string
-  createdAt: string
-  updatedAt: string
 }

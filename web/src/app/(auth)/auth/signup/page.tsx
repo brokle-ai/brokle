@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useState } from 'react'
+import { useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import {
   Card,
@@ -11,7 +11,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, Loader2 } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import { AuthLayout } from '@/components/auth/auth-layout'
 import { TwoStepSignUpForm } from '@/components/auth/two-step-signup-form'
 import { AuthFormWrapper } from '@/components/auth/auth-form-wrapper'
@@ -19,7 +19,7 @@ import Link from 'next/link'
 
 type SignupStep = 'auth' | 'personalization'
 
-function SignUpContent() {
+export default function SignUpPage() {
   const searchParams = useSearchParams()
   const invitationToken = searchParams.get('token') || undefined
   const oauthSessionId = searchParams.get('session') || undefined
@@ -89,21 +89,5 @@ function SignUpContent() {
         </CardFooter>
       </Card>
     </AuthLayout>
-  )
-}
-
-export default function SignUpPage() {
-  return (
-    <Suspense
-      fallback={
-        <AuthLayout>
-          <div className="flex min-h-[400px] items-center justify-center">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          </div>
-        </AuthLayout>
-      }
-    >
-      <SignUpContent />
-    </Suspense>
   )
 }

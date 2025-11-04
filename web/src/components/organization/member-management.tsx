@@ -14,7 +14,7 @@ import {
   Search,
   Filter
 } from 'lucide-react'
-import { useWorkspace } from '@/context/workspace-context'
+import { useOrganization } from '@/context/org-context'
 import { useAuth } from '@/hooks/auth/use-auth'
 import { useHasAccess } from '@/hooks/rbac/use-has-access'
 import {
@@ -66,7 +66,7 @@ interface MemberManagementProps {
 
 export function MemberManagement({ className }: MemberManagementProps) {
   const { user } = useAuth()
-  const { currentOrganization } = useWorkspace()
+  const { currentOrganization } = useOrganization()
 
   const [searchTerm, setSearchTerm] = useState('')
   const [roleFilter, setRoleFilter] = useState<OrganizationRole | 'all'>('all')
@@ -80,15 +80,11 @@ export function MemberManagement({ className }: MemberManagementProps) {
     return null
   }
 
-  // TODO: Fetch members from API when members page loads
-  // WorkspaceProvider only returns org + projects, not members
-  const members = [] // Placeholder until members API is integrated
-
-  const filteredMembers = members.filter(member => {
+  const filteredMembers = currentOrganization.members.filter(member => {
     const matchesSearch = member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          member.email.toLowerCase().includes(searchTerm.toLowerCase())
     const matchesRole = roleFilter === 'all' || member.role === roleFilter
-
+    
     return matchesSearch && matchesRole
   })
 

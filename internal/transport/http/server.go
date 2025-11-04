@@ -227,7 +227,6 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 	{
 		users.GET("/me", s.handlers.User.GetProfile)
 		users.PUT("/me", s.handlers.User.UpdateProfile)
-		users.PUT("/me/default-organization", s.handlers.User.SetDefaultOrganization)
 	}
 
 	// Onboarding routes

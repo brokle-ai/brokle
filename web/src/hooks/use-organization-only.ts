@@ -5,19 +5,23 @@
  * state and actions, without the complexity of project management.
  */
 
-import { useWorkspace } from '@/context/workspace-context'
-import { useRouter } from 'next/navigation'
-import type { OrganizationWithProjects } from '@/types/auth'
+import { useOrganization } from '@/context/org-context'
+import type { Organization, CreateOrganizationData } from '@/types/organization'
 
 export interface OrganizationOnlyContext {
   // State
-  organizations: OrganizationWithProjects[]
-  currentOrganization: OrganizationWithProjects | null
+  organizations: Organization[]
+  currentOrganization: Organization | null
   isLoading: boolean
   error: string | null
 
   // Organization Actions
-  switchOrganization: (compositeSlug: string) => void
+  switchOrganization: (orgSlug: string) => Promise<void>
+  createOrganization: (data: CreateOrganizationData) => Promise<Organization>
+
+  // TODO: Remove - access control will be implemented with backend integration
+  // hasAccess: (orgSlug: string) => boolean
+  // getUserRole: (orgSlug: string) => OrganizationRole | null
 
   // Computed Properties
   hasOrganization: boolean
@@ -63,27 +67,30 @@ export interface OrganizationOnlyContext {
  * ```
  */
 export function useOrganizationOnly(): OrganizationOnlyContext {
-  const workspace = useWorkspace()
-  const router = useRouter()
+  const context = useOrganization()
 
   return {
     // State (organization-focused)
-    organizations: workspace.organizations,
-    currentOrganization: workspace.currentOrganization,
-    isLoading: workspace.isLoading,
-    error: workspace.error,
+    organizations: context.organizations,
+    currentOrganization: context.currentOrganization,
+    isLoading: context.isLoading,
+    error: context.error,
 
-    // Organization Actions
-    switchOrganization: (compositeSlug: string) => {
-      router.push(`/organizations/${compositeSlug}`)
-    },
+    // Organization Actions (no project actions)
+    switchOrganization: context.switchOrganization,
+    createOrganization: context.createOrganization,
+
+    // TODO: Add utilities when implementing backend-integrated access control
+    // hasAccess: (orgSlug: string) => context.hasAccess(orgSlug),
+    // getUserRole: context.getUserRole,
 
     // Computed Properties
-    hasOrganization: workspace.currentOrganization !== null,
-    organizationCount: workspace.organizations.length,
-    isOwner: workspace.currentOrganization?.role === 'owner',
-    isAdmin: workspace.currentOrganization?.role === 'owner' || workspace.currentOrganization?.role === 'admin',
-    canCreateOrganization: true,
+    hasOrganization: context.currentOrganization !== null,
+    organizationCount: context.organizations.length,
+    // TODO: Remove role-based properties, replace with permission-based access
+    isOwner: false, // Will be replaced with permission checking
+    isAdmin: false, // Will be replaced with permission checking
+    canCreateOrganization: true, // User can always create organizations
   }
 }
 
@@ -114,15 +121,17 @@ export function useOrganizationManagement() {
 
   return {
     ...org,
-
+    
     // Management-specific computed properties
     canManageSettings: org.isAdmin,
     canManageMembers: org.isAdmin,
     canManageBilling: org.isOwner,
     canDeleteOrganization: org.isOwner,
-
+    
     // Management-specific utilities
+    getMemberCount: () => org.currentOrganization?.members.length || 0,
     getPlan: () => org.currentOrganization?.plan || 'free',
+    getBillingEmail: () => org.currentOrganization?.billing_email,
   }
 }
 
@@ -166,7 +175,7 @@ export function useOrganizationSelector() {
 
   return {
     availableOrganizations: org.organizations,
-    selectedOrgSlug: org.currentOrganization?.compositeSlug || null,
+    selectedOrgSlug: org.currentOrganization?.slug || null,
     selectOrganization: org.switchOrganization,
     hasMultipleOptions: org.organizationCount > 1,
     isLoading: org.isLoading,

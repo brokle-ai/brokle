@@ -16,21 +16,18 @@ import (
 
 // userService implements the user.UserService interface
 type userService struct {
-	userRepo      userDomain.Repository
-	authService   authDomain.AuthService
-	orgMemberRepo authDomain.OrganizationMemberRepository
+	userRepo    userDomain.Repository
+	authService authDomain.AuthService
 }
 
 // NewUserService creates a new user service instance
 func NewUserService(
 	userRepo userDomain.Repository,
 	authService authDomain.AuthService,
-	orgMemberRepo authDomain.OrganizationMemberRepository,
 ) userDomain.UserService {
 	return &userService{
-		userRepo:      userRepo,
-		authService:   authService,
-		orgMemberRepo: orgMemberRepo,
+		userRepo:    userRepo,
+		authService: authService,
 	}
 }
 
@@ -372,12 +369,6 @@ func (s *userService) GetDefaultOrganization(ctx context.Context, userID ulid.UL
 	}
 
 	return user.DefaultOrganizationID, nil
-}
-
-// ValidateUserOrgMembership checks if user is a member of the organization
-func (s *userService) ValidateUserOrgMembership(ctx context.Context, userID, orgID ulid.ULID) (bool, error) {
-	// Use Exists method - returns (false, nil) when not found, no ErrRecordNotFound handling needed
-	return s.orgMemberRepo.Exists(ctx, userID, orgID)
 }
 
 // GetUserStats retrieves aggregate user statistics

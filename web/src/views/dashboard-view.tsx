@@ -9,8 +9,12 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { DashboardHeader } from '@/components/layout/dashboard-header'
+import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
+import { ContextNavbar } from '@/components/layout/context-navbar'
+import { ProfileDropdown } from '@/components/profile-dropdown'
+import { Search } from '@/components/search'
+import { ThemeSwitch } from '@/components/theme-switch'
 import { Overview } from '@/features/dashboard/components/overview'
 import { RecentSales } from '@/features/dashboard/components/recent-sales'
 import { HelpCircle, Download } from 'lucide-react'
@@ -21,7 +25,14 @@ export function DashboardView() {
   return (
     <Tabs defaultValue='overview' className='flex-1'>
       {/* ===== Top Heading ===== */}
-      <DashboardHeader />
+      <Header>
+        <ContextNavbar />
+        <div className='ml-auto flex items-center space-x-4'>
+          <Search />
+          <ThemeSwitch />
+          <ProfileDropdown />
+        </div>
+      </Header>
 
       {/* ===== Main Content ===== */}
       <Main>

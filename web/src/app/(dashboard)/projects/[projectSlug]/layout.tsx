@@ -1,4 +1,4 @@
-import { cookies } from 'next/headers'
+import { ProjectProvider } from '@/context/project-context'
 import { ProjectSidebar } from '@/components/layout/project-sidebar'
 import { SidebarWrapper } from '@/components/layout/sidebar-wrapper'
 
@@ -11,16 +11,13 @@ export default async function ProjectLayout({
   children,
   params,
 }: ProjectLayoutProps) {
-  // Read sidebar state from cookie (server-side) to avoid hydration mismatch
-  const cookieStore = await cookies()
-  const sidebarCookie = cookieStore.get('sidebar_state')
-  const defaultOpen = sidebarCookie?.value !== 'false'
-
-  // WorkspaceProvider in parent layout handles context detection from URL
-  // Auto-detects both project and its parent organization
+  const { projectSlug } = await params
+  
   return (
-    <SidebarWrapper defaultOpen={defaultOpen} sidebar={<ProjectSidebar />}>
-      {children}
-    </SidebarWrapper>
+    <ProjectProvider compositeSlug={projectSlug}>
+      <SidebarWrapper sidebar={<ProjectSidebar />}>
+        {children}
+      </SidebarWrapper>
+    </ProjectProvider>
   )
 }

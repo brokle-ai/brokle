@@ -3,8 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, FolderOpen, Loader2 } from 'lucide-react'
-import { useWorkspace } from '@/context/workspace-context'
-import { getOrgSlug, getProjectSlug } from '@/lib/utils/slug-utils'
+import { useOrganization } from '@/context/org-context'
 import {
   Dialog,
   DialogContent,
@@ -28,7 +27,7 @@ interface CreateProjectModalProps {
 
 export function CreateProjectModal({ trigger, onSuccess }: CreateProjectModalProps) {
   const router = useRouter()
-  const { createProject, currentOrganization, projects } = useWorkspace()
+  const { createProject, currentOrganization, projects } = useOrganization()
   
   const [isOpen, setIsOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
@@ -91,9 +90,9 @@ export function CreateProjectModal({ trigger, onSuccess }: CreateProjectModalPro
 
       // Navigate to new project or call callback
       if (onSuccess) {
-        onSuccess(getProjectSlug(newProject))
+        onSuccess(newProject.slug)
       } else {
-        router.push(`/organizations/${getOrgSlug(currentOrganization)}/projects/${getProjectSlug(newProject)}`)
+        router.push(`/${currentOrganization.slug}/${newProject.slug}`)
       }
     } catch (error) {
       console.error('Failed to create project:', error)

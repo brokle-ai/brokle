@@ -1,7 +1,7 @@
 export interface Organization {
   id: string
   name: string
-  slug?: string  // Computed from name + id using generateCompositeSlug()
+  slug?: string
   plan: SubscriptionPlan
   billing_email?: string
   created_at: string
@@ -23,7 +23,7 @@ export interface OrganizationMember {
 export interface Project {
   id: string
   name: string
-  slug?: string  // Computed from name + id using generateCompositeSlug()
+  slug: string
   organizationId: string
   description?: string
   status: ProjectStatus
@@ -101,20 +101,18 @@ export interface CreateOrganizationData {
 
 export interface CreateProjectData {
   name: string
+  slug?: string
   organizationId: string
   description?: string
   environment?: ProjectEnvironment
 }
 
 // Route parameter types for Next.js
-// Note: Index signature required by Next.js 15 Params constraint
 export interface OrganizationParams {
   orgSlug: string
-  [key: string]: string | string[] | undefined
 }
 
 export interface ProjectParams {
   orgSlug: string
   projectSlug: string
-  [key: string]: string | string[] | undefined
 }

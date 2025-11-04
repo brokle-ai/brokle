@@ -5,26 +5,34 @@
  * state and actions, with minimal organization context.
  */
 
-import { useWorkspace } from '@/context/workspace-context'
-import { useRouter } from 'next/navigation'
-import type { OrganizationWithProjects, ProjectSummary } from '@/types/auth'
+import { useOrganization } from '@/context/org-context'
+import type { 
+  Organization, 
+  Project, 
+  CreateProjectData 
+} from '@/types/organization'
 
 export interface ProjectOnlyContext {
   // State
-  currentProject: ProjectSummary | null
-  projects: ProjectSummary[]
-  organization: OrganizationWithProjects | null
+  currentProject: Project | null
+  projects: Project[]
+  organization: Organization | null
   isLoading: boolean
   error: string | null
 
   // Project Actions
-  switchProject: (projectSlug: string) => void
+  switchProject: (projectSlug: string) => Promise<void>
+  createProject: (data: CreateProjectData) => Promise<Project>
+
+  // Utilities
+  getProjectsByOrg: (orgSlug: string) => Project[]
 
   // Computed Properties
   hasProject: boolean
   projectCount: number
   hasMultipleProjects: boolean
-  projectsInCurrentOrg: ProjectSummary[]
+  projectsInCurrentOrg: Project[]
+  currentProjectMetrics: Project['metrics'] | null
 }
 
 /**
@@ -59,30 +67,29 @@ export interface ProjectOnlyContext {
  * ```
  */
 export function useProjectOnly(): ProjectOnlyContext {
-  const workspace = useWorkspace()
-  const router = useRouter()
-
-  // Projects from current organization
-  const projects = workspace.currentOrganization?.projects || []
+  const context = useOrganization()
 
   return {
     // State (project-focused)
-    currentProject: workspace.currentProject,
-    projects: projects,
-    organization: workspace.currentOrganization,
-    isLoading: workspace.isLoading,
-    error: workspace.error,
+    currentProject: context.currentProject,
+    projects: context.projects,
+    organization: context.currentOrganization, // Minimal org context for project actions
+    isLoading: context.isLoading,
+    error: context.error,
 
-    // Project Actions
-    switchProject: (compositeSlug: string) => {
-      router.push(`/projects/${compositeSlug}`)
-    },
+    // Project Actions (no organization actions)
+    switchProject: context.switchProject,
+    createProject: context.createProject,
+
+    // Utilities (project-focused)
+    getProjectsByOrg: context.getProjectsByOrg,
 
     // Computed Properties
-    hasProject: workspace.currentProject !== null,
-    projectCount: projects.length,
-    hasMultipleProjects: projects.length > 1,
-    projectsInCurrentOrg: projects,
+    hasProject: context.currentProject !== null,
+    projectCount: context.projects.length,
+    hasMultipleProjects: context.projects.length > 1,
+    projectsInCurrentOrg: context.projects,
+    currentProjectMetrics: context.currentProject?.metrics || null,
   }
 }
 

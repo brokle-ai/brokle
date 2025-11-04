@@ -167,12 +167,3 @@ func (s *organizationService) SetUserDefaultOrganization(ctx context.Context, us
 
 	return s.userRepo.SetDefaultOrganization(ctx, userID, orgID)
 }
-
-// GetUserOrganizationsWithProjects returns all user's organizations with nested projects
-func (s *organizationService) GetUserOrganizationsWithProjects(
-	ctx context.Context,
-	userID ulid.ULID,
-) ([]*orgDomain.OrganizationWithProjectsAndRole, error) {
-	return s.orgRepo.GetUserOrganizationsWithProjectsBatch(ctx, userID)
-}
-

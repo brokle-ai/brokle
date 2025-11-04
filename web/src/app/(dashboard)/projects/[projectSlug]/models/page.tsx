@@ -1,6 +1,6 @@
 'use client'
 
-import { useProjectOnly } from '@/hooks/use-project-only'
+import { useProject } from '@/context/project-context'
 import { ModelsView } from '@/views/models-view'
 import { Skeleton } from '@/components/ui/skeleton'
 
@@ -9,7 +9,7 @@ export default function ProjectModelsPage() {
     currentProject,
     isLoading,
     error
-  } = useProjectOnly()
+  } = useProject()
 
   // TODO: Implement proper permission-based access control with backend integration
   // This page should verify user has 'models:read' permission for the project

@@ -14,9 +14,7 @@ import type {
 const client = new BrokleAPIClient('/api')
 
 export const login = async (credentials: LoginCredentials): Promise<AuthResponse> => {
-  if (process.env.NODE_ENV === 'development') {
-    console.debug('[AuthAPI] Login called with credentials:', { email: credentials.email })
-  }
+  console.log('[AuthAPI] Login called with credentials:', { email: credentials.email })
 
   // Backend now returns: { user, expires_at, expires_in } (tokens in httpOnly cookies)
   const backendResponse = await client.post<{
@@ -29,13 +27,11 @@ export const login = async (credentials: LoginCredentials): Promise<AuthResponse
     { skipAuth: true }
   )
 
-  if (process.env.NODE_ENV === 'development') {
-    console.debug('[AuthAPI] Login response received:', {
-      hasUser: !!backendResponse.user,
-      hasExpiresAt: !!backendResponse.expires_at,
-      backendResponse
-    })
-  }
+  console.log('[AuthAPI] Login response received:', {
+    hasUser: !!backendResponse.user,
+    hasExpiresAt: !!backendResponse.expires_at,
+    backendResponse
+  })
 
   // Defensive check
   if (!backendResponse || !backendResponse.user) {
@@ -60,61 +56,42 @@ export const login = async (credentials: LoginCredentials): Promise<AuthResponse
     onboardingCompletedAt: backendResponse.user.onboarding_completed_at,
   }
 
-  if (process.env.NODE_ENV === 'development') {
-    console.debug('[AuthAPI] User mapped:', { userId: user.id, email: user.email })
-  }
+  console.log('[AuthAPI] User mapped:', { userId: user.id, email: user.email })
 
   // Get organization from backend (cookies sent automatically, no manual auth header)
   let organization: Organization
   try {
-    if (process.env.NODE_ENV === 'development') {
-      console.debug('[AuthAPI] Fetching organizations...')
-    }
-
+    console.log('[AuthAPI] Fetching organizations...')
     const orgResponse = await client.get<Array<{
       id: string
       name: string
+      slug: string
       billing_email: string
       subscription_plan: 'free' | 'pro' | 'business' | 'enterprise'
       created_at: string
       updated_at: string
     }>>('/v1/organizations')
 
-    if (process.env.NODE_ENV === 'development') {
-      console.debug('[AuthAPI] Organization response:', {
-        isArray: Array.isArray(orgResponse),
-        length: Array.isArray(orgResponse) ? orgResponse.length : 0,
-        orgResponse
-      })
-    }
+    console.log('[AuthAPI] Organization response:', {
+      isArray: Array.isArray(orgResponse),
+      length: Array.isArray(orgResponse) ? orgResponse.length : 0,
+      orgResponse
+    })
 
-    // Select organization based on user's default_organization_id preference
-    let selectedOrg = Array.isArray(orgResponse) && orgResponse.length > 0 ? orgResponse[0] : null
+    const firstOrg = Array.isArray(orgResponse) && orgResponse.length > 0 ? orgResponse[0] : null
 
-    // If user has a default organization preference, find it in the list
-    if (user.defaultOrganizationId && Array.isArray(orgResponse)) {
-      const defaultOrg = orgResponse.find(org => org.id === user.defaultOrganizationId)
-      if (defaultOrg) {
-        selectedOrg = defaultOrg
-        console.log('[AuthAPI] Using default organization:', { id: defaultOrg.id, name: defaultOrg.name })
-      } else {
-        console.log('[AuthAPI] Default org not found in user orgs, using first org')
-      }
-    }
-
-    if (!selectedOrg) {
+    if (!firstOrg) {
       console.error('[AuthAPI] No organizations found in response')
       throw new Error('No organizations found for user')
     }
 
-    if (process.env.NODE_ENV === 'development') {
-      console.debug('[AuthAPI] First organization:', { id: selectedOrg.id, name: selectedOrg.name })
-    }
+    console.log('[AuthAPI] First organization:', { id: firstOrg.id, name: firstOrg.name })
 
     organization = {
-      id: selectedOrg.id,
-      name: selectedOrg.name,
-      plan: selectedOrg.subscription_plan,
+      id: firstOrg.id,
+      name: firstOrg.name,
+      slug: firstOrg.slug,
+      plan: firstOrg.subscription_plan,
       members: [{
         userId: user.id,
         user: user,
@@ -127,8 +104,8 @@ export const login = async (credentials: LoginCredentials): Promise<AuthResponse
         costsThisMonth: 0,
         modelsUsed: 0,
       },
-      createdAt: selectedOrg.created_at,
-      updatedAt: selectedOrg.updated_at,
+      createdAt: firstOrg.created_at,
+      updatedAt: firstOrg.updated_at,
     }
   } catch (orgError) {
     console.error('[AuthAPI] Failed to fetch organization during login:', orgError)
@@ -142,14 +119,12 @@ export const login = async (credentials: LoginCredentials): Promise<AuthResponse
     expiresIn: backendResponse.expires_in,  // Milliseconds
   }
 
-  if (process.env.NODE_ENV === 'development') {
-    console.debug('[AuthAPI] Login complete, returning:', {
-      hasUser: !!authResponse.user,
-      hasOrg: !!authResponse.organization,
-      userId: authResponse.user?.id,
-      orgId: authResponse.organization?.id
-    })
-  }
+  console.log('[AuthAPI] Login complete, returning:', {
+    hasUser: !!authResponse.user,
+    hasOrg: !!authResponse.organization,
+    userId: authResponse.user?.id,
+    orgId: authResponse.organization?.id
+  })
 
   return authResponse
 }
@@ -201,31 +176,23 @@ export const signup = async (credentials: SignUpCredentials): Promise<AuthRespon
     const orgResponse = await client.get<Array<{
       id: string
       name: string
+      slug: string
       billing_email: string
       subscription_plan: 'free' | 'pro' | 'business' | 'enterprise'
       created_at: string
       updated_at: string
     }>>('/v1/organizations')
 
-    // Select organization based on user's default_organization_id preference
-    let selectedOrg = Array.isArray(orgResponse) && orgResponse.length > 0 ? orgResponse[0] : null
-
-    // If user has a default organization preference, find it in the list
-    if (user.defaultOrganizationId && Array.isArray(orgResponse)) {
-      const defaultOrg = orgResponse.find(org => org.id === user.defaultOrganizationId)
-      if (defaultOrg) {
-        selectedOrg = defaultOrg
-      }
-    }
-
-    if (!selectedOrg) {
+    const firstOrg = Array.isArray(orgResponse) && orgResponse.length > 0 ? orgResponse[0] : null
+    if (!firstOrg) {
       throw new Error('No organizations found for user')
     }
 
     organization = {
-      id: selectedOrg.id,
-      name: selectedOrg.name,
-      plan: selectedOrg.subscription_plan,
+      id: firstOrg.id,
+      name: firstOrg.name,
+      slug: firstOrg.slug,
+      plan: firstOrg.subscription_plan,
       members: [],
       apiKeys: [],
       usage: {
@@ -233,8 +200,8 @@ export const signup = async (credentials: SignUpCredentials): Promise<AuthRespon
         costsThisMonth: 0,
         modelsUsed: 0,
       },
-      createdAt: selectedOrg.created_at,
-      updatedAt: selectedOrg.updated_at,
+      createdAt: firstOrg.created_at,
+      updatedAt: firstOrg.updated_at,
     }
   } catch (orgError) {
     console.error('[AuthAPI] Failed to fetch organization during signup:', orgError)
@@ -259,7 +226,7 @@ export const logout = async (): Promise<void> => {
 
 export const getCurrentUser = async (): Promise<User> => {
   const userResponse = await client.get<UserResponse>('/v1/users/me')
-
+  
   return {
     id: userResponse.id,
     email: userResponse.email,
@@ -274,7 +241,6 @@ export const getCurrentUser = async (): Promise<User> => {
     updatedAt: userResponse.created_at,
     isEmailVerified: userResponse.is_email_verified,
     onboardingCompletedAt: userResponse.onboarding_completed_at,
-    organizations: userResponse.organizations || [],
   }
 }
 
@@ -324,42 +290,26 @@ export const confirmPasswordReset = async (token: string, password: string): Pro
 
 export const getCurrentOrganization = async (): Promise<Organization> => {
   try {
-    // First, get user profile to check for default_organization_id
-    const userResponse = await client.get<UserResponse>('/v1/users/me')
-    const defaultOrgId = userResponse.default_organization_id
-
-    // Fetch all organizations
     const orgResponse = await client.get<Array<{
       id: string
       name: string
+      slug: string
       billing_email: string
       subscription_plan: 'free' | 'pro' | 'business' | 'enterprise'
       created_at: string
       updated_at: string
     }>>('/v1/organizations')
-
-    if (!Array.isArray(orgResponse) || orgResponse.length === 0) {
+    
+    const firstOrg = Array.isArray(orgResponse) && orgResponse.length > 0 ? orgResponse[0] : null
+    if (!firstOrg) {
       throw new Error('No organizations found for user')
     }
-
-    // Select organization based on user's default_organization_id preference
-    let selectedOrg = orgResponse[0] // Default to first
-
-    // If user has a default organization preference, find it in the list
-    if (defaultOrgId) {
-      const defaultOrg = orgResponse.find(org => org.id === defaultOrgId)
-      if (defaultOrg) {
-        selectedOrg = defaultOrg
-        console.log('[AuthAPI] Using default organization for current org:', defaultOrg.name)
-      } else {
-        console.log('[AuthAPI] Default org not found in user orgs, using first org')
-      }
-    }
-
+    
     return {
-      id: selectedOrg.id,
-      name: selectedOrg.name,
-      plan: selectedOrg.subscription_plan,
+      id: firstOrg.id,
+      name: firstOrg.name,
+      slug: firstOrg.slug,
+      plan: firstOrg.subscription_plan,
       members: [],
       apiKeys: [],
       usage: {
@@ -367,8 +317,8 @@ export const getCurrentOrganization = async (): Promise<Organization> => {
         costsThisMonth: 0,
         modelsUsed: 0,
       },
-      createdAt: selectedOrg.created_at,
-      updatedAt: selectedOrg.updated_at,
+      createdAt: firstOrg.created_at,
+      updatedAt: firstOrg.updated_at,
     }
   } catch (error) {
     console.error('[AuthAPI] Failed to fetch current organization:', error)
@@ -377,8 +327,8 @@ export const getCurrentOrganization = async (): Promise<Organization> => {
 }
 
 export const setDefaultOrganization = async (organizationId: string): Promise<void> => {
-  await client.put('/v1/users/me/default-organization', {
-    organization_id: organizationId
+  await client.patch('/v1/users/me', {
+    default_organization_id: organizationId
   })
 }
 
@@ -402,7 +352,7 @@ export const exchangeLoginSession = async (sessionId: string) => {
     user: UserResponse
     expires_at: number  // Milliseconds
     expires_in: number  // Milliseconds
-  }>(`/v1/auth/exchange-session/${sessionId}`, {}, { skipAuth: true })
+  }>(`/api/v1/auth/exchange-session/${sessionId}`, {}, { skipAuth: true })
 }
 
 // Complete OAuth signup (Step 2)
@@ -425,6 +375,7 @@ export const completeOAuthSignup = async (data: {
     organization: {
       id: string
       name: string
+      slug: string
       billing_email: string
       subscription_plan: 'free' | 'pro' | 'business' | 'enterprise'
       created_at: string
@@ -459,6 +410,7 @@ export const completeOAuthSignup = async (data: {
   const organization: Organization = {
     id: backendResponse.organization.id,
     name: backendResponse.organization.name,
+    slug: backendResponse.organization.slug,
     plan: backendResponse.organization.subscription_plan,
     members: [],
     apiKeys: [],
