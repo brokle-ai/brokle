@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, FolderOpen, Loader2 } from 'lucide-react'
-import { useOrganization } from '@/context/org-context'
+import { useWorkspace } from '@/context/workspace-context'
 import { getOrgSlug, getProjectSlug } from '@/lib/utils/slug-utils'
 import {
   Dialog,
@@ -28,7 +28,7 @@ interface CreateProjectModalProps {
 
 export function CreateProjectModal({ trigger, onSuccess }: CreateProjectModalProps) {
   const router = useRouter()
-  const { createProject, currentOrganization, projects } = useOrganization()
+  const { createProject, currentOrganization, projects } = useWorkspace()
   
   const [isOpen, setIsOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)

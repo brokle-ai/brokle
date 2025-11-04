@@ -13,7 +13,7 @@ import {
   Ban,
   Trash2
 } from 'lucide-react'
-import { useOrganization } from '@/context/org-context'
+import { useWorkspace } from '@/context/workspace-context'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -123,7 +123,7 @@ const MOCK_IP_RESTRICTIONS: IPRestriction[] = [
 ]
 
 export default function ProjectSecuritySettingsPage() {
-  const { currentProject } = useOrganization()
+  const { currentProject } = useWorkspace()
   const [securitySettings, setSecuritySettings] = useState<SecuritySetting[]>(SECURITY_SETTINGS)
   const [ipRestrictions, setIpRestrictions] = useState<IPRestriction[]>(MOCK_IP_RESTRICTIONS)
   const [webhookSecret, setWebhookSecret] = useState('whsec_1234567890abcdef')

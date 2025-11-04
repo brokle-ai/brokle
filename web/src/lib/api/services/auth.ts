@@ -88,21 +88,33 @@ export const login = async (credentials: LoginCredentials): Promise<AuthResponse
       })
     }
 
-    const firstOrg = Array.isArray(orgResponse) && orgResponse.length > 0 ? orgResponse[0] : null
+    // Select organization based on user's default_organization_id preference
+    let selectedOrg = Array.isArray(orgResponse) && orgResponse.length > 0 ? orgResponse[0] : null
 
-    if (!firstOrg) {
+    // If user has a default organization preference, find it in the list
+    if (user.defaultOrganizationId && Array.isArray(orgResponse)) {
+      const defaultOrg = orgResponse.find(org => org.id === user.defaultOrganizationId)
+      if (defaultOrg) {
+        selectedOrg = defaultOrg
+        console.log('[AuthAPI] Using default organization:', { id: defaultOrg.id, name: defaultOrg.name })
+      } else {
+        console.log('[AuthAPI] Default org not found in user orgs, using first org')
+      }
+    }
+
+    if (!selectedOrg) {
       console.error('[AuthAPI] No organizations found in response')
       throw new Error('No organizations found for user')
     }
 
     if (process.env.NODE_ENV === 'development') {
-      console.debug('[AuthAPI] First organization:', { id: firstOrg.id, name: firstOrg.name })
+      console.debug('[AuthAPI] First organization:', { id: selectedOrg.id, name: selectedOrg.name })
     }
 
     organization = {
-      id: firstOrg.id,
-      name: firstOrg.name,
-      plan: firstOrg.subscription_plan,
+      id: selectedOrg.id,
+      name: selectedOrg.name,
+      plan: selectedOrg.subscription_plan,
       members: [{
         userId: user.id,
         user: user,
@@ -115,8 +127,8 @@ export const login = async (credentials: LoginCredentials): Promise<AuthResponse
         costsThisMonth: 0,
         modelsUsed: 0,
       },
-      createdAt: firstOrg.created_at,
-      updatedAt: firstOrg.updated_at,
+      createdAt: selectedOrg.created_at,
+      updatedAt: selectedOrg.updated_at,
     }
   } catch (orgError) {
     console.error('[AuthAPI] Failed to fetch organization during login:', orgError)
@@ -195,15 +207,25 @@ export const signup = async (credentials: SignUpCredentials): Promise<AuthRespon
       updated_at: string
     }>>('/v1/organizations')
 
-    const firstOrg = Array.isArray(orgResponse) && orgResponse.length > 0 ? orgResponse[0] : null
-    if (!firstOrg) {
+    // Select organization based on user's default_organization_id preference
+    let selectedOrg = Array.isArray(orgResponse) && orgResponse.length > 0 ? orgResponse[0] : null
+
+    // If user has a default organization preference, find it in the list
+    if (user.defaultOrganizationId && Array.isArray(orgResponse)) {
+      const defaultOrg = orgResponse.find(org => org.id === user.defaultOrganizationId)
+      if (defaultOrg) {
+        selectedOrg = defaultOrg
+      }
+    }
+
+    if (!selectedOrg) {
       throw new Error('No organizations found for user')
     }
 
     organization = {
-      id: firstOrg.id,
-      name: firstOrg.name,
-      plan: firstOrg.subscription_plan,
+      id: selectedOrg.id,
+      name: selectedOrg.name,
+      plan: selectedOrg.subscription_plan,
       members: [],
       apiKeys: [],
       usage: {
@@ -211,8 +233,8 @@ export const signup = async (credentials: SignUpCredentials): Promise<AuthRespon
         costsThisMonth: 0,
         modelsUsed: 0,
       },
-      createdAt: firstOrg.created_at,
-      updatedAt: firstOrg.updated_at,
+      createdAt: selectedOrg.created_at,
+      updatedAt: selectedOrg.updated_at,
     }
   } catch (orgError) {
     console.error('[AuthAPI] Failed to fetch organization during signup:', orgError)
@@ -237,7 +259,7 @@ export const logout = async (): Promise<void> => {
 
 export const getCurrentUser = async (): Promise<User> => {
   const userResponse = await client.get<UserResponse>('/v1/users/me')
-  
+
   return {
     id: userResponse.id,
     email: userResponse.email,
@@ -252,6 +274,7 @@ export const getCurrentUser = async (): Promise<User> => {
     updatedAt: userResponse.created_at,
     isEmailVerified: userResponse.is_email_verified,
     onboardingCompletedAt: userResponse.onboarding_completed_at,
+    organizations: userResponse.organizations || [],
   }
 }
 
@@ -301,6 +324,11 @@ export const confirmPasswordReset = async (token: string, password: string): Pro
 
 export const getCurrentOrganization = async (): Promise<Organization> => {
   try {
+    // First, get user profile to check for default_organization_id
+    const userResponse = await client.get<UserResponse>('/v1/users/me')
+    const defaultOrgId = userResponse.default_organization_id
+
+    // Fetch all organizations
     const orgResponse = await client.get<Array<{
       id: string
       name: string
@@ -310,15 +338,28 @@ export const getCurrentOrganization = async (): Promise<Organization> => {
       updated_at: string
     }>>('/v1/organizations')
 
-    const firstOrg = Array.isArray(orgResponse) && orgResponse.length > 0 ? orgResponse[0] : null
-    if (!firstOrg) {
+    if (!Array.isArray(orgResponse) || orgResponse.length === 0) {
       throw new Error('No organizations found for user')
     }
 
+    // Select organization based on user's default_organization_id preference
+    let selectedOrg = orgResponse[0] // Default to first
+
+    // If user has a default organization preference, find it in the list
+    if (defaultOrgId) {
+      const defaultOrg = orgResponse.find(org => org.id === defaultOrgId)
+      if (defaultOrg) {
+        selectedOrg = defaultOrg
+        console.log('[AuthAPI] Using default organization for current org:', defaultOrg.name)
+      } else {
+        console.log('[AuthAPI] Default org not found in user orgs, using first org')
+      }
+    }
+
     return {
-      id: firstOrg.id,
-      name: firstOrg.name,
-      plan: firstOrg.subscription_plan,
+      id: selectedOrg.id,
+      name: selectedOrg.name,
+      plan: selectedOrg.subscription_plan,
       members: [],
       apiKeys: [],
       usage: {
@@ -326,8 +367,8 @@ export const getCurrentOrganization = async (): Promise<Organization> => {
         costsThisMonth: 0,
         modelsUsed: 0,
       },
-      createdAt: firstOrg.created_at,
-      updatedAt: firstOrg.updated_at,
+      createdAt: selectedOrg.created_at,
+      updatedAt: selectedOrg.updated_at,
     }
   } catch (error) {
     console.error('[AuthAPI] Failed to fetch current organization:', error)
@@ -336,8 +377,8 @@ export const getCurrentOrganization = async (): Promise<Organization> => {
 }
 
 export const setDefaultOrganization = async (organizationId: string): Promise<void> => {
-  await client.patch('/v1/users/me', {
-    default_organization_id: organizationId
+  await client.put('/v1/users/me/default-organization', {
+    organization_id: organizationId
   })
 }
 

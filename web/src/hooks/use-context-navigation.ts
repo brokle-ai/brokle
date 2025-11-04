@@ -6,7 +6,7 @@
  */
 
 import { useRouter, usePathname } from 'next/navigation'
-import { useOrganization } from '@/context/org-context'
+import { useWorkspace } from '@/context/workspace-context'
 import { parsePathContext, extractIdFromCompositeSlug, generateCompositeSlug } from '@/lib/utils/slug-utils'
 import type { Organization, Project } from '@/types/organization'
 
@@ -76,7 +76,7 @@ export interface ContextNavigationHooks {
  * ```
  */
 export function useContextNavigation(): ContextNavigationHooks {
-  const context = useOrganization()
+  const context = useWorkspace()
   const router = useRouter()
   const pathname = usePathname()
   const urlContext = parsePathContext(pathname)

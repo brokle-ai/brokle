@@ -5,8 +5,8 @@ import { useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { ChevronDown, FolderOpen, Plus, Settings } from 'lucide-react'
 import Link from 'next/link'
-import { useOrganization } from '@/context/org-context'
-import { useProject } from '@/context/project-context'
+import { useWorkspace } from '@/context/workspace-context'
+import { useProjectOnly } from '@/hooks/use-project-only'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { buildProjectUrl, getProjectSlug } from '@/lib/utils/slug-utils'
 import { getSmartRedirectUrl } from '@/lib/utils/smart-redirect'
@@ -26,16 +26,14 @@ interface ProjectSelectorProps {
 }
 
 export function ProjectSelector({ className }: ProjectSelectorProps) {
-  const { 
-    currentOrganization,
-    projects,
-    isOrgReady,
-  } = useOrganization()
-  
   const {
+    currentOrganization,
     currentProject,
-    isLoading: isProjectLoading
-  } = useProject()
+    isInitialized,
+  } = useWorkspace()
+
+  // Projects come from current organization
+  const projects = currentOrganization?.projects || []
   
   const router = useRouter()
   const pathname = usePathname()
@@ -86,8 +84,8 @@ export function ProjectSelector({ className }: ProjectSelectorProps) {
     }
   }
 
-  // Loading state - only show when we have both org ready and current project
-  if (!isOrgReady || isProjectLoading || !currentOrganization || !currentProject) {
+  // Loading state - only show when initialized and has current project
+  if (!isInitialized || !currentOrganization || !currentProject) {
     return null // This component only shows when there's a current project
   }
 

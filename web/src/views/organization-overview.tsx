@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { Plus, FolderOpen, Settings, Users, BarChart3, DollarSign, Activity, TrendingUp } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { useOrganization } from '@/context/org-context'
+import { useWorkspace } from '@/context/workspace-context'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -18,23 +18,23 @@ import { cn } from '@/lib/utils'
 
 export function OrganizationOverview() {
   const router = useRouter()
-  const { currentOrganization, projects, isLoadingProjects } = useOrganization()
+  const { currentOrganization, isLoading } = useWorkspace()
   const [selectedTab, setSelectedTab] = useState('overview')
 
   if (!currentOrganization) {
     return <div>Loading...</div>
   }
 
-  // Ensure projects is always an array
-  const safeProjects = projects || []
-  const activeProjects = safeProjects.filter(p => p.status === 'active')
-  const totalRequests = safeProjects.reduce((sum, p) => sum + (p.metrics?.total_requests || 0), 0)
-  const totalCost = safeProjects.reduce((sum, p) => sum + (p.metrics?.total_cost || 0), 0)
-  const avgLatency = safeProjects.length > 0 
-    ? safeProjects.reduce((sum, p) => sum + (p.metrics?.avg_latency || 0), 0) / safeProjects.length
+  // Projects come from currentOrganization
+  const projects = currentOrganization.projects || []
+  const activeProjects = projects.filter(p => p.status === 'active')
+  const totalRequests = projects.reduce((sum, p) => sum + (p.metrics?.total_requests || 0), 0)
+  const totalCost = projects.reduce((sum, p) => sum + (p.metrics?.total_cost || 0), 0)
+  const avgLatency = projects.length > 0
+    ? projects.reduce((sum, p) => sum + (p.metrics?.avg_latency || 0), 0) / projects.length
     : 0
-  const avgErrorRate = safeProjects.length > 0
-    ? safeProjects.reduce((sum, p) => sum + (p.metrics?.error_rate || 0), 0) / safeProjects.length
+  const avgErrorRate = projects.length > 0
+    ? projects.reduce((sum, p) => sum + (p.metrics?.error_rate || 0), 0) / projects.length
     : 0
 
   const formatNumber = (num: number) => {
@@ -95,7 +95,7 @@ export function OrganizationOverview() {
                   {currentOrganization.plan.charAt(0).toUpperCase() + currentOrganization.plan.slice(1)}
                 </Badge>
                 <span className="text-xs text-muted-foreground">
-                  {currentOrganization.members.length} member{currentOrganization.members.length !== 1 ? 's' : ''}
+                  {currentOrganization.projects.length} project{currentOrganization.projects.length !== 1 ? 's' : ''}
                 </span>
               </div>
             </div>
@@ -119,7 +119,7 @@ export function OrganizationOverview() {
         <Tabs value={selectedTab} onValueChange={setSelectedTab} className="space-y-4">
           <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="projects">Projects ({safeProjects.length})</TabsTrigger>
+            <TabsTrigger value="projects">Projects ({projects.length})</TabsTrigger>
             <TabsTrigger value="analytics">Analytics</TabsTrigger>
             <TabsTrigger value="usage">Usage</TabsTrigger>
           </TabsList>
@@ -129,7 +129,7 @@ export function OrganizationOverview() {
             <StatsGrid>
               <MetricCard
                 title="Total Projects"
-                value={safeProjects.length.toString()}
+                value={projects.length.toString()}
                 description={`${activeProjects.length} active`}
                 icon={FolderOpen}
                 trend={{ value: 12, isPositive: true }}

@@ -36,7 +36,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { checkUserScopes } from '@/lib/api/services/rbac'
 import { useAuth } from '@/hooks/auth/use-auth'
-import { useOrganization } from '@/context/org-context'
+import { useWorkspace } from '@/context/workspace-context'
 
 // ========================================
 // Type Definitions
@@ -250,7 +250,7 @@ export interface UseHasAccessParams {
  */
 export function useHasAccess({ scope, projectId }: UseHasAccessParams): boolean {
   const { user } = useAuth()
-  const { currentOrganizationId } = useOrganization()
+  const { currentOrganizationId } = useWorkspace()
 
   // Get scope level for validation
   const scopeLevel = SCOPE_LEVELS[scope]
@@ -324,7 +324,7 @@ export function useHasMultipleAccess({
   projectId,
 }: UseHasMultipleAccessParams): Record<string, boolean> {
   const { user } = useAuth()
-  const { currentOrganizationId } = useOrganization()
+  const { currentOrganizationId } = useWorkspace()
 
   const queryKey = ['scopes-multiple', user?.id, currentOrganizationId, projectId, ...scopes]
 

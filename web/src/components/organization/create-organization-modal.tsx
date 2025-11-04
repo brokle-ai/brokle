@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, Building2, Loader2 } from 'lucide-react'
-import { useOrganization } from '@/context/org-context'
+import { useWorkspace } from '@/context/workspace-context'
 import {
   Dialog,
   DialogContent,
@@ -27,7 +27,7 @@ interface CreateOrganizationModalProps {
 
 export function CreateOrganizationModal({ trigger, onSuccess }: CreateOrganizationModalProps) {
   const router = useRouter()
-  const { createOrganization, organizations } = useOrganization()
+  const { createOrganization, organizations } = useWorkspace()
   
   const [isOpen, setIsOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)

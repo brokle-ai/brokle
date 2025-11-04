@@ -1,7 +1,6 @@
 'use client'
 
 import { SearchProvider } from '@/context/search-context'
-import { OrgProvider } from '@/context/org-context'
 import SkipToMain from '@/components/skip-to-main'
 import type { User } from '@/types/auth'
 
@@ -16,10 +15,8 @@ export function AuthenticatedLayout({
 }: Props) {
   return (
     <SearchProvider>
-      <OrgProvider>
-        <SkipToMain />
-        {children}
-      </OrgProvider>
+      <SkipToMain />
+      {children}
     </SearchProvider>
   )
 }

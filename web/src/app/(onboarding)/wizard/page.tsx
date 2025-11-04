@@ -3,7 +3,7 @@
 import { Suspense, useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/hooks/auth/use-auth'
-import { useOrganization } from '@/context/org-context'
+import { useWorkspace } from '@/context/workspace-context'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { WizardProgress } from '@/components/wizard/wizard-progress'
@@ -17,7 +17,7 @@ function SetupWizardContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user } = useAuth()
-  const { organizations, isLoading: orgsLoading } = useOrganization()
+  const { organizations, isLoading: orgsLoading } = useWorkspace()
 
   const [orgId, setOrgId] = useState<string | null>(null)
 

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { UserPlus, Mail, Loader2, Copy, Check } from 'lucide-react'
-import { useOrganization } from '@/context/org-context'
+import { useWorkspace } from '@/context/workspace-context'
 import { getOrgSlug } from '@/lib/utils/slug-utils'
 import {
   Dialog,
@@ -30,7 +30,7 @@ interface InviteMemberModalProps {
 }
 
 export function InviteMemberModal({ trigger, onSuccess }: InviteMemberModalProps) {
-  const { currentOrganization } = useOrganization()
+  const { currentOrganization } = useWorkspace()
   
   const [isOpen, setIsOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)

@@ -1,7 +1,7 @@
 'use client'
 
 import { useParams } from 'next/navigation'
-import { useOrganization } from '@/context/org-context'
+import { useWorkspace } from '@/context/workspace-context'
 import { MemberManagement } from '@/components/organization/member-management'
 import { DashboardHeader } from '@/components/layout/dashboard-header'
 import { Main } from '@/components/layout/main'
@@ -14,7 +14,7 @@ export default function MembersSettingsPage() {
     currentOrganization,
     isLoading,
     error
-  } = useOrganization()
+  } = useWorkspace()
 
   // Validate params
   if (!params?.orgSlug) {

@@ -13,7 +13,7 @@ import {
   Crown,
   Zap
 } from 'lucide-react'
-import { useOrganization } from '@/context/org-context'
+import { useWorkspace } from '@/context/workspace-context'
 import { DashboardHeader } from '@/components/layout/dashboard-header'
 import { Main } from '@/components/layout/main'
 import { getOrgSlug } from '@/lib/utils/slug-utils'
@@ -108,7 +108,7 @@ export default function BillingSettingsPage() {
     currentOrganization,
     isLoading,
     error
-  } = useOrganization()
+  } = useWorkspace()
 
   // Validate params
   if (!params?.orgSlug) {

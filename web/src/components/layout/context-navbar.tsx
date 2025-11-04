@@ -1,8 +1,8 @@
 'use client'
 
 import * as React from 'react'
-import { usePathname } from 'next/navigation'
 import { Slash } from 'lucide-react'
+import { useWorkspace } from '@/context/workspace-context'
 import { OrganizationSelector } from './organization-selector'
 import { ProjectSelector } from './project-selector'
 import { cn } from '@/lib/utils'
@@ -12,11 +12,10 @@ interface ContextNavbarProps {
 }
 
 export function ContextNavbar({ className }: ContextNavbarProps) {
-  const pathname = usePathname()
+  const { currentProject } = useWorkspace()
 
-  // Always show organization selector
-  // Show project selector on project pages
-  const showProjectSelector = pathname.startsWith('/projects/')
+  // Show project selector when there's an active project in context
+  const showProjectSelector = !!currentProject
 
   return (
     <nav

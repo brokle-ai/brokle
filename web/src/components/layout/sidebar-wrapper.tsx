@@ -1,18 +1,19 @@
 'use client'
 
 import { cn } from '@/lib/utils'
-import { getCookie } from '@/lib/utils/cookies'
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar'
 
 interface SidebarWrapperProps {
   children: React.ReactNode
   sidebar: React.ReactNode
+  defaultOpen?: boolean
 }
 
-export function SidebarWrapper({ children, sidebar }: SidebarWrapperProps) {
-  // Read sidebar state from cookie to persist user preference
-  const defaultOpen = getCookie('sidebar_state') !== 'false'
-
+export function SidebarWrapper({
+  children,
+  sidebar,
+  defaultOpen = true
+}: SidebarWrapperProps) {
   return (
     <SidebarProvider defaultOpen={defaultOpen}>
       {sidebar}

@@ -261,6 +261,13 @@ func (os *OrganizationSettings) SetValue(value interface{}) error {
 	return nil
 }
 
+// OrganizationWithProjectsAndRole represents an organization with its projects and the user's role
+type OrganizationWithProjectsAndRole struct {
+	Organization *Organization
+	Projects     []*Project
+	RoleName     string
+}
+
 // Table name methods for GORM
 func (Organization) TableName() string         { return "organizations" }
 func (Member) TableName() string               { return "organization_members" }

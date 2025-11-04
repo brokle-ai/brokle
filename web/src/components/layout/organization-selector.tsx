@@ -5,7 +5,7 @@ import { useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { ChevronDown, Building2, Settings, Users, Plus } from 'lucide-react'
 import Link from 'next/link'
-import { useOrganization } from '@/context/org-context'
+import { useWorkspace } from '@/context/workspace-context'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { getSmartRedirectUrl } from '@/lib/utils/smart-redirect'
 import { generateCompositeSlug, extractIdFromCompositeSlug } from '@/lib/utils/slug-utils'
@@ -27,11 +27,11 @@ interface OrganizationSelectorProps {
 }
 
 export function OrganizationSelector({ className, showPlanBadge = false }: OrganizationSelectorProps) {
-  const { 
-    organizations, 
+  const {
+    organizations,
     currentOrganization,
-    isOrgReady,
-  } = useOrganization()
+    isInitialized,
+  } = useWorkspace()
   
   const pathname = usePathname()
   const router = useRouter()
@@ -92,11 +92,16 @@ export function OrganizationSelector({ className, showPlanBadge = false }: Organ
     }
   }
 
-  // Loading state - use isOrgReady for better loading detection
-  if (!isOrgReady || !currentOrganization) {
+  // Loading state - show shimmer only if not initialized yet
+  if (!isInitialized) {
     return (
       <div className={cn("animate-pulse bg-muted rounded h-6 w-32", className)}></div>
     )
+  }
+
+  // Show nothing if no current organization after initialization
+  if (!currentOrganization) {
+    return null
   }
 
   return (

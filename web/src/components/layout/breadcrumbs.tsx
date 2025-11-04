@@ -4,7 +4,7 @@ import * as React from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { ChevronRight, Home, Building2, FolderOpen, Settings, Users, CreditCard } from 'lucide-react'
-import { useOrganization } from '@/context/org-context'
+import { useWorkspace } from '@/context/workspace-context'
 import { generateCompositeSlug, extractIdFromCompositeSlug } from '@/lib/utils/slug-utils'
 import {
   Breadcrumb,
@@ -22,7 +22,7 @@ interface BreadcrumbsProps {
 
 export function Breadcrumbs({ className }: BreadcrumbsProps) {
   const pathname = usePathname()
-  const { currentOrganization, currentProject } = useOrganization()
+  const { currentOrganization, currentProject } = useWorkspace()
 
   const getBreadcrumbItems = () => {
     const items = []

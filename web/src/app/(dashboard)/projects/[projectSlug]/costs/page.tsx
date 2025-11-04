@@ -1,6 +1,6 @@
 'use client'
 
-import { useProject } from '@/context/project-context'
+import { useProjectOnly } from '@/hooks/use-project-only'
 import { CostsView } from '@/views/costs-view'
 import { Skeleton } from '@/components/ui/skeleton'
 
@@ -9,7 +9,7 @@ export default function ProjectCostsPage() {
     currentProject,
     isLoading,
     error
-  } = useProject()
+  } = useProjectOnly()
 
   // TODO: Implement proper permission-based access control with backend integration
   // This page should verify user has 'costs:read' permission for the project

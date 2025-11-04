@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react'
 import { AuthenticatedLayout } from "@/components/layout/authenticated-layout"
+import { WorkspaceProvider } from '@/context/workspace-context'
 import { useAuthStore } from '@/stores/auth-store'
 
 export default function DashboardLayout({
@@ -30,8 +31,10 @@ export default function DashboardLayout({
   }
 
   return (
-    <AuthenticatedLayout>
-      {children}
-    </AuthenticatedLayout>
+    <WorkspaceProvider>
+      <AuthenticatedLayout>
+        {children}
+      </AuthenticatedLayout>
+    </WorkspaceProvider>
   )
 }

@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AlertTriangle, Trash2, Shield, Download, Archive } from 'lucide-react'
-import { useOrganization } from '@/context/org-context'
+import { useWorkspace } from '@/context/workspace-context'
 import { getOrgSlug, getProjectSlug } from '@/lib/utils/slug-utils'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -18,7 +18,7 @@ import { toast } from 'sonner'
 
 export default function ProjectDangerPage() {
   const router = useRouter()
-  const { currentProject, currentOrganization } = useOrganization()
+  const { currentProject, currentOrganization } = useWorkspace()
   
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
   const [isArchiveOpen, setIsArchiveOpen] = useState(false)
