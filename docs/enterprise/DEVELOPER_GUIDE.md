@@ -416,7 +416,7 @@ router.Group("/api/v1/enterprise").Use(
 ### License Validation Architecture
 
 ```go
-// internal/services/license_service.go
+// internal/services/license/
 type LicenseService struct {
     config     *config.Config
     logger     *logrus.Logger

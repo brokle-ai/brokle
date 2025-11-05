@@ -10,7 +10,7 @@ import (
 	"brokle/internal/core/domain/user"
 	authService "brokle/internal/core/services/auth"
 	"brokle/internal/core/services/registration"
-	obsServices "brokle/internal/services/observability"
+	obsServices "brokle/internal/core/services/observability"
 	"brokle/internal/transport/http/handlers/admin"
 	"brokle/internal/transport/http/handlers/ai"
 	"brokle/internal/transport/http/handlers/analytics"

@@ -4,7 +4,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"brokle/internal/config"
-	obsServices "brokle/internal/services/observability"
+	obsServices "brokle/internal/core/services/observability"
 )
 
 // Handler contains all observability-related HTTP handlers

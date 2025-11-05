@@ -13,6 +13,7 @@ import (
 	"brokle/internal/config"
 	"brokle/internal/core/domain/common"
 	"brokle/internal/core/domain/auth"
+	"brokle/internal/core/domain/billing"
 	"brokle/internal/core/domain/gateway"
 	"brokle/internal/core/domain/observability"
 	"brokle/internal/core/domain/organization"
@@ -36,9 +37,9 @@ import (
 	userRepo "brokle/internal/infrastructure/repository/user"
 	"brokle/internal/infrastructure/storage"
 	"brokle/internal/infrastructure/streams"
-	billingService "brokle/internal/services/billing"
-	gatewayService "brokle/internal/services/gateway"
-	observabilityService "brokle/internal/services/observability"
+	billingService "brokle/internal/core/services/billing"
+	gatewayService "brokle/internal/core/services/gateway"
+	observabilityService "brokle/internal/core/services/observability"
 	"brokle/internal/transport/http"
 	"brokle/internal/transport/http/handlers"
 	"brokle/internal/workers"
@@ -176,7 +177,9 @@ type GatewayRepositories struct {
 
 // BillingRepositories contains all billing-related repositories
 type BillingRepositories struct {
-	Billing *billingRepo.Repository
+	Usage         billing.UsageRepository
+	BillingRecord billing.BillingRecordRepository
+	Quota         billing.QuotaRepository
 }
 
 // Domain-specific service containers
@@ -321,7 +324,7 @@ func ProvideServerServices(core *CoreContainer) *ServiceContainer {
 
 	// Create gateway and billing services
 	gatewayServices := ProvideGatewayServices(repos.Gateway, logger)
-	billingServices := ProvideBillingServices(repos.Billing, repos.Gateway, logger)
+	billingServices := ProvideBillingServices(repos.Billing, logger)
 
 	// Create observability services
 	observabilityServices := ProvideObservabilityServices(repos.Observability, databases.Redis, cfg, logger)
@@ -372,7 +375,7 @@ func ProvideWorkerServices(core *CoreContainer) *ServiceContainer {
 
 	// Only services worker uses for processing
 	gatewayServices := ProvideGatewayServices(repos.Gateway, logger)
-	billingServices := ProvideBillingServices(repos.Billing, repos.Gateway, logger)
+	billingServices := ProvideBillingServices(repos.Billing, logger)
 	observabilityServices := ProvideObservabilityServices(repos.Observability, databases.Redis, cfg, logger)
 
 	return &ServiceContainer{
@@ -495,7 +498,9 @@ func ProvideGatewayRepositories(db *gorm.DB, conn clickhouse.Conn, logger *logru
 // ProvideBillingRepositories creates all billing-related repositories
 func ProvideBillingRepositories(db *gorm.DB, logger *logrus.Logger) *BillingRepositories {
 	return &BillingRepositories{
-		Billing: billingRepo.NewRepository(db, logger),
+		Usage:         billingRepo.NewUsageRepository(db, logger),
+		BillingRecord: billingRepo.NewBillingRecordRepository(db, logger),
+		Quota:         billingRepo.NewQuotaRepository(db, logger),
 	}
 }
 
@@ -783,7 +788,6 @@ func ProvideGatewayServices(
 // ProvideBillingServices creates all billing-related services
 func ProvideBillingServices(
 	billingRepos *BillingRepositories,
-	gatewayRepos *GatewayRepositories,
 	logger *logrus.Logger,
 ) *BillingServices {
 	// Create organization service interface implementation
@@ -794,7 +798,9 @@ func ProvideBillingServices(
 	billingServiceImpl := billingService.NewBillingService(
 		logger,
 		nil, // config - use defaults
-		billingRepos.Billing,
+		billingRepos.Usage,         // UsageRepository
+		billingRepos.BillingRecord, // BillingRecordRepository
+		billingRepos.Quota,         // QuotaRepository
 		orgService,
 	)
 	
@@ -820,7 +826,7 @@ func (s *simpleBillingOrgService) GetDiscountRate(ctx context.Context, orgID uli
 	return 0.0, nil
 }
 
-func (s *simpleBillingOrgService) GetPaymentMethod(ctx context.Context, orgID ulid.ULID) (*billingService.PaymentMethod, error) {
+func (s *simpleBillingOrgService) GetPaymentMethod(ctx context.Context, orgID ulid.ULID) (*billing.PaymentMethod, error) {
 	// No payment method by default - in production this would query the org service
 	return nil, nil
 }

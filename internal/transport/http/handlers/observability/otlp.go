@@ -18,7 +18,7 @@ import (
 
 	"brokle/internal/core/domain/observability"
 	"brokle/internal/infrastructure/streams"
-	obsServices "brokle/internal/services/observability"
+	obsServices "brokle/internal/core/services/observability"
 	"brokle/internal/transport/http/middleware"
 	"brokle/pkg/response"
 	"brokle/pkg/ulid"

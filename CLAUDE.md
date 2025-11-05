@@ -62,9 +62,22 @@ brokle/
 ├── internal/              # Private application code
 │   ├── app/               # Application bootstrap & DI container
 │   ├── config/            # Configuration management
-│   ├── core/domain/       # Domain-driven design structure
-│   │   ├── user/          # User domain (entity, repo, service)
-│   │   └── auth/          # Authentication domain
+│   ├── core/              # Domain-driven design architecture
+│   │   ├── domain/        # Domain layer (entities, interfaces)
+│   │   │   ├── auth/      # Authentication domain
+│   │   │   ├── billing/   # Billing domain
+│   │   │   ├── gateway/   # AI Gateway domain
+│   │   │   ├── observability/ # Observability domain
+│   │   │   ├── organization/  # Organization domain
+│   │   │   └── user/      # User domain
+│   │   └── services/      # Service implementations
+│   │       ├── auth/      # Auth services
+│   │       ├── billing/   # Billing services
+│   │       ├── gateway/   # Gateway services
+│   │       ├── observability/ # Observability services
+│   │       ├── organization/  # Organization services
+│   │       ├── registration/  # Registration orchestration
+│   │       └── user/      # User services
 │   ├── infrastructure/    # External integrations
 │   │   ├── database/      # DB connections (postgres, redis, clickhouse)
 │   │   └── repository/    # Repository implementations
@@ -72,9 +85,13 @@ brokle/
 │   │   ├── handlers/      # HTTP handlers by domain
 │   │   ├── middleware/    # HTTP middleware
 │   │   └── server.go      # HTTP server setup
-│   ├── services/          # Service implementations
 │   ├── workers/           # Background workers
 │   └── ee/                # Enterprise Edition features
+│       ├── license/       # License validation service
+│       ├── sso/           # Single Sign-On
+│       ├── rbac/          # Role-Based Access Control
+│       ├── compliance/    # Compliance features
+│       └── analytics/     # Enterprise analytics
 ├── pkg/                   # Public shared packages
 │   ├── errors/            # Error handling
 │   ├── response/          # HTTP response utilities
@@ -136,11 +153,13 @@ The codebase follows DDD patterns with clear separation of concerns:
   - Entities: Domain models and business rules
   - Repository Interfaces: Data access contracts
   - Service Interfaces: Business operation contracts
+  - All domains: auth, billing, gateway, observability, organization, user
 
-- **Service Implementation Layer** (`internal/services/`):
+- **Service Implementation Layer** (`internal/core/services/`):
   - Concrete implementations of domain service interfaces
   - Business logic orchestration
-  - Example: `internal/services/observability/` implements interfaces from `internal/core/domain/observability/`
+  - One subdirectory per domain (auth, billing, gateway, observability, organization, user)
+  - Example: `internal/core/services/observability/` implements interfaces from `internal/core/domain/observability/`
 
 - **Infrastructure Layer** (`internal/infrastructure/`): External integrations
   - Database connections and configurations
@@ -429,7 +448,7 @@ The platform implements a clean separation between SDK and Dashboard routes:
 2. **OpenTelemetry Protocol** (OTLP endpoints above) - Industry-standard compatibility
 3. **Redis Streams Backend** (`TelemetryStreamConsumer` worker) - Async high-throughput processing
 
-All systems converge at `internal/services/observability/` for unified processing.
+All systems converge at `internal/core/services/observability/` for unified processing.
 
 **Cache Management**:
 - `GET /v1/cache/status` - Cache health status
@@ -725,7 +744,7 @@ make test-integration
 make test-coverage
 
 # Run specific package
-go test ./internal/services/observability -v
+go test ./internal/core/services/observability -v
 
 # Run with race detection
 go test -race ./...
@@ -735,7 +754,7 @@ go test -race ./...
 
 - **Detailed Guide**: See `docs/TESTING.md` for complete examples and patterns
 - **AI Prompt**: See `prompts/testing.txt` for AI-assisted test generation
-- **Reference Code**: See `internal/services/observability/*_test.go` for real examples
+- **Reference Code**: See `internal/core/services/observability/*_test.go` for real examples
 
 ### Test Quality Checklist
 
@@ -970,7 +989,7 @@ Asynchronous processing in `internal/workers/`:
 ```bash
 # Run specific Go test
 go test ./internal/core/domain/user/...
-go test -run TestUserService_CreateUser ./internal/services/
+go test -run TestUserService_CreateUser ./internal/core/services/
 
 # Run specific Go test with verbose output
 go test -v ./internal/transport/http/handlers/auth/
