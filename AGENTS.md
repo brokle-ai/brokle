@@ -10,12 +10,12 @@ This document is a concise, practical guide for contributors working in this rep
 
 ## Build, Test, and Development Commands
 - Setup: `make setup` — install deps, init submodules, start DBs, run migrations, seed dev.
-- Dev (full stack): `make dev` — runs Go API with Air reload and Next.js dev.
-- Dev (split): `make dev-backend`, `make dev-frontend`.
-- Build: `make build-oss` or `make build-enterprise`; dev builds via `make build-dev-oss`.
-- Tests: `make test` (all), `make test-coverage`, `make test-unit`, `make test-integration`, `make test-e2e` (if defined), `make test-load`.
+- Dev (full stack): `make dev` — runs server + worker with Air reload (use `make dev-frontend` separately for Next.js).
+- Dev (split): `make dev-server`, `make dev-worker`, `make dev-frontend`.
+- Build: `make build-oss` or `make build-enterprise`; dev builds via `make build-dev-server` or `make build-dev-worker`.
+- Tests: `make test` (all), `make test-coverage`, `make test-unit`, `make test-integration`, `make test-e2e`, `make test-load`.
 - Quality: `make lint` (`golangci-lint`, Next.js lint), `make fmt` (Go fmt + goimports), `make fmt-frontend`.
-- Docker: `make docker-build`, `make docker-build-dev`, `make docker-dev`.
+- Docker: `make docker-build`, `make docker-up`, `make docker-down`.
 
 ## Coding Style & Naming Conventions
 - Go: follow `docs/CODING_STANDARDS.md`. Keep packages lowercase; exported identifiers use PascalCase; tests end with `_test.go`. Format with `make fmt`.
