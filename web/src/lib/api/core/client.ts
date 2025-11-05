@@ -1,6 +1,6 @@
 import axios, { AxiosInstance, AxiosResponse } from 'axios'
 import { urlContextManager } from '@/lib/context/url-context-manager'
-import type { 
+import type {
   BrokleClientConfig,
   RequestOptions,
   APIResponse,
@@ -8,6 +8,7 @@ import type {
   PaginatedResponse,
   BackendPagination,
   Pagination,
+  ExtendedAxiosRequestConfig,
 } from './types'
 import { BrokleAPIError as APIError } from './types'
 
@@ -66,9 +67,9 @@ export class BrokleAPIClient {
     }, options.retries)
   }
 
-  async post<T>(
-    endpoint: string, 
-    data?: any, 
+  async post<T, D = unknown>(
+    endpoint: string,
+    data?: D,
     options: RequestOptions = {}
   ): Promise<T> {
     return this.executeWithRetry(async () => {
@@ -77,9 +78,9 @@ export class BrokleAPIClient {
     }, options.retries)
   }
 
-  async put<T>(
-    endpoint: string, 
-    data?: any, 
+  async put<T, D = unknown>(
+    endpoint: string,
+    data?: D,
     options: RequestOptions = {}
   ): Promise<T> {
     return this.executeWithRetry(async () => {
@@ -88,9 +89,9 @@ export class BrokleAPIClient {
     }, options.retries)
   }
 
-  async patch<T>(
-    endpoint: string, 
-    data?: any, 
+  async patch<T, D = unknown>(
+    endpoint: string,
+    data?: D,
     options: RequestOptions = {}
   ): Promise<T> {
     return this.executeWithRetry(async () => {
@@ -125,9 +126,9 @@ export class BrokleAPIClient {
     }, options.retries)
   }
 
-  async postPaginated<T>(
-    endpoint: string, 
-    data?: any, 
+  async postPaginated<T, D = unknown>(
+    endpoint: string,
+    data?: D,
     options: RequestOptions = {}
   ): Promise<PaginatedResponse<T>> {
     return this.executeWithRetry(async () => {
@@ -200,7 +201,7 @@ export class BrokleAPIClient {
 
         // Add performance timing start
         if (this.config.enablePerformanceLogging) {
-          (config as any)._requestStartTime = Date.now()
+          (config as ExtendedAxiosRequestConfig)._requestStartTime = Date.now()
         }
 
         return config
@@ -214,7 +215,7 @@ export class BrokleAPIClient {
     this.axiosInstance.interceptors.response.use(
       (response: AxiosResponse) => {
         // Calculate performance timing if enabled
-        const startTime = (response.config as any)._requestStartTime
+        const startTime = (response.config as ExtendedAxiosRequestConfig)._requestStartTime
         const duration = startTime ? Date.now() - startTime : undefined
 
         // Enhanced logging based on configuration
@@ -286,7 +287,7 @@ export class BrokleAPIClient {
 
         // Enhanced error logging based on configuration
         if (this.config.enableLogging) {
-          const startTime = (error.config as any)?._requestStartTime
+          const startTime = (error.config as ExtendedAxiosRequestConfig)?._requestStartTime
           const duration = startTime ? Date.now() - startTime : undefined
 
           const errorData = {
@@ -391,12 +392,12 @@ export class BrokleAPIClient {
   }
 
   // File upload with progress tracking
-  async uploadFile<T = any>(
+  async uploadFile<T = unknown>(
     endpoint: string,
     file: File | Blob,
     options: {
       fieldName?: string
-      additionalFields?: Record<string, any>
+      additionalFields?: Record<string, string | number | boolean>
       onProgress?: (progress: number) => void
       retries?: number
     } = {}
@@ -436,12 +437,12 @@ export class BrokleAPIClient {
   }
 
   // Batch file upload with progress tracking
-  async uploadFiles<T = any>(
+  async uploadFiles<T = unknown>(
     endpoint: string,
     files: Array<File | Blob>,
     options: {
       fieldName?: string
-      additionalFields?: Record<string, any>
+      additionalFields?: Record<string, string | number | boolean>
       onProgress?: (fileIndex: number, progress: number) => void
       onComplete?: (fileIndex: number) => void
       retries?: number
@@ -487,11 +488,11 @@ export class BrokleAPIClient {
     const maxRetries = customRetries ?? this.config.retries ?? 3
     const baseDelay = this.config.retryDelay ?? 1000
 
-    let lastError: any
+    let lastError: Error | APIError | unknown
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         return await operation()
-      } catch (error: any) {
+      } catch (error: unknown) {
         lastError = error
         
         // Don't retry on certain errors
@@ -503,10 +504,14 @@ export class BrokleAPIClient {
         const delay = baseDelay * Math.pow(2, attempt) + Math.random() * 1000
         
         if (this.config.enableLogging) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+          const errorStatus = (error as APIError).statusCode || (error as { response?: { status?: number } }).response?.status
+          const errorEndpoint = (error as { config?: { url?: string } }).config?.url
+
           console.warn(`[API Retry] Attempt ${attempt + 1}/${maxRetries + 1} failed, retrying in ${Math.round(delay)}ms`, {
-            error: error.message,
-            status: error.response?.status,
-            endpoint: error.config?.url
+            error: errorMessage,
+            status: errorStatus,
+            endpoint: errorEndpoint
           })
         }
 
@@ -518,20 +523,21 @@ export class BrokleAPIClient {
     throw lastError
   }
 
-  private shouldRetry(error: any, attempt: number): boolean {
+  private shouldRetry(error: Error | APIError | unknown, attempt: number): boolean {
     // Handle BrokleAPIError (wrapped) vs raw axios error
-    const status = error.statusCode || error.response?.status
-    
+    const status = (error as APIError).statusCode || (error as { response?: { status?: number } }).response?.status
+
     // Never retry auth failures
     if (status === 401) return false
 
     // Never retry client errors (400-499) except specific cases
-    if (status >= 400 && status < 500) {
+    if (status !== undefined && status >= 400 && status < 500) {
       return status === 429 || status === 408
     }
 
     // Retry server errors and network issues
-    return status >= 500 || (!status && !error.response)
+    const hasResponse = !!(error as { response?: unknown }).response
+    return (status !== undefined && status >= 500) || (!status && !hasResponse)
   }
 
   private delay(ms: number): Promise<void> {

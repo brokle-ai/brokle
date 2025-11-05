@@ -197,3 +197,5 @@ google_ai_key
 sdk/competetors/
 competetors/
 
+# Claude Code local settings
+.claude/settings.local.json
