@@ -1,6 +1,5 @@
 import { Metadata } from 'next'
-import { AccountForm } from '@/components/settings/account-form'
-import { ContentSection } from '@/components/settings/content-section'
+import { AccountForm, ContentSection } from '@/features/settings'
 
 export const metadata: Metadata = {
   title: 'Account',

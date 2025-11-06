@@ -9,8 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { AuthLayout } from '@/components/auth/auth-layout'
-import { OtpForm } from '@/components/auth/otp-form'
+import { AuthLayout, OTPForm } from '@/features/authentication'
 
 export const metadata: Metadata = {
   title: 'Verify Email',
@@ -20,8 +19,8 @@ export const metadata: Metadata = {
 function OtpFormWrapper() {
   // In a real app, you'd get the email from search params or session
   const email = 'user@example.com'
-  
-  return <OtpForm email={email} />
+
+  return <OTPForm email={email} />
 }
 
 export default function VerifyEmailPage() {

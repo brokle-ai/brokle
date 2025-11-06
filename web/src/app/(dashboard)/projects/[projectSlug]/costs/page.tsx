@@ -1,7 +1,9 @@
 'use client'
 
-import { useProjectOnly } from '@/hooks/use-project-only'
-import { CostsView } from '@/views/costs-view'
+import { useProjectOnly } from '@/features/projects'
+import { CostsView } from '@/features/analytics'
+import { DashboardHeader } from '@/components/layout/dashboard-header'
+import { Main } from '@/components/layout/main'
 import { Skeleton } from '@/components/ui/skeleton'
 
 export default function ProjectCostsPage() {
@@ -46,5 +48,18 @@ export default function ProjectCostsPage() {
     )
   }
 
-  return <CostsView />
+  return (
+    <>
+      <DashboardHeader />
+      <Main>
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold tracking-tight">Costs</h1>
+          <p className="text-muted-foreground">
+            Track API usage costs and spending for {currentProject.name}
+          </p>
+        </div>
+        <CostsView />
+      </Main>
+    </>
+  )
 }

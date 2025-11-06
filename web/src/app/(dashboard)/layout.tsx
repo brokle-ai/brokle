@@ -3,7 +3,7 @@
 import { useEffect } from 'react'
 import { AuthenticatedLayout } from "@/components/layout/authenticated-layout"
 import { WorkspaceProvider } from '@/context/workspace-context'
-import { useAuthStore } from '@/stores/auth-store'
+import { useAuthStore } from '@/features/authentication'
 
 export default function DashboardLayout({
   children,

@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { Shield, ArrowLeft, Mail } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import type { OrganizationRole } from '@/types/auth'
+import type { OrganizationRole } from '@/features/authentication'
 
 interface ForbiddenFallbackProps {
   title?: string

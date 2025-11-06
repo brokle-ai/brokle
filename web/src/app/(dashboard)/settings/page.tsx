@@ -1,6 +1,5 @@
 import { Metadata } from 'next'
-import { ProfileForm } from '@/components/settings/profile-form'
-import { ContentSection } from '@/components/settings/content-section'
+import { ProfileForm, ContentSection } from '@/features/settings'
 
 export const metadata: Metadata = {
   title: 'Profile',

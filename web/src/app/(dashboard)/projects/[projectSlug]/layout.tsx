@@ -1,5 +1,5 @@
 import { cookies } from 'next/headers'
-import { ProjectSidebar } from '@/components/layout/project-sidebar'
+import { ProjectSidebar } from '@/features/projects'
 import { SidebarWrapper } from '@/components/layout/sidebar-wrapper'
 
 interface ProjectLayoutProps {

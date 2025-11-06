@@ -667,43 +667,64 @@ Before committing tests:
 
 **Stack**: Next.js 15.5.2 with App Router, React 19.2.0, Tailwind CSS 4.1.15, runs on port `:3000`
 
+### Feature-Based Architecture
+The frontend uses a **feature-based structure** where each domain is self-contained:
+
 ```
 web/src/
-├── app/                   # Next.js App Router routes
+├── app/                   # Next.js App Router (routing only)
 │   ├── (auth)/           # Auth route group
 │   ├── (dashboard)/      # Dashboard routes
-│   │   ├── [orgSlug]/    # Organization-scoped routes
-│   │   ├── settings/     # User settings
-│   │   └── onboarding/   # User onboarding
-│   └── layout.tsx        # Root layout
-├── components/           # React components
-│   ├── ui/              # shadcn/ui components
-│   ├── analytics/       # Analytics dashboards
-│   ├── auth/            # Authentication components
-│   └── layout/          # Layout components
-├── features/            # Feature-based modules
-├── views/               # Page view components
-├── context/             # React Context providers
-├── hooks/               # Custom React hooks
-├── lib/                 # API clients and utilities
-├── stores/              # Zustand state (auth-store.ts, dashboard-store.ts, ui-store.ts)
-└── types/               # TypeScript definitions
+│   ├── (onboarding)/     # Onboarding wizard
+│   └── (errors)/         # Error pages
+├── features/             # Domain features (self-contained)
+│   ├── authentication/   # Auth domain (12 components, 4 hooks, store, API)
+│   ├── organizations/    # Org management (7 components, 2 hooks, API)
+│   ├── projects/         # Project dashboard (4 components, hooks, store, API)
+│   ├── analytics/        # Analytics & metrics
+│   ├── billing/          # Usage & billing
+│   ├── gateway/          # AI gateway config
+│   └── settings/         # User settings (7 components)
+├── components/           # Shared components only
+│   ├── ui/              # shadcn/ui primitives
+│   ├── layout/          # App shell (header, sidebar, footer)
+│   ├── guards/          # Auth guards
+│   └── shared/          # Generic reusable components
+├── lib/                 # Core infrastructure
+│   ├── api/core/        # BrokleAPIClient (HTTP client)
+│   ├── auth/            # JWT utilities
+│   └── utils/           # Pure utilities
+├── hooks/               # Global hooks (use-mobile, etc.)
+├── stores/              # Global stores (ui-store.ts)
+├── context/             # Cross-feature context (workspace-context)
+├── types/               # Shared types
+└── __tests__/           # Test infrastructure (MSW, utilities)
 ```
 
+**Feature Structure**: Each feature has `components/`, `hooks/`, `api/`, `stores/` (optional), `types/`, `__tests__/`, and `index.ts` (public exports)
+
+**Import Pattern**: Always use `@/features/[feature]` (never import internal paths)
+
 ### Key Technologies
-- Next.js 15.5.2 (App Router, Turbopack), React 19.2.0, TypeScript
+- Next.js 15.5.2 (App Router, Turbopack), React 19.2.0, TypeScript 5.9.3 (strict mode)
 - Tailwind CSS 4.1.15, shadcn/ui components
-- Zustand (state), TanStack Query (API state), React Hook Form + Zod
+- State: Zustand (client) + React Query (server state)
+- Forms: React Hook Form + Zod validation
+- Testing: Vitest + React Testing Library + MSW (30% coverage target)
 - Package manager: pnpm
 
 ### Frontend Commands
 ```bash
 cd web && pnpm install     # Install dependencies
-pnpm run dev               # Start dev server (Turbopack)
-pnpm run build             # Build for production
-pnpm run lint              # Lint code
+pnpm dev                   # Start dev server (Turbopack)
+pnpm build                 # Build for production
+pnpm lint                  # Lint code
+pnpm test                  # Run tests
+pnpm test:coverage         # Run tests with coverage
 make dev-frontend          # Or use Makefile
 ```
+
+**Documentation**: See `web/ARCHITECTURE.md` for detailed architecture guide
 
 ## Health & Monitoring
 

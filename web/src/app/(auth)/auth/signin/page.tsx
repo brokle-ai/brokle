@@ -1,10 +1,12 @@
 import { Metadata } from 'next'
 import { Suspense } from 'react'
 import Link from 'next/link'
-import { AuthLayout } from '@/components/auth/auth-layout'
-import { SignInForm } from '@/components/auth/sign-in-form'
-import { SignInToastHandler } from '@/components/auth/signin-toast-handler'
-import { AuthFormWrapper } from '@/components/auth/auth-form-wrapper'
+import {
+  AuthLayout,
+  SignInForm,
+  SignInToastHandler,
+  AuthFormWrapper
+} from '@/features/authentication'
 import {
   Card,
   CardContent,

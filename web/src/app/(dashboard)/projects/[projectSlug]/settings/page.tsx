@@ -16,7 +16,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { TabsContent } from '@/components/ui/tabs'
 import { Separator } from '@/components/ui/separator'
 import { toast } from 'sonner'
-import type { ProjectStatus, ProjectEnvironment } from '@/types/organization'
+import type { ProjectStatus, ProjectEnvironment } from '@/features/organizations'
 
 export default function ProjectGeneralSettingsPage() {
   const { currentProject, currentOrganization } = useWorkspace()

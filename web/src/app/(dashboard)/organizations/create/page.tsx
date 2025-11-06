@@ -25,7 +25,7 @@ import {
   CardContent,
   CardFooter,
 } from '@/components/ui/card'
-import { useCreateOrganizationMutation } from '@/hooks/api/use-organization-queries'
+import { useCreateOrganizationMutation } from '@/features/organizations'
 import { buildOrgUrl } from '@/lib/utils/slug-utils'
 
 // Zod validation schema

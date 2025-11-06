@@ -4,7 +4,7 @@ import * as React from 'react'
 import { Slash } from 'lucide-react'
 import { useWorkspace } from '@/context/workspace-context'
 import { OrganizationSelector } from './organization-selector'
-import { ProjectSelector } from './project-selector'
+import { ProjectSelector } from '@/features/projects'
 import { cn } from '@/lib/utils'
 
 interface ContextNavbarProps {

@@ -15,7 +15,7 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { useLogoutMutation } from '@/hooks/api/use-auth-queries'
+import { useLogoutMutation } from '@/features/authentication'
 
 interface ProfileDropdownProps {
   className?: string

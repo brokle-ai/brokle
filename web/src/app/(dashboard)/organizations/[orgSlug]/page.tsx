@@ -3,9 +3,11 @@
 import { useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useWorkspace } from '@/context/workspace-context'
-import { OrganizationOverview } from '@/views/organization-overview'
+import { OrganizationOverview } from '@/features/organizations'
+import { DashboardHeader } from '@/components/layout/dashboard-header'
+import { Main } from '@/components/layout/main'
 import { Skeleton } from '@/components/ui/skeleton'
-import type { OrganizationParams } from '@/types/organization'
+import type { OrganizationParams } from '@/features/organizations'
 
 export default function OrganizationPage() {
   const params = useParams() as OrganizationParams
@@ -58,5 +60,20 @@ export default function OrganizationPage() {
     )
   }
 
-  return <OrganizationOverview />
+  return (
+    <>
+      <DashboardHeader />
+      <Main>
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold tracking-tight">
+            {currentOrganization.name}
+          </h1>
+          <p className="text-muted-foreground">
+            Manage your organization, members, and projects
+          </p>
+        </div>
+        <OrganizationOverview />
+      </Main>
+    </>
+  )
 }

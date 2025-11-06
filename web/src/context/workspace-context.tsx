@@ -11,7 +11,7 @@ import type {
   ProjectSummary,
   SubscriptionPlan,
   OrganizationRole,
-} from '@/types/auth'
+} from '@/features/authentication'
 import type {
   EnhancedUserProfileResponse,
   BackendOrganizationWithProjects,

@@ -1,6 +1,5 @@
 import { Metadata } from 'next'
-import { DisplayForm } from '@/components/settings/display-form'
-import { ContentSection } from '@/components/settings/content-section'
+import { DisplayForm, ContentSection } from '@/features/settings'
 
 export const metadata: Metadata = {
   title: 'Display',

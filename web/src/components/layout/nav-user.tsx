@@ -25,7 +25,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from '@/components/ui/sidebar'
-import { useLogoutMutation } from '@/hooks/api/use-auth-queries'
+import { useLogoutMutation } from '@/features/authentication'
 
 export function NavUser({
   user,

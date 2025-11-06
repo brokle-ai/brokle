@@ -8,7 +8,7 @@ import { TopNav } from '@/components/layout/top-nav'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
 import { ProfileDropdown } from '@/components/profile-dropdown'
-import { SettingsNav } from '@/components/settings/settings-nav'
+import { SettingsNav } from '@/features/settings'
 
 const topNav = [
   {

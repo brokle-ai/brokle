@@ -2,7 +2,7 @@
 
 import { SearchProvider } from '@/context/search-context'
 import SkipToMain from '@/components/skip-to-main'
-import type { User } from '@/types/auth'
+import type { User } from '@/features/authentication'
 
 interface Props {
   children: React.ReactNode

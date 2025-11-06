@@ -2,9 +2,11 @@
 
 import { useParams } from 'next/navigation'
 import { useWorkspace } from '@/context/workspace-context'
-import { SettingsView } from '@/views/settings-view'
+import { SettingsView } from '@/features/settings'
+import { DashboardHeader } from '@/components/layout/dashboard-header'
+import { Main } from '@/components/layout/main'
 import { Skeleton } from '@/components/ui/skeleton'
-import type { OrganizationParams } from '@/types/organization'
+import type { OrganizationParams } from '@/features/organizations'
 
 export default function OrganizationSettingsPage() {
   const params = useParams() as OrganizationParams
@@ -45,5 +47,18 @@ export default function OrganizationSettingsPage() {
     )
   }
 
-  return <SettingsView />
+  return (
+    <>
+      <DashboardHeader />
+      <Main>
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
+          <p className="text-muted-foreground">
+            Manage your account settings and preferences
+          </p>
+        </div>
+        <SettingsView />
+      </Main>
+    </>
+  )
 }

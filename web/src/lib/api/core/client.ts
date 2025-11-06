@@ -274,7 +274,7 @@ export class BrokleAPIClient {
 
           try {
             // Delegate to auth store's refresh (single source of truth)
-            const { useAuthStore } = await import('@/stores/auth-store')
+            const { useAuthStore } = await import('@/features/authentication')
             await useAuthStore.getState().refreshToken()
 
             // Cookies updated by store, retry the request

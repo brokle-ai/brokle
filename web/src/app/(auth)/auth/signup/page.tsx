@@ -12,9 +12,11 @@ import {
 } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, Loader2 } from 'lucide-react'
-import { AuthLayout } from '@/components/auth/auth-layout'
-import { TwoStepSignUpForm } from '@/components/auth/two-step-signup-form'
-import { AuthFormWrapper } from '@/components/auth/auth-form-wrapper'
+import {
+  AuthLayout,
+  TwoStepSignUpForm,
+  AuthFormWrapper
+} from '@/features/authentication'
 import Link from 'next/link'
 
 type SignupStep = 'auth' | 'personalization'

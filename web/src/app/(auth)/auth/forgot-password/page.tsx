@@ -8,8 +8,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { AuthLayout } from '@/components/auth/auth-layout'
-import { ForgotPasswordForm } from '@/components/auth/forgot-password-form'
+import { AuthLayout, ForgotPasswordForm } from '@/features/authentication'
 
 export const metadata: Metadata = {
   title: 'Forgot Password',
