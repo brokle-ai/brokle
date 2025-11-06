@@ -35,7 +35,7 @@ interface WorkspaceContextValue {
   error: string | null
 
   // Actions
-  refresh: () => void
+  refresh: () => Promise<void>
   clearError: () => void
 }
 

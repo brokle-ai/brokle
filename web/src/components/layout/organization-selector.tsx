@@ -1,19 +1,19 @@
 'use client'
 
-import * as React from 'react'
 import { useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
-import { ChevronDown, Building2, Settings, Users, Plus } from 'lucide-react'
+import { ChevronDown, Settings, Plus, Loader2 } from 'lucide-react'
 import Link from 'next/link'
+import { toast } from 'sonner'
 import { useWorkspace } from '@/context/workspace-context'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { getSmartRedirectUrl } from '@/lib/utils/smart-redirect'
 import { generateCompositeSlug, extractIdFromCompositeSlug } from '@/lib/utils/slug-utils'
+import { setDefaultOrganization } from '@/features/authentication/api/auth-api'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
@@ -31,6 +31,7 @@ export function OrganizationSelector({ className, showPlanBadge = false }: Organ
     organizations,
     currentOrganization,
     isInitialized,
+    refresh,
   } = useWorkspace()
   
   const pathname = usePathname()
@@ -55,10 +56,16 @@ export function OrganizationSelector({ className, showPlanBadge = false }: Organ
       console.error('Organization not found for composite slug:', compositeSlug)
       return
     }
-    
+
     try {
       setIsOrgLoading(true)
-      
+
+      // Update default organization in backend
+      await setDefaultOrganization(targetOrgId)
+
+      // Refresh workspace context to get updated user data
+      await refresh()
+
       // Use smart redirect to determine the appropriate URL
       const redirectUrl = getSmartRedirectUrl({
         currentPath: pathname,
@@ -68,9 +75,14 @@ export function OrganizationSelector({ className, showPlanBadge = false }: Organ
       })
 
       // Navigate to smart redirect URL
-      // Next.js handles context cleanup automatically during navigation
       router.push(redirectUrl)
     } catch (error) {
+      // Extract error message with fallback
+      const errorMessage = error instanceof Error
+        ? error.message
+        : 'Failed to switch organization. Please try again.'
+
+      toast.error(errorMessage)
       console.error('Failed to switch organization:', error)
     } finally {
       setIsOrgLoading(false)
@@ -127,7 +139,11 @@ export function OrganizationSelector({ className, showPlanBadge = false }: Organ
             {currentOrganization.plan}
           </Badge>
         )}
-        <ChevronDown className="size-4" />
+        {isOrgLoading ? (
+          <Loader2 className="size-4 animate-spin" />
+        ) : (
+          <ChevronDown className="size-4" />
+        )}
       </DropdownMenuTrigger>
       
       <DropdownMenuContent
@@ -170,7 +186,14 @@ export function OrganizationSelector({ className, showPlanBadge = false }: Organ
                     e.preventDefault()
                     return
                   }
-                  setIsOrgLoading(true)
+                  // Allow "open in new tab" behavior for modified clicks
+                  if (e.metaKey || e.ctrlKey || e.button === 1) {
+                    return
+                  }
+                  // Prevent default link navigation and use handleOrgSwitch instead
+                  e.preventDefault()
+                  const compositeSlug = generateCompositeSlug(org.name, org.id)
+                  handleOrgSwitch(compositeSlug)
                 }}
               >
                 <span
