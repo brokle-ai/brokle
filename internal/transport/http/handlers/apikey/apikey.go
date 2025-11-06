@@ -20,7 +20,11 @@ type Handler struct {
 	apiKeyService auth.APIKeyService
 }
 
-func NewHandler(config *config.Config, logger *logrus.Logger, apiKeyService auth.APIKeyService) *Handler {
+func NewHandler(
+	config *config.Config,
+	logger *logrus.Logger,
+	apiKeyService auth.APIKeyService,
+) *Handler {
 	return &Handler{
 		config:        config,
 		logger:        logger,
@@ -58,7 +62,7 @@ type ListAPIKeysResponse struct {
 	// Pagination fields removed - use response.SuccessWithPagination() instead
 }
 
-// List handles GET /projects/:projectId/api-keys
+// List handles GET /api/v1/projects/:projectId/api-keys
 // @Summary List API keys
 // @Description Get a paginated list of API keys for a specific project. Keys are shown with preview format (bk_xxxx...yyyy) for security.
 // @Tags API Keys
@@ -180,7 +184,7 @@ func getKeyStatus(key auth.APIKey) string {
 	return "active"
 }
 
-// Create handles POST /projects/:projectId/api-keys
+// Create handles POST /api/v1/projects/:projectId/api-keys
 // @Summary Create API key
 // @Description Create a new industry-standard API key for the project. The full key will only be displayed once upon creation. Format: bk_{40_char_random}
 // @Tags API Keys
@@ -283,7 +287,7 @@ func (h *Handler) Create(c *gin.Context) {
 	response.Created(c, responseKey)
 }
 
-// Delete handles DELETE /projects/:projectId/api-keys/:keyId
+// Delete handles DELETE /api/v1/projects/:projectId/api-keys/:keyId
 // @Summary Delete project-scoped API key
 // @Description Permanently revoke and delete a project-scoped API key. This action cannot be undone and will immediately invalidate the key across all environments.
 // @Tags API Keys
@@ -324,7 +328,7 @@ func (h *Handler) Delete(c *gin.Context) {
 		return
 	}
 
-	// Get the API key to verify it exists and belongs to the environment
+	// Get the API key to verify it exists and belongs to the project
 	apiKey, err := h.apiKeyService.GetAPIKey(c.Request.Context(), keyID)
 	if err != nil {
 		h.logger.WithError(err).Error("Failed to get API key for deletion")

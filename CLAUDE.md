@@ -403,7 +403,8 @@ The platform implements a clean separation between SDK and Dashboard routes:
 - `/api/v1/users/*` - User profile management
 - `/api/v1/onboarding/*` - User onboarding flow
 - `/api/v1/organizations/*` - Organization management with RBAC
-- `/api/v1/projects/*` - Project management and API key management
+- `/api/v1/projects/*` - Project management (supports organization_id filtering)
+- `/api/v1/projects/:projectId/api-keys/*` - API key management
 - `/api/v1/analytics/*` - Metrics & reporting (read-only dashboard views)
 - `/api/v1/logs/*` - Request logs and export
 - `/api/v1/billing/*` - Usage & billing management

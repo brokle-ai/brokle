@@ -1037,15 +1037,6 @@ definitions:
     - email
     - password
     type: object
-  internal_transport_http_handlers_auth.RefreshTokenRequest:
-    description: Refresh token credentials
-    properties:
-      refresh_token:
-        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-        type: string
-    required:
-    - refresh_token
-    type: object
   internal_transport_http_handlers_billing.Invoice:
     properties:
       billing_period:
@@ -2151,6 +2142,13 @@ definitions:
       total_questions:
         example: 5
         type: integer
+    type: object
+  user.SetDefaultOrgRequest:
+    properties:
+      organization_id:
+        type: string
+    required:
+    - organization_id
     type: object
   user.SubmitResponseRequest:
     description: Request body for submitting a response to an onboarding question
@@ -3444,8 +3442,14 @@ paths:
     post:
       consumes:
       - application/json
-      description: Change user password with current password verification
+      description: Change user password with current password verification. REQUIRES
+        X-CSRF-Token header matching csrf_token cookie value (double-submit CSRF protection).
       parameters:
+      - description: CSRF token from csrf_token cookie
+        in: header
+        name: X-CSRF-Token
+        required: true
+        type: string
       - description: Password change information
         in: body
         name: request
@@ -3464,7 +3468,11 @@ paths:
           schema:
             $ref: '#/definitions/response.ErrorResponse'
         "401":
-          description: Unauthorized
+          description: Unauthorized - cookie invalid or missing
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: CSRF validation failed - token missing or mismatch
           schema:
             $ref: '#/definitions/response.ErrorResponse'
         "500":
@@ -3472,7 +3480,8 @@ paths:
           schema:
             $ref: '#/definitions/response.ErrorResponse'
       security:
-      - BearerAuth: []
+      - CSRFToken: []
+        CookieAuth: []
       summary: Change password
       tags:
       - Authentication
@@ -3646,7 +3655,9 @@ paths:
     post:
       consumes:
       - application/json
-      description: Authenticate user with email and password
+      description: 'Authenticate user. Sets httpOnly cookies: access_token (15min),
+        refresh_token (7days), csrf_token (15min). Returns user data + expiry metadata
+        (milliseconds).'
       parameters:
       - description: Login credentials
         in: body
@@ -3658,7 +3669,12 @@ paths:
       - application/json
       responses:
         "200":
-          description: Login successful
+          description: 'Cookies set. Response: { user, expires_at(ms), expires_in(ms)
+            }'
+          headers:
+            Set-Cookie:
+              description: csrf_token=<token>; Secure; SameSite=Lax; Max-Age=900
+              type: string
           schema:
             $ref: '#/definitions/response.SuccessResponse'
         "400":
@@ -3680,16 +3696,31 @@ paths:
     post:
       consumes:
       - application/json
-      description: Logout user and invalidate session
+      description: Logout user, invalidate session, clear httpOnly cookies. REQUIRES
+        X-CSRF-Token header matching csrf_token cookie value (double-submit CSRF protection).
+      parameters:
+      - description: CSRF token from csrf_token cookie
+        in: header
+        name: X-CSRF-Token
+        required: true
+        type: string
       produces:
       - application/json
       responses:
         "200":
-          description: Logout successful
+          description: Logout successful. All cookies cleared.
+          headers:
+            Set-Cookie:
+              description: csrf_token=; Max-Age=-1
+              type: string
           schema:
             $ref: '#/definitions/response.MessageResponse'
         "401":
-          description: Invalid session
+          description: Invalid session or cookie missing
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: CSRF validation failed - token missing or mismatch
           schema:
             $ref: '#/definitions/response.ErrorResponse'
         "500":
@@ -3697,35 +3728,57 @@ paths:
           schema:
             $ref: '#/definitions/response.ErrorResponse'
       security:
-      - BearerAuth: []
+      - CSRFToken: []
+        CookieAuth: []
       summary: User logout
+      tags:
+      - Authentication
+  /api/v1/auth/me:
+    get:
+      consumes:
+      - application/json
+      description: Get current user with token expiry metadata. Requires access_token
+        cookie for authentication.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 'Response: { user, expires_at(ms), expires_in(ms) }'
+          schema:
+            $ref: '#/definitions/response.SuccessResponse'
+        "401":
+          description: Unauthorized - cookie invalid or missing
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - CookieAuth: []
+      summary: Get current user
       tags:
       - Authentication
   /api/v1/auth/refresh:
     post:
       consumes:
       - application/json
-      description: Get a new access token using a valid refresh token
-      parameters:
-      - description: Refresh token
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/internal_transport_http_handlers_auth.RefreshTokenRequest'
+      description: Refresh tokens using refresh_token from httpOnly cookie. Returns
+        new cookies with rotated tokens + expiry metadata (milliseconds).
       produces:
       - application/json
       responses:
         "200":
-          description: Token refresh successful
+          description: 'New cookies set. Response: { expires_at(ms), expires_in(ms)
+            }'
+          headers:
+            Set-Cookie:
+              description: csrf_token=<token>; Secure; SameSite=Lax; Max-Age=900
+              type: string
           schema:
             $ref: '#/definitions/response.SuccessResponse'
-        "400":
-          description: Invalid request payload
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
         "401":
-          description: Invalid refresh token
+          description: Refresh token missing, invalid, or expired. Cookies cleared.
           schema:
             $ref: '#/definitions/response.ErrorResponse'
         "500":
@@ -3912,7 +3965,9 @@ paths:
     post:
       consumes:
       - application/json
-      description: Register a new user account with organization or invitation
+      description: 'Register new user with organization or invitation. Sets httpOnly
+        cookies: access_token (15min), refresh_token (7days), csrf_token (15min).
+        Returns user data + expiry metadata (milliseconds).'
       parameters:
       - description: Registration information
         in: body
@@ -3924,7 +3979,12 @@ paths:
       - application/json
       responses:
         "200":
-          description: Registration successful
+          description: 'Cookies set. Response: { user, expires_at(ms), expires_in(ms)
+            }'
+          headers:
+            Set-Cookie:
+              description: csrf_token=<token>; Secure; SameSite=Lax; Max-Age=900
+              type: string
           schema:
             $ref: '#/definitions/response.SuccessResponse'
         "400":
@@ -5504,7 +5564,7 @@ paths:
       consumes:
       - application/json
       description: Get a paginated list of projects accessible to the authenticated
-        user
+        user. Optionally filter by organization.
       parameters:
       - description: Filter by organization ID
         example: '"org_1234567890"'
@@ -5580,7 +5640,7 @@ paths:
       description: Create a new project within an organization. User must have appropriate
         permissions in the organization.
       parameters:
-      - description: Project details
+      - description: Project details (includes organization_id)
         in: body
         name: request
         required: true
@@ -6028,6 +6088,48 @@ paths:
       security:
       - BearerAuth: []
       summary: Update current user profile
+      tags:
+      - User
+  /api/v1/users/me/default-organization:
+    put:
+      consumes:
+      - application/json
+      description: Set the default organization for the authenticated user
+      parameters:
+      - description: Organization ID to set as default
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/user.SetDefaultOrgRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Default organization updated successfully
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Invalid request body or organization ID
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: User is not a member of the organization
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Set user's default organization
       tags:
       - User
   /health:
@@ -6519,13 +6621,20 @@ securityDefinitions:
     in: header
     name: Authorization
     type: apiKey
-  BearerAuth:
-    description: 'JWT token authentication for web dashboard. Format: Authorization:
-      Bearer <jwt_token>'
+  CSRFToken:
+    description: CSRF protection for mutations (POST/PUT/PATCH/DELETE). Value must
+      match csrf_token cookie. Required for all non-idempotent operations.
     in: header
-    name: Authorization
+    name: X-CSRF-Token
     type: apiKey
     x-extension-openapi: '{"definitions": {"ULID": {"type": "string", "description":
       "ULID (Universally Unique Lexicographically Sortable Identifier)", "example":
       "01ARZ3NDEKTSV4RRFFQ69G5FAV", "pattern": "^[0-9A-Z]{26}$"}}}'
+  CookieAuth:
+    description: 'Cookie-based JWT authentication. Login/Signup set httpOnly cookies
+      (access_token, refresh_token, csrf_token). Browser sends automatically. Testing:
+      Use browser DevTools/Postman/cURL (Swagger UI cannot test cookies).'
+    in: header
+    name: Cookie
+    type: apiKey
 swagger: "2.0"

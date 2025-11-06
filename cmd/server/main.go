@@ -42,10 +42,15 @@ import (
 // @name Authorization
 // @description API key authentication for AI gateway and SDKs. Format: Authorization: Bearer bk_live_... OR X-API-Key: bk_live_... (both supported for flexibility)
 //
-// @securityDefinitions.apikey BearerAuth
+// @securityDefinitions.apikey CookieAuth
 // @in header
-// @name Authorization
-// @description JWT token authentication for web dashboard. Format: Authorization: Bearer <jwt_token>
+// @name Cookie
+// @description Cookie-based JWT authentication. Login/Signup set httpOnly cookies (access_token, refresh_token, csrf_token). Browser sends automatically. Testing: Use browser DevTools/Postman/cURL (Swagger UI cannot test cookies).
+//
+// @securityDefinitions.apikey CSRFToken
+// @in header
+// @name X-CSRF-Token
+// @description CSRF protection for mutations (POST/PUT/PATCH/DELETE). Value must match csrf_token cookie. Required for all non-idempotent operations.
 //
 // Custom type definitions for Swagger
 // @x-extension-openapi {"definitions": {"ULID": {"type": "string", "description": "ULID (Universally Unique Lexicographically Sortable Identifier)", "example": "01ARZ3NDEKTSV4RRFFQ69G5FAV", "pattern": "^[0-9A-Z]{26}$"}}}

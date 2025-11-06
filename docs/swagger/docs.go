@@ -1977,10 +1977,11 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "CSRFToken": [],
+                        "CookieAuth": []
                     }
                 ],
-                "description": "Change user password with current password verification",
+                "description": "Change user password with current password verification. REQUIRES X-CSRF-Token header matching csrf_token cookie value (double-submit CSRF protection).",
                 "consumes": [
                     "application/json"
                 ],
@@ -1992,6 +1993,13 @@ const docTemplate = `{
                 ],
                 "summary": "Change password",
                 "parameters": [
+                    {
+                        "type": "string",
+                        "description": "CSRF token from csrf_token cookie",
+                        "name": "X-CSRF-Token",
+                        "in": "header",
+                        "required": true
+                    },
                     {
                         "description": "Password change information",
                         "name": "request",
@@ -2016,7 +2024,13 @@ const docTemplate = `{
                         }
                     },
                     "401": {
-                        "description": "Unauthorized",
+                        "description": "Unauthorized - cookie invalid or missing",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "CSRF validation failed - token missing or mismatch",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorResponse"
                         }
@@ -2284,7 +2298,7 @@ const docTemplate = `{
         },
         "/api/v1/auth/login": {
             "post": {
-                "description": "Authenticate user with email and password",
+                "description": "Authenticate user. Sets httpOnly cookies: access_token (15min), refresh_token (7days), csrf_token (15min). Returns user data + expiry metadata (milliseconds).",
                 "consumes": [
                     "application/json"
                 ],
@@ -2308,9 +2322,15 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "Login successful",
+                        "description": "Cookies set. Response: { user, expires_at(ms), expires_in(ms) }",
                         "schema": {
                             "$ref": "#/definitions/response.SuccessResponse"
+                        },
+                        "headers": {
+                            "Set-Cookie": {
+                                "type": "string",
+                                "description": "csrf_token=\u003ctoken\u003e; Secure; SameSite=Lax; Max-Age=900"
+                            }
                         }
                     },
                     "400": {
@@ -2338,10 +2358,11 @@ const docTemplate = `{
             "post": {
                 "security": [
                     {
-                        "BearerAuth": []
+                        "CSRFToken": [],
+                        "CookieAuth": []
                     }
                 ],
-                "description": "Logout user and invalidate session",
+                "description": "Logout user, invalidate session, clear httpOnly cookies. REQUIRES X-CSRF-Token header matching csrf_token cookie value (double-submit CSRF protection).",
                 "consumes": [
                     "application/json"
                 ],
@@ -2352,15 +2373,36 @@ const docTemplate = `{
                     "Authentication"
                 ],
                 "summary": "User logout",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "CSRF token from csrf_token cookie",
+                        "name": "X-CSRF-Token",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
                 "responses": {
                     "200": {
-                        "description": "Logout successful",
+                        "description": "Logout successful. All cookies cleared.",
                         "schema": {
                             "$ref": "#/definitions/response.MessageResponse"
+                        },
+                        "headers": {
+                            "Set-Cookie": {
+                                "type": "string",
+                                "description": "csrf_token=; Max-Age=-1"
+                            }
                         }
                     },
                     "401": {
-                        "description": "Invalid session",
+                        "description": "Invalid session or cookie missing",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "CSRF validation failed - token missing or mismatch",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorResponse"
                         }
@@ -2374,9 +2416,49 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/auth/me": {
+            "get": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "description": "Get current user with token expiry metadata. Requires access_token cookie for authentication.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Get current user",
+                "responses": {
+                    "200": {
+                        "description": "Response: { user, expires_at(ms), expires_in(ms) }",
+                        "schema": {
+                            "$ref": "#/definitions/response.SuccessResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized - cookie invalid or missing",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "User not found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/auth/refresh": {
             "post": {
-                "description": "Get a new access token using a valid refresh token",
+                "description": "Refresh tokens using refresh_token from httpOnly cookie. Returns new cookies with rotated tokens + expiry metadata (milliseconds).",
                 "consumes": [
                     "application/json"
                 ],
@@ -2387,32 +2469,21 @@ const docTemplate = `{
                     "Authentication"
                 ],
                 "summary": "Refresh access token",
-                "parameters": [
-                    {
-                        "description": "Refresh token",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/internal_transport_http_handlers_auth.RefreshTokenRequest"
-                        }
-                    }
-                ],
                 "responses": {
                     "200": {
-                        "description": "Token refresh successful",
+                        "description": "New cookies set. Response: { expires_at(ms), expires_in(ms) }",
                         "schema": {
                             "$ref": "#/definitions/response.SuccessResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request payload",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
+                        },
+                        "headers": {
+                            "Set-Cookie": {
+                                "type": "string",
+                                "description": "csrf_token=\u003ctoken\u003e; Secure; SameSite=Lax; Max-Age=900"
+                            }
                         }
                     },
                     "401": {
-                        "description": "Invalid refresh token",
+                        "description": "Refresh token missing, invalid, or expired. Cookies cleared.",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorResponse"
                         }
@@ -2697,7 +2768,7 @@ const docTemplate = `{
         },
         "/api/v1/auth/signup": {
             "post": {
-                "description": "Register a new user account with organization or invitation",
+                "description": "Register new user with organization or invitation. Sets httpOnly cookies: access_token (15min), refresh_token (7days), csrf_token (15min). Returns user data + expiry metadata (milliseconds).",
                 "consumes": [
                     "application/json"
                 ],
@@ -2721,9 +2792,15 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "Registration successful",
+                        "description": "Cookies set. Response: { user, expires_at(ms), expires_in(ms) }",
                         "schema": {
                             "$ref": "#/definitions/response.SuccessResponse"
+                        },
+                        "headers": {
+                            "Set-Cookie": {
+                                "type": "string",
+                                "description": "csrf_token=\u003ctoken\u003e; Secure; SameSite=Lax; Max-Age=900"
+                            }
                         }
                     },
                     "400": {
@@ -5186,7 +5263,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get a paginated list of projects accessible to the authenticated user",
+                "description": "Get a paginated list of projects accessible to the authenticated user. Optionally filter by organization.",
                 "consumes": [
                     "application/json"
                 ],
@@ -5316,7 +5393,7 @@ const docTemplate = `{
                 "summary": "Create project",
                 "parameters": [
                     {
-                        "description": "Project details",
+                        "description": "Project details (includes organization_id)",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -5996,6 +6073,72 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/users/me/default-organization": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Set the default organization for the authenticated user",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "User"
+                ],
+                "summary": "Set user's default organization",
+                "parameters": [
+                    {
+                        "description": "Organization ID to set as default",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/user.SetDefaultOrgRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Default organization updated successfully",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request body or organization ID",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "User is not a member of the organization",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorResponse"
                         }
@@ -8223,19 +8366,6 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_transport_http_handlers_auth.RefreshTokenRequest": {
-            "description": "Refresh token credentials",
-            "type": "object",
-            "required": [
-                "refresh_token"
-            ],
-            "properties": {
-                "refresh_token": {
-                    "type": "string",
-                    "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                }
-            }
-        },
         "internal_transport_http_handlers_billing.Invoice": {
             "type": "object",
             "properties": {
@@ -9777,6 +9907,17 @@ const docTemplate = `{
                 }
             }
         },
+        "user.SetDefaultOrgRequest": {
+            "type": "object",
+            "required": [
+                "organization_id"
+            ],
+            "properties": {
+                "organization_id": {
+                    "type": "string"
+                }
+            }
+        },
         "user.SubmitResponseRequest": {
             "description": "Request body for submitting a response to an onboarding question",
             "type": "object",
@@ -9924,12 +10065,18 @@ const docTemplate = `{
             "name": "Authorization",
             "in": "header"
         },
-        "BearerAuth": {
-            "description": "JWT token authentication for web dashboard. Format: Authorization: Bearer \u003cjwt_token\u003e",
+        "CSRFToken": {
+            "description": "CSRF protection for mutations (POST/PUT/PATCH/DELETE). Value must match csrf_token cookie. Required for all non-idempotent operations.",
             "type": "apiKey",
-            "name": "Authorization",
+            "name": "X-CSRF-Token",
             "in": "header",
             "x-extension-openapi": "{\"definitions\": {\"ULID\": {\"type\": \"string\", \"description\": \"ULID (Universally Unique Lexicographically Sortable Identifier)\", \"example\": \"01ARZ3NDEKTSV4RRFFQ69G5FAV\", \"pattern\": \"^[0-9A-Z]{26}$\"}}}"
+        },
+        "CookieAuth": {
+            "description": "Cookie-based JWT authentication. Login/Signup set httpOnly cookies (access_token, refresh_token, csrf_token). Browser sends automatically. Testing: Use browser DevTools/Postman/cURL (Swagger UI cannot test cookies).",
+            "type": "apiKey",
+            "name": "Cookie",
+            "in": "header"
         }
     }
 }`
