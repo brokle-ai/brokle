@@ -26,7 +26,7 @@ export const login = async (credentials: LoginCredentials): Promise<AuthResponse
   }>(
     '/v1/auth/login',
     credentials,
-    { skipAuth: true }
+    { skipAuth: true, skipRefreshInterceptor: true }
   )
 
   if (process.env.NODE_ENV === 'development') {
@@ -174,7 +174,7 @@ export const signup = async (credentials: SignUpCredentials): Promise<AuthRespon
   }>(
     '/v1/auth/signup',
     backendPayload,
-    { skipAuth: true }
+    { skipAuth: true, skipRefreshInterceptor: true }
   )
 
   // Map backend user response to frontend format
@@ -307,14 +307,14 @@ export const changePassword = async (currentPassword: string, newPassword: strin
 }
 
 export const requestPasswordReset = async (email: string): Promise<void> => {
-  await client.post('/v1/auth/forgot-password', { email }, { skipAuth: true })
+  await client.post('/v1/auth/forgot-password', { email }, { skipAuth: true, skipRefreshInterceptor: true })
 }
 
 export const confirmPasswordReset = async (token: string, password: string): Promise<void> => {
   await client.post(
     '/v1/auth/reset-password',
     { token, password },
-    { skipAuth: true }
+    { skipAuth: true, skipRefreshInterceptor: true }
   )
 }
 
@@ -388,7 +388,7 @@ export const validateInvitation = async (token: string) => {
     email: string
     expires_at: string
     is_expired: boolean
-  }>(`/v1/invitations/validate/${token}`, undefined, { skipAuth: true })
+  }>(`/v1/invitations/validate/${token}`, undefined, { skipAuth: true, skipRefreshInterceptor: true })
 }
 
 // Exchange OAuth login session for tokens (existing user OAuth login)
@@ -398,7 +398,7 @@ export const exchangeLoginSession = async (sessionId: string) => {
     user: UserResponse
     expires_at: number  // Milliseconds
     expires_in: number  // Milliseconds
-  }>(`/v1/auth/exchange-session/${sessionId}`, {}, { skipAuth: true })
+  }>(`/v1/auth/exchange-session/${sessionId}`, {}, { skipAuth: true, skipRefreshInterceptor: true })
 }
 
 // Complete OAuth signup (Step 2)
@@ -431,7 +431,7 @@ export const completeOAuthSignup = async (data: {
   }>(
     '/v1/auth/complete-oauth-signup',
     backendPayload,
-    { skipAuth: true }
+    { skipAuth: true, skipRefreshInterceptor: true }
   )
 
   // Map user from response (no /me call needed)

@@ -109,6 +109,26 @@ export function SignInForm({ className, ...props }: SignInFormProps) {
         className={cn('grid gap-3', className)}
         {...props}
       >
+        {/* Enhanced error display - moved to top for better visibility */}
+        {(authError || loginMutation.error) && (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              {authError || loginMutation.error?.message || 'Login failed. Please try again.'}
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Success state when redirecting */}
+        {isRedirecting && (
+          <Alert>
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <AlertDescription>
+              Welcome back! Taking you to your dashboard...
+            </AlertDescription>
+          </Alert>
+        )}
+
         <FormField
           control={form.control}
           name='email'
@@ -210,26 +230,6 @@ export function SignInForm({ className, ...props }: SignInFormProps) {
             <IconFacebook className='h-4 w-4' /> Google
           </Button>
         </div>
-        
-        {/* Enhanced error display */}
-        {(authError || loginMutation.error) && (
-          <Alert variant="destructive" className="mt-4">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertDescription>
-              {authError || loginMutation.error?.message || 'Login failed. Please try again.'}
-            </AlertDescription>
-          </Alert>
-        )}
-        
-        {/* Success state when redirecting */}
-        {isRedirecting && (
-          <Alert className="mt-4">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <AlertDescription>
-              Welcome back! Taking you to your dashboard...
-            </AlertDescription>
-          </Alert>
-        )}
       </form>
     </Form>
   )
