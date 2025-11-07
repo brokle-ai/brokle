@@ -11,7 +11,7 @@ src/
 ├── app/                    # Next.js 15 App Router
 │   ├── (auth)/            # Auth route group
 │   ├── (dashboard)/       # Protected dashboard routes
-│   ├── middleware.ts      # Route protection middleware
+│   ├── proxy.ts      # Route protection middleware
 │   └── layout.tsx         # Root layout with providers
 ├── components/
 │   ├── auth/              # Authentication components
@@ -55,7 +55,7 @@ export class AuthAPIClient extends GatewayAPIClient {
 - **Features**: Auto-refresh, secure storage, expiration handling
 - **Storage Strategy**: Memory → localStorage → httpOnly cookies
 
-#### 3. Route Protection (`/middleware.ts`)
+#### 3. Route Protection (`/proxy.ts`)
 - **Purpose**: Next.js middleware for route protection
 - **Features**: JWT validation, redirect handling, user context headers
 
