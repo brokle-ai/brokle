@@ -29,19 +29,21 @@ Brokle uses a **scalable monolith** architecture with separate binaries for inde
 
 ## Domain-Driven Design
 
-### 8 Active Domains (2 Planned)
+### Domains
 
-| Domain | Status | Location | Purpose |
-|--------|--------|----------|---------|
-| auth | ✅ Active | `internal/core/domain/auth` | Authentication, sessions, API keys |
-| billing | ✅ Active | `internal/core/domain/billing` | Usage tracking, billing |
-| common | ✅ Active | `internal/core/domain/common` | Transaction patterns, shared utilities |
-| config | 🔄 Planned (empty) | `internal/core/domain/config` | Configuration management |
-| gateway | ✅ Active | `internal/core/domain/gateway` | AI provider routing |
-| observability | ✅ Active | `internal/core/domain/observability` | Traces, observations, quality scores |
-| organization | ✅ Active | `internal/core/domain/organization` | Multi-tenant org management |
-| routing | 🔄 Planned (empty) | `internal/core/domain/routing` | Advanced routing logic |
-| user | ✅ Active | `internal/core/domain/user` | User management |
+Primary domains in `internal/core/domain/`:
+
+| Domain | Purpose |
+|--------|---------|
+| auth | Authentication, sessions, API keys |
+| billing | Usage tracking, subscriptions |
+| common | Shared transaction patterns, utilities |
+| gateway | AI provider routing |
+| observability | Traces, observations, quality scores |
+| organization | Multi-tenant org management |
+| user | User management and profiles |
+
+**Reference**: Check `internal/core/domain/` directory for complete list and implementation status
 
 ### Layer Organization
 
@@ -91,19 +93,19 @@ Brokle uses a **scalable monolith** architecture with separate binaries for inde
 
 ### ClickHouse (Analytics)
 
-From `migrations/clickhouse/`:
-
-**Tables**:
-- **traces** (365 day TTL) - Distributed tracing data (`20251023000001_create_traces.up.sql:64`)
-- **observations** (365 day TTL) - LLM call observations with ZSTD compression (`20251023000002_create_observations.up.sql:70`)
-- **quality_scores** (365 day TTL) - Model performance metrics (`20251023000003_create_scores.up.sql`)
-- **blob_storage_file_log** (365 day TTL) - File storage metadata (`20251023000004_create_blob_storage_file_log.up.sql`)
+**Primary Tables**:
+- **traces** - Distributed tracing data
+- **observations** - LLM call observations with ZSTD compression
+- **quality_scores** - Model performance metrics
+- **blob_storage_file_log** - File storage metadata
 
 **Features**:
 - OTEL-native schema with namespace prefixes
 - ZSTD compression for input/output fields (78% cost reduction)
-- TTL-based automatic data retention (365 days for all tables)
+- TTL-based automatic data retention (365 days)
 - Optimized for analytical queries
+
+**Reference**: See `migrations/clickhouse/*.up.sql` for exact schema and TTL configuration
 
 **Access**: Raw SQL with `sqlx` for performance
 

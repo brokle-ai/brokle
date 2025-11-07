@@ -181,11 +181,30 @@ Use prompts that match the skill's description:
 - **Role-Based Skills**: 2 (with 5 supporting files)
 - **Specialized Skills**: 5 (single-file each)
 
+## Source of Truth References
+
+Skills point to actual code as the source of truth. When in doubt, check:
+
+**Backend**:
+- Domains: `internal/core/domain/` directory
+- Error constructors: `pkg/errors/errors.go`
+- Migrations: `migrations/` and `migrations/clickhouse/`
+- Health endpoints: `internal/transport/http/server.go`
+
+**Frontend**:
+- Feature exports: `web/src/features/{feature}/index.ts`
+- Scripts: `web/package.json`
+- Tech stack versions: `web/package.json`
+
+**SDKs**:
+- Python: `sdk/python/brokle/__init__.py`, `pyproject.toml`
+- JavaScript: `sdk/javascript/packages/brokle/src/index.ts`, `package.json`
+
 ## Architecture Alignment
 
 These skills align with Brokle's core architecture principles:
 - **Scalable Monolith**: Separate server/worker binaries
-- **Domain-Driven Design**: 8 active domains with clean layers
+- **Domain-Driven Design**: Clean layer separation
 - **Multi-Database**: PostgreSQL, ClickHouse, Redis
 - **Dual Authentication**: SDK (API keys) vs Dashboard (JWT)
 - **Industrial Error Handling**: Repository → Service → Handler
@@ -271,7 +290,9 @@ The Python and JavaScript SDKs have their own dedicated skills in separate repos
 ---
 
 **Created**: 2025-11-07
-**Version**: 2.0
+**Version**: 3.0 (Simplified for maintainability)
 **Skills Count**: 9 total
 - **Platform**: 7 (2 role-based + 5 specialized)
 - **SDKs**: 2 (Python SDK + JavaScript SDK)
+
+**Philosophy**: Skills focus on patterns and point to source code for specifics (avoiding high-maintenance counts/versions)

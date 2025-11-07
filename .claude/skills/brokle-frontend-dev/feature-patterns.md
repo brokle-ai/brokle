@@ -20,11 +20,13 @@ features/authentication/
 │   ├── logout-button.tsx
 │   ├── auth-form-wrapper.tsx
 │   ├── signin-toast-handler.tsx
-│   └── unauthorized-fallback.tsx
+│   ├── unauthorized-fallback.tsx
+│   └── loading-spinner.tsx
 ├── hooks/
 │   ├── use-auth.ts
 │   ├── use-auth-guard.ts
-│   └── use-auth-queries.ts
+│   ├── use-auth-queries.ts
+│   └── use-logout.ts
 ├── stores/
 │   └── auth-store.ts
 ├── api/
@@ -100,7 +102,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { useSignIn } from '../hooks/use-sign-in'
+import { useLoginMutation } from '../hooks/use-auth-queries'
 
 const signInSchema = z.object({
   email: z.string().email('Invalid email address'),
@@ -115,7 +117,7 @@ interface SignInFormProps {
 }
 
 export function SignInForm({ onSuccess, redirectTo = '/dashboard' }: SignInFormProps) {
-  const { signIn, isLoading, error } = useSignIn()
+  const loginMutation = useLoginMutation()
   const {
     register,
     handleSubmit,
@@ -125,17 +127,18 @@ export function SignInForm({ onSuccess, redirectTo = '/dashboard' }: SignInFormP
   })
 
   const onSubmit = async (data: SignInFormData) => {
-    const success = await signIn(data, redirectTo)
-    if (success && onSuccess) {
-      onSuccess()
-    }
+    loginMutation.mutate(data, {
+      onSuccess: () => {
+        if (onSuccess) onSuccess()
+      }
+    })
   }
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-      {error && (
+      {loginMutation.error && (
         <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
+          <AlertDescription>{loginMutation.error.message}</AlertDescription>
         </Alert>
       )}
 
@@ -146,7 +149,7 @@ export function SignInForm({ onSuccess, redirectTo = '/dashboard' }: SignInFormP
           type="email"
           placeholder="you@example.com"
           {...register('email')}
-          disabled={isLoading}
+          disabled={loginMutation.isPending}
         />
         {errors.email && (
           <p className="text-sm text-destructive">{errors.email.message}</p>
@@ -159,15 +162,15 @@ export function SignInForm({ onSuccess, redirectTo = '/dashboard' }: SignInFormP
           id="password"
           type="password"
           {...register('password')}
-          disabled={isLoading}
+          disabled={loginMutation.isPending}
         />
         {errors.password && (
           <p className="text-sm text-destructive">{errors.password.message}</p>
         )}
       </div>
 
-      <Button type="submit" className="w-full" disabled={isLoading}>
-        {isLoading ? 'Signing in...' : 'Sign In'}
+      <Button type="submit" className="w-full" disabled={loginMutation.isPending}>
+        {loginMutation.isPending ? 'Signing in...' : 'Sign In'}
       </Button>
     </form>
   )
@@ -221,47 +224,7 @@ export function useAuth() {
 }
 ```
 
-```typescript
-// features/authentication/hooks/use-sign-in.ts
-'use client'
-
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { signIn as apiSignIn } from '../api/auth-api'
-import { useAuthStore } from '../stores/auth-store'
-import type { SignInRequest } from '../types'
-
-export function useSignIn() {
-  const router = useRouter()
-  const { setUser } = useAuthStore()
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  const signIn = async (credentials: SignInRequest, redirectTo: string = '/dashboard') => {
-    setIsLoading(true)
-    setError(null)
-
-    try {
-      const response = await apiSignIn(credentials)
-      setUser(response.user)
-      router.push(redirectTo)
-      return true
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Sign in failed'
-      setError(message)
-      return false
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  return {
-    signIn,
-    isLoading,
-    error,
-  }
-}
-```
+**Note**: Login logic uses `useLoginMutation` from `use-auth-queries.ts` (React Query pattern), not a standalone `use-sign-in` hook. See `web/src/features/authentication/hooks/use-auth-queries.ts` for actual implementation.
 
 ### API Client Example
 
@@ -431,10 +394,10 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { SignInForm } from '../components/sign-in-form'
 
 // Mock the hook
-vi.mock('../hooks/use-sign-in', () => ({
-  useSignIn: () => ({
-    signIn: vi.fn().mockResolvedValue(true),
-    isLoading: false,
+vi.mock('../hooks/use-auth-queries', () => ({
+  useLoginMutation: () => ({
+    mutate: vi.fn(),
+    isPending: false,
     error: null,
   }),
 }))
@@ -485,4 +448,4 @@ describe('SignInForm', () => {
 7. **Form Validation**: Use Zod schemas with React Hook Form
 8. **Routing**: Use Next.js router for navigation
 9. **Testing**: Test components and hooks independently
-10. **Naming**: Clear, descriptive names (use-sign-in, not use-login)
+10. **Naming**: Clear, descriptive names (useLoginMutation from use-auth-queries, useAuth, etc.)

@@ -32,18 +32,27 @@ web/src/
 │   ├── (onboarding)/        # Onboarding wizard
 │   └── (errors)/            # Error pages
 ├── features/                # Domain features (self-contained)
-│   ├── authentication/      # 12 components, 4 hooks, store, API
-│   ├── organizations/       # 7 components, 2 hooks, API
-│   ├── projects/           # 4 components, hook, store, API
-│   ├── analytics/
-│   ├── billing/
-│   ├── gateway/
-│   └── settings/
+│   ├── authentication/      # User auth, sessions, OAuth
+│   ├── organizations/       # Org management, members, invitations
+│   ├── projects/           # Project dashboard, API keys, settings
+│   ├── analytics/          # Usage analytics and metrics
+│   ├── billing/            # Billing and subscription management
+│   ├── gateway/            # AI gateway configuration
+│   ├── settings/           # User settings and preferences
+│   └── tasks/              # Task management
 ├── components/              # Shared components only
 │   ├── ui/                 # shadcn/ui primitives
 │   ├── layout/             # App shell (header, sidebar, footer)
 │   ├── guards/             # Auth guards
-│   └── shared/             # Generic reusable components
+│   ├── shared/             # Generic reusable components
+│   ├── navigation/         # Navigation components
+│   ├── notifications/      # Notification components
+│   ├── error-boundary/     # Error boundaries
+│   ├── audit/              # Audit components
+│   ├── collaboration/      # Collaboration components
+│   ├── data/               # Data components
+│   ├── templates/          # Template components
+│   └── wizard/             # Wizard components
 ├── lib/                    # Core infrastructure
 │   ├── api/core/           # BrokleAPIClient (HTTP client)
 │   ├── auth/               # JWT utilities
@@ -52,10 +61,16 @@ web/src/
 ├── stores/                 # Global stores (ui-store.ts)
 ├── context/                # Cross-feature context (workspace-context)
 ├── types/                  # Shared types
+├── assets/                 # Static assets (logos, icons, SVGs)
+│   ├── brand-icons/        # Provider/brand icons
+│   └── custom/             # Custom graphics
+├── utils/                  # Small utilities
 └── __tests__/              # Test infrastructure (MSW, utilities)
 ```
 
 ### Feature Structure
+
+**Note**: Check `web/src/features/{feature}/index.ts` for current exports and implementation status.
 
 Each feature in `features/[feature]/` has:
 - `components/` - Feature-specific UI components

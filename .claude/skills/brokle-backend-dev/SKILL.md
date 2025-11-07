@@ -13,13 +13,13 @@ This skill provides comprehensive guidance for Go backend development following 
 - **Separate Binaries**: HTTP server (`cmd/server`) + Background workers (`cmd/worker`)
 - **Shared Codebase**: Single codebase with modular DI container
 - **Multi-Database Strategy**: PostgreSQL (transactional) + ClickHouse (analytics) + Redis (cache/queues)
-- **Domain-Driven Design**: 8 active domains with clean layer separation
+- **Domain-Driven Design**: Clean layer separation with domain-driven architecture
 
 ### Application Structure
 ```
 internal/
 ├── core/
-│   ├── domain/{domain}/      # Entities, interfaces (8 active domains)
+│   ├── domain/{domain}/      # Entities, interfaces (see internal/core/domain/)
 │   └── services/{domain}/    # Business logic implementations
 ├── infrastructure/
 │   ├── database/
@@ -34,16 +34,19 @@ internal/
 └── workers/                  # Background jobs
 ```
 
-### 8 Active Domains (2 Planned)
-- **auth**: Authentication, sessions, API keys (✅ Active)
-- **billing**: Usage tracking, billing (✅ Active)
-- **common**: Transaction patterns, shared utilities (✅ Active)
-- **gateway**: AI provider routing (✅ Active)
-- **observability**: Traces, observations, quality scores (✅ Active)
-- **organization**: Multi-tenant org management (✅ Active)
-- **user**: User management (✅ Active)
-- **config**: Configuration management (🔄 Planned - empty directory)
-- **routing**: Advanced routing logic (🔄 Planned - empty directory)
+### Domains
+
+Primary domains in `internal/core/domain/`:
+- **auth** - Authentication, sessions, API keys
+- **billing** - Usage tracking, subscriptions
+- **common** - Shared transaction patterns, utilities
+- **gateway** - AI provider routing and management
+- **observability** - Traces, observations, quality scores
+- **organization** - Multi-tenant org management
+- **user** - User management and profiles
+
+**Pattern**: Each domain has entities.go, repository.go, service.go, errors.go
+**Reference**: See `internal/core/domain/` directory for complete list and implementation status
 
 ## Critical Development Patterns
 
@@ -151,15 +154,14 @@ func (h *userHandler) GetUser(c *gin.Context) {
 }
 ```
 
-**AppError Constructors**:
-- `appErrors.NewValidationError(message, details string)` - Line 86
-- `appErrors.NewNotFoundError(resource string)` - Line 90
-- `appErrors.NewConflictError(message string)` - Line 94
-- `appErrors.NewUnauthorizedError(message string)` - Line 98
-- `appErrors.NewForbiddenError(message string)` - Line 102
-- `appErrors.NewBadRequestError(message, details string)` - Line 106
-- `appErrors.NewInternalError(message string, err error)` - Line 110
-- `appErrors.NewRateLimitError(message string)` - Line 122
+**Common AppError Constructors** (see `pkg/errors/errors.go` for complete list):
+- `appErrors.NewValidationError(message, details string)`
+- `appErrors.NewNotFoundError(resource string)`
+- `appErrors.NewConflictError(message string)`
+- `appErrors.NewUnauthorizedError(message string)`
+- `appErrors.NewForbiddenError(message string)`
+- `appErrors.NewInternalError(message string, err error)`
+- `appErrors.NewRateLimitError(message string)`
 
 ### 3. Authentication Patterns
 

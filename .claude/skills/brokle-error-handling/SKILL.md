@@ -83,8 +83,7 @@ func (r *userRepository) GetByID(ctx context.Context, id ulid.ULID) (*authDomain
     var user authDomain.User
     err := r.db.WithContext(ctx).Where("id = ?", id).First(&user).Error
     if err != nil {
-        // Direct comparison (NOT errors.Is) for GORM errors
-        if err == gorm.ErrRecordNotFound {
+        if errors.Is(err, gorm.ErrRecordNotFound) {  // ✅ Standardized pattern
             return nil, fmt.Errorf("get user by ID %s: %w", id, authDomain.ErrNotFound)
         }
         return nil, fmt.Errorf("database query failed for user ID %s: %w", id, err)
@@ -217,26 +216,23 @@ return nil, fmt.Errorf("user not found")  // ❌
 log.Error("Failed to create user")  // ❌
 ```
 
-**AppError Constructors** (`pkg/errors/errors.go:86-136`):
+**AppError Constructors** (see `pkg/errors/errors.go:86-136` for complete list):
+
+**Common constructors**:
 ```go
-// Exact signatures from pkg/errors/errors.go
-appErrors.NewValidationError(message, details string) *AppError           // Line 86
-appErrors.NewNotFoundError(resource string) *AppError                     // Line 90
-appErrors.NewConflictError(message string) *AppError                      // Line 94
-appErrors.NewUnauthorizedError(message string) *AppError                  // Line 98
-appErrors.NewForbiddenError(message string) *AppError                     // Line 102
-appErrors.NewBadRequestError(message, details string) *AppError           // Line 106
-appErrors.NewInternalError(message string, err error) *AppError           // Line 110
-appErrors.NewServiceUnavailableError(message string) *AppError            // Line 114
-appErrors.NewNotImplementedError(message string) *AppError                // Line 118
-appErrors.NewRateLimitError(message string) *AppError                     // Line 122
-appErrors.NewPaymentRequiredError(message string) *AppError               // Line 126
-appErrors.NewQuotaExceededError(message string) *AppError                 // Line 130
-appErrors.NewAIProviderError(message string, err error) *AppError         // Line 134
+appErrors.NewValidationError(message, details string) *AppError
+appErrors.NewNotFoundError(resource string) *AppError
+appErrors.NewConflictError(message string) *AppError
+appErrors.NewUnauthorizedError(message string) *AppError
+appErrors.NewForbiddenError(message string) *AppError
+appErrors.NewInternalError(message string, err error) *AppError
+appErrors.NewRateLimitError(message string) *AppError
 
 // Helper
-appErrors.IsAppError(err error) (*AppError, bool)                         // Line 138
+appErrors.IsAppError(err error) (*AppError, bool)
 ```
+
+**Reference**: See `pkg/errors/errors.go` for all constructors (BadRequest, ServiceUnavailable, NotImplemented, PaymentRequired, QuotaExceeded, AIProvider) and exact signatures
 
 ## Handler Layer Pattern
 

@@ -7,19 +7,22 @@ description: Use this skill when working with Brokle's domain-driven architectur
 
 Expert guidance for Brokle's Domain-Driven Design (DDD) architecture.
 
-## 8 Active Domains (2 Planned)
+## Domains
 
-| Domain | Location | Purpose | Status |
-|--------|----------|---------|--------|
-| auth | `internal/core/domain/auth` | Authentication, sessions, API keys | ✅ Active |
-| billing | `internal/core/domain/billing` | Usage tracking, billing | ✅ Active |
-| common | `internal/core/domain/common` | Transaction patterns, shared utilities | ✅ Active |
-| config | `internal/core/domain/config` | Configuration management | 🔄 Planned (empty) |
-| gateway | `internal/core/domain/gateway` | AI provider routing | ✅ Active |
-| observability | `internal/core/domain/observability` | Traces, observations, quality scores | ✅ Active |
-| organization | `internal/core/domain/organization` | Multi-tenant org management | ✅ Active |
-| routing | `internal/core/domain/routing` | Advanced routing logic | 🔄 Planned (empty) |
-| user | `internal/core/domain/user` | User management | ✅ Active |
+Primary domains in `internal/core/domain/`:
+
+| Domain | Purpose |
+|--------|---------|
+| auth | Authentication, sessions, API keys |
+| billing | Usage tracking, subscriptions |
+| common | Shared transaction patterns, utilities |
+| gateway | AI provider routing |
+| observability | Traces, observations, quality scores |
+| organization | Multi-tenant org management |
+| user | User management and profiles |
+
+**Structure**: Each domain has entities.go, repository.go, service.go, errors.go, types.go
+**Reference**: List domains with `ls -1 internal/core/domain/` to see current implementation status
 
 ## Domain Layer Structure
 

@@ -94,12 +94,15 @@ go run cmd/migrate/main.go -dry-run up  # Preview without executing
 
 ### ClickHouse (Analytics)
 
-From actual migrations in `migrations/clickhouse/`:
+Primary tables in `migrations/clickhouse/`:
 
-- **traces** (365 day TTL) - Distributed tracing data (`20251023000001_create_traces.up.sql:64`)
-- **observations** (365 day TTL) - LLM call observations with ZSTD compression (`20251023000002_create_observations.up.sql:70`)
-- **quality_scores** (365 day TTL) - Model performance metrics (`20251023000003_create_scores.up.sql`)
-- **blob_storage_file_log** (365 day TTL) - File storage metadata (`20251023000004_create_blob_storage_file_log.up.sql`)
+- **traces** - Distributed tracing data
+- **observations** - LLM call observations with ZSTD compression
+- **quality_scores** - Model performance metrics
+- **blob_storage_file_log** - File storage metadata
+
+**TTL**: All tables use 365-day retention
+**Reference**: Check `migrations/clickhouse/*.up.sql` for exact schema, TTL configuration, and indexes
 
 ## Creating PostgreSQL Migration
 
@@ -189,7 +192,7 @@ SETTINGS index_granularity = 8192;
 
 1. **Partitioning**: `PARTITION BY toYYYYMM(timestamp)` for time-series
 2. **Ordering**: `ORDER BY` for query optimization
-3. **TTL**: `TTL toDateTime(timestamp) + INTERVAL 365 DAY` for automatic retention (all tables: traces, observations, quality_scores, blob_storage_file_log)
+3. **TTL**: `TTL toDateTime(timestamp) + INTERVAL 365 DAY` for automatic retention
 4. **Compression**: `CODEC(ZSTD)` for large text fields (78% cost reduction)
 5. **Index Granularity**: `index_granularity = 8192` for optimal performance
 6. **Engine**: `ReplacingMergeTree(event_ts, is_deleted)` for soft-delete support
