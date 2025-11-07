@@ -8,7 +8,6 @@ type SeedData struct {
 	Users               []UserSeed           `yaml:"users"`
 	RBAC                RBACSeeds            `yaml:"rbac"`
 	Projects            []ProjectSeed        `yaml:"projects"`
-	OnboardingQuestions []OnboardingSeed     `yaml:"onboarding_questions"`
 }
 
 // OrganizationSeed represents seed data for organizations
@@ -66,19 +65,6 @@ type ProjectSeed struct {
 	Name             string `yaml:"name"`
 	Description      string `yaml:"description"`
 	OrganizationName string `yaml:"organization_name"` // Changed from slug to name
-}
-
-
-// OnboardingSeed represents seed data for onboarding questions
-type OnboardingSeed struct {
-	Step         int      `yaml:"step"`
-	QuestionType string   `yaml:"question_type"`
-	Title        string   `yaml:"title"`
-	Description  string   `yaml:"description"`
-	IsRequired   bool     `yaml:"is_required"`
-	Options      []string `yaml:"options"`
-	DisplayOrder int      `yaml:"display_order"`
-	IsActive     bool     `yaml:"is_active"`
 }
 
 // Options represents the seeder configuration options

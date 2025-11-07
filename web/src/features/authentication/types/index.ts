@@ -36,7 +36,6 @@ export interface User {
   updatedAt: string
   lastLoginAt?: string
   isEmailVerified: boolean
-  onboardingCompletedAt?: string | null
   organizations?: OrganizationWithProjects[]  // NEW: Organizations with nested projects
 
   // TODO: Add when implementing backend-integrated permission system
@@ -194,8 +193,6 @@ export interface UserResponse {
   first_name: string
   last_name: string
   is_email_verified: boolean
-  onboarding_completed_at: string | null
-  onboarding_step: number
   timezone: string
   language: string
   is_active: boolean

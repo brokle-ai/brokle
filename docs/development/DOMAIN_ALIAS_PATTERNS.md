@@ -14,7 +14,7 @@ Domain alias patterns provide a standardized way to import domain packages while
 |---------------|--------|---------------|
 | `brokle/internal/core/domain/auth` | `authDomain` | Authentication, authorization, user management |
 | `brokle/internal/core/domain/organization` | `orgDomain` | Organizations, projects, environments, teams |
-| `brokle/internal/core/domain/user` | `userDomain` | User profiles, preferences, onboarding |
+| `brokle/internal/core/domain/user` | `userDomain` | User profiles, preferences |
 | `brokle/internal/core/domain/billing` | `billingDomain` | Subscriptions, payments, usage tracking |
 | `brokle/internal/core/domain/analytics` | `analyticsDomain` | Metrics, reporting, insights |
 

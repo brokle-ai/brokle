@@ -62,7 +62,6 @@ export interface EnhancedUserProfileResponse {
   last_name: string
   avatar_url: string
   is_email_verified: boolean
-  onboarding_completed_at: string | null | undefined
   is_active: boolean
   created_at: string
   updated_at: string

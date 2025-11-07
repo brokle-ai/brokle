@@ -20,20 +20,16 @@ type Handler struct {
 	logger              *logrus.Logger
 	userService         user.UserService
 	profileService      user.ProfileService
-	onboardingService   user.OnboardingService
-	Onboarding          *OnboardingHandler
 	organizationService organization.OrganizationService
 }
 
 // NewHandler creates a new user handler
-func NewHandler(config *config.Config, logger *logrus.Logger, userService user.UserService, profileService user.ProfileService, onboardingService user.OnboardingService, organizationService organization.OrganizationService) *Handler {
+func NewHandler(config *config.Config, logger *logrus.Logger, userService user.UserService, profileService user.ProfileService, organizationService organization.OrganizationService) *Handler {
 	return &Handler{
 		config:              config,
 		logger:              logger,
 		userService:         userService,
 		profileService:      profileService,
-		onboardingService:   onboardingService,
-		Onboarding:          NewOnboardingHandler(config, logger, onboardingService, userService),
 		organizationService: organizationService,
 	}
 }
@@ -48,7 +44,6 @@ type UserProfileResponse struct {
 	LastName              string           `json:"last_name" example:"Doe" description:"User last name"`
 	AvatarURL             string           `json:"avatar_url" example:"https://example.com/avatar.jpg" description:"Profile avatar URL"`
 	IsEmailVerified       bool             `json:"is_email_verified" example:"true" description:"Email verification status"`
-	OnboardingCompletedAt *string          `json:"onboarding_completed_at,omitempty" example:"2024-10-31T12:00:00Z" description:"Timestamp when onboarding was completed (null if not completed)"`
 	IsActive              bool             `json:"is_active" example:"true" description:"Account active status"`
 	CreatedAt             time.Time        `json:"created_at" example:"2025-01-01T00:00:00Z" description:"Account creation timestamp"`
 	LastLoginAt           *time.Time       `json:"last_login_at,omitempty" example:"2025-01-02T10:30:00Z" description:"Last login timestamp"`
@@ -159,13 +154,6 @@ func (h *Handler) GetProfile(c *gin.Context) {
 		LastName:              userData.LastName,
 		AvatarURL:             "", // Now stored in profile
 		IsEmailVerified:       userData.IsEmailVerified,
-		OnboardingCompletedAt: func() *string {
-			if userData.OnboardingCompletedAt != nil {
-				ts := userData.OnboardingCompletedAt.Format(time.RFC3339)
-				return &ts
-			}
-			return nil
-		}(),
 		IsActive:              userData.IsActive,
 		CreatedAt:             userData.CreatedAt,
 		LastLoginAt:           userData.LastLoginAt,

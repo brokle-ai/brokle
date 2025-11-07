@@ -230,16 +230,6 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 		users.PUT("/me/default-organization", s.handlers.User.SetDefaultOrganization)
 	}
 
-	// Onboarding routes
-	onboarding := protected.Group("/onboarding")
-	{
-		onboarding.GET("/questions", s.handlers.User.Onboarding.GetQuestions)
-		onboarding.POST("/responses", s.handlers.User.Onboarding.SubmitResponses)
-		onboarding.POST("/skip/:id", s.handlers.User.Onboarding.SkipQuestion)
-		onboarding.POST("/complete", s.handlers.User.Onboarding.CompleteOnboarding)
-		onboarding.GET("/status", s.handlers.User.Onboarding.GetStatus)
-	}
-
 	// Auth session management routes (protected)
 	authSessions := protected.Group("/auth")
 	{

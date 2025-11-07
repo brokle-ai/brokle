@@ -13,7 +13,6 @@ export function createMockUser(overrides = {}) {
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     isEmailVerified: true,
-    onboardingCompletedAt: new Date().toISOString(),
     ...overrides,
   }
 }

@@ -108,10 +108,9 @@ Populate database with environment-specific test data.
 
 **Seeding includes:**
 - **Users** - Sample users with proper authentication
-- **Organizations** - Multi-tenant organization structure  
+- **Organizations** - Multi-tenant organization structure
 - **RBAC** - Roles, permissions, and memberships
 - **Projects & Environments** - Complete project hierarchy
-- **Onboarding Questions** - User onboarding workflow setup
 - **⚠️ API Keys Skipped** - Create manually via web interface (JSON serialization issue)
 
 ### Dangerous Operations (Use with Caution)
@@ -222,7 +221,6 @@ rbac:                  # Roles, permissions, memberships
   memberships:         # User-organization-role assignments
 projects:              # Projects and environments
 api_keys:              # API keys (skipped due to JSON issue)
-onboarding_questions:  # User onboarding workflow
 ```
 
 ## Usage Examples

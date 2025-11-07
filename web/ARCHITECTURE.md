@@ -11,7 +11,6 @@ web/src/
 ├── app/                          # Next.js App Router (routing only)
 │   ├── (auth)/                   # Auth route group
 │   ├── (dashboard)/              # Protected dashboard routes
-│   ├── (onboarding)/             # Onboarding wizard
 │   └── (errors)/                 # Error pages
 │
 ├── features/                     # Domain features (self-contained)

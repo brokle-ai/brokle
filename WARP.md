@@ -227,8 +227,7 @@ src/app/
 ├── (auth)/               # Auth route group (/auth/*)
 ├── (dashboard)/          # Dashboard routes
 │   ├── [orgSlug]/       # Organization-scoped routes
-│   ├── settings/        # User settings
-│   └── onboarding/      # User onboarding flow
+│   └── settings/        # User settings
 └── layout.tsx           # Root layout with providers
 ```
 

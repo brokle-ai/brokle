@@ -57,7 +57,6 @@ export const login = async (credentials: LoginCredentials): Promise<AuthResponse
     createdAt: backendResponse.user.created_at,
     updatedAt: backendResponse.user.created_at,
     isEmailVerified: backendResponse.user.is_email_verified,
-    onboardingCompletedAt: backendResponse.user.onboarding_completed_at,
   }
 
   if (process.env.NODE_ENV === 'development') {
@@ -192,7 +191,6 @@ export const signup = async (credentials: SignUpCredentials): Promise<AuthRespon
     createdAt: backendResponse.user.created_at,
     updatedAt: backendResponse.user.created_at,
     isEmailVerified: backendResponse.user.is_email_verified,
-    onboardingCompletedAt: backendResponse.user.onboarding_completed_at,
   }
 
   // Get organization from backend (cookies sent automatically, no manual auth header)
@@ -273,7 +271,6 @@ export const getCurrentUser = async (): Promise<User> => {
     createdAt: userResponse.created_at,
     updatedAt: userResponse.created_at,
     isEmailVerified: userResponse.is_email_verified,
-    onboardingCompletedAt: userResponse.onboarding_completed_at,
     organizations: userResponse.organizations || [],
   }
 }
@@ -299,7 +296,6 @@ export const updateProfile = async (data: Partial<User>): Promise<User> => {
     createdAt: userResponse.created_at,
     updatedAt: userResponse.created_at,
     isEmailVerified: userResponse.is_email_verified,
-    onboardingCompletedAt: userResponse.onboarding_completed_at,
   }
 }
 
@@ -452,7 +448,6 @@ export const completeOAuthSignup = async (data: {
     createdAt: backendResponse.user.created_at,
     updatedAt: backendResponse.user.created_at,
     isEmailVerified: backendResponse.user.is_email_verified,
-    onboardingCompletedAt: backendResponse.user.onboarding_completed_at,
   }
 
   // Map organization from response (no /organizations call needed)

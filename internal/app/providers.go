@@ -188,7 +188,6 @@ type BillingRepositories struct {
 type UserServices struct {
 	User        user.UserService
 	Profile     user.ProfileService
-	Onboarding  user.OnboardingService
 }
 
 // AuthServices contains all auth-related services
@@ -408,7 +407,6 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 		core.Services.Auth.OAuthProvider, // OAuth provider for Google/GitHub signup
 		core.Services.User.User,
 		core.Services.User.Profile,
-		core.Services.User.Onboarding,
 		core.Services.OrganizationService,
 		core.Services.MemberService,
 		core.Services.ProjectService,
@@ -532,15 +530,10 @@ func ProvideUserServices(
 	profileSvc := userService.NewProfileService(
 		userRepos.User,
 	)
-	
-	onboardingSvc := userService.NewOnboardingService(
-		userRepos.User,
-	)
 
 	return &UserServices{
 		User:        userSvc,
 		Profile:     profileSvc,
-		Onboarding:  onboardingSvc,
 	}
 }
 

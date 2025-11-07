@@ -71,7 +71,6 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         createdAt: response.created_at,
         updatedAt: response.updated_at,
         isEmailVerified: response.is_email_verified,
-        onboardingCompletedAt: response.onboarding_completed_at ?? undefined,
         organizations: [], // Will be set below
       }
 

@@ -46,7 +46,6 @@ function OAuthCallbackContent() {
             createdAt: response.user.created_at,
             updatedAt: response.user.created_at,
             isEmailVerified: response.user.is_email_verified,
-            onboardingCompletedAt: response.user.onboarding_completed_at,
           }
 
           // Set auth state manually

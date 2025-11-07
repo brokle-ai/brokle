@@ -401,7 +401,6 @@ The platform implements a clean separation between SDK and Dashboard routes:
 
 - `/api/v1/auth/*` - Authentication & session management
 - `/api/v1/users/*` - User profile management
-- `/api/v1/onboarding/*` - User onboarding flow
 - `/api/v1/organizations/*` - Organization management with RBAC
 - `/api/v1/projects/*` - Project management (supports organization_id filtering)
 - `/api/v1/projects/:projectId/api-keys/*` - API key management
@@ -675,7 +674,6 @@ web/src/
 ├── app/                   # Next.js App Router (routing only)
 │   ├── (auth)/           # Auth route group
 │   ├── (dashboard)/      # Dashboard routes
-│   ├── (onboarding)/     # Onboarding wizard
 │   └── (errors)/         # Error pages
 ├── features/             # Domain features (self-contained)
 │   ├── authentication/   # Auth domain (12 components, 4 hooks, store, API)
