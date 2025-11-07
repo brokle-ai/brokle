@@ -9,6 +9,7 @@ import {
   LogOut,
   Sparkles,
 } from 'lucide-react'
+import { getUserInitials } from '@/lib/utils/user-utils'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   DropdownMenu,
@@ -39,6 +40,9 @@ export function NavUser({
   const { isMobile } = useSidebar()
   const { mutate: handleLogout, isPending: isLoggingOut } = useLogoutMutation()
 
+  // Compute user initials from full name
+  const initials = getUserInitials({ name: user.name, email: user.email })
+
   return (
     <SidebarMenu>
       <SidebarMenuItem>
@@ -50,7 +54,7 @@ export function NavUser({
             >
               <Avatar className='h-8 w-8 rounded-lg'>
                 <AvatarImage src={user.avatar} alt={user.name} />
-                <AvatarFallback className='rounded-lg'>SN</AvatarFallback>
+                <AvatarFallback className='rounded-lg'>{initials}</AvatarFallback>
               </Avatar>
               <div className='grid flex-1 text-left text-sm leading-tight'>
                 <span className='truncate font-semibold'>{user.name}</span>
@@ -69,7 +73,7 @@ export function NavUser({
               <div className='flex items-center gap-2 px-1 py-1.5 text-left text-sm'>
                 <Avatar className='h-8 w-8 rounded-lg'>
                   <AvatarImage src={user.avatar} alt={user.name} />
-                  <AvatarFallback className='rounded-lg'>SN</AvatarFallback>
+                  <AvatarFallback className='rounded-lg'>{initials}</AvatarFallback>
                 </Avatar>
                 <div className='grid flex-1 text-left text-sm leading-tight'>
                   <span className='truncate font-semibold'>{user.name}</span>
