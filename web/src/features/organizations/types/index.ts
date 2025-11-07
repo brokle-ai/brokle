@@ -111,6 +111,7 @@ export interface OrganizationContext {
 
 export interface CreateOrganizationData {
   name: string
+  /** Reserved for future backend use (not currently persisted) */
   description?: string
 }
 

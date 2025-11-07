@@ -57,16 +57,16 @@ type UpdateOrganizationRequest struct {
 
 // OrganizationMember represents a member of an organization
 type OrganizationMember struct {
-	UserID    string     `json:"user_id" example:"usr_1234567890" description:"User ID"`
-	Email     string     `json:"email" example:"john@acme.com" description:"User email address"`
-	FirstName string     `json:"first_name" example:"John" description:"User first name"`
-	LastName  string     `json:"last_name" example:"Doe" description:"User last name"`
-	Role      string     `json:"role" example:"admin" description:"Role name in organization"`
-	Status    string     `json:"status" example:"active" description:"Member status (active, invited, suspended)"`
-	JoinedAt  time.Time  `json:"joined_at" example:"2024-01-01T00:00:00Z" description:"When user joined organization"`
-	InvitedBy *string    `json:"invited_by,omitempty" example:"john@inviter.com" description:"Email of user who sent invitation"`
-	CreatedAt time.Time  `json:"created_at" example:"2024-01-01T00:00:00Z" description:"When membership was created"`
-	UpdatedAt time.Time  `json:"updated_at" example:"2024-01-01T00:00:00Z" description:"When membership was last updated"`
+	UserID    string    `json:"user_id" example:"usr_1234567890" description:"User ID"`
+	Email     string    `json:"email" example:"john@acme.com" description:"User email address"`
+	FirstName string    `json:"first_name" example:"John" description:"User first name"`
+	LastName  string    `json:"last_name" example:"Doe" description:"User last name"`
+	Role      string    `json:"role" example:"admin" description:"Role name in organization"`
+	Status    string    `json:"status" example:"active" description:"Member status (active, invited, suspended)"`
+	JoinedAt  time.Time `json:"joined_at" example:"2024-01-01T00:00:00Z" description:"When user joined organization"`
+	InvitedBy *string   `json:"invited_by,omitempty" example:"john@inviter.com" description:"Email of user who sent invitation"`
+	CreatedAt time.Time `json:"created_at" example:"2024-01-01T00:00:00Z" description:"When membership was created"`
+	UpdatedAt time.Time `json:"updated_at" example:"2024-01-01T00:00:00Z" description:"When membership was last updated"`
 }
 
 // ListMembersRequest represents request parameters for listing members
@@ -100,7 +100,6 @@ type ListRequest struct {
 type GetRequest struct {
 	OrgID string `uri:"orgId" binding:"required" example:"01FXYZ123456789ABCDEFGHIJK0" description:"Organization ID"`
 }
-
 
 // NewHandler creates a new organization handler
 func NewHandler(
@@ -186,7 +185,7 @@ func (h *Handler) List(c *gin.Context) {
 		filteredOrgs = append(filteredOrgs, Organization{
 			ID:        org.ID.String(),
 			Name:      org.Name,
-				Plan:      org.Plan,
+			Plan:      org.Plan,
 			Status:    org.SubscriptionStatus,
 			CreatedAt: org.CreatedAt,
 			UpdatedAt: org.UpdatedAt,
@@ -866,7 +865,7 @@ func (h *Handler) InviteMember(c *gin.Context) {
 	if err == nil {
 		inviterEmail = inviterUser.Email
 	}
-	
+
 	responseData := OrganizationMember{
 		Email:     req.Email,
 		Role:      req.Role,

@@ -146,6 +146,11 @@ export const getProjectMetrics = async (organizationId: string, projectId: strin
     )
   }
 
+/**
+ * Create a new organization
+ * @param data.name - Organization name (required, 2-100 characters)
+ * @param data.description - Reserved for future backend use (not currently persisted)
+ */
 export const createOrganization = async (data: {
     name: string
     description?: string
