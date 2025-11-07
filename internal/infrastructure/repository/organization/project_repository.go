@@ -2,6 +2,7 @@ package organization
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -33,7 +34,7 @@ func (r *projectRepository) GetByID(ctx context.Context, id ulid.ULID) (*orgDoma
 	var project orgDomain.Project
 	err := r.db.WithContext(ctx).Where("id = ? AND deleted_at IS NULL", id).First(&project).Error
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("get project by ID %s: %w", id, orgDomain.ErrProjectNotFound)
 		}
 		return nil, err
@@ -48,7 +49,7 @@ func (r *projectRepository) GetBySlug(ctx context.Context, orgID ulid.ULID, slug
 		Where("organization_id = ? AND slug = ? AND deleted_at IS NULL", orgID, slug).
 		First(&project).Error
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("get project by org %s and slug %s: %w", orgID, slug, orgDomain.ErrProjectNotFound)
 		}
 		return nil, err

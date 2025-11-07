@@ -2,6 +2,7 @@ package organization
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -33,7 +34,7 @@ func (r *invitationRepository) GetByID(ctx context.Context, id ulid.ULID) (*orgD
 	var invitation orgDomain.Invitation
 	err := r.db.WithContext(ctx).Where("id = ?", id).First(&invitation).Error
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("get invitation by ID %s: %w", id, orgDomain.ErrInvitationNotFound)
 		}
 		return nil, err
@@ -93,7 +94,7 @@ func (r *invitationRepository) GetPendingByEmail(ctx context.Context, orgID ulid
 		Where("organization_id = ? AND email = ? AND status = ?", orgID, email, orgDomain.InvitationStatusPending).
 		First(&invitation).Error
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("get pending invitation by org %s and email %s: %w", orgID, email, orgDomain.ErrInvitationNotFound)
 		}
 		return nil, err
@@ -120,7 +121,7 @@ func (r *invitationRepository) GetByToken(ctx context.Context, token string) (*o
 	var invitation orgDomain.Invitation
 	err := r.db.WithContext(ctx).Where("token = ? AND deleted_at IS NULL", token).First(&invitation).Error
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("get invitation by token: %w", orgDomain.ErrInvitationNotFound)
 		}
 		return nil, err

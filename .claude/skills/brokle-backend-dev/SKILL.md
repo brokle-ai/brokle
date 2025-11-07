@@ -84,14 +84,31 @@ import (
 
 **Three-Layer Pattern**: Repository (Domain Errors) → Service (AppErrors) → Handler (HTTP Response)
 
-**Repository Layer**:
+**Repository Layer** (Standard Pattern - `errors.Is()` for GORM):
+
+All repositories use `errors.Is()` for GORM error checking (standardized for wrapped error compatibility).
+
+✅ **Standard Pattern**:
+```go
+import "errors"
+
+if errors.Is(err, gorm.ErrRecordNotFound) {  // ✅ Standardized
+    return nil, fmt.Errorf("context: %w", domainError)
+}
+```
+
+❌ **Don't Use**:
+```go
+if err == gorm.ErrRecordNotFound {  // ❌ Old pattern - don't use
+```
+
+**Example**:
 ```go
 func (r *userRepository) GetByID(ctx context.Context, id ulid.ULID) (*authDomain.User, error) {
     var user authDomain.User
     err := r.db.WithContext(ctx).Where("id = ?", id).First(&user).Error
     if err != nil {
-        // Direct comparison for GORM errors (NOT errors.Is)
-        if err == gorm.ErrRecordNotFound {
+        if errors.Is(err, gorm.ErrRecordNotFound) {  // ✅ Standardized pattern
             return nil, fmt.Errorf("get user by ID %s: %w", id, authDomain.ErrNotFound)
         }
         return nil, fmt.Errorf("database query failed for user ID %s: %w", id, err)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -120,7 +121,7 @@ func (r *BillingRecordRepository) GetBillingRecord(ctx context.Context, recordID
 	err := r.db.WithContext(ctx).Raw(query, recordID).Scan(record).Error
 
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("billing record not found: %s", recordID)
 		}
 		return nil, fmt.Errorf("failed to get billing record: %w", err)
@@ -259,7 +260,7 @@ func (r *BillingRecordRepository) GetBillingSummary(ctx context.Context, orgID u
 	err := r.db.WithContext(ctx).Raw(query, orgID, period).Scan(&row).Error
 
 	if err != nil {
-		if err == gorm.ErrRecordNotFound || err == sql.ErrNoRows {
+		if errors.Is(err, gorm.ErrRecordNotFound) || errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("billing summary not found for organization %s and period %s", orgID, period)
 		}
 		return nil, fmt.Errorf("failed to get billing summary: %w", err)

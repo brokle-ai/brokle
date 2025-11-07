@@ -7,6 +7,7 @@ package auth
 
 import (
     "context"
+    "errors"  // Required for errors.Is()
     "fmt"
 
     "gorm.io/gorm"
@@ -34,7 +35,7 @@ func (r *userRepository) GetByID(ctx context.Context, id ulid.ULID) (*authDomain
     var user authDomain.User
     err := r.db.WithContext(ctx).Where("id = ?", id).First(&user).Error
     if err != nil {
-        if err == gorm.ErrRecordNotFound {
+        if errors.Is(err, gorm.ErrRecordNotFound) {  // ✅ Standardized pattern
             return nil, fmt.Errorf("get user by ID %s: %w", id, authDomain.ErrNotFound)
         }
         return nil, fmt.Errorf("database query failed for user ID %s: %w", id, err)
@@ -46,7 +47,7 @@ func (r *userRepository) GetByEmail(ctx context.Context, email string) (*authDom
     var user authDomain.User
     err := r.db.WithContext(ctx).Where("email = ?", email).First(&user).Error
     if err != nil {
-        if err == gorm.ErrRecordNotFound {
+        if errors.Is(err, gorm.ErrRecordNotFound) {  // ✅ Standardized pattern
             return nil, fmt.Errorf("get user by email %s: %w", email, authDomain.ErrNotFound)
         }
         return nil, fmt.Errorf("database query failed for email %s: %w", email, err)

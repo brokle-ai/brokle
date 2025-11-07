@@ -3,6 +3,7 @@ package billing
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/sirupsen/logrus"
@@ -43,7 +44,7 @@ func (r *QuotaRepository) GetUsageQuota(ctx context.Context, orgID ulid.ULID) (*
 	err := r.db.WithContext(ctx).Raw(query, orgID).Scan(quota).Error
 
 	if err != nil {
-		if err == gorm.ErrRecordNotFound || err == sql.ErrNoRows {
+		if errors.Is(err, gorm.ErrRecordNotFound) || errors.Is(err, sql.ErrNoRows) {
 			return nil, nil // No quota found, return nil without error
 		}
 		return nil, fmt.Errorf("failed to get usage quota: %w", err)

@@ -113,12 +113,12 @@ import (
     userDomain "brokle/internal/core/domain/user"
 )
 
-// 2. GORM error checking with errors.Is() (RECOMMENDED)
+// 2. GORM error checking with errors.Is() (STANDARD PATTERN)
 func (r *userRepository) GetByID(ctx context.Context, id ulid.ULID) (*userDomain.User, error) {
     var u userDomain.User
     err := r.db.WithContext(ctx).Where("id = ? AND deleted_at IS NULL", id).First(&u).Error
     if err != nil {
-        if errors.Is(err, gorm.ErrRecordNotFound) {  // ✅ errors.Is() is CORRECT
+        if errors.Is(err, gorm.ErrRecordNotFound) {  // ✅ Standardized across all repos
             return nil, fmt.Errorf("get user by ID %s: %w", id, userDomain.ErrNotFound)
         }
         return nil, fmt.Errorf("database query failed for user ID %s: %w", id, err)
@@ -127,7 +127,7 @@ func (r *userRepository) GetByID(ctx context.Context, id ulid.ULID) (*userDomain
 }
 ```
 
-**Note**: Both `errors.Is()` and direct comparison (`==`) are used in codebase. `errors.Is()` is preferred for consistency.
+**Standard**: All repositories use `errors.Is()` for GORM error checking (standardized across codebase for wrapped error compatibility).
 
 ## Service Layer Pattern
 
