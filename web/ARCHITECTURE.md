@@ -268,7 +268,7 @@ pnpm build             # Production build
 - `vitest.config.ts` - Test configuration
 - `next.config.ts` - Next.js configuration
 - `tailwind.config.ts` - Tailwind CSS configuration
-- `middleware.ts` - Next.js middleware (auth, CSRF)
+- `proxy.ts` - Next.js middleware (auth, CSRF)
 
 ## Feature Index
 

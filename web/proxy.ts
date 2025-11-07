@@ -1,6 +1,14 @@
 import { NextResponse, NextRequest } from 'next/server'
 
 /**
+ * MIGRATION NOTE (2025-11-07):
+ * This file was previously named middleware.ts in Next.js 15.
+ * Renamed to proxy.ts as required by Next.js 16.
+ * Function renamed: middleware → proxy
+ * See: https://nextjs.org/blog/next-16#middleware--proxy
+ */
+
+/**
  * Check if the given pathname is a public route that doesn't require authentication
  */
 function isPublicRoute(pathname: string): boolean {
@@ -42,10 +50,11 @@ function isTokenValid(token: string): boolean {
 }
 
 /**
- * Simplified middleware: validate JWT, redirect if invalid
+ * Simplified proxy: validate JWT, redirect if invalid
+ * (Formerly named "middleware" in Next.js 15)
  */
-export function middleware(request: NextRequest) {
-  console.log('[MIDDLEWARE] Running for:', request.nextUrl.pathname)
+export function proxy(request: NextRequest) {
+  console.log('[PROXY] Running for:', request.nextUrl.pathname)
   const { pathname } = request.nextUrl
   
   // Skip public routes
