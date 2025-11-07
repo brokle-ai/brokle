@@ -8,7 +8,7 @@
 import { useRouter, usePathname } from 'next/navigation'
 import { useWorkspace } from '@/context/workspace-context'
 import { parsePathContext, extractIdFromCompositeSlug, generateCompositeSlug } from '@/lib/utils/slug-utils'
-import type { Organization, Project } from '@/types/organization'
+import type { Organization, Project } from '@/features/organizations'
 
 export interface ContextNavigationHooks {
   // Current context

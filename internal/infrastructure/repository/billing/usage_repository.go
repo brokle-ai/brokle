@@ -1,0 +1,143 @@
+package billing
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/sirupsen/logrus"
+	"gorm.io/gorm"
+
+	billingDomain "brokle/internal/core/domain/billing"
+	"brokle/pkg/ulid"
+)
+
+// Ensure UsageRepository implements the interface
+var _ billingDomain.UsageRepository = (*UsageRepository)(nil)
+
+// UsageRepository handles usage tracking persistence
+type UsageRepository struct {
+	db     *gorm.DB
+	logger *logrus.Logger
+}
+
+// NewUsageRepository creates a new usage repository instance
+func NewUsageRepository(db *gorm.DB, logger *logrus.Logger) *UsageRepository {
+	return &UsageRepository{
+		db:     db,
+		logger: logger,
+	}
+}
+
+// InsertUsageRecord inserts a new usage record
+func (r *UsageRepository) InsertUsageRecord(ctx context.Context, record *billingDomain.UsageRecord) error {
+	query := `
+		INSERT INTO usage_records (
+			id, organization_id, request_id, provider_id, model_id,
+			request_type, input_tokens, output_tokens, total_tokens,
+			cost, currency, billing_tier, discounts, net_cost,
+			created_at, processed_at
+		) VALUES (
+			?, ?, ?, ?, ?,
+			?, ?, ?, ?,
+			?, ?, ?, ?, ?,
+			?, ?
+		)`
+
+	err := r.db.WithContext(ctx).Exec(query,
+		record.ID,
+		record.OrganizationID,
+		record.RequestID,
+		record.ProviderID,
+		record.ModelID,
+		record.RequestType,
+		record.InputTokens,
+		record.OutputTokens,
+		record.TotalTokens,
+		record.Cost,
+		record.Currency,
+		record.BillingTier,
+		record.Discounts,
+		record.NetCost,
+		record.CreatedAt,
+		record.ProcessedAt,
+	).Error
+
+	if err != nil {
+		r.logger.WithError(err).WithField("record_id", record.ID).Error("Failed to insert usage record")
+		return fmt.Errorf("failed to insert usage record: %w", err)
+	}
+
+	r.logger.WithFields(logrus.Fields{
+		"record_id":       record.ID,
+		"organization_id": record.OrganizationID,
+		"net_cost":        record.NetCost,
+	}).Debug("Inserted usage record")
+
+	return nil
+}
+
+// GetUsageRecords retrieves usage records for an organization within a time range
+func (r *UsageRepository) GetUsageRecords(ctx context.Context, orgID ulid.ULID, start, end time.Time) ([]*billingDomain.UsageRecord, error) {
+	query := `
+		SELECT
+			id, organization_id, request_id, provider_id, model_id,
+			request_type, input_tokens, output_tokens, total_tokens,
+			cost, currency, billing_tier, discounts, net_cost,
+			created_at, processed_at
+		FROM usage_records
+		WHERE organization_id = ?
+			AND created_at >= ?
+			AND created_at < ?
+		ORDER BY created_at DESC`
+
+	var records []*billingDomain.UsageRecord
+	err := r.db.WithContext(ctx).Raw(query, orgID, start, end).Scan(&records).Error
+	if err != nil {
+		return nil, fmt.Errorf("failed to get usage records: %w", err)
+	}
+
+	return records, nil
+}
+
+// UpdateUsageRecord updates an existing usage record
+func (r *UsageRepository) UpdateUsageRecord(ctx context.Context, recordID ulid.ULID, record *billingDomain.UsageRecord) error {
+	query := `
+		UPDATE usage_records
+		SET
+			request_type = ?,
+			input_tokens = ?,
+			output_tokens = ?,
+			total_tokens = ?,
+			cost = ?,
+			currency = ?,
+			billing_tier = ?,
+			discounts = ?,
+			net_cost = ?,
+			processed_at = ?
+		WHERE id = ?`
+
+	result := r.db.WithContext(ctx).Exec(query,
+		record.RequestType,
+		record.InputTokens,
+		record.OutputTokens,
+		record.TotalTokens,
+		record.Cost,
+		record.Currency,
+		record.BillingTier,
+		record.Discounts,
+		record.NetCost,
+		record.ProcessedAt,
+		recordID,
+	)
+
+	if result.Error != nil {
+		return fmt.Errorf("failed to update usage record: %w", result.Error)
+	}
+
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("usage record not found: %s", recordID)
+	}
+
+	return nil
+}

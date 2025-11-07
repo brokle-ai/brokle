@@ -44,7 +44,8 @@ curl -H "X-API-Key: bk_..." https://api.brokle.com/v1/models
 - `/api/v1/auth/*` - Authentication & session management
 - `/api/v1/users/*` - User profile management
 - `/api/v1/organizations/*` - Organization management with RBAC
-- `/api/v1/projects/*` - Project and API key management
+- `/api/v1/projects/*` - Project management (supports organization_id filtering)
+- `/api/v1/projects/:projectId/api-keys/*` - API key management
 - `/api/v1/analytics/*` - Metrics & reporting
 - `/api/v1/billing/*` - Usage & billing management
 

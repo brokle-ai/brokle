@@ -181,3 +181,9 @@ export type ResponseErrorInterceptor = (error: AxiosError) => Promise<never>
 
 // Token refresh callback type
 export type TokenRefreshCallback = () => Promise<string | null>
+
+// Extended Axios config with custom performance tracking properties
+export interface ExtendedAxiosRequestConfig extends AxiosRequestConfig {
+  _requestStartTime?: number
+  _retry?: boolean
+}

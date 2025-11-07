@@ -9,13 +9,13 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"brokle/internal/config"
+	"brokle/internal/ee/license"
 	"brokle/internal/errors"
-	"brokle/internal/services"
 )
 
 
 // EnterpriseFeature middleware checks if an enterprise feature is enabled
-func EnterpriseFeature(feature string, licenseService *services.LicenseService, logger *logrus.Logger) gin.HandlerFunc {
+func EnterpriseFeature(feature string, licenseService *license.LicenseService, logger *logrus.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		cfg := c.MustGet("config").(*config.Config)
 		
@@ -67,7 +67,7 @@ func EnterpriseFeature(feature string, licenseService *services.LicenseService, 
 }
 
 // RequireEnterpriseLicense checks for valid enterprise license
-func RequireEnterpriseLicense(licenseService *services.LicenseService, logger *logrus.Logger) gin.HandlerFunc {
+func RequireEnterpriseLicense(licenseService *license.LicenseService, logger *logrus.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		cfg := c.MustGet("config").(*config.Config)
 		
@@ -109,7 +109,7 @@ func RequireEnterpriseLicense(licenseService *services.LicenseService, logger *l
 }
 
 // CheckUsageLimit middleware validates usage against license limits
-func CheckUsageLimit(limitType string, licenseService *services.LicenseService, logger *logrus.Logger) gin.HandlerFunc {
+func CheckUsageLimit(limitType string, licenseService *license.LicenseService, logger *logrus.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		cfg := c.MustGet("config").(*config.Config)
 		
@@ -161,7 +161,7 @@ func CheckUsageLimit(limitType string, licenseService *services.LicenseService, 
 }
 
 // EnterpriseFeatureWithFallback allows graceful degradation
-func EnterpriseFeatureWithFallback(feature string, fallbackHandler gin.HandlerFunc, licenseService *services.LicenseService, logger *logrus.Logger) gin.HandlerFunc {
+func EnterpriseFeatureWithFallback(feature string, fallbackHandler gin.HandlerFunc, licenseService *license.LicenseService, logger *logrus.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		cfg := c.MustGet("config").(*config.Config)
 		

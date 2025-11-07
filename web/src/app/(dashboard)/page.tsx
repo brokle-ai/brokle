@@ -2,8 +2,8 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAuth } from '@/hooks/auth/use-auth'
-import { useCurrentOrganization } from '@/hooks/api/use-auth-queries'
+import { useAuth } from '@/features/authentication'
+import { useCurrentOrganization } from '@/features/authentication'
 import { PageLoader } from '@/components/shared/loading'
 import { buildOrgUrl } from '@/lib/utils/slug-utils'
 

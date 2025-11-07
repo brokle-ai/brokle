@@ -42,16 +42,11 @@ func NewHandler(
 
 // ListRequest represents the request parameters for listing projects
 type ListRequest struct {
-	OrganizationID string `form:"organization_id" binding:"omitempty" example:"org_1234567890" description:"Filter by organization ID"`
+	OrganizationID string `form:"organization_id" binding:"omitempty" example:"org_1234567890" description:"Optional filter by organization ID"`
 	Status         string `form:"status" binding:"omitempty,oneof=active paused archived" example:"active" description:"Filter by project status"`
 	Page           int    `form:"page" binding:"omitempty,min=1" example:"1" description:"Page number (default: 1)"`
 	Limit          int    `form:"limit" binding:"omitempty,min=1,max=100" example:"20" description:"Items per page (default: 20, max: 100)"`
 	Search         string `form:"search" binding:"omitempty" example:"chatbot" description:"Search projects by name or slug"`
-}
-
-// GetRequest represents the request parameters for getting a project
-type GetRequest struct {
-	ProjectID string `uri:"projectId" binding:"required" example:"proj_1234567890" description:"Project ID"`
 }
 
 // Project represents a project entity
@@ -81,9 +76,9 @@ type UpdateProjectRequest struct {
 	Status      string `json:"status,omitempty" binding:"omitempty,oneof=active paused archived" example:"active" description:"Project status (active, paused, archived)"`
 }
 
-// List handles GET /projects
+// List handles GET /api/v1/projects
 // @Summary List projects
-// @Description Get a paginated list of projects accessible to the authenticated user
+// @Description Get a paginated list of projects accessible to the authenticated user. Optionally filter by organization.
 // @Tags Projects
 // @Accept json
 // @Produce json
@@ -296,13 +291,13 @@ func (h *Handler) List(c *gin.Context) {
 	}).Info("Projects listed successfully")
 }
 
-// Create handles POST /projects
+// Create handles POST /api/v1/projects
 // @Summary Create project
 // @Description Create a new project within an organization. User must have appropriate permissions in the organization.
 // @Tags Projects
 // @Accept json
 // @Produce json
-// @Param request body CreateProjectRequest true "Project details"
+// @Param request body CreateProjectRequest true "Project details (includes organization_id)"
 // @Success 201 {object} response.SuccessResponse{data=Project} "Project created successfully"
 // @Failure 400 {object} response.ErrorResponse "Bad request - invalid input or validation errors"
 // @Failure 401 {object} response.ErrorResponse "Unauthorized"
@@ -345,7 +340,7 @@ func (h *Handler) Create(c *gin.Context) {
 
 	ctx := c.Request.Context()
 
-	// Parse and validate organization ID
+	// Parse and validate organization ID from request body
 	orgULID, err := ulid.Parse(req.OrganizationID)
 	if err != nil {
 		h.logger.WithFields(logrus.Fields{
@@ -449,7 +444,7 @@ func (h *Handler) Create(c *gin.Context) {
 	}).Info("Project created successfully")
 }
 
-// Get handles GET /projects/:projectId
+// Get handles GET /api/v1/projects/:projectId
 // @Summary Get project details
 // @Description Get detailed information about a specific project
 // @Tags Projects
@@ -508,7 +503,7 @@ func (h *Handler) Get(c *gin.Context) {
 
 	ctx := c.Request.Context()
 
-	// Validate user can access this project
+	// Validate user can access this project (checks org membership via project)
 	err = h.projectService.ValidateProjectAccess(ctx, userULID, projectID)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
@@ -581,7 +576,7 @@ func (h *Handler) Get(c *gin.Context) {
 	}).Info("Project retrieved successfully")
 }
 
-// Update handles PUT /projects/:projectId
+// Update handles PUT /api/v1/projects/:projectId
 // @Summary Update project
 // @Description Update project details. Requires appropriate permissions within the project organization.
 // @Tags Projects
@@ -654,7 +649,7 @@ func (h *Handler) Update(c *gin.Context) {
 
 	ctx := c.Request.Context()
 
-	// Validate user can access this project
+	// Validate user can access this project (checks org membership via project)
 	err = h.projectService.ValidateProjectAccess(ctx, userULID, projectID)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
@@ -756,7 +751,7 @@ func (h *Handler) Update(c *gin.Context) {
 	}).Info("Project updated successfully")
 }
 
-// Delete handles DELETE /projects/:projectId
+// Delete handles DELETE /api/v1/projects/:projectId
 // @Summary Delete project
 // @Description Permanently delete a project and all associated environments and data. This action cannot be undone.
 // @Tags Projects
@@ -816,7 +811,7 @@ func (h *Handler) Delete(c *gin.Context) {
 
 	ctx := c.Request.Context()
 
-	// Validate user can access this project
+	// Validate user can access this project (checks org membership via project)
 	err = h.projectService.ValidateProjectAccess(ctx, userULID, projectID)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {

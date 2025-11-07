@@ -1,12 +1,14 @@
 // Clean API exports - Direct functions with explicit versioning
 // Perfect for dashboard application - latest optimal endpoints
 
-// Direct service exports - always use optimal backend version per endpoint
-export * from './services/auth'
-export * from './services/organizations'
-export * from './services/analytics'
+// Feature-based API exports
+export * from '@/features/authentication/api/auth-api'
+export * from '@/features/organizations/api/organizations-api'
+export * from '@/features/analytics/api/analytics-api'
+export * from '@/features/projects/api/projects-api'
+
+// Remaining services (not yet migrated to features)
 export * from './services/users'
-export * from './services/dashboard'
 export * from './services/public'
 export * from './services/rbac'
 
@@ -29,30 +31,10 @@ export type {
   SignUpCredentials,
   User,
   Organization
-} from '@/types/auth'
+} from '@/features/authentication'
 
-// Re-export analytics types
-export type {
-  AnalyticsMetric,
-  ModelUsage,
-  ProviderUsage,
-  DashboardStats,
-  AnalyticsQuery,
-  CostAnalytics
-} from './services/analytics'
-
-// Re-export user types
-export type {
-  CreateUserData
-} from './services/users'
-
-// Re-export dashboard types
-export type {
-  QuickStat,
-  ChartData,
-  DashboardOverview,
-  DashboardConfig
-} from './services/dashboard'
+// Types are exported directly from feature API files
+// No need to re-export here since features handle their own types
 
 // Re-export public API types
 export type {
@@ -65,20 +47,21 @@ export type {
   FeedbackData
 } from './services/public'
 
-// Development helper - Clean API object (optional)
+// Development helper - Make API functions available globally for debugging
 if (process.env.NODE_ENV === 'development') {
   if (typeof window !== 'undefined') {
-    // Make API functions available globally for debugging
-    import('./services/auth').then((auth) => {
-      import('./services/organizations').then((orgs) => {
-        import('./services/analytics').then((analytics) => {
-          (window as any).brokleAPI = {
-            auth,
-            organizations: orgs,
-            analytics,
-            // Easy debugging access
-            client: new (require('./core/client').BrokleAPIClient)('/api')
-          }
+    import('@/features/authentication/api/auth-api').then((auth) => {
+      import('@/features/organizations/api/organizations-api').then((orgs) => {
+        import('@/features/analytics/api/analytics-api').then((analytics) => {
+          import('@/features/projects/api/projects-api').then((projects) => {
+            (window as any).brokleAPI = {
+              auth,
+              organizations: orgs,
+              analytics,
+              projects,
+              client: new (require('./core/client').BrokleAPIClient)('/api')
+            }
+          })
         })
       })
     })

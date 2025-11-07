@@ -1,7 +1,9 @@
 'use client'
 
-import { useProjectOnly } from '@/hooks/use-project-only'
-import { AnalyticsView } from '@/views/analytics-view'
+import { useProjectOnly } from '@/features/projects'
+import { AnalyticsView } from '@/features/analytics'
+import { DashboardHeader } from '@/components/layout/dashboard-header'
+import { Main } from '@/components/layout/main'
 import { Skeleton } from '@/components/ui/skeleton'
 
 export default function ProjectAnalyticsPage() {
@@ -43,5 +45,18 @@ export default function ProjectAnalyticsPage() {
     )
   }
 
-  return <AnalyticsView />
+  return (
+    <>
+      <DashboardHeader />
+      <Main>
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold tracking-tight">Analytics</h1>
+          <p className="text-muted-foreground">
+            View detailed analytics and usage metrics for {currentProject.name}
+          </p>
+        </div>
+        <AnalyticsView />
+      </Main>
+    </>
+  )
 }

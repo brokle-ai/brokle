@@ -32,9 +32,6 @@ type User struct {
 	LastLoginAt *time.Time `json:"last_login_at,omitempty"`
 	LoginCount  int        `json:"login_count" gorm:"default:0"`
 
-	// Onboarding (timestamp-based: NULL = not completed, NOT NULL = completed)
-	OnboardingCompletedAt *time.Time `json:"onboarding_completed_at,omitempty"`
-
 	// Default Organization
 	DefaultOrganizationID *ulid.ULID `json:"default_organization_id,omitempty" gorm:"type:char(26)"`
 
@@ -142,7 +139,6 @@ type PublicUser struct {
 	ID                    ulid.ULID  `json:"id"`
 	Name                  string     `json:"name"`
 	IsEmailVerified       bool       `json:"is_email_verified"`
-	OnboardingCompletedAt *time.Time `json:"onboarding_completed_at,omitempty"`
 	CreatedAt             time.Time  `json:"created_at"`
 }
 
@@ -152,7 +148,6 @@ func (u *User) ToPublic() *PublicUser {
 		ID:                    u.ID,
 		Name:                  u.GetFullName(),
 		IsEmailVerified:       u.IsEmailVerified,
-		OnboardingCompletedAt: u.OnboardingCompletedAt,
 		CreatedAt:             u.CreatedAt,
 	}
 }
@@ -189,18 +184,6 @@ func (u *User) SetPassword(hashedPassword string) {
 	u.UpdatedAt = time.Now()
 }
 
-// CompleteOnboarding marks the user's onboarding as completed.
-func (u *User) CompleteOnboarding() {
-	now := time.Now()
-	u.OnboardingCompletedAt = &now
-	u.UpdatedAt = now
-}
-
-// IsOnboardingComplete checks if user has completed onboarding
-func (u *User) IsOnboardingComplete() bool {
-	return u.OnboardingCompletedAt != nil
-}
-
 // SetDefaultOrganization sets the user's default organization.
 func (u *User) SetDefaultOrganization(orgID ulid.ULID) {
 	u.DefaultOrganizationID = &orgID
@@ -229,7 +212,6 @@ func NewUser(email, firstName, lastName, role string) *User {
 		Role:                  role,
 		IsActive:              true,
 		IsEmailVerified:       false,
-		OnboardingCompletedAt: nil,
 		Timezone:              "UTC",
 		Language:              "en",
 		LoginCount:            0,

@@ -210,7 +210,7 @@ internal/
 ├── middleware/
 │   └── enterprise.go      # Feature gating middleware
 └── services/
-    └── license_service.go # License validation service
+    └── license/ # License validation service
 ```
 
 ### Feature Gating

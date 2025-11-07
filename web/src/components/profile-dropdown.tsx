@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { LogOut } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { getUserInitials } from '@/lib/utils/user-utils'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import {
@@ -15,31 +16,43 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { useLogoutMutation } from '@/hooks/api/use-auth-queries'
+import { useAuth, useLogoutMutation } from '@/features/authentication'
 
 interface ProfileDropdownProps {
   className?: string
 }
 
 export function ProfileDropdown({ className }: ProfileDropdownProps = {}) {
+  const { user } = useAuth()
   const { mutate: handleLogout, isPending: isLoggingOut } = useLogoutMutation()
+
+  // Only render on authenticated pages (MinimalHeader is deprecated/being removed)
+  if (!user) return null
+
+  // Compute user display values
+  const initials = getUserInitials({
+    firstName: user.firstName,
+    lastName: user.lastName,
+    email: user.email
+  })
+  const displayName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email || 'User'
 
   return (
     <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
         <Button variant='ghost' className={cn('relative h-8 w-8 rounded-full', className)}>
           <Avatar className='h-8 w-8'>
-            <AvatarImage src='/avatars/01.png' alt='@shadcn' />
-            <AvatarFallback>SN</AvatarFallback>
+            <AvatarImage src={user.avatar || undefined} alt={displayName} />
+            <AvatarFallback>{initials}</AvatarFallback>
           </Avatar>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className='w-56' align='end' forceMount>
         <DropdownMenuLabel className='font-normal'>
           <div className='flex flex-col space-y-1'>
-            <p className='text-sm leading-none font-medium'>satnaing</p>
+            <p className='text-sm leading-none font-medium'>{displayName}</p>
             <p className='text-muted-foreground text-xs leading-none'>
-              satnaingdev@gmail.com
+              {user.email}
             </p>
           </div>
         </DropdownMenuLabel>

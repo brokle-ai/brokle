@@ -346,7 +346,6 @@ type AuthUser struct {
 	Name                  string     `json:"name"`
 	AvatarURL             *string    `json:"avatar_url,omitempty"`
 	IsEmailVerified       bool       `json:"is_email_verified"`
-	OnboardingCompletedAt *time.Time `json:"onboarding_completed_at,omitempty"`
 	DefaultOrganizationID *ulid.ULID `json:"default_organization_id,omitempty"`
 }
 

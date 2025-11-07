@@ -32,7 +32,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { cn } from '@/lib/utils'
-import type { OrganizationParams, SubscriptionPlan } from '@/types/organization'
+import type { OrganizationParams, SubscriptionPlan } from '@/features/organizations'
 
 // Mock billing data
 const MOCK_INVOICES = [
@@ -110,13 +110,14 @@ export default function BillingSettingsPage() {
     error
   } = useWorkspace()
 
-  // Validate params
+  // ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL LOGIC
+  const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan>('pro')
+
+  // Validate params (after all hooks)
   if (!params?.orgSlug) {
     console.error('Missing orgSlug parameter')
     return null
   }
-  
-  const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan>('pro')
 
   // TODO: Implement proper permission-based access control with backend integration
   // This page should verify user has 'billing:read' and 'billing:write' permissions

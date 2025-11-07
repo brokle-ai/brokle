@@ -10,17 +10,17 @@ import (
 	"brokle/internal/config"
 	"brokle/internal/ee/analytics"
 	"brokle/internal/ee/compliance"
+	"brokle/internal/ee/license"
 	"brokle/internal/ee/rbac"
 	"brokle/internal/ee/sso"
 	"brokle/internal/middleware"
-	"brokle/internal/services"
 )
 
 // Handler handles enterprise-specific endpoints
 type Handler struct {
 	config              *config.Config
 	logger              *logrus.Logger
-	licenseService      *services.LicenseService
+	licenseService      *license.LicenseService
 	complianceService   compliance.Compliance
 	ssoService          sso.SSOProvider
 	rbacService         rbac.RBACManager
@@ -31,7 +31,7 @@ type Handler struct {
 func NewHandler(
 	cfg *config.Config,
 	logger *logrus.Logger,
-	licenseService *services.LicenseService,
+	licenseService *license.LicenseService,
 	complianceService compliance.Compliance,
 	ssoService sso.SSOProvider,
 	rbacService rbac.RBACManager,

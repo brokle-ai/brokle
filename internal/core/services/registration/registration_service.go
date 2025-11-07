@@ -157,9 +157,6 @@ func (s *registrationService) RegisterWithOrganization(ctx context.Context, req 
 			newUser.IsEmailVerified = false      // Email/password users need verification
 		}
 
-		// Mark onboarding as completed immediately
-		now := time.Now()
-		newUser.OnboardingCompletedAt = &now
 
 		if err := txUserRepo.Create(ctx, newUser); err != nil {
 			// Check for duplicate email (database unique constraint)
@@ -319,9 +316,6 @@ func (s *registrationService) RegisterWithInvitation(ctx context.Context, req *R
 			newUser.IsEmailVerified = false
 		}
 
-		// Mark onboarding as completed (same as fresh signup)
-		now := time.Now()
-		newUser.OnboardingCompletedAt = &now
 
 		// Set default organization to invited org
 		newUser.DefaultOrganizationID = &invitation.OrganizationID

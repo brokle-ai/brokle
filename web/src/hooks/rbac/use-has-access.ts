@@ -35,7 +35,7 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { checkUserScopes } from '@/lib/api/services/rbac'
-import { useAuth } from '@/hooks/auth/use-auth'
+import { useAuth } from '@/features/authentication'
 import { useWorkspace } from '@/context/workspace-context'
 
 // ========================================

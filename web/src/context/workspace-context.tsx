@@ -5,7 +5,18 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { usePathname } from 'next/navigation'
 import { BrokleAPIClient } from '@/lib/api/core/client'
 import { extractIdFromCompositeSlug, isValidCompositeSlug } from '@/lib/utils/slug-utils'
-import type { User, OrganizationWithProjects, ProjectSummary } from '@/types/auth'
+import type {
+  User,
+  OrganizationWithProjects,
+  ProjectSummary,
+  SubscriptionPlan,
+  OrganizationRole,
+} from '@/features/authentication'
+import type {
+  EnhancedUserProfileResponse,
+  BackendOrganizationWithProjects,
+  BackendProjectSummary
+} from '@/types/api-responses'
 
 const client = new BrokleAPIClient('/api')
 
@@ -24,7 +35,7 @@ interface WorkspaceContextValue {
   error: string | null
 
   // Actions
-  refresh: () => void
+  refresh: () => Promise<void>
   clearError: () => void
 }
 
@@ -44,7 +55,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const { data, isLoading, error: queryError } = useQuery<WorkspaceData>({
     queryKey: ['workspace'],
     queryFn: async () => {
-      const response = await client.get<any>('/v1/users/me')
+      const response = await client.get<EnhancedUserProfileResponse>('/v1/users/me')
 
       // Map user (all existing fields preserved)
       const user: User = {
@@ -55,25 +66,24 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         name: `${response.first_name} ${response.last_name}`.trim(),
         role: 'user',
         organizationId: '',
-        defaultOrganizationId: response.default_organization_id,
+        defaultOrganizationId: response.default_organization_id ?? undefined,
         projects: [],
         createdAt: response.created_at,
         updatedAt: response.updated_at,
         isEmailVerified: response.is_email_verified,
-        onboardingCompletedAt: response.onboarding_completed_at,
         organizations: [], // Will be set below
       }
 
       // Map organizations with nested projects
-      const organizations: OrganizationWithProjects[] = (response.organizations || []).map((org: any) => ({
+      const organizations: OrganizationWithProjects[] = (response.organizations || []).map((org: BackendOrganizationWithProjects) => ({
         id: org.id,
         name: org.name,
         compositeSlug: org.composite_slug,
-        plan: org.plan,
-        role: org.role,
+        plan: org.plan as SubscriptionPlan,
+        role: org.role as OrganizationRole,
         createdAt: org.created_at,
         updatedAt: org.updated_at,
-        projects: (org.projects || []).map((proj: any) => ({
+        projects: (org.projects || []).map((proj: BackendProjectSummary) => ({
           id: proj.id,
           name: proj.name,
           compositeSlug: proj.composite_slug,

@@ -141,33 +141,5 @@ func (dl *DataLoader) validateSeedData(data *SeedData) error {
 		projectKeys[projectKey] = true
 	}
 
-	// Validate onboarding questions
-	steps := make(map[int]bool)
-	for _, question := range data.OnboardingQuestions {
-		if question.Title == "" || question.QuestionType == "" {
-			return fmt.Errorf("onboarding question missing required fields (title, question_type)")
-		}
-		if steps[question.Step] {
-			return fmt.Errorf("duplicate onboarding question step: %d", question.Step)
-		}
-		steps[question.Step] = true
-		
-		// Validate question type
-		validTypes := map[string]bool{
-			"single_choice":   true,
-			"multiple_choice": true,
-			"text":           true,
-			"skip_optional":  true,
-		}
-		if !validTypes[question.QuestionType] {
-			return fmt.Errorf("invalid question type: %s", question.QuestionType)
-		}
-		
-		// Validate choice questions have options
-		if (question.QuestionType == "single_choice" || question.QuestionType == "multiple_choice") && len(question.Options) == 0 {
-			return fmt.Errorf("choice question '%s' missing options", question.Title)
-		}
-	}
-
 	return nil
 }

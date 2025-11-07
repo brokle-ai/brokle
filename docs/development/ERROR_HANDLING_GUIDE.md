@@ -100,7 +100,7 @@ func (r *userRepository) GetByID(ctx context.Context, id ulid.ULID) (*userDomain
     var user userDomain.User
     err := r.db.WithContext(ctx).Where("id = ?", id).First(&user).Error
     if err != nil {
-        if err == gorm.ErrRecordNotFound {
+        if errors.Is(err, gorm.ErrRecordNotFound) {
             return nil, fmt.Errorf("get user by ID %s: %w", id, userDomain.ErrNotFound)
         }
         return nil, fmt.Errorf("database query failed for user ID %s: %w", id, err)
@@ -157,8 +157,8 @@ func (h *userHandler) GetUser(c *gin.Context) {
 // 1. Professional domain alias imports
 authDomain "brokle/internal/core/domain/auth"
 
-// 2. GORM error checking with domain error wrapping
-if err == gorm.ErrRecordNotFound {
+// 2. GORM error checking with domain error wrapping (use errors.Is for wrapped error support)
+if errors.Is(err, gorm.ErrRecordNotFound) {
     return nil, fmt.Errorf("get user by email %s: %w", email, userDomain.ErrNotFound)
 }
 
@@ -172,9 +172,9 @@ return nil, fmt.Errorf("database query failed for email %s: %w", email, err)
 // Don't use errors.New in repositories
 return nil, errors.New("user not found")
 
-// Don't use errors.Is for GORM errors - use direct comparison
-if errors.Is(err, gorm.ErrRecordNotFound) // ❌
-if err == gorm.ErrRecordNotFound         // ✅
+// Don't use direct comparison for GORM errors - use errors.Is for wrapped error support
+if err == gorm.ErrRecordNotFound           // ❌ Fails with wrapped errors
+if errors.Is(err, gorm.ErrRecordNotFound)  // ✅ Handles wrapped errors correctly
 
 // Don't use non-aliased domain references
 auth.User // ❌
@@ -238,10 +238,11 @@ package auth
 
 import (
     "context"
+    "errors"
     "fmt"
-    
+
     "gorm.io/gorm"
-    
+
     authDomain "brokle/internal/core/domain/auth"
     "brokle/pkg/ulid"
 )
@@ -265,7 +266,7 @@ func (r *userRepository) GetByID(ctx context.Context, id ulid.ULID) (*authDomain
     var user authDomain.User
     err := r.db.WithContext(ctx).Where("id = ?", id).First(&user).Error
     if err != nil {
-        if err == gorm.ErrRecordNotFound {
+        if errors.Is(err, gorm.ErrRecordNotFound) {
             return nil, fmt.Errorf("get user by ID %s: %w", id, authDomain.ErrNotFound)
         }
         return nil, fmt.Errorf("database query failed for user ID %s: %w", id, err)
@@ -277,7 +278,7 @@ func (r *userRepository) GetByEmail(ctx context.Context, email string) (*authDom
     var user authDomain.User
     err := r.db.WithContext(ctx).Where("email = ?", email).First(&user).Error
     if err != nil {
-        if err == gorm.ErrRecordNotFound {
+        if errors.Is(err, gorm.ErrRecordNotFound) {
             return nil, fmt.Errorf("get user by email %s: %w", email, authDomain.ErrNotFound)
         }
         return nil, fmt.Errorf("database query failed for email %s: %w", email, err)
@@ -510,17 +511,19 @@ import authDomain "brokle/internal/core/domain/auth"
 
 #### 3. Error Wrapping Not Working
 
-**Problem**: Using `errors.Is()` with GORM errors.
+**Problem**: Using direct comparison `==` with GORM errors fails when errors are wrapped.
 
-**Solution**: Use direct comparison for GORM errors:
+**Solution**: Use `errors.Is()` for robust error checking that handles wrapped errors:
 
 ```go
-// ❌ Before
-if errors.Is(err, gorm.ErrRecordNotFound)
-
-// ✅ After
+// ❌ Before (fails with wrapped errors)
 if err == gorm.ErrRecordNotFound
+
+// ✅ After (handles wrapped errors correctly)
+if errors.Is(err, gorm.ErrRecordNotFound)
 ```
+
+**Why this matters**: In production, errors often get wrapped by middleware, logging, or tracing layers. Using `errors.Is()` ensures error detection works correctly even when errors are wrapped with additional context.
 
 ### Debugging Tips
 

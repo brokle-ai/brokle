@@ -90,27 +90,3 @@ api_keys:
       - "analytics:read"
     allowed_ips: []
 
-onboarding_questions:
-  - step: 1
-    question_type: "single_choice"
-    title: "What's your role?"
-    description: "Help us personalize your experience"
-    is_required: true
-    options:
-      - "Developer"
-      - "Product Manager"
-      - "Other"
-    display_order: 1
-    is_active: true
-  
-  - step: 2
-    question_type: "single_choice"
-    title: "Company size?"
-    description: "Understanding your scale"
-    is_required: false
-    options:
-      - "1-10 employees"
-      - "11-50 employees"
-      - "50+ employees"
-    display_order: 2
-    is_active: true

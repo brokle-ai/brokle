@@ -38,7 +38,6 @@ type Manager struct {
 	organizationSeeder *OrganizationSeeder
 	rbacSeeder         *RBACSeeder
 	projectSeeder      *ProjectSeeder
-	onboardingSeeder   *OnboardingSeeder
 }
 
 // NewManager creates a new seeder manager with the required dependencies
@@ -90,7 +89,6 @@ func (m *Manager) initializeComponentSeeders() {
 	m.organizationSeeder = NewOrganizationSeeder(m.organizationRepo)
 	m.rbacSeeder = NewRBACSeeder(m.roleRepo, m.permissionRepo, m.rolePermRepo, m.orgMemberRepo)
 	m.projectSeeder = NewProjectSeeder(m.projectRepo)
-	m.onboardingSeeder = NewOnboardingSeeder(m.userRepo)
 }
 
 // SeedPostgres seeds PostgreSQL with the provided options
@@ -179,11 +177,6 @@ func (m *Manager) seedData(ctx context.Context, data *SeedData, options *Options
 
 	// 7. API keys are not supported in seeding (removed due to PostgreSQL JSON issues)
 
-	// 8. Onboarding questions
-	if err := m.onboardingSeeder.SeedOnboardingQuestions(ctx, data.OnboardingQuestions, entityMaps, options.Verbose); err != nil {
-		return fmt.Errorf("failed to seed onboarding questions: %w", err)
-	}
-
 	log.Println("✅ Seeding process completed successfully")
 	return nil
 }
@@ -194,8 +187,6 @@ func (m *Manager) resetData() error {
 
 	// Delete in reverse dependency order to avoid foreign key constraints
 	tables := []string{
-		"user_onboarding_responses",
-		"onboarding_questions",
 		"environments",
 		"projects",
 		"organization_members",
@@ -267,15 +258,6 @@ func (m *Manager) PrintSeedPlan(data *SeedData) {
 	fmt.Printf("\nMemberships: %d\n", len(data.RBAC.Memberships))
 	for _, membership := range data.RBAC.Memberships {
 		fmt.Printf("  - %s in %s as %s\n", membership.UserEmail, membership.OrganizationName, membership.RoleName)
-	}
-
-	fmt.Printf("\nOnboarding Questions: %d\n", len(data.OnboardingQuestions))
-	for _, question := range data.OnboardingQuestions {
-		required := "optional"
-		if question.IsRequired {
-			required = "required"
-		}
-		fmt.Printf("  - Step %d: %s (%s, %s)\n", question.Step, question.Title, question.QuestionType, required)
 	}
 
 	fmt.Println("=====================================")

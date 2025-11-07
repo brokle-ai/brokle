@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { exchangeLoginSession } from '@/lib/api/services/auth'
+import { exchangeLoginSession } from '@/features/authentication'
 
 // OAuth callback page for handling token exchange after OAuth login
 function OAuthCallbackContent() {
@@ -30,7 +30,7 @@ function OAuthCallbackContent() {
 
         if (response && response.user) {
           // Initialize auth store BEFORE redirecting (prevents loading flash)
-          const { useAuthStore } = await import('@/stores/auth-store')
+          const { useAuthStore } = await import('@/features/authentication')
 
           // Map user response to User type
           const user = {
@@ -46,7 +46,6 @@ function OAuthCallbackContent() {
             createdAt: response.user.created_at,
             updatedAt: response.user.created_at,
             isEmailVerified: response.user.is_email_verified,
-            onboardingCompletedAt: response.user.onboarding_completed_at,
           }
 
           // Set auth state manually

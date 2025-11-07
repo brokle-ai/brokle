@@ -139,14 +139,6 @@ func (r *userRepository) SetDefaultOrganization(ctx context.Context, userID ulid
 		Update("default_organization_id", orgIDPtr).Error
 }
 
-// CompleteOnboarding marks the user's onboarding as completed
-func (r *userRepository) CompleteOnboarding(ctx context.Context, userID ulid.ULID) error {
-	return r.db.WithContext(ctx).
-		Model(&userDomain.User{}).
-		Where("id = ?", userID).
-		Update("onboarding_completed_at", time.Now()).Error
-}
-
 // GetActiveUsers returns active users (those who have logged in recently)
 func (r *userRepository) GetActiveUsers(ctx context.Context, limit, offset int) ([]*userDomain.User, int, error) {
 	var users []*userDomain.User
@@ -282,13 +274,6 @@ func (r *userRepository) GetByFilters(ctx context.Context, filters *userDomain.U
 	if filters.IsEmailVerified != nil {
 		query = query.Where("is_email_verified = ?", *filters.IsEmailVerified)
 	}
-	if filters.OnboardingCompleted != nil {
-		if *filters.OnboardingCompleted {
-			query = query.Where("onboarding_completed_at IS NOT NULL")
-		} else {
-			query = query.Where("onboarding_completed_at IS NULL")
-		}
-	}
 	if filters.CreatedAfter != nil {
 		query = query.Where("created_at > ?", *filters.CreatedAfter)
 	}
@@ -380,15 +365,6 @@ func (r *userRepository) ReactivateUser(ctx context.Context, userID ulid.ULID) e
 	return r.db.WithContext(ctx).Model(&userDomain.User{}).Where("id = ?", userID).Update("is_active", true).Error
 }
 
-func (r *userRepository) IsOnboardingCompleted(ctx context.Context, userID ulid.ULID) (bool, error) {
-	var u userDomain.User
-	err := r.db.WithContext(ctx).Select("onboarding_completed_at").Where("id = ?", userID).First(&u).Error
-	if err != nil {
-		return false, err
-	}
-	return u.OnboardingCompletedAt != nil, nil
-}
-
 func (r *userRepository) GetNewUsersCount(ctx context.Context, since time.Time) (int64, error) {
 	var count int64
 	err := r.db.WithContext(ctx).Model(&userDomain.User{}).Where("created_at > ? AND deleted_at IS NULL", since).Count(&count).Error
@@ -444,98 +420,4 @@ func (r *userRepository) Transaction(fn func(userDomain.Repository) error) error
 		txRepo := &userRepository{db: tx}
 		return fn(txRepo)
 	})
-}
-
-// Onboarding question operations
-
-func (r *userRepository) CreateOnboardingQuestion(ctx context.Context, question *userDomain.OnboardingQuestion) error {
-	return r.db.WithContext(ctx).Create(question).Error
-}
-
-func (r *userRepository) GetActiveOnboardingQuestions(ctx context.Context) ([]*userDomain.OnboardingQuestion, error) {
-	var questions []*userDomain.OnboardingQuestion
-	err := r.db.WithContext(ctx).Where("is_active = ?", true).Order("display_order ASC, step ASC").Find(&questions).Error
-	return questions, err
-}
-
-func (r *userRepository) GetOnboardingQuestionByID(ctx context.Context, id ulid.ULID) (*userDomain.OnboardingQuestion, error) {
-	var question userDomain.OnboardingQuestion
-	err := r.db.WithContext(ctx).Where("id = ?", id).First(&question).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, fmt.Errorf("get onboarding question %s: %w", id, userDomain.ErrNotFound)
-		}
-		return nil, fmt.Errorf("database query failed for onboarding question %s: %w", id, err)
-	}
-	return &question, nil
-}
-
-func (r *userRepository) GetActiveOnboardingQuestionCount(ctx context.Context) (int, error) {
-	var count int64
-	err := r.db.WithContext(ctx).Model(&userDomain.OnboardingQuestion{}).Where("is_active = ?", true).Count(&count).Error
-	return int(count), err
-}
-
-func (r *userRepository) GetNextUnansweredQuestion(ctx context.Context, userID ulid.ULID) (*userDomain.OnboardingQuestion, error) {
-	var question userDomain.OnboardingQuestion
-	
-	// Find the first question that the user hasn't answered
-	subquery := r.db.Model(&userDomain.UserOnboardingResponse{}).
-		Select("question_id").
-		Where("user_id = ?", userID)
-	
-	err := r.db.WithContext(ctx).
-		Where("is_active = ? AND id NOT IN (?)", true, subquery).
-		Order("display_order ASC, step ASC").
-		First(&question).Error
-	
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, fmt.Errorf("get next unanswered question for user %s: %w", userID, userDomain.ErrNotFound)
-		}
-		return nil, fmt.Errorf("database query failed for next unanswered question %s: %w", userID, err)
-	}
-	
-	return &question, nil
-}
-
-// Onboarding response operations
-
-func (r *userRepository) GetUserOnboardingResponses(ctx context.Context, userID ulid.ULID) ([]*userDomain.UserOnboardingResponse, error) {
-	var responses []*userDomain.UserOnboardingResponse
-	err := r.db.WithContext(ctx).Where("user_id = ?", userID).Find(&responses).Error
-	return responses, err
-}
-
-func (r *userRepository) UpsertUserOnboardingResponse(ctx context.Context, response *userDomain.UserOnboardingResponse) error {
-	// Try to update existing response first
-	result := r.db.WithContext(ctx).Model(&userDomain.UserOnboardingResponse{}).
-		Where("user_id = ? AND question_id = ?", response.UserID, response.QuestionID).
-		Updates(map[string]interface{}{
-			"response_value": response.ResponseValue,
-			"skipped":        response.Skipped,
-		})
-
-	if result.Error != nil {
-		return result.Error
-	}
-
-	// If no rows were affected, create new response
-	if result.RowsAffected == 0 {
-		return r.db.WithContext(ctx).Create(response).Error
-	}
-
-	return nil
-}
-
-func (r *userRepository) GetUserOnboardingResponse(ctx context.Context, userID, questionID ulid.ULID) (*userDomain.UserOnboardingResponse, error) {
-	var response userDomain.UserOnboardingResponse
-	err := r.db.WithContext(ctx).Where("user_id = ? AND question_id = ?", userID, questionID).First(&response).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, fmt.Errorf("get onboarding response for user %s question %s: %w", userID, questionID, userDomain.ErrNotFound)
-		}
-		return nil, fmt.Errorf("database query failed for onboarding response %s %s: %w", userID, questionID, err)
-	}
-	return &response, nil
 }

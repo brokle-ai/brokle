@@ -60,12 +60,15 @@ type LoginRequest struct {
 
 // Login handles user login
 // @Summary User login
-// @Description Authenticate user with email and password, sets httpOnly cookies
+// @Description Authenticate user. Sets httpOnly cookies: access_token (15min), refresh_token (7days), csrf_token (15min). Returns user data + expiry metadata (milliseconds).
 // @Tags Authentication
 // @Accept json
 // @Produce json
 // @Param request body LoginRequest true "Login credentials"
-// @Success 200 {object} response.SuccessResponse "Login successful with cookies set"
+// @Success 200 {object} response.SuccessResponse "Cookies set. Response: { user, expires_at(ms), expires_in(ms) }"
+// @Header 200 {string} Set-Cookie "access_token=<jwt>; HttpOnly; Secure; SameSite=Lax; Max-Age=900"
+// @Header 200 {string} Set-Cookie "refresh_token=<jwt>; HttpOnly; Secure; SameSite=Strict; Path=/api/v1/auth/refresh; Max-Age=604800"
+// @Header 200 {string} Set-Cookie "csrf_token=<token>; Secure; SameSite=Lax; Max-Age=900"
 // @Failure 400 {object} response.ErrorResponse "Invalid request payload"
 // @Failure 401 {object} response.ErrorResponse "Invalid credentials"
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
@@ -143,12 +146,15 @@ type RegisterRequest struct {
 
 // Signup handles user registration
 // @Summary User registration
-// @Description Register a new user account with organization or invitation
+// @Description Register new user with organization or invitation. Sets httpOnly cookies: access_token (15min), refresh_token (7days), csrf_token (15min). Returns user data + expiry metadata (milliseconds).
 // @Tags Authentication
 // @Accept json
 // @Produce json
 // @Param request body RegisterRequest true "Registration information"
-// @Success 200 {object} response.SuccessResponse "Registration successful"
+// @Success 200 {object} response.SuccessResponse "Cookies set. Response: { user, expires_at(ms), expires_in(ms) }"
+// @Header 200 {string} Set-Cookie "access_token=<jwt>; HttpOnly; Secure; SameSite=Lax; Max-Age=900"
+// @Header 200 {string} Set-Cookie "refresh_token=<jwt>; HttpOnly; Secure; SameSite=Strict; Path=/api/v1/auth/refresh; Max-Age=604800"
+// @Header 200 {string} Set-Cookie "csrf_token=<token>; Secure; SameSite=Lax; Max-Age=900"
 // @Failure 400 {object} response.ErrorResponse "Invalid request payload"
 // @Failure 409 {object} response.ErrorResponse "Email already exists"
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
@@ -478,12 +484,15 @@ type RefreshTokenRequest struct {
 
 // RefreshToken handles token refresh via httpOnly cookies
 // @Summary Refresh access token
-// @Description Get a new access token using refresh token from httpOnly cookie
+// @Description Refresh tokens using refresh_token from httpOnly cookie. Returns new cookies with rotated tokens + expiry metadata (milliseconds).
 // @Tags Authentication
 // @Accept json
 // @Produce json
-// @Success 200 {object} response.SuccessResponse "Token refresh successful with new cookies set"
-// @Failure 401 {object} response.ErrorResponse "Refresh token missing, invalid, or expired"
+// @Success 200 {object} response.SuccessResponse "New cookies set. Response: { expires_at(ms), expires_in(ms) }"
+// @Header 200 {string} Set-Cookie "access_token=<jwt>; HttpOnly; Secure; SameSite=Lax; Max-Age=900"
+// @Header 200 {string} Set-Cookie "refresh_token=<jwt>; HttpOnly; Secure; SameSite=Strict; Path=/api/v1/auth/refresh; Max-Age=604800"
+// @Header 200 {string} Set-Cookie "csrf_token=<token>; Secure; SameSite=Lax; Max-Age=900"
+// @Failure 401 {object} response.ErrorResponse "Refresh token missing, invalid, or expired. Cookies cleared."
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /api/v1/auth/refresh [post]
 func (h *Handler) RefreshToken(c *gin.Context) {
@@ -543,13 +552,13 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 
 // GetCurrentUser returns current authenticated user with token expiry metadata
 // @Summary Get current user
-// @Description Get current authenticated user information with token expiry for frontend initialization
+// @Description Get current user with token expiry metadata. Requires access_token cookie for authentication.
 // @Tags Authentication
 // @Accept json
 // @Produce json
-// @Security BearerAuth
-// @Success 200 {object} response.SuccessResponse "Current user with metadata"
-// @Failure 401 {object} response.ErrorResponse "Unauthorized"
+// @Security CookieAuth
+// @Success 200 {object} response.SuccessResponse "Response: { user, expires_at(ms), expires_in(ms) }"
+// @Failure 401 {object} response.ErrorResponse "Unauthorized - cookie invalid or missing"
 // @Failure 404 {object} response.ErrorResponse "User not found"
 // @Router /api/v1/auth/me [get]
 func (h *Handler) GetCurrentUser(c *gin.Context) {
@@ -686,13 +695,18 @@ func (h *Handler) ResetPassword(c *gin.Context) {
 
 // Logout handles user logout
 // @Summary User logout
-// @Description Logout user, invalidate session, and clear httpOnly cookies
+// @Description Logout user, invalidate session, clear httpOnly cookies. REQUIRES X-CSRF-Token header matching csrf_token cookie value (double-submit CSRF protection).
 // @Tags Authentication
 // @Accept json
 // @Produce json
-// @Security BearerAuth
-// @Success 200 {object} response.MessageResponse "Logout successful"
-// @Failure 401 {object} response.ErrorResponse "Invalid session"
+// @Security CookieAuth && CSRFToken
+// @Param X-CSRF-Token header string true "CSRF token from csrf_token cookie"
+// @Success 200 {object} response.MessageResponse "Logout successful. All cookies cleared."
+// @Header 200 {string} Set-Cookie "access_token=; Max-Age=-1"
+// @Header 200 {string} Set-Cookie "refresh_token=; Max-Age=-1"
+// @Header 200 {string} Set-Cookie "csrf_token=; Max-Age=-1"
+// @Failure 401 {object} response.ErrorResponse "Invalid session or cookie missing"
+// @Failure 403 {object} response.ErrorResponse "CSRF validation failed - token missing or mismatch"
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /api/v1/auth/logout [post]
 func (h *Handler) Logout(c *gin.Context) {
@@ -831,15 +845,17 @@ type ChangePasswordRequest struct {
 
 // ChangePassword changes user password
 // @Summary Change password
-// @Description Change user password with current password verification
+// @Description Change user password with current password verification. REQUIRES X-CSRF-Token header matching csrf_token cookie value (double-submit CSRF protection).
 // @Tags Authentication
 // @Accept json
 // @Produce json
-// @Security BearerAuth
+// @Security CookieAuth && CSRFToken
+// @Param X-CSRF-Token header string true "CSRF token from csrf_token cookie"
 // @Param request body ChangePasswordRequest true "Password change information"
 // @Success 200 {object} response.MessageResponse "Password changed successfully"
 // @Failure 400 {object} response.ErrorResponse "Invalid request or wrong current password"
-// @Failure 401 {object} response.ErrorResponse "Unauthorized"
+// @Failure 401 {object} response.ErrorResponse "Unauthorized - cookie invalid or missing"
+// @Failure 403 {object} response.ErrorResponse "CSRF validation failed - token missing or mismatch"
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Router /api/v1/auth/change-password [post]
 func (h *Handler) ChangePassword(c *gin.Context) {

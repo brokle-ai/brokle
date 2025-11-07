@@ -1,6 +1,5 @@
 import { Metadata } from 'next'
-import { AppearanceForm } from '@/components/settings/appearance-form'
-import { ContentSection } from '@/components/settings/content-section'
+import { AppearanceForm, ContentSection } from '@/features/settings'
 
 export const metadata: Metadata = {
   title: 'Appearance',

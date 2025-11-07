@@ -9,7 +9,7 @@ import { ThemeProvider } from "@/context/theme-context";
 import { SearchProvider } from "@/context/search-context";
 import { DirectionProvider } from "@/context/direction-context";
 import { ErrorBoundary } from './error-boundary'
-import { useAuthStore } from '@/stores/auth-store'
+import { useAuthStore } from '@/features/authentication'
 import { Loader2 } from 'lucide-react'
 
 interface ClientProvidersProps {

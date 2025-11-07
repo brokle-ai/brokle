@@ -25,7 +25,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
-import type { ProjectEnvironment } from '@/types/organization'
+import type { ProjectEnvironment } from '@/features/organizations'
 
 interface ProjectTemplate {
   id: string

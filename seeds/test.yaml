@@ -69,12 +69,3 @@ api_keys:
       - "ai:completions"
     allowed_ips: []
 
-onboarding_questions:
-  - step: 1
-    question_type: "text"
-    title: "Test Question"
-    description: "Simple test question"
-    is_required: false
-    options: []
-    display_order: 1
-    is_active: true

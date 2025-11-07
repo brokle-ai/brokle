@@ -25,19 +25,7 @@ type Repository interface {
 	CreateProfile(ctx context.Context, profile *UserProfile) error
 	GetProfile(ctx context.Context, userID ulid.ULID) (*UserProfile, error)
 	UpdateProfile(ctx context.Context, profile *UserProfile) error
-	
-	// Onboarding question operations
-	CreateOnboardingQuestion(ctx context.Context, question *OnboardingQuestion) error
-	GetActiveOnboardingQuestions(ctx context.Context) ([]*OnboardingQuestion, error)
-	GetOnboardingQuestionByID(ctx context.Context, id ulid.ULID) (*OnboardingQuestion, error)
-	GetActiveOnboardingQuestionCount(ctx context.Context) (int, error)
-	GetNextUnansweredQuestion(ctx context.Context, userID ulid.ULID) (*OnboardingQuestion, error)
-	
-	// Onboarding response operations
-	GetUserOnboardingResponses(ctx context.Context, userID ulid.ULID) ([]*UserOnboardingResponse, error)
-	UpsertUserOnboardingResponse(ctx context.Context, response *UserOnboardingResponse) error
-	GetUserOnboardingResponse(ctx context.Context, userID, questionID ulid.ULID) (*UserOnboardingResponse, error)
-	
+
 	// Authentication operations
 	UpdatePassword(ctx context.Context, userID ulid.ULID, hashedPassword string) error
 	MarkEmailAsVerified(ctx context.Context, userID ulid.ULID) error
@@ -46,9 +34,7 @@ type Repository interface {
 	GetDefaultOrganization(ctx context.Context, userID ulid.ULID) (*ulid.ULID, error)
 	DeactivateUser(ctx context.Context, userID ulid.ULID) error
 	ReactivateUser(ctx context.Context, userID ulid.ULID) error
-	CompleteOnboarding(ctx context.Context, userID ulid.ULID) error
-	IsOnboardingCompleted(ctx context.Context, userID ulid.ULID) (bool, error)
-	
+
 	// Batch operations
 	GetByIDs(ctx context.Context, ids []ulid.ULID) ([]*User, error)
 	UpdateLastLogin(ctx context.Context, userID ulid.ULID) error
@@ -84,13 +70,11 @@ type ListFilters struct {
 	IsActive             *bool      `json:"is_active,omitempty"`
 	IsVerified           *bool      `json:"is_verified,omitempty"`
 	IsEmailVerified      *bool      `json:"is_email_verified,omitempty"`
-	OnboardingCompleted  *bool      `json:"onboarding_completed,omitempty"` // Computed from OnboardingCompletedAt
 	CreatedAfter         *time.Time `json:"created_after,omitempty"`    // Date filter
 	CreatedBefore        *time.Time `json:"created_before,omitempty"`   // Date filter
 	LastLoginAfter       *time.Time `json:"last_login_after,omitempty"` // Last login filter
 	Search               string     `json:"search,omitempty"`           // Search in name and email
 	HasDefaultOrg        *bool      `json:"has_default_org,omitempty"`  // Filter by having default organization
-	OnboardingDone       *bool      `json:"onboarding_done,omitempty"`  // Filter by onboarding completion (alias for OnboardingCompleted)
 }
 
 // UserFilters is an alias for ListFilters for backward compatibility

@@ -230,16 +230,6 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 		users.PUT("/me/default-organization", s.handlers.User.SetDefaultOrganization)
 	}
 
-	// Onboarding routes
-	onboarding := protected.Group("/onboarding")
-	{
-		onboarding.GET("/questions", s.handlers.User.Onboarding.GetQuestions)
-		onboarding.POST("/responses", s.handlers.User.Onboarding.SubmitResponses)
-		onboarding.POST("/skip/:id", s.handlers.User.Onboarding.SkipQuestion)
-		onboarding.POST("/complete", s.handlers.User.Onboarding.CompleteOnboarding)
-		onboarding.GET("/status", s.handlers.User.Onboarding.GetStatus)
-	}
-
 	// Auth session management routes (protected)
 	authSessions := protected.Group("/auth")
 	{
@@ -282,14 +272,16 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 		orgs.DELETE("/:orgId/roles/:roleId", s.authMiddleware.RequirePermission("roles:delete"), s.handlers.RBAC.DeleteCustomRole)
 	}
 
-	// Project routes with clean RBAC permissions
+	// Project routes (top-level with optional org filtering)
 	projects := protected.Group("/projects")
 	{
-		projects.GET("", s.handlers.Project.List) // Lists projects for authenticated user
+		projects.GET("", s.handlers.Project.List) // Supports ?organization_id= filter
 		projects.POST("", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Project.Create)
 		projects.GET("/:projectId", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Project.Get)
 		projects.PUT("/:projectId", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Project.Update)
 		projects.DELETE("/:projectId", s.authMiddleware.RequirePermission("projects:delete"), s.handlers.Project.Delete)
+
+		// API key routes nested under projects (double-nesting only)
 		projects.GET("/:projectId/api-keys", s.authMiddleware.RequirePermission("api-keys:read"), s.handlers.APIKey.List)
 		projects.POST("/:projectId/api-keys", s.authMiddleware.RequirePermission("api-keys:write"), s.handlers.APIKey.Create)
 		projects.DELETE("/:projectId/api-keys/:keyId", s.authMiddleware.RequirePermission("api-keys:delete"), s.handlers.APIKey.Delete)

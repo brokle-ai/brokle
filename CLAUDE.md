@@ -4,17 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Platform Overview
 
-**Brokle** - The Open-Source AI Control Plane. See Everything. Control Everything. Observability, routing, and governance for AI — open source and built for scale.
-
-### Core Mission
-See Everything. Control Everything. Build the unified open-source control plane for AI teams to monitor, route, and govern production AI applications with complete visibility and control.
-
-### Key Features
-- **See Everything**: 40+ AI-specific metrics with real-time observability and monitoring
-- **Control Everything**: Intelligent routing across 250+ LLM providers with governance controls
-- **Open-Source Control**: Complete visibility into your AI infrastructure with no vendor lock-in
-- **Production Scale**: Multi-tenant architecture with enterprise-grade governance
-- **Cost Intelligence**: 30-50% reduction in LLM costs through smart routing and optimization
+**Brokle** is an open-source AI control plane providing observability, routing, and governance for AI applications. The platform combines AI gateway functionality with comprehensive telemetry tracking and cost optimization.
 
 ## Architecture: Scalable Monolith with Independent Scaling
 
@@ -57,105 +47,87 @@ brokle/
 ├── cmd/                    # Application entry points
 │   ├── server/main.go     # HTTP server (API endpoints)
 │   ├── worker/main.go     # Background workers (telemetry processing)
-│   ├── migrate/main.go    # Database migration runner
-│   └── seed/main.go       # Database seeding tool
+│   └── migrate/main.go    # Database migration runner & seeder
 ├── internal/              # Private application code
 │   ├── app/               # Application bootstrap & DI container
 │   ├── config/            # Configuration management
-│   ├── core/domain/       # Domain-driven design structure
-│   │   ├── user/          # User domain (entity, repo, service)
-│   │   └── auth/          # Authentication domain
+│   ├── core/              # Domain-driven design architecture
+│   │   ├── domain/        # Domain layer (entities, interfaces) - 10 domains
+│   │   │   ├── auth/      # Authentication domain
+│   │   │   ├── billing/   # Billing domain
+│   │   │   ├── common/    # Common patterns (transaction management)
+│   │   │   ├── config/    # Configuration domain (planned)
+│   │   │   ├── gateway/   # AI Gateway domain
+│   │   │   ├── observability/ # Observability domain
+│   │   │   ├── organization/  # Organization domain
+│   │   │   ├── routing/   # Routing domain (planned)
+│   │   │   └── user/      # User domain
+│   │   └── services/      # Service implementations (matches domains)
+│   │       ├── auth/      # Auth services
+│   │       ├── billing/   # Billing services
+│   │       ├── gateway/   # Gateway services
+│   │       ├── observability/ # Observability services
+│   │       ├── organization/  # Organization services
+│   │       ├── registration/  # Registration orchestration
+│   │       └── user/      # User services
 │   ├── infrastructure/    # External integrations
-│   │   ├── database/      # DB connections (postgres, redis, clickhouse)
-│   │   └── repository/    # Repository implementations
+│   │   ├── database/      # DB connections
+│   │   │   ├── clickhouse/repository/ # ClickHouse-specific repos
+│   │   │   └── postgres/repository/   # Postgres-specific repos
+│   │   ├── repository/    # Main repository layer
+│   │   └── streams/       # Redis streams for telemetry
 │   ├── transport/http/    # HTTP transport layer
 │   │   ├── handlers/      # HTTP handlers by domain
 │   │   ├── middleware/    # HTTP middleware
 │   │   └── server.go      # HTTP server setup
-│   ├── services/          # Service implementations
+│   ├── middleware/        # Shared middleware
+│   │   └── enterprise.go  # Enterprise feature gating
 │   ├── workers/           # Background workers
+│   │   ├── analytics_worker.go
+│   │   ├── notification_worker.go
+│   │   └── telemetry_stream_consumer.go
 │   └── ee/                # Enterprise Edition features
+│       ├── license/       # License validation service
+│       ├── sso/           # Single Sign-On
+│       ├── rbac/          # Role-Based Access Control
+│       ├── compliance/    # Compliance features
+│       └── analytics/     # Enterprise analytics
 ├── pkg/                   # Public shared packages
 │   ├── errors/            # Error handling
 │   ├── response/          # HTTP response utilities
 │   ├── utils/             # Common utilities
 │   └── websocket/         # WebSocket utilities
-├── migrations/            # Database migration files
-├── web/                   # Next.js frontend
-└── docs/                  # Public OSS documentation only
+├── migrations/            # Database migration files (27 PostgreSQL, 4 ClickHouse)
+├── seeds/                 # YAML-based seeding data
+│   ├── dev.yaml          # Development seed data
+│   ├── demo.yaml         # Demo seed data
+│   └── test.yaml         # Test seed data
+├── web/                   # Next.js 15.5.2 frontend
+└── docs/                  # Public OSS documentation
 ```
 
-### Documentation Organization
-
-**IMPORTANT**: This project maintains a strict separation between public and internal documentation:
-
-#### Public Documentation (`docs/`)
-**Location**: `brokle/docs/` (committed to OSS repository)
-**Purpose**: User-facing documentation for OSS contributors and users
-**Contents**:
-- API documentation and reference
-- Architecture overview for contributors
-- Development guides and coding standards
-- Enterprise feature documentation
-- Testing guides and best practices
-- Deployment instructions
-
-#### Internal Documentation (`internal-docs/`)
-**Location**: Separate private repository
-**Purpose**: Internal research, planning, and exploration
-**Contents**:
-- `research/` - Competitor analysis, technology evaluations, market research
-- `migrations/` - Migration documentation (e.g., OpenTelemetry migration)
-- `planning/` - Feature planning, roadmaps, priorities
-- `decisions/` - Architecture Decision Records (ADRs), RFCs
-- `data/` - CSV files, analysis scripts, data exports
-
-**Documentation Workflow**:
-1. **Research/Exploration** → Create in `internal-docs/`
-2. **Implementation** → Implementation guides in `internal-docs/` during development
-3. **Public Release** → Only user-facing docs move to `brokle/docs/`
-4. **Never commit** internal docs to main OSS repository
-
-**What Goes Where**:
-```
-✅ OSS Repo (brokle/docs/)          ❌ Internal Docs Only (internal-docs/)
-- API reference                     - Competitor analysis
-- Architecture guides               - Migration research
-- Development workflows             - Technical explorations
-- Testing standards                 - Feature planning
-- Enterprise features               - Decision records
-- Deployment guides                 - Data analysis
-                                    - Internal roadmaps
-```
 
 ### Domain-Driven Architecture
-The codebase follows DDD patterns with clear separation of concerns:
+
+#### Current Domains (10 total)
+| Domain | Status | Location | Purpose |
+|--------|--------|----------|---------|
+| auth | ✅ Active | `internal/core/domain/auth` | Authentication, sessions, API keys |
+| billing | ✅ Active | `internal/core/domain/billing` | Usage tracking, billing |
+| common | ✅ Active | `internal/core/domain/common` | Transaction patterns, shared utilities |
+| config | 🔄 Planned | `internal/core/domain/config` | Configuration management |
+| gateway | ✅ Active | `internal/core/domain/gateway` | AI provider routing |
+| observability | ✅ Active | `internal/core/domain/observability` | Traces, observations, quality scores |
+| organization | ✅ Active | `internal/core/domain/organization` | Multi-tenant org management |
+| routing | 🔄 Planned | `internal/core/domain/routing` | Advanced routing logic |
+| user | ✅ Active | `internal/core/domain/user` | User management |
 
 #### Layer Organization
-- **Domain Layer** (`internal/core/domain/`): Core business concepts
-  - Entities: Domain models and business rules
-  - Repository Interfaces: Data access contracts
-  - Service Interfaces: Business operation contracts
-
-- **Service Implementation Layer** (`internal/services/`):
-  - Concrete implementations of domain service interfaces
-  - Business logic orchestration
-  - Example: `internal/services/observability/` implements interfaces from `internal/core/domain/observability/`
-
-- **Infrastructure Layer** (`internal/infrastructure/`): External integrations
-  - Database connections and configurations
-  - Repository implementations (`internal/infrastructure/repository/`)
-  - External API clients
-
-- **Transport Layer** (`internal/transport/`): Request/Response handling
-  - HTTP handlers and routing
-  - WebSocket connections
-  - Middleware components
-
-- **Application Layer** (`internal/app/`): Application bootstrap
-  - Dependency injection container
-  - Service registry and wiring
-  - Graceful shutdown coordination
+- **Domain Layer** (`internal/core/domain/`): Entities, repository interfaces, service interfaces
+- **Service Layer** (`internal/core/services/`): Business logic implementations matching domains
+- **Infrastructure Layer** (`internal/infrastructure/`): Database repos (3-tier: main → DB-specific → implementations), external clients, Redis streams
+- **Transport Layer** (`internal/transport/http/`): HTTP handlers, middleware, WebSocket
+- **Application Layer** (`internal/app/`): DI container, service registry, graceful shutdown
 
 ## Development Commands
 
@@ -288,15 +260,15 @@ go run cmd/migrate/main.go -dry-run up          # Preview migrations without exe
 ```
 
 #### Migration Safety Features
-- **✅ Confirmation Prompts**: All destructive operations require explicit 'yes' confirmation
-- **✅ Dry Run Mode**: Preview changes with `-dry-run` flag
-- **✅ Granular Control**: Target specific databases with `-db postgres|clickhouse|all`
-- **✅ Health Monitoring**: Comprehensive status reporting with dirty state detection
-- **✅ Rollback Support**: Safe rollback with proper down migration support
+- Confirmation prompts for destructive operations
+- Dry run mode with `-dry-run` flag
+- Granular database control: `-db postgres|clickhouse|all`
+- Health monitoring with dirty state detection
 
-#### Migration Architecture
-- **PostgreSQL**: Single comprehensive schema migration (user management, auth, organizations)
-- **ClickHouse**: Enhanced observability schema with recent updates (Oct 2024):
+#### Database Schema
+- **PostgreSQL**: User auth, organizations, projects, API keys, gateway config, billing
+- **ClickHouse**: Traces, observations, quality_scores, request_logs (with TTL retention)
+- **Seeding**: YAML files in `/seeds/` (dev.yaml, demo.yaml, test.yaml)
 
 ### Testing & Quality
 ```bash
@@ -406,30 +378,14 @@ The platform implements a clean separation between SDK and Dashboard routes:
 **AI Routing**:
 - `POST /v1/route` - AI routing decisions
 
-**Unified Telemetry Batch System (SDK Observability)**:
-- `POST /v1/ingest/batch` - High-performance batch processing for all telemetry events (traces, observations, quality scores)
-- `GET /v1/telemetry/health` - Telemetry service health monitoring
-- `GET /v1/telemetry/metrics` - Telemetry performance metrics
-- `GET /v1/telemetry/performance` - Performance statistics
-- `GET /v1/ingest/batch/:batch_id` - Batch status tracking
-- `POST /v1/telemetry/validate` - Event validation
-
-**OpenTelemetry Protocol (OTLP) Native Support** (Added Oct 2024):
-- `POST /v1/otlp/traces` - OTLP traces ingestion endpoint
+**Telemetry Ingestion (OpenTelemetry Protocol)**:
+- `POST /v1/otlp/traces` - OTLP traces ingestion (primary endpoint)
 - `POST /v1/traces` - Alternative OTLP traces endpoint
-- **Format Support**: Protobuf (binary) and JSON payloads
-- **Compression**: Automatic gzip decompression via Content-Encoding header
-- **Smart Processing**: OTLPConverterService with intelligent root span detection
-- **Multi-Exporter Compatible**: Handles spans from various OTLP exporters
-
-**Three Parallel Ingestion Systems**:
-1. **Brokle Native Batch** (`/v1/ingest/batch`) - High-performance batch processing optimized for Brokle SDKs
-   - ULID-based deduplication, mixed event types, Redis caching
-   - Supports traces, observations, quality scores, and events in single batch
-2. **OpenTelemetry Protocol** (OTLP endpoints above) - Industry-standard compatibility
-3. **Redis Streams Backend** (`TelemetryStreamConsumer` worker) - Async high-throughput processing
-
-All systems converge at `internal/services/observability/` for unified processing.
+- Supports: Protobuf (binary) and JSON payloads
+- Compression: Automatic gzip decompression via Content-Encoding header
+- Handler: `OTLPHandler` in `internal/transport/http/handlers/observability/otlp.go`
+- Converter: `OTLPConverterService` with intelligent root span detection
+- Processing: Events consumed via Redis streams by `TelemetryStreamConsumer` worker
 
 **Cache Management**:
 - `GET /v1/cache/status` - Cache health status
@@ -445,9 +401,9 @@ All systems converge at `internal/services/observability/` for unified processin
 
 - `/api/v1/auth/*` - Authentication & session management
 - `/api/v1/users/*` - User profile management
-- `/api/v1/onboarding/*` - User onboarding flow
 - `/api/v1/organizations/*` - Organization management with RBAC
-- `/api/v1/projects/*` - Project management and API key management
+- `/api/v1/projects/*` - Project management (supports organization_id filtering)
+- `/api/v1/projects/:projectId/api-keys/*` - API key management
 - `/api/v1/analytics/*` - Metrics & reporting (read-only dashboard views)
 - `/api/v1/logs/*` - Request logs and export
 - `/api/v1/billing/*` - Usage & billing management
@@ -487,7 +443,9 @@ bk_{40_char_random_secret}
 
 ### Middleware Architecture
 
-#### Middleware Components
+**Two middleware locations:**
+1. **HTTP Middleware** (`internal/transport/http/middleware/`): auth.go, sdk_auth.go, rate_limit.go, csrf.go, scope_middleware.go
+2. **Enterprise Middleware** (`internal/middleware/`): enterprise.go (feature gating)
 
 **SDKAuthMiddleware** (`internal/transport/http/middleware/sdk_auth.go`):
 - Validates API keys for SDK routes
@@ -624,56 +582,18 @@ Enterprise features are in `internal/ee/` with stub implementations for OSS buil
 - `internal/ee/compliance/` - Compliance features
 - `internal/ee/analytics/` - Enterprise analytics
 
-## 📚 COMPREHENSIVE ENTERPRISE DOCUMENTATION
+## Enterprise Edition
 
-**CRITICAL**: Complete enterprise documentation is available in `/docs/ENTERPRISE.md` and `/docs/enterprise/` directory.
+**Build Tags**: Use `-tags="enterprise"` for enterprise builds
 
-### Enterprise Documentation Suite
-- **[ENTERPRISE.md](docs/ENTERPRISE.md)** - Main enterprise overview (260+ pages total)
-  - Open-core business model & strategy
-  - Complete license tier breakdown (Free → Pro → Business → Enterprise)  
-  - All enterprise features with detailed explanations
-  - Architecture overview & build system
-  - Getting started guides & configuration examples
+**Features** (`internal/ee/`):
+- `license/` - License validation
+- `sso/` - Single Sign-On (SAML 2.0, OIDC/OAuth2)
+- `rbac/` - Role-Based Access Control (scope-based, added Oct 2024)
+- `compliance/` - SOC 2, HIPAA, GDPR compliance
+- `analytics/` - Enterprise analytics
 
-### Specialized Enterprise Guides
-- **[DEVELOPER_GUIDE.md](docs/enterprise/DEVELOPER_GUIDE.md)** - Technical implementation
-  - Build tag architecture & compilation details
-  - Configuration management systems
-  - Middleware & feature gating implementation
-  - License service architecture
-  - Testing strategies & debugging guides
-
-- **[SSO.md](docs/enterprise/SSO.md)** - Single Sign-On integration
-  - SAML 2.0 & OIDC/OAuth2 setup guides
-  - Azure AD, Okta, Google Workspace configurations
-  - User provisioning & role mapping
-  - Troubleshooting & debugging tools
-
-- **[RBAC.md](docs/enterprise/RBAC.md)** - Role-Based Access Control
-  - Built-in & custom role systems
-  - Granular permissions & scope hierarchy
-  - SSO integration & automatic role assignment
-  - Best practices & organizational patterns
-
-- **[COMPLIANCE.md](docs/enterprise/COMPLIANCE.md)** - Data governance & compliance
-  - SOC 2, HIPAA, GDPR compliance frameworks
-  - Data governance & retention policies
-  - Audit trails & privacy controls
-  - Certification support & best practices
-
-- **[ANALYTICS.md](docs/enterprise/ANALYTICS.md)** - Advanced analytics & intelligence
-  - ML-powered predictive insights & cost forecasting
-  - Custom dashboard builder with 50+ visualization types
-  - Business intelligence & executive reporting
-  - Real-time analytics & optimization recommendations
-
-### Enterprise Architecture Highlights
-- **Open-Core Model**: Clean OSS/Enterprise separation with professional upgrade paths
-- **70% Cost Advantage**: Brokle Pro ($29) vs Portkey ($99+) with superior features
-- **Production Ready**: SOC 2/HIPAA/GDPR compliance, enterprise SSO, advanced RBAC
-- **Complete Platform**: Gateway + Observability + Caching + Optimization + Future Model Hosting
-- **Business Intelligence**: ML-powered insights, cost optimization, predictive analytics
+**Documentation**: See `/docs/ENTERPRISE.md` and `/docs/enterprise/` for detailed guides (SSO, RBAC, compliance, analytics)
 
 ## Testing Strategy
 
@@ -699,15 +619,10 @@ We avoid testing:
 
 ### Test Coverage Guidelines
 
-**Target Metrics:**
-- Service Layer: ~1:1 test-to-code ratio (focus on business logic)
-- Domain Layer: Minimal (only complex calculations and business rules)
+**Target Approach:**
+- Service Layer: Focus on business logic with comprehensive test coverage
+- Domain Layer: Test only complex calculations and business rules
 - Handler Layer: Critical workflows only (integration tests)
-
-**Current Coverage:**
-- Observability Services: 3,485 lines of tests (0.96:1 ratio) ✅
-- Observability Domain: 594 lines of tests (business logic only) ✅
-- All tests passing with healthy coverage
 
 ### Running Tests
 
@@ -725,7 +640,7 @@ make test-integration
 make test-coverage
 
 # Run specific package
-go test ./internal/services/observability -v
+go test ./internal/core/services/observability -v
 
 # Run with race detection
 go test -race ./...
@@ -735,7 +650,7 @@ go test -race ./...
 
 - **Detailed Guide**: See `docs/TESTING.md` for complete examples and patterns
 - **AI Prompt**: See `prompts/testing.txt` for AI-assisted test generation
-- **Reference Code**: See `internal/services/observability/*_test.go` for real examples
+- **Reference Code**: See `internal/core/services/observability/*_test.go` for real examples
 
 ### Test Quality Checklist
 
@@ -749,187 +664,71 @@ Before committing tests:
 
 ## Frontend Architecture
 
-The frontend uses **Next.js 15** with App Router and runs on port `:3000`:
+**Stack**: Next.js 15.5.2 with App Router, React 19.2.0, Tailwind CSS 4.1.15, runs on port `:3000`
+
+### Feature-Based Architecture
+The frontend uses a **feature-based structure** where each domain is self-contained:
 
 ```
 web/src/
-├── app/                   # Next.js App Router
-│   ├── (auth)/           # Auth route group (/auth/*)
+├── app/                   # Next.js App Router (routing only)
+│   ├── (auth)/           # Auth route group
 │   ├── (dashboard)/      # Dashboard routes
-│   │   ├── [orgSlug]/    # Organization-scoped routes
-│   │   ├── settings/     # User settings
-│   │   └── onboarding/   # User onboarding
-│   └── layout.tsx        # Root layout
-├── components/           # React components
-│   ├── ui/              # shadcn/ui components
-│   ├── analytics/       # Analytics dashboards
-│   ├── auth/            # Authentication components
-│   └── layout/          # Layout components
-├── hooks/               # Custom React hooks
-├── lib/                 # API clients and utilities
-├── store/               # Zustand state management
-└── types/               # TypeScript definitions
+│   └── (errors)/         # Error pages
+├── features/             # Domain features (self-contained)
+│   ├── authentication/   # Auth domain (12 components, 4 hooks, store, API)
+│   ├── organizations/    # Org management (7 components, 2 hooks, API)
+│   ├── projects/         # Project dashboard (4 components, hooks, store, API)
+│   ├── analytics/        # Analytics & metrics
+│   ├── billing/          # Usage & billing
+│   ├── gateway/          # AI gateway config
+│   └── settings/         # User settings (7 components)
+├── components/           # Shared components only
+│   ├── ui/              # shadcn/ui primitives
+│   ├── layout/          # App shell (header, sidebar, footer)
+│   ├── guards/          # Auth guards
+│   └── shared/          # Generic reusable components
+├── lib/                 # Core infrastructure
+│   ├── api/core/        # BrokleAPIClient (HTTP client)
+│   ├── auth/            # JWT utilities
+│   └── utils/           # Pure utilities
+├── hooks/               # Global hooks (use-mobile, etc.)
+├── stores/              # Global stores (ui-store.ts)
+├── context/             # Cross-feature context (workspace-context)
+├── types/               # Shared types
+└── __tests__/           # Test infrastructure (MSW, utilities)
 ```
 
-### Key Frontend Technologies
-- **Next.js 15** with App Router and Turbopack
-- **React 19** with React Server Components
-- **TypeScript** with strict type checking
-- **Tailwind CSS v4** for styling
-- **shadcn/ui** component library
-- **Zustand** for state management
-- **TanStack Query** for API state
-- **React Hook Form** with Zod validation
-- **pnpm** for package management
+**Feature Structure**: Each feature has `components/`, `hooks/`, `api/`, `stores/` (optional), `types/`, `__tests__/`, and `index.ts` (public exports)
 
-### Frontend Development
+**Import Pattern**: Always use `@/features/[feature]` (never import internal paths)
+
+### Key Technologies
+- Next.js 15.5.2 (App Router, Turbopack), React 19.2.0, TypeScript 5.9.3 (strict mode)
+- Tailwind CSS 4.1.15, shadcn/ui components
+- State: Zustand (client) + React Query (server state)
+- Forms: React Hook Form + Zod validation
+- Testing: Vitest + React Testing Library + MSW (30% coverage target)
+- Package manager: pnpm
+
+### Frontend Commands
 ```bash
-# Navigate to frontend directory
-cd web
-
-# Install dependencies
-pnpm install
-
-# Start development server with Turbopack
-pnpm run dev
-
-# Build for production
-pnpm run build
-
-# Run linting
-pnpm run lint
-
-# Format code
-pnpm run format
+cd web && pnpm install     # Install dependencies
+pnpm dev                   # Start dev server (Turbopack)
+pnpm build                 # Build for production
+pnpm lint                  # Lint code
+pnpm test                  # Run tests
+pnpm test:coverage         # Run tests with coverage
+make dev-frontend          # Or use Makefile
 ```
 
-**Note**: The Makefile uses `pnpm` for all frontend operations. You can use either Make commands or direct `pnpm` commands for frontend development.
+**Documentation**: See `web/ARCHITECTURE.md` for detailed architecture guide
 
-## Performance & Monitoring
+## Health & Monitoring
 
-### Metrics
-The application exposes metrics at `/metrics`:
-- Request/response metrics
-- Business metrics (users, requests, costs)
-- Infrastructure metrics (database, cache, queues)
-
-### Tracing
-Distributed tracing with correlation IDs across all operations.
-
-### Health Checks
-- `/health` - Application health
-- `/health/db` - Database connectivity  
-- `/health/cache` - Redis connectivity
-- `/health/providers` - AI provider status
-
-## Deployment
-
-### Docker
-```bash
-# Development
-docker compose up -d
-
-# Production  
-docker compose -f docker-compose.prod.yml up -d
-```
-
-### Production Checklist
-- [ ] Environment variables configured
-- [ ] Database migrations run
-- [ ] SSL certificates configured
-- [ ] Monitoring alerts configured
-- [ ] Backup strategy implemented
-
-## Contributing Guidelines
-
-### Code Style
-- Use `gofmt` and `golint`
-- Follow Go naming conventions
-- Write meaningful commit messages
-- Add tests for new functionality
-
-### Pull Request Process
-1. Create feature branch from `main`
-2. Implement feature with tests
-3. Run full test suite: `make test`
-4. Run linting: `make lint`
-5. Create pull request with description
-
-### Commit Message Format
-```
-feat(domain): add user authentication
-fix(gateway): resolve provider routing issue
-docs: update API documentation
-```
-
-### Documentation Guidelines
-
-**CRITICAL**: Always create documentation in the correct location:
-
-#### Creating New Documentation
-
-1. **Determine the audience**:
-   - OSS contributors/users → `brokle/docs/`
-   - Internal team only → `internal-docs/` (separate repo)
-
-2. **Choose the category** (for internal docs):
-   - Research/exploration → `internal-docs/research/`
-   - Migration documentation → `internal-docs/migrations/`
-   - Feature planning → `internal-docs/planning/`
-   - Technical decisions → `internal-docs/decisions/`
-   - Data analysis → `internal-docs/data/`
-
-3. **File naming conventions**:
-   - Use descriptive, kebab-case names: `feature-implementation-guide.md`
-   - Avoid generic names: ❌ `notes.md` → ✅ `otel-migration-notes.md`
-   - Include context in filename when useful
-
-4. **Never commit to main repo root**:
-   - ❌ Root-level .md files (except README.md, CLAUDE.md, CONTRIBUTING.md, SECURITY.md)
-   - ❌ Exploration/research docs in OSS repo
-   - ❌ Internal planning docs in OSS repo
-   - ✅ All internal docs go to `internal-docs/` repo
-
-#### Internal Documentation Best Practices
-
-**For internal-docs repository**:
-- Use clear directory structure (research/, migrations/, planning/, decisions/, data/)
-- Add README files to explain directory contents
-- Link related documents together
-- Archive outdated documents (don't delete immediately)
-- Use date prefixes for time-sensitive docs: `2024-10-27-otel-migration.md`
-
-**For OSS documentation**:
-- Focus on user value and contributor guidance
-- Keep examples practical and tested
-- Update when features change
-- Link to relevant code sections
-- Use clear headings and structure
-
-## Common Tasks
-
-### Adding New Domain
-1. Create domain directory in `internal/`
-2. Implement repository interface
-3. Add service layer with business logic
-4. Create HTTP handlers
-5. Add routes to main router
-6. Write tests
-7. Update documentation
-
-### Adding New AI Provider
-1. Implement provider interface in `internal/gateway/providers/`
-2. Add provider configuration
-3. Update routing logic
-4. Add monitoring metrics
-5. Write integration tests
-
-### Database Changes
-1. Create migration file in `migrations/`
-2. Update models in relevant domain
-3. Update repository methods
-4. Run migration: `make migrate`
-5. Update tests
+- **Metrics**: `/metrics` (request/response, business, infrastructure)
+- **Health Checks**: `/health`, `/health/db`, `/health/cache`, `/health/providers`
+- **Tracing**: Distributed tracing with correlation IDs
 
 ## Key Architectural Patterns
 
@@ -957,40 +756,24 @@ func New() SSOProvider {
 ```
 
 ### Background Workers
-Asynchronous processing in `internal/workers/`:
 - `analytics_worker.go` - Metrics aggregation
 - `notification_worker.go` - Email/SMS notifications
+- `telemetry_stream_consumer.go` - Redis streams telemetry processing
 
 ### Multi-Database Strategy
-- **PostgreSQL**: Transactional data with GORM ORM, user data, configurations
-- **ClickHouse**: Time-series analytics with raw SQL, request logs, metrics aggregation
-- **Redis**: Caching layer, pub/sub messaging, background job queues, session storage
+- **PostgreSQL**: Transactional data (GORM), user data, configurations
+- **ClickHouse**: Time-series analytics (raw SQL), request logs, metrics
+- **Redis**: Cache, pub/sub, job queues, sessions, telemetry streams
 
-### Running Single Tests
-```bash
-# Run specific Go test
-go test ./internal/core/domain/user/...
-go test -run TestUserService_CreateUser ./internal/services/
-
-# Run specific Go test with verbose output
-go test -v ./internal/transport/http/handlers/auth/
-
-# Run frontend tests (if implemented)
-cd web && pnpm test
-```
+### Authentication Features
+- **API Keys**: `bk_{40_char}` format with SHA-256 hashing
+- **JWT**: Dashboard authentication with session management
+- **OAuth**: GitHub and Google providers
+- **RBAC**: Scope-based role permissions
 
 ## Troubleshooting
 
-### Common Issues
-- **Port conflicts**: Check with `lsof -ti:8080` and kill processes
-- **Database migrations**: Run `go run cmd/migrate/main.go status` for detailed health check
-- **Migration dirty state**: Use `go run cmd/migrate/main.go -db <database> drop` then re-run migrations
-- **Enterprise build errors**: Ensure proper build tags usage
-- **WebSocket connection issues**: Check CORS and proxy settings
-
-### SDK Authentication Issues
-```bash
-# Test API key validation (public endpoint)
-curl -X POST http://localhost:8080/v1/auth/validate-key \
-  -H "Content-Type: application/json" \
-  -d '{"api_key": "bk_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789AbCd"}'
+- **Port conflicts**: `lsof -ti:8080` and kill
+- **Migration dirty state**: `go run cmd/migrate/main.go -db <db> drop` then re-migrate
+- **Enterprise build**: Ensure `-tags="enterprise"` flag
+- **API key test**: `curl -X POST http://localhost:8080/v1/auth/validate-key -H "Content-Type: application/json" -d '{"api_key": "bk_..."}'`

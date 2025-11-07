@@ -34,7 +34,7 @@ func (r *organizationSettingsRepository) GetByID(ctx context.Context, id ulid.UL
 	var setting orgDomain.OrganizationSettings
 	err := r.db.WithContext(ctx).Where("id = ?", id).First(&setting).Error
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("get organization setting by ID %s: %w", id, orgDomain.ErrSettingsNotFound)
 		}
 		return nil, err
@@ -47,7 +47,7 @@ func (r *organizationSettingsRepository) GetByKey(ctx context.Context, orgID uli
 	var setting orgDomain.OrganizationSettings
 	err := r.db.WithContext(ctx).Where("organization_id = ? AND key = ?", orgID, key).First(&setting).Error
 	if err != nil {
-		if err == gorm.ErrRecordNotFound {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("get organization setting by org %s and key %s: %w", orgID, key, orgDomain.ErrSettingsNotFound)
 		}
 		return nil, err

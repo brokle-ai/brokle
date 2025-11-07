@@ -73,24 +73,6 @@ type ProfileService interface {
 	ValidateProfile(ctx context.Context, userID ulid.ULID) (*ProfileValidation, error)
 }
 
-
-// OnboardingService defines the interface for dynamic user onboarding with questions.
-type OnboardingService interface {
-	// Question management
-	GetActiveQuestions(ctx context.Context) ([]*OnboardingQuestion, error)
-	GetQuestionByID(ctx context.Context, id ulid.ULID) (*OnboardingQuestion, error)
-	CreateQuestion(ctx context.Context, req *CreateOnboardingQuestionRequest) (*OnboardingQuestion, error)
-	
-	// User responses
-	GetUserResponses(ctx context.Context, userID ulid.ULID) ([]*UserOnboardingResponseData, error)
-	SubmitResponse(ctx context.Context, userID, questionID ulid.ULID, responseValue interface{}, skipped bool) error
-	SubmitMultipleResponses(ctx context.Context, userID ulid.ULID, responses []*SubmitOnboardingResponseRequest) error
-	
-	// Status and progress
-	GetOnboardingStatus(ctx context.Context, userID ulid.ULID) (*OnboardingProgressStatus, error)
-	CompleteOnboarding(ctx context.Context, userID ulid.ULID) error
-}
-
 // Supporting types for the new service interfaces
 
 // ProfileVisibility represents profile visibility options
@@ -200,43 +182,6 @@ type UpdatePrivacyPreferencesRequest struct {
 	DataProcessingConsent  *bool             `json:"data_processing_consent,omitempty"`
 	AnalyticsConsent       *bool             `json:"analytics_consent,omitempty"`
 	ThirdPartyIntegrations *bool             `json:"third_party_integrations,omitempty"`
-}
-
-// OnboardingStep represents a step in the onboarding process
-type OnboardingStep string
-
-const (
-	OnboardingStepProfile      OnboardingStep = "profile"
-	OnboardingStepPreferences  OnboardingStep = "preferences"
-	OnboardingStepOrganization OnboardingStep = "organization"
-	OnboardingStepProject      OnboardingStep = "project"
-	OnboardingStepIntegration  OnboardingStep = "integration"
-	OnboardingStepComplete     OnboardingStep = "complete"
-)
-
-// OnboardingStatus represents the user's onboarding progress
-type OnboardingStatus struct {
-	UserID           ulid.ULID                    `json:"user_id"`
-	IsCompleted      bool                         `json:"is_completed"`
-	CompletedSteps   []OnboardingStep             `json:"completed_steps"`
-	CurrentStep      OnboardingStep               `json:"current_step"`
-	TotalSteps       int                          `json:"total_steps"`
-	CompletionRate   int                          `json:"completion_rate"` // 0-100
-	StepProgress     map[OnboardingStep]bool      `json:"step_progress"`
-	StartedAt        *string                      `json:"started_at,omitempty"`
-	CompletedAt      *string                      `json:"completed_at,omitempty"`
-}
-
-// OnboardingFlow represents the onboarding flow configuration
-type OnboardingFlow struct {
-	UserType UserType         `json:"user_type"`
-	Steps    []OnboardingStep `json:"steps"`
-	Optional []OnboardingStep `json:"optional_steps"`
-}
-
-type UpdateOnboardingPreferencesRequest struct {
-	SkipOptionalSteps *bool   `json:"skip_optional_steps,omitempty"`
-	PreferredFlow     *string `json:"preferred_flow,omitempty"`
 }
 
 // UserType represents different types of users

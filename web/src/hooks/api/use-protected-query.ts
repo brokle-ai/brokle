@@ -9,7 +9,7 @@ import {
   QueryFunction,
   MutationFunction
 } from '@tanstack/react-query'
-import { useAuth } from '@/hooks/auth/use-auth'
+import { useAuth } from '@/features/authentication'
 import type { APIError } from '@/lib/api/core/types'
 
 // Protected query hook that automatically handles auth state

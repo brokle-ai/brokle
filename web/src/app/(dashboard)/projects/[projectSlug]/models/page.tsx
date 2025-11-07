@@ -1,7 +1,9 @@
 'use client'
 
-import { useProjectOnly } from '@/hooks/use-project-only'
-import { ModelsView } from '@/views/models-view'
+import { useProjectOnly } from '@/features/projects'
+import { ModelsView } from '@/features/analytics'
+import { DashboardHeader } from '@/components/layout/dashboard-header'
+import { Main } from '@/components/layout/main'
 import { Skeleton } from '@/components/ui/skeleton'
 
 export default function ProjectModelsPage() {
@@ -42,5 +44,18 @@ export default function ProjectModelsPage() {
     )
   }
 
-  return <ModelsView />
+  return (
+    <>
+      <DashboardHeader />
+      <Main>
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold tracking-tight">Models</h1>
+          <p className="text-muted-foreground">
+            Compare AI model performance and usage for {currentProject.name}
+          </p>
+        </div>
+        <ModelsView />
+      </Main>
+    </>
+  )
 }

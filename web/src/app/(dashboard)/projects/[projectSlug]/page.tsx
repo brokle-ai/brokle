@@ -2,10 +2,12 @@
 
 import { useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { useProjectOnly } from '@/hooks/use-project-only'
-import { DashboardView } from '@/views/dashboard-view'
+import { useProjectOnly } from '@/features/projects'
+import { DashboardView } from '@/features/projects'
+import { DashboardHeader } from '@/components/layout/dashboard-header'
+import { Main } from '@/components/layout/main'
 import { Skeleton } from '@/components/ui/skeleton'
-import type { ProjectParams } from '@/types/organization'
+import type { ProjectParams } from '@/features/organizations'
 
 export default function ProjectPage() {
   const params = useParams() as ProjectParams
@@ -63,5 +65,20 @@ export default function ProjectPage() {
     )
   }
 
-  return <DashboardView />
+  return (
+    <>
+      <DashboardHeader />
+      <Main>
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold tracking-tight">
+            {currentProject.name}
+          </h1>
+          <p className="text-muted-foreground">
+            Overview of your project metrics and activity
+          </p>
+        </div>
+        <DashboardView />
+      </Main>
+    </>
+  )
 }

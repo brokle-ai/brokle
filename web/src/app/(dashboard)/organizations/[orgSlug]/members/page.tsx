@@ -2,11 +2,11 @@
 
 import { useParams } from 'next/navigation'
 import { useWorkspace } from '@/context/workspace-context'
-import { MemberManagement } from '@/components/organization/member-management'
+import { MemberManagement } from '@/features/organizations'
 import { DashboardHeader } from '@/components/layout/dashboard-header'
 import { Main } from '@/components/layout/main'
 import { Skeleton } from '@/components/ui/skeleton'
-import type { OrganizationParams } from '@/types/organization'
+import type { OrganizationParams } from '@/features/organizations'
 
 export default function MembersSettingsPage() {
   const params = useParams<OrganizationParams>()
