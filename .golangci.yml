@@ -1,0 +1,216 @@
+# golangci-lint configuration for Brokle
+# Enhanced for Go 1.25 migration - focus on nil pointer dereference detection
+
+run:
+  timeout: 5m
+  tests: true
+  build-tags:
+    - integration
+    - enterprise
+  skip-dirs:
+    - vendor
+    - web/node_modules
+    - web/.next
+    - bin
+    - migrations
+    - seeds
+  modules-download-mode: readonly
+
+output:
+  formats:
+    - format: colored-line-number
+      path: stdout
+  print-issued-lines: true
+  print-linter-name: true
+  uniq-by-line: true
+  sort-results: true
+
+linters:
+  enable:
+    # Error handling (CRITICAL for Go 1.25 nil pointer fix)
+    - errcheck           # Check for unchecked errors
+    - errorlint          # Find code that will cause problems with Go 1.13+ error wrapping
+    - nilerr             # Find code that returns nil even if it checks that the error is not nil
+
+    # Nil pointer detection
+    - nilnil             # Check there is no simultaneous return of nil error and an invalid value
+    - staticcheck        # Go vet on steroids (includes nil pointer checks)
+
+    # Code quality
+    - revive             # Fast, configurable linter (replaces golint)
+    - govet              # Official Go tool that examines Go source code
+    - ineffassign        # Detect ineffectual assignments
+    - unconvert          # Remove unnecessary type conversions
+    - unparam            # Report unused function parameters
+    - unused             # Check for unused constants, variables, functions and types
+
+    # Performance
+    - prealloc           # Find slice declarations that could potentially be preallocated
+
+    # Style
+    - gofmt              # Check whether code was gofmt-ed
+    - goimports          # Check import statements are formatted according to goimport
+    - misspell           # Find commonly misspelled English words
+
+    # Security
+    - gosec              # Inspect source code for security problems
+
+    # Bugs
+    - bodyclose          # Check whether HTTP response body is closed successfully
+    - contextcheck       # Check whether the function uses a non-inherited context
+    - noctx              # Find sending HTTP request without context.Context
+    - rowserrcheck       # Check whether Err of rows is checked successfully
+    - sqlclosecheck      # Check that sql.Rows and sql.Stmt are closed
+
+    # Complexity
+    - gocyclo            # Compute and check the cyclomatic complexity of functions
+    - nestif             # Report deeply nested if statements
+
+  disable:
+    - deadcode           # Deprecated (use unused instead)
+    - varcheck           # Deprecated (use unused instead)
+    - structcheck        # Deprecated (use unused instead)
+    - scopelint          # Deprecated (use exportloopref instead)
+
+linters-settings:
+  # errcheck - CRITICAL for Go 1.25 migration
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+    exclude-functions:
+      # Allowed functions where ignoring errors is acceptable
+      - (*database/sql.Rows).Close
+      - (io.Closer).Close
+      - (*os.File).Close
+
+  # revive - Focus on error handling patterns
+  revive:
+    rules:
+      # Detect potential nil pointer dereferences
+      - name: error-return
+        severity: error
+      - name: error-naming
+        severity: warning
+      - name: error-strings
+        severity: warning
+      - name: errorf
+        severity: warning
+      - name: if-return
+        severity: warning
+      - name: increment-decrement
+        severity: warning
+      - name: var-naming
+        severity: warning
+      - name: var-declaration
+        severity: warning
+      - name: package-comments
+        severity: warning
+      - name: dot-imports
+        severity: error
+      - name: blank-imports
+        severity: warning
+      - name: exported
+        severity: warning
+        arguments:
+          - "checkPrivateReceivers"
+          - "disableStutteringCheck"
+      - name: indent-error-flow
+        severity: error  # CRITICAL: Forces early returns, prevents nil access
+      - name: unexported-return
+        severity: warning
+      - name: time-naming
+        severity: warning
+      - name: context-as-argument
+        severity: warning
+      - name: context-keys-type
+        severity: warning
+
+  # staticcheck - Comprehensive static analysis
+  staticcheck:
+    checks:
+      - all
+      - "-SA1019"  # Don't warn about deprecated packages we still need
+
+  # gosec - Security scanning
+  gosec:
+    severity: medium
+    confidence: medium
+    excludes:
+      - G104  # Unhandled errors (covered by errcheck)
+      - G401  # SHA-1 usage (we use SHA-256 for API keys, SHA-1 only for git)
+
+  # gocyclo - Cyclomatic complexity
+  gocyclo:
+    min-complexity: 15  # Functions with complexity > 15 should be refactored
+
+  # govet settings
+  govet:
+    enable:
+      - nilness       # CRITICAL: Detects nil pointer dereferences
+      - shadow        # Report when a variable shadows another
+      - unusedwrite   # Checks for unused writes
+      - fieldalignment # Detects structs that can be rearranged to use less memory
+    disable:
+      - printf        # Already covered by other linters
+
+  # nestif - Detect deeply nested if statements
+  nestif:
+    min-complexity: 4
+
+  # prealloc - Slice preallocation
+  prealloc:
+    simple: true
+    range-loops: true
+    for-loops: true
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+  exclude-rules:
+    # Exclude some linters from running on tests files
+    - path: _test\.go
+      linters:
+        - gocyclo
+        - errcheck
+        - dupl
+        - gosec
+        - funlen
+
+    # Exclude specific linters for migration files
+    - path: cmd/migrate/
+      linters:
+        - errcheck
+        - gosec
+
+    # Exclude specific linters for generated code
+    - path: docs/swagger/
+      linters:
+        - all
+
+    # Allow dot imports in tests
+    - path: _test\.go
+      text: "dot imports"
+
+  # Show all issues from a linter
+  exclude-use-default: false
+
+  # Independently from option `exclude` we use default exclude patterns,
+  # it can be disabled by this option. To list all excluded by default
+  # patterns execute `golangci-lint run --help`.
+  # Default: true
+  exclude-case-sensitive: false
+
+  # Which dirs to exclude: issues from them won't be reported
+  exclude-dirs:
+    - web
+    - sdk
+    - docs
+    - scripts
+    - deployments
+    - tests/load
+
+  # Which files to exclude: issues from them won't be reported
+  exclude-files:
+    - ".*\\.pb\\.go$"
+    - ".*\\.gen\\.go$"
