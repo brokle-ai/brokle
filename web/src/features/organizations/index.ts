@@ -17,6 +17,12 @@ export { ProjectGrid } from './components/project-grid'
 export { BulkActionsBar } from './components/bulk-actions-bar'
 export { AccessDenied } from './components/access-denied'
 export { OrganizationOverview } from './components/organization-overview'
+export { OrganizationSettingsNav } from './components/organization-settings-nav'
+export { OrganizationGeneralSection } from './components/organization-general-section'
+export { OrganizationBillingSection } from './components/organization-billing-section'
+export { OrganizationSecuritySection } from './components/organization-security-section'
+export { OrganizationAdvancedSection } from './components/organization-advanced-section'
+export { OrganizationDangerSection } from './components/organization-danger-section'
 
 // Types
 export type {

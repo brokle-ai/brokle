@@ -3,28 +3,12 @@
 import { Separator } from '@/components/ui/separator'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
-import { TopNav } from '@/components/layout/top-nav'
 import { Search } from '@/components/search'
 import { ThemeSwitch } from '@/components/theme-switch'
 import { ProfileDropdown } from '@/components/profile-dropdown'
-import { SettingsNav } from '@/features/settings'
+import { OrganizationSettingsNav } from '@/features/organizations'
 
-const topNav = [
-  {
-    title: 'Dashboard',
-    href: '/',
-    isActive: false,
-    disabled: false,
-  },
-  {
-    title: 'Settings',
-    href: '/settings',
-    isActive: true,
-    disabled: false,
-  },
-]
-
-export default function SettingsLayout({
+export default function OrganizationSettingsLayout({
   children,
 }: {
   children: React.ReactNode
@@ -43,18 +27,18 @@ export default function SettingsLayout({
 
         <div className='space-y-0.5'>
           <h1 className='text-2xl font-bold tracking-tight md:text-3xl'>
-            Settings
+            Organization Settings
           </h1>
           <p className='text-muted-foreground'>
-            Manage your account settings and preferences.
+            Manage your organization details, members, and security settings.
           </p>
         </div>
         <Separator className='my-4 lg:my-6' />
 
-        {/* Two-column layout: SettingsNav on left, content on right */}
+        {/* Two-column layout: OrganizationSettingsNav on left, content on right */}
         <div className='flex flex-1 flex-col space-y-2 overflow-hidden md:space-y-2 lg:flex-row lg:space-y-0 lg:space-x-12'>
           <aside className='top-0 lg:sticky lg:w-1/5'>
-            <SettingsNav />
+            <OrganizationSettingsNav />
           </aside>
           <div className='flex w-full overflow-y-hidden p-1'>
             {children}

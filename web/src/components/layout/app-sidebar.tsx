@@ -1,8 +1,5 @@
 'use client'
 
-import * as React from 'react'
-import { useParams } from 'next/navigation'
-
 import {
   Sidebar,
   SidebarContent,
@@ -14,20 +11,39 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
 } from '@/components/ui/sidebar'
-import { NavGroup } from '@/components/layout/nav-group'
+import { NavMain } from '@/components/layout/nav-main'
 import { NavUser } from '@/components/layout/nav-user'
 import { BrokleLogo } from '@/assets/brokle-logo'
-import { getSidebarData } from './data/sidebar-data'
+import { SidebarSkeleton } from '@/components/layout/sidebar-skeleton'
+import { type ProcessedRoute, type RouteGroup } from '@/lib/navigation/types'
 
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  const params = useParams()
-  
-  // Extract context from URL params for navigation
-  const orgSlug = params?.orgSlug as string
-  const projectSlug = params?.projectSlug as string
-  
-  // Generate context-aware navigation
-  const sidebarData = getSidebarData(orgSlug, projectSlug)
+interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
+  mainNavigation: {
+    grouped: Partial<Record<RouteGroup, ProcessedRoute[]>>
+    ungrouped: ProcessedRoute[]
+  }
+  secondaryNavigation: {
+    grouped: Partial<Record<RouteGroup, ProcessedRoute[]>>
+    ungrouped: ProcessedRoute[]
+  }
+  user: {
+    name: string
+    email: string
+    avatar?: string
+  } | null
+  isLoading?: boolean
+}
+
+export function AppSidebar({
+  mainNavigation,
+  secondaryNavigation,
+  user,
+  isLoading,
+  ...props
+}: AppSidebarProps) {
+  if (isLoading) {
+    return <SidebarSkeleton />
+  }
 
   return (
     <Sidebar {...props} collapsible="icon" variant="sidebar">
@@ -35,25 +51,27 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
-              size='lg'
-              className='gap-2 hover:bg-transparent active:bg-transparent'
+              size="lg"
+              className="gap-2 hover:bg-transparent active:bg-transparent"
             >
-              <div className='flex aspect-square size-8 items-center justify-center'>
-                <BrokleLogo className='size-6' />
+              <div className="flex aspect-square size-8 items-center justify-center">
+                <BrokleLogo className="size-6" />
               </div>
-              <span className='text-lg font-semibold'>Brokle</span>
+              <span className="text-lg font-semibold">Brokle</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
         <SidebarSeparator />
       </SidebarHeader>
+
       <SidebarContent>
-        {sidebarData.navGroups.map((navGroup) => (
-          <NavGroup key={navGroup.title} {...navGroup} />
-        ))}
+        <NavMain items={mainNavigation} />
+        <div className="flex-1" />
+        <NavMain items={secondaryNavigation} />
       </SidebarContent>
+
       <SidebarFooter>
-        <NavUser user={sidebarData.user} />
+        {user && <NavUser user={user} />}
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

@@ -1,40 +1,15 @@
-'use client'
+import { cookies } from 'next/headers'
+import { DashboardLayoutClient } from './dashboard-layout-client'
 
-import { useEffect } from 'react'
-import { AuthenticatedLayout } from "@/components/layout/authenticated-layout"
-import { WorkspaceProvider } from '@/context/workspace-context'
-import { useAuthStore } from '@/features/authentication'
-
-export default function DashboardLayout({
+export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const initializeAuth = useAuthStore(state => state.initializeAuth)
-  const isLoading = useAuthStore(state => state.isLoading)
+  // Read sidebar state from cookie (server-side) to avoid hydration mismatch
+  const cookieStore = await cookies()
+  const sidebarCookie = cookieStore.get('sidebar_state')
+  const defaultOpen = sidebarCookie?.value !== 'false'
 
-  // Initialize auth on mount
-  useEffect(() => {
-    initializeAuth()
-  }, [initializeAuth])
-
-  // Show loading state while initializing auth
-  if (isLoading) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        <div className="text-center">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto mb-4" />
-          <p className="text-sm text-muted-foreground">Loading...</p>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <WorkspaceProvider>
-      <AuthenticatedLayout>
-        {children}
-      </AuthenticatedLayout>
-    </WorkspaceProvider>
-  )
+  return <DashboardLayoutClient defaultOpen={defaultOpen}>{children}</DashboardLayoutClient>
 }

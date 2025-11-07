@@ -14,13 +14,44 @@ import {
   CommandList,
   CommandSeparator,
 } from '@/components/ui/command'
-import { sidebarData } from './layout/data/sidebar-data'
 import { ScrollArea } from './ui/scroll-area'
+import { useNavigationContext } from '@/hooks/use-navigation-context'
+import { processNavigation } from '@/lib/navigation/process-routes'
+import { ROUTES } from '@/lib/navigation/routes'
+
+/**
+ * Safe wrapper to use navigation context
+ * Returns null if WorkspaceProvider is not available (e.g., on auth pages)
+ */
+function useSafeNavigationContext() {
+  try {
+    return useNavigationContext()
+  } catch {
+    // Not in workspace context (auth pages, etc.)
+    return null
+  }
+}
 
 export function CommandMenu() {
   const router = useRouter()
   const { setTheme } = useTheme()
   const { open, setOpen } = useSearch()
+  const navigationContext = useSafeNavigationContext()
+
+  // Process navigation only if context available
+  const flatNavigation = React.useMemo(() => {
+    if (!navigationContext) return []
+
+    const { flatNavigation } = processNavigation({
+      routes: ROUTES,
+      context: navigationContext.context,
+      permissions: navigationContext.permissions,
+      featureFlags: navigationContext.featureFlags,
+      isPermissionsLoading: navigationContext.isPermissionsLoading,
+    })
+
+    return flatNavigation
+  }, [navigationContext])
 
   const runCommand = React.useCallback(
     (command: () => unknown) => {
@@ -36,42 +67,27 @@ export function CommandMenu() {
       <CommandList>
         <ScrollArea type='hover' className='h-72 pe-1'>
           <CommandEmpty>No results found.</CommandEmpty>
-          {sidebarData.navGroups.map((group) => (
-            <CommandGroup key={group.title} heading={group.title}>
-              {group.items.map((navItem, i) => {
-                if (navItem.url)
-                  return (
-                    <CommandItem
-                      key={`${navItem.url}-${i}`}
-                      value={navItem.title}
-                      onSelect={() => {
-                        runCommand(() => router.push(navItem.url))
-                      }}
-                    >
-                      <div className='flex size-4 items-center justify-center'>
-                        <ArrowRight className='text-muted-foreground/80 size-2' />
-                      </div>
-                      {navItem.title}
-                    </CommandItem>
-                  )
-
-                return navItem.items?.map((subItem, i) => (
+          {flatNavigation.length > 0 && (
+            <>
+              <CommandGroup heading='Navigation'>
+                {flatNavigation.map((route) => (
                   <CommandItem
-                    key={`${navItem.title}-${subItem.url}-${i}`}
-                    value={`${navItem.title}-${subItem.url}`}
+                    key={route.pathname}
+                    value={route.title}
                     onSelect={() => {
-                      runCommand(() => router.push(subItem.url))
+                      runCommand(() => router.push(route.url))
                     }}
                   >
                     <div className='flex size-4 items-center justify-center'>
-                      <ArrowRight className='text-muted-foreground/80 size-2' />
+                      {route.icon ? <route.icon className='size-4' /> : <ArrowRight className='text-muted-foreground/80 size-2' />}
                     </div>
-                    {navItem.title} <ChevronRight /> {subItem.title}
+                    {route.title}
                   </CommandItem>
-                ))
-              })}
-            </CommandGroup>
-          ))}
+                ))}
+              </CommandGroup>
+              <CommandSeparator />
+            </>
+          )}
           <CommandSeparator />
           <CommandGroup heading='Theme'>
             <CommandItem onSelect={() => runCommand(() => setTheme('light'))}>
