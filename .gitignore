@@ -21,10 +21,10 @@ go.work
 /bin/
 /build/
 /dist/
-server
-main
-brokle
-brokle-*
+/server
+/main
+/brokle
+/brokle-*
 
 # Environment files
 .env
@@ -194,8 +194,8 @@ google_ai_key
 # Backup files
 # *.bak
 # *.backup
-sdk/competetors/
-competetors/
+sdk/competitors/
+competitors/
 
 # Claude Code local settings
 .claude/settings.local.json
