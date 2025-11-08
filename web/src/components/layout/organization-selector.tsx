@@ -150,7 +150,7 @@ export function OrganizationSelector({ className, showPlanBadge = false }: Organ
         disabled={isOrgLoading}
       >
         <span className="font-normal">{currentOrganization.name}</span>
-        {showPlanBadge && currentOrganization.plan !== 'free' && (
+        {showPlanBadge && (
           <Badge
             variant="secondary"
             className={cn(
