@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import {
   Sidebar,
   SidebarContent,
@@ -54,10 +55,12 @@ export function AppSidebar({
               size="lg"
               className="gap-2 hover:bg-transparent active:bg-transparent"
             >
-              <div className="flex aspect-square size-8 items-center justify-center">
-                <BrokleLogo className="size-6" />
-              </div>
-              <span className="text-lg font-semibold">Brokle</span>
+              <Link href="/" className="flex items-center gap-2 cursor-pointer">
+                <div className="flex aspect-square size-8 items-center justify-center">
+                  <BrokleLogo className="size-6" />
+                </div>
+                <span className="text-lg font-semibold">Brokle</span>
+              </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

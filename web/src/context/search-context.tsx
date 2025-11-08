@@ -9,18 +9,18 @@ interface Props {
 }
 
 export function SearchProvider({ children }: Props) {
-  const { setSearchOpen } = useUIStore()
+  const { toggleSearch } = useUIStore()
 
   React.useEffect(() => {
     const down = (e: KeyboardEvent) => {
       if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
-        setSearchOpen(true)
+        toggleSearch()
       }
     }
     document.addEventListener('keydown', down)
     return () => document.removeEventListener('keydown', down)
-  }, [setSearchOpen])
+  }, [toggleSearch])
 
   return (
     <>

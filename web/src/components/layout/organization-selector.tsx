@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { ChevronDown, Settings, Plus, Loader2 } from 'lucide-react'
 import Link from 'next/link'
@@ -10,6 +10,7 @@ import { useIsMobile } from '@/hooks/use-mobile'
 import { getSmartRedirectUrl } from '@/lib/utils/smart-redirect'
 import { generateCompositeSlug, extractIdFromCompositeSlug } from '@/lib/utils/slug-utils'
 import { setDefaultOrganization } from '@/features/authentication/api/auth-api'
+import { CreateOrganizationDialog } from '@/features/organizations'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,6 +27,22 @@ interface OrganizationSelectorProps {
   showPlanBadge?: boolean
 }
 
+// Pure function for plan badge colors - moved to module scope for performance
+const getPlanBadgeColor = (plan: string) => {
+  switch (plan) {
+    case 'enterprise':
+      return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300'
+    case 'business':
+      return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300'
+    case 'pro':
+      return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
+    case 'free':
+      return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300'
+    default:
+      return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300'
+  }
+}
+
 export function OrganizationSelector({ className, showPlanBadge = false }: OrganizationSelectorProps) {
   const {
     organizations,
@@ -38,8 +55,20 @@ export function OrganizationSelector({ className, showPlanBadge = false }: Organ
   const router = useRouter()
   const isMobile = useIsMobile()
   const [isOrgLoading, setIsOrgLoading] = useState(false)
+  const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [dialogOpen, setDialogOpen] = useState(false)
 
-  const handleOrgSwitch = async (compositeSlug: string) => {
+  // Ref to track if component is mounted (prevent state updates on unmounted component)
+  const isMountedRef = useRef(true)
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [])
+
+  const handleOrgSwitch = useCallback(async (compositeSlug: string) => {
     // Generate current composite slug for comparison
     const currentCompositeSlug = currentOrganization
       ? generateCompositeSlug(currentOrganization.name, currentOrganization.id)
@@ -53,7 +82,9 @@ export function OrganizationSelector({ className, showPlanBadge = false }: Organ
     // Find the organization object by ID
     const targetOrg = organizations.find(org => org.id === targetOrgId)
     if (!targetOrg) {
-      console.error('Organization not found for composite slug:', compositeSlug)
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Organization not found for composite slug:', compositeSlug)
+      }
       return
     }
 
@@ -77,32 +108,22 @@ export function OrganizationSelector({ className, showPlanBadge = false }: Organ
       // Navigate to smart redirect URL
       router.push(redirectUrl)
     } catch (error) {
+      // Check if component is still mounted before showing error
+      if (!isMountedRef.current) return
+
       // Extract error message with fallback
       const errorMessage = error instanceof Error
         ? error.message
         : 'Failed to switch organization. Please try again.'
 
       toast.error(errorMessage)
-      console.error('Failed to switch organization:', error)
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to switch organization:', error)
+      }
     } finally {
       setIsOrgLoading(false)
     }
-  }
-
-  const getPlanBadgeColor = (plan: string) => {
-    switch (plan) {
-      case 'enterprise':
-        return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300'
-      case 'business':
-        return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300'
-      case 'pro':
-        return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
-      case 'free':
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300'
-      default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300'
-    }
-  }
+  }, [isOrgLoading, currentOrganization, organizations, pathname, router, refresh])
 
   // Loading state - show shimmer only if not initialized yet
   if (!isInitialized) {
@@ -117,7 +138,8 @@ export function OrganizationSelector({ className, showPlanBadge = false }: Organ
   }
 
   return (
-    <DropdownMenu>
+    <>
+    <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
       <DropdownMenuTrigger
         className={cn(
           "flex items-center gap-1 [&_svg]:pointer-events-none [&_svg]:shrink-0",
@@ -128,7 +150,7 @@ export function OrganizationSelector({ className, showPlanBadge = false }: Organ
         disabled={isOrgLoading}
       >
         <span className="font-normal">{currentOrganization.name}</span>
-        {showPlanBadge && currentOrganization.plan !== 'free' && (
+        {showPlanBadge && (
           <Badge
             variant="secondary"
             className={cn(
@@ -190,8 +212,9 @@ export function OrganizationSelector({ className, showPlanBadge = false }: Organ
                   if (e.metaKey || e.ctrlKey || e.button === 1) {
                     return
                   }
-                  // Prevent default link navigation and use handleOrgSwitch instead
+                  // Prevent default link navigation and dropdown auto-close
                   e.preventDefault()
+                  e.stopPropagation()
                   const compositeSlug = generateCompositeSlug(org.name, org.id)
                   handleOrgSwitch(compositeSlug)
                 }}
@@ -224,20 +247,22 @@ export function OrganizationSelector({ className, showPlanBadge = false }: Organ
         <DropdownMenuSeparator />
 
         {/* Create new organization */}
-        <DropdownMenuItem asChild>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 w-full text-sm font-normal justify-start"
-            asChild
-          >
-            <Link href="/organizations/create">
-              <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
-              New Organization
-            </Link>
-          </Button>
+        <DropdownMenuItem
+          onSelect={() => {
+            setDialogOpen(true)
+          }}
+        >
+          <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
+          New Organization
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+
+    {/* Dialog rendered as sibling, not nested */}
+    <CreateOrganizationDialog
+      open={dialogOpen}
+      onOpenChange={setDialogOpen}
+    />
+  </>
   )
 }

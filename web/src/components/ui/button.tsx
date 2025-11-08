@@ -1,6 +1,7 @@
 import * as React from 'react'
 import { Slot } from '@radix-ui/react-slot'
 import { cva, type VariantProps } from 'class-variance-authority'
+import { Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const buttonVariants = cva(
@@ -13,9 +14,11 @@ const buttonVariants = cva(
         destructive:
           'bg-destructive text-white shadow-xs hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60',
         outline:
-          'border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50 active:scale-95 hover:shadow-md transition-all duration-200',
+          'border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50',
         secondary:
           'bg-secondary text-secondary-foreground shadow-xs hover:bg-secondary/80 active:scale-95 hover:shadow-md transition-all duration-200',
+        tertiary:
+          'bg-muted text-muted-foreground shadow-xs hover:bg-muted/80 text-xs font-medium',
         ghost:
           'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50 active:scale-95 transition-all duration-200',
         link: 'text-primary underline-offset-4 hover:underline',
@@ -39,10 +42,13 @@ function Button({
   variant,
   size,
   asChild = false,
+  loading = false,
+  children,
   ...props
 }: React.ComponentProps<'button'> &
   VariantProps<typeof buttonVariants> & {
     asChild?: boolean
+    loading?: boolean
   }) {
   const Comp = asChild ? Slot : 'button'
 
@@ -51,7 +57,17 @@ function Button({
       data-slot='button'
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
-    />
+      disabled={loading || props.disabled}
+    >
+      {asChild ? (
+        children
+      ) : (
+        <>
+          {loading && <Loader2 className="animate-spin" />}
+          {children}
+        </>
+      )}
+    </Comp>
   )
 }
 

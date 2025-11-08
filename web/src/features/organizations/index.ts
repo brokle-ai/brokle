@@ -3,14 +3,13 @@
 // Hooks
 export { useOrganizationOnly } from './hooks/use-organization-only'
 export { useOrganizationProjects } from './hooks/use-organization-projects'
-export { useCreateOrganizationMutation } from './hooks/use-organization-mutations'
+export { useCreateOrganizationMutation } from './hooks/use-organization-queries'
 
 // API Functions
 export { createProject, createOrganization } from './api/organizations-api'
 
 // Components
-export { CreateOrganizationModal } from './components/create-organization-modal'
-export { CreateProjectModal } from './components/create-project-modal'
+export { CreateOrganizationDialog } from './components/create-organization-dialog'
 export { InviteMemberModal } from './components/invite-member-modal'
 export { MemberManagement } from './components/member-management'
 export { ProjectGrid } from './components/project-grid'

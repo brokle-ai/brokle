@@ -26,12 +26,17 @@ export function useCreateOrganizationMutation() {
       // Invalidate organizations list
       queryClient.invalidateQueries({ queryKey: organizationQueryKeys.lists() })
 
+      // Invalidate workspace context to include new organization
+      queryClient.invalidateQueries({ queryKey: ['workspace'] })
+
       // Refresh user data (backend sets defaultOrganizationId automatically)
       try {
         const updatedUser = await getCurrentUser()
         queryClient.setQueryData(authQueryKeys.user(), updatedUser)
       } catch (error) {
-        console.error('Failed to refresh user after org creation:', error)
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Failed to refresh user after org creation:', error)
+        }
       }
 
       // Show success toast

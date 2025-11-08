@@ -33,17 +33,19 @@ export const Header = ({
   return (
     <header
       className={cn(
-        'bg-background relative flex min-h-16 items-center gap-3 px-4 py-3 sm:gap-4 sm:px-6',
-        fixed && 'header-fixed peer/header fixed z-50 w-[inherit] rounded-md',
-        offset > 10 && fixed && 'after:absolute after:inset-0 after:rounded-md after:bg-background/20 after:backdrop-blur-lg after:-z-10',
+        'bg-background relative h-16',
+        fixed && 'header-fixed peer/header sticky top-0 z-50 w-[inherit]',
+        offset > 10 && fixed && 'after:absolute after:inset-0 after:bg-background/20 after:backdrop-blur-lg after:-z-10',
         offset > 10 && fixed ? 'shadow-sm' : 'shadow-none',
         className
       )}
       {...props}
     >
-      <SidebarTrigger variant='outline' className='scale-125 sm:scale-100' />
-      <Separator orientation='vertical' className='h-6' />
-      {children}
+      <div className='relative flex h-full items-center gap-3 px-4 py-3 sm:gap-4 sm:px-6'>
+        <SidebarTrigger variant='outline' className='scale-125 sm:scale-100' />
+        <Separator orientation='vertical' className='h-6' />
+        {children}
+      </div>
     </header>
   )
 }

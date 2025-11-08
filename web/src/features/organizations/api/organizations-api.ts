@@ -146,6 +146,11 @@ export const getProjectMetrics = async (organizationId: string, projectId: strin
     )
   }
 
+/**
+ * Create a new organization
+ * @param data.name - Organization name (required, 2-100 characters)
+ * @param data.description - Reserved for future backend use (not currently persisted)
+ */
 export const createOrganization = async (data: {
     name: string
     description?: string
@@ -174,19 +179,22 @@ export const updateOrganization = async (organizationId: string, data: Partial<{
     return mapOrganizationFromAPI(response)
   }
 
+/**
+ * Create a new project
+ * @param organizationId - Organization ID
+ * @param data.name - Project name (required, 2-100 characters)
+ * @param data.description - Reserved for future use (optional, not required in UI)
+ */
 export const createProject = async (organizationId: string, data: {
     name: string
     description?: string
   }): Promise<Project> => {
     const response = await client.post<ProjectAPIResponse>(
-      `/organizations/${organizationId}/projects`,
+      `/v1/projects`,
       {
         name: data.name,
         description: data.description,
-      },
-      {
-        includeOrgContext: true,
-        customOrgId: organizationId
+        organization_id: organizationId,
       }
     )
 
@@ -197,30 +205,16 @@ export const updateProject = async (organizationId: string, projectId: string, d
     name: string
     description: string
   }>): Promise<Project> => {
-    const response = await client.patch<ProjectAPIResponse>(
-      `/organizations/${organizationId}/projects/${projectId}`,
-      data,
-      { 
-        includeOrgContext: true,
-        includeProjectContext: true,
-        customOrgId: organizationId,
-        customProjectId: projectId
-      }
+    const response = await client.put<ProjectAPIResponse>(
+      `/v1/projects/${projectId}`,
+      data
     )
 
     return mapProjectFromAPI(response)
   }
 
 export const deleteProject = async (organizationId: string, projectId: string): Promise<void> => {
-    await client.delete(
-      `/organizations/${organizationId}/projects/${projectId}`,
-      { 
-        includeOrgContext: true,
-        includeProjectContext: true,
-        customOrgId: organizationId,
-        customProjectId: projectId
-      }
-    )
+    await client.delete(`/v1/projects/${projectId}`)
   }
 
 export const inviteUser = async (organizationId: string, email: string, role: 'admin' | 'developer' | 'viewer'): Promise<void> => {

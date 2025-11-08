@@ -197,7 +197,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     isLoading: isLoading && !data,  // Only loading if no data yet (prevents shimmer during refetch)
     isInitialized: !!data,
     error: queryError?.message || urlError,
-    refresh: () => queryClient.invalidateQueries({ queryKey: ['workspace'] }),
+    refresh: async () => {
+      await queryClient.refetchQueries({ queryKey: ['workspace'] })
+    },
     clearError: () => setUrlError(null),
   }
 
