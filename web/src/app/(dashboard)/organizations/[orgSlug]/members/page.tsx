@@ -68,7 +68,7 @@ export default function MembersSettingsPage() {
             Manage team members and their permissions for {currentOrganization.name}
           </p>
         </div>
-        
+
         <MemberManagement />
       </Main>
     </>

@@ -1,13 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { 
-  CreditCard, 
-  Download, 
-  Calendar, 
-  DollarSign, 
-  TrendingUp, 
+import {
+  CreditCard,
+  Download,
+  Calendar,
+  TrendingUp,
   AlertCircle,
   Check,
   Crown,
@@ -212,7 +211,7 @@ export default function BillingSettingsPage() {
             </p>
           </div>
         </div>
-        
+
         {/* Current Plan & Usage */}
         <div className="grid gap-6 md:grid-cols-2">
           {/* Current Plan */}

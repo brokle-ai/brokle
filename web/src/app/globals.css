@@ -154,10 +154,6 @@
   scrollbar-width: none; /* Firefox */
 }
 
-@utility faded-bottom {
-  @apply after:pointer-events-none after:absolute after:bottom-0 after:left-0 after:hidden after:h-20 after:w-full after:bg-[linear-gradient(180deg,_transparent_20%,_var(--background)_90%)] md:after:block;
-}
-
 /* styles.css */
 .CollapsibleContent {
   overflow: hidden;
