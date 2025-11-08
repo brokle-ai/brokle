@@ -17,7 +17,7 @@ export function ContentSection({ children, title, description }: ContentSectionP
       </div>
       <Separator className='my-4 flex-none' />
       <div className='relative h-full w-full overflow-y-auto scroll-smooth pe-4 pb-12'>
-        <div className='-mx-1 px-1.5 lg:max-w-xl'>{children}</div>
+        <div className='-mx-1 px-1.5'>{children}</div>
       </div>
     </div>
   )

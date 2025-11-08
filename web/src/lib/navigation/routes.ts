@@ -1,8 +1,6 @@
 import { RouteSection, RouteGroup, type Route } from './types'
 import {
   Grid2X2,
-  Users,
-  CreditCard,
   Settings,
   FolderOpen,
   BarChart3,
@@ -25,7 +23,7 @@ export const ROUTES: Route[] = [
   },
 
   // ========================================
-  // ORGANIZATION CONTEXT (4 routes)
+  // ORGANIZATION CONTEXT (2 routes)
   // ========================================
   {
     title: 'Projects',
@@ -34,26 +32,6 @@ export const ROUTES: Route[] = [
     section: RouteSection.Main,
     show: ({ currentOrgSlug, currentProjectSlug, pathname }) =>
       !!currentOrgSlug &&
-      !currentProjectSlug &&
-      !pathname.startsWith('/settings'),
-  },
-  {
-    title: 'Members',
-    pathname: '/organizations/[orgSlug]/members',
-    icon: Users,
-    section: RouteSection.Main,
-    rbacScope: 'members:read',
-    show: ({ currentProjectSlug, pathname }) =>
-      !currentProjectSlug &&
-      !pathname.startsWith('/settings'),
-  },
-  {
-    title: 'Billing',
-    pathname: '/organizations/[orgSlug]/billing',
-    icon: CreditCard,
-    section: RouteSection.Main,
-    rbacScope: 'billing:read',
-    show: ({ currentProjectSlug, pathname }) =>
       !currentProjectSlug &&
       !pathname.startsWith('/settings'),
   },
@@ -135,8 +113,8 @@ export const ROUTES: Route[] = [
   },
 ]
 
-// Total: 11 routes
+// Total: 9 routes
 // - Root: 1 (Dashboard)
-// - Organization: 4 (Projects, Members, Billing, Settings)
+// - Organization: 2 (Projects, Settings)
 // - Project: 5 (1 Overview + 3 Observability + 1 Settings)
 // - User Settings: 1 (Home - back to dashboard)
