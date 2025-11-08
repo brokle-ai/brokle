@@ -1,11 +1,8 @@
 'use client'
 
 import { Separator } from '@/components/ui/separator'
-import { Header } from '@/components/layout/header'
+import { DashboardHeader } from '@/components/layout/dashboard-header'
 import { Main } from '@/components/layout/main'
-import { Search } from '@/components/search'
-import { ThemeSwitch } from '@/components/theme-switch'
-import { ProfileDropdown } from '@/components/profile-dropdown'
 import { OrganizationSettingsNav } from '@/features/organizations'
 
 export default function OrganizationSettingsLayout({
@@ -15,13 +12,7 @@ export default function OrganizationSettingsLayout({
 }) {
   return (
     <>
-      <Header>
-        <div className='ml-auto flex items-center space-x-4'>
-          <Search />
-          <ThemeSwitch className="hidden sm:flex" />
-          <ProfileDropdown className="hidden sm:flex" />
-        </div>
-      </Header>
+      <DashboardHeader />
 
       <Main fixed>
 
