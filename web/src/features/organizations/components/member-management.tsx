@@ -219,8 +219,8 @@ export function MemberManagement({ className }: MemberManagementProps) {
                 {filteredMembers.map((member) => (
                   <TableRow key={member.id}>
                     <TableCell>
-                      <div className="flex items-center gap-3">
-                        <Avatar className="h-8 w-8">
+                      <div className="flex items-center gap-2">
+                        <Avatar className="h-7 w-7">
                           <AvatarImage src={member.avatar} alt={member.name} />
                           <AvatarFallback className="text-xs">
                             {getInitials(member.name)}
