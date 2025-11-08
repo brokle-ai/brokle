@@ -41,7 +41,7 @@ export const Header = ({
       )}
       {...props}
     >
-      <div className='relative flex h-full items-center gap-3 px-4 py-3 sm:gap-4 sm:px-5'>
+      <div className='relative flex h-full items-center gap-3 px-4 py-3 sm:gap-4 sm:px-6'>
         <SidebarTrigger variant='outline' className='scale-125 sm:scale-100' />
         <Separator orientation='vertical' className='h-6' />
         {children}

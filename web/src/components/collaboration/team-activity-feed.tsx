@@ -467,12 +467,12 @@ export function TeamActivityFeed() {
           </Card>
 
           {/* Activity Feed */}
-          <div className="space-y-2">
+          <div className="space-y-4">
             {filteredActivities.map((activity) => (
               <Card key={activity.id} className="transition-all hover:shadow-md">
                 <CardContent className="pt-6">
-                  <div className="flex gap-2.5">
-                    <Avatar className="h-7 w-7">
+                  <div className="flex gap-4">
+                    <Avatar className="h-10 w-10">
                       <AvatarImage src={activity.actor.avatar} alt={activity.actor.name} />
                       <AvatarFallback>
                         {activity.actor.name.split(' ').map(n => n[0]).join('')}
@@ -586,8 +586,8 @@ export function TeamActivityFeed() {
             {comments.map((comment) => (
               <Card key={comment.id}>
                 <CardContent className="pt-6">
-                  <div className="flex gap-2.5">
-                    <Avatar className="h-7 w-7">
+                  <div className="flex gap-4">
+                    <Avatar className="h-10 w-10">
                       <AvatarImage src={comment.author.avatar} alt={comment.author.name} />
                       <AvatarFallback>
                         {comment.author.name.split(' ').map(n => n[0]).join('')}
@@ -622,8 +622,8 @@ export function TeamActivityFeed() {
                       {comment.replies && comment.replies.length > 0 && (
                         <div className="ml-8 space-y-3 border-l pl-4">
                           {comment.replies.map(reply => (
-                            <div key={reply.id} className="flex gap-2">
-                              <Avatar className="h-6 w-6">
+                            <div key={reply.id} className="flex gap-3">
+                              <Avatar className="h-8 w-8">
                                 <AvatarImage src={reply.author.avatar} alt={reply.author.name} />
                                 <AvatarFallback className="text-xs">
                                   {reply.author.name.split(' ').map(n => n[0]).join('')}
@@ -666,7 +666,7 @@ export function TeamActivityFeed() {
             {activities.filter(activity => activity.isBookmarked).map((activity) => (
               <Card key={activity.id} className="border-yellow-200">
                 <CardContent className="pt-6">
-                  <div className="flex gap-2">
+                  <div className="flex gap-4">
                     <div className={cn("p-2 rounded", getActivityColor(activity.type))}>
                       {getActivityIcon(activity.type)}
                     </div>
