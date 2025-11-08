@@ -13,7 +13,6 @@ export { CreateOrganizationDialog } from './components/create-organization-dialo
 export { InviteMemberModal } from './components/invite-member-modal'
 export { MemberManagement } from './components/member-management'
 export { ProjectGrid } from './components/project-grid'
-export { BulkActionsBar } from './components/bulk-actions-bar'
 export { AccessDenied } from './components/access-denied'
 export { OrganizationOverview } from './components/organization-overview'
 export { OrganizationSettingsNav } from './components/organization-settings-nav'
@@ -37,7 +36,6 @@ export type {
   ProjectMetrics,
   ProjectSettings,
   ProjectStatus,
-  ProjectEnvironment,
   ProjectParams,
   CreateProjectData,
   RoutingPreferences,

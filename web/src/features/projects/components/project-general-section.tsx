@@ -14,7 +14,7 @@ import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
 import { toast } from 'sonner'
-import type { ProjectStatus, ProjectEnvironment } from '@/features/organizations'
+import type { ProjectStatus } from '@/features/organizations'
 
 export function ProjectGeneralSection() {
   const { currentProject, currentOrganization } = useWorkspace()
@@ -25,7 +25,6 @@ export function ProjectGeneralSection() {
   const [projectSlug, setProjectSlug] = useState(currentProject?.slug || '')
   const computedProjectSlug = currentProject ? getProjectSlug(currentProject) : ''
   const [projectStatus, setProjectStatus] = useState<ProjectStatus>(currentProject?.status || 'active')
-  const [environment, setEnvironment] = useState<ProjectEnvironment>(currentProject?.environment || 'production')
   const [isPublic, setIsPublic] = useState(currentProject?.settings?.public || false)
   const [webhookUrl, setWebhookUrl] = useState(currentProject?.settings?.webhook_url || '')
   const [retryAttempts, setRetryAttempts] = useState(currentProject?.settings?.retry_attempts?.toString() || '3')
@@ -134,34 +133,19 @@ export function ProjectGeneralSection() {
         </div>
       </div>
 
-      {/* Status & Environment Section */}
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="projectStatus">Status</Label>
-          <Select value={projectStatus} onValueChange={(value: ProjectStatus) => setProjectStatus(value)}>
-            <SelectTrigger id="projectStatus">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="inactive">Inactive</SelectItem>
-              <SelectItem value="archived">Archived</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="environment">Environment</Label>
-          <Select value={environment} onValueChange={(value: ProjectEnvironment) => setEnvironment(value)}>
-            <SelectTrigger id="environment">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="development">Development</SelectItem>
-              <SelectItem value="staging">Staging</SelectItem>
-              <SelectItem value="production">Production</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+      {/* Status Section */}
+      <div className="space-y-2">
+        <Label htmlFor="projectStatus">Status</Label>
+        <Select value={projectStatus} onValueChange={(value: ProjectStatus) => setProjectStatus(value)}>
+          <SelectTrigger id="projectStatus" className="max-w-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="inactive">Inactive</SelectItem>
+            <SelectItem value="archived">Archived</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Public Project Toggle */}
@@ -232,7 +216,7 @@ export function ProjectGeneralSection() {
 
       {/* Project Information Display */}
       <div className="rounded-lg border p-4 space-y-4">
-        <div className="grid grid-cols-2 gap-6">
+        <div className="grid grid-cols-3 gap-6">
           <div>
             <div className="text-sm font-medium text-muted-foreground">Current Status</div>
             <Badge className={getStatusColor(currentProject.status || 'active')}>
@@ -242,20 +226,12 @@ export function ProjectGeneralSection() {
             </Badge>
           </div>
           <div>
-            <div className="text-sm font-medium text-muted-foreground">Environment</div>
-            <Badge variant="outline">
-              {currentProject.environment
-                ? currentProject.environment.charAt(0).toUpperCase() + currentProject.environment.slice(1)
-                : 'Production'}
-            </Badge>
-          </div>
-          <div>
             <div className="text-sm font-medium text-muted-foreground">Created</div>
-            <div className="text-sm">{new Date(currentProject.created_at).toLocaleDateString()}</div>
+            <div className="text-sm">{new Date(currentProject.createdAt).toLocaleDateString()}</div>
           </div>
           <div>
             <div className="text-sm font-medium text-muted-foreground">Last Updated</div>
-            <div className="text-sm">{new Date(currentProject.updated_at).toLocaleDateString()}</div>
+            <div className="text-sm">{new Date(currentProject.updatedAt).toLocaleDateString()}</div>
           </div>
         </div>
 

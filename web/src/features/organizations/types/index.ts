@@ -27,10 +27,9 @@ export interface Project {
   organizationId: string
   description?: string
   status: ProjectStatus
-  environment: ProjectEnvironment
   metrics: ProjectMetrics
-  created_at: string
-  updated_at: string
+  createdAt: string
+  updatedAt: string
   settings?: ProjectSettings
 }
 
@@ -42,7 +41,6 @@ export interface ProjectSummary {
   description: string
   organizationId: string
   status: ProjectStatus
-  environment: ProjectEnvironment
   metrics: ProjectMetrics
   settings?: ProjectSettings
   createdAt: string
@@ -84,8 +82,6 @@ export type SubscriptionPlan = 'free' | 'pro' | 'business' | 'enterprise'
 export type OrganizationRole = 'owner' | 'admin' | 'developer' | 'viewer'
 
 export type ProjectStatus = 'active' | 'inactive' | 'archived'
-
-export type ProjectEnvironment = 'development' | 'staging' | 'production'
 
 // Context types for state management
 export interface OrganizationContext {

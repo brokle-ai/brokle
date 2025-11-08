@@ -64,14 +64,6 @@ export default function OrganizationPage() {
     <>
       <DashboardHeader />
       <Main>
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold tracking-tight">
-            {currentOrganization.name}
-          </h1>
-          <p className="text-muted-foreground">
-            Manage your organization, members, and projects
-          </p>
-        </div>
         <OrganizationOverview />
       </Main>
     </>

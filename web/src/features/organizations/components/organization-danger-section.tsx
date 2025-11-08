@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { AlertTriangle, Trash2, Download, UserCog, LogOut } from 'lucide-react'
+import { AlertTriangle, Trash2, Download, LogOut } from 'lucide-react'
 import { useWorkspace } from '@/context/workspace-context'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -17,13 +17,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Separator } from '@/components/ui/separator'
 import { toast } from 'sonner'
@@ -33,13 +26,10 @@ export function OrganizationDangerSection() {
   const { currentOrganization } = useWorkspace()
 
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
-  const [isTransferOpen, setIsTransferOpen] = useState(false)
   const [isLeaveOpen, setIsLeaveOpen] = useState(false)
   const [deleteConfirmation, setDeleteConfirmation] = useState('')
   const [acknowledgedRisks, setAcknowledgedRisks] = useState<string[]>([])
-  const [newOwnerId, setNewOwnerId] = useState('')
   const [isDeleting, setIsDeleting] = useState(false)
-  const [isTransferring, setIsTransferring] = useState(false)
   const [isLeaving, setIsLeaving] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
 
@@ -72,28 +62,6 @@ export function OrganizationDangerSection() {
       toast.error('Failed to delete organization. Please try again.')
     } finally {
       setIsDeleting(false)
-    }
-  }
-
-  const handleTransferOwnership = async () => {
-    if (!newOwnerId) {
-      toast.error('Please select a new owner')
-      return
-    }
-
-    setIsTransferring(true)
-
-    try {
-      // TODO: Implement API call to transfer ownership
-      await new Promise(resolve => setTimeout(resolve, 1500))
-
-      toast.success('Ownership transferred successfully')
-      setIsTransferOpen(false)
-    } catch (error) {
-      console.error('Failed to transfer ownership:', error)
-      toast.error('Failed to transfer ownership. Please try again.')
-    } finally {
-      setIsTransferring(false)
     }
   }
 
@@ -212,74 +180,6 @@ export function OrganizationDangerSection() {
           )}
         </Button>
       </div>
-
-      {/* Transfer Ownership (Owner only) */}
-      {isOwner && (
-        <div className="rounded-lg border border-yellow-200 p-4 space-y-4">
-          <div>
-            <h4 className="font-medium mb-2 flex items-center gap-2">
-              <UserCog className="h-4 w-4 text-yellow-500" />
-              Transfer Ownership
-            </h4>
-            <p className="text-sm text-muted-foreground mb-4">
-              Transfer organization ownership to another member
-            </p>
-          </div>
-
-          <Dialog open={isTransferOpen} onOpenChange={setIsTransferOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline" className="w-full border-yellow-200 text-yellow-700 hover:bg-yellow-50">
-                <UserCog className="mr-2 h-4 w-4" />
-                Transfer Ownership
-              </Button>
-            </DialogTrigger>
-
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Transfer Ownership</DialogTitle>
-                <DialogDescription>
-                  Select a member to transfer organization ownership to. You will become an admin after transfer.
-                </DialogDescription>
-              </DialogHeader>
-
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label>New Owner</Label>
-                  <Select value={newOwnerId} onValueChange={setNewOwnerId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a member" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="member-1">John Doe (john@example.com)</SelectItem>
-                      <SelectItem value="member-2">Jane Smith (jane@example.com)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <Alert>
-                  <AlertTriangle className="h-4 w-4" />
-                  <AlertDescription>
-                    You will lose owner privileges and become an admin. Only the new owner can reverse this action.
-                  </AlertDescription>
-                </Alert>
-              </div>
-
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setIsTransferOpen(false)}>
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleTransferOwnership}
-                  disabled={isTransferring || !newOwnerId}
-                  className="bg-yellow-600 hover:bg-yellow-700"
-                >
-                  {isTransferring ? 'Transferring...' : 'Transfer Ownership'}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </div>
-      )}
 
       {/* Leave Organization (Non-owners) */}
       {!isOwner && (

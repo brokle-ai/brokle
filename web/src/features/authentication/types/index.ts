@@ -69,7 +69,6 @@ export interface Project {
   id: string
   name: string
   organizationId: string
-  environment: ProjectEnvironment
   apiKeys: ApiKey[]
   settings: ProjectSettings
   createdAt: string
@@ -92,8 +91,6 @@ export type UserRole = 'user' | 'admin' | 'super_admin'
 export type OrganizationRole = 'owner' | 'admin' | 'developer' | 'viewer'
 
 export type SubscriptionPlan = 'free' | 'pro' | 'business' | 'enterprise'
-
-export type ProjectEnvironment = 'development' | 'staging' | 'production'
 
 export type Permission = 
   | 'auth:read' 

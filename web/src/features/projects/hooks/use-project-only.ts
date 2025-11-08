@@ -217,16 +217,15 @@ export function useProjectMetrics() {
  * @example
  * ```tsx
  * function ProjectInfo() {
- *   const { 
- *     name, 
- *     description, 
- *     environment,
+ *   const {
+ *     name,
+ *     description,
  *     status,
  *     isActive,
  *     createdAt,
  *     age
  *   } = useProjectInfo()
- *   
+ *
  *   return (
  *     <ProjectCard>
  *       <h3>{name}</h3>
@@ -248,25 +247,22 @@ export function useProjectInfo() {
     // Basic info
     name: current?.name || '',
     description: current?.description || '',
-    environment: current?.environment || 'development',
     status: current?.status || 'inactive',
     slug: current?.slug || '',
-    
+
     // Computed properties
     isActive: current?.status === 'active',
-    isDevelopment: current?.environment === 'development',
-    isProduction: current?.environment === 'production',
-    
+
     // Dates
-    createdAt: current?.created_at,
-    updatedAt: current?.updated_at,
+    createdAt: current?.createdAt,
+    updatedAt: current?.updatedAt,
     
     // Formatted dates
-    age: current ? 
-      new Date(current.created_at).toLocaleDateString() : 
+    age: current ?
+      new Date(current.createdAt).toLocaleDateString() :
       'Unknown',
-    lastUpdated: current ? 
-      new Date(current.updated_at).toLocaleDateString() : 
+    lastUpdated: current ?
+      new Date(current.updatedAt).toLocaleDateString() :
       'Unknown',
   }
 }

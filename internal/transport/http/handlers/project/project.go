@@ -58,8 +58,6 @@ type Project struct {
 	Status         string    `json:"status" example:"active" description:"Project status (active, paused, archived)"`
 	CreatedAt      time.Time `json:"created_at" example:"2024-01-01T00:00:00Z" description:"Creation timestamp"`
 	UpdatedAt      time.Time `json:"updated_at" example:"2024-01-01T00:00:00Z" description:"Last update timestamp"`
-	OwnerID        string    `json:"owner_id" example:"usr_1234567890" description:"Project owner user ID"`
-	Environments   int       `json:"environments_count" example:"3" description:"Number of environments in this project"`
 }
 
 // CreateProjectRequest represents the request to create a project
@@ -270,8 +268,6 @@ func (h *Handler) List(c *gin.Context) {
 			Status:         "active", // Default status - extend when status field is added
 			CreatedAt:      proj.CreatedAt,
 			UpdatedAt:      proj.UpdatedAt,
-			OwnerID:        "", // TODO: Add owner concept when needed
-			Environments:   0,  // Environments are now tags, not entities
 		}
 	}
 
@@ -429,8 +425,6 @@ func (h *Handler) Create(c *gin.Context) {
 		Status:         "active", // Default status
 		CreatedAt:      project.CreatedAt,
 		UpdatedAt:      project.UpdatedAt,
-		OwnerID:        userULID.String(), // Set creator as owner
-		Environments:   0,                 // Environments are now tags, not entities
 	}
 
 	response.Created(c, responseProject)
@@ -562,8 +556,6 @@ func (h *Handler) Get(c *gin.Context) {
 		Status:         "active", // Default status
 		CreatedAt:      project.CreatedAt,
 		UpdatedAt:      project.UpdatedAt,
-		OwnerID:        "", // TODO: Add owner concept when needed
-		Environments:   0,  // Environments are now tags, not entities
 	}
 
 	response.Success(c, responseProject)
@@ -729,8 +721,6 @@ func (h *Handler) Update(c *gin.Context) {
 		Status:         req.Status,
 		CreatedAt:      project.CreatedAt,
 		UpdatedAt:      project.UpdatedAt,
-		OwnerID:        "", // TODO: Add owner concept when needed
-		Environments:   0,  // Environments are now tags, not entities
 	}
 
 	// Handle status field from request if provided

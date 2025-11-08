@@ -17,7 +17,6 @@ interface DashboardState {
   timeRange: TimeRange
   selectedProviders: string[]
   selectedModels: string[]
-  selectedEnvironment: string
   
   // Real-time data
   realtimeRequests: AIRequest[]
@@ -41,7 +40,6 @@ interface DashboardState {
   setTimeRange: (range: TimeRange) => void
   setSelectedProviders: (providers: string[]) => void
   setSelectedModels: (models: string[]) => void
-  setSelectedEnvironment: (environment: string) => void
   setRealtimeEnabled: (enabled: boolean) => void
   addRealtimeRequest: (request: AIRequest) => void
   setCurrentLayout: (layout: DashboardLayout) => void
@@ -64,7 +62,6 @@ export const useDashboardStore = create<DashboardState>()(
       timeRange: '24h',
       selectedProviders: [],
       selectedModels: [],
-      selectedEnvironment: 'production',
       realtimeRequests: [],
       realtimeEnabled: false,
       currentLayout: null,
@@ -83,13 +80,11 @@ export const useDashboardStore = create<DashboardState>()(
       }),
       
       setTimeRange: (range) => set({ timeRange: range }),
-      
+
       setSelectedProviders: (providers) => set({ selectedProviders: providers }),
-      
+
       setSelectedModels: (models) => set({ selectedModels: models }),
-      
-      setSelectedEnvironment: (environment) => set({ selectedEnvironment: environment }),
-      
+
       setRealtimeEnabled: (enabled) => set({ 
         realtimeEnabled: enabled,
         ...(enabled ? {} : { realtimeRequests: [] })
@@ -158,11 +153,10 @@ export const useDashboardStore = create<DashboardState>()(
           // const data = await dashboardAPI.getData({
           //   timeRange: state.timeRange,
           //   providers: state.selectedProviders,
-          //   models: state.selectedModels,
-          //   environment: state.selectedEnvironment
+          //   models: state.selectedModels
           // })
           // state.setData(data)
-          
+
           console.log('Refreshing dashboard data...')
         } catch (error) {
           set({ error: error instanceof Error ? error.message : 'Failed to refresh data' })

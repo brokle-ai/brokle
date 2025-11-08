@@ -13,7 +13,6 @@ interface OrganizationAPIResponse {
   description?: string
   plan: 'free' | 'pro' | 'business' | 'enterprise'
   status: 'active' | 'inactive' | 'suspended'
-  owner_id: string
   created_at: string
   updated_at: string
 }
@@ -24,16 +23,6 @@ interface ProjectAPIResponse {
   name: string
   description?: string
   status: 'active' | 'inactive' | 'archived'
-  owner_id: string
-  environments_count: number
-  created_at: string
-  updated_at: string
-}
-
-interface EnvironmentAPIResponse {
-  id: string
-  project_id: string
-  name: string
   created_at: string
   updated_at: string
 }
@@ -125,18 +114,12 @@ export const getProjectById = async (projectId: string): Promise<Project> => {
   }
 
 
-export const getProjectMetrics = async (organizationId: string, projectId: string, environmentId?: string): Promise<ProjectMetricsAPIResponse> => {
+export const getProjectMetrics = async (organizationId: string, projectId: string): Promise<ProjectMetricsAPIResponse> => {
     const options: RequestOptions = {
       includeOrgContext: true,
       includeProjectContext: true,
       customOrgId: organizationId,
       customProjectId: projectId,
-    }
-
-    // Include environment context if provided
-    if (environmentId) {
-      options.includeEnvironmentContext = true
-      options.customEnvironmentId = environmentId
     }
 
     return await client.get<ProjectMetricsAPIResponse>(
@@ -291,7 +274,6 @@ export const updateUserRole = async (organizationId: string, userId: string, rol
       organizationId: apiProject.organization_id || '',
       description: apiProject.description || '',
       status: apiProject.status || 'active',
-      environment: 'development', // Default environment, TODO: get from API
       metrics: {
         requests_today: 0, // Will be populated from metrics API
         cost_today: 0,
@@ -300,8 +282,8 @@ export const updateUserRole = async (organizationId: string, userId: string, rol
         total_requests: 0,
         total_cost: 0,
       },
-      created_at: apiProject.created_at,
-      updated_at: apiProject.updated_at,
+      createdAt: apiProject.created_at,
+      updatedAt: apiProject.updated_at,
       settings: {
         default_provider: 'openai', // Default settings, will be from backend
         enable_caching: true,
