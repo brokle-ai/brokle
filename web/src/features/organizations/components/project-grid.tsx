@@ -39,7 +39,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { CreateProjectModal } from './create-project-modal'
+import { CreateProjectDialog } from '@/features/projects'
 import { BulkActionsBar } from './bulk-actions-bar'
 import { buildProjectUrl } from '@/lib/utils/slug-utils'
 import { cn } from '@/lib/utils'
@@ -64,6 +64,7 @@ export function ProjectGrid({ className, showCreateButton = true }: ProjectGridP
   const [sortBy, setSortBy] = useState<'name' | 'created' | 'requests' | 'cost'>('name')
   const [selectedProjects, setSelectedProjects] = useState<Project[]>([])
   const [bulkSelectMode, setBulkSelectMode] = useState(false)
+  const [createDialogOpen, setCreateDialogOpen] = useState(false)
 
   const filteredAndSortedProjects = useMemo(() => {
     // Ensure projects is always an array
@@ -201,15 +202,19 @@ export function ProjectGrid({ className, showCreateButton = true }: ProjectGridP
             </Button>
           )}
           
-          {showCreateButton && (
-            <CreateProjectModal 
-              trigger={
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
-                  New Project
-                </Button>
-              }
-            />
+          {showCreateButton && currentOrganization?.id && (
+            <>
+              <Button onClick={() => setCreateDialogOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                New Project
+              </Button>
+
+              <CreateProjectDialog
+                organizationId={currentOrganization.id}
+                open={createDialogOpen}
+                onOpenChange={setCreateDialogOpen}
+              />
+            </>
           )}
         </div>
       </div>
@@ -474,15 +479,11 @@ export function ProjectGrid({ className, showCreateButton = true }: ProjectGridP
                 ? 'Try adjusting your search or filters to find what you\'re looking for.'
                 : 'Create your first project to start using the AI platform'}
             </p>
-            {(!searchTerm && statusFilter === 'all' && environmentFilter === 'all') && showCreateButton && (
-              <CreateProjectModal 
-                trigger={
-                  <Button>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Create Project
-                  </Button>
-                }
-              />
+            {(!searchTerm && statusFilter === 'all' && environmentFilter === 'all') && showCreateButton && currentOrganization?.id && (
+              <Button onClick={() => setCreateDialogOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Create Project
+              </Button>
             )}
           </CardContent>
         </Card>

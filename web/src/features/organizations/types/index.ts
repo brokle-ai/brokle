@@ -118,8 +118,8 @@ export interface CreateOrganizationData {
 export interface CreateProjectData {
   name: string
   organizationId: string
+  /** Reserved for future use (optional, not required in UI) */
   description?: string
-  environment?: ProjectEnvironment
 }
 
 // Route parameter types for Next.js

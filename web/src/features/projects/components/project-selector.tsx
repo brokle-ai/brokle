@@ -10,6 +10,7 @@ import { useProjectOnly } from '../hooks/use-project-only'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { buildProjectUrl, getProjectSlug } from '@/lib/utils/slug-utils'
 import { getSmartRedirectUrl } from '@/lib/utils/smart-redirect'
+import { CreateProjectDialog } from './create-project-dialog'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -39,6 +40,7 @@ export function ProjectSelector({ className }: ProjectSelectorProps) {
   const pathname = usePathname()
   const isMobile = useIsMobile()
   const [isSwitchLoading, setIsSwitchLoading] = useState(false)
+  const [dialogOpen, setDialogOpen] = useState(false)
 
   const handleProjectSwitch = async (project: any) => {
     if (isSwitchLoading || project.id === currentProject?.id) return
@@ -90,6 +92,7 @@ export function ProjectSelector({ className }: ProjectSelectorProps) {
   }
 
   return (
+    <>
     <DropdownMenu>
       <DropdownMenuTrigger
         className={cn(
@@ -178,20 +181,23 @@ export function ProjectSelector({ className }: ProjectSelectorProps) {
         <DropdownMenuSeparator />
 
         {/* Create new project */}
-        <DropdownMenuItem asChild>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 w-full text-sm font-normal justify-start"
-            asChild
-          >
-            <Link href="/projects/create">
-              <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
-              New Project
-            </Link>
-          </Button>
+        <DropdownMenuItem
+          onSelect={() => {
+            setDialogOpen(true)
+          }}
+        >
+          <Plus className="mr-1.5 h-4 w-4" aria-hidden="true" />
+          New Project
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+
+    {/* Dialog rendered as sibling, not nested */}
+    <CreateProjectDialog
+      organizationId={currentOrganization.id}
+      open={dialogOpen}
+      onOpenChange={setDialogOpen}
+    />
+  </>
   )
 }

@@ -2,8 +2,10 @@
 
 // Hooks
 export { useProjectOnly } from './hooks/use-project-only'
+export { useCreateProjectMutation } from './hooks/use-project-queries'
 
 // Components
+export { CreateProjectDialog } from './components/create-project-dialog'
 export { Overview } from './components/overview'
 export { RecentSales } from './components/recent-sales'
 export { ProjectSelector } from './components/project-selector'

@@ -10,7 +10,6 @@ export { createProject, createOrganization } from './api/organizations-api'
 
 // Components
 export { CreateOrganizationDialog } from './components/create-organization-dialog'
-export { CreateProjectModal } from './components/create-project-modal'
 export { InviteMemberModal } from './components/invite-member-modal'
 export { MemberManagement } from './components/member-management'
 export { ProjectGrid } from './components/project-grid'
