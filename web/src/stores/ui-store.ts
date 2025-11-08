@@ -32,6 +32,7 @@ interface UIState {
   toggleSidebar: () => void
   setSidebarOpen: (open: boolean) => void
   setSidebarCollapsed: (collapsed: boolean) => void
+  toggleSearch: () => void
   setSearchOpen: (open: boolean) => void
   setSearchQuery: (query: string) => void
   setSearchResults: (results: any[]) => void
@@ -84,8 +85,13 @@ export const useUIStore = create<UIState>()(
         setSidebarOpen: (open) => set({ sidebarOpen: open }),
         
         setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
-        
-        setSearchOpen: (open) => set({ 
+
+        toggleSearch: () => set((state) => ({
+          searchOpen: !state.searchOpen,
+          ...(!state.searchOpen ? {} : { searchQuery: '', searchResults: [] })
+        })),
+
+        setSearchOpen: (open) => set({
           searchOpen: open,
           ...(open ? {} : { searchQuery: '', searchResults: [] })
         }),
