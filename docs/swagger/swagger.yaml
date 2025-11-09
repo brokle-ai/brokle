@@ -1947,9 +1947,6 @@ definitions:
       description:
         example: Customer support AI chatbot
         type: string
-      environments_count:
-        example: 3
-        type: integer
       id:
         example: proj_1234567890
         type: string

@@ -98,7 +98,6 @@ export interface DashboardStats {
   totalCost: number
   averageLatency: number
   errorRate: number
-  topModels: ModelUsage[]
   costTrend: TimeSeries[]
   requestTrend: TimeSeries[]
   providerDistribution: ProviderUsage[]

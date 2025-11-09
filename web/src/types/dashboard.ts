@@ -14,8 +14,6 @@ export interface DashboardOverview {
   totalCost: number
   averageLatency: number
   errorRate: number
-  activeModels: number
-  activeProviders: number
   cacheHitRate: number
   costOptimization: number
 }
@@ -42,8 +40,6 @@ export interface DashboardCharts {
   costOverTime: TimeSeries[]
   latencyOverTime: TimeSeries[]
   errorRateOverTime: TimeSeries[]
-  modelUsage: ModelUsage[]
-  providerDistribution: ProviderUsage[]
   geographicDistribution: GeographicUsage[]
 }
 

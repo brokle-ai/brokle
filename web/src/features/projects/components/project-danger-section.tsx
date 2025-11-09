@@ -94,7 +94,6 @@ export function ProjectDangerSection() {
         project: currentProject,
         exported_at: new Date().toISOString(),
         data: {
-          analytics: 'Analytics data would be here...',
           logs: 'Request logs would be here...',
           settings: 'Project settings would be here...'
         }
@@ -125,7 +124,7 @@ export function ProjectDangerSection() {
   }
 
   const deleteRisks = [
-    { id: 'data-loss', text: 'All project data, analytics, and logs will be permanently deleted' },
+    { id: 'data-loss', text: 'All project data and logs will be permanently deleted' },
     { id: 'api-keys', text: 'All API keys for this project will be immediately revoked' },
     { id: 'billing-data', text: 'Billing and usage history will be removed' },
     { id: 'irreversible', text: 'This action cannot be undone' }
@@ -157,10 +156,8 @@ export function ProjectDangerSection() {
           Export includes:
           <ul className="list-disc list-inside mt-2 space-y-1">
             <li>Project configuration and settings</li>
-            <li>Analytics and usage data</li>
             <li>Request logs and metrics</li>
             <li>API key metadata (keys themselves are not exported)</li>
-            <li>Billing and cost data</li>
           </ul>
         </div>
 
@@ -271,10 +268,8 @@ export function ProjectDangerSection() {
           <strong>This will permanently delete:</strong>
           <ul className="list-disc list-inside mt-2 space-y-1">
             <li>All project data and configuration</li>
-            <li>Analytics, metrics, and usage history</li>
             <li>All API keys and access tokens</li>
             <li>Request logs and audit trails</li>
-            <li>Billing and cost tracking data</li>
           </ul>
         </div>
 

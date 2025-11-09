@@ -40,7 +40,6 @@ type Organization struct {
 	Status      string    `json:"status" example:"active" description:"Organization status (active, suspended, deleted)"`
 	CreatedAt   time.Time `json:"created_at" example:"2024-01-01T00:00:00Z" description:"Creation timestamp"`
 	UpdatedAt   time.Time `json:"updated_at" example:"2024-01-01T00:00:00Z" description:"Last update timestamp"`
-	OwnerID     string    `json:"owner_id" example:"usr_1234567890" description:"Organization owner user ID"`
 }
 
 // CreateOrganizationRequest represents the request to create an organization
@@ -288,7 +287,6 @@ func (h *Handler) Create(c *gin.Context) {
 		Status:    org.SubscriptionStatus,
 		CreatedAt: org.CreatedAt,
 		UpdatedAt: org.UpdatedAt,
-		OwnerID:   userID.String(),
 	}
 
 	h.logger.WithFields(logrus.Fields{

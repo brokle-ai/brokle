@@ -9380,10 +9380,6 @@ const docTemplate = `{
                     "type": "string",
                     "example": "Customer support AI chatbot"
                 },
-                "environments_count": {
-                    "type": "integer",
-                    "example": 3
-                },
                 "id": {
                     "type": "string",
                     "example": "proj_1234567890"

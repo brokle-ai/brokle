@@ -50,7 +50,6 @@ export type {
   OrganizationMember,
   OrganizationWithProjects,
   Project,
-  ProjectEnvironment,
   ApiKey,
   SubscriptionPlan,
   LoginResponse,
