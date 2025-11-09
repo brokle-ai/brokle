@@ -3,9 +3,6 @@ import {
   Grid2X2,
   Settings,
   FolderOpen,
-  BarChart3,
-  DollarSign,
-  Cpu,
   Home,
 } from 'lucide-react'
 
@@ -47,7 +44,7 @@ export const ROUTES: Route[] = [
   },
 
   // ========================================
-  // PROJECT CONTEXT (9 routes)
+  // PROJECT CONTEXT (6 routes)
   // ========================================
 
   // Project Group (1 route)
@@ -57,36 +54,6 @@ export const ROUTES: Route[] = [
     icon: FolderOpen,
     section: RouteSection.Main,
     rbacScope: 'projects:read',
-    show: ({ currentProjectSlug }) => !!currentProjectSlug,
-  },
-
-  // Observability Group (3 routes)
-  {
-    title: 'Analytics',
-    pathname: '/projects/[projectSlug]/analytics',
-    icon: BarChart3,
-    section: RouteSection.Main,
-    group: RouteGroup.Observability,
-    rbacScope: 'analytics:read',
-    show: ({ currentProjectSlug }) => !!currentProjectSlug,
-  },
-  {
-    title: 'Costs',
-    pathname: '/projects/[projectSlug]/costs',
-    icon: DollarSign,
-    section: RouteSection.Main,
-    group: RouteGroup.Observability,
-    badge: { type: 'dynamic', key: 'project-costs' },
-    rbacScope: 'billing:read',
-    show: ({ currentProjectSlug }) => !!currentProjectSlug,
-  },
-  {
-    title: 'Models',
-    pathname: '/projects/[projectSlug]/models',
-    icon: Cpu,
-    section: RouteSection.Main,
-    group: RouteGroup.Observability,
-    rbacScope: 'models:read',
     show: ({ currentProjectSlug }) => !!currentProjectSlug,
   },
 
@@ -113,8 +80,8 @@ export const ROUTES: Route[] = [
   },
 ]
 
-// Total: 9 routes
+// Total: 6 routes
 // - Root: 1 (Dashboard)
 // - Organization: 2 (Projects, Settings)
-// - Project: 5 (1 Overview + 3 Observability + 1 Settings)
+// - Project: 2 (Overview, Settings)
 // - User Settings: 1 (Home - back to dashboard)

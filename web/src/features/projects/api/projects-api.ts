@@ -26,12 +26,6 @@ export interface DashboardOverview {
   quickStats: QuickStat[]
   requestTrend: ChartData
   costTrend: ChartData
-  topModels: Array<{
-    name: string
-    requests: number
-    cost: number
-    change: number
-  }>
   recentActivity: Array<{
     id: string
     type: 'request' | 'error' | 'cost_alert' | 'model_change'

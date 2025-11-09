@@ -100,11 +100,6 @@ export function Breadcrumbs({ className }: BreadcrumbsProps) {
           if (segments.length >= 3) {
             const projectPage = segments[2]
             const projectPages: Record<string, string> = {
-              'analytics': 'Analytics',
-              'models': 'Models',
-              'costs': 'Cost Tracking',
-              'performance': 'Performance',
-              'optimization': 'Optimization',
               'settings': 'Settings',
             }
 

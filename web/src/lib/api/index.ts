@@ -4,7 +4,6 @@
 // Feature-based API exports
 export * from '@/features/authentication/api/auth-api'
 export * from '@/features/organizations/api/organizations-api'
-export * from '@/features/analytics/api/analytics-api'
 export * from '@/features/projects/api/projects-api'
 
 // Remaining services (not yet migrated to features)
@@ -52,16 +51,13 @@ if (process.env.NODE_ENV === 'development') {
   if (typeof window !== 'undefined') {
     import('@/features/authentication/api/auth-api').then((auth) => {
       import('@/features/organizations/api/organizations-api').then((orgs) => {
-        import('@/features/analytics/api/analytics-api').then((analytics) => {
-          import('@/features/projects/api/projects-api').then((projects) => {
-            (window as any).brokleAPI = {
-              auth,
-              organizations: orgs,
-              analytics,
-              projects,
-              client: new (require('./core/client').BrokleAPIClient)('/api')
-            }
-          })
+        import('@/features/projects/api/projects-api').then((projects) => {
+          (window as any).brokleAPI = {
+            auth,
+            organizations: orgs,
+            projects,
+            client: new (require('./core/client').BrokleAPIClient)('/api')
+          }
         })
       })
     })

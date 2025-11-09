@@ -16,7 +16,6 @@ interface DashboardState {
   // Time range and filters
   timeRange: TimeRange
   selectedProviders: string[]
-  selectedModels: string[]
   
   // Real-time data
   realtimeRequests: AIRequest[]
@@ -39,7 +38,6 @@ interface DashboardState {
   setData: (data: DashboardData) => void
   setTimeRange: (range: TimeRange) => void
   setSelectedProviders: (providers: string[]) => void
-  setSelectedModels: (models: string[]) => void
   setRealtimeEnabled: (enabled: boolean) => void
   addRealtimeRequest: (request: AIRequest) => void
   setCurrentLayout: (layout: DashboardLayout) => void
@@ -61,7 +59,6 @@ export const useDashboardStore = create<DashboardState>()(
       data: null,
       timeRange: '24h',
       selectedProviders: [],
-      selectedModels: [],
       realtimeRequests: [],
       realtimeEnabled: false,
       currentLayout: null,
@@ -82,8 +79,6 @@ export const useDashboardStore = create<DashboardState>()(
       setTimeRange: (range) => set({ timeRange: range }),
 
       setSelectedProviders: (providers) => set({ selectedProviders: providers }),
-
-      setSelectedModels: (models) => set({ selectedModels: models }),
 
       setRealtimeEnabled: (enabled) => set({ 
         realtimeEnabled: enabled,
@@ -153,7 +148,6 @@ export const useDashboardStore = create<DashboardState>()(
           // const data = await dashboardAPI.getData({
           //   timeRange: state.timeRange,
           //   providers: state.selectedProviders,
-          //   models: state.selectedModels
           // })
           // state.setData(data)
 

@@ -12,8 +12,8 @@ export const ROUTE_CONFIG = {
       homeRoute: '/'
     },
     project: {
-      pattern: '/projects/[projectSlug]', 
-      pages: ['analytics', 'costs', 'models', 'settings'] as const,
+      pattern: '/projects/[projectSlug]',
+      pages: ['settings'] as const,
       nested: {
         settings: ['integrations', 'api-keys', 'security', 'danger']
       } as const,
