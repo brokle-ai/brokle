@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { Save, RefreshCw, AlertCircle, Copy } from 'lucide-react'
 import { useWorkspace } from '@/context/workspace-context'
-import { getOrgSlug, getProjectSlug } from '@/lib/utils/slug-utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -22,8 +21,6 @@ export function ProjectGeneralSection() {
   const [isLoading, setIsLoading] = useState(false)
   const [projectName, setProjectName] = useState(currentProject?.name || '')
   const [projectDescription, setProjectDescription] = useState(currentProject?.description || '')
-  const [projectSlug, setProjectSlug] = useState(currentProject?.slug || '')
-  const computedProjectSlug = currentProject ? getProjectSlug(currentProject) : ''
   const [projectStatus, setProjectStatus] = useState<ProjectStatus>(currentProject?.status || 'active')
   const [isPublic, setIsPublic] = useState(currentProject?.settings?.public || false)
   const [webhookUrl, setWebhookUrl] = useState(currentProject?.settings?.webhook_url || '')
@@ -51,17 +48,6 @@ export function ProjectGeneralSection() {
     }
   }
 
-  const regenerateSlug = () => {
-    const newSlug = projectName.toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, '')
-      .replace(/\s+/g, '-')
-      .replace(/-+/g, '-')
-      .trim()
-
-    setProjectSlug(newSlug)
-    toast.success('Slug regenerated from project name')
-  }
-
   const copyProjectId = () => {
     navigator.clipboard.writeText(currentProject.id)
     toast.success('Project ID copied to clipboard')
@@ -84,41 +70,15 @@ export function ProjectGeneralSection() {
     <form onSubmit={handleSaveSettings} className="space-y-8">
       {/* Project Information Section */}
       <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="projectName">Project Name *</Label>
-            <Input
-              id="projectName"
-              value={projectName}
-              onChange={(e) => setProjectName(e.target.value)}
-              placeholder="Enter project name"
-              required
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="projectSlug">
-              Project Slug *
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="ml-2 h-6 px-2"
-                onClick={regenerateSlug}
-              >
-                <RefreshCw className="h-3 w-3" />
-              </Button>
-            </Label>
-            <Input
-              id="projectSlug"
-              value={projectSlug}
-              onChange={(e) => setProjectSlug(e.target.value)}
-              placeholder="project-slug"
-              required
-            />
-            <p className="text-xs text-muted-foreground">
-              URL: /organizations/{getOrgSlug(currentOrganization)}/projects/{computedProjectSlug}
-            </p>
-          </div>
+        <div className="space-y-2">
+          <Label htmlFor="projectName">Project Name *</Label>
+          <Input
+            id="projectName"
+            value={projectName}
+            onChange={(e) => setProjectName(e.target.value)}
+            placeholder="Enter project name"
+            required
+          />
         </div>
 
         <div className="space-y-2">

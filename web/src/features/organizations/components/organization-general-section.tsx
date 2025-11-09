@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { Save, RefreshCw, Copy } from 'lucide-react'
 import { useWorkspace } from '@/context/workspace-context'
-import { getOrgSlug } from '@/lib/utils/slug-utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -72,20 +71,6 @@ export function OrganizationGeneralSection() {
             placeholder="Enter organization name"
             required
           />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="organizationSlug">Organization Slug</Label>
-          <Input
-            id="organizationSlug"
-            value={getOrgSlug(currentOrganization)}
-            readOnly
-            disabled
-            className="bg-muted cursor-not-allowed"
-          />
-          <p className="text-xs text-muted-foreground">
-            URL: /organizations/{getOrgSlug(currentOrganization)}
-          </p>
         </div>
 
         <div className="space-y-2">
