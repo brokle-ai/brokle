@@ -54,7 +54,10 @@ export function TracesPeekView() {
       <SheetContent
         side='right'
         className='flex max-h-full min-h-0 min-w-[60vw] flex-col gap-0 overflow-hidden rounded-l-xl p-0'
-        onPointerDownOutside={(e) => e.preventDefault()}
+        onPointerDownOutside={(e) => {
+          // Prevent sheet closure when clicking outside with modal={false}
+          e.preventDefault()
+        }}
         tabIndex={-1}
       >
         {/* Header */}
