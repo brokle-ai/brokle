@@ -8,9 +8,9 @@ import { DataTableRowActions } from './data-table-row-actions'
 import { statuses } from '../data/constants'
 import type { Trace } from '../data/schema'
 import { formatDistanceToNow } from 'date-fns'
-import Link from 'next/link'
-import { useParams } from 'next/navigation'
-import { ExternalLink } from 'lucide-react'
+import { Copy } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { toast } from 'sonner'
 
 // Helper to format duration
 function formatDuration(ms: number | undefined): string {
@@ -56,19 +56,27 @@ export const tracesColumns: ColumnDef<Trace>[] = [
       <DataTableColumnHeader column={column} title='Trace ID' />
     ),
     cell: ({ row }) => {
-      const params = useParams()
-      const projectSlug = params?.projectSlug as string
       const traceId = row.getValue('id') as string
       const shortId = traceId.substring(0, 8)
 
+      const handleCopy = (e: React.MouseEvent) => {
+        e.stopPropagation()
+        navigator.clipboard.writeText(traceId)
+        toast.success('Trace ID copied to clipboard')
+      }
+
       return (
-        <Link
-          href={`/projects/${projectSlug}/traces/${traceId}`}
-          className='flex items-center gap-1 font-mono text-xs hover:underline'
-        >
-          {shortId}
-          <ExternalLink className='h-3 w-3' />
-        </Link>
+        <div className='flex items-center gap-1'>
+          <span className='font-mono text-xs'>{shortId}</span>
+          <Button
+            variant='ghost'
+            size='icon'
+            className='h-5 w-5'
+            onClick={handleCopy}
+          >
+            <Copy className='h-3 w-3' />
+          </Button>
+        </div>
       )
     },
     enableSorting: true,

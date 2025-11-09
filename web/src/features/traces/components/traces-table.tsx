@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useState, useTransition } from 'react'
+import { useCallback, useEffect, useMemo, useState, useTransition } from 'react'
 import { useSearchParams } from 'next/navigation'
 import type { ColumnFiltersState, SortingState, VisibilityState } from '@tanstack/react-table'
 import {
@@ -13,6 +13,8 @@ import {
 } from '@tanstack/react-table'
 import { useTableSearchParams } from '@/hooks/use-table-search-params'
 import { useTableNavigation } from '../hooks/use-table-navigation'
+import { usePeekNavigation } from '../hooks/use-peek-navigation'
+import { useTraces } from '../context/traces-context'
 import {
   Table,
   TableBody,
@@ -26,6 +28,7 @@ import { DataTableBulkActions } from './data-table-bulk-actions'
 import { DataTablePagination } from './data-table-pagination'
 import { DataTableToolbar } from './data-table-toolbar'
 import { tracesColumns as columns } from './traces-columns'
+import { TracesPeekView } from './traces-peek-view'
 
 type DataTableProps = {
   data: Trace[]
@@ -35,6 +38,8 @@ type DataTableProps = {
 export function TracesTable({ data, totalCount }: DataTableProps) {
   const searchParams = useSearchParams()
   const [isPending, startTransition] = useTransition()
+  const { setCurrentPageTraceIds } = useTraces()
+  const { openPeek } = usePeekNavigation()
 
   // Parse URL state (single source of truth)
   const {
@@ -147,7 +152,31 @@ export function TracesTable({ data, totalCount }: DataTableProps) {
     getSortedRowModel: getSortedRowModel(),
   })
 
+  // Optimized: Derive trace IDs from data (only changes when data changes)
+  const rowIds = useMemo(
+    () => data.map((trace) => trace.id),
+    [data]
+  )
+
+  // Sync current page trace IDs to context (for prev/next navigation)
+  useEffect(() => {
+    setCurrentPageTraceIds(rowIds)
+  }, [rowIds, setCurrentPageTraceIds])
+
+  // Row click handler for peek
+  const handleRowClick = useCallback(
+    (trace: Trace, e: React.MouseEvent) => {
+      // Ignore if click target is interactive element
+      if ((e.target as HTMLElement).closest('[role="checkbox"], button, a')) {
+        return
+      }
+      openPeek(trace.id)
+    },
+    [openPeek]
+  )
+
   return (
+    <>
     <div className='space-y-4 max-sm:has-[div[role="toolbar"]]:mb-16'>
       <DataTableToolbar table={table} isPending={isPending} onReset={handleReset} />
       <div className='overflow-hidden rounded-md border'>
@@ -170,7 +199,12 @@ export function TracesTable({ data, totalCount }: DataTableProps) {
           <TableBody>
             {table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => (
-                <TableRow key={row.id} data-state={row.getIsSelected() && 'selected'}>
+                <TableRow
+                  key={row.id}
+                  data-state={row.getIsSelected() && 'selected'}
+                  className='cursor-pointer hover:bg-muted/50'
+                  onClick={(e) => handleRowClick(row.original, e)}
+                >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -191,5 +225,7 @@ export function TracesTable({ data, totalCount }: DataTableProps) {
       <DataTablePagination table={table} isPending={isPending} />
       <DataTableBulkActions table={table} />
     </div>
+    <TracesPeekView />
+    </>
   )
 }

@@ -9,6 +9,8 @@ export type TableSearchParams = {
   priority: string[]
   sortBy: string | null
   sortOrder: 'asc' | 'desc' | null
+  peek: string | null
+  tab: string | null
 }
 
 type SearchParamsInput = ReadonlyURLSearchParams | Record<string, string | string[] | undefined>
@@ -65,6 +67,10 @@ export function parseTableSearchParams(searchParams: SearchParamsInput): TableSe
   const sortOrderParam = get('sortOrder')
   const sortOrder = sortOrderParam === 'asc' || sortOrderParam === 'desc' ? sortOrderParam : null
 
+  // Parse peek and tab parameters
+  const peek = get('peek')
+  const tab = get('tab')
+
   return {
     page,
     pageSize,
@@ -73,6 +79,8 @@ export function parseTableSearchParams(searchParams: SearchParamsInput): TableSe
     priority,
     sortBy,
     sortOrder,
+    peek,
+    tab,
   }
 }
 
