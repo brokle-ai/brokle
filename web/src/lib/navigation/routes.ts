@@ -49,7 +49,7 @@ export const ROUTES: Route[] = [
   // PROJECT CONTEXT (8 routes)
   // ========================================
 
-  // Project Group (3 routes)
+  // Project Group (2 routes)
   {
     title: 'Overview',
     pathname: '/projects/[projectSlug]',
@@ -66,22 +66,25 @@ export const ROUTES: Route[] = [
     rbacScope: 'projects:read',
     show: ({ currentProjectSlug }) => !!currentProjectSlug,
   },
+
+  // Observability Group (1 route)
   {
     title: 'Traces',
     pathname: '/projects/[projectSlug]/traces',
     icon: Activity,
     section: RouteSection.Main,
+    group: RouteGroup.Observability,
     rbacScope: 'projects:read',
     show: ({ currentProjectSlug }) => !!currentProjectSlug,
   },
 
-  // Settings Group (1 route)
+  // Other Group (1 route)
   {
     title: 'Settings',
     pathname: '/projects/[projectSlug]/settings',
     icon: Settings,
     section: RouteSection.Main,
-    group: RouteGroup.Settings,
+    group: RouteGroup.Other,
     rbacScope: 'settings:read',
     show: ({ currentProjectSlug }) => !!currentProjectSlug,
   },
@@ -101,5 +104,5 @@ export const ROUTES: Route[] = [
 // Total: 8 routes
 // - Root: 1 (Dashboard)
 // - Organization: 2 (Projects, Settings)
-// - Project: 4 (Overview, Tasks, Traces, Settings)
+// - Project: 4 (2 Project Group + 1 Observability + 1 Other)
 // - User Settings: 1 (Home - back to dashboard)

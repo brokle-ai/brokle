@@ -11,7 +11,7 @@ export enum RouteSection {
 export enum RouteGroup {
   Project = 'Project',
   Observability = 'Observability',
-  Settings = 'Settings',
+  Other = 'Other',
 }
 
 export type NavigationContext = {
