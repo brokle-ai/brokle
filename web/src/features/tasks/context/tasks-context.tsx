@@ -11,16 +11,22 @@ type TasksContextType = {
   setOpen: (str: TasksDialogType | null) => void
   currentRow: Task | null
   setCurrentRow: React.Dispatch<React.SetStateAction<Task | null>>
+  projectSlug?: string
 }
 
 const TasksContext = React.createContext<TasksContextType | null>(null)
 
-export function TasksProvider({ children }: { children: React.ReactNode }) {
+interface TasksProviderProps {
+  children: React.ReactNode
+  projectSlug?: string
+}
+
+export function TasksProvider({ children, projectSlug }: TasksProviderProps) {
   const [open, setOpen] = useDialogState<TasksDialogType>(null)
   const [currentRow, setCurrentRow] = useState<Task | null>(null)
 
   return (
-    <TasksContext value={{ open, setOpen, currentRow, setCurrentRow }}>
+    <TasksContext value={{ open, setOpen, currentRow, setCurrentRow, projectSlug }}>
       {children}
     </TasksContext>
   )

@@ -10,13 +10,26 @@ import { DataTableFacetedFilter } from './data-table-faceted-filter'
 
 type DataTableToolbarProps<TData> = {
   table: Table<TData>
+  isPending?: boolean
+  onReset?: () => void
 }
 
 export function DataTableToolbar<TData>({
   table,
+  isPending = false,
+  onReset,
 }: DataTableToolbarProps<TData>) {
   const isFiltered =
     table.getState().columnFilters.length > 0 || table.getState().globalFilter
+
+  const handleReset = () => {
+    if (onReset) {
+      onReset()
+    } else {
+      table.resetColumnFilters()
+      table.setGlobalFilter('')
+    }
+  }
 
   return (
     <div className='flex items-center justify-between'>
@@ -26,6 +39,7 @@ export function DataTableToolbar<TData>({
           value={table.getState().globalFilter ?? ''}
           onChange={(event) => table.setGlobalFilter(event.target.value)}
           className='h-8 w-[150px] lg:w-[250px]'
+          disabled={isPending}
         />
         <div className='flex gap-x-2'>
           {table.getColumn('status') && (
@@ -46,11 +60,9 @@ export function DataTableToolbar<TData>({
         {isFiltered && (
           <Button
             variant='ghost'
-            onClick={() => {
-              table.resetColumnFilters()
-              table.setGlobalFilter('')
-            }}
+            onClick={handleReset}
             className='h-8 px-2 lg:px-3'
+            disabled={isPending}
           >
             Reset
             <Cross2Icon className='ms-2 h-4 w-4' />

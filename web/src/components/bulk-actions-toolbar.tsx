@@ -32,8 +32,9 @@ export function BulkActionsToolbar<TData>({
   entityName,
   children,
 }: BulkActionsToolbarProps<TData>): React.ReactNode | null {
-  const selectedRows = table.getFilteredSelectedRowModel().rows
-  const selectedCount = selectedRows.length
+  const rowSelection = table.getState().rowSelection
+  const selectedCount = Object.keys(rowSelection).length
+  const selectedRows = table.getSelectedRowModel().flatRows
   const toolbarRef = useRef<HTMLDivElement>(null)
   const [announcement, setAnnouncement] = useState('')
 

@@ -1,10 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useCallback, useState, useTransition } from 'react'
+import { useSearchParams } from 'next/navigation'
+import type { ColumnFiltersState, SortingState, VisibilityState } from '@tanstack/react-table'
 import {
-  type SortingState,
-  type VisibilityState,
   flexRender,
   getCoreRowModel,
   getFilteredRowModel,
@@ -12,7 +11,8 @@ import {
   getSortedRowModel,
   useReactTable,
 } from '@tanstack/react-table'
-import { useTableUrlState } from '@/hooks/use-table-url-state'
+import { useTableSearchParams } from '@/hooks/use-table-search-params'
+import { useTableNavigation } from '../hooks/use-table-navigation'
 import {
   Table,
   TableBody,
@@ -29,63 +29,95 @@ import { tasksColumns as columns } from './tasks-columns'
 
 type DataTableProps = {
   data: Task[]
+  totalCount?: number
 }
 
-export function TasksTable({ data }: DataTableProps) {
-  const router = useRouter()
+export function TasksTable({ data, totalCount }: DataTableProps) {
   const searchParams = useSearchParams()
+  const [isPending, startTransition] = useTransition()
 
-  // Local UI-only states
+  // Parse URL state (single source of truth)
+  const {
+    page,
+    pageSize,
+    filter,
+    status,
+    priority,
+    sortBy,
+    sortOrder,
+  } = useTableSearchParams(searchParams)
+
+  // Local UI-only state (not in URL)
   const [rowSelection, setRowSelection] = useState({})
-  const [sorting, setSorting] = useState<SortingState>([])
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
 
-  // Convert searchParams to search object for useTableUrlState
-  const search = Object.fromEntries(searchParams.entries())
+  // Convert parsed params to React Table format
+  const pagination = { pageIndex: page - 1, pageSize } // Convert to 0-indexed
+  const columnFilters: ColumnFiltersState = [
+    ...(status.length > 0 ? [{ id: 'status', value: status }] : []),
+    ...(priority.length > 0 ? [{ id: 'priority', value: priority }] : []),
+  ]
+  const sorting: SortingState =
+    sortBy && sortOrder ? [{ id: sortBy, desc: sortOrder === 'desc' }] : []
+  const globalFilter = filter
 
-  // Navigate function for Next.js
-  const navigate = ({ search: searchUpdate, replace = false }: { search: any; replace?: boolean }) => {
-    const currentParams = Object.fromEntries(searchParams.entries())
-    const newSearch = typeof searchUpdate === 'function' ? searchUpdate(currentParams) : searchUpdate
-    
-    // Clean up undefined values
-    const cleanSearch = Object.fromEntries(
-      Object.entries(newSearch).filter(([_, value]) => value !== undefined)
-    )
+  // Get navigation handlers
+  const { handlePageChange, handleSearch, handleFilter, handleSort, handleReset } =
+    useTableNavigation({
+      searchParams,
+      onSearchChange: () => setRowSelection({}), // Clear selection on filter/search
+    })
 
-    const params = new URLSearchParams(cleanSearch)
-    const url = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}`
-    
-    if (replace) {
-      router.replace(url)
-    } else {
-      router.push(url)
-    }
-  }
+  // Wrap navigation handlers with startTransition for smooth UX
+  const onPaginationChange = useCallback(
+    (paginationUpdater: any) => {
+      const newPagination =
+        typeof paginationUpdater === 'function'
+          ? paginationUpdater(pagination)
+          : paginationUpdater
+      startTransition(() => {
+        handlePageChange(newPagination)
+      })
+    },
+    [pagination, handlePageChange]
+  )
 
-  // Synced with URL states
-  const {
-    globalFilter,
-    onGlobalFilterChange,
-    columnFilters,
-    onColumnFiltersChange,
-    pagination,
-    onPaginationChange,
-    ensurePageInRange,
-  } = useTableUrlState({
-    search,
-    navigate,
-    pagination: { defaultPage: 1, defaultPageSize: 10 },
-    globalFilter: { enabled: true, key: 'filter' },
-    columnFilters: [
-      { columnId: 'status', searchKey: 'status', type: 'array' },
-      { columnId: 'priority', searchKey: 'priority', type: 'array' },
-    ],
-  })
+  const onGlobalFilterChange = useCallback(
+    (filterValue: string) => {
+      startTransition(() => {
+        handleSearch(filterValue)
+      })
+    },
+    [handleSearch]
+  )
 
+  const onColumnFiltersChange = useCallback(
+    (filterUpdater: any) => {
+      const newFilters =
+        typeof filterUpdater === 'function' ? filterUpdater(columnFilters) : filterUpdater
+      startTransition(() => {
+        handleFilter(newFilters)
+      })
+    },
+    [columnFilters, handleFilter]
+  )
+
+  const onSortingChange = useCallback(
+    (sortingUpdater: any) => {
+      const newSorting =
+        typeof sortingUpdater === 'function' ? sortingUpdater(sorting) : sortingUpdater
+      startTransition(() => {
+        handleSort(newSorting)
+      })
+    },
+    [sorting, handleSort]
+  )
+
+  // Initialize React Table
   const table = useReactTable({
     data,
     columns,
+    pageCount: totalCount ? Math.ceil(totalCount / pageSize) : -1,
     state: {
       sorting,
       columnVisibility,
@@ -94,34 +126,32 @@ export function TasksTable({ data }: DataTableProps) {
       globalFilter,
       pagination,
     },
+    manualPagination: true,
+    manualFiltering: true,
+    manualSorting: true,
     enableRowSelection: true,
+    getRowId: (row) => row.id,
     onRowSelectionChange: setRowSelection,
-    onSortingChange: setSorting,
     onColumnVisibilityChange: setColumnVisibility,
+    onPaginationChange,
+    onGlobalFilterChange,
+    onColumnFiltersChange,
+    onSortingChange,
     globalFilterFn: (row, _columnId, filterValue) => {
       const id = String(row.getValue('id')).toLowerCase()
       const title = String(row.getValue('title')).toLowerCase()
       const searchValue = String(filterValue).toLowerCase()
-
       return id.includes(searchValue) || title.includes(searchValue)
     },
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
-    onPaginationChange,
-    onGlobalFilterChange,
-    onColumnFiltersChange,
   })
-
-  const pageCount = table.getPageCount()
-  useEffect(() => {
-    ensurePageInRange(pageCount)
-  }, [pageCount, ensurePageInRange])
 
   return (
     <div className='space-y-4 max-sm:has-[div[role="toolbar"]]:mb-16'>
-      <DataTableToolbar table={table} />
+      <DataTableToolbar table={table} isPending={isPending} onReset={handleReset} />
       <div className='overflow-hidden rounded-md border'>
         <Table>
           <TableHeader>
@@ -132,10 +162,7 @@ export function TasksTable({ data }: DataTableProps) {
                     <TableHead key={header.id} colSpan={header.colSpan}>
                       {header.isPlaceholder
                         ? null
-                        : flexRender(
-                            header.column.columnDef.header,
-                            header.getContext()
-                          )}
+                        : flexRender(header.column.columnDef.header, header.getContext())}
                     </TableHead>
                   )
                 })}
@@ -145,26 +172,17 @@ export function TasksTable({ data }: DataTableProps) {
           <TableBody>
             {table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => (
-                <TableRow
-                  key={row.id}
-                  data-state={row.getIsSelected() && 'selected'}
-                >
+                <TableRow key={row.id} data-state={row.getIsSelected() && 'selected'}>
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext()
-                      )}
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>
                   ))}
                 </TableRow>
               ))
             ) : (
               <TableRow>
-                <TableCell
-                  colSpan={columns.length}
-                  className='h-24 text-center'
-                >
+                <TableCell colSpan={columns.length} className='h-24 text-center'>
                   No results.
                 </TableCell>
               </TableRow>
@@ -172,7 +190,7 @@ export function TasksTable({ data }: DataTableProps) {
           </TableBody>
         </Table>
       </div>
-      <DataTablePagination table={table} />
+      <DataTablePagination table={table} isPending={isPending} />
       <DataTableBulkActions table={table} />
     </div>
   )
