@@ -5,6 +5,7 @@ import {
   FolderOpen,
   Home,
   ListTodo,
+  Activity,
 } from 'lucide-react'
 
 export const ROUTES: Route[] = [
@@ -45,10 +46,10 @@ export const ROUTES: Route[] = [
   },
 
   // ========================================
-  // PROJECT CONTEXT (7 routes)
+  // PROJECT CONTEXT (8 routes)
   // ========================================
 
-  // Project Group (2 routes)
+  // Project Group (3 routes)
   {
     title: 'Overview',
     pathname: '/projects/[projectSlug]',
@@ -61,6 +62,14 @@ export const ROUTES: Route[] = [
     title: 'Tasks',
     pathname: '/projects/[projectSlug]/tasks',
     icon: ListTodo,
+    section: RouteSection.Main,
+    rbacScope: 'projects:read',
+    show: ({ currentProjectSlug }) => !!currentProjectSlug,
+  },
+  {
+    title: 'Traces',
+    pathname: '/projects/[projectSlug]/traces',
+    icon: Activity,
     section: RouteSection.Main,
     rbacScope: 'projects:read',
     show: ({ currentProjectSlug }) => !!currentProjectSlug,
@@ -89,8 +98,8 @@ export const ROUTES: Route[] = [
   },
 ]
 
-// Total: 7 routes
+// Total: 8 routes
 // - Root: 1 (Dashboard)
 // - Organization: 2 (Projects, Settings)
-// - Project: 3 (Overview, Tasks, Settings)
+// - Project: 4 (Overview, Tasks, Traces, Settings)
 // - User Settings: 1 (Home - back to dashboard)
