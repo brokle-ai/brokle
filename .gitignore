@@ -168,6 +168,12 @@ proto-gen/
 testdata/
 test-results/
 
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
 # Documentation build
 docs/build/
 site/
