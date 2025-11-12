@@ -44,14 +44,14 @@ type DatabaseHealthCheck struct {
 
 // OverallHealth represents overall migration system health
 type OverallHealth struct {
-	Status               string        `json:"status"`
-	HealthyDatabases     int          `json:"healthy_databases"`
-	TotalDatabases       int          `json:"total_databases"`
-	DirtyDatabases       []string     `json:"dirty_databases,omitempty"`
-	ErrorDatabases       []string     `json:"error_databases,omitempty"`
-	Recommendations      []string     `json:"recommendations,omitempty"`
-	LastFullHealthCheck  time.Time    `json:"last_full_health_check"`
-	AverageResponseTime  string       `json:"average_response_time"`
+	Status              string    `json:"status"`
+	HealthyDatabases    int       `json:"healthy_databases"`
+	TotalDatabases      int       `json:"total_databases"`
+	DirtyDatabases      []string  `json:"dirty_databases,omitempty"`
+	ErrorDatabases      []string  `json:"error_databases,omitempty"`
+	Recommendations     []string  `json:"recommendations,omitempty"`
+	LastFullHealthCheck time.Time `json:"last_full_health_check"`
+	AverageResponseTime string    `json:"average_response_time"`
 }
 
 // GetHealthStatus returns comprehensive health status of all migration systems
@@ -63,7 +63,7 @@ func (hs *HealthService) GetHealthStatus(ctx context.Context) (*HealthCheckRespo
 		Timestamp: startTime,
 		Databases: make(map[string]DatabaseHealthCheck),
 		Overall: OverallHealth{
-			TotalDatabases: 2, // PostgreSQL + ClickHouse
+			TotalDatabases:      2, // PostgreSQL + ClickHouse
 			LastFullHealthCheck: startTime,
 		},
 	}
@@ -141,10 +141,10 @@ func (hs *HealthService) GetHealthStatus(ctx context.Context) (*HealthCheckRespo
 // checkPostgreSQLHealth performs health check on PostgreSQL migrations
 func (hs *HealthService) checkPostgreSQLHealth(ctx context.Context) DatabaseHealthCheck {
 	startTime := time.Now()
-	
+
 	version, dirty, err := hs.manager.postgresRunner.Version()
 	duration := time.Since(startTime)
-	
+
 	health := DatabaseHealthCheck{
 		LastChecked:  startTime,
 		ResponseTime: fmt.Sprintf("%.2fms", float64(duration.Nanoseconds())/1e6),
@@ -174,10 +174,10 @@ func (hs *HealthService) checkPostgreSQLHealth(ctx context.Context) DatabaseHeal
 // checkClickHouseHealth performs health check on ClickHouse migrations
 func (hs *HealthService) checkClickHouseHealth(ctx context.Context) DatabaseHealthCheck {
 	startTime := time.Now()
-	
+
 	version, dirty, err := hs.manager.clickhouseRunner.Version()
 	duration := time.Since(startTime)
-	
+
 	health := DatabaseHealthCheck{
 		LastChecked:  startTime,
 		ResponseTime: fmt.Sprintf("%.2fms", float64(duration.Nanoseconds())/1e6),
@@ -216,7 +216,7 @@ func (hs *HealthService) parseResponseTime(responseTime string) time.Duration {
 func (hs *HealthService) HTTPHealthHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
-		
+
 		health, err := hs.GetHealthStatus(ctx)
 		if err != nil {
 			hs.logger.WithError(err).Error("Failed to get migration health status")
@@ -225,7 +225,7 @@ func (hs *HealthService) HTTPHealthHandler() http.HandlerFunc {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		
+
 		// Set HTTP status code based on health status
 		switch health.Status {
 		case "healthy":
@@ -247,41 +247,41 @@ func (hs *HealthService) HTTPHealthHandler() http.HandlerFunc {
 // GetSimpleHealthStatus returns a simple health status for basic monitoring
 func (hs *HealthService) GetSimpleHealthStatus(ctx context.Context) map[string]interface{} {
 	health := make(map[string]interface{})
-	
+
 	// Check PostgreSQL
 	pgVersion, pgDirty, pgErr := hs.manager.postgresRunner.Version()
 	health["postgres"] = map[string]interface{}{
 		"status":          hs.getSimpleHealthStatus(pgErr, pgDirty),
 		"current_version": pgVersion,
-		"dirty":          pgDirty,
+		"dirty":           pgDirty,
 	}
 	if pgErr != nil {
 		health["postgres"].(map[string]interface{})["error"] = pgErr.Error()
 	}
-	
+
 	// Check ClickHouse
 	chVersion, chDirty, chErr := hs.manager.clickhouseRunner.Version()
 	health["clickhouse"] = map[string]interface{}{
 		"status":          hs.getSimpleHealthStatus(chErr, chDirty),
 		"current_version": chVersion,
-		"dirty":          chDirty,
+		"dirty":           chDirty,
 	}
 	if chErr != nil {
 		health["clickhouse"].(map[string]interface{})["error"] = chErr.Error()
 	}
-	
+
 	// Overall status
 	overallHealthy := pgErr == nil && chErr == nil && !pgDirty && !chDirty
 	if overallHealthy {
 		health["overall_status"] = "healthy"
-	} else if (pgErr != nil || chErr != nil) {
+	} else if pgErr != nil || chErr != nil {
 		health["overall_status"] = "critical"
 	} else {
 		health["overall_status"] = "degraded"
 	}
-	
+
 	health["timestamp"] = time.Now()
-	
+
 	return health
 }
 
@@ -299,7 +299,7 @@ func (hs *HealthService) getSimpleHealthStatus(err error, dirty bool) string {
 // CheckDrift detects schema drift between expected and actual database state
 func (hs *HealthService) CheckDrift(ctx context.Context) (*DriftReport, error) {
 	hs.logger.Info("Starting schema drift detection")
-	
+
 	report := &DriftReport{
 		Timestamp: time.Now(),
 		Databases: make(map[string]DatabaseDrift),
@@ -321,7 +321,7 @@ func (hs *HealthService) CheckDrift(ctx context.Context) (*DriftReport, error) {
 
 	// Determine overall drift status
 	report.HasDrift = pgDrift.HasDrift || chDrift.HasDrift
-	
+
 	if report.HasDrift {
 		hs.logger.Warn("Schema drift detected in migration system")
 	} else {
@@ -333,16 +333,16 @@ func (hs *HealthService) CheckDrift(ctx context.Context) (*DriftReport, error) {
 
 // DriftReport represents schema drift detection results
 type DriftReport struct {
-	Timestamp time.Time                   `json:"timestamp"`
-	HasDrift  bool                        `json:"has_drift"`
-	Databases map[string]DatabaseDrift    `json:"databases"`
+	Timestamp time.Time                `json:"timestamp"`
+	HasDrift  bool                     `json:"has_drift"`
+	Databases map[string]DatabaseDrift `json:"databases"`
 }
 
 // DatabaseDrift represents drift status for a single database
 type DatabaseDrift struct {
-	HasDrift        bool     `json:"has_drift"`
-	ExpectedVersion uint     `json:"expected_version"`
-	ActualVersion   uint     `json:"actual_version"`
+	HasDrift          bool     `json:"has_drift"`
+	ExpectedVersion   uint     `json:"expected_version"`
+	ActualVersion     uint     `json:"actual_version"`
 	MissingMigrations []string `json:"missing_migrations,omitempty"`
 	ExtraMigrations   []string `json:"extra_migrations,omitempty"`
 	DriftDetails      string   `json:"drift_details,omitempty"`
@@ -351,47 +351,47 @@ type DatabaseDrift struct {
 // checkPostgresDrift checks for PostgreSQL schema drift
 func (hs *HealthService) checkPostgresDrift(ctx context.Context) (DatabaseDrift, error) {
 	drift := DatabaseDrift{}
-	
+
 	// Get current migration version
 	version, dirty, err := hs.manager.postgresRunner.Version()
 	if err != nil {
 		return drift, fmt.Errorf("failed to get PostgreSQL version: %w", err)
 	}
-	
+
 	drift.ActualVersion = version
-	
+
 	// For now, we assume no drift if the database is not dirty
 	// In a more sophisticated implementation, we would:
 	// 1. Read expected migrations from migration files
 	// 2. Compare with actual applied migrations in the database
 	// 3. Detect missing or extra migrations
-	
+
 	if dirty {
 		drift.HasDrift = true
 		drift.DriftDetails = "Database is in dirty state - incomplete migration detected"
 	}
-	
+
 	return drift, nil
 }
 
 // checkClickHouseDrift checks for ClickHouse schema drift
 func (hs *HealthService) checkClickHouseDrift(ctx context.Context) (DatabaseDrift, error) {
 	drift := DatabaseDrift{}
-	
+
 	// Get current migration version
 	version, dirty, err := hs.manager.clickhouseRunner.Version()
 	if err != nil {
 		return drift, fmt.Errorf("failed to get ClickHouse version: %w", err)
 	}
-	
+
 	drift.ActualVersion = version
-	
+
 	// Similar to PostgreSQL, check for dirty state
 	if dirty {
 		drift.HasDrift = true
 		drift.DriftDetails = "Database is in dirty state - incomplete migration detected"
 	}
-	
+
 	return drift, nil
 }
 
@@ -416,19 +416,19 @@ func (hs *HealthService) StartPeriodicHealthCheck(ctx context.Context, interval 
 
 			// Log health status periodically
 			hs.logger.WithFields(logrus.Fields{
-				"status":           health.Status,
-				"healthy_dbs":      health.Overall.HealthyDatabases,
-				"total_dbs":        health.Overall.TotalDatabases,
+				"status":            health.Status,
+				"healthy_dbs":       health.Overall.HealthyDatabases,
+				"total_dbs":         health.Overall.TotalDatabases,
 				"avg_response_time": health.Overall.AverageResponseTime,
 			}).Info("Periodic migration health check completed")
 
 			// Alert on degraded health
 			if health.Status != "healthy" {
 				hs.logger.WithFields(logrus.Fields{
-					"status":           health.Status,
-					"dirty_databases":  health.Overall.DirtyDatabases,
-					"error_databases":  health.Overall.ErrorDatabases,
-					"recommendations":  health.Overall.Recommendations,
+					"status":          health.Status,
+					"dirty_databases": health.Overall.DirtyDatabases,
+					"error_databases": health.Overall.ErrorDatabases,
+					"recommendations": health.Overall.Recommendations,
 				}).Warn("Migration system health is degraded")
 			}
 		}

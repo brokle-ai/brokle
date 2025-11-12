@@ -15,24 +15,24 @@ import (
 
 // TraceService implements business logic for trace management
 type TraceService struct {
-	traceRepo       observability.TraceRepository
-	observationRepo observability.ObservationRepository
-	scoreRepo       observability.ScoreRepository
-	logger          *logrus.Logger
+	traceRepo observability.TraceRepository
+	spanRepo  observability.SpanRepository
+	scoreRepo observability.ScoreRepository
+	logger    *logrus.Logger
 }
 
 // NewTraceService creates a new trace service instance
 func NewTraceService(
 	traceRepo observability.TraceRepository,
-	observationRepo observability.ObservationRepository,
+	spanRepo observability.SpanRepository,
 	scoreRepo observability.ScoreRepository,
 	logger *logrus.Logger,
 ) *TraceService {
 	return &TraceService{
-		traceRepo:       traceRepo,
-		observationRepo: observationRepo,
-		scoreRepo:       scoreRepo,
-		logger:          logger,
+		traceRepo: traceRepo,
+		spanRepo:  spanRepo,
+		scoreRepo: scoreRepo,
+		logger:    logger,
 	}
 }
 
@@ -104,8 +104,8 @@ func (s *TraceService) UpdateTrace(ctx context.Context, trace *observability.Tra
 	return nil
 }
 
-// UpdateTraceMetrics updates aggregate metrics for a trace (called after observation changes)
-func (s *TraceService) UpdateTraceMetrics(ctx context.Context, traceID string, totalCost float64, totalTokens, observationCount uint32) error {
+// UpdateTraceMetrics updates aggregate metrics for a trace (called after span changes)
+func (s *TraceService) UpdateTraceMetrics(ctx context.Context, traceID string, totalCost float64, totalTokens, spanCount uint32) error {
 	// Get existing trace
 	trace, err := s.traceRepo.GetByID(ctx, traceID)
 	if err != nil {
@@ -115,7 +115,7 @@ func (s *TraceService) UpdateTraceMetrics(ctx context.Context, traceID string, t
 	// Update aggregate metrics
 	trace.TotalCost = &totalCost
 	trace.TotalTokens = &totalTokens
-	trace.ObservationCount = &observationCount
+	trace.SpanCount = &spanCount
 
 	// Update trace
 	if err := s.traceRepo.Update(ctx, trace); err != nil {
@@ -192,8 +192,8 @@ func mergeTraceFields(dst *observability.Trace, src *observability.Trace) {
 	if src.TotalTokens != nil {
 		dst.TotalTokens = src.TotalTokens
 	}
-	if src.ObservationCount != nil {
-		dst.ObservationCount = src.ObservationCount
+	if src.SpanCount != nil {
+		dst.SpanCount = src.SpanCount
 	}
 	// Bookmarked and Public are bool, so always update
 	dst.Bookmarked = src.Bookmarked
@@ -232,8 +232,8 @@ func (s *TraceService) GetTraceByID(ctx context.Context, id string) (*observabil
 	return trace, nil
 }
 
-// GetTraceWithObservations retrieves a trace with all its observations
-func (s *TraceService) GetTraceWithObservations(ctx context.Context, id string) (*observability.Trace, error) {
+// GetTraceWithSpans retrieves a trace with all its spans
+func (s *TraceService) GetTraceWithSpans(ctx context.Context, id string) (*observability.Trace, error) {
 	// Get trace
 	trace, err := s.traceRepo.GetByID(ctx, id)
 	if err != nil {
@@ -243,13 +243,13 @@ func (s *TraceService) GetTraceWithObservations(ctx context.Context, id string) 
 		return nil, appErrors.NewInternalError("failed to get trace", err)
 	}
 
-	// Get observations
-	observations, err := s.observationRepo.GetByTraceID(ctx, id)
+	// Get spans
+	spans, err := s.spanRepo.GetByTraceID(ctx, id)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to get observations", err)
+		return nil, appErrors.NewInternalError("failed to get spans", err)
 	}
 
-	trace.Observations = observations
+	trace.Spans = spans
 
 	return trace, nil
 }

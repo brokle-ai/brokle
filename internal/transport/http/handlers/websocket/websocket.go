@@ -17,10 +17,10 @@ import (
 
 // Handler handles WebSocket connections
 type Handler struct {
-	config    *config.Config
-	logger    *logrus.Logger
-	upgrader  websocket.Upgrader
-	hub       *Hub
+	config   *config.Config
+	logger   *logrus.Logger
+	upgrader websocket.Upgrader
+	hub      *Hub
 }
 
 // NewHandler creates a new WebSocket handler
@@ -157,13 +157,13 @@ func (h *Handler) getUserID(r *http.Request) string {
 
 // Hub maintains the set of active clients and broadcasts messages to them
 type Hub struct {
-	clients    map[*Client]bool
+	clients     map[*Client]bool
 	userClients map[string]map[*Client]bool // userID -> clients
-	broadcast  chan []byte
-	register   chan *Client
-	unregister chan *Client
-	logger     *logrus.Logger
-	mu         sync.RWMutex
+	broadcast   chan []byte
+	register    chan *Client
+	unregister  chan *Client
+	logger      *logrus.Logger
+	mu          sync.RWMutex
 }
 
 // NewHub creates a new WebSocket hub

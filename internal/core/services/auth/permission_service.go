@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	authDomain "brokle/internal/core/domain/auth"
-	"brokle/pkg/ulid"
 	appErrors "brokle/pkg/errors"
+	"brokle/pkg/ulid"
 )
 
 // permissionService implements auth.PermissionService interface
@@ -32,7 +32,7 @@ func (s *permissionService) CreatePermission(ctx context.Context, req *authDomai
 	// Validate permission doesn't already exist
 	existing, err := s.permissionRepo.GetByResourceAction(ctx, req.Resource, req.Action)
 	if err == nil && existing != nil {
-		return nil, appErrors.NewConflictError("Permission "+req.Resource+":"+req.Action+" already exists")
+		return nil, appErrors.NewConflictError("Permission " + req.Resource + ":" + req.Action + " already exists")
 	}
 
 	// Create permission
@@ -90,7 +90,7 @@ func (s *permissionService) ListPermissions(ctx context.Context, limit, offset i
 	}
 
 	totalCount := len(permissions)
-	
+
 	// Apply pagination
 	start := offset
 	end := offset + limit
@@ -115,7 +115,6 @@ func (s *permissionService) GetAllPermissions(ctx context.Context) ([]*authDomai
 	return s.permissionRepo.GetAllPermissions(ctx)
 }
 
-
 // GetPermissionsByResource returns all permissions for a resource
 func (s *permissionService) GetPermissionsByResource(ctx context.Context, resource string) ([]*authDomain.Permission, error) {
 	return s.permissionRepo.GetByResource(ctx, resource)
@@ -127,7 +126,7 @@ func (s *permissionService) GetPermissionsByNames(ctx context.Context, names []s
 	for _, name := range names {
 		perm, err := s.permissionRepo.GetByName(ctx, name)
 		if err != nil {
-			return nil, appErrors.NewNotFoundError("Permission "+name+" not found")
+			return nil, appErrors.NewNotFoundError("Permission " + name + " not found")
 		}
 		permissions = append(permissions, perm)
 	}
@@ -142,10 +141,10 @@ func (s *permissionService) GetPermissionsByResourceActions(ctx context.Context,
 		if err != nil {
 			return nil, appErrors.NewValidationError("resource_action", "Invalid resource:action format: "+resourceAction)
 		}
-		
+
 		perm, err := s.permissionRepo.GetByResourceAction(ctx, resource, action)
 		if err != nil {
-			return nil, appErrors.NewNotFoundError("Permission "+resourceAction+" not found")
+			return nil, appErrors.NewNotFoundError("Permission " + resourceAction + " not found")
 		}
 		permissions = append(permissions, perm)
 	}
@@ -164,9 +163,9 @@ func (s *permissionService) SearchPermissions(ctx context.Context, query string,
 	filteredPermissions := make([]*authDomain.Permission, 0)
 	for _, perm := range allPermissions {
 		if strings.Contains(strings.ToLower(perm.Name), strings.ToLower(query)) ||
-		   strings.Contains(strings.ToLower(perm.Description), strings.ToLower(query)) ||
-		   strings.Contains(strings.ToLower(perm.Resource), strings.ToLower(query)) ||
-		   strings.Contains(strings.ToLower(perm.Action), strings.ToLower(query)) {
+			strings.Contains(strings.ToLower(perm.Description), strings.ToLower(query)) ||
+			strings.Contains(strings.ToLower(perm.Resource), strings.ToLower(query)) ||
+			strings.Contains(strings.ToLower(perm.Action), strings.ToLower(query)) {
 			filteredPermissions = append(filteredPermissions, perm)
 		}
 	}
@@ -200,7 +199,6 @@ func (s *permissionService) GetAvailableResources(ctx context.Context) ([]string
 func (s *permissionService) GetActionsForResource(ctx context.Context, resource string) ([]string, error) {
 	return s.permissionRepo.GetActionsForResource(ctx, resource)
 }
-
 
 // ValidatePermissionName validates legacy permission name
 func (s *permissionService) ValidatePermissionName(ctx context.Context, name string) error {
@@ -239,7 +237,7 @@ func (s *permissionService) BulkPermissionExists(ctx context.Context, resourceAc
 			results[resourceAction] = false
 			continue
 		}
-		
+
 		exists, err := s.PermissionExists(ctx, resource, action)
 		if err != nil {
 			results[resourceAction] = false

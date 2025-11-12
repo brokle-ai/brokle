@@ -366,10 +366,10 @@ func (h *Handler) CompleteOAuthSignup(c *gin.Context) {
 
 	// Return metadata with user and organization (tokens in httpOnly cookies)
 	responseData := gin.H{
-		"user":         userInterface,       // Always present (atomic authentication)
+		"user":         userInterface,        // Always present (atomic authentication)
 		"organization": regResp.Organization, // Always present from registration
-		"expires_at":   expiresAtMs,         // Milliseconds
-		"expires_in":   expiresInMs,         // Milliseconds
+		"expires_at":   expiresAtMs,          // Milliseconds
+		"expires_in":   expiresInMs,          // Milliseconds
 	}
 
 	h.logger.WithFields(logrus.Fields{
@@ -971,7 +971,6 @@ func (h *Handler) ValidateAPIKeyHandler(c *gin.Context) {
 
 	response.Success(c, resp)
 }
-
 
 // ListSessionsRequest represents request for listing user sessions
 type ListSessionsRequest struct {

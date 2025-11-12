@@ -45,10 +45,10 @@ type Trace struct {
 	ServiceVersion *string `json:"service_version,omitempty" db:"service_version"`
 	Release        *string `json:"release,omitempty" db:"release"`
 
-	// Aggregate metrics (calculated from observations)
-	TotalCost        *float64 `json:"total_cost,omitempty" db:"total_cost"`
-	TotalTokens      *uint32  `json:"total_tokens,omitempty" db:"total_tokens"`
-	ObservationCount *uint32  `json:"observation_count,omitempty" db:"observation_count"`
+	// Aggregate metrics (calculated from spans)
+	TotalCost   *float64 `json:"total_cost,omitempty" db:"total_cost"`
+	TotalTokens *uint32  `json:"total_tokens,omitempty" db:"total_tokens"`
+	SpanCount   *uint32  `json:"span_count,omitempty" db:"span_count"`
 
 	// Flags (moved from sessions table)
 	Bookmarked bool `json:"bookmarked" db:"bookmarked"`
@@ -66,17 +66,17 @@ type Trace struct {
 	IsDeleted bool      `json:"is_deleted" db:"is_deleted"`
 
 	// Populated from joins (not in ClickHouse)
-	Observations []*Observation `json:"observations,omitempty" db:"-"`
-	Scores       []*Score       `json:"scores,omitempty" db:"-"`
+	Spans  []*Span  `json:"spans,omitempty" db:"-"`
+	Scores []*Score `json:"scores,omitempty" db:"-"`
 }
 
-// Observation represents an OTEL span with Gen AI semantic conventions and Brokle extensions
-type Observation struct {
+// Span represents an OTEL span with Gen AI semantic conventions and Brokle extensions
+type Span struct {
 	// OTEL identifiers
-	ID                  string  `json:"id" db:"id"`                                                 // OTEL span_id (16 hex chars)
-	TraceID             string  `json:"trace_id" db:"trace_id"`                                     // OTEL trace_id
-	ParentObservationID *string `json:"parent_observation_id,omitempty" db:"parent_observation_id"` // NULL for root spans
-	ProjectID           string  `json:"project_id" db:"project_id"`
+	ID           string  `json:"id" db:"id"`                                   // OTEL span_id (16 hex chars)
+	TraceID      string  `json:"trace_id" db:"trace_id"`                       // OTEL trace_id
+	ParentSpanID *string `json:"parent_span_id,omitempty" db:"parent_span_id"` // NULL for root spans
+	ProjectID    string  `json:"project_id" db:"project_id"`
 
 	// Span data
 	Name       string     `json:"name" db:"name"`
@@ -132,17 +132,17 @@ type Observation struct {
 	IsDeleted bool      `json:"is_deleted" db:"is_deleted"`
 
 	// Populated from joins (not in ClickHouse)
-	Scores            []*Score       `json:"scores,omitempty" db:"-"`
-	ChildObservations []*Observation `json:"child_observations,omitempty" db:"-"`
+	Scores     []*Score `json:"scores,omitempty" db:"-"`
+	ChildSpans []*Span  `json:"child_spans,omitempty" db:"-"`
 }
 
-// Score represents a quality evaluation score linked to traces and observations
+// Score represents a quality evaluation score linked to traces and spans
 type Score struct {
 	// Identifiers
-	ID            string `json:"id" db:"id"`
-	ProjectID     string `json:"project_id" db:"project_id"`
-	TraceID       string `json:"trace_id" db:"trace_id"`             // OTEL trace_id
-	ObservationID string `json:"observation_id" db:"observation_id"` // OTEL span_id
+	ID        string `json:"id" db:"id"`
+	ProjectID string `json:"project_id" db:"project_id"`
+	TraceID   string `json:"trace_id" db:"trace_id"` // OTEL trace_id
+	SpanID    string `json:"span_id" db:"span_id"`   // OTEL span_id
 
 	// Score data
 	Name        string   `json:"name" db:"name"`
@@ -179,7 +179,7 @@ type BlobStorageFileLog struct {
 	ProjectID string `json:"project_id" db:"project_id"`
 
 	// Entity reference
-	EntityType string `json:"entity_type" db:"entity_type"` // 'trace', 'observation', 'score'
+	EntityType string `json:"entity_type" db:"entity_type"` // 'trace', 'span', 'score'
 	EntityID   string `json:"entity_id" db:"entity_id"`     // trace_id or span_id
 	EventID    string `json:"event_id" db:"event_id"`       // Event ULID
 
@@ -246,16 +246,16 @@ const (
 
 type SpanKind string
 
-// Brokle observation type constants (stored in attributes but also as dedicated field)
+// Brokle span type constants (stored in attributes but also as dedicated field)
 const (
-	ObservationTypeSpan       = "span"
-	ObservationTypeGeneration = "generation"
-	ObservationTypeEvent      = "event"
-	ObservationTypeTool       = "tool"
-	ObservationTypeAgent      = "agent"
-	ObservationTypeChain      = "chain"
-	ObservationTypeRetrieval  = "retrieval"
-	ObservationTypeEmbedding  = "embedding"
+	SpanTypeSpan       = "span"
+	SpanTypeGeneration = "generation"
+	SpanTypeEvent      = "event"
+	SpanTypeTool       = "tool"
+	SpanTypeAgent      = "agent"
+	SpanTypeChain      = "chain"
+	SpanTypeRetrieval  = "retrieval"
+	SpanTypeEmbedding  = "embedding"
 )
 
 // OTEL StatusCode constants
@@ -265,13 +265,13 @@ const (
 	StatusCodeError = "ERROR"
 )
 
-// Observation level constants
+// Span level constants
 const (
-	ObservationLevelDebug   = "DEBUG"
-	ObservationLevelInfo    = "INFO"
-	ObservationLevelWarning = "WARNING"
-	ObservationLevelError   = "ERROR"
-	ObservationLevelDefault = "DEFAULT"
+	SpanLevelDebug   = "DEBUG"
+	SpanLevelInfo    = "INFO"
+	SpanLevelWarning = "WARNING"
+	SpanLevelError   = "ERROR"
+	SpanLevelDefault = "DEFAULT"
 )
 
 // Score data type constants
@@ -320,17 +320,17 @@ func (t *Trace) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// UnmarshalJSON implements custom JSON unmarshaling for Observation
+// UnmarshalJSON implements custom JSON unmarshaling for Span
 // Handles input/output fields that may be strings, objects, or arrays from SDK
-func (o *Observation) UnmarshalJSON(data []byte) error {
+func (s *Span) UnmarshalJSON(data []byte) error {
 	// Create a temporary struct with json.RawMessage for input/output
-	type Alias Observation
+	type Alias Span
 	aux := &struct {
 		Input  json.RawMessage `json:"input,omitempty"`
 		Output json.RawMessage `json:"output,omitempty"`
 		*Alias
 	}{
-		Alias: (*Alias)(o),
+		Alias: (*Alias)(s),
 	}
 
 	if err := json.Unmarshal(data, &aux); err != nil {
@@ -339,12 +339,12 @@ func (o *Observation) UnmarshalJSON(data []byte) error {
 
 	// Handle input field
 	if len(aux.Input) > 0 {
-		o.Input = normalizeJSONField(aux.Input)
+		s.Input = normalizeJSONField(aux.Input)
 	}
 
 	// Handle output field
 	if len(aux.Output) > 0 {
-		o.Output = normalizeJSONField(aux.Output)
+		s.Output = normalizeJSONField(aux.Output)
 	}
 
 	return nil
@@ -388,77 +388,77 @@ func (t *Trace) CalculateDuration() {
 	}
 }
 
-// ===== Observation Helper Methods =====
+// ===== Span Helper Methods =====
 
-// IsCompleted checks if the observation has ended
-func (o *Observation) IsCompleted() bool {
-	return o.EndTime != nil
+// IsCompleted checks if the span has ended
+func (s *Span) IsCompleted() bool {
+	return s.EndTime != nil
 }
 
-// HasParent checks if this observation has a parent observation
-func (o *Observation) HasParent() bool {
-	return o.ParentObservationID != nil && *o.ParentObservationID != ""
+// HasParent checks if this span has a parent span
+func (s *Span) HasParent() bool {
+	return s.ParentSpanID != nil && *s.ParentSpanID != ""
 }
 
 // IsRootSpan checks if this is a root span (no parent)
-func (o *Observation) IsRootSpan() bool {
-	return o.ParentObservationID == nil || *o.ParentObservationID == ""
+func (s *Span) IsRootSpan() bool {
+	return s.ParentSpanID == nil || *s.ParentSpanID == ""
 }
 
 // CalculateDuration calculates and sets the duration if not already set
-func (o *Observation) CalculateDuration() {
-	if o.EndTime != nil && o.DurationMs == nil {
-		duration := uint32(o.EndTime.Sub(o.StartTime).Milliseconds())
-		o.DurationMs = &duration
+func (s *Span) CalculateDuration() {
+	if s.EndTime != nil && s.DurationMs == nil {
+		duration := uint32(s.EndTime.Sub(s.StartTime).Milliseconds())
+		s.DurationMs = &duration
 	}
 }
 
 // GetTotalCost returns the total cost from TotalCost field or calculated from cost details map
-func (o *Observation) GetTotalCost() float64 {
+func (s *Span) GetTotalCost() float64 {
 	// Prefer denormalized TotalCost field
-	if o.TotalCost != nil {
-		return *o.TotalCost
+	if s.TotalCost != nil {
+		return *s.TotalCost
 	}
 	// Fallback to cost details map
-	if total, ok := o.CostDetails["total"]; ok {
+	if total, ok := s.CostDetails["total"]; ok {
 		return total
 	}
 	// Calculate from input + output
-	return o.CostDetails["input"] + o.CostDetails["output"]
+	return s.CostDetails["input"] + s.CostDetails["output"]
 }
 
 // GetTotalTokens returns the total tokens from usage details map
-func (o *Observation) GetTotalTokens() uint64 {
+func (s *Span) GetTotalTokens() uint64 {
 	// Check total in usage details
-	if total, ok := o.UsageDetails["total"]; ok {
+	if total, ok := s.UsageDetails["total"]; ok {
 		return total
 	}
 	// Calculate from input + output
-	return o.UsageDetails["input"] + o.UsageDetails["output"]
+	return s.UsageDetails["input"] + s.UsageDetails["output"]
 }
 
 // SetCostDetails sets the cost details map with input, output, and total
-func (o *Observation) SetCostDetails(inputCost, outputCost float64) {
-	if o.CostDetails == nil {
-		o.CostDetails = make(map[string]float64)
+func (s *Span) SetCostDetails(inputCost, outputCost float64) {
+	if s.CostDetails == nil {
+		s.CostDetails = make(map[string]float64)
 	}
-	o.CostDetails["input"] = inputCost
-	o.CostDetails["output"] = outputCost
+	s.CostDetails["input"] = inputCost
+	s.CostDetails["output"] = outputCost
 	total := inputCost + outputCost
-	o.CostDetails["total"] = total
+	s.CostDetails["total"] = total
 
 	// Set denormalized field for fast queries
-	o.TotalCost = &total
+	s.TotalCost = &total
 }
 
 // SetUsageDetails sets the usage details map with input, output, and total tokens
-func (o *Observation) SetUsageDetails(inputTokens, outputTokens uint64) {
-	if o.UsageDetails == nil {
-		o.UsageDetails = make(map[string]uint64)
+func (s *Span) SetUsageDetails(inputTokens, outputTokens uint64) {
+	if s.UsageDetails == nil {
+		s.UsageDetails = make(map[string]uint64)
 	}
-	o.UsageDetails["input"] = inputTokens
-	o.UsageDetails["output"] = outputTokens
-	o.UsageDetails["total"] = inputTokens + outputTokens
+	s.UsageDetails["input"] = inputTokens
+	s.UsageDetails["output"] = outputTokens
+	s.UsageDetails["total"] = inputTokens + outputTokens
 }
 
 // ===== Score Helper Methods =====
@@ -523,16 +523,16 @@ const (
 	// Structured observability (immutable events only)
 	TelemetryEventTypeTrace        TelemetryEventType = "trace"
 	TelemetryEventTypeSession      TelemetryEventType = "session"
-	TelemetryEventTypeObservation  TelemetryEventType = "observation"
+	TelemetryEventTypeSpan         TelemetryEventType = "span"
 	TelemetryEventTypeQualityScore TelemetryEventType = "quality_score"
 )
 
 // TelemetryEventDeduplication represents a deduplication entry for telemetry events
 // Internal type used by deduplication repository implementation
 type TelemetryEventDeduplication struct {
-	EventID     string    `json:"event_id" db:"event_id"`      // Composite OTLP ID: "trace_id:span_id"
-	BatchID     ulid.ULID `json:"batch_id" db:"batch_id"`      // Brokle batch ULID
-	ProjectID   ulid.ULID `json:"project_id" db:"project_id"`  // Brokle project ULID
+	EventID     string    `json:"event_id" db:"event_id"`     // Composite OTLP ID: "trace_id:span_id"
+	BatchID     ulid.ULID `json:"batch_id" db:"batch_id"`     // Brokle batch ULID
+	ProjectID   ulid.ULID `json:"project_id" db:"project_id"` // Brokle project ULID
 	FirstSeenAt time.Time `json:"first_seen_at" db:"first_seen_at"`
 	ExpiresAt   time.Time `json:"expires_at" db:"expires_at"`
 }
@@ -572,4 +572,3 @@ func (d *TelemetryEventDeduplication) Validate() []ValidationError {
 
 	return errors
 }
-

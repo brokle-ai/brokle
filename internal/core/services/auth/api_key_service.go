@@ -249,4 +249,3 @@ func (s *apiKeyService) GetAPIKeysByOrganization(ctx context.Context, orgID ulid
 func (s *apiKeyService) GetAPIKeysByProject(ctx context.Context, projectID ulid.ULID) ([]*authDomain.APIKey, error) {
 	return s.apiKeyRepo.GetByProjectID(ctx, projectID)
 }
-

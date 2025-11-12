@@ -72,7 +72,7 @@ The Brokle platform follows a pragmatic testing approach that prioritizes high-v
 
 Test complex business logic with mock repositories using table-driven patterns.
 
-### Complete Example: CreateTraceWithObservations
+### Complete Example: CreateTraceWithSpans
 
 ```go
 // ============================================================================
@@ -95,12 +95,12 @@ func (m *MockTraceRepository) CreateBatch(ctx context.Context, traces []*observa
 
 // Implement ALL interface methods (even if not used in test)
 
-type MockObservationRepository struct {
+type MockSpanRepository struct {
     mock.Mock
 }
 
-func (m *MockObservationRepository) CreateBatch(ctx context.Context, observations []observability.Observation) error {
-    args := m.Called(ctx, observations)
+func (m *MockSpanRepository) CreateBatch(ctx context.Context, spans []observability.Span) error {
+    args := m.Called(ctx, spans)
     return args.Error(0)
 }
 
@@ -117,29 +117,29 @@ func (m *MockEventPublisher) Publish(ctx context.Context, eventType observabilit
 // HIGH-VALUE TESTS: Complex Business Logic
 // ============================================================================
 
-func TestTraceService_CreateTraceWithObservations(t *testing.T) {
+func TestTraceService_CreateTraceWithSpans(t *testing.T) {
     tests := []struct {
         name        string
         trace       *observability.Trace
-        mockSetup   func(*MockTraceRepository, *MockObservationRepository, *MockEventPublisher)
+        mockSetup   func(*MockTraceRepository, *MockSpanRepository, *MockEventPublisher)
         expectedErr error
         checkResult func(*testing.T, *observability.Trace)
     }{
         {
-            name: "success - trace with multiple observations",
+            name: "success - trace with multiple spans",
             trace: &observability.Trace{
                 Name: "Test Trace",
-                Observations: []observability.Observation{
+                Spans: []observability.Span{
                     {Name: "Obs 1", Type: observability.ObservationTypeLLM},
                     {Name: "Obs 2", Type: observability.ObservationTypeSpan},
                 },
             },
-            mockSetup: func(traceRepo *MockTraceRepository, obsRepo *MockObservationRepository, publisher *MockEventPublisher) {
+            mockSetup: func(traceRepo *MockTraceRepository, spanRepo *MockSpanRepository, publisher *MockEventPublisher) {
                 // Expect trace creation
                 traceRepo.On("Create", mock.Anything, mock.Anything).Return(nil)
 
-                // Expect batch observation creation with validation
-                obsRepo.On("CreateBatch", mock.Anything, mock.MatchedBy(func(obs []observability.Observation) bool {
+                // Expect batch span creation with validation
+                spanRepo.On("CreateBatch", mock.Anything, mock.MatchedBy(func(obs []observability.Span) bool {
                     return len(obs) == 2
                 })).Return(nil)
 
@@ -150,7 +150,7 @@ func TestTraceService_CreateTraceWithObservations(t *testing.T) {
             checkResult: func(t *testing.T, trace *observability.Trace) {
                 assert.NotNil(t, trace)
                 assert.NotEqual(t, ulid.ULID{}, trace.ID)
-                assert.Len(t, trace.Observations, 2)
+                assert.Len(t, trace.Spans, 2)
                 assert.NotNil(t, trace.CreatedAt)
             },
         },
@@ -159,7 +159,7 @@ func TestTraceService_CreateTraceWithObservations(t *testing.T) {
             trace: &observability.Trace{
                 Name: "", // Invalid - empty name
             },
-            mockSetup: func(traceRepo *MockTraceRepository, obsRepo *MockObservationRepository, publisher *MockEventPublisher) {
+            mockSetup: func(traceRepo *MockTraceRepository, spanRepo *MockSpanRepository, publisher *MockEventPublisher) {
                 // No calls expected - validation should fail before repository
             },
             expectedErr: appErrors.ErrValidationFailed,
@@ -170,7 +170,7 @@ func TestTraceService_CreateTraceWithObservations(t *testing.T) {
             trace: &observability.Trace{
                 Name: "Test Trace",
             },
-            mockSetup: func(traceRepo *MockTraceRepository, obsRepo *MockObservationRepository, publisher *MockEventPublisher) {
+            mockSetup: func(traceRepo *MockTraceRepository, spanRepo *MockSpanRepository, publisher *MockEventPublisher) {
                 traceRepo.On("Create", mock.Anything, mock.Anything).
                     Return(fmt.Errorf("database error"))
             },
@@ -183,7 +183,7 @@ func TestTraceService_CreateTraceWithObservations(t *testing.T) {
         t.Run(tt.name, func(t *testing.T) {
             // Setup mocks
             mockTraceRepo := new(MockTraceRepository)
-            mockObsRepo := new(MockObservationRepository)
+            mockObsRepo := new(MockSpanRepository)
             mockPublisher := new(MockEventPublisher)
             tt.mockSetup(mockTraceRepo, mockObsRepo, mockPublisher)
 
@@ -191,7 +191,7 @@ func TestTraceService_CreateTraceWithObservations(t *testing.T) {
             service := NewTraceService(mockTraceRepo, mockObsRepo, mockPublisher)
 
             // Execute
-            result, err := service.CreateTraceWithObservations(context.Background(), tt.trace)
+            result, err := service.CreateTraceWithSpans(context.Background(), tt.trace)
 
             // Assert errors
             if tt.expectedErr != nil {
@@ -253,18 +253,18 @@ Only test complex business logic calculations, not validation or constructors.
 // HIGH-VALUE TESTS: Business Logic Calculations
 // ============================================================================
 
-func TestObservation_CalculateLatency(t *testing.T) {
+func TestSpan_CalculateLatency(t *testing.T) {
     startTime := time.Now()
     endTime := startTime.Add(150 * time.Millisecond)
 
     tests := []struct {
         name     string
-        obs      *Observation
+        obs      *Span
         expected *int
     }{
         {
             name: "with valid end time",
-            obs: &Observation{
+            obs: &Span{
                 StartTime: startTime,
                 EndTime:   &endTime,
             },
@@ -272,7 +272,7 @@ func TestObservation_CalculateLatency(t *testing.T) {
         },
         {
             name: "without end time",
-            obs: &Observation{
+            obs: &Span{
                 StartTime: startTime,
                 EndTime:   nil,
             },
@@ -280,7 +280,7 @@ func TestObservation_CalculateLatency(t *testing.T) {
         },
         {
             name: "with zero start time",
-            obs: &Observation{
+            obs: &Span{
                 StartTime: time.Time{},
                 EndTime:   &endTime,
             },
@@ -403,9 +403,9 @@ func TestTraceService_Integration(t *testing.T) {
 
     // Setup real dependencies
     traceRepo := repository.NewTraceRepository(db)
-    obsRepo := repository.NewObservationRepository(db)
+    spanRepo := repository.NewSpanRepository(db)
     publisher := events.NewEventPublisher()
-    service := services.NewTraceService(traceRepo, obsRepo, publisher)
+    service := services.NewTraceService(traceRepo, spanRepo, publisher)
 
     // Test complete workflow
     trace := &observability.Trace{
@@ -413,27 +413,27 @@ func TestTraceService_Integration(t *testing.T) {
         UserID:   stringPtr("user_123"),
         Tags:     map[string]interface{}{"env": "test"},
         Metadata: map[string]interface{}{"version": "1.0"},
-        Observations: []observability.Observation{
+        Spans: []observability.Span{
             {
-                Name:      "Test Observation",
+                Name:      "Test Span",
                 Type:      observability.ObservationTypeLLM,
                 StartTime: time.Now(),
             },
         },
     }
 
-    // Create trace with observations
-    result, err := service.CreateTraceWithObservations(context.Background(), trace)
+    // Create trace with spans
+    result, err := service.CreateTraceWithSpans(context.Background(), trace)
     require.NoError(t, err)
     require.NotEqual(t, ulid.ULID{}, result.ID)
 
     // Verify data was actually persisted
-    retrieved, err := service.GetTraceWithObservations(context.Background(), result.ID)
+    retrieved, err := service.GetTraceWithSpans(context.Background(), result.ID)
     require.NoError(t, err)
     assert.Equal(t, result.ID, retrieved.ID)
     assert.Equal(t, "Integration Test Trace", retrieved.Name)
-    assert.Len(t, retrieved.Observations, 1)
-    assert.Equal(t, "Test Observation", retrieved.Observations[0].Name)
+    assert.Len(t, retrieved.Spans, 1)
+    assert.Equal(t, "Test Span", retrieved.Spans[0].Name)
 
     // Test update workflow
     retrieved.Tags["updated"] = true
@@ -453,7 +453,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
     require.NoError(t, err)
 
     // Run migrations
-    err = db.AutoMigrate(&observability.Trace{}, &observability.Observation{})
+    err = db.AutoMigrate(&observability.Trace{}, &observability.Span{})
     require.NoError(t, err)
 
     return db
@@ -462,7 +462,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 func cleanupTestDB(t *testing.T, db *gorm.DB) {
     // Clean up test data
     db.Exec("TRUNCATE TABLE traces CASCADE")
-    db.Exec("TRUNCATE TABLE observations CASCADE")
+    db.Exec("TRUNCATE TABLE spans CASCADE")
 }
 ```
 
@@ -485,7 +485,7 @@ make test-coverage
 go test ./internal/services/observability -v
 
 # Run specific test
-go test ./internal/services/observability -run TestTraceService_CreateTraceWithObservations -v
+go test ./internal/services/observability -run TestTraceService_CreateTraceWithSpans -v
 
 # Run tests with race detection
 go test -race ./...
@@ -522,7 +522,7 @@ See the observability domain for complete examples:
 
 - **Service Tests**: `internal/services/observability/*_test.go` (3,485 lines)
   - `trace_service_test.go` (831 lines)
-  - `observation_service_test.go` (442 lines)
+  - `span_service_test.go` (442 lines)
   - `telemetry_event_service_test.go` (848 lines)
   - `telemetry_batch_service_test.go` (670 lines)
   - `quality_service_test.go` (516 lines)

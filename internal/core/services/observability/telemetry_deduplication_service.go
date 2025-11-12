@@ -303,7 +303,7 @@ func (s *telemetryDeduplicationService) ValidateRedisHealth(ctx context.Context)
 	return &observability.RedisHealthStatus{
 		Available:   true,
 		LatencyMs:   float64(latency.Nanoseconds()) / 1_000_000,
-		Connections: 1, // This would be actual connection count in production
+		Connections: 1,              // This would be actual connection count in production
 		Uptime:      time.Hour * 24, // This would be actual uptime in production
 	}, nil
 }
@@ -324,7 +324,7 @@ func (s *telemetryDeduplicationService) GetDeduplicationStats(ctx context.Contex
 	// For now, we'll return basic statistics
 	stats := &observability.DeduplicationStats{
 		ProjectID:         projectID,
-		TotalChecks:       totalEntries * 2, // Assuming 2 checks per entry on average
+		TotalChecks:       totalEntries * 2,      // Assuming 2 checks per entry on average
 		CacheHits:         totalEntries * 8 / 10, // Assuming 80% cache hit rate
 		CacheMisses:       totalEntries * 2 / 10, // Assuming 20% cache miss rate
 		DatabaseFallbacks: totalEntries * 1 / 10, // Assuming 10% database fallback rate

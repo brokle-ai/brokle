@@ -291,6 +291,7 @@ func (r *ModelRepository) GetEnabledByProviderID(ctx context.Context, providerID
 
 	return r.scanModels(rows)
 }
+
 // GetByType retrieves models by type
 func (r *ModelRepository) GetByType(ctx context.Context, modelType gateway.ModelType) ([]*gateway.Model, error) {
 	query := `
@@ -466,7 +467,7 @@ func (r *ModelRepository) ListByProviderAndStatus(ctx context.Context, providerI
 // SearchModels searches models with filters
 func (r *ModelRepository) SearchModels(ctx context.Context, filter *gateway.ModelFilter) ([]*gateway.Model, int, error) {
 	whereClause, args := r.buildWhereClause(filter)
-	
+
 	// Count query
 	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM gateway_models %s", whereClause)
 	var totalCount int
@@ -509,7 +510,7 @@ func (r *ModelRepository) SearchModels(ctx context.Context, filter *gateway.Mode
 func (r *ModelRepository) CountModels(ctx context.Context, filter *gateway.ModelFilter) (int64, error) {
 	whereClause, args := r.buildWhereClause(filter)
 	query := fmt.Sprintf("SELECT COUNT(*) FROM gateway_models %s", whereClause)
-	
+
 	var count int64
 	err := r.db.WithContext(ctx).Raw(query, args...).Scan(&count).Error
 	if err != nil {
@@ -550,7 +551,7 @@ func (r *ModelRepository) DeleteBatch(ctx context.Context, ids []ulid.ULID) erro
 	}
 
 	query := `DELETE FROM gateway_models WHERE id = ANY($1)`
-	
+
 	// Convert ULIDs to strings for PostgreSQL array
 	stringIDs := make([]string, len(ids))
 	for i, id := range ids {
@@ -1051,45 +1052,45 @@ func (r *ModelRepository) GetCompatibleModels(ctx context.Context, requirements 
 		FROM gateway_models
 		WHERE is_enabled = true
 	`
-	
+
 	var args []interface{}
 	argIndex := 1
-	
+
 	// ModelType is not a pointer, so we always filter by it
 	query += fmt.Sprintf(" AND model_type = $%d", argIndex)
 	args = append(args, string(requirements.ModelType))
 	argIndex++
-	
+
 	if requirements.MaxCostPer1k != nil {
 		query += fmt.Sprintf(" AND (input_cost_per_1k_tokens + output_cost_per_1k_tokens) <= $%d", argIndex)
 		args = append(args, *requirements.MaxCostPer1k)
 		argIndex++
 	}
-	
+
 	if requirements.MinContextTokens != nil {
 		query += fmt.Sprintf(" AND max_context_tokens >= $%d", argIndex)
 		args = append(args, *requirements.MinContextTokens)
 		argIndex++
 	}
-	
+
 	if requirements.SupportsStreaming != nil && *requirements.SupportsStreaming {
 		query += " AND supports_streaming = true"
 	}
-	
+
 	if requirements.SupportsFunctions != nil && *requirements.SupportsFunctions {
 		query += " AND supports_functions = true"
 	}
-	
+
 	if requirements.SupportsVision != nil && *requirements.SupportsVision {
 		query += " AND supports_vision = true"
 	}
-	
+
 	if requirements.MinQualityScore != nil {
 		query += fmt.Sprintf(" AND quality_score >= $%d", argIndex)
 		args = append(args, *requirements.MinQualityScore)
 		argIndex++
 	}
-	
+
 	query += " ORDER BY quality_score DESC, speed_score DESC"
 
 	rows, err := r.db.WithContext(ctx).Raw(query, args...).Rows()
@@ -1100,4 +1101,3 @@ func (r *ModelRepository) GetCompatibleModels(ctx context.Context, requirements 
 
 	return r.scanModels(rows)
 }
-

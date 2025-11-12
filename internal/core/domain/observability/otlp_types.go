@@ -21,8 +21,8 @@ type Resource struct {
 
 // ScopeSpan represents a collection of spans from a single instrumentation scope
 type ScopeSpan struct {
-	Scope *Scope `json:"scope,omitempty"`
-	Spans []Span `json:"spans"`
+	Scope *Scope     `json:"scope,omitempty"`
+	Spans []OTLPSpan `json:"spans"`
 }
 
 // Scope represents an instrumentation scope
@@ -32,14 +32,14 @@ type Scope struct {
 	Attributes []KeyValue `json:"attributes,omitempty"`
 }
 
-// Span represents an OTLP span
-type Span struct {
-	TraceID           interface{} `json:"traceId"`                    // Can be Buffer or hex string
-	SpanID            interface{} `json:"spanId"`                     // Can be Buffer or hex string
-	ParentSpanID      interface{} `json:"parentSpanId,omitempty"`     // Can be Buffer or hex string
+// OTLPSpan represents an OTLP span (wire format)
+type OTLPSpan struct {
+	TraceID           interface{} `json:"traceId"`                // Can be Buffer or hex string
+	SpanID            interface{} `json:"spanId"`                 // Can be Buffer or hex string
+	ParentSpanID      interface{} `json:"parentSpanId,omitempty"` // Can be Buffer or hex string
 	Name              string      `json:"name"`
-	Kind              int         `json:"kind,omitempty"`             // 0=UNSPECIFIED, 1=INTERNAL, 2=SERVER, 3=CLIENT, 4=PRODUCER, 5=CONSUMER
-	StartTimeUnixNano interface{} `json:"startTimeUnixNano"`          // Can be int64 or {low, high}
+	Kind              int         `json:"kind,omitempty"`    // 0=UNSPECIFIED, 1=INTERNAL, 2=SERVER, 3=CLIENT, 4=PRODUCER, 5=CONSUMER
+	StartTimeUnixNano interface{} `json:"startTimeUnixNano"` // Can be int64 or {low, high}
 	EndTimeUnixNano   interface{} `json:"endTimeUnixNano,omitempty"`
 	Attributes        []KeyValue  `json:"attributes,omitempty"`
 	Events            []Event     `json:"events,omitempty"`
@@ -61,6 +61,6 @@ type Event struct {
 
 // Status represents OTLP status
 type Status struct {
-	Code    int    `json:"code,omitempty"`    // 0=UNSET, 1=OK, 2=ERROR
+	Code    int    `json:"code,omitempty"` // 0=UNSET, 1=OK, 2=ERROR
 	Message string `json:"message,omitempty"`
 }

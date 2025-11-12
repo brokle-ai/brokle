@@ -16,12 +16,12 @@ type SSOProvider interface {
 
 // User represents an authenticated SSO user
 type User struct {
-	ID          string            `json:"id"`
-	Email       string            `json:"email"`
-	Name        string            `json:"name"`
-	Roles       []string          `json:"roles"`
-	Attributes  map[string]string `json:"attributes"`
-	Provider    string            `json:"provider"`
+	ID         string            `json:"id"`
+	Email      string            `json:"email"`
+	Name       string            `json:"name"`
+	Roles      []string          `json:"roles"`
+	Attributes map[string]string `json:"attributes"`
+	Provider   string            `json:"provider"`
 }
 
 // StubSSO provides stub implementation for OSS version

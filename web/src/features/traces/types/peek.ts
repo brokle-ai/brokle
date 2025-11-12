@@ -1,6 +1,6 @@
 export type PeekContext = 'peek' | 'full'
 
-export type TraceTab = 'details' | 'observations' | 'metadata'
+export type TraceTab = 'details' | 'spans' | 'metadata'
 
 export interface PeekNavigationState {
   peekId: string | null

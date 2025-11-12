@@ -86,7 +86,7 @@ func (r *userRepository) List(ctx context.Context, filters *userDomain.ListFilte
 	if err != nil {
 		return nil, 0, err
 	}
-	
+
 	// Get total count for the same filters - for now just return length
 	// TODO: Implement proper count query with the same filters
 	totalCount := len(users)
@@ -143,7 +143,7 @@ func (r *userRepository) SetDefaultOrganization(ctx context.Context, userID ulid
 func (r *userRepository) GetActiveUsers(ctx context.Context, limit, offset int) ([]*userDomain.User, int, error) {
 	var users []*userDomain.User
 	var count int64
-	
+
 	// Get count first
 	err := r.db.WithContext(ctx).
 		Model(&userDomain.User{}).
@@ -152,7 +152,7 @@ func (r *userRepository) GetActiveUsers(ctx context.Context, limit, offset int) 
 	if err != nil {
 		return nil, 0, err
 	}
-	
+
 	// Get users
 	err = r.db.WithContext(ctx).
 		Where("deleted_at IS NULL AND last_login_at IS NOT NULL").
@@ -176,10 +176,10 @@ func (r *userRepository) GetUsersByIDs(ctx context.Context, ids []ulid.ULID) ([]
 func (r *userRepository) SearchUsers(ctx context.Context, query string, limit, offset int) ([]*userDomain.User, int, error) {
 	var users []*userDomain.User
 	var count int64
-	
+
 	searchPattern := "%" + query + "%"
 	whereClause := "deleted_at IS NULL AND (email ILIKE ? OR first_name ILIKE ? OR last_name ILIKE ?)"
-	
+
 	// Get count first
 	err := r.db.WithContext(ctx).
 		Model(&userDomain.User{}).
@@ -188,7 +188,7 @@ func (r *userRepository) SearchUsers(ctx context.Context, query string, limit, o
 	if err != nil {
 		return nil, 0, err
 	}
-	
+
 	// Get users
 	err = r.db.WithContext(ctx).
 		Where(whereClause, searchPattern, searchPattern, searchPattern).
@@ -341,7 +341,6 @@ func (r *userRepository) UpdateProfile(ctx context.Context, profile *userDomain.
 	return r.db.WithContext(ctx).Save(profile).Error
 }
 
-
 // Additional missing interface methods
 func (r *userRepository) VerifyEmail(ctx context.Context, userID ulid.ULID, token string) error {
 	// TODO: Implement token validation logic
@@ -384,9 +383,9 @@ func (r *userRepository) GetUsersByOrganization(ctx context.Context, organizatio
 func (r *userRepository) GetVerifiedUsers(ctx context.Context, limit, offset int) ([]*userDomain.User, int, error) {
 	var users []*userDomain.User
 	var count int64
-	
+
 	whereClause := "deleted_at IS NULL AND is_email_verified = true"
-	
+
 	// Get count first
 	err := r.db.WithContext(ctx).
 		Model(&userDomain.User{}).
@@ -395,7 +394,7 @@ func (r *userRepository) GetVerifiedUsers(ctx context.Context, limit, offset int
 	if err != nil {
 		return nil, 0, err
 	}
-	
+
 	// Get users
 	err = r.db.WithContext(ctx).
 		Where(whereClause).

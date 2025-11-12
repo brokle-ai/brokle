@@ -8,7 +8,7 @@ import (
 type DatabaseType string
 
 const (
-	PostgresDB  DatabaseType = "postgres"
+	PostgresDB   DatabaseType = "postgres"
 	ClickHouseDB DatabaseType = "clickhouse"
 )
 
@@ -22,13 +22,13 @@ const (
 
 // MigrationStatus represents the status of a migration
 type MigrationStatus struct {
-	Database       DatabaseType `json:"database"`
-	CurrentVersion uint         `json:"current_version"`
-	IsDirty        bool         `json:"is_dirty"`
-	Status         string       `json:"status"` // "healthy", "dirty", "error"
-	Error          string       `json:"error,omitempty"`
-	MigrationsPath string       `json:"migrations_path"`
-	TotalMigrations int         `json:"total_migrations"`
+	Database        DatabaseType `json:"database"`
+	CurrentVersion  uint         `json:"current_version"`
+	IsDirty         bool         `json:"is_dirty"`
+	Status          string       `json:"status"` // "healthy", "dirty", "error"
+	Error           string       `json:"error,omitempty"`
+	MigrationsPath  string       `json:"migrations_path"`
+	TotalMigrations int          `json:"total_migrations"`
 }
 
 // MigrationInfo represents detailed information about migrations
@@ -47,11 +47,11 @@ type DatabaseRunner interface {
 	Goto(version uint) error
 	Force(version int) error
 	Drop() error
-	
+
 	// Information and status
 	Version() (uint, bool, error)
 	GetMigrationInfo() (map[string]interface{}, error)
-	
+
 	// Lifecycle
 	Close() (error, error)
 }
@@ -75,18 +75,18 @@ type MigrationManager interface {
 	MigratePostgresDown(ctx context.Context, steps int, dryRun bool) error
 	MigrateClickHouseUp(ctx context.Context, steps int, dryRun bool) error
 	MigrateClickHouseDown(ctx context.Context, steps int, dryRun bool) error
-	
+
 	// Status and information
 	ShowPostgresStatus(ctx context.Context) error
 	ShowClickHouseStatus(ctx context.Context) error
 	GetMigrationInfo() (*MigrationInfo, error)
 	HealthCheck() map[string]interface{}
 	GetStatus() MigrationStatus
-	
+
 	// Migration creation
 	CreatePostgresMigration(name string) error
 	CreateClickHouseMigration(name string) error
-	
+
 	// Advanced operations
 	GotoPostgres(version uint) error
 	GotoClickHouse(version uint) error
@@ -96,11 +96,11 @@ type MigrationManager interface {
 	DropClickHouse() error
 	StepsPostgres(n int) error
 	StepsClickHouse(n int) error
-	
+
 	// Auto-migration
 	AutoMigrate(ctx context.Context) error
 	CanAutoMigrate() bool
-	
+
 	// Lifecycle
 	Shutdown() error
 }

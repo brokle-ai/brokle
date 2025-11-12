@@ -5,8 +5,8 @@ import (
 	"time"
 
 	orgDomain "brokle/internal/core/domain/organization"
-	"brokle/pkg/ulid"
 	appErrors "brokle/pkg/errors"
+	"brokle/pkg/ulid"
 )
 
 // projectService implements the orgDomain.ProjectService interface
@@ -44,7 +44,6 @@ func (s *projectService) CreateProject(ctx context.Context, orgID ulid.ULID, req
 		return nil, appErrors.NewInternalError("Failed to create project", err)
 	}
 
-
 	return project, nil
 }
 
@@ -80,7 +79,6 @@ func (s *projectService) UpdateProject(ctx context.Context, projectID ulid.ULID,
 		return appErrors.NewInternalError("Failed to update project", err)
 	}
 
-
 	return nil
 }
 
@@ -96,7 +94,6 @@ func (s *projectService) DeleteProject(ctx context.Context, projectID ulid.ULID)
 	if err != nil {
 		return appErrors.NewInternalError("Failed to delete project", err)
 	}
-
 
 	return nil
 }

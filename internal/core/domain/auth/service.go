@@ -37,12 +37,12 @@ type AuthService interface {
 	GetUserSessions(ctx context.Context, userID ulid.ULID) ([]*UserSession, error)
 	RevokeSession(ctx context.Context, userID, sessionID ulid.ULID) error
 	RevokeAllSessions(ctx context.Context, userID ulid.ULID) error
-	
+
 	// Token revocation (immediate)
 	RevokeAccessToken(ctx context.Context, jti string, userID ulid.ULID, reason string) error
 	RevokeUserAccessTokens(ctx context.Context, userID ulid.ULID, reason string) error
 	IsTokenRevoked(ctx context.Context, jti string) (bool, error)
-	
+
 	// Authentication context
 	GetAuthContext(ctx context.Context, token string) (*AuthContext, error)
 	ValidateAuthToken(ctx context.Context, token string) (*AuthContext, error)
@@ -53,11 +53,11 @@ type SessionService interface {
 	// Session management
 	GetSession(ctx context.Context, sessionID ulid.ULID) (*UserSession, error)
 	RevokeSession(ctx context.Context, sessionID ulid.ULID) error
-	
+
 	// User session management
 	GetUserSessions(ctx context.Context, userID ulid.ULID) ([]*UserSession, error)
 	RevokeUserSessions(ctx context.Context, userID ulid.ULID) error
-	
+
 	// Session cleanup and maintenance
 	CleanupExpiredSessions(ctx context.Context) error
 	GetActiveSessions(ctx context.Context, userID ulid.ULID) ([]*UserSession, error)
@@ -95,23 +95,23 @@ type RoleService interface {
 	GetRoleByNameAndScope(ctx context.Context, name, scopeType string) (*Role, error)
 	UpdateRole(ctx context.Context, roleID ulid.ULID, req *UpdateRoleRequest) (*Role, error)
 	DeleteRole(ctx context.Context, roleID ulid.ULID) error
-	
+
 	// System template role queries
 	GetRolesByScopeType(ctx context.Context, scopeType string) ([]*Role, error)
 	GetAllRoles(ctx context.Context) ([]*Role, error)
 	GetSystemRoles(ctx context.Context) ([]*Role, error)
-	
+
 	// Custom scoped role management
 	CreateCustomRole(ctx context.Context, scopeType string, scopeID ulid.ULID, req *CreateRoleRequest) (*Role, error)
 	GetCustomRolesByOrganization(ctx context.Context, organizationID ulid.ULID) ([]*Role, error)
 	UpdateCustomRole(ctx context.Context, roleID ulid.ULID, req *UpdateRoleRequest) (*Role, error)
 	DeleteCustomRole(ctx context.Context, roleID ulid.ULID) error
-	
+
 	// Permission management for roles
 	GetRolePermissions(ctx context.Context, roleID ulid.ULID) ([]*Permission, error)
 	AssignRolePermissions(ctx context.Context, roleID ulid.ULID, permissionIDs []ulid.ULID, grantedBy *ulid.ULID) error
 	RevokeRolePermissions(ctx context.Context, roleID ulid.ULID, permissionIDs []ulid.ULID) error
-	
+
 	// Statistics
 	GetRoleStatistics(ctx context.Context) (*RoleStatistics, error)
 }
@@ -122,25 +122,25 @@ type OrganizationMemberService interface {
 	AddMember(ctx context.Context, userID, orgID, roleID ulid.ULID, invitedBy *ulid.ULID) (*OrganizationMember, error)
 	RemoveMember(ctx context.Context, userID, orgID ulid.ULID) error
 	UpdateMemberRole(ctx context.Context, userID, orgID, roleID ulid.ULID) error
-	
+
 	// Membership queries
 	GetMember(ctx context.Context, userID, orgID ulid.ULID) (*OrganizationMember, error)
 	GetUserMemberships(ctx context.Context, userID ulid.ULID) ([]*OrganizationMember, error)
 	GetOrganizationMembers(ctx context.Context, orgID ulid.ULID) ([]*OrganizationMember, error)
 	GetMembersByRole(ctx context.Context, roleID ulid.ULID) ([]*OrganizationMember, error)
 	IsMember(ctx context.Context, userID, orgID ulid.ULID) (bool, error)
-	
+
 	// Permission checking via membership
 	GetUserEffectivePermissions(ctx context.Context, userID ulid.ULID) ([]string, error)
 	GetUserPermissionsInOrganization(ctx context.Context, userID, orgID ulid.ULID) ([]string, error)
 	CheckUserPermission(ctx context.Context, userID ulid.ULID, permission string) (bool, error)
 	CheckUserPermissions(ctx context.Context, userID ulid.ULID, permissions []string) (map[string]bool, error)
-	
+
 	// Status management
 	ActivateMember(ctx context.Context, userID, orgID ulid.ULID) error
 	SuspendMember(ctx context.Context, userID, orgID ulid.ULID) error
 	GetActiveMembers(ctx context.Context, orgID ulid.ULID) ([]*OrganizationMember, error)
-	
+
 	// Statistics
 	GetMemberCount(ctx context.Context, orgID ulid.ULID) (int, error)
 	GetMembersByRoleCount(ctx context.Context, orgID ulid.ULID) (map[string]int, error)
@@ -155,7 +155,7 @@ type PermissionService interface {
 	GetPermissionByResourceAction(ctx context.Context, resource, action string) (*Permission, error)
 	UpdatePermission(ctx context.Context, permissionID ulid.ULID, req *UpdatePermissionRequest) error
 	DeletePermission(ctx context.Context, permissionID ulid.ULID) error
-	
+
 	// Permission queries
 	ListPermissions(ctx context.Context, limit, offset int) (*PermissionListResponse, error)
 	GetAllPermissions(ctx context.Context) ([]*Permission, error)
@@ -163,15 +163,15 @@ type PermissionService interface {
 	GetPermissionsByNames(ctx context.Context, names []string) ([]*Permission, error)
 	GetPermissionsByResourceActions(ctx context.Context, resourceActions []string) ([]*Permission, error)
 	SearchPermissions(ctx context.Context, query string, limit, offset int) (*PermissionListResponse, error)
-	
-	// Resource and action queries  
+
+	// Resource and action queries
 	GetAvailableResources(ctx context.Context) ([]string, error)
 	GetActionsForResource(ctx context.Context, resource string) ([]string, error)
-	
+
 	// Permission validation
 	PermissionExists(ctx context.Context, resource, action string) (bool, error)
 	BulkPermissionExists(ctx context.Context, resourceActions []string) (map[string]bool, error)
-	
+
 	// Utility methods
 	ParseResourceAction(resourceAction string) (resource, action string, err error)
 	FormatResourceAction(resource, action string) string
@@ -185,12 +185,12 @@ type JWTService interface {
 	GenerateAccessTokenWithJTI(ctx context.Context, userID ulid.ULID, claims map[string]interface{}) (string, string, error)
 	GenerateRefreshToken(ctx context.Context, userID ulid.ULID) (string, error)
 	GenerateAPIKeyToken(ctx context.Context, keyID ulid.ULID, scopes []string) (string, error)
-	
+
 	// Token validation
 	ValidateAccessToken(ctx context.Context, token string) (*JWTClaims, error)
 	ValidateRefreshToken(ctx context.Context, token string) (*JWTClaims, error)
 	ValidateAPIKeyToken(ctx context.Context, token string) (*JWTClaims, error)
-	
+
 	// Token utilities
 	GetTokenExpiry(ctx context.Context, token string) (time.Time, error)
 	IsTokenExpired(ctx context.Context, token string) (bool, error)
@@ -202,20 +202,20 @@ type BlacklistedTokenService interface {
 	BlacklistToken(ctx context.Context, jti string, userID ulid.ULID, expiresAt time.Time, reason string) error
 	IsTokenBlacklisted(ctx context.Context, jti string) (bool, error)
 	GetBlacklistedToken(ctx context.Context, jti string) (*BlacklistedToken, error)
-	
+
 	// User-wide timestamp blacklisting (GDPR/SOC2 compliance)
 	CreateUserTimestampBlacklist(ctx context.Context, userID ulid.ULID, reason string) error
 	IsUserBlacklistedAfterTimestamp(ctx context.Context, userID ulid.ULID, tokenIssuedAt int64) (bool, error)
 	GetUserBlacklistTimestamp(ctx context.Context, userID ulid.ULID) (*int64, error)
-	
+
 	// Bulk operations
 	BlacklistUserTokens(ctx context.Context, userID ulid.ULID, reason string) error
 	GetUserBlacklistedTokens(ctx context.Context, userID ulid.ULID, limit, offset int) ([]*BlacklistedToken, error)
-	
+
 	// Maintenance
 	CleanupExpiredTokens(ctx context.Context) error
 	CleanupOldTokens(ctx context.Context, olderThan time.Time) error
-	
+
 	// Statistics
 	GetBlacklistedTokensCount(ctx context.Context) (int64, error)
 	GetTokensByReason(ctx context.Context, reason string) ([]*BlacklistedToken, error)
@@ -227,13 +227,13 @@ type AuditLogService interface {
 	LogUserAction(ctx context.Context, userID *ulid.ULID, action, resource, resourceID string, metadata map[string]interface{}, ipAddress, userAgent string) error
 	LogSystemAction(ctx context.Context, action, resource, resourceID string, metadata map[string]interface{}) error
 	LogSecurityEvent(ctx context.Context, userID *ulid.ULID, event, description string, metadata map[string]interface{}, ipAddress, userAgent string) error
-	
+
 	// Audit log queries
 	GetUserAuditLogs(ctx context.Context, userID ulid.ULID, limit, offset int) ([]*AuditLog, error)
 	GetOrganizationAuditLogs(ctx context.Context, orgID ulid.ULID, limit, offset int) ([]*AuditLog, error)
 	GetResourceAuditLogs(ctx context.Context, resource, resourceID string, limit, offset int) ([]*AuditLog, error)
 	SearchAuditLogs(ctx context.Context, filters *AuditLogFilters) ([]*AuditLog, int, error)
-	
+
 	// Audit log maintenance
 	CleanupOldAuditLogs(ctx context.Context, olderThan time.Time) error
 	GetAuditLogStats(ctx context.Context) (*AuditLogStats, error)
@@ -268,7 +268,6 @@ type CreateSessionRequest struct {
 	UserAgent *string `json:"user_agent,omitempty"`
 	Remember  bool    `json:"remember"` // Extend session duration
 }
-
 
 type UpdateAPIKeyRequest struct {
 	Name     *string `json:"name,omitempty" validate:"omitempty,min=1,max=100"`

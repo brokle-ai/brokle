@@ -18,7 +18,7 @@ type TelemetryStreamMessage struct {
 	BatchID          ulid.ULID              `json:"batch_id"`   // Brokle batch ULID
 	ProjectID        ulid.ULID              `json:"project_id"` // Brokle project ULID
 	Events           []TelemetryEventData   `json:"events"`
-	ClaimedSpanIDs   []string               `json:"claimed_span_ids"`   // Composite OTLP IDs that were claimed
+	ClaimedSpanIDs   []string               `json:"claimed_span_ids"`             // Composite OTLP IDs that were claimed
 	DuplicateSpanIDs []string               `json:"duplicate_span_ids,omitempty"` // Composite OTLP IDs that were duplicates
 	Metadata         map[string]interface{} `json:"metadata,omitempty"`
 	Timestamp        time.Time              `json:"timestamp"`
@@ -27,11 +27,11 @@ type TelemetryStreamMessage struct {
 // TelemetryEventData represents individual event data in the stream message
 type TelemetryEventData struct {
 	// Internal tracking
-	EventID      ulid.ULID              `json:"event_id"`
+	EventID ulid.ULID `json:"event_id"`
 
 	// OTLP identity (for deduplication)
-	SpanID       string                 `json:"span_id"`   // OTLP span_id (16 hex)
-	TraceID      string                 `json:"trace_id"`  // OTLP trace_id (32 hex)
+	SpanID  string `json:"span_id"`  // OTLP span_id (16 hex)
+	TraceID string `json:"trace_id"` // OTLP trace_id (32 hex)
 
 	// Event data
 	EventType    string                 `json:"event_type"`

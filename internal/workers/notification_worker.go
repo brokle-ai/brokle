@@ -29,39 +29,39 @@ type NotificationJob struct {
 
 // EmailJob represents an email notification job
 type EmailJob struct {
-	To          []string          `json:"to"`
-	CC          []string          `json:"cc,omitempty"`
-	BCC         []string          `json:"bcc,omitempty"`
-	Subject     string            `json:"subject"`
-	Body        string            `json:"body"`
-	BodyHTML    string            `json:"body_html,omitempty"`
-	Template    string            `json:"template,omitempty"`
+	To           []string               `json:"to"`
+	CC           []string               `json:"cc,omitempty"`
+	BCC          []string               `json:"bcc,omitempty"`
+	Subject      string                 `json:"subject"`
+	Body         string                 `json:"body"`
+	BodyHTML     string                 `json:"body_html,omitempty"`
+	Template     string                 `json:"template,omitempty"`
 	TemplateData map[string]interface{} `json:"template_data,omitempty"`
-	Priority    string            `json:"priority,omitempty"`
-	UserID      string            `json:"user_id,omitempty"`
+	Priority     string                 `json:"priority,omitempty"`
+	UserID       string                 `json:"user_id,omitempty"`
 }
 
 // WebhookJob represents a webhook notification job
 type WebhookJob struct {
-	URL         string                 `json:"url"`
-	Method      string                 `json:"method"`
-	Headers     map[string]string      `json:"headers,omitempty"`
-	Payload     map[string]interface{} `json:"payload"`
-	Timeout     int                    `json:"timeout,omitempty"`
-	RetryCount  int                    `json:"retry_count,omitempty"`
-	UserID      string                 `json:"user_id,omitempty"`
-	EventType   string                 `json:"event_type,omitempty"`
+	URL        string                 `json:"url"`
+	Method     string                 `json:"method"`
+	Headers    map[string]string      `json:"headers,omitempty"`
+	Payload    map[string]interface{} `json:"payload"`
+	Timeout    int                    `json:"timeout,omitempty"`
+	RetryCount int                    `json:"retry_count,omitempty"`
+	UserID     string                 `json:"user_id,omitempty"`
+	EventType  string                 `json:"event_type,omitempty"`
 }
 
 // SlackJob represents a Slack notification job
 type SlackJob struct {
-	Channel   string                 `json:"channel"`
-	Message   string                 `json:"message"`
-	Username  string                 `json:"username,omitempty"`
-	IconEmoji string                 `json:"icon_emoji,omitempty"`
+	Channel   string                   `json:"channel"`
+	Message   string                   `json:"message"`
+	Username  string                   `json:"username,omitempty"`
+	IconEmoji string                   `json:"icon_emoji,omitempty"`
 	Blocks    []map[string]interface{} `json:"blocks,omitempty"`
-	UserID    string                 `json:"user_id,omitempty"`
-	EventType string                 `json:"event_type,omitempty"`
+	UserID    string                   `json:"user_id,omitempty"`
+	EventType string                   `json:"event_type,omitempty"`
 }
 
 // SMSJob represents an SMS notification job
@@ -248,10 +248,10 @@ func (w *NotificationWorker) processEmail(ctx context.Context, data interface{})
 
 	// TODO: Implement actual email sending logic
 	// This would integrate with services like SendGrid, AWS SES, etc.
-	
+
 	// Simulate email sending
 	time.Sleep(100 * time.Millisecond)
-	
+
 	w.logger.WithField("to", jobData.To).Info("Email sent successfully")
 	return nil
 }
@@ -282,10 +282,10 @@ func (w *NotificationWorker) processWebhook(ctx context.Context, data interface{
 
 	// TODO: Implement actual webhook sending logic
 	// This would make HTTP requests to the specified URLs
-	
+
 	// Simulate webhook sending
 	time.Sleep(200 * time.Millisecond)
-	
+
 	w.logger.WithField("url", jobData.URL).Info("Webhook sent successfully")
 	return nil
 }
@@ -315,10 +315,10 @@ func (w *NotificationWorker) processSlack(ctx context.Context, data interface{})
 
 	// TODO: Implement actual Slack API integration
 	// This would use Slack's Web API to send messages
-	
+
 	// Simulate Slack sending
 	time.Sleep(150 * time.Millisecond)
-	
+
 	w.logger.WithField("channel", jobData.Channel).Info("Slack message sent successfully")
 	return nil
 }
@@ -345,10 +345,10 @@ func (w *NotificationWorker) processSMS(ctx context.Context, data interface{}) e
 
 	// TODO: Implement actual SMS sending logic
 	// This would integrate with services like Twilio, AWS SNS, etc.
-	
+
 	// Simulate SMS sending
 	time.Sleep(100 * time.Millisecond)
-	
+
 	w.logger.WithField("to", jobData.To).Info("SMS sent successfully")
 	return nil
 }
@@ -378,10 +378,10 @@ func (w *NotificationWorker) processPush(ctx context.Context, data interface{}) 
 
 	// TODO: Implement actual push notification logic
 	// This would integrate with Firebase Cloud Messaging, Apple Push Notifications, etc.
-	
+
 	// Simulate push sending
 	time.Sleep(300 * time.Millisecond)
-	
+
 	w.logger.WithField("devices", len(jobData.DeviceTokens)).Info("Push notifications sent successfully")
 	return nil
 }
@@ -452,16 +452,16 @@ func (w *NotificationWorker) SendSystemAlert(message, severity string) {
 		IconEmoji: ":warning:",
 		EventType: "system_alert",
 	})
-	
+
 	// Also send webhook if configured
 	if w.config.Notifications.AlertWebhookURL != "" {
 		w.QueueWebhook(WebhookJob{
 			URL:    w.config.Notifications.AlertWebhookURL,
 			Method: "POST",
 			Payload: map[string]interface{}{
-				"type":     "system_alert",
-				"severity": severity,
-				"message":  message,
+				"type":      "system_alert",
+				"severity":  severity,
+				"message":   message,
 				"timestamp": time.Now().Unix(),
 			},
 			EventType: "system_alert",

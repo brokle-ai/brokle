@@ -15,7 +15,7 @@ import (
 type TelemetryService struct {
 	deduplicationService observability.TelemetryDeduplicationService
 	streamProducer       *streams.TelemetryStreamProducer
-	logger              *logrus.Logger
+	logger               *logrus.Logger
 
 	// Performance tracking
 	mu                 sync.RWMutex
@@ -34,7 +34,7 @@ func NewTelemetryService(
 	return &TelemetryService{
 		deduplicationService: deduplicationService,
 		streamProducer:       streamProducer,
-		logger:              logger,
+		logger:               logger,
 		lastProcessingTime:   time.Now(),
 	}
 }
@@ -72,7 +72,7 @@ func (s *TelemetryService) GetHealth(ctx context.Context) (*observability.Teleme
 
 	// Processing queue health (stream consumer)
 	health.ProcessingQueue = &observability.QueueHealth{
-		Size:             0,    // Stream consumer processes real-time
+		Size:             0, // Stream consumer processes real-time
 		ProcessingRate:   float64(s.eventsProcessed),
 		AverageWaitTime:  10.0, // Default value
 		OldestMessageAge: 0,
@@ -110,23 +110,23 @@ func (s *TelemetryService) GetMetrics(ctx context.Context) (*observability.Telem
 
 	// Aggregate metrics
 	metrics := &observability.TelemetryMetrics{
-		TotalBatches:         int64(s.batchesProcessed),
-		CompletedBatches:     int64(s.batchesProcessed),
-		FailedBatches:        0,
-		ProcessingBatches:    0,
-		TotalEvents:          int64(s.eventsProcessed),
-		ProcessedEvents:      int64(s.eventsProcessed),
-		FailedEvents:         0,
-		DuplicateEvents:      0,
+		TotalBatches:      int64(s.batchesProcessed),
+		CompletedBatches:  int64(s.batchesProcessed),
+		FailedBatches:     0,
+		ProcessingBatches: 0,
+		TotalEvents:       int64(s.eventsProcessed),
+		ProcessedEvents:   int64(s.eventsProcessed),
+		FailedEvents:      0,
+		DuplicateEvents:   0,
 		AverageEventsPerBatch: func() float64 {
 			if s.batchesProcessed > 0 {
 				return float64(s.eventsProcessed) / float64(s.batchesProcessed)
 			}
 			return 0
 		}(),
-		ThroughputPerSecond:  throughput,
-		SuccessRate:          successRate,
-		DeduplicationRate:    0.0, // Will be updated with actual dedup stats
+		ThroughputPerSecond: throughput,
+		SuccessRate:         successRate,
+		DeduplicationRate:   0.0, // Will be updated with actual dedup stats
 	}
 
 	return metrics, nil
@@ -153,10 +153,10 @@ func (s *TelemetryService) GetPerformanceStats(ctx context.Context, timeWindow t
 		P99LatencyMs:         float64(s.avgProcessingTime.Milliseconds()) * 1.5, // Estimated
 		ThroughputPerSecond:  throughputPerSec,
 		PeakThroughput:       throughputPerSec * 1.3, // Estimated peak
-		CacheHitRate:         0.8,  // Default 80% cache hit rate
-		DatabaseFallbackRate: 0.2,  // Default 20% fallback rate
-		ErrorRate:            0.01, // Default 1% error rate
-		RetryRate:            0.05, // Default 5% retry rate
+		CacheHitRate:         0.8,                    // Default 80% cache hit rate
+		DatabaseFallbackRate: 0.2,                    // Default 20% fallback rate
+		ErrorRate:            0.01,                   // Default 1% error rate
+		RetryRate:            0.05,                   // Default 5% retry rate
 	}
 
 	return stats, nil
@@ -179,4 +179,3 @@ func (s *TelemetryService) updatePerformanceMetrics(eventCount int, processingTi
 		s.avgProcessingTime = time.Duration(0.9*float64(s.avgProcessingTime) + 0.1*float64(processingTime))
 	}
 }
-

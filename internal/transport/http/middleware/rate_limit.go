@@ -47,7 +47,7 @@ func (m *RateLimitMiddleware) RateLimitByIP() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		clientIP := c.ClientIP()
 		key := fmt.Sprintf("rate_limit:ip:%s", clientIP)
-		
+
 		allowed, err := m.checkRateLimit(c.Request.Context(), key, m.config.RateLimitPerIP, m.config.RateLimitWindow)
 		if err != nil {
 			m.logger.WithError(err).WithField("ip", clientIP).Error("Rate limit check failed")
@@ -92,7 +92,7 @@ func (m *RateLimitMiddleware) RateLimitByUser() gin.HandlerFunc {
 		}
 
 		key := fmt.Sprintf("rate_limit:user:%s", userIDStr)
-		
+
 		allowed, err := m.checkRateLimit(c.Request.Context(), key, m.config.RateLimitPerUser, m.config.RateLimitWindow)
 		if err != nil {
 			m.logger.WithError(err).WithField("user_id", userIDStr).Error("User rate limit check failed")
@@ -174,19 +174,19 @@ func (m *RateLimitMiddleware) checkRateLimit(ctx context.Context, key string, li
 
 	// Remove expired entries
 	pipe.ZRemRangeByScore(ctx, key, "0", strconv.FormatInt(windowStart.Unix(), 10))
-	
+
 	// Count current requests in window
 	countCmd := pipe.ZCard(ctx, key)
-	
+
 	// Add current request
 	pipe.ZAdd(ctx, key, redis.Z{
 		Score:  float64(now.Unix()),
 		Member: fmt.Sprintf("%d-%d", now.Unix(), now.Nanosecond()),
 	})
-	
+
 	// Set expiry for the key
 	pipe.Expire(ctx, key, window)
-	
+
 	// Execute pipeline
 	_, err := pipe.Exec(ctx)
 	if err != nil {
@@ -211,7 +211,7 @@ func (m *RateLimitMiddleware) GetRemainingRequests(ctx context.Context, key stri
 	pipe := m.redis.TxPipeline()
 	pipe.ZRemRangeByScore(ctx, key, "0", strconv.FormatInt(windowStart.Unix(), 10))
 	countCmd := pipe.ZCard(ctx, key)
-	
+
 	_, err := pipe.Exec(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get remaining requests: %w", err)
@@ -238,7 +238,7 @@ func (m *RateLimitMiddleware) SetRateLimitHeaders(clientIP, userID string) gin.H
 		// Get IP-based rate limit info
 		ipKey := fmt.Sprintf("rate_limit:ip:%s", clientIP)
 		ipRemaining, _ := m.GetRemainingRequests(c.Request.Context(), ipKey, m.config.RateLimitPerIP, m.config.RateLimitWindow)
-		
+
 		// Set rate limit headers
 		c.Header("X-RateLimit-Limit", strconv.Itoa(m.config.RateLimitPerIP))
 		c.Header("X-RateLimit-Remaining", strconv.Itoa(ipRemaining))

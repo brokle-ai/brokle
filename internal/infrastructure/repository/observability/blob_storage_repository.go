@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"brokle/internal/core/domain/observability"
+
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 )

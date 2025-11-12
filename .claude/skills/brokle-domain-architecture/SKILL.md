@@ -17,7 +17,7 @@ Primary domains in `internal/core/domain/`:
 | billing | Usage tracking, subscriptions |
 | common | Shared transaction patterns, utilities |
 | gateway | AI provider routing |
-| observability | Traces, observations, quality scores |
+| observability | Traces, spans, quality scores |
 | organization | Multi-tenant org management |
 | user | User management and profiles |
 

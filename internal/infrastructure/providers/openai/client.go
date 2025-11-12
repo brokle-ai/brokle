@@ -46,7 +46,7 @@ func NewOpenAIProvider(config *providers.ProviderConfig) (providers.Provider, er
 
 	// Create OpenAI client configuration
 	clientConfig := openai.DefaultConfig(config.APIKey)
-	
+
 	if config.BaseURL != "" {
 		clientConfig.BaseURL = config.BaseURL
 	}
@@ -60,7 +60,7 @@ func NewOpenAIProvider(config *providers.ProviderConfig) (providers.Provider, er
 	if config.Timeout > 0 {
 		timeout = config.Timeout
 	}
-	
+
 	httpClient := &http.Client{
 		Timeout: timeout,
 	}
@@ -94,7 +94,7 @@ func (p *OpenAIProvider) GetType() gateway.ProviderType {
 func (p *OpenAIProvider) ChatCompletion(ctx context.Context, req *providers.ChatCompletionRequest) (*providers.ChatCompletionResponse, error) {
 	// Transform request to OpenAI format
 	openaiReq := p.transformChatCompletionRequest(req)
-	
+
 	// Add timeout context
 	ctx, cancel := context.WithTimeout(ctx, p.timeout)
 	defer cancel()
@@ -102,18 +102,18 @@ func (p *OpenAIProvider) ChatCompletion(ctx context.Context, req *providers.Chat
 	// Make API call with retry logic
 	var resp openai.ChatCompletionResponse
 	var err error
-	
+
 	for attempt := 0; attempt <= p.maxRetries; attempt++ {
 		resp, err = p.client.CreateChatCompletion(ctx, openaiReq)
 		if err == nil {
 			break
 		}
-		
+
 		// Check if error is retryable
 		if !p.isRetryableError(err) {
 			break
 		}
-		
+
 		// Wait before retry
 		if attempt < p.maxRetries {
 			time.Sleep(time.Duration(attempt+1) * time.Second)
@@ -157,7 +157,7 @@ func (p *OpenAIProvider) ChatCompletionStream(ctx context.Context, req *provider
 		// Transform and write response chunk
 		chunk := p.transformChatCompletionStreamResponse(&response)
 		data := fmt.Sprintf("data: %s\n\n", p.marshalJSON(chunk))
-		
+
 		if _, err := writer.Write([]byte(data)); err != nil {
 			return providers.NewProviderErrorWithCause(
 				"STREAM_WRITE_ERROR",
@@ -184,7 +184,7 @@ func (p *OpenAIProvider) ChatCompletionStream(ctx context.Context, req *provider
 func (p *OpenAIProvider) Completion(ctx context.Context, req *providers.CompletionRequest) (*providers.CompletionResponse, error) {
 	// Transform request to OpenAI format
 	openaiReq := p.transformCompletionRequest(req)
-	
+
 	// Add timeout context
 	ctx, cancel := context.WithTimeout(ctx, p.timeout)
 	defer cancel()
@@ -192,18 +192,18 @@ func (p *OpenAIProvider) Completion(ctx context.Context, req *providers.Completi
 	// Make API call with retry logic
 	var resp openai.CompletionResponse
 	var err error
-	
+
 	for attempt := 0; attempt <= p.maxRetries; attempt++ {
 		resp, err = p.client.CreateCompletion(ctx, openaiReq)
 		if err == nil {
 			break
 		}
-		
+
 		// Check if error is retryable
 		if !p.isRetryableError(err) {
 			break
 		}
-		
+
 		// Wait before retry
 		if attempt < p.maxRetries {
 			time.Sleep(time.Duration(attempt+1) * time.Second)
@@ -247,7 +247,7 @@ func (p *OpenAIProvider) CompletionStream(ctx context.Context, req *providers.Co
 		// Transform and write response chunk
 		chunk := p.transformCompletionStreamResponse(&response)
 		data := fmt.Sprintf("data: %s\n\n", p.marshalJSON(chunk))
-		
+
 		if _, err := writer.Write([]byte(data)); err != nil {
 			return providers.NewProviderErrorWithCause(
 				"STREAM_WRITE_ERROR",
@@ -274,7 +274,7 @@ func (p *OpenAIProvider) CompletionStream(ctx context.Context, req *providers.Co
 func (p *OpenAIProvider) Embedding(ctx context.Context, req *providers.EmbeddingRequest) (*providers.EmbeddingResponse, error) {
 	// Transform request to OpenAI format
 	openaiReq := p.transformEmbeddingRequest(req)
-	
+
 	// Add timeout context
 	ctx, cancel := context.WithTimeout(ctx, p.timeout)
 	defer cancel()
@@ -282,18 +282,18 @@ func (p *OpenAIProvider) Embedding(ctx context.Context, req *providers.Embedding
 	// Make API call with retry logic
 	var resp openai.EmbeddingResponse
 	var err error
-	
+
 	for attempt := 0; attempt <= p.maxRetries; attempt++ {
 		resp, err = p.client.CreateEmbeddings(ctx, openaiReq)
 		if err == nil {
 			break
 		}
-		
+
 		// Check if error is retryable
 		if !p.isRetryableError(err) {
 			break
 		}
-		
+
 		// Wait before retry
 		if attempt < p.maxRetries {
 			time.Sleep(time.Duration(attempt+1) * time.Second)
@@ -352,7 +352,7 @@ func (p *OpenAIProvider) HealthCheck(ctx context.Context) error {
 
 func (p *OpenAIProvider) TestConnection(ctx context.Context) (*providers.ConnectionTestResult, error) {
 	startTime := time.Now()
-	
+
 	err := p.HealthCheck(ctx)
 	latency := time.Since(startTime).Milliseconds()
 
@@ -365,7 +365,7 @@ func (p *OpenAIProvider) TestConnection(ctx context.Context) (*providers.Connect
 	if err != nil {
 		errMsg := err.Error()
 		result.Error = &errMsg
-		
+
 		if providerErr, ok := err.(*providers.ProviderError); ok {
 			result.StatusCode = &providerErr.HTTPStatusCode
 		}
@@ -378,7 +378,7 @@ func (p *OpenAIProvider) TestConnection(ctx context.Context) (*providers.Connect
 
 func (p *OpenAIProvider) SetAPIKey(apiKey string) {
 	p.config.APIKey = apiKey
-	
+
 	// Update client configuration
 	clientConfig := openai.DefaultConfig(apiKey)
 	if p.config.BaseURL != "" {
@@ -387,12 +387,12 @@ func (p *OpenAIProvider) SetAPIKey(apiKey string) {
 	if p.config.OrganizationID != nil {
 		clientConfig.OrgID = *p.config.OrganizationID
 	}
-	
+
 	httpClient := &http.Client{
 		Timeout: p.timeout,
 	}
 	clientConfig.HTTPClient = httpClient
-	
+
 	p.client = openai.NewClientWithConfig(clientConfig)
 }
 

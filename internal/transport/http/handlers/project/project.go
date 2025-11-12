@@ -879,6 +879,3 @@ func (h *Handler) Delete(c *gin.Context) {
 		"organization_id": project.OrganizationID.String(),
 	}).Info("Project deleted successfully")
 }
-
-
-

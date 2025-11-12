@@ -10,8 +10,8 @@ import (
 
 	authDomain "brokle/internal/core/domain/auth"
 	userDomain "brokle/internal/core/domain/user"
-	"brokle/pkg/ulid"
 	appErrors "brokle/pkg/errors"
+	"brokle/pkg/ulid"
 )
 
 // userService implements the user.UserService interface
@@ -33,7 +33,6 @@ func NewUserService(
 		orgMemberRepo: orgMemberRepo,
 	}
 }
-
 
 // GetUser retrieves user by ID
 func (s *userService) GetUser(ctx context.Context, userID ulid.ULID) (*userDomain.User, error) {
@@ -154,7 +153,7 @@ func (s *userService) ListUsers(ctx context.Context, filters *userDomain.ListFil
 	return users, total, nil
 }
 
-// SearchUsers searches for users by query  
+// SearchUsers searches for users by query
 func (s *userService) SearchUsers(ctx context.Context, query string, limit, offset int) ([]*userDomain.User, int, error) {
 	query = strings.TrimSpace(query)
 	if query == "" {

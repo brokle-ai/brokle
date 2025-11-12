@@ -6,6 +6,7 @@ import (
 	"brokle/internal/core/domain/gateway"
 	"brokle/internal/infrastructure/providers"
 	gatewayRepo "brokle/internal/infrastructure/repository/gateway"
+
 	"gorm.io/gorm"
 )
 
@@ -84,54 +85,54 @@ func NewGatewayServices(
 // ServiceConfig holds configuration for gateway services
 type ServiceConfig struct {
 	// Cost calculation settings
-	DefaultCurrency            string
-	TokenEstimationMultiplier  float64
-	EnableCostOptimization     bool
-	EnableProviderComparison   bool
-	
+	DefaultCurrency           string
+	TokenEstimationMultiplier float64
+	EnableCostOptimization    bool
+	EnableProviderComparison  bool
+
 	// Routing settings
-	DefaultRoutingStrategy     gateway.RoutingStrategy
-	EnableFallbackRouting      bool
-	EnableLoadBalancing        bool
-	EnableABTesting            bool
-	MaxConcurrentProviders     int
-	
+	DefaultRoutingStrategy gateway.RoutingStrategy
+	EnableFallbackRouting  bool
+	EnableLoadBalancing    bool
+	EnableABTesting        bool
+	MaxConcurrentProviders int
+
 	// Health check settings
-	HealthCheckInterval        int // seconds
-	ProviderTimeoutSeconds     int
-	EnableHealthChecks         bool
-	
+	HealthCheckInterval    int // seconds
+	ProviderTimeoutSeconds int
+	EnableHealthChecks     bool
+
 	// Analytics settings
-	EnableUsageTracking        bool
-	EnableMetricsCollection    bool
-	BatchSizeForAnalytics      int
+	EnableUsageTracking     bool
+	EnableMetricsCollection bool
+	BatchSizeForAnalytics   int
 }
 
 // DefaultServiceConfig returns default configuration for gateway services
 func DefaultServiceConfig() *ServiceConfig {
 	return &ServiceConfig{
 		// Cost settings
-		DefaultCurrency:            "USD",
-		TokenEstimationMultiplier:  1.0,
-		EnableCostOptimization:     true,
-		EnableProviderComparison:   true,
-		
+		DefaultCurrency:           "USD",
+		TokenEstimationMultiplier: 1.0,
+		EnableCostOptimization:    true,
+		EnableProviderComparison:  true,
+
 		// Routing settings
-		DefaultRoutingStrategy:     gateway.RoutingStrategyCostOptimized,
-		EnableFallbackRouting:      true,
-		EnableLoadBalancing:        true,
-		EnableABTesting:            false,
-		MaxConcurrentProviders:     3,
-		
+		DefaultRoutingStrategy: gateway.RoutingStrategyCostOptimized,
+		EnableFallbackRouting:  true,
+		EnableLoadBalancing:    true,
+		EnableABTesting:        false,
+		MaxConcurrentProviders: 3,
+
 		// Health check settings
-		HealthCheckInterval:        60, // 1 minute
-		ProviderTimeoutSeconds:     30,
-		EnableHealthChecks:         true,
-		
+		HealthCheckInterval:    60, // 1 minute
+		ProviderTimeoutSeconds: 30,
+		EnableHealthChecks:     true,
+
 		// Analytics settings
-		EnableUsageTracking:        true,
-		EnableMetricsCollection:    true,
-		BatchSizeForAnalytics:      100,
+		EnableUsageTracking:     true,
+		EnableMetricsCollection: true,
+		BatchSizeForAnalytics:   100,
 	}
 }
 
@@ -198,7 +199,7 @@ func NewHealthChecker(services *Services, logger *logrus.Logger) *HealthChecker 
 func (h *HealthChecker) CheckHealth() map[string]interface{} {
 	healthStatus := map[string]interface{}{
 		"gateway_service": "healthy",
-		"routing_service": "healthy", 
+		"routing_service": "healthy",
 		"cost_service":    "healthy",
 		"overall":         "healthy",
 		"timestamp":       "now", // Would use actual timestamp
@@ -231,12 +232,12 @@ func NewMetricsCollector(services *Services, logger *logrus.Logger) *MetricsColl
 // CollectMetrics gathers metrics from all gateway services
 func (m *MetricsCollector) CollectMetrics() map[string]interface{} {
 	metrics := map[string]interface{}{
-		"requests_processed":     0,
-		"total_cost_calculated":  0.0,
-		"providers_routed":       0,
-		"errors_occurred":        0,
-		"average_response_time":  0.0,
-		"cache_hit_ratio":        0.0,
+		"requests_processed":    0,
+		"total_cost_calculated": 0.0,
+		"providers_routed":      0,
+		"errors_occurred":       0,
+		"average_response_time": 0.0,
+		"cache_hit_ratio":       0.0,
 	}
 
 	// TODO: Implement actual metrics collection
@@ -256,7 +257,7 @@ func NewServiceInitializer(config *ServiceConfig, logger *logrus.Logger) *Servic
 	if config == nil {
 		config = DefaultServiceConfig()
 	}
-	
+
 	return &ServiceInitializer{
 		config: config,
 		logger: logger,

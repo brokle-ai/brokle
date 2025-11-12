@@ -119,7 +119,7 @@ func (p *OpenAIProvider) transformMessageContent(content interface{}) string {
 	if content == nil {
 		return ""
 	}
-	
+
 	switch v := content.(type) {
 	case string:
 		return v
@@ -154,7 +154,7 @@ func (p *OpenAIProvider) transformCompletionRequest(req *providers.CompletionReq
 		TopP:             p.derefFloat32(req.TopP),
 		N:                p.derefInt(req.N),
 		Stream:           req.Stream,
-		LogProbs:         p.derefInt(req.Logprobs),  // Fixed to dereference pointer
+		LogProbs:         p.derefInt(req.Logprobs), // Fixed to dereference pointer
 		Echo:             req.Echo,
 		Stop:             req.Stop,
 		PresencePenalty:  p.derefFloat32(req.PresencePenalty),
@@ -317,13 +317,13 @@ func (p *OpenAIProvider) transformChatCompletionStreamResponse(resp *openai.Chat
 							ID:   tc.ID,
 							Type: string(tc.Type),
 						}
-						
-					if tc.Function.Name != "" || tc.Function.Arguments != "" {
-						result.Choices[i].Delta.ToolCalls[j].Function = providers.FunctionCall{
-							Name:      tc.Function.Name,
-							Arguments: tc.Function.Arguments,
+
+						if tc.Function.Name != "" || tc.Function.Arguments != "" {
+							result.Choices[i].Delta.ToolCalls[j].Function = providers.FunctionCall{
+								Name:      tc.Function.Name,
+								Arguments: tc.Function.Arguments,
+							}
 						}
-					}
 					}
 				}
 			}
@@ -413,13 +413,13 @@ func (p *OpenAIProvider) transformEmbeddingResponse(resp *openai.EmbeddingRespon
 
 func (p *OpenAIProvider) transformModel(model *openai.Model) *providers.Model {
 	result := &providers.Model{
-		ID      : model.ID,
-		Object  : model.Object,
+		ID:     model.ID,
+		Object: model.Object,
 		// Created field doesn't exist in openai.Model, use 0 as default
-		Created : 0,
-		OwnedBy : model.OwnedBy,
-		Root    : model.Root,
-		Parent  : &model.Parent,
+		Created: 0,
+		OwnedBy: model.OwnedBy,
+		Root:    model.Root,
+		Parent:  &model.Parent,
 	}
 
 	// Transform permissions if present
@@ -432,8 +432,8 @@ func (p *OpenAIProvider) transformModel(model *openai.Model) *providers.Model {
 				groupStr = &groupVal
 			}
 			result.Permission[i] = providers.ModelPermission{
-				ID:                 perm.ID,
-				Object:             perm.Object,
+				ID:     perm.ID,
+				Object: perm.Object,
 				// Created field doesn't exist in openai.Permission, use 0 as default
 				Created:            0,
 				AllowCreateEngine:  perm.AllowCreateEngine,

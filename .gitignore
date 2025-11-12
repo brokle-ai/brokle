@@ -123,6 +123,7 @@ temp/
 # Editor directories and files
 .vscode/
 .idea/
+.serena/
 *.swp
 *.swo
 *~

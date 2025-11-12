@@ -1155,9 +1155,6 @@ definitions:
       name:
         example: Acme Corporation
         type: string
-      owner_id:
-        example: usr_1234567890
-        type: string
       plan:
         example: pro
         type: string
@@ -1471,14 +1468,128 @@ definitions:
           $ref: '#/definitions/observability.ResourceSpan'
         type: array
     type: object
-  observability.Observation:
+  observability.OTLPSpan:
+    properties:
+      attributes:
+        items:
+          $ref: '#/definitions/observability.KeyValue'
+        type: array
+      endTimeUnixNano: {}
+      events:
+        items:
+          $ref: '#/definitions/observability.Event'
+        type: array
+      kind:
+        description: 0=UNSPECIFIED, 1=INTERNAL, 2=SERVER, 3=CLIENT, 4=PRODUCER, 5=CONSUMER
+        type: integer
+      name:
+        type: string
+      parentSpanId:
+        description: Can be Buffer or hex string
+      spanId:
+        description: Can be Buffer or hex string
+      startTimeUnixNano:
+        description: Can be int64 or {low, high}
+      status:
+        $ref: '#/definitions/observability.Status'
+      traceId:
+        description: Can be Buffer or hex string
+    type: object
+  observability.Resource:
+    properties:
+      attributes:
+        items:
+          $ref: '#/definitions/observability.KeyValue'
+        type: array
+    type: object
+  observability.ResourceSpan:
+    properties:
+      resource:
+        $ref: '#/definitions/observability.Resource'
+      scopeSpans:
+        items:
+          $ref: '#/definitions/observability.ScopeSpan'
+        type: array
+    type: object
+  observability.Scope:
+    properties:
+      attributes:
+        items:
+          $ref: '#/definitions/observability.KeyValue'
+        type: array
+      name:
+        type: string
+      version:
+        type: string
+    type: object
+  observability.ScopeSpan:
+    properties:
+      scope:
+        $ref: '#/definitions/observability.Scope'
+      spans:
+        items:
+          $ref: '#/definitions/observability.OTLPSpan'
+        type: array
+    type: object
+  observability.Score:
+    properties:
+      author_user_id:
+        type: string
+      comment:
+        type: string
+      data_type:
+        description: NUMERIC, CATEGORICAL, BOOLEAN
+        type: string
+      evaluator_config:
+        additionalProperties:
+          type: string
+        type: object
+      evaluator_name:
+        description: Evaluator information
+        type: string
+      evaluator_version:
+        type: string
+      event_ts:
+        description: ReplacingMergeTree fields (using event_ts for deduplication)
+        type: string
+      id:
+        description: Identifiers
+        type: string
+      is_deleted:
+        type: boolean
+      name:
+        description: Score data
+        type: string
+      project_id:
+        type: string
+      source:
+        description: Metadata
+        type: string
+      span_id:
+        description: OTEL span_id
+        type: string
+      string_value:
+        type: string
+      timestamp:
+        description: Timestamp
+        type: string
+      trace_id:
+        description: OTEL trace_id
+        type: string
+      value:
+        type: number
+      version:
+        description: Application versioning (experiment tracking)
+        type: string
+    type: object
+  observability.Span:
     properties:
       attributes:
         description: OTEL attributes (JSON string for flexible key-value pairs)
         type: string
-      child_observations:
+      child_spans:
         items:
-          $ref: '#/definitions/observability.Observation'
+          $ref: '#/definitions/observability.Span'
         type: array
       cost_details:
         additionalProperties:
@@ -1523,7 +1634,7 @@ definitions:
         type: string
       output:
         type: string
-      parent_observation_id:
+      parent_span_id:
         description: NULL for root spans
         type: string
       project_id:
@@ -1582,120 +1693,6 @@ definitions:
         description: Application versioning (experiment tracking)
         type: string
     type: object
-  observability.Resource:
-    properties:
-      attributes:
-        items:
-          $ref: '#/definitions/observability.KeyValue'
-        type: array
-    type: object
-  observability.ResourceSpan:
-    properties:
-      resource:
-        $ref: '#/definitions/observability.Resource'
-      scopeSpans:
-        items:
-          $ref: '#/definitions/observability.ScopeSpan'
-        type: array
-    type: object
-  observability.Scope:
-    properties:
-      attributes:
-        items:
-          $ref: '#/definitions/observability.KeyValue'
-        type: array
-      name:
-        type: string
-      version:
-        type: string
-    type: object
-  observability.ScopeSpan:
-    properties:
-      scope:
-        $ref: '#/definitions/observability.Scope'
-      spans:
-        items:
-          $ref: '#/definitions/observability.Span'
-        type: array
-    type: object
-  observability.Score:
-    properties:
-      author_user_id:
-        type: string
-      comment:
-        type: string
-      data_type:
-        description: NUMERIC, CATEGORICAL, BOOLEAN
-        type: string
-      evaluator_config:
-        additionalProperties:
-          type: string
-        type: object
-      evaluator_name:
-        description: Evaluator information
-        type: string
-      evaluator_version:
-        type: string
-      event_ts:
-        description: ReplacingMergeTree fields (using event_ts for deduplication)
-        type: string
-      id:
-        description: Identifiers
-        type: string
-      is_deleted:
-        type: boolean
-      name:
-        description: Score data
-        type: string
-      observation_id:
-        description: OTEL span_id
-        type: string
-      project_id:
-        type: string
-      source:
-        description: Metadata
-        type: string
-      string_value:
-        type: string
-      timestamp:
-        description: Timestamp
-        type: string
-      trace_id:
-        description: OTEL trace_id
-        type: string
-      value:
-        type: number
-      version:
-        description: Application versioning (experiment tracking)
-        type: string
-    type: object
-  observability.Span:
-    properties:
-      attributes:
-        items:
-          $ref: '#/definitions/observability.KeyValue'
-        type: array
-      endTimeUnixNano: {}
-      events:
-        items:
-          $ref: '#/definitions/observability.Event'
-        type: array
-      kind:
-        description: 0=UNSPECIFIED, 1=INTERNAL, 2=SERVER, 3=CLIENT, 4=PRODUCER, 5=CONSUMER
-        type: integer
-      name:
-        type: string
-      parentSpanId:
-        description: Can be Buffer or hex string
-      spanId:
-        description: Can be Buffer or hex string
-      startTimeUnixNano:
-        description: Can be int64 or {low, high}
-      status:
-        $ref: '#/definitions/observability.Status'
-      traceId:
-        description: Can be Buffer or hex string
-    type: object
   observability.Status:
     properties:
       code:
@@ -1741,13 +1738,6 @@ definitions:
       name:
         description: Trace metadata
         type: string
-      observation_count:
-        type: integer
-      observations:
-        description: Populated from joins (not in ClickHouse)
-        items:
-          $ref: '#/definitions/observability.Observation'
-        type: array
       output:
         type: string
       project_id:
@@ -1768,6 +1758,13 @@ definitions:
       session_id:
         description: Virtual session (attribute only, not FK)
         type: string
+      span_count:
+        type: integer
+      spans:
+        description: Populated from joins (not in ClickHouse)
+        items:
+          $ref: '#/definitions/observability.Span'
+        type: array
       start_time:
         description: Timing
         type: string
@@ -1782,7 +1779,7 @@ definitions:
           type: string
         type: array
       total_cost:
-        description: Aggregate metrics (calculated from observations)
+        description: Aggregate metrics (calculated from spans)
         type: number
       total_tokens:
         type: integer
@@ -1955,9 +1952,6 @@ definitions:
         type: string
       organization_id:
         example: org_1234567890
-        type: string
-      owner_id:
-        example: usr_1234567890
         type: string
       status:
         example: active
@@ -2495,180 +2489,6 @@ paths:
       summary: Get model analytics
       tags:
       - Analytics
-  /api/v1/analytics/observations:
-    get:
-      consumes:
-      - application/json
-      description: Retrieve paginated list of observations
-      parameters:
-      - description: Filter by trace ID
-        in: query
-        name: trace_id
-        type: string
-      - description: Filter by observation type
-        in: query
-        name: type
-        type: string
-      - description: Filter by model
-        in: query
-        name: model
-        type: string
-      - description: Filter by level
-        in: query
-        name: level
-        type: string
-      - description: Limit (default 50, max 1000)
-        in: query
-        name: limit
-        type: integer
-      - description: Offset (default 0)
-        in: query
-        name: offset
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: List of observations
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                data:
-                  items:
-                    $ref: '#/definitions/observability.Observation'
-                  type: array
-              type: object
-        "400":
-          description: Invalid parameters
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-        "500":
-          description: Internal server error
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-      security:
-      - BearerAuth: []
-      summary: List observations with filtering
-      tags:
-      - Dashboard - Analytics
-  /api/v1/analytics/observations/{id}:
-    get:
-      consumes:
-      - application/json
-      description: Retrieve detailed observation information
-      parameters:
-      - description: Observation ID
-        in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Observation details
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/observability.Observation'
-              type: object
-        "404":
-          description: Observation not found
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-        "500":
-          description: Internal server error
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-      security:
-      - BearerAuth: []
-      summary: Get observation by ID
-      tags:
-      - Dashboard - Analytics
-    put:
-      consumes:
-      - application/json
-      description: Update an existing observation (for corrections/enrichment after
-        initial creation)
-      parameters:
-      - description: Observation ID
-        in: path
-        name: id
-        required: true
-        type: string
-      - description: Updated observation data
-        in: body
-        name: observation
-        required: true
-        schema:
-          $ref: '#/definitions/observability.Observation'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Updated observation
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/observability.Observation'
-              type: object
-        "400":
-          description: Invalid request
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-        "404":
-          description: Observation not found
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-        "500":
-          description: Internal server error
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-      security:
-      - BearerAuth: []
-      summary: Update observation by ID
-      tags:
-      - Dashboard - Analytics
   /api/v1/analytics/overview:
     get:
       consumes:
@@ -2894,9 +2714,9 @@ paths:
         in: query
         name: trace_id
         type: string
-      - description: Filter by observation ID
+      - description: Filter by span ID
         in: query
-        name: observation_id
+        name: span_id
         type: string
       - description: Filter by session ID
         in: query
@@ -3064,6 +2884,180 @@ paths:
       security:
       - BearerAuth: []
       summary: Update quality score by ID
+      tags:
+      - Dashboard - Analytics
+  /api/v1/analytics/spans:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve paginated list of spans
+      parameters:
+      - description: Filter by trace ID
+        in: query
+        name: trace_id
+        type: string
+      - description: Filter by span type
+        in: query
+        name: type
+        type: string
+      - description: Filter by model
+        in: query
+        name: model
+        type: string
+      - description: Filter by level
+        in: query
+        name: level
+        type: string
+      - description: Limit (default 50, max 1000)
+        in: query
+        name: limit
+        type: integer
+      - description: Offset (default 0)
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of spans
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/observability.Span'
+                  type: array
+              type: object
+        "400":
+          description: Invalid parameters
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: List spans with filtering
+      tags:
+      - Dashboard - Analytics
+  /api/v1/analytics/spans/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve detailed span information
+      parameters:
+      - description: Span ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Span details
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/observability.Span'
+              type: object
+        "404":
+          description: Span not found
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: Get span by ID
+      tags:
+      - Dashboard - Analytics
+    put:
+      consumes:
+      - application/json
+      description: Update an existing span (for corrections/enrichment after initial
+        creation)
+      parameters:
+      - description: Span ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated span data
+        in: body
+        name: span
+        required: true
+        schema:
+          $ref: '#/definitions/observability.Span'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Updated span
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/observability.Span'
+              type: object
+        "400":
+          description: Invalid request
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "404":
+          description: Span not found
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: Update span by ID
       tags:
       - Dashboard - Analytics
   /api/v1/analytics/traces:
@@ -3256,52 +3250,6 @@ paths:
       summary: Update trace by ID
       tags:
       - Dashboard - Analytics
-  /api/v1/analytics/traces/{id}/observations:
-    get:
-      consumes:
-      - application/json
-      description: Retrieve trace with all observations in hierarchical structure
-      parameters:
-      - description: Trace ID
-        in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Trace with observations
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/observability.Trace'
-              type: object
-        "404":
-          description: Trace not found
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-        "500":
-          description: Internal server error
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-      security:
-      - BearerAuth: []
-      summary: Get trace with observations tree
-      tags:
-      - Dashboard - Analytics
   /api/v1/analytics/traces/{id}/scores:
     get:
       consumes:
@@ -3346,6 +3294,52 @@ paths:
       security:
       - BearerAuth: []
       summary: Get trace with quality scores
+      tags:
+      - Dashboard - Analytics
+  /api/v1/analytics/traces/{id}/spans:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve trace with all spans in hierarchical structure
+      parameters:
+      - description: Trace ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Trace with spans
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/observability.Trace'
+              type: object
+        "404":
+          description: Trace not found
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: Get trace with spans tree
       tags:
       - Dashboard - Analytics
   /api/v1/auth/change-password:

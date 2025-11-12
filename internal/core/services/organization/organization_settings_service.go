@@ -4,8 +4,8 @@ import (
 	"context"
 
 	orgDomain "brokle/internal/core/domain/organization"
-	"brokle/pkg/ulid"
 	appErrors "brokle/pkg/errors"
+	"brokle/pkg/ulid"
 )
 
 // organizationSettingsService implements orgDomain.OrganizationSettingsService
@@ -51,7 +51,6 @@ func (s *organizationSettingsService) CreateSetting(ctx context.Context, orgID u
 		return nil, appErrors.NewInternalError("Failed to save setting", err)
 	}
 
-
 	return setting, nil
 }
 
@@ -87,7 +86,6 @@ func (s *organizationSettingsService) UpdateSetting(ctx context.Context, orgID u
 		return appErrors.NewInternalError("Failed to update setting", err)
 	}
 
-
 	return nil
 }
 
@@ -108,7 +106,6 @@ func (s *organizationSettingsService) DeleteSetting(ctx context.Context, orgID u
 		return appErrors.NewInternalError("Failed to delete setting", err)
 	}
 
-
 	return nil
 }
 
@@ -123,7 +120,6 @@ func (s *organizationSettingsService) UpsertSetting(ctx context.Context, orgID u
 	if err != nil {
 		return nil, appErrors.NewInternalError("Failed to upsert setting", err)
 	}
-
 
 	return setting, nil
 }
@@ -147,7 +143,6 @@ func (s *organizationSettingsService) CreateMultipleSettings(ctx context.Context
 	if err := s.settingsRepo.CreateMultiple(ctx, settingEntities); err != nil {
 		return appErrors.NewInternalError("Failed to create multiple settings", err)
 	}
-
 
 	return nil
 }
@@ -182,7 +177,6 @@ func (s *organizationSettingsService) DeleteMultipleSettings(ctx context.Context
 	if err := s.settingsRepo.DeleteMultiple(ctx, orgID, keys); err != nil {
 		return appErrors.NewInternalError("Failed to delete multiple settings", err)
 	}
-
 
 	return nil
 }
@@ -233,7 +227,6 @@ func (s *organizationSettingsService) ResetToDefaults(ctx context.Context, orgID
 		}
 	}
 
-
 	return nil
 }
 
@@ -248,7 +241,6 @@ func (s *organizationSettingsService) ExportSettings(ctx context.Context, orgID 
 	if err != nil {
 		return nil, appErrors.NewInternalError("Failed to export settings", err)
 	}
-
 
 	return settings, nil
 }
@@ -268,7 +260,5 @@ func (s *organizationSettingsService) ImportSettings(ctx context.Context, orgID 
 		}
 	}
 
-
 	return nil
 }
-

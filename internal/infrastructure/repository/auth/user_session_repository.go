@@ -152,7 +152,7 @@ func (r *userSessionRepository) MarkAsUsed(ctx context.Context, id ulid.ULID) er
 // GetByDeviceInfo retrieves sessions by user ID and device info
 func (r *userSessionRepository) GetByDeviceInfo(ctx context.Context, userID ulid.ULID, deviceInfo interface{}) ([]*authDomain.UserSession, error) {
 	var sessions []*authDomain.UserSession
-	
+
 	// Convert device info to JSON for comparison
 	deviceJSON, err := json.Marshal(deviceInfo)
 	if err != nil {

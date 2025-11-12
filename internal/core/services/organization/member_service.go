@@ -8,8 +8,8 @@ import (
 	authDomain "brokle/internal/core/domain/auth"
 	orgDomain "brokle/internal/core/domain/organization"
 	userDomain "brokle/internal/core/domain/user"
-	"brokle/pkg/ulid"
 	appErrors "brokle/pkg/errors"
+	"brokle/pkg/ulid"
 )
 
 // memberService implements the orgDomain.MemberService interface
@@ -71,7 +71,6 @@ func (s *memberService) AddMember(ctx context.Context, orgID, userID, roleID uli
 		return appErrors.NewInternalError("Failed to add member", err)
 	}
 
-
 	return nil
 }
 
@@ -114,7 +113,6 @@ func (s *memberService) RemoveMember(ctx context.Context, orgID, userID ulid.ULI
 		}
 	}
 
-
 	return nil
 }
 
@@ -155,7 +153,6 @@ func (s *memberService) UpdateMemberRole(ctx context.Context, orgID, userID, new
 	if err != nil {
 		return appErrors.NewInternalError("Failed to update member role", err)
 	}
-
 
 	return nil
 }

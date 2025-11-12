@@ -174,11 +174,11 @@ rbac:
 
     # Traces Management (5 scopes)
     - name: "traces:read"
-      description: "View traces and observations"
+      description: "View traces and spans"
     - name: "traces:create"
       description: "Create and ingest traces"
     - name: "traces:delete"
-      description: "Delete traces and observations"
+      description: "Delete traces and spans"
     - name: "traces:export"
       description: "Export trace data"
     - name: "traces:share"

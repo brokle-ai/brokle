@@ -52,14 +52,14 @@ func (s *scopeService) GetUserScopes(
 ) (*authDomain.ScopeResolution, error) {
 
 	resolution := &authDomain.ScopeResolution{
-		UserID:              userID,
-		OrganizationID:      orgID,
-		ProjectID:           projectID,
-		GlobalScopes:        []string{},
-		OrganizationScopes:  []string{},
-		ProjectScopes:       []string{},
-		EffectiveScopes:     []string{},
-		EffectiveScopesSet:  make(map[string]bool),
+		UserID:             userID,
+		OrganizationID:     orgID,
+		ProjectID:          projectID,
+		GlobalScopes:       []string{},
+		OrganizationScopes: []string{},
+		ProjectScopes:      []string{},
+		EffectiveScopes:    []string{},
+		EffectiveScopesSet: make(map[string]bool),
 	}
 
 	// 1. Get global scopes (future: system admin check)

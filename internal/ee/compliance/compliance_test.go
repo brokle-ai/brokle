@@ -58,13 +58,13 @@ func TestStubCompliance(t *testing.T) {
 func TestComplianceInterface(t *testing.T) {
 	// Test that our stub correctly implements the interface
 	var compliance Compliance = New()
-	
+
 	// This test will fail to compile if the interface is not correctly implemented
 	assert.NotNil(t, compliance)
-	
+
 	// Test all interface methods are available
 	ctx := context.Background()
-	
+
 	// These calls should not panic
 	assert.NotPanics(t, func() {
 		compliance.ValidateCompliance(ctx, nil)
@@ -79,32 +79,32 @@ func TestComplianceInterface(t *testing.T) {
 // Test that would be used for the real enterprise implementation
 func TestEnterpriseCompliance_Simulation(t *testing.T) {
 	t.Skip("This test simulates what enterprise compliance would look like")
-	
+
 	// In the real enterprise implementation, this would test:
 	// - Real SOC2 compliance validation
 	// - Actual PII anonymization
 	// - Real audit report generation with detailed logs
 	// - HIPAA compliance checks with actual rules
 	// - GDPR compliance with data retention policies
-	
+
 	// Example of what the real test might look like:
 	/*
-	compliance := NewEnterpriseCompliance(config)
-	
-	// Test real PII anonymization
-	data := map[string]interface{}{
-		"email": "user@example.com",
-		"ssn": "123-45-6789",
-	}
-	
-	anonymized, err := compliance.AnonymizePII(ctx, data)
-	assert.NoError(t, err)
-	assert.NotEqual(t, data["email"], anonymized["email"]) // Should be anonymized
-	assert.NotEqual(t, data["ssn"], anonymized["ssn"])     // Should be anonymized
-	
-	// Test real compliance checks
-	soc2, err := compliance.CheckSOC2Compliance(ctx)
-	assert.NoError(t, err)
-	assert.True(t, soc2) // Real implementation would return true if compliant
+		compliance := NewEnterpriseCompliance(config)
+
+		// Test real PII anonymization
+		data := map[string]interface{}{
+			"email": "user@example.com",
+			"ssn": "123-45-6789",
+		}
+
+		anonymized, err := compliance.AnonymizePII(ctx, data)
+		assert.NoError(t, err)
+		assert.NotEqual(t, data["email"], anonymized["email"]) // Should be anonymized
+		assert.NotEqual(t, data["ssn"], anonymized["ssn"])     // Should be anonymized
+
+		// Test real compliance checks
+		soc2, err := compliance.CheckSOC2Compliance(ctx)
+		assert.NoError(t, err)
+		assert.True(t, soc2) // Real implementation would return true if compliant
 	*/
 }

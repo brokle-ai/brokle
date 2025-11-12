@@ -28,14 +28,14 @@ func NewOTLPConverterService(logger *logrus.Logger) *OTLPConverterService {
 // brokleEvent represents an internal converted event (before domain conversion)
 type brokleEvent struct {
 	// Internal tracking
-	EventID   string                 `json:"event_id"`
+	EventID string `json:"event_id"`
 
 	// OTLP identity (for deduplication)
-	SpanID    string                 `json:"span_id"`
-	TraceID   string                 `json:"trace_id"`
+	SpanID  string `json:"span_id"`
+	TraceID string `json:"trace_id"`
 
 	// Event data
-	EventType string                 `json:"event_type"` // "trace", "observation"
+	EventType string                 `json:"event_type"` // "trace", "span"
 	Payload   map[string]interface{} `json:"payload"`
 	Timestamp *int64                 `json:"timestamp,omitempty"`
 }
@@ -94,7 +94,7 @@ func isRootSpanCheck(parentSpanID interface{}) bool {
 }
 
 // ConvertOTLPToBrokleEvents converts OTLP resourceSpans to Brokle telemetry events
-// For root spans, creates both trace AND observation events
+// For root spans, creates both trace AND span events
 func (s *OTLPConverterService) ConvertOTLPToBrokleEvents(otlpReq *observability.OTLPRequest) ([]*observability.TelemetryEventRequest, error) {
 	var internalEvents []*brokleEvent
 	tracesCreated := make(map[string]bool) // Track which traces we've created
@@ -127,7 +127,7 @@ func (s *OTLPConverterService) ConvertOTLPToBrokleEvents(otlpReq *observability.
 					tracesCreated[traceID] = true
 				}
 
-				// Convert OTLP span to Brokle observation event
+				// Convert OTLP span to Brokle span event
 				obsEvent, err := s.convertSpanToEvent(span, resourceAttrs, scopeAttrs, scopeSpan.Scope)
 				if err != nil {
 					return nil, fmt.Errorf("failed to convert span: %w", err)
@@ -142,7 +142,7 @@ func (s *OTLPConverterService) ConvertOTLPToBrokleEvents(otlpReq *observability.
 }
 
 // createTraceEvent creates a trace event from a root span
-func (s *OTLPConverterService) createTraceEvent(span observability.Span, resourceAttrs, scopeAttrs map[string]interface{}, scope *observability.Scope, traceID string) (*brokleEvent, error) {
+func (s *OTLPConverterService) createTraceEvent(span observability.OTLPSpan, resourceAttrs, scopeAttrs map[string]interface{}, scope *observability.Scope, traceID string) (*brokleEvent, error) {
 	// Extract span attributes
 	spanAttrs := extractAttributesFromKeyValues(span.Attributes)
 
@@ -232,8 +232,8 @@ func (s *OTLPConverterService) createTraceEvent(span observability.Span, resourc
 	// Create trace event
 	event := &brokleEvent{
 		EventID:   ulid.New().String(),
-		SpanID:    "",        // Traces don't have span_id
-		TraceID:   traceID,   // OTLP trace_id (32 hex chars)
+		SpanID:    "",      // Traces don't have span_id
+		TraceID:   traceID, // OTLP trace_id (32 hex chars)
 		EventType: "trace",
 		Payload:   payload,
 		Timestamp: func() *int64 {
@@ -246,7 +246,7 @@ func (s *OTLPConverterService) createTraceEvent(span observability.Span, resourc
 }
 
 // convertSpanToEvent converts a single OTLP span to a Brokle telemetry event
-func (s *OTLPConverterService) convertSpanToEvent(span observability.Span, resourceAttrs, scopeAttrs map[string]interface{}, scope *observability.Scope) (*brokleEvent, error) {
+func (s *OTLPConverterService) convertSpanToEvent(span observability.OTLPSpan, resourceAttrs, scopeAttrs map[string]interface{}, scope *observability.Scope) (*brokleEvent, error) {
 	// Convert OTLP IDs to hex strings
 	traceID, err := convertTraceID(span.TraceID)
 	if err != nil {
@@ -288,17 +288,17 @@ func (s *OTLPConverterService) convertSpanToEvent(span observability.Span, resou
 	// Convert OTEL status to string
 	statusCode := convertStatusCode(span.Status)
 
-	// Build observation payload
+	// Build span payload
 	payload := map[string]interface{}{
-		"id":                    spanID,
-		"trace_id":              traceID,
-		"parent_observation_id": parentSpanID,
-		"name":                  span.Name,
-		"span_kind":             spanKind,
-		"type":                  brokleType,
-		"start_time":            startTime.Format(time.RFC3339Nano),
-		"status_code":           statusCode,
-		"attributes":            marshalAttributes(allAttrs),
+		"id":             spanID,
+		"trace_id":       traceID,
+		"parent_span_id": parentSpanID,
+		"name":           span.Name,
+		"span_kind":      spanKind,
+		"type":           brokleType,
+		"start_time":     startTime.Format(time.RFC3339Nano),
+		"status_code":    statusCode,
+		"attributes":     marshalAttributes(allAttrs),
 	}
 
 	if endTime != nil {
@@ -323,12 +323,12 @@ func (s *OTLPConverterService) convertSpanToEvent(span observability.Span, resou
 	otelMetadata := buildOTELMetadata(resourceAttrs, scopeAttrs, scope)
 	payload["metadata"] = otelMetadata
 
-	// Create observation event
+	// Create span event
 	event := &brokleEvent{
 		EventID:   ulid.New().String(),
-		SpanID:    spanID,    // OTLP span_id (16 hex chars)
-		TraceID:   traceID,   // OTLP trace_id (32 hex chars)
-		EventType: "observation",
+		SpanID:    spanID,  // OTLP span_id (16 hex chars)
+		TraceID:   traceID, // OTLP trace_id (32 hex chars)
+		EventType: "span",
 		Payload:   payload,
 		Timestamp: func() *int64 {
 			ts := startTime.Unix()
@@ -756,8 +756,8 @@ func convertToDomainEvents(events []*brokleEvent) []*observability.TelemetryEven
 		eventID, _ := ulid.Parse(e.EventID)
 		result[i] = &observability.TelemetryEventRequest{
 			EventID:   eventID,
-			SpanID:    e.SpanID,    // OTLP span_id (populated from brokleEvent)
-			TraceID:   e.TraceID,   // OTLP trace_id (populated from brokleEvent)
+			SpanID:    e.SpanID,  // OTLP span_id (populated from brokleEvent)
+			TraceID:   e.TraceID, // OTLP trace_id (populated from brokleEvent)
 			EventType: observability.TelemetryEventType(e.EventType),
 			Payload:   e.Payload,
 			Timestamp: func() *time.Time {

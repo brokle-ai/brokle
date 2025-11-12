@@ -38,11 +38,11 @@ type ScopeResolution struct {
 	ProjectID      *ulid.ULID `json:"project_id,omitempty"`      // nil = no project context
 
 	// Resolved scopes by level
-	GlobalScopes        []string `json:"global_scopes"`         // Platform admin scopes (future)
-	OrganizationScopes  []string `json:"organization_scopes"`   // Org membership scopes
-	ProjectScopes       []string `json:"project_scopes"`        // Project membership scopes
-	EffectiveScopes     []string `json:"effective_scopes"`      // Combined (global + org + project)
-	EffectiveScopesSet  map[string]bool `json:"-"`              // For O(1) lookup (not serialized)
+	GlobalScopes       []string        `json:"global_scopes"`       // Platform admin scopes (future)
+	OrganizationScopes []string        `json:"organization_scopes"` // Org membership scopes
+	ProjectScopes      []string        `json:"project_scopes"`      // Project membership scopes
+	EffectiveScopes    []string        `json:"effective_scopes"`    // Combined (global + org + project)
+	EffectiveScopesSet map[string]bool `json:"-"`                   // For O(1) lookup (not serialized)
 }
 
 // HasScope checks if a specific scope exists in the resolution (O(1) lookup)
@@ -93,11 +93,11 @@ func (sr *ScopeResolution) GetScopesByLevel(level ScopeLevel) []string {
 
 // ScopeCategory groups related scopes for UI display
 type ScopeCategory struct {
-	Name        string   `json:"name"`        // "organization", "members", "billing", etc.
-	DisplayName string   `json:"display_name"` // "Organization Management"
-	Description string   `json:"description"`
-	Scopes      []string `json:"scopes"`      // List of scopes in this category
-	Level       ScopeLevel `json:"level"`      // organization or project
+	Name        string     `json:"name"`         // "organization", "members", "billing", etc.
+	DisplayName string     `json:"display_name"` // "Organization Management"
+	Description string     `json:"description"`
+	Scopes      []string   `json:"scopes"` // List of scopes in this category
+	Level       ScopeLevel `json:"level"`  // organization or project
 }
 
 // Standard scope categories for UI grouping

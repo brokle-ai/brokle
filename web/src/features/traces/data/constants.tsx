@@ -24,7 +24,7 @@ export const environments = [
   { value: 'development', label: 'Development' },
 ]
 
-export const observationTypes = [
+export const spanTypes = [
   { value: 'generation', label: 'Generation' },
   { value: 'tool', label: 'Tool' },
   { value: 'retrieval', label: 'Retrieval' },

@@ -373,7 +373,7 @@ func (r *ProviderRepository) ListByStatus(ctx context.Context, isEnabled bool, l
 // SearchProviders searches providers with filters
 func (r *ProviderRepository) SearchProviders(ctx context.Context, filter *gateway.ProviderFilter) ([]*gateway.Provider, int, error) {
 	whereClause, args := r.buildWhereClause(filter)
-	
+
 	// Count query
 	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM gateway_providers %s", whereClause)
 	var totalCount int
@@ -410,7 +410,7 @@ func (r *ProviderRepository) SearchProviders(ctx context.Context, filter *gatewa
 func (r *ProviderRepository) CountProviders(ctx context.Context, filter *gateway.ProviderFilter) (int64, error) {
 	whereClause, args := r.buildWhereClause(filter)
 	query := fmt.Sprintf("SELECT COUNT(*) FROM gateway_providers %s", whereClause)
-	
+
 	var count int64
 	err := r.db.WithContext(ctx).Raw(query, args...).Scan(&count).Error
 	if err != nil {
@@ -451,7 +451,7 @@ func (r *ProviderRepository) DeleteBatch(ctx context.Context, ids []ulid.ULID) e
 	}
 
 	query := `DELETE FROM gateway_providers WHERE id = ANY($1)`
-	
+
 	// Convert ULIDs to strings for PostgreSQL array
 	stringIDs := make([]string, len(ids))
 	for i, id := range ids {
@@ -469,7 +469,7 @@ func (r *ProviderRepository) DeleteBatch(ctx context.Context, ids []ulid.ULID) e
 // UpdateHealthStatus updates the health status of a provider
 func (r *ProviderRepository) UpdateHealthStatus(ctx context.Context, providerID ulid.ULID, status gateway.HealthStatus) error {
 	query := `UPDATE gateway_providers SET updated_at = $1 WHERE id = $2`
-	
+
 	result := r.db.WithContext(ctx).Exec(query, time.Now(), providerID)
 	if result.Error != nil {
 		return fmt.Errorf("failed to update provider health status: %w", result.Error)

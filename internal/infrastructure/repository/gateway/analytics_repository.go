@@ -279,7 +279,7 @@ func (r *Repository) GetUsageStats(ctx context.Context, orgID ulid.ULID, period 
 		var (
 			id, orgIDStr, providerIDStr, modelIDStr string
 			reqTypeStr                              string
-			minDurationNs, maxDurationNs                    int64
+			minDurationNs, maxDurationNs            int64
 		)
 
 		err := rows.Scan(
@@ -366,9 +366,9 @@ func (r *Repository) GetCostStats(ctx context.Context, orgID ulid.ULID, period s
 	for rows.Next() {
 		metric := &analytics.CostMetric{}
 		var (
-			id, reqIDStr, orgIDStr string
-			providerIDStr, modelIDStr      string
-			reqTypeStr                     string
+			id, reqIDStr, orgIDStr    string
+			providerIDStr, modelIDStr string
+			reqTypeStr                string
 		)
 
 		err := rows.Scan(

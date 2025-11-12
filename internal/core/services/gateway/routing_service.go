@@ -128,9 +128,9 @@ func (r *RoutingService) RouteByLoad(ctx context.Context, projectID ulid.ULID, m
 // GetFallbackProvider gets a fallback provider when primary fails
 func (r *RoutingService) GetFallbackProvider(ctx context.Context, projectID ulid.ULID, failedProviderID ulid.ULID, modelName string) (*gateway.RoutingDecision, error) {
 	logger := r.logger.WithFields(logrus.Fields{
-		"project_id":          projectID,
-		"failed_provider_id":  failedProviderID,
-		"model_name":          modelName,
+		"project_id":         projectID,
+		"failed_provider_id": failedProviderID,
+		"model_name":         modelName,
 	})
 
 	logger.Info("Getting fallback provider")

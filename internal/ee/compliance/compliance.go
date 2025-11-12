@@ -41,7 +41,7 @@ func (s *StubCompliance) CheckSOC2Compliance(ctx context.Context) (bool, error) 
 }
 
 func (s *StubCompliance) CheckHIPAACompliance(ctx context.Context) (bool, error) {
-	// Stub: Always returns false for compliance checks  
+	// Stub: Always returns false for compliance checks
 	return false, nil
 }
 

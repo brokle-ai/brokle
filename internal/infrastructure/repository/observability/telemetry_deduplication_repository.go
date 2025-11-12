@@ -280,7 +280,7 @@ func (r *telemetryDeduplicationRepository) GetByEventID(ctx context.Context, ded
 	return &observability.TelemetryEventDeduplication{
 		EventID:     dedupID,
 		BatchID:     batchID,
-		ProjectID:   ulid.ULID{}, // Not stored in Redis (optimization)
+		ProjectID:   ulid.ULID{},         // Not stored in Redis (optimization)
 		FirstSeenAt: now.Add(-time.Hour), // Approximate (not critical for dedup)
 		ExpiresAt:   expiresAt,
 	}, nil
@@ -319,9 +319,9 @@ func (r *telemetryDeduplicationRepository) GetStats(ctx context.Context) (map[st
 
 	return map[string]interface{}{
 		"approximate_count": count,
-		"pattern":          "dedup:span:*",
-		"storage":          "redis",
-		"auto_expiry":      true,
+		"pattern":           "dedup:span:*",
+		"storage":           "redis",
+		"auto_expiry":       true,
 	}, nil
 }
 

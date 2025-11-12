@@ -42,11 +42,11 @@ func GetOpenAIModels() map[string]ModelDefinition {
 			QualityScore:          float64Ptr(0.95),
 			SpeedScore:            float64Ptr(0.60),
 			Metadata: map[string]interface{}{
-				"family":         "gpt-4",
+				"family":          "gpt-4",
 				"training_cutoff": "2023-04",
-				"capabilities":   []string{"text_generation", "function_calling", "json_mode"},
-				"context_window": 8192,
-				"description":    "Most capable GPT-4 model. Best for complex, multi-step tasks.",
+				"capabilities":    []string{"text_generation", "function_calling", "json_mode"},
+				"context_window":  8192,
+				"description":     "Most capable GPT-4 model. Best for complex, multi-step tasks.",
 			},
 			IsDeprecated: false,
 			IsEnabled:    true,
@@ -64,10 +64,10 @@ func GetOpenAIModels() map[string]ModelDefinition {
 			QualityScore:          float64Ptr(0.95),
 			SpeedScore:            float64Ptr(0.60),
 			Metadata: map[string]interface{}{
-				"family":         "gpt-4",
+				"family":          "gpt-4",
 				"training_cutoff": "2023-04",
 				"snapshot_date":   "2023-06-13",
-				"capabilities":   []string{"text_generation", "function_calling"},
+				"capabilities":    []string{"text_generation", "function_calling"},
 			},
 			IsDeprecated: false,
 			IsEnabled:    true,
@@ -85,11 +85,11 @@ func GetOpenAIModels() map[string]ModelDefinition {
 			QualityScore:          float64Ptr(0.93),
 			SpeedScore:            float64Ptr(0.75),
 			Metadata: map[string]interface{}{
-				"family":         "gpt-4",
+				"family":          "gpt-4",
 				"training_cutoff": "2024-04",
-				"capabilities":   []string{"text_generation", "function_calling", "vision", "json_mode"},
-				"context_window": 128000,
-				"description":    "GPT-4 Turbo with vision. More efficient than GPT-4.",
+				"capabilities":    []string{"text_generation", "function_calling", "vision", "json_mode"},
+				"context_window":  128000,
+				"description":     "GPT-4 Turbo with vision. More efficient than GPT-4.",
 			},
 			IsDeprecated: false,
 			IsEnabled:    true,
@@ -107,11 +107,11 @@ func GetOpenAIModels() map[string]ModelDefinition {
 			QualityScore:          float64Ptr(0.92),
 			SpeedScore:            float64Ptr(0.75),
 			Metadata: map[string]interface{}{
-				"family":         "gpt-4",
+				"family":          "gpt-4",
 				"training_cutoff": "2024-04",
-				"capabilities":   []string{"text_generation", "function_calling", "json_mode"},
-				"context_window": 128000,
-				"preview":        true,
+				"capabilities":    []string{"text_generation", "function_calling", "json_mode"},
+				"context_window":  128000,
+				"preview":         true,
 			},
 			IsDeprecated: true,
 			IsEnabled:    false,
@@ -129,11 +129,11 @@ func GetOpenAIModels() map[string]ModelDefinition {
 			QualityScore:          float64Ptr(0.92),
 			SpeedScore:            float64Ptr(0.85),
 			Metadata: map[string]interface{}{
-				"family":         "gpt-4o",
+				"family":          "gpt-4o",
 				"training_cutoff": "2023-10",
-				"capabilities":   []string{"text_generation", "function_calling", "vision", "json_mode", "multimodal"},
-				"context_window": 128000,
-				"description":    "GPT-4 Omni: multimodal flagship model, cheaper and faster than GPT-4 Turbo.",
+				"capabilities":    []string{"text_generation", "function_calling", "vision", "json_mode", "multimodal"},
+				"context_window":  128000,
+				"description":     "GPT-4 Omni: multimodal flagship model, cheaper and faster than GPT-4 Turbo.",
 			},
 			IsDeprecated: false,
 			IsEnabled:    true,
@@ -151,11 +151,11 @@ func GetOpenAIModels() map[string]ModelDefinition {
 			QualityScore:          float64Ptr(0.85),
 			SpeedScore:            float64Ptr(0.95),
 			Metadata: map[string]interface{}{
-				"family":         "gpt-4o",
+				"family":          "gpt-4o",
 				"training_cutoff": "2023-10",
-				"capabilities":   []string{"text_generation", "function_calling", "vision", "json_mode", "multimodal"},
-				"context_window": 128000,
-				"description":    "Affordable and intelligent small model for fast, lightweight tasks.",
+				"capabilities":    []string{"text_generation", "function_calling", "vision", "json_mode", "multimodal"},
+				"context_window":  128000,
+				"description":     "Affordable and intelligent small model for fast, lightweight tasks.",
 			},
 			IsDeprecated: false,
 			IsEnabled:    true,
@@ -173,11 +173,11 @@ func GetOpenAIModels() map[string]ModelDefinition {
 			QualityScore:          float64Ptr(0.90),
 			SpeedScore:            float64Ptr(0.70),
 			Metadata: map[string]interface{}{
-				"family":         "gpt-4",
+				"family":          "gpt-4",
 				"training_cutoff": "2023-04",
-				"capabilities":   []string{"text_generation", "vision"},
-				"context_window": 128000,
-				"preview":        true,
+				"capabilities":    []string{"text_generation", "vision"},
+				"context_window":  128000,
+				"preview":         true,
 			},
 			IsDeprecated: true,
 			IsEnabled:    false,
@@ -197,11 +197,11 @@ func GetOpenAIModels() map[string]ModelDefinition {
 			QualityScore:          float64Ptr(0.80),
 			SpeedScore:            float64Ptr(0.90),
 			Metadata: map[string]interface{}{
-				"family":         "gpt-3.5",
+				"family":          "gpt-3.5",
 				"training_cutoff": "2023-09",
-				"capabilities":   []string{"text_generation", "function_calling", "json_mode"},
-				"context_window": 16385,
-				"description":    "Most capable GPT-3.5 model and optimized for chat.",
+				"capabilities":    []string{"text_generation", "function_calling", "json_mode"},
+				"context_window":  16385,
+				"description":     "Most capable GPT-3.5 model and optimized for chat.",
 			},
 			IsDeprecated: false,
 			IsEnabled:    true,
@@ -219,10 +219,10 @@ func GetOpenAIModels() map[string]ModelDefinition {
 			QualityScore:          float64Ptr(0.80),
 			SpeedScore:            float64Ptr(0.85),
 			Metadata: map[string]interface{}{
-				"family":         "gpt-3.5",
+				"family":          "gpt-3.5",
 				"training_cutoff": "2023-09",
-				"capabilities":   []string{"text_generation", "function_calling"},
-				"context_window": 16385,
+				"capabilities":    []string{"text_generation", "function_calling"},
+				"context_window":  16385,
 			},
 			IsDeprecated: true,
 			IsEnabled:    false,
@@ -240,10 +240,10 @@ func GetOpenAIModels() map[string]ModelDefinition {
 			QualityScore:          float64Ptr(0.80),
 			SpeedScore:            float64Ptr(0.90),
 			Metadata: map[string]interface{}{
-				"family":         "gpt-3.5",
+				"family":          "gpt-3.5",
 				"training_cutoff": "2023-09",
 				"snapshot_date":   "2023-11-06",
-				"capabilities":   []string{"text_generation", "function_calling", "json_mode"},
+				"capabilities":    []string{"text_generation", "function_calling", "json_mode"},
 			},
 			IsDeprecated: false,
 			IsEnabled:    true,
@@ -261,11 +261,11 @@ func GetOpenAIModels() map[string]ModelDefinition {
 			QualityScore:          float64Ptr(0.75),
 			SpeedScore:            float64Ptr(0.92),
 			Metadata: map[string]interface{}{
-				"family":         "gpt-3.5",
+				"family":          "gpt-3.5",
 				"training_cutoff": "2023-09",
-				"capabilities":   []string{"text_generation", "instruct_following"},
-				"context_window": 4096,
-				"description":    "Similar capabilities to text-davinci-003 but compatible with legacy Completions endpoint.",
+				"capabilities":    []string{"text_generation", "instruct_following"},
+				"context_window":  4096,
+				"description":     "Similar capabilities to text-davinci-003 but compatible with legacy Completions endpoint.",
 			},
 			IsDeprecated: false,
 			IsEnabled:    true,
@@ -285,10 +285,10 @@ func GetOpenAIModels() map[string]ModelDefinition {
 			QualityScore:          float64Ptr(0.85),
 			SpeedScore:            float64Ptr(0.95),
 			Metadata: map[string]interface{}{
-				"family":         "text-embedding-3",
-				"dimensions":     1536,
-				"capabilities":   []string{"text_embedding"},
-				"description":    "Most efficient embedding model for text similarity.",
+				"family":       "text-embedding-3",
+				"dimensions":   1536,
+				"capabilities": []string{"text_embedding"},
+				"description":  "Most efficient embedding model for text similarity.",
 			},
 			IsDeprecated: false,
 			IsEnabled:    true,
@@ -306,10 +306,10 @@ func GetOpenAIModels() map[string]ModelDefinition {
 			QualityScore:          float64Ptr(0.92),
 			SpeedScore:            float64Ptr(0.85),
 			Metadata: map[string]interface{}{
-				"family":         "text-embedding-3",
-				"dimensions":     3072,
-				"capabilities":   []string{"text_embedding"},
-				"description":    "Most powerful embedding model for text similarity.",
+				"family":       "text-embedding-3",
+				"dimensions":   3072,
+				"capabilities": []string{"text_embedding"},
+				"description":  "Most powerful embedding model for text similarity.",
 			},
 			IsDeprecated: false,
 			IsEnabled:    true,
@@ -327,10 +327,10 @@ func GetOpenAIModels() map[string]ModelDefinition {
 			QualityScore:          float64Ptr(0.80),
 			SpeedScore:            float64Ptr(0.90),
 			Metadata: map[string]interface{}{
-				"family":         "ada",
-				"dimensions":     1536,
-				"capabilities":   []string{"text_embedding"},
-				"description":    "Most capable embedding model.",
+				"family":       "ada",
+				"dimensions":   1536,
+				"capabilities": []string{"text_embedding"},
+				"description":  "Most capable embedding model.",
 			},
 			IsDeprecated: false,
 			IsEnabled:    true,
@@ -394,10 +394,10 @@ func GetOpenAIModels() map[string]ModelDefinition {
 			QualityScore:          float64Ptr(0.90),
 			SpeedScore:            float64Ptr(0.85),
 			Metadata: map[string]interface{}{
-				"family":         "whisper",
-				"capabilities":   []string{"speech_to_text", "translation"},
+				"family":            "whisper",
+				"capabilities":      []string{"speech_to_text", "translation"},
 				"supported_formats": []string{"mp3", "mp4", "mpeg", "mpga", "m4a", "wav", "webm"},
-				"description":    "Speech recognition model for transcription and translation.",
+				"description":       "Speech recognition model for transcription and translation.",
 			},
 			IsDeprecated: false,
 			IsEnabled:    true,
@@ -415,10 +415,10 @@ func GetOpenAIModels() map[string]ModelDefinition {
 			QualityScore:          float64Ptr(0.85),
 			SpeedScore:            float64Ptr(0.95),
 			Metadata: map[string]interface{}{
-				"family":         "tts",
-				"capabilities":   []string{"text_to_speech"},
-				"voices":         []string{"alloy", "echo", "fable", "onyx", "nova", "shimmer"},
-				"description":    "Text-to-speech model optimized for speed.",
+				"family":       "tts",
+				"capabilities": []string{"text_to_speech"},
+				"voices":       []string{"alloy", "echo", "fable", "onyx", "nova", "shimmer"},
+				"description":  "Text-to-speech model optimized for speed.",
 			},
 			IsDeprecated: false,
 			IsEnabled:    true,
@@ -436,10 +436,10 @@ func GetOpenAIModels() map[string]ModelDefinition {
 			QualityScore:          float64Ptr(0.92),
 			SpeedScore:            float64Ptr(0.80),
 			Metadata: map[string]interface{}{
-				"family":         "tts",
-				"capabilities":   []string{"text_to_speech"},
-				"voices":         []string{"alloy", "echo", "fable", "onyx", "nova", "shimmer"},
-				"description":    "Text-to-speech model optimized for quality.",
+				"family":       "tts",
+				"capabilities": []string{"text_to_speech"},
+				"voices":       []string{"alloy", "echo", "fable", "onyx", "nova", "shimmer"},
+				"description":  "Text-to-speech model optimized for quality.",
 			},
 			IsDeprecated: false,
 			IsEnabled:    true,
@@ -459,11 +459,11 @@ func GetOpenAIModels() map[string]ModelDefinition {
 			QualityScore:          float64Ptr(0.95),
 			SpeedScore:            float64Ptr(0.70),
 			Metadata: map[string]interface{}{
-				"family":         "dall-e",
-				"capabilities":   []string{"image_generation"},
-				"sizes":          []string{"1024x1024", "1792x1024", "1024x1792"},
-				"quality":        []string{"standard", "hd"},
-				"description":    "Most advanced image generation model with improved prompt adherence.",
+				"family":       "dall-e",
+				"capabilities": []string{"image_generation"},
+				"sizes":        []string{"1024x1024", "1792x1024", "1024x1792"},
+				"quality":      []string{"standard", "hd"},
+				"description":  "Most advanced image generation model with improved prompt adherence.",
 			},
 			IsDeprecated: false,
 			IsEnabled:    true,
@@ -481,10 +481,10 @@ func GetOpenAIModels() map[string]ModelDefinition {
 			QualityScore:          float64Ptr(0.85),
 			SpeedScore:            float64Ptr(0.85),
 			Metadata: map[string]interface{}{
-				"family":         "dall-e",
-				"capabilities":   []string{"image_generation", "image_edit", "image_variation"},
-				"sizes":          []string{"256x256", "512x512", "1024x1024"},
-				"description":    "Image generation model with editing capabilities.",
+				"family":       "dall-e",
+				"capabilities": []string{"image_generation", "image_edit", "image_variation"},
+				"sizes":        []string{"256x256", "512x512", "1024x1024"},
+				"description":  "Image generation model with editing capabilities.",
 			},
 			IsDeprecated: false,
 			IsEnabled:    true,
@@ -496,13 +496,13 @@ func GetOpenAIModels() map[string]ModelDefinition {
 func GetActiveOpenAIModels() map[string]ModelDefinition {
 	allModels := GetOpenAIModels()
 	activeModels := make(map[string]ModelDefinition)
-	
+
 	for name, model := range allModels {
 		if model.IsEnabled && !model.IsDeprecated {
 			activeModels[name] = model
 		}
 	}
-	
+
 	return activeModels
 }
 
@@ -510,13 +510,13 @@ func GetActiveOpenAIModels() map[string]ModelDefinition {
 func GetOpenAIModelsByType(modelType gateway.ModelType) map[string]ModelDefinition {
 	allModels := GetOpenAIModels()
 	filteredModels := make(map[string]ModelDefinition)
-	
+
 	for name, model := range allModels {
 		if model.Type == modelType && model.IsEnabled && !model.IsDeprecated {
 			filteredModels[name] = model
 		}
 	}
-	
+
 	return filteredModels
 }
 

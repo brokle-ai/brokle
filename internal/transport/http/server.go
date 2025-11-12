@@ -198,7 +198,7 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 	{
 		auth.POST("/login", s.handlers.Auth.Login)
 		auth.POST("/signup", s.handlers.Auth.Signup)
-		auth.POST("/complete-oauth-signup", s.handlers.Auth.CompleteOAuthSignup) // OAuth Step 2
+		auth.POST("/complete-oauth-signup", s.handlers.Auth.CompleteOAuthSignup)         // OAuth Step 2
 		auth.POST("/exchange-session/:session_id", s.handlers.Auth.ExchangeLoginSession) // OAuth token exchange
 		auth.POST("/refresh", s.handlers.Auth.RefreshToken)
 		auth.POST("/forgot-password", s.handlers.Auth.ForgotPassword)
@@ -218,8 +218,8 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 
 	// Protected routes (require JWT auth + CSRF validation)
 	protected := router.Group("")
-	protected.Use(s.authMiddleware.RequireAuth())           // Step 1: Validate JWT from cookie
-	protected.Use(s.csrfMiddleware.ValidateCSRF())          // Step 2: Validate CSRF for mutations
+	protected.Use(s.authMiddleware.RequireAuth())          // Step 1: Validate JWT from cookie
+	protected.Use(s.csrfMiddleware.ValidateCSRF())         // Step 2: Validate CSRF for mutations
 	protected.Use(s.rateLimitMiddleware.RateLimitByUser()) // Step 3: User-based rate limiting
 
 	// User routes
@@ -300,16 +300,16 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 		// Traces (read operations)
 		analytics.GET("/traces", s.handlers.Observability.ListTraces)
 		analytics.GET("/traces/:id", s.handlers.Observability.GetTrace)
-		analytics.GET("/traces/:id/observations", s.handlers.Observability.GetTraceWithObservations)
+		analytics.GET("/traces/:id/spans", s.handlers.Observability.GetTraceWithSpans)
 		analytics.GET("/traces/:id/scores", s.handlers.Observability.GetTraceWithScores)
 		// Traces (write operations - for corrections/enrichment via dashboard)
 		analytics.PUT("/traces/:id", s.handlers.Observability.UpdateTrace)
 
-		// Observations (read operations)
-		analytics.GET("/observations", s.handlers.Observability.ListObservations)
-		analytics.GET("/observations/:id", s.handlers.Observability.GetObservation)
-		// Observations (write operations - for corrections/enrichment via dashboard)
-		analytics.PUT("/observations/:id", s.handlers.Observability.UpdateObservation)
+		// Spans (read operations)
+		analytics.GET("/spans", s.handlers.Observability.ListSpans)
+		analytics.GET("/spans/:id", s.handlers.Observability.GetSpan)
+		// Spans (write operations - for corrections/enrichment via dashboard)
+		analytics.PUT("/spans/:id", s.handlers.Observability.UpdateSpan)
 
 		// Quality Scores (read operations)
 		analytics.GET("/scores", s.handlers.Observability.ListScores)

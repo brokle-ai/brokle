@@ -91,7 +91,7 @@ func (r *organizationSettingsRepository) GetSettingsMap(ctx context.Context, org
 		}
 		settingsMap[setting.Key] = value
 	}
-	
+
 	return settingsMap, nil
 }
 

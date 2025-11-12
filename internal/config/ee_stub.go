@@ -31,7 +31,7 @@ type SSOConfig struct {
 	Enabled bool `mapstructure:"enabled"`
 }
 
-// RBACConfig contains minimal RBAC configuration for OSS builds  
+// RBACConfig contains minimal RBAC configuration for OSS builds
 type RBACConfig struct {
 	Enabled bool `mapstructure:"enabled"`
 }
@@ -53,9 +53,9 @@ type SupportConfig struct {
 
 // Validate methods for OSS builds (minimal validation)
 func (ec *EnterpriseConfig) Validate() error { return nil }
-func (lc *LicenseConfig) Validate() error { return nil }
-func (sc *SSOConfig) Validate() error { return nil }
-func (rc *RBACConfig) Validate() error { return nil }
+func (lc *LicenseConfig) Validate() error    { return nil }
+func (sc *SSOConfig) Validate() error        { return nil }
+func (rc *RBACConfig) Validate() error       { return nil }
 func (cc *ComplianceConfig) Validate() error { return nil }
-func (ac *AnalyticsConfig) Validate() error { return nil }
-func (suc *SupportConfig) Validate() error { return nil }
+func (ac *AnalyticsConfig) Validate() error  { return nil }
+func (suc *SupportConfig) Validate() error   { return nil }

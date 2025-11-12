@@ -14,33 +14,33 @@ import (
 
 // BillingService implements billing operations for gateway usage
 type BillingService struct {
-	logger            *logrus.Logger
-	usageRepo         billingDomain.UsageRepository
-	billingRecordRepo billingDomain.BillingRecordRepository
-	quotaRepo         billingDomain.QuotaRepository
-	orgService        billingDomain.OrganizationService
-	usageTracker      *UsageTracker
+	logger             *logrus.Logger
+	usageRepo          billingDomain.UsageRepository
+	billingRecordRepo  billingDomain.BillingRecordRepository
+	quotaRepo          billingDomain.QuotaRepository
+	orgService         billingDomain.OrganizationService
+	usageTracker       *UsageTracker
 	discountCalculator *DiscountCalculator
 	invoiceGenerator   *InvoiceGenerator
 }
 
 // BillingConfig holds billing service configuration
 type BillingConfig struct {
-	DefaultCurrency      string
-	BillingPeriod       string // monthly, quarterly, annually
-	PaymentGracePeriod  time.Duration
-	OverageChargeRate   float64
-	EnableAutoBilling   bool
-	InvoiceGeneration   bool
+	DefaultCurrency    string
+	BillingPeriod      string // monthly, quarterly, annually
+	PaymentGracePeriod time.Duration
+	OverageChargeRate  float64
+	EnableAutoBilling  bool
+	InvoiceGeneration  bool
 }
 
 // DefaultBillingConfig returns default billing configuration
 func DefaultBillingConfig() *BillingConfig {
 	return &BillingConfig{
-		DefaultCurrency:     "USD",
+		DefaultCurrency:    "USD",
 		BillingPeriod:      "monthly",
 		PaymentGracePeriod: 7 * 24 * time.Hour, // 7 days
-		OverageChargeRate:  1.25, // 25% markup for overage
+		OverageChargeRate:  1.25,               // 25% markup for overage
 		EnableAutoBilling:  true,
 		InvoiceGeneration:  true,
 	}
@@ -60,12 +60,12 @@ func NewBillingService(
 	}
 
 	return &BillingService{
-		logger:            logger,
-		usageRepo:         usageRepo,
-		billingRecordRepo: billingRecordRepo,
-		quotaRepo:         quotaRepo,
-		orgService:        orgService,
-		usageTracker:      NewUsageTracker(logger, usageRepo, quotaRepo),
+		logger:             logger,
+		usageRepo:          usageRepo,
+		billingRecordRepo:  billingRecordRepo,
+		quotaRepo:          quotaRepo,
+		orgService:         orgService,
+		usageTracker:       NewUsageTracker(logger, usageRepo, quotaRepo),
 		discountCalculator: NewDiscountCalculator(logger),
 		invoiceGenerator:   NewInvoiceGenerator(logger, config),
 	}
@@ -92,21 +92,21 @@ func (s *BillingService) RecordUsage(ctx context.Context, usage *analytics.CostM
 
 	// Create usage record
 	record := &billingDomain.UsageRecord{
-		ID:               ulid.New(),
-		OrganizationID:   usage.OrganizationID,
-		RequestID:        usage.RequestID,
-		ProviderID:       usage.ProviderID,
-		ModelID:          usage.ModelID,
-		RequestType:      string(usage.RequestType),
-		InputTokens:      usage.InputTokens,
-		OutputTokens:     usage.OutputTokens,
-		TotalTokens:      usage.TotalTokens,
-		Cost:             usage.TotalCost,
-		Currency:         usage.Currency,
-		BillingTier:      billingTier,
-		Discounts:        discountAmount,
-		NetCost:          netCost,
-		CreatedAt:        time.Now(),
+		ID:             ulid.New(),
+		OrganizationID: usage.OrganizationID,
+		RequestID:      usage.RequestID,
+		ProviderID:     usage.ProviderID,
+		ModelID:        usage.ModelID,
+		RequestType:    string(usage.RequestType),
+		InputTokens:    usage.InputTokens,
+		OutputTokens:   usage.OutputTokens,
+		TotalTokens:    usage.TotalTokens,
+		Cost:           usage.TotalCost,
+		Currency:       usage.Currency,
+		BillingTier:    billingTier,
+		Discounts:      discountAmount,
+		NetCost:        netCost,
+		CreatedAt:      time.Now(),
 	}
 
 	// Store usage record
@@ -246,7 +246,7 @@ func (s *BillingService) ProcessPayment(ctx context.Context, billingRecordID uli
 	// TODO: Integrate with payment processor (Stripe, etc.)
 	// This is a placeholder for actual payment processing
 	transactionID := fmt.Sprintf("txn_%s", ulid.New())
-	
+
 	// Update billing record with payment information
 	now := time.Now()
 	record.Status = "paid"
@@ -261,8 +261,8 @@ func (s *BillingService) ProcessPayment(ctx context.Context, billingRecordID uli
 	s.logger.WithFields(logrus.Fields{
 		"billing_record_id": billingRecordID,
 		"organization_id":   record.OrganizationID,
-		"amount":           record.Amount,
-		"transaction_id":   transactionID,
+		"amount":            record.Amount,
+		"transaction_id":    transactionID,
 	}).Info("Payment processed successfully")
 
 	return nil
@@ -326,13 +326,13 @@ func (s *BillingService) CreateBillingRecord(ctx context.Context, summary *analy
 	}
 
 	record := &analytics.BillingRecord{
-		ID:               ulid.New(),
-		OrganizationID:   summary.OrganizationID,
-		Period:           summary.Period,
-		Amount:           summary.NetCost,
-		Currency:         summary.Currency,
-		Status:           "pending",
-		CreatedAt:        time.Now(),
+		ID:             ulid.New(),
+		OrganizationID: summary.OrganizationID,
+		Period:         summary.Period,
+		Amount:         summary.NetCost,
+		Currency:       summary.Currency,
+		Status:         "pending",
+		CreatedAt:      time.Now(),
 	}
 
 	if err := s.billingRecordRepo.InsertBillingRecord(ctx, record); err != nil {
@@ -342,8 +342,8 @@ func (s *BillingService) CreateBillingRecord(ctx context.Context, summary *analy
 	s.logger.WithFields(logrus.Fields{
 		"billing_record_id": record.ID,
 		"organization_id":   record.OrganizationID,
-		"amount":           record.Amount,
-		"period":           record.Period,
+		"amount":            record.Amount,
+		"period":            record.Period,
 	}).Info("Created billing record")
 
 	return record, nil
@@ -353,7 +353,7 @@ func (s *BillingService) CreateBillingRecord(ctx context.Context, summary *analy
 
 func (s *BillingService) calculatePeriodBounds(period string) (start, end time.Time) {
 	now := time.Now()
-	
+
 	switch period {
 	case "daily":
 		start = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
@@ -375,16 +375,16 @@ func (s *BillingService) calculatePeriodBounds(period string) (start, end time.T
 		start = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 		end = start.AddDate(0, 1, 0)
 	}
-	
+
 	return start, end
 }
 
 // Health check
 func (s *BillingService) GetHealth() map[string]interface{} {
 	return map[string]interface{}{
-		"service":         "billing",
-		"status":          "healthy",
-		"usage_tracker":   s.usageTracker.GetHealth(),
+		"service":           "billing",
+		"status":            "healthy",
+		"usage_tracker":     s.usageTracker.GetHealth(),
 		"invoice_generator": s.invoiceGenerator.GetHealth(),
 	}
 }

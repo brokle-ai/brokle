@@ -21,12 +21,12 @@ type EnterpriseAnalytics interface {
 
 // PredictiveReport represents ML-powered insights
 type PredictiveReport struct {
-	TimeRange         string                 `json:"time_range"`
-	CostForecast      *CostForecast         `json:"cost_forecast,omitempty"`
-	UsageTrends       []*UsageTrend         `json:"usage_trends,omitempty"`
-	Anomalies         []*Anomaly            `json:"anomalies,omitempty"`
-	Recommendations   []*Recommendation     `json:"recommendations,omitempty"`
-	GeneratedAt       time.Time             `json:"generated_at"`
+	TimeRange       string            `json:"time_range"`
+	CostForecast    *CostForecast     `json:"cost_forecast,omitempty"`
+	UsageTrends     []*UsageTrend     `json:"usage_trends,omitempty"`
+	Anomalies       []*Anomaly        `json:"anomalies,omitempty"`
+	Recommendations []*Recommendation `json:"recommendations,omitempty"`
+	GeneratedAt     time.Time         `json:"generated_at"`
 }
 
 // Dashboard represents a custom dashboard configuration
@@ -44,7 +44,7 @@ type Dashboard struct {
 // Widget represents a dashboard widget
 type Widget struct {
 	ID       string                 `json:"id"`
-	Type     string                 `json:"type"`     // chart, metric, table, etc.
+	Type     string                 `json:"type"` // chart, metric, table, etc.
 	Title    string                 `json:"title"`
 	Config   map[string]interface{} `json:"config"`
 	Position *Position              `json:"position,omitempty"`
@@ -93,18 +93,18 @@ type ExportQuery struct {
 
 // Supporting types
 type CostForecast struct {
-	NextMonth    float64 `json:"next_month"`
-	NextQuarter  float64 `json:"next_quarter"`
-	Confidence   float64 `json:"confidence"`
-	Trend        string  `json:"trend"` // increasing, decreasing, stable
+	NextMonth   float64 `json:"next_month"`
+	NextQuarter float64 `json:"next_quarter"`
+	Confidence  float64 `json:"confidence"`
+	Trend       string  `json:"trend"` // increasing, decreasing, stable
 }
 
 type UsageTrend struct {
-	Metric     string    `json:"metric"`
-	Trend      string    `json:"trend"`
-	Change     float64   `json:"change"`     // percentage
-	Confidence float64   `json:"confidence"`
-	Period     string    `json:"period"`
+	Metric     string  `json:"metric"`
+	Trend      string  `json:"trend"`
+	Change     float64 `json:"change"` // percentage
+	Confidence float64 `json:"confidence"`
+	Period     string  `json:"period"`
 }
 
 type Anomaly struct {
@@ -117,11 +117,11 @@ type Anomaly struct {
 }
 
 type Recommendation struct {
-	Type        string  `json:"type"`        // cost, performance, security
+	Type        string  `json:"type"` // cost, performance, security
 	Title       string  `json:"title"`
 	Description string  `json:"description"`
-	Impact      string  `json:"impact"`      // low, medium, high
-	Effort      string  `json:"effort"`      // low, medium, high
+	Impact      string  `json:"impact"` // low, medium, high
+	Effort      string  `json:"effort"` // low, medium, high
 	Savings     float64 `json:"savings,omitempty"`
 }
 

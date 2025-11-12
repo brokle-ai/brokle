@@ -140,11 +140,11 @@ func (m *Manager) SeedClickHouse(ctx context.Context, options *Options) error {
 func (m *Manager) seedData(ctx context.Context, data *SeedData, options *Options) error {
 	entityMaps := NewEntityMaps()
 
-	log.Printf("🌱 Starting seeding process with %d organizations, %d users, %d permissions, %d roles", 
+	log.Printf("🌱 Starting seeding process with %d organizations, %d users, %d permissions, %d roles",
 		len(data.Organizations), len(data.Users), len(data.RBAC.Permissions), len(data.RBAC.Roles))
 
 	// Execute seeding in proper dependency order
-	
+
 	// 1. Permissions first (system-level, no dependencies)
 	if err := m.rbacSeeder.SeedPermissions(ctx, data.RBAC.Permissions, entityMaps, options.Verbose); err != nil {
 		return fmt.Errorf("failed to seed permissions: %w", err)

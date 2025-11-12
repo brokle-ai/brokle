@@ -46,9 +46,9 @@ type TelemetryStreamConsumer struct {
 	logger           *logrus.Logger
 
 	// Observability services for structured events (ClickHouse-first)
-	traceService       observability.TraceService
-	observationService observability.ObservationService
-	scoreService       observability.ScoreService
+	traceService observability.TraceService
+	spanService  observability.SpanService
+	scoreService observability.ScoreService
 
 	consumerGroup       string
 	consumerID          string
@@ -93,7 +93,7 @@ func NewTelemetryStreamConsumer(
 	config *TelemetryStreamConsumerConfig,
 	// Observability services for structured events
 	traceService observability.TraceService,
-	observationService observability.ObservationService,
+	spanService observability.SpanService,
 	scoreService observability.ScoreService,
 ) *TelemetryStreamConsumer {
 	if config == nil {
@@ -114,7 +114,7 @@ func NewTelemetryStreamConsumer(
 		deduplicationSvc:    deduplicationSvc,
 		logger:              logger,
 		traceService:        traceService,
-		observationService:  observationService,
+		spanService:         spanService,
 		scoreService:        scoreService,
 		consumerGroup:       config.ConsumerGroup,
 		consumerID:          config.ConsumerID,
@@ -527,15 +527,15 @@ func (c *TelemetryStreamConsumer) processMessage(ctx context.Context, streamKey 
 }
 
 // sortEventsByDependency sorts events to ensure dependencies are processed first
-// Order: trace → session → observation → quality_score
+// Order: trace → session → span → quality_score
 // This prevents "parent not found" errors during batch processing
 func (c *TelemetryStreamConsumer) sortEventsByDependency(events []streams.TelemetryEventData) []streams.TelemetryEventData {
 	// Define processing priority (lower = processed first)
 	eventPriority := map[observability.TelemetryEventType]int{
 		observability.TelemetryEventTypeTrace:        1, // Traces first (parents)
 		observability.TelemetryEventTypeSession:      2, // Sessions second
-		observability.TelemetryEventTypeObservation:  3, // Observations third (require traces)
-		observability.TelemetryEventTypeQualityScore: 4, // Scores last (require traces/observations)
+		observability.TelemetryEventTypeSpan:         3, // Spans third (require traces)
+		observability.TelemetryEventTypeQualityScore: 4, // Scores last (require traces/spans)
 	}
 
 	// Create a copy to avoid modifying original slice
@@ -602,8 +602,8 @@ func (c *TelemetryStreamConsumer) processTraceEvent(ctx context.Context, eventDa
 	return nil
 }
 
-// processObservationEvent processes an observation event using ObservationService
-func (c *TelemetryStreamConsumer) processObservationEvent(ctx context.Context, eventData *streams.TelemetryEventData, projectID ulid.ULID) error {
+// processSpanEvent processes an span event using SpanService
+func (c *TelemetryStreamConsumer) processSpanEvent(ctx context.Context, eventData *streams.TelemetryEventData, projectID ulid.ULID) error {
 	// Debug: Log payload structure to identify ULID format issues
 	c.logger.WithFields(logrus.Fields{
 		"event_id": eventData.EventID.String(),
@@ -614,27 +614,27 @@ func (c *TelemetryStreamConsumer) processObservationEvent(ctx context.Context, e
 			}
 			return keys
 		}(),
-	}).Debug("Processing observation payload")
+	}).Debug("Processing span payload")
 
-	// Map event payload to Observation struct
-	var observation observability.Observation
-	if err := mapToStruct(eventData.EventPayload, &observation); err != nil {
+	// Map event payload to Span struct
+	var span observability.Span
+	if err := mapToStruct(eventData.EventPayload, &span); err != nil {
 		// Log detailed error with sample payload data
 		c.logger.WithFields(logrus.Fields{
 			"event_id":     eventData.EventID.String(),
 			"trace_id_raw": eventData.EventPayload["trace_id"],
 			"id_raw":       eventData.EventPayload["id"],
 			"error":        err.Error(),
-		}).Error("Failed to unmarshal observation - payload debug")
-		return fmt.Errorf("failed to unmarshal observation payload: %w", err)
+		}).Error("Failed to unmarshal span - payload debug")
+		return fmt.Errorf("failed to unmarshal span payload: %w", err)
 	}
 
 	// Set context from stream message
-	observation.ProjectID = projectID.String()
+	span.ProjectID = projectID.String()
 
 	// Use service layer
-	if err := c.observationService.CreateObservation(ctx, &observation); err != nil {
-		return fmt.Errorf("failed to create observation via service: %w", err)
+	if err := c.spanService.CreateSpan(ctx, &span); err != nil {
+		return fmt.Errorf("failed to create span via service: %w", err)
 	}
 
 	return nil
@@ -689,7 +689,7 @@ func (c *TelemetryStreamConsumer) processBatch(ctx context.Context, batch *strea
 		lastError      error
 	)
 
-	// Sort events by dependency order: traces → sessions → observations → scores
+	// Sort events by dependency order: traces → sessions → spans → scores
 	// This ensures parent entities exist before children are created
 	sortedEvents := c.sortEventsByDependency(batch.Events)
 
@@ -705,9 +705,9 @@ func (c *TelemetryStreamConsumer) processBatch(ctx context.Context, batch *strea
 
 		// Session events removed - sessions are now virtual groupings via session_id attribute
 
-		case observability.TelemetryEventTypeObservation:
-			// Structured observation event → ObservationService → observations table
-			err = c.processObservationEvent(ctx, &event, projectID)
+		case observability.TelemetryEventTypeSpan:
+			// Structured span event → SpanService → spans table
+			err = c.processSpanEvent(ctx, &event, projectID)
 
 		case observability.TelemetryEventTypeQualityScore:
 			// Structured score event → ScoreService → scores table

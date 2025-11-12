@@ -14,8 +14,8 @@ import (
 
 	"brokle/internal/config"
 	authDomain "brokle/internal/core/domain/auth"
-	"brokle/pkg/ulid"
 	appErrors "brokle/pkg/errors"
+	"brokle/pkg/ulid"
 )
 
 // jwtService implements the auth.JWTService interface with flexible signing methods
@@ -152,10 +152,10 @@ func (s *jwtService) GenerateAccessToken(ctx context.Context, userID ulid.ULID, 
 // GenerateAccessTokenWithJTI generates an access token and returns both token and JTI for session tracking
 func (s *jwtService) GenerateAccessTokenWithJTI(ctx context.Context, userID ulid.ULID, customClaims map[string]interface{}) (string, string, error) {
 	now := time.Now()
-	
+
 	// Generate JTI for this token
 	jti := ulid.New().String()
-	
+
 	// Create JWT claims
 	claims := jwt.MapClaims{
 		"iss":        s.config.JWTIssuer,
@@ -196,7 +196,7 @@ func (s *jwtService) GenerateAccessTokenWithJTI(ctx context.Context, userID ulid
 // GenerateRefreshToken generates a refresh token
 func (s *jwtService) GenerateRefreshToken(ctx context.Context, userID ulid.ULID) (string, error) {
 	now := time.Now()
-	
+
 	// Create JWT claims for refresh token
 	claims := jwt.MapClaims{
 		"iss":        s.config.JWTIssuer,
@@ -232,10 +232,10 @@ func (s *jwtService) GenerateRefreshToken(ctx context.Context, userID ulid.ULID)
 // GenerateAPIKeyToken generates a token for API key authentication
 func (s *jwtService) GenerateAPIKeyToken(ctx context.Context, keyID ulid.ULID, scopes []string) (string, error) {
 	now := time.Now()
-	
+
 	// API key tokens use access token TTL for short-lived access
 	ttl := s.config.AccessTokenTTL
-	
+
 	// Create JWT claims for API key token
 	claims := jwt.MapClaims{
 		"iss":        s.config.JWTIssuer,
@@ -276,12 +276,12 @@ func (s *jwtService) ValidateToken(ctx context.Context, tokenString string) (*au
 		switch s.config.JWTSigningMethod {
 		case "HS256":
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, appErrors.NewUnauthorizedError("Unexpected signing method: expected HMAC, got: "+fmt.Sprintf("%v", token.Header["alg"]))
+				return nil, appErrors.NewUnauthorizedError("Unexpected signing method: expected HMAC, got: " + fmt.Sprintf("%v", token.Header["alg"]))
 			}
 			return s.publicKey, nil
 		case "RS256":
 			if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
-				return nil, appErrors.NewUnauthorizedError("Unexpected signing method: expected RSA, got: "+fmt.Sprintf("%v", token.Header["alg"]))
+				return nil, appErrors.NewUnauthorizedError("Unexpected signing method: expected RSA, got: " + fmt.Sprintf("%v", token.Header["alg"]))
 			}
 			return s.publicKey, nil
 		default:
@@ -305,7 +305,7 @@ func (s *jwtService) ValidateToken(ctx context.Context, tokenString string) (*au
 	// Convert to our custom claims structure
 	tokenClaims, err := s.mapClaimsToJWTClaims(claims)
 	if err != nil {
-		return nil, appErrors.NewUnauthorizedError("Failed to convert claims: "+err.Error())
+		return nil, appErrors.NewUnauthorizedError("Failed to convert claims: " + err.Error())
 	}
 
 	// Verify issuer
@@ -397,9 +397,9 @@ func (s *jwtService) IsTokenExpired(ctx context.Context, tokenString string) (bo
 func (s *jwtService) GetTokenExpiry(ctx context.Context, token string) (time.Time, error) {
 	claims, err := s.ExtractClaims(ctx, token)
 	if err != nil {
-		return time.Time{}, appErrors.NewUnauthorizedError("Failed to extract claims: "+err.Error())
+		return time.Time{}, appErrors.NewUnauthorizedError("Failed to extract claims: " + err.Error())
 	}
-	
+
 	return time.Unix(claims.ExpiresAt, 0), nil
 }
 
@@ -446,7 +446,6 @@ func (s *jwtService) mapClaimsToJWTClaims(claims jwt.MapClaims) (*authDomain.JWT
 		}
 		return nil
 	}
-
 
 	// Standard JWT claims
 	jwtClaims.Issuer = getString("iss")

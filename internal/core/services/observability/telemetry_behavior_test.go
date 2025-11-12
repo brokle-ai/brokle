@@ -23,7 +23,7 @@ func TestCompensationPattern_Behavior(t *testing.T) {
 
 		// Implementation note: Verify compensation logic exists in:
 		// - Trace service batch operations
-		// - Observation service batch operations
+		// - Span service batch operations
 		// - Any multi-step operations that can partially fail
 	})
 }

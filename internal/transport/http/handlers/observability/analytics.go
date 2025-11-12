@@ -138,28 +138,28 @@ func (h *Handler) GetTrace(c *gin.Context) {
 	response.Success(c, trace)
 }
 
-// GetTraceWithObservations handles GET /api/v1/analytics/traces/:id/observations
-// @Summary Get trace with observations tree
-// @Description Retrieve trace with all observations in hierarchical structure
+// GetTraceWithSpans handles GET /api/v1/analytics/traces/:id/spans
+// @Summary Get trace with spans tree
+// @Description Retrieve trace with all spans in hierarchical structure
 // @Tags Dashboard - Analytics
 // @Accept json
 // @Produce json
 // @Security BearerAuth
 // @Param id path string true "Trace ID"
-// @Success 200 {object} response.APIResponse{data=observability.Trace} "Trace with observations"
+// @Success 200 {object} response.APIResponse{data=observability.Trace} "Trace with spans"
 // @Failure 404 {object} response.APIResponse{error=response.APIError} "Trace not found"
 // @Failure 500 {object} response.APIResponse{error=response.APIError} "Internal server error"
-// @Router /api/v1/analytics/traces/{id}/observations [get]
-func (h *Handler) GetTraceWithObservations(c *gin.Context) {
+// @Router /api/v1/analytics/traces/{id}/spans [get]
+func (h *Handler) GetTraceWithSpans(c *gin.Context) {
 	traceID := c.Param("id")
 	if traceID == "" {
 		response.ValidationError(c, "invalid trace_id", "trace_id is required")
 		return
 	}
 
-	trace, err := h.services.GetTraceService().GetTraceWithObservations(c.Request.Context(), traceID)
+	trace, err := h.services.GetTraceService().GetTraceWithSpans(c.Request.Context(), traceID)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to get trace with observations")
+		h.logger.WithError(err).Error("Failed to get trace with spans")
 		response.Error(c, err)
 		return
 	}
@@ -196,27 +196,27 @@ func (h *Handler) GetTraceWithScores(c *gin.Context) {
 	response.Success(c, trace)
 }
 
-// ===== Observation Analytics =====
+// ===== Span Analytics =====
 
-// ListObservations handles GET /api/v1/analytics/observations
-// @Summary List observations with filtering
-// @Description Retrieve paginated list of observations
+// ListSpans handles GET /api/v1/analytics/spans
+// @Summary List spans with filtering
+// @Description Retrieve paginated list of spans
 // @Tags Dashboard - Analytics
 // @Accept json
 // @Produce json
 // @Security BearerAuth
 // @Param trace_id query string false "Filter by trace ID"
-// @Param type query string false "Filter by observation type"
+// @Param type query string false "Filter by span type"
 // @Param model query string false "Filter by model"
 // @Param level query string false "Filter by level"
 // @Param limit query int false "Limit (default 50, max 1000)"
 // @Param offset query int false "Offset (default 0)"
-// @Success 200 {object} response.APIResponse{data=[]observability.Observation} "List of observations"
+// @Success 200 {object} response.APIResponse{data=[]observability.Span} "List of spans"
 // @Failure 400 {object} response.APIResponse{error=response.APIError} "Invalid parameters"
 // @Failure 500 {object} response.APIResponse{error=response.APIError} "Internal server error"
-// @Router /api/v1/analytics/observations [get]
-func (h *Handler) ListObservations(c *gin.Context) {
-	filter := &observability.ObservationFilter{}
+// @Router /api/v1/analytics/spans [get]
+func (h *Handler) ListSpans(c *gin.Context) {
+	filter := &observability.SpanFilter{}
 
 	// Trace ID filter
 	if traceID := c.Query("trace_id"); traceID != "" {
@@ -261,43 +261,43 @@ func (h *Handler) ListObservations(c *gin.Context) {
 	}
 	filter.Offset = offset
 
-	observations, err := h.services.GetObservationService().GetObservationsByFilter(c.Request.Context(), filter)
+	spans, err := h.services.GetSpanService().GetSpansByFilter(c.Request.Context(), filter)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to list observations")
+		h.logger.WithError(err).Error("Failed to list spans")
 		response.Error(c, err)
 		return
 	}
 
-	response.Success(c, observations)
+	response.Success(c, spans)
 }
 
-// GetObservation handles GET /api/v1/analytics/observations/:id
-// @Summary Get observation by ID
-// @Description Retrieve detailed observation information
+// GetSpan handles GET /api/v1/analytics/spans/:id
+// @Summary Get span by ID
+// @Description Retrieve detailed span information
 // @Tags Dashboard - Analytics
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param id path string true "Observation ID"
-// @Success 200 {object} response.APIResponse{data=observability.Observation} "Observation details"
-// @Failure 404 {object} response.APIResponse{error=response.APIError} "Observation not found"
+// @Param id path string true "Span ID"
+// @Success 200 {object} response.APIResponse{data=observability.Span} "Span details"
+// @Failure 404 {object} response.APIResponse{error=response.APIError} "Span not found"
 // @Failure 500 {object} response.APIResponse{error=response.APIError} "Internal server error"
-// @Router /api/v1/analytics/observations/{id} [get]
-func (h *Handler) GetObservation(c *gin.Context) {
-	observationID := c.Param("id")
-	if observationID == "" {
-		response.ValidationError(c, "invalid observation_id", "observation_id is required")
+// @Router /api/v1/analytics/spans/{id} [get]
+func (h *Handler) GetSpan(c *gin.Context) {
+	spanID := c.Param("id")
+	if spanID == "" {
+		response.ValidationError(c, "invalid span_id", "span_id is required")
 		return
 	}
 
-	observation, err := h.services.GetObservationService().GetObservationByID(c.Request.Context(), observationID)
+	span, err := h.services.GetSpanService().GetSpanByID(c.Request.Context(), spanID)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to get observation")
+		h.logger.WithError(err).Error("Failed to get span")
 		response.Error(c, err)
 		return
 	}
 
-	response.Success(c, observation)
+	response.Success(c, span)
 }
 
 // ===== Score Analytics =====
@@ -310,7 +310,7 @@ func (h *Handler) GetObservation(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param trace_id query string false "Filter by trace ID"
-// @Param observation_id query string false "Filter by observation ID"
+// @Param span_id query string false "Filter by span ID"
 // @Param session_id query string false "Filter by session ID"
 // @Param name query string false "Filter by score name"
 // @Param source query string false "Filter by source (API, AUTO, HUMAN, EVAL)"
@@ -329,9 +329,9 @@ func (h *Handler) ListScores(c *gin.Context) {
 		filter.TraceID = &traceID
 	}
 
-	// Observation ID filter
-	if observationID := c.Query("observation_id"); observationID != "" {
-		filter.ObservationID = &observationID
+	// Span ID filter
+	if spanID := c.Query("span_id"); spanID != "" {
+		filter.SpanID = &spanID
 	}
 
 	// Name filter
@@ -461,47 +461,47 @@ func (h *Handler) UpdateTrace(c *gin.Context) {
 	response.Success(c, updated)
 }
 
-// UpdateObservation handles PUT /api/v1/analytics/observations/:id
-// @Summary Update observation by ID
-// @Description Update an existing observation (for corrections/enrichment after initial creation)
+// UpdateSpan handles PUT /api/v1/analytics/spans/:id
+// @Summary Update span by ID
+// @Description Update an existing span (for corrections/enrichment after initial creation)
 // @Tags Dashboard - Analytics
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param id path string true "Observation ID"
-// @Param observation body observability.Observation true "Updated observation data"
-// @Success 200 {object} response.APIResponse{data=observability.Observation} "Updated observation"
+// @Param id path string true "Span ID"
+// @Param span body observability.Span true "Updated span data"
+// @Success 200 {object} response.APIResponse{data=observability.Span} "Updated span"
 // @Failure 400 {object} response.APIResponse{error=response.APIError} "Invalid request"
-// @Failure 404 {object} response.APIResponse{error=response.APIError} "Observation not found"
+// @Failure 404 {object} response.APIResponse{error=response.APIError} "Span not found"
 // @Failure 500 {object} response.APIResponse{error=response.APIError} "Internal server error"
-// @Router /api/v1/analytics/observations/{id} [put]
-func (h *Handler) UpdateObservation(c *gin.Context) {
-	observationID := c.Param("id")
-	if observationID == "" {
-		response.ValidationError(c, "invalid observation_id", "observation_id is required")
+// @Router /api/v1/analytics/spans/{id} [put]
+func (h *Handler) UpdateSpan(c *gin.Context) {
+	spanID := c.Param("id")
+	if spanID == "" {
+		response.ValidationError(c, "invalid span_id", "span_id is required")
 		return
 	}
 
-	var observation observability.Observation
-	if err := c.ShouldBindJSON(&observation); err != nil {
+	var span observability.Span
+	if err := c.ShouldBindJSON(&span); err != nil {
 		response.ValidationError(c, "invalid request body", err.Error())
 		return
 	}
 
 	// Ensure ID matches path parameter
-	observation.ID = observationID
+	span.ID = spanID
 
 	// Update via service
-	if err := h.services.GetObservationService().UpdateObservation(c.Request.Context(), &observation); err != nil {
-		h.logger.WithError(err).Error("Failed to update observation")
+	if err := h.services.GetSpanService().UpdateSpan(c.Request.Context(), &span); err != nil {
+		h.logger.WithError(err).Error("Failed to update span")
 		response.Error(c, err)
 		return
 	}
 
-	// Fetch updated observation
-	updated, err := h.services.GetObservationService().GetObservationByID(c.Request.Context(), observationID)
+	// Fetch updated span
+	updated, err := h.services.GetSpanService().GetSpanByID(c.Request.Context(), spanID)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to fetch updated observation")
+		h.logger.WithError(err).Error("Failed to fetch updated span")
 		response.Error(c, err)
 		return
 	}
@@ -556,4 +556,3 @@ func (h *Handler) UpdateScore(c *gin.Context) {
 
 	response.Success(c, updated)
 }
-

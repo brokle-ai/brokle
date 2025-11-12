@@ -25,15 +25,15 @@ func (dl *DataLoader) LoadSeedData(mode string) (*SeedData, error) {
 		"demo":        "demo",
 		"test":        "test",
 	}
-	
+
 	actualMode, ok := aliases[mode]
 	if !ok {
 		actualMode = mode // Use the mode as-is if no alias found
 	}
-	
+
 	// Get the seed file path
 	seedFile := fmt.Sprintf("seeds/%s.yaml", actualMode)
-	
+
 	// Check if file exists in current directory first
 	if _, err := os.Stat(seedFile); os.IsNotExist(err) {
 		// Try relative path from brokle directory
@@ -102,7 +102,7 @@ func (dl *DataLoader) validateSeedData(data *SeedData) error {
 		permissionNames[permission.Name] = true
 	}
 
-	// Validate template roles 
+	// Validate template roles
 	for _, role := range data.RBAC.Roles {
 		if role.Name == "" || role.ScopeType == "" {
 			return fmt.Errorf("role missing required fields (name, scope_type)")

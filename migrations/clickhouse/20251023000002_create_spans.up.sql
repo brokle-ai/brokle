@@ -1,9 +1,9 @@
--- OTEL observations table
-CREATE TABLE IF NOT EXISTS observations (
+-- OTEL spans table (OpenTelemetry 1.28+ native)
+CREATE TABLE IF NOT EXISTS spans (
     -- Identifiers
     id String,
     trace_id String,
-    parent_observation_id Nullable(String),
+    parent_span_id Nullable(String),
     project_id String,
 
     -- Span data
@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS observations (
     -- Indexes
     INDEX idx_id id TYPE bloom_filter(0.001) GRANULARITY 1,
     INDEX idx_trace_id trace_id TYPE bloom_filter(0.001) GRANULARITY 1,
-    INDEX idx_parent_observation_id parent_observation_id TYPE bloom_filter(0.001) GRANULARITY 1,
+    INDEX idx_parent_span_id parent_span_id TYPE bloom_filter(0.001) GRANULARITY 1,
     INDEX idx_project_id project_id TYPE bloom_filter(0.001) GRANULARITY 1,
     INDEX idx_type type TYPE bloom_filter(0.001) GRANULARITY 1,
     INDEX idx_provider provider TYPE bloom_filter(0.01) GRANULARITY 1,

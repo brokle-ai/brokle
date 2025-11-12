@@ -9,7 +9,7 @@ export const traceSchema = z.object({
   status: z.enum(['ok', 'error', 'unset']),
   cost: z.number().optional(),
   tokens: z.number().optional(),
-  observationCount: z.number().default(0),
+  spanCount: z.number().default(0),
   environment: z.string().optional(),
   serviceName: z.string().optional(),
   serviceVersion: z.string().optional(),
@@ -17,10 +17,10 @@ export const traceSchema = z.object({
   bookmarked: z.boolean().default(false),
 })
 
-export const observationSchema = z.object({
+export const spanSchema = z.object({
   id: z.string(),
   traceId: z.string(),
-  parentObservationId: z.string().optional(),
+  parentSpanId: z.string().optional(),
   name: z.string(),
   type: z.string(),
   startTime: z.date(),
@@ -42,5 +42,5 @@ export const scoreSchema = z.object({
 })
 
 export type Trace = z.infer<typeof traceSchema>
-export type Observation = z.infer<typeof observationSchema>
+export type Span = z.infer<typeof spanSchema>
 export type Score = z.infer<typeof scoreSchema>

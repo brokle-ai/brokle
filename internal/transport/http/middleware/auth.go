@@ -353,7 +353,7 @@ func GetAuthContext(c *gin.Context) (*auth.AuthContext, bool) {
 	return ctx, ok
 }
 
-// GetUserID retrieves user ID from Gin context  
+// GetUserID retrieves user ID from Gin context
 func GetUserID(c *gin.Context) (string, bool) {
 	userID, exists := c.Get(UserIDKey)
 	if !exists {
@@ -388,9 +388,9 @@ func GetUserIDULID(c *gin.Context) (ulid.ULID, bool) {
 type ContextType string
 
 const (
-	ContextOrg ContextType = "org"
+	ContextOrg     ContextType = "org"
 	ContextProject ContextType = "project"
-	ContextEnv ContextType = "env"
+	ContextEnv     ContextType = "env"
 )
 
 // ContextResolver resolves context IDs from headers or URL parameters
@@ -403,20 +403,20 @@ type ContextResolver struct {
 // ResolveContext resolves specified context types (variadic - any combination is optional)
 func ResolveContext(c *gin.Context, contextTypes ...ContextType) *ContextResolver {
 	resolver := &ContextResolver{}
-	
+
 	// Build a set for faster lookup
 	typeSet := make(map[ContextType]bool)
 	for _, ctxType := range contextTypes {
 		typeSet[ctxType] = true
 	}
-	
+
 	// If no types specified, resolve all (backward compatibility)
 	if len(contextTypes) == 0 {
 		typeSet[ContextOrg] = true
 		typeSet[ContextProject] = true
 		typeSet[ContextEnv] = true
 	}
-	
+
 	// Resolve organization ID if requested
 	if typeSet[ContextOrg] {
 		// Try X-Org-ID header first
@@ -434,7 +434,7 @@ func ResolveContext(c *gin.Context, contextTypes ...ContextType) *ContextResolve
 			}
 		}
 	}
-	
+
 	// Resolve project ID if requested
 	if typeSet[ContextProject] {
 		// Try X-Project-ID header first
@@ -452,7 +452,7 @@ func ResolveContext(c *gin.Context, contextTypes ...ContextType) *ContextResolve
 			}
 		}
 	}
-	
+
 	// Resolve environment tag if requested
 	if typeSet[ContextEnv] {
 		// Try environment query parameter
@@ -464,7 +464,7 @@ func ResolveContext(c *gin.Context, contextTypes ...ContextType) *ContextResolve
 			resolver.Environment = "default"
 		}
 	}
-	
+
 	return resolver
 }
 
@@ -480,4 +480,3 @@ func ResolveProjectID(c *gin.Context) *ulid.ULID {
 func ResolveEnvironment(c *gin.Context) string {
 	return ResolveContext(c, ContextEnv).Environment
 }
-

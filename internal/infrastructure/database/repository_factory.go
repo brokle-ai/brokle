@@ -3,8 +3,8 @@ package database
 import (
 	"gorm.io/gorm"
 
-	"brokle/internal/core/domain/common"
 	authDomain "brokle/internal/core/domain/auth"
+	"brokle/internal/core/domain/common"
 	orgDomain "brokle/internal/core/domain/organization"
 	userDomain "brokle/internal/core/domain/user"
 
@@ -19,13 +19,13 @@ type repositoryFactory struct {
 	db *gorm.DB
 
 	// Cached repositories (lazy initialization for performance)
-	userRepo         userDomain.Repository
-	orgRepo          orgDomain.OrganizationRepository
-	memberRepo       orgDomain.MemberRepository
-	projectRepo      orgDomain.ProjectRepository
-	invitationRepo   orgDomain.InvitationRepository
-	roleRepo         authDomain.RoleRepository
-	orgMemberRepo    authDomain.OrganizationMemberRepository
+	userRepo       userDomain.Repository
+	orgRepo        orgDomain.OrganizationRepository
+	memberRepo     orgDomain.MemberRepository
+	projectRepo    orgDomain.ProjectRepository
+	invitationRepo orgDomain.InvitationRepository
+	roleRepo       authDomain.RoleRepository
+	orgMemberRepo  authDomain.OrganizationMemberRepository
 }
 
 // NewRepositoryFactory creates a new repository factory instance.

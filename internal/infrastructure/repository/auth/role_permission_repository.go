@@ -121,7 +121,7 @@ func (r *rolePermissionRepository) ReplaceAllPermissions(ctx context.Context, ro
 		if err := tx.Where("role_id = ?", roleID).Delete(&authDomain.RolePermission{}).Error; err != nil {
 			return err
 		}
-		
+
 		// Add new permissions
 		for _, permissionID := range permissionIDs {
 			rolePermission := &authDomain.RolePermission{
@@ -152,11 +152,11 @@ func (r *rolePermissionRepository) HasResourceAction(ctx context.Context, roleID
 // CheckResourceActions checks multiple resource:action permissions at once
 func (r *rolePermissionRepository) CheckResourceActions(ctx context.Context, roleID ulid.ULID, resourceActions []string) (map[string]bool, error) {
 	result := make(map[string]bool)
-	
+
 	if len(resourceActions) == 0 {
 		return result, nil
 	}
-	
+
 	// Query for all permissions the role has
 	var permissions []string
 	err := r.db.WithContext(ctx).
@@ -168,17 +168,17 @@ func (r *rolePermissionRepository) CheckResourceActions(ctx context.Context, rol
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Build result map
 	permissionSet := make(map[string]bool)
 	for _, perm := range permissions {
 		permissionSet[perm] = true
 	}
-	
+
 	for _, resourceAction := range resourceActions {
 		result[resourceAction] = permissionSet[resourceAction]
 	}
-	
+
 	return result, nil
 }
 

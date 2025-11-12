@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"brokle/internal/core/domain/observability"
+
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 )
@@ -27,7 +28,7 @@ func (r *scoreRepository) Create(ctx context.Context, score *observability.Score
 
 	query := `
 		INSERT INTO scores (
-			id, project_id, trace_id, observation_id,
+			id, project_id, trace_id, span_id,
 			name, value, string_value, data_type, source, comment,
 			evaluator_name, evaluator_version, evaluator_config,
 			author_user_id, timestamp,
@@ -39,7 +40,7 @@ func (r *scoreRepository) Create(ctx context.Context, score *observability.Score
 		score.ID,
 		score.ProjectID,
 		score.TraceID,
-		score.ObservationID,
+		score.SpanID,
 		score.Name,
 		score.Value,
 		score.StringValue,
@@ -72,7 +73,7 @@ func (r *scoreRepository) Delete(ctx context.Context, id string) error {
 	query := `
 		INSERT INTO scores
 		SELECT
-			id, project_id, trace_id, observation_id,
+			id, project_id, trace_id, span_id,
 			name, value, string_value, data_type, source, comment,
 			evaluator_name, evaluator_version, evaluator_config,
 			author_user_id, timestamp,
@@ -92,7 +93,7 @@ func (r *scoreRepository) Delete(ctx context.Context, id string) error {
 func (r *scoreRepository) GetByID(ctx context.Context, id string) (*observability.Score, error) {
 	query := `
 		SELECT
-			id, project_id, trace_id, observation_id,
+			id, project_id, trace_id, span_id,
 			name, value, string_value, data_type, source, comment,
 			evaluator_name, evaluator_version, evaluator_config,
 			author_user_id, timestamp,
@@ -111,7 +112,7 @@ func (r *scoreRepository) GetByID(ctx context.Context, id string) (*observabilit
 func (r *scoreRepository) GetByTraceID(ctx context.Context, traceID string) ([]*observability.Score, error) {
 	query := `
 		SELECT
-			id, project_id, trace_id, observation_id,
+			id, project_id, trace_id, span_id,
 			name, value, string_value, data_type, source, comment,
 			evaluator_name, evaluator_version, evaluator_config,
 			author_user_id, timestamp,
@@ -130,23 +131,23 @@ func (r *scoreRepository) GetByTraceID(ctx context.Context, traceID string) ([]*
 	return r.scanScores(rows)
 }
 
-// GetByObservationID retrieves all scores for an observation
-func (r *scoreRepository) GetByObservationID(ctx context.Context, observationID string) ([]*observability.Score, error) {
+// GetBySpanID retrieves all scores for a span
+func (r *scoreRepository) GetBySpanID(ctx context.Context, spanID string) ([]*observability.Score, error) {
 	query := `
 		SELECT
-			id, project_id, trace_id, observation_id,
+			id, project_id, trace_id, span_id,
 			name, value, string_value, data_type, source, comment,
 			evaluator_name, evaluator_version, evaluator_config,
 			author_user_id, timestamp,
 			version, event_ts, is_deleted
 		FROM scores
-		WHERE observation_id = ? AND is_deleted = 0
+		WHERE span_id = ? AND is_deleted = 0
 		ORDER BY timestamp DESC
 	`
 
-	rows, err := r.db.Query(ctx, query, observationID)
+	rows, err := r.db.Query(ctx, query, spanID)
 	if err != nil {
-		return nil, fmt.Errorf("query scores by observation: %w", err)
+		return nil, fmt.Errorf("query scores by span: %w", err)
 	}
 	defer rows.Close()
 
@@ -157,7 +158,7 @@ func (r *scoreRepository) GetByObservationID(ctx context.Context, observationID 
 func (r *scoreRepository) GetByFilter(ctx context.Context, filter *observability.ScoreFilter) ([]*observability.Score, error) {
 	query := `
 		SELECT
-			id, project_id, trace_id, observation_id,
+			id, project_id, trace_id, span_id,
 			name, value, string_value, data_type, source, comment,
 			evaluator_name, evaluator_version, evaluator_config,
 			author_user_id, timestamp,
@@ -173,9 +174,9 @@ func (r *scoreRepository) GetByFilter(ctx context.Context, filter *observability
 			query += " AND trace_id = ?"
 			args = append(args, *filter.TraceID)
 		}
-		if filter.ObservationID != nil {
-			query += " AND observation_id = ?"
-			args = append(args, *filter.ObservationID)
+		if filter.SpanID != nil {
+			query += " AND span_id = ?"
+			args = append(args, *filter.SpanID)
 		}
 		if filter.Name != nil {
 			query += " AND name = ?"
@@ -243,7 +244,7 @@ func (r *scoreRepository) CreateBatch(ctx context.Context, scores []*observabili
 
 	batch, err := r.db.PrepareBatch(ctx, `
 		INSERT INTO scores (
-			id, project_id, trace_id, observation_id,
+			id, project_id, trace_id, span_id,
 			name, value, string_value, data_type, source, comment,
 			evaluator_name, evaluator_version, evaluator_config,
 			author_user_id, timestamp,
@@ -265,7 +266,7 @@ func (r *scoreRepository) CreateBatch(ctx context.Context, scores []*observabili
 			score.ID,
 			score.ProjectID,
 			score.TraceID,
-			score.ObservationID,
+			score.SpanID,
 			score.Name,
 			score.Value,
 			score.StringValue,
@@ -299,9 +300,9 @@ func (r *scoreRepository) Count(ctx context.Context, filter *observability.Score
 			query += " AND trace_id = ?"
 			args = append(args, *filter.TraceID)
 		}
-		if filter.ObservationID != nil {
-			query += " AND observation_id = ?"
-			args = append(args, *filter.ObservationID)
+		if filter.SpanID != nil {
+			query += " AND span_id = ?"
+			args = append(args, *filter.SpanID)
 		}
 		if filter.Name != nil {
 			query += " AND name = ?"
@@ -339,7 +340,7 @@ func (r *scoreRepository) scanScoreRow(row driver.Row) (*observability.Score, er
 		&score.ID,
 		&score.ProjectID,
 		&score.TraceID,
-		&score.ObservationID,
+		&score.SpanID,
 		&score.Name,
 		&score.Value,
 		&score.StringValue,
@@ -377,7 +378,7 @@ func (r *scoreRepository) scanScores(rows driver.Rows) ([]*observability.Score, 
 			&score.ID,
 			&score.ProjectID,
 			&score.TraceID,
-			&score.ObservationID,
+			&score.SpanID,
 			&score.Name,
 			&score.Value,
 			&score.StringValue,

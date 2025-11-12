@@ -61,7 +61,7 @@ func TestConfig_DevelopmentMode(t *testing.T) {
 	}
 
 	assert.True(t, cfg.IsDevelopment())
-	
+
 	// In development mode, all features should be available
 	assert.True(t, cfg.CanUseFeature("advanced_rbac"))
 	assert.True(t, cfg.CanUseFeature("sso_integration"))
@@ -205,7 +205,7 @@ func TestEnterpriseConfig_Validation(t *testing.T) {
 			cfg := &Config{
 				Enterprise: tt.config,
 			}
-			
+
 			// Basic validation - ensure the config can be used
 			assert.NotNil(t, cfg.Enterprise)
 			assert.NotEmpty(t, cfg.GetLicenseTier())
@@ -236,7 +236,7 @@ func TestGetLicenseTier_EdgeCases(t *testing.T) {
 					},
 				},
 			}
-			
+
 			assert.Equal(t, tt.expectedTier, cfg.GetLicenseTier())
 		})
 	}

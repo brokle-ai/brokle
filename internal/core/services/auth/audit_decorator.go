@@ -7,8 +7,8 @@ import (
 	"github.com/sirupsen/logrus"
 
 	authDomain "brokle/internal/core/domain/auth"
-	"brokle/pkg/ulid"
 	appErrors "brokle/pkg/errors"
+	"brokle/pkg/ulid"
 )
 
 // auditDecorator wraps an AuthService to provide automatic audit logging
@@ -30,12 +30,12 @@ func NewAuditDecorator(authService authDomain.AuthService, auditRepo authDomain.
 // Login handles user login with audit logging
 func (a *auditDecorator) Login(ctx context.Context, req *authDomain.LoginRequest) (*authDomain.LoginResponse, error) {
 	resp, err := a.authService.Login(ctx, req)
-	
+
 	// Audit based on result
 	if err != nil {
 		var reason string
 		var userID *ulid.ULID
-		
+
 		// Determine reason based on error type
 		if appErr, ok := appErrors.IsAppError(err); ok {
 			switch appErr.Type {
@@ -49,9 +49,9 @@ func (a *auditDecorator) Login(ctx context.Context, req *authDomain.LoginRequest
 		} else {
 			reason = "system_error"
 		}
-		
+
 		// For user_not_found, we don't have a userID, for others we might need to look it up
-		auditLog := authDomain.NewAuditLog(userID, nil, "auth.login.failed", "user", "", 
+		auditLog := authDomain.NewAuditLog(userID, nil, "auth.login.failed", "user", "",
 			fmt.Sprintf(`{"email": "%s", "reason": "%s"}`, req.Email, reason), "", "")
 		if createErr := a.auditRepo.Create(ctx, auditLog); createErr != nil {
 			a.logger.WithError(createErr).Error("Failed to create login failure audit log")
@@ -65,14 +65,14 @@ func (a *auditDecorator) Login(ctx context.Context, req *authDomain.LoginRequest
 			a.logger.WithError(createErr).Error("Failed to create login success audit log")
 		}
 	}
-	
+
 	return resp, err
 }
 
 // RefreshToken handles token refresh with audit logging
 func (a *auditDecorator) RefreshToken(ctx context.Context, req *authDomain.RefreshTokenRequest) (*authDomain.LoginResponse, error) {
 	resp, err := a.authService.RefreshToken(ctx, req)
-	
+
 	// Audit based on result
 	if err != nil {
 		var reason string
@@ -86,8 +86,8 @@ func (a *auditDecorator) RefreshToken(ctx context.Context, req *authDomain.Refre
 		} else {
 			reason = "system_error"
 		}
-		
-		auditLog := authDomain.NewAuditLog(nil, nil, "auth.refresh_token.failed", "token", "", 
+
+		auditLog := authDomain.NewAuditLog(nil, nil, "auth.refresh_token.failed", "token", "",
 			fmt.Sprintf(`{"reason": "%s"}`, reason), "", "")
 		if createErr := a.auditRepo.Create(ctx, auditLog); createErr != nil {
 			a.logger.WithError(createErr).Error("Failed to create refresh token failure audit log")
@@ -99,17 +99,17 @@ func (a *auditDecorator) RefreshToken(ctx context.Context, req *authDomain.Refre
 			a.logger.WithError(createErr).Error("Failed to create refresh token success audit log")
 		}
 	}
-	
+
 	return resp, err
 }
 
 // Logout handles user logout with audit logging
 func (a *auditDecorator) Logout(ctx context.Context, jti string, userID ulid.ULID) error {
 	err := a.authService.Logout(ctx, jti, userID)
-	
+
 	// Audit based on result
 	if err != nil {
-		auditLog := authDomain.NewAuditLog(&userID, nil, "auth.logout.failed", "user", userID.String(), 
+		auditLog := authDomain.NewAuditLog(&userID, nil, "auth.logout.failed", "user", userID.String(),
 			fmt.Sprintf(`{"jti": "%s"}`, jti), "", "")
 		if createErr := a.auditRepo.Create(ctx, auditLog); createErr != nil {
 			a.logger.WithError(createErr).Error("Failed to create logout failure audit log")
@@ -122,7 +122,7 @@ func (a *auditDecorator) Logout(ctx context.Context, jti string, userID ulid.ULI
 			a.logger.WithError(createErr).Error("Failed to create logout success audit log")
 		}
 	}
-	
+
 	return err
 }
 

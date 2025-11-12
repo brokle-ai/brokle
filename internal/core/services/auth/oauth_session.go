@@ -6,19 +6,19 @@ import (
 	"fmt"
 	"time"
 
-	"brokle/pkg/ulid"
 	appErrors "brokle/pkg/errors"
+	"brokle/pkg/ulid"
 )
 
 // OAuthSession stores incomplete user data during OAuth flow
 type OAuthSession struct {
-	Email           string     `json:"email"`
-	FirstName       string     `json:"first_name"`
-	LastName        string     `json:"last_name"`
-	Provider        string     `json:"provider"` // "google" | "github"
-	ProviderID      string     `json:"provider_id"`
-	ExpiresAt       time.Time  `json:"expires_at"`
-	InvitationToken *string    `json:"invitation_token,omitempty"`
+	Email           string    `json:"email"`
+	FirstName       string    `json:"first_name"`
+	LastName        string    `json:"last_name"`
+	Provider        string    `json:"provider"` // "google" | "github"
+	ProviderID      string    `json:"provider_id"`
+	ExpiresAt       time.Time `json:"expires_at"`
+	InvitationToken *string   `json:"invitation_token,omitempty"`
 }
 
 // CreateOAuthSession stores a temporary OAuth session in Redis

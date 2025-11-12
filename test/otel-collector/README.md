@@ -252,7 +252,7 @@ docker compose -f docker-compose.test.yml exec redis redis-cli ping
    docker compose -f docker-compose.test.yml exec clickhouse \
      clickhouse-client --user brokle --password test --query "SHOW TABLES"
    ```
-   Should include: `traces`, `observations`, `scores`
+   Should include: `traces`, `spans`, `scores`
 
 ---
 

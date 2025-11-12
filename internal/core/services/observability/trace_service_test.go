@@ -60,7 +60,7 @@ func (m *MockTraceRepository) GetBySessionID(ctx context.Context, sessionID stri
 
 // Removed after refactor: SearchTraces method removed
 
-// Removed after refactor: GetTraceWithObservations method removed
+// Removed after refactor: GetTraceWithSpans method removed
 
 // Removed after refactor: GetTraceStats method and TraceStats type removed
 
@@ -106,7 +106,7 @@ func (m *MockTraceRepository) GetChildren(ctx context.Context, parentTraceID str
 	return args.Get(0).([]*observability.Trace), args.Error(1)
 }
 
-func (m *MockTraceRepository) GetWithObservations(ctx context.Context, id string) (*observability.Trace, error) {
+func (m *MockTraceRepository) GetWithSpans(ctx context.Context, id string) (*observability.Trace, error) {
 	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -130,44 +130,44 @@ func (m *MockTraceRepository) GetByUserID(ctx context.Context, userID string, fi
 	return args.Get(0).([]*observability.Trace), args.Error(1)
 }
 
-type MockObservationRepository struct {
+type MockSpanRepository struct {
 	mock.Mock
 }
 
-func (m *MockObservationRepository) Create(ctx context.Context, observation *observability.Observation) error {
-	args := m.Called(ctx, observation)
+func (m *MockSpanRepository) Create(ctx context.Context, span *observability.Span) error {
+	args := m.Called(ctx, span)
 	return args.Error(0)
 }
 
-func (m *MockObservationRepository) GetByID(ctx context.Context, id string) (*observability.Observation, error) {
+func (m *MockSpanRepository) GetByID(ctx context.Context, id string) (*observability.Span, error) {
 	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*observability.Observation), args.Error(1)
+	return args.Get(0).(*observability.Span), args.Error(1)
 }
 
-// Removed after refactor: GetByExternalObservationID method removed
+// Removed after refactor: GetByExternalSpanID method removed
 
-func (m *MockObservationRepository) Update(ctx context.Context, observation *observability.Observation) error {
-	args := m.Called(ctx, observation)
+func (m *MockSpanRepository) Update(ctx context.Context, span *observability.Span) error {
+	args := m.Called(ctx, span)
 	return args.Error(0)
 }
 
-func (m *MockObservationRepository) Delete(ctx context.Context, id string) error {
+func (m *MockSpanRepository) Delete(ctx context.Context, id string) error {
 	args := m.Called(ctx, id)
 	return args.Error(0)
 }
 
-func (m *MockObservationRepository) GetByTraceID(ctx context.Context, traceID string) ([]*observability.Observation, error) {
+func (m *MockSpanRepository) GetByTraceID(ctx context.Context, traceID string) ([]*observability.Span, error) {
 	args := m.Called(ctx, traceID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*observability.Observation), args.Error(1)
+	return args.Get(0).([]*observability.Span), args.Error(1)
 }
 
-// Removed after refactor: GetByParentObservationID renamed to GetChildren
+// Removed after refactor: GetByParentSpanID renamed to GetChildren
 
 // Removed after refactor: GetByType method removed
 
@@ -175,68 +175,68 @@ func (m *MockObservationRepository) GetByTraceID(ctx context.Context, traceID st
 
 // Removed after refactor: GetByModel method removed
 
-// Removed after refactor: SearchObservations method removed
+// Removed after refactor: SearchSpans method removed
 
-// Removed after refactor: GetObservationStats method and ObservationStats type removed
+// Removed after refactor: GetSpanStats method and SpanStats type removed
 
-func (m *MockObservationRepository) CreateBatch(ctx context.Context, observations []*observability.Observation) error {
-	args := m.Called(ctx, observations)
+func (m *MockSpanRepository) CreateBatch(ctx context.Context, spans []*observability.Span) error {
+	args := m.Called(ctx, spans)
 	return args.Error(0)
 }
 
-func (m *MockObservationRepository) UpdateBatch(ctx context.Context, observations []*observability.Observation) error {
-	args := m.Called(ctx, observations)
+func (m *MockSpanRepository) UpdateBatch(ctx context.Context, spans []*observability.Span) error {
+	args := m.Called(ctx, spans)
 	return args.Error(0)
 }
 
-func (m *MockObservationRepository) DeleteBatch(ctx context.Context, ids []string) error {
+func (m *MockSpanRepository) DeleteBatch(ctx context.Context, ids []string) error {
 	args := m.Called(ctx, ids)
 	return args.Error(0)
 }
 
-// Removed after refactor: CompleteObservation method removed
+// Removed after refactor: CompleteSpan method removed
 
-// Removed after refactor: GetIncompleteObservations method removed
+// Removed after refactor: GetIncompleteSpans method removed
 
-// Removed after refactor: GetObservationsByTimeRange method removed
+// Removed after refactor: GetSpansByTimeRange method removed
 
-// Removed after refactor: CountObservations method removed, now using Count
+// Removed after refactor: CountSpans method removed, now using Count
 
-func (m *MockObservationRepository) Count(ctx context.Context, filter *observability.ObservationFilter) (int64, error) {
+func (m *MockSpanRepository) Count(ctx context.Context, filter *observability.SpanFilter) (int64, error) {
 	args := m.Called(ctx, filter)
 	return args.Get(0).(int64), args.Error(1)
 }
 
-func (m *MockObservationRepository) GetByFilter(ctx context.Context, filter *observability.ObservationFilter) ([]*observability.Observation, error) {
+func (m *MockSpanRepository) GetByFilter(ctx context.Context, filter *observability.SpanFilter) ([]*observability.Span, error) {
 	args := m.Called(ctx, filter)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*observability.Observation), args.Error(1)
+	return args.Get(0).([]*observability.Span), args.Error(1)
 }
 
-func (m *MockObservationRepository) GetChildren(ctx context.Context, parentObservationID string) ([]*observability.Observation, error) {
-	args := m.Called(ctx, parentObservationID)
+func (m *MockSpanRepository) GetChildren(ctx context.Context, parentSpanID string) ([]*observability.Span, error) {
+	args := m.Called(ctx, parentSpanID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*observability.Observation), args.Error(1)
+	return args.Get(0).([]*observability.Span), args.Error(1)
 }
 
-func (m *MockObservationRepository) GetRootSpan(ctx context.Context, traceID string) (*observability.Observation, error) {
+func (m *MockSpanRepository) GetRootSpan(ctx context.Context, traceID string) (*observability.Span, error) {
 	args := m.Called(ctx, traceID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).(*observability.Observation), args.Error(1)
+	return args.Get(0).(*observability.Span), args.Error(1)
 }
 
-func (m *MockObservationRepository) GetTreeByTraceID(ctx context.Context, traceID string) ([]*observability.Observation, error) {
+func (m *MockSpanRepository) GetTreeByTraceID(ctx context.Context, traceID string) ([]*observability.Span, error) {
 	args := m.Called(ctx, traceID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*observability.Observation), args.Error(1)
+	return args.Get(0).([]*observability.Span), args.Error(1)
 }
 
 type MockEventPublisher struct {
@@ -253,49 +253,48 @@ func (m *MockEventPublisher) PublishBatch(ctx context.Context, events []*observa
 	return args.Error(0)
 }
 
-// MockScoreRepository is defined in observation_service_test.go
+// MockScoreRepository is defined in span_service_test.go
 
 // ============================================================================
 // CreateTrace Tests
 // ============================================================================
 
-
 // ============================================================================
 // HIGH-VALUE TESTS: Complex Business Logic & Orchestration
 // ============================================================================
 
-// Removed after refactor: CreateTraceWithObservations method no longer exists
+// Removed after refactor: CreateTraceWithSpans method no longer exists
 /*
-func TestTraceService_CreateTraceWithObservations(t *testing.T) {
+func TestTraceService_CreateTraceWithSpans(t *testing.T) {
 	tests := []struct {
 		name        string
 		trace       *observability.Trace
-		mockSetup   func(*MockTraceRepository, *MockObservationRepository, *MockEventPublisher)
+		mockSetup   func(*MockTraceRepository, *MockSpanRepository, *MockEventPublisher)
 		expectedErr error
 		checkResult func(*testing.T, *observability.Trace)
 	}{
 		{
-			name: "success - trace with observations",
+			name: "success - trace with spans",
 			trace: &observability.Trace{
 				ProjectID: "11111111111111111111111111111111",
-				Name:      "Trace with Observations",
-				Observations: []*observability.Observation{
+				Name:      "Trace with Spans",
+				Spans: []*observability.Span{
 					{
-						Type:      observability.ObservationTypeGeneration,
+						Type:      observability.SpanTypeGeneration,
 						Name:      "LLM Call 1",
 						StartTime: time.Now(),
 					},
 					{
-						Type:      observability.ObservationTypeSpan,
+						Type:      observability.SpanTypeSpan,
 						Name:      "Span 1",
 						StartTime: time.Now(),
 					},
 				},
 			},
-			mockSetup: func(traceRepo *MockTraceRepository, obsRepo *MockObservationRepository, publisher *MockEventPublisher) {
+			mockSetup: func(traceRepo *MockTraceRepository, obsRepo *MockSpanRepository, publisher *MockEventPublisher) {
 				traceRepo.On("Create", mock.Anything, mock.AnythingOfType("*observability.Trace")).
 					Return(nil)
-				obsRepo.On("CreateBatch", mock.Anything, mock.AnythingOfType("[]*observability.Observation")).
+				obsRepo.On("CreateBatch", mock.Anything, mock.AnythingOfType("[]*observability.Span")).
 					Return(nil)
 				publisher.On("Publish", mock.Anything, mock.AnythingOfType("*observability.Event")).
 					Return(nil)
@@ -303,22 +302,22 @@ func TestTraceService_CreateTraceWithObservations(t *testing.T) {
 			expectedErr: nil,
 			checkResult: func(t *testing.T, trace *observability.Trace) {
 				assert.NotNil(t, trace)
-				// The returned trace doesn't include observations
+				// The returned trace doesn't include spans
 				// But the original trace object has been modified with IDs
 			},
 		},
 		{
-			name: "success - trace without observations",
+			name: "success - trace without spans",
 			trace: &observability.Trace{
 				ProjectID: "22222222222222222222222222222222",
-				Name:      "Trace without Observations",
+				Name:      "Trace without Spans",
 			},
-			mockSetup: func(traceRepo *MockTraceRepository, obsRepo *MockObservationRepository, publisher *MockEventPublisher) {
+			mockSetup: func(traceRepo *MockTraceRepository, obsRepo *MockSpanRepository, publisher *MockEventPublisher) {
 				traceRepo.On("Create", mock.Anything, mock.AnythingOfType("*observability.Trace")).
 					Return(nil)
 				publisher.On("Publish", mock.Anything, mock.AnythingOfType("*observability.Event")).
 					Return(nil)
-				// No observation repo call expected
+				// No span repo call expected
 			},
 			expectedErr: nil,
 			checkResult: func(t *testing.T, trace *observability.Trace) {
@@ -328,7 +327,7 @@ func TestTraceService_CreateTraceWithObservations(t *testing.T) {
 		{
 			name:  "error - nil trace",
 			trace: nil,
-			mockSetup: func(traceRepo *MockTraceRepository, obsRepo *MockObservationRepository, publisher *MockEventPublisher) {
+			mockSetup: func(traceRepo *MockTraceRepository, obsRepo *MockSpanRepository, publisher *MockEventPublisher) {
 				// No calls expected
 			},
 			expectedErr: &observability.ObservabilityError{},
@@ -337,27 +336,27 @@ func TestTraceService_CreateTraceWithObservations(t *testing.T) {
 			},
 		},
 		{
-			name: "error - observation creation failure",
+			name: "error - span creation failure",
 			trace: &observability.Trace{
 				ProjectID: "33333333333333333333333333333333",
 				Name:      "Trace Obs Fail",
-				Observations: []*observability.Observation{
+				Spans: []*observability.Span{
 					{
-						Type:      observability.ObservationTypeGeneration,
-						Name:      "Failing Observation",
+						Type:      observability.SpanTypeGeneration,
+						Name:      "Failing Span",
 						StartTime: time.Now(),
 					},
 				},
 			},
-			mockSetup: func(traceRepo *MockTraceRepository, obsRepo *MockObservationRepository, publisher *MockEventPublisher) {
+			mockSetup: func(traceRepo *MockTraceRepository, obsRepo *MockSpanRepository, publisher *MockEventPublisher) {
 				traceRepo.On("Create", mock.Anything, mock.AnythingOfType("*observability.Trace")).
 					Return(nil)
-				obsRepo.On("CreateBatch", mock.Anything, mock.AnythingOfType("[]*observability.Observation")).
-					Return(errors.New("observation creation failed"))
+				obsRepo.On("CreateBatch", mock.Anything, mock.AnythingOfType("[]*observability.Span")).
+					Return(errors.New("span creation failed"))
 				publisher.On("Publish", mock.Anything, mock.AnythingOfType("*observability.Event")).
 					Return(nil)
 			},
-			expectedErr: errors.New("failed to create observations"),
+			expectedErr: errors.New("failed to create spans"),
 			checkResult: func(t *testing.T, trace *observability.Trace) {
 				assert.Nil(t, trace)
 			},
@@ -367,14 +366,14 @@ func TestTraceService_CreateTraceWithObservations(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockTraceRepo := new(MockTraceRepository)
-			mockObsRepo := new(MockObservationRepository)
+			mockObsRepo := new(MockSpanRepository)
 			mockPublisher := new(MockEventPublisher)
 
 			tt.mockSetup(mockTraceRepo, mockObsRepo, mockPublisher)
 
 			service := NewTraceService(mockTraceRepo, mockObsRepo, mockPublisher)
 
-			result, err := service.CreateTraceWithObservations(context.Background(), tt.trace)
+			result, err := service.CreateTraceWithSpans(context.Background(), tt.trace)
 
 			if tt.expectedErr != nil {
 				assert.Error(t, err)
@@ -399,45 +398,45 @@ func TestTraceService_CreateTraceWithObservations(t *testing.T) {
 
 */
 
-func TestTraceService_GetTraceWithObservations(t *testing.T) {
+func TestTraceService_GetTraceWithSpans(t *testing.T) {
 	traceID := "12345678901234567890123456789012"
 
 	tests := []struct {
 		name        string
 		id          string
-		mockSetup   func(*MockTraceRepository, *MockObservationRepository)
+		mockSetup   func(*MockTraceRepository, *MockSpanRepository)
 		expectedErr error
 		checkResult func(*testing.T, *observability.Trace)
 	}{
 		{
-			name: "success - trace with observations found",
+			name: "success - trace with spans found",
 			id:   traceID,
-			mockSetup: func(traceRepo *MockTraceRepository, obsRepo *MockObservationRepository) {
-				// GetTraceWithObservations calls GetTrace which calls GetByID
+			mockSetup: func(traceRepo *MockTraceRepository, obsRepo *MockSpanRepository) {
+				// GetTraceWithSpans calls GetTrace which calls GetByID
 				traceRepo.On("GetByID", mock.Anything, traceID).
-				Return(&observability.Trace{
-					ID:        traceID,
-					ProjectID: "98765432109876543210987654321098",
-					Name:      "Test Trace",
-				}, nil)
+					Return(&observability.Trace{
+						ID:        traceID,
+						ProjectID: "98765432109876543210987654321098",
+						Name:      "Test Trace",
+					}, nil)
 
-				// Then it calls GetByTraceID to get observations
-				observations := []*observability.Observation{
+				// Then it calls GetByTraceID to get spans
+				spans := []*observability.Span{
 					{
 						ID:        "abcdef12345678901234567890123456",
 						TraceID:   traceID,
-						Type:      observability.ObservationTypeGeneration,
+						Type:      observability.SpanTypeGeneration,
 						Name:      "LLM Call",
 						StartTime: time.Now(),
 					},
 				}
-			obsRepo.On("GetByTraceID", mock.Anything, traceID).
-				Return(observations, nil)
+				obsRepo.On("GetByTraceID", mock.Anything, traceID).
+					Return(spans, nil)
 			},
 			expectedErr: nil,
 			checkResult: func(t *testing.T, trace *observability.Trace) {
 				assert.NotNil(t, trace)
-				assert.Len(t, trace.Observations, 1)
+				assert.Len(t, trace.Spans, 1)
 			},
 		},
 	}
@@ -445,14 +444,14 @@ func TestTraceService_GetTraceWithObservations(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockRepo := new(MockTraceRepository)
-		mockObsRepo := new(MockObservationRepository)
+			mockObsRepo := new(MockSpanRepository)
 
-		tt.mockSetup(mockRepo, mockObsRepo)
+			tt.mockSetup(mockRepo, mockObsRepo)
 
 			mockScoreRepo := &MockScoreRepository{}
 			service := NewTraceService(mockRepo, mockObsRepo, mockScoreRepo, logrus.New())
 
-			result, err := service.GetTraceWithObservations(context.Background(), tt.id)
+			result, err := service.GetTraceWithSpans(context.Background(), tt.id)
 
 			if tt.expectedErr != nil {
 				assert.Error(t, err)
@@ -566,7 +565,7 @@ func TestTraceService_CreateTracesBatch(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockRepo := new(MockTraceRepository)
-			mockObsRepo := new(MockObservationRepository)
+			mockObsRepo := new(MockSpanRepository)
 			mockPublisher := new(MockEventPublisher)
 
 			tt.mockSetup(mockRepo, mockPublisher)
@@ -597,4 +596,3 @@ func TestTraceService_CreateTracesBatch(t *testing.T) {
 */
 
 // Removed after refactor: GetTracesByTimeRange, GetRecentTraces, and GetTraceAnalytics methods no longer exist
-

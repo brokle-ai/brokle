@@ -18,48 +18,48 @@ func NewLicenseWrapper(config *Config) *LicenseWrapper {
 // GetEffectiveLicense returns the effective license configuration with all defaults applied
 func (lw *LicenseWrapper) GetEffectiveLicense() *LicenseConfig {
 	license := &lw.config.Enterprise.License
-	
+
 	// Apply tier-based defaults if not explicitly set
 	if license.Type == "" {
 		license.Type = "free"
 	}
-	
+
 	// Ensure license has proper limits based on tier
 	lw.applyTierDefaults(license)
-	
+
 	// Ensure license has valid expiration
 	if license.ValidUntil.IsZero() {
 		license.ValidUntil = lw.getDefaultValidUntil(license.Type)
 	}
-	
+
 	return license
 }
 
 // ValidateLicense performs comprehensive license validation
 func (lw *LicenseWrapper) ValidateLicense() error {
 	license := lw.GetEffectiveLicense()
-	
+
 	// Validate tier
 	validTiers := []string{"free", "pro", "business", "enterprise"}
 	if !lw.isValidTier(license.Type, validTiers) {
 		return fmt.Errorf("invalid license tier: %s. Valid tiers: %v", license.Type, validTiers)
 	}
-	
+
 	// Validate limits are reasonable
 	if err := lw.validateLimits(license); err != nil {
 		return fmt.Errorf("invalid license limits: %w", err)
 	}
-	
+
 	// Validate expiration
 	if license.ValidUntil.Before(time.Now()) && license.Type != "free" {
 		return fmt.Errorf("license expired on %s", license.ValidUntil.Format("2006-01-02"))
 	}
-	
+
 	// Validate features exist for the tier
 	if err := lw.validateFeaturesForTier(license); err != nil {
 		return fmt.Errorf("invalid features for tier: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -70,26 +70,26 @@ func (lw *LicenseWrapper) GetTierLimits(tier string) (*LicenseConfig, error) {
 		ValidUntil:  lw.getDefaultValidUntil(tier),
 		OfflineMode: false,
 	}
-	
+
 	switch tier {
 	case "free":
 		limits.MaxRequests = 10000   // 10K requests/month
 		limits.MaxUsers = 5          // 5 users
 		limits.MaxProjects = 2       // 2 projects
 		limits.Features = []string{} // No enterprise features
-		
+
 	case "pro":
-		limits.MaxRequests = 100000   // 100K requests/month
-		limits.MaxUsers = 10          // 10 users
-		limits.MaxProjects = 10       // 10 projects
+		limits.MaxRequests = 100000 // 100K requests/month
+		limits.MaxUsers = 10        // 10 users
+		limits.MaxProjects = 10     // 10 projects
 		limits.Features = []string{
 			"advanced_rbac",
 		}
-		
+
 	case "business":
-		limits.MaxRequests = 1000000  // 1M requests/month
-		limits.MaxUsers = 50          // 50 users
-		limits.MaxProjects = 100      // 100 projects
+		limits.MaxRequests = 1000000 // 1M requests/month
+		limits.MaxUsers = 50         // 50 users
+		limits.MaxProjects = 100     // 100 projects
 		limits.Features = []string{
 			"advanced_rbac",
 			"sso_integration",
@@ -97,7 +97,7 @@ func (lw *LicenseWrapper) GetTierLimits(tier string) (*LicenseConfig, error) {
 			"predictive_insights",
 			"custom_dashboards",
 		}
-		
+
 	case "enterprise":
 		limits.MaxRequests = 10000000 // 10M requests/month (effectively unlimited)
 		limits.MaxUsers = 1000        // 1000 users
@@ -113,11 +113,11 @@ func (lw *LicenseWrapper) GetTierLimits(tier string) (*LicenseConfig, error) {
 			"advanced_integrations",
 			"cross_org_analytics",
 		}
-		
+
 	default:
 		return nil, fmt.Errorf("unknown tier: %s", tier)
 	}
-	
+
 	return limits, nil
 }
 
@@ -127,7 +127,7 @@ func (lw *LicenseWrapper) IsFeatureAvailableInTier(feature, tier string) bool {
 	if err != nil {
 		return false
 	}
-	
+
 	for _, f := range tierLimits.Features {
 		if f == feature {
 			return true
@@ -139,13 +139,13 @@ func (lw *LicenseWrapper) IsFeatureAvailableInTier(feature, tier string) bool {
 // GetRecommendedTierForFeature returns the minimum tier that supports the feature
 func (lw *LicenseWrapper) GetRecommendedTierForFeature(feature string) string {
 	tiers := []string{"free", "pro", "business", "enterprise"}
-	
+
 	for _, tier := range tiers {
 		if lw.IsFeatureAvailableInTier(feature, tier) {
 			return tier
 		}
 	}
-	
+
 	return "enterprise" // Default to enterprise for unknown features
 }
 
@@ -157,42 +157,42 @@ func (lw *LicenseWrapper) GetUpgradePath(currentTier, targetTier string) []strin
 		"business":   2,
 		"enterprise": 3,
 	}
-	
+
 	currentOrder, currentExists := tierOrder[currentTier]
 	targetOrder, targetExists := tierOrder[targetTier]
-	
+
 	if !currentExists || !targetExists || currentOrder >= targetOrder {
 		return []string{targetTier}
 	}
-	
+
 	path := []string{}
 	for tier, order := range tierOrder {
 		if order > currentOrder && order <= targetOrder {
 			path = append(path, tier)
 		}
 	}
-	
+
 	return path
 }
 
 // GetLicenseStatus returns a human-readable status of the current license
 func (lw *LicenseWrapper) GetLicenseStatus() string {
 	license := lw.GetEffectiveLicense()
-	
+
 	if license.Type == "free" {
 		return "Free tier - upgrade to unlock enterprise features"
 	}
-	
+
 	if license.ValidUntil.Before(time.Now()) {
-		return fmt.Sprintf("%s license expired on %s", 
+		return fmt.Sprintf("%s license expired on %s",
 			license.Type, license.ValidUntil.Format("January 2, 2006"))
 	}
-	
+
 	daysUntilExpiry := int(time.Until(license.ValidUntil).Hours() / 24)
 	if daysUntilExpiry <= 30 && license.Type != "free" {
 		return fmt.Sprintf("%s license expires in %d days", license.Type, daysUntilExpiry)
 	}
-	
+
 	return fmt.Sprintf("%s license active", license.Type)
 }
 
@@ -246,16 +246,16 @@ func (lw *LicenseWrapper) validateLimits(license *LicenseConfig) error {
 	if license.MaxProjects <= 0 {
 		return fmt.Errorf("max_projects must be positive, got %d", license.MaxProjects)
 	}
-	
+
 	// Validate limits are reasonable for the tier
 	expectedLimits, err := lw.GetTierLimits(license.Type)
 	if err == nil {
 		if license.MaxRequests > expectedLimits.MaxRequests*10 {
-			return fmt.Errorf("max_requests %d exceeds reasonable limit for %s tier", 
+			return fmt.Errorf("max_requests %d exceeds reasonable limit for %s tier",
 				license.MaxRequests, license.Type)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -264,7 +264,7 @@ func (lw *LicenseWrapper) validateFeaturesForTier(license *LicenseConfig) error 
 	if err != nil {
 		return err
 	}
-	
+
 	// Check if license has features that shouldn't be available in this tier
 	for _, feature := range license.Features {
 		found := false
@@ -278,6 +278,6 @@ func (lw *LicenseWrapper) validateFeaturesForTier(license *LicenseConfig) error 
 			return fmt.Errorf("feature '%s' not available in %s tier", feature, license.Type)
 		}
 	}
-	
+
 	return nil
 }

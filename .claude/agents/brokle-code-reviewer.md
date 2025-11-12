@@ -84,7 +84,7 @@ Review against `docs/TESTING.md` and `docs/development/testing-philosophy.md`:
 - **PostgreSQL**: Transactional data (users, orgs, projects, API keys)
   - Use GORM ORM with proper error handling
   - Single comprehensive schema in migrations
-- **ClickHouse**: Time-series analytics (observations, traces, logs)
+- **ClickHouse**: Time-series analytics (spans, traces, logs)
   - Raw SQL queries for performance
   - ZSTD compression for large fields
   - TTL-based retention policies
@@ -242,7 +242,7 @@ func TestBatchProcessor_ProcessTelemetryBatch(t *testing.T) {
     tests := []struct {
         name           string
         batch          TelemetryBatch
-        setupMocks     func(*mocks.MockObservationRepo, *mocks.MockTraceRepo)
+        setupMocks     func(*mocks.MockSpanRepo, *mocks.MockTraceRepo)
         expectedError  bool
         expectedStats  BatchStats
     }{
@@ -250,13 +250,13 @@ func TestBatchProcessor_ProcessTelemetryBatch(t *testing.T) {
             name: "successfully processes mixed batch with deduplication",
             batch: TelemetryBatch{
                 Traces: []Trace{{ID: "trace1"}, {ID: "trace1"}}, // Duplicate
-                Observations: []Observation{{ID: "obs1"}},
+                Spans: []Span{{ID: "obs1"}},
             },
-            setupMocks: func(obsRepo *mocks.MockObservationRepo, traceRepo *mocks.MockTraceRepo) {
+            setupMocks: func(spanRepo *mocks.MockSpanRepo, traceRepo *mocks.MockTraceRepo) {
                 traceRepo.On("BatchCreate", mock.Anything, mock.MatchedBy(func(traces []Trace) bool {
                     return len(traces) == 1 // Verify deduplication
                 })).Return(nil)
-                obsRepo.On("BatchCreate", mock.Anything, mock.Anything).Return(nil)
+                spanRepo.On("BatchCreate", mock.Anything, mock.Anything).Return(nil)
             },
             expectedError: false,
             expectedStats: BatchStats{Processed: 2, Duplicates: 1},

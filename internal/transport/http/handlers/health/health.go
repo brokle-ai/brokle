@@ -131,10 +131,10 @@ func (h *Handler) Live(c *gin.Context) {
 // checkDatabase checks database connectivity
 func (h *Handler) checkDatabase() HealthCheck {
 	start := time.Now()
-	
+
 	// TODO: Implement actual database ping
 	// For now, simulate a successful check
-	
+
 	return HealthCheck{
 		Status:      "healthy",
 		Message:     "Database connection is healthy",
@@ -146,10 +146,10 @@ func (h *Handler) checkDatabase() HealthCheck {
 // checkRedis checks Redis connectivity
 func (h *Handler) checkRedis() HealthCheck {
 	start := time.Now()
-	
+
 	// TODO: Implement actual Redis ping
 	// For now, simulate a successful check
-	
+
 	return HealthCheck{
 		Status:      "healthy",
 		Message:     "Redis connection is healthy",
@@ -161,10 +161,10 @@ func (h *Handler) checkRedis() HealthCheck {
 // checkClickHouse checks ClickHouse connectivity
 func (h *Handler) checkClickHouse() HealthCheck {
 	start := time.Now()
-	
+
 	// TODO: Implement actual ClickHouse ping
 	// For now, simulate a successful check
-	
+
 	return HealthCheck{
 		Status:      "healthy",
 		Message:     "ClickHouse connection is healthy",
@@ -172,4 +172,3 @@ func (h *Handler) checkClickHouse() HealthCheck {
 		Duration:    time.Since(start).String(),
 	}
 }
-

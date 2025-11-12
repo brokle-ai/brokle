@@ -73,11 +73,11 @@ export function TraceDetailView({ trace }: TraceDetailViewProps) {
           <CardHeader className='pb-2'>
             <CardTitle className='text-sm font-medium text-muted-foreground flex items-center gap-2'>
               <Layers className='h-4 w-4' />
-              Observations
+              Spans
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className='text-2xl font-bold'>{trace.observationCount}</div>
+            <div className='text-2xl font-bold'>{trace.spanCount}</div>
           </CardContent>
         </Card>
 
@@ -152,17 +152,17 @@ export function TraceDetailView({ trace }: TraceDetailViewProps) {
         </CardContent>
       </Card>
 
-      {/* Observations Section - Placeholder */}
+      {/* Spans Section - Placeholder */}
       <Card>
         <CardHeader>
-          <CardTitle>Observations</CardTitle>
+          <CardTitle>Spans</CardTitle>
         </CardHeader>
         <CardContent>
           <div className='text-sm text-muted-foreground'>
-            {trace.observationCount} observation{trace.observationCount !== 1 ? 's' : ''} in this trace
+            {trace.spanCount} span{trace.spanCount !== 1 ? 's' : ''} in this trace
           </div>
           <p className='text-sm text-muted-foreground mt-2'>
-            Detailed observation view coming soon...
+            Detailed span view coming soon...
           </p>
         </CardContent>
       </Card>

@@ -11,14 +11,17 @@ import (
 	"gorm.io/gorm"
 
 	"brokle/internal/config"
-	"brokle/internal/core/domain/common"
 	"brokle/internal/core/domain/auth"
 	"brokle/internal/core/domain/billing"
+	"brokle/internal/core/domain/common"
 	"brokle/internal/core/domain/gateway"
 	"brokle/internal/core/domain/observability"
 	"brokle/internal/core/domain/organization"
 	"brokle/internal/core/domain/user"
 	authService "brokle/internal/core/services/auth"
+	billingService "brokle/internal/core/services/billing"
+	gatewayService "brokle/internal/core/services/gateway"
+	observabilityService "brokle/internal/core/services/observability"
 	orgService "brokle/internal/core/services/organization"
 	registrationService "brokle/internal/core/services/registration"
 	userService "brokle/internal/core/services/user"
@@ -37,9 +40,6 @@ import (
 	userRepo "brokle/internal/infrastructure/repository/user"
 	"brokle/internal/infrastructure/storage"
 	"brokle/internal/infrastructure/streams"
-	billingService "brokle/internal/core/services/billing"
-	gatewayService "brokle/internal/core/services/gateway"
-	observabilityService "brokle/internal/core/services/observability"
 	"brokle/internal/transport/http"
 	"brokle/internal/transport/http/handlers"
 	"brokle/internal/workers"
@@ -74,8 +74,8 @@ type ServerContainer struct {
 // ProviderContainer holds all provider instances for dependency injection
 type ProviderContainer struct {
 	Core    *CoreContainer
-	Server  *ServerContainer  // nil in worker mode
-	Workers *WorkerContainer  // nil in server mode
+	Server  *ServerContainer // nil in worker mode
+	Workers *WorkerContainer // nil in server mode
 	Mode    DeploymentMode
 }
 
@@ -88,8 +88,8 @@ type DatabaseContainer struct {
 
 // WorkerContainer holds all background worker instances
 type WorkerContainer struct {
-	TelemetryConsumer   *workers.TelemetryStreamConsumer
-	GatewayAnalytics    *gatewayAnalytics.GatewayAnalyticsWorker
+	TelemetryConsumer *workers.TelemetryStreamConsumer
+	GatewayAnalytics  *gatewayAnalytics.GatewayAnalyticsWorker
 }
 
 // RepositoryContainer holds all repository instances organized by domain
@@ -104,21 +104,21 @@ type RepositoryContainer struct {
 
 // ServiceContainer holds all service instances organized by domain
 type ServiceContainer struct {
-	User               *UserServices
-	Auth               *AuthServices
-	Registration       registrationService.RegistrationService // Registration orchestrator
+	User         *UserServices
+	Auth         *AuthServices
+	Registration registrationService.RegistrationService // Registration orchestrator
 	// Direct organization services - no wrapper
-	OrganizationService    organization.OrganizationService
-	MemberService         organization.MemberService
-	ProjectService        organization.ProjectService
-	InvitationService     organization.InvitationService
-	SettingsService       organization.OrganizationSettingsService
+	OrganizationService organization.OrganizationService
+	MemberService       organization.MemberService
+	ProjectService      organization.ProjectService
+	InvitationService   organization.InvitationService
+	SettingsService     organization.OrganizationSettingsService
 	// Observability services
-	Observability         *observabilityService.ServiceRegistry
+	Observability *observabilityService.ServiceRegistry
 	// Gateway services
-	Gateway               *GatewayServices
+	Gateway *GatewayServices
 	// Billing services
-	Billing               *BillingServices
+	Billing *BillingServices
 }
 
 // EnterpriseContainer holds all enterprise service instances
@@ -138,15 +138,15 @@ type UserRepositories struct {
 
 // AuthRepositories contains all auth-related repositories
 type AuthRepositories struct {
-	UserSession         auth.UserSessionRepository
-	BlacklistedToken    auth.BlacklistedTokenRepository
-	PasswordResetToken  auth.PasswordResetTokenRepository
-	APIKey              auth.APIKeyRepository
-	Role                auth.RoleRepository
-	OrganizationMember  auth.OrganizationMemberRepository
-	Permission          auth.PermissionRepository
-	RolePermission      auth.RolePermissionRepository
-	AuditLog            auth.AuditLogRepository
+	UserSession        auth.UserSessionRepository
+	BlacklistedToken   auth.BlacklistedTokenRepository
+	PasswordResetToken auth.PasswordResetTokenRepository
+	APIKey             auth.APIKeyRepository
+	Role               auth.RoleRepository
+	OrganizationMember auth.OrganizationMemberRepository
+	Permission         auth.PermissionRepository
+	RolePermission     auth.RolePermissionRepository
+	AuditLog           auth.AuditLogRepository
 }
 
 // OrganizationRepositories contains all organization-related repositories
@@ -161,7 +161,7 @@ type OrganizationRepositories struct {
 // ObservabilityRepositories contains all observability-related repositories
 type ObservabilityRepositories struct {
 	Trace                  observability.TraceRepository
-	Observation            observability.ObservationRepository
+	Span                   observability.SpanRepository
 	Score                  observability.ScoreRepository
 	BlobStorage            observability.BlobStorageRepository
 	TelemetryDeduplication observability.TelemetryDeduplicationRepository
@@ -186,22 +186,22 @@ type BillingRepositories struct {
 
 // UserServices contains all user-related services
 type UserServices struct {
-	User        user.UserService
-	Profile     user.ProfileService
+	User    user.UserService
+	Profile user.ProfileService
 }
 
 // AuthServices contains all auth-related services
 type AuthServices struct {
-	Auth                   auth.AuthService
-	JWT                    auth.JWTService
-	Sessions               auth.SessionService
-	APIKey                 auth.APIKeyService
-	Role                   auth.RoleService
-	Permission             auth.PermissionService
-	OrganizationMembers    auth.OrganizationMemberService
-	BlacklistedTokens      auth.BlacklistedTokenService
-	Scope                  auth.ScopeService
-	OAuthProvider          *authService.OAuthProviderService
+	Auth                auth.AuthService
+	JWT                 auth.JWTService
+	Sessions            auth.SessionService
+	APIKey              auth.APIKeyService
+	Role                auth.RoleService
+	Permission          auth.PermissionService
+	OrganizationMembers auth.OrganizationMemberService
+	BlacklistedTokens   auth.BlacklistedTokenService
+	Scope               auth.ScopeService
+	OAuthProvider       *authService.OAuthProviderService
 }
 
 // GatewayServices contains all gateway-related services
@@ -215,7 +215,6 @@ type GatewayServices struct {
 type BillingServices struct {
 	Billing *billingService.BillingService
 }
-
 
 // Provider functions for modular DI
 
@@ -271,7 +270,7 @@ func ProvideWorkers(core *CoreContainer) (*WorkerContainer, error) {
 		core.Logger,
 		consumerConfig,
 		core.Services.Observability.TraceService,
-		core.Services.Observability.ObservationService,
+		core.Services.Observability.SpanService,
 		core.Services.Observability.ScoreService,
 	)
 
@@ -388,9 +387,9 @@ func ProvideWorkerServices(core *CoreContainer) *ServiceContainer {
 		InvitationService:   nil,
 		SettingsService:     nil,
 		// Worker only needs these
-		Observability:       observabilityServices,
-		Gateway:             gatewayServices,
-		Billing:             billingServices,
+		Observability: observabilityServices,
+		Gateway:       gatewayServices,
+		Billing:       billingServices,
 	}
 }
 
@@ -403,7 +402,7 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 		core.Services.Auth.Auth,
 		core.Services.Auth.APIKey,
 		core.Services.Auth.BlacklistedTokens,
-		core.Services.Registration, // Registration service for signup
+		core.Services.Registration,       // Registration service for signup
 		core.Services.Auth.OAuthProvider, // OAuth provider for Google/GitHub signup
 		core.Services.User.User,
 		core.Services.User.Profile,
@@ -476,7 +475,7 @@ func ProvideOrganizationRepositories(db *gorm.DB) *OrganizationRepositories {
 func ProvideObservabilityRepositories(clickhouseDB *database.ClickHouseDB, redisDB *database.RedisDB) *ObservabilityRepositories {
 	return &ObservabilityRepositories{
 		Trace:                  observabilityRepo.NewTraceRepository(clickhouseDB.Conn),
-		Observation:            observabilityRepo.NewObservationRepository(clickhouseDB.Conn),
+		Span:                   observabilityRepo.NewSpanRepository(clickhouseDB.Conn),
 		Score:                  observabilityRepo.NewScoreRepository(clickhouseDB.Conn),
 		BlobStorage:            observabilityRepo.NewBlobStorageRepository(clickhouseDB.Conn),
 		TelemetryDeduplication: observabilityRepo.NewTelemetryDeduplicationRepository(redisDB),
@@ -523,17 +522,17 @@ func ProvideUserServices(
 	// Import the actual user service implementations
 	userSvc := userService.NewUserService(
 		userRepos.User,
-		nil, // AuthService - would need to be injected if needed
+		nil,                          // AuthService - would need to be injected if needed
 		authRepos.OrganizationMember, // OrganizationMemberRepository for membership validation
 	)
-	
+
 	profileSvc := userService.NewProfileService(
 		userRepos.User,
 	)
 
 	return &UserServices{
-		User:        userSvc,
-		Profile:     profileSvc,
+		User:    userSvc,
+		Profile: profileSvc,
 	}
 }
 
@@ -723,7 +722,7 @@ func ProvideObservabilityServices(
 
 	return observabilityService.NewServiceRegistry(
 		observabilityRepos.Trace,
-		observabilityRepos.Observation,
+		observabilityRepos.Span,
 		observabilityRepos.Score,
 		observabilityRepos.BlobStorage,
 		s3Client,
@@ -786,17 +785,17 @@ func ProvideBillingServices(
 	// Create organization service interface implementation
 	// This is a simple implementation - in production you'd inject the real org service
 	orgService := &simpleBillingOrgService{logger: logger}
-	
+
 	// Create billing service
 	billingServiceImpl := billingService.NewBillingService(
 		logger,
-		nil, // config - use defaults
+		nil,                        // config - use defaults
 		billingRepos.Usage,         // UsageRepository
 		billingRepos.BillingRecord, // BillingRecordRepository
 		billingRepos.Quota,         // QuotaRepository
 		orgService,
 	)
-	
+
 	return &BillingServices{
 		Billing: billingServiceImpl,
 	}

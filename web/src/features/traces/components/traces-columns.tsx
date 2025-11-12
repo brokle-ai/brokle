@@ -141,12 +141,12 @@ export const tracesColumns: ColumnDef<Trace>[] = [
     enableSorting: true,
   },
   {
-    accessorKey: 'observationCount',
+    accessorKey: 'spanCount',
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title='Observations' />
+      <DataTableColumnHeader column={column} title='Spans' />
     ),
     cell: ({ row }) => {
-      const count = row.getValue('observationCount') as number
+      const count = row.getValue('spanCount') as number
       return (
         <Badge variant='outline' className='font-mono'>
           {count}

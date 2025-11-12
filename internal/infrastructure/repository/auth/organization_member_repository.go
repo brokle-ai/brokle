@@ -3,7 +3,7 @@ package auth
 import (
 	"context"
 	"fmt"
-	
+
 	"gorm.io/gorm"
 
 	authDomain "brokle/internal/core/domain/auth"
@@ -34,7 +34,7 @@ func (r *organizationMemberRepository) GetByUserAndOrganization(ctx context.Cont
 		Where("user_id = ? AND organization_id = ?", userID, orgID).
 		Preload("Role").
 		First(&member).Error
-	
+
 	if err != nil {
 		return nil, err
 	}
@@ -59,7 +59,7 @@ func (r *organizationMemberRepository) GetByUserID(ctx context.Context, userID u
 		Where("user_id = ?", userID).
 		Preload("Role").
 		Find(&members).Error
-	
+
 	return members, err
 }
 
@@ -69,7 +69,7 @@ func (r *organizationMemberRepository) GetByOrganizationID(ctx context.Context, 
 		Where("organization_id = ?", orgID).
 		Preload("Role").
 		Find(&members).Error
-	
+
 	return members, err
 }
 
@@ -79,7 +79,7 @@ func (r *organizationMemberRepository) GetByRole(ctx context.Context, roleID uli
 		Where("role_id = ?", roleID).
 		Preload("Role").
 		Find(&members).Error
-	
+
 	return members, err
 }
 
@@ -89,7 +89,7 @@ func (r *organizationMemberRepository) Exists(ctx context.Context, userID, orgID
 		Model(&authDomain.OrganizationMember{}).
 		Where("user_id = ? AND organization_id = ?", userID, orgID).
 		Count(&count).Error
-	
+
 	return count > 0, err
 }
 
@@ -97,7 +97,7 @@ func (r *organizationMemberRepository) Exists(ctx context.Context, userID, orgID
 
 func (r *organizationMemberRepository) GetUserEffectivePermissions(ctx context.Context, userID ulid.ULID) ([]string, error) {
 	var permissions []string
-	
+
 	err := r.db.WithContext(ctx).Raw(`
 		SELECT DISTINCT p.name 
 		FROM organization_members om
@@ -106,13 +106,13 @@ func (r *organizationMemberRepository) GetUserEffectivePermissions(ctx context.C
 		JOIN permissions p ON rp.permission_id = p.id
 		WHERE om.user_id = ? AND om.status = 'active'
 	`, userID).Scan(&permissions).Error
-	
+
 	return permissions, err
 }
 
 func (r *organizationMemberRepository) HasUserPermission(ctx context.Context, userID ulid.ULID, permission string) (bool, error) {
 	var count int64
-	
+
 	err := r.db.WithContext(ctx).Raw(`
 		SELECT COUNT(1) 
 		FROM organization_members om
@@ -121,13 +121,13 @@ func (r *organizationMemberRepository) HasUserPermission(ctx context.Context, us
 		JOIN permissions p ON rp.permission_id = p.id
 		WHERE om.user_id = ? AND om.status = 'active' AND p.name = ?
 	`, userID, permission).Count(&count).Error
-	
+
 	return count > 0, err
 }
 
 func (r *organizationMemberRepository) CheckUserPermissions(ctx context.Context, userID ulid.ULID, permissions []string) (map[string]bool, error) {
 	result := make(map[string]bool)
-	
+
 	for _, permission := range permissions {
 		hasPermission, err := r.HasUserPermission(ctx, userID, permission)
 		if err != nil {
@@ -135,13 +135,13 @@ func (r *organizationMemberRepository) CheckUserPermissions(ctx context.Context,
 		}
 		result[permission] = hasPermission
 	}
-	
+
 	return result, nil
 }
 
 func (r *organizationMemberRepository) GetUserPermissionsInOrganization(ctx context.Context, userID, orgID ulid.ULID) ([]string, error) {
 	var permissions []string
-	
+
 	err := r.db.WithContext(ctx).Raw(`
 		SELECT DISTINCT p.name 
 		FROM organization_members om
@@ -150,7 +150,7 @@ func (r *organizationMemberRepository) GetUserPermissionsInOrganization(ctx cont
 		JOIN permissions p ON rp.permission_id = p.id
 		WHERE om.user_id = ? AND om.organization_id = ? AND om.status = 'active'
 	`, userID, orgID).Scan(&permissions).Error
-	
+
 	return permissions, err
 }
 
@@ -176,7 +176,7 @@ func (r *organizationMemberRepository) GetActiveMembers(ctx context.Context, org
 		Where("organization_id = ? AND status = ?", orgID, authDomain.MemberStatusActive).
 		Preload("Role").
 		Find(&members).Error
-	
+
 	return members, err
 }
 
@@ -216,7 +216,7 @@ func (r *organizationMemberRepository) GetMemberCount(ctx context.Context, orgID
 		Model(&authDomain.OrganizationMember{}).
 		Where("organization_id = ? AND status = ?", orgID, authDomain.MemberStatusActive).
 		Count(&count).Error
-	
+
 	return int(count), err
 }
 
@@ -225,7 +225,7 @@ func (r *organizationMemberRepository) GetMembersByRole(ctx context.Context, org
 		RoleName string
 		Count    int64
 	}
-	
+
 	err := r.db.WithContext(ctx).
 		Model(&authDomain.OrganizationMember{}).
 		Select("r.name as role_name, COUNT(*) as count").
@@ -233,15 +233,15 @@ func (r *organizationMemberRepository) GetMembersByRole(ctx context.Context, org
 		Where("organization_members.organization_id = ? AND organization_members.status = ?", orgID, authDomain.MemberStatusActive).
 		Group("r.name").
 		Find(&results).Error
-	
+
 	if err != nil {
 		return nil, err
 	}
-	
+
 	membersByRole := make(map[string]int)
 	for _, result := range results {
 		membersByRole[result.RoleName] = int(result.Count)
 	}
-	
+
 	return membersByRole, nil
 }

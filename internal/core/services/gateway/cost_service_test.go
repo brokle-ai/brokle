@@ -331,12 +331,12 @@ func TestCostService_CalculateRequestCost(t *testing.T) {
 
 func TestCostService_EstimateRequestCost(t *testing.T) {
 	tests := []struct {
-		name           string
-		modelName      string
+		name            string
+		modelName       string
 		estimatedTokens int
-		setupMocks     func(*MockModelRepository)
-		expectedCost   float64
-		expectedError  string
+		setupMocks      func(*MockModelRepository)
+		expectedCost    float64
+		expectedError   string
 	}{
 		{
 			name:            "gpt-3.5-turbo estimation",
@@ -417,11 +417,11 @@ func TestCostService_EstimateRequestCost(t *testing.T) {
 
 func TestCostService_CalculateBatchCost(t *testing.T) {
 	tests := []struct {
-		name          string
-		requests      []*gateway.CostCalculationRequest
-		setupMocks    func(*MockModelRepository)
+		name           string
+		requests       []*gateway.CostCalculationRequest
+		setupMocks     func(*MockModelRepository)
 		validateResult func(*testing.T, *gateway.BatchCostResult)
-		expectedError string
+		expectedError  string
 	}{
 		{
 			name:     "successful batch calculation",
@@ -432,11 +432,11 @@ func TestCostService_CalculateBatchCost(t *testing.T) {
 				model1.ModelName = "gpt-3.5-turbo"
 				model2 := createTestModelWithCosts()
 				model2.ModelName = "gpt-4"
-				
+
 				modelRepo.On("GetByID", mock.Anything, mock.MatchedBy(func(id ulid.ULID) bool {
 					return true // Accept any ULID
 				})).Return(model1, nil).Once()
-				
+
 				modelRepo.On("GetByID", mock.Anything, mock.MatchedBy(func(id ulid.ULID) bool {
 					return true
 				})).Return(model2, nil).Once()
@@ -462,17 +462,17 @@ func TestCostService_CalculateBatchCost(t *testing.T) {
 				// First model succeeds
 				model1 := createTestModelWithCosts()
 				modelRepo.On("GetByID", mock.Anything, mock.Anything).Return(model1, nil).Once()
-				
+
 				// Second model fails
 				modelRepo.On("GetByID", mock.Anything, mock.Anything).Return(nil, errors.New("model not found")).Once()
 			},
 			validateResult: func(t *testing.T, result *gateway.BatchCostResult) {
 				assert.Len(t, result.Results, 2)
-				
+
 				// First should succeed
 				assert.Greater(t, result.Results[0].TotalCost, 0.0)
 				assert.Nil(t, result.Results[0].Error)
-				
+
 				// Second should fail
 				assert.Equal(t, 0.0, result.Results[1].TotalCost)
 				assert.NotNil(t, result.Results[1].Error)
@@ -540,9 +540,9 @@ func TestCostService_CompareCosts(t *testing.T) {
 
 func TestCostService_TrackRequestCost(t *testing.T) {
 	tests := []struct {
-		name           string
-		metrics        *gateway.RequestMetrics
-		expectedError  string
+		name          string
+		metrics       *gateway.RequestMetrics
+		expectedError string
 	}{
 		{
 			name:    "successful cost tracking",

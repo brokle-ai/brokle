@@ -117,7 +117,7 @@ brokle/
 | common | ✅ Active | `internal/core/domain/common` | Transaction patterns, shared utilities |
 | config | 🔄 Planned | `internal/core/domain/config` | Configuration management |
 | gateway | ✅ Active | `internal/core/domain/gateway` | AI provider routing |
-| observability | ✅ Active | `internal/core/domain/observability` | Traces, observations, quality scores |
+| observability | ✅ Active | `internal/core/domain/observability` | Traces, spans, quality scores |
 | organization | ✅ Active | `internal/core/domain/organization` | Multi-tenant org management |
 | routing | 🔄 Planned | `internal/core/domain/routing` | Advanced routing logic |
 | user | ✅ Active | `internal/core/domain/user` | User management |
@@ -267,7 +267,7 @@ go run cmd/migrate/main.go -dry-run up          # Preview migrations without exe
 
 #### Database Schema
 - **PostgreSQL**: User auth, organizations, projects, API keys, gateway config, billing
-- **ClickHouse**: Traces, observations, quality_scores, request_logs (with TTL retention)
+- **ClickHouse**: Traces, spans, quality_scores, request_logs (with TTL retention)
 - **Seeding**: YAML files in `/seeds/` (dev.yaml, demo.yaml, test.yaml)
 
 ### Testing & Quality
@@ -484,7 +484,7 @@ Single database with domain-separated tables:
 Time-series data optimized for analytical queries with TTL-based retention:
 
 #### Observability Tables
-- **observations** - LLM call observations with request/response data
+- **spans** - LLM call spans with request/response data
   - `attributes` (String) - All OTEL + Brokle attributes with namespace prefixes
   - `metadata` (String) - OTEL metadata (resourceAttributes + instrumentation scope)
   - `version` (Nullable(String)) - Application version for A/B testing
@@ -499,7 +499,7 @@ Time-series data optimized for analytical queries with TTL-based retention:
   - **OTEL-native**: Follows OpenTelemetry standard
 
 - **quality_scores** - Model performance metrics
-  - Links to traces and observations for evaluation context
+  - Links to traces and spans for evaluation context
 
 - **request_logs** - API request logging (60 day TTL)
 

@@ -34,10 +34,10 @@ type JWTClaims struct {
 	TokenType TokenType `json:"token_type"`
 	UserID    ulid.ULID `json:"user_id"`
 	Email     string    `json:"email"`
-	
+
 	// API Key specific claims (for API key tokens only)
 	APIKeyID *ulid.ULID `json:"api_key_id,omitempty"`
-	
+
 	// Session specific claims (for user session tokens only)
 	SessionID *ulid.ULID `json:"session_id,omitempty"`
 }
@@ -45,10 +45,10 @@ type JWTClaims struct {
 // TokenConfig represents configuration for JWT tokens
 type TokenConfig struct {
 	// Signing configuration
-	SigningKey    string        `json:"-"` // Secret key for signing
-	SigningMethod string        `json:"signing_method"`
-	Issuer        string        `json:"issuer"`
-	
+	SigningKey    string `json:"-"` // Secret key for signing
+	SigningMethod string `json:"signing_method"`
+	Issuer        string `json:"issuer"`
+
 	// Token lifetimes
 	AccessTokenTTL  time.Duration `json:"access_token_ttl"`
 	RefreshTokenTTL time.Duration `json:"refresh_token_ttl"`
@@ -56,53 +56,53 @@ type TokenConfig struct {
 	InviteTokenTTL  time.Duration `json:"invite_token_ttl"`
 	ResetTokenTTL   time.Duration `json:"reset_token_ttl"`
 	VerifyTokenTTL  time.Duration `json:"verify_token_ttl"`
-	
+
 	// Security settings
-	RequireAudience bool `json:"require_audience"`
-	AllowedAudiences []string `json:"allowed_audiences"`
-	ClockSkew       time.Duration `json:"clock_skew"`
+	RequireAudience  bool          `json:"require_audience"`
+	AllowedAudiences []string      `json:"allowed_audiences"`
+	ClockSkew        time.Duration `json:"clock_skew"`
 }
 
 // DefaultTokenConfig returns the default token configuration
 func DefaultTokenConfig() *TokenConfig {
 	return &TokenConfig{
 		SigningMethod:   "HS256",
-		Issuer:         "brokle-platform",
-		AccessTokenTTL: 15 * time.Minute,
+		Issuer:          "brokle-platform",
+		AccessTokenTTL:  15 * time.Minute,
 		RefreshTokenTTL: 7 * 24 * time.Hour, // 7 days
-		APIKeyTokenTTL:  24 * time.Hour, // API keys generate short-lived access tokens
+		APIKeyTokenTTL:  24 * time.Hour,     // API keys generate short-lived access tokens
 		InviteTokenTTL:  7 * 24 * time.Hour, // 7 days
 		ResetTokenTTL:   1 * time.Hour,
 		VerifyTokenTTL:  24 * time.Hour,
-		ClockSkew:      5 * time.Minute,
+		ClockSkew:       5 * time.Minute,
 		RequireAudience: false,
 	}
 }
 
 // TokenValidationResult represents the result of token validation
 type TokenValidationResult struct {
-	Valid       bool          `json:"valid"`
-	Claims      *JWTClaims    `json:"claims,omitempty"`
-	Error       string        `json:"error,omitempty"`
-	ErrorCode   string        `json:"error_code,omitempty"`
-	ExpiresIn   time.Duration `json:"expires_in,omitempty"` // Time until expiration
-	TokenType   TokenType     `json:"token_type,omitempty"`
+	Valid     bool          `json:"valid"`
+	Claims    *JWTClaims    `json:"claims,omitempty"`
+	Error     string        `json:"error,omitempty"`
+	ErrorCode string        `json:"error_code,omitempty"`
+	ExpiresIn time.Duration `json:"expires_in,omitempty"` // Time until expiration
+	TokenType TokenType     `json:"token_type,omitempty"`
 }
 
 // TokenGenerationRequest represents a request to generate a new token
 type TokenGenerationRequest struct {
-	TokenType TokenType  `json:"token_type"`
-	UserID    ulid.ULID  `json:"user_id"`
-	Email     string     `json:"email"`
-	APIKeyID  *ulid.ULID `json:"api_key_id,omitempty"`
-	SessionID *ulid.ULID `json:"session_id,omitempty"`
+	TokenType TokenType      `json:"token_type"`
+	UserID    ulid.ULID      `json:"user_id"`
+	Email     string         `json:"email"`
+	APIKeyID  *ulid.ULID     `json:"api_key_id,omitempty"`
+	SessionID *ulid.ULID     `json:"session_id,omitempty"`
 	TTL       *time.Duration `json:"ttl,omitempty"` // Override default TTL
 }
 
 // NewJWTClaims creates a new JWT claims structure with default values
 func NewJWTClaims(req *TokenGenerationRequest) *JWTClaims {
 	now := time.Now()
-	
+
 	return &JWTClaims{
 		Issuer:    "brokle-platform",
 		Subject:   req.UserID.String(),
@@ -142,7 +142,6 @@ func (c *JWTClaims) GetUserContext() *AuthContext {
 	}
 }
 
-
 // EmailVerificationToken represents an email verification token
 type EmailVerificationToken struct {
 	ID        ulid.ULID `json:"id" gorm:"type:char(26);primaryKey"`
@@ -150,10 +149,10 @@ type EmailVerificationToken struct {
 	Token     string    `json:"token" gorm:"size:255;not null;uniqueIndex"`
 	ExpiresAt time.Time `json:"expires_at"`
 	Used      bool      `json:"used" gorm:"default:false"`
-	
+
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
-	
+
 	// Relations
 	User user.User `json:"user,omitempty" gorm:"foreignKey:UserID"`
 }
@@ -200,4 +199,4 @@ func (t *EmailVerificationToken) IsValid() bool {
 }
 
 // Table name methods
-func (EmailVerificationToken) TableName() string   { return "email_verification_tokens" }
+func (EmailVerificationToken) TableName() string { return "email_verification_tokens" }

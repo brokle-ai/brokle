@@ -175,4 +175,3 @@ func (s *organizationService) GetUserOrganizationsWithProjects(
 ) ([]*orgDomain.OrganizationWithProjectsAndRole, error) {
 	return s.orgRepo.GetUserOrganizationsWithProjectsBatch(ctx, userID)
 }
-

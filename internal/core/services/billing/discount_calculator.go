@@ -20,21 +20,21 @@ type DiscountCalculator struct {
 
 // DiscountCalculation represents the result of discount calculation
 type DiscountCalculation struct {
-	OriginalAmount   float64          `json:"original_amount"`
-	TotalDiscount    float64          `json:"total_discount"`
-	NetAmount        float64          `json:"net_amount"`
+	OriginalAmount   float64           `json:"original_amount"`
+	TotalDiscount    float64           `json:"total_discount"`
+	NetAmount        float64           `json:"net_amount"`
 	AppliedDiscounts []AppliedDiscount `json:"applied_discounts"`
-	Currency         string           `json:"currency"`
+	Currency         string            `json:"currency"`
 }
 
 // AppliedDiscount represents a discount that was applied
 type AppliedDiscount struct {
-	RuleID      ulid.ULID    `json:"rule_id"`
-	RuleName    string       `json:"rule_name"`
-	Type       billingDomain.DiscountType `json:"type"`
-	Value       float64      `json:"value"`
-	Amount      float64      `json:"amount"`
-	Description string       `json:"description"`
+	RuleID      ulid.ULID                  `json:"rule_id"`
+	RuleName    string                     `json:"rule_name"`
+	Type        billingDomain.DiscountType `json:"type"`
+	Value       float64                    `json:"value"`
+	Amount      float64                    `json:"amount"`
+	Description string                     `json:"description"`
 }
 
 // DiscountContext provides context for discount calculation
@@ -72,7 +72,7 @@ func (c *DiscountCalculator) CalculateDiscounts(
 	discountContext *DiscountContext,
 	rules []*billingDomain.DiscountRule,
 ) (*DiscountCalculation, error) {
-	
+
 	calculation := &DiscountCalculation{
 		OriginalAmount:   amount,
 		TotalDiscount:    0,
@@ -95,7 +95,7 @@ func (c *DiscountCalculator) CalculateDiscounts(
 
 	// Apply discounts in priority order
 	currentAmount := amount
-	
+
 	for _, rule := range applicableRules {
 		discount, err := c.calculateSingleDiscount(rule, currentAmount, discountContext)
 		if err != nil {
@@ -170,7 +170,7 @@ func (c *DiscountCalculator) CreateVolumeDiscountRule(
 		OrganizationID:  orgID,
 		Name:            name,
 		Description:     description,
-		Type:       billingDomain.DiscountTypeTiered,
+		Type:            billingDomain.DiscountTypeTiered,
 		Value:           0, // Value is determined by tiers
 		MinimumAmount:   0,
 		MaximumDiscount: 0, // No maximum for volume discounts
@@ -195,13 +195,13 @@ func (c *DiscountCalculator) CreateFirstTimeCustomerDiscount(
 	validFor time.Duration,
 ) *billingDomain.DiscountRule {
 	validUntil := time.Now().Add(validFor)
-	
+
 	return &billingDomain.DiscountRule{
 		ID:              ulid.New(),
 		OrganizationID:  nil, // Global rule
 		Name:            "First Time Customer Discount",
 		Description:     fmt.Sprintf("%.0f%% discount for first-time customers", percentage*100),
-		Type:       billingDomain.DiscountTypePercentage,
+		Type:            billingDomain.DiscountTypePercentage,
 		Value:           percentage,
 		MinimumAmount:   0,
 		MaximumDiscount: maxDiscount,
@@ -363,7 +363,7 @@ func (c *DiscountCalculator) checkDiscountConditions(
 		currentTime := now.Format("15:04")
 		startTime := conditions.TimeOfDay.Start.Format("15:04")
 		endTime := conditions.TimeOfDay.End.Format("15:04")
-		
+
 		if currentTime < startTime || currentTime > endTime {
 			return false
 		}
@@ -441,7 +441,7 @@ func (c *DiscountCalculator) calculateVolumeDiscount(amount float64, volumeDisco
 	// Sort tiers by minimum amount (ascending)
 	tiers := make([]billingDomain.VolumeTier, len(volumeDiscount.Tiers))
 	copy(tiers, volumeDiscount.Tiers)
-	
+
 	for i := 0; i < len(tiers)-1; i++ {
 		for j := i + 1; j < len(tiers); j++ {
 			if tiers[i].MinAmount > tiers[j].MinAmount {
