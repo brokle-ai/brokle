@@ -28,10 +28,25 @@ rbac:
       display_name: "Read Projects"
       description: "View projects"
       category: "project"
-    
-    - name: "api_keys:read"
+
+    - name: "api-keys:read"
       display_name: "Read API Keys"
       description: "View API keys"
+      category: "api_key"
+
+    - name: "api-keys:create"
+      display_name: "Create API Keys"
+      description: "Create new API keys"
+      category: "api_key"
+
+    - name: "api-keys:update"
+      display_name: "Update API Keys"
+      description: "Update API key settings"
+      category: "api_key"
+
+    - name: "api-keys:delete"
+      display_name: "Delete API Keys"
+      description: "Delete API keys"
       category: "api_key"
 
   roles:
@@ -41,7 +56,10 @@ rbac:
       permissions:
         - "organizations:read"
         - "projects:read"
-        - "api_keys:read"
+        - "api-keys:read"
+        - "api-keys:create"
+        - "api-keys:update"
+        - "api-keys:delete"
 
   memberships:
     - user_email: "test@test.com"

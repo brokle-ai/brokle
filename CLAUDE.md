@@ -206,9 +206,6 @@ make migrate-status
 make create-migration DB=postgres NAME=add_users_table
 make create-migration DB=clickhouse NAME=add_metrics_table
 
-# Reset all databases (WARNING: destroys data)
-make migrate-reset
-
 # Seed with development data
 make seed-dev
 
@@ -240,6 +237,16 @@ go run cmd/migrate/main.go down                 # Both databases
 # Create new migrations
 go run cmd/migrate/main.go -db postgres -name create_users_table create
 go run cmd/migrate/main.go -db clickhouse -name create_metrics_table create
+
+# Reset databases (DESTRUCTIVE - use with caution)
+go run cmd/migrate/main.go drop                 # Drop all tables (requires confirmation)
+go run cmd/migrate/main.go down -steps 999      # Rollback all migrations
+
+**⚠️ CRITICAL: Always Use CLI to Create Migrations**
+- **NEVER create migration files manually** in the `migrations/` directory
+- **ALWAYS use**: `go run cmd/migrate/main.go -db <postgres|clickhouse> -name <description> create`
+- The CLI generates properly named files with timestamps and correct up/down structure
+- Manual creation leads to naming conflicts, incorrect versioning, and migration failures
 
 # Advanced operations (DESTRUCTIVE - requires 'yes' confirmation)
 go run cmd/migrate/main.go -db postgres drop    # Drop all PostgreSQL tables
@@ -284,12 +291,6 @@ make test-integration
 # Run with coverage report
 make test-coverage
 
-# Run load tests
-make test-load
-
-# End-to-end tests
-make test-e2e
-
 # Lint all code
 make lint
 
@@ -298,9 +299,6 @@ make lint-go
 
 # Lint frontend code only
 make lint-frontend
-
-# Security scanning
-make security-scan
 
 # Format all code
 make fmt
@@ -316,8 +314,8 @@ make build-oss
 make build-enterprise
 
 # Development builds (faster, with debug info)
-make build-dev-oss
-make build-dev-enterprise
+make build-dev-server
+make build-dev-worker
 ```
 
 ## Environment Configuration

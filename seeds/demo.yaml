@@ -39,9 +39,19 @@ rbac:
       description: "View API keys"
       category: "api_key"
 
-    - name: "api-keys:write"
-      display_name: "Write API Keys"
-      description: "Create and modify API keys"
+    - name: "api-keys:create"
+      display_name: "Create API Keys"
+      description: "Create new API keys"
+      category: "api_key"
+
+    - name: "api-keys:update"
+      display_name: "Update API Keys"
+      description: "Update API key settings (name, status)"
+      category: "api_key"
+
+    - name: "api-keys:delete"
+      display_name: "Delete API Keys"
+      description: "Delete API keys"
       category: "api_key"
     
     - name: "analytics:read"
@@ -58,7 +68,9 @@ rbac:
         - "projects:read"
         - "projects:write"
         - "api-keys:read"
-        - "api-keys:write"
+        - "api-keys:create"
+        - "api-keys:update"
+        - "api-keys:delete"
         - "analytics:read"
 
   memberships:
