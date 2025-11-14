@@ -88,13 +88,6 @@ func TestDIContainer_ServerMode(t *testing.T) {
 		repos := providers.Core.Repos
 		require.NotNil(t, repos, "Repository container should be initialized")
 
-		// Verify gateway repositories
-		assert.NotNil(t, repos.Gateway, "Gateway repositories should exist")
-		assert.NotNil(t, repos.Gateway.Provider, "Provider repository should exist")
-		assert.NotNil(t, repos.Gateway.Model, "Model repository should exist")
-		assert.NotNil(t, repos.Gateway.ProviderConfig, "Provider config repository should exist")
-		assert.NotNil(t, repos.Gateway.Analytics, "Gateway analytics repository should exist")
-
 		// Verify observability repositories
 		assert.NotNil(t, repos.Observability, "Observability repositories should exist")
 
@@ -109,13 +102,6 @@ func TestDIContainer_ServerMode(t *testing.T) {
 		// Verify services are initialized
 		services := providers.Core.Services
 		require.NotNil(t, services, "Service container should be initialized")
-
-		// Verify gateway services
-		gatewayServices := application.GetGatewayServices()
-		require.NotNil(t, gatewayServices, "Gateway services should exist")
-		assert.NotNil(t, gatewayServices.Gateway, "Gateway service should exist")
-		assert.NotNil(t, gatewayServices.Routing, "Routing service should exist")
-		assert.NotNil(t, gatewayServices.Cost, "Cost service should exist")
 
 		// Verify other services
 		assert.NotNil(t, services.User, "User services should exist")
@@ -145,7 +131,6 @@ func TestDIContainer_ServerMode(t *testing.T) {
 		assert.NotNil(t, services.InvitationService, "Server needs Invitation service")
 		assert.NotNil(t, services.SettingsService, "Server needs Settings service")
 		assert.NotNil(t, services.Observability, "Server needs Observability")
-		assert.NotNil(t, services.Gateway, "Server needs Gateway")
 		assert.NotNil(t, services.Billing, "Server needs Billing")
 
 		// Server should have enterprise services
@@ -197,7 +182,6 @@ func TestDIContainer_WorkerMode(t *testing.T) {
 		// Verify workers exist
 		require.NotNil(t, providers.Workers, "Workers should be initialized")
 		require.NotNil(t, providers.Workers.TelemetryConsumer, "Telemetry consumer should exist")
-		require.NotNil(t, providers.Workers.GatewayAnalytics, "Gateway analytics worker should exist")
 
 		// Verify HTTP server is nil in worker mode
 		require.Nil(t, providers.Server, "Server should be nil in worker mode")
@@ -208,12 +192,10 @@ func TestDIContainer_WorkerMode(t *testing.T) {
 		health := application.Health()
 		assert.Contains(t, health, "mode", "Mode should be reported")
 		assert.Equal(t, "worker", health["mode"], "Mode should be worker")
-		assert.Contains(t, health, "gateway_analytics_worker", "Gateway worker health should be reported")
 
 		// Verify workers are healthy
 		workers := application.GetWorkers()
 		require.NotNil(t, workers, "Workers should be accessible")
-		assert.True(t, workers.GatewayAnalytics.IsHealthy(), "Gateway analytics worker should be healthy")
 	})
 
 	t.Run("Shared Core Infrastructure", func(t *testing.T) {
@@ -246,7 +228,6 @@ func TestDIContainer_WorkerMode(t *testing.T) {
 
 		// Worker SHOULD have processing services
 		assert.NotNil(t, services.Observability, "Worker needs Observability services")
-		assert.NotNil(t, services.Gateway, "Worker needs Gateway services for analytics")
 		assert.NotNil(t, services.Billing, "Worker needs Billing services for analytics")
 
 		// Worker should not have enterprise services
@@ -334,7 +315,6 @@ func TestHealthCheckIntegration_WorkerMode(t *testing.T) {
 		"redis",
 		"clickhouse",
 		"mode",
-		"gateway_analytics_worker",
 	}
 
 	for _, component := range expectedComponents {

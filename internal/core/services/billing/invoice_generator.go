@@ -10,7 +10,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	billingDomain "brokle/internal/core/domain/billing"
-	"brokle/internal/workers/analytics"
 	"brokle/pkg/ulid"
 )
 
@@ -33,7 +32,7 @@ func NewInvoiceGenerator(logger *logrus.Logger, config *BillingConfig) *InvoiceG
 // GenerateInvoice creates an invoice from a billing summary
 func (g *InvoiceGenerator) GenerateInvoice(
 	ctx context.Context,
-	summary *analytics.BillingSummary,
+	summary *billingDomain.BillingSummary,
 	organizationName string,
 	billingAddress *billingDomain.BillingAddress,
 ) (*billingDomain.Invoice, error) {
@@ -371,11 +370,15 @@ func (g *InvoiceGenerator) generateInvoiceNumber(orgID ulid.ULID, periodStart ti
 	return fmt.Sprintf("BRKL-%s-%s-%s", yearMonth, orgShort, sequence)
 }
 
-func (g *InvoiceGenerator) generateLineItems(summary *analytics.BillingSummary) []billingDomain.InvoiceLineItem {
+func (g *InvoiceGenerator) generateLineItems(summary *billingDomain.BillingSummary) []billingDomain.InvoiceLineItem {
 	var lineItems []billingDomain.InvoiceLineItem
 
 	// Create line items based on provider breakdown
-	for providerKey, amount := range summary.ProviderBreakdown {
+	for providerKey, amountInterface := range summary.ProviderBreakdown {
+		amount, ok := amountInterface.(float64)
+		if !ok {
+			continue
+		}
 		if amount > 0 {
 			lineItem := billingDomain.InvoiceLineItem{
 				ID:          ulid.New(),

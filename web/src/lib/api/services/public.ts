@@ -30,7 +30,7 @@ export interface SystemStatus {
   overall: 'operational' | 'degraded' | 'outage'
   services: {
     api: 'operational' | 'degraded' | 'outage'
-    gateway: 'operational' | 'degraded' | 'outage'
+    observability: 'operational' | 'degraded' | 'outage'
     dashboard: 'operational' | 'degraded' | 'outage'
     monitoring: 'operational' | 'degraded' | 'outage'
   }
