@@ -13,12 +13,11 @@ import (
 	"brokle/internal/errors"
 )
 
-
 // EnterpriseFeature middleware checks if an enterprise feature is enabled
 func EnterpriseFeature(feature string, licenseService *license.LicenseService, logger *logrus.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		cfg := c.MustGet("config").(*config.Config)
-		
+
 		// Allow all features in development mode
 		if cfg.IsDevelopment() {
 			c.Header("X-Feature-Mode", "development")
@@ -31,7 +30,7 @@ func EnterpriseFeature(feature string, licenseService *license.LicenseService, l
 		if err != nil {
 			logger.WithError(err).WithField("feature", feature).Error("Failed to check feature entitlement")
 			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "Failed to validate feature access",
+				"error":   "Failed to validate feature access",
 				"feature": feature,
 			})
 			c.Abort()
@@ -41,14 +40,14 @@ func EnterpriseFeature(feature string, licenseService *license.LicenseService, l
 		if !available {
 			currentTier := cfg.GetLicenseTier()
 			requiredTier := getRequiredTierForFeature(feature)
-			
+
 			// Log feature access attempt for analytics
 			logger.WithFields(logrus.Fields{
-				"feature":      feature,
-				"current_tier": currentTier,
+				"feature":       feature,
+				"current_tier":  currentTier,
 				"required_tier": requiredTier,
-				"user_agent":   c.Request.UserAgent(),
-				"ip":           c.ClientIP(),
+				"user_agent":    c.Request.UserAgent(),
+				"ip":            c.ClientIP(),
 			}).Info("Enterprise feature access denied")
 
 			enterpriseError := errors.NewFeatureNotAvailableError(feature, currentTier, requiredTier)
@@ -70,7 +69,7 @@ func EnterpriseFeature(feature string, licenseService *license.LicenseService, l
 func RequireEnterpriseLicense(licenseService *license.LicenseService, logger *logrus.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		cfg := c.MustGet("config").(*config.Config)
-		
+
 		// Allow in development mode
 		if cfg.IsDevelopment() {
 			c.Header("X-License-Mode", "development")
@@ -112,7 +111,7 @@ func RequireEnterpriseLicense(licenseService *license.LicenseService, logger *lo
 func CheckUsageLimit(limitType string, licenseService *license.LicenseService, logger *logrus.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		cfg := c.MustGet("config").(*config.Config)
-		
+
 		// Skip in development mode
 		if cfg.IsDevelopment() {
 			c.Next()
@@ -138,7 +137,7 @@ func CheckUsageLimit(limitType string, licenseService *license.LicenseService, l
 
 			// Calculate next reset date (monthly reset)
 			resetDate := time.Now().AddDate(0, 1, -time.Now().Day()).Add(-time.Hour * time.Duration(time.Now().Hour()))
-			
+
 			enterpriseError := errors.NewUsageLimitExceededError(limitType, cfg.GetLicenseTier(), remaining, &resetDate)
 			c.JSON(enterpriseError.HTTPStatus(), gin.H{
 				"error": enterpriseError,
@@ -164,7 +163,7 @@ func CheckUsageLimit(limitType string, licenseService *license.LicenseService, l
 func EnterpriseFeatureWithFallback(feature string, fallbackHandler gin.HandlerFunc, licenseService *license.LicenseService, logger *logrus.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		cfg := c.MustGet("config").(*config.Config)
-		
+
 		// Always allow in development
 		if cfg.IsDevelopment() {
 			c.Next()
@@ -179,7 +178,7 @@ func EnterpriseFeatureWithFallback(feature string, fallbackHandler gin.HandlerFu
 			} else {
 				logger.WithField("feature", feature).Info("Feature not available, using fallback")
 			}
-			
+
 			// Use fallback handler
 			c.Set("feature_fallback", true)
 			fallbackHandler(c)
@@ -198,7 +197,7 @@ func getRequiredTierForFeature(feature string) string {
 	// Map features to required tiers
 	tierMap := map[string]string{
 		"advanced_rbac":         "business",
-		"sso_integration":       "business", 
+		"sso_integration":       "business",
 		"custom_compliance":     "business",
 		"predictive_insights":   "business",
 		"custom_dashboards":     "business",
@@ -213,4 +212,3 @@ func getRequiredTierForFeature(feature string) string {
 	}
 	return "business" // Default to business tier
 }
-

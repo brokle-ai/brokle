@@ -33,7 +33,7 @@ func (r *roleRepository) GetByID(ctx context.Context, id ulid.ULID) (*authDomain
 		Where("id = ?", id).
 		Preload("Permissions").
 		First(&role).Error
-	
+
 	if err != nil {
 		return nil, err
 	}
@@ -46,7 +46,7 @@ func (r *roleRepository) GetByNameAndScope(ctx context.Context, name, scopeType 
 		Where("name = ? AND scope_type = ? AND scope_id IS NULL", name, scopeType).
 		Preload("Permissions").
 		First(&role).Error
-	
+
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +69,7 @@ func (r *roleRepository) GetByScopeType(ctx context.Context, scopeType string) (
 		Where("scope_type = ?", scopeType).
 		Preload("Permissions").
 		Find(&roles).Error
-	
+
 	return roles, err
 }
 
@@ -78,7 +78,7 @@ func (r *roleRepository) GetAllRoles(ctx context.Context) ([]*authDomain.Role, e
 	err := r.db.WithContext(ctx).
 		Preload("Permissions").
 		Find(&roles).Error
-	
+
 	return roles, err
 }
 
@@ -90,7 +90,7 @@ func (r *roleRepository) GetRolePermissions(ctx context.Context, roleID ulid.ULI
 		Joins("JOIN role_permissions ON permissions.id = role_permissions.permission_id").
 		Where("role_permissions.role_id = ?", roleID).
 		Find(&permissions).Error
-	
+
 	return permissions, err
 }
 
@@ -118,7 +118,7 @@ func (r *roleRepository) UpdateRolePermissions(ctx context.Context, roleID ulid.
 		if err := tx.Where("role_id = ?", roleID).Delete(&authDomain.RolePermission{}).Error; err != nil {
 			return err
 		}
-		
+
 		// Add new permissions
 		if len(permissionIDs) > 0 {
 			var rolePermissions []authDomain.RolePermission
@@ -131,7 +131,7 @@ func (r *roleRepository) UpdateRolePermissions(ctx context.Context, roleID ulid.
 			}
 			return tx.Create(&rolePermissions).Error
 		}
-		
+
 		return nil
 	})
 }
@@ -140,14 +140,14 @@ func (r *roleRepository) UpdateRolePermissions(ctx context.Context, roleID ulid.
 
 func (r *roleRepository) GetRoleStatistics(ctx context.Context) (*authDomain.RoleStatistics, error) {
 	var stats authDomain.RoleStatistics
-	
+
 	// Get total role count
 	var totalCount int64
 	if err := r.db.WithContext(ctx).Model(&authDomain.Role{}).Count(&totalCount).Error; err != nil {
 		return nil, err
 	}
 	stats.TotalRoles = int(totalCount)
-	
+
 	// Get scope distribution
 	var scopeCounts []struct {
 		ScopeType string
@@ -160,11 +160,11 @@ func (r *roleRepository) GetRoleStatistics(ctx context.Context) (*authDomain.Rol
 		Find(&scopeCounts).Error; err != nil {
 		return nil, err
 	}
-	
+
 	stats.ScopeDistribution = make(map[string]int)
 	for _, sc := range scopeCounts {
 		stats.ScopeDistribution[sc.ScopeType] = int(sc.Count)
-		
+
 		switch sc.ScopeType {
 		case authDomain.ScopeOrganization:
 			stats.OrganizationRoles = int(sc.Count)
@@ -172,7 +172,7 @@ func (r *roleRepository) GetRoleStatistics(ctx context.Context) (*authDomain.Rol
 			stats.ProjectRoles = int(sc.Count)
 		}
 	}
-	
+
 	// Get role usage distribution (how many members have each role)
 	var roleUsage []struct {
 		RoleName string
@@ -186,12 +186,12 @@ func (r *roleRepository) GetRoleStatistics(ctx context.Context) (*authDomain.Rol
 		Find(&roleUsage).Error; err != nil {
 		return nil, err
 	}
-	
+
 	stats.RoleDistribution = make(map[string]int)
 	for _, ru := range roleUsage {
 		stats.RoleDistribution[ru.RoleName] = int(ru.Count)
 	}
-	
+
 	return &stats, nil
 }
 
@@ -223,13 +223,13 @@ func (r *roleRepository) GetByNameScopeAndID(ctx context.Context, name, scopeTyp
 	var role authDomain.Role
 	query := r.db.WithContext(ctx).
 		Where("name = ? AND scope_type = ?", name, scopeType)
-	
+
 	if scopeID == nil {
 		query = query.Where("scope_id IS NULL")
 	} else {
 		query = query.Where("scope_id = ?", *scopeID)
 	}
-	
+
 	err := query.Preload("Permissions").First(&role).Error
 	if err != nil {
 		return nil, err

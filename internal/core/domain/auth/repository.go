@@ -12,15 +12,15 @@ type UserSessionRepository interface {
 	// Basic CRUD operations
 	Create(ctx context.Context, session *UserSession) error
 	GetByID(ctx context.Context, id ulid.ULID) (*UserSession, error)
-	GetByJTI(ctx context.Context, jti string) (*UserSession, error)              // Get session by JWT ID (current access token)
+	GetByJTI(ctx context.Context, jti string) (*UserSession, error)                           // Get session by JWT ID (current access token)
 	GetByRefreshTokenHash(ctx context.Context, refreshTokenHash string) (*UserSession, error) // Get session by refresh token hash
 	Update(ctx context.Context, session *UserSession) error
 	Delete(ctx context.Context, id ulid.ULID) error
-	
+
 	// User sessions
 	GetByUserID(ctx context.Context, userID ulid.ULID) ([]*UserSession, error)
 	GetActiveSessionsByUserID(ctx context.Context, userID ulid.ULID) ([]*UserSession, error)
-	
+
 	// Session management
 	DeactivateSession(ctx context.Context, id ulid.ULID) error
 	DeactivateUserSessions(ctx context.Context, userID ulid.ULID) error
@@ -29,7 +29,7 @@ type UserSessionRepository interface {
 	CleanupExpiredSessions(ctx context.Context) error
 	CleanupRevokedSessions(ctx context.Context) error
 	MarkAsUsed(ctx context.Context, id ulid.ULID) error
-	
+
 	// Device-specific queries
 	GetByDeviceInfo(ctx context.Context, userID ulid.ULID, deviceInfo interface{}) ([]*UserSession, error)
 	GetActiveSessionsCount(ctx context.Context, userID ulid.ULID) (int, error)
@@ -41,20 +41,20 @@ type BlacklistedTokenRepository interface {
 	Create(ctx context.Context, blacklistedToken *BlacklistedToken) error
 	GetByJTI(ctx context.Context, jti string) (*BlacklistedToken, error)
 	IsTokenBlacklisted(ctx context.Context, jti string) (bool, error)
-	
+
 	// User-wide timestamp blacklisting (GDPR/SOC2 compliance)
 	CreateUserTimestampBlacklist(ctx context.Context, userID ulid.ULID, blacklistTimestamp int64, reason string) error
 	IsUserBlacklistedAfterTimestamp(ctx context.Context, userID ulid.ULID, tokenIssuedAt int64) (bool, error)
 	GetUserBlacklistTimestamp(ctx context.Context, userID ulid.ULID) (*int64, error)
-	
+
 	// Cleanup operations
 	CleanupExpiredTokens(ctx context.Context) error
 	CleanupTokensOlderThan(ctx context.Context, olderThan time.Time) error
-	
+
 	// Bulk operations
 	BlacklistUserTokens(ctx context.Context, userID ulid.ULID, reason string) error
 	GetBlacklistedTokensByUser(ctx context.Context, userID ulid.ULID, limit, offset int) ([]*BlacklistedToken, error)
-	
+
 	// Statistics
 	GetBlacklistedTokensCount(ctx context.Context) (int64, error)
 	GetBlacklistedTokensByReason(ctx context.Context, reason string) ([]*BlacklistedToken, error)
@@ -93,26 +93,26 @@ type RoleRepository interface {
 	GetByNameAndScope(ctx context.Context, name, scopeType string) (*Role, error)
 	Update(ctx context.Context, role *Role) error
 	Delete(ctx context.Context, id ulid.ULID) error
-	
+
 	// System template role queries
 	GetByScopeType(ctx context.Context, scopeType string) ([]*Role, error)
 	GetAllRoles(ctx context.Context) ([]*Role, error)
 	GetSystemRoles(ctx context.Context) ([]*Role, error)
-	
+
 	// Custom scoped role queries
 	GetCustomRolesByScopeID(ctx context.Context, scopeType string, scopeID ulid.ULID) ([]*Role, error)
 	GetByNameScopeAndID(ctx context.Context, name, scopeType string, scopeID *ulid.ULID) (*Role, error)
 	GetCustomRolesByOrganization(ctx context.Context, organizationID ulid.ULID) ([]*Role, error)
-	
+
 	// Permission management for roles
 	GetRolePermissions(ctx context.Context, roleID ulid.ULID) ([]*Permission, error)
 	AssignRolePermissions(ctx context.Context, roleID ulid.ULID, permissionIDs []ulid.ULID, grantedBy *ulid.ULID) error
 	RevokeRolePermissions(ctx context.Context, roleID ulid.ULID, permissionIDs []ulid.ULID) error
 	UpdateRolePermissions(ctx context.Context, roleID ulid.ULID, permissionIDs []ulid.ULID, grantedBy *ulid.ULID) error
-	
+
 	// Statistics
 	GetRoleStatistics(ctx context.Context) (*RoleStatistics, error)
-	
+
 	// Bulk operations
 	BulkCreate(ctx context.Context, roles []*Role) error
 }
@@ -175,31 +175,31 @@ type OrganizationMemberRepository interface {
 	GetByUserAndOrganization(ctx context.Context, userID, orgID ulid.ULID) (*OrganizationMember, error)
 	Update(ctx context.Context, member *OrganizationMember) error
 	Delete(ctx context.Context, userID, orgID ulid.ULID) error
-	
+
 	// Membership queries
 	GetByUserID(ctx context.Context, userID ulid.ULID) ([]*OrganizationMember, error)
 	GetByOrganizationID(ctx context.Context, orgID ulid.ULID) ([]*OrganizationMember, error)
 	GetByRole(ctx context.Context, roleID ulid.ULID) ([]*OrganizationMember, error)
 	Exists(ctx context.Context, userID, orgID ulid.ULID) (bool, error)
-	
+
 	// Permission queries
 	GetUserEffectivePermissions(ctx context.Context, userID ulid.ULID) ([]string, error)
 	HasUserPermission(ctx context.Context, userID ulid.ULID, permission string) (bool, error)
 	CheckUserPermissions(ctx context.Context, userID ulid.ULID, permissions []string) (map[string]bool, error)
 	GetUserPermissionsInOrganization(ctx context.Context, userID, orgID ulid.ULID) ([]string, error)
-	
+
 	// Status management
 	ActivateMember(ctx context.Context, userID, orgID ulid.ULID) error
 	SuspendMember(ctx context.Context, userID, orgID ulid.ULID) error
 	GetActiveMembers(ctx context.Context, orgID ulid.ULID) ([]*OrganizationMember, error)
-	
+
 	// Role management
 	UpdateMemberRole(ctx context.Context, userID, orgID, roleID ulid.ULID) error
-	
+
 	// Bulk operations
 	BulkCreate(ctx context.Context, members []*OrganizationMember) error
 	BulkUpdateRoles(ctx context.Context, updates []MemberRoleUpdate) error
-	
+
 	// Statistics
 	GetMemberCount(ctx context.Context, orgID ulid.ULID) (int, error)
 	GetMembersByRole(ctx context.Context, orgID ulid.ULID) (map[string]int, error)
@@ -219,12 +219,12 @@ type RolePermissionRepository interface {
 	Delete(ctx context.Context, roleID, permissionID ulid.ULID) error
 	GetByRoleID(ctx context.Context, roleID ulid.ULID) ([]*RolePermission, error)
 	HasPermission(ctx context.Context, roleID, permissionID ulid.ULID) (bool, error)
-	
+
 	// Batch operations
 	AssignPermissions(ctx context.Context, roleID ulid.ULID, permissionIDs []ulid.ULID, grantedBy *ulid.ULID) error
 	RevokePermissions(ctx context.Context, roleID ulid.ULID, permissionIDs []ulid.ULID) error
 	ReplaceAllPermissions(ctx context.Context, roleID ulid.ULID, permissionIDs []ulid.ULID, grantedBy *ulid.ULID) error
-	
+
 	// Bulk operations
 	BulkAssign(ctx context.Context, assignments []RolePermissionAssignment) error
 	BulkRevoke(ctx context.Context, revocations []RolePermissionRevocation) error
@@ -235,22 +235,22 @@ type AuditLogRepository interface {
 	// Basic operations
 	Create(ctx context.Context, auditLog *AuditLog) error
 	GetByID(ctx context.Context, id ulid.ULID) (*AuditLog, error)
-	
+
 	// Audit log queries
 	GetByUserID(ctx context.Context, userID ulid.ULID, limit, offset int) ([]*AuditLog, error)
 	GetByOrganizationID(ctx context.Context, orgID ulid.ULID, limit, offset int) ([]*AuditLog, error)
 	GetByResource(ctx context.Context, resource, resourceID string, limit, offset int) ([]*AuditLog, error)
 	GetByAction(ctx context.Context, action string, limit, offset int) ([]*AuditLog, error)
 	GetByDateRange(ctx context.Context, startDate, endDate time.Time, limit, offset int) ([]*AuditLog, error)
-	
+
 	// Advanced queries
 	Search(ctx context.Context, filters *AuditLogFilters) ([]*AuditLog, int, error)
-	
+
 	// Statistics
 	GetAuditLogStats(ctx context.Context) (*AuditLogStats, error)
 	GetUserAuditLogStats(ctx context.Context, userID ulid.ULID) (*AuditLogStats, error)
 	GetOrganizationAuditLogStats(ctx context.Context, orgID ulid.ULID) (*AuditLogStats, error)
-	
+
 	// Cleanup
 	CleanupOldLogs(ctx context.Context, olderThan time.Time) error
 }
@@ -260,7 +260,7 @@ type AuditLogFilters struct {
 	// Pagination
 	Limit  int `json:"limit"`
 	Offset int `json:"offset"`
-	
+
 	// Filters
 	UserID         *ulid.ULID `json:"user_id,omitempty"`
 	OrganizationID *ulid.ULID `json:"organization_id,omitempty"`
@@ -270,7 +270,7 @@ type AuditLogFilters struct {
 	IPAddress      *string    `json:"ip_address,omitempty"`
 	StartDate      *time.Time `json:"start_date,omitempty"`
 	EndDate        *time.Time `json:"end_date,omitempty"`
-	
+
 	// Sorting
 	SortBy    string `json:"sort_by"`    // created_at, action, resource
 	SortOrder string `json:"sort_order"` // asc, desc
@@ -278,10 +278,10 @@ type AuditLogFilters struct {
 
 // AuditLogStats represents audit log statistics
 type AuditLogStats struct {
-	TotalLogs      int64                `json:"total_logs"`
-	LogsByAction   map[string]int64     `json:"logs_by_action"`
-	LogsByResource map[string]int64     `json:"logs_by_resource"`
-	LastLogTime    *time.Time           `json:"last_log_time,omitempty"`
+	TotalLogs      int64            `json:"total_logs"`
+	LogsByAction   map[string]int64 `json:"logs_by_action"`
+	LogsByResource map[string]int64 `json:"logs_by_resource"`
+	LastLogTime    *time.Time       `json:"last_log_time,omitempty"`
 }
 
 // PasswordResetTokenRepository defines the interface for password reset token data access.
@@ -293,13 +293,13 @@ type PasswordResetTokenRepository interface {
 	GetByUserID(ctx context.Context, userID ulid.ULID) ([]*PasswordResetToken, error)
 	Update(ctx context.Context, token *PasswordResetToken) error
 	Delete(ctx context.Context, id ulid.ULID) error
-	
+
 	// Token management
 	MarkAsUsed(ctx context.Context, id ulid.ULID) error
 	IsUsed(ctx context.Context, id ulid.ULID) (bool, error)
 	IsValid(ctx context.Context, id ulid.ULID) (bool, error)
 	GetValidTokenByUserID(ctx context.Context, userID ulid.ULID) (*PasswordResetToken, error)
-	
+
 	// Cleanup operations
 	CleanupExpiredTokens(ctx context.Context) error
 	CleanupUsedTokens(ctx context.Context, olderThan time.Time) error

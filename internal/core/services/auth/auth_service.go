@@ -14,8 +14,8 @@ import (
 	"brokle/internal/config"
 	authDomain "brokle/internal/core/domain/auth"
 	userDomain "brokle/internal/core/domain/user"
-	"brokle/pkg/ulid"
 	appErrors "brokle/pkg/errors"
+	"brokle/pkg/ulid"
 )
 
 // authService implements the authDomain.AuthService interface
@@ -96,7 +96,7 @@ func (s *authService) Login(ctx context.Context, req *authDomain.LoginRequest) (
 
 	// Generate access token with JTI for session tracking
 	accessToken, jti, err := s.jwtService.GenerateAccessTokenWithJTI(ctx, user.ID, map[string]interface{}{
-		"email":          user.Email,
+		"email":           user.Email,
 		"organization_id": user.DefaultOrganizationID,
 		"permissions":     permissions,
 	})
@@ -119,7 +119,7 @@ func (s *authService) Login(ctx context.Context, req *authDomain.LoginRequest) (
 	// Extract IP address and user agent from request context (if available)
 	var ipAddress, userAgent *string
 	// TODO: Extract from request context when available
-	
+
 	// Create secure session (NO ACCESS TOKEN STORED)
 	session := authDomain.NewUserSession(user.ID, refreshTokenHash, jti, expiresAt, refreshExpiresAt, ipAddress, userAgent, req.DeviceInfo)
 	err = s.sessionRepo.Create(ctx, session)
@@ -209,7 +209,6 @@ func (s *authService) Logout(ctx context.Context, jti string, userID ulid.ULID) 
 	if err != nil {
 		return appErrors.NewInternalError("Failed to blacklist token", err)
 	}
-	
 
 	return nil
 }
@@ -261,7 +260,7 @@ func (s *authService) RefreshToken(ctx context.Context, req *authDomain.RefreshT
 
 	// Generate new access token with JTI for session tracking
 	accessToken, jti, err := s.jwtService.GenerateAccessTokenWithJTI(ctx, user.ID, map[string]interface{}{
-		"email":          user.Email,
+		"email":           user.Email,
 		"organization_id": user.DefaultOrganizationID,
 		"permissions":     permissions,
 	})
@@ -311,7 +310,6 @@ func (s *authService) RefreshToken(ctx context.Context, req *authDomain.RefreshT
 		return nil, appErrors.NewInternalError("Failed to update session", err)
 	}
 
-
 	return &authDomain.LoginResponse{
 		AccessToken:  accessToken,
 		RefreshToken: newRefreshToken,
@@ -354,7 +352,6 @@ func (s *authService) ChangePassword(ctx context.Context, userID ulid.ULID, curr
 		// Non-critical error, password change succeeded
 	}
 
-
 	return nil
 }
 
@@ -389,7 +386,6 @@ func (s *authService) ResetPassword(ctx context.Context, email string) error {
 
 	// TODO: Send email with reset link containing tokenString
 	// The email would contain a link like: https://app.brokle.com/reset-password?token=tokenString
-
 
 	return nil
 }
@@ -448,7 +444,6 @@ func (s *authService) ConfirmPasswordReset(ctx context.Context, token, newPasswo
 		// Non-critical error, password reset succeeded
 	}
 
-
 	return nil
 }
 
@@ -500,7 +495,6 @@ func (s *authService) UpdateProfile(ctx context.Context, userID ulid.ULID, req *
 	if err != nil {
 		return appErrors.NewInternalError("Failed to update user", err)
 	}
-
 
 	return nil
 }
@@ -562,13 +556,12 @@ func (s *authService) RevokeAccessToken(ctx context.Context, jti string, userID 
 	// We need the expiration time to know when to cleanup the blacklisted token
 	// For now, we'll use a default expiration time based on config
 	expiresAt := time.Now().Add(s.authConfig.AccessTokenTTL)
-	
+
 	// Add token to blacklist
 	err := s.blacklistedTokens.BlacklistToken(ctx, jti, userID, expiresAt, reason)
 	if err != nil {
 		return appErrors.NewInternalError("Failed to revoke access token", err)
 	}
-
 
 	return nil
 }
@@ -580,7 +573,6 @@ func (s *authService) RevokeUserAccessTokens(ctx context.Context, userID ulid.UL
 	if err != nil {
 		return appErrors.NewInternalError("Failed to revoke user access tokens", err)
 	}
-
 
 	return nil
 }

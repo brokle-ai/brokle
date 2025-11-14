@@ -114,7 +114,7 @@ func TestOTLPConverterService_RootSpanDetection(t *testing.T) {
 					{
 						ScopeSpans: []observability.ScopeSpan{
 							{
-								Spans: []observability.Span{
+								Spans: []observability.OTLPSpan{
 									{
 										TraceID:           "0123456789abcdef0123456789abcdef",
 										SpanID:            "0123456789abcdef",
@@ -142,24 +142,24 @@ func TestOTLPConverterService_RootSpanDetection(t *testing.T) {
 				}
 			}
 
-			// Find observation event
-			var obsEvent *observability.TelemetryEventRequest
+			// Find span event
+			var spanEvent *observability.TelemetryEventRequest
 			for _, e := range events {
-				if e.EventType == "observation" {
-					obsEvent = e
+				if e.EventType == "span" {
+					spanEvent = e
 					break
 				}
 			}
-			require.NotNil(t, obsEvent, "Should have observation event")
+			require.NotNil(t, spanEvent, "Should have span event")
 
 			if tc.expectRoot {
 				assert.True(t, hasTraceEvent, "Expected trace event for root span: %s", tc.description)
-				// Verify root span has nil parent_observation_id (will be NULL in ClickHouse)
-				assert.Nil(t, obsEvent.Payload["parent_observation_id"], "Root span should have nil parent_observation_id: %s", tc.description)
+				// Verify root span has nil parent_span_id (will be NULL in ClickHouse)
+				assert.Nil(t, spanEvent.Payload["parent_span_id"], "Root span should have nil parent_span_id: %s", tc.description)
 			} else {
 				assert.False(t, hasTraceEvent, "Expected NO trace event for non-root span: %s", tc.description)
-				// Verify child span has non-nil parent_observation_id
-				assert.NotNil(t, obsEvent.Payload["parent_observation_id"], "Child span should have parent_observation_id: %s", tc.description)
+				// Verify child span has non-nil parent_span_id
+				assert.NotNil(t, spanEvent.Payload["parent_span_id"], "Child span should have parent_span_id: %s", tc.description)
 			}
 		})
 	}

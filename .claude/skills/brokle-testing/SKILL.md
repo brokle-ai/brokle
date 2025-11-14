@@ -261,18 +261,18 @@ mockPublisher.AssertExpectations(t)
 
 ```go
 // ✅ HIGH-VALUE: Business logic calculation
-func TestObservation_CalculateLatency(t *testing.T) {
+func TestSpan_CalculateLatency(t *testing.T) {
     startTime := time.Now()
     endTime := startTime.Add(150 * time.Millisecond)
 
     tests := []struct {
         name     string
-        obs      *Observation
+        span      *Span
         expected *int
     }{
         {
             name: "with valid end time",
-            obs: &Observation{
+            span: &Span{
                 StartTime: startTime,
                 EndTime:   &endTime,
             },
@@ -280,7 +280,7 @@ func TestObservation_CalculateLatency(t *testing.T) {
         },
         {
             name: "without end time",
-            obs: &Observation{
+            span: &Span{
                 StartTime: startTime,
                 EndTime:   nil,
             },

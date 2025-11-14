@@ -45,7 +45,7 @@ type UsageQuota struct {
 type PaymentMethod struct {
 	ID             ulid.ULID `json:"id"`
 	OrganizationID ulid.ULID `json:"organization_id"`
-	Type           string    `json:"type"` // card, bank_transfer, etc.
+	Type           string    `json:"type"`     // card, bank_transfer, etc.
 	Provider       string    `json:"provider"` // stripe, etc.
 	ExternalID     string    `json:"external_id"`
 	Last4          string    `json:"last_4"`
@@ -163,15 +163,15 @@ const (
 
 // DiscountCondition represents conditions for applying discounts
 type DiscountCondition struct {
-	BillingTiers      []string         `json:"billing_tiers,omitempty"`      // Apply only to specific tiers
-	MinUsage          *UsageThreshold  `json:"min_usage,omitempty"`          // Minimum usage requirements
-	RequestTypes      []string         `json:"request_types,omitempty"`      // Specific request types
-	Providers         []ulid.ULID      `json:"providers,omitempty"`          // Specific providers
-	Models            []ulid.ULID      `json:"models,omitempty"`             // Specific models
-	TimeOfDay         *TimeRange       `json:"time_of_day,omitempty"`        // Time-based discounts
-	DaysOfWeek        []time.Weekday   `json:"days_of_week,omitempty"`       // Day-based discounts
-	FirstTimeCustomer bool             `json:"first_time_customer"`          // First-time customer discount
-	VolumeThreshold   *VolumeDiscount  `json:"volume_threshold,omitempty"`   // Volume-based discounts
+	BillingTiers      []string        `json:"billing_tiers,omitempty"`    // Apply only to specific tiers
+	MinUsage          *UsageThreshold `json:"min_usage,omitempty"`        // Minimum usage requirements
+	RequestTypes      []string        `json:"request_types,omitempty"`    // Specific request types
+	Providers         []ulid.ULID     `json:"providers,omitempty"`        // Specific providers
+	Models            []ulid.ULID     `json:"models,omitempty"`           // Specific models
+	TimeOfDay         *TimeRange      `json:"time_of_day,omitempty"`      // Time-based discounts
+	DaysOfWeek        []time.Weekday  `json:"days_of_week,omitempty"`     // Day-based discounts
+	FirstTimeCustomer bool            `json:"first_time_customer"`        // First-time customer discount
+	VolumeThreshold   *VolumeDiscount `json:"volume_threshold,omitempty"` // Volume-based discounts
 }
 
 // UsageThreshold represents minimum usage requirements

@@ -67,7 +67,6 @@ func (r *permissionRepository) GetAllPermissions(ctx context.Context) ([]*authDo
 	return r.GetAll(ctx)
 }
 
-
 // GetByNames retrieves permissions by names
 func (r *permissionRepository) GetByNames(ctx context.Context, names []string) ([]*authDomain.Permission, error) {
 	var permissions []*authDomain.Permission
@@ -169,7 +168,7 @@ func (r *permissionRepository) ListPermissions(ctx context.Context, limit, offse
 	if err := r.db.WithContext(ctx).Model(&authDomain.Permission{}).Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
-	
+
 	// Get permissions with pagination
 	var permissions []*authDomain.Permission
 	err := r.db.WithContext(ctx).
@@ -177,7 +176,7 @@ func (r *permissionRepository) ListPermissions(ctx context.Context, limit, offse
 		Limit(limit).
 		Offset(offset).
 		Find(&permissions).Error
-	
+
 	return permissions, int(total), err
 }
 
@@ -188,13 +187,13 @@ func (r *permissionRepository) SearchPermissions(ctx context.Context, query stri
 		"(name ILIKE ? OR description ILIKE ? OR resource ILIKE ? OR action ILIKE ? OR category ILIKE ?)",
 		searchPattern, searchPattern, searchPattern, searchPattern, searchPattern,
 	)
-	
+
 	// Get total count
 	var total int64
 	if err := dbQuery.Model(&authDomain.Permission{}).Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
-	
+
 	// Get permissions with pagination
 	var permissions []*authDomain.Permission
 	err := dbQuery.
@@ -202,7 +201,7 @@ func (r *permissionRepository) SearchPermissions(ctx context.Context, query stri
 		Limit(limit).
 		Offset(offset).
 		Find(&permissions).Error
-	
+
 	return permissions, int(total), err
 }
 
@@ -253,7 +252,7 @@ func (r *permissionRepository) GetRolePermissionMap(ctx context.Context, roleID 
 	if err != nil {
 		return nil, err
 	}
-	
+
 	result := make(map[string]bool)
 	for _, resourceAction := range resourceActions {
 		result[resourceAction] = true
@@ -281,7 +280,7 @@ func (r *permissionRepository) GetUserEffectivePermissions(ctx context.Context, 
 	if err != nil {
 		return nil, err
 	}
-	
+
 	result := make(map[string]bool)
 	for _, resourceAction := range resourceActions {
 		result[resourceAction] = true
@@ -321,17 +320,17 @@ func (r *permissionRepository) BulkPermissionExists(ctx context.Context, resourc
 	if err != nil {
 		return nil, err
 	}
-	
+
 	result := make(map[string]bool)
 	existingSet := make(map[string]bool)
 	for _, action := range existingActions {
 		existingSet[action] = true
 	}
-	
+
 	for _, resourceAction := range resourceActions {
 		result[resourceAction] = existingSet[resourceAction]
 	}
-	
+
 	return result, nil
 }
 

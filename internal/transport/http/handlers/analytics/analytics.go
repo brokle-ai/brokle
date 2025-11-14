@@ -3,10 +3,11 @@ package analytics
 import (
 	"time"
 
-	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 	"brokle/internal/config"
 	"brokle/pkg/response"
+
+	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 )
 
 type Handler struct {
@@ -22,37 +23,37 @@ func NewHandler(config *config.Config, logger *logrus.Logger) *Handler {
 
 // AnalyticsOverview provides high-level analytics metrics
 type AnalyticsOverview struct {
-	TotalRequests     int64   `json:"total_requests" example:"125000" description:"Total number of AI requests"`
-	TotalTokens       int64   `json:"total_tokens" example:"2500000" description:"Total tokens processed"`
-	TotalCost         float64 `json:"total_cost" example:"1250.75" description:"Total cost in USD"`
-	AvgLatency        float64 `json:"avg_latency_ms" example:"850.5" description:"Average response latency in milliseconds"`
-	SuccessRate       float64 `json:"success_rate" example:"0.987" description:"Success rate (0.0 to 1.0)"`
-	TopProvider       string  `json:"top_provider" example:"openai" description:"Most used AI provider"`
-	TopModel          string  `json:"top_model" example:"gpt-4" description:"Most used AI model"`
-	RequestsToday     int64   `json:"requests_today" example:"5420" description:"Requests processed today"`
-	CostToday         float64 `json:"cost_today" example:"54.20" description:"Cost incurred today in USD"`
-	Period            string  `json:"period" example:"30d" description:"Time period for these metrics"`
+	TotalRequests int64   `json:"total_requests" example:"125000" description:"Total number of AI requests"`
+	TotalTokens   int64   `json:"total_tokens" example:"2500000" description:"Total tokens processed"`
+	TotalCost     float64 `json:"total_cost" example:"1250.75" description:"Total cost in USD"`
+	AvgLatency    float64 `json:"avg_latency_ms" example:"850.5" description:"Average response latency in milliseconds"`
+	SuccessRate   float64 `json:"success_rate" example:"0.987" description:"Success rate (0.0 to 1.0)"`
+	TopProvider   string  `json:"top_provider" example:"openai" description:"Most used AI provider"`
+	TopModel      string  `json:"top_model" example:"gpt-4" description:"Most used AI model"`
+	RequestsToday int64   `json:"requests_today" example:"5420" description:"Requests processed today"`
+	CostToday     float64 `json:"cost_today" example:"54.20" description:"Cost incurred today in USD"`
+	Period        string  `json:"period" example:"30d" description:"Time period for these metrics"`
 }
 
 // RequestAnalytics provides detailed request analytics
 type RequestAnalytics struct {
-	TimeRange     string                 `json:"time_range" example:"30d" description:"Time range for analytics"`
-	RequestCounts []TimeSeriesDataPoint  `json:"request_counts" description:"Request counts over time"`
-	ByProvider    []ProviderAnalytics    `json:"by_provider" description:"Analytics broken down by AI provider"`
-	ByModel       []ModelAnalytics       `json:"by_model" description:"Analytics broken down by AI model"`
-	ByStatus      []StatusAnalytics      `json:"by_status" description:"Analytics broken down by response status"`
-	HourlyPattern []HourlyAnalytics      `json:"hourly_pattern" description:"Request patterns by hour of day"`
+	TimeRange     string                `json:"time_range" example:"30d" description:"Time range for analytics"`
+	RequestCounts []TimeSeriesDataPoint `json:"request_counts" description:"Request counts over time"`
+	ByProvider    []ProviderAnalytics   `json:"by_provider" description:"Analytics broken down by AI provider"`
+	ByModel       []ModelAnalytics      `json:"by_model" description:"Analytics broken down by AI model"`
+	ByStatus      []StatusAnalytics     `json:"by_status" description:"Analytics broken down by response status"`
+	HourlyPattern []HourlyAnalytics     `json:"hourly_pattern" description:"Request patterns by hour of day"`
 }
 
 // CostAnalytics provides cost analysis and optimization insights
 type CostAnalytics struct {
-	TimeRange        string                    `json:"time_range" example:"30d" description:"Time range for cost analytics"`
-	TotalCost        float64                   `json:"total_cost" example:"1250.75" description:"Total cost in USD"`
-	CostByProvider   []ProviderCostAnalytics   `json:"cost_by_provider" description:"Cost breakdown by AI provider"`
-	CostByModel      []ModelCostAnalytics      `json:"cost_by_model" description:"Cost breakdown by AI model"`
-	CostTrend        []TimeSeriesDataPoint     `json:"cost_trend" description:"Cost trend over time"`
-	Optimizations    []CostOptimizationSuggestion `json:"optimizations" description:"Cost optimization suggestions"`
-	BudgetStatus     BudgetStatus              `json:"budget_status" description:"Current budget utilization"`
+	TimeRange      string                       `json:"time_range" example:"30d" description:"Time range for cost analytics"`
+	TotalCost      float64                      `json:"total_cost" example:"1250.75" description:"Total cost in USD"`
+	CostByProvider []ProviderCostAnalytics      `json:"cost_by_provider" description:"Cost breakdown by AI provider"`
+	CostByModel    []ModelCostAnalytics         `json:"cost_by_model" description:"Cost breakdown by AI model"`
+	CostTrend      []TimeSeriesDataPoint        `json:"cost_trend" description:"Cost trend over time"`
+	Optimizations  []CostOptimizationSuggestion `json:"optimizations" description:"Cost optimization suggestions"`
+	BudgetStatus   BudgetStatus                 `json:"budget_status" description:"Current budget utilization"`
 }
 
 // ProviderAnalytics contains analytics for a specific AI provider
@@ -68,13 +69,13 @@ type ProviderAnalytics struct {
 
 // ModelAnalytics contains analytics for a specific AI model
 type ModelAnalytics struct {
-	Model       string  `json:"model" example:"gpt-4" description:"AI model name"`
-	Provider    string  `json:"provider" example:"openai" description:"Provider of this model"`
-	Requests    int64   `json:"requests" example:"25000" description:"Number of requests"`
-	Tokens      int64   `json:"tokens" example:"500000" description:"Total tokens processed"`
-	Cost        float64 `json:"cost" example:"250.00" description:"Total cost in USD"`
-	AvgLatency  float64 `json:"avg_latency_ms" example:"850.5" description:"Average latency in milliseconds"`
-	SuccessRate float64 `json:"success_rate" example:"0.987" description:"Success rate (0.0 to 1.0)"`
+	Model        string  `json:"model" example:"gpt-4" description:"AI model name"`
+	Provider     string  `json:"provider" example:"openai" description:"Provider of this model"`
+	Requests     int64   `json:"requests" example:"25000" description:"Number of requests"`
+	Tokens       int64   `json:"tokens" example:"500000" description:"Total tokens processed"`
+	Cost         float64 `json:"cost" example:"250.00" description:"Total cost in USD"`
+	AvgLatency   float64 `json:"avg_latency_ms" example:"850.5" description:"Average latency in milliseconds"`
+	SuccessRate  float64 `json:"success_rate" example:"0.987" description:"Success rate (0.0 to 1.0)"`
 	QualityScore float64 `json:"quality_score" example:"0.92" description:"Average quality score (0.0 to 1.0)"`
 }
 
@@ -87,15 +88,15 @@ type TimeSeriesDataPoint struct {
 
 // StatusAnalytics contains analytics by response status
 type StatusAnalytics struct {
-	Status   string `json:"status" example:"success" description:"Response status category"`
-	Requests int64  `json:"requests" example:"120000" description:"Number of requests with this status"`
+	Status   string  `json:"status" example:"success" description:"Response status category"`
+	Requests int64   `json:"requests" example:"120000" description:"Number of requests with this status"`
 	Percent  float64 `json:"percent" example:"0.96" description:"Percentage of total requests"`
 }
 
 // HourlyAnalytics contains request pattern by hour
 type HourlyAnalytics struct {
-	Hour     int   `json:"hour" example:"14" description:"Hour of day (0-23)"`
-	Requests int64 `json:"requests" example:"5420" description:"Average requests during this hour"`
+	Hour     int     `json:"hour" example:"14" description:"Hour of day (0-23)"`
+	Requests int64   `json:"requests" example:"5420" description:"Average requests during this hour"`
 	Cost     float64 `json:"cost" example:"54.20" description:"Average cost during this hour"`
 }
 
@@ -109,19 +110,19 @@ type ProviderCostAnalytics struct {
 
 // ModelCostAnalytics contains cost analytics by model
 type ModelCostAnalytics struct {
-	Model    string  `json:"model" example:"gpt-4" description:"AI model name"`
-	Provider string  `json:"provider" example:"openai" description:"Provider of this model"`
-	Cost     float64 `json:"cost" example:"250.00" description:"Total cost in USD"`
-	Percent  float64 `json:"percent" example:"0.20" description:"Percentage of total cost"`
+	Model        string  `json:"model" example:"gpt-4" description:"AI model name"`
+	Provider     string  `json:"provider" example:"openai" description:"Provider of this model"`
+	Cost         float64 `json:"cost" example:"250.00" description:"Total cost in USD"`
+	Percent      float64 `json:"percent" example:"0.20" description:"Percentage of total cost"`
 	CostPerToken float64 `json:"cost_per_token" example:"0.0005" description:"Average cost per token"`
 }
 
 // CostOptimizationSuggestion provides cost saving recommendations
 type CostOptimizationSuggestion struct {
-	Type        string  `json:"type" example:"model_switch" description:"Type of optimization"`
-	Description string  `json:"description" example:"Switch from gpt-4 to gpt-3.5-turbo for 70% of requests" description:"Optimization description"`
+	Type             string  `json:"type" example:"model_switch" description:"Type of optimization"`
+	Description      string  `json:"description" example:"Switch from gpt-4 to gpt-3.5-turbo for 70% of requests" description:"Optimization description"`
 	PotentialSavings float64 `json:"potential_savings" example:"125.50" description:"Estimated monthly savings in USD"`
-	Impact      string  `json:"impact" example:"low" description:"Expected impact on quality (low, medium, high)"`
+	Impact           string  `json:"impact" example:"low" description:"Expected impact on quality (low, medium, high)"`
 }
 
 // BudgetStatus shows current budget utilization
@@ -151,7 +152,10 @@ type BudgetStatus struct {
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Security BearerAuth
 // @Router /api/v1/analytics/overview [get]
-func (h *Handler) Overview(c *gin.Context) { response.Success(c, gin.H{"message": "Analytics overview - TODO"}) }
+func (h *Handler) Overview(c *gin.Context) {
+	response.Success(c, gin.H{"message": "Analytics overview - TODO"})
+}
+
 // Requests handles GET /analytics/requests
 // @Summary Get request analytics
 // @Description Get detailed analytics about AI requests including patterns, providers, models, and success rates
@@ -171,7 +175,10 @@ func (h *Handler) Overview(c *gin.Context) { response.Success(c, gin.H{"message"
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Security BearerAuth
 // @Router /api/v1/analytics/requests [get]
-func (h *Handler) Requests(c *gin.Context) { response.Success(c, gin.H{"message": "Analytics requests - TODO"}) }
+func (h *Handler) Requests(c *gin.Context) {
+	response.Success(c, gin.H{"message": "Analytics requests - TODO"})
+}
+
 // Costs handles GET /analytics/costs
 // @Summary Get cost analytics
 // @Description Get detailed cost analytics including trends, breakdowns by provider/model, and optimization suggestions
@@ -190,7 +197,10 @@ func (h *Handler) Requests(c *gin.Context) { response.Success(c, gin.H{"message"
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Security BearerAuth
 // @Router /api/v1/analytics/costs [get]
-func (h *Handler) Costs(c *gin.Context) { response.Success(c, gin.H{"message": "Analytics costs - TODO"}) }
+func (h *Handler) Costs(c *gin.Context) {
+	response.Success(c, gin.H{"message": "Analytics costs - TODO"})
+}
+
 // Providers handles GET /analytics/providers
 // @Summary Get provider analytics
 // @Description Get performance analytics for AI providers including latency, success rates, and health scores
@@ -209,7 +219,10 @@ func (h *Handler) Costs(c *gin.Context) { response.Success(c, gin.H{"message": "
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Security BearerAuth
 // @Router /api/v1/analytics/providers [get]
-func (h *Handler) Providers(c *gin.Context) { response.Success(c, gin.H{"message": "Analytics providers - TODO"}) }
+func (h *Handler) Providers(c *gin.Context) {
+	response.Success(c, gin.H{"message": "Analytics providers - TODO"})
+}
+
 // Models handles GET /analytics/models
 // @Summary Get model analytics
 // @Description Get performance and usage analytics for AI models including quality scores and cost efficiency
@@ -229,4 +242,6 @@ func (h *Handler) Providers(c *gin.Context) { response.Success(c, gin.H{"message
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Security BearerAuth
 // @Router /api/v1/analytics/models [get]
-func (h *Handler) Models(c *gin.Context) { response.Success(c, gin.H{"message": "Analytics models - TODO"}) }
+func (h *Handler) Models(c *gin.Context) {
+	response.Success(c, gin.H{"message": "Analytics models - TODO"})
+}

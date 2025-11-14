@@ -2,7 +2,7 @@
 
 ## Overview
 
-As of **October 2025**, the Brokle platform has deprecated the generic `event_type: "event"` in favor of OTEL-native structured observability using `Observation.Type = "event"`.
+As of **October 2025**, the Brokle platform has deprecated the generic `event_type: "event"` in favor of OTEL-native structured observability using `Span.Type = "event"`.
 
 ---
 
@@ -16,9 +16,9 @@ As of **October 2025**, the Brokle platform has deprecated the generic `event_ty
 - `/v1/ingest/batch` endpoint no longer accepts `event_type: "event"`
 
 ### ✅ New Pattern
-- Use `event_type: "observation"` with `payload.type: "event"`
-- Events are now first-class observations in the OTEL model
-- Unified storage in `observations` table (ClickHouse)
+- Use `event_type: "span"` with `payload.type: "event"`
+- Events are now first-class spans in the OTEL model
+- Unified storage in `spans` table (ClickHouse)
 - Full trace hierarchy support
 
 ---
@@ -55,7 +55,7 @@ curl -X POST http://localhost:8080/v1/ingest/batch \
   -d '{
     "events": [{
       "event_id": "01HQXYZ...",
-      "event_type": "observation",
+      "event_type": "span",
       "payload": {
         "type": "event",
         "name": "user_click",
@@ -72,7 +72,7 @@ curl -X POST http://localhost:8080/v1/ingest/batch \
   }'
 ```
 
-**Result**: ✅ `200 OK` - Event stored as observation with `type = "event"`
+**Result**: ✅ `200 OK` - Event stored as span with `type = "event"`
 
 ---
 
@@ -101,9 +101,9 @@ from brokle_legacy.types.telemetry import TelemetryEventType
 
 client.submit_batch([
     {
-        "event_type": TelemetryEventType.OBSERVATION,  # ✅ Use OBSERVATION
+        "event_type": TelemetryEventType.SPAN,  # ✅ Use SPAN
         "payload": {
-            "type": "event",  # ✅ Set observation type to "event"
+            "type": "event",  # ✅ Set span type to "event"
             "name": "user_login",
             "input": {"user_id": "123"},
             "metadata": {
@@ -115,7 +115,7 @@ client.submit_batch([
 ])
 ```
 
-**Result**: ✅ Event stored as observation with `type = "event"`
+**Result**: ✅ Event stored as span with `type = "event"`
 
 ---
 
@@ -128,10 +128,10 @@ from brokle import Brokle
 
 brokle = Brokle(api_key="bk_your_secret")
 
-# Events as observations (zero-duration)
+# Events as spans (zero-duration)
 with brokle.start_as_current_span(
     name="user_click",
-    as_type="event",  # ✅ Uses ObservationType.EVENT internally
+    as_type="event",  # ✅ Uses SpanType.EVENT internally
     input={"button": "checkout", "page": "/cart"},
     metadata={"event.domain": "user_interaction"}
 ):
@@ -198,7 +198,7 @@ with brokle.start_as_current_span(
 **Get all events for a project:**
 ```sql
 SELECT *
-FROM observations
+FROM spans
 WHERE project_id = 'proj_123'
   AND type = 'event'
   AND start_time >= now() - INTERVAL 7 DAY
@@ -211,7 +211,7 @@ SELECT
     name,
     COUNT(*) as event_count,
     AVG(duration_ms) as avg_duration
-FROM observations
+FROM spans
 WHERE type = 'event'
   AND start_time >= now() - INTERVAL 1 DAY
 GROUP BY name
@@ -221,7 +221,7 @@ ORDER BY event_count DESC;
 **Get all events in a trace (mixed with spans/generations):**
 ```sql
 SELECT *
-FROM observations
+FROM spans
 WHERE trace_id = 'trace_xyz'
 ORDER BY start_time ASC;
 ```
@@ -236,8 +236,8 @@ ORDER BY start_time ASC;
 - Industry-standard observability
 
 ### ✅ Unified Storage
-- All observations in one table
-- Efficient querying across all observation types
+- All spans in one table
+- Efficient querying across all span types
 - Consistent event structure
 
 ### ✅ Hierarchical Events
@@ -247,7 +247,7 @@ ORDER BY start_time ASC;
 
 ### ✅ Better Analytics
 - Filter by `type = 'event'` for event-specific analytics
-- Query across all observation types
+- Query across all span types
 - Unified metrics and dashboards
 
 ---
@@ -257,12 +257,12 @@ ORDER BY start_time ASC;
 ### API Breaking Changes
 - ❌ `/v1/ingest/batch` rejects `event_type: "event"` → returns `400 Bad Request`
 - ❌ `/v1/telemetry/validate` rejects "event" type → returns validation error
-- ✅ Valid types: `["trace", "observation", "quality_score", "session"]`
+- ✅ Valid types: `["trace", "span", "quality_score", "session"]`
 
 ### SDK Breaking Changes
 - ❌ Python Legacy SDK: `TelemetryEventType.EVENT` removed from enum
 - ❌ Old code using `event_type=TelemetryEventType.EVENT` will raise `AttributeError`
-- ✅ Migration: Use `TelemetryEventType.OBSERVATION` with `payload.type="event"`
+- ✅ Migration: Use `TelemetryEventType.SPAN` with `payload.type="event"`
 
 ### No User Impact
 - ✅ Early development phase - no production users affected

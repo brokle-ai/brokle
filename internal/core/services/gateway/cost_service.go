@@ -313,14 +313,14 @@ func (c *CostService) GetModelPricing(ctx context.Context, modelID ulid.ULID) (*
 	}
 
 	pricing := &gateway.ModelPricing{
-		ModelID:             model.ID,
-		ModelName:           model.ModelName,
-		ProviderID:          model.ProviderID,
-		InputCostPerToken:   model.InputCostPer1kTokens / 1000.0,
-		OutputCostPerToken:  model.OutputCostPer1kTokens / 1000.0,
-		Currency:            "USD",
-		EffectiveDate:       model.CreatedAt,
-		IsActive:            model.IsEnabled,
+		ModelID:            model.ID,
+		ModelName:          model.ModelName,
+		ProviderID:         model.ProviderID,
+		InputCostPerToken:  model.InputCostPer1kTokens / 1000.0,
+		OutputCostPerToken: model.OutputCostPer1kTokens / 1000.0,
+		Currency:           "USD",
+		EffectiveDate:      model.CreatedAt,
+		IsActive:           model.IsEnabled,
 	}
 
 	logger.WithFields(logrus.Fields{
@@ -415,7 +415,7 @@ func (c *CostService) findSimilarModels(ctx context.Context, modelName string, m
 		return nil, fmt.Errorf("failed to search models: %w", err)
 	}
 
-		// If specific model name is provided, try to find exact matches first
+	// If specific model name is provided, try to find exact matches first
 	if modelName != "" {
 		var exactMatches []*gateway.Model
 		for _, model := range models {
@@ -464,10 +464,10 @@ func (c *CostService) CalculateTokenEfficiency(inputTokens, outputTokens int32, 
 	}
 
 	return &gateway.EfficiencyMetrics{
-		TokensPerSecond:     tokensPerSecond,
-		OutputToInputRatio:  outputRatio,
-		TotalTokens:         totalTokens,
-		Duration:            duration,
+		TokensPerSecond:    tokensPerSecond,
+		OutputToInputRatio: outputRatio,
+		TotalTokens:        totalTokens,
+		Duration:           duration,
 	}
 }
 
@@ -575,12 +575,12 @@ func (c *CostService) GetProviderCostBreakdown(ctx context.Context, projectID ul
 func (c *CostService) CheckBudgetLimits(ctx context.Context, projectID ulid.ULID, estimatedCost float64) (*gateway.BudgetCheckResult, error) {
 	// TODO: Implement budget limits checking
 	return &gateway.BudgetCheckResult{
-		ProjectID: projectID,
-		CurrentUsage: 0.0,
-		BudgetLimit:  0.0,
-		RemainingBudget: 0.0,
+		ProjectID:        projectID,
+		CurrentUsage:     0.0,
+		BudgetLimit:      0.0,
+		RemainingBudget:  0.0,
 		WillExceedBudget: false,
-		CheckedAt: time.Now(),
+		CheckedAt:        time.Now(),
 	}, nil
 }
 
@@ -594,12 +594,12 @@ func (c *CostService) UpdateBudgetUsage(ctx context.Context, projectID ulid.ULID
 func (c *CostService) GetBudgetStatus(ctx context.Context, projectID ulid.ULID) (*gateway.BudgetStatus, error) {
 	// TODO: Implement budget status retrieval
 	return &gateway.BudgetStatus{
-		ProjectID: projectID,
-		CurrentUsage: 0.0,
-		BudgetLimit:  0.0,
-		RemainingBudget: 0.0,
+		ProjectID:         projectID,
+		CurrentUsage:      0.0,
+		BudgetLimit:       0.0,
+		RemainingBudget:   0.0,
 		BudgetUtilization: 0.0,
-		OnTrack: true,
-		UpdatedAt: time.Now(),
+		OnTrack:           true,
+		UpdatedAt:         time.Now(),
 	}, nil
 }

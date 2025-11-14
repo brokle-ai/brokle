@@ -17,8 +17,8 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"brokle/internal/core/domain/observability"
-	"brokle/internal/infrastructure/streams"
 	obsServices "brokle/internal/core/services/observability"
+	"brokle/internal/infrastructure/streams"
 	"brokle/internal/transport/http/middleware"
 	"brokle/pkg/response"
 	"brokle/pkg/ulid"
@@ -179,19 +179,19 @@ func (h *OTLPHandler) HandleTraces(c *gin.Context) {
 
 	// OTLP-native processing: deduplication + Redis Streams publishing
 
-	// 1. Extract composite dedup IDs for observations (trace_id:span_id)
+	// 1. Extract composite dedup IDs for spans (trace_id:span_id)
 	dedupIDs := make([]string, 0, len(brokleEvents))
 	dedupIDToFirstIndex := make(map[string]int) // Track first occurrence index for intra-batch deduplication
 
 	for i, event := range brokleEvents {
-		// Only deduplicate observations (spans have unique span_id)
-		if event.EventType == observability.TelemetryEventTypeObservation {
+		// Only deduplicate spans (spans have unique span_id)
+		if event.EventType == observability.TelemetryEventTypeSpan {
 			if event.SpanID == "" {
 				h.logger.WithFields(logrus.Fields{
 					"event_id":   event.EventID.String(),
 					"trace_id":   event.TraceID,
 					"event_type": event.EventType,
-				}).Error("Observation missing span_id, skipping deduplication")
+				}).Error("Span missing span_id, skipping deduplication")
 				continue
 			}
 
@@ -206,7 +206,7 @@ func (h *OTLPHandler) HandleTraces(c *gin.Context) {
 		}
 	}
 
-	// 2. Claim observations atomically (24h TTL, prevents duplicates)
+	// 2. Claim spans atomically (24h TTL, prevents duplicates)
 	batchID := ulid.New()
 	var claimedIDs, duplicateIDs []string
 
@@ -215,13 +215,13 @@ func (h *OTLPHandler) HandleTraces(c *gin.Context) {
 			ctx, *projectIDPtr, batchID, dedupIDs, 24*time.Hour,
 		)
 		if err != nil {
-			h.logger.WithError(err).Error("Failed to claim OTLP observations for deduplication")
+			h.logger.WithError(err).Error("Failed to claim OTLP spans for deduplication")
 			response.InternalServerError(c, "Failed to claim events for deduplication")
 			return
 		}
 	}
 
-	// 3. Skip if all observations were duplicates and no traces
+	// 3. Skip if all spans were duplicates and no traces
 	hasTraces := false
 	for _, event := range brokleEvents {
 		if event.EventType == observability.TelemetryEventTypeTrace {
@@ -232,9 +232,9 @@ func (h *OTLPHandler) HandleTraces(c *gin.Context) {
 
 	if len(claimedIDs) == 0 && !hasTraces {
 		h.logger.WithFields(logrus.Fields{
-			"project_id":  projectID,
-			"duplicates":  len(duplicateIDs),
-		}).Info("All OTLP observations were duplicates, skipping")
+			"project_id": projectID,
+			"duplicates": len(duplicateIDs),
+		}).Info("All OTLP spans were duplicates, skipping")
 
 		response.Success(c, map[string]interface{}{
 			"status":          "all_duplicates",
@@ -243,7 +243,7 @@ func (h *OTLPHandler) HandleTraces(c *gin.Context) {
 		return
 	}
 
-	// 4. Filter to claimed observations + all traces
+	// 4. Filter to claimed spans + all traces
 	claimedSet := make(map[string]bool, len(claimedIDs))
 	for _, id := range claimedIDs {
 		claimedSet[id] = true
@@ -263,8 +263,8 @@ func (h *OTLPHandler) HandleTraces(c *gin.Context) {
 			continue
 		}
 
-		// Observations: include ONLY if (1) first occurrence in batch AND (2) claimed
-		if event.EventType == observability.TelemetryEventTypeObservation {
+		// Spans: include ONLY if (1) first occurrence in batch AND (2) claimed
+		if event.EventType == observability.TelemetryEventTypeSpan {
 			dedupID := fmt.Sprintf("%s:%s", event.TraceID, event.SpanID)
 			firstIndex := dedupIDToFirstIndex[dedupID]
 			isFirstOccurrence := (i == firstIndex)
@@ -391,7 +391,7 @@ func convertProtoToInternal(protoReq *coltracepb.ExportTraceServiceRequest) (obs
 					parentSpanIDHex = hex.EncodeToString(protoSpan.ParentSpanId)
 				}
 
-				internalSpan := observability.Span{
+				internalSpan := observability.OTLPSpan{
 					TraceID:           traceIDHex,
 					SpanID:            spanIDHex,
 					ParentSpanID:      parentSpanIDHex,

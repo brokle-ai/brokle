@@ -88,11 +88,11 @@ type OrganizationRepository interface {
 // Security: Full key is hashed with SHA-256 (deterministic, enables O(1) lookup)
 // Organization is derived via projects.organization_id (no redundant storage)
 type APIKey struct {
-	ID         ulid.ULID      `json:"id" gorm:"type:char(26);primaryKey"`
-	KeyHash    string         `json:"-" gorm:"size:255;unique;not null;index"`        // SHA-256(full_key)
-	KeyPreview string         `json:"key_preview" gorm:"size:50;not null"`            // bk_xxxx...yyyy (for display)
-	ProjectID  ulid.ULID      `json:"project_id" gorm:"type:char(26);not null;index"` // Project this key belongs to
-	UserID     ulid.ULID      `json:"user_id" gorm:"type:char(26);not null;index"`    // Creator user
+	ID         ulid.ULID `json:"id" gorm:"type:char(26);primaryKey"`
+	KeyHash    string    `json:"-" gorm:"size:255;unique;not null;index"`        // SHA-256(full_key)
+	KeyPreview string    `json:"key_preview" gorm:"size:50;not null"`            // bk_xxxx...yyyy (for display)
+	ProjectID  ulid.ULID `json:"project_id" gorm:"type:char(26);not null;index"` // Project this key belongs to
+	UserID     ulid.ULID `json:"user_id" gorm:"type:char(26);not null;index"`    // Creator user
 
 	// Key metadata
 	Name     string `json:"name" gorm:"size:255;not null"`
@@ -244,8 +244,8 @@ type Permission struct {
 	Resource    string     `json:"resource" gorm:"size:50;not null;index"`
 	Action      string     `json:"action" gorm:"size:50;not null;index"`
 	Description string     `json:"description" gorm:"type:text"`
-	ScopeLevel  ScopeLevel `json:"scope_level" gorm:"size:20;not null;default:'organization';index"`  // organization, project, global
-	Category    string     `json:"category" gorm:"size:50;index"`                                     // grouping: organization, members, billing, etc.
+	ScopeLevel  ScopeLevel `json:"scope_level" gorm:"size:20;not null;default:'organization';index"` // organization, project, global
+	Category    string     `json:"category" gorm:"size:50;index"`                                    // grouping: organization, members, billing, etc.
 	CreatedAt   time.Time  `json:"created_at"`
 
 	// Relations
@@ -519,7 +519,7 @@ func NewPermission(resource, action, description string) *Permission {
 		Action:      action,
 		Description: description,
 		ScopeLevel:  ScopeLevelOrganization, // Default to organization level
-		Category:    resource,                // Default category to resource name
+		Category:    resource,               // Default category to resource name
 		CreatedAt:   time.Now(),
 	}
 }

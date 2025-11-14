@@ -62,7 +62,6 @@ func (ps *ProjectSeeder) SeedProjects(ctx context.Context, projectSeeds []Projec
 	return nil
 }
 
-
 // generateSlug creates a URL-friendly slug from a name
 func generateSlug(name string) string {
 	// Simple slug generation - convert to lowercase and replace spaces with hyphens
@@ -80,15 +79,15 @@ func generateSlug(name string) string {
 			}
 		}
 	}
-	
+
 	// Remove trailing hyphens
 	for len(slug) > 0 && slug[len(slug)-1] == '-' {
 		slug = slug[:len(slug)-1]
 	}
-	
+
 	if slug == "" {
 		slug = "unnamed"
 	}
-	
+
 	return slug
 }

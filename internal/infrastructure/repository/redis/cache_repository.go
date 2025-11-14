@@ -6,8 +6,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/redis/go-redis/v9"
 	"brokle/internal/infrastructure/database"
+
+	"github.com/redis/go-redis/v9"
 )
 
 // CacheRepository implements caching operations using Redis
@@ -169,7 +170,7 @@ func (r *CacheRepository) RefreshSession(ctx context.Context, sessionID string, 
 // CheckRateLimit checks if request is within rate limit
 func (r *CacheRepository) CheckRateLimit(ctx context.Context, key string, limit int64, window time.Duration) (bool, int64, error) {
 	rateLimitKey := r.rateLimitKey(key)
-	
+
 	current, err := r.db.Increment(ctx, rateLimitKey)
 	if err != nil {
 		return false, 0, fmt.Errorf("failed to increment rate limit counter: %w", err)

@@ -28,7 +28,7 @@ func NewTokenAdminHandler(
 	return &TokenAdminHandler{
 		authService:       authService,
 		blacklistedTokens: blacklistedTokens,
-		logger:           logger,
+		logger:            logger,
 	}
 }
 
@@ -48,14 +48,14 @@ type RevokeUserTokensRequest struct {
 // TokenStatsResponse represents token statistics
 // @Description Token management statistics
 type TokenStatsResponse struct {
-	TotalBlacklisted    int64                    `json:"total_blacklisted" example:"1234" description:"Total number of blacklisted tokens"`
-	BlacklistedToday    int64                    `json:"blacklisted_today" example:"45" description:"Tokens blacklisted today"`
+	TotalBlacklisted    int64                      `json:"total_blacklisted" example:"1234" description:"Total number of blacklisted tokens"`
+	BlacklistedToday    int64                      `json:"blacklisted_today" example:"45" description:"Tokens blacklisted today"`
 	BlacklistedByReason map[string][]TokenByReason `json:"blacklisted_by_reason" description:"Breakdown of tokens by revocation reason"`
 }
 
 // TokenByReason represents tokens grouped by reason
 type TokenByReason struct {
-	Reason string                      `json:"reason" example:"security_incident"`
+	Reason string                     `json:"reason" example:"security_incident"`
 	Count  int                        `json:"count" example:"12"`
 	Tokens []BlacklistedTokenResponse `json:"tokens,omitempty"`
 }
@@ -63,11 +63,11 @@ type TokenByReason struct {
 // BlacklistedTokenResponse represents a blacklisted token
 // @Description Blacklisted token information
 type BlacklistedTokenResponse struct {
-	JTI       string    `json:"jti" example:"01K4FHGHT3XX9WFM293QPZ5G9V" description:"JWT ID"`
-	UserID    string    `json:"user_id" example:"01K4FHGHT3XX9WFM293QPZ5G9V" description:"User ID who owned the token"`
-	Reason    string    `json:"reason" example:"security_incident" description:"Reason for revocation"`
-	RevokedAt string    `json:"revoked_at" example:"2025-01-15T10:30:00Z" description:"When the token was revoked"`
-	ExpiresAt string    `json:"expires_at" example:"2025-01-15T11:30:00Z" description:"When the token would have naturally expired"`
+	JTI       string `json:"jti" example:"01K4FHGHT3XX9WFM293QPZ5G9V" description:"JWT ID"`
+	UserID    string `json:"user_id" example:"01K4FHGHT3XX9WFM293QPZ5G9V" description:"User ID who owned the token"`
+	Reason    string `json:"reason" example:"security_incident" description:"Reason for revocation"`
+	RevokedAt string `json:"revoked_at" example:"2025-01-15T10:30:00Z" description:"When the token was revoked"`
+	ExpiresAt string `json:"expires_at" example:"2025-01-15T11:30:00Z" description:"When the token would have naturally expired"`
 }
 
 // RevokeToken revokes a specific access token immediately
@@ -135,10 +135,10 @@ func (h *TokenAdminHandler) RevokeToken(c *gin.Context) {
 	}
 
 	h.logger.WithFields(logrus.Fields{
-		"jti":         req.JTI,
-		"reason":      req.Reason,
-		"admin_user":  adminUserID,
-		"request_id":  c.GetString("request_id"),
+		"jti":        req.JTI,
+		"reason":     req.Reason,
+		"admin_user": adminUserID,
+		"request_id": c.GetString("request_id"),
 	}).Info("Token revoked by admin")
 
 	response.Success(c, gin.H{
@@ -203,10 +203,10 @@ func (h *TokenAdminHandler) RevokeUserTokens(c *gin.Context) {
 	}
 
 	h.logger.WithFields(logrus.Fields{
-		"user_id":     userID,
-		"reason":      req.Reason,
-		"admin_user":  authContext.UserID,
-		"request_id":  c.GetString("request_id"),
+		"user_id":    userID,
+		"reason":     req.Reason,
+		"admin_user": authContext.UserID,
+		"request_id": c.GetString("request_id"),
 	}).Info("All user tokens revoked by admin")
 
 	response.Success(c, gin.H{
@@ -362,7 +362,7 @@ func (h *TokenAdminHandler) GetTokenStats(c *gin.Context) {
 		if len(tokens) < limit {
 			limit = len(tokens)
 		}
-		
+
 		for i := 0; i < limit; i++ {
 			token := tokens[i]
 			sampleTokens = append(sampleTokens, BlacklistedTokenResponse{

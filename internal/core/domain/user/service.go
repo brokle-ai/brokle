@@ -16,27 +16,27 @@ type UserService interface {
 	DeactivateUser(ctx context.Context, userID ulid.ULID) error
 	ReactivateUser(ctx context.Context, userID ulid.ULID) error
 	DeleteUser(ctx context.Context, userID ulid.ULID) error
-	
+
 	// User listing and search
 	ListUsers(ctx context.Context, filters *ListFilters) ([]*User, int, error)
 	SearchUsers(ctx context.Context, query string, limit, offset int) ([]*User, int, error)
 	GetUsersByIDs(ctx context.Context, userIDs []ulid.ULID) ([]*User, error)
 	GetPublicUsers(ctx context.Context, userIDs []ulid.ULID) ([]*PublicUser, error)
-	
+
 	// Email verification
 	VerifyEmail(ctx context.Context, userID ulid.ULID, token string) error
 	MarkEmailAsVerified(ctx context.Context, userID ulid.ULID) error
 	SendVerificationEmail(ctx context.Context, userID ulid.ULID) error
-	
+
 	// Password management
 	RequestPasswordReset(ctx context.Context, email string) error
 	ResetPassword(ctx context.Context, token, newPassword string) error
 	ChangePassword(ctx context.Context, userID ulid.ULID, currentPassword, newPassword string) error
-	
+
 	// Activity tracking
 	UpdateLastLogin(ctx context.Context, userID ulid.ULID) error
 	GetUserActivity(ctx context.Context, userID ulid.ULID) (*UserActivity, error)
-	
+
 	// Organization context
 	SetDefaultOrganization(ctx context.Context, userID, orgID ulid.ULID) error
 	GetDefaultOrganization(ctx context.Context, userID ulid.ULID) (*ulid.ULID, error)
@@ -53,21 +53,21 @@ type ProfileService interface {
 	UpdateProfile(ctx context.Context, userID ulid.ULID, req *UpdateProfileRequest) (*UserProfile, error)
 	UploadAvatar(ctx context.Context, userID ulid.ULID, imageData []byte, contentType string) (*UserProfile, error)
 	RemoveAvatar(ctx context.Context, userID ulid.ULID) error
-	
+
 	// Notification preferences (consolidated from preferences service)
 	GetNotificationPreferences(ctx context.Context, userID ulid.ULID) (*NotificationPreferences, error)
 	UpdateNotificationPreferences(ctx context.Context, userID ulid.ULID, req *UpdateNotificationPreferencesRequest) (*NotificationPreferences, error)
-	
+
 	// Theme and UI preferences (consolidated from preferences service)
 	GetThemePreferences(ctx context.Context, userID ulid.ULID) (*ThemePreferences, error)
 	UpdateThemePreferences(ctx context.Context, userID ulid.ULID, req *UpdateThemePreferencesRequest) (*ThemePreferences, error)
-	
+
 	// Profile visibility and privacy
 	UpdateProfileVisibility(ctx context.Context, userID ulid.ULID, visibility ProfileVisibility) error
 	GetPublicProfile(ctx context.Context, userID ulid.ULID) (*PublicProfile, error)
 	GetPrivacyPreferences(ctx context.Context, userID ulid.ULID) (*PrivacyPreferences, error)
 	UpdatePrivacyPreferences(ctx context.Context, userID ulid.ULID, req *UpdatePrivacyPreferencesRequest) (*PrivacyPreferences, error)
-	
+
 	// Profile completeness and validation
 	GetProfileCompleteness(ctx context.Context, userID ulid.ULID) (*ProfileCompleteness, error)
 	ValidateProfile(ctx context.Context, userID ulid.ULID) (*ProfileValidation, error)
@@ -79,10 +79,10 @@ type ProfileService interface {
 type ProfileVisibility string
 
 const (
-	ProfileVisibilityPublic   ProfileVisibility = "public"
-	ProfileVisibilityPrivate  ProfileVisibility = "private"
-	ProfileVisibilityFriends  ProfileVisibility = "friends"
-	ProfileVisibilityTeam     ProfileVisibility = "team"
+	ProfileVisibilityPublic  ProfileVisibility = "public"
+	ProfileVisibilityPrivate ProfileVisibility = "private"
+	ProfileVisibilityFriends ProfileVisibility = "friends"
+	ProfileVisibilityTeam    ProfileVisibility = "team"
 )
 
 // PublicProfile represents a public view of a user profile
@@ -97,16 +97,16 @@ type PublicProfile struct {
 
 // ProfileCompleteness represents profile completion status
 type ProfileCompleteness struct {
-	OverallScore    int               `json:"overall_score"`    // 0-100
-	CompletedFields []string          `json:"completed_fields"`
-	MissingFields   []string          `json:"missing_fields"`
-	Recommendations []string          `json:"recommendations"`
-	Sections        map[string]int    `json:"sections"`         // section -> completion %
+	OverallScore    int            `json:"overall_score"` // 0-100
+	CompletedFields []string       `json:"completed_fields"`
+	MissingFields   []string       `json:"missing_fields"`
+	Recommendations []string       `json:"recommendations"`
+	Sections        map[string]int `json:"sections"` // section -> completion %
 }
 
 // ProfileValidation represents profile validation results
 type ProfileValidation struct {
-	IsValid bool                    `json:"is_valid"`
+	IsValid bool                     `json:"is_valid"`
 	Errors  []ProfileValidationError `json:"errors"`
 }
 
@@ -117,13 +117,13 @@ type ProfileValidationError struct {
 
 // NotificationPreferences represents user notification settings
 type NotificationPreferences struct {
-	EmailNotifications    bool `json:"email_notifications"`
-	PushNotifications     bool `json:"push_notifications"`
-	SMSNotifications      bool `json:"sms_notifications"`
-	MarketingEmails       bool `json:"marketing_emails"`
-	SecurityAlerts        bool `json:"security_alerts"`
-	ProductUpdates        bool `json:"product_updates"`
-	WeeklyDigest          bool `json:"weekly_digest"`
+	EmailNotifications      bool `json:"email_notifications"`
+	PushNotifications       bool `json:"push_notifications"`
+	SMSNotifications        bool `json:"sms_notifications"`
+	MarketingEmails         bool `json:"marketing_emails"`
+	SecurityAlerts          bool `json:"security_alerts"`
+	ProductUpdates          bool `json:"product_updates"`
+	WeeklyDigest            bool `json:"weekly_digest"`
 	InvitationNotifications bool `json:"invitation_notifications"`
 }
 
@@ -140,15 +140,15 @@ type UpdateNotificationPreferencesRequest struct {
 
 // ThemePreferences represents user UI/theme preferences
 type ThemePreferences struct {
-	Theme            string `json:"theme"`              // light, dark, auto
-	PrimaryColor     string `json:"primary_color"`
-	Language         string `json:"language"`
-	TimeFormat       string `json:"time_format"`        // 12h, 24h
-	DateFormat       string `json:"date_format"`
-	Timezone         string `json:"timezone"`
-	CompactMode      bool   `json:"compact_mode"`
-	ShowAnimations   bool   `json:"show_animations"`
-	HighContrast     bool   `json:"high_contrast"`
+	Theme          string `json:"theme"` // light, dark, auto
+	PrimaryColor   string `json:"primary_color"`
+	Language       string `json:"language"`
+	TimeFormat     string `json:"time_format"` // 12h, 24h
+	DateFormat     string `json:"date_format"`
+	Timezone       string `json:"timezone"`
+	CompactMode    bool   `json:"compact_mode"`
+	ShowAnimations bool   `json:"show_animations"`
+	HighContrast   bool   `json:"high_contrast"`
 }
 
 type UpdateThemePreferencesRequest struct {
@@ -165,23 +165,23 @@ type UpdateThemePreferencesRequest struct {
 
 // PrivacyPreferences represents user privacy settings
 type PrivacyPreferences struct {
-	ProfileVisibility ProfileVisibility `json:"profile_visibility"`
-	ShowEmail         bool             `json:"show_email"`
-	ShowLastSeen      bool             `json:"show_last_seen"`
-	AllowDirectMessages bool           `json:"allow_direct_messages"`
-	DataProcessingConsent bool         `json:"data_processing_consent"`
-	AnalyticsConsent   bool            `json:"analytics_consent"`
-	ThirdPartyIntegrations bool        `json:"third_party_integrations"`
+	ProfileVisibility      ProfileVisibility `json:"profile_visibility"`
+	ShowEmail              bool              `json:"show_email"`
+	ShowLastSeen           bool              `json:"show_last_seen"`
+	AllowDirectMessages    bool              `json:"allow_direct_messages"`
+	DataProcessingConsent  bool              `json:"data_processing_consent"`
+	AnalyticsConsent       bool              `json:"analytics_consent"`
+	ThirdPartyIntegrations bool              `json:"third_party_integrations"`
 }
 
 type UpdatePrivacyPreferencesRequest struct {
 	ProfileVisibility      *ProfileVisibility `json:"profile_visibility,omitempty"`
-	ShowEmail              *bool             `json:"show_email,omitempty"`
-	ShowLastSeen           *bool             `json:"show_last_seen,omitempty"`
-	AllowDirectMessages    *bool             `json:"allow_direct_messages,omitempty"`
-	DataProcessingConsent  *bool             `json:"data_processing_consent,omitempty"`
-	AnalyticsConsent       *bool             `json:"analytics_consent,omitempty"`
-	ThirdPartyIntegrations *bool             `json:"third_party_integrations,omitempty"`
+	ShowEmail              *bool              `json:"show_email,omitempty"`
+	ShowLastSeen           *bool              `json:"show_last_seen,omitempty"`
+	AllowDirectMessages    *bool              `json:"allow_direct_messages,omitempty"`
+	DataProcessingConsent  *bool              `json:"data_processing_consent,omitempty"`
+	AnalyticsConsent       *bool              `json:"analytics_consent,omitempty"`
+	ThirdPartyIntegrations *bool              `json:"third_party_integrations,omitempty"`
 }
 
 // UserType represents different types of users

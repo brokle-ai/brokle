@@ -63,7 +63,7 @@ func setAuthCookies(w http.ResponseWriter, access, refresh, csrf string) {
 		Name:     "csrf_token",
 		Value:    csrf,
 		Path:     "/",
-		MaxAge:   900, // 15 minutes
+		MaxAge:   900,   // 15 minutes
 		HttpOnly: false, // CRITICAL: Must be readable by JS
 		Secure:   isSecure,
 		SameSite: http.SameSiteLaxMode,

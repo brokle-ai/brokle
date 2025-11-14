@@ -97,7 +97,7 @@ go run cmd/migrate/main.go -dry-run up  # Preview without executing
 Primary tables in `migrations/clickhouse/`:
 
 - **traces** - Distributed tracing data
-- **observations** - LLM call observations with ZSTD compression
+- **spans** - LLM call spans with ZSTD compression
 - **quality_scores** - Model performance metrics
 - **blob_storage_file_log** - File storage metadata
 
@@ -157,7 +157,7 @@ DROP TABLE IF EXISTS metrics;
 ### OTEL-Native Schema Pattern
 
 ```sql
-CREATE TABLE observations (
+CREATE TABLE spans (
     -- Core fields
     id String,
     trace_id String,

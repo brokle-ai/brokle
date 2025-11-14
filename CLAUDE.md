@@ -117,7 +117,7 @@ brokle/
 | common | ✅ Active | `internal/core/domain/common` | Transaction patterns, shared utilities |
 | config | 🔄 Planned | `internal/core/domain/config` | Configuration management |
 | gateway | ✅ Active | `internal/core/domain/gateway` | AI provider routing |
-| observability | ✅ Active | `internal/core/domain/observability` | Traces, observations, quality scores |
+| observability | ✅ Active | `internal/core/domain/observability` | Traces, spans, quality scores |
 | organization | ✅ Active | `internal/core/domain/organization` | Multi-tenant org management |
 | routing | 🔄 Planned | `internal/core/domain/routing` | Advanced routing logic |
 | user | ✅ Active | `internal/core/domain/user` | User management |
@@ -206,9 +206,6 @@ make migrate-status
 make create-migration DB=postgres NAME=add_users_table
 make create-migration DB=clickhouse NAME=add_metrics_table
 
-# Reset all databases (WARNING: destroys data)
-make migrate-reset
-
 # Seed with development data
 make seed-dev
 
@@ -241,6 +238,16 @@ go run cmd/migrate/main.go down                 # Both databases
 go run cmd/migrate/main.go -db postgres -name create_users_table create
 go run cmd/migrate/main.go -db clickhouse -name create_metrics_table create
 
+# Reset databases (DESTRUCTIVE - use with caution)
+go run cmd/migrate/main.go drop                 # Drop all tables (requires confirmation)
+go run cmd/migrate/main.go down -steps 999      # Rollback all migrations
+
+**⚠️ CRITICAL: Always Use CLI to Create Migrations**
+- **NEVER create migration files manually** in the `migrations/` directory
+- **ALWAYS use**: `go run cmd/migrate/main.go -db <postgres|clickhouse> -name <description> create`
+- The CLI generates properly named files with timestamps and correct up/down structure
+- Manual creation leads to naming conflicts, incorrect versioning, and migration failures
+
 # Advanced operations (DESTRUCTIVE - requires 'yes' confirmation)
 go run cmd/migrate/main.go -db postgres drop    # Drop all PostgreSQL tables
 go run cmd/migrate/main.go -db clickhouse drop  # Drop all ClickHouse tables
@@ -267,7 +274,7 @@ go run cmd/migrate/main.go -dry-run up          # Preview migrations without exe
 
 #### Database Schema
 - **PostgreSQL**: User auth, organizations, projects, API keys, gateway config, billing
-- **ClickHouse**: Traces, observations, quality_scores, request_logs (with TTL retention)
+- **ClickHouse**: Traces, spans, quality_scores, request_logs (with TTL retention)
 - **Seeding**: YAML files in `/seeds/` (dev.yaml, demo.yaml, test.yaml)
 
 ### Testing & Quality
@@ -284,12 +291,6 @@ make test-integration
 # Run with coverage report
 make test-coverage
 
-# Run load tests
-make test-load
-
-# End-to-end tests
-make test-e2e
-
 # Lint all code
 make lint
 
@@ -298,9 +299,6 @@ make lint-go
 
 # Lint frontend code only
 make lint-frontend
-
-# Security scanning
-make security-scan
 
 # Format all code
 make fmt
@@ -316,8 +314,8 @@ make build-oss
 make build-enterprise
 
 # Development builds (faster, with debug info)
-make build-dev-oss
-make build-dev-enterprise
+make build-dev-server
+make build-dev-worker
 ```
 
 ## Environment Configuration
@@ -484,7 +482,7 @@ Single database with domain-separated tables:
 Time-series data optimized for analytical queries with TTL-based retention:
 
 #### Observability Tables
-- **observations** - LLM call observations with request/response data
+- **spans** - LLM call spans with request/response data
   - `attributes` (String) - All OTEL + Brokle attributes with namespace prefixes
   - `metadata` (String) - OTEL metadata (resourceAttributes + instrumentation scope)
   - `version` (Nullable(String)) - Application version for A/B testing
@@ -499,7 +497,7 @@ Time-series data optimized for analytical queries with TTL-based retention:
   - **OTEL-native**: Follows OpenTelemetry standard
 
 - **quality_scores** - Model performance metrics
-  - Links to traces and observations for evaluation context
+  - Links to traces and spans for evaluation context
 
 - **request_logs** - API request logging (60 day TTL)
 

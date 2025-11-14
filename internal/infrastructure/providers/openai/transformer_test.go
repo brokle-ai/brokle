@@ -270,7 +270,7 @@ func TestOpenAIProvider_transformChatMessage(t *testing.T) {
 			assert.Equal(t, tt.expected.Content, result.Content)
 			assert.Equal(t, tt.expected.Name, result.Name)
 			assert.Equal(t, tt.expected.ToolCallID, result.ToolCallID)
-			
+
 			// Compare function calls
 			if tt.expected.FunctionCall != nil {
 				require.NotNil(t, result.FunctionCall)
@@ -279,7 +279,7 @@ func TestOpenAIProvider_transformChatMessage(t *testing.T) {
 			} else {
 				assert.Nil(t, result.FunctionCall)
 			}
-			
+
 			// Compare tool calls
 			assert.Len(t, result.ToolCalls, len(tt.expected.ToolCalls))
 			for i, expectedToolCall := range tt.expected.ToolCalls {
@@ -749,7 +749,7 @@ func TestOpenAIProvider_transformChatCompletionStreamResponse(t *testing.T) {
 	// FinishReason is a pointer
 	require.NotNil(t, result.Choices[0].FinishReason)
 	assert.Equal(t, "stop", *result.Choices[0].FinishReason)
-	
+
 	require.NotNil(t, result.Choices[0].Delta)
 	assert.Equal(t, "assistant", result.Choices[0].Delta.Role)
 	assert.Equal(t, "Hello", result.Choices[0].Delta.Content)
@@ -805,12 +805,12 @@ func TestOpenAIProvider_transformCompletionResponse(t *testing.T) {
 	assert.Equal(t, expected.Object, result.Object)
 	assert.Equal(t, expected.Created, result.Created)
 	assert.Equal(t, expected.Model, result.Model)
-	
+
 	assert.Len(t, result.Choices, 1)
 	assert.Equal(t, expected.Choices[0].Text, result.Choices[0].Text)
 	assert.Equal(t, expected.Choices[0].Index, result.Choices[0].Index)
 	assert.Equal(t, expected.Choices[0].FinishReason, result.Choices[0].FinishReason)
-	
+
 	require.NotNil(t, result.Usage)
 	assert.Equal(t, expected.Usage.PromptTokens, result.Usage.PromptTokens)
 	assert.Equal(t, expected.Usage.CompletionTokens, result.Usage.CompletionTokens)
@@ -870,7 +870,7 @@ func TestOpenAIProvider_transformEmbeddingResponse(t *testing.T) {
 
 	assert.Equal(t, expected.Object, result.Object)
 	assert.Equal(t, expected.Model, result.Model)
-	
+
 	assert.Len(t, result.Data, 2)
 	for i, expectedData := range expected.Data {
 		assert.Equal(t, expectedData.Object, result.Data[i].Object)
@@ -881,7 +881,7 @@ func TestOpenAIProvider_transformEmbeddingResponse(t *testing.T) {
 			assert.InDelta(t, expectedVal, result.Data[i].Embedding[j], 0.0001)
 		}
 	}
-	
+
 	require.NotNil(t, result.Usage)
 	assert.Equal(t, expected.Usage.PromptTokens, result.Usage.PromptTokens)
 	assert.Equal(t, expected.Usage.CompletionTokens, result.Usage.CompletionTokens)

@@ -25,9 +25,18 @@ export function TasksMultiDeleteDialog<TData>({
 }: TaskMultiDeleteDialogProps<TData>) {
   const [value, setValue] = useState('')
 
-  const selectedRows = table.getFilteredSelectedRowModel().rows
+  // Get all selected rows across all pages
+  const rowSelection = table.getState().rowSelection
+  const selectedCount = Object.keys(rowSelection).length
+  const selectedRows = table.getSelectedRowModel().flatRows
+  const selectedTasks = selectedRows.map((row) => row.original as Task)
 
   const handleDelete = () => {
+    if (selectedTasks.length === 0) {
+      toast.error('No tasks selected to delete')
+      return
+    }
+
     if (value.trim() !== CONFIRM_WORD) {
       toast.error(`Please type "${CONFIRM_WORD}" to confirm.`)
       return
@@ -39,8 +48,8 @@ export function TasksMultiDeleteDialog<TData>({
       loading: 'Deleting tasks...',
       success: () => {
         table.resetRowSelection()
-        return `Deleted ${selectedRows.length} ${
-          selectedRows.length > 1 ? 'tasks' : 'task'
+        return `Deleted ${selectedTasks.length} ${
+          selectedTasks.length > 1 ? 'tasks' : 'task'
         }`
       },
       error: 'Error',
@@ -59,8 +68,8 @@ export function TasksMultiDeleteDialog<TData>({
             className='stroke-destructive me-1 inline-block'
             size={18}
           />{' '}
-          Delete {selectedRows.length}{' '}
-          {selectedRows.length > 1 ? 'tasks' : 'task'}
+          Delete {selectedCount}{' '}
+          {selectedCount > 1 ? 'tasks' : 'task'}
         </span>
       }
       desc={

@@ -14,21 +14,21 @@ import (
 
 // ScoreService implements business logic for quality score management
 type ScoreService struct {
-	scoreRepo       observability.ScoreRepository
-	traceRepo       observability.TraceRepository
-	observationRepo observability.ObservationRepository
+	scoreRepo observability.ScoreRepository
+	traceRepo observability.TraceRepository
+	spanRepo  observability.SpanRepository
 }
 
 // NewScoreService creates a new score service instance
 func NewScoreService(
 	scoreRepo observability.ScoreRepository,
 	traceRepo observability.TraceRepository,
-	observationRepo observability.ObservationRepository,
+	spanRepo observability.SpanRepository,
 ) *ScoreService {
 	return &ScoreService{
-		scoreRepo:       scoreRepo,
-		traceRepo:       traceRepo,
-		observationRepo: observationRepo,
+		scoreRepo: scoreRepo,
+		traceRepo: traceRepo,
+		spanRepo:  spanRepo,
 	}
 }
 
@@ -42,12 +42,12 @@ func (s *ScoreService) CreateScore(ctx context.Context, score *observability.Sco
 		return appErrors.NewValidationError("name is required", "score name cannot be empty")
 	}
 
-	// Validate trace and observation IDs are set
+	// Validate trace and span IDs are set
 	if score.TraceID == "" {
 		return appErrors.NewValidationError("trace_id is required", "score must have a trace_id")
 	}
-	if score.ObservationID == "" {
-		return appErrors.NewValidationError("observation_id is required", "score must have an observation_id")
+	if score.SpanID == "" {
+		return appErrors.NewValidationError("span_id is required", "score must have a span_id")
 	}
 
 	// Validate data type and value consistency
@@ -189,13 +189,13 @@ func (s *ScoreService) GetScoresByTraceID(ctx context.Context, traceID string) (
 	return scores, nil
 }
 
-// GetScoresByObservationID retrieves all scores for an observation
-func (s *ScoreService) GetScoresByObservationID(ctx context.Context, observationID string) ([]*observability.Score, error) {
-	if observationID == "" {
-		return nil, appErrors.NewValidationError("observation_id is required", "scores query requires a valid observation_id")
+// GetScoresBySpanID retrieves all scores for a span
+func (s *ScoreService) GetScoresBySpanID(ctx context.Context, spanID string) ([]*observability.Score, error) {
+	if spanID == "" {
+		return nil, appErrors.NewValidationError("span_id is required", "scores query requires a valid span_id")
 	}
 
-	scores, err := s.scoreRepo.GetByObservationID(ctx, observationID)
+	scores, err := s.scoreRepo.GetBySpanID(ctx, spanID)
 	if err != nil {
 		return nil, appErrors.NewInternalError("failed to get scores", err)
 	}
@@ -234,17 +234,17 @@ func (s *ScoreService) CreateScoreBatch(ctx context.Context, scores []*observabi
 			)
 		}
 
-		// Validate trace and observation IDs are set
+		// Validate trace and span IDs are set
 		if score.TraceID == "" {
 			return appErrors.NewValidationError(
 				fmt.Sprintf("score[%d]: trace_id is required", i),
 				"all scores must have trace_id",
 			)
 		}
-		if score.ObservationID == "" {
+		if score.SpanID == "" {
 			return appErrors.NewValidationError(
-				fmt.Sprintf("score[%d]: observation_id is required", i),
-				"all scores must have observation_id",
+				fmt.Sprintf("score[%d]: span_id is required", i),
+				"all scores must have span_id",
 			)
 		}
 
@@ -331,11 +331,11 @@ func (s *ScoreService) validateScoreTargets(ctx context.Context, score *observab
 		}
 	}
 
-	// Validate observation exists
-	if score.ObservationID != "" {
-		_, err := s.observationRepo.GetByID(ctx, score.ObservationID)
+	// Validate span exists
+	if score.SpanID != "" {
+		_, err := s.spanRepo.GetByID(ctx, score.SpanID)
 		if err != nil {
-			return appErrors.NewNotFoundError(fmt.Sprintf("observation %s", score.ObservationID))
+			return appErrors.NewNotFoundError(fmt.Sprintf("span %s", score.SpanID))
 		}
 	}
 

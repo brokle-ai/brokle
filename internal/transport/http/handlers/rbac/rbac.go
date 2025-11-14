@@ -146,7 +146,7 @@ func (h *Handler) DeleteRole(c *gin.Context) {
 		"developer": true,
 		"viewer":    true,
 	}
-	
+
 	if builtinRoles[role.Name] {
 		h.logger.WithField("role_id", roleID).Warn("Attempted to delete built-in role")
 		response.Forbidden(c, "Cannot delete built-in role")
@@ -532,20 +532,20 @@ func (h *Handler) CreateCustomRole(c *gin.Context) {
 			"role_name":  req.Name,
 			"scope_type": req.ScopeType,
 		}).Error("Failed to create custom role")
-		
+
 		if err.Error() == "custom role with name "+req.Name+" already exists in this scope" {
 			response.Conflict(c, err.Error())
 			return
 		}
-		
+
 		response.InternalServerError(c, "Failed to create custom role")
 		return
 	}
 
 	h.logger.WithFields(logrus.Fields{
-		"role_id":    role.ID,
-		"role_name":  role.Name,
-		"org_id":     orgID,
+		"role_id":   role.ID,
+		"role_name": role.Name,
+		"org_id":    orgID,
 	}).Info("Custom role created successfully")
 
 	response.Success(c, role)
@@ -621,12 +621,12 @@ func (h *Handler) UpdateCustomRole(c *gin.Context) {
 	role, err := h.roleService.UpdateCustomRole(c.Request.Context(), roleID, &req)
 	if err != nil {
 		h.logger.WithError(err).WithField("role_id", roleID).Error("Failed to update custom role")
-		
+
 		if err.Error() == "cannot update system role" {
 			response.Forbidden(c, err.Error())
 			return
 		}
-		
+
 		response.InternalServerError(c, "Failed to update custom role")
 		return
 	}
@@ -652,12 +652,12 @@ func (h *Handler) DeleteCustomRole(c *gin.Context) {
 	err = h.roleService.DeleteCustomRole(c.Request.Context(), roleID)
 	if err != nil {
 		h.logger.WithError(err).WithField("role_id", roleID).Error("Failed to delete custom role")
-		
+
 		if err.Error() == "cannot delete system role" {
 			response.Forbidden(c, err.Error())
 			return
 		}
-		
+
 		response.InternalServerError(c, "Failed to delete custom role")
 		return
 	}

@@ -6,12 +6,13 @@ import (
 	"strconv"
 	"time"
 
+	"math/rand"
+
 	"github.com/gin-gonic/gin"
 	"github.com/oklog/ulid/v2"
-	"github.com/sirupsen/logrus"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"math/rand"
+	"github.com/sirupsen/logrus"
 )
 
 // Prometheus metrics

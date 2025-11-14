@@ -4,10 +4,10 @@ import "brokle/pkg/ulid"
 
 // SeedData represents all the data to be seeded into the database
 type SeedData struct {
-	Organizations       []OrganizationSeed   `yaml:"organizations"`
-	Users               []UserSeed           `yaml:"users"`
-	RBAC                RBACSeeds            `yaml:"rbac"`
-	Projects            []ProjectSeed        `yaml:"projects"`
+	Organizations []OrganizationSeed `yaml:"organizations"`
+	Users         []UserSeed         `yaml:"users"`
+	RBAC          RBACSeeds          `yaml:"rbac"`
+	Projects      []ProjectSeed      `yaml:"projects"`
 }
 
 // OrganizationSeed represents seed data for organizations
@@ -55,9 +55,9 @@ type PermissionSeed struct {
 type MembershipSeed struct {
 	UserEmail        string `yaml:"user_email"`
 	RoleName         string `yaml:"role_name"`
-	ScopeType        string `yaml:"scope_type"`                   // 'system' | 'organization' | 'project'
-	OrganizationName string `yaml:"organization_name,omitempty"`  // Only for org/project scopes (changed from slug)
-	ProjectName      string `yaml:"project_name,omitempty"`       // Only for project scope
+	ScopeType        string `yaml:"scope_type"`                  // 'system' | 'organization' | 'project'
+	OrganizationName string `yaml:"organization_name,omitempty"` // Only for org/project scopes (changed from slug)
+	ProjectName      string `yaml:"project_name,omitempty"`      // Only for project scope
 }
 
 // ProjectSeed represents seed data for projects

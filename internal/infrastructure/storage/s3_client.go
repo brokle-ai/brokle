@@ -74,11 +74,11 @@ func NewS3Client(cfg *config.BlobStorageConfig, logger *logrus.Logger) (*S3Clien
 	})
 
 	logger.WithFields(logrus.Fields{
-		"provider":    cfg.Provider,
-		"bucket":      cfg.BucketName,
-		"region":      cfg.Region,
-		"endpoint":    cfg.Endpoint,
-		"path_style":  cfg.UsePathStyle,
+		"provider":   cfg.Provider,
+		"bucket":     cfg.BucketName,
+		"region":     cfg.Region,
+		"endpoint":   cfg.Endpoint,
+		"path_style": cfg.UsePathStyle,
 	}).Info("S3 client initialized")
 
 	return &S3Client{

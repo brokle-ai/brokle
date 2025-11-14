@@ -244,18 +244,18 @@ span.set_attribute("gen_ai.usage.input_tokens", 100)
 span.set_attribute("gen_ai.usage.output_tokens", 50)
 ```
 
-### Observation Types
+### Span Types
 
-Brokle extends OTLP with observation type classification:
+Brokle extends OTLP with span type classification:
 
 ```python
-# Set observation type via attribute
-span.set_attribute("brokle.observation_type", "generation")  # LLM generation
-span.set_attribute("brokle.observation_type", "span")        # Generic span
-span.set_attribute("brokle.observation_type", "tool")        # Tool call
-span.set_attribute("brokle.observation_type", "agent")       # Agent execution
-span.set_attribute("brokle.observation_type", "retrieval")   # RAG retrieval
-span.set_attribute("brokle.observation_type", "event")       # Generic event
+# Set span type via attribute
+span.set_attribute("brokle.span_type", "generation")  # LLM generation
+span.set_attribute("brokle.span_type", "span")        # Generic span
+span.set_attribute("brokle.span_type", "tool")        # Tool call
+span.set_attribute("brokle.span_type", "agent")       # Agent execution
+span.set_attribute("brokle.span_type", "retrieval")   # RAG retrieval
+span.set_attribute("brokle.span_type", "event")       # Generic event
 ```
 
 ---
@@ -331,7 +331,7 @@ Response for duplicate spans:
 - [ ] Update SDK examples (add OTLP integration)
 - [ ] Monitor OTLP endpoint usage
 - [ ] Verify deduplication working (check Redis)
-- [ ] Check ClickHouse for traces/observations data
+- [ ] Check ClickHouse for traces/spans data
 
 ---
 
@@ -426,10 +426,10 @@ Response for duplicate spans:
 **A**: No, it has been completely removed. All applications must migrate to OTLP.
 
 ### Q: Will my existing data be affected?
-**A**: No. All existing trace/observation/score data remains in ClickHouse. Only the ingestion method changes.
+**A**: No. All existing trace/span/score data remains in ClickHouse. Only the ingestion method changes.
 
 ### Q: Do I need to change my ClickHouse queries?
-**A**: No. Data is still stored in the same `traces`, `observations`, and `quality_scores` tables with the same schema.
+**A**: No. Data is still stored in the same `traces`, `spans`, and `quality_scores` tables with the same schema.
 
 ### Q: Is deduplication still supported?
 **A**: Yes! Deduplication works identically with OTLP span IDs (deterministic ULID generation).

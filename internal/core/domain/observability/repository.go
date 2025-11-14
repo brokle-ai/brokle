@@ -12,7 +12,7 @@ type TraceRepository interface {
 	// Basic operations (ReplacingMergeTree pattern)
 	Create(ctx context.Context, trace *Trace) error
 	Update(ctx context.Context, trace *Trace) error // Inserts with higher version
-	Delete(ctx context.Context, id string) error // Soft delete (OTEL trace_id)
+	Delete(ctx context.Context, id string) error    // Soft delete (OTEL trace_id)
 	GetByID(ctx context.Context, id string) (*Trace, error)
 
 	// Queries
@@ -21,7 +21,7 @@ type TraceRepository interface {
 	GetByUserID(ctx context.Context, userID string, filter *TraceFilter) ([]*Trace, error)
 
 	// With relations
-	GetWithObservations(ctx context.Context, id string) (*Trace, error)
+	GetWithSpans(ctx context.Context, id string) (*Trace, error)
 	GetWithScores(ctx context.Context, id string) (*Trace, error)
 
 	// Batch operations
@@ -31,28 +31,28 @@ type TraceRepository interface {
 	Count(ctx context.Context, filter *TraceFilter) (int64, error)
 }
 
-// ObservationRepository defines the interface for observation data access (ClickHouse)
-type ObservationRepository interface {
+// SpanRepository defines the interface for span data access (ClickHouse)
+type SpanRepository interface {
 	// Basic operations (ReplacingMergeTree pattern)
-	Create(ctx context.Context, obs *Observation) error
-	Update(ctx context.Context, obs *Observation) error
+	Create(ctx context.Context, span *Span) error
+	Update(ctx context.Context, span *Span) error
 	Delete(ctx context.Context, id string) error // Soft delete (OTEL span_id)
-	GetByID(ctx context.Context, id string) (*Observation, error)
+	GetByID(ctx context.Context, id string) (*Span, error)
 
 	// Queries
-	GetByTraceID(ctx context.Context, traceID string) ([]*Observation, error)
-	GetRootSpan(ctx context.Context, traceID string) (*Observation, error) // Get span with parent_observation_id IS NULL
-	GetChildren(ctx context.Context, parentObservationID string) ([]*Observation, error)
-	GetTreeByTraceID(ctx context.Context, traceID string) ([]*Observation, error) // Recursive tree
+	GetByTraceID(ctx context.Context, traceID string) ([]*Span, error)
+	GetRootSpan(ctx context.Context, traceID string) (*Span, error) // Get span with parent_span_id IS NULL
+	GetChildren(ctx context.Context, parentSpanID string) ([]*Span, error)
+	GetTreeByTraceID(ctx context.Context, traceID string) ([]*Span, error) // Recursive tree
 
 	// Filters
-	GetByFilter(ctx context.Context, filter *ObservationFilter) ([]*Observation, error)
+	GetByFilter(ctx context.Context, filter *SpanFilter) ([]*Span, error)
 
 	// Batch operations
-	CreateBatch(ctx context.Context, observations []*Observation) error
+	CreateBatch(ctx context.Context, spans []*Span) error
 
 	// Count
-	Count(ctx context.Context, filter *ObservationFilter) (int64, error)
+	Count(ctx context.Context, filter *SpanFilter) (int64, error)
 }
 
 // ScoreRepository defines the interface for score data access (ClickHouse)
@@ -65,7 +65,7 @@ type ScoreRepository interface {
 
 	// Queries
 	GetByTraceID(ctx context.Context, traceID string) ([]*Score, error)
-	GetByObservationID(ctx context.Context, observationID string) ([]*Score, error)
+	GetBySpanID(ctx context.Context, spanID string) ([]*Score, error)
 
 	// Filters
 	GetByFilter(ctx context.Context, filter *ScoreFilter) ([]*Score, error)
@@ -97,66 +97,65 @@ type BlobStorageRepository interface {
 
 // TraceFilter represents filters for trace queries
 type TraceFilter struct {
-	UserID        *string
-	SessionID     *string // Virtual session filtering
-	StartTime     *time.Time
-	EndTime       *time.Time
-	Tags          []string
-	Environment   *string
-	ServiceName   *string
-	StatusCode    *string
-	Bookmarked    *bool
-	Public        *bool
-	Limit         int
-	Offset        int
+	UserID      *string
+	SessionID   *string // Virtual session filtering
+	StartTime   *time.Time
+	EndTime     *time.Time
+	Tags        []string
+	Environment *string
+	ServiceName *string
+	StatusCode  *string
+	Bookmarked  *bool
+	Public      *bool
+	Limit       int
+	Offset      int
 }
 
-// ObservationFilter represents filters for observation queries
-type ObservationFilter struct {
-	TraceID         *string
-	ParentID        *string
-	Type            *string
-	SpanKind        *string
-	Model           *string
-	StartTime       *time.Time
-	EndTime         *time.Time
-	MinLatencyMs    *uint32
-	MaxLatencyMs    *uint32
-	MinCost         *float64
-	MaxCost         *float64
-	Level           *string
-	IsCompleted     *bool
-	Limit           int
-	Offset          int
+// SpanFilter represents filters for span queries
+type SpanFilter struct {
+	TraceID      *string
+	ParentID     *string
+	Type         *string
+	SpanKind     *string
+	Model        *string
+	StartTime    *time.Time
+	EndTime      *time.Time
+	MinLatencyMs *uint32
+	MaxLatencyMs *uint32
+	MinCost      *float64
+	MaxCost      *float64
+	Level        *string
+	IsCompleted  *bool
+	Limit        int
+	Offset       int
 }
 
 // ScoreFilter represents filters for score queries
 type ScoreFilter struct {
-	TraceID         *string
-	ObservationID   *string
-	Name            *string
-	Source          *string
-	DataType        *string
-	EvaluatorName   *string
-	MinValue        *float64
-	MaxValue        *float64
-	StartTime       *time.Time
-	EndTime         *time.Time
-	Limit           int
-	Offset          int
-}
-
-// BlobStorageFilter represents filters for blob storage queries
-type BlobStorageFilter struct {
-	EntityType    *string
+	TraceID       *string
+	SpanID        *string
+	Name          *string
+	Source        *string
+	DataType      *string
+	EvaluatorName *string
+	MinValue      *float64
+	MaxValue      *float64
 	StartTime     *time.Time
 	EndTime       *time.Time
-	MinSizeBytes  *uint64
-	MaxSizeBytes  *uint64
 	Limit         int
 	Offset        int
 }
 
+// BlobStorageFilter represents filters for blob storage queries
+type BlobStorageFilter struct {
+	EntityType   *string
+	StartTime    *time.Time
+	EndTime      *time.Time
+	MinSizeBytes *uint64
+	MaxSizeBytes *uint64
+	Limit        int
+	Offset       int
+}
 
 // TelemetryDeduplicationRepository defines methods for telemetry deduplication
 type TelemetryDeduplicationRepository interface {
@@ -178,4 +177,3 @@ type TelemetryDeduplicationRepository interface {
 	// Statistics
 	CountByProjectID(ctx context.Context, projectID ulid.ULID) (int64, error)
 }
-

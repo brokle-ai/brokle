@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS traces (
     -- Aggregate metrics
     total_cost Nullable(Decimal64(12)),
     total_tokens Nullable(UInt32),
-    observation_count Nullable(UInt32),
+    span_count Nullable(UInt32),
 
     -- Flags
     bookmarked Bool DEFAULT false,

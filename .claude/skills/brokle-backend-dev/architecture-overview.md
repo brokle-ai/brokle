@@ -39,7 +39,7 @@ Primary domains in `internal/core/domain/`:
 | billing | Usage tracking, subscriptions |
 | common | Shared transaction patterns, utilities |
 | gateway | AI provider routing |
-| observability | Traces, observations, quality scores |
+| observability | Traces, spans, quality scores |
 | organization | Multi-tenant org management |
 | user | User management and profiles |
 
@@ -95,7 +95,7 @@ Primary domains in `internal/core/domain/`:
 
 **Primary Tables**:
 - **traces** - Distributed tracing data
-- **observations** - LLM call observations with ZSTD compression
+- **spans** - LLM call spans with ZSTD compression
 - **quality_scores** - Model performance metrics
 - **blob_storage_file_log** - File storage metadata
 

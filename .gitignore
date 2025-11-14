@@ -123,6 +123,7 @@ temp/
 # Editor directories and files
 .vscode/
 .idea/
+.serena/
 *.swp
 *.swo
 *~
@@ -166,6 +167,12 @@ proto-gen/
 # Testing
 testdata/
 test-results/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
 
 # Documentation build
 docs/build/

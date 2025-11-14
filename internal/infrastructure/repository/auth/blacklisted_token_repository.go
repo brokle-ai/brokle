@@ -48,11 +48,11 @@ func (r *blacklistedTokenRepository) IsTokenBlacklisted(ctx context.Context, jti
 	err := r.db.WithContext(ctx).Model(&authDomain.BlacklistedToken{}).
 		Where("jti = ? AND expires_at > ?", jti, time.Now()).
 		Count(&count).Error
-	
+
 	if err != nil {
 		return false, err
 	}
-	
+
 	return count > 0, nil
 }
 
@@ -80,14 +80,14 @@ func (r *blacklistedTokenRepository) CreateUserTimestampBlacklist(ctx context.Co
 func (r *blacklistedTokenRepository) IsUserBlacklistedAfterTimestamp(ctx context.Context, userID ulid.ULID, tokenIssuedAt int64) (bool, error) {
 	var count int64
 	err := r.db.WithContext(ctx).Model(&authDomain.BlacklistedToken{}).
-		Where("user_id = ? AND token_type = ? AND blacklist_timestamp IS NOT NULL AND ? < blacklist_timestamp AND expires_at > ?", 
+		Where("user_id = ? AND token_type = ? AND blacklist_timestamp IS NOT NULL AND ? < blacklist_timestamp AND expires_at > ?",
 			userID, authDomain.TokenTypeUserTimestamp, tokenIssuedAt, time.Now()).
 		Count(&count).Error
-	
+
 	if err != nil {
 		return false, err
 	}
-	
+
 	return count > 0, nil
 }
 
@@ -95,18 +95,18 @@ func (r *blacklistedTokenRepository) IsUserBlacklistedAfterTimestamp(ctx context
 func (r *blacklistedTokenRepository) GetUserBlacklistTimestamp(ctx context.Context, userID ulid.ULID) (*int64, error) {
 	var token authDomain.BlacklistedToken
 	err := r.db.WithContext(ctx).
-		Where("user_id = ? AND token_type = ? AND blacklist_timestamp IS NOT NULL AND expires_at > ?", 
+		Where("user_id = ? AND token_type = ? AND blacklist_timestamp IS NOT NULL AND expires_at > ?",
 			userID, authDomain.TokenTypeUserTimestamp, time.Now()).
 		Order("blacklist_timestamp DESC").
 		First(&token).Error
-	
+
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil // No user-wide blacklist found
 		}
 		return nil, err
 	}
-	
+
 	return token.BlacklistTimestamp, nil
 }
 
@@ -121,23 +121,23 @@ func (r *blacklistedTokenRepository) BlacklistUserTokens(ctx context.Context, us
 // GetBlacklistedTokensByUser retrieves blacklisted tokens for a specific user
 func (r *blacklistedTokenRepository) GetBlacklistedTokensByUser(ctx context.Context, userID ulid.ULID, limit, offset int) ([]*authDomain.BlacklistedToken, error) {
 	var tokens []*authDomain.BlacklistedToken
-	
+
 	query := r.db.WithContext(ctx).Where("user_id = ?", userID).
 		Order("created_at DESC")
-	
+
 	if limit > 0 {
 		query = query.Limit(limit)
 	}
-	
+
 	if offset > 0 {
 		query = query.Offset(offset)
 	}
-	
+
 	err := query.Find(&tokens).Error
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return tokens, nil
 }
 
@@ -153,10 +153,10 @@ func (r *blacklistedTokenRepository) GetBlacklistedTokensByReason(ctx context.Co
 	var tokens []*authDomain.BlacklistedToken
 	err := r.db.WithContext(ctx).Where("reason = ?", reason).
 		Order("created_at DESC").Find(&tokens).Error
-	
+
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return tokens, nil
 }

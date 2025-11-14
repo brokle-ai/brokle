@@ -23,8 +23,8 @@ var (
 	ErrInvalidCredentials = errors.New("invalid credentials")
 
 	// Legacy aliases for backward compatibility
-	ErrUserNotFound = ErrNotFound
-	ErrUserInactive = ErrInactive
+	ErrUserNotFound      = ErrNotFound
+	ErrUserInactive      = ErrInactive
 	ErrUserAlreadyExists = ErrAlreadyExists
 
 	// Validation errors

@@ -3,10 +3,11 @@ package billing
 import (
 	"time"
 
-	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 	"brokle/internal/config"
 	"brokle/pkg/response"
+
+	"github.com/gin-gonic/gin"
+	"github.com/sirupsen/logrus"
 )
 
 type Handler struct {
@@ -22,17 +23,17 @@ func NewHandler(config *config.Config, logger *logrus.Logger) *Handler {
 
 // UsageMetrics represents usage metrics for an organization
 type UsageMetrics struct {
-	OrganizationID   string                    `json:"organization_id" example:"org_1234567890" description:"Organization identifier"`
-	BillingPeriod    BillingPeriod            `json:"billing_period" description:"Current billing period"`
-	TotalRequests    int64                    `json:"total_requests" example:"125000" description:"Total AI requests in period"`
-	TotalTokens      int64                    `json:"total_tokens" example:"2500000" description:"Total tokens processed"`
-	TotalCost        float64                  `json:"total_cost" example:"1250.75" description:"Total cost in USD"`
-	UsageByProvider  []ProviderUsage          `json:"usage_by_provider" description:"Usage breakdown by AI provider"`
-	UsageByProject   []ProjectUsage           `json:"usage_by_project" description:"Usage breakdown by project"`
-	UsageByEnvironment []EnvironmentUsage      `json:"usage_by_environment" description:"Usage breakdown by environment"`
-	DailyUsage       []DailyUsage             `json:"daily_usage" description:"Daily usage breakdown"`
-	QuotaLimits      QuotaLimits              `json:"quota_limits" description:"Current quota limits and usage"`
-	BillingAlerts    []BillingAlert           `json:"billing_alerts,omitempty" description:"Active billing alerts"`
+	OrganizationID     string             `json:"organization_id" example:"org_1234567890" description:"Organization identifier"`
+	BillingPeriod      BillingPeriod      `json:"billing_period" description:"Current billing period"`
+	TotalRequests      int64              `json:"total_requests" example:"125000" description:"Total AI requests in period"`
+	TotalTokens        int64              `json:"total_tokens" example:"2500000" description:"Total tokens processed"`
+	TotalCost          float64            `json:"total_cost" example:"1250.75" description:"Total cost in USD"`
+	UsageByProvider    []ProviderUsage    `json:"usage_by_provider" description:"Usage breakdown by AI provider"`
+	UsageByProject     []ProjectUsage     `json:"usage_by_project" description:"Usage breakdown by project"`
+	UsageByEnvironment []EnvironmentUsage `json:"usage_by_environment" description:"Usage breakdown by environment"`
+	DailyUsage         []DailyUsage       `json:"daily_usage" description:"Daily usage breakdown"`
+	QuotaLimits        QuotaLimits        `json:"quota_limits" description:"Current quota limits and usage"`
+	BillingAlerts      []BillingAlert     `json:"billing_alerts,omitempty" description:"Active billing alerts"`
 }
 
 // BillingPeriod represents a billing period
@@ -80,47 +81,47 @@ type DailyUsage struct {
 
 // QuotaLimits represents current quota limits and usage
 type QuotaLimits struct {
-	RequestsLimit     int64   `json:"requests_limit" example:"100000" description:"Monthly requests limit (0 = unlimited)"`
-	RequestsUsed      int64   `json:"requests_used" example:"75000" description:"Requests used this month"`
-	RequestsPercent   float64 `json:"requests_percent" example:"0.75" description:"Percentage of requests quota used"`
-	CostLimit         float64 `json:"cost_limit" example:"1000.00" description:"Monthly cost limit in USD (0 = unlimited)"`
-	CostUsed          float64 `json:"cost_used" example:"750.25" description:"Cost used this month in USD"`
-	CostPercent       float64 `json:"cost_percent" example:"0.75" description:"Percentage of cost quota used"`
-	TokensLimit       int64   `json:"tokens_limit" example:"2000000" description:"Monthly tokens limit (0 = unlimited)"`
-	TokensUsed        int64   `json:"tokens_used" example:"1500000" description:"Tokens used this month"`
-	TokensPercent     float64 `json:"tokens_percent" example:"0.75" description:"Percentage of tokens quota used"`
-	OverageAllowed    bool    `json:"overage_allowed" example:"true" description:"Whether overage is allowed beyond limits"`
+	RequestsLimit   int64   `json:"requests_limit" example:"100000" description:"Monthly requests limit (0 = unlimited)"`
+	RequestsUsed    int64   `json:"requests_used" example:"75000" description:"Requests used this month"`
+	RequestsPercent float64 `json:"requests_percent" example:"0.75" description:"Percentage of requests quota used"`
+	CostLimit       float64 `json:"cost_limit" example:"1000.00" description:"Monthly cost limit in USD (0 = unlimited)"`
+	CostUsed        float64 `json:"cost_used" example:"750.25" description:"Cost used this month in USD"`
+	CostPercent     float64 `json:"cost_percent" example:"0.75" description:"Percentage of cost quota used"`
+	TokensLimit     int64   `json:"tokens_limit" example:"2000000" description:"Monthly tokens limit (0 = unlimited)"`
+	TokensUsed      int64   `json:"tokens_used" example:"1500000" description:"Tokens used this month"`
+	TokensPercent   float64 `json:"tokens_percent" example:"0.75" description:"Percentage of tokens quota used"`
+	OverageAllowed  bool    `json:"overage_allowed" example:"true" description:"Whether overage is allowed beyond limits"`
 }
 
 // BillingAlert represents an active billing alert
 type BillingAlert struct {
-	ID          string    `json:"id" example:"alert_1234567890" description:"Alert identifier"`
-	Type        string    `json:"type" example:"cost_threshold" description:"Alert type (cost_threshold, quota_limit, usage_spike)"`
-	Severity    string    `json:"severity" example:"warning" description:"Alert severity (info, warning, critical)"`
-	Message     string    `json:"message" example:"Monthly cost has reached 80% of limit" description:"Alert message"`
-	TriggeredAt time.Time `json:"triggered_at" example:"2024-01-15T10:30:00Z" description:"When alert was triggered"`
-	Threshold   float64   `json:"threshold" example:"800.00" description:"Threshold value that triggered alert"`
-	CurrentValue float64  `json:"current_value" example:"750.25" description:"Current value that triggered alert"`
-	Status      string    `json:"status" example:"active" description:"Alert status (active, acknowledged, resolved)"`
+	ID           string    `json:"id" example:"alert_1234567890" description:"Alert identifier"`
+	Type         string    `json:"type" example:"cost_threshold" description:"Alert type (cost_threshold, quota_limit, usage_spike)"`
+	Severity     string    `json:"severity" example:"warning" description:"Alert severity (info, warning, critical)"`
+	Message      string    `json:"message" example:"Monthly cost has reached 80% of limit" description:"Alert message"`
+	TriggeredAt  time.Time `json:"triggered_at" example:"2024-01-15T10:30:00Z" description:"When alert was triggered"`
+	Threshold    float64   `json:"threshold" example:"800.00" description:"Threshold value that triggered alert"`
+	CurrentValue float64   `json:"current_value" example:"750.25" description:"Current value that triggered alert"`
+	Status       string    `json:"status" example:"active" description:"Alert status (active, acknowledged, resolved)"`
 }
 
 // Invoice represents a billing invoice
 type Invoice struct {
-	ID              string           `json:"id" example:"inv_1234567890" description:"Invoice identifier"`
-	InvoiceNumber   string           `json:"invoice_number" example:"INV-2024-001" description:"Human-readable invoice number"`
-	OrganizationID  string           `json:"organization_id" example:"org_1234567890" description:"Organization identifier"`
-	BillingPeriod   BillingPeriod    `json:"billing_period" description:"Billing period for this invoice"`
-	Status          string           `json:"status" example:"paid" description:"Invoice status (draft, sent, paid, overdue, void)"`
-	Subtotal        float64          `json:"subtotal" example:"1250.75" description:"Subtotal before taxes in USD"`
-	TaxAmount       float64          `json:"tax_amount" example:"125.08" description:"Tax amount in USD"`
-	Total           float64          `json:"total" example:"1375.83" description:"Total amount including taxes in USD"`
-	Currency        string           `json:"currency" example:"USD" description:"Invoice currency"`
-	IssueDate       time.Time        `json:"issue_date" example:"2024-02-01T00:00:00Z" description:"Invoice issue date"`
-	DueDate         time.Time        `json:"due_date" example:"2024-02-15T23:59:59Z" description:"Payment due date"`
-	PaidDate        time.Time        `json:"paid_date,omitempty" example:"2024-02-10T14:30:00Z" description:"Payment date (if paid)"`
-	LineItems       []InvoiceLineItem `json:"line_items" description:"Invoice line items"`
-	PaymentMethod   string           `json:"payment_method,omitempty" example:"credit_card" description:"Payment method used"`
-	DownloadURL     string           `json:"download_url,omitempty" example:"https://invoices.brokle.ai/inv_1234567890.pdf" description:"PDF download URL"`
+	ID             string            `json:"id" example:"inv_1234567890" description:"Invoice identifier"`
+	InvoiceNumber  string            `json:"invoice_number" example:"INV-2024-001" description:"Human-readable invoice number"`
+	OrganizationID string            `json:"organization_id" example:"org_1234567890" description:"Organization identifier"`
+	BillingPeriod  BillingPeriod     `json:"billing_period" description:"Billing period for this invoice"`
+	Status         string            `json:"status" example:"paid" description:"Invoice status (draft, sent, paid, overdue, void)"`
+	Subtotal       float64           `json:"subtotal" example:"1250.75" description:"Subtotal before taxes in USD"`
+	TaxAmount      float64           `json:"tax_amount" example:"125.08" description:"Tax amount in USD"`
+	Total          float64           `json:"total" example:"1375.83" description:"Total amount including taxes in USD"`
+	Currency       string            `json:"currency" example:"USD" description:"Invoice currency"`
+	IssueDate      time.Time         `json:"issue_date" example:"2024-02-01T00:00:00Z" description:"Invoice issue date"`
+	DueDate        time.Time         `json:"due_date" example:"2024-02-15T23:59:59Z" description:"Payment due date"`
+	PaidDate       time.Time         `json:"paid_date,omitempty" example:"2024-02-10T14:30:00Z" description:"Payment date (if paid)"`
+	LineItems      []InvoiceLineItem `json:"line_items" description:"Invoice line items"`
+	PaymentMethod  string            `json:"payment_method,omitempty" example:"credit_card" description:"Payment method used"`
+	DownloadURL    string            `json:"download_url,omitempty" example:"https://invoices.brokle.ai/inv_1234567890.pdf" description:"PDF download URL"`
 }
 
 // InvoiceLineItem represents a line item on an invoice
@@ -151,23 +152,23 @@ type Subscription struct {
 
 // SubscriptionPlan represents a subscription plan
 type SubscriptionPlan struct {
-	ID            string  `json:"id" example:"plan_pro" description:"Plan identifier"`
-	Name          string  `json:"name" example:"Pro Plan" description:"Plan name"`
-	Price         float64 `json:"price" example:"29.00" description:"Monthly price in USD"`
-	Currency      string  `json:"currency" example:"USD" description:"Plan currency"`
-	Interval      string  `json:"interval" example:"month" description:"Billing interval (month, year)"`
-	RequestsLimit int64   `json:"requests_limit" example:"100000" description:"Monthly requests limit (0 = unlimited)"`
+	ID               string   `json:"id" example:"plan_pro" description:"Plan identifier"`
+	Name             string   `json:"name" example:"Pro Plan" description:"Plan name"`
+	Price            float64  `json:"price" example:"29.00" description:"Monthly price in USD"`
+	Currency         string   `json:"currency" example:"USD" description:"Plan currency"`
+	Interval         string   `json:"interval" example:"month" description:"Billing interval (month, year)"`
+	RequestsLimit    int64    `json:"requests_limit" example:"100000" description:"Monthly requests limit (0 = unlimited)"`
 	FeaturesIncluded []string `json:"features_included" example:"[\"advanced_analytics\", \"semantic_caching\"]" description:"Features included in plan"`
 }
 
 // PaymentMethod represents a payment method
 type PaymentMethod struct {
-	ID     string `json:"id" example:"pm_1234567890" description:"Payment method identifier"`
-	Type   string `json:"type" example:"credit_card" description:"Payment method type"`
-	Brand  string `json:"brand,omitempty" example:"visa" description:"Card brand (for credit cards)"`
-	Last4  string `json:"last4,omitempty" example:"1234" description:"Last 4 digits (for credit cards)"`
-	Expiry string `json:"expiry,omitempty" example:"12/2025" description:"Expiry date (for credit cards)"`
-	Default bool  `json:"default" example:"true" description:"Whether this is the default payment method"`
+	ID      string `json:"id" example:"pm_1234567890" description:"Payment method identifier"`
+	Type    string `json:"type" example:"credit_card" description:"Payment method type"`
+	Brand   string `json:"brand,omitempty" example:"visa" description:"Card brand (for credit cards)"`
+	Last4   string `json:"last4,omitempty" example:"1234" description:"Last 4 digits (for credit cards)"`
+	Expiry  string `json:"expiry,omitempty" example:"12/2025" description:"Expiry date (for credit cards)"`
+	Default bool   `json:"default" example:"true" description:"Whether this is the default payment method"`
 }
 
 // SubscriptionAddOn represents a subscription add-on
@@ -180,19 +181,19 @@ type SubscriptionAddOn struct {
 
 // Discount represents a discount applied to subscription
 type Discount struct {
-	ID       string  `json:"id" example:"discount_1234567890" description:"Discount identifier"`
-	Name     string  `json:"name" example:"New Customer 20% Off" description:"Discount name"`
-	Type     string  `json:"type" example:"percentage" description:"Discount type (percentage, fixed_amount)"`
-	Value    float64 `json:"value" example:"20.0" description:"Discount value (percentage or amount)"`
+	ID         string    `json:"id" example:"discount_1234567890" description:"Discount identifier"`
+	Name       string    `json:"name" example:"New Customer 20% Off" description:"Discount name"`
+	Type       string    `json:"type" example:"percentage" description:"Discount type (percentage, fixed_amount)"`
+	Value      float64   `json:"value" example:"20.0" description:"Discount value (percentage or amount)"`
 	ValidUntil time.Time `json:"valid_until,omitempty" example:"2024-06-01T00:00:00Z" description:"Discount expiration date"`
 }
 
 // UpdateSubscriptionRequest represents a request to update subscription
 type UpdateSubscriptionRequest struct {
-	PlanID string `json:"plan_id,omitempty" example:"plan_business" description:"New plan ID"`
-	AddOns []SubscriptionAddOn `json:"add_ons,omitempty" description:"Updated add-ons"`
-	PaymentMethodID string `json:"payment_method_id,omitempty" example:"pm_0987654321" description:"New payment method ID"`
-	CancelAt time.Time `json:"cancel_at,omitempty" example:"2024-12-31T23:59:59Z" description:"Schedule cancellation date"`
+	PlanID          string              `json:"plan_id,omitempty" example:"plan_business" description:"New plan ID"`
+	AddOns          []SubscriptionAddOn `json:"add_ons,omitempty" description:"Updated add-ons"`
+	PaymentMethodID string              `json:"payment_method_id,omitempty" example:"pm_0987654321" description:"New payment method ID"`
+	CancelAt        time.Time           `json:"cancel_at,omitempty" example:"2024-12-31T23:59:59Z" description:"Schedule cancellation date"`
 }
 
 // ListInvoicesResponse represents the response when listing invoices
@@ -223,6 +224,7 @@ type ListInvoicesResponse struct {
 // @Security BearerAuth
 // @Router /api/v1/billing/{orgId}/usage [get]
 func (h *Handler) GetUsage(c *gin.Context) { response.Success(c, gin.H{"message": "Get usage - TODO"}) }
+
 // ListInvoices handles GET /billing/:orgId/invoices
 // @Summary List organization invoices
 // @Description Get a paginated list of invoices for an organization
@@ -243,7 +245,10 @@ func (h *Handler) GetUsage(c *gin.Context) { response.Success(c, gin.H{"message"
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Security BearerAuth
 // @Router /api/v1/billing/{orgId}/invoices [get]
-func (h *Handler) ListInvoices(c *gin.Context) { response.Success(c, gin.H{"message": "List invoices - TODO"}) }
+func (h *Handler) ListInvoices(c *gin.Context) {
+	response.Success(c, gin.H{"message": "List invoices - TODO"})
+}
+
 // GetSubscription handles GET /billing/:orgId/subscription
 // @Summary Get organization subscription
 // @Description Get current subscription details for an organization
@@ -259,7 +264,10 @@ func (h *Handler) ListInvoices(c *gin.Context) { response.Success(c, gin.H{"mess
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Security BearerAuth
 // @Router /api/v1/billing/{orgId}/subscription [get]
-func (h *Handler) GetSubscription(c *gin.Context) { response.Success(c, gin.H{"message": "Get subscription - TODO"}) }
+func (h *Handler) GetSubscription(c *gin.Context) {
+	response.Success(c, gin.H{"message": "Get subscription - TODO"})
+}
+
 // UpdateSubscription handles POST /billing/:orgId/subscription
 // @Summary Update organization subscription
 // @Description Update subscription plan, add-ons, or payment method for an organization
@@ -277,4 +285,6 @@ func (h *Handler) GetSubscription(c *gin.Context) { response.Success(c, gin.H{"m
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Security BearerAuth
 // @Router /api/v1/billing/{orgId}/subscription [post]
-func (h *Handler) UpdateSubscription(c *gin.Context) { response.Success(c, gin.H{"message": "Update subscription - TODO"}) }
+func (h *Handler) UpdateSubscription(c *gin.Context) {
+	response.Success(c, gin.H{"message": "Update subscription - TODO"})
+}

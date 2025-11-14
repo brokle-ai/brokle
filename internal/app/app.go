@@ -83,7 +83,7 @@ func NewWorker(cfg *config.Config) (*App, error) {
 
 	// Create ONLY worker services (minimal - no auth)
 	core.Services = ProvideWorkerServices(core)
-	core.Enterprise = nil  // Worker doesn't need enterprise
+	core.Enterprise = nil // Worker doesn't need enterprise
 
 	// Initialize workers
 	workers, err := ProvideWorkers(core)
@@ -211,7 +211,7 @@ func (a *App) Health() map[string]string {
 	if a.providers != nil {
 		return a.providers.HealthCheck()
 	}
-	
+
 	return map[string]string{
 		"status": "providers not initialized",
 	}

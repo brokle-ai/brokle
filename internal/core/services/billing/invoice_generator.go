@@ -37,7 +37,7 @@ func (g *InvoiceGenerator) GenerateInvoice(
 	organizationName string,
 	billingAddress *billingDomain.BillingAddress,
 ) (*billingDomain.Invoice, error) {
-	
+
 	if summary.NetCost <= 0 {
 		return nil, fmt.Errorf("cannot generate invoice for zero or negative amount: %f", summary.NetCost)
 	}
@@ -69,17 +69,17 @@ func (g *InvoiceGenerator) GenerateInvoice(
 	for _, item := range lineItems {
 		subtotal += item.Amount
 	}
-	
+
 	invoice.Subtotal = subtotal
 	invoice.DiscountAmount = summary.Discounts
-	
+
 	// Apply tax if configured
 	taxConfig := g.getTaxConfiguration(billingAddress)
 	if taxConfig != nil {
 		taxableAmount := subtotal - invoice.DiscountAmount
 		invoice.TaxAmount = taxableAmount * taxConfig.TaxRate
 	}
-	
+
 	invoice.TotalAmount = invoice.Subtotal - invoice.DiscountAmount + invoice.TaxAmount
 
 	// Add metadata
@@ -289,7 +289,7 @@ func (g *InvoiceGenerator) CancelInvoice(ctx context.Context, invoice *billingDo
 
 	invoice.Status = billingDomain.InvoiceStatusCancelled
 	invoice.UpdatedAt = time.Now()
-	
+
 	if invoice.Metadata == nil {
 		invoice.Metadata = make(map[string]interface{})
 	}
@@ -309,12 +309,12 @@ func (g *InvoiceGenerator) CancelInvoice(ctx context.Context, invoice *billingDo
 // GetInvoiceSummary generates a summary of multiple invoices
 func (g *InvoiceGenerator) GetInvoiceSummary(ctx context.Context, invoices []*billingDomain.Invoice) *InvoiceSummary {
 	summary := &InvoiceSummary{
-		TotalInvoices: len(invoices),
-		StatusCounts:  make(map[billingDomain.InvoiceStatus]int),
-		TotalAmount:   0,
-		PaidAmount:    0,
+		TotalInvoices:     len(invoices),
+		StatusCounts:      make(map[billingDomain.InvoiceStatus]int),
+		TotalAmount:       0,
+		PaidAmount:        0,
 		OutstandingAmount: 0,
-		OverdueAmount: 0,
+		OverdueAmount:     0,
 	}
 
 	for _, invoice := range invoices {
@@ -348,14 +348,14 @@ func (g *InvoiceGenerator) GetInvoiceSummary(ctx context.Context, invoices []*bi
 
 // InvoiceSummary represents a summary of multiple invoices
 type InvoiceSummary struct {
-	TotalInvoices     int                        `json:"total_invoices"`
-	StatusCounts      map[billingDomain.InvoiceStatus]int      `json:"status_counts"`
-	TotalAmount       float64                    `json:"total_amount"`
-	PaidAmount        float64                    `json:"paid_amount"`
-	OutstandingAmount float64                    `json:"outstanding_amount"`
-	OverdueAmount     float64                    `json:"overdue_amount"`
-	EarliestDate      *time.Time                 `json:"earliest_date,omitempty"`
-	LatestDate        *time.Time                 `json:"latest_date,omitempty"`
+	TotalInvoices     int                                 `json:"total_invoices"`
+	StatusCounts      map[billingDomain.InvoiceStatus]int `json:"status_counts"`
+	TotalAmount       float64                             `json:"total_amount"`
+	PaidAmount        float64                             `json:"paid_amount"`
+	OutstandingAmount float64                             `json:"outstanding_amount"`
+	OverdueAmount     float64                             `json:"overdue_amount"`
+	EarliestDate      *time.Time                          `json:"earliest_date,omitempty"`
+	LatestDate        *time.Time                          `json:"latest_date,omitempty"`
 }
 
 // Internal methods
@@ -364,10 +364,10 @@ func (g *InvoiceGenerator) generateInvoiceNumber(orgID ulid.ULID, periodStart ti
 	// Format: BRKL-YYYY-MM-{ORG_SHORT}-{SEQUENCE}
 	orgShort := orgID.String()[:8] // First 8 characters of org ID
 	yearMonth := periodStart.Format("2006-01")
-	
+
 	// In a real implementation, you'd want to get the next sequence number from the database
 	sequence := "001"
-	
+
 	return fmt.Sprintf("BRKL-%s-%s-%s", yearMonth, orgShort, sequence)
 }
 
@@ -384,10 +384,10 @@ func (g *InvoiceGenerator) generateLineItems(summary *analytics.BillingSummary) 
 				UnitPrice:   amount,
 				Amount:      amount,
 			}
-			
+
 			// In a real implementation, you'd look up provider details
 			lineItem.ProviderName = fmt.Sprintf("Provider %s", providerKey[:8])
-			
+
 			lineItems = append(lineItems, lineItem)
 		}
 	}
@@ -440,9 +440,9 @@ func (g *InvoiceGenerator) GetHealth() map[string]interface{} {
 		"service": "invoice_generator",
 		"status":  "healthy",
 		"config": map[string]interface{}{
-			"default_currency":       g.config.DefaultCurrency,
-			"payment_grace_period":   g.config.PaymentGracePeriod.String(),
-			"invoice_generation":     g.config.InvoiceGeneration,
+			"default_currency":     g.config.DefaultCurrency,
+			"payment_grace_period": g.config.PaymentGracePeriod.String(),
+			"invoice_generation":   g.config.InvoiceGeneration,
 		},
 	}
 }
@@ -451,9 +451,9 @@ func (g *InvoiceGenerator) GetHealth() map[string]interface{} {
 
 // IsOverdue checks if an invoice is overdue
 func (g *InvoiceGenerator) IsOverdue(invoice *billingDomain.Invoice) bool {
-	return invoice.Status != billingDomain.InvoiceStatusPaid && 
-		   invoice.Status != billingDomain.InvoiceStatusCancelled && 
-		   time.Now().After(invoice.DueDate)
+	return invoice.Status != billingDomain.InvoiceStatusPaid &&
+		invoice.Status != billingDomain.InvoiceStatusCancelled &&
+		time.Now().After(invoice.DueDate)
 }
 
 // CalculateLateFee calculates late fee for an overdue invoice
@@ -473,14 +473,14 @@ func (g *InvoiceGenerator) CalculateLateFee(invoice *billingDomain.Invoice, late
 // GeneratePaymentReminder generates text for a payment reminder
 func (g *InvoiceGenerator) GeneratePaymentReminder(invoice *billingDomain.Invoice) string {
 	daysOverdue := int(time.Since(invoice.DueDate).Hours() / 24)
-	
+
 	var message string
 	if daysOverdue <= 0 {
 		daysToDue := int(time.Until(invoice.DueDate).Hours() / 24)
-		message = fmt.Sprintf("Your invoice %s for $%.2f is due in %d days.", 
+		message = fmt.Sprintf("Your invoice %s for $%.2f is due in %d days.",
 			invoice.InvoiceNumber, invoice.TotalAmount, daysToDue)
 	} else {
-		message = fmt.Sprintf("Your invoice %s for $%.2f is %d days overdue. Please remit payment immediately.", 
+		message = fmt.Sprintf("Your invoice %s for $%.2f is %d days overdue. Please remit payment immediately.",
 			invoice.InvoiceNumber, invoice.TotalAmount, daysOverdue)
 	}
 

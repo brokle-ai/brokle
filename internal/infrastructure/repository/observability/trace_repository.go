@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"brokle/internal/core/domain/observability"
+
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 )
@@ -34,7 +35,7 @@ func (r *traceRepository) Create(ctx context.Context, trace *observability.Trace
 			start_time, end_time, duration_ms, status_code, status_message,
 			attributes, input, output, metadata, tags,
 			environment, service_name, service_version, release,
-			total_cost, total_tokens, observation_count,
+			total_cost, total_tokens, span_count,
 			bookmarked, public, created_at, updated_at,
 			version, event_ts, is_deleted
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -62,7 +63,7 @@ func (r *traceRepository) Create(ctx context.Context, trace *observability.Trace
 		trace.Release,
 		trace.TotalCost,
 		trace.TotalTokens,
-		trace.ObservationCount,
+		trace.SpanCount,
 		boolToUint8(trace.Bookmarked),
 		boolToUint8(trace.Public),
 		trace.CreatedAt,
@@ -95,7 +96,7 @@ func (r *traceRepository) Delete(ctx context.Context, id string) error {
 			start_time, end_time, duration_ms, status_code, status_message,
 			attributes, input, output, metadata, tags,
 			environment, service_name, service_version, release,
-			total_cost, total_tokens, observation_count,
+			total_cost, total_tokens, span_count,
 			bookmarked, public, created_at, updated_at,
 			version,
 			now64() as event_ts,
@@ -117,7 +118,7 @@ func (r *traceRepository) GetByID(ctx context.Context, id string) (*observabilit
 			start_time, end_time, duration_ms, status_code, status_message,
 			attributes, input, output, metadata, tags,
 			environment, service_name, service_version, release,
-			total_cost, total_tokens, observation_count,
+			total_cost, total_tokens, span_count,
 			bookmarked, public, created_at, updated_at,
 			version, event_ts, is_deleted
 		FROM traces
@@ -138,7 +139,7 @@ func (r *traceRepository) GetByProjectID(ctx context.Context, projectID string, 
 			start_time, end_time, duration_ms, status_code, status_message,
 			attributes, input, output, metadata, tags,
 			environment, service_name, service_version, release,
-			total_cost, total_tokens, observation_count,
+			total_cost, total_tokens, span_count,
 			bookmarked, public, created_at, updated_at,
 			version, event_ts, is_deleted
 		FROM traces
@@ -223,7 +224,7 @@ func (r *traceRepository) GetBySessionID(ctx context.Context, sessionID string) 
 			start_time, end_time, duration_ms, status_code, status_message,
 			attributes, input, output, metadata, tags,
 			environment, service_name, service_version, release,
-			total_cost, total_tokens, observation_count,
+			total_cost, total_tokens, span_count,
 			bookmarked, public, created_at, updated_at,
 			version, event_ts, is_deleted
 		FROM traces
@@ -248,7 +249,7 @@ func (r *traceRepository) GetByUserID(ctx context.Context, userID string, filter
 			start_time, end_time, duration_ms, status_code, status_message,
 			attributes, input, output, metadata, tags,
 			environment, service_name, service_version, release,
-			total_cost, total_tokens, observation_count,
+			total_cost, total_tokens, span_count,
 			bookmarked, public, created_at, updated_at,
 			version, event_ts, is_deleted
 		FROM traces
@@ -284,9 +285,9 @@ func (r *traceRepository) GetByUserID(ctx context.Context, userID string, filter
 	return r.scanTraces(rows)
 }
 
-// GetWithObservations retrieves a trace with all its observations (requires join)
-func (r *traceRepository) GetWithObservations(ctx context.Context, id string) (*observability.Trace, error) {
-	// TODO: Implement after ObservationRepository is created
+// GetWithSpans retrieves a trace with all its spans (requires join)
+func (r *traceRepository) GetWithSpans(ctx context.Context, id string) (*observability.Trace, error) {
+	// TODO: Implement after SpanRepository is created
 	return r.GetByID(ctx, id)
 }
 
@@ -308,7 +309,7 @@ func (r *traceRepository) CreateBatch(ctx context.Context, traces []*observabili
 			start_time, end_time, duration_ms, status_code, status_message,
 			attributes, input, output, metadata, tags,
 			environment, service_name, service_version, release,
-			total_cost, total_tokens, observation_count,
+			total_cost, total_tokens, span_count,
 			bookmarked, public, created_at, updated_at,
 			version, event_ts, is_deleted
 		)
@@ -351,7 +352,7 @@ func (r *traceRepository) CreateBatch(ctx context.Context, traces []*observabili
 			trace.Release,
 			trace.TotalCost,
 			trace.TotalTokens,
-			trace.ObservationCount,
+			trace.SpanCount,
 			boolToUint8(trace.Bookmarked),
 			boolToUint8(trace.Public),
 			trace.CreatedAt,
@@ -424,7 +425,7 @@ func (r *traceRepository) scanTraceRow(row driver.Row) (*observability.Trace, er
 		&trace.Release,
 		&trace.TotalCost,
 		&trace.TotalTokens,
-		&trace.ObservationCount,
+		&trace.SpanCount,
 		&bookmarked,
 		&public,
 		&trace.CreatedAt,
@@ -475,7 +476,7 @@ func (r *traceRepository) scanTraces(rows driver.Rows) ([]*observability.Trace, 
 			&trace.Release,
 			&trace.TotalCost,
 			&trace.TotalTokens,
-			&trace.ObservationCount,
+			&trace.SpanCount,
 			&bookmarked,
 			&public,
 			&trace.CreatedAt,

@@ -145,7 +145,7 @@ func (rs *RBACSeeder) SeedRoles(ctx context.Context, roleSeeds []RoleSeed, entit
 		}
 
 		if verbose {
-			log.Printf("   ✓ Created template role: %s (%s scope) with %d permissions", 
+			log.Printf("   ✓ Created template role: %s (%s scope) with %d permissions",
 				roleSeed.Name, roleSeed.ScopeType, len(roleSeed.Permissions))
 		}
 	}

@@ -244,7 +244,7 @@ Stream: telemetry:batches:{project_id}
     ↓
 TelemetryStreamConsumer (in-process worker)
     ↓
-Process Events (traces, observations, scores)
+Process Events (traces, spans, scores)
     ↓
 ClickHouse Analytics Database
 ```

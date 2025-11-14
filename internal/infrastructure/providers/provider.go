@@ -14,28 +14,28 @@ type Provider interface {
 	// Provider identification
 	GetName() string
 	GetType() gateway.ProviderType
-	
+
 	// Core AI operations
 	ChatCompletion(ctx context.Context, req *ChatCompletionRequest) (*ChatCompletionResponse, error)
 	ChatCompletionStream(ctx context.Context, req *ChatCompletionRequest, writer io.Writer) error
 	Completion(ctx context.Context, req *CompletionRequest) (*CompletionResponse, error)
 	CompletionStream(ctx context.Context, req *CompletionRequest, writer io.Writer) error
 	Embedding(ctx context.Context, req *EmbeddingRequest) (*EmbeddingResponse, error)
-	
+
 	// Model operations
 	ListModels(ctx context.Context) ([]*Model, error)
 	GetModel(ctx context.Context, modelName string) (*Model, error)
-	
+
 	// Health and connectivity
 	HealthCheck(ctx context.Context) error
 	TestConnection(ctx context.Context) (*ConnectionTestResult, error)
-	
+
 	// Configuration
 	SetAPIKey(apiKey string)
 	SetBaseURL(baseURL string)
 	SetTimeout(timeout time.Duration)
 	SetMaxRetries(maxRetries int)
-	
+
 	// Provider-specific capabilities
 	GetSupportedFeatures() []string
 	SupportsStreaming() bool
@@ -46,13 +46,13 @@ type Provider interface {
 
 // ProviderConfig contains configuration for provider initialization
 type ProviderConfig struct {
-	APIKey          string        `json:"api_key"`
-	BaseURL         string        `json:"base_url"`
-	Timeout         time.Duration `json:"timeout"`
-	MaxRetries      int           `json:"max_retries"`
-	CustomHeaders   map[string]string `json:"custom_headers,omitempty"`
-	OrganizationID  *string       `json:"organization_id,omitempty"`
-	ProjectID       *string       `json:"project_id,omitempty"`
+	APIKey         string            `json:"api_key"`
+	BaseURL        string            `json:"base_url"`
+	Timeout        time.Duration     `json:"timeout"`
+	MaxRetries     int               `json:"max_retries"`
+	CustomHeaders  map[string]string `json:"custom_headers,omitempty"`
+	OrganizationID *string           `json:"organization_id,omitempty"`
+	ProjectID      *string           `json:"project_id,omitempty"`
 }
 
 // Request/Response types that match OpenAI's API format
@@ -92,13 +92,13 @@ type ChatMessage struct {
 
 // ChatCompletionResponse represents the response from a chat completion
 type ChatCompletionResponse struct {
-	ID                string                    `json:"id"`
-	Object            string                    `json:"object"`
-	Created           int64                     `json:"created"`
-	Model             string                    `json:"model"`
-	Choices           []ChatCompletionChoice    `json:"choices"`
-	Usage             *TokenUsage               `json:"usage,omitempty"`
-	SystemFingerprint *string                   `json:"system_fingerprint,omitempty"`
+	ID                string                 `json:"id"`
+	Object            string                 `json:"object"`
+	Created           int64                  `json:"created"`
+	Model             string                 `json:"model"`
+	Choices           []ChatCompletionChoice `json:"choices"`
+	Usage             *TokenUsage            `json:"usage,omitempty"`
+	SystemFingerprint *string                `json:"system_fingerprint,omitempty"`
 }
 
 // ChatCompletionChoice represents a choice in the chat completion response
@@ -112,22 +112,22 @@ type ChatCompletionChoice struct {
 
 // CompletionRequest represents a text completion request
 type CompletionRequest struct {
-	Model            string    `json:"model"`
-	Prompt           interface{} `json:"prompt"`
-	MaxTokens        *int      `json:"max_tokens,omitempty"`
-	Temperature      *float64  `json:"temperature,omitempty"`
-	TopP             *float64  `json:"top_p,omitempty"`
-	N                *int      `json:"n,omitempty"`
-	Stream           bool      `json:"stream,omitempty"`
-	Logprobs         *int      `json:"logprobs,omitempty"`
-	Echo             bool      `json:"echo,omitempty"`
-	Stop             []string  `json:"stop,omitempty"`
-	PresencePenalty  *float64  `json:"presence_penalty,omitempty"`
-	FrequencyPenalty *float64  `json:"frequency_penalty,omitempty"`
-	BestOf           *int      `json:"best_of,omitempty"`
+	Model            string                 `json:"model"`
+	Prompt           interface{}            `json:"prompt"`
+	MaxTokens        *int                   `json:"max_tokens,omitempty"`
+	Temperature      *float64               `json:"temperature,omitempty"`
+	TopP             *float64               `json:"top_p,omitempty"`
+	N                *int                   `json:"n,omitempty"`
+	Stream           bool                   `json:"stream,omitempty"`
+	Logprobs         *int                   `json:"logprobs,omitempty"`
+	Echo             bool                   `json:"echo,omitempty"`
+	Stop             []string               `json:"stop,omitempty"`
+	PresencePenalty  *float64               `json:"presence_penalty,omitempty"`
+	FrequencyPenalty *float64               `json:"frequency_penalty,omitempty"`
+	BestOf           *int                   `json:"best_of,omitempty"`
 	LogitBias        map[string]interface{} `json:"logit_bias,omitempty"`
-	User             *string   `json:"user,omitempty"`
-	Suffix           *string   `json:"suffix,omitempty"`
+	User             *string                `json:"user,omitempty"`
+	Suffix           *string                `json:"suffix,omitempty"`
 }
 
 // CompletionResponse represents the response from a text completion
@@ -194,8 +194,8 @@ type Tool struct {
 
 // ToolCall represents a tool call in a message
 type ToolCall struct {
-	ID       string   `json:"id"`
-	Type     string   `json:"type"`
+	ID       string       `json:"id"`
+	Type     string       `json:"type"`
 	Function FunctionCall `json:"function"`
 }
 
@@ -311,7 +311,7 @@ func NewProviderFactory() ProviderFactory {
 func (f *DefaultProviderFactory) GetProvider(ctx context.Context, providerType gateway.ProviderType, config map[string]interface{}) (Provider, error) {
 	// Convert map to ProviderConfig
 	providerConfig := &ProviderConfig{}
-	
+
 	// Extract configuration values from the map
 	if apiKey, ok := config["api_key"].(string); ok {
 		providerConfig.APIKey = apiKey
@@ -334,7 +334,7 @@ func (f *DefaultProviderFactory) GetProvider(ctx context.Context, providerType g
 	if projectID, ok := config["project_id"].(string); ok {
 		providerConfig.ProjectID = &projectID
 	}
-	
+
 	// Use the existing factory registration system
 	factory, exists := providerFactories[providerType]
 	if !exists {
@@ -344,7 +344,7 @@ func (f *DefaultProviderFactory) GetProvider(ctx context.Context, providerType g
 			400,
 		)
 	}
-	
+
 	return factory(providerConfig)
 }
 
@@ -374,7 +374,7 @@ func CreateProvider(providerType gateway.ProviderType, config *ProviderConfig) (
 			400,
 		)
 	}
-	
+
 	return factory(config)
 }
 

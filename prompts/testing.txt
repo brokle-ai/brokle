@@ -328,7 +328,7 @@ Pattern: TestServiceName_MethodName
 Examples:
 ✅ TestUserService_CreateUserWithOrganization
 ✅ TestTraceService_IngestTraceBatch
-✅ TestObservationService_CompleteObservation
+✅ TestSpanService_CompleteSpan
 ✅ TestTelemetryBatchService_ProcessEventsBatch
 
 Table Test Case Names:
@@ -473,19 +473,19 @@ Result: 7 tests → 4 tests (43% reduction, 100% business logic coverage)
 
 See: internal/services/observability/
 - trace_service_test.go (831 lines)
-  ✅ CreateTraceWithObservations (orchestration)
-  ✅ GetTraceWithObservations (complex query)
+  ✅ CreateTraceWithSpans (orchestration)
+  ✅ GetTraceWithSpans (complex query)
   ✅ CreateTracesBatch (batch processing)
   ✅ IngestTraceBatch (bulk ingestion)
   ✅ GetTracesByTimeRange (time-based queries)
   ❌ CreateTrace, GetTrace, UpdateTrace, DeleteTrace (removed)
 
-- observation_service_test.go (442 lines)
-  ✅ CompleteObservation (business logic with calculations)
-  ✅ CreateObservationsBatch (batch processing)
-  ✅ UpdateObservationsBatch (batch updates)
-  ✅ GetObservationAnalytics (analytics)
-  ❌ CreateObservation, GetObservation, UpdateObservation (removed)
+- span_service_test.go (442 lines)
+  ✅ CompleteSpan (business logic with calculations)
+  ✅ CreateSpansBatch (batch processing)
+  ✅ UpdateSpansBatch (batch updates)
+  ✅ GetSpanAnalytics (analytics)
+  ❌ CreateSpan, GetSpan, UpdateSpan (removed)
 
 - telemetry_batch_service_test.go (670 lines)
   ✅ ProcessEventsBatch (high-throughput processing)

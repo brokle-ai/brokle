@@ -91,8 +91,8 @@ type ProjectSummary struct {
 
 // EnhancedUserProfileResponse extends UserProfileResponse with organizations hierarchy
 type EnhancedUserProfileResponse struct {
-	*UserProfileResponse                     // Embed pointer to preserve all existing fields
-	Organizations       []OrganizationWithProjects `json:"organizations"`
+	*UserProfileResponse                            // Embed pointer to preserve all existing fields
+	Organizations        []OrganizationWithProjects `json:"organizations"`
 }
 
 // GetProfile handles GET /users/me
@@ -411,4 +411,3 @@ func (h *Handler) SetDefaultOrganization(c *gin.Context) {
 		"message": "Default organization updated successfully",
 	})
 }
-

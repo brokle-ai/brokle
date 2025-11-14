@@ -190,7 +190,7 @@ func (r *auditLogRepository) GetAuditLogStats(ctx context.Context) (*authDomain.
 		LogsByAction:   make(map[string]int64),
 		LogsByResource: make(map[string]int64),
 	}
-	
+
 	// Get total logs count
 	err := r.db.WithContext(ctx).
 		Model(&authDomain.AuditLog{}).
@@ -198,7 +198,7 @@ func (r *auditLogRepository) GetAuditLogStats(ctx context.Context) (*authDomain.
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Get logs by action
 	type actionCount struct {
 		Action string
@@ -213,11 +213,11 @@ func (r *auditLogRepository) GetAuditLogStats(ctx context.Context) (*authDomain.
 	if err != nil {
 		return nil, err
 	}
-	
+
 	for _, ac := range actionCounts {
 		stats.LogsByAction[ac.Action] = ac.Count
 	}
-	
+
 	// Get logs by resource
 	type resourceCount struct {
 		Resource string
@@ -233,11 +233,11 @@ func (r *auditLogRepository) GetAuditLogStats(ctx context.Context) (*authDomain.
 	if err != nil {
 		return nil, err
 	}
-	
+
 	for _, rc := range resourceCounts {
 		stats.LogsByResource[rc.Resource] = rc.Count
 	}
-	
+
 	// Get last log time
 	var lastLog authDomain.AuditLog
 	err = r.db.WithContext(ctx).
@@ -246,7 +246,7 @@ func (r *auditLogRepository) GetAuditLogStats(ctx context.Context) (*authDomain.
 	if err == nil {
 		stats.LastLogTime = &lastLog.CreatedAt
 	}
-	
+
 	return stats, nil
 }
 
@@ -256,7 +256,7 @@ func (r *auditLogRepository) GetUserAuditLogStats(ctx context.Context, userID ul
 		LogsByAction:   make(map[string]int64),
 		LogsByResource: make(map[string]int64),
 	}
-	
+
 	// Get total logs count for user
 	err := r.db.WithContext(ctx).
 		Model(&authDomain.AuditLog{}).
@@ -265,7 +265,7 @@ func (r *auditLogRepository) GetUserAuditLogStats(ctx context.Context, userID ul
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Get logs by action for user
 	type actionCount struct {
 		Action string
@@ -281,11 +281,11 @@ func (r *auditLogRepository) GetUserAuditLogStats(ctx context.Context, userID ul
 	if err != nil {
 		return nil, err
 	}
-	
+
 	for _, ac := range actionCounts {
 		stats.LogsByAction[ac.Action] = ac.Count
 	}
-	
+
 	// Get logs by resource for user
 	type resourceCount struct {
 		Resource string
@@ -301,11 +301,11 @@ func (r *auditLogRepository) GetUserAuditLogStats(ctx context.Context, userID ul
 	if err != nil {
 		return nil, err
 	}
-	
+
 	for _, rc := range resourceCounts {
 		stats.LogsByResource[rc.Resource] = rc.Count
 	}
-	
+
 	return stats, nil
 }
 
@@ -315,7 +315,7 @@ func (r *auditLogRepository) GetOrganizationAuditLogStats(ctx context.Context, o
 		LogsByAction:   make(map[string]int64),
 		LogsByResource: make(map[string]int64),
 	}
-	
+
 	// Get total logs count for organization
 	err := r.db.WithContext(ctx).
 		Model(&authDomain.AuditLog{}).
@@ -324,7 +324,7 @@ func (r *auditLogRepository) GetOrganizationAuditLogStats(ctx context.Context, o
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Get logs by action for organization
 	type actionCount struct {
 		Action string
@@ -340,11 +340,11 @@ func (r *auditLogRepository) GetOrganizationAuditLogStats(ctx context.Context, o
 	if err != nil {
 		return nil, err
 	}
-	
+
 	for _, ac := range actionCounts {
 		stats.LogsByAction[ac.Action] = ac.Count
 	}
-	
+
 	// Get logs by resource for organization
 	type resourceCount struct {
 		Resource string
@@ -360,10 +360,10 @@ func (r *auditLogRepository) GetOrganizationAuditLogStats(ctx context.Context, o
 	if err != nil {
 		return nil, err
 	}
-	
+
 	for _, rc := range resourceCounts {
 		stats.LogsByResource[rc.Resource] = rc.Count
 	}
-	
+
 	return stats, nil
 }

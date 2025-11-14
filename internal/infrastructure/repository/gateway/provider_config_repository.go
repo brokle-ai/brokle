@@ -439,7 +439,7 @@ func (r *ProviderConfigRepository) ListByOrganization(ctx context.Context, orgID
 // SearchConfigs searches provider configurations with filters
 func (r *ProviderConfigRepository) SearchConfigs(ctx context.Context, filter *gateway.ProviderConfigFilter) ([]*gateway.ProviderConfig, int, error) {
 	whereClause, args := r.buildWhereClause(filter)
-	
+
 	// Count query
 	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM gateway_provider_configs %s", whereClause)
 	var totalCount int
@@ -478,7 +478,7 @@ func (r *ProviderConfigRepository) SearchConfigs(ctx context.Context, filter *ga
 func (r *ProviderConfigRepository) CountConfigs(ctx context.Context, filter *gateway.ProviderConfigFilter) (int64, error) {
 	whereClause, args := r.buildWhereClause(filter)
 	query := fmt.Sprintf("SELECT COUNT(*) FROM gateway_provider_configs %s", whereClause)
-	
+
 	var count int64
 	err := r.db.WithContext(ctx).Raw(query, args...).Scan(&count).Error
 	if err != nil {
@@ -519,7 +519,7 @@ func (r *ProviderConfigRepository) DeleteBatch(ctx context.Context, ids []ulid.U
 	}
 
 	query := `DELETE FROM gateway_provider_configs WHERE id = ANY($1)`
-	
+
 	// Convert ULIDs to strings for PostgreSQL array
 	stringIDs := make([]string, len(ids))
 	for i, id := range ids {
@@ -940,17 +940,17 @@ func (r *ProviderConfigRepository) TestProviderConnection(ctx context.Context, c
 	// TODO: Implement actual connection testing logic
 	// This would involve making a test request to the provider's API
 	// to verify that the configuration is valid and the connection works
-	
+
 	// For now, just validate that the config has required fields
 	if config.APIKeyEncrypted == "" {
 		return fmt.Errorf("API key is required for provider connection test")
 	}
-	
+
 	// In a real implementation, this would:
 	// 1. Decrypt the API key
 	// 2. Make a test request to the provider's API
 	// 3. Return success/failure based on the response
-	
+
 	return nil // Placeholder - always succeeds
 }
 
@@ -965,25 +965,25 @@ func (r *ProviderConfigRepository) ValidateConfiguration(ctx context.Context, co
 	// TODO: Implement actual validation logic
 	// This would involve validating the provider configuration schema,
 	// checking required fields, validating API key format, etc.
-	
+
 	// Basic validation - check required fields
 	if config.ProviderID.IsZero() {
 		return fmt.Errorf("provider ID is required")
 	}
-	
+
 	if config.ProjectID.IsZero() {
 		return fmt.Errorf("project ID is required")
 	}
-	
+
 	if config.APIKeyEncrypted == "" {
 		return fmt.Errorf("API key is required")
 	}
-	
+
 	// In a full implementation, this would:
 	// 1. Validate against provider-specific schemas
 	// 2. Check API key format
 	// 3. Validate configuration parameters
 	// 4. Test connection to provider
-	
+
 	return nil // Placeholder - always succeeds after basic validation
 }

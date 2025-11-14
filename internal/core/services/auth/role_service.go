@@ -4,8 +4,8 @@ import (
 	"context"
 
 	authDomain "brokle/internal/core/domain/auth"
-	"brokle/pkg/ulid"
 	appErrors "brokle/pkg/errors"
+	"brokle/pkg/ulid"
 )
 
 // roleService implements clean auth.RoleService interface (template roles only)
@@ -38,12 +38,12 @@ func (s *roleService) CreateRole(ctx context.Context, req *authDomain.CreateRole
 	// Check if role already exists with this name and scope
 	existing, err := s.roleRepo.GetByNameAndScope(ctx, req.Name, req.ScopeType)
 	if err == nil && existing != nil {
-		return nil, appErrors.NewConflictError("Role with name "+req.Name+" and scope "+req.ScopeType+" already exists")
+		return nil, appErrors.NewConflictError("Role with name " + req.Name + " and scope " + req.ScopeType + " already exists")
 	}
 
 	// Create new role
 	role := authDomain.NewRole(req.Name, req.ScopeType, req.Description)
-	
+
 	err = s.roleRepo.Create(ctx, role)
 	if err != nil {
 		return nil, appErrors.NewInternalError("Failed to create role", err)
@@ -101,7 +101,7 @@ func (s *roleService) DeleteRole(ctx context.Context, roleID ulid.ULID) error {
 	}
 
 	if builtinRoles[role.Name] {
-		return appErrors.NewForbiddenError("Cannot delete built-in role: "+role.Name)
+		return appErrors.NewForbiddenError("Cannot delete built-in role: " + role.Name)
 	}
 
 	return s.roleRepo.Delete(ctx, roleID)
@@ -169,12 +169,12 @@ func (s *roleService) CreateCustomRole(ctx context.Context, scopeType string, sc
 	// Check if custom role already exists with this name and scope
 	existing, err := s.roleRepo.GetByNameScopeAndID(ctx, req.Name, scopeType, &scopeID)
 	if err == nil && existing != nil {
-		return nil, appErrors.NewConflictError("Custom role with name "+req.Name+" already exists in this scope")
+		return nil, appErrors.NewConflictError("Custom role with name " + req.Name + " already exists in this scope")
 	}
 
 	// Create new custom role
 	role := authDomain.NewCustomRole(req.Name, scopeType, req.Description, scopeID)
-	
+
 	err = s.roleRepo.Create(ctx, role)
 	if err != nil {
 		return nil, appErrors.NewInternalError("Failed to create custom role", err)

@@ -10,44 +10,44 @@ var (
 	ErrInvalidTraceID        = fmt.Errorf("invalid trace ID")
 	ErrExternalTraceIDExists = fmt.Errorf("external trace ID already exists")
 
-	// Observation errors
-	ErrObservationNotFound         = fmt.Errorf("observation not found")
-	ErrObservationAlreadyExists    = fmt.Errorf("observation already exists")
-	ErrInvalidObservationID        = fmt.Errorf("invalid observation ID")
-	ErrObservationTraceNotFound    = fmt.Errorf("observation trace not found")
-	ErrInvalidObservationType      = fmt.Errorf("invalid observation type")
-	ErrObservationAlreadyCompleted = fmt.Errorf("observation already completed")
+	// Span errors
+	ErrSpanNotFound         = fmt.Errorf("span not found")
+	ErrSpanAlreadyExists    = fmt.Errorf("span already exists")
+	ErrInvalidSpanID        = fmt.Errorf("invalid span ID")
+	ErrSpanTraceNotFound    = fmt.Errorf("span trace not found")
+	ErrInvalidSpanType      = fmt.Errorf("invalid span type")
+	ErrSpanAlreadyCompleted = fmt.Errorf("span already completed")
 
 	// Quality score errors
-	ErrQualityScoreNotFound    = fmt.Errorf("quality score not found")
-	ErrInvalidQualityScoreID   = fmt.Errorf("invalid quality score ID")
-	ErrInvalidScoreValue       = fmt.Errorf("invalid score value")
-	ErrInvalidScoreDataType    = fmt.Errorf("invalid score data type")
-	ErrEvaluatorNotFound       = fmt.Errorf("evaluator not found")
-	ErrDuplicateQualityScore   = fmt.Errorf("duplicate quality score for the same trace/observation and score name")
+	ErrQualityScoreNotFound  = fmt.Errorf("quality score not found")
+	ErrInvalidQualityScoreID = fmt.Errorf("invalid quality score ID")
+	ErrInvalidScoreValue     = fmt.Errorf("invalid score value")
+	ErrInvalidScoreDataType  = fmt.Errorf("invalid score data type")
+	ErrEvaluatorNotFound     = fmt.Errorf("evaluator not found")
+	ErrDuplicateQualityScore = fmt.Errorf("duplicate quality score for the same trace/span and score name")
 
 	// General validation errors
-	ErrValidationFailed     = fmt.Errorf("validation failed")
-	ErrInvalidProjectID     = fmt.Errorf("invalid project ID")
-	ErrInvalidUserID        = fmt.Errorf("invalid user ID")
-	ErrInvalidSessionID     = fmt.Errorf("invalid session ID")
-	ErrUnauthorizedAccess   = fmt.Errorf("unauthorized access")
+	ErrValidationFailed        = fmt.Errorf("validation failed")
+	ErrInvalidProjectID        = fmt.Errorf("invalid project ID")
+	ErrInvalidUserID           = fmt.Errorf("invalid user ID")
+	ErrInvalidSessionID        = fmt.Errorf("invalid session ID")
+	ErrUnauthorizedAccess      = fmt.Errorf("unauthorized access")
 	ErrInsufficientPermissions = fmt.Errorf("insufficient permissions")
 
 	// Operation errors
-	ErrBatchOperationFailed = fmt.Errorf("batch operation failed")
+	ErrBatchOperationFailed   = fmt.Errorf("batch operation failed")
 	ErrConcurrentModification = fmt.Errorf("concurrent modification detected")
-	ErrResourceLimitExceeded = fmt.Errorf("resource limit exceeded")
-	ErrInvalidFilter         = fmt.Errorf("invalid filter parameters")
-	ErrInvalidPagination     = fmt.Errorf("invalid pagination parameters")
+	ErrResourceLimitExceeded  = fmt.Errorf("resource limit exceeded")
+	ErrInvalidFilter          = fmt.Errorf("invalid filter parameters")
+	ErrInvalidPagination      = fmt.Errorf("invalid pagination parameters")
 )
 
 // ObservabilityError represents a structured error for observability operations
 type ObservabilityError struct {
-	Code      string                 `json:"code"`
-	Message   string                 `json:"message"`
-	Details   map[string]interface{} `json:"details,omitempty"`
-	Cause     error                  `json:"-"`
+	Code    string                 `json:"code"`
+	Message string                 `json:"message"`
+	Details map[string]interface{} `json:"details,omitempty"`
+	Cause   error                  `json:"-"`
 }
 
 // Error implements the error interface
@@ -99,15 +99,15 @@ const (
 	ErrCodeInvalidTraceID        = "INVALID_TRACE_ID"
 	ErrCodeExternalTraceIDExists = "EXTERNAL_TRACE_ID_EXISTS"
 
-	// Observation error codes
-	ErrCodeObservationNotFound              = "OBSERVATION_NOT_FOUND"
-	ErrCodeObservationAlreadyExists         = "OBSERVATION_ALREADY_EXISTS"
-	ErrCodeInvalidObservationID             = "INVALID_OBSERVATION_ID"
-	ErrCodeObservationTraceNotFound         = "OBSERVATION_TRACE_NOT_FOUND"
-	ErrCodeInvalidObservationType           = "INVALID_OBSERVATION_TYPE"
-	ErrCodeObservationAlreadyCompleted      = "OBSERVATION_ALREADY_COMPLETED"
-	ErrCodeExternalObservationIDExists      = "EXTERNAL_OBSERVATION_ID_EXISTS"
-	ErrCodeValidation                       = "VALIDATION_ERROR"
+	// Span error codes
+	ErrCodeSpanNotFound         = "SPAN_NOT_FOUND"
+	ErrCodeSpanAlreadyExists    = "SPAN_ALREADY_EXISTS"
+	ErrCodeInvalidSpanID        = "INVALID_SPAN_ID"
+	ErrCodeSpanTraceNotFound    = "SPAN_TRACE_NOT_FOUND"
+	ErrCodeInvalidSpanType      = "INVALID_SPAN_TYPE"
+	ErrCodeSpanAlreadyCompleted = "SPAN_ALREADY_COMPLETED"
+	ErrCodeExternalSpanIDExists = "EXTERNAL_SPAN_ID_EXISTS"
+	ErrCodeValidation           = "VALIDATION_ERROR"
 
 	// Quality score error codes
 	ErrCodeQualityScoreNotFound  = "QUALITY_SCORE_NOT_FOUND"
@@ -141,10 +141,10 @@ func NewTraceNotFoundError(traceID string) *ObservabilityError {
 		WithDetail("trace_id", traceID)
 }
 
-// NewObservationNotFoundError creates an observation not found error
-func NewObservationNotFoundError(observationID string) *ObservabilityError {
-	return NewObservabilityError(ErrCodeObservationNotFound, "observation not found").
-		WithDetail("observation_id", observationID)
+// NewSpanNotFoundError creates a span not found error
+func NewSpanNotFoundError(spanID string) *ObservabilityError {
+	return NewObservabilityError(ErrCodeSpanNotFound, "span not found").
+		WithDetail("span_id", spanID)
 }
 
 // ValidationError represents a field validation error
@@ -201,7 +201,7 @@ func NewResourceLimitError(resource string, limit int) *ObservabilityError {
 func IsNotFoundError(err error) bool {
 	if obsErr, ok := err.(*ObservabilityError); ok {
 		return obsErr.Code == ErrCodeTraceNotFound ||
-			obsErr.Code == ErrCodeObservationNotFound ||
+			obsErr.Code == ErrCodeSpanNotFound ||
 			obsErr.Code == ErrCodeQualityScoreNotFound ||
 			obsErr.Code == ErrCodeEvaluatorNotFound
 	}
@@ -213,9 +213,9 @@ func IsValidationError(err error) bool {
 	if obsErr, ok := err.(*ObservabilityError); ok {
 		return obsErr.Code == ErrCodeValidationFailed ||
 			obsErr.Code == ErrCodeInvalidTraceID ||
-			obsErr.Code == ErrCodeInvalidObservationID ||
+			obsErr.Code == ErrCodeInvalidSpanID ||
 			obsErr.Code == ErrCodeInvalidQualityScoreID ||
-			obsErr.Code == ErrCodeInvalidObservationType ||
+			obsErr.Code == ErrCodeInvalidSpanType ||
 			obsErr.Code == ErrCodeInvalidScoreValue ||
 			obsErr.Code == ErrCodeInvalidScoreDataType
 	}
@@ -235,7 +235,7 @@ func IsUnauthorizedError(err error) bool {
 func IsConflictError(err error) bool {
 	if obsErr, ok := err.(*ObservabilityError); ok {
 		return obsErr.Code == ErrCodeTraceAlreadyExists ||
-			obsErr.Code == ErrCodeObservationAlreadyExists ||
+			obsErr.Code == ErrCodeSpanAlreadyExists ||
 			obsErr.Code == ErrCodeExternalTraceIDExists ||
 			obsErr.Code == ErrCodeDuplicateQualityScore ||
 			obsErr.Code == ErrCodeConcurrentModification

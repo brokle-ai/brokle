@@ -30,10 +30,15 @@ export function DataTableBulkActions<TData>({
   table,
 }: DataTableBulkActionsProps<TData>) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  const selectedRows = table.getFilteredSelectedRowModel().rows
+
+  // Get all selected rows across all pages
+  const rowSelection = table.getState().rowSelection
+  const selectedRows = table.getSelectedRowModel().flatRows
+  const selectedTasks = selectedRows.map((row) => row.original as Task)
 
   const handleBulkStatusChange = (status: string) => {
-    const selectedTasks = selectedRows.map((row) => row.original as Task)
+    if (selectedTasks.length === 0) return
+
     toast.promise(sleep(2000), {
       loading: 'Updating status...',
       success: () => {
@@ -42,11 +47,11 @@ export function DataTableBulkActions<TData>({
       },
       error: 'Error',
     })
-    table.resetRowSelection()
   }
 
   const handleBulkPriorityChange = (priority: string) => {
-    const selectedTasks = selectedRows.map((row) => row.original as Task)
+    if (selectedTasks.length === 0) return
+
     toast.promise(sleep(2000), {
       loading: 'Updating priority...',
       success: () => {
@@ -55,11 +60,11 @@ export function DataTableBulkActions<TData>({
       },
       error: 'Error',
     })
-    table.resetRowSelection()
   }
 
   const handleBulkExport = () => {
-    const selectedTasks = selectedRows.map((row) => row.original as Task)
+    if (selectedTasks.length === 0) return
+
     toast.promise(sleep(2000), {
       loading: 'Exporting tasks...',
       success: () => {
@@ -68,7 +73,6 @@ export function DataTableBulkActions<TData>({
       },
       error: 'Error',
     })
-    table.resetRowSelection()
   }
 
   return (

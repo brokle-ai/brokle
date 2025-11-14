@@ -4,8 +4,8 @@ import (
 	"context"
 
 	authDomain "brokle/internal/core/domain/auth"
-	"brokle/pkg/ulid"
 	appErrors "brokle/pkg/errors"
+	"brokle/pkg/ulid"
 )
 
 // organizationMemberService implements the auth.OrganizationMemberService interface
@@ -44,7 +44,7 @@ func (s *organizationMemberService) AddMember(ctx context.Context, userID, orgID
 
 	// Create new membership
 	member := authDomain.NewOrganizationMember(userID, orgID, roleID, invitedBy)
-	
+
 	err = s.orgMemberRepo.Create(ctx, member)
 	if err != nil {
 		return nil, appErrors.NewInternalError("Failed to create membership", err)

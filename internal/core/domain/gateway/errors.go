@@ -5,65 +5,65 @@ import "fmt"
 // Domain errors for gateway operations
 var (
 	// Provider errors
-	ErrProviderNotFound         = fmt.Errorf("provider not found")
-	ErrProviderAlreadyExists    = fmt.Errorf("provider already exists")
-	ErrProviderDisabled         = fmt.Errorf("provider is disabled")
-	ErrProviderUnhealthy        = fmt.Errorf("provider is unhealthy")
-	ErrProviderUnavailable      = fmt.Errorf("provider is unavailable")
-	ErrInvalidProviderID        = fmt.Errorf("invalid provider ID")
-	ErrInvalidProviderType      = fmt.Errorf("invalid provider type")
-	ErrProviderConfigMissing    = fmt.Errorf("provider configuration missing")
-	ErrProviderAPIKeyInvalid    = fmt.Errorf("provider API key is invalid")
+	ErrProviderNotFound          = fmt.Errorf("provider not found")
+	ErrProviderAlreadyExists     = fmt.Errorf("provider already exists")
+	ErrProviderDisabled          = fmt.Errorf("provider is disabled")
+	ErrProviderUnhealthy         = fmt.Errorf("provider is unhealthy")
+	ErrProviderUnavailable       = fmt.Errorf("provider is unavailable")
+	ErrInvalidProviderID         = fmt.Errorf("invalid provider ID")
+	ErrInvalidProviderType       = fmt.Errorf("invalid provider type")
+	ErrProviderConfigMissing     = fmt.Errorf("provider configuration missing")
+	ErrProviderAPIKeyInvalid     = fmt.Errorf("provider API key is invalid")
 	ErrProviderRateLimitExceeded = fmt.Errorf("provider rate limit exceeded")
 
 	// Model errors
-	ErrModelNotFound         = fmt.Errorf("model not found")
-	ErrModelAlreadyExists    = fmt.Errorf("model already exists")
-	ErrModelDisabled         = fmt.Errorf("model is disabled")
-	ErrModelNotSupported     = fmt.Errorf("model not supported by provider")
-	ErrInvalidModelID        = fmt.Errorf("invalid model ID")
-	ErrInvalidModelType      = fmt.Errorf("invalid model type")
-	ErrModelContextExceeded  = fmt.Errorf("model context length exceeded")
+	ErrModelNotFound           = fmt.Errorf("model not found")
+	ErrModelAlreadyExists      = fmt.Errorf("model already exists")
+	ErrModelDisabled           = fmt.Errorf("model is disabled")
+	ErrModelNotSupported       = fmt.Errorf("model not supported by provider")
+	ErrInvalidModelID          = fmt.Errorf("invalid model ID")
+	ErrInvalidModelType        = fmt.Errorf("invalid model type")
+	ErrModelContextExceeded    = fmt.Errorf("model context length exceeded")
 	ErrModelTokenLimitExceeded = fmt.Errorf("model token limit exceeded")
 
 	// Routing errors
-	ErrNoProvidersAvailable     = fmt.Errorf("no providers available for routing")
-	ErrNoModelsAvailable        = fmt.Errorf("no models available for routing")
-	ErrRoutingStrategyInvalid   = fmt.Errorf("invalid routing strategy")
-	ErrRoutingDecisionFailed    = fmt.Errorf("routing decision failed")
-	ErrAllProvidersFailed       = fmt.Errorf("all providers failed")
-	ErrFallbackProviderFailed   = fmt.Errorf("fallback provider failed")
-	ErrCircularRoutingDetected  = fmt.Errorf("circular routing detected")
+	ErrNoProvidersAvailable    = fmt.Errorf("no providers available for routing")
+	ErrNoModelsAvailable       = fmt.Errorf("no models available for routing")
+	ErrRoutingStrategyInvalid  = fmt.Errorf("invalid routing strategy")
+	ErrRoutingDecisionFailed   = fmt.Errorf("routing decision failed")
+	ErrAllProvidersFailed      = fmt.Errorf("all providers failed")
+	ErrFallbackProviderFailed  = fmt.Errorf("fallback provider failed")
+	ErrCircularRoutingDetected = fmt.Errorf("circular routing detected")
 
 	// Configuration errors
-	ErrProviderConfigNotFound    = fmt.Errorf("provider configuration not found")
-	ErrProviderConfigInvalid     = fmt.Errorf("provider configuration is invalid")
-	ErrAPIKeyNotConfigured       = fmt.Errorf("API key not configured for provider")
-	ErrAPIKeyEncryptionFailed    = fmt.Errorf("API key encryption failed")
-	ErrAPIKeyDecryptionFailed    = fmt.Errorf("API key decryption failed")
-	ErrConfigValidationFailed    = fmt.Errorf("configuration validation failed")
+	ErrProviderConfigNotFound = fmt.Errorf("provider configuration not found")
+	ErrProviderConfigInvalid  = fmt.Errorf("provider configuration is invalid")
+	ErrAPIKeyNotConfigured    = fmt.Errorf("API key not configured for provider")
+	ErrAPIKeyEncryptionFailed = fmt.Errorf("API key encryption failed")
+	ErrAPIKeyDecryptionFailed = fmt.Errorf("API key decryption failed")
+	ErrConfigValidationFailed = fmt.Errorf("configuration validation failed")
 
 	// Cache errors
-	ErrCacheNotFound            = fmt.Errorf("cache entry not found")
-	ErrCacheExpired             = fmt.Errorf("cache entry expired")
-	ErrCacheKeyGenerationFailed = fmt.Errorf("cache key generation failed")
-	ErrCacheSerializationFailed = fmt.Errorf("cache serialization failed")
+	ErrCacheNotFound              = fmt.Errorf("cache entry not found")
+	ErrCacheExpired               = fmt.Errorf("cache entry expired")
+	ErrCacheKeyGenerationFailed   = fmt.Errorf("cache key generation failed")
+	ErrCacheSerializationFailed   = fmt.Errorf("cache serialization failed")
 	ErrCacheDeserializationFailed = fmt.Errorf("cache deserialization failed")
 
 	// Request errors
-	ErrRequestValidationFailed  = fmt.Errorf("request validation failed")
-	ErrRequestTimeout           = fmt.Errorf("request timeout")
-	ErrRequestTooLarge          = fmt.Errorf("request too large")
-	ErrInvalidRequestFormat     = fmt.Errorf("invalid request format")
-	ErrUnsupportedRequestType   = fmt.Errorf("unsupported request type")
-	ErrRequestQuotaExceeded     = fmt.Errorf("request quota exceeded")
+	ErrRequestValidationFailed = fmt.Errorf("request validation failed")
+	ErrRequestTimeout          = fmt.Errorf("request timeout")
+	ErrRequestTooLarge         = fmt.Errorf("request too large")
+	ErrInvalidRequestFormat    = fmt.Errorf("invalid request format")
+	ErrUnsupportedRequestType  = fmt.Errorf("unsupported request type")
+	ErrRequestQuotaExceeded    = fmt.Errorf("request quota exceeded")
 
 	// Authentication errors
-	ErrAuthenticationFailed     = fmt.Errorf("authentication failed")
-	ErrAuthorizationFailed      = fmt.Errorf("authorization failed")
-	ErrInvalidAPIKey            = fmt.Errorf("invalid API key")
-	ErrAPIKeyExpired            = fmt.Errorf("API key expired")
-	ErrInsufficientPermissions  = fmt.Errorf("insufficient permissions")
+	ErrAuthenticationFailed    = fmt.Errorf("authentication failed")
+	ErrAuthorizationFailed     = fmt.Errorf("authorization failed")
+	ErrInvalidAPIKey           = fmt.Errorf("invalid API key")
+	ErrAPIKeyExpired           = fmt.Errorf("API key expired")
+	ErrInsufficientPermissions = fmt.Errorf("insufficient permissions")
 
 	// Health monitoring errors
 	ErrHealthCheckFailed        = fmt.Errorf("health check failed")
@@ -71,27 +71,27 @@ var (
 	ErrProviderHealthUnknown    = fmt.Errorf("provider health status unknown")
 
 	// General validation errors
-	ErrValidationFailed         = fmt.Errorf("validation failed")
-	ErrInvalidProjectID         = fmt.Errorf("invalid project ID")
-	ErrInvalidUserID            = fmt.Errorf("invalid user ID")
-	ErrInvalidEnvironment       = fmt.Errorf("invalid environment")
-	ErrResourceNotFound         = fmt.Errorf("resource not found")
-	ErrUnauthorizedAccess       = fmt.Errorf("unauthorized access")
+	ErrValidationFailed   = fmt.Errorf("validation failed")
+	ErrInvalidProjectID   = fmt.Errorf("invalid project ID")
+	ErrInvalidUserID      = fmt.Errorf("invalid user ID")
+	ErrInvalidEnvironment = fmt.Errorf("invalid environment")
+	ErrResourceNotFound   = fmt.Errorf("resource not found")
+	ErrUnauthorizedAccess = fmt.Errorf("unauthorized access")
 
 	// Operation errors
-	ErrOperationFailed          = fmt.Errorf("operation failed")
-	ErrConcurrentModification   = fmt.Errorf("concurrent modification detected")
-	ErrResourceLimitExceeded    = fmt.Errorf("resource limit exceeded")
-	ErrInvalidFilter            = fmt.Errorf("invalid filter parameters")
-	ErrInvalidPagination        = fmt.Errorf("invalid pagination parameters")
+	ErrOperationFailed        = fmt.Errorf("operation failed")
+	ErrConcurrentModification = fmt.Errorf("concurrent modification detected")
+	ErrResourceLimitExceeded  = fmt.Errorf("resource limit exceeded")
+	ErrInvalidFilter          = fmt.Errorf("invalid filter parameters")
+	ErrInvalidPagination      = fmt.Errorf("invalid pagination parameters")
 )
 
 // GatewayError represents a structured error for gateway operations
 type GatewayError struct {
-	Code      string                 `json:"code"`
-	Message   string                 `json:"message"`
-	Details   map[string]interface{} `json:"details,omitempty"`
-	Cause     error                  `json:"-"`
+	Code    string                 `json:"code"`
+	Message string                 `json:"message"`
+	Details map[string]interface{} `json:"details,omitempty"`
+	Cause   error                  `json:"-"`
 }
 
 // Error implements the error interface
@@ -138,65 +138,65 @@ func (e *GatewayError) WithDetail(key string, value interface{}) *GatewayError {
 // Error codes for different types of errors
 const (
 	// Provider error codes
-	ErrCodeProviderNotFound         = "PROVIDER_NOT_FOUND"
-	ErrCodeProviderAlreadyExists    = "PROVIDER_ALREADY_EXISTS"
-	ErrCodeProviderDisabled         = "PROVIDER_DISABLED"
-	ErrCodeProviderUnhealthy        = "PROVIDER_UNHEALTHY"
-	ErrCodeProviderUnavailable      = "PROVIDER_UNAVAILABLE"
-	ErrCodeInvalidProviderID        = "INVALID_PROVIDER_ID"
-	ErrCodeInvalidProviderType      = "INVALID_PROVIDER_TYPE"
-	ErrCodeProviderConfigMissing    = "PROVIDER_CONFIG_MISSING"
-	ErrCodeProviderAPIKeyInvalid    = "PROVIDER_API_KEY_INVALID"
+	ErrCodeProviderNotFound          = "PROVIDER_NOT_FOUND"
+	ErrCodeProviderAlreadyExists     = "PROVIDER_ALREADY_EXISTS"
+	ErrCodeProviderDisabled          = "PROVIDER_DISABLED"
+	ErrCodeProviderUnhealthy         = "PROVIDER_UNHEALTHY"
+	ErrCodeProviderUnavailable       = "PROVIDER_UNAVAILABLE"
+	ErrCodeInvalidProviderID         = "INVALID_PROVIDER_ID"
+	ErrCodeInvalidProviderType       = "INVALID_PROVIDER_TYPE"
+	ErrCodeProviderConfigMissing     = "PROVIDER_CONFIG_MISSING"
+	ErrCodeProviderAPIKeyInvalid     = "PROVIDER_API_KEY_INVALID"
 	ErrCodeProviderRateLimitExceeded = "PROVIDER_RATE_LIMIT_EXCEEDED"
 
 	// Model error codes
-	ErrCodeModelNotFound         = "MODEL_NOT_FOUND"
-	ErrCodeModelAlreadyExists    = "MODEL_ALREADY_EXISTS"
-	ErrCodeModelDisabled         = "MODEL_DISABLED"
-	ErrCodeModelNotSupported     = "MODEL_NOT_SUPPORTED"
-	ErrCodeInvalidModelID        = "INVALID_MODEL_ID"
-	ErrCodeInvalidModelType      = "INVALID_MODEL_TYPE"
-	ErrCodeModelContextExceeded  = "MODEL_CONTEXT_EXCEEDED"
+	ErrCodeModelNotFound           = "MODEL_NOT_FOUND"
+	ErrCodeModelAlreadyExists      = "MODEL_ALREADY_EXISTS"
+	ErrCodeModelDisabled           = "MODEL_DISABLED"
+	ErrCodeModelNotSupported       = "MODEL_NOT_SUPPORTED"
+	ErrCodeInvalidModelID          = "INVALID_MODEL_ID"
+	ErrCodeInvalidModelType        = "INVALID_MODEL_TYPE"
+	ErrCodeModelContextExceeded    = "MODEL_CONTEXT_EXCEEDED"
 	ErrCodeModelTokenLimitExceeded = "MODEL_TOKEN_LIMIT_EXCEEDED"
 
 	// Routing error codes
-	ErrCodeNoProvidersAvailable     = "NO_PROVIDERS_AVAILABLE"
-	ErrCodeNoModelsAvailable        = "NO_MODELS_AVAILABLE"
-	ErrCodeRoutingStrategyInvalid   = "ROUTING_STRATEGY_INVALID"
-	ErrCodeRoutingDecisionFailed    = "ROUTING_DECISION_FAILED"
-	ErrCodeAllProvidersFailed       = "ALL_PROVIDERS_FAILED"
-	ErrCodeFallbackProviderFailed   = "FALLBACK_PROVIDER_FAILED"
-	ErrCodeCircularRoutingDetected  = "CIRCULAR_ROUTING_DETECTED"
+	ErrCodeNoProvidersAvailable    = "NO_PROVIDERS_AVAILABLE"
+	ErrCodeNoModelsAvailable       = "NO_MODELS_AVAILABLE"
+	ErrCodeRoutingStrategyInvalid  = "ROUTING_STRATEGY_INVALID"
+	ErrCodeRoutingDecisionFailed   = "ROUTING_DECISION_FAILED"
+	ErrCodeAllProvidersFailed      = "ALL_PROVIDERS_FAILED"
+	ErrCodeFallbackProviderFailed  = "FALLBACK_PROVIDER_FAILED"
+	ErrCodeCircularRoutingDetected = "CIRCULAR_ROUTING_DETECTED"
 
 	// Configuration error codes
-	ErrCodeProviderConfigNotFound    = "PROVIDER_CONFIG_NOT_FOUND"
-	ErrCodeProviderConfigInvalid     = "PROVIDER_CONFIG_INVALID"
-	ErrCodeAPIKeyNotConfigured       = "API_KEY_NOT_CONFIGURED"
-	ErrCodeAPIKeyEncryptionFailed    = "API_KEY_ENCRYPTION_FAILED"
-	ErrCodeAPIKeyDecryptionFailed    = "API_KEY_DECRYPTION_FAILED"
-	ErrCodeConfigValidationFailed    = "CONFIG_VALIDATION_FAILED"
+	ErrCodeProviderConfigNotFound = "PROVIDER_CONFIG_NOT_FOUND"
+	ErrCodeProviderConfigInvalid  = "PROVIDER_CONFIG_INVALID"
+	ErrCodeAPIKeyNotConfigured    = "API_KEY_NOT_CONFIGURED"
+	ErrCodeAPIKeyEncryptionFailed = "API_KEY_ENCRYPTION_FAILED"
+	ErrCodeAPIKeyDecryptionFailed = "API_KEY_DECRYPTION_FAILED"
+	ErrCodeConfigValidationFailed = "CONFIG_VALIDATION_FAILED"
 
 	// Cache error codes
-	ErrCodeCacheNotFound            = "CACHE_NOT_FOUND"
-	ErrCodeCacheExpired             = "CACHE_EXPIRED"
-	ErrCodeCacheKeyGenerationFailed = "CACHE_KEY_GENERATION_FAILED"
-	ErrCodeCacheSerializationFailed = "CACHE_SERIALIZATION_FAILED"
+	ErrCodeCacheNotFound              = "CACHE_NOT_FOUND"
+	ErrCodeCacheExpired               = "CACHE_EXPIRED"
+	ErrCodeCacheKeyGenerationFailed   = "CACHE_KEY_GENERATION_FAILED"
+	ErrCodeCacheSerializationFailed   = "CACHE_SERIALIZATION_FAILED"
 	ErrCodeCacheDeserializationFailed = "CACHE_DESERIALIZATION_FAILED"
 
 	// Request error codes
-	ErrCodeRequestValidationFailed  = "REQUEST_VALIDATION_FAILED"
-	ErrCodeRequestTimeout           = "REQUEST_TIMEOUT"
-	ErrCodeRequestTooLarge          = "REQUEST_TOO_LARGE"
-	ErrCodeInvalidRequestFormat     = "INVALID_REQUEST_FORMAT"
-	ErrCodeUnsupportedRequestType   = "UNSUPPORTED_REQUEST_TYPE"
-	ErrCodeRequestQuotaExceeded     = "REQUEST_QUOTA_EXCEEDED"
+	ErrCodeRequestValidationFailed = "REQUEST_VALIDATION_FAILED"
+	ErrCodeRequestTimeout          = "REQUEST_TIMEOUT"
+	ErrCodeRequestTooLarge         = "REQUEST_TOO_LARGE"
+	ErrCodeInvalidRequestFormat    = "INVALID_REQUEST_FORMAT"
+	ErrCodeUnsupportedRequestType  = "UNSUPPORTED_REQUEST_TYPE"
+	ErrCodeRequestQuotaExceeded    = "REQUEST_QUOTA_EXCEEDED"
 
 	// Authentication error codes
-	ErrCodeAuthenticationFailed     = "AUTHENTICATION_FAILED"
-	ErrCodeAuthorizationFailed      = "AUTHORIZATION_FAILED"
-	ErrCodeInvalidAPIKey            = "INVALID_API_KEY"
-	ErrCodeAPIKeyExpired            = "API_KEY_EXPIRED"
-	ErrCodeInsufficientPermissions  = "INSUFFICIENT_PERMISSIONS"
+	ErrCodeAuthenticationFailed    = "AUTHENTICATION_FAILED"
+	ErrCodeAuthorizationFailed     = "AUTHORIZATION_FAILED"
+	ErrCodeInvalidAPIKey           = "INVALID_API_KEY"
+	ErrCodeAPIKeyExpired           = "API_KEY_EXPIRED"
+	ErrCodeInsufficientPermissions = "INSUFFICIENT_PERMISSIONS"
 
 	// Health monitoring error codes
 	ErrCodeHealthCheckFailed        = "HEALTH_CHECK_FAILED"
@@ -204,19 +204,19 @@ const (
 	ErrCodeProviderHealthUnknown    = "PROVIDER_HEALTH_UNKNOWN"
 
 	// General validation error codes
-	ErrCodeValidationFailed         = "VALIDATION_FAILED"
-	ErrCodeInvalidProjectID         = "INVALID_PROJECT_ID"
-	ErrCodeInvalidUserID            = "INVALID_USER_ID"
-	ErrCodeInvalidEnvironment       = "INVALID_ENVIRONMENT"
-	ErrCodeResourceNotFound         = "RESOURCE_NOT_FOUND"
-	ErrCodeUnauthorizedAccess       = "UNAUTHORIZED_ACCESS"
+	ErrCodeValidationFailed   = "VALIDATION_FAILED"
+	ErrCodeInvalidProjectID   = "INVALID_PROJECT_ID"
+	ErrCodeInvalidUserID      = "INVALID_USER_ID"
+	ErrCodeInvalidEnvironment = "INVALID_ENVIRONMENT"
+	ErrCodeResourceNotFound   = "RESOURCE_NOT_FOUND"
+	ErrCodeUnauthorizedAccess = "UNAUTHORIZED_ACCESS"
 
 	// Operation error codes
-	ErrCodeOperationFailed          = "OPERATION_FAILED"
-	ErrCodeConcurrentModification   = "CONCURRENT_MODIFICATION"
-	ErrCodeResourceLimitExceeded    = "RESOURCE_LIMIT_EXCEEDED"
-	ErrCodeInvalidFilter            = "INVALID_FILTER"
-	ErrCodeInvalidPagination        = "INVALID_PAGINATION"
+	ErrCodeOperationFailed        = "OPERATION_FAILED"
+	ErrCodeConcurrentModification = "CONCURRENT_MODIFICATION"
+	ErrCodeResourceLimitExceeded  = "RESOURCE_LIMIT_EXCEEDED"
+	ErrCodeInvalidFilter          = "INVALID_FILTER"
+	ErrCodeInvalidPagination      = "INVALID_PAGINATION"
 )
 
 // Convenience functions for creating common errors

@@ -6,8 +6,8 @@ import (
 	"time"
 
 	userDomain "brokle/internal/core/domain/user"
-	"brokle/pkg/ulid"
 	appErrors "brokle/pkg/errors"
+	"brokle/pkg/ulid"
 )
 
 // profileService implements the user.ProfileService interface
@@ -90,7 +90,7 @@ func (s *profileService) UploadAvatar(ctx context.Context, userID ulid.ULID, ima
 	// TODO: Implement actual image upload to storage service
 	// For now, just simulate with a placeholder URL
 	avatarURL := fmt.Sprintf("https://api.example.com/avatars/%s.jpg", userID.String())
-	
+
 	profile.AvatarURL = &avatarURL
 	profile.UpdatedAt = time.Now()
 
@@ -207,7 +207,7 @@ func (s *profileService) GetProfileCompleteness(ctx context.Context, userID ulid
 	// Check extended info from profile (already fetched above)
 	extendedFields := 0
 	totalExtendedFields := 3
-	
+
 	if profile != nil && profile.Bio != nil && *profile.Bio != "" {
 		completeness.CompletedFields = append(completeness.CompletedFields, "bio")
 		extendedFields++
@@ -353,14 +353,14 @@ func (s *profileService) GetThemePreferences(ctx context.Context, userID ulid.UL
 
 	return &userDomain.ThemePreferences{
 		Theme:          profile.Theme,
-		PrimaryColor:   "#007bff",        // Default blue
+		PrimaryColor:   "#007bff", // Default blue
 		Language:       user.Language,
-		TimeFormat:     "12h",            // Default
-		DateFormat:     "MM/dd/yyyy",     // Default
+		TimeFormat:     "12h",        // Default
+		DateFormat:     "MM/dd/yyyy", // Default
 		Timezone:       user.Timezone,
-		CompactMode:    false,                 // Default
-		ShowAnimations: true,                  // Default
-		HighContrast:   false,                 // Default
+		CompactMode:    false, // Default
+		ShowAnimations: true,  // Default
+		HighContrast:   false, // Default
 	}, nil
 }
 
@@ -413,12 +413,12 @@ func (s *profileService) GetPrivacyPreferences(ctx context.Context, userID ulid.
 	// Return default privacy preferences since they're not in the current model
 	return &userDomain.PrivacyPreferences{
 		ProfileVisibility:      userDomain.ProfileVisibilityPublic, // Default
-		ShowEmail:              false,                         // Default private
-		ShowLastSeen:           true,                          // Default
-		AllowDirectMessages:    true,                          // Default
-		DataProcessingConsent:  true,                          // Required
-		AnalyticsConsent:       true,                          // Default
-		ThirdPartyIntegrations: false,                         // Default private
+		ShowEmail:              false,                              // Default private
+		ShowLastSeen:           true,                               // Default
+		AllowDirectMessages:    true,                               // Default
+		DataProcessingConsent:  true,                               // Required
+		AnalyticsConsent:       true,                               // Default
+		ThirdPartyIntegrations: false,                              // Default private
 	}, nil
 }
 

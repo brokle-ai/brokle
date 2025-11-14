@@ -5,8 +5,8 @@ import (
 	"time"
 
 	authDomain "brokle/internal/core/domain/auth"
-	"brokle/pkg/ulid"
 	appErrors "brokle/pkg/errors"
+	"brokle/pkg/ulid"
 )
 
 // blacklistedTokenService implements the auth.BlacklistedTokenService interface
@@ -30,7 +30,7 @@ func (s *blacklistedTokenService) BlacklistToken(ctx context.Context, jti string
 	if err != nil {
 		return appErrors.NewInternalError("Failed to check token blacklist status", err)
 	}
-	
+
 	if isBlacklisted {
 		// Token is already blacklisted, no need to add again
 		return nil
@@ -38,13 +38,12 @@ func (s *blacklistedTokenService) BlacklistToken(ctx context.Context, jti string
 
 	// Create blacklisted token entry
 	blacklistedToken := authDomain.NewBlacklistedToken(jti, userID, expiresAt, reason)
-	
+
 	// Add to blacklist
 	err = s.blacklistedTokenRepo.Create(ctx, blacklistedToken)
 	if err != nil {
 		return appErrors.NewInternalError("Failed to blacklist token", err)
 	}
-
 
 	return nil
 }
@@ -62,12 +61,11 @@ func (s *blacklistedTokenService) GetBlacklistedToken(ctx context.Context, jti s
 // CreateUserTimestampBlacklist creates a user-wide timestamp blacklist for GDPR/SOC2 compliance
 func (s *blacklistedTokenService) CreateUserTimestampBlacklist(ctx context.Context, userID ulid.ULID, reason string) error {
 	blacklistTimestamp := time.Now().Unix()
-	
+
 	err := s.blacklistedTokenRepo.CreateUserTimestampBlacklist(ctx, userID, blacklistTimestamp, reason)
 	if err != nil {
 		return appErrors.NewInternalError("Failed to create user timestamp blacklist", err)
 	}
-
 
 	return nil
 }
@@ -100,7 +98,6 @@ func (s *blacklistedTokenService) CleanupExpiredTokens(ctx context.Context) erro
 		return appErrors.NewInternalError("Failed to cleanup expired tokens", err)
 	}
 
-
 	return nil
 }
 
@@ -110,7 +107,6 @@ func (s *blacklistedTokenService) CleanupOldTokens(ctx context.Context, olderTha
 	if err != nil {
 		return appErrors.NewInternalError("Failed to cleanup old tokens", err)
 	}
-
 
 	return nil
 }

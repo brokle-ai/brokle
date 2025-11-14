@@ -66,14 +66,14 @@ func NewLicenseService(cfg *config.Config, logger *logrus.Logger, redisClient *r
 func (ls *LicenseService) ValidateLicense(ctx context.Context) (*LicenseStatus, error) {
 	return &LicenseStatus{
 		License: &LicenseInfo{
-			Key:        "oss",
-			Type:       "open-source",
-			ValidUntil: time.Now().AddDate(100, 0, 0), // Always valid
-			MaxRequests: -1, // Unlimited
-			MaxUsers:    -1, // Unlimited
-			MaxProjects: -1, // Unlimited
-			Features:   []string{}, // No enterprise features
-			IsValid:    true,
+			Key:           "oss",
+			Type:          "open-source",
+			ValidUntil:    time.Now().AddDate(100, 0, 0), // Always valid
+			MaxRequests:   -1,                            // Unlimited
+			MaxUsers:      -1,                            // Unlimited
+			MaxProjects:   -1,                            // Unlimited
+			Features:      []string{},                    // No enterprise features
+			IsValid:       true,
 			LastValidated: time.Now(),
 		},
 		Usage: &UsageInfo{

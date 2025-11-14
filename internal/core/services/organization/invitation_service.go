@@ -8,8 +8,8 @@ import (
 	authDomain "brokle/internal/core/domain/auth"
 	orgDomain "brokle/internal/core/domain/organization"
 	userDomain "brokle/internal/core/domain/user"
-	"brokle/pkg/ulid"
 	appErrors "brokle/pkg/errors"
+	"brokle/pkg/ulid"
 )
 
 // invitationService implements the orgDomain.InvitationService interface
@@ -69,7 +69,6 @@ func (s *invitationService) InviteUser(ctx context.Context, orgID ulid.ULID, inv
 		return nil, appErrors.NewInternalError("Failed to create invitation", err)
 	}
 
-
 	return invitation, nil
 }
 
@@ -124,7 +123,6 @@ func (s *invitationService) AcceptInvitation(ctx context.Context, token string, 
 		}
 	}
 
-
 	return nil
 }
 
@@ -147,7 +145,6 @@ func (s *invitationService) DeclineInvitation(ctx context.Context, token string)
 	if err != nil {
 		return appErrors.NewInternalError("Failed to update invitation", err)
 	}
-
 
 	return nil
 }
@@ -172,7 +169,6 @@ func (s *invitationService) RevokeInvitation(ctx context.Context, invitationID u
 		return appErrors.NewInternalError("Failed to update invitation", err)
 	}
 
-
 	return nil
 }
 
@@ -195,7 +191,6 @@ func (s *invitationService) ResendInvitation(ctx context.Context, invitationID u
 	if err != nil {
 		return appErrors.NewInternalError("Failed to update invitation", err)
 	}
-
 
 	return nil
 }

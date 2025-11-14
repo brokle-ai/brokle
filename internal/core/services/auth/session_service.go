@@ -8,10 +8,9 @@ import (
 	"brokle/internal/config"
 	authDomain "brokle/internal/core/domain/auth"
 	userDomain "brokle/internal/core/domain/user"
-	"brokle/pkg/ulid"
 	appErrors "brokle/pkg/errors"
+	"brokle/pkg/ulid"
 )
-
 
 // sessionService implements the auth.SessionService interface
 type sessionService struct {
@@ -36,13 +35,10 @@ func NewSessionService(
 	}
 }
 
-
 // GetSession retrieves a session by ID
 func (s *sessionService) GetSession(ctx context.Context, sessionID ulid.ULID) (*authDomain.UserSession, error) {
 	return s.sessionRepo.GetByID(ctx, sessionID)
 }
-
-
 
 // RevokeSession revokes a specific session
 func (s *sessionService) RevokeSession(ctx context.Context, sessionID ulid.ULID) error {
@@ -55,7 +51,6 @@ func (s *sessionService) RevokeSession(ctx context.Context, sessionID ulid.ULID)
 	if err != nil {
 		return appErrors.NewInternalError("Failed to revoke session", err)
 	}
-
 
 	return nil
 }
@@ -72,7 +67,6 @@ func (s *sessionService) RevokeUserSessions(ctx context.Context, userID ulid.ULI
 		return appErrors.NewInternalError("Failed to revoke user sessions", err)
 	}
 
-
 	return nil
 }
 
@@ -85,7 +79,6 @@ func (s *sessionService) CleanupExpiredSessions(ctx context.Context) error {
 func (s *sessionService) GetActiveSessions(ctx context.Context, userID ulid.ULID) ([]*authDomain.UserSession, error) {
 	return s.sessionRepo.GetActiveSessionsByUserID(ctx, userID)
 }
-
 
 // hashToken creates a SHA-256 hash of a token for secure storage
 func (s *sessionService) hashToken(token string) string {

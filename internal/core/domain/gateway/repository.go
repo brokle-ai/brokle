@@ -260,37 +260,37 @@ type CacheRepository interface {
 
 // ProviderFilter represents filtering options for provider queries
 type ProviderFilter struct {
-	ProjectID    *ulid.ULID     `json:"project_id,omitempty"`
-	ProviderType *ProviderType  `json:"provider_type,omitempty"`
-	IsEnabled    *bool          `json:"is_enabled,omitempty"`
-	HealthStatus *HealthStatus  `json:"health_status,omitempty"`
-	Search       *string        `json:"search,omitempty"`
-	CreatedAfter *time.Time     `json:"created_after,omitempty"`
+	ProjectID     *ulid.ULID    `json:"project_id,omitempty"`
+	ProviderType  *ProviderType `json:"provider_type,omitempty"`
+	IsEnabled     *bool         `json:"is_enabled,omitempty"`
+	HealthStatus  *HealthStatus `json:"health_status,omitempty"`
+	Search        *string       `json:"search,omitempty"`
+	CreatedAfter  *time.Time    `json:"created_after,omitempty"`
 	CreatedBefore *time.Time    `json:"created_before,omitempty"`
 }
 
 // ModelFilter represents filtering options for model queries
 type ModelFilter struct {
-	ProviderID       *ulid.ULID  `json:"provider_id,omitempty"`
-	ModelType        *ModelType  `json:"model_type,omitempty"`
-	IsEnabled        *bool       `json:"is_enabled,omitempty"`
+	ProviderID        *ulid.ULID `json:"provider_id,omitempty"`
+	ModelType         *ModelType `json:"model_type,omitempty"`
+	IsEnabled         *bool      `json:"is_enabled,omitempty"`
 	SupportsStreaming *bool      `json:"supports_streaming,omitempty"`
 	SupportsFunctions *bool      `json:"supports_functions,omitempty"`
-	SupportsVision   *bool       `json:"supports_vision,omitempty"`
-	MinCostPer1k     *float64    `json:"min_cost_per_1k,omitempty"`
-	MaxCostPer1k     *float64    `json:"max_cost_per_1k,omitempty"`
-	MinContextTokens *int        `json:"min_context_tokens,omitempty"`
-	MaxContextTokens *int        `json:"max_context_tokens,omitempty"`
-	Search           *string     `json:"search,omitempty"`
+	SupportsVision    *bool      `json:"supports_vision,omitempty"`
+	MinCostPer1k      *float64   `json:"min_cost_per_1k,omitempty"`
+	MaxCostPer1k      *float64   `json:"max_cost_per_1k,omitempty"`
+	MinContextTokens  *int       `json:"min_context_tokens,omitempty"`
+	MaxContextTokens  *int       `json:"max_context_tokens,omitempty"`
+	Search            *string    `json:"search,omitempty"`
 }
 
 // ProviderConfigFilter represents filtering options for provider config queries
 type ProviderConfigFilter struct {
-	ProjectID  *ulid.ULID `json:"project_id,omitempty"`
-	ProviderID *ulid.ULID `json:"provider_id,omitempty"`
-	IsEnabled  *bool      `json:"is_enabled,omitempty"`
-	MinPriority *int      `json:"min_priority,omitempty"`
-	MaxPriority *int      `json:"max_priority,omitempty"`
+	ProjectID   *ulid.ULID `json:"project_id,omitempty"`
+	ProviderID  *ulid.ULID `json:"provider_id,omitempty"`
+	IsEnabled   *bool      `json:"is_enabled,omitempty"`
+	MinPriority *int       `json:"min_priority,omitempty"`
+	MaxPriority *int       `json:"max_priority,omitempty"`
 }
 
 // RoutingRuleFilter represents filtering options for routing rule queries
@@ -305,11 +305,11 @@ type RoutingRuleFilter struct {
 
 // CacheFilter represents filtering options for cache queries
 type CacheFilter struct {
-	ProjectID    *ulid.ULID `json:"project_id,omitempty"`
-	ModelName    *string    `json:"model_name,omitempty"`
-	MinHitCount  *int       `json:"min_hit_count,omitempty"`
-	IsExpired    *bool      `json:"is_expired,omitempty"`
-	CreatedAfter *time.Time `json:"created_after,omitempty"`
+	ProjectID     *ulid.ULID `json:"project_id,omitempty"`
+	ModelName     *string    `json:"model_name,omitempty"`
+	MinHitCount   *int       `json:"min_hit_count,omitempty"`
+	IsExpired     *bool      `json:"is_expired,omitempty"`
+	CreatedAfter  *time.Time `json:"created_after,omitempty"`
 	CreatedBefore *time.Time `json:"created_before,omitempty"`
 }
 
@@ -328,25 +328,25 @@ type ModelRequirements struct {
 
 // HealthMetricsData contains health metrics data for updates
 type HealthMetricsData struct {
-	AvgLatencyMs     *int     `json:"avg_latency_ms,omitempty"`
-	SuccessRate      *float64 `json:"success_rate,omitempty"`
-	RequestsPerMinute *int    `json:"requests_per_minute,omitempty"`
-	ErrorsPerMinute  *int     `json:"errors_per_minute,omitempty"`
-	ResponseTimeP95  *int     `json:"response_time_p95,omitempty"`
-	ResponseTimeP99  *int     `json:"response_time_p99,omitempty"`
-	UptimePercentage *float64 `json:"uptime_percentage,omitempty"`
-	LastError        *string  `json:"last_error,omitempty"`
+	AvgLatencyMs      *int     `json:"avg_latency_ms,omitempty"`
+	SuccessRate       *float64 `json:"success_rate,omitempty"`
+	RequestsPerMinute *int     `json:"requests_per_minute,omitempty"`
+	ErrorsPerMinute   *int     `json:"errors_per_minute,omitempty"`
+	ResponseTimeP95   *int     `json:"response_time_p95,omitempty"`
+	ResponseTimeP99   *int     `json:"response_time_p99,omitempty"`
+	UptimePercentage  *float64 `json:"uptime_percentage,omitempty"`
+	LastError         *string  `json:"last_error,omitempty"`
 }
 
 // CacheStats contains cache statistics
 type CacheStats struct {
-	TotalEntries    int64   `json:"total_entries"`
-	HitRate         float64 `json:"hit_rate"`
-	TotalHits       int64   `json:"total_hits"`
-	TotalMisses     int64   `json:"total_misses"`
-	TotalSize       int64   `json:"total_size"`
-	ExpiredEntries  int64   `json:"expired_entries"`
-	AvgHitCount     float64 `json:"avg_hit_count"`
-	TopModels       []string `json:"top_models"`
-	CostSavings     float64 `json:"cost_savings"`
+	TotalEntries   int64    `json:"total_entries"`
+	HitRate        float64  `json:"hit_rate"`
+	TotalHits      int64    `json:"total_hits"`
+	TotalMisses    int64    `json:"total_misses"`
+	TotalSize      int64    `json:"total_size"`
+	ExpiredEntries int64    `json:"expired_entries"`
+	AvgHitCount    float64  `json:"avg_hit_count"`
+	TopModels      []string `json:"top_models"`
+	CostSavings    float64  `json:"cost_savings"`
 }

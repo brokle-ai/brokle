@@ -48,21 +48,21 @@ type RegisterRequest struct {
 
 	// OAuth data (required for OAuth signup)
 	IsOAuthUser bool
-	Provider    string  // google | github | etc
-	ProviderID  string  // Provider's unique user ID
+	Provider    string // google | github | etc
+	ProviderID  string // Provider's unique user ID
 }
 
 // OAuthRegistrationRequest contains OAuth-specific registration data
 type OAuthRegistrationRequest struct {
-	Email           string
-	FirstName       string
-	LastName        string
-	Role            string
-	Provider        string
-	ProviderID      string
-	ReferralSource  *string
+	Email            string
+	FirstName        string
+	LastName         string
+	Role             string
+	Provider         string
+	ProviderID       string
+	ReferralSource   *string
 	OrganizationName *string
-	InvitationToken *string
+	InvitationToken  *string
 }
 
 // RegistrationResponse contains the result of a successful registration
@@ -154,9 +154,8 @@ func (s *registrationService) RegisterWithOrganization(ctx context.Context, req 
 		} else {
 			newUser.AuthMethod = "password"
 			newUser.SetPassword(hashedPassword) // Reuse pre-hashed password
-			newUser.IsEmailVerified = false      // Email/password users need verification
+			newUser.IsEmailVerified = false     // Email/password users need verification
 		}
-
 
 		if err := txUserRepo.Create(ctx, newUser); err != nil {
 			// Check for duplicate email (database unique constraint)
@@ -315,7 +314,6 @@ func (s *registrationService) RegisterWithInvitation(ctx context.Context, req *R
 			newUser.SetPassword(hashedPassword) // Reuse pre-hashed password
 			newUser.IsEmailVerified = false
 		}
-
 
 		// Set default organization to invited org
 		newUser.DefaultOrganizationID = &invitation.OrganizationID

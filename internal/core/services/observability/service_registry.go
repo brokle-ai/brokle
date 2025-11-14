@@ -5,6 +5,7 @@ import (
 	"brokle/internal/core/domain/observability"
 	"brokle/internal/infrastructure/storage"
 	"brokle/internal/infrastructure/streams"
+
 	"github.com/sirupsen/logrus"
 )
 
@@ -12,7 +13,7 @@ import (
 type ServiceRegistry struct {
 	// ClickHouse-first services
 	TraceService       *TraceService
-	ObservationService *ObservationService
+	SpanService        *SpanService
 	ScoreService       *ScoreService
 	BlobStorageService *BlobStorageService
 
@@ -31,7 +32,7 @@ type ServiceRegistry struct {
 func NewServiceRegistry(
 	// ClickHouse repositories
 	traceRepo observability.TraceRepository,
-	observationRepo observability.ObservationRepository,
+	spanRepo observability.SpanRepository,
 	scoreRepo observability.ScoreRepository,
 	blobStorageRepo observability.BlobStorageRepository,
 
@@ -55,13 +56,13 @@ func NewServiceRegistry(
 	otlpConverterService := NewOTLPConverterService(logger)
 
 	// Create ClickHouse-first services (no blob storage for LLM data - stored inline with ZSTD compression)
-	traceService := NewTraceService(traceRepo, observationRepo, scoreRepo, logger)
-	observationService := NewObservationService(observationRepo, traceRepo, scoreRepo, logger)
-	scoreService := NewScoreService(scoreRepo, traceRepo, observationRepo)
+	traceService := NewTraceService(traceRepo, spanRepo, scoreRepo, logger)
+	spanService := NewSpanService(spanRepo, traceRepo, scoreRepo, logger)
+	scoreService := NewScoreService(scoreRepo, traceRepo, spanRepo)
 
 	return &ServiceRegistry{
 		TraceService:         traceService,
-		ObservationService:   observationService,
+		SpanService:          spanService,
 		ScoreService:         scoreService,
 		BlobStorageService:   blobStorageService,
 		OTLPConverterService: otlpConverterService,
@@ -76,9 +77,9 @@ func (r *ServiceRegistry) GetTraceService() *TraceService {
 	return r.TraceService
 }
 
-// GetObservationService returns the observation service
-func (r *ServiceRegistry) GetObservationService() *ObservationService {
-	return r.ObservationService
+// GetSpanService returns the span service
+func (r *ServiceRegistry) GetSpanService() *SpanService {
+	return r.SpanService
 }
 
 // GetScoreService returns the score service

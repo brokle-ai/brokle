@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS scores (
     id String,
     project_id String,
     trace_id String,
-    observation_id String,
+    span_id String,
 
     -- Score data
     name String,
@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS scores (
 
     -- Indexes
     INDEX idx_trace_id trace_id TYPE bloom_filter(0.001) GRANULARITY 1,
-    INDEX idx_observation_id observation_id TYPE bloom_filter(0.001) GRANULARITY 1
+    INDEX idx_span_id span_id TYPE bloom_filter(0.001) GRANULARITY 1
 
 ) ENGINE = ReplacingMergeTree(event_ts, is_deleted)
 PARTITION BY toYYYYMM(timestamp)
