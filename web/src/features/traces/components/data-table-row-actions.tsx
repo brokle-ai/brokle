@@ -27,7 +27,7 @@ export function DataTableRowActions<TData>({
   const trace = row.original as Trace
 
   const handleViewDetail = () => {
-    router.push(`/projects/${projectSlug}/traces/${trace.id}`)
+    router.push(`/projects/${projectSlug}/traces/${trace.trace_id}`)
   }
 
   const handleDelete = () => {

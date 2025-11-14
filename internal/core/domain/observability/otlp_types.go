@@ -43,6 +43,7 @@ type OTLPSpan struct {
 	EndTimeUnixNano   interface{} `json:"endTimeUnixNano,omitempty"`
 	Attributes        []KeyValue  `json:"attributes,omitempty"`
 	Events            []Event     `json:"events,omitempty"`
+	Links             []Link      `json:"links,omitempty"` // OTEL span links (cross-trace references)
 	Status            *Status     `json:"status,omitempty"`
 }
 
@@ -52,11 +53,20 @@ type KeyValue struct {
 	Value interface{} `json:"value"` // Can be stringValue, intValue, boolValue, arrayValue, etc.
 }
 
-// Event represents an OTLP span event
+// Event represents an OTLP span event (timestamped annotation within a span)
 type Event struct {
-	TimeUnixNano interface{} `json:"timeUnixNano"`
-	Name         string      `json:"name"`
-	Attributes   []KeyValue  `json:"attributes,omitempty"`
+	TimeUnixNano           interface{} `json:"timeUnixNano"`
+	Name                   string      `json:"name"`
+	Attributes             []KeyValue  `json:"attributes,omitempty"`
+	DroppedAttributesCount uint32      `json:"droppedAttributesCount,omitempty"` // Number of dropped attributes
+}
+
+// Link represents an OTLP span link (reference to span in another trace)
+type Link struct {
+	TraceID                interface{} `json:"traceId"`                      // Linked trace ID (Buffer or hex string)
+	SpanID                 interface{} `json:"spanId"`                       // Linked span ID (Buffer or hex string)
+	Attributes             []KeyValue  `json:"attributes,omitempty"`         // Link metadata
+	DroppedAttributesCount uint32      `json:"droppedAttributesCount,omitempty"` // Number of dropped attributes
 }
 
 // Status represents OTLP status

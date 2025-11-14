@@ -10,7 +10,7 @@ import (
 // Trace represents an OTEL trace (root span) with trace-level context
 type Trace struct {
 	// OTEL identifiers
-	ID        string `json:"id" db:"id"`                 // OTEL trace_id (32 hex chars)
+	TraceID   string `json:"trace_id" db:"trace_id"`     // OTEL trace_id (32 hex chars) - renamed from ID
 	ProjectID string `json:"project_id" db:"project_id"` // Brokle project context
 
 	// Trace metadata
@@ -24,31 +24,29 @@ type Trace struct {
 	DurationMs *uint32    `json:"duration_ms,omitempty" db:"duration_ms"`
 
 	// OTEL status
-	StatusCode    string  `json:"status_code" db:"status_code"` // OK, ERROR, UNSET
+	StatusCode    uint8   `json:"status_code" db:"status_code"`         // OTEL enum: 0=UNSET, 1=OK, 2=ERROR
 	StatusMessage *string `json:"status_message,omitempty" db:"status_message"`
 
-	// OTEL attributes (JSON string for flexible key-value pairs)
-	Attributes string `json:"attributes" db:"attributes"`
+	// OTEL resource attributes (JSON string with all resource-level attributes)
+	ResourceAttributes string `json:"resource_attributes" db:"resource_attributes"`
 
 	// Input/Output (trace-level data stored in ClickHouse with ZSTD compression)
 	Input  *string `json:"input,omitempty" db:"input"`
 	Output *string `json:"output,omitempty" db:"output"`
 
-	// OTEL metadata (resource attributes + instrumentation scope)
-	Metadata map[string]interface{} `json:"metadata" db:"metadata"`
 	// Tags for categorization
 	Tags []string `json:"tags" db:"tags"`
 
-	// OTEL resource attributes
+	// OTEL resource attributes (extracted for common queries)
 	Environment    string  `json:"environment" db:"environment"`
 	ServiceName    *string `json:"service_name,omitempty" db:"service_name"`
 	ServiceVersion *string `json:"service_version,omitempty" db:"service_version"`
 	Release        *string `json:"release,omitempty" db:"release"`
 
-	// Aggregate metrics (calculated from spans)
-	TotalCost   *float64 `json:"total_cost,omitempty" db:"total_cost"`
-	TotalTokens *uint32  `json:"total_tokens,omitempty" db:"total_tokens"`
-	SpanCount   *uint32  `json:"span_count,omitempty" db:"span_count"`
+	// Note: Aggregate metrics (total_cost, total_tokens, span_count) removed
+	// Following industry standard (Langfuse/Datadog/Honeycomb pattern):
+	// Aggregations calculated on-demand from spans table using materialized columns
+	// Performance: 10-50ms for 1000 spans (ClickHouse columnar aggregation)
 
 	// Flags (moved from sessions table)
 	Bookmarked bool `json:"bookmarked" db:"bookmarked"`
@@ -61,10 +59,6 @@ type Trace struct {
 	// Application versioning (experiment tracking)
 	Version *string `json:"version,omitempty" db:"version"`
 
-	// ReplacingMergeTree fields (using event_ts for deduplication)
-	EventTs   time.Time `json:"event_ts" db:"event_ts"`
-	IsDeleted bool      `json:"is_deleted" db:"is_deleted"`
-
 	// Populated from joins (not in ClickHouse)
 	Spans  []*Span  `json:"spans,omitempty" db:"-"`
 	Scores []*Score `json:"scores,omitempty" db:"-"`
@@ -73,63 +67,68 @@ type Trace struct {
 // Span represents an OTEL span with Gen AI semantic conventions and Brokle extensions
 type Span struct {
 	// OTEL identifiers
-	ID           string  `json:"id" db:"id"`                                   // OTEL span_id (16 hex chars)
+	SpanID       string  `json:"span_id" db:"span_id"`                         // OTEL span_id (16 hex chars) - renamed from ID
 	TraceID      string  `json:"trace_id" db:"trace_id"`                       // OTEL trace_id
 	ParentSpanID *string `json:"parent_span_id,omitempty" db:"parent_span_id"` // NULL for root spans
 	ProjectID    string  `json:"project_id" db:"project_id"`
 
 	// Span data
-	Name       string     `json:"name" db:"name"`
-	SpanKind   string     `json:"span_kind" db:"span_kind"` // OTEL: INTERNAL, SERVER, CLIENT, PRODUCER, CONSUMER
-	Type       string     `json:"type" db:"type"`           // Brokle: span, generation, event, tool, agent, chain
+	SpanName   string     `json:"span_name" db:"span_name"` // OTEL span name - renamed from Name
+	SpanKind   uint8      `json:"span_kind" db:"span_kind"` // OTEL enum: 0=UNSPECIFIED, 1=INTERNAL, 2=SERVER, 3=CLIENT, 4=PRODUCER, 5=CONSUMER
 	StartTime  time.Time  `json:"start_time" db:"start_time"`
 	EndTime    *time.Time `json:"end_time,omitempty" db:"end_time"`
 	DurationMs *uint32    `json:"duration_ms,omitempty" db:"duration_ms"`
 
 	// OTEL status
-	StatusCode    string  `json:"status_code" db:"status_code"` // OK, ERROR, UNSET
+	StatusCode    uint8   `json:"status_code" db:"status_code"` // OTEL enum: 0=UNSET, 1=OK, 2=ERROR
 	StatusMessage *string `json:"status_message,omitempty" db:"status_message"`
 
-	// OTEL attributes (JSON string for flexible key-value pairs)
-	Attributes string `json:"attributes" db:"attributes"`
+	// OTEL attributes (JSON string with all span-level attributes)
+	// Stores: gen_ai.*, brokle.*, and custom attributes
+	SpanAttributes string `json:"span_attributes" db:"span_attributes"`
+
+	// OTEL resource attributes (JSON string with resource-level context)
+	ResourceAttributes string `json:"resource_attributes" db:"resource_attributes"`
 
 	// Input/Output (stored in ClickHouse with ZSTD compression)
 	Input  *string `json:"input,omitempty" db:"input"`
 	Output *string `json:"output,omitempty" db:"output"`
 
-	// OTEL metadata (resource attributes + instrumentation scope)
-	Metadata map[string]interface{} `json:"metadata" db:"metadata"`
+	// OTEL Events (OTEL spec) - arrays for event tracking
+	EventsTimestamp  []time.Time               `json:"events_timestamp,omitempty" db:"events_timestamp"`
+	EventsName       []string                  `json:"events_name,omitempty" db:"events_name"`
+	EventsAttributes []string                  `json:"events_attributes,omitempty" db:"events_attributes"` // JSON strings
 
-	Level string `json:"level" db:"level"` // DEBUG, INFO, WARNING, ERROR, DEFAULT
-
-	// Universal model fields
-	ModelName       *string `json:"model_name,omitempty" db:"model_name"`
-	Provider        string  `json:"provider" db:"provider"`
-	InternalModelID *string `json:"internal_model_id,omitempty" db:"internal_model_id"`
-	ModelParameters *string `json:"model_parameters,omitempty" db:"model_parameters"` // JSON string
-
-	// Usage & Cost Maps (Pattern: provided + calculated)
-	ProvidedUsageDetails map[string]uint64  `json:"provided_usage_details,omitempty" db:"provided_usage_details"`
-	UsageDetails         map[string]uint64  `json:"usage_details,omitempty" db:"usage_details"`
-	ProvidedCostDetails  map[string]float64 `json:"provided_cost_details,omitempty" db:"provided_cost_details"`
-	CostDetails          map[string]float64 `json:"cost_details,omitempty" db:"cost_details"`
-	TotalCost            *float64           `json:"total_cost,omitempty" db:"total_cost"`
-
-	// Prompt management
-	PromptID      *string `json:"prompt_id,omitempty" db:"prompt_id"`
-	PromptName    *string `json:"prompt_name,omitempty" db:"prompt_name"`
-	PromptVersion *uint16 `json:"prompt_version,omitempty" db:"prompt_version"`
+	// OTEL Links (OTEL spec) - arrays for span linking
+	LinksTraceID    []string `json:"links_trace_id,omitempty" db:"links_trace_id"`
+	LinksSpanID     []string `json:"links_span_id,omitempty" db:"links_span_id"`
+	LinksAttributes []string `json:"links_attributes,omitempty" db:"links_attributes"` // JSON strings
 
 	// Timestamps
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
 
-	// Application versioning (experiment tracking)
-	Version *string `json:"version,omitempty" db:"version"`
+	// ===== MATERIALIZED COLUMNS (Read-only, computed by ClickHouse) =====
+	// Gen AI attributes (OTEL 1.38+ conventions)
+	GenAIOperationName       *string  `json:"gen_ai_operation_name,omitempty" db:"gen_ai_operation_name"`
+	GenAIProviderName        *string  `json:"gen_ai_provider_name,omitempty" db:"gen_ai_provider_name"`
+	GenAIRequestModel        *string  `json:"gen_ai_request_model,omitempty" db:"gen_ai_request_model"`
+	GenAIRequestMaxTokens    *uint16  `json:"gen_ai_request_max_tokens,omitempty" db:"gen_ai_request_max_tokens"`
+	GenAIRequestTemperature  *float32 `json:"gen_ai_request_temperature,omitempty" db:"gen_ai_request_temperature"`
+	GenAIRequestTopP         *float32 `json:"gen_ai_request_top_p,omitempty" db:"gen_ai_request_top_p"`
+	GenAIUsageInputTokens    *uint32  `json:"gen_ai_usage_input_tokens,omitempty" db:"gen_ai_usage_input_tokens"`
+	GenAIUsageOutputTokens   *uint32  `json:"gen_ai_usage_output_tokens,omitempty" db:"gen_ai_usage_output_tokens"`
 
-	// ReplacingMergeTree fields (using event_ts for deduplication)
-	EventTs   time.Time `json:"event_ts" db:"event_ts"`
-	IsDeleted bool      `json:"is_deleted" db:"is_deleted"`
+	// Brokle attributes (custom extensions)
+	BrokleSpanType        *string  `json:"brokle_span_type,omitempty" db:"brokle_span_type"`       // span, generation, event, tool, agent, chain
+	BrokleSpanLevel       *string  `json:"brokle_span_level,omitempty" db:"brokle_span_level"`     // DEBUG, INFO, WARNING, ERROR
+	BrokleCostInput       *float64 `json:"brokle_cost_input,omitempty" db:"brokle_cost_input"`     // Decimal(18,9) extracted from STRING
+	BrokleCostOutput      *float64 `json:"brokle_cost_output,omitempty" db:"brokle_cost_output"`   // Decimal(18,9) extracted from STRING
+	BrokleCostTotal       *float64 `json:"brokle_cost_total,omitempty" db:"brokle_cost_total"`     // Decimal(18,9) extracted from STRING
+	BroklePromptID        *string  `json:"brokle_prompt_id,omitempty" db:"brokle_prompt_id"`
+	BroklePromptName      *string  `json:"brokle_prompt_name,omitempty" db:"brokle_prompt_name"`
+	BroklePromptVersion   *uint16  `json:"brokle_prompt_version,omitempty" db:"brokle_prompt_version"`
+	BrokleInternalModelID *string  `json:"brokle_internal_model_id,omitempty" db:"brokle_internal_model_id"`
 
 	// Populated from joins (not in ClickHouse)
 	Scores     []*Score `json:"scores,omitempty" db:"-"`
@@ -165,10 +164,6 @@ type Score struct {
 
 	// Application versioning (experiment tracking)
 	Version *string `json:"version,omitempty" db:"version"`
-
-	// ReplacingMergeTree fields (using event_ts for deduplication)
-	EventTs   time.Time `json:"event_ts" db:"event_ts"`
-	IsDeleted bool      `json:"is_deleted" db:"is_deleted"`
 }
 
 // BlobStorageFileLog represents a reference to S3-stored large payload
@@ -198,10 +193,6 @@ type BlobStorageFileLog struct {
 
 	// Application versioning (experiment tracking)
 	Version *string `json:"version,omitempty" db:"version"`
-
-	// ReplacingMergeTree fields (using event_ts for deduplication)
-	EventTs   time.Time `json:"event_ts" db:"event_ts"`
-	IsDeleted bool      `json:"is_deleted" db:"is_deleted"`
 }
 
 // Model represents an LLM/API model with pricing information (PostgreSQL)
@@ -235,18 +226,27 @@ type Model struct {
 	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
 }
 
-// OTEL SpanKind constants
+// OTEL SpanKind enum values (UInt8 in ClickHouse)
 const (
-	SpanKindInternal SpanKind = "INTERNAL"
-	SpanKindServer   SpanKind = "SERVER"
-	SpanKindClient   SpanKind = "CLIENT"
-	SpanKindProducer SpanKind = "PRODUCER"
-	SpanKindConsumer SpanKind = "CONSUMER"
+	SpanKindUnspecified uint8 = 0 // SPAN_KIND_UNSPECIFIED
+	SpanKindInternal    uint8 = 1 // SPAN_KIND_INTERNAL
+	SpanKindServer      uint8 = 2 // SPAN_KIND_SERVER
+	SpanKindClient      uint8 = 3 // SPAN_KIND_CLIENT
+	SpanKindProducer    uint8 = 4 // SPAN_KIND_PRODUCER
+	SpanKindConsumer    uint8 = 5 // SPAN_KIND_CONSUMER
 )
 
-type SpanKind string
+// SpanKind string constants for backwards compatibility
+const (
+	SpanKindUnspecifiedStr = "UNSPECIFIED"
+	SpanKindInternalStr    = "INTERNAL"
+	SpanKindServerStr      = "SERVER"
+	SpanKindClientStr      = "CLIENT"
+	SpanKindProducerStr    = "PRODUCER"
+	SpanKindConsumerStr    = "CONSUMER"
+)
 
-// Brokle span type constants (stored in attributes but also as dedicated field)
+// Brokle span type constants (stored in attributes as brokle.span.type)
 const (
 	SpanTypeSpan       = "span"
 	SpanTypeGeneration = "generation"
@@ -258,11 +258,18 @@ const (
 	SpanTypeEmbedding  = "embedding"
 )
 
-// OTEL StatusCode constants
+// OTEL StatusCode enum values (UInt8 in ClickHouse)
 const (
-	StatusCodeUnset = "UNSET"
-	StatusCodeOK    = "OK"
-	StatusCodeError = "ERROR"
+	StatusCodeUnset uint8 = 0 // STATUS_CODE_UNSET
+	StatusCodeOK    uint8 = 1 // STATUS_CODE_OK
+	StatusCodeError uint8 = 2 // STATUS_CODE_ERROR
+)
+
+// StatusCode string constants for backwards compatibility
+const (
+	StatusCodeUnsetStr = "UNSET"
+	StatusCodeOKStr    = "OK"
+	StatusCodeErrorStr = "ERROR"
 )
 
 // Span level constants
@@ -413,52 +420,33 @@ func (s *Span) CalculateDuration() {
 	}
 }
 
-// GetTotalCost returns the total cost from TotalCost field or calculated from cost details map
+// GetTotalCost returns the total cost from materialized BrokleCostTotal field
 func (s *Span) GetTotalCost() float64 {
-	// Prefer denormalized TotalCost field
-	if s.TotalCost != nil {
-		return *s.TotalCost
+	// Use materialized column from ClickHouse
+	if s.BrokleCostTotal != nil {
+		return *s.BrokleCostTotal
 	}
-	// Fallback to cost details map
-	if total, ok := s.CostDetails["total"]; ok {
-		return total
+	// Fallback: calculate from input + output materialized columns
+	var inputCost, outputCost float64
+	if s.BrokleCostInput != nil {
+		inputCost = *s.BrokleCostInput
 	}
-	// Calculate from input + output
-	return s.CostDetails["input"] + s.CostDetails["output"]
+	if s.BrokleCostOutput != nil {
+		outputCost = *s.BrokleCostOutput
+	}
+	return inputCost + outputCost
 }
 
-// GetTotalTokens returns the total tokens from usage details map
+// GetTotalTokens returns the total tokens from materialized Gen AI usage fields
 func (s *Span) GetTotalTokens() uint64 {
-	// Check total in usage details
-	if total, ok := s.UsageDetails["total"]; ok {
-		return total
+	var total uint64
+	if s.GenAIUsageInputTokens != nil {
+		total += uint64(*s.GenAIUsageInputTokens)
 	}
-	// Calculate from input + output
-	return s.UsageDetails["input"] + s.UsageDetails["output"]
-}
-
-// SetCostDetails sets the cost details map with input, output, and total
-func (s *Span) SetCostDetails(inputCost, outputCost float64) {
-	if s.CostDetails == nil {
-		s.CostDetails = make(map[string]float64)
+	if s.GenAIUsageOutputTokens != nil {
+		total += uint64(*s.GenAIUsageOutputTokens)
 	}
-	s.CostDetails["input"] = inputCost
-	s.CostDetails["output"] = outputCost
-	total := inputCost + outputCost
-	s.CostDetails["total"] = total
-
-	// Set denormalized field for fast queries
-	s.TotalCost = &total
-}
-
-// SetUsageDetails sets the usage details map with input, output, and total tokens
-func (s *Span) SetUsageDetails(inputTokens, outputTokens uint64) {
-	if s.UsageDetails == nil {
-		s.UsageDetails = make(map[string]uint64)
-	}
-	s.UsageDetails["input"] = inputTokens
-	s.UsageDetails["output"] = outputTokens
-	s.UsageDetails["total"] = inputTokens + outputTokens
+	return total
 }
 
 // ===== Score Helper Methods =====
@@ -510,6 +498,78 @@ func (b *BlobStorageFileLog) GetS3URI() string {
 // IsCompressed checks if the content is compressed
 func (b *BlobStorageFileLog) IsCompressed() bool {
 	return b.Compression != nil && *b.Compression != ""
+}
+
+// ==================================
+// OTEL Enum Converters
+// ==================================
+
+// ConvertStatusCodeToEnum converts a string status code to OTEL enum (UInt8)
+func ConvertStatusCodeToEnum(statusStr string) uint8 {
+	switch statusStr {
+	case StatusCodeOKStr:
+		return StatusCodeOK
+	case StatusCodeErrorStr:
+		return StatusCodeError
+	case StatusCodeUnsetStr, "":
+		return StatusCodeUnset
+	default:
+		return StatusCodeUnset
+	}
+}
+
+// ConvertStatusCodeToString converts OTEL enum (UInt8) to string
+func ConvertStatusCodeToString(statusCode uint8) string {
+	switch statusCode {
+	case StatusCodeOK:
+		return StatusCodeOKStr
+	case StatusCodeError:
+		return StatusCodeErrorStr
+	case StatusCodeUnset:
+		return StatusCodeUnsetStr
+	default:
+		return StatusCodeUnsetStr
+	}
+}
+
+// ConvertSpanKindToEnum converts a string span kind to OTEL enum (UInt8)
+func ConvertSpanKindToEnum(kindStr string) uint8 {
+	switch kindStr {
+	case SpanKindInternalStr:
+		return SpanKindInternal
+	case SpanKindServerStr:
+		return SpanKindServer
+	case SpanKindClientStr:
+		return SpanKindClient
+	case SpanKindProducerStr:
+		return SpanKindProducer
+	case SpanKindConsumerStr:
+		return SpanKindConsumer
+	case SpanKindUnspecifiedStr, "":
+		return SpanKindUnspecified
+	default:
+		return SpanKindUnspecified
+	}
+}
+
+// ConvertSpanKindToString converts OTEL enum (UInt8) to string
+func ConvertSpanKindToString(spanKind uint8) string {
+	switch spanKind {
+	case SpanKindInternal:
+		return SpanKindInternalStr
+	case SpanKindServer:
+		return SpanKindServerStr
+	case SpanKindClient:
+		return SpanKindClientStr
+	case SpanKindProducer:
+		return SpanKindProducerStr
+	case SpanKindConsumer:
+		return SpanKindConsumerStr
+	case SpanKindUnspecified:
+		return SpanKindUnspecifiedStr
+	default:
+		return SpanKindUnspecifiedStr
+	}
 }
 
 // ==================================

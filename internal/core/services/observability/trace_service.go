@@ -45,24 +45,24 @@ func (s *TraceService) CreateTrace(ctx context.Context, trace *observability.Tra
 	if trace.Name == "" {
 		return appErrors.NewValidationError("name is required", "trace name cannot be empty")
 	}
-	if trace.ID == "" {
-		return appErrors.NewValidationError("id is required", "trace must have OTEL trace_id")
+	if trace.TraceID == "" {
+		return appErrors.NewValidationError("trace_id is required", "trace must have OTEL trace_id")
 	}
 
 	// Validate OTEL trace_id format (32 hex chars)
-	if len(trace.ID) != 32 {
+	if len(trace.TraceID) != 32 {
 		return appErrors.NewValidationError("invalid trace_id", "OTEL trace_id must be 32 hex characters")
 	}
 
 	// Set defaults
-	if trace.StatusCode == "" {
-		trace.StatusCode = observability.StatusCodeUnset
+	if trace.StatusCode == 0 {
+		trace.StatusCode = observability.StatusCodeUnset // UInt8: 0
 	}
 	if trace.Environment == "" {
 		trace.Environment = "production"
 	}
-	if trace.Attributes == "" {
-		trace.Attributes = "{}"
+	if trace.ResourceAttributes == "" {
+		trace.ResourceAttributes = "{}"
 	}
 	if trace.CreatedAt.IsZero() {
 		trace.CreatedAt = time.Now()
@@ -82,10 +82,10 @@ func (s *TraceService) CreateTrace(ctx context.Context, trace *observability.Tra
 // UpdateTrace updates an existing trace
 func (s *TraceService) UpdateTrace(ctx context.Context, trace *observability.Trace) error {
 	// Validate trace exists
-	existing, err := s.traceRepo.GetByID(ctx, trace.ID)
+	existing, err := s.traceRepo.GetByID(ctx, trace.TraceID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return appErrors.NewNotFoundError(fmt.Sprintf("trace %s", trace.ID))
+			return appErrors.NewNotFoundError(fmt.Sprintf("trace %s", trace.TraceID))
 		}
 		return appErrors.NewInternalError("failed to get trace", err)
 	}
@@ -104,36 +104,16 @@ func (s *TraceService) UpdateTrace(ctx context.Context, trace *observability.Tra
 	return nil
 }
 
-// UpdateTraceMetrics updates aggregate metrics for a trace (called after span changes)
-func (s *TraceService) UpdateTraceMetrics(ctx context.Context, traceID string, totalCost float64, totalTokens, spanCount uint32) error {
-	// Get existing trace
-	trace, err := s.traceRepo.GetByID(ctx, traceID)
-	if err != nil {
-		return appErrors.NewNotFoundError(fmt.Sprintf("trace %s", traceID))
-	}
-
-	// Update aggregate metrics
-	trace.TotalCost = &totalCost
-	trace.TotalTokens = &totalTokens
-	trace.SpanCount = &spanCount
-
-	// Update trace
-	if err := s.traceRepo.Update(ctx, trace); err != nil {
-		return appErrors.NewInternalError("failed to update trace metrics", err)
-	}
-
-	return nil
-}
+// Note: UpdateTraceMetrics removed - aggregations calculated on-demand
+// See aggregation_service.go for query-time aggregation logic
 
 // mergeTraceFields merges non-zero fields from src into dst
 // This prevents zero-value corruption from partial JSON updates
 func mergeTraceFields(dst *observability.Trace, src *observability.Trace) {
 	// Immutable fields (never update):
-	// - ID (primary key)
+	// - TraceID (primary key)
 	// - ProjectID (security boundary)
 	// - Version (managed by repository)
-	// - EventTs (managed by repository)
-	// - IsDeleted (managed by Delete method)
 
 	// Update optional fields only if non-zero
 	if src.Name != "" {
@@ -151,8 +131,8 @@ func mergeTraceFields(dst *observability.Trace, src *observability.Trace) {
 	if src.Output != nil {
 		dst.Output = src.Output
 	}
-	if src.Metadata != nil {
-		dst.Metadata = src.Metadata
+	if src.ResourceAttributes != "" && src.ResourceAttributes != "{}" {
+		dst.ResourceAttributes = src.ResourceAttributes
 	}
 	if src.Tags != nil {
 		dst.Tags = src.Tags
@@ -171,14 +151,11 @@ func mergeTraceFields(dst *observability.Trace, src *observability.Trace) {
 		// Recalculate duration when end time is updated
 		dst.CalculateDuration()
 	}
-	if src.StatusCode != "" {
+	if src.StatusCode != 0 {
 		dst.StatusCode = src.StatusCode
 	}
 	if src.StatusMessage != nil {
 		dst.StatusMessage = src.StatusMessage
-	}
-	if src.Attributes != "" {
-		dst.Attributes = src.Attributes
 	}
 	if src.ServiceName != nil {
 		dst.ServiceName = src.ServiceName
@@ -186,15 +163,8 @@ func mergeTraceFields(dst *observability.Trace, src *observability.Trace) {
 	if src.ServiceVersion != nil {
 		dst.ServiceVersion = src.ServiceVersion
 	}
-	if src.TotalCost != nil {
-		dst.TotalCost = src.TotalCost
-	}
-	if src.TotalTokens != nil {
-		dst.TotalTokens = src.TotalTokens
-	}
-	if src.SpanCount != nil {
-		dst.SpanCount = src.SpanCount
-	}
+	// Note: TotalCost, TotalTokens, SpanCount removed (calculated on-demand from spans)
+
 	// Bookmarked and Public are bool, so always update
 	dst.Bookmarked = src.Bookmarked
 	dst.Public = src.Public
@@ -320,19 +290,19 @@ func (s *TraceService) CreateTraceBatch(ctx context.Context, traces []*observabi
 		if trace.Name == "" {
 			return appErrors.NewValidationError(fmt.Sprintf("trace[%d].name", i), "name is required")
 		}
-		if trace.ID == "" {
-			return appErrors.NewValidationError(fmt.Sprintf("trace[%d].id", i), "OTEL trace_id is required")
+		if trace.TraceID == "" {
+			return appErrors.NewValidationError(fmt.Sprintf("trace[%d].trace_id", i), "OTEL trace_id is required")
 		}
 
 		// Set defaults
-		if trace.StatusCode == "" {
-			trace.StatusCode = observability.StatusCodeUnset
+		if trace.StatusCode == 0 {
+			trace.StatusCode = observability.StatusCodeUnset // UInt8: 0
 		}
 		if trace.Environment == "" {
 			trace.Environment = "production"
 		}
-		if trace.Attributes == "" {
-			trace.Attributes = "{}"
+		if trace.ResourceAttributes == "" {
+			trace.ResourceAttributes = "{}"
 		}
 		if trace.CreatedAt.IsZero() {
 			trace.CreatedAt = time.Now()

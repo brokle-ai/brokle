@@ -37,9 +37,9 @@ export function DataTableToolbar<TData>({
           disabled={isPending}
         />
         <div className='flex gap-x-2'>
-          {table.getColumn('status') && (
+          {table.getColumn('status_code') && (
             <DataTableFacetedFilter
-              column={table.getColumn('status')}
+              column={table.getColumn('status_code')}
               title='Status'
               options={statuses}
             />

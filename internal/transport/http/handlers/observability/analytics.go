@@ -440,8 +440,8 @@ func (h *Handler) UpdateTrace(c *gin.Context) {
 		return
 	}
 
-	// Ensure ID matches path parameter
-	trace.ID = traceID
+	// Ensure TraceID matches path parameter
+	trace.TraceID = traceID
 
 	// Update via service
 	if err := h.services.GetTraceService().UpdateTrace(c.Request.Context(), &trace); err != nil {
@@ -488,8 +488,8 @@ func (h *Handler) UpdateSpan(c *gin.Context) {
 		return
 	}
 
-	// Ensure ID matches path parameter
-	span.ID = spanID
+	// Ensure SpanID matches path parameter
+	span.SpanID = spanID
 
 	// Update via service
 	if err := h.services.GetSpanService().UpdateSpan(c.Request.Context(), &span); err != nil {

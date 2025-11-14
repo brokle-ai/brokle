@@ -22,8 +22,7 @@ func NewTraceRepository(db clickhouse.Conn) observability.TraceRepository {
 
 // Create inserts a new OTEL trace into ClickHouse
 func (r *traceRepository) Create(ctx context.Context, trace *observability.Trace) error {
-	// Set event_ts for ReplacingMergeTree deduplication
-	trace.EventTs = time.Now()
+	// Set updated timestamp
 	trace.UpdatedAt = time.Now()
 
 	// Calculate duration if not set
@@ -31,18 +30,16 @@ func (r *traceRepository) Create(ctx context.Context, trace *observability.Trace
 
 	query := `
 		INSERT INTO traces (
-			id, project_id, name, user_id, session_id,
+			trace_id, project_id, name, user_id, session_id,
 			start_time, end_time, duration_ms, status_code, status_message,
-			attributes, input, output, metadata, tags,
+			resource_attributes, input, output, tags,
 			environment, service_name, service_version, release,
-			total_cost, total_tokens, span_count,
-			bookmarked, public, created_at, updated_at,
-			version, event_ts, is_deleted
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			bookmarked, public, created_at, updated_at, version
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	return r.db.Exec(ctx, query,
-		trace.ID,
+		trace.TraceID,
 		trace.ProjectID,
 		trace.Name,
 		trace.UserID,
@@ -52,78 +49,53 @@ func (r *traceRepository) Create(ctx context.Context, trace *observability.Trace
 		trace.DurationMs,
 		trace.StatusCode,
 		trace.StatusMessage,
-		trace.Attributes,
+		trace.ResourceAttributes,
 		trace.Input,
 		trace.Output,
-		trace.Metadata,
 		trace.Tags,
 		trace.Environment,
 		trace.ServiceName,
 		trace.ServiceVersion,
 		trace.Release,
-		trace.TotalCost,
-		trace.TotalTokens,
-		trace.SpanCount,
 		boolToUint8(trace.Bookmarked),
 		boolToUint8(trace.Public),
 		trace.CreatedAt,
 		trace.UpdatedAt,
 		trace.Version,
-		trace.EventTs,
-		boolToUint8(trace.IsDeleted),
+		// Removed: total_cost, total_tokens, span_count (calculated on-demand from spans)
 	)
 }
 
-// Update performs an update using ReplacingMergeTree pattern (insert with new event_ts)
+// Update performs an update by inserting new data (MergeTree will handle deduplication)
 func (r *traceRepository) Update(ctx context.Context, trace *observability.Trace) error {
-	// ReplacingMergeTree pattern: update event_ts for deduplication
-	trace.EventTs = time.Now()
+	// Set updated timestamp
 	trace.UpdatedAt = time.Now()
 
 	// Calculate duration if not set
 	trace.CalculateDuration()
 
-	// Same INSERT query as Create - ClickHouse will handle merging based on ORDER BY
+	// MergeTree pattern: INSERT new version, ClickHouse merges based on ORDER BY (trace_id)
 	return r.Create(ctx, trace)
 }
 
-// Delete performs soft deletion by inserting a record with is_deleted = true
+// Delete performs hard deletion (MergeTree supports lightweight deletes with DELETE mutation)
 func (r *traceRepository) Delete(ctx context.Context, id string) error {
-	query := `
-		INSERT INTO traces
-		SELECT
-			id, project_id, name, user_id, session_id,
-			start_time, end_time, duration_ms, status_code, status_message,
-			attributes, input, output, metadata, tags,
-			environment, service_name, service_version, release,
-			total_cost, total_tokens, span_count,
-			bookmarked, public, created_at, updated_at,
-			version,
-			now64() as event_ts,
-			1 as is_deleted
-		FROM traces
-		WHERE id = ? AND is_deleted = 0
-		ORDER BY event_ts DESC
-		LIMIT 1
-	`
-
+	// MergeTree lightweight DELETE (async mutation, eventually consistent)
+	query := `ALTER TABLE traces DELETE WHERE trace_id = ?`
 	return r.db.Exec(ctx, query, id)
 }
 
-// GetByID retrieves a trace by its OTEL trace_id (returns latest version)
+// GetByID retrieves a trace by its OTEL trace_id
 func (r *traceRepository) GetByID(ctx context.Context, id string) (*observability.Trace, error) {
 	query := `
 		SELECT
-			id, project_id, name, user_id, session_id,
+			trace_id, project_id, name, user_id, session_id,
 			start_time, end_time, duration_ms, status_code, status_message,
-			attributes, input, output, metadata, tags,
+			resource_attributes, input, output, tags,
 			environment, service_name, service_version, release,
-			total_cost, total_tokens, span_count,
-			bookmarked, public, created_at, updated_at,
-			version, event_ts, is_deleted
+			bookmarked, public, created_at, updated_at, version
 		FROM traces
-		WHERE id = ? AND is_deleted = 0
-		ORDER BY event_ts DESC
+		WHERE trace_id = ?
 		LIMIT 1
 	`
 
@@ -135,15 +107,13 @@ func (r *traceRepository) GetByID(ctx context.Context, id string) (*observabilit
 func (r *traceRepository) GetByProjectID(ctx context.Context, projectID string, filter *observability.TraceFilter) ([]*observability.Trace, error) {
 	query := `
 		SELECT
-			id, project_id, name, user_id, session_id,
+			trace_id, project_id, name, user_id, session_id,
 			start_time, end_time, duration_ms, status_code, status_message,
-			attributes, input, output, metadata, tags,
+			resource_attributes, input, output, tags,
 			environment, service_name, service_version, release,
-			total_cost, total_tokens, span_count,
-			bookmarked, public, created_at, updated_at,
-			version, event_ts, is_deleted
+			bookmarked, public, created_at, updated_at, version
 		FROM traces
-		WHERE project_id = ? AND is_deleted = 0
+		WHERE project_id = ?
 	`
 
 	args := []interface{}{projectID}
@@ -220,15 +190,13 @@ func (r *traceRepository) GetByProjectID(ctx context.Context, projectID string, 
 func (r *traceRepository) GetBySessionID(ctx context.Context, sessionID string) ([]*observability.Trace, error) {
 	query := `
 		SELECT
-			id, project_id, name, user_id, session_id,
+			trace_id, project_id, name, user_id, session_id,
 			start_time, end_time, duration_ms, status_code, status_message,
-			attributes, input, output, metadata, tags,
+			resource_attributes, input, output, tags,
 			environment, service_name, service_version, release,
-			total_cost, total_tokens, span_count,
-			bookmarked, public, created_at, updated_at,
-			version, event_ts, is_deleted
+			bookmarked, public, created_at, updated_at, version
 		FROM traces
-		WHERE session_id = ? AND is_deleted = 0
+		WHERE session_id = ?
 		ORDER BY start_time ASC
 	`
 
@@ -245,15 +213,13 @@ func (r *traceRepository) GetBySessionID(ctx context.Context, sessionID string) 
 func (r *traceRepository) GetByUserID(ctx context.Context, userID string, filter *observability.TraceFilter) ([]*observability.Trace, error) {
 	query := `
 		SELECT
-			id, project_id, name, user_id, session_id,
+			trace_id, project_id, name, user_id, session_id,
 			start_time, end_time, duration_ms, status_code, status_message,
-			attributes, input, output, metadata, tags,
+			resource_attributes, input, output, tags,
 			environment, service_name, service_version, release,
-			total_cost, total_tokens, span_count,
-			bookmarked, public, created_at, updated_at,
-			version, event_ts, is_deleted
+			bookmarked, public, created_at, updated_at, version
 		FROM traces
-		WHERE user_id = ? AND is_deleted = 0
+		WHERE user_id = ?
 	`
 
 	args := []interface{}{userID}
@@ -305,13 +271,11 @@ func (r *traceRepository) CreateBatch(ctx context.Context, traces []*observabili
 
 	batch, err := r.db.PrepareBatch(ctx, `
 		INSERT INTO traces (
-			id, project_id, name, user_id, session_id,
+			trace_id, project_id, name, user_id, session_id,
 			start_time, end_time, duration_ms, status_code, status_message,
-			attributes, input, output, metadata, tags,
+			resource_attributes, input, output, tags,
 			environment, service_name, service_version, release,
-			total_cost, total_tokens, span_count,
-			bookmarked, public, created_at, updated_at,
-			version, event_ts, is_deleted
+			bookmarked, public, created_at, updated_at, version
 		)
 	`)
 	if err != nil {
@@ -319,10 +283,7 @@ func (r *traceRepository) CreateBatch(ctx context.Context, traces []*observabili
 	}
 
 	for _, trace := range traces {
-		// Set event_ts for ReplacingMergeTree
-		if trace.EventTs.IsZero() {
-			trace.EventTs = time.Now()
-		}
+		// Set timestamp defaults
 		if trace.UpdatedAt.IsZero() {
 			trace.UpdatedAt = time.Now()
 		}
@@ -331,7 +292,7 @@ func (r *traceRepository) CreateBatch(ctx context.Context, traces []*observabili
 		trace.CalculateDuration()
 
 		err = batch.Append(
-			trace.ID,
+			trace.TraceID, // Renamed from ID
 			trace.ProjectID,
 			trace.Name,
 			trace.UserID,
@@ -339,27 +300,22 @@ func (r *traceRepository) CreateBatch(ctx context.Context, traces []*observabili
 			trace.StartTime,
 			trace.EndTime,
 			trace.DurationMs,
-			trace.StatusCode,
+			trace.StatusCode, // Now UInt8
 			trace.StatusMessage,
-			trace.Attributes,
+			trace.ResourceAttributes, // Renamed from Attributes, removed Metadata
 			trace.Input,
 			trace.Output,
-			trace.Metadata,
 			trace.Tags,
 			trace.Environment,
 			trace.ServiceName,
 			trace.ServiceVersion,
 			trace.Release,
-			trace.TotalCost,
-			trace.TotalTokens,
-			trace.SpanCount,
 			boolToUint8(trace.Bookmarked),
 			boolToUint8(trace.Public),
 			trace.CreatedAt,
 			trace.UpdatedAt,
 			trace.Version,
-			trace.EventTs,
-			boolToUint8(trace.IsDeleted),
+			// Removed: event_ts, is_deleted
 		)
 		if err != nil {
 			return fmt.Errorf("append to batch: %w", err)
@@ -371,7 +327,7 @@ func (r *traceRepository) CreateBatch(ctx context.Context, traces []*observabili
 
 // Count returns the count of traces matching the filter
 func (r *traceRepository) Count(ctx context.Context, filter *observability.TraceFilter) (int64, error) {
-	query := "SELECT count() FROM traces WHERE is_deleted = 0"
+	query := "SELECT count() FROM traces"
 	args := []interface{}{}
 
 	if filter != nil {
@@ -401,10 +357,10 @@ func (r *traceRepository) Count(ctx context.Context, filter *observability.Trace
 // Helper function to scan a single trace from query row
 func (r *traceRepository) scanTraceRow(row driver.Row) (*observability.Trace, error) {
 	var trace observability.Trace
-	var bookmarked, public, isDeleted uint8
+	var bookmarked, public uint8
 
 	err := row.Scan(
-		&trace.ID,
+		&trace.TraceID, // Renamed from ID
 		&trace.ProjectID,
 		&trace.Name,
 		&trace.UserID,
@@ -412,27 +368,22 @@ func (r *traceRepository) scanTraceRow(row driver.Row) (*observability.Trace, er
 		&trace.StartTime,
 		&trace.EndTime,
 		&trace.DurationMs,
-		&trace.StatusCode,
+		&trace.StatusCode, // Now UInt8
 		&trace.StatusMessage,
-		&trace.Attributes,
+		&trace.ResourceAttributes, // Renamed from Attributes, removed Metadata
 		&trace.Input,
 		&trace.Output,
-		&trace.Metadata,
 		&trace.Tags,
 		&trace.Environment,
 		&trace.ServiceName,
 		&trace.ServiceVersion,
 		&trace.Release,
-		&trace.TotalCost,
-		&trace.TotalTokens,
-		&trace.SpanCount,
 		&bookmarked,
 		&public,
 		&trace.CreatedAt,
 		&trace.UpdatedAt,
 		&trace.Version,
-		&trace.EventTs,
-		&isDeleted,
+		// Removed: event_ts, is_deleted
 	)
 
 	if err != nil {
@@ -441,7 +392,6 @@ func (r *traceRepository) scanTraceRow(row driver.Row) (*observability.Trace, er
 
 	trace.Bookmarked = bookmarked != 0
 	trace.Public = public != 0
-	trace.IsDeleted = isDeleted != 0
 
 	return &trace, nil
 }
@@ -452,10 +402,10 @@ func (r *traceRepository) scanTraces(rows driver.Rows) ([]*observability.Trace, 
 
 	for rows.Next() {
 		var trace observability.Trace
-		var bookmarked, public, isDeleted uint8
+		var bookmarked, public uint8
 
 		err := rows.Scan(
-			&trace.ID,
+			&trace.TraceID, // Renamed from ID
 			&trace.ProjectID,
 			&trace.Name,
 			&trace.UserID,
@@ -463,27 +413,22 @@ func (r *traceRepository) scanTraces(rows driver.Rows) ([]*observability.Trace, 
 			&trace.StartTime,
 			&trace.EndTime,
 			&trace.DurationMs,
-			&trace.StatusCode,
+			&trace.StatusCode, // Now UInt8
 			&trace.StatusMessage,
-			&trace.Attributes,
+			&trace.ResourceAttributes, // Renamed from Attributes, removed Metadata
 			&trace.Input,
 			&trace.Output,
-			&trace.Metadata,
 			&trace.Tags,
 			&trace.Environment,
 			&trace.ServiceName,
 			&trace.ServiceVersion,
 			&trace.Release,
-			&trace.TotalCost,
-			&trace.TotalTokens,
-			&trace.SpanCount,
 			&bookmarked,
 			&public,
 			&trace.CreatedAt,
 			&trace.UpdatedAt,
 			&trace.Version,
-			&trace.EventTs,
-			&isDeleted,
+			// Removed: event_ts, is_deleted
 		)
 
 		if err != nil {
@@ -492,7 +437,6 @@ func (r *traceRepository) scanTraces(rows driver.Rows) ([]*observability.Trace, 
 
 		trace.Bookmarked = bookmarked != 0
 		trace.Public = public != 0
-		trace.IsDeleted = isDeleted != 0
 
 		traces = append(traces, &trace)
 	}

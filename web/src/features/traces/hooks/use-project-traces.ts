@@ -35,19 +35,22 @@ export function useProjectTraces() {
         // MOCK: Simulate server-side filtering, sorting, and pagination
         let filtered = [...allTraces]
 
-        // Apply global filter (search by ID or name)
+        // Apply global filter (search by trace_id or name)
         if (filter) {
           const searchLower = filter.toLowerCase()
           filtered = filtered.filter(
             (trace) =>
-              trace.id.toLowerCase().includes(searchLower) ||
+              trace.trace_id.toLowerCase().includes(searchLower) ||
               trace.name.toLowerCase().includes(searchLower)
           )
         }
 
-        // Apply status filter
+        // Apply status filter (convert UInt8 to string for comparison)
         if (status.length > 0) {
-          filtered = filtered.filter((trace) => status.includes(trace.status))
+          filtered = filtered.filter((trace) => {
+            const statusStr = trace.status_code === 1 ? 'ok' : trace.status_code === 2 ? 'error' : 'unset'
+            return status.includes(statusStr)
+          })
         }
 
         // Apply sorting

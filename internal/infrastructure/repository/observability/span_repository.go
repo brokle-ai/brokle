@@ -20,10 +20,9 @@ func NewSpanRepository(db clickhouse.Conn) observability.SpanRepository {
 	return &spanRepository{db: db}
 }
 
-// Create inserts a new OTEL span (span) into ClickHouse
+// Create inserts a new OTEL span into ClickHouse
 func (r *spanRepository) Create(ctx context.Context, span *observability.Span) error {
-	// Set event_ts for ReplacingMergeTree deduplication
-	span.EventTs = time.Now()
+	// Set updated timestamp
 	span.UpdatedAt = time.Now()
 
 	// Calculate duration if not set
@@ -31,113 +30,88 @@ func (r *spanRepository) Create(ctx context.Context, span *observability.Span) e
 
 	query := `
 		INSERT INTO spans (
-			id, trace_id, parent_span_id, project_id,
-			name, span_kind, type, start_time, end_time, duration_ms,
+			span_id, trace_id, parent_span_id, project_id,
+			span_name, span_kind, start_time, end_time, duration_ms,
 			status_code, status_message,
-			attributes, input, output, metadata, level,
-			model_name, provider, internal_model_id, model_parameters,
-			provided_usage_details, usage_details,
-			provided_cost_details, cost_details, total_cost,
-			prompt_id, prompt_name, prompt_version,
-			created_at, updated_at,
-			version, event_ts, is_deleted
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			span_attributes, resource_attributes,
+			input, output,
+			events_timestamp, events_name, events_attributes,
+			links_trace_id, links_span_id, links_attributes,
+			created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	return r.db.Exec(ctx, query,
-		span.ID,
+		span.SpanID, // Renamed from ID
 		span.TraceID,
 		span.ParentSpanID,
 		span.ProjectID,
-		span.Name,
-		span.SpanKind,
-		span.Type,
+		span.SpanName,   // Renamed from Name
+		span.SpanKind,   // Now UInt8 (0-5)
 		span.StartTime,
 		span.EndTime,
 		span.DurationMs,
-		span.StatusCode,
+		span.StatusCode, // Now UInt8 (0-2)
 		span.StatusMessage,
-		span.Attributes,
+		span.SpanAttributes,     // All attributes (gen_ai.*, brokle.*, custom)
+		span.ResourceAttributes, // Resource-level attributes
 		span.Input,
 		span.Output,
-		span.Metadata,
-		span.Level,
-		span.ModelName,
-		span.Provider,
-		span.InternalModelID,
-		span.ModelParameters,
-		span.ProvidedUsageDetails,
-		span.UsageDetails,
-		span.ProvidedCostDetails,
-		span.CostDetails,
-		span.TotalCost,
-		span.PromptID,
-		span.PromptName,
-		span.PromptVersion,
+		span.EventsTimestamp,  // OTEL Events arrays
+		span.EventsName,
+		span.EventsAttributes,
+		span.LinksTraceID, // OTEL Links arrays
+		span.LinksSpanID,
+		span.LinksAttributes,
 		span.CreatedAt,
 		span.UpdatedAt,
-		span.Version,
-		span.EventTs,
-		boolToUint8(span.IsDeleted),
+		// Note: Materialized columns (gen_ai_*, brokle_*) are NOT inserted - ClickHouse computes them
+		// Removed 19 columns: type, level, model_name, provider, internal_model_id, model_parameters,
+		//                     provided_usage_details, usage_details, provided_cost_details, cost_details,
+		//                     total_cost, prompt_id, prompt_name, prompt_version, version, metadata,
+		//                     event_ts, is_deleted, attributes (split into span_attributes + resource_attributes)
 	)
 }
 
-// Update performs an update using ReplacingMergeTree pattern (insert with higher version)
+// Update performs an update by inserting new data (MergeTree will handle deduplication)
 func (r *spanRepository) Update(ctx context.Context, span *observability.Span) error {
-	// ReplacingMergeTree pattern: increment version and update event_ts
-	span.EventTs = time.Now()
+	// Set updated timestamp
 	span.UpdatedAt = time.Now()
 
 	// Calculate duration if not set
 	span.CalculateDuration()
 
-	// Same INSERT query as Create - ClickHouse will handle merging
+	// MergeTree pattern: INSERT new version, ClickHouse merges based on ORDER BY (span_id, updated_at)
 	return r.Create(ctx, span)
 }
 
-// Delete performs soft deletion by inserting a record with is_deleted = true
+// Delete performs hard deletion (MergeTree supports lightweight deletes with DELETE mutation)
 func (r *spanRepository) Delete(ctx context.Context, id string) error {
-	query := `
-		INSERT INTO spans
-		SELECT
-			id, trace_id, parent_span_id, project_id,
-			name, span_kind, type, start_time, end_time, duration_ms,
-			status_code, status_message,
-			attributes, input, output, metadata, level,
-			model_name, provider, internal_model_id, model_parameters,
-			provided_usage_details, usage_details,
-			provided_cost_details, cost_details, total_cost,
-			prompt_id, prompt_name, prompt_version,
-			created_at, updated_at,
-			version,
-			now64() as event_ts,
-			1 as is_deleted
-		FROM spans
-		WHERE id = ? AND is_deleted = 0
-		ORDER BY event_ts DESC
-		LIMIT 1
-	`
-
+	// MergeTree lightweight DELETE (async mutation, eventually consistent)
+	query := `ALTER TABLE spans DELETE WHERE span_id = ?`
 	return r.db.Exec(ctx, query, id)
 }
 
-// GetByID retrieves a span by its OTEL span_id (returns latest version)
+// GetByID retrieves a span by its OTEL span_id
 func (r *spanRepository) GetByID(ctx context.Context, id string) (*observability.Span, error) {
 	query := `
 		SELECT
-			id, trace_id, parent_span_id, project_id,
-			name, span_kind, type, start_time, end_time, duration_ms,
+			span_id, trace_id, parent_span_id, project_id,
+			span_name, span_kind, start_time, end_time, duration_ms,
 			status_code, status_message,
-			attributes, input, output, metadata, level,
-			model_name, provider, internal_model_id, model_parameters,
-			provided_usage_details, usage_details,
-			provided_cost_details, cost_details, total_cost,
-			prompt_id, prompt_name, prompt_version,
+			span_attributes, resource_attributes,
+			input, output,
+			events_timestamp, events_name, events_attributes,
+			links_trace_id, links_span_id, links_attributes,
 			created_at, updated_at,
-			version, event_ts, is_deleted
+			gen_ai_operation_name, gen_ai_provider_name, gen_ai_request_model,
+			gen_ai_usage_input_tokens, gen_ai_usage_output_tokens,
+			brokle_span_type, brokle_span_level,
+			brokle_cost_input, brokle_cost_output, brokle_cost_total,
+			brokle_prompt_id, brokle_prompt_name, brokle_prompt_version,
+			brokle_internal_model_id
 		FROM spans
-		WHERE id = ? AND is_deleted = 0
-		ORDER BY event_ts DESC
+		WHERE span_id = ?
 		LIMIT 1
 	`
 
@@ -149,18 +123,22 @@ func (r *spanRepository) GetByID(ctx context.Context, id string) (*observability
 func (r *spanRepository) GetByTraceID(ctx context.Context, traceID string) ([]*observability.Span, error) {
 	query := `
 		SELECT
-			id, trace_id, parent_span_id, project_id,
-			name, span_kind, type, start_time, end_time, duration_ms,
+			span_id, trace_id, parent_span_id, project_id,
+			span_name, span_kind, start_time, end_time, duration_ms,
 			status_code, status_message,
-			attributes, input, output, metadata, level,
-			model_name, provider, internal_model_id, model_parameters,
-			provided_usage_details, usage_details,
-			provided_cost_details, cost_details, total_cost,
-			prompt_id, prompt_name, prompt_version,
+			span_attributes, resource_attributes,
+			input, output,
+			events_timestamp, events_name, events_attributes,
+			links_trace_id, links_span_id, links_attributes,
 			created_at, updated_at,
-			version, event_ts, is_deleted
+			gen_ai_operation_name, gen_ai_provider_name, gen_ai_request_model,
+			gen_ai_usage_input_tokens, gen_ai_usage_output_tokens,
+			brokle_span_type, brokle_span_level,
+			brokle_cost_input, brokle_cost_output, brokle_cost_total,
+			brokle_prompt_id, brokle_prompt_name, brokle_prompt_version,
+			brokle_internal_model_id
 		FROM spans
-		WHERE trace_id = ? AND is_deleted = 0
+		WHERE trace_id = ?
 		ORDER BY start_time ASC
 	`
 
@@ -177,19 +155,23 @@ func (r *spanRepository) GetByTraceID(ctx context.Context, traceID string) ([]*o
 func (r *spanRepository) GetRootSpan(ctx context.Context, traceID string) (*observability.Span, error) {
 	query := `
 		SELECT
-			id, trace_id, parent_span_id, project_id,
-			name, span_kind, type, start_time, end_time, duration_ms,
+			span_id, trace_id, parent_span_id, project_id,
+			span_name, span_kind, start_time, end_time, duration_ms,
 			status_code, status_message,
-			attributes, input, output, metadata, level,
-			model_name, provider, internal_model_id, model_parameters,
-			provided_usage_details, usage_details,
-			provided_cost_details, cost_details, total_cost,
-			prompt_id, prompt_name, prompt_version,
+			span_attributes, resource_attributes,
+			input, output,
+			events_timestamp, events_name, events_attributes,
+			links_trace_id, links_span_id, links_attributes,
 			created_at, updated_at,
-			version, event_ts, is_deleted
+			gen_ai_operation_name, gen_ai_provider_name, gen_ai_request_model,
+			gen_ai_usage_input_tokens, gen_ai_usage_output_tokens,
+			brokle_span_type, brokle_span_level,
+			brokle_cost_input, brokle_cost_output, brokle_cost_total,
+			brokle_prompt_id, brokle_prompt_name, brokle_prompt_version,
+			brokle_internal_model_id
 		FROM spans
-		WHERE trace_id = ? AND parent_span_id IS NULL AND is_deleted = 0
-		ORDER BY event_ts DESC
+		WHERE trace_id = ? AND parent_span_id IS NULL
+		ORDER BY start_time DESC
 		LIMIT 1
 	`
 
@@ -201,19 +183,22 @@ func (r *spanRepository) GetRootSpan(ctx context.Context, traceID string) (*obse
 func (r *spanRepository) GetChildren(ctx context.Context, parentSpanID string) ([]*observability.Span, error) {
 	query := `
 		SELECT
-			id, trace_id, parent_span_id, project_id,
-			name, span_kind, type, start_time, end_time, duration_ms,
+			span_id, trace_id, parent_span_id, project_id,
+			span_name, span_kind, start_time, end_time, duration_ms,
 			status_code, status_message,
-			attributes, input, output, metadata, level,
-			model_name, provider, internal_model_id, model_parameters,
-			provided_usage_details, usage_details,
-			provided_cost_details, cost_details, total_cost,
-			prompt_id, prompt_name, prompt_version,
+			span_attributes, resource_attributes,
+			input, output,
+			events_timestamp, events_name, events_attributes,
+			links_trace_id, links_span_id, links_attributes,
 			created_at, updated_at,
-			version, event_ts, is_deleted
+			gen_ai_operation_name, gen_ai_provider_name, gen_ai_request_model,
+			gen_ai_usage_input_tokens, gen_ai_usage_output_tokens,
+			brokle_span_type, brokle_span_level,
+			brokle_cost_input, brokle_cost_output, brokle_cost_total,
+			brokle_prompt_id, brokle_prompt_name, brokle_prompt_version,
+			brokle_internal_model_id
 		FROM spans
-		WHERE parent_span_id = ? AND is_deleted = 0
-		ORDER BY start_time ASC
+		WHERE parent_span_id = ?		ORDER BY start_time ASC
 	`
 
 	rows, err := r.db.Query(ctx, query, parentSpanID)
@@ -235,18 +220,22 @@ func (r *spanRepository) GetTreeByTraceID(ctx context.Context, traceID string) (
 func (r *spanRepository) GetByFilter(ctx context.Context, filter *observability.SpanFilter) ([]*observability.Span, error) {
 	query := `
 		SELECT
-			id, trace_id, parent_span_id, project_id,
-			name, span_kind, type, start_time, end_time, duration_ms,
+			span_id, trace_id, parent_span_id, project_id,
+			span_name, span_kind, start_time, end_time, duration_ms,
 			status_code, status_message,
-			attributes, input, output, metadata, level,
-			model_name, provider, internal_model_id, model_parameters,
-			provided_usage_details, usage_details,
-			provided_cost_details, cost_details, total_cost,
-			prompt_id, prompt_name, prompt_version,
+			span_attributes, resource_attributes,
+			input, output,
+			events_timestamp, events_name, events_attributes,
+			links_trace_id, links_span_id, links_attributes,
 			created_at, updated_at,
-			version, event_ts, is_deleted
+			gen_ai_operation_name, gen_ai_provider_name, gen_ai_request_model,
+			gen_ai_usage_input_tokens, gen_ai_usage_output_tokens,
+			brokle_span_type, brokle_span_level,
+			brokle_cost_input, brokle_cost_output, brokle_cost_total,
+			brokle_prompt_id, brokle_prompt_name, brokle_prompt_version,
+			brokle_internal_model_id
 		FROM spans
-		WHERE is_deleted = 0
+		WHERE 1=1
 	`
 
 	args := []interface{}{}
@@ -262,7 +251,7 @@ func (r *spanRepository) GetByFilter(ctx context.Context, filter *observability.
 			args = append(args, *filter.ParentID)
 		}
 		if filter.Type != nil {
-			query += " AND type = ?"
+			query += " AND brokle_span_type = ?" // Use materialized column
 			args = append(args, *filter.Type)
 		}
 		if filter.SpanKind != nil {
@@ -342,16 +331,14 @@ func (r *spanRepository) CreateBatch(ctx context.Context, spans []*observability
 
 	batch, err := r.db.PrepareBatch(ctx, `
 		INSERT INTO spans (
-			id, trace_id, parent_span_id, project_id,
-			name, span_kind, type, start_time, end_time, duration_ms,
+			span_id, trace_id, parent_span_id, project_id,
+			span_name, span_kind, start_time, end_time, duration_ms,
 			status_code, status_message,
-			attributes, input, output, metadata, level,
-			model_name, provider, internal_model_id, model_parameters,
-			provided_usage_details, usage_details,
-			provided_cost_details, cost_details, total_cost,
-			prompt_id, prompt_name, prompt_version,
-			created_at, updated_at,
-			version, event_ts, is_deleted
+			span_attributes, resource_attributes,
+			input, output,
+			events_timestamp, events_name, events_attributes,
+			links_trace_id, links_span_id, links_attributes,
+			created_at, updated_at
 		)
 	`)
 	if err != nil {
@@ -359,10 +346,7 @@ func (r *spanRepository) CreateBatch(ctx context.Context, spans []*observability
 	}
 
 	for _, span := range spans {
-		// Set event_ts for ReplacingMergeTree
-		if span.EventTs.IsZero() {
-			span.EventTs = time.Now()
-		}
+		// Set timestamp defaults
 		if span.UpdatedAt.IsZero() {
 			span.UpdatedAt = time.Now()
 		}
@@ -371,40 +355,30 @@ func (r *spanRepository) CreateBatch(ctx context.Context, spans []*observability
 		span.CalculateDuration()
 
 		err = batch.Append(
-			span.ID,
+			span.SpanID, // Renamed from ID
 			span.TraceID,
 			span.ParentSpanID,
 			span.ProjectID,
-			span.Name,
-			span.SpanKind,
-			span.Type,
+			span.SpanName,   // Renamed from Name
+			span.SpanKind,   // Now UInt8
 			span.StartTime,
 			span.EndTime,
 			span.DurationMs,
-			span.StatusCode,
+			span.StatusCode, // Now UInt8
 			span.StatusMessage,
-			span.Attributes,
+			span.SpanAttributes,     // All attributes JSON
+			span.ResourceAttributes, // Resource attributes JSON
 			span.Input,
 			span.Output,
-			span.Metadata,
-			span.Level,
-			span.ModelName,
-			span.Provider,
-			span.InternalModelID,
-			span.ModelParameters,
-			span.ProvidedUsageDetails,
-			span.UsageDetails,
-			span.ProvidedCostDetails,
-			span.CostDetails,
-			span.TotalCost,
-			span.PromptID,
-			span.PromptName,
-			span.PromptVersion,
+			span.EventsTimestamp,  // OTEL Events
+			span.EventsName,
+			span.EventsAttributes,
+			span.LinksTraceID, // OTEL Links
+			span.LinksSpanID,
+			span.LinksAttributes,
 			span.CreatedAt,
 			span.UpdatedAt,
-			span.Version,
-			span.EventTs,
-			boolToUint8(span.IsDeleted),
+			// Note: Materialized columns NOT inserted (computed by ClickHouse)
 		)
 		if err != nil {
 			return fmt.Errorf("append to batch: %w", err)
@@ -416,7 +390,7 @@ func (r *spanRepository) CreateBatch(ctx context.Context, spans []*observability
 
 // Count returns the count of spans matching the filter
 func (r *spanRepository) Count(ctx context.Context, filter *observability.SpanFilter) (int64, error) {
-	query := "SELECT count() FROM spans WHERE is_deleted = 0"
+	query := "SELECT count() FROM spans"
 	args := []interface{}{}
 
 	if filter != nil {
@@ -425,7 +399,7 @@ func (r *spanRepository) Count(ctx context.Context, filter *observability.SpanFi
 			args = append(args, *filter.TraceID)
 		}
 		if filter.Type != nil {
-			query += " AND type = ?"
+			query += " AND brokle_span_type = ?" // Use materialized column
 			args = append(args, *filter.Type)
 		}
 		if filter.StartTime != nil {
@@ -446,50 +420,54 @@ func (r *spanRepository) Count(ctx context.Context, filter *observability.SpanFi
 // Helper function to scan a single span from query row
 func (r *spanRepository) scanSpanRow(row driver.Row) (*observability.Span, error) {
 	var span observability.Span
-	var isDeleted uint8
 
 	err := row.Scan(
-		&span.ID,
+		&span.SpanID, // Renamed from ID
 		&span.TraceID,
 		&span.ParentSpanID,
 		&span.ProjectID,
-		&span.Name,
-		&span.SpanKind,
-		&span.Type,
+		&span.SpanName,   // Renamed from Name
+		&span.SpanKind,   // Now UInt8
 		&span.StartTime,
 		&span.EndTime,
 		&span.DurationMs,
-		&span.StatusCode,
+		&span.StatusCode, // Now UInt8
 		&span.StatusMessage,
-		&span.Attributes,
+		&span.SpanAttributes,     // All attributes JSON
+		&span.ResourceAttributes, // Resource attributes JSON
 		&span.Input,
 		&span.Output,
-		&span.Metadata,
-		&span.Level,
-		&span.ModelName,
-		&span.Provider,
-		&span.InternalModelID,
-		&span.ModelParameters,
-		&span.ProvidedUsageDetails,
-		&span.UsageDetails,
-		&span.ProvidedCostDetails,
-		&span.CostDetails,
-		&span.TotalCost,
-		&span.PromptID,
-		&span.PromptName,
-		&span.PromptVersion,
+		&span.EventsTimestamp,  // OTEL Events
+		&span.EventsName,
+		&span.EventsAttributes,
+		&span.LinksTraceID, // OTEL Links
+		&span.LinksSpanID,
+		&span.LinksAttributes,
 		&span.CreatedAt,
 		&span.UpdatedAt,
-		&span.Version,
-		&span.EventTs,
-		&isDeleted,
+		// Materialized columns (read-only, computed by ClickHouse)
+		&span.GenAIOperationName,
+		&span.GenAIProviderName,
+		&span.GenAIRequestModel,
+		&span.GenAIRequestMaxTokens,
+		&span.GenAIRequestTemperature,
+		&span.GenAIRequestTopP,
+		&span.GenAIUsageInputTokens,
+		&span.GenAIUsageOutputTokens,
+		&span.BrokleSpanType,
+		&span.BrokleSpanLevel,
+		&span.BrokleCostInput,
+		&span.BrokleCostOutput,
+		&span.BrokleCostTotal,
+		&span.BroklePromptID,
+		&span.BroklePromptName,
+		&span.BroklePromptVersion,
+		&span.BrokleInternalModelID,
 	)
 
 	if err != nil {
-		return nil, fmt.Errorf("sca span: %w", err)
+		return nil, fmt.Errorf("scan span: %w", err)
 	}
-
-	span.IsDeleted = isDeleted != 0
 
 	return &span, nil
 }
@@ -500,50 +478,54 @@ func (r *spanRepository) scanSpans(rows driver.Rows) ([]*observability.Span, err
 
 	for rows.Next() {
 		var span observability.Span
-		var isDeleted uint8
 
 		err := rows.Scan(
-			&span.ID,
+			&span.SpanID, // Renamed from ID
 			&span.TraceID,
 			&span.ParentSpanID,
 			&span.ProjectID,
-			&span.Name,
-			&span.SpanKind,
-			&span.Type,
+			&span.SpanName,   // Renamed from Name
+			&span.SpanKind,   // Now UInt8
 			&span.StartTime,
 			&span.EndTime,
 			&span.DurationMs,
-			&span.StatusCode,
+			&span.StatusCode, // Now UInt8
 			&span.StatusMessage,
-			&span.Attributes,
+			&span.SpanAttributes,     // All attributes JSON
+			&span.ResourceAttributes, // Resource attributes JSON
 			&span.Input,
 			&span.Output,
-			&span.Metadata,
-			&span.Level,
-			&span.ModelName,
-			&span.Provider,
-			&span.InternalModelID,
-			&span.ModelParameters,
-			&span.ProvidedUsageDetails,
-			&span.UsageDetails,
-			&span.ProvidedCostDetails,
-			&span.CostDetails,
-			&span.TotalCost,
-			&span.PromptID,
-			&span.PromptName,
-			&span.PromptVersion,
+			&span.EventsTimestamp,  // OTEL Events
+			&span.EventsName,
+			&span.EventsAttributes,
+			&span.LinksTraceID, // OTEL Links
+			&span.LinksSpanID,
+			&span.LinksAttributes,
 			&span.CreatedAt,
 			&span.UpdatedAt,
-			&span.Version,
-			&span.EventTs,
-			&isDeleted,
+			// Materialized columns
+			&span.GenAIOperationName,
+			&span.GenAIProviderName,
+			&span.GenAIRequestModel,
+			&span.GenAIRequestMaxTokens,
+			&span.GenAIRequestTemperature,
+			&span.GenAIRequestTopP,
+			&span.GenAIUsageInputTokens,
+			&span.GenAIUsageOutputTokens,
+			&span.BrokleSpanType,
+			&span.BrokleSpanLevel,
+			&span.BrokleCostInput,
+			&span.BrokleCostOutput,
+			&span.BrokleCostTotal,
+			&span.BroklePromptID,
+			&span.BroklePromptName,
+			&span.BroklePromptVersion,
+			&span.BrokleInternalModelID,
 		)
 
 		if err != nil {
-			return nil, fmt.Errorf("sca span: %w", err)
+			return nil, fmt.Errorf("scan span: %w", err)
 		}
-
-		span.IsDeleted = isDeleted != 0
 
 		spans = append(spans, &span)
 	}

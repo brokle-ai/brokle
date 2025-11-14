@@ -3,7 +3,6 @@ package observability
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"brokle/internal/core/domain/observability"
 
@@ -24,7 +23,6 @@ func NewScoreRepository(db clickhouse.Conn) observability.ScoreRepository {
 func (r *scoreRepository) Create(ctx context.Context, score *observability.Score) error {
 	// Set version and event_ts for new scores
 	// Version is now optional application version (not row version)
-	score.EventTs = time.Now()
 
 	query := `
 		INSERT INTO scores (
@@ -32,7 +30,7 @@ func (r *scoreRepository) Create(ctx context.Context, score *observability.Score
 			name, value, string_value, data_type, source, comment,
 			evaluator_name, evaluator_version, evaluator_config,
 			author_user_id, timestamp,
-			version, event_ts, is_deleted
+			version
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
@@ -53,8 +51,6 @@ func (r *scoreRepository) Create(ctx context.Context, score *observability.Score
 		score.AuthorUserID,
 		score.Timestamp,
 		score.Version,
-		score.EventTs,
-		boolToUint8(score.IsDeleted),
 	)
 }
 
@@ -62,30 +58,15 @@ func (r *scoreRepository) Create(ctx context.Context, score *observability.Score
 func (r *scoreRepository) Update(ctx context.Context, score *observability.Score) error {
 	// ReplacingMergeTree pattern: increment version and update event_ts
 	// Version is now optional application version (not auto-incremented)
-	score.EventTs = time.Now()
 
 	// Same INSERT query as Create - ClickHouse will handle merging
 	return r.Create(ctx, score)
 }
 
-// Delete performs soft deletion by inserting a record with is_deleted = true
+// Delete performs hard deletion (MergeTree supports lightweight deletes with DELETE mutation)
 func (r *scoreRepository) Delete(ctx context.Context, id string) error {
-	query := `
-		INSERT INTO scores
-		SELECT
-			id, project_id, trace_id, span_id,
-			name, value, string_value, data_type, source, comment,
-			evaluator_name, evaluator_version, evaluator_config,
-			author_user_id, timestamp,
-			version + 1 as version,
-			now64() as event_ts,
-			1 as is_deleted
-		FROM scores
-		WHERE id = ? AND is_deleted = 0
-		ORDER BY event_ts DESC
-		LIMIT 1
-	`
-
+	// MergeTree lightweight DELETE (async mutation, eventually consistent)
+	query := `ALTER TABLE scores DELETE WHERE id = ?`
 	return r.db.Exec(ctx, query, id)
 }
 
@@ -97,10 +78,9 @@ func (r *scoreRepository) GetByID(ctx context.Context, id string) (*observabilit
 			name, value, string_value, data_type, source, comment,
 			evaluator_name, evaluator_version, evaluator_config,
 			author_user_id, timestamp,
-			version, event_ts, is_deleted
+			version
 		FROM scores
-		WHERE id = ? AND is_deleted = 0
-		ORDER BY event_ts DESC
+		WHERE id = ?
 		LIMIT 1
 	`
 
@@ -116,10 +96,9 @@ func (r *scoreRepository) GetByTraceID(ctx context.Context, traceID string) ([]*
 			name, value, string_value, data_type, source, comment,
 			evaluator_name, evaluator_version, evaluator_config,
 			author_user_id, timestamp,
-			version, event_ts, is_deleted
+			version
 		FROM scores
-		WHERE trace_id = ? AND is_deleted = 0
-		ORDER BY timestamp DESC
+		WHERE trace_id = ?		ORDER BY timestamp DESC
 	`
 
 	rows, err := r.db.Query(ctx, query, traceID)
@@ -139,10 +118,9 @@ func (r *scoreRepository) GetBySpanID(ctx context.Context, spanID string) ([]*ob
 			name, value, string_value, data_type, source, comment,
 			evaluator_name, evaluator_version, evaluator_config,
 			author_user_id, timestamp,
-			version, event_ts, is_deleted
+			version
 		FROM scores
-		WHERE span_id = ? AND is_deleted = 0
-		ORDER BY timestamp DESC
+		WHERE span_id = ?		ORDER BY timestamp DESC
 	`
 
 	rows, err := r.db.Query(ctx, query, spanID)
@@ -162,7 +140,7 @@ func (r *scoreRepository) GetByFilter(ctx context.Context, filter *observability
 			name, value, string_value, data_type, source, comment,
 			evaluator_name, evaluator_version, evaluator_config,
 			author_user_id, timestamp,
-			version, event_ts, is_deleted
+			version
 		FROM scores
 		WHERE is_deleted = 0
 	`
@@ -248,7 +226,7 @@ func (r *scoreRepository) CreateBatch(ctx context.Context, scores []*observabili
 			name, value, string_value, data_type, source, comment,
 			evaluator_name, evaluator_version, evaluator_config,
 			author_user_id, timestamp,
-			version, event_ts, is_deleted
+			version
 		)
 	`)
 	if err != nil {
@@ -256,12 +234,6 @@ func (r *scoreRepository) CreateBatch(ctx context.Context, scores []*observabili
 	}
 
 	for _, score := range scores {
-		// Set version and event_ts for new scores
-		// Version is now optional application version
-		if score.EventTs.IsZero() {
-			score.EventTs = time.Now()
-		}
-
 		err = batch.Append(
 			score.ID,
 			score.ProjectID,
@@ -279,8 +251,7 @@ func (r *scoreRepository) CreateBatch(ctx context.Context, scores []*observabili
 			score.AuthorUserID,
 			score.Timestamp,
 			score.Version,
-			score.EventTs,
-			boolToUint8(score.IsDeleted),
+			// Removed: event_ts, is_deleted
 		)
 		if err != nil {
 			return fmt.Errorf("append to batch: %w", err)
@@ -292,7 +263,7 @@ func (r *scoreRepository) CreateBatch(ctx context.Context, scores []*observabili
 
 // Count returns the count of scores matching the filter
 func (r *scoreRepository) Count(ctx context.Context, filter *observability.ScoreFilter) (int64, error) {
-	query := "SELECT count() FROM scores WHERE is_deleted = 0"
+	query := "SELECT count() FROM scores"
 	args := []interface{}{}
 
 	if filter != nil {
@@ -334,7 +305,6 @@ func (r *scoreRepository) Count(ctx context.Context, filter *observability.Score
 // Helper function to scan a single score from query row
 func (r *scoreRepository) scanScoreRow(row driver.Row) (*observability.Score, error) {
 	var score observability.Score
-	var isDeleted uint8
 
 	err := row.Scan(
 		&score.ID,
@@ -353,15 +323,12 @@ func (r *scoreRepository) scanScoreRow(row driver.Row) (*observability.Score, er
 		&score.AuthorUserID,
 		&score.Timestamp,
 		&score.Version,
-		&score.EventTs,
-		&isDeleted,
+		// Removed: event_ts, is_deleted
 	)
 
 	if err != nil {
 		return nil, fmt.Errorf("scan score: %w", err)
 	}
-
-	score.IsDeleted = isDeleted != 0
 
 	return &score, nil
 }
@@ -372,7 +339,6 @@ func (r *scoreRepository) scanScores(rows driver.Rows) ([]*observability.Score, 
 
 	for rows.Next() {
 		var score observability.Score
-		var isDeleted uint8
 
 		err := rows.Scan(
 			&score.ID,
@@ -391,15 +357,12 @@ func (r *scoreRepository) scanScores(rows driver.Rows) ([]*observability.Score, 
 			&score.AuthorUserID,
 			&score.Timestamp,
 			&score.Version,
-			&score.EventTs,
-			&isDeleted,
+			// Removed: event_ts, is_deleted
 		)
 
 		if err != nil {
 			return nil, fmt.Errorf("scan score row: %w", err)
 		}
-
-		score.IsDeleted = isDeleted != 0
 
 		scores = append(scores, &score)
 	}

@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import type { Trace } from '../data/schema'
-import { statuses } from '../data/constants'
+import { statuses, statusCodeToString } from '../data/constants'
 import { format } from 'date-fns'
 import { Clock, DollarSign, Layers, Server, Tag } from 'lucide-react'
 
@@ -24,7 +24,8 @@ function formatCost(cost: number | undefined): string {
 }
 
 export function TraceDetailView({ trace }: TraceDetailViewProps) {
-  const status = statuses.find((s) => s.value === trace.status)
+  const statusStr = statusCodeToString(trace.status_code) // Convert UInt8 to string
+  const status = statuses.find((s) => s.value === statusStr)
   const StatusIcon = status?.icon
 
   return (
@@ -40,7 +41,7 @@ export function TraceDetailView({ trace }: TraceDetailViewProps) {
             </div>
           )}
         </div>
-        <p className='text-sm text-muted-foreground font-mono'>{trace.id}</p>
+        <p className='text-sm text-muted-foreground font-mono'>{trace.trace_id}</p>
       </div>
 
       {/* Metrics Grid */}

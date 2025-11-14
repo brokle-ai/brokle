@@ -12,7 +12,7 @@ const generateMockTraces = (): Trace[] => {
     const cost = (tokens / 1000) * faker.number.float({ min: 0.0001, max: 0.01, fractionDigits: 6 })
 
     return {
-      id: faker.string.hexadecimal({ length: 32, prefix: '' }),
+      trace_id: faker.string.hexadecimal({ length: 32, prefix: '' }), // Renamed from 'id'
       name: faker.helpers.arrayElement([
         'chat.completions',
         'embeddings.create',
@@ -24,7 +24,8 @@ const generateMockTraces = (): Trace[] => {
       startTime,
       endTime,
       durationMs,
-      status: faker.helpers.arrayElement(['ok', 'error', 'unset'] as const),
+      status_code: faker.helpers.arrayElement([0, 1, 2]), // UInt8: 0=UNSET, 1=OK, 2=ERROR
+      resource_attributes: JSON.stringify({ 'service.name': 'api-server' }), // JSON string
       cost,
       tokens,
       spanCount,

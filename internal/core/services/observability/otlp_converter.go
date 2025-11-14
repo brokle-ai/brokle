@@ -156,13 +156,13 @@ func (s *OTLPConverterService) createTraceEvent(span observability.OTLPSpan, res
 	// Convert status
 	statusCode := convertStatusCode(span.Status)
 
-	// Build trace payload
+	// Build trace payload with new OTEL-native field names
 	payload := map[string]interface{}{
-		"id":          traceID,
-		"name":        span.Name,
-		"start_time":  startTime.Format(time.RFC3339Nano),
-		"status_code": statusCode,
-		"attributes":  marshalAttributes(allAttrs),
+		"trace_id":             traceID, // Renamed from "id"
+		"name":                 span.Name,
+		"start_time":           startTime.Format(time.RFC3339Nano),
+		"status_code":          statusCode,                      // Now UInt8 (0-2)
+		"resource_attributes":  marshalAttributes(resourceAttrs), // OTEL resource attributes only
 	}
 
 	if endTime != nil {
@@ -225,9 +225,8 @@ func (s *OTLPConverterService) createTraceEvent(span observability.OTLPSpan, res
 		payload["version"] = version
 	}
 
-	// Add OTEL metadata (resource attributes + instrumentation scope)
-	otelMetadata := buildOTELMetadata(resourceAttrs, scopeAttrs, scope)
-	payload["metadata"] = otelMetadata
+	// Note: resource_attributes already set above with pure OTEL attributes
+	// No need for separate metadata field - consolidated into resource_attributes
 
 	// Create trace event
 	event := &brokleEvent{
@@ -272,11 +271,8 @@ func (s *OTLPConverterService) convertSpanToEvent(span observability.OTLPSpan, r
 	// Merge all attributes (resource + scope + span)
 	allAttrs := mergeAttributes(resourceAttrs, scopeAttrs, spanAttrs)
 
-	// Extract Brokle type from attributes (default: "span")
-	brokleType := "span"
-	if t, ok := allAttrs["brokle.type"].(string); ok {
-		brokleType = t
-	}
+	// Note: brokle.span.type is now stored in span_attributes JSON
+	// and will be extracted to materialized column brokle_span_type in ClickHouse
 
 	// Convert start/end times
 	startTime := convertUnixNano(span.StartTimeUnixNano)
@@ -288,17 +284,17 @@ func (s *OTLPConverterService) convertSpanToEvent(span observability.OTLPSpan, r
 	// Convert OTEL status to string
 	statusCode := convertStatusCode(span.Status)
 
-	// Build span payload
+	// Build span payload with new OTEL-native field names
 	payload := map[string]interface{}{
-		"id":             spanID,
-		"trace_id":       traceID,
-		"parent_span_id": parentSpanID,
-		"name":           span.Name,
-		"span_kind":      spanKind,
-		"type":           brokleType,
-		"start_time":     startTime.Format(time.RFC3339Nano),
-		"status_code":    statusCode,
-		"attributes":     marshalAttributes(allAttrs),
+		"span_id":              spanID,      // Renamed from "id"
+		"trace_id":             traceID,
+		"parent_span_id":       parentSpanID,
+		"span_name":            span.Name,   // Renamed from "name"
+		"span_kind":            spanKind,    // Now UInt8 (0-5)
+		"start_time":           startTime.Format(time.RFC3339Nano),
+		"status_code":          statusCode,                       // Now UInt8 (0-2)
+		"span_attributes":      marshalAttributes(spanAttrs),     // Span-level attributes only
+		"resource_attributes":  marshalAttributes(resourceAttrs), // Resource-level attributes only
 	}
 
 	if endTime != nil {
@@ -314,14 +310,73 @@ func (s *OTLPConverterService) convertSpanToEvent(span observability.OTLPSpan, r
 	// Extract Brokle extensions from attributes
 	extractBrokleFields(allAttrs, payload)
 
-	// Extract version (optional application version) - OBSERVATIONS
-	if version, ok := allAttrs["brokle.version"].(string); ok && version != "" {
-		payload["version"] = version
+	// Extract OTLP Events (timeline annotations within span)
+	if len(span.Events) > 0 {
+		eventsTimestamp := make([]string, len(span.Events))
+		eventsName := make([]string, len(span.Events))
+		eventsAttributes := make([]string, len(span.Events))
+		eventsDroppedCount := make([]uint32, len(span.Events))
+
+		for i, event := range span.Events {
+			// Convert event timestamp
+			if eventTime := convertUnixNano(event.TimeUnixNano); eventTime != nil {
+				eventsTimestamp[i] = eventTime.Format(time.RFC3339Nano)
+			}
+
+			// Extract event name
+			eventsName[i] = event.Name
+
+			// Extract event attributes as JSON
+			eventAttrs := extractAttributesFromKeyValues(event.Attributes)
+			eventsAttributes[i] = marshalAttributes(eventAttrs)
+
+			// Track dropped attributes
+			eventsDroppedCount[i] = event.DroppedAttributesCount
+		}
+
+		payload["events_timestamp"] = eventsTimestamp
+		payload["events_name"] = eventsName
+		payload["events_attributes"] = eventsAttributes
+		payload["events_dropped_attributes_count"] = eventsDroppedCount
 	}
 
-	// Add OTEL metadata (resource attributes + instrumentation scope)
-	otelMetadata := buildOTELMetadata(resourceAttrs, scopeAttrs, scope)
-	payload["metadata"] = otelMetadata
+	// Extract OTLP Links (cross-trace references)
+	if len(span.Links) > 0 {
+		linksTraceID := make([]string, len(span.Links))
+		linksSpanID := make([]string, len(span.Links))
+		linksAttributes := make([]string, len(span.Links))
+		linksDroppedCount := make([]uint32, len(span.Links))
+
+		for i, link := range span.Links {
+			// Convert linked trace ID
+			if traceID, err := convertTraceID(link.TraceID); err == nil {
+				linksTraceID[i] = traceID
+			}
+
+			// Convert linked span ID
+			if spanID, err := convertSpanID(link.SpanID); err == nil {
+				linksSpanID[i] = spanID
+			}
+
+			// Extract link attributes as JSON
+			linkAttrs := extractAttributesFromKeyValues(link.Attributes)
+			linksAttributes[i] = marshalAttributes(linkAttrs)
+
+			// Track dropped attributes
+			linksDroppedCount[i] = link.DroppedAttributesCount
+		}
+
+		payload["links_trace_id"] = linksTraceID
+		payload["links_span_id"] = linksSpanID
+		payload["links_attributes"] = linksAttributes
+		payload["links_dropped_attributes_count"] = linksDroppedCount
+	}
+
+	// Note: span_attributes and resource_attributes already set above
+	// All attributes are now properly namespaced:
+	// - gen_ai.* → OTEL Gen AI conventions
+	// - brokle.* → Brokle custom attributes
+	// - service.*, deployment.* → OTEL resource attributes
 
 	// Create span event
 	event := &brokleEvent{
@@ -410,40 +465,40 @@ func convertUnixNano(ts interface{}) *time.Time {
 	return &t
 }
 
-// convertSpanKind converts OTLP span kind enum to string
-func convertSpanKind(kind int) string {
+// convertSpanKind converts OTLP span kind enum to UInt8 for ClickHouse
+func convertSpanKind(kind int) uint8 {
 	switch kind {
 	case 0:
-		return "UNSPECIFIED"
+		return observability.SpanKindUnspecified // 0
 	case 1:
-		return "INTERNAL"
+		return observability.SpanKindInternal // 1
 	case 2:
-		return "SERVER"
+		return observability.SpanKindServer // 2
 	case 3:
-		return "CLIENT"
+		return observability.SpanKindClient // 3
 	case 4:
-		return "PRODUCER"
+		return observability.SpanKindProducer // 4
 	case 5:
-		return "CONSUMER"
+		return observability.SpanKindConsumer // 5
 	default:
-		return "INTERNAL"
+		return observability.SpanKindInternal // default to INTERNAL
 	}
 }
 
-// convertStatusCode converts OTLP status code to string
-func convertStatusCode(status *observability.Status) string {
+// convertStatusCode converts OTLP status code to UInt8 for ClickHouse
+func convertStatusCode(status *observability.Status) uint8 {
 	if status == nil {
-		return "UNSET"
+		return observability.StatusCodeUnset // 0
 	}
 	switch status.Code {
 	case 0:
-		return "UNSET"
+		return observability.StatusCodeUnset // 0
 	case 1:
-		return "OK"
+		return observability.StatusCodeOK // 1
 	case 2:
-		return "ERROR"
+		return observability.StatusCodeError // 2
 	default:
-		return "UNSET"
+		return observability.StatusCodeUnset // default to UNSET
 	}
 }
 
@@ -702,40 +757,51 @@ func extractGenAIFields(attrs map[string]interface{}, payload map[string]interfa
 }
 
 // extractBrokleFields extracts Brokle extension fields from attributes
+// CRITICAL: This function ensures costs extracted from attributes are stored as STRINGS
+// in span_attributes to avoid Float64 precision loss when written to ClickHouse JSON.
+// ClickHouse will then extract these STRING values to Decimal(18,9) materialized columns.
 func extractBrokleFields(attrs map[string]interface{}, payload map[string]interface{}) {
-	// Initialize cost details map
-	costDetails := make(map[string]float64)
+	// ==================================
+	// COST PRECISION CRITICAL SECTION
+	// ==================================
+	// Costs MUST be formatted as STRINGS in attributes to avoid Float64 precision loss.
+	// Flow: SDK → Float64 in attributes → FORMAT AS STRING → ClickHouse JSON (String) →
+	//       Materialized Decimal(18,9) column → Zero precision loss
 
-	// Cost → cost_details Map
+	// Get or initialize span_attributes map for modification
+	var spanAttrs map[string]interface{}
+	if attrsJSON, ok := payload["span_attributes"].(string); ok {
+		json.Unmarshal([]byte(attrsJSON), &spanAttrs)
+	}
+	if spanAttrs == nil {
+		spanAttrs = make(map[string]interface{})
+	}
+
+	// Extract and format costs as STRINGS (9 decimal places for exact billing)
 	if costTotal, ok := attrs["brokle.cost.total"].(float64); ok {
-		costDetails["total"] = costTotal
-		payload["total_cost"] = costTotal // Denormalized for fast queries
+		spanAttrs["brokle.cost.total"] = fmt.Sprintf("%.9f", costTotal) // STRING!
+	} else if costStr, ok := attrs["brokle.cost.total"].(string); ok {
+		spanAttrs["brokle.cost.total"] = costStr // Already string
 	}
+
 	if costInput, ok := attrs["brokle.cost.input"].(float64); ok {
-		costDetails["input"] = costInput
+		spanAttrs["brokle.cost.input"] = fmt.Sprintf("%.9f", costInput) // STRING!
+	} else if costStr, ok := attrs["brokle.cost.input"].(string); ok {
+		spanAttrs["brokle.cost.input"] = costStr // Already string
 	}
+
 	if costOutput, ok := attrs["brokle.cost.output"].(float64); ok {
-		costDetails["output"] = costOutput
+		spanAttrs["brokle.cost.output"] = fmt.Sprintf("%.9f", costOutput) // STRING!
+	} else if costStr, ok := attrs["brokle.cost.output"].(string); ok {
+		spanAttrs["brokle.cost.output"] = costStr // Already string
 	}
 
-	// Prompt management (keep as dedicated fields)
-	if promptID, ok := attrs["brokle.prompt.id"].(string); ok {
-		payload["prompt_id"] = promptID
-	}
-	if promptName, ok := attrs["brokle.prompt.name"].(string); ok {
-		payload["prompt_name"] = promptName
-	}
-	if promptVersion, ok := attrs["brokle.prompt.version"].(int64); ok {
-		payload["prompt_version"] = uint16(promptVersion)
-	}
+	// Update payload with modified span_attributes (costs now as STRINGS)
+	payload["span_attributes"] = marshalAttributes(spanAttrs)
 
-	// Add cost details map to payload
-	if len(costDetails) > 0 {
-		payload["cost_details"] = costDetails
-	}
-
-	// Note: Brokle-specific data (routing, cache, governance) is stored in attributes column
-	// with brokle.* namespace, following OTEL-native patterns
+	// Note: ALL Brokle attributes (span.type, span.level, prompt.*, etc.) are now
+	// stored in span_attributes JSON with brokle.* namespace.
+	// Materialized columns will extract them automatically in ClickHouse.
 }
 
 // Helper function to convert byte array to hex

@@ -19,7 +19,7 @@ export default function TraceDetailPage() {
 
   // Find trace from mock data
   // TODO: Replace with API call when backend ready
-  const trace = traces.find((t) => t.id === params.traceId)
+  const trace = traces.find((t) => t.trace_id === params.traceId)
 
   if (!trace) {
     return (

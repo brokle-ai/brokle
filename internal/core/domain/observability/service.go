@@ -29,7 +29,7 @@ type TraceService interface {
 
 	// Update operations
 	UpdateTrace(ctx context.Context, trace *Trace) error
-	UpdateTraceMetrics(ctx context.Context, traceID string, totalCost float64, totalTokens, spanCount uint32) error
+	// Note: UpdateTraceMetrics removed - aggregations calculated on-demand
 
 	// Delete operations
 	DeleteTrace(ctx context.Context, id string) error
