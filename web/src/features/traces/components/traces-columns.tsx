@@ -5,7 +5,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { DataTableColumnHeader } from './data-table-column-header'
 import { DataTableRowActions } from './data-table-row-actions'
-import { statuses } from '../data/constants'
+import { statuses, statusCodeToString } from '../data/constants'
 import type { Trace } from '../data/schema'
 import { formatDistanceToNow } from 'date-fns'
 import { Copy } from 'lucide-react'
@@ -51,12 +51,12 @@ export const tracesColumns: ColumnDef<Trace>[] = [
     enableHiding: false,
   },
   {
-    accessorKey: 'id',
+    accessorKey: 'trace_id', // Updated from 'id'
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title='Trace ID' />
     ),
     cell: ({ row }) => {
-      const traceId = row.getValue('id') as string
+      const traceId = row.getValue('trace_id') as string
       const shortId = traceId.substring(0, 8)
 
       const handleCopy = (e: React.MouseEvent) => {
@@ -104,14 +104,14 @@ export const tracesColumns: ColumnDef<Trace>[] = [
     enableSorting: true,
   },
   {
-    accessorKey: 'status',
+    accessorKey: 'status_code', // Updated from 'status'
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title='Status' />
     ),
     cell: ({ row }) => {
-      const status = statuses.find(
-        (status) => status.value === row.getValue('status')
-      )
+      const statusCode = row.getValue('status_code') as number
+      const statusStr = statusCodeToString(statusCode) // Convert UInt8 to string
+      const status = statuses.find((s) => s.value === statusStr)
 
       if (!status) return null
 
@@ -125,7 +125,9 @@ export const tracesColumns: ColumnDef<Trace>[] = [
       )
     },
     filterFn: (row, id, value) => {
-      return value.includes(row.getValue(id))
+      const statusCode = row.getValue(id) as number
+      const statusStr = statusCodeToString(statusCode)
+      return value.includes(statusStr)
     },
     enableSorting: false,
   },

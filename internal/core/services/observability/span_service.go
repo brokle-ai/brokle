@@ -3,6 +3,7 @@ package observability
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -45,15 +46,15 @@ func (s *SpanService) CreateSpan(ctx context.Context, span *observability.Span) 
 	if span.ProjectID == "" {
 		return appErrors.NewValidationError("project_id is required", "span must have a valid project_id")
 	}
-	if span.Name == "" {
-		return appErrors.NewValidationError("name is required", "span name cannot be empty")
+	if span.SpanName == "" {
+		return appErrors.NewValidationError("span_name is required", "span name cannot be empty")
 	}
-	if span.ID == "" {
-		return appErrors.NewValidationError("id is required", "span must have OTEL span_id")
+	if span.SpanID == "" {
+		return appErrors.NewValidationError("span_id is required", "span must have OTEL span_id")
 	}
 
 	// Validate OTEL span_id format (16 hex chars)
-	if len(span.ID) != 16 {
+	if len(span.SpanID) != 16 {
 		return appErrors.NewValidationError("invalid span_id", "OTEL span_id must be 16 hex characters")
 	}
 
@@ -64,45 +65,33 @@ func (s *SpanService) CreateSpan(ctx context.Context, span *observability.Span) 
 	// Async processing means parent may arrive after children - eventual consistency model
 	// Database foreign key relationships will be preserved in final merged state
 
-	// Set defaults
-	if span.StatusCode == "" {
-		span.StatusCode = observability.StatusCodeUnset
+	// Set defaults for required fields
+	if span.StatusCode == 0 {
+		span.StatusCode = observability.StatusCodeUnset // UInt8: 0
 	}
-	if span.SpanKind == "" {
-		span.SpanKind = string(observability.SpanKindInternal)
+	if span.SpanKind == 0 {
+		span.SpanKind = observability.SpanKindInternal // UInt8: 1
 	}
-	if span.Type == "" {
-		span.Type = observability.SpanTypeSpan
+	if span.SpanAttributes == "" {
+		span.SpanAttributes = "{}"
 	}
-	if span.Level == "" {
-		span.Level = observability.SpanLevelDefault
-	}
-	if span.Attributes == "" {
-		span.Attributes = "{}"
-	}
-	if span.Provider == "" {
-		span.Provider = ""
+	if span.ResourceAttributes == "" {
+		span.ResourceAttributes = "{}"
 	}
 	if span.CreatedAt.IsZero() {
 		span.CreatedAt = time.Now()
 	}
 
-	// Initialize maps if nil
-	if span.Metadata == nil {
-		span.Metadata = make(map[string]interface{})
-	}
-	if span.ProvidedUsageDetails == nil {
-		span.ProvidedUsageDetails = make(map[string]uint64)
-	}
-	if span.UsageDetails == nil {
-		span.UsageDetails = make(map[string]uint64)
-	}
-	if span.ProvidedCostDetails == nil {
-		span.ProvidedCostDetails = make(map[string]float64)
-	}
-	if span.CostDetails == nil {
-		span.CostDetails = make(map[string]float64)
-	}
+	// Note: Old dedicated fields (Type, Level, Provider, ModelName, etc.) are now
+	// stored in span_attributes JSON with proper namespaces:
+	// - brokle.span.type, brokle.span.level
+	// - gen_ai.provider.name, gen_ai.request.model
+	// - brokle.cost.*, gen_ai.usage.*
+	// These will be extracted to materialized columns by ClickHouse.
+
+	// Note: Old map fields removed (no longer exist in entity):
+	// - Metadata, ProvidedUsageDetails, UsageDetails, ProvidedCostDetails, CostDetails
+	// All data now stored in span_attributes JSON with proper namespaces
 
 	// Calculate duration if not set
 	span.CalculateDuration()
@@ -112,16 +101,19 @@ func (s *SpanService) CreateSpan(ctx context.Context, span *observability.Span) 
 		return appErrors.NewInternalError("failed to create span", err)
 	}
 
+	// Note: Trace aggregations (total_cost, total_tokens, span_count) calculated on-demand
+	// Industry standard pattern: Query-time aggregation from spans using materialized columns
+
 	return nil
 }
 
 // UpdateSpan updates an existing span
 func (s *SpanService) UpdateSpan(ctx context.Context, span *observability.Span) error {
 	// Validate span exists
-	existing, err := s.spanRepo.GetByID(ctx, span.ID)
+	existing, err := s.spanRepo.GetByID(ctx, span.SpanID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return appErrors.NewNotFoundError(fmt.Sprintf("span %s", span.ID))
+			return appErrors.NewNotFoundError(fmt.Sprintf("span %s", span.SpanID))
 		}
 		return appErrors.NewInternalError("failed to get span", err)
 	}
@@ -129,8 +121,7 @@ func (s *SpanService) UpdateSpan(ctx context.Context, span *observability.Span) 
 	// Merge non-zero fields from incoming span into existing
 	mergeSpanFields(existing, span)
 
-	// Preserve version for increment in repository layer
-	existing.Version = existing.Version
+	// Note: Version field removed (only exists in traces, not spans in OTEL schema)
 
 	// Calculate duration if end time updated
 	existing.CalculateDuration()
@@ -144,14 +135,28 @@ func (s *SpanService) UpdateSpan(ctx context.Context, span *observability.Span) 
 }
 
 // SetSpanCost sets cost details for a span
+// Note: Costs are now stored in span_attributes JSON as STRINGS (brokle.cost.*)
+// and extracted to materialized columns (brokle_cost_input, brokle_cost_output, brokle_cost_total)
 func (s *SpanService) SetSpanCost(ctx context.Context, spanID string, inputCost, outputCost float64) error {
 	span, err := s.spanRepo.GetByID(ctx, spanID)
 	if err != nil {
 		return appErrors.NewNotFoundError(fmt.Sprintf("span %s", spanID))
 	}
 
-	// Set cost details (updates both Maps and Brokle extension fields)
-	span.SetCostDetails(inputCost, outputCost)
+	// Update span_attributes JSON with cost values as STRINGS
+	// Parse existing attributes, add/update cost fields, re-marshal
+	var attrs map[string]interface{}
+	if err := json.Unmarshal([]byte(span.SpanAttributes), &attrs); err != nil {
+		attrs = make(map[string]interface{})
+	}
+
+	// CRITICAL: Format costs as STRINGS (9 decimal places)
+	attrs["brokle.cost.input"] = fmt.Sprintf("%.9f", inputCost)
+	attrs["brokle.cost.output"] = fmt.Sprintf("%.9f", outputCost)
+	attrs["brokle.cost.total"] = fmt.Sprintf("%.9f", inputCost+outputCost)
+
+	attrsJSON, _ := json.Marshal(attrs)
+	span.SpanAttributes = string(attrsJSON)
 
 	// Update span
 	if err := s.spanRepo.Update(ctx, span); err != nil {
@@ -162,14 +167,26 @@ func (s *SpanService) SetSpanCost(ctx context.Context, spanID string, inputCost,
 }
 
 // SetSpanUsage sets usage details for a span
+// Note: Usage tokens are now stored in span_attributes JSON as STRINGS (gen_ai.usage.*)
+// and extracted to materialized columns (gen_ai_usage_input_tokens, gen_ai_usage_output_tokens)
 func (s *SpanService) SetSpanUsage(ctx context.Context, spanID string, promptTokens, completionTokens uint32) error {
 	span, err := s.spanRepo.GetByID(ctx, spanID)
 	if err != nil {
 		return appErrors.NewNotFoundError(fmt.Sprintf("span %s", spanID))
 	}
 
-	// Set usage details (populates usage_details Map)
-	span.SetUsageDetails(uint64(promptTokens), uint64(completionTokens))
+	// Update span_attributes JSON with usage values as STRINGS
+	var attrs map[string]interface{}
+	if err := json.Unmarshal([]byte(span.SpanAttributes), &attrs); err != nil {
+		attrs = make(map[string]interface{})
+	}
+
+	// Store tokens as strings for consistency with OTEL conventions
+	attrs["gen_ai.usage.input_tokens"] = fmt.Sprintf("%d", promptTokens)
+	attrs["gen_ai.usage.output_tokens"] = fmt.Sprintf("%d", completionTokens)
+
+	attrsJSON, _ := json.Marshal(attrs)
+	span.SpanAttributes = string(attrsJSON)
 
 	// Update span
 	if err := s.spanRepo.Update(ctx, span); err != nil {
@@ -181,15 +198,12 @@ func (s *SpanService) SetSpanUsage(ctx context.Context, spanID string, promptTok
 
 // mergeSpanFields merges non-zero fields from src into dst
 func mergeSpanFields(dst *observability.Span, src *observability.Span) {
-	// Update optional fields only if non-zero
-	if src.Name != "" {
-		dst.Name = src.Name
+	// Update core fields only if non-zero
+	if src.SpanName != "" {
+		dst.SpanName = src.SpanName
 	}
-	if src.SpanKind != "" {
+	if src.SpanKind != 0 {
 		dst.SpanKind = src.SpanKind
-	}
-	if src.Type != "" {
-		dst.Type = src.Type
 	}
 	if !src.StartTime.IsZero() {
 		dst.StartTime = src.StartTime
@@ -197,69 +211,45 @@ func mergeSpanFields(dst *observability.Span, src *observability.Span) {
 	if src.EndTime != nil {
 		dst.EndTime = src.EndTime
 	}
-	if src.StatusCode != "" {
+	if src.StatusCode != 0 {
 		dst.StatusCode = src.StatusCode
 	}
 	if src.StatusMessage != nil {
 		dst.StatusMessage = src.StatusMessage
 	}
-	if src.Attributes != "" {
-		dst.Attributes = src.Attributes
+
+	// Attribute fields (JSON strings)
+	if src.SpanAttributes != "" && src.SpanAttributes != "{}" {
+		dst.SpanAttributes = src.SpanAttributes
 	}
+	if src.ResourceAttributes != "" && src.ResourceAttributes != "{}" {
+		dst.ResourceAttributes = src.ResourceAttributes
+	}
+
+	// Input/Output
 	if src.Input != nil {
 		dst.Input = src.Input
 	}
 	if src.Output != nil {
 		dst.Output = src.Output
 	}
-	if src.Metadata != nil {
-		dst.Metadata = src.Metadata
+
+	// Events/Links arrays
+	if len(src.EventsTimestamp) > 0 {
+		dst.EventsTimestamp = src.EventsTimestamp
+		dst.EventsName = src.EventsName
+		dst.EventsAttributes = src.EventsAttributes
 	}
-	if src.Level != "" {
-		dst.Level = src.Level
+	if len(src.LinksTraceID) > 0 {
+		dst.LinksTraceID = src.LinksTraceID
+		dst.LinksSpanID = src.LinksSpanID
+		dst.LinksAttributes = src.LinksAttributes
 	}
 
-	// Model fields
-	if src.ModelName != nil {
-		dst.ModelName = src.ModelName
-	}
-	if src.Provider != "" {
-		dst.Provider = src.Provider
-	}
-	if src.InternalModelID != nil {
-		dst.InternalModelID = src.InternalModelID
-	}
-	if src.ModelParameters != nil {
-		dst.ModelParameters = src.ModelParameters
-	}
-
-	// Usage & Cost Maps
-	if src.ProvidedUsageDetails != nil {
-		dst.ProvidedUsageDetails = src.ProvidedUsageDetails
-	}
-	if src.UsageDetails != nil {
-		dst.UsageDetails = src.UsageDetails
-	}
-	if src.ProvidedCostDetails != nil {
-		dst.ProvidedCostDetails = src.ProvidedCostDetails
-	}
-	if src.CostDetails != nil {
-		dst.CostDetails = src.CostDetails
-	}
-	if src.TotalCost != nil {
-		dst.TotalCost = src.TotalCost
-	}
-
-	// Prompt management
-	if src.PromptID != nil {
-		dst.PromptID = src.PromptID
-	}
-	if src.PromptName != nil {
-		dst.PromptName = src.PromptName
-	}
-	if src.PromptVersion != nil {
-		dst.PromptVersion = src.PromptVersion
-	}
+	// Note: Old dedicated fields (ModelName, Provider, InternalModelID, ModelParameters,
+	// Usage/Cost maps, Prompt fields, Metadata, Type, Level) are now stored in
+	// span_attributes JSON with proper namespaces and extracted to materialized columns.
+	// No need to merge them here - they're part of span_attributes JSON.
 }
 
 // DeleteSpan soft deletes a span
@@ -361,49 +351,32 @@ func (s *SpanService) CreateSpanBatch(ctx context.Context, spans []*observabilit
 		if span.ProjectID == "" {
 			return appErrors.NewValidationError(fmt.Sprintf("span[%d].project_id", i), "project_id is required")
 		}
-		if span.Name == "" {
-			return appErrors.NewValidationError(fmt.Sprintf("span[%d].name", i), "name is required")
+		if span.SpanName == "" {
+			return appErrors.NewValidationError(fmt.Sprintf("span[%d].span_name", i), "span_name is required")
 		}
-		if span.ID == "" {
-			return appErrors.NewValidationError(fmt.Sprintf("span[%d].id", i), "OTEL span_id is required")
+		if span.SpanID == "" {
+			return appErrors.NewValidationError(fmt.Sprintf("span[%d].span_id", i), "OTEL span_id is required")
 		}
 
-		// Set defaults
-		if span.StatusCode == "" {
-			span.StatusCode = observability.StatusCodeUnset
+		// Set defaults for required fields
+		if span.StatusCode == 0 {
+			span.StatusCode = observability.StatusCodeUnset // UInt8: 0
 		}
-		if span.SpanKind == "" {
-			span.SpanKind = string(observability.SpanKindInternal)
+		if span.SpanKind == 0 {
+			span.SpanKind = observability.SpanKindInternal // UInt8: 1
 		}
-		if span.Type == "" {
-			span.Type = observability.SpanTypeSpan
+		if span.SpanAttributes == "" {
+			span.SpanAttributes = "{}"
 		}
-		if span.Level == "" {
-			span.Level = observability.SpanLevelDefault
-		}
-		if span.Attributes == "" {
-			span.Attributes = "{}"
+		if span.ResourceAttributes == "" {
+			span.ResourceAttributes = "{}"
 		}
 		if span.CreatedAt.IsZero() {
 			span.CreatedAt = time.Now()
 		}
 
-		// Initialize maps if nil
-		if span.Metadata == nil {
-			span.Metadata = make(map[string]interface{})
-		}
-		if span.ProvidedUsageDetails == nil {
-			span.ProvidedUsageDetails = make(map[string]uint64)
-		}
-		if span.UsageDetails == nil {
-			span.UsageDetails = make(map[string]uint64)
-		}
-		if span.ProvidedCostDetails == nil {
-			span.ProvidedCostDetails = make(map[string]float64)
-		}
-		if span.CostDetails == nil {
-			span.CostDetails = make(map[string]float64)
-		}
+		// Note: Old fields (Type, Level, Attributes, Metadata, Usage/Cost maps)
+		// are now stored in span_attributes/resource_attributes JSON
 
 		// Calculate duration
 		span.CalculateDuration()
@@ -456,3 +429,4 @@ func (s *SpanService) CalculateTraceTokens(ctx context.Context, traceID string) 
 
 	return uint32(totalTokens), nil
 }
+

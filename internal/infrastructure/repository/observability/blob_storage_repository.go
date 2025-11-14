@@ -24,7 +24,6 @@ func NewBlobStorageRepository(db clickhouse.Conn) observability.BlobStorageRepos
 func (r *blobStorageRepository) Create(ctx context.Context, blob *observability.BlobStorageFileLog) error {
 	// Set version and event_ts for new blob references
 	// Version is now optional application version
-	blob.EventTs = time.Now()
 	blob.UpdatedAt = time.Now()
 
 	query := `
@@ -33,7 +32,7 @@ func (r *blobStorageRepository) Create(ctx context.Context, blob *observability.
 			bucket_name, bucket_path,
 			file_size_bytes, content_type, compression,
 			created_at, updated_at,
-			version, event_ts, is_deleted
+			version
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
@@ -51,8 +50,7 @@ func (r *blobStorageRepository) Create(ctx context.Context, blob *observability.
 		blob.CreatedAt,
 		blob.UpdatedAt,
 		blob.Version,
-		blob.EventTs,
-		boolToUint8(blob.IsDeleted),
+		// Removed: event_ts, is_deleted
 	)
 }
 
@@ -60,7 +58,6 @@ func (r *blobStorageRepository) Create(ctx context.Context, blob *observability.
 func (r *blobStorageRepository) Update(ctx context.Context, blob *observability.BlobStorageFileLog) error {
 	// ReplacingMergeTree pattern: increment version and update event_ts
 	// Version is now optional application version (not auto-incremented)
-	blob.EventTs = time.Now()
 	blob.UpdatedAt = time.Now()
 
 	// Same INSERT query as Create - ClickHouse will handle merging
@@ -80,8 +77,7 @@ func (r *blobStorageRepository) Delete(ctx context.Context, id string) error {
 			now64() as event_ts,
 			1 as is_deleted
 		FROM blob_storage_file_log
-		WHERE id = ? AND is_deleted = 0
-		ORDER BY event_ts DESC
+		WHERE id = ?		ORDER BY event_ts DESC
 		LIMIT 1
 	`
 
@@ -96,10 +92,9 @@ func (r *blobStorageRepository) GetByID(ctx context.Context, id string) (*observ
 			bucket_name, bucket_path,
 			file_size_bytes, content_type, compression,
 			created_at, updated_at,
-			version, event_ts, is_deleted
+			version
 		FROM blob_storage_file_log
-		WHERE id = ? AND is_deleted = 0
-		ORDER BY event_ts DESC
+		WHERE id = ?		ORDER BY event_ts DESC
 		LIMIT 1
 	`
 
@@ -115,10 +110,9 @@ func (r *blobStorageRepository) GetByEntityID(ctx context.Context, entityType, e
 			bucket_name, bucket_path,
 			file_size_bytes, content_type, compression,
 			created_at, updated_at,
-			version, event_ts, is_deleted
+			version
 		FROM blob_storage_file_log
-		WHERE entity_type = ? AND entity_id = ? AND is_deleted = 0
-		ORDER BY created_at DESC
+		WHERE entity_type = ? AND entity_id = ?		ORDER BY created_at DESC
 	`
 
 	rows, err := r.db.Query(ctx, query, entityType, entityID)
@@ -138,10 +132,9 @@ func (r *blobStorageRepository) GetByProjectID(ctx context.Context, projectID st
 			bucket_name, bucket_path,
 			file_size_bytes, content_type, compression,
 			created_at, updated_at,
-			version, event_ts, is_deleted
+			version
 		FROM blob_storage_file_log
-		WHERE project_id = ? AND is_deleted = 0
-	`
+		WHERE project_id = ?	`
 
 	args := []interface{}{projectID}
 
@@ -221,7 +214,6 @@ func (r *blobStorageRepository) Count(ctx context.Context, filter *observability
 // Helper function to scan a single blob from query row
 func (r *blobStorageRepository) scanBlobRow(row driver.Row) (*observability.BlobStorageFileLog, error) {
 	var blob observability.BlobStorageFileLog
-	var isDeleted uint8
 
 	err := row.Scan(
 		&blob.ID,
@@ -237,15 +229,12 @@ func (r *blobStorageRepository) scanBlobRow(row driver.Row) (*observability.Blob
 		&blob.CreatedAt,
 		&blob.UpdatedAt,
 		&blob.Version,
-		&blob.EventTs,
-		&isDeleted,
+		// Removed: event_ts, is_deleted
 	)
 
 	if err != nil {
 		return nil, fmt.Errorf("scan blob: %w", err)
 	}
-
-	blob.IsDeleted = isDeleted != 0
 
 	return &blob, nil
 }
@@ -256,7 +245,6 @@ func (r *blobStorageRepository) scanBlobs(rows driver.Rows) ([]*observability.Bl
 
 	for rows.Next() {
 		var blob observability.BlobStorageFileLog
-		var isDeleted uint8
 
 		err := rows.Scan(
 			&blob.ID,
@@ -272,15 +260,12 @@ func (r *blobStorageRepository) scanBlobs(rows driver.Rows) ([]*observability.Bl
 			&blob.CreatedAt,
 			&blob.UpdatedAt,
 			&blob.Version,
-			&blob.EventTs,
-			&isDeleted,
+			// Removed: event_ts, is_deleted
 		)
 
 		if err != nil {
 			return nil, fmt.Errorf("scan blob row: %w", err)
 		}
-
-		blob.IsDeleted = isDeleted != 0
 
 		blobs = append(blobs, &blob)
 	}

@@ -1,7 +1,7 @@
 services:
   # Database Services
   postgres:
-    image: postgres:17-alpine
+    image: postgres:18-alpine
     container_name: brokle-postgres
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-brokle_dev}
@@ -20,7 +20,7 @@ services:
       - brokle-network
 
   clickhouse:
-    image: clickhouse/clickhouse-server:24.12-alpine
+    image: clickhouse/clickhouse-server:25.8-alpine
     container_name: brokle-clickhouse
     environment:
       CLICKHOUSE_DB: ${CLICKHOUSE_DB:-default}
@@ -43,7 +43,7 @@ services:
       - brokle-network
 
   redis:
-    image: redis:7.4-alpine
+    image: redis:8.2-alpine
     container_name: brokle-redis
     ports:
       - "6379:6379"
@@ -136,7 +136,7 @@ services:
 
   # MinIO for local S3-compatible blob storage
   minio:
-    image: minio/minio:latest
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
     container_name: brokle-minio
     ports:
       - "9100:9000"   # S3 API

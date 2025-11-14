@@ -133,7 +133,7 @@ export function TracesTable({ data, totalCount }: DataTableProps) {
     manualFiltering: true,
     manualSorting: true,
     enableRowSelection: true,
-    getRowId: (row) => row.id,
+    getRowId: (row) => row.trace_id,
     onRowSelectionChange: setRowSelection,
     onColumnVisibilityChange: setColumnVisibility,
     onPaginationChange,
@@ -141,10 +141,10 @@ export function TracesTable({ data, totalCount }: DataTableProps) {
     onColumnFiltersChange,
     onSortingChange,
     globalFilterFn: (row, _columnId, filterValue) => {
-      const id = String(row.getValue('id')).toLowerCase()
+      const traceId = String(row.getValue('trace_id')).toLowerCase()
       const name = String(row.getValue('name')).toLowerCase()
       const searchValue = String(filterValue).toLowerCase()
-      return id.includes(searchValue) || name.includes(searchValue)
+      return traceId.includes(searchValue) || name.includes(searchValue)
     },
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -154,7 +154,7 @@ export function TracesTable({ data, totalCount }: DataTableProps) {
 
   // Optimized: Derive trace IDs from data (only changes when data changes)
   const rowIds = useMemo(
-    () => data.map((trace) => trace.id),
+    () => data.map((trace) => trace.trace_id),
     [data]
   )
 
@@ -170,7 +170,7 @@ export function TracesTable({ data, totalCount }: DataTableProps) {
       if ((e.target as HTMLElement).closest('[role="checkbox"], button, a')) {
         return
       }
-      openPeek(trace.id)
+      openPeek(trace.trace_id)
     },
     [openPeek]
   )

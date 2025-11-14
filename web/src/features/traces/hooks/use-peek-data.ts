@@ -34,7 +34,7 @@ export function usePeekData() {
 
         // MOCK: Find trace from mock data
         await new Promise((resolve) => setTimeout(resolve, 300)) // Simulate network delay
-        const foundTrace = traces.find((t) => t.id === peekId)
+        const foundTrace = traces.find((t) => t.trace_id === peekId)
 
         if (!foundTrace) {
           throw new Error('Trace not found')
