@@ -6,7 +6,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 
@@ -14,13 +13,11 @@ import (
 	"brokle/internal/core/domain/auth"
 	"brokle/internal/core/domain/billing"
 	"brokle/internal/core/domain/common"
-	"brokle/internal/core/domain/gateway"
 	"brokle/internal/core/domain/observability"
 	"brokle/internal/core/domain/organization"
 	"brokle/internal/core/domain/user"
 	authService "brokle/internal/core/services/auth"
 	billingService "brokle/internal/core/services/billing"
-	gatewayService "brokle/internal/core/services/gateway"
 	observabilityService "brokle/internal/core/services/observability"
 	orgService "brokle/internal/core/services/organization"
 	registrationService "brokle/internal/core/services/registration"
@@ -30,11 +27,8 @@ import (
 	"brokle/internal/ee/rbac"
 	"brokle/internal/ee/sso"
 	"brokle/internal/infrastructure/database"
-	"brokle/internal/infrastructure/providers"
-	_ "brokle/internal/infrastructure/providers/openai" // Import for side-effect (provider registration)
 	authRepo "brokle/internal/infrastructure/repository/auth"
 	billingRepo "brokle/internal/infrastructure/repository/billing"
-	gatewayRepo "brokle/internal/infrastructure/repository/gateway"
 	observabilityRepo "brokle/internal/infrastructure/repository/observability"
 	orgRepo "brokle/internal/infrastructure/repository/organization"
 	userRepo "brokle/internal/infrastructure/repository/user"
@@ -43,7 +37,6 @@ import (
 	"brokle/internal/transport/http"
 	"brokle/internal/transport/http/handlers"
 	"brokle/internal/workers"
-	gatewayAnalytics "brokle/internal/workers/analytics"
 	"brokle/pkg/ulid"
 )
 
@@ -89,7 +82,6 @@ type DatabaseContainer struct {
 // WorkerContainer holds all background worker instances
 type WorkerContainer struct {
 	TelemetryConsumer *workers.TelemetryStreamConsumer
-	GatewayAnalytics  *gatewayAnalytics.GatewayAnalyticsWorker
 }
 
 // RepositoryContainer holds all repository instances organized by domain
@@ -98,7 +90,6 @@ type RepositoryContainer struct {
 	Auth          *AuthRepositories
 	Organization  *OrganizationRepositories
 	Observability *ObservabilityRepositories
-	Gateway       *GatewayRepositories
 	Billing       *BillingRepositories
 }
 
@@ -115,8 +106,6 @@ type ServiceContainer struct {
 	SettingsService     organization.OrganizationSettingsService
 	// Observability services
 	Observability *observabilityService.ServiceRegistry
-	// Gateway services
-	Gateway *GatewayServices
 	// Billing services
 	Billing *BillingServices
 }
@@ -165,14 +154,7 @@ type ObservabilityRepositories struct {
 	Score                  observability.ScoreRepository
 	BlobStorage            observability.BlobStorageRepository
 	TelemetryDeduplication observability.TelemetryDeduplicationRepository
-}
-
-// GatewayRepositories contains all gateway-related repositories
-type GatewayRepositories struct {
-	Provider       gateway.ProviderRepository
-	Model          gateway.ModelRepository
-	ProviderConfig gateway.ProviderConfigRepository
-	Analytics      *gatewayRepo.Repository
+	Model observability.ModelRepository // PostgreSQL repo for cost calculation
 }
 
 // BillingRepositories contains all billing-related repositories
@@ -202,13 +184,6 @@ type AuthServices struct {
 	BlacklistedTokens   auth.BlacklistedTokenService
 	Scope               auth.ScopeService
 	OAuthProvider       *authService.OAuthProviderService
-}
-
-// GatewayServices contains all gateway-related services
-type GatewayServices struct {
-	Gateway gateway.GatewayService
-	Routing gateway.RoutingService
-	Cost    gateway.CostService
 }
 
 // BillingServices contains all billing-related services
@@ -274,17 +249,8 @@ func ProvideWorkers(core *CoreContainer) (*WorkerContainer, error) {
 		core.Services.Observability.ScoreService,
 	)
 
-	// Create gateway analytics worker
-	gatewayAnalyticsWorker := gatewayAnalytics.NewGatewayAnalyticsWorker(
-		core.Logger,
-		nil,
-		core.Repos.Gateway.Analytics,
-		core.Services.Billing.Billing,
-	)
-
 	return &WorkerContainer{
 		TelemetryConsumer: telemetryConsumer,
-		GatewayAnalytics:  gatewayAnalyticsWorker,
 	}, nil
 }
 
@@ -320,8 +286,7 @@ func ProvideServerServices(core *CoreContainer) *ServiceContainer {
 	repos := core.Repos
 	databases := core.Databases
 
-	// Create gateway and billing services
-	gatewayServices := ProvideGatewayServices(repos.Gateway, logger)
+	// Create billing services
 	billingServices := ProvideBillingServices(repos.Billing, logger)
 
 	// Create observability services
@@ -359,7 +324,6 @@ func ProvideServerServices(core *CoreContainer) *ServiceContainer {
 		InvitationService:   invitationService,
 		SettingsService:     settingsService,
 		Observability:       observabilityServices,
-		Gateway:             gatewayServices,
 		Billing:             billingServices,
 	}
 }
@@ -372,7 +336,6 @@ func ProvideWorkerServices(core *CoreContainer) *ServiceContainer {
 	databases := core.Databases
 
 	// Only services worker uses for processing
-	gatewayServices := ProvideGatewayServices(repos.Gateway, logger)
 	billingServices := ProvideBillingServices(repos.Billing, logger)
 	observabilityServices := ProvideObservabilityServices(repos.Observability, databases.Redis, cfg, logger)
 
@@ -388,7 +351,6 @@ func ProvideWorkerServices(core *CoreContainer) *ServiceContainer {
 		SettingsService:     nil,
 		// Worker only needs these
 		Observability: observabilityServices,
-		Gateway:       gatewayServices,
 		Billing:       billingServices,
 	}
 }
@@ -416,9 +378,6 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 		core.Services.Auth.OrganizationMembers,
 		core.Services.Auth.Scope,
 		core.Services.Observability,
-		core.Services.Gateway.Gateway,
-		core.Services.Gateway.Routing,
-		core.Services.Gateway.Cost,
 	)
 
 	// Initialize HTTP server
@@ -472,23 +431,14 @@ func ProvideOrganizationRepositories(db *gorm.DB) *OrganizationRepositories {
 }
 
 // ProvideObservabilityRepositories creates all observability-related repositories
-func ProvideObservabilityRepositories(clickhouseDB *database.ClickHouseDB, redisDB *database.RedisDB) *ObservabilityRepositories {
+func ProvideObservabilityRepositories(clickhouseDB *database.ClickHouseDB, postgresDB *gorm.DB, redisDB *database.RedisDB) *ObservabilityRepositories {
 	return &ObservabilityRepositories{
 		Trace:                  observabilityRepo.NewTraceRepository(clickhouseDB.Conn),
 		Span:                   observabilityRepo.NewSpanRepository(clickhouseDB.Conn),
 		Score:                  observabilityRepo.NewScoreRepository(clickhouseDB.Conn),
 		BlobStorage:            observabilityRepo.NewBlobStorageRepository(clickhouseDB.Conn),
 		TelemetryDeduplication: observabilityRepo.NewTelemetryDeduplicationRepository(redisDB),
-	}
-}
-
-// ProvideGatewayRepositories creates all gateway-related repositories
-func ProvideGatewayRepositories(db *gorm.DB, conn clickhouse.Conn, logger *logrus.Logger) *GatewayRepositories {
-	return &GatewayRepositories{
-		Provider:       gatewayRepo.NewProviderRepository(db),
-		Model:          gatewayRepo.NewModelRepository(db),
-		ProviderConfig: gatewayRepo.NewProviderConfigRepository(db),
-		Analytics:      gatewayRepo.NewRepository(conn, logger),
+		Model: observabilityRepo.NewModelRepository(postgresDB), // PostgreSQL for pricing
 	}
 }
 
@@ -507,8 +457,7 @@ func ProvideRepositories(dbs *DatabaseContainer, logger *logrus.Logger) *Reposit
 		User:          ProvideUserRepositories(dbs.Postgres.DB),
 		Auth:          ProvideAuthRepositories(dbs.Postgres.DB),
 		Organization:  ProvideOrganizationRepositories(dbs.Postgres.DB),
-		Observability: ProvideObservabilityRepositories(dbs.ClickHouse, dbs.Redis),
-		Gateway:       ProvideGatewayRepositories(dbs.Postgres.DB, dbs.ClickHouse.Conn, logger),
+		Observability: ProvideObservabilityRepositories(dbs.ClickHouse, dbs.Postgres.DB, dbs.Redis),
 		Billing:       ProvideBillingRepositories(dbs.Postgres.DB, logger),
 	}
 }
@@ -725,6 +674,7 @@ func ProvideObservabilityServices(
 		observabilityRepos.Span,
 		observabilityRepos.Score,
 		observabilityRepos.BlobStorage,
+		observabilityRepos.Model, // Add model repo for cost calculation
 		s3Client,
 		&cfg.BlobStorage,
 		streamProducer,
@@ -732,49 +682,6 @@ func ProvideObservabilityServices(
 		telemetryService,
 		logger,
 	)
-}
-
-// ProvideGatewayServices creates all gateway-related services
-func ProvideGatewayServices(
-	gatewayRepos *GatewayRepositories,
-	logger *logrus.Logger,
-) *GatewayServices {
-	// Create provider factory (OpenAI provider auto-registers via init())
-	providerFactory := providers.NewProviderFactory()
-
-	// Create cost service with repository dependencies
-	costService := gatewayService.NewCostService(
-		gatewayRepos.Model,
-		gatewayRepos.Provider,
-		gatewayRepos.ProviderConfig,
-		logger,
-	)
-
-	// Create routing service with cost service dependency
-	routingService := gatewayService.NewRoutingService(
-		gatewayRepos.Provider,
-		gatewayRepos.Model,
-		gatewayRepos.ProviderConfig,
-		costService,
-		logger,
-	)
-
-	// Create gateway service with all dependencies
-	gatewayServiceImpl := gatewayService.NewGatewayService(
-		gatewayRepos.Provider,
-		gatewayRepos.Model,
-		gatewayRepos.ProviderConfig,
-		routingService,
-		costService,
-		providerFactory,
-		logger,
-	)
-
-	return &GatewayServices{
-		Gateway: gatewayServiceImpl,
-		Routing: routingService,
-		Cost:    costService,
-	}
 }
 
 // ProvideBillingServices creates all billing-related services
@@ -888,14 +795,6 @@ func (pc *ProviderContainer) HealthCheck() map[string]string {
 		}
 	}
 
-	if pc.Workers != nil && pc.Workers.GatewayAnalytics != nil {
-		if pc.Workers.GatewayAnalytics.IsHealthy() {
-			health["gateway_analytics_worker"] = "healthy"
-		} else {
-			health["gateway_analytics_worker"] = "unhealthy: queue depth exceeded or processing failed"
-		}
-	}
-
 	// Add deployment mode
 	health["mode"] = string(pc.Mode)
 
@@ -913,12 +812,6 @@ func (pc *ProviderContainer) Shutdown() error {
 		logger.Info("Stopping telemetry stream consumer...")
 		pc.Workers.TelemetryConsumer.Stop()
 		logger.Info("Telemetry stream consumer stopped")
-	}
-
-	if pc.Workers != nil && pc.Workers.GatewayAnalytics != nil {
-		logger.Info("Stopping gateway analytics worker...")
-		pc.Workers.GatewayAnalytics.Stop()
-		logger.Info("Gateway analytics worker stopped")
 	}
 
 	// Close database connections

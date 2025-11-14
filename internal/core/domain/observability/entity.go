@@ -2,6 +2,9 @@ package observability
 
 import (
 	"encoding/json"
+	"fmt"
+	"regexp"
+	"strings"
 	"time"
 
 	"brokle/pkg/ulid"
@@ -207,14 +210,20 @@ type Model struct {
 	MatchPattern string `json:"match_pattern" db:"match_pattern"` // Regex for model aliases
 	Provider     string `json:"provider" db:"provider"`           // openai, anthropic, google, etc.
 
-	// Pricing (per 1k tokens by default)
+	// Pricing per 1M tokens (industry standard)
 	InputPrice  *float64 `json:"input_price,omitempty" db:"input_price"`
 	OutputPrice *float64 `json:"output_price,omitempty" db:"output_price"`
-	TotalPrice  *float64 `json:"total_price,omitempty" db:"total_price"` // Fallback for non-token pricing
+	TotalPrice  *float64 `json:"total_price,omitempty" db:"total_price"` // For flat-priced models
 	Unit        string   `json:"unit" db:"unit"`                         // TOKENS, CHARACTERS, REQUESTS, etc.
+
+	// Advanced pricing features
+	CacheWriteMultiplier    float64 `json:"cache_write_multiplier" db:"cache_write_multiplier"`
+	CacheReadMultiplier     float64 `json:"cache_read_multiplier" db:"cache_read_multiplier"`
+	BatchDiscountPercentage float64 `json:"batch_discount_percentage" db:"batch_discount_percentage"`
 
 	// Versioning
 	StartDate    *time.Time `json:"start_date,omitempty" db:"start_date"`
+	EndDate      *time.Time `json:"end_date,omitempty" db:"end_date"` // NULL = current active pricing
 	IsDeprecated bool       `json:"is_deprecated" db:"is_deprecated"`
 
 	// Tokenizer config (optional)
@@ -224,6 +233,218 @@ type Model struct {
 	// Timestamps
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+}
+
+// Model business logic methods
+
+// IsActive checks if pricing is currently active
+func (m *Model) IsActive() bool {
+	if m.IsDeprecated {
+		return false
+	}
+
+	now := time.Now()
+
+	// Check start date
+	if m.StartDate != nil && now.Before(*m.StartDate) {
+		return false
+	}
+
+	// Check end date (NULL = active)
+	if m.EndDate != nil && now.After(*m.EndDate) {
+		return false
+	}
+
+	return true
+}
+
+// IsGlobalPricing checks if this is global (non-project-specific) pricing
+func (m *Model) IsGlobalPricing() bool {
+	return m.ProjectID == nil
+}
+
+// CalculateInputCost calculates cost for input tokens
+func (m *Model) CalculateInputCost(inputTokens int32, cacheHit bool) float64 {
+	if m.InputPrice == nil {
+		return 0.0
+	}
+
+	// Base cost (per-1M tokens)
+	cost := (float64(inputTokens) / 1_000_000.0) * *m.InputPrice
+
+	// Apply caching multiplier
+	if cacheHit && m.CacheReadMultiplier > 0 {
+		cost *= m.CacheReadMultiplier
+	}
+
+	return cost
+}
+
+// CalculateOutputCost calculates cost for output tokens
+func (m *Model) CalculateOutputCost(outputTokens int32) float64 {
+	if m.OutputPrice == nil {
+		return 0.0
+	}
+
+	// Base cost (per-1M tokens)
+	return (float64(outputTokens) / 1_000_000.0) * *m.OutputPrice
+}
+
+// CalculateTotalCost calculates total cost with optional batch discount
+func (m *Model) CalculateTotalCost(inputTokens, outputTokens int32, cacheHit, batchMode bool) float64 {
+	inputCost := m.CalculateInputCost(inputTokens, cacheHit)
+	outputCost := m.CalculateOutputCost(outputTokens)
+	totalCost := inputCost + outputCost
+
+	// Apply batch discount
+	if batchMode && m.BatchDiscountPercentage > 0 {
+		totalCost *= (1.0 - m.BatchDiscountPercentage / 100.0)
+	}
+
+	return totalCost
+}
+
+// Validate validates model pricing data
+// Includes ReDoS protection for regex patterns
+func (m *Model) Validate() []ValidationError {
+	var errors []ValidationError
+
+	// Required fields
+	if m.ModelName == "" {
+		errors = append(errors, ValidationError{
+			Field:   "model_name",
+			Message: "model name is required",
+		})
+	}
+
+	if m.MatchPattern == "" {
+		errors = append(errors, ValidationError{
+			Field:   "match_pattern",
+			Message: "match pattern is required",
+		})
+	}
+
+	if m.Provider == "" {
+		errors = append(errors, ValidationError{
+			Field:   "provider",
+			Message: "provider is required",
+		})
+	}
+
+	if m.Unit == "" {
+		errors = append(errors, ValidationError{
+			Field:   "unit",
+			Message: "pricing unit is required",
+		})
+	}
+
+	// At least one price must be set
+	if m.InputPrice == nil && m.OutputPrice == nil && m.TotalPrice == nil {
+		errors = append(errors, ValidationError{
+			Field:   "pricing",
+			Message: "at least one price (input/output/total) is required",
+		})
+	}
+
+	// Validate non-negative prices
+	if m.InputPrice != nil && *m.InputPrice < 0 {
+		errors = append(errors, ValidationError{
+			Field:   "input_price",
+			Message: "must be non-negative",
+		})
+	}
+
+	if m.OutputPrice != nil && *m.OutputPrice < 0 {
+		errors = append(errors, ValidationError{
+			Field:   "output_price",
+			Message: "must be non-negative",
+		})
+	}
+
+	if m.TotalPrice != nil && *m.TotalPrice < 0 {
+		errors = append(errors, ValidationError{
+			Field:   "total_price",
+			Message: "must be non-negative",
+		})
+	}
+
+	// Validate regex pattern (ReDoS protection)
+	if m.MatchPattern != "" {
+		// Test regex compilation
+		if _, err := regexp.Compile(m.MatchPattern); err != nil {
+			errors = append(errors, ValidationError{
+				Field:   "match_pattern",
+				Message: fmt.Sprintf("invalid regex pattern: %v", err),
+			})
+		}
+
+		// Pattern complexity checks (prevent ReDoS attacks)
+		if len(m.MatchPattern) > 200 {
+			errors = append(errors, ValidationError{
+				Field:   "match_pattern",
+				Message: "pattern too long (max 200 characters)",
+			})
+		}
+
+		if strings.Count(m.MatchPattern, "*") > 10 {
+			errors = append(errors, ValidationError{
+				Field:   "match_pattern",
+				Message: "pattern too complex (max 10 wildcards)",
+			})
+		}
+	}
+
+	// Validate temporal constraints
+	if m.StartDate != nil && m.EndDate != nil && !m.EndDate.After(*m.StartDate) {
+		errors = append(errors, ValidationError{
+			Field:   "end_date",
+			Message: "end date must be after start date",
+		})
+	}
+
+	// Validate multipliers
+	if m.CacheWriteMultiplier < 0 {
+		errors = append(errors, ValidationError{
+			Field:   "cache_write_multiplier",
+			Message: "must be non-negative",
+		})
+	}
+
+	if m.CacheReadMultiplier < 0 || m.CacheReadMultiplier > 1.0 {
+		errors = append(errors, ValidationError{
+			Field:   "cache_read_multiplier",
+			Message: "must be between 0 and 1",
+		})
+	}
+
+	if m.BatchDiscountPercentage < 0 || m.BatchDiscountPercentage > 100 {
+		errors = append(errors, ValidationError{
+			Field:   "batch_discount_percentage",
+			Message: "must be between 0 and 100",
+		})
+	}
+
+	return errors
+}
+
+// CostBreakdown represents detailed cost calculation result
+type CostBreakdown struct {
+	InputCost  string `json:"input_cost"`  // Formatted as "0.000012345" (9 decimals, Decimal(18,9))
+	OutputCost string `json:"output_cost"` // Formatted as "0.000067890" (9 decimals, Decimal(18,9))
+	TotalCost  string `json:"total_cost"`  // Formatted as "0.000080235" (9 decimals, Decimal(18,9))
+	Currency   string `json:"currency"`    // Always "USD"
+
+	// Metadata for attribution
+	ModelName    string `json:"model_name"`
+	Provider     string `json:"provider"`
+	InputTokens  int32  `json:"input_tokens"`
+	OutputTokens int32  `json:"output_tokens"`
+	CacheHit     bool   `json:"cache_hit"`
+	BatchMode    bool   `json:"batch_mode"`
+
+	// Savings attribution (optional)
+	CacheSavings *float64 `json:"cache_savings,omitempty"` // Amount saved via caching
+	BatchSavings *float64 `json:"batch_savings,omitempty"` // Amount saved via batch discount
 }
 
 // OTEL SpanKind enum values (UInt8 in ClickHouse)
