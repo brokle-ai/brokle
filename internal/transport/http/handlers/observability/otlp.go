@@ -163,8 +163,8 @@ func (h *OTLPHandler) HandleTraces(c *gin.Context) {
 		"resource_spans": len(otlpReq.ResourceSpans),
 	}).Debug("Received OTLP trace request")
 
-	// Convert OTLP spans to Brokle telemetry events using converter service
-	brokleEvents, err := h.otlpConverter.ConvertOTLPToBrokleEvents(&otlpReq)
+	// Convert OTLP spans to Brokle telemetry events using converter service (with cost calculation)
+	brokleEvents, err := h.otlpConverter.ConvertOTLPToBrokleEvents(c.Request.Context(), &otlpReq, projectID)
 	if err != nil {
 		h.logger.WithError(err).Error("Failed to convert OTLP to Brokle events")
 		response.InternalServerError(c, "Failed to process OTLP traces")

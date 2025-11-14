@@ -8,7 +8,6 @@ import (
 	"github.com/sirupsen/logrus"
 
 	billingDomain "brokle/internal/core/domain/billing"
-	"brokle/internal/workers/analytics"
 	"brokle/pkg/ulid"
 )
 
@@ -72,7 +71,7 @@ func NewBillingService(
 }
 
 // RecordUsage records usage for billing
-func (s *BillingService) RecordUsage(ctx context.Context, usage *analytics.CostMetric) error {
+func (s *BillingService) RecordUsage(ctx context.Context, usage *billingDomain.CostMetric) error {
 	// Get organization billing tier
 	billingTier, err := s.orgService.GetBillingTier(ctx, usage.OrganizationID)
 	if err != nil {
@@ -132,7 +131,7 @@ func (s *BillingService) RecordUsage(ctx context.Context, usage *analytics.CostM
 }
 
 // CalculateBill generates a billing summary for an organization
-func (s *BillingService) CalculateBill(ctx context.Context, orgID ulid.ULID, period string) (*analytics.BillingSummary, error) {
+func (s *BillingService) CalculateBill(ctx context.Context, orgID ulid.ULID, period string) (*billingDomain.BillingSummary, error) {
 	// Calculate period start and end dates
 	start, end := s.calculatePeriodBounds(period)
 
@@ -143,7 +142,7 @@ func (s *BillingService) CalculateBill(ctx context.Context, orgID ulid.ULID, per
 	}
 
 	if len(usageRecords) == 0 {
-		return &analytics.BillingSummary{
+		return &billingDomain.BillingSummary{
 			ID:             ulid.New(),
 			OrganizationID: orgID,
 			Period:         period,
@@ -160,15 +159,15 @@ func (s *BillingService) CalculateBill(ctx context.Context, orgID ulid.ULID, per
 	}
 
 	// Calculate summary statistics
-	summary := &analytics.BillingSummary{
+	summary := &billingDomain.BillingSummary{
 		ID:                ulid.New(),
 		OrganizationID:    orgID,
 		Period:            period,
 		PeriodStart:       start,
 		PeriodEnd:         end,
 		Currency:          usageRecords[0].Currency,
-		ProviderBreakdown: make(map[string]float64),
-		ModelBreakdown:    make(map[string]float64),
+		ProviderBreakdown: make(map[string]interface{}),
+		ModelBreakdown:    make(map[string]interface{}),
 		GeneratedAt:       time.Now(),
 	}
 
@@ -186,16 +185,24 @@ func (s *BillingService) CalculateBill(ctx context.Context, orgID ulid.ULID, per
 		totalNetCost += record.NetCost
 
 		// Provider breakdown
-		providerKey := record.ProviderID.String() // Could be enhanced with provider name
-		summary.ProviderBreakdown[providerKey] += record.NetCost
+		providerKey := record.ProviderID.String()
+		if val, ok := summary.ProviderBreakdown[providerKey].(float64); ok {
+			summary.ProviderBreakdown[providerKey] = val + record.NetCost
+		} else {
+			summary.ProviderBreakdown[providerKey] = record.NetCost
+		}
 
 		// Model breakdown
-		modelKey := record.ModelID.String() // Could be enhanced with model name
-		summary.ModelBreakdown[modelKey] += record.NetCost
+		modelKey := record.ModelID.String()
+		if val, ok := summary.ModelBreakdown[modelKey].(float64); ok {
+			summary.ModelBreakdown[modelKey] = val + record.NetCost
+		} else {
+			summary.ModelBreakdown[modelKey] = record.NetCost
+		}
 	}
 
-	summary.TotalRequests = totalRequests
-	summary.TotalTokens = totalTokens
+	summary.TotalRequests = int(totalRequests)
+	summary.TotalTokens = int(totalTokens)
 	summary.TotalCost = totalCost
 	summary.Discounts = totalDiscounts
 	summary.NetCost = totalNetCost
@@ -217,7 +224,7 @@ func (s *BillingService) CalculateBill(ctx context.Context, orgID ulid.ULID, per
 }
 
 // GetBillingHistory retrieves billing history for an organization
-func (s *BillingService) GetBillingHistory(ctx context.Context, orgID ulid.ULID, start, end time.Time) ([]*analytics.BillingRecord, error) {
+func (s *BillingService) GetBillingHistory(ctx context.Context, orgID ulid.ULID, start, end time.Time) ([]*billingDomain.BillingRecord, error) {
 	return s.billingRecordRepo.GetBillingHistory(ctx, orgID, start, end)
 }
 
@@ -320,12 +327,12 @@ func (s *BillingService) CheckUsageQuotas(ctx context.Context, orgID ulid.ULID) 
 // QuotaStatus represents the current quota status for an organization
 
 // CreateBillingRecord creates a new billing record for an organization
-func (s *BillingService) CreateBillingRecord(ctx context.Context, summary *analytics.BillingSummary) (*analytics.BillingRecord, error) {
+func (s *BillingService) CreateBillingRecord(ctx context.Context, summary *billingDomain.BillingSummary) (*billingDomain.BillingRecord, error) {
 	if summary.NetCost <= 0 {
 		return nil, fmt.Errorf("no charges to bill for organization %s", summary.OrganizationID)
 	}
 
-	record := &analytics.BillingRecord{
+	record := &billingDomain.BillingRecord{
 		ID:             ulid.New(),
 		OrganizationID: summary.OrganizationID,
 		Period:         summary.Period,

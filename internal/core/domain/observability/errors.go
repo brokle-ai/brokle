@@ -26,6 +26,13 @@ var (
 	ErrEvaluatorNotFound     = fmt.Errorf("evaluator not found")
 	ErrDuplicateQualityScore = fmt.Errorf("duplicate quality score for the same trace/span and score name")
 
+	// Model pricing errors
+	ErrModelNotFound         = fmt.Errorf("model not found")
+	ErrInvalidPricingPattern = fmt.Errorf("invalid pricing pattern")
+	ErrPricingDataIncomplete = fmt.Errorf("incomplete pricing data")
+	ErrPricingExpired        = fmt.Errorf("pricing has expired")
+	ErrInvalidPricingData    = fmt.Errorf("invalid pricing data")
+
 	// General validation errors
 	ErrValidationFailed        = fmt.Errorf("validation failed")
 	ErrInvalidProjectID        = fmt.Errorf("invalid project ID")
@@ -116,6 +123,13 @@ const (
 	ErrCodeInvalidScoreDataType  = "INVALID_SCORE_DATA_TYPE"
 	ErrCodeEvaluatorNotFound     = "EVALUATOR_NOT_FOUND"
 	ErrCodeDuplicateQualityScore = "DUPLICATE_QUALITY_SCORE"
+
+	// Model pricing error codes
+	ErrCodeModelNotFound         = "MODEL_NOT_FOUND"
+	ErrCodeInvalidPricingPattern = "INVALID_PRICING_PATTERN"
+	ErrCodePricingDataIncomplete = "PRICING_DATA_INCOMPLETE"
+	ErrCodePricingExpired        = "PRICING_EXPIRED"
+	ErrCodeInvalidPricingData    = "INVALID_PRICING_DATA"
 
 	// General validation error codes
 	ErrCodeValidationFailed        = "VALIDATION_FAILED"

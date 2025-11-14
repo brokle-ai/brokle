@@ -12,12 +12,14 @@ import (
 	"gorm.io/gorm"
 
 	billingDomain "brokle/internal/core/domain/billing"
-	"brokle/internal/workers/analytics"
 	"brokle/pkg/ulid"
 )
 
 // Ensure BillingRecordRepository implements the interface
 var _ billingDomain.BillingRecordRepository = (*BillingRecordRepository)(nil)
+
+// Note: BillingRecord and BillingSummary types are now defined in billingDomain
+// (previously in deleted analytics worker)
 
 // BillingRecordRepository handles billing records and summaries persistence
 type BillingRecordRepository struct {
@@ -34,7 +36,7 @@ func NewBillingRecordRepository(db *gorm.DB, logger *logrus.Logger) *BillingReco
 }
 
 // InsertBillingRecord inserts a new billing record
-func (r *BillingRecordRepository) InsertBillingRecord(ctx context.Context, record *analytics.BillingRecord) error {
+func (r *BillingRecordRepository) InsertBillingRecord(ctx context.Context, record *billingDomain.BillingRecord) error {
 	query := `
 		INSERT INTO billing_records (
 			id, organization_id, period, amount, currency,
@@ -73,7 +75,7 @@ func (r *BillingRecordRepository) InsertBillingRecord(ctx context.Context, recor
 }
 
 // UpdateBillingRecord updates an existing billing record
-func (r *BillingRecordRepository) UpdateBillingRecord(ctx context.Context, recordID ulid.ULID, record *analytics.BillingRecord) error {
+func (r *BillingRecordRepository) UpdateBillingRecord(ctx context.Context, recordID ulid.ULID, record *billingDomain.BillingRecord) error {
 	query := `
 		UPDATE billing_records
 		SET
@@ -109,7 +111,7 @@ func (r *BillingRecordRepository) UpdateBillingRecord(ctx context.Context, recor
 }
 
 // GetBillingRecord retrieves a billing record by ID
-func (r *BillingRecordRepository) GetBillingRecord(ctx context.Context, recordID ulid.ULID) (*analytics.BillingRecord, error) {
+func (r *BillingRecordRepository) GetBillingRecord(ctx context.Context, recordID ulid.ULID) (*billingDomain.BillingRecord, error) {
 	query := `
 		SELECT
 			id, organization_id, period, amount, currency,
@@ -117,7 +119,7 @@ func (r *BillingRecordRepository) GetBillingRecord(ctx context.Context, recordID
 		FROM billing_records
 		WHERE id = ?`
 
-	record := &analytics.BillingRecord{}
+	record := &billingDomain.BillingRecord{}
 	err := r.db.WithContext(ctx).Raw(query, recordID).Scan(record).Error
 
 	if err != nil {
@@ -131,7 +133,7 @@ func (r *BillingRecordRepository) GetBillingRecord(ctx context.Context, recordID
 }
 
 // GetBillingHistory retrieves billing history for an organization
-func (r *BillingRecordRepository) GetBillingHistory(ctx context.Context, orgID ulid.ULID, start, end time.Time) ([]*analytics.BillingRecord, error) {
+func (r *BillingRecordRepository) GetBillingHistory(ctx context.Context, orgID ulid.ULID, start, end time.Time) ([]*billingDomain.BillingRecord, error) {
 	query := `
 		SELECT
 			id, organization_id, period, amount, currency,
@@ -142,7 +144,7 @@ func (r *BillingRecordRepository) GetBillingHistory(ctx context.Context, orgID u
 			AND created_at < ?
 		ORDER BY created_at DESC`
 
-	var records []*analytics.BillingRecord
+	var records []*billingDomain.BillingRecord
 	err := r.db.WithContext(ctx).Raw(query, orgID, start, end).Scan(&records).Error
 	if err != nil {
 		return nil, fmt.Errorf("failed to get billing history: %w", err)
@@ -152,7 +154,7 @@ func (r *BillingRecordRepository) GetBillingHistory(ctx context.Context, orgID u
 }
 
 // InsertBillingSummary inserts or updates a billing summary
-func (r *BillingRecordRepository) InsertBillingSummary(ctx context.Context, summary *analytics.BillingSummary) error {
+func (r *BillingRecordRepository) InsertBillingSummary(ctx context.Context, summary *billingDomain.BillingSummary) error {
 	providerBreakdownJSON, err := json.Marshal(summary.ProviderBreakdown)
 	if err != nil {
 		return fmt.Errorf("failed to marshal provider breakdown: %w", err)
@@ -226,7 +228,7 @@ func (r *BillingRecordRepository) InsertBillingSummary(ctx context.Context, summ
 }
 
 // GetBillingSummary retrieves a billing summary for an organization and period
-func (r *BillingRecordRepository) GetBillingSummary(ctx context.Context, orgID ulid.ULID, period string) (*analytics.BillingSummary, error) {
+func (r *BillingRecordRepository) GetBillingSummary(ctx context.Context, orgID ulid.ULID, period string) (*billingDomain.BillingSummary, error) {
 	query := `
 		SELECT
 			id, organization_id, period, period_start, period_end,
@@ -271,14 +273,14 @@ func (r *BillingRecordRepository) GetBillingSummary(ctx context.Context, orgID u
 		return nil, fmt.Errorf("billing summary not found for organization %s and period %s", orgID, period)
 	}
 
-	summary := &analytics.BillingSummary{
+	summary := &billingDomain.BillingSummary{
 		ID:             row.ID,
 		OrganizationID: row.OrganizationID,
 		Period:         row.Period,
 		PeriodStart:    row.PeriodStart,
 		PeriodEnd:      row.PeriodEnd,
-		TotalRequests:  row.TotalRequests,
-		TotalTokens:    row.TotalTokens,
+		TotalRequests:  int(row.TotalRequests),
+		TotalTokens:    int(row.TotalTokens),
 		TotalCost:      row.TotalCost,
 		Currency:       row.Currency,
 		Discounts:      row.Discounts,
@@ -300,7 +302,7 @@ func (r *BillingRecordRepository) GetBillingSummary(ctx context.Context, orgID u
 }
 
 // GetBillingSummaryHistory retrieves billing summary history for an organization
-func (r *BillingRecordRepository) GetBillingSummaryHistory(ctx context.Context, orgID ulid.ULID, start, end time.Time) ([]*analytics.BillingSummary, error) {
+func (r *BillingRecordRepository) GetBillingSummaryHistory(ctx context.Context, orgID ulid.ULID, start, end time.Time) ([]*billingDomain.BillingSummary, error) {
 	query := `
 		SELECT
 			id, organization_id, period, period_start, period_end,
@@ -337,16 +339,16 @@ func (r *BillingRecordRepository) GetBillingSummaryHistory(ctx context.Context, 
 		return nil, fmt.Errorf("failed to get billing summary history: %w", err)
 	}
 
-	var summaries []*analytics.BillingSummary
+	var summaries []*billingDomain.BillingSummary
 	for _, row := range rows {
-		summary := &analytics.BillingSummary{
+		summary := &billingDomain.BillingSummary{
 			ID:             row.ID,
 			OrganizationID: row.OrganizationID,
 			Period:         row.Period,
 			PeriodStart:    row.PeriodStart,
 			PeriodEnd:      row.PeriodEnd,
-			TotalRequests:  row.TotalRequests,
-			TotalTokens:    row.TotalTokens,
+			TotalRequests:  int(row.TotalRequests),
+			TotalTokens:    int(row.TotalTokens),
 			TotalCost:      row.TotalCost,
 			Currency:       row.Currency,
 			Discounts:      row.Discounts,

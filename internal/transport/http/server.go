@@ -391,16 +391,6 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 
 // setupSDKRoutes configures SDK routes (/v1/*)
 func (s *Server) setupSDKRoutes(router *gin.RouterGroup) {
-	// OpenAI-compatible endpoints
-	router.POST("/chat/completions", s.handlers.AI.ChatCompletions)
-	router.POST("/completions", s.handlers.AI.Completions)
-	router.POST("/embeddings", s.handlers.AI.Embeddings)
-	router.GET("/models", s.handlers.AI.ListModels)
-	router.GET("/models/:model", s.handlers.AI.GetModel)
-
-	// AI routing decisions
-	router.POST("/route", s.handlers.AI.RouteRequest)
-
 	// OTLP (OpenTelemetry Protocol) ingestion - 100% spec compliant
 	// Standard OTLP endpoint (OpenTelemetry convention)
 	router.POST("/otlp/traces", s.handlers.OTLP.HandleTraces) // Primary OTLP endpoint (supports Protobuf + JSON)
@@ -410,13 +400,6 @@ func (s *Server) setupSDKRoutes(router *gin.RouterGroup) {
 	// Future OTLP endpoints:
 	// router.POST("/otlp/metrics", s.handlers.OTLP.HandleMetrics) // OTLP metrics ingestion
 	// router.POST("/otlp/logs", s.handlers.OTLP.HandleLogs)       // OTLP logs ingestion
-
-	// Cache management endpoints
-	cache := router.Group("/cache")
-	{
-		cache.GET("/status", s.handlers.AI.CacheStatus)          // Cache health
-		cache.POST("/invalidate", s.handlers.AI.InvalidateCache) // Cache management
-	}
 }
 
 // Shutdown gracefully shuts down the server

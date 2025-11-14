@@ -4,22 +4,21 @@ import (
 	"context"
 	"time"
 
-	"brokle/internal/workers/analytics"
 	"brokle/pkg/ulid"
 )
 
 // BillingService defines the interface for billing operations
 type BillingService interface {
 	// Usage recording
-	RecordUsage(ctx context.Context, usage *analytics.CostMetric) error
+	RecordUsage(ctx context.Context, usage *CostMetric) error
 
 	// Billing calculation
-	CalculateBill(ctx context.Context, orgID ulid.ULID, period string) (*analytics.BillingSummary, error)
-	GetBillingHistory(ctx context.Context, orgID ulid.ULID, start, end time.Time) ([]*analytics.BillingRecord, error)
+	CalculateBill(ctx context.Context, orgID ulid.ULID, period string) (*BillingSummary, error)
+	GetBillingHistory(ctx context.Context, orgID ulid.ULID, start, end time.Time) ([]*BillingRecord, error)
 
 	// Payment processing
 	ProcessPayment(ctx context.Context, billingRecordID ulid.ULID) error
-	CreateBillingRecord(ctx context.Context, summary *analytics.BillingSummary) (*analytics.BillingRecord, error)
+	CreateBillingRecord(ctx context.Context, summary *BillingSummary) (*BillingRecord, error)
 
 	// Quota management
 	CheckUsageQuotas(ctx context.Context, orgID ulid.ULID) (*QuotaStatus, error)

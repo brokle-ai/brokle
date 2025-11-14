@@ -197,3 +197,60 @@ type VolumeTier struct {
 	MinAmount float64 `json:"min_amount"`
 	Discount  float64 `json:"discount"` // percentage or fixed amount
 }
+
+// BillingRecord represents a billing record (moved from deleted analytics worker)
+type BillingRecord struct {
+	ID             ulid.ULID              `json:"id" db:"id"`
+	OrganizationID ulid.ULID              `json:"organization_id" db:"organization_id"`
+	Period         string                 `json:"period" db:"period"` // e.g., "2024-11"
+	Amount         float64                `json:"amount" db:"amount"`
+	Currency       string                 `json:"currency" db:"currency"`
+	Status         string                 `json:"status" db:"status"`
+	TransactionID  *string                `json:"transaction_id,omitempty" db:"transaction_id"`
+	PaymentMethod  *string                `json:"payment_method,omitempty" db:"payment_method"`
+	ProcessedAt    *time.Time             `json:"processed_at,omitempty" db:"processed_at"`
+	NetCost        float64                `json:"net_cost" db:"net_cost"`
+	Metadata       map[string]interface{} `json:"metadata" db:"metadata"`
+	CreatedAt      time.Time              `json:"created_at" db:"created_at"`
+	UpdatedAt      time.Time              `json:"updated_at" db:"updated_at"`
+}
+
+// BillingSummary represents aggregated billing data (moved from deleted analytics worker)
+type BillingSummary struct {
+	ID                ulid.ULID              `json:"id" db:"id"`
+	OrganizationID    ulid.ULID              `json:"organization_id" db:"organization_id"`
+	Period            string                 `json:"period" db:"period"`
+	PeriodStart       time.Time              `json:"period_start" db:"period_start"`
+	PeriodEnd         time.Time              `json:"period_end" db:"period_end"`
+	TotalRequests     int                    `json:"total_requests" db:"total_requests"`
+	TotalTokens       int                    `json:"total_tokens" db:"total_tokens"`
+	TotalCost         float64                `json:"total_cost" db:"total_cost"`
+	TotalAmount       float64                `json:"total_amount" db:"total_amount"`
+	Currency          string                 `json:"currency" db:"currency"`
+	Discounts         float64                `json:"discounts" db:"discounts"`
+	NetCost           float64                `json:"net_cost" db:"net_cost"`
+	RecordCount       int                    `json:"record_count" db:"record_count"`
+	Status            string                 `json:"status" db:"status"`
+	GeneratedAt       time.Time              `json:"generated_at" db:"generated_at"`
+	CreatedAt         time.Time              `json:"created_at" db:"created_at"`
+	ProviderBreakdown map[string]interface{} `json:"provider_breakdown"`
+	ModelBreakdown    map[string]interface{} `json:"model_breakdown"`
+}
+
+// CostMetric represents cost tracking data (moved from deleted analytics worker)
+type CostMetric struct {
+	RequestID      ulid.ULID `json:"request_id"`
+	OrganizationID ulid.ULID `json:"organization_id"`
+	ProjectID      ulid.ULID `json:"project_id"`
+	ProviderID     ulid.ULID `json:"provider_id"`
+	ModelID        ulid.ULID `json:"model_id"`
+	Model          string    `json:"model"`
+	Provider       string    `json:"provider"`
+	RequestType    string    `json:"request_type"`
+	InputTokens    int32     `json:"input_tokens"`
+	OutputTokens   int32     `json:"output_tokens"`
+	TotalTokens    int32     `json:"total_tokens"`
+	TotalCost      float64   `json:"total_cost"`
+	Currency       string    `json:"currency"`
+	Timestamp      time.Time `json:"timestamp"`
+}

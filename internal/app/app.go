@@ -129,10 +129,6 @@ func (a *App) Start() error {
 			return err
 		}
 		a.logger.Info("Telemetry stream consumer started")
-
-		// Start gateway analytics worker
-		a.providers.Workers.GatewayAnalytics.Start()
-		a.logger.Info("Gateway analytics worker started")
 	}
 
 	return nil
@@ -165,9 +161,6 @@ func (a *App) Shutdown(ctx context.Context) error {
 			if a.providers.Workers != nil {
 				if a.providers.Workers.TelemetryConsumer != nil {
 					a.providers.Workers.TelemetryConsumer.Stop()
-				}
-				if a.providers.Workers.GatewayAnalytics != nil {
-					a.providers.Workers.GatewayAnalytics.Stop()
 				}
 			}
 		}()
@@ -217,13 +210,6 @@ func (a *App) Health() map[string]string {
 	}
 }
 
-// GetGatewayServices returns the gateway services for AI API operations
-func (a *App) GetGatewayServices() *GatewayServices {
-	if a.providers == nil || a.providers.Core == nil || a.providers.Core.Services == nil {
-		return nil
-	}
-	return a.providers.Core.Services.Gateway
-}
 
 // GetWorkers returns the worker container for background processing
 func (a *App) GetWorkers() *WorkerContainer {

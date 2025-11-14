@@ -36,6 +36,9 @@ func NewServiceRegistry(
 	scoreRepo observability.ScoreRepository,
 	blobStorageRepo observability.BlobStorageRepository,
 
+	// PostgreSQL repositories (for cost calculation)
+	modelRepo observability.ModelRepository,
+
 	// Blob storage dependencies
 	s3Client *storage.S3Client,
 	blobConfig *config.BlobStorageConfig,
@@ -52,8 +55,11 @@ func NewServiceRegistry(
 	// Create blob storage service (kept for future use: exports, media files, raw events)
 	blobStorageService := NewBlobStorageService(blobStorageRepo, s3Client, blobConfig, logger)
 
-	// Create OTLP converter service
-	otlpConverterService := NewOTLPConverterService(logger)
+	// Create cost calculator service
+	costCalculator := NewCostCalculatorService(modelRepo)
+
+	// Create OTLP converter service (with cost calculation)
+	otlpConverterService := NewOTLPConverterService(logger, costCalculator)
 
 	// Create ClickHouse-first services (no blob storage for LLM data - stored inline with ZSTD compression)
 	traceService := NewTraceService(traceRepo, spanRepo, scoreRepo, logger)

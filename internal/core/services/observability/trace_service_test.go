@@ -280,13 +280,11 @@ func TestTraceService_CreateTraceWithSpans(t *testing.T) {
 				Name:      "Trace with Spans",
 				Spans: []*observability.Span{
 					{
-						Type:      observability.SpanTypeGeneration,
-						Name:      "LLM Call 1",
+						SpanName:  "LLM Call 1",
 						StartTime: time.Now(),
 					},
 					{
-						Type:      observability.SpanTypeSpan,
-						Name:      "Span 1",
+						SpanName:  "Span 1",
 						StartTime: time.Now(),
 					},
 				},
@@ -342,8 +340,7 @@ func TestTraceService_CreateTraceWithSpans(t *testing.T) {
 				Name:      "Trace Obs Fail",
 				Spans: []*observability.Span{
 					{
-						Type:      observability.SpanTypeGeneration,
-						Name:      "Failing Span",
+						SpanName:  "Failing Span",
 						StartTime: time.Now(),
 					},
 				},
@@ -415,7 +412,7 @@ func TestTraceService_GetTraceWithSpans(t *testing.T) {
 				// GetTraceWithSpans calls GetTrace which calls GetByID
 				traceRepo.On("GetByID", mock.Anything, traceID).
 					Return(&observability.Trace{
-						ID:        traceID,
+						TraceID:   traceID,
 						ProjectID: "98765432109876543210987654321098",
 						Name:      "Test Trace",
 					}, nil)
@@ -423,10 +420,9 @@ func TestTraceService_GetTraceWithSpans(t *testing.T) {
 				// Then it calls GetByTraceID to get spans
 				spans := []*observability.Span{
 					{
-						ID:        "abcdef12345678901234567890123456",
+						SpanID:    "abcdef12345678901234567890123456",
 						TraceID:   traceID,
-						Type:      observability.SpanTypeGeneration,
-						Name:      "LLM Call",
+						SpanName:  "LLM Call",
 						StartTime: time.Now(),
 					},
 				}

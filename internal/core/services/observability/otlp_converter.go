@@ -1,6 +1,7 @@
 package observability
 
 import (
+	"context"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -15,13 +16,15 @@ import (
 
 // OTLPConverterService handles conversion of OTLP traces to Brokle telemetry events
 type OTLPConverterService struct {
-	logger *logrus.Logger
+	logger         *logrus.Logger
+	costCalculator observability.CostCalculator
 }
 
 // NewOTLPConverterService creates a new OTLP converter service
-func NewOTLPConverterService(logger *logrus.Logger) *OTLPConverterService {
+func NewOTLPConverterService(logger *logrus.Logger, costCalculator observability.CostCalculator) *OTLPConverterService {
 	return &OTLPConverterService{
-		logger: logger,
+		logger:         logger,
+		costCalculator: costCalculator,
 	}
 }
 
@@ -95,7 +98,9 @@ func isRootSpanCheck(parentSpanID interface{}) bool {
 
 // ConvertOTLPToBrokleEvents converts OTLP resourceSpans to Brokle telemetry events
 // For root spans, creates both trace AND span events
-func (s *OTLPConverterService) ConvertOTLPToBrokleEvents(otlpReq *observability.OTLPRequest) ([]*observability.TelemetryEventRequest, error) {
+// ctx is used for cost calculation database queries
+// projectID is required for cost calculation (model pricing lookup)
+func (s *OTLPConverterService) ConvertOTLPToBrokleEvents(ctx context.Context, otlpReq *observability.OTLPRequest, projectID string) ([]*observability.TelemetryEventRequest, error) {
 	var internalEvents []*brokleEvent
 	tracesCreated := make(map[string]bool) // Track which traces we've created
 
@@ -127,8 +132,8 @@ func (s *OTLPConverterService) ConvertOTLPToBrokleEvents(otlpReq *observability.
 					tracesCreated[traceID] = true
 				}
 
-				// Convert OTLP span to Brokle span event
-				obsEvent, err := s.convertSpanToEvent(span, resourceAttrs, scopeAttrs, scopeSpan.Scope)
+				// Convert OTLP span to Brokle span event (with cost calculation)
+				obsEvent, err := s.convertSpanToEvent(ctx, span, resourceAttrs, scopeAttrs, scopeSpan.Scope, projectID)
 				if err != nil {
 					return nil, fmt.Errorf("failed to convert span: %w", err)
 				}
@@ -245,7 +250,7 @@ func (s *OTLPConverterService) createTraceEvent(span observability.OTLPSpan, res
 }
 
 // convertSpanToEvent converts a single OTLP span to a Brokle telemetry event
-func (s *OTLPConverterService) convertSpanToEvent(span observability.OTLPSpan, resourceAttrs, scopeAttrs map[string]interface{}, scope *observability.Scope) (*brokleEvent, error) {
+func (s *OTLPConverterService) convertSpanToEvent(ctx context.Context, span observability.OTLPSpan, resourceAttrs, scopeAttrs map[string]interface{}, scope *observability.Scope, projectID string) (*brokleEvent, error) {
 	// Convert OTLP IDs to hex strings
 	traceID, err := convertTraceID(span.TraceID)
 	if err != nil {
@@ -307,7 +312,10 @@ func (s *OTLPConverterService) convertSpanToEvent(span observability.OTLPSpan, r
 	// Extract Gen AI semantic conventions from attributes
 	extractGenAIFields(allAttrs, payload)
 
-	// Extract Brokle extensions from attributes
+	// Calculate costs based on token usage and model pricing
+	s.calculateAndInjectCosts(ctx, allAttrs, projectID)
+
+	// Extract Brokle extensions from attributes (now includes calculated costs)
 	extractBrokleFields(allAttrs, payload)
 
 	// Extract OTLP Events (timeline annotations within span)
@@ -836,4 +844,99 @@ func convertToDomainEvents(events []*brokleEvent) []*observability.TelemetryEven
 		}
 	}
 	return result
+}
+
+// calculateAndInjectCosts calculates costs based on token usage and injects them into attributes
+// CRITICAL: Costs are calculated backend-side (NOT from SDK) and injected as STRINGS
+// This ensures proper Decimal(18,9) precision in ClickHouse without Float64 loss
+func (s *OTLPConverterService) calculateAndInjectCosts(ctx context.Context, attrs map[string]interface{}, projectID string) {
+	// Extract required attributes for cost calculation
+	modelName := extractStringFromInterface(attrs["gen_ai.request.model"])
+	if modelName == "" {
+		// No model name - skip cost calculation
+		return
+	}
+
+	// Extract token usage (OTEL 1.38+ standard attributes)
+	var inputTokens, outputTokens int32
+
+	if val, ok := attrs["gen_ai.usage.input_tokens"].(float64); ok {
+		inputTokens = int32(val)
+	} else if val, ok := attrs["gen_ai.usage.input_tokens"].(int64); ok {
+		inputTokens = int32(val)
+	} else if val, ok := attrs["gen_ai.usage.input_tokens"].(int32); ok {
+		inputTokens = val
+	}
+
+	if val, ok := attrs["gen_ai.usage.output_tokens"].(float64); ok {
+		outputTokens = int32(val)
+	} else if val, ok := attrs["gen_ai.usage.output_tokens"].(int64); ok {
+		outputTokens = int32(val)
+	} else if val, ok := attrs["gen_ai.usage.output_tokens"].(int32); ok {
+		outputTokens = val
+	}
+
+	if inputTokens == 0 && outputTokens == 0 {
+		// No tokens - skip cost calculation
+		return
+	}
+
+	// Extract optional cost optimization flags
+	cacheHit := extractBoolFromInterface(attrs["gen_ai.prompt.cache_hit"])
+	batchMode := extractBoolFromInterface(attrs["brokle.batch"])
+
+	// Calculate costs using cost calculator service
+	costBreakdown, err := s.costCalculator.CalculateCost(ctx, observability.CostCalculationInput{
+		ModelName:    modelName,
+		ProjectID:    projectID,
+		InputTokens:  inputTokens,
+		OutputTokens: outputTokens,
+		CacheHit:     cacheHit,
+		BatchMode:    batchMode,
+	})
+
+	if err != nil {
+		s.logger.WithFields(logrus.Fields{
+			"model":      modelName,
+			"project_id": projectID,
+			"error":      err,
+		}).Warn("Failed to calculate costs - continuing without cost data")
+		return
+	}
+
+	if costBreakdown == nil {
+		// No pricing found - continue without costs
+		return
+	}
+
+	// Inject calculated costs as STRINGS into attributes
+	// CRITICAL: Must be strings for ClickHouse Decimal(18,9) precision
+	attrs["brokle.cost.input"] = costBreakdown.InputCost
+	attrs["brokle.cost.output"] = costBreakdown.OutputCost
+	attrs["brokle.cost.total"] = costBreakdown.TotalCost
+
+	s.logger.WithFields(logrus.Fields{
+		"model":        modelName,
+		"input_tokens": inputTokens,
+		"output_tokens": outputTokens,
+		"total_cost":   costBreakdown.TotalCost,
+		"cache_hit":    cacheHit,
+		"batch_mode":   batchMode,
+	}).Debug("Costs calculated successfully")
+}
+
+// extractStringFromInterface safely extracts a string from interface{}
+func extractStringFromInterface(val interface{}) string {
+	if str, ok := val.(string); ok {
+		return str
+	}
+	return ""
+}
+
+// extractBoolFromInterface safely extracts a boolean from interface{}
+func extractBoolFromInterface(val interface{}) bool {
+	if b, ok := val.(bool); ok {
+		return b
+	}
+	return false
 }

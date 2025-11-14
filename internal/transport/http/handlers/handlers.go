@@ -5,14 +5,12 @@ import (
 
 	"brokle/internal/config"
 	"brokle/internal/core/domain/auth"
-	"brokle/internal/core/domain/gateway"
 	"brokle/internal/core/domain/organization"
 	"brokle/internal/core/domain/user"
 	authService "brokle/internal/core/services/auth"
 	obsServices "brokle/internal/core/services/observability"
 	"brokle/internal/core/services/registration"
 	"brokle/internal/transport/http/handlers/admin"
-	"brokle/internal/transport/http/handlers/ai"
 	"brokle/internal/transport/http/handlers/analytics"
 	"brokle/internal/transport/http/handlers/apikey"
 	authHandler "brokle/internal/transport/http/handlers/auth"
@@ -40,7 +38,6 @@ type Handlers struct {
 	Analytics     *analytics.Handler
 	Logs          *logs.Handler
 	Billing       *billing.Handler
-	AI            *ai.Handler
 	WebSocket     *websocket.Handler
 	Admin         *admin.TokenAdminHandler
 	RBAC          *rbac.Handler
@@ -69,11 +66,6 @@ func NewHandlers(
 	organizationMemberService auth.OrganizationMemberService,
 	scopeService auth.ScopeService,
 	observabilityServices *obsServices.ServiceRegistry,
-	// Gateway services
-	gatewayService gateway.GatewayService,
-	routingService gateway.RoutingService,
-	costService gateway.CostService,
-	// Add other service dependencies as they're implemented
 ) *Handlers {
 	return &Handlers{
 		Health:        health.NewHandler(cfg, logger),
@@ -86,7 +78,6 @@ func NewHandlers(
 		Analytics:     analytics.NewHandler(cfg, logger),
 		Logs:          logs.NewHandler(cfg, logger),
 		Billing:       billing.NewHandler(cfg, logger),
-		AI:            ai.NewHandler(cfg, logger, gatewayService, routingService, costService),
 		WebSocket:     websocket.NewHandler(cfg, logger),
 		Admin:         admin.NewTokenAdminHandler(authService, blacklistedTokens, logger),
 		RBAC:          rbac.NewHandler(cfg, logger, roleService, permissionService, organizationMemberService, scopeService),

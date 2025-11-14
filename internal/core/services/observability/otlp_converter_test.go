@@ -1,6 +1,7 @@
 package observability
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"testing"
@@ -12,11 +13,36 @@ import (
 	"brokle/internal/core/domain/observability"
 )
 
+// mockCostCalculator is a test mock that returns zero costs
+type mockCostCalculator struct{}
+
+func (m *mockCostCalculator) CalculateCost(ctx context.Context, input observability.CostCalculationInput) (*observability.CostBreakdown, error) {
+	// Return zero costs for testing (allows tests to pass without real pricing data)
+	return &observability.CostBreakdown{
+		InputCost:  "0.000000000",
+		OutputCost: "0.000000000",
+		TotalCost:  "0.000000000",
+		Currency:   "USD",
+		ModelName:  input.ModelName,
+	}, nil
+}
+
+func (m *mockCostCalculator) CalculateCostWithPricing(input observability.CostCalculationInput, pricing *observability.Model) *observability.CostBreakdown {
+	return &observability.CostBreakdown{
+		InputCost:  "0.000000000",
+		OutputCost: "0.000000000",
+		TotalCost:  "0.000000000",
+		Currency:   "USD",
+		ModelName:  input.ModelName,
+	}
+}
+
 func TestOTLPConverterService_ConvertOTLPToBrokleEvents_TraceInputOutput(t *testing.T) {
-	// Create converter service
+	// Create converter service with mock cost calculator
 	logger := logrus.New()
 	logger.SetOutput(os.Stdout)
-	converter := NewOTLPConverterService(logger)
+	mockCalc := &mockCostCalculator{}
+	converter := NewOTLPConverterService(logger, mockCalc)
 
 	// Load test fixture
 	data, err := os.ReadFile("../../../../tests/fixtures/otlp_trace_large_payload.json")
@@ -26,8 +52,8 @@ func TestOTLPConverterService_ConvertOTLPToBrokleEvents_TraceInputOutput(t *test
 	err = json.Unmarshal(data, &otlpReq)
 	require.NoError(t, err)
 
-	// Convert OTLP to Brokle events
-	events, err := converter.ConvertOTLPToBrokleEvents(&otlpReq)
+	// Convert OTLP to Brokle events (with test project_id)
+	events, err := converter.ConvertOTLPToBrokleEvents(context.Background(), &otlpReq, "test-project-id")
 	require.NoError(t, err)
 	require.NotEmpty(t, events)
 
@@ -72,7 +98,8 @@ func TestOTLPConverterService_ConvertOTLPToBrokleEvents_TraceInputOutput(t *test
 func TestOTLPConverterService_RootSpanDetection(t *testing.T) {
 	logger := logrus.New()
 	logger.SetOutput(os.Stdout)
-	converter := NewOTLPConverterService(logger)
+	mockCalc := &mockCostCalculator{}
+	converter := NewOTLPConverterService(logger, mockCalc)
 
 	testCases := []struct {
 		name         string
@@ -129,7 +156,7 @@ func TestOTLPConverterService_RootSpanDetection(t *testing.T) {
 				},
 			}
 
-			events, err := converter.ConvertOTLPToBrokleEvents(otlpReq)
+			events, err := converter.ConvertOTLPToBrokleEvents(context.Background(), otlpReq, "test-project")
 			require.NoError(t, err)
 			require.NotEmpty(t, events)
 
