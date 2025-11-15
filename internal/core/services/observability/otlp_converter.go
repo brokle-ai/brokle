@@ -230,6 +230,29 @@ func (s *OTLPConverterService) createTraceEvent(span observability.OTLPSpan, res
 		payload["version"] = version
 	}
 
+	// Extract tags (trace-level categorization)
+	if tagsAttr, ok := allAttrs["brokle.trace.tags"]; ok {
+		var tags []string
+
+		// Handle JSON string format (current SDK sends this)
+		if tagsJSON, ok := tagsAttr.(string); ok && tagsJSON != "" {
+			if err := json.Unmarshal([]byte(tagsJSON), &tags); err == nil {
+				payload["tags"] = tags
+			}
+		} else if tagsArray, ok := tagsAttr.([]interface{}); ok {
+			// Handle array format (OTLP arrayValue - future-proofing)
+			tags = make([]string, 0, len(tagsArray))
+			for _, tag := range tagsArray {
+				if tagStr, ok := tag.(string); ok {
+					tags = append(tags, tagStr)
+				} else {
+					tags = append(tags, fmt.Sprintf("%v", tag))
+				}
+			}
+			payload["tags"] = tags
+		}
+	}
+
 	// Note: resource_attributes already set above with pure OTEL attributes
 	// No need for separate metadata field - consolidated into resource_attributes
 
