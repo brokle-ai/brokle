@@ -23,274 +23,6 @@ definitions:
     required:
     - reason
     type: object
-  ai.CacheStatusResponse:
-    description: Cache health and statistics response
-    properties:
-      eviction_count:
-        example: 142
-        type: integer
-      hit_rate:
-        example: 0.85
-        type: number
-      last_eviction:
-        example: 1677610602
-        type: integer
-      memory_usage:
-        example: 0.45
-        type: number
-      provider_breakdown:
-        additionalProperties: true
-        type: object
-      size_bytes:
-        example: 1048576
-        type: integer
-      status:
-        example: healthy
-        type: string
-      total_entries:
-        example: 15420
-        type: integer
-    type: object
-  ai.ChatCompletionRequest:
-    description: OpenAI-compatible chat completion request
-    properties:
-      frequency_penalty:
-        example: 0
-        type: number
-      logit_bias:
-        additionalProperties:
-          format: float64
-          type: number
-        type: object
-      max_tokens:
-        example: 150
-        type: integer
-      messages:
-        items:
-          $ref: '#/definitions/ai.ChatMessage'
-        type: array
-      model:
-        example: gpt-3.5-turbo
-        type: string
-      "n":
-        example: 1
-        type: integer
-      presence_penalty:
-        example: 0
-        type: number
-      stop: {}
-      stream:
-        example: false
-        type: boolean
-      temperature:
-        example: 0.7
-        type: number
-      top_p:
-        example: 1
-        type: number
-      user:
-        example: user-123
-        type: string
-    type: object
-  ai.ChatMessage:
-    description: Single message in a chat conversation
-    properties:
-      content:
-        example: Hello, how are you?
-        type: string
-      name:
-        example: John
-        type: string
-      role:
-        example: user
-        type: string
-    type: object
-  ai.CompletionRequest:
-    description: OpenAI-compatible text completion request
-    properties:
-      best_of:
-        example: 1
-        type: integer
-      echo:
-        example: false
-        type: boolean
-      frequency_penalty:
-        example: 0
-        type: number
-      logit_bias:
-        additionalProperties:
-          format: float64
-          type: number
-        type: object
-      logprobs:
-        example: 0
-        type: integer
-      max_tokens:
-        example: 150
-        type: integer
-      model:
-        example: gpt-3.5-turbo-instruct
-        type: string
-      "n":
-        example: 1
-        type: integer
-      presence_penalty:
-        example: 0
-        type: number
-      prompt:
-        example: Once upon a time
-        type: string
-      stop: {}
-      stream:
-        example: false
-        type: boolean
-      temperature:
-        example: 0.7
-        type: number
-      top_p:
-        example: 1
-        type: number
-      user:
-        example: user-123
-        type: string
-    type: object
-  ai.EmbeddingRequest:
-    description: OpenAI-compatible embedding request
-    properties:
-      encoding_format:
-        example: float
-        type: string
-      input:
-        example: The food was delicious and the waiter...
-        type: string
-      model:
-        example: text-embedding-ada-002
-        type: string
-      user:
-        example: user-123
-        type: string
-    type: object
-  ai.InvalidateCacheRequest:
-    description: Request data for cache invalidation
-    properties:
-      clear_all:
-        example: false
-        type: boolean
-      keys:
-        items:
-          type: string
-        type: array
-      max_age:
-        example: 3600
-        type: integer
-      model:
-        example: gpt-3.5-turbo
-        type: string
-      pattern:
-        example: chat:*
-        type: string
-      provider:
-        example: openai
-        type: string
-    type: object
-  ai.InvalidateCacheResponse:
-    description: Cache invalidation result
-    properties:
-      count:
-        example: 25
-        type: integer
-      error:
-        type: string
-      invalidated_keys:
-        items:
-          type: string
-        type: array
-      message:
-        example: Cache invalidated successfully
-        type: string
-      success:
-        example: true
-        type: boolean
-    type: object
-  ai.Model:
-    description: Available AI model information
-    properties:
-      created:
-        example: 1677610602
-        type: integer
-      id:
-        example: gpt-3.5-turbo
-        type: string
-      object:
-        example: model
-        type: string
-      owned_by:
-        example: openai
-        type: string
-    type: object
-  ai.RouteRequest:
-    description: Request data for AI routing decisions
-    properties:
-      max_tokens:
-        example: 150
-        type: integer
-      messages:
-        items:
-          $ref: '#/definitions/ai.ChatMessage'
-        type: array
-      metadata:
-        additionalProperties: true
-        type: object
-      model:
-        example: gpt-3.5-turbo
-        type: string
-      prompt:
-        example: Hello world
-        type: string
-      provider:
-        example: openai
-        type: string
-      strategy:
-        example: cost_optimized
-        type: string
-      temperature:
-        example: 0.7
-        type: number
-    type: object
-  ai.RouteResponse:
-    description: AI routing decision response
-    properties:
-      cache_hit:
-        example: false
-        type: boolean
-      endpoint:
-        example: https://api.openai.com/v1/chat/completions
-        type: string
-      estimated_cost:
-        example: 0.0015
-        type: number
-      estimated_latency:
-        example: 250
-        type: integer
-      metadata:
-        additionalProperties: true
-        type: object
-      model:
-        example: gpt-3.5-turbo
-        type: string
-      provider:
-        example: openai
-        type: string
-      provider_health:
-        example: 0.98
-        type: number
-      quality_score:
-        example: 0.95
-        type: number
-      strategy:
-        example: cost_optimized
-        type: string
-    type: object
   analytics.AnalyticsOverview:
     properties:
       avg_latency_ms:
@@ -583,6 +315,17 @@ definitions:
     required:
     - expiry_option
     - name
+    type: object
+  apikey.UpdateAPIKeyRequest:
+    properties:
+      is_active:
+        example: false
+        type: boolean
+      name:
+        example: Updated Production Key
+        maxLength: 100
+        minLength: 2
+        type: string
     type: object
   auth.ChangePasswordRequest:
     description: Password change information
@@ -1450,6 +1193,9 @@ definitions:
         items:
           $ref: '#/definitions/observability.KeyValue'
         type: array
+      droppedAttributesCount:
+        description: Number of dropped attributes
+        type: integer
       name:
         type: string
       timeUnixNano: {}
@@ -1460,6 +1206,21 @@ definitions:
         type: string
       value:
         description: Can be stringValue, intValue, boolValue, arrayValue, etc.
+    type: object
+  observability.Link:
+    properties:
+      attributes:
+        description: Link metadata
+        items:
+          $ref: '#/definitions/observability.KeyValue'
+        type: array
+      droppedAttributesCount:
+        description: Number of dropped attributes
+        type: integer
+      spanId:
+        description: Linked span ID (Buffer or hex string)
+      traceId:
+        description: Linked trace ID (Buffer or hex string)
     type: object
   observability.OTLPRequest:
     properties:
@@ -1482,6 +1243,11 @@ definitions:
       kind:
         description: 0=UNSPECIFIED, 1=INTERNAL, 2=SERVER, 3=CLIENT, 4=PRODUCER, 5=CONSUMER
         type: integer
+      links:
+        description: OTEL span links (cross-trace references)
+        items:
+          $ref: '#/definitions/observability.Link'
+        type: array
       name:
         type: string
       parentSpanId:
@@ -1549,14 +1315,9 @@ definitions:
         type: string
       evaluator_version:
         type: string
-      event_ts:
-        description: ReplacingMergeTree fields (using event_ts for deduplication)
-        type: string
       id:
         description: Identifiers
         type: string
-      is_deleted:
-        type: boolean
       name:
         description: Score data
         type: string
@@ -1584,18 +1345,33 @@ definitions:
     type: object
   observability.Span:
     properties:
-      attributes:
-        description: OTEL attributes (JSON string for flexible key-value pairs)
+      brokle_cost_input:
+        description: Decimal(18,9) extracted from STRING
+        type: number
+      brokle_cost_output:
+        description: Decimal(18,9) extracted from STRING
+        type: number
+      brokle_cost_total:
+        description: Decimal(18,9) extracted from STRING
+        type: number
+      brokle_internal_model_id:
+        type: string
+      brokle_prompt_id:
+        type: string
+      brokle_prompt_name:
+        type: string
+      brokle_prompt_version:
+        type: integer
+      brokle_span_level:
+        description: DEBUG, INFO, WARNING, ERROR
+        type: string
+      brokle_span_type:
+        description: Brokle attributes (custom extensions)
         type: string
       child_spans:
         items:
           $ref: '#/definitions/observability.Span'
         type: array
-      cost_details:
-        additionalProperties:
-          format: float64
-          type: number
-        type: object
       created_at:
         description: Timestamps
         type: string
@@ -1603,35 +1379,56 @@ definitions:
         type: integer
       end_time:
         type: string
-      event_ts:
-        description: ReplacingMergeTree fields (using event_ts for deduplication)
+      events_attributes:
+        description: JSON strings
+        items:
+          type: string
+        type: array
+      events_name:
+        items:
+          type: string
+        type: array
+      events_timestamp:
+        description: OTEL Events (OTEL spec) - arrays for event tracking
+        items:
+          type: string
+        type: array
+      gen_ai_operation_name:
+        description: |-
+          ===== MATERIALIZED COLUMNS (Read-only, computed by ClickHouse) =====
+          Gen AI attributes (OTEL 1.38+ conventions)
         type: string
-      id:
-        description: OTEL identifiers
+      gen_ai_provider_name:
         type: string
+      gen_ai_request_max_tokens:
+        type: integer
+      gen_ai_request_model:
+        type: string
+      gen_ai_request_temperature:
+        type: number
+      gen_ai_request_top_p:
+        type: number
+      gen_ai_usage_input_tokens:
+        type: integer
+      gen_ai_usage_output_tokens:
+        type: integer
       input:
         description: Input/Output (stored in ClickHouse with ZSTD compression)
         type: string
-      internal_model_id:
-        type: string
-      is_deleted:
-        type: boolean
-      level:
-        description: DEBUG, INFO, WARNING, ERROR, DEFAULT
-        type: string
-      metadata:
-        additionalProperties: true
-        description: OTEL metadata (resource attributes + instrumentation scope)
-        type: object
-      model_name:
-        description: Universal model fields
-        type: string
-      model_parameters:
-        description: JSON string
-        type: string
-      name:
-        description: Span data
-        type: string
+      links_attributes:
+        description: JSON strings
+        items:
+          type: string
+        type: array
+      links_span_id:
+        items:
+          type: string
+        type: array
+      links_trace_id:
+        description: OTEL Links (OTEL spec) - arrays for span linking
+        items:
+          type: string
+        type: array
       output:
         type: string
       parent_span_id:
@@ -1639,58 +1436,40 @@ definitions:
         type: string
       project_id:
         type: string
-      prompt_id:
-        description: Prompt management
-        type: string
-      prompt_name:
-        type: string
-      prompt_version:
-        type: integer
-      provided_cost_details:
-        additionalProperties:
-          format: float64
-          type: number
-        type: object
-      provided_usage_details:
-        additionalProperties:
-          format: int64
-          type: integer
-        description: 'Usage & Cost Maps (Pattern: provided + calculated)'
-        type: object
-      provider:
+      resource_attributes:
+        description: OTEL resource attributes (JSON string with resource-level context)
         type: string
       scores:
         description: Populated from joins (not in ClickHouse)
         items:
           $ref: '#/definitions/observability.Score'
         type: array
+      span_attributes:
+        description: |-
+          OTEL attributes (JSON string with all span-level attributes)
+          Stores: gen_ai.*, brokle.*, and custom attributes
+        type: string
+      span_id:
+        description: OTEL identifiers
+        type: string
       span_kind:
-        description: 'OTEL: INTERNAL, SERVER, CLIENT, PRODUCER, CONSUMER'
+        description: 'OTEL enum: 0=UNSPECIFIED, 1=INTERNAL, 2=SERVER, 3=CLIENT, 4=PRODUCER,
+          5=CONSUMER'
+        type: integer
+      span_name:
+        description: Span data
         type: string
       start_time:
         type: string
       status_code:
         description: OTEL status
-        type: string
+        type: integer
       status_message:
         type: string
-      total_cost:
-        type: number
       trace_id:
         description: OTEL trace_id
         type: string
-      type:
-        description: 'Brokle: span, generation, event, tool, agent, chain'
-        type: string
       updated_at:
-        type: string
-      usage_details:
-        additionalProperties:
-          format: int64
-          type: integer
-        type: object
-      version:
-        description: Application versioning (experiment tracking)
         type: string
     type: object
   observability.Status:
@@ -1703,9 +1482,6 @@ definitions:
     type: object
   observability.Trace:
     properties:
-      attributes:
-        description: OTEL attributes (JSON string for flexible key-value pairs)
-        type: string
       bookmarked:
         description: Flags (moved from sessions table)
         type: boolean
@@ -1717,24 +1493,12 @@ definitions:
       end_time:
         type: string
       environment:
-        description: OTEL resource attributes
-        type: string
-      event_ts:
-        description: ReplacingMergeTree fields (using event_ts for deduplication)
-        type: string
-      id:
-        description: OTEL identifiers
+        description: OTEL resource attributes (extracted for common queries)
         type: string
       input:
         description: Input/Output (trace-level data stored in ClickHouse with ZSTD
           compression)
         type: string
-      is_deleted:
-        type: boolean
-      metadata:
-        additionalProperties: true
-        description: OTEL metadata (resource attributes + instrumentation scope)
-        type: object
       name:
         description: Trace metadata
         type: string
@@ -1747,6 +1511,10 @@ definitions:
         type: boolean
       release:
         type: string
+      resource_attributes:
+        description: OTEL resource attributes (JSON string with all resource-level
+          attributes)
+        type: string
       scores:
         items:
           $ref: '#/definitions/observability.Score'
@@ -1758,8 +1526,6 @@ definitions:
       session_id:
         description: Virtual session (attribute only, not FK)
         type: string
-      span_count:
-        type: integer
       spans:
         description: Populated from joins (not in ClickHouse)
         items:
@@ -1770,7 +1536,7 @@ definitions:
         type: string
       status_code:
         description: OTEL status
-        type: string
+        type: integer
       status_message:
         type: string
       tags:
@@ -1778,11 +1544,9 @@ definitions:
         items:
           type: string
         type: array
-      total_cost:
-        description: Aggregate metrics (calculated from spans)
-        type: number
-      total_tokens:
-        type: integer
+      trace_id:
+        description: OTEL identifiers
+        type: string
       updated_at:
         type: string
       user_id:
@@ -2704,644 +2468,6 @@ paths:
       summary: Get request analytics
       tags:
       - Analytics
-  /api/v1/analytics/scores:
-    get:
-      consumes:
-      - application/json
-      description: Retrieve paginated list of quality scores
-      parameters:
-      - description: Filter by trace ID
-        in: query
-        name: trace_id
-        type: string
-      - description: Filter by span ID
-        in: query
-        name: span_id
-        type: string
-      - description: Filter by session ID
-        in: query
-        name: session_id
-        type: string
-      - description: Filter by score name
-        in: query
-        name: name
-        type: string
-      - description: Filter by source (API, AUTO, HUMAN, EVAL)
-        in: query
-        name: source
-        type: string
-      - description: Filter by data type (NUMERIC, CATEGORICAL, BOOLEAN)
-        in: query
-        name: data_type
-        type: string
-      - description: Limit (default 50, max 1000)
-        in: query
-        name: limit
-        type: integer
-      - description: Offset (default 0)
-        in: query
-        name: offset
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: List of scores
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                data:
-                  items:
-                    $ref: '#/definitions/observability.Score'
-                  type: array
-              type: object
-        "400":
-          description: Invalid parameters
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-        "500":
-          description: Internal server error
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-      security:
-      - BearerAuth: []
-      summary: List quality scores with filtering
-      tags:
-      - Dashboard - Analytics
-  /api/v1/analytics/scores/{id}:
-    get:
-      consumes:
-      - application/json
-      description: Retrieve detailed score information
-      parameters:
-      - description: Score ID
-        in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Score details
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/observability.Score'
-              type: object
-        "404":
-          description: Score not found
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-        "500":
-          description: Internal server error
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-      security:
-      - BearerAuth: []
-      summary: Get quality score by ID
-      tags:
-      - Dashboard - Analytics
-    put:
-      consumes:
-      - application/json
-      description: Update an existing score (for corrections/enrichment after initial
-        creation)
-      parameters:
-      - description: Score ID
-        in: path
-        name: id
-        required: true
-        type: string
-      - description: Updated score data
-        in: body
-        name: score
-        required: true
-        schema:
-          $ref: '#/definitions/observability.Score'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Updated score
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/observability.Score'
-              type: object
-        "400":
-          description: Invalid request
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-        "404":
-          description: Score not found
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-        "500":
-          description: Internal server error
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-      security:
-      - BearerAuth: []
-      summary: Update quality score by ID
-      tags:
-      - Dashboard - Analytics
-  /api/v1/analytics/spans:
-    get:
-      consumes:
-      - application/json
-      description: Retrieve paginated list of spans
-      parameters:
-      - description: Filter by trace ID
-        in: query
-        name: trace_id
-        type: string
-      - description: Filter by span type
-        in: query
-        name: type
-        type: string
-      - description: Filter by model
-        in: query
-        name: model
-        type: string
-      - description: Filter by level
-        in: query
-        name: level
-        type: string
-      - description: Limit (default 50, max 1000)
-        in: query
-        name: limit
-        type: integer
-      - description: Offset (default 0)
-        in: query
-        name: offset
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: List of spans
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                data:
-                  items:
-                    $ref: '#/definitions/observability.Span'
-                  type: array
-              type: object
-        "400":
-          description: Invalid parameters
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-        "500":
-          description: Internal server error
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-      security:
-      - BearerAuth: []
-      summary: List spans with filtering
-      tags:
-      - Dashboard - Analytics
-  /api/v1/analytics/spans/{id}:
-    get:
-      consumes:
-      - application/json
-      description: Retrieve detailed span information
-      parameters:
-      - description: Span ID
-        in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Span details
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/observability.Span'
-              type: object
-        "404":
-          description: Span not found
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-        "500":
-          description: Internal server error
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-      security:
-      - BearerAuth: []
-      summary: Get span by ID
-      tags:
-      - Dashboard - Analytics
-    put:
-      consumes:
-      - application/json
-      description: Update an existing span (for corrections/enrichment after initial
-        creation)
-      parameters:
-      - description: Span ID
-        in: path
-        name: id
-        required: true
-        type: string
-      - description: Updated span data
-        in: body
-        name: span
-        required: true
-        schema:
-          $ref: '#/definitions/observability.Span'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Updated span
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/observability.Span'
-              type: object
-        "400":
-          description: Invalid request
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-        "404":
-          description: Span not found
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-        "500":
-          description: Internal server error
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-      security:
-      - BearerAuth: []
-      summary: Update span by ID
-      tags:
-      - Dashboard - Analytics
-  /api/v1/analytics/traces:
-    get:
-      consumes:
-      - application/json
-      description: Retrieve paginated list of traces with optional filtering
-      parameters:
-      - description: Project ID
-        in: query
-        name: project_id
-        required: true
-        type: string
-      - description: Filter by session ID
-        in: query
-        name: session_id
-        type: string
-      - description: Filter by user ID
-        in: query
-        name: user_id
-        type: string
-      - description: Start time (Unix timestamp)
-        format: int64
-        in: query
-        name: start_time
-        type: integer
-      - description: End time (Unix timestamp)
-        format: int64
-        in: query
-        name: end_time
-        type: integer
-      - description: Limit (default 50, max 1000)
-        in: query
-        name: limit
-        type: integer
-      - description: Offset (default 0)
-        in: query
-        name: offset
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: List of traces
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                data:
-                  items:
-                    $ref: '#/definitions/observability.Trace'
-                  type: array
-              type: object
-        "400":
-          description: Invalid parameters
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-        "401":
-          description: Unauthorized
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-        "500":
-          description: Internal server error
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-      security:
-      - BearerAuth: []
-      summary: List traces for a project
-      tags:
-      - Dashboard - Analytics
-  /api/v1/analytics/traces/{id}:
-    get:
-      consumes:
-      - application/json
-      description: Retrieve detailed trace information
-      parameters:
-      - description: Trace ID
-        in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Trace details
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/observability.Trace'
-              type: object
-        "404":
-          description: Trace not found
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-        "500":
-          description: Internal server error
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-      security:
-      - BearerAuth: []
-      summary: Get trace by ID
-      tags:
-      - Dashboard - Analytics
-    put:
-      consumes:
-      - application/json
-      description: Update an existing trace (for corrections/enrichment after initial
-        creation)
-      parameters:
-      - description: Trace ID
-        in: path
-        name: id
-        required: true
-        type: string
-      - description: Updated trace data
-        in: body
-        name: trace
-        required: true
-        schema:
-          $ref: '#/definitions/observability.Trace'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Updated trace
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/observability.Trace'
-              type: object
-        "400":
-          description: Invalid request
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-        "404":
-          description: Trace not found
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-        "500":
-          description: Internal server error
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-      security:
-      - BearerAuth: []
-      summary: Update trace by ID
-      tags:
-      - Dashboard - Analytics
-  /api/v1/analytics/traces/{id}/scores:
-    get:
-      consumes:
-      - application/json
-      description: Retrieve trace with all associated quality scores
-      parameters:
-      - description: Trace ID
-        in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Trace with scores
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/observability.Trace'
-              type: object
-        "404":
-          description: Trace not found
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-        "500":
-          description: Internal server error
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-      security:
-      - BearerAuth: []
-      summary: Get trace with quality scores
-      tags:
-      - Dashboard - Analytics
-  /api/v1/analytics/traces/{id}/spans:
-    get:
-      consumes:
-      - application/json
-      description: Retrieve trace with all spans in hierarchical structure
-      parameters:
-      - description: Trace ID
-        in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Trace with spans
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/observability.Trace'
-              type: object
-        "404":
-          description: Trace not found
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-        "500":
-          description: Internal server error
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-      security:
-      - BearerAuth: []
-      summary: Get trace with spans tree
-      tags:
-      - Dashboard - Analytics
   /api/v1/auth/change-password:
     post:
       consumes:
@@ -5774,6 +4900,710 @@ paths:
       summary: Delete project-scoped API key
       tags:
       - API Keys
+    patch:
+      consumes:
+      - application/json
+      description: Update an existing API key's name or active status. Only name and
+        is_active can be modified. The API key secret cannot be changed.
+      parameters:
+      - description: Project ID
+        example: '"proj_01234567890123456789012345"'
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: API Key ID
+        example: '"key_01234567890123456789012345"'
+        in: path
+        name: keyId
+        required: true
+        type: string
+      - description: Fields to update (at least one required)
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/apikey.UpdateAPIKeyRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: API key updated successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.SuccessResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/apikey.APIKey'
+              type: object
+        "400":
+          description: Bad request - invalid project ID, key ID, validation errors,
+            or no fields provided
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized - authentication required
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Forbidden - insufficient permissions to update API keys
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Project or API key not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "409":
+          description: Conflict - API key name already exists in project
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update API key
+      tags:
+      - API Keys
+  /api/v1/scores:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve paginated list of quality scores
+      parameters:
+      - description: Filter by trace ID
+        in: query
+        name: trace_id
+        type: string
+      - description: Filter by span ID
+        in: query
+        name: span_id
+        type: string
+      - description: Filter by session ID
+        in: query
+        name: session_id
+        type: string
+      - description: Filter by score name
+        in: query
+        name: name
+        type: string
+      - description: Filter by source (API, AUTO, HUMAN, EVAL)
+        in: query
+        name: source
+        type: string
+      - description: Filter by data type (NUMERIC, CATEGORICAL, BOOLEAN)
+        in: query
+        name: data_type
+        type: string
+      - description: Limit (default 50, max 1000)
+        in: query
+        name: limit
+        type: integer
+      - description: Offset (default 0)
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of scores
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/observability.Score'
+                  type: array
+              type: object
+        "400":
+          description: Invalid parameters
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: List quality scores with filtering
+      tags:
+      - Scores
+  /api/v1/scores/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve detailed score information
+      parameters:
+      - description: Score ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Score details
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/observability.Score'
+              type: object
+        "404":
+          description: Score not found
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: Get quality score by ID
+      tags:
+      - Scores
+    put:
+      consumes:
+      - application/json
+      description: Update an existing score (for corrections/enrichment after initial
+        creation)
+      parameters:
+      - description: Score ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated score data
+        in: body
+        name: score
+        required: true
+        schema:
+          $ref: '#/definitions/observability.Score'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Updated score
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/observability.Score'
+              type: object
+        "400":
+          description: Invalid request
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "404":
+          description: Score not found
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: Update quality score by ID
+      tags:
+      - Scores
+  /api/v1/spans:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve paginated list of spans
+      parameters:
+      - description: Filter by trace ID
+        in: query
+        name: trace_id
+        type: string
+      - description: Filter by span type
+        in: query
+        name: type
+        type: string
+      - description: Filter by model
+        in: query
+        name: model
+        type: string
+      - description: Filter by level
+        in: query
+        name: level
+        type: string
+      - description: Limit (default 50, max 1000)
+        in: query
+        name: limit
+        type: integer
+      - description: Offset (default 0)
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of spans
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/observability.Span'
+                  type: array
+              type: object
+        "400":
+          description: Invalid parameters
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: List spans with filtering
+      tags:
+      - Spans
+  /api/v1/spans/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve detailed span information
+      parameters:
+      - description: Span ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Span details
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/observability.Span'
+              type: object
+        "404":
+          description: Span not found
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: Get span by ID
+      tags:
+      - Spans
+    put:
+      consumes:
+      - application/json
+      description: Update an existing span (for corrections/enrichment after initial
+        creation)
+      parameters:
+      - description: Span ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated span data
+        in: body
+        name: span
+        required: true
+        schema:
+          $ref: '#/definitions/observability.Span'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Updated span
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/observability.Span'
+              type: object
+        "400":
+          description: Invalid request
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "404":
+          description: Span not found
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: Update span by ID
+      tags:
+      - Spans
+  /api/v1/traces:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve paginated list of traces with optional filtering
+      parameters:
+      - description: Project ID
+        in: query
+        name: project_id
+        required: true
+        type: string
+      - description: Filter by session ID
+        in: query
+        name: session_id
+        type: string
+      - description: Filter by user ID
+        in: query
+        name: user_id
+        type: string
+      - description: Start time (Unix timestamp)
+        format: int64
+        in: query
+        name: start_time
+        type: integer
+      - description: End time (Unix timestamp)
+        format: int64
+        in: query
+        name: end_time
+        type: integer
+      - description: Limit (default 50, max 1000)
+        in: query
+        name: limit
+        type: integer
+      - description: Offset (default 0)
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of traces
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/observability.Trace'
+                  type: array
+              type: object
+        "400":
+          description: Invalid parameters
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: List traces for a project
+      tags:
+      - Traces
+  /api/v1/traces/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve detailed trace information
+      parameters:
+      - description: Trace ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Trace details
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/observability.Trace'
+              type: object
+        "404":
+          description: Trace not found
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: Get trace by ID
+      tags:
+      - Traces
+    put:
+      consumes:
+      - application/json
+      description: Update trace name, tags, or metadata (corrections/enrichment via
+        dashboard)
+      parameters:
+      - description: Trace ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated trace data
+        in: body
+        name: trace
+        required: true
+        schema:
+          $ref: '#/definitions/observability.Trace'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Updated trace
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/observability.Trace'
+              type: object
+        "400":
+          description: Invalid request
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "404":
+          description: Trace not found
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: Update trace metadata
+      tags:
+      - Traces
+  /api/v1/traces/{id}/scores:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve trace with all associated quality scores
+      parameters:
+      - description: Trace ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Trace with scores
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/observability.Trace'
+              type: object
+        "404":
+          description: Trace not found
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: Get trace with quality scores
+      tags:
+      - Traces
+  /api/v1/traces/{id}/spans:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve trace with all spans in hierarchical structure
+      parameters:
+      - description: Trace ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Trace with spans
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/observability.Trace'
+              type: object
+        "404":
+          description: Trace not found
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: Get trace with spans tree
+      tags:
+      - Traces
   /api/v1/users/me:
     get:
       description: Get the profile information of the currently authenticated user
@@ -5975,295 +5805,6 @@ paths:
       summary: Validate API key
       tags:
       - SDK - Authentication
-  /v1/cache/invalidate:
-    post:
-      consumes:
-      - application/json
-      description: Invalidate specific cache entries or clear cache
-      parameters:
-      - description: Cache invalidation data
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/ai.InvalidateCacheRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Cache invalidated successfully
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.SuccessResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/ai.InvalidateCacheResponse'
-              type: object
-        "400":
-          description: Invalid request payload
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Invalid or missing API key
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Invalidate cache entries
-      tags:
-      - SDK - Cache
-  /v1/cache/status:
-    get:
-      description: Get current cache health and statistics
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Cache status returned
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.SuccessResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/ai.CacheStatusResponse'
-              type: object
-        "401":
-          description: Invalid or missing API key
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Get cache status
-      tags:
-      - SDK - Cache
-  /v1/chat/completions:
-    post:
-      consumes:
-      - application/json
-      description: Generate AI chat completions using OpenAI-compatible API
-      parameters:
-      - description: Chat completion request
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/ai.ChatCompletionRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Chat completion generated successfully
-          schema:
-            $ref: '#/definitions/response.SuccessResponse'
-        "400":
-          description: Invalid request payload
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Invalid API key
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "429":
-          description: Rate limit exceeded
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Create chat completion
-      tags:
-      - AI Gateway
-  /v1/completions:
-    post:
-      consumes:
-      - application/json
-      description: Generate AI text completions using OpenAI-compatible API
-      parameters:
-      - description: Text completion request
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/ai.CompletionRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Text completion generated successfully
-          schema:
-            $ref: '#/definitions/response.SuccessResponse'
-        "400":
-          description: Invalid request payload
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Invalid API key
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "429":
-          description: Rate limit exceeded
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Create text completion
-      tags:
-      - AI Gateway
-  /v1/embeddings:
-    post:
-      consumes:
-      - application/json
-      description: Generate text embeddings using OpenAI-compatible API
-      parameters:
-      - description: Embedding request
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/ai.EmbeddingRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Embeddings generated successfully
-          schema:
-            $ref: '#/definitions/response.SuccessResponse'
-        "400":
-          description: Invalid request payload
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Invalid API key
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "429":
-          description: Rate limit exceeded
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Create embeddings
-      tags:
-      - AI Gateway
-  /v1/models:
-    get:
-      description: Get list of available AI models
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: List of available models
-          schema:
-            items:
-              $ref: '#/definitions/ai.Model'
-            type: array
-        "401":
-          description: Invalid API key
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: List available models
-      tags:
-      - AI Gateway
-  /v1/models/{model}:
-    get:
-      description: Get detailed information about a specific AI model
-      parameters:
-      - description: Model ID
-        example: '"gpt-3.5-turbo"'
-        in: path
-        name: model
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Model information
-          schema:
-            $ref: '#/definitions/ai.Model'
-        "401":
-          description: Invalid API key
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "404":
-          description: Model not found
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Get model information
-      tags:
-      - AI Gateway
-  /v1/route:
-    post:
-      consumes:
-      - application/json
-      description: Determine optimal AI provider and model for a request
-      parameters:
-      - description: Routing request data
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/ai.RouteRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Routing decision returned
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.SuccessResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/ai.RouteResponse'
-              type: object
-        "400":
-          description: Invalid request payload
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "401":
-          description: Invalid or missing API key
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-      security:
-      - ApiKeyAuth: []
-      summary: Make AI routing decision
-      tags:
-      - SDK - Routing
   /v1/traces:
     post:
       consumes:
