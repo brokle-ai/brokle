@@ -9,6 +9,7 @@ import (
 	"gorm.io/gorm"
 
 	authDomain "brokle/internal/core/domain/auth"
+	"brokle/pkg/pagination"
 	"brokle/pkg/ulid"
 )
 
@@ -117,31 +118,37 @@ func (r *auditLogRepository) GetByFilters(ctx context.Context, filters *authDoma
 		return nil, 0, err
 	}
 
-	// Apply sorting
-	switch filters.SortBy {
-	case "created_at":
-		if filters.SortOrder == "asc" {
-			query = query.Order("created_at ASC")
-		} else {
-			query = query.Order("created_at DESC")
+	// Determine sort field and direction with validation
+	allowedSortFields := []string{"created_at", "action", "ip_address", "user_agent", "id"}
+	sortField := "created_at" // default
+	sortDir := "DESC"
+
+	if filters != nil {
+		// Validate sort field against whitelist
+		if filters.Params.SortBy != "" {
+			validated, err := pagination.ValidateSortField(filters.Params.SortBy, allowedSortFields)
+			if err != nil {
+				return nil, 0, err
+			}
+			if validated != "" {
+				sortField = validated
+			}
 		}
-	case "action":
-		if filters.SortOrder == "desc" {
-			query = query.Order("action DESC")
-		} else {
-			query = query.Order("action ASC")
+		if filters.Params.SortDir == "asc" {
+			sortDir = "ASC"
 		}
-	default:
-		query = query.Order("created_at DESC")
 	}
 
-	// Apply pagination
-	if filters.Limit > 0 {
-		query = query.Limit(filters.Limit)
+	// Apply sorting with secondary sort on id for stable ordering
+	query = query.Order(fmt.Sprintf("%s %s, id %s", sortField, sortDir, sortDir))
+
+	// Apply limit and offset for pagination
+	limit := pagination.DefaultPageSize
+	if filters.Params.Limit > 0 {
+		limit = filters.Params.Limit
 	}
-	if filters.Offset > 0 {
-		query = query.Offset(filters.Offset)
-	}
+	offset := filters.Params.GetOffset()
+	query = query.Limit(limit).Offset(offset)
 
 	err = query.Find(&auditLogs).Error
 	return auditLogs, int(totalCount), err

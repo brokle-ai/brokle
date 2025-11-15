@@ -30,8 +30,8 @@ type Trace struct {
 	StatusCode    uint8   `json:"status_code" db:"status_code"`         // OTEL enum: 0=UNSET, 1=OK, 2=ERROR
 	StatusMessage *string `json:"status_message,omitempty" db:"status_message"`
 
-	// OTEL resource attributes (JSON string with all resource-level attributes)
-	ResourceAttributes string `json:"resource_attributes" db:"resource_attributes"`
+	// OTEL resource attributes (JSON map with all resource-level attributes)
+	ResourceAttributes map[string]interface{} `json:"resource_attributes" db:"resource_attributes"`
 
 	// Input/Output (trace-level data stored in ClickHouse with ZSTD compression)
 	Input  *string `json:"input,omitempty" db:"input"`
@@ -86,12 +86,12 @@ type Span struct {
 	StatusCode    uint8   `json:"status_code" db:"status_code"` // OTEL enum: 0=UNSET, 1=OK, 2=ERROR
 	StatusMessage *string `json:"status_message,omitempty" db:"status_message"`
 
-	// OTEL attributes (JSON string with all span-level attributes)
+	// OTEL attributes (JSON map with all span-level attributes)
 	// Stores: gen_ai.*, brokle.*, and custom attributes
-	SpanAttributes string `json:"span_attributes" db:"span_attributes"`
+	SpanAttributes map[string]interface{} `json:"span_attributes" db:"span_attributes"`
 
-	// OTEL resource attributes (JSON string with resource-level context)
-	ResourceAttributes string `json:"resource_attributes" db:"resource_attributes"`
+	// OTEL resource attributes (JSON map with resource-level context)
+	ResourceAttributes map[string]interface{} `json:"resource_attributes" db:"resource_attributes"`
 
 	// Input/Output (stored in ClickHouse with ZSTD compression)
 	Input  *string `json:"input,omitempty" db:"input"`
@@ -119,8 +119,8 @@ type Span struct {
 	GenAIRequestMaxTokens    *uint16  `json:"gen_ai_request_max_tokens,omitempty" db:"gen_ai_request_max_tokens"`
 	GenAIRequestTemperature  *float32 `json:"gen_ai_request_temperature,omitempty" db:"gen_ai_request_temperature"`
 	GenAIRequestTopP         *float32 `json:"gen_ai_request_top_p,omitempty" db:"gen_ai_request_top_p"`
-	GenAIUsageInputTokens    *uint32  `json:"gen_ai_usage_input_tokens,omitempty" db:"gen_ai_usage_input_tokens"`
-	GenAIUsageOutputTokens   *uint32  `json:"gen_ai_usage_output_tokens,omitempty" db:"gen_ai_usage_output_tokens"`
+	GenAIUsageInputTokens    *int32  `json:"gen_ai_usage_input_tokens,omitempty" db:"gen_ai_usage_input_tokens"`
+	GenAIUsageOutputTokens   *int32  `json:"gen_ai_usage_output_tokens,omitempty" db:"gen_ai_usage_output_tokens"`
 
 	// Brokle attributes (custom extensions)
 	BrokleSpanType        *string  `json:"brokle_span_type,omitempty" db:"brokle_span_type"`       // span, generation, event, tool, agent, chain

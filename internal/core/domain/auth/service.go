@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"brokle/pkg/pagination"
 	"brokle/pkg/ulid"
 )
 
@@ -85,6 +86,9 @@ type APIKeyService interface {
 	GetAPIKeysByUser(ctx context.Context, userID ulid.ULID) ([]*APIKey, error)
 	GetAPIKeysByOrganization(ctx context.Context, orgID ulid.ULID) ([]*APIKey, error)
 	GetAPIKeysByProject(ctx context.Context, projectID ulid.ULID) ([]*APIKey, error)
+
+	// Pagination support
+	CountAPIKeys(ctx context.Context, filters *APIKeyFilters) (int64, error)
 }
 
 // RoleService defines both system template and custom scoped role management service interface.
@@ -210,7 +214,7 @@ type BlacklistedTokenService interface {
 
 	// Bulk operations
 	BlacklistUserTokens(ctx context.Context, userID ulid.ULID, reason string) error
-	GetUserBlacklistedTokens(ctx context.Context, userID ulid.ULID, limit, offset int) ([]*BlacklistedToken, error)
+	GetUserBlacklistedTokens(ctx context.Context, filters *BlacklistedTokenFilter) ([]*BlacklistedToken, error)
 
 	// Maintenance
 	CleanupExpiredTokens(ctx context.Context) error
@@ -276,20 +280,15 @@ type UpdateAPIKeyRequest struct {
 
 // Filter types
 type APIKeyFilters struct {
-	// Pagination
-	Limit  int `json:"limit"`
-	Offset int `json:"offset"`
-
-	// Filters
+	// Domain filters
 	UserID         *ulid.ULID `json:"user_id,omitempty"`
 	OrganizationID *ulid.ULID `json:"organization_id,omitempty"`
 	ProjectID      *ulid.ULID `json:"project_id,omitempty"`
 	IsActive       *bool      `json:"is_active,omitempty"`
 	IsExpired      *bool      `json:"is_expired,omitempty"`
 
-	// Sorting
-	SortBy    string `json:"sort_by"`    // name, created_at, last_used_at
-	SortOrder string `json:"sort_order"` // asc, desc
+	// Pagination (embedded for DRY)
+	pagination.Params `json:",inline"`
 }
 
 // Statistics types - AuditLogStats is defined in repository.go

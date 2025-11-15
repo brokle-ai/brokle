@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"brokle/pkg/pagination"
 	"brokle/pkg/ulid"
 )
 
@@ -53,11 +54,21 @@ type BlacklistedTokenRepository interface {
 
 	// Bulk operations
 	BlacklistUserTokens(ctx context.Context, userID ulid.ULID, reason string) error
-	GetBlacklistedTokensByUser(ctx context.Context, userID ulid.ULID, limit, offset int) ([]*BlacklistedToken, error)
+	GetBlacklistedTokensByUser(ctx context.Context, filters *BlacklistedTokenFilter) ([]*BlacklistedToken, error)
 
 	// Statistics
 	GetBlacklistedTokensCount(ctx context.Context) (int64, error)
 	GetBlacklistedTokensByReason(ctx context.Context, reason string) ([]*BlacklistedToken, error)
+}
+
+// BlacklistedTokenFilter represents filters for blacklisted token queries
+type BlacklistedTokenFilter struct {
+	// Domain filters
+	UserID *ulid.ULID
+	Reason *string
+
+	// Pagination (embedded for DRY)
+	pagination.Params
 }
 
 // APIKeyRepository defines the interface for API key data access.
@@ -79,6 +90,10 @@ type APIKeyRepository interface {
 	MarkAsUsed(ctx context.Context, id ulid.ULID) error
 	UpdateLastUsed(ctx context.Context, id ulid.ULID) error // For async last used updates
 	CleanupExpiredAPIKeys(ctx context.Context) error
+
+	// Filtered queries with pagination
+	GetByFilters(ctx context.Context, filters *APIKeyFilters) ([]*APIKey, error)
+	CountByFilters(ctx context.Context, filters *APIKeyFilters) (int64, error)
 
 	// Statistics
 	GetAPIKeyCount(ctx context.Context, userID ulid.ULID) (int, error)
@@ -257,11 +272,7 @@ type AuditLogRepository interface {
 
 // AuditLogFilters represents filters for audit log queries.
 type AuditLogFilters struct {
-	// Pagination
-	Limit  int `json:"limit"`
-	Offset int `json:"offset"`
-
-	// Filters
+	// Domain filters
 	UserID         *ulid.ULID `json:"user_id,omitempty"`
 	OrganizationID *ulid.ULID `json:"organization_id,omitempty"`
 	Action         *string    `json:"action,omitempty"`
@@ -271,9 +282,8 @@ type AuditLogFilters struct {
 	StartDate      *time.Time `json:"start_date,omitempty"`
 	EndDate        *time.Time `json:"end_date,omitempty"`
 
-	// Sorting
-	SortBy    string `json:"sort_by"`    // created_at, action, resource
-	SortOrder string `json:"sort_order"` // asc, desc
+	// Pagination (embedded for DRY)
+	pagination.Params `json:",inline"`
 }
 
 // AuditLogStats represents audit log statistics

@@ -3,6 +3,7 @@ package organization
 import (
 	"context"
 
+	"brokle/pkg/pagination"
 	"brokle/pkg/ulid"
 )
 
@@ -14,7 +15,7 @@ type OrganizationRepository interface {
 	GetBySlug(ctx context.Context, slug string) (*Organization, error)
 	Update(ctx context.Context, org *Organization) error
 	Delete(ctx context.Context, id ulid.ULID) error
-	List(ctx context.Context, limit, offset int) ([]*Organization, error)
+	List(ctx context.Context, filters *OrganizationFilters) ([]*Organization, error)
 
 	// User context
 	GetOrganizationsByUserID(ctx context.Context, userID ulid.ULID) ([]*Organization, error)
@@ -93,37 +94,45 @@ type InvitationRepository interface {
 
 // OrganizationFilters represents filters for organization queries.
 type OrganizationFilters struct {
+	// Domain filters
 	Name   *string
 	Plan   *string
 	Status *string
-	Limit  int
-	Offset int
+
+	// Pagination (embedded for DRY)
+	pagination.Params
 }
 
 // MemberFilters represents filters for member queries.
 type MemberFilters struct {
+	// Domain filters
 	OrganizationID *ulid.ULID
 	UserID         *ulid.ULID
 	RoleID         *ulid.ULID
-	Limit          int
-	Offset         int
+
+	// Pagination (embedded for DRY)
+	pagination.Params
 }
 
 // ProjectFilters represents filters for project queries.
 type ProjectFilters struct {
+	// Domain filters
 	OrganizationID *ulid.ULID
 	Name           *string
-	Limit          int
-	Offset         int
+
+	// Pagination (embedded for DRY)
+	pagination.Params
 }
 
 // InvitationFilters represents filters for invitation queries.
 type InvitationFilters struct {
+	// Domain filters
 	OrganizationID *ulid.ULID
 	Status         *string
 	Email          *string
-	Limit          int
-	Offset         int
+
+	// Pagination (embedded for DRY)
+	pagination.Params
 }
 
 // OrganizationSettingsRepository defines the interface for organization settings data access.

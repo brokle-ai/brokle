@@ -235,9 +235,11 @@ func (h *Handler) GetUsage(c *gin.Context) { response.Success(c, gin.H{"message"
 // @Param status query string false "Filter by invoice status" Enums(draft,sent,paid,overdue,void)
 // @Param start_date query string false "Filter invoices from date (RFC3339)" example("2024-01-01T00:00:00Z")
 // @Param end_date query string false "Filter invoices until date (RFC3339)" example("2024-01-31T23:59:59Z")
-// @Param page query int false "Page number" default(1) minimum(1)
-// @Param limit query int false "Items per page" default(20) minimum(1) maximum(100)
-// @Success 200 {object} response.APIResponse{data=[]Invoice,meta=response.Meta{pagination=response.Pagination}} "List of organization invoices with pagination"
+// @Param cursor query string false "Pagination cursor" example("eyJjcmVhdGVkX2F0IjoiMjAyNC0wMS0wMVQxMjowMDowMFoiLCJpZCI6IjAxSDJYM1k0WjUifQ==")
+// @Param page_size query int false "Items per page" Enums(10,20,30,40,50) default(50)
+// @Param sort_by query string false "Sort field" Enums(created_at) default("created_at")
+// @Param sort_dir query string false "Sort direction" Enums(asc,desc) default("desc")
+// @Success 200 {object} response.APIResponse{data=[]Invoice,meta=response.Meta{pagination=response.Pagination}} "List of organization invoices with cursor pagination"
 // @Failure 400 {object} response.ErrorResponse "Bad request - invalid organization ID or parameters"
 // @Failure 401 {object} response.ErrorResponse "Unauthorized"
 // @Failure 403 {object} response.ErrorResponse "Forbidden - insufficient permissions to view billing information"

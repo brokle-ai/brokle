@@ -2,6 +2,7 @@ package organization
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -131,10 +132,12 @@ func NewHandler(
 // @Tags Organizations
 // @Accept json
 // @Produce json
-// @Param page query int false "Page number" default(1) minimum(1)
-// @Param limit query int false "Items per page" default(20) minimum(1) maximum(100)
+// @Param cursor query string false "Pagination cursor" example("eyJjcmVhdGVkX2F0IjoiMjAyNC0wMS0wMVQxMjowMDowMFoiLCJpZCI6IjAxSDJYM1k0WjUifQ==")
+// @Param page_size query int false "Items per page" Enums(10,20,30,40,50) default(50)
+// @Param sort_by query string false "Sort field" Enums(created_at,name) default("created_at")
+// @Param sort_dir query string false "Sort direction" Enums(asc,desc) default("desc")
 // @Param search query string false "Search organizations by name or slug"
-// @Success 200 {object} response.APIResponse{data=[]Organization,meta=response.Meta{pagination=response.Pagination}} "List of organizations with pagination"
+// @Success 200 {object} response.APIResponse{data=[]Organization,meta=response.Meta{pagination=response.Pagination}} "List of organizations with cursor pagination"
 // @Failure 400 {object} response.ErrorResponse "Bad request"
 // @Failure 401 {object} response.ErrorResponse "Unauthorized"
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
@@ -191,31 +194,51 @@ func (h *Handler) List(c *gin.Context) {
 		})
 	}
 
-	// Apply pagination
-	total := len(filteredOrgs)
-	startIdx := (req.Page - 1) * req.Limit
-	endIdx := startIdx + req.Limit
+	// Parse offset pagination parameters
+	params := response.ParsePaginationParams(
+		c.Query("page"),
+		c.Query("limit"),
+		c.Query("sort_by"),
+		c.Query("sort_dir"),
+	)
 
-	if startIdx >= total {
-		filteredOrgs = []Organization{}
-	} else {
-		if endIdx > total {
-			endIdx = total
+	total := len(filteredOrgs)
+
+	// Sort organizations for stable ordering
+	sort.Slice(filteredOrgs, func(i, j int) bool {
+		if params.SortDir == "asc" {
+			return filteredOrgs[i].CreatedAt.Before(filteredOrgs[j].CreatedAt)
 		}
-		filteredOrgs = filteredOrgs[startIdx:endIdx]
+		return filteredOrgs[i].CreatedAt.After(filteredOrgs[j].CreatedAt)
+	})
+
+	// Apply offset pagination
+	offset := params.GetOffset()
+	limit := params.Limit
+
+	// Calculate end index for slicing
+	end := offset + limit
+	if end > len(filteredOrgs) {
+		end = len(filteredOrgs)
 	}
 
-	// Create pagination
-	pagination := response.NewPagination(req.Page, req.Limit, int64(total))
+	// Apply pagination slice
+	if offset < len(filteredOrgs) {
+		filteredOrgs = filteredOrgs[offset:end]
+	} else {
+		filteredOrgs = []Organization{}
+	}
+
+	// Create offset pagination
+	pag := response.NewPagination(params.Page, params.Limit, int64(total))
 
 	h.logger.WithFields(logrus.Fields{
 		"user_id": userID,
 		"count":   len(filteredOrgs),
 		"total":   total,
-		"page":    req.Page,
 	}).Info("Organizations listed successfully")
 
-	response.SuccessWithPagination(c, filteredOrgs, pagination)
+	response.SuccessWithPagination(c, filteredOrgs, pag)
 }
 
 // Create handles POST /organizations
@@ -614,7 +637,7 @@ func (h *Handler) Delete(c *gin.Context) {
 // @Param orgId path string true "Organization ID" example("org_1234567890")
 // @Param status query string false "Filter by member status" Enums(active,invited,suspended)
 // @Param role query string false "Filter by member role" Enums(owner,admin,developer,viewer)
-// @Success 200 {object} response.APIResponse{data=[]OrganizationMember,meta=response.Meta{pagination=response.Pagination}} "List of organization members with pagination"
+// @Success 200 {object} response.APIResponse{data=[]OrganizationMember,meta=response.Meta{pagination=response.Pagination}} "List of organization members with cursor pagination"
 // @Failure 400 {object} response.ErrorResponse "Bad request - invalid organization ID or query parameters"
 // @Failure 401 {object} response.ErrorResponse "Unauthorized"
 // @Failure 403 {object} response.ErrorResponse "Forbidden - insufficient permissions to view members"
@@ -740,8 +763,43 @@ func (h *Handler) ListMembers(c *gin.Context) {
 		})
 	}
 
-	// Create pagination (using 1, len(memberList) since this endpoint doesn't support pagination yet)
-	pagination := response.NewPagination(1, len(memberList), int64(len(memberList)))
+	// Parse offset pagination parameters
+	params := response.ParsePaginationParams(
+		c.Query("page"),
+		c.Query("limit"),
+		c.Query("sort_by"),
+		c.Query("sort_dir"),
+	)
+
+	total := len(memberList)
+
+	// Sort members for stable ordering
+	sort.Slice(memberList, func(i, j int) bool {
+		if params.SortDir == "asc" {
+			return memberList[i].CreatedAt.Before(memberList[j].CreatedAt)
+		}
+		return memberList[i].CreatedAt.After(memberList[j].CreatedAt)
+	})
+
+	// Apply offset pagination
+	offset := params.GetOffset()
+	limit := params.Limit
+
+	// Calculate end index for slicing
+	end := offset + limit
+	if end > len(memberList) {
+		end = len(memberList)
+	}
+
+	// Apply pagination slice
+	if offset < len(memberList) {
+		memberList = memberList[offset:end]
+	} else {
+		memberList = []OrganizationMember{}
+	}
+
+	// Create offset pagination
+	pag := response.NewPagination(params.Page, params.Limit, int64(total))
 
 	h.logger.WithFields(logrus.Fields{
 		"user_id": userID,
@@ -749,7 +807,7 @@ func (h *Handler) ListMembers(c *gin.Context) {
 		"count":   len(memberList),
 	}).Info("Organization members listed successfully")
 
-	response.SuccessWithPagination(c, memberList, pagination)
+	response.SuccessWithPagination(c, memberList, pag)
 }
 
 // InviteMember handles POST /organizations/:orgId/members

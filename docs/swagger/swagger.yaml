@@ -1437,18 +1437,20 @@ definitions:
       project_id:
         type: string
       resource_attributes:
-        description: OTEL resource attributes (JSON string with resource-level context)
-        type: string
+        additionalProperties: true
+        description: OTEL resource attributes (JSON map with resource-level context)
+        type: object
       scores:
         description: Populated from joins (not in ClickHouse)
         items:
           $ref: '#/definitions/observability.Score'
         type: array
       span_attributes:
+        additionalProperties: true
         description: |-
-          OTEL attributes (JSON string with all span-level attributes)
+          OTEL attributes (JSON map with all span-level attributes)
           Stores: gen_ai.*, brokle.*, and custom attributes
-        type: string
+        type: object
       span_id:
         description: OTEL identifiers
         type: string
@@ -1512,9 +1514,9 @@ definitions:
       release:
         type: string
       resource_attributes:
-        description: OTEL resource attributes (JSON string with all resource-level
-          attributes)
-        type: string
+        additionalProperties: true
+        description: OTEL resource attributes (JSON map with all resource-level attributes)
+        type: object
       scores:
         items:
           $ref: '#/definitions/observability.Score'
@@ -1790,7 +1792,7 @@ definitions:
         type: string
     type: object
   response.Meta:
-    description: Response metadata including request tracking and pagination
+    description: Response metadata including request tracking and offset pagination
     properties:
       pagination:
         $ref: '#/definitions/response.Pagination'
@@ -1800,15 +1802,12 @@ definitions:
       timestamp:
         example: "2023-12-01T10:30:00Z"
         type: string
-      total:
-        example: 150
-        type: integer
       version:
         example: v1
         type: string
     type: object
   response.Pagination:
-    description: Pagination metadata for paginated API responses
+    description: Offset-based pagination information for list responses
     properties:
       has_next:
         example: true
@@ -1816,17 +1815,17 @@ definitions:
       has_prev:
         example: false
         type: boolean
+      limit:
+        example: 50
+        type: integer
       page:
         example: 1
         type: integer
-      page_size:
-        example: 20
-        type: integer
       total:
-        example: 150
+        example: 1234
         type: integer
-      total_page:
-        example: 8
+      total_pages:
+        example: 25
         type: integer
     type: object
   response.SuccessResponse:
@@ -2854,16 +2853,37 @@ paths:
       - application/json
       description: Get paginated list of user sessions with device info
       parameters:
-      - default: 1
-        description: Page number
+      - description: Pagination cursor
+        example: '"eyJjcmVhdGVkX2F0IjoiMjAyNC0wMS0wMVQxMjowMDowMFoiLCJpZCI6IjAxSDJYM1k0WjUifQ=="'
         in: query
-        name: page
-        type: integer
-      - default: 10
-        description: Page size
+        name: cursor
+        type: string
+      - default: 50
+        description: Items per page
+        enum:
+        - 10
+        - 20
+        - 30
+        - 40
+        - 50
         in: query
         name: page_size
         type: integer
+      - default: '"created_at"'
+        description: Sort field
+        enum:
+        - created_at
+        in: query
+        name: sort_by
+        type: string
+      - default: '"desc"'
+        description: Sort direction
+        enum:
+        - asc
+        - desc
+        in: query
+        name: sort_dir
+        type: string
       - default: false
         description: Active sessions only
         in: query
@@ -3064,24 +3084,42 @@ paths:
         in: query
         name: end_date
         type: string
-      - default: 1
-        description: Page number
+      - description: Pagination cursor
+        example: '"eyJjcmVhdGVkX2F0IjoiMjAyNC0wMS0wMVQxMjowMDowMFoiLCJpZCI6IjAxSDJYM1k0WjUifQ=="'
         in: query
-        minimum: 1
-        name: page
-        type: integer
-      - default: 20
+        name: cursor
+        type: string
+      - default: 50
         description: Items per page
+        enum:
+        - 10
+        - 20
+        - 30
+        - 40
+        - 50
         in: query
-        maximum: 100
-        minimum: 1
-        name: limit
+        name: page_size
         type: integer
+      - default: '"created_at"'
+        description: Sort field
+        enum:
+        - created_at
+        in: query
+        name: sort_by
+        type: string
+      - default: '"desc"'
+        description: Sort direction
+        enum:
+        - asc
+        - desc
+        in: query
+        name: sort_dir
+        type: string
       produces:
       - application/json
       responses:
         "200":
-          description: List of organization invoices with pagination
+          description: List of organization invoices with cursor pagination
           schema:
             allOf:
             - $ref: '#/definitions/response.APIResponse'
@@ -3500,18 +3538,21 @@ paths:
         in: query
         name: search
         type: string
-      - default: 1
-        description: Page number
+      - description: Pagination cursor
+        example: '"eyJjcmVhdGVkX2F0IjoiMjAyNC0wMS0wMVQxMjowMDowMFoiLCJpZCI6IjAxSDJYM1k0WjUifQ=="'
         in: query
-        minimum: 1
-        name: page
-        type: integer
+        name: cursor
+        type: string
       - default: 50
         description: Items per page
+        enum:
+        - 10
+        - 20
+        - 30
+        - 40
+        - 50
         in: query
-        maximum: 1000
-        minimum: 1
-        name: limit
+        name: page_size
         type: integer
       - default: '"-timestamp"'
         description: Sort order
@@ -3624,19 +3665,38 @@ paths:
       - application/json
       description: Get a paginated list of organizations for the authenticated user
       parameters:
-      - default: 1
-        description: Page number
+      - description: Pagination cursor
+        example: '"eyJjcmVhdGVkX2F0IjoiMjAyNC0wMS0wMVQxMjowMDowMFoiLCJpZCI6IjAxSDJYM1k0WjUifQ=="'
         in: query
-        minimum: 1
-        name: page
-        type: integer
-      - default: 20
+        name: cursor
+        type: string
+      - default: 50
         description: Items per page
+        enum:
+        - 10
+        - 20
+        - 30
+        - 40
+        - 50
         in: query
-        maximum: 100
-        minimum: 1
-        name: limit
+        name: page_size
         type: integer
+      - default: '"created_at"'
+        description: Sort field
+        enum:
+        - created_at
+        - name
+        in: query
+        name: sort_by
+        type: string
+      - default: '"desc"'
+        description: Sort direction
+        enum:
+        - asc
+        - desc
+        in: query
+        name: sort_dir
+        type: string
       - description: Search organizations by name or slug
         in: query
         name: search
@@ -3645,7 +3705,7 @@ paths:
       - application/json
       responses:
         "200":
-          description: List of organizations with pagination
+          description: List of organizations with cursor pagination
           schema:
             allOf:
             - $ref: '#/definitions/response.APIResponse'
@@ -3910,7 +3970,7 @@ paths:
       - application/json
       responses:
         "200":
-          description: List of organization members with pagination
+          description: List of organization members with cursor pagination
           schema:
             allOf:
             - $ref: '#/definitions/response.APIResponse'
@@ -4451,19 +4511,38 @@ paths:
         in: query
         name: status
         type: string
-      - default: 1
-        description: Page number
+      - description: Cursor for pagination
+        example: '"eyJjcmVhdGVkX2F0IjoiMjAyNC0wMS0wMVQxMjowMDowMFoiLCJpZCI6IjAxSDJYM1k0WjUifQ=="'
         in: query
-        minimum: 1
-        name: page
-        type: integer
-      - default: 20
+        name: cursor
+        type: string
+      - default: 50
         description: Items per page
+        enum:
+        - 10
+        - 20
+        - 30
+        - 40
+        - 50
         in: query
-        maximum: 100
-        minimum: 1
-        name: limit
+        name: page_size
         type: integer
+      - default: '"created_at"'
+        description: Sort field
+        enum:
+        - created_at
+        - name
+        in: query
+        name: sort_by
+        type: string
+      - default: '"desc"'
+        description: Sort direction
+        enum:
+        - asc
+        - desc
+        in: query
+        name: sort_dir
+        type: string
       - description: Search projects by name or slug
         in: query
         name: search
@@ -4472,7 +4551,7 @@ paths:
       - application/json
       responses:
         "200":
-          description: List of projects with pagination
+          description: List of projects with cursor pagination
           schema:
             allOf:
             - $ref: '#/definitions/response.APIResponse'
@@ -4732,24 +4811,44 @@ paths:
         in: query
         name: status
         type: string
-      - default: 1
-        description: Page number
+      - description: Pagination cursor
+        example: '"eyJjcmVhdGVkX2F0IjoiMjAyNC0wMS0wMVQxMjowMDowMFoiLCJpZCI6IjAxSDJYM1k0WjUifQ=="'
         in: query
-        minimum: 1
-        name: page
-        type: integer
-      - default: 20
+        name: cursor
+        type: string
+      - default: 50
         description: Items per page
+        enum:
+        - 10
+        - 20
+        - 30
+        - 40
+        - 50
         in: query
-        maximum: 100
-        minimum: 1
-        name: limit
+        name: page_size
         type: integer
+      - default: '"created_at"'
+        description: Sort field
+        enum:
+        - created_at
+        - name
+        - last_used_at
+        in: query
+        name: sort_by
+        type: string
+      - default: '"desc"'
+        description: Sort direction
+        enum:
+        - asc
+        - desc
+        in: query
+        name: sort_dir
+        type: string
       produces:
       - application/json
       responses:
         "200":
-          description: List of project-scoped API keys with pagination
+          description: List of project-scoped API keys with cursor pagination
           schema:
             allOf:
             - $ref: '#/definitions/response.APIResponse'

@@ -1,8 +1,6 @@
 package observability
 
 import (
-	"strconv"
-
 	"github.com/gin-gonic/gin"
 
 	"brokle/internal/core/domain/observability"
@@ -58,29 +56,18 @@ func (h *Handler) ListScores(c *gin.Context) {
 		filter.DataType = &dataType
 	}
 
-	// Pagination
-	limit := 50
-	if limitStr := c.Query("limit"); limitStr != "" {
-		l, err := strconv.Atoi(limitStr)
-		if err != nil || l < 1 || l > 1000 {
-			response.ValidationError(c, "invalid limit", "limit must be between 1 and 1000")
-			return
-		}
-		limit = l
-	}
-	filter.Limit = limit
+	// Offset pagination
+	params := response.ParsePaginationParams(
+		c.Query("page"),
+		c.Query("limit"),
+		c.Query("sort_by"),
+		c.Query("sort_dir"),
+	)
 
-	offset := 0
-	if offsetStr := c.Query("offset"); offsetStr != "" {
-		o, err := strconv.Atoi(offsetStr)
-		if err != nil || o < 0 {
-			response.ValidationError(c, "invalid offset", "offset must be >= 0")
-			return
-		}
-		offset = o
-	}
-	filter.Offset = offset
+	// Set embedded pagination fields
+	filter.Params = params
 
+	// Get scores from service
 	scores, err := h.services.GetScoreService().GetScoresByFilter(c.Request.Context(), filter)
 	if err != nil {
 		h.logger.WithError(err).Error("Failed to list scores")
@@ -88,7 +75,18 @@ func (h *Handler) ListScores(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, scores)
+	// Get total count for pagination metadata
+	totalCount, err := h.services.GetScoreService().CountScores(c.Request.Context(), filter)
+	if err != nil {
+		h.logger.WithError(err).Error("Failed to count scores")
+		response.Error(c, err)
+		return
+	}
+
+	// Build pagination metadata (NewPagination calculates has_next, has_prev, total_pages)
+	paginationMeta := response.NewPagination(params.Page, params.Limit, totalCount)
+
+	response.SuccessWithPagination(c, scores, paginationMeta)
 }
 
 // GetScore handles GET /api/v1/scores/:id

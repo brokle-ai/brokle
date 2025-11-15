@@ -40,7 +40,9 @@ func (h *Handler) ListTraces(c *gin.Context) {
 	}
 
 	// Build filter from query parameters
-	filter := &observability.TraceFilter{}
+	filter := &observability.TraceFilter{
+		ProjectID: projectID, // Set project scope
+	}
 
 	// Session ID filter (virtual session)
 	if sessionID := c.Query("session_id"); sessionID != "" {
@@ -73,28 +75,16 @@ func (h *Handler) ListTraces(c *gin.Context) {
 		filter.EndTime = &endTime
 	}
 
-	// Pagination
-	limit := 50
-	if limitStr := c.Query("limit"); limitStr != "" {
-		l, err := strconv.Atoi(limitStr)
-		if err != nil || l < 1 || l > 1000 {
-			response.ValidationError(c, "invalid limit", "limit must be between 1 and 1000")
-			return
-		}
-		limit = l
-	}
-	filter.Limit = limit
+	// Offset pagination
+	params := response.ParsePaginationParams(
+		c.Query("page"),
+		c.Query("limit"),
+		c.Query("sort_by"),
+		c.Query("sort_dir"),
+	)
 
-	offset := 0
-	if offsetStr := c.Query("offset"); offsetStr != "" {
-		o, err := strconv.Atoi(offsetStr)
-		if err != nil || o < 0 {
-			response.ValidationError(c, "invalid offset", "offset must be >= 0")
-			return
-		}
-		offset = o
-	}
-	filter.Offset = offset
+	// Set embedded pagination fields
+	filter.Params = params
 
 	// Get traces from service
 	traces, err := h.services.GetTraceService().GetTracesByProjectID(c.Request.Context(), projectID, filter)
@@ -104,7 +94,18 @@ func (h *Handler) ListTraces(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, traces)
+	// Get total count for pagination metadata
+	totalCount, err := h.services.GetTraceService().CountTraces(c.Request.Context(), filter)
+	if err != nil {
+		h.logger.WithError(err).Error("Failed to count traces")
+		response.Error(c, err)
+		return
+	}
+
+	// Build pagination metadata (NewPagination calculates has_next, has_prev, total_pages)
+	paginationMeta := response.NewPagination(params.Page, params.Limit, totalCount)
+
+	response.SuccessWithPagination(c, traces, paginationMeta)
 }
 
 // GetTrace handles GET /api/v1/traces/:id

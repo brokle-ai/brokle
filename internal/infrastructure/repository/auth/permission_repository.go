@@ -169,12 +169,11 @@ func (r *permissionRepository) ListPermissions(ctx context.Context, limit, offse
 		return nil, 0, err
 	}
 
-	// Get permissions with pagination
+	// Get permissions with cursor pagination (fetch +1 to detect has_next)
 	var permissions []*authDomain.Permission
 	err := r.db.WithContext(ctx).
-		Order("category ASC, resource ASC, action ASC").
-		Limit(limit).
-		Offset(offset).
+		Order("category ASC, resource ASC, action ASC, id ASC").
+		Limit(limit + 1). // Fetch extra for has_next detection
 		Find(&permissions).Error
 
 	return permissions, int(total), err
@@ -194,12 +193,11 @@ func (r *permissionRepository) SearchPermissions(ctx context.Context, query stri
 		return nil, 0, err
 	}
 
-	// Get permissions with pagination
+	// Get permissions with cursor pagination (fetch +1 to detect has_next)
 	var permissions []*authDomain.Permission
 	err := dbQuery.
-		Order("category ASC, resource ASC, action ASC").
-		Limit(limit).
-		Offset(offset).
+		Order("category ASC, resource ASC, action ASC, id ASC").
+		Limit(limit + 1). // Fetch extra for has_next detection
 		Find(&permissions).Error
 
 	return permissions, int(total), err

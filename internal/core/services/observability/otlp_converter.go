@@ -166,8 +166,8 @@ func (s *OTLPConverterService) createTraceEvent(span observability.OTLPSpan, res
 		"trace_id":             traceID, // Renamed from "id"
 		"name":                 span.Name,
 		"start_time":           startTime.Format(time.RFC3339Nano),
-		"status_code":          statusCode,                      // Now UInt8 (0-2)
-		"resource_attributes":  marshalAttributes(resourceAttrs), // OTEL resource attributes only
+		"status_code":          statusCode,          // Now UInt8 (0-2)
+		"resource_attributes":  resourceAttrs,       // OTEL resource attributes as map
 	}
 
 	if endTime != nil {
@@ -320,9 +320,9 @@ func (s *OTLPConverterService) convertSpanToEvent(ctx context.Context, span obse
 		"span_name":            span.Name,   // Renamed from "name"
 		"span_kind":            spanKind,    // Now UInt8 (0-5)
 		"start_time":           startTime.Format(time.RFC3339Nano),
-		"status_code":          statusCode,                       // Now UInt8 (0-2)
-		"span_attributes":      marshalAttributes(spanAttrs),     // Span-level attributes only
-		"resource_attributes":  marshalAttributes(resourceAttrs), // Resource-level attributes only
+		"status_code":          statusCode,           // Now UInt8 (0-2)
+		"span_attributes":      spanAttrs,            // Span-level attributes as map
+		"resource_attributes":  resourceAttrs,        // Resource-level attributes as map
 	}
 
 	if endTime != nil {
@@ -799,12 +799,9 @@ func extractBrokleFields(attrs map[string]interface{}, payload map[string]interf
 	// Flow: SDK → Float64 in attributes → FORMAT AS STRING → ClickHouse JSON (String) →
 	//       Materialized Decimal(18,9) column → Zero precision loss
 
-	// Get or initialize span_attributes map for modification
-	var spanAttrs map[string]interface{}
-	if attrsJSON, ok := payload["span_attributes"].(string); ok {
-		json.Unmarshal([]byte(attrsJSON), &spanAttrs)
-	}
-	if spanAttrs == nil {
+	// Get span_attributes map for modification (now already a map, not JSON string)
+	spanAttrs, ok := payload["span_attributes"].(map[string]interface{})
+	if !ok || spanAttrs == nil {
 		spanAttrs = make(map[string]interface{})
 	}
 
@@ -827,8 +824,8 @@ func extractBrokleFields(attrs map[string]interface{}, payload map[string]interf
 		spanAttrs["brokle.cost.output"] = costStr // Already string
 	}
 
-	// Update payload with modified span_attributes (costs now as STRINGS)
-	payload["span_attributes"] = marshalAttributes(spanAttrs)
+	// Update payload with modified span_attributes (now as map, not JSON string)
+	payload["span_attributes"] = spanAttrs
 
 	// Note: ALL Brokle attributes (span.type, span.level, prompt.*, etc.) are now
 	// stored in span_attributes JSON with brokle.* namespace.

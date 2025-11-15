@@ -129,8 +129,8 @@ type ExportResponse struct {
 // @Param max_latency query int false "Maximum latency filter (ms)" example("5000")
 // @Param cache_hit query bool false "Filter by cache hit status" example("false")
 // @Param search query string false "Search in request content" example("error")
-// @Param page query int false "Page number" default(1) minimum(1)
-// @Param limit query int false "Items per page" default(50) minimum(1) maximum(1000)
+// @Param cursor query string false "Pagination cursor" example("eyJjcmVhdGVkX2F0IjoiMjAyNC0wMS0wMVQxMjowMDowMFoiLCJpZCI6IjAxSDJYM1k0WjUifQ==")
+// @Param page_size query int false "Items per page" Enums(10,20,30,40,50) default(50)
 // @Param sort query string false "Sort order" default("-timestamp") Enums(timestamp,-timestamp,latency,-latency,cost,-cost)
 // @Success 200 {object} response.SuccessResponse{data=ListRequestsResponse} "List of AI requests"
 // @Failure 400 {object} response.ErrorResponse "Bad request - invalid query parameters"

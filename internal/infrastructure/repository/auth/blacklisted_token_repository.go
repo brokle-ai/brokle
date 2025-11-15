@@ -9,6 +9,7 @@ import (
 	"gorm.io/gorm"
 
 	authDomain "brokle/internal/core/domain/auth"
+	"brokle/pkg/pagination"
 	"brokle/pkg/ulid"
 )
 
@@ -118,20 +119,56 @@ func (r *blacklistedTokenRepository) BlacklistUserTokens(ctx context.Context, us
 	return r.CreateUserTimestampBlacklist(ctx, userID, blacklistTimestamp, reason)
 }
 
-// GetBlacklistedTokensByUser retrieves blacklisted tokens for a specific user
-func (r *blacklistedTokenRepository) GetBlacklistedTokensByUser(ctx context.Context, userID ulid.ULID, limit, offset int) ([]*authDomain.BlacklistedToken, error) {
+// GetBlacklistedTokensByUser retrieves blacklisted tokens with cursor pagination
+func (r *blacklistedTokenRepository) GetBlacklistedTokensByUser(ctx context.Context, filters *authDomain.BlacklistedTokenFilter) ([]*authDomain.BlacklistedToken, error) {
 	var tokens []*authDomain.BlacklistedToken
 
-	query := r.db.WithContext(ctx).Where("user_id = ?", userID).
-		Order("created_at DESC")
+	query := r.db.WithContext(ctx)
 
-	if limit > 0 {
-		query = query.Limit(limit)
+	// Apply filters
+	if filters != nil {
+		if filters.UserID != nil {
+			query = query.Where("user_id = ?", *filters.UserID)
+		}
+		if filters.Reason != nil {
+			query = query.Where("reason = ?", *filters.Reason)
+		}
 	}
 
-	if offset > 0 {
-		query = query.Offset(offset)
+	// Determine sort field and direction with validation
+	allowedSortFields := []string{"created_at", "expires_at", "reason", "id"}
+	sortField := "created_at" // default
+	sortDir := "DESC"
+
+	if filters != nil {
+		// Validate sort field against whitelist
+		if filters.Params.SortBy != "" {
+			validated, err := pagination.ValidateSortField(filters.Params.SortBy, allowedSortFields)
+			if err != nil {
+				return nil, err
+			}
+			if validated != "" {
+				sortField = validated
+			}
+		}
+		if filters.Params.SortDir == "asc" {
+			sortDir = "ASC"
+		}
 	}
+
+	// Apply sorting with secondary sort on id for stable ordering
+	query = query.Order(fmt.Sprintf("%s %s, id %s", sortField, sortDir, sortDir))
+
+	// Apply limit and offset for pagination
+	limit := pagination.DefaultPageSize
+	offset := 0
+	if filters != nil {
+		if filters.Params.Limit > 0 {
+			limit = filters.Params.Limit
+		}
+		offset = filters.Params.GetOffset()
+	}
+	query = query.Limit(limit).Offset(offset)
 
 	err := query.Find(&tokens).Error
 	if err != nil {

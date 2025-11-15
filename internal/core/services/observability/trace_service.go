@@ -61,8 +61,8 @@ func (s *TraceService) CreateTrace(ctx context.Context, trace *observability.Tra
 	if trace.Environment == "" {
 		trace.Environment = "production"
 	}
-	if trace.ResourceAttributes == "" {
-		trace.ResourceAttributes = "{}"
+	if trace.ResourceAttributes == nil {
+		trace.ResourceAttributes = make(map[string]interface{})
 	}
 	if trace.CreatedAt.IsZero() {
 		trace.CreatedAt = time.Now()
@@ -131,7 +131,7 @@ func mergeTraceFields(dst *observability.Trace, src *observability.Trace) {
 	if src.Output != nil {
 		dst.Output = src.Output
 	}
-	if src.ResourceAttributes != "" && src.ResourceAttributes != "{}" {
+	if src.ResourceAttributes != nil && len(src.ResourceAttributes) > 0 {
 		dst.ResourceAttributes = src.ResourceAttributes
 	}
 	if src.Tags != nil {
@@ -301,8 +301,8 @@ func (s *TraceService) CreateTraceBatch(ctx context.Context, traces []*observabi
 		if trace.Environment == "" {
 			trace.Environment = "production"
 		}
-		if trace.ResourceAttributes == "" {
-			trace.ResourceAttributes = "{}"
+		if trace.ResourceAttributes == nil {
+			trace.ResourceAttributes = make(map[string]interface{})
 		}
 		if trace.CreatedAt.IsZero() {
 			trace.CreatedAt = time.Now()

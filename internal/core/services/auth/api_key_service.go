@@ -99,9 +99,13 @@ func (s *apiKeyService) GetAPIKeys(ctx context.Context, filters *authDomain.APIK
 		return s.apiKeyRepo.GetByUserID(ctx, *filters.UserID)
 	}
 
-	// If no specific filters, return empty array for now
-	// TODO: Implement comprehensive filtering in repository including environment tags
-	return []*authDomain.APIKey{}, nil
+	// Use GetByFilters for comprehensive filtering with pagination
+	return s.apiKeyRepo.GetByFilters(ctx, filters)
+}
+
+// CountAPIKeys returns the total count of API keys matching the filters
+func (s *apiKeyService) CountAPIKeys(ctx context.Context, filters *authDomain.APIKeyFilters) (int64, error) {
+	return s.apiKeyRepo.CountByFilters(ctx, filters)
 }
 
 // UpdateAPIKey updates an existing API key

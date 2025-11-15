@@ -8,6 +8,7 @@ import (
 	"gorm.io/gorm"
 
 	"brokle/internal/core/domain/observability"
+	"brokle/pkg/pagination"
 )
 
 // ModelRepository implements observability.ModelRepository
@@ -121,15 +122,38 @@ func (r *ModelRepository) List(
 		query = query.Where("is_deprecated = ?", *filter.IsDeprecated)
 	}
 
-	query = query.Order("created_at DESC")
+	// Determine sort field and direction with SQL injection protection
+	allowedSortFields := []string{"created_at", "updated_at", "provider", "model_name", "input_cost_per_million", "output_cost_per_million", "id"}
+	sortField := "created_at" // default
+	sortDir := "DESC"
+	limit := pagination.DefaultPageSize
+	offset := 0
 
-	if filter.Limit > 0 {
-		query = query.Limit(filter.Limit)
+	if filter != nil {
+		// Validate sort field against whitelist
+		if filter.Params.SortBy != "" {
+			validated, err := pagination.ValidateSortField(filter.Params.SortBy, allowedSortFields)
+			if err != nil {
+				return nil, err
+			}
+			if validated != "" {
+				sortField = validated
+			}
+		}
+		if filter.Params.SortDir == "asc" {
+			sortDir = "ASC"
+		}
+		if filter.Params.Limit > 0 {
+			limit = filter.Params.Limit
+		}
+		offset = filter.Params.GetOffset()
 	}
 
-	if filter.Offset > 0 {
-		query = query.Offset(filter.Offset)
-	}
+	// Apply sorting with secondary sort on id for stable ordering
+	query = query.Order(fmt.Sprintf("%s %s, id %s", sortField, sortDir, sortDir))
+
+	// Apply limit and offset for pagination
+	query = query.Limit(limit).Offset(offset)
 
 	err := query.Find(&pricings).Error
 	if err != nil {

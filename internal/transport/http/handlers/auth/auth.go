@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -986,8 +987,10 @@ type ListSessionsRequest struct {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param page query int false "Page number" default(1)
-// @Param page_size query int false "Page size" default(10)
+// @Param cursor query string false "Pagination cursor" example("eyJjcmVhdGVkX2F0IjoiMjAyNC0wMS0wMVQxMjowMDowMFoiLCJpZCI6IjAxSDJYM1k0WjUifQ==")
+// @Param page_size query int false "Items per page" Enums(10,20,30,40,50) default(50)
+// @Param sort_by query string false "Sort field" Enums(created_at) default("created_at")
+// @Param sort_dir query string false "Sort direction" Enums(asc,desc) default("desc")
 // @Param active query bool false "Active sessions only" default(false)
 // @Success 200 {object} response.SuccessResponse "Sessions retrieved successfully"
 // @Failure 401 {object} response.ErrorResponse "Unauthorized"
@@ -1022,6 +1025,14 @@ func (h *Handler) ListSessions(c *gin.Context) {
 		return
 	}
 
+	// Parse offset pagination parameters
+	params := response.ParsePaginationParams(
+		c.Query("page"),
+		c.Query("limit"),
+		c.Query("sort_by"),
+		c.Query("sort_dir"),
+	)
+
 	// Filter active sessions if requested
 	var filteredSessions []*auth.UserSession
 	if req.Active {
@@ -1034,22 +1045,35 @@ func (h *Handler) ListSessions(c *gin.Context) {
 		filteredSessions = sessions
 	}
 
-	// Manual pagination
-	startIdx := (req.Page - 1) * req.PageSize
-	endIdx := startIdx + req.PageSize
 	total := int64(len(filteredSessions))
 
-	if startIdx >= len(filteredSessions) {
-		filteredSessions = []*auth.UserSession{}
-	} else {
-		if endIdx > len(filteredSessions) {
-			endIdx = len(filteredSessions)
+	// Sort sessions for stable ordering
+	sort.Slice(filteredSessions, func(i, j int) bool {
+		if params.SortDir == "asc" {
+			return filteredSessions[i].CreatedAt.Before(filteredSessions[j].CreatedAt)
 		}
-		filteredSessions = filteredSessions[startIdx:endIdx]
+		return filteredSessions[i].CreatedAt.After(filteredSessions[j].CreatedAt)
+	})
+
+	// Apply offset pagination
+	offset := params.GetOffset()
+	limit := params.Limit
+
+	// Calculate end index for slicing
+	end := offset + limit
+	if end > len(filteredSessions) {
+		end = len(filteredSessions)
 	}
 
-	// Create pagination metadata
-	pagination := response.NewPagination(req.Page, req.PageSize, total)
+	// Apply pagination slice
+	if offset < len(filteredSessions) {
+		filteredSessions = filteredSessions[offset:end]
+	} else {
+		filteredSessions = []*auth.UserSession{}
+	}
+
+	// Create offset pagination
+	pag := response.NewPagination(params.Page, params.Limit, total)
 
 	h.logger.WithFields(logrus.Fields{
 		"user_id": userID,
@@ -1057,7 +1081,7 @@ func (h *Handler) ListSessions(c *gin.Context) {
 		"total":   total,
 	}).Info("Sessions listed successfully")
 
-	response.SuccessWithPagination(c, filteredSessions, pagination)
+	response.SuccessWithPagination(c, filteredSessions, pag)
 }
 
 // GetSessionRequest represents request for getting session by ID

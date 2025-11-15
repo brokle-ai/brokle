@@ -2,6 +2,7 @@ package project
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -82,10 +83,12 @@ type UpdateProjectRequest struct {
 // @Produce json
 // @Param organization_id query string false "Filter by organization ID" example("org_1234567890")
 // @Param status query string false "Filter by project status" Enums(active,paused,archived)
-// @Param page query int false "Page number" default(1) minimum(1)
-// @Param limit query int false "Items per page" default(20) minimum(1) maximum(100)
+// @Param cursor query string false "Cursor for pagination" example("eyJjcmVhdGVkX2F0IjoiMjAyNC0wMS0wMVQxMjowMDowMFoiLCJpZCI6IjAxSDJYM1k0WjUifQ==")
+// @Param page_size query int false "Items per page" Enums(10,20,30,40,50) default(50)
+// @Param sort_by query string false "Sort field" Enums(created_at,name) default("created_at")
+// @Param sort_dir query string false "Sort direction" Enums(asc,desc) default("desc")
 // @Param search query string false "Search projects by name or slug"
-// @Success 200 {object} response.APIResponse{data=[]Project,meta=response.Meta{pagination=response.Pagination}} "List of projects with pagination"
+// @Success 200 {object} response.APIResponse{data=[]Project,meta=response.Meta{pagination=response.Pagination}} "List of projects with cursor pagination"
 // @Failure 400 {object} response.ErrorResponse "Bad request"
 // @Failure 401 {object} response.ErrorResponse "Unauthorized"
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
@@ -122,13 +125,13 @@ func (h *Handler) List(c *gin.Context) {
 		return
 	}
 
-	// Set default pagination values
-	if req.Page <= 0 {
-		req.Page = 1
-	}
-	if req.Limit <= 0 {
-		req.Limit = 20
-	}
+	// Parse offset pagination parameters
+	params := response.ParsePaginationParams(
+		c.Query("page"),
+		c.Query("limit"),
+		c.Query("sort_by"),
+		c.Query("sort_dir"),
+	)
 
 	ctx := c.Request.Context()
 	var projects []*organization.Project
@@ -242,24 +245,35 @@ func (h *Handler) List(c *gin.Context) {
 	// Update total after filtering
 	total = len(filteredProjects)
 
-	// Apply pagination
-	offset := (req.Page - 1) * req.Limit
-	end := offset + req.Limit
-	if offset > total {
-		offset = total
-	}
-	if end > total {
-		end = total
+	// Apply in-memory offset pagination
+	// Sort filtered projects for stable ordering
+	sort.Slice(filteredProjects, func(i, j int) bool {
+		if params.SortDir == "asc" {
+			return filteredProjects[i].CreatedAt.Before(filteredProjects[j].CreatedAt)
+		}
+		return filteredProjects[i].CreatedAt.After(filteredProjects[j].CreatedAt)
+	})
+
+	// Apply offset pagination
+	offset := params.GetOffset()
+	limit := params.Limit
+
+	// Calculate end index for slicing
+	end := offset + limit
+	if end > len(filteredProjects) {
+		end = len(filteredProjects)
 	}
 
-	var paginatedProjects []*organization.Project
-	if offset < total {
-		paginatedProjects = filteredProjects[offset:end]
+	// Apply pagination slice
+	if offset < len(filteredProjects) {
+		filteredProjects = filteredProjects[offset:end]
+	} else {
+		filteredProjects = []*organization.Project{}
 	}
 
 	// Convert to response format
-	responseProjects := make([]Project, len(paginatedProjects))
-	for i, proj := range paginatedProjects {
+	responseProjects := make([]Project, len(filteredProjects))
+	for i, proj := range filteredProjects {
 		responseProjects[i] = Project{
 			ID:             proj.ID.String(),
 			Name:           proj.Name,
@@ -271,10 +285,10 @@ func (h *Handler) List(c *gin.Context) {
 		}
 	}
 
-	// Create pagination
-	pagination := response.NewPagination(req.Page, req.Limit, int64(total))
+	// Create offset pagination
+	pag := response.NewPagination(params.Page, params.Limit, int64(total))
 
-	response.SuccessWithPagination(c, responseProjects, pagination)
+	response.SuccessWithPagination(c, responseProjects, pag)
 
 	h.logger.WithFields(logrus.Fields{
 		"endpoint":        "List",

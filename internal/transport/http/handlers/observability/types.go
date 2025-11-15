@@ -54,14 +54,6 @@ type TraceStatsResponse struct {
 	TotalTokens int     `json:"total_tokens"`
 }
 
-// ListTracesResponse represents a paginated list of traces
-type ListTracesResponse struct {
-	Traces []TraceResponse `json:"traces"`
-	Total  int             `json:"total"`
-	Limit  int             `json:"limit"`
-	Offset int             `json:"offset"`
-}
-
 // BatchCreateTracesRequest represents a batch create request
 type BatchCreateTracesRequest struct {
 	Traces []CreateTraceRequest `json:"traces" binding:"required"`
@@ -168,14 +160,6 @@ type SpanResponse struct {
 	UpdatedAt        time.Time              `json:"updated_at"`
 }
 
-// ListSpansResponse represents a paginated list of spans
-type ListSpansResponse struct {
-	Spans  []SpanResponse `json:"spans"`
-	Total  int            `json:"total"`
-	Limit  int            `json:"limit"`
-	Offset int            `json:"offset"`
-}
-
 // BatchCreateSpansRequest represents a batch create request
 type BatchCreateSpansRequest struct {
 	Spans []CreateSpanRequest `json:"spans" binding:"required"`
@@ -229,14 +213,6 @@ type QualityScoreResponse struct {
 	AuthorUserID     string    `json:"author_user_id,omitempty"`
 	CreatedAt        time.Time `json:"created_at"`
 	UpdatedAt        time.Time `json:"updated_at"`
-}
-
-// ListQualityScoresResponse represents a paginated list of quality scores
-type ListQualityScoresResponse struct {
-	QualityScores []QualityScoreResponse `json:"quality_scores"`
-	Total         int                    `json:"total"`
-	Limit         int                    `json:"limit"`
-	Offset        int                    `json:"offset"`
 }
 
 // EvaluateRequest represents a request to evaluate traces or spans
@@ -329,13 +305,6 @@ type ValidationErrorResponse struct {
 }
 
 // Utility types for pagination
-
-// PaginationInfo represents pagination information
-type PaginationInfo struct {
-	Limit  int `json:"limit"`
-	Offset int `json:"offset"`
-	Total  int `json:"total"`
-}
 
 // SortInfo represents sorting information
 type SortInfo struct {

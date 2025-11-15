@@ -30,18 +30,12 @@ type IDResponse struct {
 	ID string `json:"id" example:"ulid_01h2x3y4z5" description:"Resource identifier"`
 }
 
-// ListResponse represents a paginated list response
-// @Description Paginated list response wrapper
+// ListResponse represents a cursor-paginated list response
+// @Description Cursor-paginated list response wrapper
 type ListResponse struct {
 	Success bool        `json:"success" example:"true" description:"Request success status"`
 	Data    interface{} `json:"data" description:"Array of items"`
-	Meta    struct {
-		RequestID  string      `json:"request_id,omitempty" example:"req_01h2x3y4z5"`
-		Timestamp  string      `json:"timestamp,omitempty" example:"2023-12-01T10:30:00Z"`
-		Version    string      `json:"version,omitempty" example:"v1"`
-		Pagination *Pagination `json:"pagination" description:"Pagination information"`
-		Total      int64       `json:"total" example:"150"`
-	} `json:"meta"`
+	Meta    *Meta       `json:"meta" description:"Response metadata with cursor pagination"`
 }
 
 // HealthResponse represents health check response

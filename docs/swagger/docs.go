@@ -1418,17 +1418,45 @@ const docTemplate = `{
                 "summary": "List user sessions",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "default": 1,
-                        "description": "Page number",
-                        "name": "page",
+                        "type": "string",
+                        "example": "\"eyJjcmVhdGVkX2F0IjoiMjAyNC0wMS0wMVQxMjowMDowMFoiLCJpZCI6IjAxSDJYM1k0WjUifQ==\"",
+                        "description": "Pagination cursor",
+                        "name": "cursor",
                         "in": "query"
                     },
                     {
+                        "enum": [
+                            10,
+                            20,
+                            30,
+                            40,
+                            50
+                        ],
                         "type": "integer",
-                        "default": 10,
-                        "description": "Page size",
+                        "default": 50,
+                        "description": "Items per page",
                         "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "created_at"
+                        ],
+                        "type": "string",
+                        "default": "\"created_at\"",
+                        "description": "Sort field",
+                        "name": "sort_by",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "asc",
+                            "desc"
+                        ],
+                        "type": "string",
+                        "default": "\"desc\"",
+                        "description": "Sort direction",
+                        "name": "sort_dir",
                         "in": "query"
                     },
                     {
@@ -1734,26 +1762,51 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
-                        "minimum": 1,
-                        "type": "integer",
-                        "default": 1,
-                        "description": "Page number",
-                        "name": "page",
+                        "type": "string",
+                        "example": "\"eyJjcmVhdGVkX2F0IjoiMjAyNC0wMS0wMVQxMjowMDowMFoiLCJpZCI6IjAxSDJYM1k0WjUifQ==\"",
+                        "description": "Pagination cursor",
+                        "name": "cursor",
                         "in": "query"
                     },
                     {
-                        "maximum": 100,
-                        "minimum": 1,
+                        "enum": [
+                            10,
+                            20,
+                            30,
+                            40,
+                            50
+                        ],
                         "type": "integer",
-                        "default": 20,
+                        "default": 50,
                         "description": "Items per page",
-                        "name": "limit",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "created_at"
+                        ],
+                        "type": "string",
+                        "default": "\"created_at\"",
+                        "description": "Sort field",
+                        "name": "sort_by",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "asc",
+                            "desc"
+                        ],
+                        "type": "string",
+                        "default": "\"desc\"",
+                        "description": "Sort direction",
+                        "name": "sort_dir",
                         "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "List of organization invoices with pagination",
+                        "description": "List of organization invoices with cursor pagination",
                         "schema": {
                             "allOf": [
                                 {
@@ -2404,20 +2457,24 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
-                        "minimum": 1,
-                        "type": "integer",
-                        "default": 1,
-                        "description": "Page number",
-                        "name": "page",
+                        "type": "string",
+                        "example": "\"eyJjcmVhdGVkX2F0IjoiMjAyNC0wMS0wMVQxMjowMDowMFoiLCJpZCI6IjAxSDJYM1k0WjUifQ==\"",
+                        "description": "Pagination cursor",
+                        "name": "cursor",
                         "in": "query"
                     },
                     {
-                        "maximum": 1000,
-                        "minimum": 1,
+                        "enum": [
+                            10,
+                            20,
+                            30,
+                            40,
+                            50
+                        ],
                         "type": "integer",
                         "default": 50,
                         "description": "Items per page",
-                        "name": "limit",
+                        "name": "page_size",
                         "in": "query"
                     },
                     {
@@ -2596,20 +2653,46 @@ const docTemplate = `{
                 "summary": "List organizations",
                 "parameters": [
                     {
-                        "minimum": 1,
-                        "type": "integer",
-                        "default": 1,
-                        "description": "Page number",
-                        "name": "page",
+                        "type": "string",
+                        "example": "\"eyJjcmVhdGVkX2F0IjoiMjAyNC0wMS0wMVQxMjowMDowMFoiLCJpZCI6IjAxSDJYM1k0WjUifQ==\"",
+                        "description": "Pagination cursor",
+                        "name": "cursor",
                         "in": "query"
                     },
                     {
-                        "maximum": 100,
-                        "minimum": 1,
+                        "enum": [
+                            10,
+                            20,
+                            30,
+                            40,
+                            50
+                        ],
                         "type": "integer",
-                        "default": 20,
+                        "default": 50,
                         "description": "Items per page",
-                        "name": "limit",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "created_at",
+                            "name"
+                        ],
+                        "type": "string",
+                        "default": "\"created_at\"",
+                        "description": "Sort field",
+                        "name": "sort_by",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "asc",
+                            "desc"
+                        ],
+                        "type": "string",
+                        "default": "\"desc\"",
+                        "description": "Sort direction",
+                        "name": "sort_dir",
                         "in": "query"
                     },
                     {
@@ -2621,7 +2704,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "List of organizations with pagination",
+                        "description": "List of organizations with cursor pagination",
                         "schema": {
                             "allOf": [
                                 {
@@ -3039,7 +3122,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "List of organization members with pagination",
+                        "description": "List of organization members with cursor pagination",
                         "schema": {
                             "allOf": [
                                 {
@@ -3890,20 +3973,46 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
-                        "minimum": 1,
-                        "type": "integer",
-                        "default": 1,
-                        "description": "Page number",
-                        "name": "page",
+                        "type": "string",
+                        "example": "\"eyJjcmVhdGVkX2F0IjoiMjAyNC0wMS0wMVQxMjowMDowMFoiLCJpZCI6IjAxSDJYM1k0WjUifQ==\"",
+                        "description": "Cursor for pagination",
+                        "name": "cursor",
                         "in": "query"
                     },
                     {
-                        "maximum": 100,
-                        "minimum": 1,
+                        "enum": [
+                            10,
+                            20,
+                            30,
+                            40,
+                            50
+                        ],
                         "type": "integer",
-                        "default": 20,
+                        "default": 50,
                         "description": "Items per page",
-                        "name": "limit",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "created_at",
+                            "name"
+                        ],
+                        "type": "string",
+                        "default": "\"created_at\"",
+                        "description": "Sort field",
+                        "name": "sort_by",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "asc",
+                            "desc"
+                        ],
+                        "type": "string",
+                        "default": "\"desc\"",
+                        "description": "Sort direction",
+                        "name": "sort_dir",
                         "in": "query"
                     },
                     {
@@ -3915,7 +4024,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "List of projects with pagination",
+                        "description": "List of projects with cursor pagination",
                         "schema": {
                             "allOf": [
                                 {
@@ -4331,26 +4440,53 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
-                        "minimum": 1,
-                        "type": "integer",
-                        "default": 1,
-                        "description": "Page number",
-                        "name": "page",
+                        "type": "string",
+                        "example": "\"eyJjcmVhdGVkX2F0IjoiMjAyNC0wMS0wMVQxMjowMDowMFoiLCJpZCI6IjAxSDJYM1k0WjUifQ==\"",
+                        "description": "Pagination cursor",
+                        "name": "cursor",
                         "in": "query"
                     },
                     {
-                        "maximum": 100,
-                        "minimum": 1,
+                        "enum": [
+                            10,
+                            20,
+                            30,
+                            40,
+                            50
+                        ],
                         "type": "integer",
-                        "default": 20,
+                        "default": 50,
                         "description": "Items per page",
-                        "name": "limit",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "created_at",
+                            "name",
+                            "last_used_at"
+                        ],
+                        "type": "string",
+                        "default": "\"created_at\"",
+                        "description": "Sort field",
+                        "name": "sort_by",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "asc",
+                            "desc"
+                        ],
+                        "type": "string",
+                        "default": "\"desc\"",
+                        "description": "Sort direction",
+                        "name": "sort_dir",
                         "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "List of project-scoped API keys with pagination",
+                        "description": "List of project-scoped API keys with cursor pagination",
                         "schema": {
                             "allOf": [
                                 {
@@ -8307,8 +8443,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "resource_attributes": {
-                    "description": "OTEL resource attributes (JSON string with resource-level context)",
-                    "type": "string"
+                    "description": "OTEL resource attributes (JSON map with resource-level context)",
+                    "type": "object",
+                    "additionalProperties": true
                 },
                 "scores": {
                     "description": "Populated from joins (not in ClickHouse)",
@@ -8318,8 +8455,9 @@ const docTemplate = `{
                     }
                 },
                 "span_attributes": {
-                    "description": "OTEL attributes (JSON string with all span-level attributes)\nStores: gen_ai.*, brokle.*, and custom attributes",
-                    "type": "string"
+                    "description": "OTEL attributes (JSON map with all span-level attributes)\nStores: gen_ai.*, brokle.*, and custom attributes",
+                    "type": "object",
+                    "additionalProperties": true
                 },
                 "span_id": {
                     "description": "OTEL identifiers",
@@ -8407,8 +8545,9 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "resource_attributes": {
-                    "description": "OTEL resource attributes (JSON string with all resource-level attributes)",
-                    "type": "string"
+                    "description": "OTEL resource attributes (JSON map with all resource-level attributes)",
+                    "type": "object",
+                    "additionalProperties": true
                 },
                 "scores": {
                     "type": "array",
@@ -8794,7 +8933,7 @@ const docTemplate = `{
             }
         },
         "response.Meta": {
-            "description": "Response metadata including request tracking and pagination",
+            "description": "Response metadata including request tracking and offset pagination",
             "type": "object",
             "properties": {
                 "pagination": {
@@ -8808,10 +8947,6 @@ const docTemplate = `{
                     "type": "string",
                     "example": "2023-12-01T10:30:00Z"
                 },
-                "total": {
-                    "type": "integer",
-                    "example": 150
-                },
                 "version": {
                     "type": "string",
                     "example": "v1"
@@ -8819,7 +8954,7 @@ const docTemplate = `{
             }
         },
         "response.Pagination": {
-            "description": "Pagination metadata for paginated API responses",
+            "description": "Offset-based pagination information for list responses",
             "type": "object",
             "properties": {
                 "has_next": {
@@ -8830,21 +8965,21 @@ const docTemplate = `{
                     "type": "boolean",
                     "example": false
                 },
+                "limit": {
+                    "type": "integer",
+                    "example": 50
+                },
                 "page": {
                     "type": "integer",
                     "example": 1
                 },
-                "page_size": {
-                    "type": "integer",
-                    "example": 20
-                },
                 "total": {
                     "type": "integer",
-                    "example": 150
+                    "example": 1234
                 },
-                "total_page": {
+                "total_pages": {
                     "type": "integer",
-                    "example": 8
+                    "example": 25
                 }
             }
         },

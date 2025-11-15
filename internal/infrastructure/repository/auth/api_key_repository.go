@@ -9,6 +9,7 @@ import (
 	"gorm.io/gorm"
 
 	authDomain "brokle/internal/core/domain/auth"
+	"brokle/pkg/pagination"
 	"brokle/pkg/ulid"
 )
 
@@ -134,40 +135,72 @@ func (r *apiKeyRepository) GetByFilters(ctx context.Context, filters *authDomain
 		}
 	}
 
-	// Apply sorting
-	switch filters.SortBy {
-	case "name":
-		if filters.SortOrder == "desc" {
-			query = query.Order("name DESC")
-		} else {
-			query = query.Order("name ASC")
+	// Determine sort field and direction with validation
+	allowedSortFields := []string{"created_at", "updated_at", "name", "expires_at", "last_used_at", "id"}
+	sortField := "created_at" // default
+	sortDir := "DESC"
+
+	if filters != nil {
+		// Validate sort field against whitelist
+		if filters.Params.SortBy != "" {
+			validated, err := pagination.ValidateSortField(filters.Params.SortBy, allowedSortFields)
+			if err != nil {
+				return nil, err
+			}
+			if validated != "" {
+				sortField = validated
+			}
 		}
-	case "created_at":
-		if filters.SortOrder == "desc" {
-			query = query.Order("created_at DESC")
-		} else {
-			query = query.Order("created_at ASC")
+		if filters.Params.SortDir == "asc" {
+			sortDir = "ASC"
 		}
-	case "last_used_at":
-		if filters.SortOrder == "desc" {
-			query = query.Order("last_used_at DESC")
-		} else {
-			query = query.Order("last_used_at ASC")
-		}
-	default:
-		query = query.Order("created_at DESC")
 	}
 
-	// Apply pagination
-	if filters.Limit > 0 {
-		query = query.Limit(filters.Limit)
+	// Apply sorting with secondary sort on id for stable ordering
+	query = query.Order(fmt.Sprintf("%s %s, id %s", sortField, sortDir, sortDir))
+
+	// Apply limit and offset for pagination
+	limit := pagination.DefaultPageSize
+	if filters.Params.Limit > 0 {
+		limit = filters.Params.Limit
 	}
-	if filters.Offset > 0 {
-		query = query.Offset(filters.Offset)
-	}
+	offset := filters.Params.GetOffset()
+	query = query.Limit(limit).Offset(offset)
 
 	err := query.Find(&apiKeys).Error
 	return apiKeys, err
+}
+
+// CountByFilters returns the total count of API keys matching the filters
+func (r *apiKeyRepository) CountByFilters(ctx context.Context, filters *authDomain.APIKeyFilters) (int64, error) {
+	var count int64
+	query := r.db.WithContext(ctx).Model(&authDomain.APIKey{}).Where("deleted_at IS NULL")
+
+	// Apply the same filters as GetByFilters
+	if filters.UserID != nil {
+		query = query.Where("user_id = ?", *filters.UserID)
+	}
+	if filters.OrganizationID != nil {
+		// Organization filter requires JOIN with projects table
+		query = query.Joins("JOIN projects ON api_keys.project_id = projects.id").
+			Where("projects.organization_id = ?", *filters.OrganizationID)
+	}
+	if filters.ProjectID != nil {
+		query = query.Where("project_id = ?", *filters.ProjectID)
+	}
+	if filters.IsActive != nil {
+		query = query.Where("is_active = ?", *filters.IsActive)
+	}
+	if filters.IsExpired != nil {
+		if *filters.IsExpired {
+			query = query.Where("expires_at IS NOT NULL AND expires_at < ?", time.Now())
+		} else {
+			query = query.Where("expires_at IS NULL OR expires_at > ?", time.Now())
+		}
+	}
+
+	err := query.Count(&count).Error
+	return count, err
 }
 
 // CleanupExpiredAPIKeys removes expired API keys

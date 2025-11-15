@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"brokle/pkg/pagination"
 	"brokle/pkg/ulid"
 )
 
@@ -58,15 +59,7 @@ type Filter = ListFilters
 
 // ListFilters defines filters for listing users.
 type ListFilters struct {
-	// Pagination
-	Limit  int `json:"limit"`
-	Offset int `json:"offset"`
-
-	// Sorting
-	SortBy    string `json:"sort_by"`    // id, email, name, created_at
-	SortOrder string `json:"sort_order"` // asc, desc
-
-	// Filters
+	// Domain filters
 	IsActive        *bool      `json:"is_active,omitempty"`
 	IsVerified      *bool      `json:"is_verified,omitempty"`
 	IsEmailVerified *bool      `json:"is_email_verified,omitempty"`
@@ -75,6 +68,9 @@ type ListFilters struct {
 	LastLoginAfter  *time.Time `json:"last_login_after,omitempty"` // Last login filter
 	Search          string     `json:"search,omitempty"`           // Search in name and email
 	HasDefaultOrg   *bool      `json:"has_default_org,omitempty"`  // Filter by having default organization
+
+	// Pagination (embedded for DRY)
+	pagination.Params `json:",inline"`
 }
 
 // UserFilters is an alias for ListFilters for backward compatibility

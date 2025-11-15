@@ -9,6 +9,7 @@ import (
 	"gorm.io/gorm"
 
 	orgDomain "brokle/internal/core/domain/organization"
+	"brokle/pkg/pagination"
 	"brokle/pkg/ulid"
 )
 
@@ -65,15 +66,61 @@ func (r *organizationRepository) Delete(ctx context.Context, id ulid.ULID) error
 	return r.db.WithContext(ctx).Model(&orgDomain.Organization{}).Where("id = ?", id).Update("deleted_at", time.Now()).Error
 }
 
-// List retrieves organizations with pagination
-func (r *organizationRepository) List(ctx context.Context, limit, offset int) ([]*orgDomain.Organization, error) {
+// List retrieves organizations with cursor pagination
+func (r *organizationRepository) List(ctx context.Context, filters *orgDomain.OrganizationFilters) ([]*orgDomain.Organization, error) {
 	var orgs []*orgDomain.Organization
-	err := r.db.WithContext(ctx).
-		Where("deleted_at IS NULL").
-		Limit(limit).
-		Offset(offset).
-		Order("created_at DESC").
-		Find(&orgs).Error
+
+	query := r.db.WithContext(ctx).Where("deleted_at IS NULL")
+
+	// Apply filters
+	if filters != nil {
+		if filters.Name != nil {
+			query = query.Where("name LIKE ?", "%"+*filters.Name+"%")
+		}
+		if filters.Plan != nil {
+			query = query.Where("plan = ?", *filters.Plan)
+		}
+		if filters.Status != nil {
+			query = query.Where("status = ?", *filters.Status)
+		}
+	}
+
+	// Determine sort field and direction with validation
+	allowedSortFields := []string{"created_at", "updated_at", "name", "id"}
+	sortField := "created_at" // default
+	sortDir := "DESC"
+
+	if filters != nil {
+		// Validate sort field against whitelist
+		if filters.Params.SortBy != "" {
+			validated, err := pagination.ValidateSortField(filters.Params.SortBy, allowedSortFields)
+			if err != nil {
+				return nil, err
+			}
+			if validated != "" {
+				sortField = validated
+			}
+		}
+		if filters.Params.SortDir == "asc" {
+			sortDir = "ASC"
+		}
+	}
+
+	// Apply sorting with secondary sort on id for stable ordering
+	query = query.Order(fmt.Sprintf("%s %s, id %s", sortField, sortDir, sortDir))
+
+	// Apply limit and offset for pagination
+	limit := pagination.DefaultPageSize
+	offset := 0
+	if filters != nil {
+		if filters.Params.Limit > 0 {
+			limit = filters.Params.Limit
+		}
+		offset = filters.Params.GetOffset()
+	}
+	query = query.Limit(limit).Offset(offset)
+
+	err := query.Find(&orgs).Error
 	return orgs, err
 }
 

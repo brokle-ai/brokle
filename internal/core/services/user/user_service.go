@@ -161,10 +161,11 @@ func (s *userService) SearchUsers(ctx context.Context, query string, limit, offs
 	}
 
 	// For now, use List with basic filters since Search may not be implemented
-	filters := &userDomain.ListFilters{
-		Limit:  limit,
-		Offset: offset,
-	}
+	filters := &userDomain.ListFilters{}
+	filters.Params.Limit = limit
+	filters.Params.Page = 1 // First page for search results
+	filters.Params.SortBy = "created_at"
+	filters.Params.SortDir = "desc"
 	users, total, err := s.userRepo.List(ctx, filters)
 	if err != nil {
 		return nil, 0, appErrors.NewInternalError("Failed to search users", err)
