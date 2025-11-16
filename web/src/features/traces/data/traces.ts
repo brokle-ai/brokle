@@ -13,6 +13,7 @@ const generateMockTraces = (): Trace[] => {
 
     return {
       trace_id: faker.string.hexadecimal({ length: 32, prefix: '' }), // Renamed from 'id'
+      project_id: faker.string.uuid(),
       name: faker.helpers.arrayElement([
         'chat.completions',
         'embeddings.create',
@@ -21,19 +22,20 @@ const generateMockTraces = (): Trace[] => {
         'data.retrieval',
         'model.inference',
       ]),
-      startTime,
-      endTime,
-      durationMs,
+      start_time: startTime,
+      end_time: endTime,
+      duration_ms: durationMs,
       status_code: faker.helpers.arrayElement([0, 1, 2]), // UInt8: 0=UNSET, 1=OK, 2=ERROR
-      resource_attributes: JSON.stringify({ 'service.name': 'api-server' }), // JSON string
+      resource_attributes: { 'service.name': 'api-server' }, // JSON object, not string
       cost,
       tokens,
       spanCount,
       environment: faker.helpers.arrayElement(['production', 'staging', 'development']),
-      serviceName: faker.helpers.arrayElement(['api-server', 'worker', 'web-app', 'ml-service']),
-      serviceVersion: `v${faker.number.int({ min: 1, max: 3 })}.${faker.number.int({ min: 0, max: 20 })}.${faker.number.int({ min: 0, max: 10 })}`,
+      service_name: faker.helpers.arrayElement(['api-server', 'worker', 'web-app', 'ml-service']),
+      service_version: `v${faker.number.int({ min: 1, max: 3 })}.${faker.number.int({ min: 0, max: 20 })}.${faker.number.int({ min: 0, max: 10 })}`,
       tags: faker.helpers.arrayElements(['chat', 'search', 'generation', 'retrieval', 'embedding'], { min: 0, max: 3 }),
       bookmarked: faker.datatype.boolean({ probability: 0.1 }),
+      public: faker.datatype.boolean({ probability: 0.05 }),
     }
   })
 }

@@ -15,77 +15,62 @@ import (
 
 // Organization represents a tenant organization with full multi-tenancy.
 type Organization struct {
-	ID   ulid.ULID `json:"id" gorm:"type:char(26);primaryKey"`
-	Name string    `json:"name" gorm:"size:255;not null"`
-
-	// Business fields
-	BillingEmail       string     `json:"billing_email,omitempty" gorm:"size:255"`
-	Plan               string     `json:"plan" gorm:"size:50;default:'free'"`
-	SubscriptionStatus string     `json:"subscription_status" gorm:"size:50;default:'active'"`
-	TrialEndsAt        *time.Time `json:"trial_ends_at,omitempty"`
-
-	CreatedAt time.Time      `json:"created_at"`
-	UpdatedAt time.Time      `json:"updated_at"`
-	DeletedAt gorm.DeletedAt `json:"deleted_at,omitempty" gorm:"index"`
-
-	// Relations (using ULIDs to avoid circular imports)
-	Projects    []Project              `json:"projects,omitempty" gorm:"foreignKey:OrganizationID"`
-	Members     []Member               `json:"members,omitempty" gorm:"foreignKey:OrganizationID"`
-	Invitations []Invitation           `json:"invitations,omitempty" gorm:"foreignKey:OrganizationID"`
-	Settings    []OrganizationSettings `json:"settings,omitempty" gorm:"foreignKey:OrganizationID"`
+	UpdatedAt          time.Time              `json:"updated_at"`
+	CreatedAt          time.Time              `json:"created_at"`
+	TrialEndsAt        *time.Time             `json:"trial_ends_at,omitempty"`
+	DeletedAt          gorm.DeletedAt         `json:"deleted_at,omitempty" gorm:"index"`
+	Plan               string                 `json:"plan" gorm:"size:50;default:'free'"`
+	SubscriptionStatus string                 `json:"subscription_status" gorm:"size:50;default:'active'"`
+	BillingEmail       string                 `json:"billing_email,omitempty" gorm:"size:255"`
+	Name               string                 `json:"name" gorm:"size:255;not null"`
+	Projects           []Project              `json:"projects,omitempty" gorm:"foreignKey:OrganizationID"`
+	Members            []Member               `json:"members,omitempty" gorm:"foreignKey:OrganizationID"`
+	Invitations        []Invitation           `json:"invitations,omitempty" gorm:"foreignKey:OrganizationID"`
+	Settings           []OrganizationSettings `json:"settings,omitempty" gorm:"foreignKey:OrganizationID"`
+	ID                 ulid.ULID              `json:"id" gorm:"type:char(26);primaryKey"`
 }
 
 // Member represents the many-to-many relationship between users and organizations.
 type Member struct {
-	OrganizationID ulid.ULID      `json:"organization_id" gorm:"type:char(26);not null;primaryKey;priority:1"`
-	UserID         ulid.ULID      `json:"user_id" gorm:"type:char(26);not null;primaryKey;priority:2"` // References user.User.ID
-	RoleID         ulid.ULID      `json:"role_id" gorm:"type:char(26);not null"`                       // References auth.Role.ID
-	Status         string         `json:"status" gorm:"size:20;default:'active'"`                      // "active", "suspended", "invited"
 	JoinedAt       time.Time      `json:"joined_at"`
-	InvitedBy      *ulid.ULID     `json:"invited_by,omitempty" gorm:"type:char(26)"` // References user.User.ID
 	CreatedAt      time.Time      `json:"created_at"`
 	UpdatedAt      time.Time      `json:"updated_at"`
+	InvitedBy      *ulid.ULID     `json:"invited_by,omitempty" gorm:"type:char(26)"`
 	DeletedAt      gorm.DeletedAt `json:"deleted_at,omitempty" gorm:"index"`
-
-	// Relations
-	Organization Organization `json:"organization,omitempty" gorm:"foreignKey:OrganizationID"`
-	// User and Role will be loaded separately to avoid circular imports
+	Status         string         `json:"status" gorm:"size:20;default:'active'"`
+	Organization   Organization   `json:"organization,omitempty" gorm:"foreignKey:OrganizationID"`
+	OrganizationID ulid.ULID      `json:"organization_id" gorm:"type:char(26);not null;primaryKey;priority:1"`
+	UserID         ulid.ULID      `json:"user_id" gorm:"type:char(26);not null;primaryKey;priority:2"`
+	RoleID         ulid.ULID      `json:"role_id" gorm:"type:char(26);not null"`
 }
 
 // Project represents a project within an organization.
 type Project struct {
-	ID             ulid.ULID `json:"id" gorm:"type:char(26);primaryKey"`
-	OrganizationID ulid.ULID `json:"organization_id" gorm:"type:char(26);not null"`
-	Name           string    `json:"name" gorm:"size:255;not null"`
-	Description    string    `json:"description,omitempty" gorm:"text"`
-
-	CreatedAt time.Time      `json:"created_at"`
-	UpdatedAt time.Time      `json:"updated_at"`
-	DeletedAt gorm.DeletedAt `json:"deleted_at,omitempty" gorm:"index"`
-
-	// Relations
-	Organization Organization `json:"organization,omitempty" gorm:"foreignKey:OrganizationID"`
+	CreatedAt      time.Time      `json:"created_at"`
+	UpdatedAt      time.Time      `json:"updated_at"`
+	DeletedAt      gorm.DeletedAt `json:"deleted_at,omitempty" gorm:"index"`
+	Name           string         `json:"name" gorm:"size:255;not null"`
+	Description    string         `json:"description,omitempty" gorm:"text"`
+	Organization   Organization   `json:"organization,omitempty" gorm:"foreignKey:OrganizationID"`
+	ID             ulid.ULID      `json:"id" gorm:"type:char(26);primaryKey"`
+	OrganizationID ulid.ULID      `json:"organization_id" gorm:"type:char(26);not null"`
 }
 
 // Invitation represents an invitation to join an organization.
 type Invitation struct {
-	ID             ulid.ULID        `json:"id" gorm:"type:char(26);primaryKey"`
-	OrganizationID ulid.ULID        `json:"organization_id" gorm:"type:char(26);not null"`
-	RoleID         ulid.ULID        `json:"role_id" gorm:"type:char(26);not null"`       // References auth.Role.ID
-	InvitedByID    ulid.ULID        `json:"invited_by_id" gorm:"type:char(26);not null"` // References user.User.ID
-	Email          string           `json:"email" gorm:"size:255;not null"`
-	Token          string           `json:"token" gorm:"size:255;not null;uniqueIndex"`
-	Status         InvitationStatus `json:"status" gorm:"size:50;default:'pending'"`
 	ExpiresAt      time.Time        `json:"expires_at"`
+	UpdatedAt      time.Time        `json:"updated_at"`
+	CreatedAt      time.Time        `json:"created_at"`
 	AcceptedAt     *time.Time       `json:"accepted_at,omitempty"`
-
-	CreatedAt time.Time      `json:"created_at"`
-	UpdatedAt time.Time      `json:"updated_at"`
-	DeletedAt gorm.DeletedAt `json:"deleted_at,omitempty" gorm:"index"`
-
-	// Relations
-	Organization Organization `json:"organization,omitempty" gorm:"foreignKey:OrganizationID"`
-	// Role and InvitedBy will be loaded separately to avoid circular imports
+	DeletedAt      gorm.DeletedAt   `json:"deleted_at,omitempty" gorm:"index"`
+	Status         InvitationStatus `json:"status" gorm:"size:50;default:'pending'"`
+	Token          string           `json:"token" gorm:"size:255;not null;uniqueIndex"`
+	Email          string           `json:"email" gorm:"size:255;not null"`
+	Organization   Organization     `json:"organization,omitempty" gorm:"foreignKey:OrganizationID"`
+	ID             ulid.ULID        `json:"id" gorm:"type:char(26);primaryKey"`
+	InvitedByID    ulid.ULID        `json:"invited_by_id" gorm:"type:char(26);not null"`
+	RoleID         ulid.ULID        `json:"role_id" gorm:"type:char(26);not null"`
+	OrganizationID ulid.ULID        `json:"organization_id" gorm:"type:char(26);not null"`
 }
 
 // Request/Response DTOs
@@ -200,21 +185,19 @@ func (i *Invitation) Revoke() {
 
 // OrganizationSettings represents key-value settings for an organization.
 type OrganizationSettings struct {
-	ID             ulid.ULID `json:"id" gorm:"type:char(26);primaryKey"`
-	OrganizationID ulid.ULID `json:"organization_id" gorm:"type:char(26);not null"`
-	Key            string    `json:"key" gorm:"size:255;not null"`
-	Value          string    `json:"value" gorm:"type:jsonb;not null"` // JSONB for flexible value storage
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
-
-	// Relations
-	Organization Organization `json:"organization,omitempty" gorm:"foreignKey:OrganizationID"`
+	CreatedAt      time.Time    `json:"created_at"`
+	UpdatedAt      time.Time    `json:"updated_at"`
+	Key            string       `json:"key" gorm:"size:255;not null"`
+	Value          string       `json:"value" gorm:"type:jsonb;not null"`
+	Organization   Organization `json:"organization,omitempty" gorm:"foreignKey:OrganizationID"`
+	ID             ulid.ULID    `json:"id" gorm:"type:char(26);primaryKey"`
+	OrganizationID ulid.ULID    `json:"organization_id" gorm:"type:char(26);not null"`
 }
 
 // Settings-related DTOs
 type CreateOrganizationSettingRequest struct {
-	Key   string      `json:"key" validate:"required,min=1,max=255"`
 	Value interface{} `json:"value" validate:"required"`
+	Key   string      `json:"key" validate:"required,min=1,max=255"`
 }
 
 type UpdateOrganizationSettingRequest struct {
@@ -262,8 +245,8 @@ func (os *OrganizationSettings) SetValue(value interface{}) error {
 // OrganizationWithProjectsAndRole represents an organization with its projects and the user's role
 type OrganizationWithProjectsAndRole struct {
 	Organization *Organization
-	Projects     []*Project
 	RoleName     string
+	Projects     []*Project
 }
 
 // Table name methods for GORM

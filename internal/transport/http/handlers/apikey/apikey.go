@@ -1,7 +1,6 @@
 package apikey
 
 import (
-	"strconv"
 	"time"
 
 	"brokle/internal/config"
@@ -76,9 +75,11 @@ type ListAPIKeysResponse struct {
 // @Produce json
 // @Param projectId path string true "Project ID" example("proj_01234567890123456789012345")
 // @Param status query string false "Filter by API key status" Enums(active,inactive,expired)
-// @Param page query int false "Page number" default(1) minimum(1)
-// @Param limit query int false "Items per page" default(20) minimum(1) maximum(100)
-// @Success 200 {object} response.APIResponse{data=[]APIKey,meta=response.Meta{pagination=response.Pagination}} "List of project-scoped API keys with pagination"
+// @Param cursor query string false "Pagination cursor" example("eyJjcmVhdGVkX2F0IjoiMjAyNC0wMS0wMVQxMjowMDowMFoiLCJpZCI6IjAxSDJYM1k0WjUifQ==")
+// @Param page_size query int false "Items per page" Enums(10,20,30,40,50) default(50)
+// @Param sort_by query string false "Sort field" Enums(created_at,name,last_used_at) default("created_at")
+// @Param sort_dir query string false "Sort direction" Enums(asc,desc) default("desc")
+// @Success 200 {object} response.APIResponse{data=[]APIKey,meta=response.Meta{pagination=response.Pagination}} "List of project-scoped API keys with cursor pagination"
 // @Failure 400 {object} response.ErrorResponse "Bad request - invalid project ID"
 // @Failure 401 {object} response.ErrorResponse "Unauthorized"
 // @Failure 403 {object} response.ErrorResponse "Forbidden - insufficient permissions to view API keys"
@@ -103,31 +104,22 @@ func (h *Handler) List(c *gin.Context) {
 		return
 	}
 
-	// Parse query parameters
-	page := 1
-	if pageStr := c.Query("page"); pageStr != "" {
-		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
-			page = p
-		}
-	}
-
-	limit := 20
-	if limitStr := c.Query("limit"); limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 100 {
-			limit = l
-		}
-	}
+	// Parse offset pagination parameters
+	params := response.ParsePaginationParams(
+		c.Query("page"),
+		c.Query("limit"),
+		c.Query("sort_by"),
+		c.Query("sort_dir"),
+	)
 
 	status := c.Query("status")
 
 	// Create filters with project ID
 	filters := &auth.APIKeyFilters{
-		ProjectID: &projectID, // Set project ID filter
-		Limit:     limit,
-		Offset:    (page - 1) * limit,
-		SortBy:    "created_at",
-		SortOrder: "desc",
+		ProjectID: &projectID,
 	}
+	// Set embedded pagination fields
+	filters.Params = params
 
 	// Note: Environment filtering removed - environments are handled via SDK headers/tags
 
@@ -166,17 +158,24 @@ func (h *Handler) List(c *gin.Context) {
 		}
 	}
 
+	// Get total count for accurate pagination metadata
+	total, err := h.apiKeyService.CountAPIKeys(c.Request.Context(), filters)
+	if err != nil {
+		h.logger.WithError(err).Error("Failed to count API keys")
+		response.Error(c, err)
+		return
+	}
+
+	// Create offset pagination
+	pag := response.NewPagination(params.Page, params.Limit, total)
+
 	h.logger.WithFields(map[string]interface{}{
 		"user_id":    userID,
 		"project_id": projectID,
 		"count":      len(responseKeys),
-		"page":       page,
-		"limit":      limit,
 	}).Debug("Listed API keys")
 
-	// Use response.SuccessWithPagination for consistent pagination
-	pagination := response.NewPagination(page, limit, int64(len(responseKeys)))
-	response.SuccessWithPagination(c, responseKeys, pagination)
+	response.SuccessWithPagination(c, responseKeys, pag)
 }
 
 // getKeyStatus determines the status of an API key

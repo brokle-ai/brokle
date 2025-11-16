@@ -2,7 +2,6 @@ package auth
 
 import (
 	"context"
-	"fmt"
 
 	authDomain "brokle/internal/core/domain/auth"
 	appErrors "brokle/pkg/errors"
@@ -325,6 +324,6 @@ func getCategoryDescription(category string) string {
 	case "gateway":
 		return "AI models, providers, and prompts"
 	default:
-		return fmt.Sprintf("%s management", category)
+		return category + " management"
 	}
 }

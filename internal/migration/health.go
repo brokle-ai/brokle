@@ -34,24 +34,24 @@ type HealthCheckResponse struct {
 
 // DatabaseHealthCheck represents health status of a single database
 type DatabaseHealthCheck struct {
+	LastChecked    time.Time `json:"last_checked"`
 	Status         string    `json:"status"`
+	Error          string    `json:"error,omitempty"`
+	ResponseTime   string    `json:"response_time"`
 	CurrentVersion uint      `json:"current_version"`
 	IsDirty        bool      `json:"is_dirty"`
-	Error          string    `json:"error,omitempty"`
-	LastChecked    time.Time `json:"last_checked"`
-	ResponseTime   string    `json:"response_time"`
 }
 
 // OverallHealth represents overall migration system health
 type OverallHealth struct {
+	LastFullHealthCheck time.Time `json:"last_full_health_check"`
 	Status              string    `json:"status"`
-	HealthyDatabases    int       `json:"healthy_databases"`
-	TotalDatabases      int       `json:"total_databases"`
+	AverageResponseTime string    `json:"average_response_time"`
 	DirtyDatabases      []string  `json:"dirty_databases,omitempty"`
 	ErrorDatabases      []string  `json:"error_databases,omitempty"`
 	Recommendations     []string  `json:"recommendations,omitempty"`
-	LastFullHealthCheck time.Time `json:"last_full_health_check"`
-	AverageResponseTime string    `json:"average_response_time"`
+	HealthyDatabases    int       `json:"healthy_databases"`
+	TotalDatabases      int       `json:"total_databases"`
 }
 
 // GetHealthStatus returns comprehensive health status of all migration systems
@@ -334,18 +334,18 @@ func (hs *HealthService) CheckDrift(ctx context.Context) (*DriftReport, error) {
 // DriftReport represents schema drift detection results
 type DriftReport struct {
 	Timestamp time.Time                `json:"timestamp"`
-	HasDrift  bool                     `json:"has_drift"`
 	Databases map[string]DatabaseDrift `json:"databases"`
+	HasDrift  bool                     `json:"has_drift"`
 }
 
 // DatabaseDrift represents drift status for a single database
 type DatabaseDrift struct {
-	HasDrift          bool     `json:"has_drift"`
-	ExpectedVersion   uint     `json:"expected_version"`
-	ActualVersion     uint     `json:"actual_version"`
+	DriftDetails      string   `json:"drift_details,omitempty"`
 	MissingMigrations []string `json:"missing_migrations,omitempty"`
 	ExtraMigrations   []string `json:"extra_migrations,omitempty"`
-	DriftDetails      string   `json:"drift_details,omitempty"`
+	ExpectedVersion   uint     `json:"expected_version"`
+	ActualVersion     uint     `json:"actual_version"`
+	HasDrift          bool     `json:"has_drift"`
 }
 
 // checkPostgresDrift checks for PostgreSQL schema drift

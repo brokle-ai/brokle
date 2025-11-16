@@ -97,10 +97,10 @@ func TestOTLPConverterService_RootSpanDetection(t *testing.T) {
 	converter := NewOTLPConverterService(logger, mockCalc)
 
 	testCases := []struct {
-		name         string
 		parentSpanID interface{}
-		expectRoot   bool
+		name         string
 		description  string
+		expectRoot   bool
 	}{
 		{
 			name:         "nil parent",

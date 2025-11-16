@@ -161,10 +161,10 @@ func TestGeneratePreview_ErrorContent(t *testing.T) {
 func TestGeneratePreview_LargeJSONContent(t *testing.T) {
 	// Create large JSON (>10KB)
 	largeArray := make([]map[string]string, 0, 1000)
-	for i := 0; i < 1000; i++ {
+	for i := range 1000 {
 		largeArray = append(largeArray, map[string]string{
-			"id":      string(rune(i)),
-			"name":    "Item " + string(rune(i)),
+			"id":          string(rune(i)),
+			"name":        "Item " + string(rune(i)),
 			"description": "This is a sample description for testing purposes.",
 		})
 	}
@@ -196,16 +196,16 @@ func TestGeneratePreview_LargeJSONContent(t *testing.T) {
 // TestFormatBytes tests human-readable byte formatting
 func TestFormatBytes(t *testing.T) {
 	tests := []struct {
-		bytes    int
 		expected string
+		bytes    int
 	}{
-		{100, "100 bytes"},
-		{1024, "1.0 KB"},
-		{1536, "1.5 KB"},
-		{1048576, "1.0 MB"},
-		{1572864, "1.5 MB"},
-		{1073741824, "1.0 GB"},
-		{2147483648, "2.0 GB"},
+		{"100 bytes", 100},
+		{"1.0 KB", 1024},
+		{"1.5 KB", 1536},
+		{"1.0 MB", 1048576},
+		{"1.5 MB", 1572864},
+		{"1.0 GB", 1073741824},
+		{"2.0 GB", 2147483648},
 	}
 
 	for _, test := range tests {
@@ -405,7 +405,7 @@ func TestGeneratePreview_FallbackOnError(t *testing.T) {
 func BenchmarkGeneratePreview_SmallJSON(b *testing.B) {
 	content := `{"model": "gpt-4", "temperature": 0.7, "messages": [{"role": "user", "content": "Hello"}]}`
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		_ = GeneratePreview(content)
 	}
 }
@@ -413,15 +413,15 @@ func BenchmarkGeneratePreview_SmallJSON(b *testing.B) {
 // BenchmarkGeneratePreview_LargeJSON benchmarks preview generation for large JSON
 func BenchmarkGeneratePreview_LargeJSON(b *testing.B) {
 	largeArray := make([]map[string]string, 0, 100)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		largeArray = append(largeArray, map[string]string{
-			"id": string(rune(i)),
+			"id":   string(rune(i)),
 			"data": strings.Repeat("x", 100),
 		})
 	}
 	content, _ := json.Marshal(map[string]interface{}{"items": largeArray})
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		_ = GeneratePreview(string(content))
 	}
 }
@@ -430,7 +430,7 @@ func BenchmarkGeneratePreview_LargeJSON(b *testing.B) {
 func BenchmarkGeneratePreview_Text(b *testing.B) {
 	content := strings.Repeat("This is a sentence. ", 100)
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		_ = GeneratePreview(content)
 	}
 }

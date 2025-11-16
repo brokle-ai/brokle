@@ -132,7 +132,7 @@ func (s *organizationService) DeleteOrganization(ctx context.Context, orgID ulid
 
 // ListOrganizations lists organizations with filters
 func (s *organizationService) ListOrganizations(ctx context.Context, filters *orgDomain.OrganizationFilters) ([]*orgDomain.Organization, error) {
-	return s.orgRepo.List(ctx, filters.Limit, filters.Offset)
+	return s.orgRepo.List(ctx, filters)
 }
 
 // GetUserOrganizations returns organizations for a user

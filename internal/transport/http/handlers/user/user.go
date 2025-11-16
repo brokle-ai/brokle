@@ -37,19 +37,19 @@ func NewHandler(config *config.Config, logger *logrus.Logger, userService user.U
 // UserProfileResponse represents the complete user profile response
 // @Description Complete user profile information including basic info and extended profile
 type UserProfileResponse struct {
-	ID                    ulid.ULID        `json:"id" example:"01K4FHGHT3XX9WFM293QPZ5G9V" description:"User unique identifier" swaggertype:"string"`
-	Email                 string           `json:"email" example:"user@example.com" description:"User email address"`
-	Name                  string           `json:"name" example:"John Doe" description:"User full name"`
+	CreatedAt             time.Time        `json:"created_at" example:"2025-01-01T00:00:00Z" description:"Account creation timestamp"`
+	Profile               *UserProfileData `json:"profile,omitempty" description:"Extended profile information"`
+	DefaultOrganizationID *ulid.ULID       `json:"default_organization_id,omitempty" example:"01K4FHGHT3XX9WFM293QPZ5G9V" description:"Default organization ID" swaggertype:"string"`
+	LastLoginAt           *time.Time       `json:"last_login_at,omitempty" example:"2025-01-02T10:30:00Z" description:"Last login timestamp"`
 	FirstName             string           `json:"first_name" example:"John" description:"User first name"`
-	LastName              string           `json:"last_name" example:"Doe" description:"User last name"`
 	AvatarURL             string           `json:"avatar_url" example:"https://example.com/avatar.jpg" description:"Profile avatar URL"`
+	LastName              string           `json:"last_name" example:"Doe" description:"User last name"`
+	Name                  string           `json:"name" example:"John Doe" description:"User full name"`
+	Email                 string           `json:"email" example:"user@example.com" description:"User email address"`
+	Completeness          int              `json:"completeness" example:"85" description:"Profile completeness percentage"`
+	ID                    ulid.ULID        `json:"id" example:"01K4FHGHT3XX9WFM293QPZ5G9V" description:"User unique identifier" swaggertype:"string"`
 	IsEmailVerified       bool             `json:"is_email_verified" example:"true" description:"Email verification status"`
 	IsActive              bool             `json:"is_active" example:"true" description:"Account active status"`
-	CreatedAt             time.Time        `json:"created_at" example:"2025-01-01T00:00:00Z" description:"Account creation timestamp"`
-	LastLoginAt           *time.Time       `json:"last_login_at,omitempty" example:"2025-01-02T10:30:00Z" description:"Last login timestamp"`
-	DefaultOrganizationID *ulid.ULID       `json:"default_organization_id,omitempty" example:"01K4FHGHT3XX9WFM293QPZ5G9V" description:"Default organization ID" swaggertype:"string"`
-	Profile               *UserProfileData `json:"profile,omitempty" description:"Extended profile information"`
-	Completeness          int              `json:"completeness" example:"85" description:"Profile completeness percentage"`
 }
 
 // UserProfileData represents extended profile information
@@ -80,13 +80,13 @@ type OrganizationWithProjects struct {
 
 // ProjectSummary represents a summary of a project
 type ProjectSummary struct {
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
 	ID             string    `json:"id"`
 	Name           string    `json:"name"`
 	CompositeSlug  string    `json:"composite_slug"`
 	Description    string    `json:"description,omitempty"`
 	OrganizationID string    `json:"organization_id"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 // EnhancedUserProfileResponse extends UserProfileResponse with organizations hierarchy

@@ -30,33 +30,33 @@ type LicenseService struct {
 
 // LicenseInfo represents license information
 type LicenseInfo struct {
+	ValidUntil    time.Time `json:"valid_until"`
+	LastValidated time.Time `json:"last_validated"`
 	Key           string    `json:"key"`
 	Type          string    `json:"type"`
-	ValidUntil    time.Time `json:"valid_until"`
+	Organization  string    `json:"organization,omitempty"`
+	ContactEmail  string    `json:"contact_email,omitempty"`
+	Features      []string  `json:"features"`
 	MaxRequests   int64     `json:"max_requests"`
 	MaxUsers      int       `json:"max_users"`
 	MaxProjects   int       `json:"max_projects"`
-	Features      []string  `json:"features"`
-	Organization  string    `json:"organization,omitempty"`
-	ContactEmail  string    `json:"contact_email,omitempty"`
 	IsValid       bool      `json:"is_valid"`
-	LastValidated time.Time `json:"last_validated"`
 }
 
 // UsageInfo represents current usage statistics
 type UsageInfo struct {
+	LastUpdated time.Time `json:"last_updated"`
 	Requests    int64     `json:"requests"`
 	Users       int       `json:"users"`
 	Projects    int       `json:"projects"`
-	LastUpdated time.Time `json:"last_updated"`
 }
 
 // LicenseStatus represents the overall license status
 type LicenseStatus struct {
 	License *LicenseInfo `json:"license"`
 	Usage   *UsageInfo   `json:"usage"`
-	IsValid bool         `json:"is_valid"`
 	Errors  []string     `json:"errors,omitempty"`
+	IsValid bool         `json:"is_valid"`
 }
 
 const (
@@ -197,7 +197,7 @@ func (ls *LicenseService) CheckUsageLimit(ctx context.Context, limitType string)
 
 // UpdateUsage updates the current usage statistics
 func (ls *LicenseService) UpdateUsage(ctx context.Context, usageType string, increment int64) error {
-	key := fmt.Sprintf("brokle:usage:%s", usageType)
+	key := "brokle:usage:" + usageType
 
 	// Use Redis to track usage with expiration
 	_, err := ls.redis.IncrBy(ctx, key, increment).Result()
@@ -296,9 +296,9 @@ func (ls *LicenseService) validateLicenseOnline(ctx context.Context, license *co
 	}
 
 	var result struct {
-		Valid   bool         `json:"valid"`
 		License *LicenseInfo `json:"license"`
 		Error   string       `json:"error,omitempty"`
+		Valid   bool         `json:"valid"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {

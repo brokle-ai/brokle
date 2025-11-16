@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"brokle/pkg/pagination"
 	"brokle/pkg/ulid"
 )
 
@@ -98,21 +99,25 @@ type BlobStorageRepository interface {
 // TraceFilter represents filters for trace queries
 type TraceFilter struct {
 	UserID      *string
-	SessionID   *string // Virtual session filtering
+	SessionID   *string
 	StartTime   *time.Time
 	EndTime     *time.Time
-	Tags        []string
 	Environment *string
 	ServiceName *string
 	StatusCode  *string
 	Bookmarked  *bool
 	Public      *bool
-	Limit       int
-	Offset      int
+	pagination.Params
+	ProjectID string
+	Tags      []string
 }
 
 // SpanFilter represents filters for span queries
 type SpanFilter struct {
+	// Scope
+	ProjectID string // Required for scoping queries to project
+
+	// Domain filters
 	TraceID      *string
 	ParentID     *string
 	Type         *string
@@ -126,12 +131,17 @@ type SpanFilter struct {
 	MaxCost      *float64
 	Level        *string
 	IsCompleted  *bool
-	Limit        int
-	Offset       int
+
+	// Pagination (embedded for DRY)
+	pagination.Params
 }
 
 // ScoreFilter represents filters for score queries
 type ScoreFilter struct {
+	// Scope
+	ProjectID string // Required for scoping queries to project
+
+	// Domain filters
 	TraceID       *string
 	SpanID        *string
 	Name          *string
@@ -142,19 +152,22 @@ type ScoreFilter struct {
 	MaxValue      *float64
 	StartTime     *time.Time
 	EndTime       *time.Time
-	Limit         int
-	Offset        int
+
+	// Pagination (embedded for DRY)
+	pagination.Params
 }
 
 // BlobStorageFilter represents filters for blob storage queries
 type BlobStorageFilter struct {
+	// Domain filters
 	EntityType   *string
 	StartTime    *time.Time
 	EndTime      *time.Time
 	MinSizeBytes *uint64
 	MaxSizeBytes *uint64
-	Limit        int
-	Offset       int
+
+	// Pagination (embedded for DRY)
+	pagination.Params
 }
 
 // TelemetryDeduplicationRepository defines methods for telemetry deduplication
@@ -204,6 +217,7 @@ type ModelRepository interface {
 
 // ModelFilter represents filters for model pricing queries
 type ModelFilter struct {
+	// Domain filters
 	ProjectID    *string
 	Provider     *string
 	ModelName    *string
@@ -211,6 +225,7 @@ type ModelFilter struct {
 	IsDeprecated *bool
 	StartDate    *time.Time
 	EndDate      *time.Time
-	Limit        int
-	Offset       int
+
+	// Pagination (embedded for DRY)
+	pagination.Params
 }

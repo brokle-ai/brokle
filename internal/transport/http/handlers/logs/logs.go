@@ -23,29 +23,29 @@ func NewHandler(config *config.Config, logger *logrus.Logger) *Handler {
 
 // AIRequest represents a logged AI request
 type AIRequest struct {
-	ID           string                 `json:"id" example:"req_1234567890" description:"Unique request identifier"`
-	RequestID    string                 `json:"request_id" example:"550e8400-e29b-41d4-a716-446655440000" description:"Correlation ID for tracing"`
 	Timestamp    time.Time              `json:"timestamp" example:"2024-01-01T00:00:00Z" description:"Request timestamp"`
-	Method       string                 `json:"method" example:"POST" description:"HTTP method"`
+	Metadata     map[string]interface{} `json:"metadata,omitempty" description:"Additional request metadata"`
+	Project      string                 `json:"project_id" example:"proj_1234567890" description:"Project ID"`
+	UserAgent    string                 `json:"user_agent,omitempty" example:"MyApp/1.0" description:"Client user agent"`
 	Path         string                 `json:"path" example:"/v1/chat/completions" description:"Request path"`
 	Provider     string                 `json:"provider" example:"openai" description:"AI provider used"`
 	Model        string                 `json:"model" example:"gpt-4" description:"AI model used"`
-	Status       int                    `json:"status" example:"200" description:"HTTP response status code"`
-	Latency      int64                  `json:"latency_ms" example:"850" description:"Response latency in milliseconds"`
-	TokensIn     int64                  `json:"tokens_in" example:"150" description:"Input tokens"`
-	TokensOut    int64                  `json:"tokens_out" example:"75" description:"Output tokens"`
-	Cost         float64                `json:"cost" example:"0.0425" description:"Request cost in USD"`
-	QualityScore float64                `json:"quality_score,omitempty" example:"0.92" description:"AI response quality score (0.0 to 1.0)"`
+	RequestID    string                 `json:"request_id" example:"550e8400-e29b-41d4-a716-446655440000" description:"Correlation ID for tracing"`
+	ErrorMessage string                 `json:"error_message,omitempty" example:"Rate limit exceeded" description:"Error message if request failed"`
+	IPAddress    string                 `json:"ip_address,omitempty" example:"192.168.1.100" description:"Client IP address (anonymized)"`
+	Method       string                 `json:"method" example:"POST" description:"HTTP method"`
+	APIKey       string                 `json:"api_key_id" example:"key_1234567890" description:"API key used for request"`
+	Environment  string                 `json:"environment_id" example:"env_1234567890" description:"Environment ID"`
 	UserID       string                 `json:"user_id" example:"usr_1234567890" description:"User who made the request"`
 	Organization string                 `json:"organization_id" example:"org_1234567890" description:"Organization ID"`
-	Project      string                 `json:"project_id" example:"proj_1234567890" description:"Project ID"`
-	Environment  string                 `json:"environment_id" example:"env_1234567890" description:"Environment ID"`
-	APIKey       string                 `json:"api_key_id" example:"key_1234567890" description:"API key used for request"`
-	UserAgent    string                 `json:"user_agent,omitempty" example:"MyApp/1.0" description:"Client user agent"`
-	IPAddress    string                 `json:"ip_address,omitempty" example:"192.168.1.100" description:"Client IP address (anonymized)"`
+	ID           string                 `json:"id" example:"req_1234567890" description:"Unique request identifier"`
+	QualityScore float64                `json:"quality_score,omitempty" example:"0.92" description:"AI response quality score (0.0 to 1.0)"`
+	Cost         float64                `json:"cost" example:"0.0425" description:"Request cost in USD"`
+	TokensOut    int64                  `json:"tokens_out" example:"75" description:"Output tokens"`
+	TokensIn     int64                  `json:"tokens_in" example:"150" description:"Input tokens"`
+	Latency      int64                  `json:"latency_ms" example:"850" description:"Response latency in milliseconds"`
+	Status       int                    `json:"status" example:"200" description:"HTTP response status code"`
 	CacheHit     bool                   `json:"cache_hit" example:"false" description:"Whether response was served from cache"`
-	ErrorMessage string                 `json:"error_message,omitempty" example:"Rate limit exceeded" description:"Error message if request failed"`
-	Metadata     map[string]interface{} `json:"metadata,omitempty" description:"Additional request metadata"`
 }
 
 // AIRequestDetail provides detailed information about a specific request
@@ -54,8 +54,8 @@ type AIRequestDetail struct {
 	RequestBody  interface{}       `json:"request_body,omitempty" description:"Original request payload (may be truncated)"`
 	ResponseBody interface{}       `json:"response_body,omitempty" description:"Response payload (may be truncated)"`
 	Headers      map[string]string `json:"headers,omitempty" description:"Request headers (sensitive headers removed)"`
-	RoutingInfo  RoutingInfo       `json:"routing_info" description:"AI provider routing details"`
 	Trace        []TraceEvent      `json:"trace,omitempty" description:"Detailed execution trace"`
+	RoutingInfo  RoutingInfo       `json:"routing_info" description:"AI provider routing details"`
 }
 
 // RoutingInfo provides details about AI provider routing decisions
@@ -70,17 +70,17 @@ type RoutingInfo struct {
 // AlternativeProvider represents an alternative provider that was considered
 type AlternativeProvider struct {
 	Provider string  `json:"provider" example:"anthropic" description:"Provider name"`
-	Score    float64 `json:"score" example:"0.85" description:"Provider score for this request"`
 	Reason   string  `json:"reason" example:"Higher latency" description:"Why this provider wasn't selected"`
+	Score    float64 `json:"score" example:"0.85" description:"Provider score for this request"`
 }
 
 // TraceEvent represents an event in the request execution trace
 type TraceEvent struct {
 	Timestamp   time.Time              `json:"timestamp" example:"2024-01-01T00:00:00Z" description:"Event timestamp"`
+	Metadata    map[string]interface{} `json:"metadata,omitempty" description:"Additional event metadata"`
 	Event       string                 `json:"event" example:"provider_request_start" description:"Event type"`
 	Description string                 `json:"description" example:"Starting request to OpenAI" description:"Event description"`
 	Duration    int64                  `json:"duration_ms,omitempty" example:"25" description:"Event duration in milliseconds"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty" description:"Additional event metadata"`
 }
 
 // ListRequestsResponse represents the response when listing requests
@@ -94,21 +94,21 @@ type ListRequestsResponse struct {
 
 // ExportRequest represents the request to export logs
 type ExportRequest struct {
-	Format      string                 `json:"format" binding:"required,oneof=json csv xlsx" example:"json" description:"Export format (json, csv, xlsx)"`
 	StartTime   time.Time              `json:"start_time" binding:"required" example:"2024-01-01T00:00:00Z" description:"Start time for export range"`
 	EndTime     time.Time              `json:"end_time" binding:"required" example:"2024-01-31T23:59:59Z" description:"End time for export range"`
 	Filters     map[string]interface{} `json:"filters,omitempty" description:"Additional filters to apply"`
+	Format      string                 `json:"format" binding:"required,oneof=json csv xlsx" example:"json" description:"Export format (json, csv, xlsx)"`
 	IncludeBody bool                   `json:"include_body" example:"false" description:"Whether to include request/response bodies"`
 }
 
 // ExportResponse represents the response when initiating a log export
 type ExportResponse struct {
-	JobID       string    `json:"job_id" example:"export_1234567890" description:"Export job identifier"`
-	Status      string    `json:"status" example:"pending" description:"Export status (pending, processing, completed, failed)"`
 	CreatedAt   time.Time `json:"created_at" example:"2024-01-01T00:00:00Z" description:"Export job creation time"`
 	ExpectedAt  time.Time `json:"expected_at,omitempty" example:"2024-01-01T00:05:00Z" description:"Expected completion time"`
-	DownloadURL string    `json:"download_url,omitempty" example:"https://exports.brokle.ai/export_1234567890.json" description:"Download URL (available when completed)"`
 	ExpiresAt   time.Time `json:"expires_at,omitempty" example:"2024-01-08T00:00:00Z" description:"Download URL expiration time"`
+	JobID       string    `json:"job_id" example:"export_1234567890" description:"Export job identifier"`
+	Status      string    `json:"status" example:"pending" description:"Export status (pending, processing, completed, failed)"`
+	DownloadURL string    `json:"download_url,omitempty" example:"https://exports.brokle.ai/export_1234567890.json" description:"Download URL (available when completed)"`
 }
 
 // ListRequests handles GET /logs/requests
@@ -129,8 +129,8 @@ type ExportResponse struct {
 // @Param max_latency query int false "Maximum latency filter (ms)" example("5000")
 // @Param cache_hit query bool false "Filter by cache hit status" example("false")
 // @Param search query string false "Search in request content" example("error")
-// @Param page query int false "Page number" default(1) minimum(1)
-// @Param limit query int false "Items per page" default(50) minimum(1) maximum(1000)
+// @Param cursor query string false "Pagination cursor" example("eyJjcmVhdGVkX2F0IjoiMjAyNC0wMS0wMVQxMjowMDowMFoiLCJpZCI6IjAxSDJYM1k0WjUifQ==")
+// @Param page_size query int false "Items per page" Enums(10,20,30,40,50) default(50)
 // @Param sort query string false "Sort order" default("-timestamp") Enums(timestamp,-timestamp,latency,-latency,cost,-cost)
 // @Success 200 {object} response.SuccessResponse{data=ListRequestsResponse} "List of AI requests"
 // @Failure 400 {object} response.ErrorResponse "Bad request - invalid query parameters"

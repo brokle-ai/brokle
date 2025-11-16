@@ -13,17 +13,17 @@ import (
 
 // ClientConfig represents WebSocket client configuration
 type ClientConfig struct {
-	URL             string        `json:"url"`
-	Subprotocols    []string      `json:"subprotocols"`
-	Headers         http.Header   `json:"headers"`
-	PingInterval    time.Duration `json:"ping_interval"`
-	PongTimeout     time.Duration `json:"pong_timeout"`
-	ReconnectDelay  time.Duration `json:"reconnect_delay"`
-	MaxReconnects   int           `json:"max_reconnects"`
-	BufferSize      int           `json:"buffer_size"`
-	Compression     bool          `json:"compression"`
-	EnablePing      bool          `json:"enable_ping"`
-	AutoReconnect   bool          `json:"auto_reconnect"`
+	URL            string        `json:"url"`
+	Subprotocols   []string      `json:"subprotocols"`
+	Headers        http.Header   `json:"headers"`
+	PingInterval   time.Duration `json:"ping_interval"`
+	PongTimeout    time.Duration `json:"pong_timeout"`
+	ReconnectDelay time.Duration `json:"reconnect_delay"`
+	MaxReconnects  int           `json:"max_reconnects"`
+	BufferSize     int           `json:"buffer_size"`
+	Compression    bool          `json:"compression"`
+	EnablePing     bool          `json:"enable_ping"`
+	AutoReconnect  bool          `json:"auto_reconnect"`
 }
 
 // DefaultClientConfig returns a default client configuration
@@ -158,14 +158,14 @@ func (c *Client) Connect() error {
 // Disconnect closes the WebSocket connection
 func (c *Client) Disconnect() error {
 	c.cancel()
-	
+
 	if c.conn != nil {
 		// Send close message
 		err := c.conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 		if err != nil {
 			return err
 		}
-		
+
 		// Close connection
 		err = c.conn.Close()
 		if err != nil {
@@ -279,7 +279,7 @@ func (c *Client) readLoop() {
 						c.errorHandler(fmt.Errorf("websocket read error: %w", err))
 					}
 				}
-				
+
 				if c.config.AutoReconnect && c.reconnects < c.config.MaxReconnects {
 					c.setState(StateReconnecting)
 					c.reconnectChan <- struct{}{}
@@ -379,14 +379,14 @@ func (c *Client) handleMessage(data []byte) {
 // reconnect attempts to reconnect to the WebSocket
 func (c *Client) reconnect() {
 	c.reconnects++
-	
+
 	time.Sleep(c.config.ReconnectDelay)
-	
+
 	if err := c.Connect(); err != nil {
 		if c.errorHandler != nil {
 			c.errorHandler(fmt.Errorf("reconnect failed: %w", err))
 		}
-		
+
 		if c.reconnects < c.config.MaxReconnects {
 			go c.reconnect()
 		} else {
@@ -398,10 +398,10 @@ func (c *Client) reconnect() {
 // GetConnectionInfo returns connection information
 func (c *Client) GetConnectionInfo() map[string]interface{} {
 	return map[string]interface{}{
-		"url":         c.config.URL,
-		"state":       c.GetState().String(),
-		"reconnects":  c.reconnects,
-		"connected":   c.IsConnected(),
+		"url":           c.config.URL,
+		"state":         c.GetState().String(),
+		"reconnects":    c.reconnects,
+		"connected":     c.IsConnected(),
 		"ping_interval": c.config.PingInterval.String(),
 	}
 }

@@ -18,8 +18,8 @@ import (
 // S3Client wraps AWS S3 SDK for blob storage operations
 type S3Client struct {
 	client     *s3.Client
-	bucketName string
 	logger     *logrus.Logger
+	bucketName string
 }
 
 // NewS3Client creates a new S3 client instance

@@ -125,10 +125,10 @@ func isErrorContent(content string) bool {
 // isMarkdownContent checks if content has Markdown patterns
 func isMarkdownContent(content string) bool {
 	markdownPatterns := []string{
-		"^#{1,6} ",      // Headers
-		"^\\* ",         // Unordered lists
-		"^\\d+\\. ",     // Ordered lists
-		"```",           // Code blocks
+		"^#{1,6} ",         // Headers
+		"^\\* ",            // Unordered lists
+		"^\\d+\\. ",        // Ordered lists
+		"```",              // Code blocks
 		"\\[.*\\]\\(.*\\)", // Links
 	}
 

@@ -87,27 +87,27 @@ const (
 
 // PublicProfile represents a public view of a user profile
 type PublicProfile struct {
-	UserID    ulid.ULID `json:"user_id"`
-	FirstName string    `json:"first_name"`
-	LastName  string    `json:"last_name"`
 	AvatarURL *string   `json:"avatar_url,omitempty"`
 	Bio       *string   `json:"bio,omitempty"`
 	Location  *string   `json:"location,omitempty"`
+	FirstName string    `json:"first_name"`
+	LastName  string    `json:"last_name"`
+	UserID    ulid.ULID `json:"user_id"`
 }
 
 // ProfileCompleteness represents profile completion status
 type ProfileCompleteness struct {
-	OverallScore    int            `json:"overall_score"` // 0-100
+	Sections        map[string]int `json:"sections"`
 	CompletedFields []string       `json:"completed_fields"`
 	MissingFields   []string       `json:"missing_fields"`
 	Recommendations []string       `json:"recommendations"`
-	Sections        map[string]int `json:"sections"` // section -> completion %
+	OverallScore    int            `json:"overall_score"`
 }
 
 // ProfileValidation represents profile validation results
 type ProfileValidation struct {
-	IsValid bool                     `json:"is_valid"`
 	Errors  []ProfileValidationError `json:"errors"`
+	IsValid bool                     `json:"is_valid"`
 }
 
 type ProfileValidationError struct {
@@ -196,14 +196,14 @@ const (
 
 // UserActivity represents user activity and engagement metrics.
 type UserActivity struct {
-	UserID           ulid.ULID `json:"user_id"`
 	LastLoginAt      *string   `json:"last_login_at,omitempty"`
+	LastAPIRequestAt *string   `json:"last_api_request_at,omitempty"`
 	TotalLogins      int64     `json:"total_logins"`
 	DashboardViews   int64     `json:"dashboard_views"`
 	APIRequestsCount int64     `json:"api_requests_count"`
-	LastAPIRequestAt *string   `json:"last_api_request_at,omitempty"`
 	CreatedProjects  int64     `json:"created_projects"`
 	JoinedOrgs       int64     `json:"joined_orgs"`
+	UserID           ulid.ULID `json:"user_id"`
 }
 
 // UserStats represents aggregate user statistics.

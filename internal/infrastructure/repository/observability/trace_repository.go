@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"brokle/internal/core/domain/observability"
+	"brokle/pkg/pagination"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
@@ -57,8 +58,8 @@ func (r *traceRepository) Create(ctx context.Context, trace *observability.Trace
 		trace.ServiceName,
 		trace.ServiceVersion,
 		trace.Release,
-		boolToUint8(trace.Bookmarked),
-		boolToUint8(trace.Public),
+		trace.Bookmarked,
+		trace.Public,
 		trace.CreatedAt,
 		trace.UpdatedAt,
 		trace.Version,
@@ -103,7 +104,7 @@ func (r *traceRepository) GetByID(ctx context.Context, id string) (*observabilit
 	return r.scanTraceRow(row)
 }
 
-// GetByProjectID retrieves traces by project ID with optional filters
+// GetByProjectID retrieves traces by project ID with cursor-based pagination
 func (r *traceRepository) GetByProjectID(ctx context.Context, projectID string, filter *observability.TraceFilter) ([]*observability.Trace, error) {
 	query := `
 		SELECT
@@ -142,11 +143,11 @@ func (r *traceRepository) GetByProjectID(ctx context.Context, projectID string, 
 		}
 		if filter.Bookmarked != nil {
 			query += " AND bookmarked = ?"
-			args = append(args, boolToUint8(*filter.Bookmarked))
+			args = append(args, *filter.Bookmarked)
 		}
 		if filter.Public != nil {
 			query += " AND public = ?"
-			args = append(args, boolToUint8(*filter.Public))
+			args = append(args, *filter.Public)
 		}
 		if filter.StartTime != nil {
 			query += " AND start_time >= ?"
@@ -160,22 +161,44 @@ func (r *traceRepository) GetByProjectID(ctx context.Context, projectID string, 
 			query += " AND hasAll(tags, ?)"
 			args = append(args, filter.Tags)
 		}
+
 	}
 
-	// Order by start_time descending (most recent first)
-	query += " ORDER BY start_time DESC"
+	// Determine sort field and direction with SQL injection protection
+	allowedSortFields := []string{"start_time", "end_time", "duration_ms", "status_code", "created_at", "updated_at", "trace_id"}
+	sortField := "start_time" // default
+	sortDir := "DESC"
 
-	// Apply limit and offset
 	if filter != nil {
-		if filter.Limit > 0 {
-			query += " LIMIT ?"
-			args = append(args, filter.Limit)
+		// Validate sort field against whitelist
+		if filter.Params.SortBy != "" {
+			validated, err := pagination.ValidateSortField(filter.Params.SortBy, allowedSortFields)
+			if err != nil {
+				return nil, fmt.Errorf("invalid sort field: %w", err)
+			}
+			if validated != "" {
+				sortField = validated
+			}
 		}
-		if filter.Offset > 0 {
-			query += " OFFSET ?"
-			args = append(args, filter.Offset)
+		if filter.Params.SortDir == "asc" {
+			sortDir = "ASC"
 		}
 	}
+
+	// Order by sort field and trace_id for stable ordering
+	query += fmt.Sprintf(" ORDER BY %s %s, trace_id %s", sortField, sortDir, sortDir)
+
+	// Apply limit and offset for pagination
+	limit := pagination.DefaultPageSize
+	offset := 0
+	if filter != nil {
+		if filter.Params.Limit > 0 {
+			limit = filter.Params.Limit
+		}
+		offset = filter.Params.GetOffset()
+	}
+	query += " LIMIT ? OFFSET ?"
+	args = append(args, limit, offset)
 
 	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
@@ -209,7 +232,7 @@ func (r *traceRepository) GetBySessionID(ctx context.Context, sessionID string) 
 	return r.scanTraces(rows)
 }
 
-// GetByUserID retrieves traces by user ID
+// GetByUserID retrieves traces by user ID with cursor-based pagination
 func (r *traceRepository) GetByUserID(ctx context.Context, userID string, filter *observability.TraceFilter) ([]*observability.Trace, error) {
 	query := `
 		SELECT
@@ -233,14 +256,43 @@ func (r *traceRepository) GetByUserID(ctx context.Context, userID string, filter
 			query += " AND start_time <= ?"
 			args = append(args, *filter.EndTime)
 		}
+
 	}
 
-	query += " ORDER BY start_time DESC"
+	// Determine sort field and direction with SQL injection protection
+	allowedSortFields := []string{"start_time", "end_time", "duration_ms", "status_code", "created_at", "updated_at", "trace_id"}
+	sortField := "start_time" // default
+	sortDir := "DESC"
 
-	if filter != nil && filter.Limit > 0 {
-		query += " LIMIT ?"
-		args = append(args, filter.Limit)
+	if filter != nil {
+		// Validate sort field against whitelist
+		if filter.Params.SortBy != "" {
+			validated, err := pagination.ValidateSortField(filter.Params.SortBy, allowedSortFields)
+			if err != nil {
+				return nil, fmt.Errorf("invalid sort field: %w", err)
+			}
+			if validated != "" {
+				sortField = validated
+			}
+		}
+		if filter.Params.SortDir == "asc" {
+			sortDir = "ASC"
+		}
 	}
+
+	query += fmt.Sprintf(" ORDER BY %s %s, trace_id %s", sortField, sortDir, sortDir)
+
+	// Apply limit and offset for pagination
+	limit := pagination.DefaultPageSize
+	offset := 0
+	if filter != nil {
+		if filter.Params.Limit > 0 {
+			limit = filter.Params.Limit
+		}
+		offset = filter.Params.GetOffset()
+	}
+	query += " LIMIT ? OFFSET ?"
+	args = append(args, limit, offset)
 
 	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
@@ -310,8 +362,8 @@ func (r *traceRepository) CreateBatch(ctx context.Context, traces []*observabili
 			trace.ServiceName,
 			trace.ServiceVersion,
 			trace.Release,
-			boolToUint8(trace.Bookmarked),
-			boolToUint8(trace.Public),
+			trace.Bookmarked,
+			trace.Public,
 			trace.CreatedAt,
 			trace.UpdatedAt,
 			trace.Version,
@@ -327,10 +379,17 @@ func (r *traceRepository) CreateBatch(ctx context.Context, traces []*observabili
 
 // Count returns the count of traces matching the filter
 func (r *traceRepository) Count(ctx context.Context, filter *observability.TraceFilter) (int64, error) {
-	query := "SELECT count() FROM traces"
+	query := "SELECT count() FROM traces WHERE 1=1"
 	args := []interface{}{}
 
 	if filter != nil {
+		// CRITICAL: Filter by project_id first
+		if filter.ProjectID != "" {
+			query += " AND project_id = ?"
+			args = append(args, filter.ProjectID)
+		}
+
+		// Apply ALL the same filters as GetByProjectID
 		if filter.SessionID != nil {
 			query += " AND session_id = ?"
 			args = append(args, *filter.SessionID)
@@ -338,6 +397,26 @@ func (r *traceRepository) Count(ctx context.Context, filter *observability.Trace
 		if filter.UserID != nil {
 			query += " AND user_id = ?"
 			args = append(args, *filter.UserID)
+		}
+		if filter.Environment != nil {
+			query += " AND environment = ?"
+			args = append(args, *filter.Environment)
+		}
+		if filter.ServiceName != nil {
+			query += " AND service_name = ?"
+			args = append(args, *filter.ServiceName)
+		}
+		if filter.StatusCode != nil {
+			query += " AND status_code = ?"
+			args = append(args, *filter.StatusCode)
+		}
+		if filter.Bookmarked != nil {
+			query += " AND bookmarked = ?"
+			args = append(args, *filter.Bookmarked)
+		}
+		if filter.Public != nil {
+			query += " AND public = ?"
+			args = append(args, *filter.Public)
 		}
 		if filter.StartTime != nil {
 			query += " AND start_time >= ?"
@@ -347,17 +426,20 @@ func (r *traceRepository) Count(ctx context.Context, filter *observability.Trace
 			query += " AND start_time <= ?"
 			args = append(args, *filter.EndTime)
 		}
+		if len(filter.Tags) > 0 {
+			query += " AND hasAll(tags, ?)"
+			args = append(args, filter.Tags)
+		}
 	}
 
-	var count int64
+	var count uint64
 	err := r.db.QueryRow(ctx, query, args...).Scan(&count)
-	return count, err
+	return int64(count), err
 }
 
 // Helper function to scan a single trace from query row
 func (r *traceRepository) scanTraceRow(row driver.Row) (*observability.Trace, error) {
 	var trace observability.Trace
-	var bookmarked, public uint8
 
 	err := row.Scan(
 		&trace.TraceID, // Renamed from ID
@@ -378,8 +460,8 @@ func (r *traceRepository) scanTraceRow(row driver.Row) (*observability.Trace, er
 		&trace.ServiceName,
 		&trace.ServiceVersion,
 		&trace.Release,
-		&bookmarked,
-		&public,
+		&trace.Bookmarked,
+		&trace.Public,
 		&trace.CreatedAt,
 		&trace.UpdatedAt,
 		&trace.Version,
@@ -390,9 +472,6 @@ func (r *traceRepository) scanTraceRow(row driver.Row) (*observability.Trace, er
 		return nil, fmt.Errorf("scan trace: %w", err)
 	}
 
-	trace.Bookmarked = bookmarked != 0
-	trace.Public = public != 0
-
 	return &trace, nil
 }
 
@@ -402,7 +481,6 @@ func (r *traceRepository) scanTraces(rows driver.Rows) ([]*observability.Trace, 
 
 	for rows.Next() {
 		var trace observability.Trace
-		var bookmarked, public uint8
 
 		err := rows.Scan(
 			&trace.TraceID, // Renamed from ID
@@ -423,8 +501,8 @@ func (r *traceRepository) scanTraces(rows driver.Rows) ([]*observability.Trace, 
 			&trace.ServiceName,
 			&trace.ServiceVersion,
 			&trace.Release,
-			&bookmarked,
-			&public,
+			&trace.Bookmarked,
+			&trace.Public,
 			&trace.CreatedAt,
 			&trace.UpdatedAt,
 			&trace.Version,
@@ -435,19 +513,8 @@ func (r *traceRepository) scanTraces(rows driver.Rows) ([]*observability.Trace, 
 			return nil, fmt.Errorf("scan trace: %w", err)
 		}
 
-		trace.Bookmarked = bookmarked != 0
-		trace.Public = public != 0
-
 		traces = append(traces, &trace)
 	}
 
 	return traces, rows.Err()
-}
-
-// Helper function
-func boolToUint8(b bool) uint8 {
-	if b {
-		return 1
-	}
-	return 0
 }

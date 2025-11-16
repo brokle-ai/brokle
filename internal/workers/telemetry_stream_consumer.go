@@ -41,36 +41,33 @@ const (
 
 // TelemetryStreamConsumer consumes telemetry batches from Redis Streams and writes to ClickHouse
 type TelemetryStreamConsumer struct {
-	redis            *database.RedisDB
-	deduplicationSvc observability.TelemetryDeduplicationService
-	logger           *logrus.Logger
-
-	// Observability services for structured events (ClickHouse-first)
-	traceService observability.TraceService
-	spanService  observability.SpanService
-	scoreService observability.ScoreService
-
+	deduplicationSvc    observability.TelemetryDeduplicationService
+	traceService        observability.TraceService
+	spanService         observability.SpanService
+	scoreService        observability.ScoreService
+	redis               *database.RedisDB
+	logger              *logrus.Logger
+	activeStreams       map[string]bool
+	quit                chan struct{}
 	consumerGroup       string
 	consumerID          string
-	batchSize           int
-	blockDuration       time.Duration
-	maxRetries          int
-	retryBackoff        time.Duration
+	wg                  sync.WaitGroup
 	discoveryInterval   time.Duration
+	batchesProcessed    int64
 	maxStreamsPerRead   int
 	running             int64
-	wg                  sync.WaitGroup
-	quit                chan struct{}
-	statsLock           sync.RWMutex
-	batchesProcessed    int64
+	maxRetries          int
+	blockDuration       time.Duration
+	maxDiscoveryBackoff time.Duration
+	retryBackoff        time.Duration
 	eventsProcessed     int64
 	errorsCount         int64
 	dlqMessagesCount    int64
-	activeStreams       map[string]bool
-	streamsMutex        sync.RWMutex
-	streamRotation      int
+	batchSize           int
 	discoveryBackoff    time.Duration
-	maxDiscoveryBackoff time.Duration
+	streamRotation      int
+	streamsMutex        sync.RWMutex
+	statsLock           sync.RWMutex
 }
 
 // TelemetryStreamConsumerConfig holds configuration for the consumer
@@ -99,7 +96,7 @@ func NewTelemetryStreamConsumer(
 	if config == nil {
 		config = &TelemetryStreamConsumerConfig{
 			ConsumerGroup:     "telemetry-workers",
-			ConsumerID:        fmt.Sprintf("worker-%s", ulid.New().String()),
+			ConsumerID:        "worker-" + ulid.New().String(),
 			BatchSize:         50, // Optimized for lower latency and better worker utilization
 			BlockDuration:     time.Second,
 			MaxRetries:        3,
@@ -134,7 +131,7 @@ func NewTelemetryStreamConsumer(
 // Start begins consuming from Redis Streams
 func (c *TelemetryStreamConsumer) Start(ctx context.Context) error {
 	if !atomic.CompareAndSwapInt64(&c.running, 0, 1) {
-		return fmt.Errorf("consumer already running")
+		return errors.New("consumer already running")
 	}
 
 	c.logger.WithFields(logrus.Fields{
@@ -461,7 +458,7 @@ func (c *TelemetryStreamConsumer) processMessage(ctx context.Context, streamKey 
 	// Extract batch data from message
 	dataStr, ok := msg.Values["data"].(string)
 	if !ok {
-		return fmt.Errorf("invalid message format: missing data field")
+		return errors.New("invalid message format: missing data field")
 	}
 
 	// Deserialize batch
@@ -892,7 +889,7 @@ func (c *TelemetryStreamConsumer) RetryDLQMessage(ctx context.Context, projectID
 	// Extract original data
 	originalData, ok := msg.Values["original_data"].(string)
 	if !ok {
-		return fmt.Errorf("invalid DLQ message format: missing original_data")
+		return errors.New("invalid DLQ message format: missing original_data")
 	}
 
 	// Deserialize batch

@@ -154,7 +154,7 @@ type ObservabilityRepositories struct {
 	Score                  observability.ScoreRepository
 	BlobStorage            observability.BlobStorageRepository
 	TelemetryDeduplication observability.TelemetryDeduplicationRepository
-	Model observability.ModelRepository // PostgreSQL repo for cost calculation
+	Model                  observability.ModelRepository // PostgreSQL repo for cost calculation
 }
 
 // BillingRepositories contains all billing-related repositories
@@ -230,7 +230,7 @@ func ProvideWorkers(core *CoreContainer) (*WorkerContainer, error) {
 	// Create telemetry stream consumer
 	consumerConfig := &workers.TelemetryStreamConsumerConfig{
 		ConsumerGroup:     "telemetry-workers",
-		ConsumerID:        fmt.Sprintf("worker-%s", ulid.New().String()),
+		ConsumerID:        "worker-" + ulid.New().String(),
 		BatchSize:         50,
 		BlockDuration:     time.Second,
 		MaxRetries:        3,
@@ -438,7 +438,7 @@ func ProvideObservabilityRepositories(clickhouseDB *database.ClickHouseDB, postg
 		Score:                  observabilityRepo.NewScoreRepository(clickhouseDB.Conn),
 		BlobStorage:            observabilityRepo.NewBlobStorageRepository(clickhouseDB.Conn),
 		TelemetryDeduplication: observabilityRepo.NewTelemetryDeduplicationRepository(redisDB),
-		Model: observabilityRepo.NewModelRepository(postgresDB), // PostgreSQL for pricing
+		Model:                  observabilityRepo.NewModelRepository(postgresDB), // PostgreSQL for pricing
 	}
 }
 

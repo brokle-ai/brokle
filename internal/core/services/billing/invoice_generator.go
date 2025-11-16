@@ -347,14 +347,14 @@ func (g *InvoiceGenerator) GetInvoiceSummary(ctx context.Context, invoices []*bi
 
 // InvoiceSummary represents a summary of multiple invoices
 type InvoiceSummary struct {
-	TotalInvoices     int                                 `json:"total_invoices"`
 	StatusCounts      map[billingDomain.InvoiceStatus]int `json:"status_counts"`
+	EarliestDate      *time.Time                          `json:"earliest_date,omitempty"`
+	LatestDate        *time.Time                          `json:"latest_date,omitempty"`
+	TotalInvoices     int                                 `json:"total_invoices"`
 	TotalAmount       float64                             `json:"total_amount"`
 	PaidAmount        float64                             `json:"paid_amount"`
 	OutstandingAmount float64                             `json:"outstanding_amount"`
 	OverdueAmount     float64                             `json:"overdue_amount"`
-	EarliestDate      *time.Time                          `json:"earliest_date,omitempty"`
-	LatestDate        *time.Time                          `json:"latest_date,omitempty"`
 }
 
 // Internal methods
@@ -382,14 +382,14 @@ func (g *InvoiceGenerator) generateLineItems(summary *billingDomain.BillingSumma
 		if amount > 0 {
 			lineItem := billingDomain.InvoiceLineItem{
 				ID:          ulid.New(),
-				Description: fmt.Sprintf("AI API Usage - Provider %s", providerKey),
+				Description: "AI API Usage - Provider " + providerKey,
 				Quantity:    1,
 				UnitPrice:   amount,
 				Amount:      amount,
 			}
 
 			// In a real implementation, you'd look up provider details
-			lineItem.ProviderName = fmt.Sprintf("Provider %s", providerKey[:8])
+			lineItem.ProviderName = "Provider " + providerKey[:8]
 
 			lineItems = append(lineItems, lineItem)
 		}
@@ -399,7 +399,7 @@ func (g *InvoiceGenerator) generateLineItems(summary *billingDomain.BillingSumma
 	if len(lineItems) == 0 {
 		lineItems = append(lineItems, billingDomain.InvoiceLineItem{
 			ID:          ulid.New(),
-			Description: fmt.Sprintf("AI API Usage - %s", summary.Period),
+			Description: "AI API Usage - " + summary.Period,
 			Quantity:    float64(summary.TotalRequests),
 			UnitPrice:   summary.TotalCost / float64(summary.TotalRequests),
 			Amount:      summary.TotalCost,

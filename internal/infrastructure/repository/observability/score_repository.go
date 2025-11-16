@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"brokle/internal/core/domain/observability"
+	"brokle/pkg/pagination"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
@@ -188,22 +189,43 @@ func (r *scoreRepository) GetByFilter(ctx context.Context, filter *observability
 			query += " AND timestamp <= ?"
 			args = append(args, *filter.EndTime)
 		}
+
 	}
 
-	// Order by timestamp descending (most recent first)
-	query += " ORDER BY timestamp DESC"
+	// Determine sort field and direction with SQL injection protection
+	allowedSortFields := []string{"timestamp", "value", "dimension", "data_type", "created_at", "updated_at", "id"}
+	sortField := "timestamp" // default
+	sortDir := "DESC"
 
-	// Apply limit and offset
 	if filter != nil {
-		if filter.Limit > 0 {
-			query += " LIMIT ?"
-			args = append(args, filter.Limit)
+		// Validate sort field against whitelist
+		if filter.Params.SortBy != "" {
+			validated, err := pagination.ValidateSortField(filter.Params.SortBy, allowedSortFields)
+			if err != nil {
+				return nil, fmt.Errorf("invalid sort field: %w", err)
+			}
+			if validated != "" {
+				sortField = validated
+			}
 		}
-		if filter.Offset > 0 {
-			query += " OFFSET ?"
-			args = append(args, filter.Offset)
+		if filter.Params.SortDir == "asc" {
+			sortDir = "ASC"
 		}
 	}
+
+	query += fmt.Sprintf(" ORDER BY %s %s, id %s", sortField, sortDir, sortDir)
+
+	// Apply limit and offset for pagination
+	limit := pagination.DefaultPageSize
+	offset := 0
+	if filter != nil {
+		if filter.Params.Limit > 0 {
+			limit = filter.Params.Limit
+		}
+		offset = filter.Params.GetOffset()
+	}
+	query += " LIMIT ? OFFSET ?"
+	args = append(args, limit, offset)
 
 	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
@@ -297,9 +319,9 @@ func (r *scoreRepository) Count(ctx context.Context, filter *observability.Score
 		}
 	}
 
-	var count int64
+	var count uint64
 	err := r.db.QueryRow(ctx, query, args...).Scan(&count)
-	return count, err
+	return int64(count), err
 }
 
 // Helper function to scan a single score from query row

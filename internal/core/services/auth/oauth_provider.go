@@ -5,8 +5,8 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"io"
+	"strconv"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -83,7 +83,7 @@ func (s *OAuthProviderService) GenerateState(ctx context.Context, invitationToke
 		return "", appErrors.NewInternalError("Failed to marshal state data", err)
 	}
 
-	key := fmt.Sprintf("oauth:state:%s", state)
+	key := "oauth:state:" + state
 	err = s.redis.Set(ctx, key, data, 5*time.Minute).Err()
 	if err != nil {
 		return "", appErrors.NewInternalError("Failed to store state token", err)
@@ -94,7 +94,7 @@ func (s *OAuthProviderService) GenerateState(ctx context.Context, invitationToke
 
 // ValidateState validates the OAuth state token and returns invitation token if present
 func (s *OAuthProviderService) ValidateState(ctx context.Context, state string) (*string, error) {
-	key := fmt.Sprintf("oauth:state:%s", state)
+	key := "oauth:state:" + state
 
 	data, err := s.redis.Get(ctx, key).Result()
 	if err != nil {
@@ -181,10 +181,10 @@ func (s *OAuthProviderService) getGoogleUserProfile(ctx context.Context, token *
 	var googleUser struct {
 		ID            string `json:"id"`
 		Email         string `json:"email"`
-		VerifiedEmail bool   `json:"verified_email"`
 		GivenName     string `json:"given_name"`
 		FamilyName    string `json:"family_name"`
 		Name          string `json:"name"`
+		VerifiedEmail bool   `json:"verified_email"`
 	}
 
 	if err := json.Unmarshal(body, &googleUser); err != nil {
@@ -222,10 +222,10 @@ func (s *OAuthProviderService) getGitHubUserProfile(ctx context.Context, token *
 	}
 
 	var githubUser struct {
-		ID    int    `json:"id"`
 		Login string `json:"login"`
 		Name  string `json:"name"`
 		Email string `json:"email"`
+		ID    int    `json:"id"`
 	}
 
 	if err := json.Unmarshal(body, &githubUser); err != nil {
@@ -279,7 +279,7 @@ func (s *OAuthProviderService) getGitHubUserProfile(ctx context.Context, token *
 		FirstName:  firstName,
 		LastName:   lastName,
 		Provider:   "github",
-		ProviderID: fmt.Sprintf("%d", githubUser.ID),
+		ProviderID: strconv.Itoa(githubUser.ID),
 	}, nil
 }
 

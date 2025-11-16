@@ -46,8 +46,8 @@ type OrganizationSetting struct {
 
 // CreateSettingRequest represents the request to create an organization setting
 type CreateSettingRequest struct {
-	Key   string      `json:"key" binding:"required,min=1,max=255" example:"theme_color" description:"Setting key (1-255 characters)"`
 	Value interface{} `json:"value" binding:"required" swaggertype:"object" description:"Setting value (any JSON type)"`
+	Key   string      `json:"key" binding:"required,min=1,max=255" example:"theme_color" description:"Setting key (1-255 characters)"`
 }
 
 // UpdateSettingRequest represents the request to update an organization setting

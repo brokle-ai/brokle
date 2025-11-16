@@ -14,11 +14,11 @@ import (
 
 // App represents the main application
 type App struct {
-	mode       DeploymentMode
 	config     *config.Config
 	logger     *logrus.Logger
 	providers  *ProviderContainer
-	httpServer *httpTransport.Server // nil in worker mode
+	httpServer *httpTransport.Server
+	mode       DeploymentMode
 }
 
 // NewServer creates a new API server application (HTTP only, no workers)
@@ -209,7 +209,6 @@ func (a *App) Health() map[string]string {
 		"status": "providers not initialized",
 	}
 }
-
 
 // GetWorkers returns the worker container for background processing
 func (a *App) GetWorkers() *WorkerContainer {

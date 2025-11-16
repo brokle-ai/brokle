@@ -30,11 +30,11 @@ func NewHandler(config *config.Config, logger *logrus.Logger) *Handler {
 // HealthResponse represents the health check response
 // @Description Health check response containing service status
 type HealthResponse struct {
+	Checks    map[string]HealthCheck `json:"checks,omitempty" description:"Individual component health checks"`
 	Status    string                 `json:"status" example:"healthy" description:"Overall service status (healthy, unhealthy, alive)"`
 	Timestamp string                 `json:"timestamp" example:"2023-12-01T10:30:00Z" description:"Health check timestamp in ISO 8601 format"`
 	Version   string                 `json:"version,omitempty" example:"1.0.0" description:"Application version"`
 	Uptime    string                 `json:"uptime" example:"2h30m15s" description:"Service uptime duration"`
-	Checks    map[string]HealthCheck `json:"checks,omitempty" description:"Individual component health checks"`
 }
 
 // HealthCheck represents an individual health check

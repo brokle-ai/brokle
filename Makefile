@@ -12,6 +12,7 @@
 .PHONY: migrate-up migrate-down migrate-status seed-dev create-migration
 .PHONY: test test-coverage test-unit test-integration
 .PHONY: lint lint-go lint-frontend fmt fmt-frontend
+.PHONY: docs-generate
 .PHONY: clean-builds shell-db shell-redis shell-clickhouse
 .PHONY: release-patch release-minor release-major release-patch-skip-tests release-dry
 
@@ -175,6 +176,13 @@ fmt: ## Format Go code
 fmt-frontend: ## Format frontend code
 	@echo "💅 Formatting frontend code..."
 	cd web && pnpm run format
+
+##@ Documentation
+
+docs-generate: ## Generate API documentation
+	@echo "📚 Generating API documentation..."
+	swag init -g cmd/server/main.go --output docs/swagger
+	@echo "✅ Swagger documentation generated in docs/swagger/"
 
 ##@ Utilities
 

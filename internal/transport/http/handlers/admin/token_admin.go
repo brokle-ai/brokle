@@ -48,16 +48,16 @@ type RevokeUserTokensRequest struct {
 // TokenStatsResponse represents token statistics
 // @Description Token management statistics
 type TokenStatsResponse struct {
+	BlacklistedByReason map[string][]TokenByReason `json:"blacklisted_by_reason" description:"Breakdown of tokens by revocation reason"`
 	TotalBlacklisted    int64                      `json:"total_blacklisted" example:"1234" description:"Total number of blacklisted tokens"`
 	BlacklistedToday    int64                      `json:"blacklisted_today" example:"45" description:"Tokens blacklisted today"`
-	BlacklistedByReason map[string][]TokenByReason `json:"blacklisted_by_reason" description:"Breakdown of tokens by revocation reason"`
 }
 
 // TokenByReason represents tokens grouped by reason
 type TokenByReason struct {
 	Reason string                     `json:"reason" example:"security_incident"`
-	Count  int                        `json:"count" example:"12"`
 	Tokens []BlacklistedTokenResponse `json:"tokens,omitempty"`
+	Count  int                        `json:"count" example:"12"`
 }
 
 // BlacklistedTokenResponse represents a blacklisted token
@@ -264,7 +264,16 @@ func (h *TokenAdminHandler) ListBlacklistedTokens(c *gin.Context) {
 			return
 		}
 
-		tokens, err = h.blacklistedTokens.GetUserBlacklistedTokens(c.Request.Context(), userID, limit, offset)
+		// Create filter for user tokens
+		filters := &auth.BlacklistedTokenFilter{
+			UserID: &userID,
+		}
+		filters.Params.Limit = limit
+		filters.Params.Page = 1
+		filters.Params.SortBy = "created_at"
+		filters.Params.SortDir = "desc"
+
+		tokens, err = h.blacklistedTokens.GetUserBlacklistedTokens(c.Request.Context(), filters)
 	} else if reason != "" {
 		// Filter by reason
 		allTokens, reasonErr := h.blacklistedTokens.GetTokensByReason(c.Request.Context(), reason)
@@ -284,8 +293,7 @@ func (h *TokenAdminHandler) ListBlacklistedTokens(c *gin.Context) {
 			}
 		}
 	} else {
-		// TODO: Implement GetAllBlacklistedTokens with pagination in service
-		// For now, we'll return an error asking for filters
+		// Require filters for listing blacklisted tokens
 		response.BadRequest(c, "Please specify user_id or reason filter for token listing", "")
 		return
 	}
@@ -308,18 +316,11 @@ func (h *TokenAdminHandler) ListBlacklistedTokens(c *gin.Context) {
 		})
 	}
 
-	response.Success(c, gin.H{
-		"tokens": responseTokens,
-		"pagination": gin.H{
-			"limit":  limit,
-			"offset": offset,
-			"count":  len(responseTokens),
-		},
-		"filters": gin.H{
-			"user_id": userIDStr,
-			"reason":  reason,
-		},
-	})
+	// Create standard pagination metadata
+	total := int64(len(responseTokens))
+	pag := response.NewPagination(1, limit, total) // Page 1 for admin list
+
+	response.SuccessWithPagination(c, responseTokens, pag)
 }
 
 // GetTokenStats returns statistics about token management
@@ -363,7 +364,7 @@ func (h *TokenAdminHandler) GetTokenStats(c *gin.Context) {
 			limit = len(tokens)
 		}
 
-		for i := 0; i < limit; i++ {
+		for i := range limit {
 			token := tokens[i]
 			sampleTokens = append(sampleTokens, BlacklistedTokenResponse{
 				JTI:       token.JTI,

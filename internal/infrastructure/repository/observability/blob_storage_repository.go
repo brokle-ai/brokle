@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"brokle/internal/core/domain/observability"
+	"brokle/pkg/pagination"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
@@ -162,20 +163,40 @@ func (r *blobStorageRepository) GetByProjectID(ctx context.Context, projectID st
 		}
 	}
 
-	// Order by created_at descending (most recent first)
-	query += " ORDER BY created_at DESC"
+	// Determine sort field and direction with SQL injection protection
+	allowedSortFields := []string{"created_at", "file_size_bytes", "id"}
+	sortField := "created_at" // default
+	sortDir := "DESC"
 
-	// Apply limit and offset
 	if filter != nil {
-		if filter.Limit > 0 {
-			query += " LIMIT ?"
-			args = append(args, filter.Limit)
+		// Validate sort field against whitelist
+		if filter.Params.SortBy != "" {
+			validated, err := pagination.ValidateSortField(filter.Params.SortBy, allowedSortFields)
+			if err != nil {
+				return nil, fmt.Errorf("invalid sort field: %w", err)
+			}
+			if validated != "" {
+				sortField = validated
+			}
 		}
-		if filter.Offset > 0 {
-			query += " OFFSET ?"
-			args = append(args, filter.Offset)
+		if filter.Params.SortDir == "asc" {
+			sortDir = "ASC"
 		}
 	}
+
+	query += fmt.Sprintf(" ORDER BY %s %s", sortField, sortDir)
+
+	// Apply limit and offset for pagination
+	limit := pagination.DefaultPageSize
+	offset := 0
+	if filter != nil {
+		if filter.Params.Limit > 0 {
+			limit = filter.Params.Limit
+		}
+		offset = filter.Params.GetOffset()
+	}
+	query += " LIMIT ? OFFSET ?"
+	args = append(args, limit, offset)
 
 	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {

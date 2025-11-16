@@ -61,8 +61,8 @@ func (s *TraceService) CreateTrace(ctx context.Context, trace *observability.Tra
 	if trace.Environment == "" {
 		trace.Environment = "production"
 	}
-	if trace.ResourceAttributes == "" {
-		trace.ResourceAttributes = "{}"
+	if trace.ResourceAttributes == nil {
+		trace.ResourceAttributes = make(map[string]interface{})
 	}
 	if trace.CreatedAt.IsZero() {
 		trace.CreatedAt = time.Now()
@@ -85,7 +85,7 @@ func (s *TraceService) UpdateTrace(ctx context.Context, trace *observability.Tra
 	existing, err := s.traceRepo.GetByID(ctx, trace.TraceID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return appErrors.NewNotFoundError(fmt.Sprintf("trace %s", trace.TraceID))
+			return appErrors.NewNotFoundError("trace " + trace.TraceID)
 		}
 		return appErrors.NewInternalError("failed to get trace", err)
 	}
@@ -94,7 +94,6 @@ func (s *TraceService) UpdateTrace(ctx context.Context, trace *observability.Tra
 	mergeTraceFields(existing, trace)
 
 	// Preserve version for increment in repository layer
-	existing.Version = existing.Version
 
 	// Update trace
 	if err := s.traceRepo.Update(ctx, existing); err != nil {
@@ -131,7 +130,7 @@ func mergeTraceFields(dst *observability.Trace, src *observability.Trace) {
 	if src.Output != nil {
 		dst.Output = src.Output
 	}
-	if src.ResourceAttributes != "" && src.ResourceAttributes != "{}" {
+	if src.ResourceAttributes != nil && len(src.ResourceAttributes) > 0 {
 		dst.ResourceAttributes = src.ResourceAttributes
 	}
 	if src.Tags != nil {
@@ -176,7 +175,7 @@ func (s *TraceService) DeleteTrace(ctx context.Context, id string) error {
 	_, err := s.traceRepo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return appErrors.NewNotFoundError(fmt.Sprintf("trace %s", id))
+			return appErrors.NewNotFoundError("trace " + id)
 		}
 		return appErrors.NewInternalError("failed to get trace", err)
 	}
@@ -194,7 +193,7 @@ func (s *TraceService) GetTraceByID(ctx context.Context, id string) (*observabil
 	trace, err := s.traceRepo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("trace %s", id))
+			return nil, appErrors.NewNotFoundError("trace " + id)
 		}
 		return nil, appErrors.NewInternalError("failed to get trace", err)
 	}
@@ -208,7 +207,7 @@ func (s *TraceService) GetTraceWithSpans(ctx context.Context, id string) (*obser
 	trace, err := s.traceRepo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("trace %s", id))
+			return nil, appErrors.NewNotFoundError("trace " + id)
 		}
 		return nil, appErrors.NewInternalError("failed to get trace", err)
 	}
@@ -230,7 +229,7 @@ func (s *TraceService) GetTraceWithScores(ctx context.Context, id string) (*obse
 	trace, err := s.traceRepo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("trace %s", id))
+			return nil, appErrors.NewNotFoundError("trace " + id)
 		}
 		return nil, appErrors.NewInternalError("failed to get trace", err)
 	}
@@ -301,8 +300,8 @@ func (s *TraceService) CreateTraceBatch(ctx context.Context, traces []*observabi
 		if trace.Environment == "" {
 			trace.Environment = "production"
 		}
-		if trace.ResourceAttributes == "" {
-			trace.ResourceAttributes = "{}"
+		if trace.ResourceAttributes == nil {
+			trace.ResourceAttributes = make(map[string]interface{})
 		}
 		if trace.CreatedAt.IsZero() {
 			trace.CreatedAt = time.Now()

@@ -30,39 +30,30 @@ type RegistrationService interface {
 
 // RegisterRequest contains all data needed for registration
 type RegisterRequest struct {
-	// User data
-	Email     string
-	Password  string // Empty for OAuth users
-	FirstName string
-	LastName  string
-	Role      string
-
-	// Optional fields
-	ReferralSource *string
-
-	// Organization data (required for fresh signup)
+	ReferralSource   *string
 	OrganizationName *string
-
-	// Invitation data (required for invite signup)
-	InvitationToken *string
-
-	// OAuth data (required for OAuth signup)
-	IsOAuthUser bool
-	Provider    string // google | github | etc
-	ProviderID  string // Provider's unique user ID
+	InvitationToken  *string
+	Email            string
+	Password         string
+	FirstName        string
+	LastName         string
+	Role             string
+	Provider         string
+	ProviderID       string
+	IsOAuthUser      bool
 }
 
 // OAuthRegistrationRequest contains OAuth-specific registration data
 type OAuthRegistrationRequest struct {
+	ReferralSource   *string
+	OrganizationName *string
+	InvitationToken  *string
 	Email            string
 	FirstName        string
 	LastName         string
 	Role             string
 	Provider         string
 	ProviderID       string
-	ReferralSource   *string
-	OrganizationName *string
-	InvitationToken  *string
 }
 
 // RegistrationResponse contains the result of a successful registration

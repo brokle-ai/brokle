@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"brokle/internal/core/domain/observability"
+	"brokle/pkg/pagination"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
@@ -46,8 +47,8 @@ func (r *spanRepository) Create(ctx context.Context, span *observability.Span) e
 		span.TraceID,
 		span.ParentSpanID,
 		span.ProjectID,
-		span.SpanName,   // Renamed from Name
-		span.SpanKind,   // Now UInt8 (0-5)
+		span.SpanName, // Renamed from Name
+		span.SpanKind, // Now UInt8 (0-5)
 		span.StartTime,
 		span.EndTime,
 		span.DurationMs,
@@ -57,7 +58,7 @@ func (r *spanRepository) Create(ctx context.Context, span *observability.Span) e
 		span.ResourceAttributes, // Resource-level attributes
 		span.Input,
 		span.Output,
-		span.EventsTimestamp,  // OTEL Events arrays
+		span.EventsTimestamp, // OTEL Events arrays
 		span.EventsName,
 		span.EventsAttributes,
 		span.LinksTraceID, // OTEL Links arrays
@@ -107,7 +108,9 @@ func (r *spanRepository) GetByID(ctx context.Context, id string) (*observability
 			gen_ai_operation_name, gen_ai_provider_name, gen_ai_request_model,
 			gen_ai_usage_input_tokens, gen_ai_usage_output_tokens,
 			brokle_span_type, brokle_span_level,
-			brokle_cost_input, brokle_cost_output, brokle_cost_total,
+			CAST(brokle_cost_input AS Nullable(Float64)),
+			CAST(brokle_cost_output AS Nullable(Float64)),
+			CAST(brokle_cost_total AS Nullable(Float64)),
 			brokle_prompt_id, brokle_prompt_name, brokle_prompt_version,
 			brokle_internal_model_id
 		FROM spans
@@ -134,7 +137,9 @@ func (r *spanRepository) GetByTraceID(ctx context.Context, traceID string) ([]*o
 			gen_ai_operation_name, gen_ai_provider_name, gen_ai_request_model,
 			gen_ai_usage_input_tokens, gen_ai_usage_output_tokens,
 			brokle_span_type, brokle_span_level,
-			brokle_cost_input, brokle_cost_output, brokle_cost_total,
+			CAST(brokle_cost_input AS Nullable(Float64)),
+			CAST(brokle_cost_output AS Nullable(Float64)),
+			CAST(brokle_cost_total AS Nullable(Float64)),
 			brokle_prompt_id, brokle_prompt_name, brokle_prompt_version,
 			brokle_internal_model_id
 		FROM spans
@@ -166,7 +171,9 @@ func (r *spanRepository) GetRootSpan(ctx context.Context, traceID string) (*obse
 			gen_ai_operation_name, gen_ai_provider_name, gen_ai_request_model,
 			gen_ai_usage_input_tokens, gen_ai_usage_output_tokens,
 			brokle_span_type, brokle_span_level,
-			brokle_cost_input, brokle_cost_output, brokle_cost_total,
+			CAST(brokle_cost_input AS Nullable(Float64)),
+			CAST(brokle_cost_output AS Nullable(Float64)),
+			CAST(brokle_cost_total AS Nullable(Float64)),
 			brokle_prompt_id, brokle_prompt_name, brokle_prompt_version,
 			brokle_internal_model_id
 		FROM spans
@@ -194,11 +201,14 @@ func (r *spanRepository) GetChildren(ctx context.Context, parentSpanID string) (
 			gen_ai_operation_name, gen_ai_provider_name, gen_ai_request_model,
 			gen_ai_usage_input_tokens, gen_ai_usage_output_tokens,
 			brokle_span_type, brokle_span_level,
-			brokle_cost_input, brokle_cost_output, brokle_cost_total,
+			CAST(brokle_cost_input AS Nullable(Float64)),
+			CAST(brokle_cost_output AS Nullable(Float64)),
+			CAST(brokle_cost_total AS Nullable(Float64)),
 			brokle_prompt_id, brokle_prompt_name, brokle_prompt_version,
 			brokle_internal_model_id
 		FROM spans
-		WHERE parent_span_id = ?		ORDER BY start_time ASC
+		WHERE parent_span_id = ?
+		ORDER BY start_time ASC
 	`
 
 	rows, err := r.db.Query(ctx, query, parentSpanID)
@@ -231,7 +241,9 @@ func (r *spanRepository) GetByFilter(ctx context.Context, filter *observability.
 			gen_ai_operation_name, gen_ai_provider_name, gen_ai_request_model,
 			gen_ai_usage_input_tokens, gen_ai_usage_output_tokens,
 			brokle_span_type, brokle_span_level,
-			brokle_cost_input, brokle_cost_output, brokle_cost_total,
+			CAST(brokle_cost_input AS Nullable(Float64)),
+			CAST(brokle_cost_output AS Nullable(Float64)),
+			CAST(brokle_cost_total AS Nullable(Float64)),
 			brokle_prompt_id, brokle_prompt_name, brokle_prompt_version,
 			brokle_internal_model_id
 		FROM spans
@@ -297,22 +309,43 @@ func (r *spanRepository) GetByFilter(ctx context.Context, filter *observability.
 				query += " AND end_time IS NULL"
 			}
 		}
+
 	}
 
-	// Order by start_time descending
-	query += " ORDER BY start_time DESC"
+	// Determine sort field and direction with SQL injection protection
+	allowedSortFields := []string{"start_time", "end_time", "duration_ms", "span_name", "level", "status_code", "created_at", "updated_at", "span_id"}
+	sortField := "start_time" // default
+	sortDir := "DESC"
 
-	// Apply limit and offset
 	if filter != nil {
-		if filter.Limit > 0 {
-			query += " LIMIT ?"
-			args = append(args, filter.Limit)
+		// Validate sort field against whitelist
+		if filter.Params.SortBy != "" {
+			validated, err := pagination.ValidateSortField(filter.Params.SortBy, allowedSortFields)
+			if err != nil {
+				return nil, fmt.Errorf("invalid sort field: %w", err)
+			}
+			if validated != "" {
+				sortField = validated
+			}
 		}
-		if filter.Offset > 0 {
-			query += " OFFSET ?"
-			args = append(args, filter.Offset)
+		if filter.Params.SortDir == "asc" {
+			sortDir = "ASC"
 		}
 	}
+
+	query += fmt.Sprintf(" ORDER BY %s %s, span_id %s", sortField, sortDir, sortDir)
+
+	// Apply limit and offset for pagination
+	limit := pagination.DefaultPageSize
+	offset := 0
+	if filter != nil {
+		if filter.Params.Limit > 0 {
+			limit = filter.Params.Limit
+		}
+		offset = filter.Params.GetOffset()
+	}
+	query += " LIMIT ? OFFSET ?"
+	args = append(args, limit, offset)
 
 	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
@@ -359,8 +392,8 @@ func (r *spanRepository) CreateBatch(ctx context.Context, spans []*observability
 			span.TraceID,
 			span.ParentSpanID,
 			span.ProjectID,
-			span.SpanName,   // Renamed from Name
-			span.SpanKind,   // Now UInt8
+			span.SpanName, // Renamed from Name
+			span.SpanKind, // Now UInt8
 			span.StartTime,
 			span.EndTime,
 			span.DurationMs,
@@ -370,7 +403,7 @@ func (r *spanRepository) CreateBatch(ctx context.Context, spans []*observability
 			span.ResourceAttributes, // Resource attributes JSON
 			span.Input,
 			span.Output,
-			span.EventsTimestamp,  // OTEL Events
+			span.EventsTimestamp, // OTEL Events
 			span.EventsName,
 			span.EventsAttributes,
 			span.LinksTraceID, // OTEL Links
@@ -412,9 +445,9 @@ func (r *spanRepository) Count(ctx context.Context, filter *observability.SpanFi
 		}
 	}
 
-	var count int64
+	var count uint64
 	err := r.db.QueryRow(ctx, query, args...).Scan(&count)
-	return count, err
+	return int64(count), err
 }
 
 // Helper function to scan a single span from query row
@@ -426,8 +459,8 @@ func (r *spanRepository) scanSpanRow(row driver.Row) (*observability.Span, error
 		&span.TraceID,
 		&span.ParentSpanID,
 		&span.ProjectID,
-		&span.SpanName,   // Renamed from Name
-		&span.SpanKind,   // Now UInt8
+		&span.SpanName, // Renamed from Name
+		&span.SpanKind, // Now UInt8
 		&span.StartTime,
 		&span.EndTime,
 		&span.DurationMs,
@@ -437,7 +470,7 @@ func (r *spanRepository) scanSpanRow(row driver.Row) (*observability.Span, error
 		&span.ResourceAttributes, // Resource attributes JSON
 		&span.Input,
 		&span.Output,
-		&span.EventsTimestamp,  // OTEL Events
+		&span.EventsTimestamp, // OTEL Events
 		&span.EventsName,
 		&span.EventsAttributes,
 		&span.LinksTraceID, // OTEL Links
@@ -449,16 +482,15 @@ func (r *spanRepository) scanSpanRow(row driver.Row) (*observability.Span, error
 		&span.GenAIOperationName,
 		&span.GenAIProviderName,
 		&span.GenAIRequestModel,
-		&span.GenAIRequestMaxTokens,
-		&span.GenAIRequestTemperature,
-		&span.GenAIRequestTopP,
+		// Note: GenAIRequestMaxTokens, GenAIRequestTemperature, GenAIRequestTopP
+		// are NOT materialized (remain in span_attributes JSON) - removed from scan
 		&span.GenAIUsageInputTokens,
 		&span.GenAIUsageOutputTokens,
 		&span.BrokleSpanType,
 		&span.BrokleSpanLevel,
-		&span.BrokleCostInput,
-		&span.BrokleCostOutput,
-		&span.BrokleCostTotal,
+		&span.BrokleCostInput,  // Decimal cast to Float64
+		&span.BrokleCostOutput, // Decimal cast to Float64
+		&span.BrokleCostTotal,  // Decimal cast to Float64
 		&span.BroklePromptID,
 		&span.BroklePromptName,
 		&span.BroklePromptVersion,
@@ -484,8 +516,8 @@ func (r *spanRepository) scanSpans(rows driver.Rows) ([]*observability.Span, err
 			&span.TraceID,
 			&span.ParentSpanID,
 			&span.ProjectID,
-			&span.SpanName,   // Renamed from Name
-			&span.SpanKind,   // Now UInt8
+			&span.SpanName, // Renamed from Name
+			&span.SpanKind, // Now UInt8
 			&span.StartTime,
 			&span.EndTime,
 			&span.DurationMs,
@@ -495,7 +527,7 @@ func (r *spanRepository) scanSpans(rows driver.Rows) ([]*observability.Span, err
 			&span.ResourceAttributes, // Resource attributes JSON
 			&span.Input,
 			&span.Output,
-			&span.EventsTimestamp,  // OTEL Events
+			&span.EventsTimestamp, // OTEL Events
 			&span.EventsName,
 			&span.EventsAttributes,
 			&span.LinksTraceID, // OTEL Links
@@ -507,16 +539,15 @@ func (r *spanRepository) scanSpans(rows driver.Rows) ([]*observability.Span, err
 			&span.GenAIOperationName,
 			&span.GenAIProviderName,
 			&span.GenAIRequestModel,
-			&span.GenAIRequestMaxTokens,
-			&span.GenAIRequestTemperature,
-			&span.GenAIRequestTopP,
+			// Note: GenAIRequestMaxTokens, GenAIRequestTemperature, GenAIRequestTopP
+			// are NOT materialized (remain in span_attributes JSON) - removed from scan
 			&span.GenAIUsageInputTokens,
 			&span.GenAIUsageOutputTokens,
 			&span.BrokleSpanType,
 			&span.BrokleSpanLevel,
-			&span.BrokleCostInput,
-			&span.BrokleCostOutput,
-			&span.BrokleCostTotal,
+			&span.BrokleCostInput,  // Decimal cast to Float64
+			&span.BrokleCostOutput, // Decimal cast to Float64
+			&span.BrokleCostTotal,  // Decimal cast to Float64
 			&span.BroklePromptID,
 			&span.BroklePromptName,
 			&span.BroklePromptVersion,

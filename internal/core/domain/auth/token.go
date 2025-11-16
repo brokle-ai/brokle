@@ -21,46 +21,34 @@ const (
 
 // JWTClaims represents the clean JWT claims structure for user identity only
 type JWTClaims struct {
-	// Standard JWT claims
-	Issuer    string `json:"iss"`
-	Subject   string `json:"sub"`
-	Audience  string `json:"aud,omitempty"`
-	ExpiresAt int64  `json:"exp"`
-	NotBefore int64  `json:"nbf"`
-	IssuedAt  int64  `json:"iat"`
-	JWTID     string `json:"jti"`
-
-	// Essential identity claims only
-	TokenType TokenType `json:"token_type"`
-	UserID    ulid.ULID `json:"user_id"`
-	Email     string    `json:"email"`
-
-	// API Key specific claims (for API key tokens only)
-	APIKeyID *ulid.ULID `json:"api_key_id,omitempty"`
-
-	// Session specific claims (for user session tokens only)
+	APIKeyID  *ulid.ULID `json:"api_key_id,omitempty"`
 	SessionID *ulid.ULID `json:"session_id,omitempty"`
+	Issuer    string     `json:"iss"`
+	Subject   string     `json:"sub"`
+	Audience  string     `json:"aud,omitempty"`
+	JWTID     string     `json:"jti"`
+	TokenType TokenType  `json:"token_type"`
+	Email     string     `json:"email"`
+	ExpiresAt int64      `json:"exp"`
+	NotBefore int64      `json:"nbf"`
+	IssuedAt  int64      `json:"iat"`
+	UserID    ulid.ULID  `json:"user_id"`
 }
 
 // TokenConfig represents configuration for JWT tokens
 type TokenConfig struct {
-	// Signing configuration
-	SigningKey    string `json:"-"` // Secret key for signing
-	SigningMethod string `json:"signing_method"`
-	Issuer        string `json:"issuer"`
-
-	// Token lifetimes
-	AccessTokenTTL  time.Duration `json:"access_token_ttl"`
-	RefreshTokenTTL time.Duration `json:"refresh_token_ttl"`
-	APIKeyTokenTTL  time.Duration `json:"api_key_token_ttl"`
-	InviteTokenTTL  time.Duration `json:"invite_token_ttl"`
-	ResetTokenTTL   time.Duration `json:"reset_token_ttl"`
-	VerifyTokenTTL  time.Duration `json:"verify_token_ttl"`
-
-	// Security settings
-	RequireAudience  bool          `json:"require_audience"`
+	SigningKey       string        `json:"-"`
+	SigningMethod    string        `json:"signing_method"`
+	Issuer           string        `json:"issuer"`
 	AllowedAudiences []string      `json:"allowed_audiences"`
+	AccessTokenTTL   time.Duration `json:"access_token_ttl"`
+	RefreshTokenTTL  time.Duration `json:"refresh_token_ttl"`
+	APIKeyTokenTTL   time.Duration `json:"api_key_token_ttl"`
+	InviteTokenTTL   time.Duration `json:"invite_token_ttl"`
+	ResetTokenTTL    time.Duration `json:"reset_token_ttl"`
+	VerifyTokenTTL   time.Duration `json:"verify_token_ttl"`
 	ClockSkew        time.Duration `json:"clock_skew"`
+	RequireAudience  bool          `json:"require_audience"`
 }
 
 // DefaultTokenConfig returns the default token configuration
@@ -81,22 +69,22 @@ func DefaultTokenConfig() *TokenConfig {
 
 // TokenValidationResult represents the result of token validation
 type TokenValidationResult struct {
-	Valid     bool          `json:"valid"`
 	Claims    *JWTClaims    `json:"claims,omitempty"`
 	Error     string        `json:"error,omitempty"`
 	ErrorCode string        `json:"error_code,omitempty"`
-	ExpiresIn time.Duration `json:"expires_in,omitempty"` // Time until expiration
 	TokenType TokenType     `json:"token_type,omitempty"`
+	ExpiresIn time.Duration `json:"expires_in,omitempty"`
+	Valid     bool          `json:"valid"`
 }
 
 // TokenGenerationRequest represents a request to generate a new token
 type TokenGenerationRequest struct {
-	TokenType TokenType      `json:"token_type"`
-	UserID    ulid.ULID      `json:"user_id"`
-	Email     string         `json:"email"`
 	APIKeyID  *ulid.ULID     `json:"api_key_id,omitempty"`
 	SessionID *ulid.ULID     `json:"session_id,omitempty"`
-	TTL       *time.Duration `json:"ttl,omitempty"` // Override default TTL
+	TTL       *time.Duration `json:"ttl,omitempty"`
+	TokenType TokenType      `json:"token_type"`
+	Email     string         `json:"email"`
+	UserID    ulid.ULID      `json:"user_id"`
 }
 
 // NewJWTClaims creates a new JWT claims structure with default values
@@ -144,17 +132,14 @@ func (c *JWTClaims) GetUserContext() *AuthContext {
 
 // EmailVerificationToken represents an email verification token
 type EmailVerificationToken struct {
-	ID        ulid.ULID `json:"id" gorm:"type:char(26);primaryKey"`
-	UserID    ulid.ULID `json:"user_id" gorm:"type:char(26);not null"`
-	Token     string    `json:"token" gorm:"size:255;not null;uniqueIndex"`
 	ExpiresAt time.Time `json:"expires_at"`
-	Used      bool      `json:"used" gorm:"default:false"`
-
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
-
-	// Relations
-	User user.User `json:"user,omitempty" gorm:"foreignKey:UserID"`
+	User      user.User `json:"user,omitempty" gorm:"foreignKey:UserID"`
+	Token     string    `json:"token" gorm:"size:255;not null;uniqueIndex"`
+	ID        ulid.ULID `json:"id" gorm:"type:char(26);primaryKey"`
+	UserID    ulid.ULID `json:"user_id" gorm:"type:char(26);not null"`
+	Used      bool      `json:"used" gorm:"default:false"`
 }
 
 // Token creation helpers

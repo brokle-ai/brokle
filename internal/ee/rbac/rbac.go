@@ -23,10 +23,10 @@ type Role struct {
 	ID          string   `json:"id"`
 	Name        string   `json:"name"`
 	Description string   `json:"description,omitempty"`
-	Permissions []string `json:"permissions"`
-	Scopes      []string `json:"scopes"` // org, project, environment
 	CreatedAt   string   `json:"created_at"`
 	UpdatedAt   string   `json:"updated_at"`
+	Permissions []string `json:"permissions"`
+	Scopes      []string `json:"scopes"`
 }
 
 // Permission represents a permission with resource and action

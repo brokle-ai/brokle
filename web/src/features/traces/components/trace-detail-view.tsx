@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import type { Trace } from '../data/schema'
 import { statuses, statusCodeToString } from '../data/constants'
-import { format } from 'date-fns'
+import { safeFormat } from '../utils/format-helpers'
 import { Clock, DollarSign, Layers, Server, Tag } from 'lucide-react'
 
 interface TraceDetailViewProps {
@@ -54,7 +54,7 @@ export function TraceDetailView({ trace }: TraceDetailViewProps) {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className='text-2xl font-bold'>{formatDuration(trace.durationMs)}</div>
+            <div className='text-2xl font-bold'>{formatDuration(trace.duration_ms)}</div>
           </CardContent>
         </Card>
 
@@ -104,12 +104,12 @@ export function TraceDetailView({ trace }: TraceDetailViewProps) {
           <div className='grid grid-cols-2 gap-4'>
             <div>
               <div className='text-sm font-medium text-muted-foreground'>Start Time</div>
-              <div className='text-sm'>{format(trace.startTime, 'PPpp')}</div>
+              <div className='text-sm'>{safeFormat(trace.start_time, 'PPpp')}</div>
             </div>
-            {trace.endTime && (
+            {trace.end_time && (
               <div>
                 <div className='text-sm font-medium text-muted-foreground'>End Time</div>
-                <div className='text-sm'>{format(trace.endTime, 'PPpp')}</div>
+                <div className='text-sm'>{safeFormat(trace.end_time, 'PPpp')}</div>
               </div>
             )}
             {trace.environment && (
@@ -118,16 +118,16 @@ export function TraceDetailView({ trace }: TraceDetailViewProps) {
                 <Badge variant='outline'>{trace.environment}</Badge>
               </div>
             )}
-            {trace.serviceName && (
+            {trace.service_name && (
               <div>
                 <div className='text-sm font-medium text-muted-foreground'>Service</div>
-                <div className='text-sm'>{trace.serviceName}</div>
+                <div className='text-sm'>{trace.service_name}</div>
               </div>
             )}
-            {trace.serviceVersion && (
+            {trace.service_version && (
               <div>
                 <div className='text-sm font-medium text-muted-foreground'>Version</div>
-                <div className='text-sm font-mono'>{trace.serviceVersion}</div>
+                <div className='text-sm font-mono'>{trace.service_version}</div>
               </div>
             )}
           </div>

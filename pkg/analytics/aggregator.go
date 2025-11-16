@@ -2,6 +2,7 @@ package analytics
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"sort"
@@ -14,80 +15,80 @@ import (
 type AggregationType string
 
 const (
-	AggSum     AggregationType = "sum"
-	AggAvg     AggregationType = "avg"
-	AggMin     AggregationType = "min"
-	AggMax     AggregationType = "max"
-	AggCount   AggregationType = "count"
-	AggP50     AggregationType = "p50"
-	AggP90     AggregationType = "p90"
-	AggP95     AggregationType = "p95"
-	AggP99     AggregationType = "p99"
-	AggStdDev  AggregationType = "stddev"
-	AggRate    AggregationType = "rate"
-	AggGrowth  AggregationType = "growth"
+	AggSum    AggregationType = "sum"
+	AggAvg    AggregationType = "avg"
+	AggMin    AggregationType = "min"
+	AggMax    AggregationType = "max"
+	AggCount  AggregationType = "count"
+	AggP50    AggregationType = "p50"
+	AggP90    AggregationType = "p90"
+	AggP95    AggregationType = "p95"
+	AggP99    AggregationType = "p99"
+	AggStdDev AggregationType = "stddev"
+	AggRate   AggregationType = "rate"
+	AggGrowth AggregationType = "growth"
 )
 
 // TimeWindow represents a time window for aggregation
 type TimeWindow struct {
-	Start    time.Time `json:"start"`
-	End      time.Time `json:"end"`
+	Start    time.Time     `json:"start"`
+	End      time.Time     `json:"end"`
 	Duration time.Duration `json:"duration"`
 }
 
 // DataPoint represents a single data point
 type DataPoint struct {
 	Timestamp time.Time              `json:"timestamp"`
-	Value     float64                `json:"value"`
 	Labels    map[string]string      `json:"labels,omitempty"`
 	Metadata  map[string]interface{} `json:"metadata,omitempty"`
+	Value     float64                `json:"value"`
 }
 
 // TimeSeries represents a time series of data points
 type TimeSeries struct {
-	Name        string                 `json:"name"`
-	Labels      map[string]string      `json:"labels,omitempty"`
-	DataPoints  []DataPoint            `json:"data_points"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	Labels     map[string]string      `json:"labels,omitempty"`
+	Metadata   map[string]interface{} `json:"metadata,omitempty"`
+	Name       string                 `json:"name"`
+	DataPoints []DataPoint            `json:"data_points"`
 }
 
 // AggregationRequest represents a request for aggregation
 type AggregationRequest struct {
-	MetricName   string                 `json:"metric_name"`
-	Aggregation  AggregationType        `json:"aggregation"`
-	TimeWindow   TimeWindow             `json:"time_window"`
-	GroupBy      []string               `json:"group_by,omitempty"`
-	Filters      map[string]string      `json:"filters,omitempty"`
-	Interval     time.Duration          `json:"interval,omitempty"`
-	FillValue    *float64               `json:"fill_value,omitempty"`
-	Metadata     map[string]interface{} `json:"metadata,omitempty"`
+	Filters     map[string]string      `json:"filters,omitempty"`
+	FillValue   *float64               `json:"fill_value,omitempty"`
+	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	TimeWindow  TimeWindow             `json:"time_window"`
+	MetricName  string                 `json:"metric_name"`
+	Aggregation AggregationType        `json:"aggregation"`
+	GroupBy     []string               `json:"group_by,omitempty"`
+	Interval    time.Duration          `json:"interval,omitempty"`
 }
 
 // AggregationResult represents the result of an aggregation
 type AggregationResult struct {
-	MetricName   string                 `json:"metric_name"`
-	Aggregation  AggregationType        `json:"aggregation"`
-	TimeWindow   TimeWindow             `json:"time_window"`
-	Value        float64                `json:"value"`
-	Series       []TimeSeries           `json:"series,omitempty"`
-	Count        int64                  `json:"count"`
-	Labels       map[string]string      `json:"labels,omitempty"`
-	Metadata     map[string]interface{} `json:"metadata,omitempty"`
-	ComputedAt   time.Time              `json:"computed_at"`
+	ComputedAt  time.Time              `json:"computed_at"`
+	Labels      map[string]string      `json:"labels,omitempty"`
+	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	TimeWindow  TimeWindow             `json:"time_window"`
+	MetricName  string                 `json:"metric_name"`
+	Aggregation AggregationType        `json:"aggregation"`
+	Series      []TimeSeries           `json:"series,omitempty"`
+	Value       float64                `json:"value"`
+	Count       int64                  `json:"count"`
 }
 
 // Aggregator handles metric aggregations
 type Aggregator struct {
-	data    map[string][]DataPoint
-	mu      sync.RWMutex
-	ctx     context.Context
-	cancel  context.CancelFunc
+	ctx    context.Context
+	data   map[string][]DataPoint
+	cancel context.CancelFunc
+	mu     sync.RWMutex
 }
 
 // NewAggregator creates a new aggregator
 func NewAggregator() *Aggregator {
 	ctx, cancel := context.WithCancel(context.Background())
-	
+
 	return &Aggregator{
 		data:   make(map[string][]DataPoint),
 		ctx:    ctx,
@@ -99,11 +100,11 @@ func NewAggregator() *Aggregator {
 func (a *Aggregator) AddDataPoint(metricName string, point DataPoint) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	
+
 	if a.data[metricName] == nil {
 		a.data[metricName] = make([]DataPoint, 0)
 	}
-	
+
 	a.data[metricName] = append(a.data[metricName], point)
 }
 
@@ -111,11 +112,11 @@ func (a *Aggregator) AddDataPoint(metricName string, point DataPoint) {
 func (a *Aggregator) AddDataPoints(metricName string, points []DataPoint) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	
+
 	if a.data[metricName] == nil {
 		a.data[metricName] = make([]DataPoint, 0)
 	}
-	
+
 	a.data[metricName] = append(a.data[metricName], points...)
 }
 
@@ -123,18 +124,18 @@ func (a *Aggregator) AddDataPoints(metricName string, points []DataPoint) {
 func (a *Aggregator) Aggregate(req *AggregationRequest) (*AggregationResult, error) {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
-	
+
 	points, exists := a.data[req.MetricName]
 	if !exists || len(points) == 0 {
 		return nil, fmt.Errorf("no data found for metric: %s", req.MetricName)
 	}
-	
+
 	// Filter data points by time window and filters
 	filteredPoints := a.filterPoints(points, req)
 	if len(filteredPoints) == 0 {
-		return nil, fmt.Errorf("no data points match the criteria")
+		return nil, errors.New("no data points match the criteria")
 	}
-	
+
 	result := &AggregationResult{
 		MetricName:  req.MetricName,
 		Aggregation: req.Aggregation,
@@ -143,24 +144,24 @@ func (a *Aggregator) Aggregate(req *AggregationRequest) (*AggregationResult, err
 		ComputedAt:  time.Now().UTC(),
 		Metadata:    make(map[string]interface{}),
 	}
-	
+
 	// Group by labels if specified
 	if len(req.GroupBy) > 0 {
 		groups := a.groupByLabels(filteredPoints, req.GroupBy)
 		series := make([]TimeSeries, 0, len(groups))
-		
+
 		for groupKey, groupPoints := range groups {
 			_, err := a.computeAggregation(groupPoints, req.Aggregation)
 			if err != nil {
 				return nil, err
 			}
-			
+
 			// Parse labels from group key
 			labels := a.parseGroupKey(groupKey, req.GroupBy)
 			timeSeries := a.createTimeSeries(req.MetricName, labels, groupPoints, req.Interval)
 			series = append(series, timeSeries)
 		}
-		
+
 		result.Series = series
 		// Set overall value to average of all series if applicable
 		if len(series) > 0 {
@@ -179,21 +180,21 @@ func (a *Aggregator) Aggregate(req *AggregationRequest) (*AggregationResult, err
 			return nil, err
 		}
 		result.Value = value
-		
+
 		// Create time series if interval is specified
 		if req.Interval > 0 {
 			timeSeries := a.createTimeSeries(req.MetricName, nil, filteredPoints, req.Interval)
 			result.Series = []TimeSeries{timeSeries}
 		}
 	}
-	
+
 	return result, nil
 }
 
 // AggregateMultiple performs multiple aggregations
 func (a *Aggregator) AggregateMultiple(requests []*AggregationRequest) ([]*AggregationResult, error) {
 	results := make([]*AggregationResult, 0, len(requests))
-	
+
 	for _, req := range requests {
 		result, err := a.Aggregate(req)
 		if err != nil {
@@ -201,7 +202,7 @@ func (a *Aggregator) AggregateMultiple(requests []*AggregationRequest) ([]*Aggre
 		}
 		results = append(results, result)
 	}
-	
+
 	return results, nil
 }
 
@@ -209,12 +210,12 @@ func (a *Aggregator) AggregateMultiple(requests []*AggregationRequest) ([]*Aggre
 func (a *Aggregator) GetMetrics() []string {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
-	
+
 	metrics := make([]string, 0, len(a.data))
 	for metric := range a.data {
 		metrics = append(metrics, metric)
 	}
-	
+
 	return metrics
 }
 
@@ -222,19 +223,19 @@ func (a *Aggregator) GetMetrics() []string {
 func (a *Aggregator) GetDataPoints(metricName string, timeWindow TimeWindow) ([]DataPoint, error) {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
-	
+
 	points, exists := a.data[metricName]
 	if !exists {
 		return nil, fmt.Errorf("metric not found: %s", metricName)
 	}
-	
+
 	var filteredPoints []DataPoint
 	for _, point := range points {
 		if point.Timestamp.After(timeWindow.Start) && point.Timestamp.Before(timeWindow.End) {
 			filteredPoints = append(filteredPoints, point)
 		}
 	}
-	
+
 	return filteredPoints, nil
 }
 
@@ -242,7 +243,7 @@ func (a *Aggregator) GetDataPoints(metricName string, timeWindow TimeWindow) ([]
 func (a *Aggregator) Clear() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	
+
 	a.data = make(map[string][]DataPoint)
 }
 
@@ -250,7 +251,7 @@ func (a *Aggregator) Clear() {
 func (a *Aggregator) ClearMetric(metricName string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	
+
 	delete(a.data, metricName)
 }
 
@@ -259,21 +260,21 @@ func (a *Aggregator) ClearMetric(metricName string) {
 // filterPoints filters data points based on time window and filters
 func (a *Aggregator) filterPoints(points []DataPoint, req *AggregationRequest) []DataPoint {
 	var filtered []DataPoint
-	
+
 	for _, point := range points {
 		// Check time window
 		if point.Timestamp.Before(req.TimeWindow.Start) || point.Timestamp.After(req.TimeWindow.End) {
 			continue
 		}
-		
+
 		// Check filters
 		if !a.matchesFilters(point, req.Filters) {
 			continue
 		}
-		
+
 		filtered = append(filtered, point)
 	}
-	
+
 	return filtered
 }
 
@@ -282,20 +283,20 @@ func (a *Aggregator) matchesFilters(point DataPoint, filters map[string]string) 
 	if len(filters) == 0 {
 		return true
 	}
-	
+
 	for key, expectedValue := range filters {
 		if actualValue, exists := point.Labels[key]; !exists || actualValue != expectedValue {
 			return false
 		}
 	}
-	
+
 	return true
 }
 
 // groupByLabels groups data points by the specified labels
 func (a *Aggregator) groupByLabels(points []DataPoint, groupBy []string) map[string][]DataPoint {
 	groups := make(map[string][]DataPoint)
-	
+
 	for _, point := range points {
 		key := a.createGroupKey(point.Labels, groupBy)
 		if groups[key] == nil {
@@ -303,7 +304,7 @@ func (a *Aggregator) groupByLabels(points []DataPoint, groupBy []string) map[str
 		}
 		groups[key] = append(groups[key], point)
 	}
-	
+
 	return groups
 }
 
@@ -314,28 +315,28 @@ func (a *Aggregator) createGroupKey(labels map[string]string, groupBy []string) 
 		if value, exists := labels[label]; exists {
 			keyParts = append(keyParts, fmt.Sprintf("%s=%s", label, value))
 		} else {
-			keyParts = append(keyParts, fmt.Sprintf("%s=", label))
+			keyParts = append(keyParts, label+"=")
 		}
 	}
-	
+
 	if len(keyParts) == 0 {
 		return "default"
 	}
-	
+
 	return fmt.Sprintf("{%s}", joinStrings(keyParts, ","))
 }
 
 // computeAggregation computes the specified aggregation on data points
 func (a *Aggregator) computeAggregation(points []DataPoint, aggType AggregationType) (float64, error) {
 	if len(points) == 0 {
-		return 0, fmt.Errorf("no data points to aggregate")
+		return 0, errors.New("no data points to aggregate")
 	}
-	
+
 	values := make([]float64, len(points))
 	for i, point := range points {
 		values[i] = point.Value
 	}
-	
+
 	switch aggType {
 	case AggSum:
 		return a.sum(values), nil
@@ -374,16 +375,16 @@ func (a *Aggregator) createTimeSeries(metricName string, labels map[string]strin
 		DataPoints: make([]DataPoint, 0),
 		Metadata:   make(map[string]interface{}),
 	}
-	
+
 	if interval <= 0 {
 		// No bucketing, return original points
 		timeSeries.DataPoints = points
 		return timeSeries
 	}
-	
+
 	// Bucket data points by interval
 	buckets := a.bucketByInterval(points, interval)
-	
+
 	for timestamp, bucketPoints := range buckets {
 		if len(bucketPoints) > 0 {
 			avgValue := a.average(extractValues(bucketPoints))
@@ -394,19 +395,19 @@ func (a *Aggregator) createTimeSeries(metricName string, labels map[string]strin
 			})
 		}
 	}
-	
+
 	// Sort by timestamp
 	sort.Slice(timeSeries.DataPoints, func(i, j int) bool {
 		return timeSeries.DataPoints[i].Timestamp.Before(timeSeries.DataPoints[j].Timestamp)
 	})
-	
+
 	return timeSeries
 }
 
 // bucketByInterval buckets data points by time interval
 func (a *Aggregator) bucketByInterval(points []DataPoint, interval time.Duration) map[time.Time][]DataPoint {
 	buckets := make(map[time.Time][]DataPoint)
-	
+
 	for _, point := range points {
 		bucketTime := point.Timestamp.Truncate(interval)
 		if buckets[bucketTime] == nil {
@@ -414,7 +415,7 @@ func (a *Aggregator) bucketByInterval(points []DataPoint, interval time.Duration
 		}
 		buckets[bucketTime] = append(buckets[bucketTime], point)
 	}
-	
+
 	return buckets
 }
 
@@ -465,19 +466,19 @@ func (a *Aggregator) percentile(values []float64, p float64) float64 {
 	if len(values) == 0 {
 		return 0
 	}
-	
+
 	sorted := make([]float64, len(values))
 	copy(sorted, values)
 	sort.Float64s(sorted)
-	
+
 	index := p * float64(len(sorted)-1)
 	lower := int(math.Floor(index))
 	upper := int(math.Ceil(index))
-	
+
 	if lower == upper {
 		return sorted[lower]
 	}
-	
+
 	weight := index - float64(lower)
 	return sorted[lower]*(1-weight) + sorted[upper]*weight
 }
@@ -486,15 +487,15 @@ func (a *Aggregator) standardDeviation(values []float64) float64 {
 	if len(values) <= 1 {
 		return 0
 	}
-	
+
 	mean := a.average(values)
 	sumSquaredDiff := 0.0
-	
+
 	for _, v := range values {
 		diff := v - mean
 		sumSquaredDiff += diff * diff
 	}
-	
+
 	variance := sumSquaredDiff / float64(len(values)-1)
 	return math.Sqrt(variance)
 }
@@ -503,22 +504,22 @@ func (a *Aggregator) rate(points []DataPoint) float64 {
 	if len(points) < 2 {
 		return 0
 	}
-	
+
 	// Sort by timestamp
 	sortedPoints := make([]DataPoint, len(points))
 	copy(sortedPoints, points)
 	sort.Slice(sortedPoints, func(i, j int) bool {
 		return sortedPoints[i].Timestamp.Before(sortedPoints[j].Timestamp)
 	})
-	
+
 	first := sortedPoints[0]
 	last := sortedPoints[len(sortedPoints)-1]
-	
+
 	timeDiff := last.Timestamp.Sub(first.Timestamp).Seconds()
 	if timeDiff == 0 {
 		return 0
 	}
-	
+
 	valueDiff := last.Value - first.Value
 	return valueDiff / timeDiff
 }
@@ -527,26 +528,26 @@ func (a *Aggregator) growth(values []float64) float64 {
 	if len(values) < 2 {
 		return 0
 	}
-	
+
 	first := values[0]
 	last := values[len(values)-1]
-	
+
 	if first == 0 {
 		return 0
 	}
-	
+
 	return ((last - first) / first) * 100
 }
 
 // parseGroupKey parses a group key back to label map
 func (a *Aggregator) parseGroupKey(key string, groupBy []string) map[string]string {
 	labels := make(map[string]string)
-	
+
 	// Remove the braces and split by comma
 	if len(key) > 2 && key[0] == '{' && key[len(key)-1] == '}' {
 		content := key[1 : len(key)-1]
 		pairs := strings.Split(content, ",")
-		
+
 		for _, pair := range pairs {
 			parts := strings.SplitN(pair, "=", 2)
 			if len(parts) == 2 {
@@ -554,7 +555,7 @@ func (a *Aggregator) parseGroupKey(key string, groupBy []string) map[string]stri
 			}
 		}
 	}
-	
+
 	return labels
 }
 
@@ -575,7 +576,7 @@ func joinStrings(strs []string, sep string) string {
 	if len(strs) == 1 {
 		return strs[0]
 	}
-	
+
 	result := strs[0]
 	for _, s := range strs[1:] {
 		result += sep + s

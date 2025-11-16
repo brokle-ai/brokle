@@ -93,12 +93,12 @@ export const tracesColumns: ColumnDef<Trace>[] = [
     enableSorting: true,
   },
   {
-    accessorKey: 'durationMs',
+    accessorKey: 'duration_ms',
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title='Duration' />
     ),
     cell: ({ row }) => {
-      const duration = row.getValue('durationMs') as number | undefined
+      const duration = row.getValue('duration_ms') as number | undefined
       return <div className='font-mono text-sm'>{formatDuration(duration)}</div>
     },
     enableSorting: true,
@@ -158,12 +158,18 @@ export const tracesColumns: ColumnDef<Trace>[] = [
     enableSorting: true,
   },
   {
-    accessorKey: 'startTime',
+    accessorKey: 'start_time',
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title='Timestamp' />
     ),
     cell: ({ row }) => {
-      const startTime = row.getValue('startTime') as Date
+      const startTime = row.getValue('start_time') as Date
+
+      // Safety check for invalid dates
+      if (!startTime || !(startTime instanceof Date) || isNaN(startTime.getTime())) {
+        return <div className='text-sm text-muted-foreground'>-</div>
+      }
+
       return (
         <div className='text-sm text-muted-foreground'>
           {formatDistanceToNow(startTime, { addSuffix: true })}

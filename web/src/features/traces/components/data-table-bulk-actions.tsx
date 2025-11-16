@@ -27,60 +27,72 @@ export function DataTableBulkActions<TData>({
   const selectedTraces = selectedRows.map((row) => row.original as Trace)
 
   const handleBulkExport = () => {
-    if (selectedTraces.length === 0) return
+    // Feature not implemented yet
+    toast.error('Export functionality is not yet available', {
+      description: 'This feature requires backend implementation and will be available in a future update.',
+    })
+  }
 
-    toast.promise(sleep(2000), {
-      loading: 'Exporting traces...',
-      success: () => {
-        table.resetRowSelection()
-        return `Exported ${selectedTraces.length} trace${selectedTraces.length > 1 ? 's' : ''} to CSV.`
-      },
-      error: 'Error',
+  const handleBulkDelete = () => {
+    // Feature not implemented yet
+    toast.error('Delete functionality is not yet available', {
+      description: 'This feature requires backend implementation and will be available in a future update.',
     })
   }
 
   return (
     <>
       <BulkActionsToolbar table={table} entityName='trace'>
+        {/* Export Action - Disabled (backend not implemented) */}
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
               variant='outline'
               size='icon'
               onClick={handleBulkExport}
-              className='size-8'
-              aria-label='Export traces'
-              title='Export traces'
+              disabled
+              className='size-8 cursor-not-allowed opacity-50'
+              aria-label='Export traces (not available)'
+              title='Export traces (not available)'
             >
               <Download />
-              <span className='sr-only'>Export traces</span>
+              <span className='sr-only'>Export traces (not available)</span>
             </Button>
           </TooltipTrigger>
           <TooltipContent>
-            <p>Export traces</p>
+            <p className='font-semibold'>Export not available</p>
+            <p className='text-xs text-muted-foreground mt-1'>
+              Backend endpoint not yet implemented
+            </p>
           </TooltipContent>
         </Tooltip>
 
+        {/* Delete Action - Disabled (backend not implemented) */}
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
               variant='destructive'
               size='icon'
-              onClick={() => setShowDeleteConfirm(true)}
-              className='size-8'
-              aria-label='Delete selected traces'
-              title='Delete selected traces'
+              onClick={handleBulkDelete}
+              disabled
+              className='size-8 cursor-not-allowed opacity-50'
+              aria-label='Delete selected traces (not available)'
+              title='Delete selected traces (not available)'
             >
               <Trash2 />
-              <span className='sr-only'>Delete selected traces</span>
+              <span className='sr-only'>Delete selected traces (not available)</span>
             </Button>
           </TooltipTrigger>
           <TooltipContent>
-            <p>Delete selected traces</p>
+            <p className='font-semibold'>Delete not available</p>
+            <p className='text-xs text-muted-foreground mt-1'>
+              Backend endpoint not yet implemented
+            </p>
           </TooltipContent>
         </Tooltip>
       </BulkActionsToolbar>
 
+      {/* Delete dialog - keep for future use but won't open */}
       <TracesMultiDeleteDialog
         open={showDeleteConfirm}
         onOpenChange={setShowDeleteConfirm}

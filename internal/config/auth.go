@@ -8,37 +8,26 @@ import (
 
 // AuthConfig contains authentication and JWT token configuration.
 type AuthConfig struct {
-	// Token Lifetimes (Go duration strings)
-	AccessTokenTTL       time.Duration `mapstructure:"access_token_ttl"`
+	GoogleClientSecret   string        `mapstructure:"google_client_secret"`
+	JWTPublicKeyBase64   string        `mapstructure:"jwt_public_key_base64"`
+	GitHubRedirectURL    string        `mapstructure:"github_redirect_url"`
+	GitHubClientSecret   string        `mapstructure:"github_client_secret"`
+	GitHubClientID       string        `mapstructure:"github_client_id"`
+	JWTIssuer            string        `mapstructure:"jwt_issuer"`
+	GoogleRedirectURL    string        `mapstructure:"google_redirect_url"`
+	JWTSigningMethod     string        `mapstructure:"jwt_signing_method"`
+	JWTSecret            string        `mapstructure:"jwt_secret"`
+	GoogleClientID       string        `mapstructure:"google_client_id"`
+	JWTPrivateKeyBase64  string        `mapstructure:"jwt_private_key_base64"`
+	JWTPublicKeyPath     string        `mapstructure:"jwt_public_key_path"`
+	JWTPrivateKeyPath    string        `mapstructure:"jwt_private_key_path"`
+	RateLimitPerUser     int           `mapstructure:"rate_limit_per_user"`
 	RefreshTokenTTL      time.Duration `mapstructure:"refresh_token_ttl"`
+	AccessTokenTTL       time.Duration `mapstructure:"access_token_ttl"`
+	RateLimitWindow      time.Duration `mapstructure:"rate_limit_window"`
+	RateLimitPerIP       int           `mapstructure:"rate_limit_per_ip"`
+	RateLimitEnabled     bool          `mapstructure:"rate_limit_enabled"`
 	TokenRotationEnabled bool          `mapstructure:"token_rotation_enabled"`
-
-	// Rate Limiting
-	RateLimitEnabled bool          `mapstructure:"rate_limit_enabled"`
-	RateLimitPerIP   int           `mapstructure:"rate_limit_per_ip"`
-	RateLimitPerUser int           `mapstructure:"rate_limit_per_user"`
-	RateLimitWindow  time.Duration `mapstructure:"rate_limit_window"`
-
-	// JWT Security (Smart defaults: HS256 for dev, RS256 for prod)
-	JWTSigningMethod string `mapstructure:"jwt_signing_method"`
-	JWTIssuer        string `mapstructure:"jwt_issuer"`
-
-	// HS256 (Simple/Development)
-	JWTSecret string `mapstructure:"jwt_secret"`
-
-	// RS256 (Production/Enterprise)
-	JWTPrivateKeyPath   string `mapstructure:"jwt_private_key_path"`
-	JWTPublicKeyPath    string `mapstructure:"jwt_public_key_path"`
-	JWTPrivateKeyBase64 string `mapstructure:"jwt_private_key_base64"`
-	JWTPublicKeyBase64  string `mapstructure:"jwt_public_key_base64"`
-
-	// OAuth Configuration (Google/GitHub Signup)
-	GoogleClientID     string `mapstructure:"google_client_id"`
-	GoogleClientSecret string `mapstructure:"google_client_secret"`
-	GoogleRedirectURL  string `mapstructure:"google_redirect_url"`
-	GitHubClientID     string `mapstructure:"github_client_id"`
-	GitHubClientSecret string `mapstructure:"github_client_secret"`
-	GitHubRedirectURL  string `mapstructure:"github_redirect_url"`
 }
 
 // Validate ensures the auth configuration is valid and complete.

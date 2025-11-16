@@ -84,7 +84,7 @@ func (s *ScoreService) UpdateScore(ctx context.Context, score *observability.Sco
 	existing, err := s.scoreRepo.GetByID(ctx, score.ID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return appErrors.NewNotFoundError(fmt.Sprintf("score %s", score.ID))
+			return appErrors.NewNotFoundError("score " + score.ID)
 		}
 		return appErrors.NewInternalError("failed to get score", err)
 	}
@@ -93,7 +93,6 @@ func (s *ScoreService) UpdateScore(ctx context.Context, score *observability.Sco
 	mergeScoreFields(existing, score)
 
 	// Preserve version for increment in repository layer
-	existing.Version = existing.Version
 
 	// Validate data type and value consistency
 	if err := s.validateScoreData(existing); err != nil {
@@ -152,7 +151,7 @@ func (s *ScoreService) DeleteScore(ctx context.Context, id string) error {
 	_, err := s.scoreRepo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return appErrors.NewNotFoundError(fmt.Sprintf("score %s", id))
+			return appErrors.NewNotFoundError("score " + id)
 		}
 		return appErrors.NewInternalError("failed to get score", err)
 	}
@@ -169,7 +168,7 @@ func (s *ScoreService) DeleteScore(ctx context.Context, id string) error {
 func (s *ScoreService) GetScoreByID(ctx context.Context, id string) (*observability.Score, error) {
 	score, err := s.scoreRepo.GetByID(ctx, id)
 	if err != nil {
-		return nil, appErrors.NewNotFoundError(fmt.Sprintf("score %s", id))
+		return nil, appErrors.NewNotFoundError("score " + id)
 	}
 
 	return score, nil
@@ -327,7 +326,7 @@ func (s *ScoreService) validateScoreTargets(ctx context.Context, score *observab
 	if score.TraceID != "" {
 		_, err := s.traceRepo.GetByID(ctx, score.TraceID)
 		if err != nil {
-			return appErrors.NewNotFoundError(fmt.Sprintf("trace %s", score.TraceID))
+			return appErrors.NewNotFoundError("trace " + score.TraceID)
 		}
 	}
 
@@ -335,7 +334,7 @@ func (s *ScoreService) validateScoreTargets(ctx context.Context, score *observab
 	if score.SpanID != "" {
 		_, err := s.spanRepo.GetByID(ctx, score.SpanID)
 		if err != nil {
-			return appErrors.NewNotFoundError(fmt.Sprintf("span %s", score.SpanID))
+			return appErrors.NewNotFoundError("span " + score.SpanID)
 		}
 	}
 

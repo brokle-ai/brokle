@@ -9,6 +9,7 @@ import (
 	"gorm.io/gorm"
 
 	userDomain "brokle/internal/core/domain/user"
+	"brokle/pkg/pagination"
 	"brokle/pkg/ulid"
 )
 
@@ -284,37 +285,37 @@ func (r *userRepository) GetByFilters(ctx context.Context, filters *userDomain.U
 		query = query.Where("last_login_at > ?", *filters.LastLoginAfter)
 	}
 
-	// Apply sorting
-	switch filters.SortBy {
-	case "email":
-		if filters.SortOrder == "desc" {
-			query = query.Order("email DESC")
-		} else {
-			query = query.Order("email ASC")
+	// Determine sort field and direction with validation
+	allowedSortFields := []string{"created_at", "updated_at", "email", "name", "id"}
+	sortField := "created_at" // default
+	sortDir := "DESC"
+
+	if filters != nil {
+		// Validate sort field against whitelist
+		if filters.Params.SortBy != "" {
+			validated, err := pagination.ValidateSortField(filters.Params.SortBy, allowedSortFields)
+			if err != nil {
+				return nil, err
+			}
+			if validated != "" {
+				sortField = validated
+			}
 		}
-	case "created_at":
-		if filters.SortOrder == "desc" {
-			query = query.Order("created_at DESC")
-		} else {
-			query = query.Order("created_at ASC")
+		if filters.Params.SortDir == "asc" {
+			sortDir = "ASC"
 		}
-	case "last_login_at":
-		if filters.SortOrder == "desc" {
-			query = query.Order("last_login_at DESC")
-		} else {
-			query = query.Order("last_login_at ASC")
-		}
-	default:
-		query = query.Order("created_at DESC")
 	}
 
-	// Apply pagination
-	if filters.Limit > 0 {
-		query = query.Limit(filters.Limit)
+	// Apply sorting with secondary sort on id for stable ordering
+	query = query.Order(fmt.Sprintf("%s %s, id %s", sortField, sortDir, sortDir))
+
+	// Apply limit and offset for pagination
+	limit := pagination.DefaultPageSize
+	if filters.Params.Limit > 0 {
+		limit = filters.Params.Limit
 	}
-	if filters.Offset > 0 {
-		query = query.Offset(filters.Offset)
-	}
+	offset := filters.Params.GetOffset()
+	query = query.Limit(limit).Offset(offset)
 
 	err := query.Find(&users).Error
 	return users, err

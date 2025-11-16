@@ -2,6 +2,7 @@ package organization
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -33,13 +34,13 @@ type Handler struct {
 
 // Organization represents an organization entity
 type Organization struct {
+	CreatedAt   time.Time `json:"created_at" example:"2024-01-01T00:00:00Z" description:"Creation timestamp"`
+	UpdatedAt   time.Time `json:"updated_at" example:"2024-01-01T00:00:00Z" description:"Last update timestamp"`
 	ID          string    `json:"id" example:"org_1234567890" description:"Unique organization identifier"`
 	Name        string    `json:"name" example:"Acme Corporation" description:"Organization name"`
 	Description string    `json:"description,omitempty" example:"Leading AI solutions provider" description:"Optional organization description"`
 	Plan        string    `json:"plan" example:"pro" description:"Subscription plan (free, pro, business, enterprise)"`
 	Status      string    `json:"status" example:"active" description:"Organization status (active, suspended, deleted)"`
-	CreatedAt   time.Time `json:"created_at" example:"2024-01-01T00:00:00Z" description:"Creation timestamp"`
-	UpdatedAt   time.Time `json:"updated_at" example:"2024-01-01T00:00:00Z" description:"Last update timestamp"`
 }
 
 // CreateOrganizationRequest represents the request to create an organization
@@ -56,16 +57,16 @@ type UpdateOrganizationRequest struct {
 
 // OrganizationMember represents a member of an organization
 type OrganizationMember struct {
+	JoinedAt  time.Time `json:"joined_at" example:"2024-01-01T00:00:00Z" description:"When user joined organization"`
+	CreatedAt time.Time `json:"created_at" example:"2024-01-01T00:00:00Z" description:"When membership was created"`
+	UpdatedAt time.Time `json:"updated_at" example:"2024-01-01T00:00:00Z" description:"When membership was last updated"`
+	InvitedBy *string   `json:"invited_by,omitempty" example:"john@inviter.com" description:"Email of user who sent invitation"`
 	UserID    string    `json:"user_id" example:"usr_1234567890" description:"User ID"`
 	Email     string    `json:"email" example:"john@acme.com" description:"User email address"`
 	FirstName string    `json:"first_name" example:"John" description:"User first name"`
 	LastName  string    `json:"last_name" example:"Doe" description:"User last name"`
 	Role      string    `json:"role" example:"admin" description:"Role name in organization"`
 	Status    string    `json:"status" example:"active" description:"Member status (active, invited, suspended)"`
-	JoinedAt  time.Time `json:"joined_at" example:"2024-01-01T00:00:00Z" description:"When user joined organization"`
-	InvitedBy *string   `json:"invited_by,omitempty" example:"john@inviter.com" description:"Email of user who sent invitation"`
-	CreatedAt time.Time `json:"created_at" example:"2024-01-01T00:00:00Z" description:"When membership was created"`
-	UpdatedAt time.Time `json:"updated_at" example:"2024-01-01T00:00:00Z" description:"When membership was last updated"`
 }
 
 // ListMembersRequest represents request parameters for listing members
@@ -90,9 +91,9 @@ type RemoveMemberRequest struct {
 
 // ListRequest represents request parameters for listing organizations
 type ListRequest struct {
+	Search string `form:"search" example:"acme" description:"Search organizations by name or slug"`
 	Page   int    `form:"page,default=1" binding:"min=1" example:"1" description:"Page number"`
 	Limit  int    `form:"limit,default=20" binding:"min=1,max=100" example:"20" description:"Items per page"`
-	Search string `form:"search" example:"acme" description:"Search organizations by name or slug"`
 }
 
 // GetRequest represents request parameters for getting an organization
@@ -131,10 +132,12 @@ func NewHandler(
 // @Tags Organizations
 // @Accept json
 // @Produce json
-// @Param page query int false "Page number" default(1) minimum(1)
-// @Param limit query int false "Items per page" default(20) minimum(1) maximum(100)
+// @Param cursor query string false "Pagination cursor" example("eyJjcmVhdGVkX2F0IjoiMjAyNC0wMS0wMVQxMjowMDowMFoiLCJpZCI6IjAxSDJYM1k0WjUifQ==")
+// @Param page_size query int false "Items per page" Enums(10,20,30,40,50) default(50)
+// @Param sort_by query string false "Sort field" Enums(created_at,name) default("created_at")
+// @Param sort_dir query string false "Sort direction" Enums(asc,desc) default("desc")
 // @Param search query string false "Search organizations by name or slug"
-// @Success 200 {object} response.APIResponse{data=[]Organization,meta=response.Meta{pagination=response.Pagination}} "List of organizations with pagination"
+// @Success 200 {object} response.APIResponse{data=[]Organization,meta=response.Meta{pagination=response.Pagination}} "List of organizations with cursor pagination"
 // @Failure 400 {object} response.ErrorResponse "Bad request"
 // @Failure 401 {object} response.ErrorResponse "Unauthorized"
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
@@ -191,31 +194,51 @@ func (h *Handler) List(c *gin.Context) {
 		})
 	}
 
-	// Apply pagination
-	total := len(filteredOrgs)
-	startIdx := (req.Page - 1) * req.Limit
-	endIdx := startIdx + req.Limit
+	// Parse offset pagination parameters
+	params := response.ParsePaginationParams(
+		c.Query("page"),
+		c.Query("limit"),
+		c.Query("sort_by"),
+		c.Query("sort_dir"),
+	)
 
-	if startIdx >= total {
-		filteredOrgs = []Organization{}
-	} else {
-		if endIdx > total {
-			endIdx = total
+	total := len(filteredOrgs)
+
+	// Sort organizations for stable ordering
+	sort.Slice(filteredOrgs, func(i, j int) bool {
+		if params.SortDir == "asc" {
+			return filteredOrgs[i].CreatedAt.Before(filteredOrgs[j].CreatedAt)
 		}
-		filteredOrgs = filteredOrgs[startIdx:endIdx]
+		return filteredOrgs[i].CreatedAt.After(filteredOrgs[j].CreatedAt)
+	})
+
+	// Apply offset pagination
+	offset := params.GetOffset()
+	limit := params.Limit
+
+	// Calculate end index for slicing
+	end := offset + limit
+	if end > len(filteredOrgs) {
+		end = len(filteredOrgs)
 	}
 
-	// Create pagination
-	pagination := response.NewPagination(req.Page, req.Limit, int64(total))
+	// Apply pagination slice
+	if offset < len(filteredOrgs) {
+		filteredOrgs = filteredOrgs[offset:end]
+	} else {
+		filteredOrgs = []Organization{}
+	}
+
+	// Create offset pagination
+	pag := response.NewPagination(params.Page, params.Limit, int64(total))
 
 	h.logger.WithFields(logrus.Fields{
 		"user_id": userID,
 		"count":   len(filteredOrgs),
 		"total":   total,
-		"page":    req.Page,
 	}).Info("Organizations listed successfully")
 
-	response.SuccessWithPagination(c, filteredOrgs, pagination)
+	response.SuccessWithPagination(c, filteredOrgs, pag)
 }
 
 // Create handles POST /organizations
@@ -614,7 +637,7 @@ func (h *Handler) Delete(c *gin.Context) {
 // @Param orgId path string true "Organization ID" example("org_1234567890")
 // @Param status query string false "Filter by member status" Enums(active,invited,suspended)
 // @Param role query string false "Filter by member role" Enums(owner,admin,developer,viewer)
-// @Success 200 {object} response.APIResponse{data=[]OrganizationMember,meta=response.Meta{pagination=response.Pagination}} "List of organization members with pagination"
+// @Success 200 {object} response.APIResponse{data=[]OrganizationMember,meta=response.Meta{pagination=response.Pagination}} "List of organization members with cursor pagination"
 // @Failure 400 {object} response.ErrorResponse "Bad request - invalid organization ID or query parameters"
 // @Failure 401 {object} response.ErrorResponse "Unauthorized"
 // @Failure 403 {object} response.ErrorResponse "Forbidden - insufficient permissions to view members"
@@ -740,8 +763,43 @@ func (h *Handler) ListMembers(c *gin.Context) {
 		})
 	}
 
-	// Create pagination (using 1, len(memberList) since this endpoint doesn't support pagination yet)
-	pagination := response.NewPagination(1, len(memberList), int64(len(memberList)))
+	// Parse offset pagination parameters
+	params := response.ParsePaginationParams(
+		c.Query("page"),
+		c.Query("limit"),
+		c.Query("sort_by"),
+		c.Query("sort_dir"),
+	)
+
+	total := len(memberList)
+
+	// Sort members for stable ordering
+	sort.Slice(memberList, func(i, j int) bool {
+		if params.SortDir == "asc" {
+			return memberList[i].CreatedAt.Before(memberList[j].CreatedAt)
+		}
+		return memberList[i].CreatedAt.After(memberList[j].CreatedAt)
+	})
+
+	// Apply offset pagination
+	offset := params.GetOffset()
+	limit := params.Limit
+
+	// Calculate end index for slicing
+	end := offset + limit
+	if end > len(memberList) {
+		end = len(memberList)
+	}
+
+	// Apply pagination slice
+	if offset < len(memberList) {
+		memberList = memberList[offset:end]
+	} else {
+		memberList = []OrganizationMember{}
+	}
+
+	// Create offset pagination
+	pag := response.NewPagination(params.Page, params.Limit, int64(total))
 
 	h.logger.WithFields(logrus.Fields{
 		"user_id": userID,
@@ -749,7 +807,7 @@ func (h *Handler) ListMembers(c *gin.Context) {
 		"count":   len(memberList),
 	}).Info("Organization members listed successfully")
 
-	response.SuccessWithPagination(c, memberList, pagination)
+	response.SuccessWithPagination(c, memberList, pag)
 }
 
 // InviteMember handles POST /organizations/:orgId/members
@@ -1001,12 +1059,12 @@ func (h *Handler) ResetToDefaults(c *gin.Context)    { h.Settings.ResetToDefault
 
 // InvitationDetailsResponse represents invitation details for validation
 type InvitationDetailsResponse struct {
+	ExpiresAt        time.Time `json:"expires_at"`
 	OrganizationName string    `json:"organization_name" example:"Acme Corp"`
 	OrganizationID   string    `json:"organization_id" example:"01HX..."`
 	InviterName      string    `json:"inviter_name" example:"John"`
 	Role             string    `json:"role" example:"developer"`
 	Email            string    `json:"email" example:"user@example.com"`
-	ExpiresAt        time.Time `json:"expires_at"`
 	IsExpired        bool      `json:"is_expired"`
 }
 

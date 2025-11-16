@@ -3,9 +3,9 @@ package observability
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -72,11 +72,11 @@ func (s *SpanService) CreateSpan(ctx context.Context, span *observability.Span) 
 	if span.SpanKind == 0 {
 		span.SpanKind = observability.SpanKindInternal // UInt8: 1
 	}
-	if span.SpanAttributes == "" {
-		span.SpanAttributes = "{}"
+	if span.SpanAttributes == nil {
+		span.SpanAttributes = make(map[string]interface{})
 	}
-	if span.ResourceAttributes == "" {
-		span.ResourceAttributes = "{}"
+	if span.ResourceAttributes == nil {
+		span.ResourceAttributes = make(map[string]interface{})
 	}
 	if span.CreatedAt.IsZero() {
 		span.CreatedAt = time.Now()
@@ -113,7 +113,7 @@ func (s *SpanService) UpdateSpan(ctx context.Context, span *observability.Span) 
 	existing, err := s.spanRepo.GetByID(ctx, span.SpanID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return appErrors.NewNotFoundError(fmt.Sprintf("span %s", span.SpanID))
+			return appErrors.NewNotFoundError("span " + span.SpanID)
 		}
 		return appErrors.NewInternalError("failed to get span", err)
 	}
@@ -140,23 +140,19 @@ func (s *SpanService) UpdateSpan(ctx context.Context, span *observability.Span) 
 func (s *SpanService) SetSpanCost(ctx context.Context, spanID string, inputCost, outputCost float64) error {
 	span, err := s.spanRepo.GetByID(ctx, spanID)
 	if err != nil {
-		return appErrors.NewNotFoundError(fmt.Sprintf("span %s", spanID))
+		return appErrors.NewNotFoundError("span " + spanID)
 	}
 
-	// Update span_attributes JSON with cost values as STRINGS
-	// Parse existing attributes, add/update cost fields, re-marshal
-	var attrs map[string]interface{}
-	if err := json.Unmarshal([]byte(span.SpanAttributes), &attrs); err != nil {
-		attrs = make(map[string]interface{})
+	// Update span_attributes map with cost values as STRINGS
+	// Get or initialize attributes map
+	if span.SpanAttributes == nil {
+		span.SpanAttributes = make(map[string]interface{})
 	}
 
 	// CRITICAL: Format costs as STRINGS (9 decimal places)
-	attrs["brokle.cost.input"] = fmt.Sprintf("%.9f", inputCost)
-	attrs["brokle.cost.output"] = fmt.Sprintf("%.9f", outputCost)
-	attrs["brokle.cost.total"] = fmt.Sprintf("%.9f", inputCost+outputCost)
-
-	attrsJSON, _ := json.Marshal(attrs)
-	span.SpanAttributes = string(attrsJSON)
+	span.SpanAttributes["brokle.cost.input"] = fmt.Sprintf("%.9f", inputCost)
+	span.SpanAttributes["brokle.cost.output"] = fmt.Sprintf("%.9f", outputCost)
+	span.SpanAttributes["brokle.cost.total"] = fmt.Sprintf("%.9f", inputCost+outputCost)
 
 	// Update span
 	if err := s.spanRepo.Update(ctx, span); err != nil {
@@ -172,21 +168,18 @@ func (s *SpanService) SetSpanCost(ctx context.Context, spanID string, inputCost,
 func (s *SpanService) SetSpanUsage(ctx context.Context, spanID string, promptTokens, completionTokens uint32) error {
 	span, err := s.spanRepo.GetByID(ctx, spanID)
 	if err != nil {
-		return appErrors.NewNotFoundError(fmt.Sprintf("span %s", spanID))
+		return appErrors.NewNotFoundError("span " + spanID)
 	}
 
-	// Update span_attributes JSON with usage values as STRINGS
-	var attrs map[string]interface{}
-	if err := json.Unmarshal([]byte(span.SpanAttributes), &attrs); err != nil {
-		attrs = make(map[string]interface{})
+	// Update span_attributes map with usage values as STRINGS
+	// Get or initialize attributes map
+	if span.SpanAttributes == nil {
+		span.SpanAttributes = make(map[string]interface{})
 	}
 
 	// Store tokens as strings for consistency with OTEL conventions
-	attrs["gen_ai.usage.input_tokens"] = fmt.Sprintf("%d", promptTokens)
-	attrs["gen_ai.usage.output_tokens"] = fmt.Sprintf("%d", completionTokens)
-
-	attrsJSON, _ := json.Marshal(attrs)
-	span.SpanAttributes = string(attrsJSON)
+	span.SpanAttributes["gen_ai.usage.input_tokens"] = strconv.FormatUint(uint64(promptTokens), 10)
+	span.SpanAttributes["gen_ai.usage.output_tokens"] = strconv.FormatUint(uint64(completionTokens), 10)
 
 	// Update span
 	if err := s.spanRepo.Update(ctx, span); err != nil {
@@ -218,11 +211,11 @@ func mergeSpanFields(dst *observability.Span, src *observability.Span) {
 		dst.StatusMessage = src.StatusMessage
 	}
 
-	// Attribute fields (JSON strings)
-	if src.SpanAttributes != "" && src.SpanAttributes != "{}" {
+	// Attribute fields (maps)
+	if src.SpanAttributes != nil && len(src.SpanAttributes) > 0 {
 		dst.SpanAttributes = src.SpanAttributes
 	}
-	if src.ResourceAttributes != "" && src.ResourceAttributes != "{}" {
+	if src.ResourceAttributes != nil && len(src.ResourceAttributes) > 0 {
 		dst.ResourceAttributes = src.ResourceAttributes
 	}
 
@@ -258,7 +251,7 @@ func (s *SpanService) DeleteSpan(ctx context.Context, id string) error {
 	_, err := s.spanRepo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return appErrors.NewNotFoundError(fmt.Sprintf("span %s", id))
+			return appErrors.NewNotFoundError("span " + id)
 		}
 		return appErrors.NewInternalError("failed to get span", err)
 	}
@@ -276,7 +269,7 @@ func (s *SpanService) GetSpanByID(ctx context.Context, id string) (*observabilit
 	span, err := s.spanRepo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("span %s", id))
+			return nil, appErrors.NewNotFoundError("span " + id)
 		}
 		return nil, appErrors.NewInternalError("failed to get span", err)
 	}
@@ -299,7 +292,7 @@ func (s *SpanService) GetRootSpan(ctx context.Context, traceID string) (*observa
 	rootSpan, err := s.spanRepo.GetRootSpan(ctx, traceID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("root span for trace %s", traceID))
+			return nil, appErrors.NewNotFoundError("root span for trace " + traceID)
 		}
 		return nil, appErrors.NewInternalError("failed to get root span", err)
 	}
@@ -365,11 +358,11 @@ func (s *SpanService) CreateSpanBatch(ctx context.Context, spans []*observabilit
 		if span.SpanKind == 0 {
 			span.SpanKind = observability.SpanKindInternal // UInt8: 1
 		}
-		if span.SpanAttributes == "" {
-			span.SpanAttributes = "{}"
+		if span.SpanAttributes == nil {
+			span.SpanAttributes = make(map[string]interface{})
 		}
-		if span.ResourceAttributes == "" {
-			span.ResourceAttributes = "{}"
+		if span.ResourceAttributes == nil {
+			span.ResourceAttributes = make(map[string]interface{})
 		}
 		if span.CreatedAt.IsZero() {
 			span.CreatedAt = time.Now()
@@ -429,4 +422,3 @@ func (s *SpanService) CalculateTraceTokens(ctx context.Context, traceID string) 
 
 	return uint32(totalTokens), nil
 }
-

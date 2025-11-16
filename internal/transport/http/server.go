@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -99,7 +100,7 @@ func (s *Server) Start() error {
 		// CRITICAL: Wildcard incompatible with AllowCredentials (cookies won't work)
 		s.logger.Fatal("CORS misconfiguration: cannot use wildcard (*) origins with AllowCredentials (httpOnly cookies require specific origins). " +
 			"Set specific origins in CORS_ALLOWED_ORIGINS environment variable.")
-		return fmt.Errorf("invalid CORS configuration: wildcard origins incompatible with credentials")
+		return errors.New("invalid CORS configuration: wildcard origins incompatible with credentials")
 	}
 
 	// Configure specific origins (only reached if not wildcard)
@@ -109,7 +110,7 @@ func (s *Server) Start() error {
 	if len(s.config.Server.CORSAllowedOrigins) == 0 {
 		s.logger.Fatal("CORS misconfiguration: AllowCredentials requires specific AllowedOrigins. " +
 			"Set CORS_ALLOWED_ORIGINS environment variable.")
-		return fmt.Errorf("invalid CORS configuration: no origins specified")
+		return errors.New("invalid CORS configuration: no origins specified")
 	}
 
 	corsConfig.AllowMethods = s.config.Server.CORSAllowedMethods
@@ -296,29 +297,38 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 		analytics.GET("/costs", s.handlers.Analytics.Costs)
 		analytics.GET("/providers", s.handlers.Analytics.Providers)
 		analytics.GET("/models", s.handlers.Analytics.Models)
+	}
 
-		// Observability analytics routes - ClickHouse-first
-		// Traces (read operations)
-		analytics.GET("/traces", s.handlers.Observability.ListTraces)
-		analytics.GET("/traces/:id", s.handlers.Observability.GetTrace)
-		analytics.GET("/traces/:id/spans", s.handlers.Observability.GetTraceWithSpans)
-		analytics.GET("/traces/:id/scores", s.handlers.Observability.GetTraceWithScores)
-		// Traces (write operations - for corrections/enrichment via dashboard)
-		analytics.PUT("/traces/:id", s.handlers.Observability.UpdateTrace)
+	// Traces routes - observability data
+	traces := protected.Group("/traces")
+	{
+		// Read operations
+		traces.GET("", s.handlers.Observability.ListTraces)
+		traces.GET("/:id", s.handlers.Observability.GetTrace)
+		traces.GET("/:id/spans", s.handlers.Observability.GetTraceWithSpans)
+		traces.GET("/:id/scores", s.handlers.Observability.GetTraceWithScores)
+		// Write operations (corrections/enrichment via dashboard)
+		traces.PUT("/:id", s.handlers.Observability.UpdateTrace)
+	}
 
-		// Spans (read operations)
-		analytics.GET("/spans", s.handlers.Observability.ListSpans)
-		analytics.GET("/spans/:id", s.handlers.Observability.GetSpan)
-		// Spans (write operations - for corrections/enrichment via dashboard)
-		analytics.PUT("/spans/:id", s.handlers.Observability.UpdateSpan)
+	// Spans routes - observability data (ClickHouse)
+	spans := protected.Group("/spans")
+	{
+		// Read operations
+		spans.GET("", s.handlers.Observability.ListSpans)
+		spans.GET("/:id", s.handlers.Observability.GetSpan)
+		// Write operations (corrections/enrichment via dashboard)
+		spans.PUT("/:id", s.handlers.Observability.UpdateSpan)
+	}
 
-		// Quality Scores (read operations)
-		analytics.GET("/scores", s.handlers.Observability.ListScores)
-		analytics.GET("/scores/:id", s.handlers.Observability.GetScore)
-		// Quality Scores (write operations - for corrections/enrichment via dashboard)
-		analytics.PUT("/scores/:id", s.handlers.Observability.UpdateScore)
-
-		// Sessions removed - now virtual groupings via session_id attribute on traces
+	// Quality Scores routes - observability data (ClickHouse)
+	scores := protected.Group("/scores")
+	{
+		// Read operations
+		scores.GET("", s.handlers.Observability.ListScores)
+		scores.GET("/:id", s.handlers.Observability.GetScore)
+		// Write operations (corrections/enrichment via dashboard)
+		scores.PUT("/:id", s.handlers.Observability.UpdateScore)
 	}
 
 	// Logs routes

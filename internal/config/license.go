@@ -193,7 +193,7 @@ func (lw *LicenseWrapper) GetLicenseStatus() string {
 		return fmt.Sprintf("%s license expires in %d days", license.Type, daysUntilExpiry)
 	}
 
-	return fmt.Sprintf("%s license active", license.Type)
+	return license.Type + " license active"
 }
 
 // Private helper methods

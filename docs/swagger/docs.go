@@ -828,1151 +828,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/analytics/scores": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Retrieve paginated list of quality scores",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Dashboard - Analytics"
-                ],
-                "summary": "List quality scores with filtering",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Filter by trace ID",
-                        "name": "trace_id",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Filter by span ID",
-                        "name": "span_id",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Filter by session ID",
-                        "name": "session_id",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Filter by score name",
-                        "name": "name",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Filter by source (API, AUTO, HUMAN, EVAL)",
-                        "name": "source",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Filter by data type (NUMERIC, CATEGORICAL, BOOLEAN)",
-                        "name": "data_type",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Limit (default 50, max 1000)",
-                        "name": "limit",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Offset (default 0)",
-                        "name": "offset",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "List of scores",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "$ref": "#/definitions/observability.Score"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid parameters",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/analytics/scores/{id}": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Retrieve detailed score information",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Dashboard - Analytics"
-                ],
-                "summary": "Get quality score by ID",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Score ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Score details",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/observability.Score"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "404": {
-                        "description": "Score not found",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                }
-            },
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Update an existing score (for corrections/enrichment after initial creation)",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Dashboard - Analytics"
-                ],
-                "summary": "Update quality score by ID",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Score ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Updated score data",
-                        "name": "score",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/observability.Score"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Updated score",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/observability.Score"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "404": {
-                        "description": "Score not found",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/analytics/spans": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Retrieve paginated list of spans",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Dashboard - Analytics"
-                ],
-                "summary": "List spans with filtering",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Filter by trace ID",
-                        "name": "trace_id",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Filter by span type",
-                        "name": "type",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Filter by model",
-                        "name": "model",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Filter by level",
-                        "name": "level",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Limit (default 50, max 1000)",
-                        "name": "limit",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Offset (default 0)",
-                        "name": "offset",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "List of spans",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "$ref": "#/definitions/observability.Span"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid parameters",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/analytics/spans/{id}": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Retrieve detailed span information",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Dashboard - Analytics"
-                ],
-                "summary": "Get span by ID",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Span ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Span details",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/observability.Span"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "404": {
-                        "description": "Span not found",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                }
-            },
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Update an existing span (for corrections/enrichment after initial creation)",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Dashboard - Analytics"
-                ],
-                "summary": "Update span by ID",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Span ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Updated span data",
-                        "name": "span",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/observability.Span"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Updated span",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/observability.Span"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "404": {
-                        "description": "Span not found",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/analytics/traces": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Retrieve paginated list of traces with optional filtering",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Dashboard - Analytics"
-                ],
-                "summary": "List traces for a project",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Project ID",
-                        "name": "project_id",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Filter by session ID",
-                        "name": "session_id",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Filter by user ID",
-                        "name": "user_id",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "format": "int64",
-                        "description": "Start time (Unix timestamp)",
-                        "name": "start_time",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "format": "int64",
-                        "description": "End time (Unix timestamp)",
-                        "name": "end_time",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Limit (default 50, max 1000)",
-                        "name": "limit",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Offset (default 0)",
-                        "name": "offset",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "List of traces",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "$ref": "#/definitions/observability.Trace"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid parameters",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/analytics/traces/{id}": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Retrieve detailed trace information",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Dashboard - Analytics"
-                ],
-                "summary": "Get trace by ID",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Trace ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Trace details",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/observability.Trace"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "404": {
-                        "description": "Trace not found",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                }
-            },
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Update an existing trace (for corrections/enrichment after initial creation)",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Dashboard - Analytics"
-                ],
-                "summary": "Update trace by ID",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Trace ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Updated trace data",
-                        "name": "trace",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/observability.Trace"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Updated trace",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/observability.Trace"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "404": {
-                        "description": "Trace not found",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/analytics/traces/{id}/scores": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Retrieve trace with all associated quality scores",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Dashboard - Analytics"
-                ],
-                "summary": "Get trace with quality scores",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Trace ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Trace with scores",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/observability.Trace"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "404": {
-                        "description": "Trace not found",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/analytics/traces/{id}/spans": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Retrieve trace with all spans in hierarchical structure",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Dashboard - Analytics"
-                ],
-                "summary": "Get trace with spans tree",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Trace ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Trace with spans",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/observability.Trace"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "404": {
-                        "description": "Trace not found",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                }
-            }
-        },
         "/api/v1/auth/change-password": {
             "post": {
                 "security": [
@@ -2563,17 +1418,45 @@ const docTemplate = `{
                 "summary": "List user sessions",
                 "parameters": [
                     {
-                        "type": "integer",
-                        "default": 1,
-                        "description": "Page number",
-                        "name": "page",
+                        "type": "string",
+                        "example": "\"eyJjcmVhdGVkX2F0IjoiMjAyNC0wMS0wMVQxMjowMDowMFoiLCJpZCI6IjAxSDJYM1k0WjUifQ==\"",
+                        "description": "Pagination cursor",
+                        "name": "cursor",
                         "in": "query"
                     },
                     {
+                        "enum": [
+                            10,
+                            20,
+                            30,
+                            40,
+                            50
+                        ],
                         "type": "integer",
-                        "default": 10,
-                        "description": "Page size",
+                        "default": 50,
+                        "description": "Items per page",
                         "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "created_at"
+                        ],
+                        "type": "string",
+                        "default": "\"created_at\"",
+                        "description": "Sort field",
+                        "name": "sort_by",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "asc",
+                            "desc"
+                        ],
+                        "type": "string",
+                        "default": "\"desc\"",
+                        "description": "Sort direction",
+                        "name": "sort_dir",
                         "in": "query"
                     },
                     {
@@ -2879,26 +1762,51 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
-                        "minimum": 1,
-                        "type": "integer",
-                        "default": 1,
-                        "description": "Page number",
-                        "name": "page",
+                        "type": "string",
+                        "example": "\"eyJjcmVhdGVkX2F0IjoiMjAyNC0wMS0wMVQxMjowMDowMFoiLCJpZCI6IjAxSDJYM1k0WjUifQ==\"",
+                        "description": "Pagination cursor",
+                        "name": "cursor",
                         "in": "query"
                     },
                     {
-                        "maximum": 100,
-                        "minimum": 1,
+                        "enum": [
+                            10,
+                            20,
+                            30,
+                            40,
+                            50
+                        ],
                         "type": "integer",
-                        "default": 20,
+                        "default": 50,
                         "description": "Items per page",
-                        "name": "limit",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "created_at"
+                        ],
+                        "type": "string",
+                        "default": "\"created_at\"",
+                        "description": "Sort field",
+                        "name": "sort_by",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "asc",
+                            "desc"
+                        ],
+                        "type": "string",
+                        "default": "\"desc\"",
+                        "description": "Sort direction",
+                        "name": "sort_dir",
                         "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "List of organization invoices with pagination",
+                        "description": "List of organization invoices with cursor pagination",
                         "schema": {
                             "allOf": [
                                 {
@@ -3549,20 +2457,24 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
-                        "minimum": 1,
-                        "type": "integer",
-                        "default": 1,
-                        "description": "Page number",
-                        "name": "page",
+                        "type": "string",
+                        "example": "\"eyJjcmVhdGVkX2F0IjoiMjAyNC0wMS0wMVQxMjowMDowMFoiLCJpZCI6IjAxSDJYM1k0WjUifQ==\"",
+                        "description": "Pagination cursor",
+                        "name": "cursor",
                         "in": "query"
                     },
                     {
-                        "maximum": 1000,
-                        "minimum": 1,
+                        "enum": [
+                            10,
+                            20,
+                            30,
+                            40,
+                            50
+                        ],
                         "type": "integer",
                         "default": 50,
                         "description": "Items per page",
-                        "name": "limit",
+                        "name": "page_size",
                         "in": "query"
                     },
                     {
@@ -3741,20 +2653,46 @@ const docTemplate = `{
                 "summary": "List organizations",
                 "parameters": [
                     {
-                        "minimum": 1,
-                        "type": "integer",
-                        "default": 1,
-                        "description": "Page number",
-                        "name": "page",
+                        "type": "string",
+                        "example": "\"eyJjcmVhdGVkX2F0IjoiMjAyNC0wMS0wMVQxMjowMDowMFoiLCJpZCI6IjAxSDJYM1k0WjUifQ==\"",
+                        "description": "Pagination cursor",
+                        "name": "cursor",
                         "in": "query"
                     },
                     {
-                        "maximum": 100,
-                        "minimum": 1,
+                        "enum": [
+                            10,
+                            20,
+                            30,
+                            40,
+                            50
+                        ],
                         "type": "integer",
-                        "default": 20,
+                        "default": 50,
                         "description": "Items per page",
-                        "name": "limit",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "created_at",
+                            "name"
+                        ],
+                        "type": "string",
+                        "default": "\"created_at\"",
+                        "description": "Sort field",
+                        "name": "sort_by",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "asc",
+                            "desc"
+                        ],
+                        "type": "string",
+                        "default": "\"desc\"",
+                        "description": "Sort direction",
+                        "name": "sort_dir",
                         "in": "query"
                     },
                     {
@@ -3766,7 +2704,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "List of organizations with pagination",
+                        "description": "List of organizations with cursor pagination",
                         "schema": {
                             "allOf": [
                                 {
@@ -4184,7 +3122,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "List of organization members with pagination",
+                        "description": "List of organization members with cursor pagination",
                         "schema": {
                             "allOf": [
                                 {
@@ -5035,20 +3973,46 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
-                        "minimum": 1,
-                        "type": "integer",
-                        "default": 1,
-                        "description": "Page number",
-                        "name": "page",
+                        "type": "string",
+                        "example": "\"eyJjcmVhdGVkX2F0IjoiMjAyNC0wMS0wMVQxMjowMDowMFoiLCJpZCI6IjAxSDJYM1k0WjUifQ==\"",
+                        "description": "Cursor for pagination",
+                        "name": "cursor",
                         "in": "query"
                     },
                     {
-                        "maximum": 100,
-                        "minimum": 1,
+                        "enum": [
+                            10,
+                            20,
+                            30,
+                            40,
+                            50
+                        ],
                         "type": "integer",
-                        "default": 20,
+                        "default": 50,
                         "description": "Items per page",
-                        "name": "limit",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "created_at",
+                            "name"
+                        ],
+                        "type": "string",
+                        "default": "\"created_at\"",
+                        "description": "Sort field",
+                        "name": "sort_by",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "asc",
+                            "desc"
+                        ],
+                        "type": "string",
+                        "default": "\"desc\"",
+                        "description": "Sort direction",
+                        "name": "sort_dir",
                         "in": "query"
                     },
                     {
@@ -5060,7 +4024,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "List of projects with pagination",
+                        "description": "List of projects with cursor pagination",
                         "schema": {
                             "allOf": [
                                 {
@@ -5476,26 +4440,53 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
-                        "minimum": 1,
-                        "type": "integer",
-                        "default": 1,
-                        "description": "Page number",
-                        "name": "page",
+                        "type": "string",
+                        "example": "\"eyJjcmVhdGVkX2F0IjoiMjAyNC0wMS0wMVQxMjowMDowMFoiLCJpZCI6IjAxSDJYM1k0WjUifQ==\"",
+                        "description": "Pagination cursor",
+                        "name": "cursor",
                         "in": "query"
                     },
                     {
-                        "maximum": 100,
-                        "minimum": 1,
+                        "enum": [
+                            10,
+                            20,
+                            30,
+                            40,
+                            50
+                        ],
                         "type": "integer",
-                        "default": 20,
+                        "default": 50,
                         "description": "Items per page",
-                        "name": "limit",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "created_at",
+                            "name",
+                            "last_used_at"
+                        ],
+                        "type": "string",
+                        "default": "\"created_at\"",
+                        "description": "Sort field",
+                        "name": "sort_by",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "asc",
+                            "desc"
+                        ],
+                        "type": "string",
+                        "default": "\"desc\"",
+                        "description": "Sort direction",
+                        "name": "sort_dir",
                         "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "List of project-scoped API keys with pagination",
+                        "description": "List of project-scoped API keys with cursor pagination",
                         "schema": {
                             "allOf": [
                                 {
@@ -5724,6 +4715,1252 @@ const docTemplate = `{
                         "description": "Internal server error",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Update an existing API key's name or active status. Only name and is_active can be modified. The API key secret cannot be changed.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "API Keys"
+                ],
+                "summary": "Update API key",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "example": "\"proj_01234567890123456789012345\"",
+                        "description": "Project ID",
+                        "name": "projectId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "example": "\"key_01234567890123456789012345\"",
+                        "description": "API Key ID",
+                        "name": "keyId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Fields to update (at least one required)",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/apikey.UpdateAPIKeyRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "API key updated successfully",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.SuccessResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/apikey.APIKey"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request - invalid project ID, key ID, validation errors, or no fields provided",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized - authentication required",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - insufficient permissions to update API keys",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Project or API key not found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict - API key name already exists in project",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/scores": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Retrieve paginated list of quality scores",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Scores"
+                ],
+                "summary": "List quality scores with filtering",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Filter by trace ID",
+                        "name": "trace_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by span ID",
+                        "name": "span_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by session ID",
+                        "name": "session_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by score name",
+                        "name": "name",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by source (API, AUTO, HUMAN, EVAL)",
+                        "name": "source",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by data type (NUMERIC, CATEGORICAL, BOOLEAN)",
+                        "name": "data_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Limit (default 50, max 1000)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Offset (default 0)",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "List of scores",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/observability.Score"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid parameters",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/scores/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Retrieve detailed score information",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Scores"
+                ],
+                "summary": "Get quality score by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Score ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Score details",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/observability.Score"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "Score not found",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Update an existing score (for corrections/enrichment after initial creation)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Scores"
+                ],
+                "summary": "Update quality score by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Score ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Updated score data",
+                        "name": "score",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/observability.Score"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Updated score",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/observability.Score"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "Score not found",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/spans": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Retrieve paginated list of spans",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Spans"
+                ],
+                "summary": "List spans with filtering",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Filter by trace ID",
+                        "name": "trace_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by span type",
+                        "name": "type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by model",
+                        "name": "model",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by level",
+                        "name": "level",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Limit (default 50, max 1000)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Offset (default 0)",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "List of spans",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/observability.Span"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid parameters",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/spans/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Retrieve detailed span information",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Spans"
+                ],
+                "summary": "Get span by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Span ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Span details",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/observability.Span"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "Span not found",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Update an existing span (for corrections/enrichment after initial creation)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Spans"
+                ],
+                "summary": "Update span by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Span ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Updated span data",
+                        "name": "span",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/observability.Span"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Updated span",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/observability.Span"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "Span not found",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/traces": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Retrieve paginated list of traces with optional filtering",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Traces"
+                ],
+                "summary": "List traces for a project",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project ID",
+                        "name": "project_id",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by session ID",
+                        "name": "session_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by user ID",
+                        "name": "user_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "format": "int64",
+                        "description": "Start time (Unix timestamp)",
+                        "name": "start_time",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "format": "int64",
+                        "description": "End time (Unix timestamp)",
+                        "name": "end_time",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Limit (default 50, max 1000)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Offset (default 0)",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "List of traces",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/observability.Trace"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid parameters",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/traces/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Retrieve detailed trace information",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Traces"
+                ],
+                "summary": "Get trace by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Trace ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Trace details",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/observability.Trace"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "Trace not found",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Update trace name, tags, or metadata (corrections/enrichment via dashboard)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Traces"
+                ],
+                "summary": "Update trace metadata",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Trace ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Updated trace data",
+                        "name": "trace",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/observability.Trace"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Updated trace",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/observability.Trace"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "Trace not found",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/traces/{id}/scores": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Retrieve trace with all associated quality scores",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Traces"
+                ],
+                "summary": "Get trace with quality scores",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Trace ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Trace with scores",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/observability.Trace"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "Trace not found",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/traces/{id}/spans": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Retrieve trace with all spans in hierarchical structure",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Traces"
+                ],
+                "summary": "Get trace with spans tree",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Trace ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Trace with spans",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/observability.Trace"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "404": {
+                        "description": "Trace not found",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     }
                 }
@@ -6040,475 +6277,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/cache/invalidate": {
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Invalidate specific cache entries or clear cache",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "SDK - Cache"
-                ],
-                "summary": "Invalidate cache entries",
-                "parameters": [
-                    {
-                        "description": "Cache invalidation data",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/ai.InvalidateCacheRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Cache invalidated successfully",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.SuccessResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/ai.InvalidateCacheResponse"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request payload",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Invalid or missing API key",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/v1/cache/status": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Get current cache health and statistics",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "SDK - Cache"
-                ],
-                "summary": "Get cache status",
-                "responses": {
-                    "200": {
-                        "description": "Cache status returned",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.SuccessResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/ai.CacheStatusResponse"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "401": {
-                        "description": "Invalid or missing API key",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/v1/chat/completions": {
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Generate AI chat completions using OpenAI-compatible API",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "AI Gateway"
-                ],
-                "summary": "Create chat completion",
-                "parameters": [
-                    {
-                        "description": "Chat completion request",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/ai.ChatCompletionRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Chat completion generated successfully",
-                        "schema": {
-                            "$ref": "#/definitions/response.SuccessResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request payload",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Invalid API key",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "429": {
-                        "description": "Rate limit exceeded",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/v1/completions": {
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Generate AI text completions using OpenAI-compatible API",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "AI Gateway"
-                ],
-                "summary": "Create text completion",
-                "parameters": [
-                    {
-                        "description": "Text completion request",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/ai.CompletionRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Text completion generated successfully",
-                        "schema": {
-                            "$ref": "#/definitions/response.SuccessResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request payload",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Invalid API key",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "429": {
-                        "description": "Rate limit exceeded",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/v1/embeddings": {
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Generate text embeddings using OpenAI-compatible API",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "AI Gateway"
-                ],
-                "summary": "Create embeddings",
-                "parameters": [
-                    {
-                        "description": "Embedding request",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/ai.EmbeddingRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Embeddings generated successfully",
-                        "schema": {
-                            "$ref": "#/definitions/response.SuccessResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request payload",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Invalid API key",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "429": {
-                        "description": "Rate limit exceeded",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/v1/models": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Get list of available AI models",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "AI Gateway"
-                ],
-                "summary": "List available models",
-                "responses": {
-                    "200": {
-                        "description": "List of available models",
-                        "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/ai.Model"
-                            }
-                        }
-                    },
-                    "401": {
-                        "description": "Invalid API key",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/v1/models/{model}": {
-            "get": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Get detailed information about a specific AI model",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "AI Gateway"
-                ],
-                "summary": "Get model information",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "example": "\"gpt-3.5-turbo\"",
-                        "description": "Model ID",
-                        "name": "model",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Model information",
-                        "schema": {
-                            "$ref": "#/definitions/ai.Model"
-                        }
-                    },
-                    "401": {
-                        "description": "Invalid API key",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Model not found",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/v1/route": {
-            "post": {
-                "security": [
-                    {
-                        "ApiKeyAuth": []
-                    }
-                ],
-                "description": "Determine optimal AI provider and model for a request",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "SDK - Routing"
-                ],
-                "summary": "Make AI routing decision",
-                "parameters": [
-                    {
-                        "description": "Routing request data",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/ai.RouteRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Routing decision returned",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.SuccessResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/ai.RouteResponse"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request payload",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Invalid or missing API key",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/response.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/v1/traces": {
             "post": {
                 "security": [
@@ -6700,373 +6468,6 @@ const docTemplate = `{
                     "type": "string",
                     "maxLength": 100,
                     "example": "account_compromise"
-                }
-            }
-        },
-        "ai.CacheStatusResponse": {
-            "description": "Cache health and statistics response",
-            "type": "object",
-            "properties": {
-                "eviction_count": {
-                    "type": "integer",
-                    "example": 142
-                },
-                "hit_rate": {
-                    "type": "number",
-                    "example": 0.85
-                },
-                "last_eviction": {
-                    "type": "integer",
-                    "example": 1677610602
-                },
-                "memory_usage": {
-                    "type": "number",
-                    "example": 0.45
-                },
-                "provider_breakdown": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "size_bytes": {
-                    "type": "integer",
-                    "example": 1048576
-                },
-                "status": {
-                    "type": "string",
-                    "example": "healthy"
-                },
-                "total_entries": {
-                    "type": "integer",
-                    "example": 15420
-                }
-            }
-        },
-        "ai.ChatCompletionRequest": {
-            "description": "OpenAI-compatible chat completion request",
-            "type": "object",
-            "properties": {
-                "frequency_penalty": {
-                    "type": "number",
-                    "example": 0
-                },
-                "logit_bias": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "number",
-                        "format": "float64"
-                    }
-                },
-                "max_tokens": {
-                    "type": "integer",
-                    "example": 150
-                },
-                "messages": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/ai.ChatMessage"
-                    }
-                },
-                "model": {
-                    "type": "string",
-                    "example": "gpt-3.5-turbo"
-                },
-                "n": {
-                    "type": "integer",
-                    "example": 1
-                },
-                "presence_penalty": {
-                    "type": "number",
-                    "example": 0
-                },
-                "stop": {},
-                "stream": {
-                    "type": "boolean",
-                    "example": false
-                },
-                "temperature": {
-                    "type": "number",
-                    "example": 0.7
-                },
-                "top_p": {
-                    "type": "number",
-                    "example": 1
-                },
-                "user": {
-                    "type": "string",
-                    "example": "user-123"
-                }
-            }
-        },
-        "ai.ChatMessage": {
-            "description": "Single message in a chat conversation",
-            "type": "object",
-            "properties": {
-                "content": {
-                    "type": "string",
-                    "example": "Hello, how are you?"
-                },
-                "name": {
-                    "type": "string",
-                    "example": "John"
-                },
-                "role": {
-                    "type": "string",
-                    "example": "user"
-                }
-            }
-        },
-        "ai.CompletionRequest": {
-            "description": "OpenAI-compatible text completion request",
-            "type": "object",
-            "properties": {
-                "best_of": {
-                    "type": "integer",
-                    "example": 1
-                },
-                "echo": {
-                    "type": "boolean",
-                    "example": false
-                },
-                "frequency_penalty": {
-                    "type": "number",
-                    "example": 0
-                },
-                "logit_bias": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "number",
-                        "format": "float64"
-                    }
-                },
-                "logprobs": {
-                    "type": "integer",
-                    "example": 0
-                },
-                "max_tokens": {
-                    "type": "integer",
-                    "example": 150
-                },
-                "model": {
-                    "type": "string",
-                    "example": "gpt-3.5-turbo-instruct"
-                },
-                "n": {
-                    "type": "integer",
-                    "example": 1
-                },
-                "presence_penalty": {
-                    "type": "number",
-                    "example": 0
-                },
-                "prompt": {
-                    "type": "string",
-                    "example": "Once upon a time"
-                },
-                "stop": {},
-                "stream": {
-                    "type": "boolean",
-                    "example": false
-                },
-                "temperature": {
-                    "type": "number",
-                    "example": 0.7
-                },
-                "top_p": {
-                    "type": "number",
-                    "example": 1
-                },
-                "user": {
-                    "type": "string",
-                    "example": "user-123"
-                }
-            }
-        },
-        "ai.EmbeddingRequest": {
-            "description": "OpenAI-compatible embedding request",
-            "type": "object",
-            "properties": {
-                "encoding_format": {
-                    "type": "string",
-                    "example": "float"
-                },
-                "input": {
-                    "type": "string",
-                    "example": "The food was delicious and the waiter..."
-                },
-                "model": {
-                    "type": "string",
-                    "example": "text-embedding-ada-002"
-                },
-                "user": {
-                    "type": "string",
-                    "example": "user-123"
-                }
-            }
-        },
-        "ai.InvalidateCacheRequest": {
-            "description": "Request data for cache invalidation",
-            "type": "object",
-            "properties": {
-                "clear_all": {
-                    "type": "boolean",
-                    "example": false
-                },
-                "keys": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "max_age": {
-                    "type": "integer",
-                    "example": 3600
-                },
-                "model": {
-                    "type": "string",
-                    "example": "gpt-3.5-turbo"
-                },
-                "pattern": {
-                    "type": "string",
-                    "example": "chat:*"
-                },
-                "provider": {
-                    "type": "string",
-                    "example": "openai"
-                }
-            }
-        },
-        "ai.InvalidateCacheResponse": {
-            "description": "Cache invalidation result",
-            "type": "object",
-            "properties": {
-                "count": {
-                    "type": "integer",
-                    "example": 25
-                },
-                "error": {
-                    "type": "string"
-                },
-                "invalidated_keys": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "message": {
-                    "type": "string",
-                    "example": "Cache invalidated successfully"
-                },
-                "success": {
-                    "type": "boolean",
-                    "example": true
-                }
-            }
-        },
-        "ai.Model": {
-            "description": "Available AI model information",
-            "type": "object",
-            "properties": {
-                "created": {
-                    "type": "integer",
-                    "example": 1677610602
-                },
-                "id": {
-                    "type": "string",
-                    "example": "gpt-3.5-turbo"
-                },
-                "object": {
-                    "type": "string",
-                    "example": "model"
-                },
-                "owned_by": {
-                    "type": "string",
-                    "example": "openai"
-                }
-            }
-        },
-        "ai.RouteRequest": {
-            "description": "Request data for AI routing decisions",
-            "type": "object",
-            "properties": {
-                "max_tokens": {
-                    "type": "integer",
-                    "example": 150
-                },
-                "messages": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/ai.ChatMessage"
-                    }
-                },
-                "metadata": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "model": {
-                    "type": "string",
-                    "example": "gpt-3.5-turbo"
-                },
-                "prompt": {
-                    "type": "string",
-                    "example": "Hello world"
-                },
-                "provider": {
-                    "type": "string",
-                    "example": "openai"
-                },
-                "strategy": {
-                    "type": "string",
-                    "example": "cost_optimized"
-                },
-                "temperature": {
-                    "type": "number",
-                    "example": 0.7
-                }
-            }
-        },
-        "ai.RouteResponse": {
-            "description": "AI routing decision response",
-            "type": "object",
-            "properties": {
-                "cache_hit": {
-                    "type": "boolean",
-                    "example": false
-                },
-                "endpoint": {
-                    "type": "string",
-                    "example": "https://api.openai.com/v1/chat/completions"
-                },
-                "estimated_cost": {
-                    "type": "number",
-                    "example": 0.0015
-                },
-                "estimated_latency": {
-                    "type": "integer",
-                    "example": 250
-                },
-                "metadata": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "model": {
-                    "type": "string",
-                    "example": "gpt-3.5-turbo"
-                },
-                "provider": {
-                    "type": "string",
-                    "example": "openai"
-                },
-                "provider_health": {
-                    "type": "number",
-                    "example": 0.98
-                },
-                "quality_score": {
-                    "type": "number",
-                    "example": 0.95
-                },
-                "strategy": {
-                    "type": "string",
-                    "example": "cost_optimized"
                 }
             }
         },
@@ -7477,6 +6878,21 @@ const docTemplate = `{
                     "maxLength": 100,
                     "minLength": 2,
                     "example": "Production API Key"
+                }
+            }
+        },
+        "apikey.UpdateAPIKeyRequest": {
+            "type": "object",
+            "properties": {
+                "is_active": {
+                    "type": "boolean",
+                    "example": false
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 2,
+                    "example": "Updated Production Key"
                 }
             }
         },
@@ -8674,6 +8090,10 @@ const docTemplate = `{
                         "$ref": "#/definitions/observability.KeyValue"
                     }
                 },
+                "droppedAttributesCount": {
+                    "description": "Number of dropped attributes",
+                    "type": "integer"
+                },
                 "name": {
                     "type": "string"
                 },
@@ -8688,6 +8108,28 @@ const docTemplate = `{
                 },
                 "value": {
                     "description": "Can be stringValue, intValue, boolValue, arrayValue, etc."
+                }
+            }
+        },
+        "observability.Link": {
+            "type": "object",
+            "properties": {
+                "attributes": {
+                    "description": "Link metadata",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/observability.KeyValue"
+                    }
+                },
+                "droppedAttributesCount": {
+                    "description": "Number of dropped attributes",
+                    "type": "integer"
+                },
+                "spanId": {
+                    "description": "Linked span ID (Buffer or hex string)"
+                },
+                "traceId": {
+                    "description": "Linked trace ID (Buffer or hex string)"
                 }
             }
         },
@@ -8721,6 +8163,13 @@ const docTemplate = `{
                 "kind": {
                     "description": "0=UNSPECIFIED, 1=INTERNAL, 2=SERVER, 3=CLIENT, 4=PRODUCER, 5=CONSUMER",
                     "type": "integer"
+                },
+                "links": {
+                    "description": "OTEL span links (cross-trace references)",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/observability.Link"
+                    }
                 },
                 "name": {
                     "type": "string"
@@ -8824,16 +8273,9 @@ const docTemplate = `{
                 "evaluator_version": {
                     "type": "string"
                 },
-                "event_ts": {
-                    "description": "ReplacingMergeTree fields (using event_ts for deduplication)",
-                    "type": "string"
-                },
                 "id": {
                     "description": "Identifiers",
                     "type": "string"
-                },
-                "is_deleted": {
-                    "type": "boolean"
                 },
                 "name": {
                     "description": "Score data",
@@ -8873,21 +8315,42 @@ const docTemplate = `{
         "observability.Span": {
             "type": "object",
             "properties": {
-                "attributes": {
-                    "description": "OTEL attributes (JSON string for flexible key-value pairs)",
+                "brokle_cost_input": {
+                    "description": "Decimal(18,9) extracted from STRING",
+                    "type": "number"
+                },
+                "brokle_cost_output": {
+                    "description": "Decimal(18,9) extracted from STRING",
+                    "type": "number"
+                },
+                "brokle_cost_total": {
+                    "description": "Decimal(18,9) extracted from STRING",
+                    "type": "number"
+                },
+                "brokle_internal_model_id": {
+                    "type": "string"
+                },
+                "brokle_prompt_id": {
+                    "type": "string"
+                },
+                "brokle_prompt_name": {
+                    "type": "string"
+                },
+                "brokle_prompt_version": {
+                    "type": "integer"
+                },
+                "brokle_span_level": {
+                    "description": "DEBUG, INFO, WARNING, ERROR",
+                    "type": "string"
+                },
+                "brokle_span_type": {
+                    "description": "Brokle attributes (custom extensions)",
                     "type": "string"
                 },
                 "child_spans": {
                     "type": "array",
                     "items": {
                         "$ref": "#/definitions/observability.Span"
-                    }
-                },
-                "cost_details": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "number",
-                        "format": "float64"
                     }
                 },
                 "created_at": {
@@ -8900,44 +8363,74 @@ const docTemplate = `{
                 "end_time": {
                     "type": "string"
                 },
-                "event_ts": {
-                    "description": "ReplacingMergeTree fields (using event_ts for deduplication)",
+                "events_attributes": {
+                    "description": "JSON strings",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "events_name": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "events_timestamp": {
+                    "description": "OTEL Events (OTEL spec) - arrays for event tracking",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "gen_ai_operation_name": {
+                    "description": "===== MATERIALIZED COLUMNS (Read-only, computed by ClickHouse) =====\nGen AI attributes (OTEL 1.38+ conventions)",
                     "type": "string"
                 },
-                "id": {
-                    "description": "OTEL identifiers",
+                "gen_ai_provider_name": {
                     "type": "string"
+                },
+                "gen_ai_request_max_tokens": {
+                    "type": "integer"
+                },
+                "gen_ai_request_model": {
+                    "type": "string"
+                },
+                "gen_ai_request_temperature": {
+                    "type": "number"
+                },
+                "gen_ai_request_top_p": {
+                    "type": "number"
+                },
+                "gen_ai_usage_input_tokens": {
+                    "type": "integer"
+                },
+                "gen_ai_usage_output_tokens": {
+                    "type": "integer"
                 },
                 "input": {
                     "description": "Input/Output (stored in ClickHouse with ZSTD compression)",
                     "type": "string"
                 },
-                "internal_model_id": {
-                    "type": "string"
+                "links_attributes": {
+                    "description": "JSON strings",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 },
-                "is_deleted": {
-                    "type": "boolean"
+                "links_span_id": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 },
-                "level": {
-                    "description": "DEBUG, INFO, WARNING, ERROR, DEFAULT",
-                    "type": "string"
-                },
-                "metadata": {
-                    "description": "OTEL metadata (resource attributes + instrumentation scope)",
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "model_name": {
-                    "description": "Universal model fields",
-                    "type": "string"
-                },
-                "model_parameters": {
-                    "description": "JSON string",
-                    "type": "string"
-                },
-                "name": {
-                    "description": "Span data",
-                    "type": "string"
+                "links_trace_id": {
+                    "description": "OTEL Links (OTEL spec) - arrays for span linking",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
                 },
                 "output": {
                     "type": "string"
@@ -8949,33 +8442,10 @@ const docTemplate = `{
                 "project_id": {
                     "type": "string"
                 },
-                "prompt_id": {
-                    "description": "Prompt management",
-                    "type": "string"
-                },
-                "prompt_name": {
-                    "type": "string"
-                },
-                "prompt_version": {
-                    "type": "integer"
-                },
-                "provided_cost_details": {
+                "resource_attributes": {
+                    "description": "OTEL resource attributes (JSON map with resource-level context)",
                     "type": "object",
-                    "additionalProperties": {
-                        "type": "number",
-                        "format": "float64"
-                    }
-                },
-                "provided_usage_details": {
-                    "description": "Usage \u0026 Cost Maps (Pattern: provided + calculated)",
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "integer",
-                        "format": "int64"
-                    }
-                },
-                "provider": {
-                    "type": "string"
+                    "additionalProperties": true
                 },
                 "scores": {
                     "description": "Populated from joins (not in ClickHouse)",
@@ -8984,8 +8454,21 @@ const docTemplate = `{
                         "$ref": "#/definitions/observability.Score"
                     }
                 },
+                "span_attributes": {
+                    "description": "OTEL attributes (JSON map with all span-level attributes)\nStores: gen_ai.*, brokle.*, and custom attributes",
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "span_id": {
+                    "description": "OTEL identifiers",
+                    "type": "string"
+                },
                 "span_kind": {
-                    "description": "OTEL: INTERNAL, SERVER, CLIENT, PRODUCER, CONSUMER",
+                    "description": "OTEL enum: 0=UNSPECIFIED, 1=INTERNAL, 2=SERVER, 3=CLIENT, 4=PRODUCER, 5=CONSUMER",
+                    "type": "integer"
+                },
+                "span_name": {
+                    "description": "Span data",
                     "type": "string"
                 },
                 "start_time": {
@@ -8993,34 +8476,16 @@ const docTemplate = `{
                 },
                 "status_code": {
                     "description": "OTEL status",
-                    "type": "string"
+                    "type": "integer"
                 },
                 "status_message": {
                     "type": "string"
-                },
-                "total_cost": {
-                    "type": "number"
                 },
                 "trace_id": {
                     "description": "OTEL trace_id",
                     "type": "string"
                 },
-                "type": {
-                    "description": "Brokle: span, generation, event, tool, agent, chain",
-                    "type": "string"
-                },
                 "updated_at": {
-                    "type": "string"
-                },
-                "usage_details": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "integer",
-                        "format": "int64"
-                    }
-                },
-                "version": {
-                    "description": "Application versioning (experiment tracking)",
                     "type": "string"
                 }
             }
@@ -9040,10 +8505,6 @@ const docTemplate = `{
         "observability.Trace": {
             "type": "object",
             "properties": {
-                "attributes": {
-                    "description": "OTEL attributes (JSON string for flexible key-value pairs)",
-                    "type": "string"
-                },
                 "bookmarked": {
                     "description": "Flags (moved from sessions table)",
                     "type": "boolean"
@@ -9059,28 +8520,12 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "environment": {
-                    "description": "OTEL resource attributes",
-                    "type": "string"
-                },
-                "event_ts": {
-                    "description": "ReplacingMergeTree fields (using event_ts for deduplication)",
-                    "type": "string"
-                },
-                "id": {
-                    "description": "OTEL identifiers",
+                    "description": "OTEL resource attributes (extracted for common queries)",
                     "type": "string"
                 },
                 "input": {
                     "description": "Input/Output (trace-level data stored in ClickHouse with ZSTD compression)",
                     "type": "string"
-                },
-                "is_deleted": {
-                    "type": "boolean"
-                },
-                "metadata": {
-                    "description": "OTEL metadata (resource attributes + instrumentation scope)",
-                    "type": "object",
-                    "additionalProperties": true
                 },
                 "name": {
                     "description": "Trace metadata",
@@ -9099,6 +8544,11 @@ const docTemplate = `{
                 "release": {
                     "type": "string"
                 },
+                "resource_attributes": {
+                    "description": "OTEL resource attributes (JSON map with all resource-level attributes)",
+                    "type": "object",
+                    "additionalProperties": true
+                },
                 "scores": {
                     "type": "array",
                     "items": {
@@ -9115,9 +8565,6 @@ const docTemplate = `{
                     "description": "Virtual session (attribute only, not FK)",
                     "type": "string"
                 },
-                "span_count": {
-                    "type": "integer"
-                },
                 "spans": {
                     "description": "Populated from joins (not in ClickHouse)",
                     "type": "array",
@@ -9131,7 +8578,7 @@ const docTemplate = `{
                 },
                 "status_code": {
                     "description": "OTEL status",
-                    "type": "string"
+                    "type": "integer"
                 },
                 "status_message": {
                     "type": "string"
@@ -9143,12 +8590,9 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
-                "total_cost": {
-                    "description": "Aggregate metrics (calculated from spans)",
-                    "type": "number"
-                },
-                "total_tokens": {
-                    "type": "integer"
+                "trace_id": {
+                    "description": "OTEL identifiers",
+                    "type": "string"
                 },
                 "updated_at": {
                     "type": "string"
@@ -9489,7 +8933,7 @@ const docTemplate = `{
             }
         },
         "response.Meta": {
-            "description": "Response metadata including request tracking and pagination",
+            "description": "Response metadata including request tracking and offset pagination",
             "type": "object",
             "properties": {
                 "pagination": {
@@ -9503,10 +8947,6 @@ const docTemplate = `{
                     "type": "string",
                     "example": "2023-12-01T10:30:00Z"
                 },
-                "total": {
-                    "type": "integer",
-                    "example": 150
-                },
                 "version": {
                     "type": "string",
                     "example": "v1"
@@ -9514,7 +8954,7 @@ const docTemplate = `{
             }
         },
         "response.Pagination": {
-            "description": "Pagination metadata for paginated API responses",
+            "description": "Offset-based pagination information for list responses",
             "type": "object",
             "properties": {
                 "has_next": {
@@ -9525,21 +8965,21 @@ const docTemplate = `{
                     "type": "boolean",
                     "example": false
                 },
+                "limit": {
+                    "type": "integer",
+                    "example": 50
+                },
                 "page": {
                     "type": "integer",
                     "example": 1
                 },
-                "page_size": {
-                    "type": "integer",
-                    "example": 20
-                },
                 "total": {
                     "type": "integer",
-                    "example": 150
+                    "example": 1234
                 },
-                "total_page": {
+                "total_pages": {
                     "type": "integer",
-                    "example": 8
+                    "example": 25
                 }
             }
         },

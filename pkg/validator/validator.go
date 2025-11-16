@@ -225,7 +225,7 @@ func (v *Validator) URL(field string, value string, message ...string) *Validato
 
 // Pattern validates against regular expression
 func (v *Validator) Pattern(field string, value string, pattern string, message ...string) *Validator {
-	msg := fmt.Sprintf("must match pattern %s", pattern)
+	msg := "must match pattern " + pattern
 	if len(message) > 0 {
 		msg = message[0]
 	}
@@ -287,7 +287,7 @@ func (v *Validator) Numeric(field string, value string, message ...string) *Vali
 
 // OneOf validates value is one of allowed values
 func (v *Validator) OneOf(field string, value string, allowed []string, message ...string) *Validator {
-	msg := fmt.Sprintf("must be one of: %s", strings.Join(allowed, ", "))
+	msg := "must be one of: " + strings.Join(allowed, ", ")
 	if len(message) > 0 {
 		msg = message[0]
 	}
@@ -304,7 +304,7 @@ func (v *Validator) OneOf(field string, value string, allowed []string, message 
 
 // Date validates date format
 func (v *Validator) Date(field string, value string, format string, message ...string) *Validator {
-	msg := fmt.Sprintf("must be a valid date in format %s", format)
+	msg := "must be a valid date in format " + format
 	if len(message) > 0 {
 		msg = message[0]
 	}

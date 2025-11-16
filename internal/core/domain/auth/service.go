@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"brokle/pkg/pagination"
 	"brokle/pkg/ulid"
 )
 
@@ -85,6 +86,9 @@ type APIKeyService interface {
 	GetAPIKeysByUser(ctx context.Context, userID ulid.ULID) ([]*APIKey, error)
 	GetAPIKeysByOrganization(ctx context.Context, orgID ulid.ULID) ([]*APIKey, error)
 	GetAPIKeysByProject(ctx context.Context, projectID ulid.ULID) ([]*APIKey, error)
+
+	// Pagination support
+	CountAPIKeys(ctx context.Context, filters *APIKeyFilters) (int64, error)
 }
 
 // RoleService defines both system template and custom scoped role management service interface.
@@ -210,7 +214,7 @@ type BlacklistedTokenService interface {
 
 	// Bulk operations
 	BlacklistUserTokens(ctx context.Context, userID ulid.ULID, reason string) error
-	GetUserBlacklistedTokens(ctx context.Context, userID ulid.ULID, limit, offset int) ([]*BlacklistedToken, error)
+	GetUserBlacklistedTokens(ctx context.Context, filters *BlacklistedTokenFilter) ([]*BlacklistedToken, error)
 
 	// Maintenance
 	CleanupExpiredTokens(ctx context.Context) error
@@ -241,16 +245,16 @@ type AuditLogService interface {
 
 // TokenClaims represents JWT token claims.
 type TokenClaims struct {
-	UserID         ulid.ULID  `json:"user_id"`
-	Email          string     `json:"email"`
 	OrganizationID *ulid.ULID `json:"organization_id,omitempty"`
+	Email          string     `json:"email"`
+	TokenType      string     `json:"token_type"`
+	Issuer         string     `json:"iss"`
+	Subject        string     `json:"sub"`
 	Scopes         []string   `json:"scopes,omitempty"`
-	TokenType      string     `json:"token_type"` // access, refresh, api_key
 	IssuedAt       int64      `json:"iat"`
 	ExpiresAt      int64      `json:"exp"`
 	NotBefore      int64      `json:"nbf"`
-	Issuer         string     `json:"iss"`
-	Subject        string     `json:"sub"`
+	UserID         ulid.ULID  `json:"user_id"`
 }
 
 // Request/Response DTOs
@@ -276,20 +280,15 @@ type UpdateAPIKeyRequest struct {
 
 // Filter types
 type APIKeyFilters struct {
-	// Pagination
-	Limit  int `json:"limit"`
-	Offset int `json:"offset"`
-
-	// Filters
+	// Domain filters
 	UserID         *ulid.ULID `json:"user_id,omitempty"`
 	OrganizationID *ulid.ULID `json:"organization_id,omitempty"`
 	ProjectID      *ulid.ULID `json:"project_id,omitempty"`
 	IsActive       *bool      `json:"is_active,omitempty"`
 	IsExpired      *bool      `json:"is_expired,omitempty"`
 
-	// Sorting
-	SortBy    string `json:"sort_by"`    // name, created_at, last_used_at
-	SortOrder string `json:"sort_order"` // asc, desc
+	// Pagination (embedded for DRY)
+	pagination.Params `json:",inline"`
 }
 
 // Statistics types - AuditLogStats is defined in repository.go

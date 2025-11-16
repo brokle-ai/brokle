@@ -86,9 +86,9 @@ func (s *blacklistedTokenService) BlacklistUserTokens(ctx context.Context, userI
 	return s.CreateUserTimestampBlacklist(ctx, userID, reason)
 }
 
-// GetUserBlacklistedTokens retrieves blacklisted tokens for a specific user
-func (s *blacklistedTokenService) GetUserBlacklistedTokens(ctx context.Context, userID ulid.ULID, limit, offset int) ([]*authDomain.BlacklistedToken, error) {
-	return s.blacklistedTokenRepo.GetBlacklistedTokensByUser(ctx, userID, limit, offset)
+// GetUserBlacklistedTokens retrieves blacklisted tokens with cursor pagination
+func (s *blacklistedTokenService) GetUserBlacklistedTokens(ctx context.Context, filters *authDomain.BlacklistedTokenFilter) ([]*authDomain.BlacklistedToken, error) {
+	return s.blacklistedTokenRepo.GetBlacklistedTokensByUser(ctx, filters)
 }
 
 // CleanupExpiredTokens removes naturally expired tokens from blacklist

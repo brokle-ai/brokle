@@ -2,6 +2,7 @@ package migration
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -100,7 +101,7 @@ func NewManagerWithDatabases(cfg *config.Config, databases []DatabaseType) (*Man
 // initPostgresRunner initializes the PostgreSQL migration runner
 func (m *Manager) initPostgresRunner() error {
 	if m.postgresDB == nil {
-		return fmt.Errorf("postgres database not initialized")
+		return errors.New("postgres database not initialized")
 	}
 
 	// Get migrations path
@@ -123,7 +124,7 @@ func (m *Manager) initPostgresRunner() error {
 
 	// Create migration runner using golang-migrate
 	runner, err := migrate.NewWithDatabaseInstance(
-		fmt.Sprintf("file://%s", migrationsPath),
+		"file://"+migrationsPath,
 		"postgres",
 		driver,
 	)
@@ -139,7 +140,7 @@ func (m *Manager) initPostgresRunner() error {
 // initClickHouseRunner initializes the ClickHouse migration runner
 func (m *Manager) initClickHouseRunner() error {
 	if m.clickhouseDB == nil {
-		return fmt.Errorf("clickhouse database not initialized")
+		return errors.New("clickhouse database not initialized")
 	}
 
 	// Get migrations path
@@ -148,7 +149,7 @@ func (m *Manager) initClickHouseRunner() error {
 	// Create migration runner using golang-migrate with URL-based approach
 	// since ClickHouse uses driver.Conn not sql.DB
 	runner, err := migrate.New(
-		fmt.Sprintf("file://%s", migrationsPath),
+		"file://"+migrationsPath,
 		m.config.GetClickHouseURL(),
 	)
 	if err != nil {
@@ -183,7 +184,7 @@ func (m *Manager) getMigrationsPath(dbType DatabaseType) string {
 // MigratePostgresUp runs PostgreSQL migrations up
 func (m *Manager) MigratePostgresUp(ctx context.Context, steps int, dryRun bool) error {
 	if m.postgresRunner == nil {
-		return fmt.Errorf("PostgreSQL not initialized - run with -db postgres or -db all")
+		return errors.New("PostgreSQL not initialized - run with -db postgres or -db all")
 	}
 
 	if dryRun {
@@ -202,7 +203,7 @@ func (m *Manager) MigratePostgresUp(ctx context.Context, steps int, dryRun bool)
 // MigratePostgresDown runs PostgreSQL migrations down
 func (m *Manager) MigratePostgresDown(ctx context.Context, steps int, dryRun bool) error {
 	if m.postgresRunner == nil {
-		return fmt.Errorf("PostgreSQL not initialized - run with -db postgres or -db all")
+		return errors.New("PostgreSQL not initialized - run with -db postgres or -db all")
 	}
 
 	if dryRun {
@@ -221,7 +222,7 @@ func (m *Manager) MigratePostgresDown(ctx context.Context, steps int, dryRun boo
 // MigrateClickHouseUp runs ClickHouse migrations up
 func (m *Manager) MigrateClickHouseUp(ctx context.Context, steps int, dryRun bool) error {
 	if m.clickhouseRunner == nil {
-		return fmt.Errorf("ClickHouse not initialized - run with -db clickhouse or -db all")
+		return errors.New("ClickHouse not initialized - run with -db clickhouse or -db all")
 	}
 
 	if dryRun {
@@ -240,7 +241,7 @@ func (m *Manager) MigrateClickHouseUp(ctx context.Context, steps int, dryRun boo
 // MigrateClickHouseDown runs ClickHouse migrations down
 func (m *Manager) MigrateClickHouseDown(ctx context.Context, steps int, dryRun bool) error {
 	if m.clickhouseRunner == nil {
-		return fmt.Errorf("ClickHouse not initialized - run with -db clickhouse or -db all")
+		return errors.New("ClickHouse not initialized - run with -db clickhouse or -db all")
 	}
 
 	if dryRun {
@@ -408,7 +409,7 @@ func (m *Manager) HealthCheck() map[string]interface{} {
 			"status": "not_initialized",
 			"error":  "PostgreSQL not initialized - run with -db postgres or -db all",
 		}
-		pgErr = fmt.Errorf("not initialized")
+		pgErr = errors.New("not initialized")
 	} else {
 		pgVersion, pgDirty, pgErr = m.postgresRunner.Version()
 		health["postgres"] = map[string]interface{}{
@@ -427,7 +428,7 @@ func (m *Manager) HealthCheck() map[string]interface{} {
 			"status": "not_initialized",
 			"error":  "ClickHouse not initialized - run with -db clickhouse or -db all",
 		}
-		chErr = fmt.Errorf("not initialized")
+		chErr = errors.New("not initialized")
 	} else {
 		chVersion, chDirty, chErr = m.clickhouseRunner.Version()
 		health["clickhouse"] = map[string]interface{}{
@@ -489,7 +490,7 @@ func (m *Manager) GetStatus() MigrationStatus {
 // AutoMigrate runs migrations automatically on startup if configured
 func (m *Manager) AutoMigrate(ctx context.Context) error {
 	if !m.CanAutoMigrate() {
-		return fmt.Errorf("auto-migration is disabled")
+		return errors.New("auto-migration is disabled")
 	}
 
 	m.logger.Info("Starting auto-migration")
@@ -518,7 +519,7 @@ func (m *Manager) CanAutoMigrate() bool {
 // GotoPostgres migrates PostgreSQL to a specific version
 func (m *Manager) GotoPostgres(version uint) error {
 	if m.postgresRunner == nil {
-		return fmt.Errorf("PostgreSQL not initialized - run with -db postgres or -db all")
+		return errors.New("PostgreSQL not initialized - run with -db postgres or -db all")
 	}
 	// golang-migrate uses different method - use Steps to get to specific version
 	current, _, err := m.postgresRunner.Version()
@@ -535,7 +536,7 @@ func (m *Manager) GotoPostgres(version uint) error {
 // GotoClickHouse migrates ClickHouse to a specific version
 func (m *Manager) GotoClickHouse(version uint) error {
 	if m.clickhouseRunner == nil {
-		return fmt.Errorf("ClickHouse not initialized - run with -db clickhouse or -db all")
+		return errors.New("ClickHouse not initialized - run with -db clickhouse or -db all")
 	}
 	// golang-migrate uses different method - use Steps to get to specific version
 	current, _, err := m.clickhouseRunner.Version()
@@ -552,7 +553,7 @@ func (m *Manager) GotoClickHouse(version uint) error {
 // ForcePostgres forces PostgreSQL to a specific version
 func (m *Manager) ForcePostgres(version int) error {
 	if m.postgresRunner == nil {
-		return fmt.Errorf("PostgreSQL not initialized - run with -db postgres or -db all")
+		return errors.New("PostgreSQL not initialized - run with -db postgres or -db all")
 	}
 	return m.postgresRunner.Force(version)
 }
@@ -560,7 +561,7 @@ func (m *Manager) ForcePostgres(version int) error {
 // ForceClickHouse forces ClickHouse to a specific version
 func (m *Manager) ForceClickHouse(version int) error {
 	if m.clickhouseRunner == nil {
-		return fmt.Errorf("ClickHouse not initialized - run with -db clickhouse or -db all")
+		return errors.New("ClickHouse not initialized - run with -db clickhouse or -db all")
 	}
 	return m.clickhouseRunner.Force(version)
 }
@@ -568,7 +569,7 @@ func (m *Manager) ForceClickHouse(version int) error {
 // DropPostgres drops all PostgreSQL tables
 func (m *Manager) DropPostgres() error {
 	if m.postgresRunner == nil {
-		return fmt.Errorf("PostgreSQL not initialized - run with -db postgres or -db all")
+		return errors.New("PostgreSQL not initialized - run with -db postgres or -db all")
 	}
 	return m.postgresRunner.Drop()
 }
@@ -576,7 +577,7 @@ func (m *Manager) DropPostgres() error {
 // DropClickHouse drops all ClickHouse tables
 func (m *Manager) DropClickHouse() error {
 	if m.clickhouseRunner == nil {
-		return fmt.Errorf("ClickHouse not initialized - run with -db clickhouse or -db all")
+		return errors.New("ClickHouse not initialized - run with -db clickhouse or -db all")
 	}
 	return m.clickhouseRunner.Drop()
 }
@@ -584,7 +585,7 @@ func (m *Manager) DropClickHouse() error {
 // StepsPostgres runs n PostgreSQL migration steps
 func (m *Manager) StepsPostgres(n int) error {
 	if m.postgresRunner == nil {
-		return fmt.Errorf("PostgreSQL not initialized - run with -db postgres or -db all")
+		return errors.New("PostgreSQL not initialized - run with -db postgres or -db all")
 	}
 	return m.postgresRunner.Steps(n)
 }
@@ -592,7 +593,7 @@ func (m *Manager) StepsPostgres(n int) error {
 // StepsClickHouse runs n ClickHouse migration steps
 func (m *Manager) StepsClickHouse(n int) error {
 	if m.clickhouseRunner == nil {
-		return fmt.Errorf("ClickHouse not initialized - run with -db clickhouse or -db all")
+		return errors.New("ClickHouse not initialized - run with -db clickhouse or -db all")
 	}
 	return m.clickhouseRunner.Steps(n)
 }

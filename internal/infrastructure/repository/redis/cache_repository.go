@@ -210,23 +210,23 @@ func (r *CacheRepository) InvalidateAPIKey(ctx context.Context, apiKey string) e
 // Helper methods for key generation
 
 func (r *CacheRepository) sessionKey(sessionID string) string {
-	return fmt.Sprintf("session:%s", sessionID)
+	return "session:" + sessionID
 }
 
 func (r *CacheRepository) rateLimitKey(identifier string) string {
-	return fmt.Sprintf("rate_limit:%s", identifier)
+	return "rate_limit:" + identifier
 }
 
 func (r *CacheRepository) apiKeyKey(apiKey string) string {
-	return fmt.Sprintf("api_key:%s", apiKey)
+	return "api_key:" + apiKey
 }
 
 func (r *CacheRepository) userKey(userID string) string {
-	return fmt.Sprintf("user:%s", userID)
+	return "user:" + userID
 }
 
 func (r *CacheRepository) semanticCacheKey(hash string) string {
-	return fmt.Sprintf("semantic_cache:%s", hash)
+	return "semantic_cache:" + hash
 }
 
 // Semantic cache methods for AI requests

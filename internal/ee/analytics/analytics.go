@@ -21,40 +21,40 @@ type EnterpriseAnalytics interface {
 
 // PredictiveReport represents ML-powered insights
 type PredictiveReport struct {
-	TimeRange       string            `json:"time_range"`
+	GeneratedAt     time.Time         `json:"generated_at"`
 	CostForecast    *CostForecast     `json:"cost_forecast,omitempty"`
+	TimeRange       string            `json:"time_range"`
 	UsageTrends     []*UsageTrend     `json:"usage_trends,omitempty"`
 	Anomalies       []*Anomaly        `json:"anomalies,omitempty"`
 	Recommendations []*Recommendation `json:"recommendations,omitempty"`
-	GeneratedAt     time.Time         `json:"generated_at"`
 }
 
 // Dashboard represents a custom dashboard configuration
 type Dashboard struct {
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	Layout      *Layout   `json:"layout,omitempty"`
 	ID          string    `json:"id"`
 	Name        string    `json:"name"`
 	Description string    `json:"description,omitempty"`
-	Widgets     []*Widget `json:"widgets"`
-	Layout      *Layout   `json:"layout,omitempty"`
 	CreatedBy   string    `json:"created_by"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	Widgets     []*Widget `json:"widgets"`
 }
 
 // Widget represents a dashboard widget
 type Widget struct {
-	ID       string                 `json:"id"`
-	Type     string                 `json:"type"` // chart, metric, table, etc.
-	Title    string                 `json:"title"`
 	Config   map[string]interface{} `json:"config"`
 	Position *Position              `json:"position,omitempty"`
+	ID       string                 `json:"id"`
+	Type     string                 `json:"type"`
+	Title    string                 `json:"title"`
 }
 
 // Layout represents dashboard layout configuration
 type Layout struct {
+	Theme   string `json:"theme,omitempty"`
 	Columns int    `json:"columns"`
 	Rows    int    `json:"rows"`
-	Theme   string `json:"theme,omitempty"`
 }
 
 // Position represents widget position in dashboard
@@ -67,20 +67,20 @@ type Position struct {
 
 // ReportRequest represents advanced report parameters
 type ReportRequest struct {
+	Filters     map[string]interface{} `json:"filters,omitempty"`
 	Type        string                 `json:"type"`
 	TimeRange   string                 `json:"time_range"`
-	Filters     map[string]interface{} `json:"filters,omitempty"`
-	GroupBy     []string               `json:"group_by,omitempty"`
 	Aggregation string                 `json:"aggregation,omitempty"`
+	GroupBy     []string               `json:"group_by,omitempty"`
 }
 
 // Report represents generated report
 type Report struct {
-	ID          string                 `json:"id"`
-	Type        string                 `json:"type"`
-	Data        map[string]interface{} `json:"data"`
 	GeneratedAt time.Time              `json:"generated_at"`
 	ExpiresAt   time.Time              `json:"expires_at,omitempty"`
+	Data        map[string]interface{} `json:"data"`
+	ID          string                 `json:"id"`
+	Type        string                 `json:"type"`
 }
 
 // ExportQuery represents data export parameters
@@ -93,27 +93,27 @@ type ExportQuery struct {
 
 // Supporting types
 type CostForecast struct {
+	Trend       string  `json:"trend"`
 	NextMonth   float64 `json:"next_month"`
 	NextQuarter float64 `json:"next_quarter"`
 	Confidence  float64 `json:"confidence"`
-	Trend       string  `json:"trend"` // increasing, decreasing, stable
 }
 
 type UsageTrend struct {
 	Metric     string  `json:"metric"`
 	Trend      string  `json:"trend"`
-	Change     float64 `json:"change"` // percentage
-	Confidence float64 `json:"confidence"`
 	Period     string  `json:"period"`
+	Change     float64 `json:"change"`
+	Confidence float64 `json:"confidence"`
 }
 
 type Anomaly struct {
-	Metric      string    `json:"metric"`
 	Timestamp   time.Time `json:"timestamp"`
+	Metric      string    `json:"metric"`
+	Severity    string    `json:"severity"`
+	Description string    `json:"description"`
 	Value       float64   `json:"value"`
 	Expected    float64   `json:"expected"`
-	Severity    string    `json:"severity"` // low, medium, high
-	Description string    `json:"description"`
 }
 
 type Recommendation struct {

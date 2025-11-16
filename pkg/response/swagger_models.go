@@ -5,17 +5,17 @@ package response
 // SuccessResponse represents a successful API response
 // @Description Standard successful response
 type SuccessResponse struct {
-	Success bool        `json:"success" example:"true" description:"Always true for successful responses"`
 	Data    interface{} `json:"data" description:"Response data payload"`
 	Meta    *Meta       `json:"meta,omitempty" description:"Response metadata"`
+	Success bool        `json:"success" example:"true" description:"Always true for successful responses"`
 }
 
 // ErrorResponse represents an error API response
 // @Description Standard error response
 type ErrorResponse struct {
-	Success bool      `json:"success" example:"false" description:"Always false for error responses"`
 	Error   *APIError `json:"error" description:"Error details"`
 	Meta    *Meta     `json:"meta,omitempty" description:"Response metadata"`
+	Success bool      `json:"success" example:"false" description:"Always false for error responses"`
 }
 
 // MessageResponse represents a simple message response
@@ -30,18 +30,12 @@ type IDResponse struct {
 	ID string `json:"id" example:"ulid_01h2x3y4z5" description:"Resource identifier"`
 }
 
-// ListResponse represents a paginated list response
-// @Description Paginated list response wrapper
+// ListResponse represents a cursor-paginated list response
+// @Description Cursor-paginated list response wrapper
 type ListResponse struct {
-	Success bool        `json:"success" example:"true" description:"Request success status"`
 	Data    interface{} `json:"data" description:"Array of items"`
-	Meta    struct {
-		RequestID  string      `json:"request_id,omitempty" example:"req_01h2x3y4z5"`
-		Timestamp  string      `json:"timestamp,omitempty" example:"2023-12-01T10:30:00Z"`
-		Version    string      `json:"version,omitempty" example:"v1"`
-		Pagination *Pagination `json:"pagination" description:"Pagination information"`
-		Total      int64       `json:"total" example:"150"`
-	} `json:"meta"`
+	Meta    *Meta       `json:"meta" description:"Response metadata with cursor pagination"`
+	Success bool        `json:"success" example:"true" description:"Request success status"`
 }
 
 // HealthResponse represents health check response
@@ -60,15 +54,15 @@ type HealthResponse struct {
 // RoleResponse represents a role in API responses
 // @Description Role information for API responses
 type RoleResponse struct {
-	ID             string          `json:"id" example:"01ARZ3NDEKTSV4RRFFQ69G5FAV" description:"Role unique identifier"`
-	OrganizationID *string         `json:"organization_id,omitempty" example:"01ARZ3NDEKTSV4RRFFQ69G5FAV" description:"Organization ID (null for global system roles)"`
-	Name           string          `json:"name" example:"admin" description:"Role name"`
-	DisplayName    string          `json:"display_name" example:"Administrator" description:"Human-readable role name"`
-	Description    string          `json:"description" example:"Full administrative access" description:"Role description"`
-	IsSystemRole   bool            `json:"is_system_role" example:"false" description:"Whether this is a system-defined role"`
-	CreatedAt      string          `json:"created_at" example:"2023-01-01T00:00:00Z" description:"Role creation timestamp"`
-	UpdatedAt      string          `json:"updated_at" example:"2023-01-01T00:00:00Z" description:"Role last update timestamp"`
+	OrganizationID *string              `json:"organization_id,omitempty" example:"01ARZ3NDEKTSV4RRFFQ69G5FAV" description:"Organization ID (null for global system roles)"`
+	ID             string               `json:"id" example:"01ARZ3NDEKTSV4RRFFQ69G5FAV" description:"Role unique identifier"`
+	Name           string               `json:"name" example:"admin" description:"Role name"`
+	DisplayName    string               `json:"display_name" example:"Administrator" description:"Human-readable role name"`
+	Description    string               `json:"description" example:"Full administrative access" description:"Role description"`
+	CreatedAt      string               `json:"created_at" example:"2023-01-01T00:00:00Z" description:"Role creation timestamp"`
+	UpdatedAt      string               `json:"updated_at" example:"2023-01-01T00:00:00Z" description:"Role last update timestamp"`
 	Permissions    []PermissionResponse `json:"permissions,omitempty" description:"Role permissions"`
+	IsSystemRole   bool                 `json:"is_system_role" example:"false" description:"Whether this is a system-defined role"`
 }
 
 // PermissionResponse represents a permission in API responses
@@ -106,11 +100,11 @@ type PermissionListResponse struct {
 // UserPermissionsResponse represents a user's effective permissions in an organization
 // @Description User's effective permissions with role information
 type UserPermissionsResponse struct {
-	UserID         string              `json:"user_id" example:"01ARZ3NDEKTSV4RRFFQ69G5FAV" description:"User unique identifier"`
-	OrganizationID string              `json:"organization_id" example:"01ARZ3NDEKTSV4RRFFQ69G5FAV" description:"Organization unique identifier"`
-	Role           *RoleResponse       `json:"role,omitempty" description:"User's assigned role"`
-	Permissions    []PermissionResponse `json:"permissions" description:"User's effective permissions"`
-	ResourceActions []string           `json:"resource_actions" example:"[\"users:read\", \"projects:write\"]" description:"Permission strings in resource:action format"`
+	UserID          string               `json:"user_id" example:"01ARZ3NDEKTSV4RRFFQ69G5FAV" description:"User unique identifier"`
+	OrganizationID  string               `json:"organization_id" example:"01ARZ3NDEKTSV4RRFFQ69G5FAV" description:"Organization unique identifier"`
+	Role            *RoleResponse        `json:"role,omitempty" description:"User's assigned role"`
+	Permissions     []PermissionResponse `json:"permissions" description:"User's effective permissions"`
+	ResourceActions []string             `json:"resource_actions" example:"[\"users:read\", \"projects:write\"]" description:"Permission strings in resource:action format"`
 }
 
 // CheckPermissionsResponse represents the result of checking multiple permissions
@@ -122,12 +116,12 @@ type CheckPermissionsResponse struct {
 // RoleStatistics represents statistics about roles in an organization
 // @Description Statistics about roles in an organization
 type RoleStatistics struct {
+	RoleDistribution map[string]int `json:"role_distribution" description:"Distribution of members by role"`
 	OrganizationID   string         `json:"organization_id" example:"01ARZ3NDEKTSV4RRFFQ69G5FAV" description:"Organization unique identifier"`
+	LastUpdated      string         `json:"last_updated" example:"2023-01-01T00:00:00Z" description:"Last update timestamp"`
 	TotalRoles       int            `json:"total_roles" example:"10" description:"Total number of roles"`
 	SystemRoles      int            `json:"system_roles" example:"4" description:"Number of system roles"`
 	CustomRoles      int            `json:"custom_roles" example:"6" description:"Number of custom roles"`
 	TotalMembers     int            `json:"total_members" example:"25" description:"Total organization members"`
-	RoleDistribution map[string]int `json:"role_distribution" description:"Distribution of members by role"`
 	PermissionCount  int            `json:"permission_count" example:"45" description:"Total number of available permissions"`
-	LastUpdated      string         `json:"last_updated" example:"2023-01-01T00:00:00Z" description:"Last update timestamp"`
 }

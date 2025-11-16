@@ -12,227 +12,139 @@ import (
 
 // Trace represents an OTEL trace (root span) with trace-level context
 type Trace struct {
-	// OTEL identifiers
-	TraceID   string `json:"trace_id" db:"trace_id"`     // OTEL trace_id (32 hex chars) - renamed from ID
-	ProjectID string `json:"project_id" db:"project_id"` // Brokle project context
-
-	// Trace metadata
-	Name      string  `json:"name" db:"name"`
-	UserID    *string `json:"user_id,omitempty" db:"user_id"`
-	SessionID *string `json:"session_id,omitempty" db:"session_id"` // Virtual session (attribute only, not FK)
-
-	// Timing
-	StartTime  time.Time  `json:"start_time" db:"start_time"`
-	EndTime    *time.Time `json:"end_time,omitempty" db:"end_time"`
-	DurationMs *uint32    `json:"duration_ms,omitempty" db:"duration_ms"`
-
-	// OTEL status
-	StatusCode    uint8   `json:"status_code" db:"status_code"`         // OTEL enum: 0=UNSET, 1=OK, 2=ERROR
-	StatusMessage *string `json:"status_message,omitempty" db:"status_message"`
-
-	// OTEL resource attributes (JSON string with all resource-level attributes)
-	ResourceAttributes string `json:"resource_attributes" db:"resource_attributes"`
-
-	// Input/Output (trace-level data stored in ClickHouse with ZSTD compression)
-	Input  *string `json:"input,omitempty" db:"input"`
-	Output *string `json:"output,omitempty" db:"output"`
-
-	// Tags for categorization
-	Tags []string `json:"tags" db:"tags"`
-
-	// OTEL resource attributes (extracted for common queries)
-	Environment    string  `json:"environment" db:"environment"`
-	ServiceName    *string `json:"service_name,omitempty" db:"service_name"`
-	ServiceVersion *string `json:"service_version,omitempty" db:"service_version"`
-	Release        *string `json:"release,omitempty" db:"release"`
-
-	// Note: Aggregate metrics (total_cost, total_tokens, span_count) removed
-	// Following industry standard (Langfuse/Datadog/Honeycomb pattern):
-	// Aggregations calculated on-demand from spans table using materialized columns
-	// Performance: 10-50ms for 1000 spans (ClickHouse columnar aggregation)
-
-	// Flags (moved from sessions table)
-	Bookmarked bool `json:"bookmarked" db:"bookmarked"`
-	Public     bool `json:"public" db:"public"`
-
-	// Timestamps
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
-
-	// Application versioning (experiment tracking)
-	Version *string `json:"version,omitempty" db:"version"`
-
-	// Populated from joins (not in ClickHouse)
-	Spans  []*Span  `json:"spans,omitempty" db:"-"`
-	Scores []*Score `json:"scores,omitempty" db:"-"`
+	StartTime          time.Time              `json:"start_time" db:"start_time"`
+	UpdatedAt          time.Time              `json:"updated_at" db:"updated_at"`
+	CreatedAt          time.Time              `json:"created_at" db:"created_at"`
+	Output             *string                `json:"output,omitempty" db:"output"`
+	ServiceName        *string                `json:"service_name,omitempty" db:"service_name"`
+	UserID             *string                `json:"user_id,omitempty" db:"user_id"`
+	EndTime            *time.Time             `json:"end_time,omitempty" db:"end_time"`
+	DurationMs         *uint32                `json:"duration_ms,omitempty" db:"duration_ms"`
+	Version            *string                `json:"version,omitempty" db:"version"`
+	StatusMessage      *string                `json:"status_message,omitempty" db:"status_message"`
+	ResourceAttributes map[string]interface{} `json:"resource_attributes" db:"resource_attributes"`
+	Input              *string                `json:"input,omitempty" db:"input"`
+	Release            *string                `json:"release,omitempty" db:"release"`
+	ServiceVersion     *string                `json:"service_version,omitempty" db:"service_version"`
+	SessionID          *string                `json:"session_id,omitempty" db:"session_id"`
+	Environment        string                 `json:"environment" db:"environment"`
+	TraceID            string                 `json:"trace_id" db:"trace_id"`
+	Name               string                 `json:"name" db:"name"`
+	ProjectID          string                 `json:"project_id" db:"project_id"`
+	Tags               []string               `json:"tags" db:"tags"`
+	Spans              []*Span                `json:"spans,omitempty" db:"-"`
+	Scores             []*Score               `json:"scores,omitempty" db:"-"`
+	Bookmarked         bool                   `json:"bookmarked" db:"bookmarked"`
+	Public             bool                   `json:"public" db:"public"`
+	StatusCode         uint8                  `json:"status_code" db:"status_code"`
 }
 
 // Span represents an OTEL span with Gen AI semantic conventions and Brokle extensions
 type Span struct {
-	// OTEL identifiers
-	SpanID       string  `json:"span_id" db:"span_id"`                         // OTEL span_id (16 hex chars) - renamed from ID
-	TraceID      string  `json:"trace_id" db:"trace_id"`                       // OTEL trace_id
-	ParentSpanID *string `json:"parent_span_id,omitempty" db:"parent_span_id"` // NULL for root spans
-	ProjectID    string  `json:"project_id" db:"project_id"`
-
-	// Span data
-	SpanName   string     `json:"span_name" db:"span_name"` // OTEL span name - renamed from Name
-	SpanKind   uint8      `json:"span_kind" db:"span_kind"` // OTEL enum: 0=UNSPECIFIED, 1=INTERNAL, 2=SERVER, 3=CLIENT, 4=PRODUCER, 5=CONSUMER
-	StartTime  time.Time  `json:"start_time" db:"start_time"`
-	EndTime    *time.Time `json:"end_time,omitempty" db:"end_time"`
-	DurationMs *uint32    `json:"duration_ms,omitempty" db:"duration_ms"`
-
-	// OTEL status
-	StatusCode    uint8   `json:"status_code" db:"status_code"` // OTEL enum: 0=UNSET, 1=OK, 2=ERROR
-	StatusMessage *string `json:"status_message,omitempty" db:"status_message"`
-
-	// OTEL attributes (JSON string with all span-level attributes)
-	// Stores: gen_ai.*, brokle.*, and custom attributes
-	SpanAttributes string `json:"span_attributes" db:"span_attributes"`
-
-	// OTEL resource attributes (JSON string with resource-level context)
-	ResourceAttributes string `json:"resource_attributes" db:"resource_attributes"`
-
-	// Input/Output (stored in ClickHouse with ZSTD compression)
-	Input  *string `json:"input,omitempty" db:"input"`
-	Output *string `json:"output,omitempty" db:"output"`
-
-	// OTEL Events (OTEL spec) - arrays for event tracking
-	EventsTimestamp  []time.Time               `json:"events_timestamp,omitempty" db:"events_timestamp"`
-	EventsName       []string                  `json:"events_name,omitempty" db:"events_name"`
-	EventsAttributes []string                  `json:"events_attributes,omitempty" db:"events_attributes"` // JSON strings
-
-	// OTEL Links (OTEL spec) - arrays for span linking
-	LinksTraceID    []string `json:"links_trace_id,omitempty" db:"links_trace_id"`
-	LinksSpanID     []string `json:"links_span_id,omitempty" db:"links_span_id"`
-	LinksAttributes []string `json:"links_attributes,omitempty" db:"links_attributes"` // JSON strings
-
-	// Timestamps
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
-
-	// ===== MATERIALIZED COLUMNS (Read-only, computed by ClickHouse) =====
-	// Gen AI attributes (OTEL 1.38+ conventions)
-	GenAIOperationName       *string  `json:"gen_ai_operation_name,omitempty" db:"gen_ai_operation_name"`
-	GenAIProviderName        *string  `json:"gen_ai_provider_name,omitempty" db:"gen_ai_provider_name"`
-	GenAIRequestModel        *string  `json:"gen_ai_request_model,omitempty" db:"gen_ai_request_model"`
-	GenAIRequestMaxTokens    *uint16  `json:"gen_ai_request_max_tokens,omitempty" db:"gen_ai_request_max_tokens"`
-	GenAIRequestTemperature  *float32 `json:"gen_ai_request_temperature,omitempty" db:"gen_ai_request_temperature"`
-	GenAIRequestTopP         *float32 `json:"gen_ai_request_top_p,omitempty" db:"gen_ai_request_top_p"`
-	GenAIUsageInputTokens    *uint32  `json:"gen_ai_usage_input_tokens,omitempty" db:"gen_ai_usage_input_tokens"`
-	GenAIUsageOutputTokens   *uint32  `json:"gen_ai_usage_output_tokens,omitempty" db:"gen_ai_usage_output_tokens"`
-
-	// Brokle attributes (custom extensions)
-	BrokleSpanType        *string  `json:"brokle_span_type,omitempty" db:"brokle_span_type"`       // span, generation, event, tool, agent, chain
-	BrokleSpanLevel       *string  `json:"brokle_span_level,omitempty" db:"brokle_span_level"`     // DEBUG, INFO, WARNING, ERROR
-	BrokleCostInput       *float64 `json:"brokle_cost_input,omitempty" db:"brokle_cost_input"`     // Decimal(18,9) extracted from STRING
-	BrokleCostOutput      *float64 `json:"brokle_cost_output,omitempty" db:"brokle_cost_output"`   // Decimal(18,9) extracted from STRING
-	BrokleCostTotal       *float64 `json:"brokle_cost_total,omitempty" db:"brokle_cost_total"`     // Decimal(18,9) extracted from STRING
-	BroklePromptID        *string  `json:"brokle_prompt_id,omitempty" db:"brokle_prompt_id"`
-	BroklePromptName      *string  `json:"brokle_prompt_name,omitempty" db:"brokle_prompt_name"`
-	BroklePromptVersion   *uint16  `json:"brokle_prompt_version,omitempty" db:"brokle_prompt_version"`
-	BrokleInternalModelID *string  `json:"brokle_internal_model_id,omitempty" db:"brokle_internal_model_id"`
-
-	// Populated from joins (not in ClickHouse)
-	Scores     []*Score `json:"scores,omitempty" db:"-"`
-	ChildSpans []*Span  `json:"child_spans,omitempty" db:"-"`
+	StartTime               time.Time              `json:"start_time" db:"start_time"`
+	UpdatedAt               time.Time              `json:"updated_at" db:"updated_at"`
+	CreatedAt               time.Time              `json:"created_at" db:"created_at"`
+	GenAIUsageOutputTokens  *int32                 `json:"gen_ai_usage_output_tokens,omitempty" db:"gen_ai_usage_output_tokens"`
+	BrokleSpanType          *string                `json:"brokle_span_type,omitempty" db:"brokle_span_type"`
+	BrokleInternalModelID   *string                `json:"brokle_internal_model_id,omitempty" db:"brokle_internal_model_id"`
+	BroklePromptVersion     *uint16                `json:"brokle_prompt_version,omitempty" db:"brokle_prompt_version"`
+	EndTime                 *time.Time             `json:"end_time,omitempty" db:"end_time"`
+	DurationMs              *uint32                `json:"duration_ms,omitempty" db:"duration_ms"`
+	BroklePromptName        *string                `json:"brokle_prompt_name,omitempty" db:"brokle_prompt_name"`
+	StatusMessage           *string                `json:"status_message,omitempty" db:"status_message"`
+	SpanAttributes          map[string]interface{} `json:"span_attributes" db:"span_attributes"`
+	ResourceAttributes      map[string]interface{} `json:"resource_attributes" db:"resource_attributes"`
+	Input                   *string                `json:"input,omitempty" db:"input"`
+	Output                  *string                `json:"output,omitempty" db:"output"`
+	BroklePromptID          *string                `json:"brokle_prompt_id,omitempty" db:"brokle_prompt_id"`
+	BrokleCostTotal         *float64               `json:"brokle_cost_total,omitempty" db:"brokle_cost_total"`
+	BrokleCostOutput        *float64               `json:"brokle_cost_output,omitempty" db:"brokle_cost_output"`
+	BrokleCostInput         *float64               `json:"brokle_cost_input,omitempty" db:"brokle_cost_input"`
+	BrokleSpanLevel         *string                `json:"brokle_span_level,omitempty" db:"brokle_span_level"`
+	ParentSpanID            *string                `json:"parent_span_id,omitempty" db:"parent_span_id"`
+	GenAIUsageInputTokens   *int32                 `json:"gen_ai_usage_input_tokens,omitempty" db:"gen_ai_usage_input_tokens"`
+	GenAIRequestTopP        *float32               `json:"gen_ai_request_top_p,omitempty" db:"gen_ai_request_top_p"`
+	GenAIRequestMaxTokens   *uint16                `json:"gen_ai_request_max_tokens,omitempty" db:"gen_ai_request_max_tokens"`
+	GenAIProviderName       *string                `json:"gen_ai_provider_name,omitempty" db:"gen_ai_provider_name"`
+	GenAIRequestModel       *string                `json:"gen_ai_request_model,omitempty" db:"gen_ai_request_model"`
+	GenAIOperationName      *string                `json:"gen_ai_operation_name,omitempty" db:"gen_ai_operation_name"`
+	GenAIRequestTemperature *float32               `json:"gen_ai_request_temperature,omitempty" db:"gen_ai_request_temperature"`
+	TraceID                 string                 `json:"trace_id" db:"trace_id"`
+	SpanName                string                 `json:"span_name" db:"span_name"`
+	SpanID                  string                 `json:"span_id" db:"span_id"`
+	ProjectID               string                 `json:"project_id" db:"project_id"`
+	EventsAttributes        []string               `json:"events_attributes,omitempty" db:"events_attributes"`
+	LinksSpanID             []string               `json:"links_span_id,omitempty" db:"links_span_id"`
+	LinksTraceID            []string               `json:"links_trace_id,omitempty" db:"links_trace_id"`
+	EventsTimestamp         []time.Time            `json:"events_timestamp,omitempty" db:"events_timestamp"`
+	EventsName              []string               `json:"events_name,omitempty" db:"events_name"`
+	LinksAttributes         []string               `json:"links_attributes,omitempty" db:"links_attributes"`
+	Scores                  []*Score               `json:"scores,omitempty" db:"-"`
+	ChildSpans              []*Span                `json:"child_spans,omitempty" db:"-"`
+	StatusCode              uint8                  `json:"status_code" db:"status_code"`
+	SpanKind                uint8                  `json:"span_kind" db:"span_kind"`
 }
 
 // Score represents a quality evaluation score linked to traces and spans
 type Score struct {
-	// Identifiers
-	ID        string `json:"id" db:"id"`
-	ProjectID string `json:"project_id" db:"project_id"`
-	TraceID   string `json:"trace_id" db:"trace_id"` // OTEL trace_id
-	SpanID    string `json:"span_id" db:"span_id"`   // OTEL span_id
-
-	// Score data
-	Name        string   `json:"name" db:"name"`
-	Value       *float64 `json:"value,omitempty" db:"value"`
-	StringValue *string  `json:"string_value,omitempty" db:"string_value"`
-	DataType    string   `json:"data_type" db:"data_type"` // NUMERIC, CATEGORICAL, BOOLEAN
-
-	// Metadata
-	Source  string  `json:"source" db:"source"` // API, ANNOTATION, EVAL
-	Comment *string `json:"comment,omitempty" db:"comment"`
-
-	// Evaluator information
-	EvaluatorName    *string           `json:"evaluator_name,omitempty" db:"evaluator_name"`
-	EvaluatorVersion *string           `json:"evaluator_version,omitempty" db:"evaluator_version"`
-	EvaluatorConfig  map[string]string `json:"evaluator_config" db:"evaluator_config"`
+	Timestamp        time.Time         `json:"timestamp" db:"timestamp"`
+	Comment          *string           `json:"comment,omitempty" db:"comment"`
+	Version          *string           `json:"version,omitempty" db:"version"`
 	AuthorUserID     *string           `json:"author_user_id,omitempty" db:"author_user_id"`
-
-	// Timestamp
-	Timestamp time.Time `json:"timestamp" db:"timestamp"`
-
-	// Application versioning (experiment tracking)
-	Version *string `json:"version,omitempty" db:"version"`
+	EvaluatorConfig  map[string]string `json:"evaluator_config" db:"evaluator_config"`
+	Value            *float64          `json:"value,omitempty" db:"value"`
+	StringValue      *string           `json:"string_value,omitempty" db:"string_value"`
+	EvaluatorVersion *string           `json:"evaluator_version,omitempty" db:"evaluator_version"`
+	EvaluatorName    *string           `json:"evaluator_name,omitempty" db:"evaluator_name"`
+	Name             string            `json:"name" db:"name"`
+	Source           string            `json:"source" db:"source"`
+	DataType         string            `json:"data_type" db:"data_type"`
+	ID               string            `json:"id" db:"id"`
+	SpanID           string            `json:"span_id" db:"span_id"`
+	TraceID          string            `json:"trace_id" db:"trace_id"`
+	ProjectID        string            `json:"project_id" db:"project_id"`
 }
 
 // BlobStorageFileLog represents a reference to S3-stored large payload
 // Used when payload > 10KB threshold
 type BlobStorageFileLog struct {
-	// Identifiers
-	ID        string `json:"id" db:"id"`
-	ProjectID string `json:"project_id" db:"project_id"`
-
-	// Entity reference
-	EntityType string `json:"entity_type" db:"entity_type"` // 'trace', 'span', 'score'
-	EntityID   string `json:"entity_id" db:"entity_id"`     // trace_id or span_id
-	EventID    string `json:"event_id" db:"event_id"`       // Event ULID
-
-	// Storage location
-	BucketName string `json:"bucket_name" db:"bucket_name"`
-	BucketPath string `json:"bucket_path" db:"bucket_path"`
-
-	// Metadata
-	FileSizeBytes *uint64 `json:"file_size_bytes,omitempty" db:"file_size_bytes"`
-	ContentType   *string `json:"content_type,omitempty" db:"content_type"`
-	Compression   *string `json:"compression,omitempty" db:"compression"` // 'gzip', 'zstd', null
-
-	// Timestamps
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
-
-	// Application versioning (experiment tracking)
-	Version *string `json:"version,omitempty" db:"version"`
+	UpdatedAt     time.Time `json:"updated_at" db:"updated_at"`
+	CreatedAt     time.Time `json:"created_at" db:"created_at"`
+	FileSizeBytes *uint64   `json:"file_size_bytes,omitempty" db:"file_size_bytes"`
+	Version       *string   `json:"version,omitempty" db:"version"`
+	Compression   *string   `json:"compression,omitempty" db:"compression"`
+	ContentType   *string   `json:"content_type,omitempty" db:"content_type"`
+	EntityID      string    `json:"entity_id" db:"entity_id"`
+	BucketPath    string    `json:"bucket_path" db:"bucket_path"`
+	BucketName    string    `json:"bucket_name" db:"bucket_name"`
+	EventID       string    `json:"event_id" db:"event_id"`
+	ID            string    `json:"id" db:"id"`
+	EntityType    string    `json:"entity_type" db:"entity_type"`
+	ProjectID     string    `json:"project_id" db:"project_id"`
 }
 
 // Model represents an LLM/API model with pricing information (PostgreSQL)
 // Used for cost calculation via internal_model_id lookup
 type Model struct {
-	// Identifiers
-	ID        string  `json:"id" db:"id"`
-	ProjectID *string `json:"project_id,omitempty" db:"project_id"` // NULL = global model
-
-	// Model identification
-	ModelName    string `json:"model_name" db:"model_name"`       // gpt-4-turbo, claude-3-opus, etc.
-	MatchPattern string `json:"match_pattern" db:"match_pattern"` // Regex for model aliases
-	Provider     string `json:"provider" db:"provider"`           // openai, anthropic, google, etc.
-
-	// Pricing per 1M tokens (industry standard)
-	InputPrice  *float64 `json:"input_price,omitempty" db:"input_price"`
-	OutputPrice *float64 `json:"output_price,omitempty" db:"output_price"`
-	TotalPrice  *float64 `json:"total_price,omitempty" db:"total_price"` // For flat-priced models
-	Unit        string   `json:"unit" db:"unit"`                         // TOKENS, CHARACTERS, REQUESTS, etc.
-
-	// Advanced pricing features
-	CacheWriteMultiplier    float64 `json:"cache_write_multiplier" db:"cache_write_multiplier"`
-	CacheReadMultiplier     float64 `json:"cache_read_multiplier" db:"cache_read_multiplier"`
-	BatchDiscountPercentage float64 `json:"batch_discount_percentage" db:"batch_discount_percentage"`
-
-	// Versioning
-	StartDate    *time.Time `json:"start_date,omitempty" db:"start_date"`
-	EndDate      *time.Time `json:"end_date,omitempty" db:"end_date"` // NULL = current active pricing
-	IsDeprecated bool       `json:"is_deprecated" db:"is_deprecated"`
-
-	// Tokenizer config (optional)
-	TokenizerID     *string `json:"tokenizer_id,omitempty" db:"tokenizer_id"`
-	TokenizerConfig *string `json:"tokenizer_config,omitempty" db:"tokenizer_config"` // JSONB
-
-	// Timestamps
-	CreatedAt time.Time `json:"created_at" db:"created_at"`
-	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+	UpdatedAt               time.Time  `json:"updated_at" db:"updated_at"`
+	CreatedAt               time.Time  `json:"created_at" db:"created_at"`
+	StartDate               *time.Time `json:"start_date,omitempty" db:"start_date"`
+	ProjectID               *string    `json:"project_id,omitempty" db:"project_id"`
+	TokenizerConfig         *string    `json:"tokenizer_config,omitempty" db:"tokenizer_config"`
+	InputPrice              *float64   `json:"input_price,omitempty" db:"input_price"`
+	OutputPrice             *float64   `json:"output_price,omitempty" db:"output_price"`
+	TotalPrice              *float64   `json:"total_price,omitempty" db:"total_price"`
+	TokenizerID             *string    `json:"tokenizer_id,omitempty" db:"tokenizer_id"`
+	EndDate                 *time.Time `json:"end_date,omitempty" db:"end_date"`
+	Provider                string     `json:"provider" db:"provider"`
+	Unit                    string     `json:"unit" db:"unit"`
+	ID                      string     `json:"id" db:"id"`
+	MatchPattern            string     `json:"match_pattern" db:"match_pattern"`
+	ModelName               string     `json:"model_name" db:"model_name"`
+	BatchDiscountPercentage float64    `json:"batch_discount_percentage" db:"batch_discount_percentage"`
+	CacheReadMultiplier     float64    `json:"cache_read_multiplier" db:"cache_read_multiplier"`
+	CacheWriteMultiplier    float64    `json:"cache_write_multiplier" db:"cache_write_multiplier"`
+	IsDeprecated            bool       `json:"is_deprecated" db:"is_deprecated"`
 }
 
 // Model business logic methods
@@ -298,7 +210,7 @@ func (m *Model) CalculateTotalCost(inputTokens, outputTokens int32, cacheHit, ba
 
 	// Apply batch discount
 	if batchMode && m.BatchDiscountPercentage > 0 {
-		totalCost *= (1.0 - m.BatchDiscountPercentage / 100.0)
+		totalCost *= (1.0 - m.BatchDiscountPercentage/100.0)
 	}
 
 	return totalCost
@@ -429,22 +341,18 @@ func (m *Model) Validate() []ValidationError {
 
 // CostBreakdown represents detailed cost calculation result
 type CostBreakdown struct {
-	InputCost  string `json:"input_cost"`  // Formatted as "0.000012345" (9 decimals, Decimal(18,9))
-	OutputCost string `json:"output_cost"` // Formatted as "0.000067890" (9 decimals, Decimal(18,9))
-	TotalCost  string `json:"total_cost"`  // Formatted as "0.000080235" (9 decimals, Decimal(18,9))
-	Currency   string `json:"currency"`    // Always "USD"
-
-	// Metadata for attribution
-	ModelName    string `json:"model_name"`
-	Provider     string `json:"provider"`
-	InputTokens  int32  `json:"input_tokens"`
-	OutputTokens int32  `json:"output_tokens"`
-	CacheHit     bool   `json:"cache_hit"`
-	BatchMode    bool   `json:"batch_mode"`
-
-	// Savings attribution (optional)
-	CacheSavings *float64 `json:"cache_savings,omitempty"` // Amount saved via caching
-	BatchSavings *float64 `json:"batch_savings,omitempty"` // Amount saved via batch discount
+	CacheSavings *float64 `json:"cache_savings,omitempty"`
+	BatchSavings *float64 `json:"batch_savings,omitempty"`
+	InputCost    string   `json:"input_cost"`
+	OutputCost   string   `json:"output_cost"`
+	TotalCost    string   `json:"total_cost"`
+	Currency     string   `json:"currency"`
+	ModelName    string   `json:"model_name"`
+	Provider     string   `json:"provider"`
+	InputTokens  int32    `json:"input_tokens"`
+	OutputTokens int32    `json:"output_tokens"`
+	CacheHit     bool     `json:"cache_hit"`
+	BatchMode    bool     `json:"batch_mode"`
 }
 
 // OTEL SpanKind enum values (UInt8 in ClickHouse)
@@ -524,9 +432,9 @@ func (t *Trace) UnmarshalJSON(data []byte) error {
 	// Create a temporary struct with json.RawMessage for input/output
 	type Alias Trace
 	aux := &struct {
+		*Alias
 		Input  json.RawMessage `json:"input,omitempty"`
 		Output json.RawMessage `json:"output,omitempty"`
-		*Alias
 	}{
 		Alias: (*Alias)(t),
 	}
@@ -554,9 +462,9 @@ func (s *Span) UnmarshalJSON(data []byte) error {
 	// Create a temporary struct with json.RawMessage for input/output
 	type Alias Span
 	aux := &struct {
+		*Alias
 		Input  json.RawMessage `json:"input,omitempty"`
 		Output json.RawMessage `json:"output,omitempty"`
-		*Alias
 	}{
 		Alias: (*Alias)(s),
 	}
@@ -811,11 +719,11 @@ const (
 // TelemetryEventDeduplication represents a deduplication entry for telemetry events
 // Internal type used by deduplication repository implementation
 type TelemetryEventDeduplication struct {
-	EventID     string    `json:"event_id" db:"event_id"`     // Composite OTLP ID: "trace_id:span_id"
-	BatchID     ulid.ULID `json:"batch_id" db:"batch_id"`     // Brokle batch ULID
-	ProjectID   ulid.ULID `json:"project_id" db:"project_id"` // Brokle project ULID
 	FirstSeenAt time.Time `json:"first_seen_at" db:"first_seen_at"`
 	ExpiresAt   time.Time `json:"expires_at" db:"expires_at"`
+	EventID     string    `json:"event_id" db:"event_id"`
+	BatchID     ulid.ULID `json:"batch_id" db:"batch_id"`
+	ProjectID   ulid.ULID `json:"project_id" db:"project_id"`
 }
 
 // IsExpired checks if the deduplication entry has expired

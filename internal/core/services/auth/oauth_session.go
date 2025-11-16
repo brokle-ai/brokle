@@ -3,7 +3,6 @@ package auth
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"time"
 
 	appErrors "brokle/pkg/errors"
@@ -12,13 +11,13 @@ import (
 
 // OAuthSession stores incomplete user data during OAuth flow
 type OAuthSession struct {
+	ExpiresAt       time.Time `json:"expires_at"`
+	InvitationToken *string   `json:"invitation_token,omitempty"`
 	Email           string    `json:"email"`
 	FirstName       string    `json:"first_name"`
 	LastName        string    `json:"last_name"`
-	Provider        string    `json:"provider"` // "google" | "github"
+	Provider        string    `json:"provider"`
 	ProviderID      string    `json:"provider_id"`
-	ExpiresAt       time.Time `json:"expires_at"`
-	InvitationToken *string   `json:"invitation_token,omitempty"`
 }
 
 // CreateOAuthSession stores a temporary OAuth session in Redis
@@ -28,7 +27,7 @@ func (s *authService) CreateOAuthSession(ctx context.Context, session interface{
 		return "", appErrors.NewInternalError("Invalid session type", nil)
 	}
 	sessionID := ulid.New().String()
-	key := fmt.Sprintf("oauth:session:%s", sessionID)
+	key := "oauth:session:" + sessionID
 
 	// Set expiration
 	oauthSession.ExpiresAt = time.Now().Add(15 * time.Minute)
@@ -48,7 +47,7 @@ func (s *authService) CreateOAuthSession(ctx context.Context, session interface{
 
 // GetOAuthSession retrieves an OAuth session from Redis
 func (s *authService) GetOAuthSession(ctx context.Context, sessionID string) (interface{}, error) {
-	key := fmt.Sprintf("oauth:session:%s", sessionID)
+	key := "oauth:session:" + sessionID
 
 	data, err := s.redis.Get(ctx, key).Result()
 	if err != nil {
@@ -85,7 +84,7 @@ func (s *authService) GetOAuthSessionTyped(ctx context.Context, sessionID string
 
 // DeleteOAuthSession removes an OAuth session from Redis
 func (s *authService) DeleteOAuthSession(ctx context.Context, sessionID string) error {
-	key := fmt.Sprintf("oauth:session:%s", sessionID)
+	key := "oauth:session:" + sessionID
 	return s.redis.Del(ctx, key).Err()
 }
 
@@ -94,7 +93,7 @@ func (s *authService) DeleteOAuthSession(ctx context.Context, sessionID string) 
 // Used when existing OAuth users login (not signup).
 func (s *authService) CreateLoginTokenSession(ctx context.Context, accessToken, refreshToken string, expiresIn int64, userID ulid.ULID) (string, error) {
 	sessionID := ulid.New().String()
-	key := fmt.Sprintf("oauth:login:%s", sessionID)
+	key := "oauth:login:" + sessionID
 
 	sessionData := map[string]interface{}{
 		"access_token":  accessToken,
@@ -121,7 +120,7 @@ func (s *authService) CreateLoginTokenSession(ctx context.Context, accessToken, 
 // GetLoginTokenSession retrieves login tokens from Redis (one-time use).
 // After retrieval, the session is deleted.
 func (s *authService) GetLoginTokenSession(ctx context.Context, sessionID string) (map[string]interface{}, error) {
-	key := fmt.Sprintf("oauth:login:%s", sessionID)
+	key := "oauth:login:" + sessionID
 
 	data, err := s.redis.Get(ctx, key).Result()
 	if err != nil {

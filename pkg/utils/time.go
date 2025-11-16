@@ -260,7 +260,7 @@ func ParseUnixTimestamp(timestamp string) (time.Time, error) {
 // GetTimeRange creates a time range for common periods
 func GetTimeRange(period string) (TimeRange, error) {
 	now := time.Now()
-	
+
 	switch period {
 	case "today":
 		return TimeRange{

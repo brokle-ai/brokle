@@ -23,17 +23,17 @@ func NewHandler(config *config.Config, logger *logrus.Logger) *Handler {
 
 // UsageMetrics represents usage metrics for an organization
 type UsageMetrics struct {
-	OrganizationID     string             `json:"organization_id" example:"org_1234567890" description:"Organization identifier"`
 	BillingPeriod      BillingPeriod      `json:"billing_period" description:"Current billing period"`
-	TotalRequests      int64              `json:"total_requests" example:"125000" description:"Total AI requests in period"`
-	TotalTokens        int64              `json:"total_tokens" example:"2500000" description:"Total tokens processed"`
-	TotalCost          float64            `json:"total_cost" example:"1250.75" description:"Total cost in USD"`
+	OrganizationID     string             `json:"organization_id" example:"org_1234567890" description:"Organization identifier"`
 	UsageByProvider    []ProviderUsage    `json:"usage_by_provider" description:"Usage breakdown by AI provider"`
 	UsageByProject     []ProjectUsage     `json:"usage_by_project" description:"Usage breakdown by project"`
 	UsageByEnvironment []EnvironmentUsage `json:"usage_by_environment" description:"Usage breakdown by environment"`
 	DailyUsage         []DailyUsage       `json:"daily_usage" description:"Daily usage breakdown"`
-	QuotaLimits        QuotaLimits        `json:"quota_limits" description:"Current quota limits and usage"`
 	BillingAlerts      []BillingAlert     `json:"billing_alerts,omitempty" description:"Active billing alerts"`
+	QuotaLimits        QuotaLimits        `json:"quota_limits" description:"Current quota limits and usage"`
+	TotalRequests      int64              `json:"total_requests" example:"125000" description:"Total AI requests in period"`
+	TotalTokens        int64              `json:"total_tokens" example:"2500000" description:"Total tokens processed"`
+	TotalCost          float64            `json:"total_cost" example:"1250.75" description:"Total cost in USD"`
 }
 
 // BillingPeriod represents a billing period
@@ -95,70 +95,70 @@ type QuotaLimits struct {
 
 // BillingAlert represents an active billing alert
 type BillingAlert struct {
+	TriggeredAt  time.Time `json:"triggered_at" example:"2024-01-15T10:30:00Z" description:"When alert was triggered"`
 	ID           string    `json:"id" example:"alert_1234567890" description:"Alert identifier"`
 	Type         string    `json:"type" example:"cost_threshold" description:"Alert type (cost_threshold, quota_limit, usage_spike)"`
 	Severity     string    `json:"severity" example:"warning" description:"Alert severity (info, warning, critical)"`
 	Message      string    `json:"message" example:"Monthly cost has reached 80% of limit" description:"Alert message"`
-	TriggeredAt  time.Time `json:"triggered_at" example:"2024-01-15T10:30:00Z" description:"When alert was triggered"`
+	Status       string    `json:"status" example:"active" description:"Alert status (active, acknowledged, resolved)"`
 	Threshold    float64   `json:"threshold" example:"800.00" description:"Threshold value that triggered alert"`
 	CurrentValue float64   `json:"current_value" example:"750.25" description:"Current value that triggered alert"`
-	Status       string    `json:"status" example:"active" description:"Alert status (active, acknowledged, resolved)"`
 }
 
 // Invoice represents a billing invoice
 type Invoice struct {
-	ID             string            `json:"id" example:"inv_1234567890" description:"Invoice identifier"`
-	InvoiceNumber  string            `json:"invoice_number" example:"INV-2024-001" description:"Human-readable invoice number"`
-	OrganizationID string            `json:"organization_id" example:"org_1234567890" description:"Organization identifier"`
+	IssueDate      time.Time         `json:"issue_date" example:"2024-02-01T00:00:00Z" description:"Invoice issue date"`
+	PaidDate       time.Time         `json:"paid_date,omitempty" example:"2024-02-10T14:30:00Z" description:"Payment date (if paid)"`
+	DueDate        time.Time         `json:"due_date" example:"2024-02-15T23:59:59Z" description:"Payment due date"`
 	BillingPeriod  BillingPeriod     `json:"billing_period" description:"Billing period for this invoice"`
 	Status         string            `json:"status" example:"paid" description:"Invoice status (draft, sent, paid, overdue, void)"`
+	Currency       string            `json:"currency" example:"USD" description:"Invoice currency"`
+	ID             string            `json:"id" example:"inv_1234567890" description:"Invoice identifier"`
+	OrganizationID string            `json:"organization_id" example:"org_1234567890" description:"Organization identifier"`
+	InvoiceNumber  string            `json:"invoice_number" example:"INV-2024-001" description:"Human-readable invoice number"`
+	PaymentMethod  string            `json:"payment_method,omitempty" example:"credit_card" description:"Payment method used"`
+	DownloadURL    string            `json:"download_url,omitempty" example:"https://invoices.brokle.ai/inv_1234567890.pdf" description:"PDF download URL"`
+	LineItems      []InvoiceLineItem `json:"line_items" description:"Invoice line items"`
 	Subtotal       float64           `json:"subtotal" example:"1250.75" description:"Subtotal before taxes in USD"`
 	TaxAmount      float64           `json:"tax_amount" example:"125.08" description:"Tax amount in USD"`
 	Total          float64           `json:"total" example:"1375.83" description:"Total amount including taxes in USD"`
-	Currency       string            `json:"currency" example:"USD" description:"Invoice currency"`
-	IssueDate      time.Time         `json:"issue_date" example:"2024-02-01T00:00:00Z" description:"Invoice issue date"`
-	DueDate        time.Time         `json:"due_date" example:"2024-02-15T23:59:59Z" description:"Payment due date"`
-	PaidDate       time.Time         `json:"paid_date,omitempty" example:"2024-02-10T14:30:00Z" description:"Payment date (if paid)"`
-	LineItems      []InvoiceLineItem `json:"line_items" description:"Invoice line items"`
-	PaymentMethod  string            `json:"payment_method,omitempty" example:"credit_card" description:"Payment method used"`
-	DownloadURL    string            `json:"download_url,omitempty" example:"https://invoices.brokle.ai/inv_1234567890.pdf" description:"PDF download URL"`
 }
 
 // InvoiceLineItem represents a line item on an invoice
 type InvoiceLineItem struct {
 	Description string  `json:"description" example:"OpenAI GPT-4 Usage" description:"Line item description"`
+	Provider    string  `json:"provider,omitempty" example:"openai" description:"AI provider (if applicable)"`
+	Model       string  `json:"model,omitempty" example:"gpt-4" description:"AI model (if applicable)"`
 	Quantity    int64   `json:"quantity" example:"50000" description:"Quantity (e.g., number of requests or tokens)"`
 	UnitPrice   float64 `json:"unit_price" example:"0.025" description:"Price per unit in USD"`
 	Amount      float64 `json:"amount" example:"1250.00" description:"Line item total amount in USD"`
-	Provider    string  `json:"provider,omitempty" example:"openai" description:"AI provider (if applicable)"`
-	Model       string  `json:"model,omitempty" example:"gpt-4" description:"AI model (if applicable)"`
 }
 
 // Subscription represents a billing subscription
 type Subscription struct {
-	ID              string              `json:"id" example:"sub_1234567890" description:"Subscription identifier"`
-	OrganizationID  string              `json:"organization_id" example:"org_1234567890" description:"Organization identifier"`
-	Plan            SubscriptionPlan    `json:"plan" description:"Current subscription plan"`
-	Status          string              `json:"status" example:"active" description:"Subscription status (active, canceled, past_due, unpaid)"`
-	CurrentPeriod   BillingPeriod       `json:"current_period" description:"Current billing period"`
 	NextBillingDate time.Time           `json:"next_billing_date" example:"2024-02-01T00:00:00Z" description:"Next billing date"`
 	CreatedAt       time.Time           `json:"created_at" example:"2024-01-01T00:00:00Z" description:"Subscription creation date"`
 	UpdatedAt       time.Time           `json:"updated_at" example:"2024-01-15T10:30:00Z" description:"Last update date"`
+	CancelAt        time.Time           `json:"cancel_at,omitempty" example:"2024-12-31T23:59:59Z" description:"Scheduled cancellation date"`
+	CurrentPeriod   BillingPeriod       `json:"current_period" description:"Current billing period"`
+	ID              string              `json:"id" example:"sub_1234567890" description:"Subscription identifier"`
+	OrganizationID  string              `json:"organization_id" example:"org_1234567890" description:"Organization identifier"`
+	Status          string              `json:"status" example:"active" description:"Subscription status (active, canceled, past_due, unpaid)"`
+	Plan            SubscriptionPlan    `json:"plan" description:"Current subscription plan"`
 	PaymentMethod   PaymentMethod       `json:"payment_method" description:"Payment method for subscription"`
 	AddOns          []SubscriptionAddOn `json:"add_ons,omitempty" description:"Subscription add-ons"`
 	Discounts       []Discount          `json:"discounts,omitempty" description:"Applied discounts"`
-	CancelAt        time.Time           `json:"cancel_at,omitempty" example:"2024-12-31T23:59:59Z" description:"Scheduled cancellation date"`
 }
 
 // SubscriptionPlan represents a subscription plan
 type SubscriptionPlan struct {
 	ID               string   `json:"id" example:"plan_pro" description:"Plan identifier"`
 	Name             string   `json:"name" example:"Pro Plan" description:"Plan name"`
-	Price            float64  `json:"price" example:"29.00" description:"Monthly price in USD"`
 	Currency         string   `json:"currency" example:"USD" description:"Plan currency"`
 	Interval         string   `json:"interval" example:"month" description:"Billing interval (month, year)"`
-	RequestsLimit    int64    `json:"requests_limit" example:"100000" description:"Monthly requests limit (0 = unlimited)"`
 	FeaturesIncluded []string `json:"features_included" example:"[\"advanced_analytics\", \"semantic_caching\"]" description:"Features included in plan"`
+	Price            float64  `json:"price" example:"29.00" description:"Monthly price in USD"`
+	RequestsLimit    int64    `json:"requests_limit" example:"100000" description:"Monthly requests limit (0 = unlimited)"`
 }
 
 // PaymentMethod represents a payment method
@@ -181,19 +181,19 @@ type SubscriptionAddOn struct {
 
 // Discount represents a discount applied to subscription
 type Discount struct {
+	ValidUntil time.Time `json:"valid_until,omitempty" example:"2024-06-01T00:00:00Z" description:"Discount expiration date"`
 	ID         string    `json:"id" example:"discount_1234567890" description:"Discount identifier"`
 	Name       string    `json:"name" example:"New Customer 20% Off" description:"Discount name"`
 	Type       string    `json:"type" example:"percentage" description:"Discount type (percentage, fixed_amount)"`
 	Value      float64   `json:"value" example:"20.0" description:"Discount value (percentage or amount)"`
-	ValidUntil time.Time `json:"valid_until,omitempty" example:"2024-06-01T00:00:00Z" description:"Discount expiration date"`
 }
 
 // UpdateSubscriptionRequest represents a request to update subscription
 type UpdateSubscriptionRequest struct {
-	PlanID          string              `json:"plan_id,omitempty" example:"plan_business" description:"New plan ID"`
-	AddOns          []SubscriptionAddOn `json:"add_ons,omitempty" description:"Updated add-ons"`
-	PaymentMethodID string              `json:"payment_method_id,omitempty" example:"pm_0987654321" description:"New payment method ID"`
 	CancelAt        time.Time           `json:"cancel_at,omitempty" example:"2024-12-31T23:59:59Z" description:"Schedule cancellation date"`
+	PlanID          string              `json:"plan_id,omitempty" example:"plan_business" description:"New plan ID"`
+	PaymentMethodID string              `json:"payment_method_id,omitempty" example:"pm_0987654321" description:"New payment method ID"`
+	AddOns          []SubscriptionAddOn `json:"add_ons,omitempty" description:"Updated add-ons"`
 }
 
 // ListInvoicesResponse represents the response when listing invoices
@@ -235,9 +235,11 @@ func (h *Handler) GetUsage(c *gin.Context) { response.Success(c, gin.H{"message"
 // @Param status query string false "Filter by invoice status" Enums(draft,sent,paid,overdue,void)
 // @Param start_date query string false "Filter invoices from date (RFC3339)" example("2024-01-01T00:00:00Z")
 // @Param end_date query string false "Filter invoices until date (RFC3339)" example("2024-01-31T23:59:59Z")
-// @Param page query int false "Page number" default(1) minimum(1)
-// @Param limit query int false "Items per page" default(20) minimum(1) maximum(100)
-// @Success 200 {object} response.APIResponse{data=[]Invoice,meta=response.Meta{pagination=response.Pagination}} "List of organization invoices with pagination"
+// @Param cursor query string false "Pagination cursor" example("eyJjcmVhdGVkX2F0IjoiMjAyNC0wMS0wMVQxMjowMDowMFoiLCJpZCI6IjAxSDJYM1k0WjUifQ==")
+// @Param page_size query int false "Items per page" Enums(10,20,30,40,50) default(50)
+// @Param sort_by query string false "Sort field" Enums(created_at) default("created_at")
+// @Param sort_dir query string false "Sort direction" Enums(asc,desc) default("desc")
+// @Success 200 {object} response.APIResponse{data=[]Invoice,meta=response.Meta{pagination=response.Pagination}} "List of organization invoices with cursor pagination"
 // @Failure 400 {object} response.ErrorResponse "Bad request - invalid organization ID or parameters"
 // @Failure 401 {object} response.ErrorResponse "Unauthorized"
 // @Failure 403 {object} response.ErrorResponse "Forbidden - insufficient permissions to view billing information"
