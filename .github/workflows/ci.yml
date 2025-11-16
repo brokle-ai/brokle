@@ -35,7 +35,10 @@ jobs:
         run: make test
 
       - name: Run Go linting
-        run: make lint-go
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          args: --config .golangci.yml
 
   test-frontend:
     name: Test Frontend (Web)
