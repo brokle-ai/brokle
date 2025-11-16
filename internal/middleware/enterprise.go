@@ -9,7 +9,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"brokle/internal/config"
-	"brokle/internal/ee/license"
+	license "brokle/internal/ee/licensing"
 	"brokle/internal/errors"
 )
 
