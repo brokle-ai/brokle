@@ -14,6 +14,7 @@
 .PHONY: lint lint-go lint-frontend fmt fmt-frontend
 .PHONY: docs-generate
 .PHONY: clean-builds shell-db shell-redis shell-clickhouse
+.PHONY: release-patch release-minor release-major release-patch-skip-tests release-dry
 
 # Default target
 help: ## Show this help message
@@ -199,6 +200,23 @@ shell-redis: ## Get shell access to Redis
 
 shell-clickhouse: ## Get shell access to ClickHouse
 	docker compose exec clickhouse clickhouse-client
+
+##@ Release
+
+release-patch: ## Release patch version (v0.1.0 → v0.1.1)
+	@bash scripts/release.sh patch
+
+release-minor: ## Release minor version (v0.1.0 → v0.2.0)
+	@bash scripts/release.sh minor
+
+release-major: ## Release major version (v0.1.0 → v1.0.0)
+	@bash scripts/release.sh major
+
+release-patch-skip-tests: ## Release patch version (skip tests)
+	@bash scripts/release.sh patch --skip-tests
+
+release-dry: ## Preview release without making changes
+	@bash scripts/release.sh patch --dry-run
 
 ##@ Default
 

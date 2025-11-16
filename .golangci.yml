@@ -7,13 +7,6 @@ run:
   build-tags:
     - integration
     - enterprise
-  skip-dirs:
-    - vendor
-    - web/node_modules
-    - web/.next
-    - bin
-    - migrations
-    - seeds
   modules-download-mode: readonly
 
 output:
@@ -22,7 +15,6 @@ output:
       path: stdout
   print-issued-lines: true
   print-linter-name: true
-  uniq-by-line: true
   sort-results: true
 
 linters:
@@ -42,10 +34,15 @@ linters:
     - ineffassign        # Detect ineffectual assignments
     - unconvert          # Remove unnecessary type conversions
     - unparam            # Report unused function parameters
-    - unused             # Check for unused constants, variables, functions and types
+    - unused             # Check for unused constants, variables, functions and types (replaces deadcode/varcheck/structcheck)
 
     # Performance
     - prealloc           # Find slice declarations that could potentially be preallocated
+    - perfsprint         # Performance optimizations for string formatting
+
+    # Modern Go features (Go 1.22+)
+    - copyloopvar        # Detects loop variable copying issues
+    - intrange           # Suggests integer range loops
 
     # Style
     - gofmt              # Check whether code was gofmt-ed
@@ -66,11 +63,8 @@ linters:
     - gocyclo            # Compute and check the cyclomatic complexity of functions
     - nestif             # Report deeply nested if statements
 
-  disable:
-    - deadcode           # Deprecated (use unused instead)
-    - varcheck           # Deprecated (use unused instead)
-    - structcheck        # Deprecated (use unused instead)
-    - scopelint          # Deprecated (use exportloopref instead)
+    # Testing (since codebase uses testify)
+    - testifylint        # Checks usage of github.com/stretchr/testify
 
 linters-settings:
   # errcheck - CRITICAL for Go 1.25 migration
@@ -163,9 +157,21 @@ linters-settings:
     range-loops: true
     for-loops: true
 
+  # perfsprint - Performance optimizations for string formatting
+  perfsprint:
+    int-conversion: true
+    err-error: true
+    errorf: true
+    sprintf1: true
+
+  # copyloopvar - Loop variable issues
+  copyloopvar:
+    check-alias: true
+
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
+  uniq-by-line: true  # Deduplicate issues by line (moved from output section)
 
   exclude-rules:
     # Exclude some linters from running on tests files
@@ -203,12 +209,18 @@ issues:
 
   # Which dirs to exclude: issues from them won't be reported
   exclude-dirs:
+    - vendor
+    - web/node_modules
+    - web/.next
     - web
     - sdk
     - docs
     - scripts
     - deployments
     - tests/load
+    - bin
+    - migrations
+    - seeds
 
   # Which files to exclude: issues from them won't be reported
   exclude-files:

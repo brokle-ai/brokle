@@ -68,7 +68,7 @@ func TestOTLPConverterService_ConvertOTLPToBrokleEvents_TraceInputOutput(t *test
 
 	require.NotNil(t, traceEvent, "Should have created a trace event")
 
-	// Verify trace has input and output
+	// Verify trace has input and output (matches ClickHouse schema)
 	input, ok := traceEvent.Payload["input"].(string)
 	assert.True(t, ok, "Trace should have input field")
 	assert.NotEmpty(t, input, "Trace input should not be empty")
@@ -79,20 +79,15 @@ func TestOTLPConverterService_ConvertOTLPToBrokleEvents_TraceInputOutput(t *test
 	assert.NotEmpty(t, output, "Trace output should not be empty")
 	t.Logf("Trace output length: %d", len(output))
 
-	// Verify trace has input_preview and output_preview
-	inputPreview, ok := traceEvent.Payload["input_preview"].(string)
-	assert.True(t, ok, "Trace should have input_preview field")
-	assert.NotEmpty(t, inputPreview, "Trace input_preview should not be empty")
-	t.Logf("Trace input_preview length: %d", len(inputPreview))
+	// Verify input/output are valid JSON (OTEL gen_ai.input.messages format)
+	var inputMessages, outputMessages []interface{}
+	err = json.Unmarshal([]byte(input), &inputMessages)
+	assert.NoError(t, err, "Input should be valid JSON array")
+	assert.NotEmpty(t, inputMessages, "Input messages should not be empty")
 
-	outputPreview, ok := traceEvent.Payload["output_preview"].(string)
-	assert.True(t, ok, "Trace should have output_preview field")
-	assert.NotEmpty(t, outputPreview, "Trace output_preview should not be empty")
-	t.Logf("Trace output_preview length: %d", len(outputPreview))
-
-	// Verify preview format
-	assert.Contains(t, inputPreview, "[", "Preview should have format header")
-	assert.Contains(t, outputPreview, "[", "Preview should have format header")
+	err = json.Unmarshal([]byte(output), &outputMessages)
+	assert.NoError(t, err, "Output should be valid JSON array")
+	assert.NotEmpty(t, outputMessages, "Output messages should not be empty")
 }
 
 func TestOTLPConverterService_RootSpanDetection(t *testing.T) {

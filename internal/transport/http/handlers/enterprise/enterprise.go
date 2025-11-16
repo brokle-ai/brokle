@@ -10,7 +10,7 @@ import (
 	"brokle/internal/config"
 	"brokle/internal/ee/analytics"
 	"brokle/internal/ee/compliance"
-	"brokle/internal/ee/license"
+	license "brokle/internal/ee/licensing"
 	"brokle/internal/ee/rbac"
 	"brokle/internal/ee/sso"
 	"brokle/internal/middleware"

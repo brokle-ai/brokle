@@ -8,6 +8,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"brokle/internal/config"
+	"brokle/internal/version"
 )
 
 // Handler handles health check endpoints
@@ -56,7 +57,7 @@ func (h *Handler) Check(c *gin.Context) {
 	response := HealthResponse{
 		Status:    "healthy",
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
-		Version:   h.config.App.Version,
+		Version:   version.Get(),
 		Uptime:    time.Since(h.startTime).String(),
 	}
 
@@ -103,7 +104,7 @@ func (h *Handler) Ready(c *gin.Context) {
 	response := HealthResponse{
 		Status:    overallStatus,
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
-		Version:   h.config.App.Version,
+		Version:   version.Get(),
 		Uptime:    time.Since(h.startTime).String(),
 		Checks:    checks,
 	}
