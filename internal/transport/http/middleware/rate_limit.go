@@ -46,7 +46,7 @@ func (m *RateLimitMiddleware) RateLimitByIP() gin.HandlerFunc {
 
 	return func(c *gin.Context) {
 		clientIP := c.ClientIP()
-		key := fmt.Sprintf("rate_limit:ip:%s", clientIP)
+		key := "rate_limit:ip:" + clientIP
 
 		allowed, err := m.checkRateLimit(c.Request.Context(), key, m.config.RateLimitPerIP, m.config.RateLimitWindow)
 		if err != nil {
@@ -91,7 +91,7 @@ func (m *RateLimitMiddleware) RateLimitByUser() gin.HandlerFunc {
 			return
 		}
 
-		key := fmt.Sprintf("rate_limit:user:%s", userIDStr)
+		key := "rate_limit:user:" + userIDStr
 
 		allowed, err := m.checkRateLimit(c.Request.Context(), key, m.config.RateLimitPerUser, m.config.RateLimitWindow)
 		if err != nil {
@@ -138,7 +138,7 @@ func (m *RateLimitMiddleware) RateLimitByAPIKey() gin.HandlerFunc {
 			return
 		}
 
-		key := fmt.Sprintf("rate_limit:apikey:%s", apiKeyID)
+		key := "rate_limit:apikey:" + apiKeyID
 
 		// API keys typically have higher limits (5x user limits)
 		apiKeyLimit := m.config.RateLimitPerUser * 5
@@ -236,7 +236,7 @@ func (m *RateLimitMiddleware) SetRateLimitHeaders(clientIP, userID string) gin.H
 
 	return func(c *gin.Context) {
 		// Get IP-based rate limit info
-		ipKey := fmt.Sprintf("rate_limit:ip:%s", clientIP)
+		ipKey := "rate_limit:ip:" + clientIP
 		ipRemaining, _ := m.GetRemainingRequests(c.Request.Context(), ipKey, m.config.RateLimitPerIP, m.config.RateLimitWindow)
 
 		// Set rate limit headers
@@ -246,7 +246,7 @@ func (m *RateLimitMiddleware) SetRateLimitHeaders(clientIP, userID string) gin.H
 
 		// Add user-specific headers if user is authenticated
 		if userID != "" {
-			userKey := fmt.Sprintf("rate_limit:user:%s", userID)
+			userKey := "rate_limit:user:" + userID
 			userRemaining, _ := m.GetRemainingRequests(c.Request.Context(), userKey, m.config.RateLimitPerUser, m.config.RateLimitWindow)
 			c.Header("X-RateLimit-User-Limit", strconv.Itoa(m.config.RateLimitPerUser))
 			c.Header("X-RateLimit-User-Remaining", strconv.Itoa(userRemaining))

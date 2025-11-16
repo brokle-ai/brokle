@@ -45,20 +45,20 @@ func NewHandler(
 type ListRequest struct {
 	OrganizationID string `form:"organization_id" binding:"omitempty" example:"org_1234567890" description:"Optional filter by organization ID"`
 	Status         string `form:"status" binding:"omitempty,oneof=active paused archived" example:"active" description:"Filter by project status"`
+	Search         string `form:"search" binding:"omitempty" example:"chatbot" description:"Search projects by name or slug"`
 	Page           int    `form:"page" binding:"omitempty,min=1" example:"1" description:"Page number (default: 1)"`
 	Limit          int    `form:"limit" binding:"omitempty,min=1,max=100" example:"20" description:"Items per page (default: 20, max: 100)"`
-	Search         string `form:"search" binding:"omitempty" example:"chatbot" description:"Search projects by name or slug"`
 }
 
 // Project represents a project entity
 type Project struct {
+	CreatedAt      time.Time `json:"created_at" example:"2024-01-01T00:00:00Z" description:"Creation timestamp"`
+	UpdatedAt      time.Time `json:"updated_at" example:"2024-01-01T00:00:00Z" description:"Last update timestamp"`
 	ID             string    `json:"id" example:"proj_1234567890" description:"Unique project identifier"`
 	Name           string    `json:"name" example:"AI Chatbot" description:"Project name"`
 	Description    string    `json:"description,omitempty" example:"Customer support AI chatbot" description:"Optional project description"`
 	OrganizationID string    `json:"organization_id" example:"org_1234567890" description:"Organization ID this project belongs to"`
 	Status         string    `json:"status" example:"active" description:"Project status (active, paused, archived)"`
-	CreatedAt      time.Time `json:"created_at" example:"2024-01-01T00:00:00Z" description:"Creation timestamp"`
-	UpdatedAt      time.Time `json:"updated_at" example:"2024-01-01T00:00:00Z" description:"Last update timestamp"`
 }
 
 // CreateProjectRequest represents the request to create a project

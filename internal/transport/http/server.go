@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -99,7 +100,7 @@ func (s *Server) Start() error {
 		// CRITICAL: Wildcard incompatible with AllowCredentials (cookies won't work)
 		s.logger.Fatal("CORS misconfiguration: cannot use wildcard (*) origins with AllowCredentials (httpOnly cookies require specific origins). " +
 			"Set specific origins in CORS_ALLOWED_ORIGINS environment variable.")
-		return fmt.Errorf("invalid CORS configuration: wildcard origins incompatible with credentials")
+		return errors.New("invalid CORS configuration: wildcard origins incompatible with credentials")
 	}
 
 	// Configure specific origins (only reached if not wildcard)
@@ -109,7 +110,7 @@ func (s *Server) Start() error {
 	if len(s.config.Server.CORSAllowedOrigins) == 0 {
 		s.logger.Fatal("CORS misconfiguration: AllowCredentials requires specific AllowedOrigins. " +
 			"Set CORS_ALLOWED_ORIGINS environment variable.")
-		return fmt.Errorf("invalid CORS configuration: no origins specified")
+		return errors.New("invalid CORS configuration: no origins specified")
 	}
 
 	corsConfig.AllowMethods = s.config.Server.CORSAllowedMethods

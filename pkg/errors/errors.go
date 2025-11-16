@@ -25,11 +25,11 @@ const (
 )
 
 type AppError struct {
+	Err        error        `json:"-"`
 	Type       AppErrorType `json:"type"`
 	Message    string       `json:"message"`
 	Details    string       `json:"details,omitempty"`
 	StatusCode int          `json:"-"`
-	Err        error        `json:"-"`
 }
 
 func (e *AppError) Error() string {
@@ -88,7 +88,7 @@ func NewValidationError(message, details string) *AppError {
 }
 
 func NewNotFoundError(resource string) *AppError {
-	return NewAppError(NotFoundError, fmt.Sprintf("%s not found", resource), "", nil)
+	return NewAppError(NotFoundError, resource+" not found", "", nil)
 }
 
 func NewConflictError(message string) *AppError {

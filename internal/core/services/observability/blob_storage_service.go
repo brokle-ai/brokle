@@ -89,7 +89,7 @@ func (s *BlobStorageService) UpdateBlobReference(ctx context.Context, blob *obse
 	existing, err := s.blobRepo.GetByID(ctx, blob.ID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return appErrors.NewNotFoundError(fmt.Sprintf("blob %s", blob.ID))
+			return appErrors.NewNotFoundError("blob " + blob.ID)
 		}
 		return appErrors.NewInternalError("failed to get blob", err)
 	}
@@ -111,7 +111,7 @@ func (s *BlobStorageService) DeleteBlobReference(ctx context.Context, id string)
 	blob, err := s.blobRepo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return appErrors.NewNotFoundError(fmt.Sprintf("blob %s", id))
+			return appErrors.NewNotFoundError("blob " + id)
 		}
 		return appErrors.NewInternalError("failed to get blob", err)
 	}
@@ -138,7 +138,7 @@ func (s *BlobStorageService) GetBlobByID(ctx context.Context, id string) (*obser
 	blob, err := s.blobRepo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("blob %s", id))
+			return nil, appErrors.NewNotFoundError("blob " + id)
 		}
 		return nil, appErrors.NewInternalError("failed to get blob", err)
 	}
@@ -177,7 +177,7 @@ func (s *BlobStorageService) ShouldOffload(content string) bool {
 func (s *BlobStorageService) UploadToS3(ctx context.Context, content string, projectID, entityType, entityID, eventID string) (*observability.BlobStorageFileLog, error) {
 	// Check if S3 client is initialized
 	if s.s3Client == nil {
-		return nil, fmt.Errorf("S3 client not initialized - check BLOB_STORAGE configuration in environment")
+		return nil, errors.New("S3 client not initialized - check BLOB_STORAGE configuration in environment")
 	}
 
 	// Generate blob ID
@@ -242,13 +242,13 @@ func (s *BlobStorageService) UploadToS3WithPreview(ctx context.Context, content 
 func (s *BlobStorageService) DownloadFromS3(ctx context.Context, blobID string) (string, error) {
 	// Check if S3 client is initialized
 	if s.s3Client == nil {
-		return "", fmt.Errorf("S3 client not initialized - check BLOB_STORAGE configuration in environment")
+		return "", errors.New("S3 client not initialized - check BLOB_STORAGE configuration in environment")
 	}
 
 	// Get blob reference from ClickHouse
 	blob, err := s.blobRepo.GetByID(ctx, blobID)
 	if err != nil {
-		return "", appErrors.NewNotFoundError(fmt.Sprintf("blob %s", blobID))
+		return "", appErrors.NewNotFoundError("blob " + blobID)
 	}
 
 	// Download from S3

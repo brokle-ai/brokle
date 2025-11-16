@@ -18,43 +18,33 @@ import (
 // UserSession represents an active user session with secure token management.
 // SECURITY: Access tokens are NOT stored - only session metadata and hashed refresh tokens.
 type UserSession struct {
-	ID     ulid.ULID `json:"id" gorm:"type:char(26);primaryKey"`
-	UserID ulid.ULID `json:"user_id" gorm:"type:char(26);not null;index:idx_user_sessions_user_active,priority:1"`
-
-	// Secure Token Management (NO ACCESS TOKENS STORED)
-	RefreshTokenHash    string `json:"-" gorm:"type:char(64);not null;uniqueIndex"`     // SHA-256 hash = 64 hex chars
-	RefreshTokenVersion int    `json:"refresh_token_version" gorm:"default:1;not null"` // For rotation tracking
-	CurrentJTI          string `json:"-" gorm:"type:char(26);not null;index"`           // Current access token JTI for blacklisting
-
-	// Session Metadata
-	ExpiresAt        time.Time   `json:"expires_at" gorm:"not null;index"`            // Access token expiry
-	RefreshExpiresAt time.Time   `json:"refresh_expires_at" gorm:"not null;index"`    // Refresh token expiry
-	IPAddress        *string     `json:"ip_address,omitempty" gorm:"type:inet;index"` // PostgreSQL inet type
-	UserAgent        *string     `json:"user_agent,omitempty" gorm:"type:text"`
-	DeviceInfo       interface{} `json:"device_info,omitempty" gorm:"type:jsonb"` // Device information JSON
-
-	// Session State
-	IsActive   bool       `json:"is_active" gorm:"default:true;not null;index:idx_user_sessions_user_active,priority:2"`
-	LastUsedAt *time.Time `json:"last_used_at,omitempty" gorm:"index"`
-	RevokedAt  *time.Time `json:"revoked_at,omitempty" gorm:"index"`
-
-	CreatedAt time.Time `json:"created_at" gorm:"not null"`
-	UpdatedAt time.Time `json:"updated_at" gorm:"not null"`
+	ExpiresAt           time.Time   `json:"expires_at" gorm:"not null;index"`
+	UpdatedAt           time.Time   `json:"updated_at" gorm:"not null"`
+	CreatedAt           time.Time   `json:"created_at" gorm:"not null"`
+	RefreshExpiresAt    time.Time   `json:"refresh_expires_at" gorm:"not null;index"`
+	DeviceInfo          interface{} `json:"device_info,omitempty" gorm:"type:jsonb"`
+	IPAddress           *string     `json:"ip_address,omitempty" gorm:"type:inet;index"`
+	UserAgent           *string     `json:"user_agent,omitempty" gorm:"type:text"`
+	LastUsedAt          *time.Time  `json:"last_used_at,omitempty" gorm:"index"`
+	RevokedAt           *time.Time  `json:"revoked_at,omitempty" gorm:"index"`
+	CurrentJTI          string      `json:"-" gorm:"type:char(26);not null;index"`
+	RefreshTokenHash    string      `json:"-" gorm:"type:char(64);not null;uniqueIndex"`
+	RefreshTokenVersion int         `json:"refresh_token_version" gorm:"default:1;not null"`
+	ID                  ulid.ULID   `json:"id" gorm:"type:char(26);primaryKey"`
+	UserID              ulid.ULID   `json:"user_id" gorm:"type:char(26);not null;index:idx_user_sessions_user_active,priority:1"`
+	IsActive            bool        `json:"is_active" gorm:"default:true;not null;index:idx_user_sessions_user_active,priority:2"`
 }
 
 // BlacklistedToken represents a revoked access token for immediate revocation capability.
 type BlacklistedToken struct {
-	JTI       string    `json:"jti" gorm:"type:char(26);primaryKey"`                  // JWT ID (ULID format)
-	UserID    ulid.ULID `json:"user_id" gorm:"type:char(26);not null;index"`          // Owner user
-	ExpiresAt time.Time `json:"expires_at" gorm:"not null;index"`                     // Token expiry for cleanup
-	RevokedAt time.Time `json:"revoked_at" gorm:"not null;default:CURRENT_TIMESTAMP"` // When revoked
-	Reason    string    `json:"reason" gorm:"type:varchar(100);not null"`             // logout, suspicious_activity, etc.
-
-	// New fields for user-wide timestamp blacklisting (GDPR/SOC2 compliance)
-	TokenType          string `json:"token_type" gorm:"type:varchar(50);not null;default:'individual';index"` // individual, user_wide_timestamp
-	BlacklistTimestamp *int64 `json:"blacklist_timestamp,omitempty" gorm:"index"`                             // Unix timestamp for user-wide blacklisting
-
-	CreatedAt time.Time `json:"created_at" gorm:"not null"`
+	ExpiresAt          time.Time `json:"expires_at" gorm:"not null;index"`
+	RevokedAt          time.Time `json:"revoked_at" gorm:"not null;default:CURRENT_TIMESTAMP"`
+	CreatedAt          time.Time `json:"created_at" gorm:"not null"`
+	BlacklistTimestamp *int64    `json:"blacklist_timestamp,omitempty" gorm:"index"`
+	JTI                string    `json:"jti" gorm:"type:char(26);primaryKey"`
+	Reason             string    `json:"reason" gorm:"type:varchar(100);not null"`
+	TokenType          string    `json:"token_type" gorm:"type:varchar(50);not null;default:'individual';index"`
+	UserID             ulid.ULID `json:"user_id" gorm:"type:char(26);not null;index"`
 }
 
 // SessionStats represents session statistics and metrics
@@ -88,62 +78,52 @@ type OrganizationRepository interface {
 // Security: Full key is hashed with SHA-256 (deterministic, enables O(1) lookup)
 // Organization is derived via projects.organization_id (no redundant storage)
 type APIKey struct {
-	ID         ulid.ULID `json:"id" gorm:"type:char(26);primaryKey"`
-	KeyHash    string    `json:"-" gorm:"size:255;unique;not null;index"`        // SHA-256(full_key)
-	KeyPreview string    `json:"key_preview" gorm:"size:50;not null"`            // bk_xxxx...yyyy (for display)
-	ProjectID  ulid.ULID `json:"project_id" gorm:"type:char(26);not null;index"` // Project this key belongs to
-	UserID     ulid.ULID `json:"user_id" gorm:"type:char(26);not null;index"`    // Creator user
-
-	// Key metadata
-	Name     string `json:"name" gorm:"size:255;not null"`
-	IsActive bool   `json:"is_active" gorm:"default:true"`
-
-	// Timestamps
-	LastUsedAt *time.Time     `json:"last_used_at,omitempty"`
-	ExpiresAt  *time.Time     `json:"expires_at,omitempty"`
 	CreatedAt  time.Time      `json:"created_at"`
 	UpdatedAt  time.Time      `json:"updated_at"`
+	LastUsedAt *time.Time     `json:"last_used_at,omitempty"`
+	ExpiresAt  *time.Time     `json:"expires_at,omitempty"`
 	DeletedAt  gorm.DeletedAt `json:"deleted_at,omitempty" gorm:"index"`
+	KeyHash    string         `json:"-" gorm:"size:255;unique;not null;index"`
+	KeyPreview string         `json:"key_preview" gorm:"size:50;not null"`
+	Name       string         `json:"name" gorm:"size:255;not null"`
+	ID         ulid.ULID      `json:"id" gorm:"type:char(26);primaryKey"`
+	ProjectID  ulid.ULID      `json:"project_id" gorm:"type:char(26);not null;index"`
+	UserID     ulid.ULID      `json:"user_id" gorm:"type:char(26);not null;index"`
+	IsActive   bool           `json:"is_active" gorm:"default:true"`
 }
 
 // Role represents both system template roles and custom scoped roles
 type Role struct {
-	ID          ulid.ULID  `json:"id" gorm:"type:char(26);primaryKey"`
-	Name        string     `json:"name" gorm:"size:50;not null"`
-	ScopeType   string     `json:"scope_type" gorm:"size:20;not null"`
-	ScopeID     *ulid.ULID `json:"scope_id,omitempty" gorm:"type:char(26);index"`
-	Description string     `json:"description" gorm:"type:text"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
-
-	// Relations
+	CreatedAt       time.Time        `json:"created_at"`
+	UpdatedAt       time.Time        `json:"updated_at"`
+	ScopeID         *ulid.ULID       `json:"scope_id,omitempty" gorm:"type:char(26);index"`
+	Name            string           `json:"name" gorm:"size:50;not null"`
+	ScopeType       string           `json:"scope_type" gorm:"size:20;not null"`
+	Description     string           `json:"description" gorm:"type:text"`
 	Permissions     []Permission     `json:"permissions,omitempty" gorm:"many2many:role_permissions"`
 	RolePermissions []RolePermission `json:"role_permissions,omitempty" gorm:"foreignKey:RoleID"`
+	ID              ulid.ULID        `json:"id" gorm:"type:char(26);primaryKey"`
 }
 
 // OrganizationMember represents user membership in an organization with a single role
 type OrganizationMember struct {
+	JoinedAt       time.Time  `json:"joined_at" gorm:"default:CURRENT_TIMESTAMP"`
+	InvitedBy      *ulid.ULID `json:"invited_by,omitempty" gorm:"type:char(26)"`
+	Role           *Role      `json:"role,omitempty" gorm:"foreignKey:RoleID"`
+	Status         string     `json:"status" gorm:"size:20;default:active"`
 	UserID         ulid.ULID  `json:"user_id" gorm:"type:char(26);primaryKey"`
 	OrganizationID ulid.ULID  `json:"organization_id" gorm:"type:char(26);primaryKey"`
 	RoleID         ulid.ULID  `json:"role_id" gorm:"type:char(26);not null"`
-	Status         string     `json:"status" gorm:"size:20;default:active"`
-	JoinedAt       time.Time  `json:"joined_at" gorm:"default:CURRENT_TIMESTAMP"`
-	InvitedBy      *ulid.ULID `json:"invited_by,omitempty" gorm:"type:char(26)"`
-
-	// Relations
-	Role *Role `json:"role,omitempty" gorm:"foreignKey:RoleID"`
 }
 
 // ProjectMember represents user membership in a project with a single role (future)
 type ProjectMember struct {
+	JoinedAt  time.Time `json:"joined_at" gorm:"default:CURRENT_TIMESTAMP"`
+	Role      *Role     `json:"role,omitempty" gorm:"foreignKey:RoleID"`
+	Status    string    `json:"status" gorm:"size:20;default:active"`
 	UserID    ulid.ULID `json:"user_id" gorm:"type:char(26);primaryKey"`
 	ProjectID ulid.ULID `json:"project_id" gorm:"type:char(26);primaryKey"`
 	RoleID    ulid.ULID `json:"role_id" gorm:"type:char(26);not null"`
-	Status    string    `json:"status" gorm:"size:20;default:active"`
-	JoinedAt  time.Time `json:"joined_at" gorm:"default:CURRENT_TIMESTAMP"`
-
-	// Relations
-	Role *Role `json:"role,omitempty" gorm:"foreignKey:RoleID"`
 }
 
 // Scope constants for roles
@@ -239,17 +219,15 @@ const (
 
 // Permission represents a normalized permission using resource:action format
 type Permission struct {
-	ID          ulid.ULID  `json:"id" gorm:"type:char(26);primaryKey"`
+	CreatedAt   time.Time  `json:"created_at"`
 	Name        string     `json:"name" gorm:"size:100;not null;uniqueIndex"`
 	Resource    string     `json:"resource" gorm:"size:50;not null;index"`
 	Action      string     `json:"action" gorm:"size:50;not null;index"`
 	Description string     `json:"description" gorm:"type:text"`
-	ScopeLevel  ScopeLevel `json:"scope_level" gorm:"size:20;not null;default:'organization';index"` // organization, project, global
-	Category    string     `json:"category" gorm:"size:50;index"`                                    // grouping: organization, members, billing, etc.
-	CreatedAt   time.Time  `json:"created_at"`
-
-	// Relations
-	Roles []Role `json:"roles,omitempty" gorm:"many2many:role_permissions"`
+	ScopeLevel  ScopeLevel `json:"scope_level" gorm:"size:20;not null;default:'organization';index"`
+	Category    string     `json:"category" gorm:"size:50;index"`
+	Roles       []Role     `json:"roles,omitempty" gorm:"many2many:role_permissions"`
+	ID          ulid.ULID  `json:"id" gorm:"type:char(26);primaryKey"`
 }
 
 // GetResourceAction returns the resource:action format string
@@ -300,19 +278,17 @@ func ValidateResourceAction(resourceAction string) error {
 
 // RolePermission represents the many-to-many relationship between template roles and permissions
 type RolePermission struct {
-	RoleID       ulid.ULID  `json:"role_id" gorm:"type:char(26);not null;primaryKey"`
-	PermissionID ulid.ULID  `json:"permission_id" gorm:"type:char(26);not null;primaryKey"`
 	GrantedAt    time.Time  `json:"granted_at" gorm:"default:CURRENT_TIMESTAMP"`
 	GrantedBy    *ulid.ULID `json:"granted_by,omitempty" gorm:"type:char(26)"`
-
-	// Relations
-	Role       Role       `json:"role,omitempty" gorm:"foreignKey:RoleID"`
-	Permission Permission `json:"permission,omitempty" gorm:"foreignKey:PermissionID"`
+	Role         Role       `json:"role,omitempty" gorm:"foreignKey:RoleID"`
+	Permission   Permission `json:"permission,omitempty" gorm:"foreignKey:PermissionID"`
+	RoleID       ulid.ULID  `json:"role_id" gorm:"type:char(26);not null;primaryKey"`
+	PermissionID ulid.ULID  `json:"permission_id" gorm:"type:char(26);not null;primaryKey"`
 }
 
 // AuditLog represents an audit log entry for compliance.
 type AuditLog struct {
-	ID             ulid.ULID  `json:"id" gorm:"type:char(26);primaryKey"`
+	CreatedAt      time.Time  `json:"created_at"`
 	UserID         *ulid.ULID `json:"user_id,omitempty" gorm:"type:char(26)"`
 	OrganizationID *ulid.ULID `json:"organization_id,omitempty" gorm:"type:char(26)"`
 	Action         string     `json:"action" gorm:"size:255;not null"`
@@ -321,16 +297,15 @@ type AuditLog struct {
 	Metadata       string     `json:"metadata" gorm:"type:jsonb"`
 	IPAddress      string     `json:"ip_address" gorm:"size:45"`
 	UserAgent      string     `json:"user_agent" gorm:"type:text"`
-
-	CreatedAt time.Time `json:"created_at"`
+	ID             ulid.ULID  `json:"id" gorm:"type:char(26);primaryKey"`
 }
 
 // Request/Response DTOs
 type LoginRequest struct {
+	DeviceInfo map[string]interface{} `json:"device_info,omitempty"`
 	Email      string                 `json:"email" validate:"required,email"`
 	Password   string                 `json:"password" validate:"required"`
-	Remember   bool                   `json:"remember"`              // Extend session duration
-	DeviceInfo map[string]interface{} `json:"device_info,omitempty"` // Device information for session tracking
+	Remember   bool                   `json:"remember"`
 }
 
 type LoginResponse struct {
@@ -341,28 +316,28 @@ type LoginResponse struct {
 }
 
 type AuthUser struct {
-	ID                    ulid.ULID  `json:"id"`
+	AvatarURL             *string    `json:"avatar_url,omitempty"`
+	DefaultOrganizationID *ulid.ULID `json:"default_organization_id,omitempty"`
 	Email                 string     `json:"email"`
 	Name                  string     `json:"name"`
-	AvatarURL             *string    `json:"avatar_url,omitempty"`
+	ID                    ulid.ULID  `json:"id"`
 	IsEmailVerified       bool       `json:"is_email_verified"`
-	DefaultOrganizationID *ulid.ULID `json:"default_organization_id,omitempty"`
 }
 
 type CreateAPIKeyRequest struct {
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 	Name      string     `json:"name" validate:"required,min=1,max=100"`
 	ProjectID ulid.ULID  `json:"project_id" validate:"required"`
-	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 }
 
 type CreateAPIKeyResponse struct {
-	ID         string     `json:"id" example:"key_01234567890123456789012345"`
-	Name       string     `json:"name" example:"Production API Key"`
-	Key        string     `json:"key" example:"bk_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789AbCd"` // Full key - shown only once
-	KeyPreview string     `json:"key_preview" example:"bk_AbCd...AbCd"`
-	ProjectID  string     `json:"project_id" example:"proj_01234567890123456789012345"`
 	CreatedAt  time.Time  `json:"created_at"`
 	ExpiresAt  *time.Time `json:"expires_at,omitempty"`
+	ID         string     `json:"id" example:"key_01234567890123456789012345"`
+	Name       string     `json:"name" example:"Production API Key"`
+	Key        string     `json:"key" example:"bk_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789AbCd"`
+	KeyPreview string     `json:"key_preview" example:"bk_AbCd...AbCd"`
+	ProjectID  string     `json:"project_id" example:"proj_01234567890123456789012345"`
 }
 
 type RefreshTokenRequest struct {
@@ -372,9 +347,9 @@ type RefreshTokenRequest struct {
 // AuthContext represents the authenticated context for a request.
 // AuthContext represents clean user identity context (permissions resolved dynamically)
 type AuthContext struct {
+	APIKeyID  *ulid.ULID `json:"api_key_id,omitempty"`
+	SessionID *ulid.ULID `json:"session_id,omitempty"`
 	UserID    ulid.ULID  `json:"user_id"`
-	APIKeyID  *ulid.ULID `json:"api_key_id,omitempty"` // Set if authenticated via API key
-	SessionID *ulid.ULID `json:"session_id,omitempty"` // Set if authenticated via session
 }
 
 // Deprecated: StandardPermissions removed
@@ -542,14 +517,14 @@ func NewPermissionWithScope(resource, action, description string, scopeLevel Sco
 
 // PasswordResetToken represents a password reset token
 type PasswordResetToken struct {
-	ID        ulid.ULID  `json:"id" gorm:"type:char(26);primaryKey"`
-	UserID    ulid.ULID  `json:"user_id" gorm:"type:char(26);not null;index"`
-	Token     string     `json:"-" gorm:"size:255;not null;uniqueIndex"`
-	Used      bool       `json:"used" gorm:"default:false;not null"`
 	ExpiresAt time.Time  `json:"expires_at" gorm:"not null;index"`
-	UsedAt    *time.Time `json:"used_at,omitempty"`
 	CreatedAt time.Time  `json:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at"`
+	UsedAt    *time.Time `json:"used_at,omitempty"`
+	Token     string     `json:"-" gorm:"size:255;not null;uniqueIndex"`
+	ID        ulid.ULID  `json:"id" gorm:"type:char(26);primaryKey"`
+	UserID    ulid.ULID  `json:"user_id" gorm:"type:char(26);not null;index"`
+	Used      bool       `json:"used" gorm:"default:false;not null"`
 }
 
 func NewAuditLog(userID, orgID *ulid.ULID, action, resource, resourceID, metadata, ipAddress, userAgent string) *AuditLog {
@@ -582,9 +557,9 @@ func NewPasswordResetToken(userID ulid.ULID, token string, expiresAt time.Time) 
 // ValidateAPIKeyResponse represents the response from API key validation
 type ValidateAPIKeyResponse struct {
 	APIKey      *APIKey      `json:"api_key"`
+	AuthContext *AuthContext `json:"auth_context,omitempty"`
 	ProjectID   ulid.ULID    `json:"project_id"`
 	Valid       bool         `json:"valid"`
-	AuthContext *AuthContext `json:"auth_context,omitempty"`
 }
 
 // Utility methods
@@ -697,10 +672,10 @@ type PermissionListResponse struct {
 
 // UserPermissionsResponse represents a user's effective permissions across all scopes
 type UserPermissionsResponse struct {
-	UserID          ulid.ULID     `json:"user_id"`
 	Roles           []*Role       `json:"roles"`
 	Permissions     []*Permission `json:"permissions"`
-	ResourceActions []string      `json:"resource_actions"` // ["users:read", "projects:write", etc.]
+	ResourceActions []string      `json:"resource_actions"`
+	UserID          ulid.ULID     `json:"user_id"`
 }
 
 // CheckPermissionsRequest represents a request to check multiple permissions
@@ -715,14 +690,14 @@ type CheckPermissionsResponse struct {
 
 // RoleStatistics represents statistics about roles across all scopes
 type RoleStatistics struct {
+	LastUpdated       time.Time      `json:"last_updated"`
+	ScopeDistribution map[string]int `json:"scope_distribution"`
+	RoleDistribution  map[string]int `json:"role_distribution"`
 	TotalRoles        int            `json:"total_roles"`
 	SystemRoles       int            `json:"system_roles"`
 	OrganizationRoles int            `json:"organization_roles"`
 	ProjectRoles      int            `json:"project_roles"`
-	ScopeDistribution map[string]int `json:"scope_distribution"` // scope_type -> role_count
-	RoleDistribution  map[string]int `json:"role_distribution"`  // role_name -> member_count
 	PermissionCount   int            `json:"permission_count"`
-	LastUpdated       time.Time      `json:"last_updated"`
 }
 
 // Table name methods for GORM

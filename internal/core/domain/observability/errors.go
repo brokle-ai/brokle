@@ -1,60 +1,63 @@
 package observability
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 // Domain errors for observability operations
 var (
 	// Trace errors
-	ErrTraceNotFound         = fmt.Errorf("trace not found")
-	ErrTraceAlreadyExists    = fmt.Errorf("trace already exists")
-	ErrInvalidTraceID        = fmt.Errorf("invalid trace ID")
-	ErrExternalTraceIDExists = fmt.Errorf("external trace ID already exists")
+	ErrTraceNotFound         = errors.New("trace not found")
+	ErrTraceAlreadyExists    = errors.New("trace already exists")
+	ErrInvalidTraceID        = errors.New("invalid trace ID")
+	ErrExternalTraceIDExists = errors.New("external trace ID already exists")
 
 	// Span errors
-	ErrSpanNotFound         = fmt.Errorf("span not found")
-	ErrSpanAlreadyExists    = fmt.Errorf("span already exists")
-	ErrInvalidSpanID        = fmt.Errorf("invalid span ID")
-	ErrSpanTraceNotFound    = fmt.Errorf("span trace not found")
-	ErrInvalidSpanType      = fmt.Errorf("invalid span type")
-	ErrSpanAlreadyCompleted = fmt.Errorf("span already completed")
+	ErrSpanNotFound         = errors.New("span not found")
+	ErrSpanAlreadyExists    = errors.New("span already exists")
+	ErrInvalidSpanID        = errors.New("invalid span ID")
+	ErrSpanTraceNotFound    = errors.New("span trace not found")
+	ErrInvalidSpanType      = errors.New("invalid span type")
+	ErrSpanAlreadyCompleted = errors.New("span already completed")
 
 	// Quality score errors
-	ErrQualityScoreNotFound  = fmt.Errorf("quality score not found")
-	ErrInvalidQualityScoreID = fmt.Errorf("invalid quality score ID")
-	ErrInvalidScoreValue     = fmt.Errorf("invalid score value")
-	ErrInvalidScoreDataType  = fmt.Errorf("invalid score data type")
-	ErrEvaluatorNotFound     = fmt.Errorf("evaluator not found")
-	ErrDuplicateQualityScore = fmt.Errorf("duplicate quality score for the same trace/span and score name")
+	ErrQualityScoreNotFound  = errors.New("quality score not found")
+	ErrInvalidQualityScoreID = errors.New("invalid quality score ID")
+	ErrInvalidScoreValue     = errors.New("invalid score value")
+	ErrInvalidScoreDataType  = errors.New("invalid score data type")
+	ErrEvaluatorNotFound     = errors.New("evaluator not found")
+	ErrDuplicateQualityScore = errors.New("duplicate quality score for the same trace/span and score name")
 
 	// Model pricing errors
-	ErrModelNotFound         = fmt.Errorf("model not found")
-	ErrInvalidPricingPattern = fmt.Errorf("invalid pricing pattern")
-	ErrPricingDataIncomplete = fmt.Errorf("incomplete pricing data")
-	ErrPricingExpired        = fmt.Errorf("pricing has expired")
-	ErrInvalidPricingData    = fmt.Errorf("invalid pricing data")
+	ErrModelNotFound         = errors.New("model not found")
+	ErrInvalidPricingPattern = errors.New("invalid pricing pattern")
+	ErrPricingDataIncomplete = errors.New("incomplete pricing data")
+	ErrPricingExpired        = errors.New("pricing has expired")
+	ErrInvalidPricingData    = errors.New("invalid pricing data")
 
 	// General validation errors
-	ErrValidationFailed        = fmt.Errorf("validation failed")
-	ErrInvalidProjectID        = fmt.Errorf("invalid project ID")
-	ErrInvalidUserID           = fmt.Errorf("invalid user ID")
-	ErrInvalidSessionID        = fmt.Errorf("invalid session ID")
-	ErrUnauthorizedAccess      = fmt.Errorf("unauthorized access")
-	ErrInsufficientPermissions = fmt.Errorf("insufficient permissions")
+	ErrValidationFailed        = errors.New("validation failed")
+	ErrInvalidProjectID        = errors.New("invalid project ID")
+	ErrInvalidUserID           = errors.New("invalid user ID")
+	ErrInvalidSessionID        = errors.New("invalid session ID")
+	ErrUnauthorizedAccess      = errors.New("unauthorized access")
+	ErrInsufficientPermissions = errors.New("insufficient permissions")
 
 	// Operation errors
-	ErrBatchOperationFailed   = fmt.Errorf("batch operation failed")
-	ErrConcurrentModification = fmt.Errorf("concurrent modification detected")
-	ErrResourceLimitExceeded  = fmt.Errorf("resource limit exceeded")
-	ErrInvalidFilter          = fmt.Errorf("invalid filter parameters")
-	ErrInvalidPagination      = fmt.Errorf("invalid pagination parameters")
+	ErrBatchOperationFailed   = errors.New("batch operation failed")
+	ErrConcurrentModification = errors.New("concurrent modification detected")
+	ErrResourceLimitExceeded  = errors.New("resource limit exceeded")
+	ErrInvalidFilter          = errors.New("invalid filter parameters")
+	ErrInvalidPagination      = errors.New("invalid pagination parameters")
 )
 
 // ObservabilityError represents a structured error for observability operations
 type ObservabilityError struct {
+	Cause   error                  `json:"-"`
+	Details map[string]interface{} `json:"details,omitempty"`
 	Code    string                 `json:"code"`
 	Message string                 `json:"message"`
-	Details map[string]interface{} `json:"details,omitempty"`
-	Cause   error                  `json:"-"`
 }
 
 // Error implements the error interface

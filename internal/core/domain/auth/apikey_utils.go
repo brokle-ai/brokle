@@ -2,6 +2,7 @@ package auth
 
 import (
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -36,7 +37,7 @@ func GenerateAPIKey() (string, error) {
 func ValidateAPIKeyFormat(fullKey string) error {
 	parts := strings.Split(fullKey, APIKeySeparator)
 	if len(parts) != 2 {
-		return fmt.Errorf("invalid API key format: expected 2 parts separated by underscore (bk_{secret})")
+		return errors.New("invalid API key format: expected 2 parts separated by underscore (bk_{secret})")
 	}
 
 	if parts[0] != APIKeyPrefix {

@@ -2,7 +2,6 @@ package observability
 
 import (
 	"errors"
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -14,7 +13,7 @@ import (
 
 // TestErrorWrapping tests that errors can be unwrapped correctly
 func TestErrorWrapping(t *testing.T) {
-	originalErr := fmt.Errorf("database connection failed")
+	originalErr := errors.New("database connection failed")
 	wrappedErr := NewObservabilityErrorWithCause(
 		ErrCodeBatchOperationFailed,
 		"failed to process batch",
@@ -22,7 +21,7 @@ func TestErrorWrapping(t *testing.T) {
 	)
 
 	// Test that we can unwrap to get the original error
-	assert.True(t, errors.Is(wrappedErr, originalErr))
+	assert.ErrorIs(t, wrappedErr, originalErr)
 
 	// Test that error message includes both wrapped and original
 	assert.Contains(t, wrappedErr.Error(), "failed to process batch")
@@ -32,13 +31,13 @@ func TestErrorWrapping(t *testing.T) {
 // TestErrorChaining tests multi-level error wrapping
 func TestErrorChaining(t *testing.T) {
 	// Create a chain of errors
-	dbErr := fmt.Errorf("connection timeout")
+	dbErr := errors.New("connection timeout")
 	repoErr := NewObservabilityErrorWithCause(ErrCodeBatchOperationFailed, "repository error", dbErr)
 	serviceErr := NewObservabilityErrorWithCause(ErrCodeBatchOperationFailed, "service error", repoErr)
 
 	// Verify we can unwrap through the chain
-	assert.True(t, errors.Is(serviceErr, repoErr))
-	assert.True(t, errors.Is(serviceErr, dbErr))
+	assert.ErrorIs(t, serviceErr, repoErr)
+	assert.ErrorIs(t, serviceErr, dbErr)
 }
 
 // TestObservabilityError_WithDetail tests detail accumulation

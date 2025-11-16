@@ -241,21 +241,21 @@ func (r *BillingRecordRepository) GetBillingSummary(ctx context.Context, orgID u
 		LIMIT 1`
 
 	type BillingSummaryRow struct {
-		ID                   ulid.ULID
-		OrganizationID       ulid.ULID
-		Period               string
+		GeneratedAt          time.Time
 		PeriodStart          time.Time
 		PeriodEnd            time.Time
-		TotalRequests        int64
-		TotalTokens          int64
-		TotalCost            float64
 		Currency             string
+		Period               string
+		Status               string
 		ProviderBreakdownRaw []byte `gorm:"column:provider_breakdown"`
 		ModelBreakdownRaw    []byte `gorm:"column:model_breakdown"`
+		TotalCost            float64
+		TotalTokens          int64
 		Discounts            float64
 		NetCost              float64
-		Status               string
-		GeneratedAt          time.Time
+		TotalRequests        int64
+		ID                   ulid.ULID
+		OrganizationID       ulid.ULID
 	}
 
 	var row BillingSummaryRow
@@ -316,21 +316,21 @@ func (r *BillingRecordRepository) GetBillingSummaryHistory(ctx context.Context, 
 		ORDER BY period_start DESC`
 
 	type BillingSummaryRow struct {
-		ID                   ulid.ULID
-		OrganizationID       ulid.ULID
-		Period               string
+		GeneratedAt          time.Time
 		PeriodStart          time.Time
 		PeriodEnd            time.Time
-		TotalRequests        int64
-		TotalTokens          int64
-		TotalCost            float64
 		Currency             string
+		Period               string
+		Status               string
 		ProviderBreakdownRaw []byte `gorm:"column:provider_breakdown"`
 		ModelBreakdownRaw    []byte `gorm:"column:model_breakdown"`
+		TotalCost            float64
+		TotalTokens          int64
 		Discounts            float64
 		NetCost              float64
-		Status               string
-		GeneratedAt          time.Time
+		TotalRequests        int64
+		ID                   ulid.ULID
+		OrganizationID       ulid.ULID
 	}
 
 	var rows []BillingSummaryRow

@@ -94,7 +94,11 @@ func (h *OTLPHandler) HandleTraces(c *gin.Context) {
 			response.BadRequest(c, "invalid encoding", "Failed to decompress gzip data")
 			return
 		}
-		defer gzipReader.Close()
+		defer func() {
+			if err := gzipReader.Close(); err != nil {
+				h.logger.WithError(err).Warn("Failed to close gzip reader")
+			}
+		}()
 
 		body, err = io.ReadAll(gzipReader)
 		if err != nil {

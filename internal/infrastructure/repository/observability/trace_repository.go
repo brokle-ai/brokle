@@ -522,4 +522,3 @@ func (r *traceRepository) scanTraces(rows driver.Rows) ([]*observability.Trace, 
 
 	return traces, rows.Err()
 }
-

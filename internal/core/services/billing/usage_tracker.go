@@ -14,31 +14,25 @@ import (
 
 // UsageTracker manages organization usage tracking and quotas
 type UsageTracker struct {
-	logger    *logrus.Logger
-	usageRepo billingDomain.UsageRepository
-	quotaRepo billingDomain.QuotaRepository
-
-	// In-memory cache for frequently accessed quotas
-	quotaCache map[ulid.ULID]*billingDomain.UsageQuota
-	cacheMutex sync.RWMutex
-
-	// Configuration
+	usageRepo    billingDomain.UsageRepository
+	quotaRepo    billingDomain.QuotaRepository
+	logger       *logrus.Logger
+	quotaCache   map[ulid.ULID]*billingDomain.UsageQuota
+	stopCh       chan struct{}
+	wg           sync.WaitGroup
 	cacheExpiry  time.Duration
 	syncInterval time.Duration
-
-	// Background sync
-	stopCh chan struct{}
-	wg     sync.WaitGroup
+	cacheMutex   sync.RWMutex
 }
 
 // UsageUpdate represents an update to organization usage
 type UsageUpdate struct {
-	OrganizationID ulid.ULID
+	Timestamp      time.Time
+	Currency       string
 	Requests       int64
 	Tokens         int64
 	Cost           float64
-	Currency       string
-	Timestamp      time.Time
+	OrganizationID ulid.ULID
 }
 
 // NewUsageTracker creates a new usage tracker instance

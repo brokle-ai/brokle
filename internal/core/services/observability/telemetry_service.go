@@ -13,16 +13,14 @@ import (
 
 // TelemetryService aggregates all telemetry-related services with Redis Streams-based async processing
 type TelemetryService struct {
+	lastProcessingTime   time.Time
 	deduplicationService observability.TelemetryDeduplicationService
 	streamProducer       *streams.TelemetryStreamProducer
 	logger               *logrus.Logger
-
-	// Performance tracking
-	mu                 sync.RWMutex
-	batchesProcessed   uint64
-	eventsProcessed    uint64
-	lastProcessingTime time.Time
-	avgProcessingTime  time.Duration
+	batchesProcessed     uint64
+	eventsProcessed      uint64
+	avgProcessingTime    time.Duration
+	mu                   sync.RWMutex
 }
 
 // NewTelemetryService creates a new telemetry service with Redis Streams and deduplication

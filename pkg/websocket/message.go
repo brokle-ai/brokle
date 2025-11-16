@@ -30,14 +30,14 @@ const (
 	MessageTypeAck    MessageType = "ack"
 
 	// Real-time updates
-	MessageTypeMetricUpdate     MessageType = "metric_update"
-	MessageTypeAnalyticsUpdate  MessageType = "analytics_update"
-	MessageTypeUsageUpdate      MessageType = "usage_update"
-	MessageTypeProviderUpdate   MessageType = "provider_update"
-	MessageTypeRoutingUpdate    MessageType = "routing_update"
-	MessageTypeBillingUpdate    MessageType = "billing_update"
-	MessageTypeSystemAlert      MessageType = "system_alert"
-	MessageTypeNotification     MessageType = "notification"
+	MessageTypeMetricUpdate    MessageType = "metric_update"
+	MessageTypeAnalyticsUpdate MessageType = "analytics_update"
+	MessageTypeUsageUpdate     MessageType = "usage_update"
+	MessageTypeProviderUpdate  MessageType = "provider_update"
+	MessageTypeRoutingUpdate   MessageType = "routing_update"
+	MessageTypeBillingUpdate   MessageType = "billing_update"
+	MessageTypeSystemAlert     MessageType = "system_alert"
+	MessageTypeNotification    MessageType = "notification"
 
 	// AI Platform specific messages
 	MessageTypeRequestStarted   MessageType = "request_started"
@@ -231,8 +231,8 @@ type ErrorMessage struct {
 
 // StatusMessage represents a status message
 type StatusMessage struct {
-	Status  string `json:"status"`
-	Message string `json:"message"`
+	Status  string      `json:"status"`
+	Message string      `json:"message"`
 	Data    interface{} `json:"data,omitempty"`
 }
 
@@ -247,24 +247,24 @@ type AckMessage struct {
 
 // MetricUpdate represents a real-time metrics update
 type MetricUpdate struct {
-	MetricName  string                 `json:"metric_name"`
-	Value       float64                `json:"value"`
-	Unit        string                 `json:"unit,omitempty"`
-	Labels      map[string]string      `json:"labels,omitempty"`
-	Dimensions  map[string]interface{} `json:"dimensions,omitempty"`
-	Timestamp   time.Time              `json:"timestamp"`
-	OrgID       string                 `json:"org_id"`
-	ProjectID   string                 `json:"project_id"`
+	MetricName string                 `json:"metric_name"`
+	Value      float64                `json:"value"`
+	Unit       string                 `json:"unit,omitempty"`
+	Labels     map[string]string      `json:"labels,omitempty"`
+	Dimensions map[string]interface{} `json:"dimensions,omitempty"`
+	Timestamp  time.Time              `json:"timestamp"`
+	OrgID      string                 `json:"org_id"`
+	ProjectID  string                 `json:"project_id"`
 }
 
 // AnalyticsUpdate represents a real-time analytics update
 type AnalyticsUpdate struct {
-	Type        string                 `json:"type"`
-	Data        map[string]interface{} `json:"data"`
-	Period      string                 `json:"period"`
-	Timestamp   time.Time              `json:"timestamp"`
-	OrgID       string                 `json:"org_id"`
-	ProjectID   string                 `json:"project_id"`
+	Type      string                 `json:"type"`
+	Data      map[string]interface{} `json:"data"`
+	Period    string                 `json:"period"`
+	Timestamp time.Time              `json:"timestamp"`
+	OrgID     string                 `json:"org_id"`
+	ProjectID string                 `json:"project_id"`
 }
 
 // UsageUpdate represents a real-time usage update
@@ -291,18 +291,18 @@ type ProviderUpdate struct {
 
 // RoutingUpdate represents a routing decision update
 type RoutingUpdate struct {
-	RequestID     string                 `json:"request_id"`
-	Model         string                 `json:"model"`
-	Provider      string                 `json:"provider"`
-	Decision      string                 `json:"decision"`
-	Reason        string                 `json:"reason"`
-	Latency       float64                `json:"latency"`
-	Cost          float64                `json:"cost"`
-	Quality       float64                `json:"quality,omitempty"`
-	Metadata      map[string]interface{} `json:"metadata,omitempty"`
-	Timestamp     time.Time              `json:"timestamp"`
-	OrgID         string                 `json:"org_id"`
-	ProjectID     string                 `json:"project_id"`
+	RequestID string                 `json:"request_id"`
+	Model     string                 `json:"model"`
+	Provider  string                 `json:"provider"`
+	Decision  string                 `json:"decision"`
+	Reason    string                 `json:"reason"`
+	Latency   float64                `json:"latency"`
+	Cost      float64                `json:"cost"`
+	Quality   float64                `json:"quality,omitempty"`
+	Metadata  map[string]interface{} `json:"metadata,omitempty"`
+	Timestamp time.Time              `json:"timestamp"`
+	OrgID     string                 `json:"org_id"`
+	ProjectID string                 `json:"project_id"`
 }
 
 // BillingUpdate represents a billing update
@@ -318,79 +318,79 @@ type BillingUpdate struct {
 
 // SystemAlert represents a system alert
 type SystemAlert struct {
-	Level       string                 `json:"level"`
-	Title       string                 `json:"title"`
-	Message     string                 `json:"message"`
-	Component   string                 `json:"component"`
-	Action      string                 `json:"action,omitempty"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
-	Timestamp   time.Time              `json:"timestamp"`
-	OrgID       string                 `json:"org_id,omitempty"`
-	ProjectID   string                 `json:"project_id,omitempty"`
+	Level     string                 `json:"level"`
+	Title     string                 `json:"title"`
+	Message   string                 `json:"message"`
+	Component string                 `json:"component"`
+	Action    string                 `json:"action,omitempty"`
+	Metadata  map[string]interface{} `json:"metadata,omitempty"`
+	Timestamp time.Time              `json:"timestamp"`
+	OrgID     string                 `json:"org_id,omitempty"`
+	ProjectID string                 `json:"project_id,omitempty"`
 }
 
 // Notification represents a user notification
 type Notification struct {
-	ID          string                 `json:"id"`
-	Type        string                 `json:"type"`
-	Title       string                 `json:"title"`
-	Message     string                 `json:"message"`
-	Priority    string                 `json:"priority"`
-	Category    string                 `json:"category"`
-	ActionURL   string                 `json:"action_url,omitempty"`
-	Data        map[string]interface{} `json:"data,omitempty"`
-	Read        bool                   `json:"read"`
-	Timestamp   time.Time              `json:"timestamp"`
-	ExpiresAt   *time.Time             `json:"expires_at,omitempty"`
-	UserID      string                 `json:"user_id"`
-	OrgID       string                 `json:"org_id"`
+	ID        string                 `json:"id"`
+	Type      string                 `json:"type"`
+	Title     string                 `json:"title"`
+	Message   string                 `json:"message"`
+	Priority  string                 `json:"priority"`
+	Category  string                 `json:"category"`
+	ActionURL string                 `json:"action_url,omitempty"`
+	Data      map[string]interface{} `json:"data,omitempty"`
+	Read      bool                   `json:"read"`
+	Timestamp time.Time              `json:"timestamp"`
+	ExpiresAt *time.Time             `json:"expires_at,omitempty"`
+	UserID    string                 `json:"user_id"`
+	OrgID     string                 `json:"org_id"`
 }
 
 // RequestEvent represents an AI request event
 type RequestEvent struct {
-	RequestID     string                 `json:"request_id"`
-	Status        string                 `json:"status"`
-	Provider      string                 `json:"provider"`
-	Model         string                 `json:"model"`
-	Tokens        int                    `json:"tokens,omitempty"`
-	Cost          float64                `json:"cost,omitempty"`
-	Latency       float64                `json:"latency,omitempty"`
-	Quality       float64                `json:"quality,omitempty"`
-	CacheHit      bool                   `json:"cache_hit,omitempty"`
-	Error         string                 `json:"error,omitempty"`
-	Metadata      map[string]interface{} `json:"metadata,omitempty"`
-	Timestamp     time.Time              `json:"timestamp"`
-	OrgID         string                 `json:"org_id"`
-	ProjectID     string                 `json:"project_id"`
-	UserID        string                 `json:"user_id,omitempty"`
+	RequestID string                 `json:"request_id"`
+	Status    string                 `json:"status"`
+	Provider  string                 `json:"provider"`
+	Model     string                 `json:"model"`
+	Tokens    int                    `json:"tokens,omitempty"`
+	Cost      float64                `json:"cost,omitempty"`
+	Latency   float64                `json:"latency,omitempty"`
+	Quality   float64                `json:"quality,omitempty"`
+	CacheHit  bool                   `json:"cache_hit,omitempty"`
+	Error     string                 `json:"error,omitempty"`
+	Metadata  map[string]interface{} `json:"metadata,omitempty"`
+	Timestamp time.Time              `json:"timestamp"`
+	OrgID     string                 `json:"org_id"`
+	ProjectID string                 `json:"project_id"`
+	UserID    string                 `json:"user_id,omitempty"`
 }
 
 // CacheEvent represents a cache event
 type CacheEvent struct {
-	Type        string                 `json:"type"`
-	Key         string                 `json:"key"`
-	Hit         bool                   `json:"hit"`
-	Similarity  float64                `json:"similarity,omitempty"`
-	SavedCost   float64                `json:"saved_cost,omitempty"`
-	SavedTime   float64                `json:"saved_time,omitempty"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
-	Timestamp   time.Time              `json:"timestamp"`
-	OrgID       string                 `json:"org_id"`
-	ProjectID   string                 `json:"project_id"`
+	Type       string                 `json:"type"`
+	Key        string                 `json:"key"`
+	Hit        bool                   `json:"hit"`
+	Similarity float64                `json:"similarity,omitempty"`
+	SavedCost  float64                `json:"saved_cost,omitempty"`
+	SavedTime  float64                `json:"saved_time,omitempty"`
+	Metadata   map[string]interface{} `json:"metadata,omitempty"`
+	Timestamp  time.Time              `json:"timestamp"`
+	OrgID      string                 `json:"org_id"`
+	ProjectID  string                 `json:"project_id"`
 }
 
 // QuotaEvent represents a quota-related event
 type QuotaEvent struct {
-	Type        string    `json:"type"`
-	Resource    string    `json:"resource"`
-	Current     int64     `json:"current"`
-	Limit       int64     `json:"limit"`
-	Percentage  float64   `json:"percentage"`
-	Period      string    `json:"period"`
-	Action      string    `json:"action,omitempty"`
-	Timestamp   time.Time `json:"timestamp"`
-	OrgID       string    `json:"org_id"`
-	ProjectID   string    `json:"project_id"`
+	Type       string    `json:"type"`
+	Resource   string    `json:"resource"`
+	Current    int64     `json:"current"`
+	Limit      int64     `json:"limit"`
+	Percentage float64   `json:"percentage"`
+	Period     string    `json:"period"`
+	Action     string    `json:"action,omitempty"`
+	Timestamp  time.Time `json:"timestamp"`
+	OrgID      string    `json:"org_id"`
+	ProjectID  string    `json:"project_id"`
 }
 
 // Helper functions for creating common messages

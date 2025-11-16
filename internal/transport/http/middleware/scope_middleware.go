@@ -214,10 +214,10 @@ func (m *ScopeMiddleware) RequireAllScopes(scopes []string) gin.HandlerFunc {
 
 // ScopeContext holds resolved scope context for a request
 type ScopeContext struct {
-	UserID         ulid.ULID
 	OrganizationID *ulid.ULID
 	ProjectID      *ulid.ULID
-	Scopes         []string // User's effective scopes in this context
+	Scopes         []string
+	UserID         ulid.ULID
 }
 
 // Context key for storing scope context

@@ -2,6 +2,7 @@ package observability
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -26,7 +27,7 @@ func NewTelemetryDeduplicationService(
 // CheckDuplicate checks if a dedup ID is a duplicate using Redis-only approach
 func (s *telemetryDeduplicationService) CheckDuplicate(ctx context.Context, dedupID string) (bool, error) {
 	if dedupID == "" {
-		return false, fmt.Errorf("dedup ID cannot be empty")
+		return false, errors.New("dedup ID cannot be empty")
 	}
 
 	// Use Redis-only exists check (auto-expiry handles cleanup)
@@ -68,11 +69,11 @@ func (s *telemetryDeduplicationService) ClaimEvents(ctx context.Context, project
 	}
 
 	if projectID.IsZero() {
-		return nil, nil, fmt.Errorf("project ID cannot be zero")
+		return nil, nil, errors.New("project ID cannot be zero")
 	}
 
 	if batchID.IsZero() {
-		return nil, nil, fmt.Errorf("batch ID cannot be zero")
+		return nil, nil, errors.New("batch ID cannot be zero")
 	}
 
 	// Validate dedup IDs
@@ -108,13 +109,13 @@ func (s *telemetryDeduplicationService) ReleaseEvents(ctx context.Context, dedup
 // RegisterEvent registers a new event for deduplication
 func (s *telemetryDeduplicationService) RegisterEvent(ctx context.Context, dedupID string, batchID ulid.ULID, projectID ulid.ULID, ttl time.Duration) error {
 	if dedupID == "" {
-		return fmt.Errorf("dedup ID cannot be empty")
+		return errors.New("dedup ID cannot be empty")
 	}
 	if batchID.IsZero() {
-		return fmt.Errorf("batch ID cannot be zero")
+		return errors.New("batch ID cannot be zero")
 	}
 	if projectID.IsZero() {
-		return fmt.Errorf("project ID cannot be zero")
+		return errors.New("project ID cannot be zero")
 	}
 
 	// Calculate optimal expiration time
@@ -146,10 +147,10 @@ func (s *telemetryDeduplicationService) RegisterEvent(ctx context.Context, dedup
 // Uses the default TTL from configuration (typically 24 hours for telemetry events)
 func (s *telemetryDeduplicationService) RegisterProcessedEventsBatch(ctx context.Context, projectID ulid.ULID, batchID ulid.ULID, dedupIDs []string) error {
 	if projectID.IsZero() {
-		return fmt.Errorf("project ID cannot be zero")
+		return errors.New("project ID cannot be zero")
 	}
 	if batchID.IsZero() {
-		return fmt.Errorf("batch ID cannot be zero")
+		return errors.New("batch ID cannot be zero")
 	}
 	if len(dedupIDs) == 0 {
 		return nil // Nothing to register
@@ -199,7 +200,7 @@ func (s *telemetryDeduplicationService) RegisterProcessedEventsBatch(ctx context
 // CalculateOptimalTTL calculates the optimal TTL based on ULID timestamp and default TTL
 func (s *telemetryDeduplicationService) CalculateOptimalTTL(ctx context.Context, dedupID string, defaultTTL time.Duration) (time.Duration, error) {
 	if dedupID == "" {
-		return 0, fmt.Errorf("dedup ID cannot be empty")
+		return 0, errors.New("dedup ID cannot be empty")
 	}
 
 	// For composite OTLP IDs (trace_id:span_id), always use default TTL
@@ -226,7 +227,7 @@ func (s *telemetryDeduplicationService) CleanupExpired(ctx context.Context) (int
 // Note: With Redis-only approach, TTL handles auto-expiry per key
 func (s *telemetryDeduplicationService) CleanupByProject(ctx context.Context, projectID ulid.ULID, olderThan time.Time) (int64, error) {
 	if projectID.IsZero() {
-		return 0, fmt.Errorf("project ID cannot be zero")
+		return 0, errors.New("project ID cannot be zero")
 	}
 
 	// Redis automatically expires entries based on TTL
@@ -311,7 +312,7 @@ func (s *telemetryDeduplicationService) ValidateRedisHealth(ctx context.Context)
 // GetDeduplicationStats retrieves deduplication performance statistics
 func (s *telemetryDeduplicationService) GetDeduplicationStats(ctx context.Context, projectID ulid.ULID) (*observability.DeduplicationStats, error) {
 	if projectID.IsZero() {
-		return nil, fmt.Errorf("project ID cannot be zero")
+		return nil, errors.New("project ID cannot be zero")
 	}
 
 	// Get count of entries for the project

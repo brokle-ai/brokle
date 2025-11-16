@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -112,7 +113,7 @@ func (s *SpanService) UpdateSpan(ctx context.Context, span *observability.Span) 
 	existing, err := s.spanRepo.GetByID(ctx, span.SpanID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return appErrors.NewNotFoundError(fmt.Sprintf("span %s", span.SpanID))
+			return appErrors.NewNotFoundError("span " + span.SpanID)
 		}
 		return appErrors.NewInternalError("failed to get span", err)
 	}
@@ -139,7 +140,7 @@ func (s *SpanService) UpdateSpan(ctx context.Context, span *observability.Span) 
 func (s *SpanService) SetSpanCost(ctx context.Context, spanID string, inputCost, outputCost float64) error {
 	span, err := s.spanRepo.GetByID(ctx, spanID)
 	if err != nil {
-		return appErrors.NewNotFoundError(fmt.Sprintf("span %s", spanID))
+		return appErrors.NewNotFoundError("span " + spanID)
 	}
 
 	// Update span_attributes map with cost values as STRINGS
@@ -167,7 +168,7 @@ func (s *SpanService) SetSpanCost(ctx context.Context, spanID string, inputCost,
 func (s *SpanService) SetSpanUsage(ctx context.Context, spanID string, promptTokens, completionTokens uint32) error {
 	span, err := s.spanRepo.GetByID(ctx, spanID)
 	if err != nil {
-		return appErrors.NewNotFoundError(fmt.Sprintf("span %s", spanID))
+		return appErrors.NewNotFoundError("span " + spanID)
 	}
 
 	// Update span_attributes map with usage values as STRINGS
@@ -177,8 +178,8 @@ func (s *SpanService) SetSpanUsage(ctx context.Context, spanID string, promptTok
 	}
 
 	// Store tokens as strings for consistency with OTEL conventions
-	span.SpanAttributes["gen_ai.usage.input_tokens"] = fmt.Sprintf("%d", promptTokens)
-	span.SpanAttributes["gen_ai.usage.output_tokens"] = fmt.Sprintf("%d", completionTokens)
+	span.SpanAttributes["gen_ai.usage.input_tokens"] = strconv.FormatUint(uint64(promptTokens), 10)
+	span.SpanAttributes["gen_ai.usage.output_tokens"] = strconv.FormatUint(uint64(completionTokens), 10)
 
 	// Update span
 	if err := s.spanRepo.Update(ctx, span); err != nil {
@@ -250,7 +251,7 @@ func (s *SpanService) DeleteSpan(ctx context.Context, id string) error {
 	_, err := s.spanRepo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return appErrors.NewNotFoundError(fmt.Sprintf("span %s", id))
+			return appErrors.NewNotFoundError("span " + id)
 		}
 		return appErrors.NewInternalError("failed to get span", err)
 	}
@@ -268,7 +269,7 @@ func (s *SpanService) GetSpanByID(ctx context.Context, id string) (*observabilit
 	span, err := s.spanRepo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("span %s", id))
+			return nil, appErrors.NewNotFoundError("span " + id)
 		}
 		return nil, appErrors.NewInternalError("failed to get span", err)
 	}
@@ -291,7 +292,7 @@ func (s *SpanService) GetRootSpan(ctx context.Context, traceID string) (*observa
 	rootSpan, err := s.spanRepo.GetRootSpan(ctx, traceID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, appErrors.NewNotFoundError(fmt.Sprintf("root span for trace %s", traceID))
+			return nil, appErrors.NewNotFoundError("root span for trace " + traceID)
 		}
 		return nil, appErrors.NewInternalError("failed to get root span", err)
 	}
@@ -421,4 +422,3 @@ func (s *SpanService) CalculateTraceTokens(ctx context.Context, traceID string) 
 
 	return uint32(totalTokens), nil
 }
-

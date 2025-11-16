@@ -54,9 +54,9 @@ func NewHandler(
 // LoginRequest represents the login request payload
 // @Description User login credentials
 type LoginRequest struct {
+	DeviceInfo map[string]interface{} `json:"device_info,omitempty" description:"Device information for session tracking"`
 	Email      string                 `json:"email" binding:"required,email" example:"user@example.com" description:"User email address"`
 	Password   string                 `json:"password" binding:"required" example:"password123" description:"User password (minimum 8 characters)"`
-	DeviceInfo map[string]interface{} `json:"device_info,omitempty" description:"Device information for session tracking"`
 }
 
 // Login handles user login
@@ -135,14 +135,14 @@ func (h *Handler) Login(c *gin.Context) {
 // RegisterRequest represents the registration request payload
 // @Description User registration information
 type RegisterRequest struct {
+	OrganizationName *string `json:"organization_name,omitempty" example:"Acme Corp" description:"Organization name (required for fresh signup, omitted for invitation)"`
+	ReferralSource   *string `json:"referral_source,omitempty" example:"search" description:"Where did you hear about us (optional)"`
+	InvitationToken  *string `json:"invitation_token,omitempty" example:"01HX..." description:"Invitation token (for invitation-based signup)"`
 	Email            string  `json:"email" binding:"required,email" example:"user@example.com" description:"User email address"`
 	FirstName        string  `json:"first_name" binding:"required,min=1,max=100" example:"John" description:"User first name"`
 	LastName         string  `json:"last_name" binding:"required,min=1,max=100" example:"Doe" description:"User last name"`
 	Password         string  `json:"password" binding:"required,min=8" example:"password123" description:"User password (minimum 8 characters)"`
 	Role             string  `json:"role" binding:"required,oneof=engineer product designer executive other" example:"engineer" description:"User role (engineer, product, designer, executive, other)"`
-	OrganizationName *string `json:"organization_name,omitempty" example:"Acme Corp" description:"Organization name (required for fresh signup, omitted for invitation)"`
-	ReferralSource   *string `json:"referral_source,omitempty" example:"search" description:"Where did you hear about us (optional)"`
-	InvitationToken  *string `json:"invitation_token,omitempty" example:"01HX..." description:"Invitation token (for invitation-based signup)"`
 }
 
 // Signup handles user registration
@@ -248,10 +248,10 @@ func (h *Handler) Signup(c *gin.Context) {
 // CompleteOAuthSignupRequest represents the OAuth signup completion request
 // @Description Complete OAuth signup with additional user information
 type CompleteOAuthSignupRequest struct {
-	SessionID        string  `json:"session_id" binding:"required" example:"01HX..." description:"OAuth session ID from redirect"`
-	Role             string  `json:"role" binding:"required" example:"engineer" description:"User role"`
 	OrganizationName *string `json:"organization_name,omitempty" example:"Acme Corp" description:"Organization name (required for fresh signup)"`
 	ReferralSource   *string `json:"referral_source,omitempty" example:"search" description:"Where did you hear about us"`
+	SessionID        string  `json:"session_id" binding:"required" example:"01HX..." description:"OAuth session ID from redirect"`
+	Role             string  `json:"role" binding:"required" example:"engineer" description:"User role"`
 }
 
 // CompleteOAuthSignup handles OAuth signup completion (Step 2)

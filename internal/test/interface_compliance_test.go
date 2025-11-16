@@ -266,25 +266,25 @@ func TestStubBehaviorConsistency(t *testing.T) {
 // Benchmark tests to ensure interface overhead is minimal
 func BenchmarkEnterpriseServiceInstantiation(b *testing.B) {
 	b.Run("Compliance instantiation", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			_ = compliance.New()
 		}
 	})
 
 	b.Run("SSO instantiation", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			_ = sso.New()
 		}
 	})
 
 	b.Run("RBAC instantiation", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			_ = rbac.New()
 		}
 	})
 
 	b.Run("Analytics instantiation", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
+		for range b.N {
 			_ = analytics.New()
 		}
 	})

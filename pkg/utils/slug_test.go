@@ -10,8 +10,8 @@ func TestGenerateCompositeSlug(t *testing.T) {
 	tests := []struct {
 		name     string
 		orgName  string
-		id       ulid.ULID
 		expected string
+		id       ulid.ULID
 	}{
 		{
 			name:     "simple name",

@@ -98,23 +98,18 @@ type BlobStorageRepository interface {
 
 // TraceFilter represents filters for trace queries
 type TraceFilter struct {
-	// Scope
-	ProjectID string // Required for scoping queries to project
-
-	// Domain filters
 	UserID      *string
-	SessionID   *string // Virtual session filtering
+	SessionID   *string
 	StartTime   *time.Time
 	EndTime     *time.Time
-	Tags        []string
 	Environment *string
 	ServiceName *string
 	StatusCode  *string
 	Bookmarked  *bool
 	Public      *bool
-
-	// Pagination (embedded for DRY)
 	pagination.Params
+	ProjectID string
+	Tags      []string
 }
 
 // SpanFilter represents filters for span queries

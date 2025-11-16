@@ -391,4 +391,3 @@ func (r *scoreRepository) scanScores(rows driver.Rows) ([]*observability.Score, 
 
 	return scores, rows.Err()
 }
-

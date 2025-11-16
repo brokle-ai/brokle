@@ -5,24 +5,26 @@
 // both PostgreSQL and ClickHouse databases.
 //
 // Usage Examples:
-//   go run cmd/migrate/main.go up                    # Run all pending migrations
-//   go run cmd/migrate/main.go down                  # Rollback 1 migration (with confirmation)
-//   go run cmd/migrate/main.go down -steps 5         # Rollback 5 migrations (with confirmation)
-//   go run cmd/migrate/main.go -db postgres up       # Run PostgreSQL migrations only
-//   go run cmd/migrate/main.go -db clickhouse up     # Run ClickHouse migrations only
-//   go run cmd/migrate/main.go status                # Show migration status
-//   go run cmd/migrate/main.go goto -version 5       # Migrate to specific version (with confirmation)
-//   go run cmd/migrate/main.go force -version 3      # Force version (with confirmation)
-//   go run cmd/migrate/main.go drop                  # Drop all tables (with confirmation)
-//   go run cmd/migrate/main.go steps -steps 2        # Run 2 steps forward
-//   go run cmd/migrate/main.go steps -steps -1       # Run 1 step backward
-//   go run cmd/migrate/main.go info                  # Show detailed migration information
-//   go run cmd/migrate/main.go create -name "add_users" -db postgres  # Create new migration
+//
+//	go run cmd/migrate/main.go up                    # Run all pending migrations
+//	go run cmd/migrate/main.go down                  # Rollback 1 migration (with confirmation)
+//	go run cmd/migrate/main.go down -steps 5         # Rollback 5 migrations (with confirmation)
+//	go run cmd/migrate/main.go -db postgres up       # Run PostgreSQL migrations only
+//	go run cmd/migrate/main.go -db clickhouse up     # Run ClickHouse migrations only
+//	go run cmd/migrate/main.go status                # Show migration status
+//	go run cmd/migrate/main.go goto -version 5       # Migrate to specific version (with confirmation)
+//	go run cmd/migrate/main.go force -version 3      # Force version (with confirmation)
+//	go run cmd/migrate/main.go drop                  # Drop all tables (with confirmation)
+//	go run cmd/migrate/main.go steps -steps 2        # Run 2 steps forward
+//	go run cmd/migrate/main.go steps -steps -1       # Run 1 step backward
+//	go run cmd/migrate/main.go info                  # Show detailed migration information
+//	go run cmd/migrate/main.go create -name "add_users" -db postgres  # Create new migration
 package main
 
 import (
 	"bufio"
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -37,11 +39,11 @@ import (
 // MigrateFlags holds all parsed command-line flags
 type MigrateFlags struct {
 	Database    string
+	Name        string
+	Environment string
 	Steps       int
 	Version     int
-	Name        string
 	DryRun      bool
-	Environment string
 	Reset       bool
 	Verbose     bool
 }
@@ -56,7 +58,7 @@ func parseFlags(args []string) (*MigrateFlags, string, error) {
 	}
 
 	if len(args) == 0 {
-		return nil, "", fmt.Errorf("no command specified")
+		return nil, "", errors.New("no command specified")
 	}
 
 	// Create a new flag set for parsing
@@ -82,7 +84,7 @@ func parseFlags(args []string) (*MigrateFlags, string, error) {
 	// The command is the first remaining argument after flag parsing
 	remainingArgs := fs.Args()
 	if len(remainingArgs) == 0 {
-		return nil, "", fmt.Errorf("no command specified")
+		return nil, "", errors.New("no command specified")
 	}
 
 	command := remainingArgs[0]
@@ -241,13 +243,13 @@ func confirmDestructiveOperation(operation string) bool {
 	fmt.Printf("⚠️  DANGER: About to %s.\n", operation)
 	fmt.Printf("This action cannot be undone and may result in data loss.\n")
 	fmt.Print("Type 'yes' to confirm (anything else will cancel): ")
-	
+
 	reader := bufio.NewReader(os.Stdin)
 	response, err := reader.ReadString('\n')
 	if err != nil {
 		return false
 	}
-	
+
 	response = strings.TrimSpace(strings.ToLower(response))
 	return response == "yes"
 }
@@ -301,12 +303,12 @@ func showStatus(ctx context.Context, manager *migration.Manager, database string
 			fmt.Printf("❌ Error getting PostgreSQL status: %v\n", err)
 		}
 		fmt.Println()
-		
+
 		fmt.Println("🏠 ClickHouse Migration Status:")
 		if err := manager.ShowClickHouseStatus(ctx); err != nil {
 			fmt.Printf("❌ Error getting ClickHouse status: %v\n", err)
 		}
-		
+
 		// Show overall health
 		fmt.Println()
 		info, err := manager.GetMigrationInfo()
@@ -399,10 +401,10 @@ func showDetailedInfo(manager *migration.Manager) error {
 	if err != nil {
 		return err
 	}
-	
+
 	fmt.Println("📊 Detailed Migration Information")
 	fmt.Println(strings.Repeat("=", 50))
-	
+
 	fmt.Println("\n🐘 PostgreSQL:")
 	fmt.Printf("  Status: %s\n", getStatusIcon(info.Postgres.Status))
 	fmt.Printf("  Current Version: %d\n", info.Postgres.CurrentVersion)
@@ -411,7 +413,7 @@ func showDetailedInfo(manager *migration.Manager) error {
 	if info.Postgres.Error != "" {
 		fmt.Printf("  Error: %s\n", info.Postgres.Error)
 	}
-	
+
 	fmt.Println("\n🏠 ClickHouse:")
 	fmt.Printf("  Status: %s\n", getStatusIcon(info.ClickHouse.Status))
 	fmt.Printf("  Current Version: %d\n", info.ClickHouse.CurrentVersion)
@@ -420,9 +422,9 @@ func showDetailedInfo(manager *migration.Manager) error {
 	if info.ClickHouse.Error != "" {
 		fmt.Printf("  Error: %s\n", info.ClickHouse.Error)
 	}
-	
+
 	fmt.Printf("\n🌐 Overall Status: %s\n", getStatusIcon(info.Overall))
-	
+
 	return nil
 }
 
@@ -547,21 +549,21 @@ func runSeeding(ctx context.Context, cfg *config.Config, environment string, res
 	// Confirm reset operation if requested
 	if reset && !dryRun {
 		if !confirmDestructiveOperation(fmt.Sprintf("RESET ALL DATA and seed with %s environment", environment)) {
-			return fmt.Errorf("seeding cancelled by user")
+			return errors.New("seeding cancelled by user")
 		}
 	}
 
 	// Show seed plan in dry-run mode
 	if dryRun {
 		fmt.Printf("🔍 DRY RUN: Seeding plan for environment '%s':\n", environment)
-		
+
 		// Load seed data to show plan
 		dataLoader := seeder.NewDataLoader()
 		seedData, err := dataLoader.LoadSeedData(environment)
 		if err != nil {
 			return fmt.Errorf("failed to load seed data for preview: %w", err)
 		}
-		
+
 		manager.PrintSeedPlan(seedData)
 		return nil
 	}

@@ -47,8 +47,8 @@ func (r *spanRepository) Create(ctx context.Context, span *observability.Span) e
 		span.TraceID,
 		span.ParentSpanID,
 		span.ProjectID,
-		span.SpanName,   // Renamed from Name
-		span.SpanKind,   // Now UInt8 (0-5)
+		span.SpanName, // Renamed from Name
+		span.SpanKind, // Now UInt8 (0-5)
 		span.StartTime,
 		span.EndTime,
 		span.DurationMs,
@@ -58,7 +58,7 @@ func (r *spanRepository) Create(ctx context.Context, span *observability.Span) e
 		span.ResourceAttributes, // Resource-level attributes
 		span.Input,
 		span.Output,
-		span.EventsTimestamp,  // OTEL Events arrays
+		span.EventsTimestamp, // OTEL Events arrays
 		span.EventsName,
 		span.EventsAttributes,
 		span.LinksTraceID, // OTEL Links arrays
@@ -392,8 +392,8 @@ func (r *spanRepository) CreateBatch(ctx context.Context, spans []*observability
 			span.TraceID,
 			span.ParentSpanID,
 			span.ProjectID,
-			span.SpanName,   // Renamed from Name
-			span.SpanKind,   // Now UInt8
+			span.SpanName, // Renamed from Name
+			span.SpanKind, // Now UInt8
 			span.StartTime,
 			span.EndTime,
 			span.DurationMs,
@@ -403,7 +403,7 @@ func (r *spanRepository) CreateBatch(ctx context.Context, spans []*observability
 			span.ResourceAttributes, // Resource attributes JSON
 			span.Input,
 			span.Output,
-			span.EventsTimestamp,  // OTEL Events
+			span.EventsTimestamp, // OTEL Events
 			span.EventsName,
 			span.EventsAttributes,
 			span.LinksTraceID, // OTEL Links
@@ -459,8 +459,8 @@ func (r *spanRepository) scanSpanRow(row driver.Row) (*observability.Span, error
 		&span.TraceID,
 		&span.ParentSpanID,
 		&span.ProjectID,
-		&span.SpanName,   // Renamed from Name
-		&span.SpanKind,   // Now UInt8
+		&span.SpanName, // Renamed from Name
+		&span.SpanKind, // Now UInt8
 		&span.StartTime,
 		&span.EndTime,
 		&span.DurationMs,
@@ -470,7 +470,7 @@ func (r *spanRepository) scanSpanRow(row driver.Row) (*observability.Span, error
 		&span.ResourceAttributes, // Resource attributes JSON
 		&span.Input,
 		&span.Output,
-		&span.EventsTimestamp,  // OTEL Events
+		&span.EventsTimestamp, // OTEL Events
 		&span.EventsName,
 		&span.EventsAttributes,
 		&span.LinksTraceID, // OTEL Links
@@ -516,8 +516,8 @@ func (r *spanRepository) scanSpans(rows driver.Rows) ([]*observability.Span, err
 			&span.TraceID,
 			&span.ParentSpanID,
 			&span.ProjectID,
-			&span.SpanName,   // Renamed from Name
-			&span.SpanKind,   // Now UInt8
+			&span.SpanName, // Renamed from Name
+			&span.SpanKind, // Now UInt8
 			&span.StartTime,
 			&span.EndTime,
 			&span.DurationMs,
@@ -527,7 +527,7 @@ func (r *spanRepository) scanSpans(rows driver.Rows) ([]*observability.Span, err
 			&span.ResourceAttributes, // Resource attributes JSON
 			&span.Input,
 			&span.Output,
-			&span.EventsTimestamp,  // OTEL Events
+			&span.EventsTimestamp, // OTEL Events
 			&span.EventsName,
 			&span.EventsAttributes,
 			&span.LinksTraceID, // OTEL Links
@@ -563,4 +563,3 @@ func (r *spanRepository) scanSpans(rows driver.Rows) ([]*observability.Span, err
 
 	return spans, rows.Err()
 }
-

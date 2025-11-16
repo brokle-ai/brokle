@@ -24,10 +24,10 @@ type UserSeed struct {
 	FirstName     string `yaml:"first_name"`
 	LastName      string `yaml:"last_name"`
 	Password      string `yaml:"password"`
-	EmailVerified bool   `yaml:"email_verified"`
-	IsActive      bool   `yaml:"is_active"`
 	Timezone      string `yaml:"timezone"`
 	Language      string `yaml:"language"`
+	EmailVerified bool   `yaml:"email_verified"`
+	IsActive      bool   `yaml:"is_active"`
 }
 
 // RBACSeeds represents all RBAC-related seed data

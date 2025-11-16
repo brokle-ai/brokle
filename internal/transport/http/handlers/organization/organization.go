@@ -34,13 +34,13 @@ type Handler struct {
 
 // Organization represents an organization entity
 type Organization struct {
+	CreatedAt   time.Time `json:"created_at" example:"2024-01-01T00:00:00Z" description:"Creation timestamp"`
+	UpdatedAt   time.Time `json:"updated_at" example:"2024-01-01T00:00:00Z" description:"Last update timestamp"`
 	ID          string    `json:"id" example:"org_1234567890" description:"Unique organization identifier"`
 	Name        string    `json:"name" example:"Acme Corporation" description:"Organization name"`
 	Description string    `json:"description,omitempty" example:"Leading AI solutions provider" description:"Optional organization description"`
 	Plan        string    `json:"plan" example:"pro" description:"Subscription plan (free, pro, business, enterprise)"`
 	Status      string    `json:"status" example:"active" description:"Organization status (active, suspended, deleted)"`
-	CreatedAt   time.Time `json:"created_at" example:"2024-01-01T00:00:00Z" description:"Creation timestamp"`
-	UpdatedAt   time.Time `json:"updated_at" example:"2024-01-01T00:00:00Z" description:"Last update timestamp"`
 }
 
 // CreateOrganizationRequest represents the request to create an organization
@@ -57,16 +57,16 @@ type UpdateOrganizationRequest struct {
 
 // OrganizationMember represents a member of an organization
 type OrganizationMember struct {
+	JoinedAt  time.Time `json:"joined_at" example:"2024-01-01T00:00:00Z" description:"When user joined organization"`
+	CreatedAt time.Time `json:"created_at" example:"2024-01-01T00:00:00Z" description:"When membership was created"`
+	UpdatedAt time.Time `json:"updated_at" example:"2024-01-01T00:00:00Z" description:"When membership was last updated"`
+	InvitedBy *string   `json:"invited_by,omitempty" example:"john@inviter.com" description:"Email of user who sent invitation"`
 	UserID    string    `json:"user_id" example:"usr_1234567890" description:"User ID"`
 	Email     string    `json:"email" example:"john@acme.com" description:"User email address"`
 	FirstName string    `json:"first_name" example:"John" description:"User first name"`
 	LastName  string    `json:"last_name" example:"Doe" description:"User last name"`
 	Role      string    `json:"role" example:"admin" description:"Role name in organization"`
 	Status    string    `json:"status" example:"active" description:"Member status (active, invited, suspended)"`
-	JoinedAt  time.Time `json:"joined_at" example:"2024-01-01T00:00:00Z" description:"When user joined organization"`
-	InvitedBy *string   `json:"invited_by,omitempty" example:"john@inviter.com" description:"Email of user who sent invitation"`
-	CreatedAt time.Time `json:"created_at" example:"2024-01-01T00:00:00Z" description:"When membership was created"`
-	UpdatedAt time.Time `json:"updated_at" example:"2024-01-01T00:00:00Z" description:"When membership was last updated"`
 }
 
 // ListMembersRequest represents request parameters for listing members
@@ -91,9 +91,9 @@ type RemoveMemberRequest struct {
 
 // ListRequest represents request parameters for listing organizations
 type ListRequest struct {
+	Search string `form:"search" example:"acme" description:"Search organizations by name or slug"`
 	Page   int    `form:"page,default=1" binding:"min=1" example:"1" description:"Page number"`
 	Limit  int    `form:"limit,default=20" binding:"min=1,max=100" example:"20" description:"Items per page"`
-	Search string `form:"search" example:"acme" description:"Search organizations by name or slug"`
 }
 
 // GetRequest represents request parameters for getting an organization
@@ -1059,12 +1059,12 @@ func (h *Handler) ResetToDefaults(c *gin.Context)    { h.Settings.ResetToDefault
 
 // InvitationDetailsResponse represents invitation details for validation
 type InvitationDetailsResponse struct {
+	ExpiresAt        time.Time `json:"expires_at"`
 	OrganizationName string    `json:"organization_name" example:"Acme Corp"`
 	OrganizationID   string    `json:"organization_id" example:"01HX..."`
 	InviterName      string    `json:"inviter_name" example:"John"`
 	Role             string    `json:"role" example:"developer"`
 	Email            string    `json:"email" example:"user@example.com"`
-	ExpiresAt        time.Time `json:"expires_at"`
 	IsExpired        bool      `json:"is_expired"`
 }
 

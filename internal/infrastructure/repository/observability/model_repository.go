@@ -37,7 +37,7 @@ func (r *ModelRepository) FindByModelName(
 		Where("(end_date IS NULL OR end_date > CURRENT_TIMESTAMP)").
 		Where("is_deprecated = ?", false).
 		Order("project_id ASC NULLS LAST"). // Project-specific first
-		Order("start_date DESC").            // Latest pricing first
+		Order("start_date DESC").           // Latest pricing first
 		First(&pricing).Error
 
 	if err != nil {

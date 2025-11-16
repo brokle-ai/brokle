@@ -48,16 +48,16 @@ type RevokeUserTokensRequest struct {
 // TokenStatsResponse represents token statistics
 // @Description Token management statistics
 type TokenStatsResponse struct {
+	BlacklistedByReason map[string][]TokenByReason `json:"blacklisted_by_reason" description:"Breakdown of tokens by revocation reason"`
 	TotalBlacklisted    int64                      `json:"total_blacklisted" example:"1234" description:"Total number of blacklisted tokens"`
 	BlacklistedToday    int64                      `json:"blacklisted_today" example:"45" description:"Tokens blacklisted today"`
-	BlacklistedByReason map[string][]TokenByReason `json:"blacklisted_by_reason" description:"Breakdown of tokens by revocation reason"`
 }
 
 // TokenByReason represents tokens grouped by reason
 type TokenByReason struct {
 	Reason string                     `json:"reason" example:"security_incident"`
-	Count  int                        `json:"count" example:"12"`
 	Tokens []BlacklistedTokenResponse `json:"tokens,omitempty"`
+	Count  int                        `json:"count" example:"12"`
 }
 
 // BlacklistedTokenResponse represents a blacklisted token
@@ -364,7 +364,7 @@ func (h *TokenAdminHandler) GetTokenStats(c *gin.Context) {
 			limit = len(tokens)
 		}
 
-		for i := 0; i < limit; i++ {
+		for i := range limit {
 			token := tokens[i]
 			sampleTokens = append(sampleTokens, BlacklistedTokenResponse{
 				JTI:       token.JTI,

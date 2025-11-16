@@ -14,10 +14,10 @@ import (
 // APIResponse represents the standard API response format
 // @Description Standard API response wrapper
 type APIResponse struct {
-	Success bool        `json:"success" example:"true" description:"Indicates if the request was successful"`
 	Data    interface{} `json:"data,omitempty" description:"Response data payload"`
 	Error   *APIError   `json:"error,omitempty" description:"Error information if request failed"`
 	Meta    *Meta       `json:"meta,omitempty" description:"Response metadata"`
+	Success bool        `json:"success" example:"true" description:"Indicates if the request was successful"`
 }
 
 // APIError represents error information in API responses
@@ -43,10 +43,10 @@ type Pagination struct {
 // Meta contains metadata about the API response
 // @Description Response metadata including request tracking and offset pagination
 type Meta struct {
+	Pagination *Pagination `json:"pagination,omitempty" description:"Offset pagination information for list responses"`
 	RequestID  string      `json:"request_id,omitempty" example:"req_01h2x3y4z5" description:"Unique request identifier"`
 	Timestamp  string      `json:"timestamp,omitempty" example:"2023-12-01T10:30:00Z" description:"Response timestamp in ISO 8601 format"`
 	Version    string      `json:"version,omitempty" example:"v1" description:"API version"`
-	Pagination *Pagination `json:"pagination,omitempty" description:"Offset pagination information for list responses"`
 }
 
 // Success returns a successful response with data
@@ -300,9 +300,9 @@ func NewPagination(page, limit int, total int64) *Pagination {
 // ParsePaginationParams parses offset pagination parameters from query strings
 func ParsePaginationParams(page, limit, sortBy, sortDir string) pagination.Params {
 	params := pagination.Params{
-		Page:    1,    // default page 1
-		Limit:   50,   // default limit 50
-		SortBy:  "",   // empty = repository will use domain-specific default
+		Page:    1,  // default page 1
+		Limit:   50, // default limit 50
+		SortBy:  "", // empty = repository will use domain-specific default
 		SortDir: "desc",
 	}
 

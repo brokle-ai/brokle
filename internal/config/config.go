@@ -7,6 +7,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -17,21 +18,21 @@ import (
 
 // Config represents the complete application configuration.
 type Config struct {
-	Environment   string              `mapstructure:"environment"`
-	App           AppConfig           `mapstructure:"app"`
-	Server        ServerConfig        `mapstructure:"server"`
-	Database      DatabaseConfig      `mapstructure:"database"`
-	ClickHouse    ClickHouseConfig    `mapstructure:"clickhouse"`
-	Redis         RedisConfig         `mapstructure:"redis"`
-	Auth          AuthConfig          `mapstructure:"auth"`
-	Logging       LoggingConfig       `mapstructure:"logging"`
 	External      ExternalConfig      `mapstructure:"external"`
-	Features      FeatureConfig       `mapstructure:"features"`
-	Monitoring    MonitoringConfig    `mapstructure:"monitoring"`
-	Enterprise    EnterpriseConfig    `mapstructure:"enterprise"`
-	Workers       WorkersConfig       `mapstructure:"workers"`
+	Auth          AuthConfig          `mapstructure:"auth"`
+	ClickHouse    ClickHouseConfig    `mapstructure:"clickhouse"`
+	Database      DatabaseConfig      `mapstructure:"database"`
+	App           AppConfig           `mapstructure:"app"`
+	Environment   string              `mapstructure:"environment"`
 	Notifications NotificationsConfig `mapstructure:"notifications"`
+	Enterprise    EnterpriseConfig    `mapstructure:"enterprise"`
+	Server        ServerConfig        `mapstructure:"server"`
 	BlobStorage   BlobStorageConfig   `mapstructure:"blob_storage"`
+	Monitoring    MonitoringConfig    `mapstructure:"monitoring"`
+	Logging       LoggingConfig       `mapstructure:"logging"`
+	Redis         RedisConfig         `mapstructure:"redis"`
+	Workers       WorkersConfig       `mapstructure:"workers"`
+	Features      FeatureConfig       `mapstructure:"features"`
 }
 
 // AppConfig contains application-level configuration.
@@ -42,64 +43,62 @@ type AppConfig struct {
 
 // ServerConfig contains HTTP and WebSocket server configuration.
 type ServerConfig struct {
-	Host               string        `mapstructure:"host"`
-	Port               int           `mapstructure:"port"`
 	Environment        string        `mapstructure:"environment"`
-	ReadTimeout        time.Duration `mapstructure:"read_timeout"`
-	WriteTimeout       time.Duration `mapstructure:"write_timeout"`
-	IdleTimeout        time.Duration `mapstructure:"idle_timeout"`
-	ShutdownTimeout    time.Duration `mapstructure:"shutdown_timeout"`
-	MaxRequestSize     int64         `mapstructure:"max_request_size"`
-	EnableCORS         bool          `mapstructure:"enable_cors"`
+	Host               string        `mapstructure:"host"`
 	CORSAllowedOrigins []string      `mapstructure:"cors_allowed_origins"`
-	CORSAllowedMethods []string      `mapstructure:"cors_allowed_methods"`
-	CORSAllowedHeaders []string      `mapstructure:"cors_allowed_headers"`
 	TrustedProxies     []string      `mapstructure:"trusted_proxies"`
+	CORSAllowedHeaders []string      `mapstructure:"cors_allowed_headers"`
+	CORSAllowedMethods []string      `mapstructure:"cors_allowed_methods"`
+	ReadTimeout        time.Duration `mapstructure:"read_timeout"`
+	MaxRequestSize     int64         `mapstructure:"max_request_size"`
+	ShutdownTimeout    time.Duration `mapstructure:"shutdown_timeout"`
+	IdleTimeout        time.Duration `mapstructure:"idle_timeout"`
+	WriteTimeout       time.Duration `mapstructure:"write_timeout"`
+	Port               int           `mapstructure:"port"`
+	EnableCORS         bool          `mapstructure:"enable_cors"`
 }
 
 // DatabaseConfig contains PostgreSQL database configuration.
 type DatabaseConfig struct {
-	URL             string        `mapstructure:"url"`
+	SSLMode         string        `mapstructure:"ssl_mode"`
 	Host            string        `mapstructure:"host"`
-	Port            int           `mapstructure:"port"`
 	User            string        `mapstructure:"user"`
 	Password        string        `mapstructure:"password"`
 	Database        string        `mapstructure:"database"`
-	SSLMode         string        `mapstructure:"ssl_mode"`
+	URL             string        `mapstructure:"url"`
+	MigrationsPath  string        `mapstructure:"migrations_path"`
+	Port            int           `mapstructure:"port"`
 	MaxOpenConns    int           `mapstructure:"max_open_conns"`
 	MaxIdleConns    int           `mapstructure:"max_idle_conns"`
 	ConnMaxLifetime time.Duration `mapstructure:"conn_max_lifetime"`
 	ConnMaxIdleTime time.Duration `mapstructure:"conn_max_idle_time"`
-	// Migration settings
-	AutoMigrate    bool   `mapstructure:"auto_migrate"`
-	MigrationsPath string `mapstructure:"migrations_path"`
+	AutoMigrate     bool          `mapstructure:"auto_migrate"`
 }
 
 // ClickHouseConfig contains ClickHouse database configuration.
 type ClickHouseConfig struct {
-	URL             string        `mapstructure:"url"`
-	Host            string        `mapstructure:"host"`
-	Port            int           `mapstructure:"port"`
-	User            string        `mapstructure:"user"`
-	Password        string        `mapstructure:"password"`
-	Database        string        `mapstructure:"database"`
-	MaxOpenConns    int           `mapstructure:"max_open_conns"`
-	MaxIdleConns    int           `mapstructure:"max_idle_conns"`
-	ConnMaxLifetime time.Duration `mapstructure:"conn_max_lifetime"`
-	ReadTimeout     time.Duration `mapstructure:"read_timeout"`
-	WriteTimeout    time.Duration `mapstructure:"write_timeout"`
-	// Migration settings
-	MigrationsPath   string `mapstructure:"migrations_path"`
-	MigrationsTable  string `mapstructure:"migrations_table"`
-	MigrationsEngine string `mapstructure:"migrations_engine"`
+	MigrationsPath   string        `mapstructure:"migrations_path"`
+	Host             string        `mapstructure:"host"`
+	MigrationsEngine string        `mapstructure:"migrations_engine"`
+	User             string        `mapstructure:"user"`
+	Password         string        `mapstructure:"password"`
+	Database         string        `mapstructure:"database"`
+	URL              string        `mapstructure:"url"`
+	MigrationsTable  string        `mapstructure:"migrations_table"`
+	MaxOpenConns     int           `mapstructure:"max_open_conns"`
+	ReadTimeout      time.Duration `mapstructure:"read_timeout"`
+	WriteTimeout     time.Duration `mapstructure:"write_timeout"`
+	ConnMaxLifetime  time.Duration `mapstructure:"conn_max_lifetime"`
+	MaxIdleConns     int           `mapstructure:"max_idle_conns"`
+	Port             int           `mapstructure:"port"`
 }
 
 // RedisConfig contains Redis configuration.
 type RedisConfig struct {
 	URL          string        `mapstructure:"url"`
 	Host         string        `mapstructure:"host"`
-	Port         int           `mapstructure:"port"`
 	Password     string        `mapstructure:"password"`
+	Port         int           `mapstructure:"port"`
 	Database     int           `mapstructure:"database"`
 	PoolSize     int           `mapstructure:"pool_size"`
 	MinIdleConns int           `mapstructure:"min_idle_conns"`
@@ -120,11 +119,11 @@ type LoggingConfig struct {
 
 // ExternalConfig contains external service configurations.
 type ExternalConfig struct {
+	Email     EmailConfig     `mapstructure:"email"`
+	Stripe    StripeConfig    `mapstructure:"stripe"`
 	OpenAI    OpenAIConfig    `mapstructure:"openai"`
 	Anthropic AnthropicConfig `mapstructure:"anthropic"`
 	Cohere    CohereConfig    `mapstructure:"cohere"`
-	Stripe    StripeConfig    `mapstructure:"stripe"`
-	Email     EmailConfig     `mapstructure:"email"`
 }
 
 // OpenAIConfig contains OpenAI API configuration.
@@ -161,14 +160,14 @@ type StripeConfig struct {
 
 // EmailConfig contains email service configuration.
 type EmailConfig struct {
-	Provider   string `mapstructure:"provider"` // smtp, sendgrid, mailgun
+	Provider   string `mapstructure:"provider"`
 	SMTPHost   string `mapstructure:"smtp_host"`
-	SMTPPort   int    `mapstructure:"smtp_port"`
 	Username   string `mapstructure:"username"`
 	Password   string `mapstructure:"password"`
 	FromEmail  string `mapstructure:"from_email"`
 	FromName   string `mapstructure:"from_name"`
 	ReplyEmail string `mapstructure:"reply_email"`
+	SMTPPort   int    `mapstructure:"smtp_port"`
 }
 
 // FeatureConfig contains feature flag configuration.
@@ -185,12 +184,12 @@ type FeatureConfig struct {
 
 // MonitoringConfig contains monitoring and observability configuration.
 type MonitoringConfig struct {
-	Enabled        bool          `mapstructure:"enabled"`
-	PrometheusPort int           `mapstructure:"prometheus_port"`
 	MetricsPath    string        `mapstructure:"metrics_path"`
 	JaegerEndpoint string        `mapstructure:"jaeger_endpoint"`
+	PrometheusPort int           `mapstructure:"prometheus_port"`
 	SampleRate     float64       `mapstructure:"sample_rate"`
 	FlushInterval  time.Duration `mapstructure:"flush_interval"`
+	Enabled        bool          `mapstructure:"enabled"`
 }
 
 // WorkersConfig contains background worker configuration.
@@ -268,19 +267,19 @@ func (sc *ServerConfig) Validate() error {
 	}
 
 	if sc.Host == "" {
-		return fmt.Errorf("host cannot be empty")
+		return errors.New("host cannot be empty")
 	}
 
 	if sc.ReadTimeout < 0 {
-		return fmt.Errorf("read_timeout cannot be negative")
+		return errors.New("read_timeout cannot be negative")
 	}
 
 	if sc.WriteTimeout < 0 {
-		return fmt.Errorf("write_timeout cannot be negative")
+		return errors.New("write_timeout cannot be negative")
 	}
 
 	if sc.MaxRequestSize <= 0 {
-		return fmt.Errorf("max_request_size must be positive")
+		return errors.New("max_request_size must be positive")
 	}
 
 	return nil
@@ -292,11 +291,11 @@ func (dc *DatabaseConfig) Validate() error {
 	if dc.URL != "" {
 		// URL takes precedence, minimal validation
 		if dc.MaxOpenConns < 0 {
-			return fmt.Errorf("max_open_conns cannot be negative")
+			return errors.New("max_open_conns cannot be negative")
 		}
 
 		if dc.MaxIdleConns < 0 {
-			return fmt.Errorf("max_idle_conns cannot be negative")
+			return errors.New("max_idle_conns cannot be negative")
 		}
 
 		return nil
@@ -304,7 +303,7 @@ func (dc *DatabaseConfig) Validate() error {
 
 	// If no URL, validate individual fields
 	if dc.Host == "" {
-		return fmt.Errorf("either url or host must be provided")
+		return errors.New("either url or host must be provided")
 	}
 
 	if dc.Port <= 0 || dc.Port > 65535 {
@@ -312,19 +311,19 @@ func (dc *DatabaseConfig) Validate() error {
 	}
 
 	if dc.User == "" {
-		return fmt.Errorf("user cannot be empty when using individual fields")
+		return errors.New("user cannot be empty when using individual fields")
 	}
 
 	if dc.Database == "" {
-		return fmt.Errorf("database name cannot be empty when using individual fields")
+		return errors.New("database name cannot be empty when using individual fields")
 	}
 
 	if dc.MaxOpenConns < 0 {
-		return fmt.Errorf("max_open_conns cannot be negative")
+		return errors.New("max_open_conns cannot be negative")
 	}
 
 	if dc.MaxIdleConns < 0 {
-		return fmt.Errorf("max_idle_conns cannot be negative")
+		return errors.New("max_idle_conns cannot be negative")
 	}
 
 	return nil
@@ -339,7 +338,7 @@ func (cc *ClickHouseConfig) Validate() error {
 
 	// If no URL, validate individual fields
 	if cc.Host == "" {
-		return fmt.Errorf("either url or host must be provided for clickhouse")
+		return errors.New("either url or host must be provided for clickhouse")
 	}
 
 	if cc.Port <= 0 || cc.Port > 65535 {
@@ -347,7 +346,7 @@ func (cc *ClickHouseConfig) Validate() error {
 	}
 
 	if cc.Database == "" {
-		return fmt.Errorf("clickhouse database name cannot be empty when using individual fields")
+		return errors.New("clickhouse database name cannot be empty when using individual fields")
 	}
 
 	return nil
@@ -359,7 +358,7 @@ func (rc *RedisConfig) Validate() error {
 	if rc.URL != "" {
 		// URL takes precedence, minimal validation
 		if rc.PoolSize < 0 {
-			return fmt.Errorf("pool_size cannot be negative")
+			return errors.New("pool_size cannot be negative")
 		}
 
 		return nil
@@ -367,7 +366,7 @@ func (rc *RedisConfig) Validate() error {
 
 	// If no URL, validate individual fields
 	if rc.Host == "" {
-		return fmt.Errorf("either url or host must be provided for redis")
+		return errors.New("either url or host must be provided for redis")
 	}
 
 	if rc.Port <= 0 || rc.Port > 65535 {
@@ -379,7 +378,7 @@ func (rc *RedisConfig) Validate() error {
 	}
 
 	if rc.PoolSize < 0 {
-		return fmt.Errorf("pool_size cannot be negative")
+		return errors.New("pool_size cannot be negative")
 	}
 
 	return nil
@@ -424,7 +423,7 @@ func (lc *LoggingConfig) Validate() error {
 	}
 
 	if lc.Output == "file" && lc.File == "" {
-		return fmt.Errorf("file path is required when output is 'file'")
+		return errors.New("file path is required when output is 'file'")
 	}
 
 	return nil
@@ -458,11 +457,11 @@ func (ec *ExternalConfig) Validate() error {
 // Validate validates OpenAI configuration.
 func (oc *OpenAIConfig) Validate() error {
 	if oc.APIKey != "" && oc.BaseURL == "" {
-		return fmt.Errorf("base_url is required when api_key is provided")
+		return errors.New("base_url is required when api_key is provided")
 	}
 
 	if oc.MaxRetries < 0 {
-		return fmt.Errorf("max_retries cannot be negative")
+		return errors.New("max_retries cannot be negative")
 	}
 
 	return nil
@@ -471,11 +470,11 @@ func (oc *OpenAIConfig) Validate() error {
 // Validate validates Anthropic configuration.
 func (ac *AnthropicConfig) Validate() error {
 	if ac.APIKey != "" && ac.BaseURL == "" {
-		return fmt.Errorf("base_url is required when api_key is provided")
+		return errors.New("base_url is required when api_key is provided")
 	}
 
 	if ac.MaxRetries < 0 {
-		return fmt.Errorf("max_retries cannot be negative")
+		return errors.New("max_retries cannot be negative")
 	}
 
 	return nil
@@ -484,11 +483,11 @@ func (ac *AnthropicConfig) Validate() error {
 // Validate validates Cohere configuration.
 func (cc *CohereConfig) Validate() error {
 	if cc.APIKey != "" && cc.BaseURL == "" {
-		return fmt.Errorf("base_url is required when api_key is provided")
+		return errors.New("base_url is required when api_key is provided")
 	}
 
 	if cc.MaxRetries < 0 {
-		return fmt.Errorf("max_retries cannot be negative")
+		return errors.New("max_retries cannot be negative")
 	}
 
 	return nil
@@ -530,7 +529,7 @@ func (ec *EmailConfig) Validate() error {
 
 		if ec.Provider == "smtp" {
 			if ec.SMTPHost == "" {
-				return fmt.Errorf("smtp_host is required for SMTP provider")
+				return errors.New("smtp_host is required for SMTP provider")
 			}
 			if ec.SMTPPort <= 0 || ec.SMTPPort > 65535 {
 				return fmt.Errorf("invalid smtp_port: %d", ec.SMTPPort)
@@ -538,7 +537,7 @@ func (ec *EmailConfig) Validate() error {
 		}
 
 		if ec.FromEmail == "" {
-			return fmt.Errorf("from_email is required")
+			return errors.New("from_email is required")
 		}
 	}
 
@@ -559,7 +558,7 @@ func (mc *MonitoringConfig) Validate() error {
 		}
 
 		if mc.MetricsPath == "" {
-			return fmt.Errorf("metrics_path is required when monitoring is enabled")
+			return errors.New("metrics_path is required when monitoring is enabled")
 		}
 
 		if mc.SampleRate < 0 || mc.SampleRate > 1 {
@@ -595,86 +594,155 @@ func Load() (*Config, error) {
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
 	// Bind standard infrastructure variables (no BROKLE_ prefix)
+	//nolint:errcheck // BindEnv only errors with invalid args, safe with string literals
+	//nolint:errcheck
 	viper.BindEnv("database.url", "DATABASE_URL")
+	//nolint:errcheck
+	//nolint:errcheck
 	viper.BindEnv("clickhouse.url", "CLICKHOUSE_URL")
+	//nolint:errcheck
+	//nolint:errcheck
 	viper.BindEnv("redis.url", "REDIS_URL")
+	//nolint:errcheck
+	//nolint:errcheck
 	viper.BindEnv("server.port", "PORT")
+	//nolint:errcheck
+	//nolint:errcheck
 	viper.BindEnv("server.environment", "ENV")
+	//nolint:errcheck
+	//nolint:errcheck
 	viper.BindEnv("logging.level", "LOG_LEVEL")
 
 	// CORS configuration (OSS-standard naming)
+	//nolint:errcheck
 	viper.BindEnv("server.cors_allowed_origins", "CORS_ALLOWED_ORIGINS")
+	//nolint:errcheck
 	viper.BindEnv("server.cors_allowed_methods", "CORS_ALLOWED_METHODS")
+	//nolint:errcheck
 	viper.BindEnv("server.cors_allowed_headers", "CORS_ALLOWED_HEADERS")
 
 	// External API keys (standard names)
+	//nolint:errcheck
 	viper.BindEnv("external.openai.api_key", "OPENAI_API_KEY")
+	//nolint:errcheck
 	viper.BindEnv("external.anthropic.api_key", "ANTHROPIC_API_KEY")
+	//nolint:errcheck
 	viper.BindEnv("external.cohere.api_key", "COHERE_API_KEY")
+	//nolint:errcheck
 	viper.BindEnv("external.stripe.secret_key", "STRIPE_SECRET_KEY")
 
 	// Blob Storage configuration (for large payload offloading)
+	//nolint:errcheck
 	viper.BindEnv("blob_storage.provider", "BLOB_STORAGE_PROVIDER")
+	//nolint:errcheck
 	viper.BindEnv("blob_storage.bucket_name", "BLOB_STORAGE_BUCKET_NAME")
+	//nolint:errcheck
 	viper.BindEnv("blob_storage.region", "BLOB_STORAGE_REGION")
+	//nolint:errcheck
 	viper.BindEnv("blob_storage.endpoint", "BLOB_STORAGE_ENDPOINT")
+	//nolint:errcheck
 	viper.BindEnv("blob_storage.access_key_id", "BLOB_STORAGE_ACCESS_KEY_ID")
+	//nolint:errcheck
 	viper.BindEnv("blob_storage.secret_access_key", "BLOB_STORAGE_SECRET_ACCESS_KEY")
+	//nolint:errcheck
 	viper.BindEnv("blob_storage.use_path_style", "BLOB_STORAGE_USE_PATH_STYLE")
+	//nolint:errcheck
 	viper.BindEnv("blob_storage.threshold", "BLOB_STORAGE_THRESHOLD")
+	//nolint:errcheck
 	viper.BindEnv("external.stripe.publishable_key", "STRIPE_PUBLISHABLE_KEY")
+	//nolint:errcheck
 	viper.BindEnv("external.stripe.webhook_secret", "STRIPE_WEBHOOK_SECRET")
 
 	// Auth configuration (flexible JWT configuration - HS256 or RS256)
+	//nolint:errcheck
 	viper.BindEnv("auth.access_token_ttl", "ACCESS_TOKEN_TTL")
+	//nolint:errcheck
 	viper.BindEnv("auth.refresh_token_ttl", "REFRESH_TOKEN_TTL")
+	//nolint:errcheck
 	viper.BindEnv("auth.token_rotation_enabled", "TOKEN_ROTATION_ENABLED")
+	//nolint:errcheck
 	viper.BindEnv("auth.rate_limit_enabled", "RATE_LIMIT_ENABLED")
+	//nolint:errcheck
 	viper.BindEnv("auth.rate_limit_per_ip", "RATE_LIMIT_PER_IP")
+	//nolint:errcheck
 	viper.BindEnv("auth.rate_limit_per_user", "RATE_LIMIT_PER_USER")
+	//nolint:errcheck
 	viper.BindEnv("auth.rate_limit_window", "RATE_LIMIT_WINDOW")
+	//nolint:errcheck
 	viper.BindEnv("auth.jwt_signing_method", "JWT_SIGNING_METHOD")
+	//nolint:errcheck
 	viper.BindEnv("auth.jwt_issuer", "JWT_ISSUER")
+	//nolint:errcheck
 	viper.BindEnv("auth.jwt_secret", "JWT_SECRET")
+	//nolint:errcheck
 	viper.BindEnv("auth.jwt_private_key_path", "JWT_PRIVATE_KEY_PATH")
+	//nolint:errcheck
 	viper.BindEnv("auth.jwt_public_key_path", "JWT_PUBLIC_KEY_PATH")
+	//nolint:errcheck
 	viper.BindEnv("auth.jwt_private_key_base64", "JWT_PRIVATE_KEY_BASE64")
+	//nolint:errcheck
 	viper.BindEnv("auth.jwt_public_key_base64", "JWT_PUBLIC_KEY_BASE64")
 
 	// OAuth configuration (Google/GitHub Signup)
+	//nolint:errcheck
 	viper.BindEnv("auth.google_client_id", "GOOGLE_CLIENT_ID")
+	//nolint:errcheck
 	viper.BindEnv("auth.google_client_secret", "GOOGLE_CLIENT_SECRET")
+	//nolint:errcheck
 	viper.BindEnv("auth.google_redirect_url", "GOOGLE_REDIRECT_URL")
+	//nolint:errcheck
 	viper.BindEnv("auth.github_client_id", "GITHUB_CLIENT_ID")
+	//nolint:errcheck
 	viper.BindEnv("auth.github_client_secret", "GITHUB_CLIENT_SECRET")
+	//nolint:errcheck
 	viper.BindEnv("auth.github_redirect_url", "GITHUB_REDIRECT_URL")
 
 	// Database configuration (granular environment variables)
+	//nolint:errcheck
 	viper.BindEnv("database.host", "DB_HOST")
+	//nolint:errcheck
 	viper.BindEnv("database.port", "DB_PORT")
+	//nolint:errcheck
 	viper.BindEnv("database.user", "DB_USER")
+	//nolint:errcheck
 	viper.BindEnv("database.password", "DB_PASSWORD")
+	//nolint:errcheck
 	viper.BindEnv("database.database", "DB_NAME")
+	//nolint:errcheck
 	viper.BindEnv("database.ssl_mode", "DB_SSLMODE")
 
 	// Database migration configuration
+	//nolint:errcheck
 	viper.BindEnv("database.auto_migrate", "DB_AUTO_MIGRATE")
+	//nolint:errcheck
 	viper.BindEnv("database.migrations_path", "DATABASE_MIGRATIONS_PATH")
+	//nolint:errcheck
 	viper.BindEnv("database.username", "DB_USERNAME")
+	//nolint:errcheck
 	viper.BindEnv("database.migrations_table", "DB_MIGRATIONS_TABLE")
 
 	// ClickHouse migration configuration
+	//nolint:errcheck
 	viper.BindEnv("clickhouse.migrations_path", "CLICKHOUSE_MIGRATIONS_PATH")
+	//nolint:errcheck
 	viper.BindEnv("clickhouse.migrations_engine", "CLICKHOUSE_MIGRATIONS_ENGINE")
 
 	// Keep BROKLE_ prefix for Brokle-specific variables
+	//nolint:errcheck
 	viper.BindEnv("enterprise.license.key", "BROKLE_ENTERPRISE_LICENSE_KEY")
+	//nolint:errcheck
 	viper.BindEnv("enterprise.license.type", "BROKLE_ENTERPRISE_LICENSE_TYPE")
+	//nolint:errcheck
 	viper.BindEnv("enterprise.license.offline_mode", "BROKLE_ENTERPRISE_LICENSE_OFFLINE_MODE")
+	//nolint:errcheck
 	viper.BindEnv("enterprise.sso.enabled", "BROKLE_ENTERPRISE_SSO_ENABLED")
+	//nolint:errcheck
 	viper.BindEnv("enterprise.sso.provider", "BROKLE_ENTERPRISE_SSO_PROVIDER")
+	//nolint:errcheck
 	viper.BindEnv("enterprise.rbac.enabled", "BROKLE_ENTERPRISE_RBAC_ENABLED")
+	//nolint:errcheck
 	viper.BindEnv("enterprise.compliance.enabled", "BROKLE_ENTERPRISE_COMPLIANCE_ENABLED")
+	//nolint:errcheck
 	viper.BindEnv("enterprise.analytics.enabled", "BROKLE_ENTERPRISE_ANALYTICS_ENABLED")
 
 	// Set default values

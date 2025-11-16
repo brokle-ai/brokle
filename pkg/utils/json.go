@@ -3,6 +3,7 @@ package utils
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"reflect"
@@ -49,12 +50,12 @@ func JSONMinify(jsonStr string) (string, error) {
 	if err := json.Unmarshal([]byte(jsonStr), &jsonData); err != nil {
 		return "", fmt.Errorf("invalid JSON: %w", err)
 	}
-	
+
 	minified, err := json.Marshal(jsonData)
 	if err != nil {
 		return "", err
 	}
-	
+
 	return string(minified), nil
 }
 
@@ -69,10 +70,10 @@ func JSONGetValue(jsonData interface{}, path string) (interface{}, error) {
 	if path == "" {
 		return jsonData, nil
 	}
-	
+
 	parts := strings.Split(path, ".")
 	current := jsonData
-	
+
 	for _, part := range parts {
 		switch v := current.(type) {
 		case map[string]interface{}:
@@ -94,23 +95,23 @@ func JSONGetValue(jsonData interface{}, path string) (interface{}, error) {
 			return nil, fmt.Errorf("cannot navigate through non-object/array at path: %s", path)
 		}
 	}
-	
+
 	return current, nil
 }
 
 // JSONSetValue sets a value in JSON using dot notation path
 func JSONSetValue(jsonData map[string]interface{}, path string, value interface{}) error {
 	if path == "" {
-		return fmt.Errorf("empty path")
+		return errors.New("empty path")
 	}
-	
+
 	parts := strings.Split(path, ".")
 	current := jsonData
-	
+
 	// Navigate to the parent of the target
-	for i := 0; i < len(parts)-1; i++ {
+	for i := range len(parts) - 1 {
 		part := parts[i]
-		
+
 		if next, exists := current[part]; exists {
 			if nextMap, ok := next.(map[string]interface{}); ok {
 				current = nextMap
@@ -124,7 +125,7 @@ func JSONSetValue(jsonData map[string]interface{}, path string, value interface{
 			current = newObj
 		}
 	}
-	
+
 	// Set the final value
 	current[parts[len(parts)-1]] = value
 	return nil
@@ -133,24 +134,24 @@ func JSONSetValue(jsonData map[string]interface{}, path string, value interface{
 // JSONMerge merges multiple JSON objects into one
 func JSONMerge(jsons ...map[string]interface{}) map[string]interface{} {
 	result := make(map[string]interface{})
-	
+
 	for _, jsonObj := range jsons {
 		for key, value := range jsonObj {
 			result[key] = value
 		}
 	}
-	
+
 	return result
 }
 
 // JSONDeepMerge deeply merges multiple JSON objects
 func JSONDeepMerge(jsons ...map[string]interface{}) map[string]interface{} {
 	result := make(map[string]interface{})
-	
+
 	for _, jsonObj := range jsons {
 		deepMergeInto(result, jsonObj)
 	}
-	
+
 	return result
 }
 
@@ -177,19 +178,19 @@ func JSONClone(data interface{}) (interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	var clone interface{}
 	if err := json.Unmarshal(jsonBytes, &clone); err != nil {
 		return nil, err
 	}
-	
+
 	return clone, nil
 }
 
 // JSONDiff finds differences between two JSON objects
 func JSONDiff(obj1, obj2 map[string]interface{}) map[string]interface{} {
 	diff := make(map[string]interface{})
-	
+
 	// Find keys that are different or missing in obj2
 	for key, val1 := range obj1 {
 		if val2, exists := obj2[key]; exists {
@@ -206,7 +207,7 @@ func JSONDiff(obj1, obj2 map[string]interface{}) map[string]interface{} {
 			}
 		}
 	}
-	
+
 	// Find keys that are new in obj2
 	for key, val2 := range obj2 {
 		if _, exists := obj1[key]; !exists {
@@ -216,7 +217,7 @@ func JSONDiff(obj1, obj2 map[string]interface{}) map[string]interface{} {
 			}
 		}
 	}
-	
+
 	return diff
 }
 
@@ -233,7 +234,7 @@ func flattenRecursive(prefix string, data map[string]interface{}, result map[str
 		if prefix != "" {
 			newKey = prefix + "." + key
 		}
-		
+
 		switch v := value.(type) {
 		case map[string]interface{}:
 			flattenRecursive(newKey, v, result)
@@ -255,50 +256,50 @@ func flattenRecursive(prefix string, data map[string]interface{}, result map[str
 // JSONUnflatten converts a flattened JSON object back to nested structure
 func JSONUnflatten(flatData map[string]interface{}) map[string]interface{} {
 	result := make(map[string]interface{})
-	
+
 	for key, value := range flatData {
 		setNestedValue(result, key, value)
 	}
-	
+
 	return result
 }
 
 func setNestedValue(data map[string]interface{}, path string, value interface{}) {
 	parts := strings.Split(path, ".")
 	current := data
-	
-	for i := 0; i < len(parts)-1; i++ {
+
+	for i := range len(parts) - 1 {
 		part := parts[i]
-		
+
 		// Handle array notation
 		if strings.Contains(part, "[") {
 			// This is a more complex case that would require array handling
 			// For simplicity, treating as regular key for now
 		}
-		
+
 		if _, exists := current[part]; !exists {
 			current[part] = make(map[string]interface{})
 		}
-		
+
 		if next, ok := current[part].(map[string]interface{}); ok {
 			current = next
 		}
 	}
-	
+
 	current[parts[len(parts)-1]] = value
 }
 
 // JSONToQueryString converts a JSON object to URL query string
 func JSONToQueryString(data map[string]interface{}) string {
 	var parts []string
-	
+
 	for key, value := range data {
 		if value != nil {
 			valueStr := fmt.Sprintf("%v", value)
 			parts = append(parts, key+"="+valueStr)
 		}
 	}
-	
+
 	return strings.Join(parts, "&")
 }
 
@@ -312,18 +313,18 @@ func JSONFromReader(reader io.Reader, dest interface{}) error {
 func JSONToBuffer(data interface{}) (*bytes.Buffer, error) {
 	buffer := new(bytes.Buffer)
 	encoder := json.NewEncoder(buffer)
-	
+
 	if err := encoder.Encode(data); err != nil {
 		return nil, err
 	}
-	
+
 	return buffer, nil
 }
 
 // JSONStreamDecode decodes multiple JSON objects from a stream
 func JSONStreamDecode(reader io.Reader, callback func(interface{}) error) error {
 	decoder := json.NewDecoder(reader)
-	
+
 	for {
 		var data interface{}
 		if err := decoder.Decode(&data); err != nil {
@@ -332,12 +333,12 @@ func JSONStreamDecode(reader io.Reader, callback func(interface{}) error) error 
 			}
 			return err
 		}
-		
+
 		if err := callback(data); err != nil {
 			return err
 		}
 	}
-	
+
 	return nil
 }
 

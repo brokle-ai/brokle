@@ -3,6 +3,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"time"
 )
@@ -10,42 +11,42 @@ import (
 // EnterpriseConfig contains enterprise-only configuration
 // This struct is always present but features are license-gated
 type EnterpriseConfig struct {
-	License    LicenseConfig    `mapstructure:"license"`
 	SSO        SSOConfig        `mapstructure:"sso"`
 	RBAC       RBACConfig       `mapstructure:"rbac"`
-	Compliance ComplianceConfig `mapstructure:"compliance"`
-	Analytics  AnalyticsConfig  `mapstructure:"analytics"`
 	Support    SupportConfig    `mapstructure:"support"`
+	Analytics  AnalyticsConfig  `mapstructure:"analytics"`
+	License    LicenseConfig    `mapstructure:"license"`
+	Compliance ComplianceConfig `mapstructure:"compliance"`
 }
 
 // LicenseConfig handles license validation and entitlements
 type LicenseConfig struct {
-	Key         string    `mapstructure:"key"`
-	Type        string    `mapstructure:"type"` // free, pro, business, enterprise
 	ValidUntil  time.Time `mapstructure:"valid_until"`
-	MaxRequests int       `mapstructure:"max_requests"` // Changed from int64 to int for consistency with OSS
+	Key         string    `mapstructure:"key"`
+	Type        string    `mapstructure:"type"`
+	Features    []string  `mapstructure:"features"`
+	MaxRequests int       `mapstructure:"max_requests"`
 	MaxUsers    int       `mapstructure:"max_users"`
 	MaxProjects int       `mapstructure:"max_projects"`
-	Features    []string  `mapstructure:"features"`     // Enabled enterprise features
-	OfflineMode bool      `mapstructure:"offline_mode"` // For airgapped deployments
+	OfflineMode bool      `mapstructure:"offline_mode"`
 }
 
 // SSOConfig for enterprise authentication
 type SSOConfig struct {
-	Enabled     bool              `mapstructure:"enabled"`
-	Provider    string            `mapstructure:"provider"` // saml, oidc, oauth2
+	Attributes  map[string]string `mapstructure:"attributes"`
+	Provider    string            `mapstructure:"provider"`
 	MetadataURL string            `mapstructure:"metadata_url"`
 	EntityID    string            `mapstructure:"entity_id"`
 	Certificate string            `mapstructure:"certificate"`
-	Attributes  map[string]string `mapstructure:"attributes"` // Role mapping
+	Enabled     bool              `mapstructure:"enabled"`
 }
 
 // RBACConfig for advanced role-based access control
 type RBACConfig struct {
-	Enabled     bool                `mapstructure:"enabled"`
-	CustomRoles []CustomRole        `mapstructure:"custom_roles"`
 	Permissions map[string][]string `mapstructure:"permissions"`
 	Inheritance map[string][]string `mapstructure:"inheritance"`
+	CustomRoles []CustomRole        `mapstructure:"custom_roles"`
+	Enabled     bool                `mapstructure:"enabled"`
 }
 
 // CustomRole represents a custom RBAC role
@@ -57,9 +58,9 @@ type CustomRole struct {
 
 // ComplianceConfig for enterprise compliance features
 type ComplianceConfig struct {
-	Enabled          bool          `mapstructure:"enabled"`
-	AuditRetention   time.Duration `mapstructure:"audit_retention"` // 7 years for compliance
+	AuditRetention   time.Duration `mapstructure:"audit_retention"`
 	DataRetention    time.Duration `mapstructure:"data_retention"`
+	Enabled          bool          `mapstructure:"enabled"`
 	PIIAnonymization bool          `mapstructure:"pii_anonymization"`
 	SOC2Compliance   bool          `mapstructure:"soc2_compliance"`
 	HIPAACompliance  bool          `mapstructure:"hipaa_compliance"`
@@ -68,11 +69,11 @@ type ComplianceConfig struct {
 
 // AnalyticsConfig for enterprise analytics features
 type AnalyticsConfig struct {
+	ExportFormats      []string `mapstructure:"export_formats"`
 	Enabled            bool     `mapstructure:"enabled"`
 	PredictiveInsights bool     `mapstructure:"predictive_insights"`
 	CustomDashboards   bool     `mapstructure:"custom_dashboards"`
 	MLModels           bool     `mapstructure:"ml_models"`
-	ExportFormats      []string `mapstructure:"export_formats"`
 }
 
 // SupportConfig for enterprise support features
@@ -129,15 +130,15 @@ func (lc *LicenseConfig) Validate() error {
 	}
 
 	if lc.MaxRequests <= 0 {
-		return fmt.Errorf("max_requests must be positive")
+		return errors.New("max_requests must be positive")
 	}
 
 	if lc.MaxUsers <= 0 {
-		return fmt.Errorf("max_users must be positive")
+		return errors.New("max_users must be positive")
 	}
 
 	if lc.MaxProjects <= 0 {
-		return fmt.Errorf("max_projects must be positive")
+		return errors.New("max_projects must be positive")
 	}
 
 	// Validate license expiration for non-free licenses
@@ -167,14 +168,14 @@ func (sc *SSOConfig) Validate() error {
 		switch sc.Provider {
 		case "saml":
 			if sc.EntityID == "" {
-				return fmt.Errorf("entity_id is required for SAML")
+				return errors.New("entity_id is required for SAML")
 			}
 			if sc.MetadataURL == "" && sc.Certificate == "" {
-				return fmt.Errorf("either metadata_url or certificate is required for SAML")
+				return errors.New("either metadata_url or certificate is required for SAML")
 			}
 		case "oidc", "oauth2":
 			if sc.MetadataURL == "" {
-				return fmt.Errorf("metadata_url is required for OIDC/OAuth2")
+				return errors.New("metadata_url is required for OIDC/OAuth2")
 			}
 		}
 	}
@@ -187,7 +188,7 @@ func (rc *RBACConfig) Validate() error {
 	// Validate custom roles if defined
 	for _, role := range rc.CustomRoles {
 		if role.Name == "" {
-			return fmt.Errorf("custom role name cannot be empty")
+			return errors.New("custom role name cannot be empty")
 		}
 		if len(role.Permissions) == 0 {
 			return fmt.Errorf("custom role '%s' must have at least one permission", role.Name)
@@ -201,11 +202,11 @@ func (rc *RBACConfig) Validate() error {
 func (cc *ComplianceConfig) Validate() error {
 	if cc.Enabled {
 		if cc.AuditRetention <= 0 {
-			return fmt.Errorf("audit_retention must be positive when compliance is enabled")
+			return errors.New("audit_retention must be positive when compliance is enabled")
 		}
 
 		if cc.DataRetention <= 0 {
-			return fmt.Errorf("data_retention must be positive when compliance is enabled")
+			return errors.New("data_retention must be positive when compliance is enabled")
 		}
 	}
 

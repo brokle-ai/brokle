@@ -183,10 +183,10 @@ func TestEnterpriseFeatureMatrix(t *testing.T) {
 	// Test the feature matrix for different license tiers
 
 	tests := []struct {
+		expected map[string]bool
 		name     string
 		tier     string
 		features []string
-		expected map[string]bool
 	}{
 		{
 			name:     "Free tier",

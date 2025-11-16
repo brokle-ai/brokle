@@ -245,16 +245,16 @@ type AuditLogService interface {
 
 // TokenClaims represents JWT token claims.
 type TokenClaims struct {
-	UserID         ulid.ULID  `json:"user_id"`
-	Email          string     `json:"email"`
 	OrganizationID *ulid.ULID `json:"organization_id,omitempty"`
+	Email          string     `json:"email"`
+	TokenType      string     `json:"token_type"`
+	Issuer         string     `json:"iss"`
+	Subject        string     `json:"sub"`
 	Scopes         []string   `json:"scopes,omitempty"`
-	TokenType      string     `json:"token_type"` // access, refresh, api_key
 	IssuedAt       int64      `json:"iat"`
 	ExpiresAt      int64      `json:"exp"`
 	NotBefore      int64      `json:"nbf"`
-	Issuer         string     `json:"iss"`
-	Subject        string     `json:"sub"`
+	UserID         ulid.ULID  `json:"user_id"`
 }
 
 // Request/Response DTOs

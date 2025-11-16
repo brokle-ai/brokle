@@ -2,6 +2,7 @@ package realtime
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -9,28 +10,28 @@ import (
 
 // Channel represents a broadcast channel
 type Channel struct {
-	Name        string                 `json:"name"`
-	Description string                 `json:"description,omitempty"`
-	Private     bool                   `json:"private"`
-	Persistent  bool                   `json:"persistent"`
-	TTL         time.Duration          `json:"ttl,omitempty"`
-	MaxSize     int                    `json:"max_size,omitempty"`
+	CreatedAt   time.Time              `json:"created_at"`
 	Filters     *EventFilter           `json:"filters,omitempty"`
 	Metadata    map[string]interface{} `json:"metadata,omitempty"`
-	CreatedAt   time.Time              `json:"created_at"`
+	Name        string                 `json:"name"`
+	Description string                 `json:"description,omitempty"`
+	TTL         time.Duration          `json:"ttl,omitempty"`
+	MaxSize     int                    `json:"max_size,omitempty"`
+	Private     bool                   `json:"private"`
+	Persistent  bool                   `json:"persistent"`
 }
 
 // Subscription represents a client subscription
 type Subscription struct {
+	CreatedAt time.Time              `json:"created_at"`
+	LastSeen  time.Time              `json:"last_seen"`
+	Filters   *EventFilter           `json:"filters,omitempty"`
+	Metadata  map[string]interface{} `json:"metadata,omitempty"`
 	ID        string                 `json:"id"`
 	Channel   string                 `json:"channel"`
 	UserID    string                 `json:"user_id,omitempty"`
 	OrgID     string                 `json:"org_id,omitempty"`
 	ProjectID string                 `json:"project_id,omitempty"`
-	Filters   *EventFilter           `json:"filters,omitempty"`
-	Metadata  map[string]interface{} `json:"metadata,omitempty"`
-	CreatedAt time.Time              `json:"created_at"`
-	LastSeen  time.Time              `json:"last_seen"`
 }
 
 // Subscriber represents a client that receives events
@@ -43,61 +44,61 @@ type Subscriber interface {
 
 // BroadcasterConfig represents broadcaster configuration
 type BroadcasterConfig struct {
-	BufferSize           int           `json:"buffer_size"`
-	MaxSubscribers       int           `json:"max_subscribers"`
-	MaxChannels          int           `json:"max_channels"`
-	DefaultChannelTTL    time.Duration `json:"default_channel_ttl"`
-	CleanupInterval      time.Duration `json:"cleanup_interval"`
-	SubscriberTimeout    time.Duration `json:"subscriber_timeout"`
-	EnableMetrics        bool          `json:"enable_metrics"`
-	PersistentStorage    bool          `json:"persistent_storage"`
-	MaxEventHistory      int           `json:"max_event_history"`
+	BufferSize        int           `json:"buffer_size"`
+	MaxSubscribers    int           `json:"max_subscribers"`
+	MaxChannels       int           `json:"max_channels"`
+	DefaultChannelTTL time.Duration `json:"default_channel_ttl"`
+	CleanupInterval   time.Duration `json:"cleanup_interval"`
+	SubscriberTimeout time.Duration `json:"subscriber_timeout"`
+	EnableMetrics     bool          `json:"enable_metrics"`
+	PersistentStorage bool          `json:"persistent_storage"`
+	MaxEventHistory   int           `json:"max_event_history"`
 }
 
 // DefaultBroadcasterConfig returns a default broadcaster configuration
 func DefaultBroadcasterConfig() *BroadcasterConfig {
 	return &BroadcasterConfig{
-		BufferSize:           1000,
-		MaxSubscribers:       10000,
-		MaxChannels:          1000,
-		DefaultChannelTTL:    24 * time.Hour,
-		CleanupInterval:      5 * time.Minute,
-		SubscriberTimeout:    30 * time.Second,
-		EnableMetrics:        true,
-		PersistentStorage:    false,
-		MaxEventHistory:      100,
+		BufferSize:        1000,
+		MaxSubscribers:    10000,
+		MaxChannels:       1000,
+		DefaultChannelTTL: 24 * time.Hour,
+		CleanupInterval:   5 * time.Minute,
+		SubscriberTimeout: 30 * time.Second,
+		EnableMetrics:     true,
+		PersistentStorage: false,
+		MaxEventHistory:   100,
 	}
 }
 
 // Broadcaster manages real-time event broadcasting
 type Broadcaster struct {
-	config       *BroadcasterConfig
-	channels     map[string]*Channel
+	ctx          context.Context
+	subChan      chan *Subscription
 	subscribers  map[string]Subscriber
 	channelSubs  map[string]map[string]*Subscription
 	eventHistory map[string][]*Event
 	eventChan    chan *Event
-	subChan      chan *Subscription
+	config       *BroadcasterConfig
 	unsubChan    chan string
 	closeChan    chan struct{}
-	mu           sync.RWMutex
-	ctx          context.Context
+	channels     map[string]*Channel
 	cancel       context.CancelFunc
-	wg           sync.WaitGroup
 	metrics      *BroadcasterMetrics
+	wg           sync.WaitGroup
+	mu           sync.RWMutex
 }
 
 // BroadcasterMetrics represents broadcaster metrics
 type BroadcasterMetrics struct {
-	TotalChannels     int64             `json:"total_channels"`
-	TotalSubscribers  int64             `json:"total_subscribers"`
-	EventsSent        int64             `json:"events_sent"`
-	EventsDropped     int64             `json:"events_dropped"`
-	SubscriptionsRate float64           `json:"subscriptions_rate"`
-	EventRate         float64           `json:"event_rate"`
-	ChannelStats      map[string]int64  `json:"channel_stats"`
-	LastUpdated       time.Time         `json:"last_updated"`
-	mu                sync.RWMutex      `json:"-"`
+	LastUpdated       time.Time        `json:"last_updated"`
+	ChannelStats      map[string]int64 `json:"channel_stats"`
+	TotalChannels     int64            `json:"total_channels"`
+	TotalSubscribers  int64            `json:"total_subscribers"`
+	EventsSent        int64            `json:"events_sent"`
+	EventsDropped     int64            `json:"events_dropped"`
+	SubscriptionsRate float64          `json:"subscriptions_rate"`
+	EventRate         float64          `json:"event_rate"`
+	mu                sync.RWMutex     `json:"-"`
 }
 
 // NewBroadcaster creates a new event broadcaster
@@ -120,7 +121,7 @@ func NewBroadcaster(config *BroadcasterConfig) *Broadcaster {
 		closeChan:    make(chan struct{}),
 		ctx:          ctx,
 		cancel:       cancel,
-		metrics:      &BroadcasterMetrics{
+		metrics: &BroadcasterMetrics{
 			ChannelStats: make(map[string]int64),
 			LastUpdated:  time.Now(),
 		},
@@ -151,7 +152,7 @@ func (b *Broadcaster) CreateChannel(name, description string, private, persisten
 	defer b.mu.Unlock()
 
 	if len(b.channels) >= b.config.MaxChannels {
-		return nil, fmt.Errorf("maximum number of channels reached")
+		return nil, errors.New("maximum number of channels reached")
 	}
 
 	if _, exists := b.channels[name]; exists {
@@ -170,7 +171,7 @@ func (b *Broadcaster) CreateChannel(name, description string, private, persisten
 
 	b.channels[name] = channel
 	b.channelSubs[name] = make(map[string]*Subscription)
-	
+
 	if persistent && b.config.PersistentStorage {
 		b.eventHistory[name] = make([]*Event, 0)
 	}
@@ -230,7 +231,7 @@ func (b *Broadcaster) Subscribe(subscriber Subscriber, channelName string, filte
 	defer b.mu.Unlock()
 
 	if len(b.subscribers) >= b.config.MaxSubscribers {
-		return nil, fmt.Errorf("maximum number of subscribers reached")
+		return nil, errors.New("maximum number of subscribers reached")
 	}
 
 	channel, exists := b.channels[channelName]
@@ -273,7 +274,7 @@ func (b *Broadcaster) Unsubscribe(subscriberID string) error {
 	case b.unsubChan <- subscriberID:
 		return nil
 	case <-b.ctx.Done():
-		return fmt.Errorf("broadcaster closed")
+		return errors.New("broadcaster closed")
 	}
 }
 
@@ -300,12 +301,12 @@ func (b *Broadcaster) Broadcast(channelName string, event *Event) error {
 	case b.eventChan <- eventCopy:
 		return nil
 	case <-b.ctx.Done():
-		return fmt.Errorf("broadcaster closed")
+		return errors.New("broadcaster closed")
 	default:
 		b.metrics.mu.Lock()
 		b.metrics.EventsDropped++
 		b.metrics.mu.Unlock()
-		return fmt.Errorf("event buffer full")
+		return errors.New("event buffer full")
 	}
 }
 
@@ -362,7 +363,7 @@ func (b *Broadcaster) GetChannelSubscribers(channelName string) []*Subscription 
 func (b *Broadcaster) GetMetrics() *BroadcasterMetrics {
 	b.metrics.mu.RLock()
 	defer b.metrics.mu.RUnlock()
-	
+
 	// Create a copy of metrics
 	metrics := &BroadcasterMetrics{
 		TotalChannels:     b.metrics.TotalChannels,
@@ -374,11 +375,11 @@ func (b *Broadcaster) GetMetrics() *BroadcasterMetrics {
 		LastUpdated:       b.metrics.LastUpdated,
 		ChannelStats:      make(map[string]int64),
 	}
-	
+
 	for k, v := range b.metrics.ChannelStats {
 		metrics.ChannelStats[k] = v
 	}
-	
+
 	return metrics
 }
 
@@ -452,7 +453,7 @@ func (b *Broadcaster) processEvent(event *Event) {
 	// Send to all subscribers
 	subscribers := make([]Subscriber, 0, len(channelSubs))
 	subscriptions := make([]*Subscription, 0, len(channelSubs))
-	
+
 	for _, subscription := range channelSubs {
 		if subscriber, exists := b.subscribers[subscription.ID]; exists {
 			// Apply subscription filters
@@ -551,12 +552,12 @@ func (b *Broadcaster) cleanup() {
 func (b *Broadcaster) addToHistory(channelName string, event *Event) {
 	if history, exists := b.eventHistory[channelName]; exists {
 		history = append(history, event)
-		
+
 		// Trim history if it exceeds max size
 		if len(history) > b.config.MaxEventHistory {
 			history = history[len(history)-b.config.MaxEventHistory:]
 		}
-		
+
 		b.eventHistory[channelName] = history
 	}
 }
@@ -567,7 +568,7 @@ func (b *Broadcaster) sendEventHistory(subscriber Subscriber, history []*Event, 
 		if filters != nil && !filters.Matches(event) {
 			continue
 		}
-		
+
 		if err := subscriber.Send(event); err != nil {
 			break
 		}
@@ -578,7 +579,7 @@ func (b *Broadcaster) sendEventHistory(subscriber Subscriber, history []*Event, 
 func (b *Broadcaster) updateMetrics() {
 	b.metrics.mu.Lock()
 	defer b.metrics.mu.Unlock()
-	
+
 	b.metrics.TotalChannels = int64(len(b.channels))
 	b.metrics.TotalSubscribers = int64(len(b.subscribers))
 	b.metrics.LastUpdated = time.Now()

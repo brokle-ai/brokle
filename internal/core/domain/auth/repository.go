@@ -288,10 +288,10 @@ type AuditLogFilters struct {
 
 // AuditLogStats represents audit log statistics
 type AuditLogStats struct {
-	TotalLogs      int64            `json:"total_logs"`
 	LogsByAction   map[string]int64 `json:"logs_by_action"`
 	LogsByResource map[string]int64 `json:"logs_by_resource"`
 	LastLogTime    *time.Time       `json:"last_log_time,omitempty"`
+	TotalLogs      int64            `json:"total_logs"`
 }
 
 // PasswordResetTokenRepository defines the interface for password reset token data access.

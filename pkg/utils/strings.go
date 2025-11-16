@@ -33,12 +33,12 @@ func Truncate(s string, maxLength int, ellipsis ...string) string {
 	if len(s) <= maxLength {
 		return s
 	}
-	
+
 	suffix := "..."
 	if len(ellipsis) > 0 {
 		suffix = ellipsis[0]
 	}
-	
+
 	return s[:maxLength-len(suffix)] + suffix
 }
 
@@ -48,12 +48,12 @@ func TruncateWords(s string, maxWords int, ellipsis ...string) string {
 	if len(words) <= maxWords {
 		return s
 	}
-	
+
 	suffix := "..."
 	if len(ellipsis) > 0 {
 		suffix = ellipsis[0]
 	}
-	
+
 	return strings.Join(words[:maxWords], " ") + suffix
 }
 
@@ -78,7 +78,7 @@ func CamelCase(s string) string {
 	if len(words) == 0 {
 		return ""
 	}
-	
+
 	result := strings.ToLower(words[0])
 	for i := 1; i < len(words); i++ {
 		result += Capitalize(strings.ToLower(words[i]))
@@ -90,7 +90,7 @@ func CamelCase(s string) string {
 func PascalCase(s string) string {
 	words := strings.Fields(regexp.MustCompile(`[^a-zA-Z0-9]+`).ReplaceAllString(s, " "))
 	var result strings.Builder
-	
+
 	for _, word := range words {
 		result.WriteString(Capitalize(strings.ToLower(word)))
 	}
@@ -102,14 +102,14 @@ func SnakeCase(s string) string {
 	// Insert underscores before uppercase letters (for camelCase/PascalCase)
 	re := regexp.MustCompile(`([a-z0-9])([A-Z])`)
 	s = re.ReplaceAllString(s, `${1}_${2}`)
-	
+
 	// Replace non-alphanumeric characters with underscores
 	re = regexp.MustCompile(`[^a-zA-Z0-9]+`)
 	s = re.ReplaceAllString(s, "_")
-	
+
 	// Remove leading and trailing underscores
 	s = strings.Trim(s, "_")
-	
+
 	return strings.ToLower(s)
 }
 
@@ -122,14 +122,14 @@ func KebabCase(s string) string {
 func Slugify(s string) string {
 	// Convert to lowercase
 	s = strings.ToLower(s)
-	
+
 	// Replace spaces and special characters with hyphens
 	re := regexp.MustCompile(`[^a-z0-9]+`)
 	s = re.ReplaceAllString(s, "-")
-	
+
 	// Remove leading and trailing hyphens
 	s = strings.Trim(s, "-")
-	
+
 	return s
 }
 
@@ -137,13 +137,13 @@ func Slugify(s string) string {
 func RandomString(length int) string {
 	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	b := make([]byte, length)
-	
+
 	for i := range b {
 		randomByte := make([]byte, 1)
 		rand.Read(randomByte)
 		b[i] = charset[randomByte[0]%byte(len(charset))]
 	}
-	
+
 	return string(b)
 }
 
@@ -232,15 +232,15 @@ func WrapText(text string, width int) string {
 	if width <= 0 {
 		return text
 	}
-	
+
 	words := strings.Fields(text)
 	if len(words) == 0 {
 		return text
 	}
-	
+
 	var lines []string
 	currentLine := ""
-	
+
 	for _, word := range words {
 		if len(currentLine) == 0 {
 			currentLine = word
@@ -251,11 +251,11 @@ func WrapText(text string, width int) string {
 			currentLine = word
 		}
 	}
-	
+
 	if len(currentLine) > 0 {
 		lines = append(lines, currentLine)
 	}
-	
+
 	return strings.Join(lines, "\n")
 }
 
@@ -280,11 +280,11 @@ func PadCenter(s string, length int, pad rune) string {
 	if len(s) >= length {
 		return s
 	}
-	
+
 	totalPad := length - len(s)
 	leftPad := totalPad / 2
 	rightPad := totalPad - leftPad
-	
+
 	return strings.Repeat(string(pad), leftPad) + s + strings.Repeat(string(pad), rightPad)
 }
 
@@ -341,12 +341,12 @@ func Similarity(s1, s2 string) float64 {
 	if s1 == s2 {
 		return 1.0
 	}
-	
+
 	maxLen := math.Max(float64(len(s1)), float64(len(s2)))
 	if maxLen == 0 {
 		return 1.0
 	}
-	
+
 	distance := levenshteinDistance(s1, s2)
 	return 1.0 - (float64(distance) / maxLen)
 }
@@ -358,24 +358,24 @@ func levenshteinDistance(s1, s2 string) int {
 	if len(s2) == 0 {
 		return len(s1)
 	}
-	
+
 	matrix := make([][]int, len(s1)+1)
 	for i := range matrix {
 		matrix[i] = make([]int, len(s2)+1)
 		matrix[i][0] = i
 	}
-	
+
 	for j := range matrix[0] {
 		matrix[0][j] = j
 	}
-	
+
 	for i := 1; i <= len(s1); i++ {
 		for j := 1; j <= len(s2); j++ {
 			cost := 0
 			if s1[i-1] != s2[j-1] {
 				cost = 1
 			}
-			
+
 			matrix[i][j] = min3(
 				matrix[i-1][j]+1,      // deletion
 				matrix[i][j-1]+1,      // insertion
@@ -383,7 +383,7 @@ func levenshteinDistance(s1, s2 string) int {
 			)
 		}
 	}
-	
+
 	return matrix[len(s1)][len(s2)]
 }
 
@@ -406,13 +406,13 @@ func FormatBytes(bytes int64) string {
 	if bytes < unit {
 		return fmt.Sprintf("%d B", bytes)
 	}
-	
+
 	div, exp := int64(unit), 0
 	for n := bytes / unit; n >= unit; n /= unit {
 		div *= unit
 		exp++
 	}
-	
+
 	units := []string{"KB", "MB", "GB", "TB", "PB", "EB"}
 	return fmt.Sprintf("%.1f %s", float64(bytes)/float64(div), units[exp])
 }

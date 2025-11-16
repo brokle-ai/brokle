@@ -1,6 +1,7 @@
 package seeder
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -70,7 +71,7 @@ func (dl *DataLoader) validateSeedData(data *SeedData) error {
 	orgNames := make(map[string]bool)
 	for _, org := range data.Organizations {
 		if org.Name == "" {
-			return fmt.Errorf("organization missing required field: name")
+			return errors.New("organization missing required field: name")
 		}
 		if orgNames[org.Name] {
 			return fmt.Errorf("duplicate organization name: %s", org.Name)
@@ -82,7 +83,7 @@ func (dl *DataLoader) validateSeedData(data *SeedData) error {
 	userEmails := make(map[string]bool)
 	for _, user := range data.Users {
 		if user.Email == "" || user.FirstName == "" || user.LastName == "" {
-			return fmt.Errorf("user missing required fields (email, first_name, last_name)")
+			return errors.New("user missing required fields (email, first_name, last_name)")
 		}
 		if userEmails[user.Email] {
 			return fmt.Errorf("duplicate user email: %s", user.Email)
@@ -94,7 +95,7 @@ func (dl *DataLoader) validateSeedData(data *SeedData) error {
 	permissionNames := make(map[string]bool)
 	for _, permission := range data.RBAC.Permissions {
 		if permission.Name == "" {
-			return fmt.Errorf("permission missing required field: name")
+			return errors.New("permission missing required field: name")
 		}
 		if permissionNames[permission.Name] {
 			return fmt.Errorf("duplicate permission name: %s", permission.Name)
@@ -105,7 +106,7 @@ func (dl *DataLoader) validateSeedData(data *SeedData) error {
 	// Validate template roles
 	for _, role := range data.RBAC.Roles {
 		if role.Name == "" || role.ScopeType == "" {
-			return fmt.Errorf("role missing required fields (name, scope_type)")
+			return errors.New("role missing required fields (name, scope_type)")
 		}
 		// Validate role permissions reference valid permissions
 		for _, permName := range role.Permissions {
@@ -132,7 +133,7 @@ func (dl *DataLoader) validateSeedData(data *SeedData) error {
 			return fmt.Errorf("project references unknown organization: %s", project.OrganizationName)
 		}
 		if project.Name == "" {
-			return fmt.Errorf("project missing required field: name")
+			return errors.New("project missing required field: name")
 		}
 		projectKey := fmt.Sprintf("%s:%s", project.OrganizationName, project.Name)
 		if projectKeys[projectKey] {

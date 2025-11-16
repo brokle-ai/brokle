@@ -2,7 +2,7 @@ package observability
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"time"
 
 	"brokle/pkg/ulid"
@@ -189,123 +189,116 @@ type TokenUsage struct {
 
 // CostCalculation represents cost calculation details
 type CostCalculation struct {
-	InputCost  float64 `json:"input_cost"`
-	OutputCost float64 `json:"output_cost"`
-	TotalCost  float64 `json:"total_cost"`
 	Currency   string  `json:"currency"`
 	Provider   string  `json:"provider"`
 	Model      string  `json:"model"`
+	InputCost  float64 `json:"input_cost"`
+	OutputCost float64 `json:"output_cost"`
+	TotalCost  float64 `json:"total_cost"`
 }
 
 // BatchIngestRequest represents a batch ingestion request
 type BatchIngestRequest struct {
-	ProjectID ulid.ULID `json:"project_id"`
 	Traces    []*Trace  `json:"traces"`
+	ProjectID ulid.ULID `json:"project_id"`
 	Async     bool      `json:"async"`
 }
 
 // BatchIngestResult represents the result of a batch ingestion
 type BatchIngestResult struct {
+	JobID          *string               `json:"job_id,omitempty"`
+	Errors         []BatchIngestionError `json:"errors,omitempty"`
 	ProcessedCount int                   `json:"processed_count"`
 	FailedCount    int                   `json:"failed_count"`
-	Errors         []BatchIngestionError `json:"errors,omitempty"`
 	Duration       time.Duration         `json:"duration"`
-	JobID          *string               `json:"job_id,omitempty"` // For async operations
 }
 
 // Service-specific request and response types for telemetry processing
 
 // TelemetryBatchRequest represents a high-throughput telemetry batch request
 type TelemetryBatchRequest struct {
-	ProjectID ulid.ULID                `json:"project_id"`
 	Metadata  map[string]any           `json:"metadata"`
 	Events    []*TelemetryEventRequest `json:"events"`
+	ProjectID ulid.ULID                `json:"project_id"`
 	Async     bool                     `json:"async"`
 }
 
 // TelemetryEventRequest represents an individual telemetry event in a batch
 type TelemetryEventRequest struct {
-	// Internal tracking (Brokle-specific)
-	EventID ulid.ULID `json:"event_id"`
-
-	// OTLP identity (for deduplication)
-	SpanID  string `json:"span_id"`  // OTLP span_id (16 hex) - empty for traces
-	TraceID string `json:"trace_id"` // OTLP trace_id (32 hex) - required
-
-	// Event data
-	EventType TelemetryEventType `json:"event_type"`
 	Payload   map[string]any     `json:"payload"`
 	Timestamp *time.Time         `json:"timestamp,omitempty"`
+	SpanID    string             `json:"span_id"`
+	TraceID   string             `json:"trace_id"`
+	EventType TelemetryEventType `json:"event_type"`
+	EventID   ulid.ULID          `json:"event_id"`
 }
 
 // Validate validates the event request
 func (e *TelemetryEventRequest) Validate() error {
 	if e.EventType == TelemetryEventTypeSpan && e.SpanID == "" {
-		return fmt.Errorf("span events must have non-empty span_id")
+		return errors.New("span events must have non-empty span_id")
 	}
 	if e.TraceID == "" {
-		return fmt.Errorf("trace_id is required for all events")
+		return errors.New("trace_id is required for all events")
 	}
 	return nil
 }
 
 // TelemetryBatchResponse represents the response for telemetry batch processing
 type TelemetryBatchResponse struct {
-	BatchID           ulid.ULID             `json:"batch_id"`
+	JobID             *string               `json:"job_id,omitempty"`
+	Errors            []TelemetryEventError `json:"errors,omitempty"`
+	DuplicateEventIDs []ulid.ULID           `json:"duplicate_event_ids,omitempty"`
 	ProcessedEvents   int                   `json:"processed_events"`
 	DuplicateEvents   int                   `json:"duplicate_events"`
 	FailedEvents      int                   `json:"failed_events"`
 	ProcessingTimeMs  int                   `json:"processing_time_ms"`
-	Errors            []TelemetryEventError `json:"errors,omitempty"`
-	DuplicateEventIDs []ulid.ULID           `json:"duplicate_event_ids,omitempty"`
-	JobID             *string               `json:"job_id,omitempty"` // For async processing
+	BatchID           ulid.ULID             `json:"batch_id"`
 }
 
 // TelemetryEventError represents an error processing a telemetry event
 type TelemetryEventError struct {
-	EventID      ulid.ULID          `json:"event_id"`
 	EventType    TelemetryEventType `json:"event_type"`
 	ErrorCode    string             `json:"error_code"`
 	ErrorMessage string             `json:"error_message"`
+	EventID      ulid.ULID          `json:"event_id"`
 	Retryable    bool               `json:"retryable"`
 }
 
 // BatchProcessingResult represents the result of batch processing operations
 type BatchProcessingResult struct {
-	BatchID          ulid.ULID             `json:"batch_id"`
+	Errors           []TelemetryEventError `json:"errors,omitempty"`
 	TotalEvents      int                   `json:"total_events"`
 	ProcessedEvents  int                   `json:"processed_events"`
 	FailedEvents     int                   `json:"failed_events"`
 	SkippedEvents    int                   `json:"skipped_events"`
 	ProcessingTimeMs int                   `json:"processing_time_ms"`
 	ThroughputPerSec float64               `json:"throughput_per_sec"`
-	Errors           []TelemetryEventError `json:"errors,omitempty"`
 	SuccessRate      float64               `json:"success_rate"`
+	BatchID          ulid.ULID             `json:"batch_id"`
 }
 
 // EventProcessingResult represents the result of event processing operations
 type EventProcessingResult struct {
-	ProcessedCount    int `json:"processed_count"`
-	FailedCount       int `json:"failed_count"`
-	NotProcessedCount int `json:"not_processed_count"` // NEW: Events never attempted
-	RetryCount        int `json:"retry_count"`
-	ProcessingTimeMs  int `json:"processing_time_ms"`
-
-	// Explicit event ID lists for precise tracking
-	ProcessedEventIDs []ulid.ULID           `json:"processed_event_ids"` // NEW: Successfully processed
-	NotProcessedIDs   []ulid.ULID           `json:"not_processed_ids"`   // NEW: Never attempted
-	Errors            []TelemetryEventError `json:"errors,omitempty"`    // Failed events with details
+	ProcessedEventIDs []ulid.ULID           `json:"processed_event_ids"`
+	NotProcessedIDs   []ulid.ULID           `json:"not_processed_ids"`
+	Errors            []TelemetryEventError `json:"errors,omitempty"`
+	ProcessedCount    int                   `json:"processed_count"`
+	FailedCount       int                   `json:"failed_count"`
+	NotProcessedCount int                   `json:"not_processed_count"`
+	RetryCount        int                   `json:"retry_count"`
+	ProcessingTimeMs  int                   `json:"processing_time_ms"`
 	SuccessRate       float64               `json:"success_rate"`
 }
 
 // RedisHealthStatus represents Redis health status for deduplication
 type RedisHealthStatus struct {
-	Available   bool          `json:"available"`
+	LastError   *string       `json:"last_error,omitempty"`
 	LatencyMs   float64       `json:"latency_ms"`
 	MemoryUsage int64         `json:"memory_usage_bytes"`
 	Connections int           `json:"connections"`
-	LastError   *string       `json:"last_error,omitempty"`
 	Uptime      time.Duration `json:"uptime"`
+	Available   bool          `json:"available"`
 }
 
 // DeduplicationStats represents deduplication performance statistics
@@ -323,7 +316,6 @@ type DeduplicationStats struct {
 
 // TelemetryHealthStatus represents overall telemetry service health
 type TelemetryHealthStatus struct {
-	Healthy               bool               `json:"healthy"`
 	Database              *DatabaseHealth    `json:"database"`
 	Redis                 *RedisHealthStatus `json:"redis"`
 	ProcessingQueue       *QueueHealth       `json:"processing_queue"`
@@ -331,6 +323,7 @@ type TelemetryHealthStatus struct {
 	AverageProcessingTime float64            `json:"average_processing_time_ms"`
 	ThroughputPerMinute   float64            `json:"throughput_per_minute"`
 	ErrorRate             float64            `json:"error_rate"`
+	Healthy               bool               `json:"healthy"`
 }
 
 // DatabaseHealth represents database health status
@@ -383,48 +376,48 @@ type TelemetryPerformanceStats struct {
 
 // SpanBatchRequest represents a batch span ingestion request
 type SpanBatchRequest struct {
-	ProjectID ulid.ULID `json:"project_id"`
 	Spans     []*Span   `json:"spans"`
+	ProjectID ulid.ULID `json:"project_id"`
 	Async     bool      `json:"async"`
 }
 
 // QualityScoreBatchRequest represents a batch quality score ingestion request
 type QualityScoreBatchRequest struct {
-	ProjectID     ulid.ULID `json:"project_id"`
 	QualityScores []*Score  `json:"quality_scores"`
+	ProjectID     ulid.ULID `json:"project_id"`
 	Async         bool      `json:"async"`
 }
 
 // BatchIngestionError represents an error during batch ingestion
 type BatchIngestionError struct {
-	Index   int    `json:"index"`
-	Error   string `json:"error"`
 	Details any    `json:"details,omitempty"`
+	Error   string `json:"error"`
+	Index   int    `json:"index"`
 }
 
 // BulkEvaluationRequest represents a bulk evaluation request
 type BulkEvaluationRequest struct {
+	Filter         *AnalyticsFilter `json:"filter,omitempty"`
 	TraceIDs       []ulid.ULID      `json:"trace_ids,omitempty"`
 	SpanIDs        []ulid.ULID      `json:"span_ids,omitempty"`
 	EvaluatorNames []string         `json:"evaluator_names"`
-	Filter         *AnalyticsFilter `json:"filter,omitempty"`
 	Async          bool             `json:"async"`
 }
 
 // BulkEvaluationResult represents the result of bulk evaluation
 type BulkEvaluationResult struct {
-	ProcessedCount int                   `json:"processed_count"`
-	FailedCount    int                   `json:"failed_count"`
+	JobID          *string               `json:"job_id,omitempty"`
 	Scores         []*Score              `json:"scores,omitempty"`
 	Errors         []BulkEvaluationError `json:"errors,omitempty"`
-	JobID          *string               `json:"job_id,omitempty"`
+	ProcessedCount int                   `json:"processed_count"`
+	FailedCount    int                   `json:"failed_count"`
 }
 
 // BulkEvaluationError represents an error during bulk evaluation
 type BulkEvaluationError struct {
-	ItemID  ulid.ULID `json:"item_id"`
-	Error   string    `json:"error"`
 	Details any       `json:"details,omitempty"`
+	Error   string    `json:"error"`
+	ItemID  ulid.ULID `json:"item_id"`
 }
 
 // EvaluationInput represents input for quality evaluation
@@ -438,27 +431,27 @@ type EvaluationInput struct {
 
 // QualityEvaluatorInfo represents information about a quality evaluator
 type QualityEvaluatorInfo struct {
+	Configuration  map[string]any `json:"configuration,omitempty"`
 	Name           string         `json:"name"`
 	Version        string         `json:"version"`
 	Description    string         `json:"description"`
-	SupportedTypes []string       `json:"supported_types"` // Span types
+	SupportedTypes []string       `json:"supported_types"`
 	IsBuiltIn      bool           `json:"is_built_in"`
-	Configuration  map[string]any `json:"configuration,omitempty"`
 }
 
 // Dashboard and reporting types
 
 // DashboardOverview represents overview metrics for dashboard
 type DashboardOverview struct {
-	TotalTraces    int64              `json:"total_traces"`
-	TotalCost      float64            `json:"total_cost"`
-	AverageLatency float64            `json:"average_latency"`
-	ErrorRate      float64            `json:"error_rate"`
 	TopProviders   []*ProviderSummary `json:"top_providers"`
 	RecentActivity []*ActivityItem    `json:"recent_activity"`
 	CostTrend      []*TimeSeriesPoint `json:"cost_trend"`
 	LatencyTrend   []*TimeSeriesPoint `json:"latency_trend"`
 	QualityTrend   []*TimeSeriesPoint `json:"quality_trend"`
+	TotalTraces    int64              `json:"total_traces"`
+	TotalCost      float64            `json:"total_cost"`
+	AverageLatency float64            `json:"average_latency"`
+	ErrorRate      float64            `json:"error_rate"`
 }
 
 // ProviderSummary represents summary information for a provider
@@ -472,10 +465,10 @@ type ProviderSummary struct {
 
 // ActivityItem represents a recent activity item
 type ActivityItem struct {
-	Type        string         `json:"type"`
-	Description string         `json:"description"`
 	Timestamp   time.Time      `json:"timestamp"`
 	Metadata    map[string]any `json:"metadata,omitempty"`
+	Type        string         `json:"type"`
+	Description string         `json:"description"`
 }
 
 // TimeRange represents a time range for analytics
@@ -486,13 +479,13 @@ type TimeRange struct {
 
 // OptimizationSuggestion represents a cost optimization suggestion
 type OptimizationSuggestion struct {
+	Metadata         map[string]any `json:"metadata,omitempty"`
 	Type             string         `json:"type"`
 	Title            string         `json:"title"`
 	Description      string         `json:"description"`
+	ActionItems      []string       `json:"action_items"`
 	PotentialSavings float64        `json:"potential_savings"`
 	Confidence       float64        `json:"confidence"`
-	ActionItems      []string       `json:"action_items"`
-	Metadata         map[string]any `json:"metadata,omitempty"`
 }
 
 // LatencyHeatmap represents latency data in heatmap format
@@ -506,11 +499,11 @@ type LatencyHeatmap struct {
 
 // ThroughputMetrics represents throughput metrics
 type ThroughputMetrics struct {
+	TimeSeries        []*TimeSeriesPoint `json:"time_series"`
 	RequestsPerSecond float64            `json:"requests_per_second"`
 	RequestsPerMinute float64            `json:"requests_per_minute"`
 	RequestsPerHour   float64            `json:"requests_per_hour"`
 	PeakThroughput    float64            `json:"peak_throughput"`
-	TimeSeries        []*TimeSeriesPoint `json:"time_series"`
 }
 
 // Queue and ingestion monitoring types
@@ -526,42 +519,42 @@ type QueueStatus struct {
 
 // QueueInfo represents information about a specific queue
 type QueueInfo struct {
+	LastUpdated time.Time `json:"last_updated"`
 	Name        string    `json:"name"`
 	Size        int64     `json:"size"`
 	Processing  int64     `json:"processing"`
 	Failed      int64     `json:"failed"`
-	LastUpdated time.Time `json:"last_updated"`
 }
 
 // IngestionHealth represents the health status of ingestion
 type IngestionHealth struct {
-	Status         string         `json:"status"` // healthy, degraded, unhealthy
+	LastCheck      time.Time      `json:"last_check"`
+	Details        map[string]any `json:"details,omitempty"`
+	Status         string         `json:"status"`
+	Bottlenecks    []string       `json:"bottlenecks,omitempty"`
 	IngestionRate  float64        `json:"ingestion_rate"`
 	ProcessingRate float64        `json:"processing_rate"`
 	ErrorRate      float64        `json:"error_rate"`
-	Bottlenecks    []string       `json:"bottlenecks,omitempty"`
-	LastCheck      time.Time      `json:"last_check"`
-	Details        map[string]any `json:"details,omitempty"`
 }
 
 // IngestionMetrics represents metrics for the ingestion system
 type IngestionMetrics struct {
+	Errors         []*IngestionError `json:"recent_errors,omitempty"`
 	TotalIngested  int64             `json:"total_ingested"`
 	IngestedToday  int64             `json:"ingested_today"`
 	ProcessingRate float64           `json:"processing_rate"`
 	AverageLatency float64           `json:"average_latency"`
 	QueueBacklog   int64             `json:"queue_backlog"`
 	WorkerCount    int               `json:"worker_count"`
-	Errors         []*IngestionError `json:"recent_errors,omitempty"`
 }
 
 // IngestionError represents an ingestion error
 type IngestionError struct {
 	Timestamp time.Time      `json:"timestamp"`
+	Details   map[string]any `json:"details,omitempty"`
 	Type      string         `json:"type"`
 	Message   string         `json:"message"`
 	Count     int64          `json:"count"`
-	Details   map[string]any `json:"details,omitempty"`
 }
 
 // Export and reporting types
@@ -577,12 +570,12 @@ const (
 
 // ExportResult represents the result of an export operation
 type ExportResult struct {
+	ExpiresAt   time.Time    `json:"expires_at"`
 	DownloadURL string       `json:"download_url"`
 	Format      ExportFormat `json:"format"`
+	Status      string       `json:"status"`
 	RecordCount int64        `json:"record_count"`
 	FileSize    int64        `json:"file_size"`
-	ExpiresAt   time.Time    `json:"expires_at"`
-	Status      string       `json:"status"`
 }
 
 // ReportType represents different types of reports
@@ -597,14 +590,14 @@ const (
 
 // Report represents a generated report
 type Report struct {
-	ID          ulid.ULID      `json:"id"`
+	GeneratedAt time.Time      `json:"generated_at"`
+	Data        map[string]any `json:"data"`
 	Type        ReportType     `json:"type"`
 	Title       string         `json:"title"`
 	Description string         `json:"description"`
-	Data        map[string]any `json:"data"`
-	GeneratedAt time.Time      `json:"generated_at"`
 	Format      ExportFormat   `json:"format"`
 	DownloadURL string         `json:"download_url,omitempty"`
+	ID          ulid.ULID      `json:"id"`
 }
 
 // ==================================
@@ -643,6 +636,6 @@ type CostCalculationInput struct {
 	ProjectID    string `json:"project_id"`
 	InputTokens  int32  `json:"input_tokens"`
 	OutputTokens int32  `json:"output_tokens"`
-	CacheHit     bool   `json:"cache_hit"`     // From gen_ai.prompt.cache_hit attribute
-	BatchMode    bool   `json:"batch_mode"`    // From brokle.batch attribute
+	CacheHit     bool   `json:"cache_hit"`  // From gen_ai.prompt.cache_hit attribute
+	BatchMode    bool   `json:"batch_mode"` // From brokle.batch attribute
 }

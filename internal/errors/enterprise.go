@@ -21,17 +21,17 @@ const (
 
 // EnterpriseError represents a professional enterprise error response
 type EnterpriseError struct {
+	ResetDate      *time.Time          `json:"reset_date,omitempty"`
+	Metadata       map[string]string   `json:"metadata,omitempty"`
+	Support        SupportInfo         `json:"support"`
 	Code           EnterpriseErrorCode `json:"code"`
 	Message        string              `json:"message"`
 	Feature        string              `json:"feature,omitempty"`
 	CurrentTier    string              `json:"current_tier,omitempty"`
 	RequiredTier   string              `json:"required_tier,omitempty"`
 	LimitType      string              `json:"limit_type,omitempty"`
-	RemainingQuota int64               `json:"remaining_quota,omitempty"`
-	ResetDate      *time.Time          `json:"reset_date,omitempty"`
 	Actions        []ActionSuggestion  `json:"actions"`
-	Support        SupportInfo         `json:"support"`
-	Metadata       map[string]string   `json:"metadata,omitempty"`
+	RemainingQuota int64               `json:"remaining_quota,omitempty"`
 }
 
 // ActionSuggestion represents a suggested action for the user
@@ -129,7 +129,7 @@ func buildUpgradeActions(currentTier, requiredTier, feature string) []ActionSugg
 	upgradeURL := buildUpgradeURL(requiredTier, feature)
 	actions = append(actions, ActionSuggestion{
 		Type:        "upgrade",
-		Label:       fmt.Sprintf("Upgrade to %s", strings.Title(requiredTier)),
+		Label:       "Upgrade to " + strings.Title(requiredTier),
 		URL:         upgradeURL,
 		UTMSource:   "api",
 		UTMCampaign: "feature_upgrade",
@@ -241,15 +241,15 @@ func buildUpgradeURL(tier, feature string) string {
 }
 
 func buildTrialURL(feature string) string {
-	return fmt.Sprintf("https://brokle.com/trial?utm_source=api&utm_campaign=feature_trial&utm_content=%s", feature)
+	return "https://brokle.com/trial?utm_source=api&utm_campaign=feature_trial&utm_content=" + feature
 }
 
 func buildSalesURL(feature string) string {
-	return fmt.Sprintf("https://brokle.com/contact?utm_source=api&utm_campaign=enterprise_inquiry&utm_content=%s", feature)
+	return "https://brokle.com/contact?utm_source=api&utm_campaign=enterprise_inquiry&utm_content=" + feature
 }
 
 func buildUsageUpgradeURL(limitType string) string {
-	return fmt.Sprintf("https://brokle.com/pricing?utm_source=api&utm_campaign=usage_upgrade&utm_content=%s", limitType)
+	return "https://brokle.com/pricing?utm_source=api&utm_campaign=usage_upgrade&utm_content=" + limitType
 }
 
 func buildFeatureDocsURL(feature string) string {

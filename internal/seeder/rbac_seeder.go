@@ -256,7 +256,7 @@ func (rs *RBACSeeder) GetRoleStatistics(ctx context.Context) (*RoleStatistics, e
 
 // RoleStatistics represents statistics about seeded roles
 type RoleStatistics struct {
+	ScopeDistribution map[string]int `json:"scope_distribution"`
+	RoleDistribution  map[string]int `json:"role_distribution"`
 	TotalRoles        int            `json:"total_roles"`
-	ScopeDistribution map[string]int `json:"scope_distribution"` // scope_type -> count
-	RoleDistribution  map[string]int `json:"role_distribution"`  // role_name -> count
 }

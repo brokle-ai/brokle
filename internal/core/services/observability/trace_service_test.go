@@ -2,7 +2,6 @@ package observability
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -399,11 +398,11 @@ func TestTraceService_GetTraceWithSpans(t *testing.T) {
 	traceID := "12345678901234567890123456789012"
 
 	tests := []struct {
+		expectedErr error
+		mockSetup   func(*MockTraceRepository, *MockSpanRepository)
+		checkResult func(*testing.T, *observability.Trace)
 		name        string
 		id          string
-		mockSetup   func(*MockTraceRepository, *MockSpanRepository)
-		expectedErr error
-		checkResult func(*testing.T, *observability.Trace)
 	}{
 		{
 			name: "success - trace with spans found",
@@ -451,7 +450,7 @@ func TestTraceService_GetTraceWithSpans(t *testing.T) {
 
 			if tt.expectedErr != nil {
 				assert.Error(t, err)
-				assert.True(t, errors.Is(err, tt.expectedErr))
+				assert.ErrorIs(t, err, tt.expectedErr)
 			} else {
 				assert.NoError(t, err)
 			}

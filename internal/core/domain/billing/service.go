@@ -36,12 +36,12 @@ type OrganizationService interface {
 
 // QuotaStatus represents the current quota status for an organization
 type QuotaStatus struct {
-	OrganizationID       ulid.ULID `json:"organization_id"`
-	RequestsOK           bool      `json:"requests_ok"`
-	TokensOK             bool      `json:"tokens_ok"`
-	CostOK               bool      `json:"cost_ok"`
 	Status               string    `json:"status"`
 	RequestsUsagePercent float64   `json:"requests_usage_percent"`
 	TokensUsagePercent   float64   `json:"tokens_usage_percent"`
 	CostUsagePercent     float64   `json:"cost_usage_percent"`
+	OrganizationID       ulid.ULID `json:"organization_id"`
+	RequestsOK           bool      `json:"requests_ok"`
+	TokensOK             bool      `json:"tokens_ok"`
+	CostOK               bool      `json:"cost_ok"`
 }

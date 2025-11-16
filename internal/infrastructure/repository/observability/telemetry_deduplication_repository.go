@@ -2,6 +2,7 @@ package observability
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -33,11 +34,11 @@ func (r *telemetryDeduplicationRepository) ClaimEvents(ctx context.Context, proj
 	}
 
 	if projectID.IsZero() {
-		return nil, nil, fmt.Errorf("project ID cannot be zero")
+		return nil, nil, errors.New("project ID cannot be zero")
 	}
 
 	if batchID.IsZero() {
-		return nil, nil, fmt.Errorf("batch ID cannot be zero")
+		return nil, nil, errors.New("batch ID cannot be zero")
 	}
 
 	// Use Redis pipeline with SetNX for atomic claim
@@ -107,15 +108,15 @@ func (r *telemetryDeduplicationRepository) ReleaseEvents(ctx context.Context, de
 // Create creates a new telemetry event deduplication entry in Redis with auto-expiry
 func (r *telemetryDeduplicationRepository) Create(ctx context.Context, dedup *observability.TelemetryEventDeduplication) error {
 	if dedup == nil {
-		return fmt.Errorf("dedup entry cannot be nil")
+		return errors.New("dedup entry cannot be nil")
 	}
 
 	if dedup.EventID == "" {
-		return fmt.Errorf("event ID is required")
+		return errors.New("event ID is required")
 	}
 
 	if dedup.BatchID.IsZero() {
-		return fmt.Errorf("batch ID is required")
+		return errors.New("batch ID is required")
 	}
 
 	// Calculate TTL
@@ -123,7 +124,7 @@ func (r *telemetryDeduplicationRepository) Create(ctx context.Context, dedup *ob
 	ttl := dedup.ExpiresAt.Sub(now)
 
 	if ttl <= 0 {
-		return fmt.Errorf("deduplication entry already expired")
+		return errors.New("deduplication entry already expired")
 	}
 
 	// Store in Redis with auto-expiry (SETEX)
@@ -300,7 +301,7 @@ func (r *telemetryDeduplicationRepository) CountByProjectID(ctx context.Context,
 func (r *telemetryDeduplicationRepository) buildRedisKey(dedupID string) string {
 	// dedupID is now OTLP composite ID (trace_id:span_id)
 	// Use single prefix for all OTLP IDs (globally unique)
-	return fmt.Sprintf("dedup:span:%s", dedupID)
+	return "dedup:span:" + dedupID
 }
 
 // GetStats returns statistics about deduplication cache (approximate)
@@ -330,7 +331,7 @@ func (r *telemetryDeduplicationRepository) GetStats(ctx context.Context) (map[st
 // ExistsInBatch checks if event exists in specific batch (not supported in Redis-only)
 func (r *telemetryDeduplicationRepository) ExistsInBatch(ctx context.Context, eventID string, batchID string) (bool, error) {
 	// Not supported - would need to store batch_id in Redis value
-	return false, fmt.Errorf("ExistsInBatch not supported in Redis-only mode")
+	return false, errors.New("ExistsInBatch not supported in Redis-only mode")
 }
 
 // ExistsWithRedisCheck checks existence with Redis flag (Redis-only always uses Redis)
@@ -381,7 +382,7 @@ func (r *telemetryDeduplicationRepository) BatchCleanup(ctx context.Context, old
 // GetByProjectID retrieves entries by project (not supported efficiently in Redis-only)
 func (r *telemetryDeduplicationRepository) GetByProjectID(ctx context.Context, projectID string, limit, offset int) ([]*observability.TelemetryEventDeduplication, error) {
 	// Not supported - would require scanning all keys
-	return nil, fmt.Errorf("GetByProjectID not supported in Redis-only mode")
+	return nil, errors.New("GetByProjectID not supported in Redis-only mode")
 }
 
 // CleanupByProjectID cleanup by project (not needed - Redis handles auto-expiry)

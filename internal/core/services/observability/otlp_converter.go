@@ -30,17 +30,12 @@ func NewOTLPConverterService(logger *logrus.Logger, costCalculator observability
 
 // brokleEvent represents an internal converted event (before domain conversion)
 type brokleEvent struct {
-	// Internal tracking
-	EventID string `json:"event_id"`
-
-	// OTLP identity (for deduplication)
-	SpanID  string `json:"span_id"`
-	TraceID string `json:"trace_id"`
-
-	// Event data
-	EventType string                 `json:"event_type"` // "trace", "span"
 	Payload   map[string]interface{} `json:"payload"`
 	Timestamp *int64                 `json:"timestamp,omitempty"`
+	EventID   string                 `json:"event_id"`
+	SpanID    string                 `json:"span_id"`
+	TraceID   string                 `json:"trace_id"`
+	EventType string                 `json:"event_type"`
 }
 
 // isRootSpanCheck determines if a span is a root span by checking if parent ID is nil, empty, or zero
@@ -163,11 +158,11 @@ func (s *OTLPConverterService) createTraceEvent(span observability.OTLPSpan, res
 
 	// Build trace payload with new OTEL-native field names
 	payload := map[string]interface{}{
-		"trace_id":             traceID, // Renamed from "id"
-		"name":                 span.Name,
-		"start_time":           startTime.Format(time.RFC3339Nano),
-		"status_code":          statusCode,          // Now UInt8 (0-2)
-		"resource_attributes":  resourceAttrs,       // OTEL resource attributes as map
+		"trace_id":            traceID, // Renamed from "id"
+		"name":                span.Name,
+		"start_time":          startTime.Format(time.RFC3339Nano),
+		"status_code":         statusCode,    // Now UInt8 (0-2)
+		"resource_attributes": resourceAttrs, // OTEL resource attributes as map
 	}
 
 	if endTime != nil {
@@ -314,15 +309,15 @@ func (s *OTLPConverterService) convertSpanToEvent(ctx context.Context, span obse
 
 	// Build span payload with new OTEL-native field names
 	payload := map[string]interface{}{
-		"span_id":              spanID,      // Renamed from "id"
-		"trace_id":             traceID,
-		"parent_span_id":       parentSpanID,
-		"span_name":            span.Name,   // Renamed from "name"
-		"span_kind":            spanKind,    // Now UInt8 (0-5)
-		"start_time":           startTime.Format(time.RFC3339Nano),
-		"status_code":          statusCode,           // Now UInt8 (0-2)
-		"span_attributes":      spanAttrs,            // Span-level attributes as map
-		"resource_attributes":  resourceAttrs,        // Resource-level attributes as map
+		"span_id":             spanID, // Renamed from "id"
+		"trace_id":            traceID,
+		"parent_span_id":      parentSpanID,
+		"span_name":           span.Name, // Renamed from "name"
+		"span_kind":           spanKind,  // Now UInt8 (0-5)
+		"start_time":          startTime.Format(time.RFC3339Nano),
+		"status_code":         statusCode,    // Now UInt8 (0-2)
+		"span_attributes":     spanAttrs,     // Span-level attributes as map
+		"resource_attributes": resourceAttrs, // Resource-level attributes as map
 	}
 
 	if endTime != nil {
@@ -481,8 +476,11 @@ func convertUnixNano(ts interface{}) *time.Time {
 		nanos = int64(v)
 	case map[string]interface{}:
 		// Handle {low, high} format from protobuf
-		low, _ := v["low"].(float64)
-		high, _ := v["high"].(float64)
+		low, lowOk := v["low"].(float64)
+		high, highOk := v["high"].(float64)
+		if !lowOk || !highOk {
+			return nil
+		}
 		nanos = int64(high)*4294967296 + int64(low)
 	default:
 		return nil
@@ -845,10 +843,14 @@ func bytesToHex(data []interface{}) string {
 
 // convertToDomainEvents converts internal events to domain events
 func convertToDomainEvents(events []*brokleEvent) []*observability.TelemetryEventRequest {
-	result := make([]*observability.TelemetryEventRequest, len(events))
-	for i, e := range events {
-		eventID, _ := ulid.Parse(e.EventID)
-		result[i] = &observability.TelemetryEventRequest{
+	result := make([]*observability.TelemetryEventRequest, 0, len(events))
+	for _, e := range events {
+		eventID, err := ulid.Parse(e.EventID)
+		if err != nil {
+			// Skip invalid event IDs
+			continue
+		}
+		result = append(result, &observability.TelemetryEventRequest{
 			EventID:   eventID,
 			SpanID:    e.SpanID,  // OTLP span_id (populated from brokleEvent)
 			TraceID:   e.TraceID, // OTLP trace_id (populated from brokleEvent)
@@ -861,7 +863,7 @@ func convertToDomainEvents(events []*brokleEvent) []*observability.TelemetryEven
 				}
 				return nil
 			}(),
-		}
+		})
 	}
 	return result
 }
@@ -936,12 +938,12 @@ func (s *OTLPConverterService) calculateAndInjectCosts(ctx context.Context, attr
 	attrs["brokle.cost.total"] = costBreakdown.TotalCost
 
 	s.logger.WithFields(logrus.Fields{
-		"model":        modelName,
-		"input_tokens": inputTokens,
+		"model":         modelName,
+		"input_tokens":  inputTokens,
 		"output_tokens": outputTokens,
-		"total_cost":   costBreakdown.TotalCost,
-		"cache_hit":    cacheHit,
-		"batch_mode":   batchMode,
+		"total_cost":    costBreakdown.TotalCost,
+		"cache_hit":     cacheHit,
+		"batch_mode":    batchMode,
 	}).Debug("Costs calculated successfully")
 }
 

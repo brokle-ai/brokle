@@ -1,31 +1,34 @@
 package pagination
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
 
 // Params represents offset-based pagination parameters
 // Embed this struct in domain filters for DRY pagination
 type Params struct {
-	Page    int    `json:"page"`     // Page number (1-indexed)
-	Limit   int    `json:"limit"`    // Items per page (10, 25, 50, 100)
-	SortBy  string `json:"sort_by"`  // Sort field name (domain-specific)
-	SortDir string `json:"sort_dir"` // asc or desc
+	SortBy  string `json:"sort_by"`
+	SortDir string `json:"sort_dir"`
+	Page    int    `json:"page"`
+	Limit   int    `json:"limit"`
 }
 
 // Validate validates pagination parameters
 func (p *Params) Validate() error {
 	// Validate page number (must be >= 1)
 	if p.Page < 1 {
-		return fmt.Errorf("page must be >= 1")
+		return errors.New("page must be >= 1")
 	}
 
 	// Validate limit
 	if p.Limit != 0 && !IsValidPageSize(p.Limit) {
-		return fmt.Errorf("limit must be one of: 10, 25, 50, 100")
+		return errors.New("limit must be one of: 10, 25, 50, 100")
 	}
 
 	// Validate sort direction
 	if p.SortDir != "" && p.SortDir != "asc" && p.SortDir != "desc" {
-		return fmt.Errorf("sort_dir must be 'asc' or 'desc'")
+		return errors.New("sort_dir must be 'asc' or 'desc'")
 	}
 
 	// Validate maximum offset to prevent performance issues

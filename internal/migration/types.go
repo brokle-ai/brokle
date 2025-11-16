@@ -23,19 +23,19 @@ const (
 // MigrationStatus represents the status of a migration
 type MigrationStatus struct {
 	Database        DatabaseType `json:"database"`
-	CurrentVersion  uint         `json:"current_version"`
-	IsDirty         bool         `json:"is_dirty"`
-	Status          string       `json:"status"` // "healthy", "dirty", "error"
+	Status          string       `json:"status"`
 	Error           string       `json:"error,omitempty"`
 	MigrationsPath  string       `json:"migrations_path"`
+	CurrentVersion  uint         `json:"current_version"`
 	TotalMigrations int          `json:"total_migrations"`
+	IsDirty         bool         `json:"is_dirty"`
 }
 
 // MigrationInfo represents detailed information about migrations
 type MigrationInfo struct {
+	Overall    string          `json:"overall_status"`
 	Postgres   MigrationStatus `json:"postgres"`
 	ClickHouse MigrationStatus `json:"clickhouse"`
-	Overall    string          `json:"overall_status"`
 }
 
 // DatabaseRunner defines the interface for database-specific migration runners

@@ -11,26 +11,26 @@ import (
 // ValidateUserData validates user registration/update data
 func ValidateUserData(data map[string]interface{}) error {
 	v := New()
-	
+
 	// Name validation
 	if name, ok := data["name"].(string); ok {
 		v.Required("name", name).
-		  MinLength("name", name, 2, "name must be at least 2 characters").
-		  MaxLength("name", name, 100, "name must not exceed 100 characters")
+			MinLength("name", name, 2, "name must be at least 2 characters").
+			MaxLength("name", name, 100, "name must not exceed 100 characters")
 	}
-	
+
 	// Email validation
 	if email, ok := data["email"].(string); ok {
 		v.Required("email", email).
-		  Email("email", email)
+			Email("email", email)
 	}
-	
+
 	// Password validation (if provided)
 	if password, ok := data["password"].(string); ok && password != "" {
 		v.MinLength("password", password, 8, "password must be at least 8 characters").
-		  Custom("password", password, IsStrongPassword, "password must contain at least one uppercase letter, one lowercase letter, one number, and one special character")
+			Custom("password", password, IsStrongPassword, "password must contain at least one uppercase letter, one lowercase letter, one number, and one special character")
 	}
-	
+
 	if v.HasErrors() {
 		return v.Errors()
 	}
@@ -40,22 +40,22 @@ func ValidateUserData(data map[string]interface{}) error {
 // ValidateOrganizationData validates organization data
 func ValidateOrganizationData(data map[string]interface{}) error {
 	v := New()
-	
+
 	// Name validation
 	if name, ok := data["name"].(string); ok {
 		v.Required("name", name).
-		  MinLength("name", name, 2, "organization name must be at least 2 characters").
-		  MaxLength("name", name, 100, "organization name must not exceed 100 characters")
+			MinLength("name", name, 2, "organization name must be at least 2 characters").
+			MaxLength("name", name, 100, "organization name must not exceed 100 characters")
 	}
-	
+
 	// Slug validation
 	if slug, ok := data["slug"].(string); ok {
 		v.Required("slug", slug).
-		  MinLength("slug", slug, 3, "slug must be at least 3 characters").
-		  MaxLength("slug", slug, 50, "slug must not exceed 50 characters").
-		  Pattern("slug", slug, `^[a-z0-9][a-z0-9-]*[a-z0-9]$`, "slug must contain only lowercase letters, numbers, and hyphens, and cannot start or end with a hyphen")
+			MinLength("slug", slug, 3, "slug must be at least 3 characters").
+			MaxLength("slug", slug, 50, "slug must not exceed 50 characters").
+			Pattern("slug", slug, `^[a-z0-9][a-z0-9-]*[a-z0-9]$`, "slug must contain only lowercase letters, numbers, and hyphens, and cannot start or end with a hyphen")
 	}
-	
+
 	if v.HasErrors() {
 		return v.Errors()
 	}
@@ -65,25 +65,25 @@ func ValidateOrganizationData(data map[string]interface{}) error {
 // ValidateProjectData validates project data
 func ValidateProjectData(data map[string]interface{}) error {
 	v := New()
-	
+
 	// Name validation
 	if name, ok := data["name"].(string); ok {
 		v.Required("name", name).
-		  MinLength("name", name, 2, "project name must be at least 2 characters").
-		  MaxLength("name", name, 100, "project name must not exceed 100 characters")
+			MinLength("name", name, 2, "project name must be at least 2 characters").
+			MaxLength("name", name, 100, "project name must not exceed 100 characters")
 	}
-	
+
 	// Description validation (optional)
 	if description, ok := data["description"].(string); ok && description != "" {
 		v.MaxLength("description", description, 500, "description must not exceed 500 characters")
 	}
-	
+
 	// Environment validation
 	if environment, ok := data["environment"].(string); ok {
 		v.Required("environment", environment).
-		  OneOf("environment", environment, []string{"development", "staging", "production"}, "environment must be development, staging, or production")
+			OneOf("environment", environment, []string{"development", "staging", "production"}, "environment must be development, staging, or production")
 	}
-	
+
 	if v.HasErrors() {
 		return v.Errors()
 	}
@@ -93,42 +93,42 @@ func ValidateProjectData(data map[string]interface{}) error {
 // ValidateAPIKeyData validates API key data
 func ValidateAPIKeyData(data map[string]interface{}) error {
 	v := New()
-	
+
 	// Name validation
 	if name, ok := data["name"].(string); ok {
 		v.Required("name", name).
-		  MinLength("name", name, 3, "API key name must be at least 3 characters").
-		  MaxLength("name", name, 100, "API key name must not exceed 100 characters")
+			MinLength("name", name, 3, "API key name must be at least 3 characters").
+			MaxLength("name", name, 100, "API key name must not exceed 100 characters")
 	}
-	
+
 	// Permissions validation (optional)
 	if permissions, ok := data["permissions"].([]interface{}); ok && len(permissions) > 0 {
 		for i, perm := range permissions {
 			if permStr, ok := perm.(string); ok {
 				v.Custom(
-					"permissions["+string(rune(i))+"]", 
-					permStr, 
+					"permissions["+string(rune(i))+"]",
+					permStr,
 					func(val interface{}) bool {
 						return IsValidPermission(val.(string))
-					}, 
+					},
 					"invalid permission: "+permStr,
 				)
 			}
 		}
 	}
-	
+
 	// Expiration date validation (optional)
 	if expiresAt, ok := data["expires_at"].(string); ok && expiresAt != "" {
 		v.Date("expires_at", expiresAt, time.RFC3339, "expires_at must be a valid RFC3339 date").
-		  Custom("expires_at", expiresAt, func(val interface{}) bool {
-			t, err := time.Parse(time.RFC3339, val.(string))
-			if err != nil {
-				return false
-			}
-			return t.After(time.Now())
-		}, "expires_at must be in the future")
+			Custom("expires_at", expiresAt, func(val interface{}) bool {
+				t, err := time.Parse(time.RFC3339, val.(string))
+				if err != nil {
+					return false
+				}
+				return t.After(time.Now())
+			}, "expires_at must be in the future")
 	}
-	
+
 	if v.HasErrors() {
 		return v.Errors()
 	}
@@ -138,31 +138,31 @@ func ValidateAPIKeyData(data map[string]interface{}) error {
 // ValidateAIRoutingConfig validates AI routing configuration
 func ValidateAIRoutingConfig(data map[string]interface{}) error {
 	v := New()
-	
+
 	// Provider validation
 	if provider, ok := data["provider"].(string); ok {
 		v.Required("provider", provider).
-		  OneOf("provider", provider, []string{"openai", "anthropic", "cohere", "google", "azure", "aws"}, "unsupported AI provider")
+			OneOf("provider", provider, []string{"openai", "anthropic", "cohere", "google", "azure", "aws"}, "unsupported AI provider")
 	}
-	
+
 	// Model validation
 	if model, ok := data["model"].(string); ok {
 		v.Required("model", model).
-		  MinLength("model", model, 1, "model is required").
-		  MaxLength("model", model, 100, "model name too long")
+			MinLength("model", model, 1, "model is required").
+			MaxLength("model", model, 100, "model name too long")
 	}
-	
+
 	// Temperature validation (optional)
 	if temperature, ok := data["temperature"]; ok {
 		v.Range("temperature", temperature, 0.0, 2.0, "temperature must be between 0.0 and 2.0")
 	}
-	
+
 	// Max tokens validation (optional)
 	if maxTokens, ok := data["max_tokens"]; ok {
 		v.Min("max_tokens", maxTokens, 1, "max_tokens must be at least 1").
-		  Max("max_tokens", maxTokens, 128000, "max_tokens cannot exceed 128000")
+			Max("max_tokens", maxTokens, 128000, "max_tokens cannot exceed 128000")
 	}
-	
+
 	if v.HasErrors() {
 		return v.Errors()
 	}
@@ -172,23 +172,23 @@ func ValidateAIRoutingConfig(data map[string]interface{}) error {
 // ValidateBillingData validates billing configuration
 func ValidateBillingData(data map[string]interface{}) error {
 	v := New()
-	
+
 	// Plan validation
 	if plan, ok := data["plan"].(string); ok {
 		v.Required("plan", plan).
-		  OneOf("plan", plan, []string{"free", "pro", "business", "enterprise"}, "invalid billing plan")
+			OneOf("plan", plan, []string{"free", "pro", "business", "enterprise"}, "invalid billing plan")
 	}
-	
+
 	// Usage limit validation (optional)
 	if usageLimit, ok := data["usage_limit"]; ok {
 		v.Min("usage_limit", usageLimit, 0, "usage_limit cannot be negative")
 	}
-	
+
 	// Billing email validation (optional)
 	if billingEmail, ok := data["billing_email"].(string); ok && billingEmail != "" {
 		v.Email("billing_email", billingEmail)
 	}
-	
+
 	if v.HasErrors() {
 		return v.Errors()
 	}
@@ -198,27 +198,27 @@ func ValidateBillingData(data map[string]interface{}) error {
 // ValidatePaginationParams validates pagination parameters
 func ValidatePaginationParams(data map[string]interface{}) error {
 	v := New()
-	
+
 	// Page validation
 	if page, ok := data["page"]; ok {
 		v.Min("page", page, 1, "page must be at least 1")
 	}
-	
+
 	// Page size validation
 	if pageSize, ok := data["page_size"]; ok {
 		v.Range("page_size", pageSize, 1, 100, "page_size must be between 1 and 100")
 	}
-	
+
 	// Sort field validation (optional)
 	if sortBy, ok := data["sort_by"].(string); ok && sortBy != "" {
 		v.Pattern("sort_by", sortBy, `^[a-zA-Z_][a-zA-Z0-9_]*$`, "sort_by must be a valid field name")
 	}
-	
+
 	// Sort order validation (optional)
 	if sortOrder, ok := data["sort_order"].(string); ok && sortOrder != "" {
 		v.OneOf("sort_order", sortOrder, []string{"asc", "desc"}, "sort_order must be 'asc' or 'desc'")
 	}
-	
+
 	if v.HasErrors() {
 		return v.Errors()
 	}
@@ -228,21 +228,21 @@ func ValidatePaginationParams(data map[string]interface{}) error {
 // ValidateWebSocketMessage validates WebSocket message format
 func ValidateWebSocketMessage(data map[string]interface{}) error {
 	v := New()
-	
+
 	// Type validation
 	if msgType, ok := data["type"].(string); ok {
 		v.Required("type", msgType).
-		  OneOf("type", msgType, []string{"subscribe", "unsubscribe", "message", "ping", "pong"}, "invalid message type")
+			OneOf("type", msgType, []string{"subscribe", "unsubscribe", "message", "ping", "pong"}, "invalid message type")
 	}
-	
+
 	// Channel validation (for subscribe/unsubscribe)
 	if msgType, ok := data["type"].(string); ok && (msgType == "subscribe" || msgType == "unsubscribe") {
 		if channel, ok := data["channel"].(string); ok {
 			v.Required("channel", channel).
-			  Pattern("channel", channel, `^[a-zA-Z0-9_.-]+$`, "channel name contains invalid characters")
+				Pattern("channel", channel, `^[a-zA-Z0-9_.-]+$`, "channel name contains invalid characters")
 		}
 	}
-	
+
 	if v.HasErrors() {
 		return v.Errors()
 	}
@@ -257,16 +257,16 @@ func IsStrongPassword(password interface{}) bool {
 	if !ok {
 		return false
 	}
-	
+
 	if len(pwd) < 8 {
 		return false
 	}
-	
+
 	hasUpper := regexp.MustCompile(`[A-Z]`).MatchString(pwd)
 	hasLower := regexp.MustCompile(`[a-z]`).MatchString(pwd)
 	hasNumber := regexp.MustCompile(`\d`).MatchString(pwd)
 	hasSpecial := regexp.MustCompile(`[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]`).MatchString(pwd)
-	
+
 	return hasUpper && hasLower && hasNumber && hasSpecial
 }
 
@@ -281,13 +281,13 @@ func IsValidPermission(permission string) bool {
 		"api_keys:read", "api_keys:write", "api_keys:admin",
 		"routing:read", "routing:write", "routing:admin",
 	}
-	
+
 	for _, valid := range validPermissions {
 		if permission == valid {
 			return true
 		}
 	}
-	
+
 	// Also allow resource-specific permissions like "project:123:read"
 	resourcePattern := regexp.MustCompile(`^[a-z_]+:[a-zA-Z0-9_-]+:(read|write|admin)$`)
 	return resourcePattern.MatchString(permission)
@@ -298,7 +298,7 @@ func IsValidSlug(slug string) bool {
 	if len(slug) < 3 || len(slug) > 50 {
 		return false
 	}
-	
+
 	// Must start and end with alphanumeric, can contain hyphens in between
 	pattern := regexp.MustCompile(`^[a-z0-9][a-z0-9-]*[a-z0-9]$`)
 	return pattern.MatchString(slug)
@@ -335,7 +335,7 @@ func IsValidProviderModel(provider, model string) bool {
 			"gemini-pro", "gemini-pro-vision", "text-bison", "chat-bison",
 		},
 	}
-	
+
 	if models, exists := validCombinations[provider]; exists {
 		for _, validModel := range models {
 			if model == validModel {
@@ -343,7 +343,7 @@ func IsValidProviderModel(provider, model string) bool {
 			}
 		}
 	}
-	
+
 	return false
 }
 
@@ -359,13 +359,13 @@ func IsValidLanguageCode(code string) bool {
 		"en", "es", "fr", "de", "it", "pt", "ru", "ja", "ko", "zh",
 		"ar", "hi", "th", "vi", "nl", "sv", "da", "no", "fi", "pl",
 	}
-	
+
 	for _, valid := range validCodes {
 		if strings.ToLower(code) == valid {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -375,13 +375,13 @@ func IsValidCurrency(code string) bool {
 		"USD", "EUR", "GBP", "JPY", "AUD", "CAD", "CHF", "CNY", "SEK", "NZD",
 		"MXN", "SGD", "HKD", "NOK", "KRW", "TRY", "RUB", "INR", "BRL", "ZAR",
 	}
-	
+
 	for _, valid := range validCurrencies {
 		if strings.ToUpper(code) == valid {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -392,12 +392,12 @@ func IsValidCountryCode(code string) bool {
 		"US", "GB", "DE", "FR", "CA", "AU", "JP", "KR", "CN", "IN",
 		"BR", "MX", "RU", "IT", "ES", "NL", "SE", "NO", "DK", "FI",
 	}
-	
+
 	for _, valid := range validCodes {
 		if strings.ToUpper(code) == valid {
 			return true
 		}
 	}
-	
+
 	return false
 }

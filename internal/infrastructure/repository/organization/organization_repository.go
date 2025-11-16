@@ -139,20 +139,18 @@ func (r *organizationRepository) GetOrganizationsByUserID(ctx context.Context, u
 
 // orgProjectRow represents a row from the batch query joining orgs, projects, and roles
 type orgProjectRow struct {
-	OrgID        ulid.ULID
-	OrgName      string
-	OrgPlan      string
-	OrgCreatedAt time.Time
-	OrgUpdatedAt time.Time
-	RoleName     string
-
-	// Project fields - nullable from LEFT JOIN
+	OrgCreatedAt   time.Time
+	OrgUpdatedAt   time.Time
 	ProjectID      *ulid.ULID
 	ProjectName    *string
 	ProjectDesc    *string
 	ProjectOrgID   *ulid.ULID
 	ProjectCreated *time.Time
 	ProjectUpdated *time.Time
+	OrgName        string
+	OrgPlan        string
+	RoleName       string
+	OrgID          ulid.ULID
 }
 
 // GetUserOrganizationsWithProjectsBatch fetches all user's organizations with nested projects in a single optimized query

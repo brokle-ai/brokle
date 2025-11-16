@@ -20,41 +20,41 @@ type DiscountCalculator struct {
 
 // DiscountCalculation represents the result of discount calculation
 type DiscountCalculation struct {
+	Currency         string            `json:"currency"`
+	AppliedDiscounts []AppliedDiscount `json:"applied_discounts"`
 	OriginalAmount   float64           `json:"original_amount"`
 	TotalDiscount    float64           `json:"total_discount"`
 	NetAmount        float64           `json:"net_amount"`
-	AppliedDiscounts []AppliedDiscount `json:"applied_discounts"`
-	Currency         string            `json:"currency"`
 }
 
 // AppliedDiscount represents a discount that was applied
 type AppliedDiscount struct {
-	RuleID      ulid.ULID                  `json:"rule_id"`
 	RuleName    string                     `json:"rule_name"`
 	Type        billingDomain.DiscountType `json:"type"`
+	Description string                     `json:"description"`
 	Value       float64                    `json:"value"`
 	Amount      float64                    `json:"amount"`
-	Description string                     `json:"description"`
+	RuleID      ulid.ULID                  `json:"rule_id"`
 }
 
 // DiscountContext provides context for discount calculation
 type DiscountContext struct {
-	OrganizationID  ulid.ULID  `json:"organization_id"`
-	BillingTier     string     `json:"billing_tier"`
+	Timestamp       time.Time  `json:"timestamp"`
 	UsageSummary    *UsageData `json:"usage_summary"`
 	RequestType     *string    `json:"request_type,omitempty"`
 	ProviderID      *ulid.ULID `json:"provider_id,omitempty"`
 	ModelID         *ulid.ULID `json:"model_id,omitempty"`
+	BillingTier     string     `json:"billing_tier"`
+	OrganizationID  ulid.ULID  `json:"organization_id"`
 	IsFirstCustomer bool       `json:"is_first_customer"`
-	Timestamp       time.Time  `json:"timestamp"`
 }
 
 // UsageData represents usage data for discount calculation
 type UsageData struct {
+	Currency      string  `json:"currency"`
 	TotalRequests int64   `json:"total_requests"`
 	TotalTokens   int64   `json:"total_tokens"`
 	TotalCost     float64 `json:"total_cost"`
-	Currency      string  `json:"currency"`
 }
 
 // NewDiscountCalculator creates a new discount calculator
@@ -234,7 +234,7 @@ func (c *DiscountCalculator) filterApplicableRules(
 	}
 
 	// Sort by priority (highest first)
-	for i := 0; i < len(applicable)-1; i++ {
+	for i := range len(applicable) - 1 {
 		for j := i + 1; j < len(applicable); j++ {
 			if applicable[i].Priority < applicable[j].Priority {
 				applicable[i], applicable[j] = applicable[j], applicable[i]
@@ -442,7 +442,7 @@ func (c *DiscountCalculator) calculateVolumeDiscount(amount float64, volumeDisco
 	tiers := make([]billingDomain.VolumeTier, len(volumeDiscount.Tiers))
 	copy(tiers, volumeDiscount.Tiers)
 
-	for i := 0; i < len(tiers)-1; i++ {
+	for i := range len(tiers) - 1 {
 		for j := i + 1; j < len(tiers); j++ {
 			if tiers[i].MinAmount > tiers[j].MinAmount {
 				tiers[i], tiers[j] = tiers[j], tiers[i]

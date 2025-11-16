@@ -3,6 +3,7 @@ package workers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -21,36 +22,36 @@ type NotificationWorker struct {
 
 // NotificationJob represents a notification processing job
 type NotificationJob struct {
-	Type      string      `json:"type"`
-	Data      interface{} `json:"data"`
 	Timestamp time.Time   `json:"timestamp"`
+	Data      interface{} `json:"data"`
+	Type      string      `json:"type"`
 	Retry     int         `json:"retry"`
 }
 
 // EmailJob represents an email notification job
 type EmailJob struct {
-	To           []string               `json:"to"`
-	CC           []string               `json:"cc,omitempty"`
-	BCC          []string               `json:"bcc,omitempty"`
+	TemplateData map[string]interface{} `json:"template_data,omitempty"`
 	Subject      string                 `json:"subject"`
 	Body         string                 `json:"body"`
 	BodyHTML     string                 `json:"body_html,omitempty"`
 	Template     string                 `json:"template,omitempty"`
-	TemplateData map[string]interface{} `json:"template_data,omitempty"`
 	Priority     string                 `json:"priority,omitempty"`
 	UserID       string                 `json:"user_id,omitempty"`
+	To           []string               `json:"to"`
+	CC           []string               `json:"cc,omitempty"`
+	BCC          []string               `json:"bcc,omitempty"`
 }
 
 // WebhookJob represents a webhook notification job
 type WebhookJob struct {
-	URL        string                 `json:"url"`
-	Method     string                 `json:"method"`
 	Headers    map[string]string      `json:"headers,omitempty"`
 	Payload    map[string]interface{} `json:"payload"`
-	Timeout    int                    `json:"timeout,omitempty"`
-	RetryCount int                    `json:"retry_count,omitempty"`
+	URL        string                 `json:"url"`
+	Method     string                 `json:"method"`
 	UserID     string                 `json:"user_id,omitempty"`
 	EventType  string                 `json:"event_type,omitempty"`
+	Timeout    int                    `json:"timeout,omitempty"`
+	RetryCount int                    `json:"retry_count,omitempty"`
 }
 
 // SlackJob represents a Slack notification job
@@ -59,9 +60,9 @@ type SlackJob struct {
 	Message   string                   `json:"message"`
 	Username  string                   `json:"username,omitempty"`
 	IconEmoji string                   `json:"icon_emoji,omitempty"`
-	Blocks    []map[string]interface{} `json:"blocks,omitempty"`
 	UserID    string                   `json:"user_id,omitempty"`
 	EventType string                   `json:"event_type,omitempty"`
+	Blocks    []map[string]interface{} `json:"blocks,omitempty"`
 }
 
 // SMSJob represents an SMS notification job
@@ -73,13 +74,13 @@ type SMSJob struct {
 
 // PushJob represents a push notification job
 type PushJob struct {
-	DeviceTokens []string               `json:"device_tokens"`
+	Data         map[string]interface{} `json:"data,omitempty"`
 	Title        string                 `json:"title"`
 	Body         string                 `json:"body"`
-	Data         map[string]interface{} `json:"data,omitempty"`
-	Badge        int                    `json:"badge,omitempty"`
 	Sound        string                 `json:"sound,omitempty"`
 	UserID       string                 `json:"user_id,omitempty"`
+	DeviceTokens []string               `json:"device_tokens"`
+	Badge        int                    `json:"badge,omitempty"`
 }
 
 // NewNotificationWorker creates a new notification worker
@@ -105,7 +106,7 @@ func (w *NotificationWorker) Start() {
 		numWorkers = 2 // Default
 	}
 
-	for i := 0; i < numWorkers; i++ {
+	for i := range numWorkers {
 		go w.worker(i)
 	}
 }
@@ -236,7 +237,7 @@ func (w *NotificationWorker) processEmail(ctx context.Context, data interface{})
 				return fmt.Errorf("failed to unmarshal email data: %w", err)
 			}
 		} else {
-			return fmt.Errorf("invalid email data type")
+			return errors.New("invalid email data type")
 		}
 	}
 
@@ -270,7 +271,7 @@ func (w *NotificationWorker) processWebhook(ctx context.Context, data interface{
 				return fmt.Errorf("failed to unmarshal webhook data: %w", err)
 			}
 		} else {
-			return fmt.Errorf("invalid webhook data type")
+			return errors.New("invalid webhook data type")
 		}
 	}
 
@@ -304,7 +305,7 @@ func (w *NotificationWorker) processSlack(ctx context.Context, data interface{})
 				return fmt.Errorf("failed to unmarshal slack data: %w", err)
 			}
 		} else {
-			return fmt.Errorf("invalid slack data type")
+			return errors.New("invalid slack data type")
 		}
 	}
 
@@ -337,7 +338,7 @@ func (w *NotificationWorker) processSMS(ctx context.Context, data interface{}) e
 				return fmt.Errorf("failed to unmarshal sms data: %w", err)
 			}
 		} else {
-			return fmt.Errorf("invalid sms data type")
+			return errors.New("invalid sms data type")
 		}
 	}
 
@@ -367,7 +368,7 @@ func (w *NotificationWorker) processPush(ctx context.Context, data interface{}) 
 				return fmt.Errorf("failed to unmarshal push data: %w", err)
 			}
 		} else {
-			return fmt.Errorf("invalid push data type")
+			return errors.New("invalid push data type")
 		}
 	}
 

@@ -65,9 +65,9 @@ func main() {
 	if cfg.Database.AutoMigrate {
 		log.Println("Running database migrations...")
 
-		migrationManager, err := migration.NewManager(cfg)
-		if err != nil {
-			log.Fatalf("Failed to initialize migration manager: %v", err)
+		migrationManager, migErr := migration.NewManager(cfg)
+		if migErr != nil {
+			log.Fatalf("Failed to initialize migration manager: %v", migErr)
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
@@ -89,7 +89,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to initialize server: %v", err)
 	}
-	defer application.Shutdown(context.Background())
+	defer func() {
+		if err := application.Shutdown(context.Background()); err != nil {
+			log.Printf("Error during shutdown: %v", err)
+		}
+	}()
 
 	// Start the HTTP server
 	if err := application.Start(); err != nil {

@@ -10,10 +10,10 @@ type EventType string
 
 const (
 	// System Events
-	EventSystemStarted   EventType = "system.started"
-	EventSystemShutdown  EventType = "system.shutdown"
-	EventSystemError     EventType = "system.error"
-	EventSystemHealth    EventType = "system.health"
+	EventSystemStarted  EventType = "system.started"
+	EventSystemShutdown EventType = "system.shutdown"
+	EventSystemError    EventType = "system.error"
+	EventSystemHealth   EventType = "system.health"
 
 	// User Events
 	EventUserConnected    EventType = "user.connected"
@@ -47,10 +47,10 @@ const (
 	EventMetricUpdate    EventType = "metric.update"
 
 	// Billing Events
-	EventUsageThreshold  EventType = "billing.usage_threshold"
-	EventQuotaWarning    EventType = "billing.quota_warning"
-	EventQuotaExceeded   EventType = "billing.quota_exceeded"
-	EventBillingUpdated  EventType = "billing.updated"
+	EventUsageThreshold EventType = "billing.usage_threshold"
+	EventQuotaWarning   EventType = "billing.quota_warning"
+	EventQuotaExceeded  EventType = "billing.quota_exceeded"
+	EventBillingUpdated EventType = "billing.updated"
 
 	// Cache Events
 	EventCacheHit    EventType = "cache.hit"
@@ -59,15 +59,15 @@ const (
 	EventCacheEvict  EventType = "cache.evict"
 
 	// Analytics Events
-	EventAnalyticsComputed   EventType = "analytics.computed"
-	EventAnalyticsExported   EventType = "analytics.exported"
-	EventDashboardRefreshed  EventType = "analytics.dashboard_refreshed"
+	EventAnalyticsComputed  EventType = "analytics.computed"
+	EventAnalyticsExported  EventType = "analytics.exported"
+	EventDashboardRefreshed EventType = "analytics.dashboard_refreshed"
 
 	// Organization Events
-	EventOrgCreated   EventType = "org.created"
-	EventOrgUpdated   EventType = "org.updated"
-	EventOrgDeleted   EventType = "org.deleted"
-	EventMemberAdded  EventType = "org.member_added"
+	EventOrgCreated    EventType = "org.created"
+	EventOrgUpdated    EventType = "org.updated"
+	EventOrgDeleted    EventType = "org.deleted"
+	EventMemberAdded   EventType = "org.member_added"
 	EventMemberRemoved EventType = "org.member_removed"
 
 	// Project Events
@@ -76,7 +76,7 @@ const (
 	EventProjectDeleted EventType = "project.deleted"
 
 	// Configuration Events
-	EventConfigChanged EventType = "config.changed"
+	EventConfigChanged   EventType = "config.changed"
 	EventSettingsUpdated EventType = "config.settings_updated"
 
 	// Notification Events
@@ -259,15 +259,15 @@ func (e *Event) Clone() *Event {
 
 // EventFilter represents a filter for events
 type EventFilter struct {
-	Types       []EventType           `json:"types,omitempty"`
-	Sources     []string              `json:"sources,omitempty"`
-	Priorities  []Priority            `json:"priorities,omitempty"`
-	UserID      string                `json:"user_id,omitempty"`
-	OrgID       string                `json:"org_id,omitempty"`
-	ProjectID   string                `json:"project_id,omitempty"`
-	Environment string                `json:"environment,omitempty"`
-	TimeRange   *EventTimeRange       `json:"time_range,omitempty"`
+	TimeRange   *EventTimeRange        `json:"time_range,omitempty"`
 	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	UserID      string                 `json:"user_id,omitempty"`
+	OrgID       string                 `json:"org_id,omitempty"`
+	ProjectID   string                 `json:"project_id,omitempty"`
+	Environment string                 `json:"environment,omitempty"`
+	Types       []EventType            `json:"types,omitempty"`
+	Sources     []string               `json:"sources,omitempty"`
+	Priorities  []Priority             `json:"priorities,omitempty"`
 }
 
 // EventTimeRange represents a time range for event filtering
@@ -357,94 +357,94 @@ func (f *EventFilter) Matches(event *Event) bool {
 
 // RequestEventData represents data for request events
 type RequestEventData struct {
-	RequestID    string                 `json:"request_id"`
+	CustomFields map[string]interface{} `json:"custom_fields,omitempty"`
+	Error        string                 `json:"error,omitempty"`
 	Provider     string                 `json:"provider"`
 	Model        string                 `json:"model"`
 	Method       string                 `json:"method"`
 	Path         string                 `json:"path"`
-	StatusCode   int                    `json:"status_code,omitempty"`
+	RequestID    string                 `json:"request_id"`
 	Tokens       int                    `json:"tokens,omitempty"`
-	Cost         float64                `json:"cost,omitempty"`
 	Latency      float64                `json:"latency,omitempty"`
 	Quality      float64                `json:"quality,omitempty"`
+	Cost         float64                `json:"cost,omitempty"`
+	StatusCode   int                    `json:"status_code,omitempty"`
 	CacheHit     bool                   `json:"cache_hit,omitempty"`
-	Error        string                 `json:"error,omitempty"`
-	CustomFields map[string]interface{} `json:"custom_fields,omitempty"`
 }
 
 // ProviderEventData represents data for provider events
 type ProviderEventData struct {
-	Provider      string  `json:"provider"`
-	Status        string  `json:"status"`
-	Health        float64 `json:"health"`
-	Latency       float64 `json:"latency"`
-	ErrorRate     float64 `json:"error_rate"`
-	SuccessRate   float64 `json:"success_rate"`
+	Provider       string  `json:"provider"`
+	Status         string  `json:"status"`
+	Health         float64 `json:"health"`
+	Latency        float64 `json:"latency"`
+	ErrorRate      float64 `json:"error_rate"`
+	SuccessRate    float64 `json:"success_rate"`
 	RequestsPerMin int64   `json:"requests_per_min,omitempty"`
 }
 
 // MetricEventData represents data for metric events
 type MetricEventData struct {
-	MetricName  string                 `json:"metric_name"`
-	Value       float64                `json:"value"`
-	PrevValue   float64                `json:"prev_value,omitempty"`
-	Threshold   float64                `json:"threshold,omitempty"`
-	Unit        string                 `json:"unit"`
-	Labels      map[string]string      `json:"labels,omitempty"`
-	Dimensions  map[string]interface{} `json:"dimensions,omitempty"`
+	Labels     map[string]string      `json:"labels,omitempty"`
+	Dimensions map[string]interface{} `json:"dimensions,omitempty"`
+	MetricName string                 `json:"metric_name"`
+	Unit       string                 `json:"unit"`
+	Value      float64                `json:"value"`
+	PrevValue  float64                `json:"prev_value,omitempty"`
+	Threshold  float64                `json:"threshold,omitempty"`
 }
 
 // UsageEventData represents data for usage/billing events
 type UsageEventData struct {
 	ResourceType string  `json:"resource_type"`
+	Period       string  `json:"period"`
+	Currency     string  `json:"currency,omitempty"`
 	Usage        int64   `json:"usage"`
 	Limit        int64   `json:"limit"`
 	Percentage   float64 `json:"percentage"`
-	Period       string  `json:"period"`
 	Cost         float64 `json:"cost,omitempty"`
-	Currency     string  `json:"currency,omitempty"`
 }
 
 // CacheEventData represents data for cache events
 type CacheEventData struct {
-	Key         string  `json:"key"`
-	Size        int     `json:"size,omitempty"`
-	TTL         int64   `json:"ttl,omitempty"`
-	Similarity  float64 `json:"similarity,omitempty"`
-	SavedCost   float64 `json:"saved_cost,omitempty"`
-	SavedTime   float64 `json:"saved_time,omitempty"`
-	Provider    string  `json:"provider,omitempty"`
-	Model       string  `json:"model,omitempty"`
+	Key        string  `json:"key"`
+	Provider   string  `json:"provider,omitempty"`
+	Model      string  `json:"model,omitempty"`
+	Size       int     `json:"size,omitempty"`
+	TTL        int64   `json:"ttl,omitempty"`
+	Similarity float64 `json:"similarity,omitempty"`
+	SavedCost  float64 `json:"saved_cost,omitempty"`
+	SavedTime  float64 `json:"saved_time,omitempty"`
 }
 
 // OrganizationEventData represents data for organization events
 type OrganizationEventData struct {
+	Changes     map[string]interface{} `json:"changes,omitempty"`
 	Name        string                 `json:"name"`
 	Slug        string                 `json:"slug,omitempty"`
 	Plan        string                 `json:"plan,omitempty"`
 	MemberCount int                    `json:"member_count,omitempty"`
-	Changes     map[string]interface{} `json:"changes,omitempty"`
 }
 
 // ProjectEventData represents data for project events
 type ProjectEventData struct {
+	Changes     map[string]interface{} `json:"changes,omitempty"`
 	Name        string                 `json:"name"`
 	Environment string                 `json:"environment"`
 	Status      string                 `json:"status,omitempty"`
-	Changes     map[string]interface{} `json:"changes,omitempty"`
 }
 
 // NotificationEventData represents data for notification events
 type NotificationEventData struct {
-	NotificationID string `json:"notification_id"`
-	Type           string `json:"type"`
-	Channel        string `json:"channel"`
-	Title          string `json:"title"`
-	Message        string `json:"message"`
-	Priority       string `json:"priority"`
-	Delivered      bool   `json:"delivered"`
 	DeliveredAt    *time.Time `json:"delivered_at,omitempty"`
 	ReadAt         *time.Time `json:"read_at,omitempty"`
+	NotificationID string     `json:"notification_id"`
+	Type           string     `json:"type"`
+	Channel        string     `json:"channel"`
+	Title          string     `json:"title"`
+	Message        string     `json:"message"`
+	Priority       string     `json:"priority"`
+	Delivered      bool       `json:"delivered"`
 }
 
 // Helper functions for creating common events
@@ -469,7 +469,7 @@ func NewMetricEvent(eventType EventType, metricData *MetricEventData) *Event {
 	if eventType == EventMetricThreshold || eventType == EventMetricAnomaly {
 		priority = PriorityHigh
 	}
-	
+
 	return NewEvent(eventType, metricData).
 		SetSubject("metrics").
 		SetSource("analytics").
@@ -484,7 +484,7 @@ func NewUsageEvent(eventType EventType, usageData *UsageEventData) *Event {
 	} else if eventType == EventQuotaWarning {
 		priority = PriorityHigh
 	}
-	
+
 	return NewEvent(eventType, usageData).
 		SetSubject("billing").
 		SetSource("billing-service").

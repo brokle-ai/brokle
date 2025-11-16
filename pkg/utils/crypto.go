@@ -2,9 +2,9 @@ package utils
 
 import (
 	"crypto/hmac"
-	"crypto/md5"
+	"crypto/md5" //nolint:gosec // MD5 supported for legacy compatibility only
 	cryptoRand "crypto/rand"
-	"crypto/sha1"
+	"crypto/sha1" //nolint:gosec // SHA1 supported for legacy compatibility only
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/base64"
@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"hash"
 	"io"
-	"math/rand"
 	"time"
 
 	"github.com/oklog/ulid/v2"
@@ -44,7 +43,7 @@ func CheckPassword(password, hash string) bool {
 // GenerateSecureToken generates a cryptographically secure random token
 func GenerateSecureToken(length int) (string, error) {
 	bytes := make([]byte, length)
-	if _, err := rand.Read(bytes); err != nil {
+	if _, err := cryptoRand.Read(bytes); err != nil {
 		return "", fmt.Errorf("failed to generate secure token: %w", err)
 	}
 	return base64.URLEncoding.EncodeToString(bytes), nil
@@ -53,7 +52,7 @@ func GenerateSecureToken(length int) (string, error) {
 // GenerateHexToken generates a cryptographically secure random token in hex format
 func GenerateHexToken(length int) (string, error) {
 	bytes := make([]byte, length)
-	if _, err := rand.Read(bytes); err != nil {
+	if _, err := cryptoRand.Read(bytes); err != nil {
 		return "", fmt.Errorf("failed to generate hex token: %w", err)
 	}
 	return hex.EncodeToString(bytes), nil
@@ -64,10 +63,9 @@ func GenerateAPIKey(prefix string) (string, error) {
 	if prefix == "" {
 		prefix = "bk"
 	}
-	
-	entropy := rand.New(rand.NewSource(time.Now().UnixNano()))
-	id := ulid.MustNew(ulid.Timestamp(time.Now()), entropy)
-	
+
+	id := ulid.MustNew(ulid.Timestamp(time.Now()), cryptoRand.Reader)
+
 	// Create API key format: prefix_env_ulid (e.g., bk_live_01ARZ3NDEKTSV4RRFFQ69G5FAV)
 	return fmt.Sprintf("%s_live_%s", prefix, id.String()), nil
 }
@@ -163,7 +161,7 @@ func DecodeBase64URL(data string) ([]byte, error) {
 // GenerateSalt generates a cryptographic salt
 func GenerateSalt(length int) ([]byte, error) {
 	salt := make([]byte, length)
-	if _, err := rand.Read(salt); err != nil {
+	if _, err := cryptoRand.Read(salt); err != nil {
 		return nil, fmt.Errorf("failed to generate salt: %w", err)
 	}
 	return salt, nil
@@ -197,14 +195,12 @@ func HashAPIKey(apiKey string) (string, error) {
 
 // GenerateULID generates a new ULID
 func GenerateULID() string {
-	entropy := rand.New(rand.NewSource(time.Now().UnixNano()))
-	return ulid.MustNew(ulid.Timestamp(time.Now()), entropy).String()
+	return ulid.MustNew(ulid.Timestamp(time.Now()), cryptoRand.Reader).String()
 }
 
 // GenerateULIDWithTime generates a ULID with specific timestamp
 func GenerateULIDWithTime(t time.Time) string {
-	entropy := rand.New(rand.NewSource(time.Now().UnixNano()))
-	return ulid.MustNew(ulid.Timestamp(t), entropy).String()
+	return ulid.MustNew(ulid.Timestamp(t), cryptoRand.Reader).String()
 }
 
 // ParseULID parses a ULID string and returns the ULID
@@ -221,14 +217,13 @@ func ULIDTime(id string) (time.Time, error) {
 	return ulid.Time(parsed.Time()), nil
 }
 
-// GenerateTestAPIKey generates a test API key with ULID  
+// GenerateTestAPIKey generates a test API key with ULID
 func GenerateTestAPIKey(prefix string) (string, error) {
 	if prefix == "" {
 		prefix = "bk"
 	}
-	
-	entropy := rand.New(rand.NewSource(time.Now().UnixNano()))
-	id := ulid.MustNew(ulid.Timestamp(time.Now()), entropy)
-	
+
+	id := ulid.MustNew(ulid.Timestamp(time.Now()), cryptoRand.Reader)
+
 	return fmt.Sprintf("%s_test_%s", prefix, id.String()), nil
 }
