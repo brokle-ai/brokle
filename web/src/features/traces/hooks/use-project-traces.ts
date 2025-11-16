@@ -1,100 +1,126 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'next/navigation'
 import { useTableSearchParams } from '@/hooks/use-table-search-params'
-import { useTraces } from '../context/traces-context'
-import { traces as allTraces } from '../data/traces'
+import { useProjectOnly } from '@/features/projects'
+import { getProjectTraces } from '../api/traces-api'
 import type { Trace } from '../data/schema'
 
+/**
+ * Hook to fetch and manage project traces with filtering, sorting, and pagination
+ *
+ * Uses React Query for:
+ * - Automatic caching (30 seconds stale time)
+ * - Loading state management
+ * - Error handling
+ * - Background refetching
+ *
+ * Requires:
+ * - Project context (from workspace context)
+ * - Search params for table state (page, filters, sorting)
+ *
+ * @returns Traces data, pagination, loading state, and error state
+ */
 export function useProjectTraces() {
   const searchParams = useSearchParams()
-  const { projectSlug } = useTraces()
-  const [data, setData] = useState<Trace[]>([])
-  const [totalCount, setTotalCount] = useState(0)
-  const [isLoading, setIsLoading] = useState(false)
+  const { currentProject, hasProject, isLoading: isProjectLoading } = useProjectOnly()
 
   const { page, pageSize, filter, status, sortBy, sortOrder } =
     useTableSearchParams(searchParams)
 
-  useEffect(() => {
-    const fetchData = async () => {
-      setIsLoading(true)
-      try {
-        // TODO: Replace with real API call when ready
-        // const result = await getProjectTraces({
-        //   projectSlug,
-        //   page,
-        //   pageSize,
-        //   filter,
-        //   status,
-        //   sortBy,
-        //   sortOrder,
-        // })
+  // Extract project ID from current project
+  const projectId = currentProject?.id
 
-        // MOCK: Simulate server-side filtering, sorting, and pagination
-        let filtered = [...allTraces]
+  // Use React Query for data fetching with automatic caching
+  const {
+    data,
+    isLoading: isTracesLoading,
+    error,
+    refetch,
+  } = useQuery({
+    // Query key includes all parameters that affect the data
+    queryKey: ['traces', projectId, page, pageSize, filter, status, sortBy, sortOrder],
 
-        // Apply global filter (search by trace_id or name)
-        if (filter) {
-          const searchLower = filter.toLowerCase()
-          filtered = filtered.filter(
-            (trace) =>
-              trace.trace_id.toLowerCase().includes(searchLower) ||
-              trace.name.toLowerCase().includes(searchLower)
-          )
-        }
-
-        // Apply status filter (convert UInt8 to string for comparison)
-        if (status.length > 0) {
-          filtered = filtered.filter((trace) => {
-            const statusStr = trace.status_code === 1 ? 'ok' : trace.status_code === 2 ? 'error' : 'unset'
-            return status.includes(statusStr)
-          })
-        }
-
-        // Apply sorting
-        if (sortBy) {
-          filtered.sort((a, b) => {
-            const aVal = a[sortBy as keyof Trace]
-            const bVal = b[sortBy as keyof Trace]
-
-            if (aVal === undefined || bVal === undefined) return 0
-
-            let comparison = 0
-            if (aVal instanceof Date && bVal instanceof Date) {
-              comparison = aVal.getTime() - bVal.getTime()
-            } else if (typeof aVal === 'string' && typeof bVal === 'string') {
-              comparison = aVal.localeCompare(bVal)
-            } else if (typeof aVal === 'number' && typeof bVal === 'number') {
-              comparison = aVal - bVal
-            } else if (aVal < bVal) {
-              comparison = -1
-            } else if (aVal > bVal) {
-              comparison = 1
-            }
-
-            return sortOrder === 'desc' ? -comparison : comparison
-          })
-        }
-
-        // Store total count after filtering
-        const total = filtered.length
-        setTotalCount(total)
-
-        // Apply pagination
-        const start = (page - 1) * pageSize
-        const end = start + pageSize
-        const paginated = filtered.slice(start, end)
-
-        setData(paginated)
-      } finally {
-        setIsLoading(false)
+    // Query function: fetch traces from backend
+    queryFn: async () => {
+      if (!projectId) {
+        throw new Error('No project selected')
       }
-    }
 
-    fetchData()
-  }, [page, pageSize, filter, status, sortBy, sortOrder, projectSlug])
+      return getProjectTraces({
+        projectId,
+        page,
+        pageSize,
+        search: filter || undefined,
+        status: status.length > 0 ? status : undefined,
+        sortBy: sortBy || undefined,
+        sortOrder: sortOrder || undefined,
+      })
+    },
 
-  return { data, totalCount, isLoading }
+    // Only fetch when we have a project ID
+    enabled: !!projectId && hasProject,
+
+    // Cache configuration
+    staleTime: 30_000, // 30 seconds - data is fresh for this duration
+    gcTime: 5 * 60 * 1000, // 5 minutes - keep unused data in cache
+    refetchOnWindowFocus: true, // Refetch when user returns to tab
+    refetchOnReconnect: true, // Refetch when internet reconnects
+
+    // Retry configuration
+    retry: 2, // Retry failed requests twice
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000), // Exponential backoff
+  })
+
+  return {
+    // Data
+    data: data?.traces ?? [],
+    totalCount: data?.totalCount ?? 0,
+    page: data?.page ?? page,
+    pageSize: data?.pageSize ?? pageSize,
+    totalPages: data?.totalPages ?? 0,
+
+    // Loading states
+    isLoading: isProjectLoading || isTracesLoading,
+    isProjectLoading,
+    isTracesLoading,
+
+    // Error state
+    error: error instanceof Error ? error.message : error ? String(error) : null,
+
+    // Actions
+    refetch,
+
+    // Project context
+    hasProject,
+    currentProject,
+  }
+}
+
+/**
+ * Return type for useProjectTraces hook
+ */
+export interface UseProjectTracesReturn {
+  // Data
+  data: Trace[]
+  totalCount: number
+  page: number
+  pageSize: number
+  totalPages: number
+
+  // Loading states
+  isLoading: boolean
+  isProjectLoading: boolean
+  isTracesLoading: boolean
+
+  // Error state
+  error: string | null
+
+  // Actions
+  refetch: () => void
+
+  // Project context
+  hasProject: boolean
+  currentProject: ReturnType<typeof useProjectOnly>['currentProject']
 }

@@ -440,7 +440,6 @@ func (r *traceRepository) Count(ctx context.Context, filter *observability.Trace
 // Helper function to scan a single trace from query row
 func (r *traceRepository) scanTraceRow(row driver.Row) (*observability.Trace, error) {
 	var trace observability.Trace
-	var bookmarked, public uint8
 
 	err := row.Scan(
 		&trace.TraceID, // Renamed from ID
@@ -461,8 +460,8 @@ func (r *traceRepository) scanTraceRow(row driver.Row) (*observability.Trace, er
 		&trace.ServiceName,
 		&trace.ServiceVersion,
 		&trace.Release,
-		&bookmarked,
-		&public,
+		&trace.Bookmarked,
+		&trace.Public,
 		&trace.CreatedAt,
 		&trace.UpdatedAt,
 		&trace.Version,
@@ -472,9 +471,6 @@ func (r *traceRepository) scanTraceRow(row driver.Row) (*observability.Trace, er
 	if err != nil {
 		return nil, fmt.Errorf("scan trace: %w", err)
 	}
-
-	trace.Bookmarked = bookmarked != 0
-	trace.Public = public != 0
 
 	return &trace, nil
 }
@@ -505,8 +501,8 @@ func (r *traceRepository) scanTraces(rows driver.Rows) ([]*observability.Trace, 
 			&trace.ServiceName,
 			&trace.ServiceVersion,
 			&trace.Release,
-			&trace.Bookmarked, // Scan directly into bool
-			&trace.Public,     // Scan directly into bool
+			&trace.Bookmarked,
+			&trace.Public,
 			&trace.CreatedAt,
 			&trace.UpdatedAt,
 			&trace.Version,
