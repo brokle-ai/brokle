@@ -402,14 +402,14 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 // setupSDKRoutes configures SDK routes (/v1/*)
 func (s *Server) setupSDKRoutes(router *gin.RouterGroup) {
 	// OTLP (OpenTelemetry Protocol) ingestion - 100% spec compliant
-	// Standard OTLP endpoint (OpenTelemetry convention)
-	router.POST("/otlp/traces", s.handlers.OTLP.HandleTraces) // Primary OTLP endpoint (supports Protobuf + JSON)
-	// Legacy endpoint (maintained for backward compatibility)
-	router.POST("/traces", s.handlers.OTLP.HandleTraces) // Alias for /otlp/traces
+	// POST /v1/traces - OTLP standard endpoint for trace ingestion
+	// Supports: Protobuf + JSON formats, gzip compression
+	// Compatible with: OpenTelemetry Collector, OTLP SDKs, direct integrations
+	router.POST("/traces", s.handlers.OTLP.HandleTraces)
 
-	// Future OTLP endpoints:
-	// router.POST("/otlp/metrics", s.handlers.OTLP.HandleMetrics) // OTLP metrics ingestion
-	// router.POST("/otlp/logs", s.handlers.OTLP.HandleLogs)       // OTLP logs ingestion
+	// Future OTLP standard endpoints (OpenTelemetry specification):
+	// router.POST("/metrics", s.handlers.OTLP.HandleMetrics) // POST /v1/metrics - OTLP metrics ingestion
+	// router.POST("/logs", s.handlers.OTLP.HandleLogs)       // POST /v1/logs - OTLP logs ingestion
 }
 
 // Shutdown gracefully shuts down the server

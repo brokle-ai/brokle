@@ -377,10 +377,10 @@ The platform implements a clean separation between SDK and Dashboard routes:
 - `POST /v1/route` - AI routing decisions
 
 **Telemetry Ingestion (OpenTelemetry Protocol)**:
-- `POST /v1/otlp/traces` - OTLP traces ingestion (primary endpoint)
-- `POST /v1/traces` - Alternative OTLP traces endpoint
-- Supports: Protobuf (binary) and JSON payloads
+- `POST /v1/traces` - OTLP traces ingestion endpoint (OpenTelemetry standard)
+- Supports: Protobuf (binary) and JSON payloads with explicit Content-Type validation
 - Compression: Automatic gzip decompression via Content-Encoding header
+- Request Limit: 10MB max (DoS protection)
 - Handler: `OTLPHandler` in `internal/transport/http/handlers/observability/otlp.go`
 - Converter: `OTLPConverterService` with intelligent root span detection
 - Processing: Events consumed via Redis streams by `TelemetryStreamConsumer` worker

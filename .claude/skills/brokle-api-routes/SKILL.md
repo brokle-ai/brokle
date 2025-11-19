@@ -17,7 +17,7 @@ Expert guidance for API endpoint development following Brokle's dual-route archi
 **Examples**:
 - `POST /v1/chat/completions` - OpenAI-compatible chat
 - `POST /v1/embeddings` - Embeddings
-- `POST /v1/otlp/traces` - OTLP traces ingestion
+- `POST /v1/traces` - OTLP traces ingestion (OpenTelemetry standard)
 - `GET /v1/models` - Available models
 - `POST /v1/route` - AI routing decisions
 

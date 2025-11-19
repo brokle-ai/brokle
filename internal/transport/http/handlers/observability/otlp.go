@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
 	"time"
 
@@ -73,9 +74,36 @@ func (h *OTLPHandler) HandleTraces(c *gin.Context) {
 	}
 	projectID := projectIDPtr.String()
 
+	// Validate Content-Type header (OTLP specification requires explicit Content-Type)
+	contentType := c.GetHeader("Content-Type")
+	validContentType := strings.Contains(contentType, "application/x-protobuf") ||
+		strings.Contains(contentType, "application/json")
+
+	if !validContentType {
+		h.logger.WithField("content_type", contentType).Warn("Unsupported Content-Type for OTLP endpoint")
+		response.ErrorWithStatus(c, 415, "unsupported_media_type",
+			"Content-Type must be 'application/x-protobuf' or 'application/json'", "")
+		return
+	}
+
+	// Enforce 10MB request size limit (OTEL Collector default, prevents DoS attacks)
+	const maxRequestSize = 10 * 1024 * 1024 // 10MB
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxRequestSize)
+
 	// Read raw request body
 	body, err := io.ReadAll(c.Request.Body)
 	if err != nil {
+		// Check if error is due to size limit
+		if err.Error() == "http: request body too large" {
+			h.logger.WithFields(logrus.Fields{
+				"max_size": maxRequestSize,
+				"error":    err.Error(),
+			}).Warn("OTLP request exceeds maximum size limit")
+			response.ErrorWithStatus(c, 413, "payload_too_large",
+				fmt.Sprintf("Request body exceeds maximum size of %d bytes", maxRequestSize), "")
+			return
+		}
+
 		h.logger.WithError(err).Error("Failed to read OTLP request body")
 		response.BadRequest(c, "invalid request", "Failed to read request body")
 		return
@@ -114,8 +142,7 @@ func (h *OTLPHandler) HandleTraces(c *gin.Context) {
 		}).Info("Gzip decompression successful")
 	}
 
-	// Detect content type and parse accordingly
-	contentType := c.GetHeader("Content-Type")
+	// Parse request based on content type (already validated above)
 	var otlpReq observability.OTLPRequest
 
 	if strings.Contains(contentType, "application/x-protobuf") {
