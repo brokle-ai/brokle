@@ -37,7 +37,7 @@ jobs:
       - name: Run Go linting
         uses: golangci/golangci-lint-action@v6
         with:
-          version: latest
+          version: v2.6.2
           args: --config .golangci.yml
 
   test-frontend:
