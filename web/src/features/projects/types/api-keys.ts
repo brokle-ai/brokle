@@ -30,14 +30,6 @@ export interface CreateAPIKeyRequest {
 }
 
 /**
- * Request payload for updating an existing API key
- * Matches UpdateAPIKeyRequest from internal/transport/http/handlers/apikey/apikey.go
- */
-export interface UpdateAPIKeyRequest {
-  name?: string // 2-100 characters
-}
-
-/**
  * Filter options for listing API keys
  * Used as query parameters for GET /api/v1/projects/:projectId/api-keys
  */

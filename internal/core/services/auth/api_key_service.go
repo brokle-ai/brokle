@@ -108,29 +108,6 @@ func (s *apiKeyService) CountAPIKeys(ctx context.Context, filters *authDomain.AP
 	return s.apiKeyRepo.CountByFilters(ctx, filters)
 }
 
-// UpdateAPIKey updates an existing API key
-func (s *apiKeyService) UpdateAPIKey(ctx context.Context, keyID ulid.ULID, req *authDomain.UpdateAPIKeyRequest) error {
-	// Get existing key
-	apiKey, err := s.apiKeyRepo.GetByID(ctx, keyID)
-	if err != nil {
-		return fmt.Errorf("get API key: %w", err)
-	}
-
-	// Update fields
-	if req.Name != nil {
-		apiKey.Name = *req.Name
-	}
-
-	apiKey.UpdatedAt = time.Now()
-
-	// Save changes
-	if err := s.apiKeyRepo.Update(ctx, apiKey); err != nil {
-		return fmt.Errorf("update API key: %w", err)
-	}
-
-	return nil
-}
-
 // DeleteAPIKey deletes (soft deletes) an API key
 func (s *apiKeyService) DeleteAPIKey(ctx context.Context, keyID ulid.ULID) error {
 	if err := s.apiKeyRepo.Delete(ctx, keyID); err != nil {

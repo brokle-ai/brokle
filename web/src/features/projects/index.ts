@@ -6,7 +6,6 @@ export { useCreateProjectMutation } from './hooks/use-project-queries'
 export {
   useAPIKeysQuery,
   useCreateAPIKeyMutation,
-  useUpdateAPIKeyMutation,
   useDeleteAPIKeyMutation,
   apiKeyQueryKeys
 } from './hooks/use-api-key-queries'
@@ -15,7 +14,6 @@ export {
 export {
   listAPIKeys,
   createAPIKey,
-  updateAPIKey,
   deleteAPIKey,
   createKeyPreview,
   validateAPIKeyFormat
@@ -41,7 +39,6 @@ export { useDashboardStore } from './stores/dashboard-store'
 export type {
   APIKey,
   CreateAPIKeyRequest,
-  UpdateAPIKeyRequest,
   APIKeyFilters,
   APIKeyListResponse,
   APIKeyResponse

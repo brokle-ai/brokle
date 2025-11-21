@@ -70,7 +70,6 @@ type APIKeyService interface {
 	CreateAPIKey(ctx context.Context, userID ulid.ULID, req *CreateAPIKeyRequest) (*CreateAPIKeyResponse, error)
 	GetAPIKey(ctx context.Context, keyID ulid.ULID) (*APIKey, error)
 	GetAPIKeys(ctx context.Context, filters *APIKeyFilters) ([]*APIKey, error)
-	UpdateAPIKey(ctx context.Context, keyID ulid.ULID, req *UpdateAPIKeyRequest) error
 	DeleteAPIKey(ctx context.Context, keyID ulid.ULID) error
 
 	// API key validation and usage
@@ -270,10 +269,6 @@ type CreateSessionRequest struct {
 	IPAddress *string `json:"ip_address,omitempty"`
 	UserAgent *string `json:"user_agent,omitempty"`
 	Remember  bool    `json:"remember"` // Extend session duration
-}
-
-type UpdateAPIKeyRequest struct {
-	Name *string `json:"name,omitempty" validate:"omitempty,min=1,max=100"`
 }
 
 // Filter types

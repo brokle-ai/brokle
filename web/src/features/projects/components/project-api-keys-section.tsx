@@ -27,7 +27,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { toast } from 'sonner'
-import { useAPIKeysQuery, useCreateAPIKeyMutation, useUpdateAPIKeyMutation, useDeleteAPIKeyMutation } from '../hooks/use-api-key-queries'
+import { useAPIKeysQuery, useCreateAPIKeyMutation, useDeleteAPIKeyMutation } from '../hooks/use-api-key-queries'
 import type { APIKey } from '../types/api-keys'
 
 export function ProjectAPIKeysSection() {
@@ -36,7 +36,6 @@ export function ProjectAPIKeysSection() {
   // React Query hooks
   const { data: apiKeysData, isLoading, error, refetch } = useAPIKeysQuery(currentProject?.id)
   const createMutation = useCreateAPIKeyMutation(currentProject?.id || '')
-  const updateMutation = useUpdateAPIKeyMutation(currentProject?.id || '')
   const deleteMutation = useDeleteAPIKeyMutation(currentProject?.id || '')
 
   // Local state

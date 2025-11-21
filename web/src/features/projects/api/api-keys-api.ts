@@ -7,7 +7,6 @@ import { BrokleAPIClient } from '@/lib/api/core/client'
 import type {
   APIKey,
   CreateAPIKeyRequest,
-  UpdateAPIKeyRequest,
   APIKeyFilters,
   BackendAPIKey,
 } from '../types/api-keys'
@@ -108,44 +107,6 @@ export async function createAPIKey(
   const endpoint = `/v1/projects/${projectId}/api-keys`
 
   const response = await client.post<BackendAPIKey, CreateAPIKeyRequest>(
-    endpoint,
-    data
-  )
-
-  return mapAPIKeyToFrontend(response)
-}
-
-/**
- * Update an existing API key (name or active status)
- *
- * At least one field (name or is_active) must be provided.
- *
- * @param projectId - Project ULID
- * @param keyId - API key ID (ULID)
- * @param data - Update data (name and/or is_active)
- * @returns Updated API key (without full key)
- *
- * @example
- * ```ts
- * // Update name
- * await updateAPIKey('proj_123', 'key_456', {
- *   name: 'Updated Production Key'
- * })
- *
- * // Deactivate key
- * await updateAPIKey('proj_123', 'key_456', {
- *   is_active: false
- * })
- * ```
- */
-export async function updateAPIKey(
-  projectId: string,
-  keyId: string,
-  data: UpdateAPIKeyRequest
-): Promise<APIKey> {
-  const endpoint = `/v1/projects/${projectId}/api-keys/${keyId}`
-
-  const response = await client.patch<BackendAPIKey, UpdateAPIKeyRequest>(
     endpoint,
     data
   )

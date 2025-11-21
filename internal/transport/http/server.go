@@ -285,7 +285,6 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 		// API key routes nested under projects (double-nesting only)
 		projects.GET("/:projectId/api-keys", s.authMiddleware.RequirePermission("api-keys:read"), s.handlers.APIKey.List)
 		projects.POST("/:projectId/api-keys", s.authMiddleware.RequirePermission("api-keys:create"), s.handlers.APIKey.Create)
-		projects.PATCH("/:projectId/api-keys/:keyId", s.authMiddleware.RequirePermission("api-keys:update"), s.handlers.APIKey.Update)
 		projects.DELETE("/:projectId/api-keys/:keyId", s.authMiddleware.RequirePermission("api-keys:delete"), s.handlers.APIKey.Delete)
 	}
 

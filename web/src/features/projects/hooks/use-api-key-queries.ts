@@ -5,13 +5,11 @@ import { toast } from 'sonner'
 import {
   listAPIKeys,
   createAPIKey,
-  updateAPIKey,
   deleteAPIKey,
 } from '../api/api-keys-api'
 import type {
   APIKey,
   CreateAPIKeyRequest,
-  UpdateAPIKeyRequest,
   APIKeyFilters,
 } from '../types/api-keys'
 
@@ -106,97 +104,6 @@ export function useCreateAPIKeyMutation(projectId: string) {
       const apiError = error as { message?: string }
       toast.error('Failed to Create API Key', {
         description: apiError?.message || 'Could not create API key. Please try again.',
-      })
-    },
-  })
-}
-
-/**
- * Mutation hook to update an existing API key
- *
- * Supports optimistic updates for better UX.
- * Note: Only name updates are supported (no revoke - use delete instead)
- *
- * @example
- * ```tsx
- * const updateMutation = useUpdateAPIKeyMutation('proj_123')
- *
- * // Update name
- * await updateMutation.mutateAsync({
- *   keyId: 'key_456',
- *   data: { name: 'Updated Name' }
- * })
- * ```
- */
-export function useUpdateAPIKeyMutation(projectId: string) {
-  const queryClient = useQueryClient()
-
-  return useMutation({
-    mutationFn: async ({
-      keyId,
-      data
-    }: {
-      keyId: string
-      data: UpdateAPIKeyRequest
-    }) => {
-      return updateAPIKey(projectId, keyId, data)
-    },
-    onMutate: async ({ keyId, data }) => {
-      // Cancel outgoing refetches
-      await queryClient.cancelQueries({
-        queryKey: apiKeyQueryKeys.lists()
-      })
-
-      // Snapshot previous value
-      const previousKeys = queryClient.getQueriesData({
-        queryKey: apiKeyQueryKeys.lists()
-      })
-
-      // Optimistically update cache (only name changes)
-      queryClient.setQueriesData<{ data: APIKey[] }>(
-        { queryKey: apiKeyQueryKeys.lists() },
-        (old) => {
-          if (!old) return old
-
-          return {
-            ...old,
-            data: old.data.map((key) => {
-              if (key.id === keyId && data.name) {
-                return {
-                  ...key,
-                  name: data.name,
-                }
-              }
-              return key
-            }),
-          }
-        }
-      )
-
-      return { previousKeys }
-    },
-    onSuccess: (updatedKey: APIKey) => {
-      // Invalidate to get fresh data from server
-      queryClient.invalidateQueries({
-        queryKey: apiKeyQueryKeys.lists()
-      })
-
-      // Show success toast
-      toast.success('API Key Updated!', {
-        description: `${updatedKey.name} has been updated successfully.`,
-      })
-    },
-    onError: (error: unknown, _variables, context) => {
-      // Rollback optimistic update on error
-      if (context?.previousKeys) {
-        context.previousKeys.forEach(([queryKey, data]) => {
-          queryClient.setQueryData(queryKey, data)
-        })
-      }
-
-      const apiError = error as { message?: string }
-      toast.error('Failed to Update API Key', {
-        description: apiError?.message || 'Could not update API key. Please try again.',
       })
     },
   })
