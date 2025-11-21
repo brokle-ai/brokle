@@ -18,13 +18,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { toast } from 'sonner'
 import { useAPIKeysQuery, useCreateAPIKeyMutation, useDeleteAPIKeyMutation } from '../hooks/use-api-key-queries'
@@ -230,7 +223,7 @@ export function ProjectAPIKeysSection() {
                   <TableHead>Last Used</TableHead>
                   <TableHead>Expires</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="w-[50px]"></TableHead>
+                  <TableHead className="w-[70px] text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -289,27 +282,21 @@ export function ProjectAPIKeysSection() {
                         </Badge>
                       </TableCell>
 
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              disabled={deleteMutation.isPending}
-                            >
-                              •••
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              onClick={() => handleDeleteAPIKey(apiKey.id, apiKey.name)}
-                              className="text-red-600"
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteAPIKey(apiKey.id, apiKey.name)}
+                          disabled={deleteMutation.isPending}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
+                          title="Delete API key"
+                        >
+                          {deleteMutation.isPending ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-4 w-4" />
+                          )}
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))
