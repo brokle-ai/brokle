@@ -71,7 +71,7 @@ type APIKeyService interface {
 	GetAPIKey(ctx context.Context, keyID ulid.ULID) (*APIKey, error)
 	GetAPIKeys(ctx context.Context, filters *APIKeyFilters) ([]*APIKey, error)
 	UpdateAPIKey(ctx context.Context, keyID ulid.ULID, req *UpdateAPIKeyRequest) error
-	RevokeAPIKey(ctx context.Context, keyID ulid.ULID) error
+	DeleteAPIKey(ctx context.Context, keyID ulid.ULID) error
 
 	// API key validation and usage
 	ValidateAPIKey(ctx context.Context, fullKey string) (*ValidateAPIKeyResponse, error)
@@ -273,8 +273,7 @@ type CreateSessionRequest struct {
 }
 
 type UpdateAPIKeyRequest struct {
-	Name     *string `json:"name,omitempty" validate:"omitempty,min=1,max=100"`
-	IsActive *bool   `json:"is_active,omitempty"`
+	Name *string `json:"name,omitempty" validate:"omitempty,min=1,max=100"`
 }
 
 // Filter types

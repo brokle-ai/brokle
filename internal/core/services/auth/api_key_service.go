@@ -120,9 +120,6 @@ func (s *apiKeyService) UpdateAPIKey(ctx context.Context, keyID ulid.ULID, req *
 	if req.Name != nil {
 		apiKey.Name = *req.Name
 	}
-	if req.IsActive != nil {
-		apiKey.IsActive = *req.IsActive
-	}
 
 	apiKey.UpdatedAt = time.Now()
 
@@ -134,10 +131,10 @@ func (s *apiKeyService) UpdateAPIKey(ctx context.Context, keyID ulid.ULID, req *
 	return nil
 }
 
-// RevokeAPIKey revokes an API key
-func (s *apiKeyService) RevokeAPIKey(ctx context.Context, keyID ulid.ULID) error {
-	if err := s.apiKeyRepo.DeactivateAPIKey(ctx, keyID); err != nil {
-		return fmt.Errorf("revoke API key: %w", err)
+// DeleteAPIKey deletes (soft deletes) an API key
+func (s *apiKeyService) DeleteAPIKey(ctx context.Context, keyID ulid.ULID) error {
+	if err := s.apiKeyRepo.Delete(ctx, keyID); err != nil {
+		return fmt.Errorf("delete API key: %w", err)
 	}
 	return nil
 }
@@ -168,12 +165,7 @@ func (s *apiKeyService) ValidateAPIKey(ctx context.Context, fullKey string) (*au
 		return nil, appErrors.NewInternalError("Failed to validate API key", err)
 	}
 
-	// Check if key is active
-	if !apiKey.IsActive {
-		return nil, appErrors.NewUnauthorizedError("API key is inactive")
-	}
-
-	// Check expiration
+	// Check expiration (deleted keys filtered by GORM soft delete)
 	if apiKey.ExpiresAt != nil && time.Now().After(*apiKey.ExpiresAt) {
 		return nil, appErrors.NewUnauthorizedError("API key has expired")
 	}
@@ -223,7 +215,7 @@ func (s *apiKeyService) GetAPIKeyContext(ctx context.Context, keyID ulid.ULID) (
 }
 
 // CanAPIKeyAccessResource checks if an API key can access a specific resource
-// Note: With scopes removed, this now checks if the key is active
+// Note: All non-deleted, non-expired API keys have full access to their project
 // Access control should be handled at the organization RBAC level
 func (s *apiKeyService) CanAPIKeyAccessResource(ctx context.Context, keyID ulid.ULID, resource string) (bool, error) {
 	apiKey, err := s.apiKeyRepo.GetByID(ctx, keyID)
@@ -231,9 +223,9 @@ func (s *apiKeyService) CanAPIKeyAccessResource(ctx context.Context, keyID ulid.
 		return false, fmt.Errorf("get API key: %w", err)
 	}
 
-	// All active API keys have full access to their project
+	// All API keys have full access to their project (deleted keys filtered by GORM)
 	// Fine-grained permissions handled by organization RBAC
-	return apiKey.IsActive, nil
+	return !apiKey.IsExpired(), nil
 }
 
 // Scoped access methods

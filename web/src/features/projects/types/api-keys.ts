@@ -13,7 +13,7 @@ export interface APIKey {
   key?: string // Only present on creation (one-time view)
   key_preview: string // Format: bk_AbCd...XyZa
   project_id: string
-  status: 'active' | 'inactive' | 'expired'
+  status: 'active' | 'expired' // inactive removed - delete is now the only action
   last_used?: string // ISO 8601 timestamp
   created_at: string // ISO 8601 timestamp
   expires_at?: string // ISO 8601 timestamp
@@ -35,7 +35,6 @@ export interface CreateAPIKeyRequest {
  */
 export interface UpdateAPIKeyRequest {
   name?: string // 2-100 characters
-  is_active?: boolean
 }
 
 /**
@@ -43,7 +42,7 @@ export interface UpdateAPIKeyRequest {
  * Used as query parameters for GET /api/v1/projects/:projectId/api-keys
  */
 export interface APIKeyFilters {
-  status?: 'active' | 'inactive' | 'expired'
+  status?: 'active' | 'expired' // inactive removed
   page?: number
   limit?: number // 10, 25, 50, 100
   sort_by?: 'created_at' | 'name' | 'last_used_at'
@@ -60,7 +59,7 @@ export interface BackendAPIKey {
   key?: string
   key_preview: string
   project_id: string
-  status: 'active' | 'inactive' | 'expired'
+  status: 'active' | 'expired' // inactive removed
   last_used?: string
   created_at: string
   expires_at?: string

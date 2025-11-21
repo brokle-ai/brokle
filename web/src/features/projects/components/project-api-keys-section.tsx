@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Copy, Trash2, Shield, Loader2, AlertCircle } from 'lucide-react'
+import { Plus, Copy, Trash2, Loader2, AlertCircle } from 'lucide-react'
 import { useWorkspace } from '@/context/workspace-context'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -89,7 +89,7 @@ export function ProjectAPIKeysSection() {
   }
 
   const handleDeleteAPIKey = async (keyId: string, keyName: string) => {
-    if (!confirm(`Delete "${keyName}"? This action cannot be undone and will immediately revoke the API key.`)) {
+    if (!confirm(`Delete "${keyName}"?\n\nThis will immediately revoke access and cannot be undone.`)) {
       return
     }
 
@@ -101,28 +101,11 @@ export function ProjectAPIKeysSection() {
     }
   }
 
-  const handleRevokeAPIKey = async (keyId: string, keyName: string) => {
-    if (!confirm(`Revoke "${keyName}"? This will immediately disable the API key.`)) {
-      return
-    }
-
-    try {
-      await updateMutation.mutateAsync({
-        keyId,
-        data: { is_active: false }
-      })
-    } catch (error) {
-      // Error toast handled by mutation hook
-      console.error('Failed to revoke API key:', error)
-    }
-  }
 
   const getStatusColor = (status: APIKey['status']) => {
     switch (status) {
       case 'active':
         return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
-      case 'inactive':
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300'
       case 'expired':
         return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
       default:
@@ -313,19 +296,12 @@ export function ProjectAPIKeysSection() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              disabled={deleteMutation.isPending || updateMutation.isPending}
+                              disabled={deleteMutation.isPending}
                             >
                               •••
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            {apiKey.status === 'active' && (
-                              <DropdownMenuItem onClick={() => handleRevokeAPIKey(apiKey.id, apiKey.name)}>
-                                <Shield className="mr-2 h-4 w-4" />
-                                Revoke
-                              </DropdownMenuItem>
-                            )}
-                            {apiKey.status === 'active' && <DropdownMenuSeparator />}
                             <DropdownMenuItem
                               onClick={() => handleDeleteAPIKey(apiKey.id, apiKey.name)}
                               className="text-red-600"

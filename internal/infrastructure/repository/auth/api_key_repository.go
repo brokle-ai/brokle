@@ -210,14 +210,6 @@ func (r *apiKeyRepository) CleanupExpiredAPIKeys(ctx context.Context) error {
 		Delete(&authDomain.APIKey{}).Error
 }
 
-// DeactivateAPIKey deactivates an API key
-func (r *apiKeyRepository) DeactivateAPIKey(ctx context.Context, id ulid.ULID) error {
-	return r.db.WithContext(ctx).
-		Model(&authDomain.APIKey{}).
-		Where("id = ?", id).
-		Update("is_active", false).Error
-}
-
 // GetAPIKeyCount returns the total count of API keys for a user
 func (r *apiKeyRepository) GetAPIKeyCount(ctx context.Context, userID ulid.ULID) (int, error) {
 	var count int64

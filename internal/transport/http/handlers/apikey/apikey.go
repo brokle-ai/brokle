@@ -55,8 +55,7 @@ type CreateAPIKeyRequest struct {
 
 // UpdateAPIKeyRequest represents the request to update an API key
 type UpdateAPIKeyRequest struct {
-	Name     *string `json:"name,omitempty" binding:"omitempty,min=2,max=100" example:"Updated Production Key" description:"New name for the API key (2-100 characters)"`
-	IsActive *bool   `json:"is_active,omitempty" example:"false" description:"Active status (true=active, false=inactive)"`
+	Name *string `json:"name,omitempty" binding:"omitempty,min=2,max=100" example:"Updated Production Key" description:"New name for the API key (2-100 characters)"`
 }
 
 // ListAPIKeysResponse represents the response when listing API keys
@@ -175,9 +174,8 @@ func (h *Handler) List(c *gin.Context) {
 
 // getKeyStatus determines the status of an API key
 func getKeyStatus(key auth.APIKey) string {
-	if !key.IsActive {
-		return "inactive"
-	}
+	// Deleted keys are filtered by GORM soft delete
+	// Only check if expired
 	if key.IsExpired() {
 		return "expired"
 	}
@@ -345,8 +343,8 @@ func (h *Handler) Delete(c *gin.Context) {
 		return
 	}
 
-	// Revoke the API key
-	if err := h.apiKeyService.RevokeAPIKey(c.Request.Context(), keyID); err != nil {
+	// Delete the API key (soft delete)
+	if err := h.apiKeyService.DeleteAPIKey(c.Request.Context(), keyID); err != nil {
 		h.logger.WithError(err).Error("Failed to delete API key")
 		response.Error(c, err)
 		return
@@ -405,10 +403,10 @@ func (h *Handler) Update(c *gin.Context) {
 		return
 	}
 
-	// Validate at least one field is provided
-	if req.Name == nil && req.IsActive == nil {
-		h.logger.Warn("Update request with no fields")
-		response.BadRequest(c, "At least one field must be provided", "name or is_active required")
+	// Validate name field is provided
+	if req.Name == nil {
+		h.logger.Warn("Update request with no name field")
+		response.BadRequest(c, "Name field is required", "name must be provided")
 		return
 	}
 
@@ -441,8 +439,7 @@ func (h *Handler) Update(c *gin.Context) {
 
 	// Create service request
 	serviceReq := &auth.UpdateAPIKeyRequest{
-		Name:     req.Name,
-		IsActive: req.IsActive,
+		Name: req.Name,
 	}
 
 	// Update the API key

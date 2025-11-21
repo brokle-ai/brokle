@@ -115,6 +115,7 @@ export function useCreateAPIKeyMutation(projectId: string) {
  * Mutation hook to update an existing API key
  *
  * Supports optimistic updates for better UX.
+ * Note: Only name updates are supported (no revoke - use delete instead)
  *
  * @example
  * ```tsx
@@ -124,12 +125,6 @@ export function useCreateAPIKeyMutation(projectId: string) {
  * await updateMutation.mutateAsync({
  *   keyId: 'key_456',
  *   data: { name: 'Updated Name' }
- * })
- *
- * // Revoke key
- * await updateMutation.mutateAsync({
- *   keyId: 'key_456',
- *   data: { is_active: false }
  * })
  * ```
  */
@@ -157,7 +152,7 @@ export function useUpdateAPIKeyMutation(projectId: string) {
         queryKey: apiKeyQueryKeys.lists()
       })
 
-      // Optimistically update cache
+      // Optimistically update cache (only name changes)
       queryClient.setQueriesData<{ data: APIKey[] }>(
         { queryKey: apiKeyQueryKeys.lists() },
         (old) => {
@@ -166,13 +161,10 @@ export function useUpdateAPIKeyMutation(projectId: string) {
           return {
             ...old,
             data: old.data.map((key) => {
-              if (key.id === keyId) {
+              if (key.id === keyId && data.name) {
                 return {
                   ...key,
-                  ...(data.name && { name: data.name }),
-                  ...(data.is_active !== undefined && {
-                    status: data.is_active ? 'active' as const : 'inactive' as const
-                  }),
+                  name: data.name,
                 }
               }
               return key
@@ -190,9 +182,8 @@ export function useUpdateAPIKeyMutation(projectId: string) {
       })
 
       // Show success toast
-      const action = updatedKey.status === 'inactive' ? 'revoked' : 'updated'
-      toast.success(`API Key ${action}!`, {
-        description: `${updatedKey.name} has been ${action} successfully.`,
+      toast.success('API Key Updated!', {
+        description: `${updatedKey.name} has been updated successfully.`,
       })
     },
     onError: (error: unknown, _variables, context) => {
