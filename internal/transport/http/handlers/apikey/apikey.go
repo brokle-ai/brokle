@@ -37,14 +37,14 @@ func NewHandler(
 type APIKey struct {
 	ID         string    `json:"id" example:"key_01234567890123456789012345" description:"Unique API key identifier"`
 	Name       string    `json:"name" example:"Production API Key" description:"Human-readable name for the API key"`
-	Key        string    `json:"key,omitempty" example:"bk_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789AbCd" description:"The actual API key (only shown on creation)"`
-	KeyPreview string    `json:"key_preview" example:"bk_AbCd...AbCd" description:"Truncated version of the key for display"`
-	ProjectID  string    `json:"project_id" example:"proj_01234567890123456789012345" description:"Project ID this key belongs to"`
-	Status     string    `json:"status" example:"active" description:"API key status (active, inactive, expired)"`
-	LastUsed   time.Time `json:"last_used,omitempty" example:"2024-01-01T00:00:00Z" description:"Last time this key was used (null if never used)"`
-	CreatedAt  time.Time `json:"created_at" example:"2024-01-01T00:00:00Z" description:"Creation timestamp"`
-	ExpiresAt  time.Time `json:"expires_at,omitempty" example:"2024-12-31T23:59:59Z" description:"Expiration timestamp (null if never expires)"`
-	CreatedBy  string    `json:"created_by" example:"usr_01234567890123456789012345" description:"User ID who created this key"`
+	Key        string     `json:"key,omitempty" example:"bk_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789AbCd" description:"The actual API key (only shown on creation)"`
+	KeyPreview string     `json:"key_preview" example:"bk_AbCd...AbCd" description:"Truncated version of the key for display"`
+	ProjectID  string     `json:"project_id" example:"proj_01234567890123456789012345" description:"Project ID this key belongs to"`
+	Status     string     `json:"status" example:"active" description:"API key status (active, inactive, expired)"`
+	LastUsed   *time.Time `json:"last_used,omitempty" example:"2024-01-01T00:00:00Z" description:"Last time this key was used (null if never used)"`
+	CreatedAt  time.Time  `json:"created_at" example:"2024-01-01T00:00:00Z" description:"Creation timestamp"`
+	ExpiresAt  *time.Time `json:"expires_at,omitempty" example:"2024-12-31T23:59:59Z" description:"Expiration timestamp (null if never expires)"`
+	CreatedBy  string     `json:"created_by" example:"usr_01234567890123456789012345" description:"User ID who created this key"`
 }
 
 // CreateAPIKeyRequest represents the request to create an API key
@@ -146,15 +146,10 @@ func (h *Handler) List(c *gin.Context) {
 			KeyPreview: key.KeyPreview, // Use stored preview
 			ProjectID:  key.ProjectID.String(),
 			Status:     getKeyStatus(*key),
+			LastUsed:   key.LastUsedAt,  // Pointer, will be null if nil
 			CreatedAt:  key.CreatedAt,
+			ExpiresAt:  key.ExpiresAt,   // Pointer, will be null if nil
 			CreatedBy:  key.UserID.String(),
-		}
-
-		if key.LastUsedAt != nil {
-			responseKeys[i].LastUsed = *key.LastUsedAt
-		}
-		if key.ExpiresAt != nil {
-			responseKeys[i].ExpiresAt = *key.ExpiresAt
 		}
 	}
 
@@ -274,12 +269,10 @@ func (h *Handler) Create(c *gin.Context) {
 		KeyPreview: apiKeyResp.KeyPreview,
 		ProjectID:  apiKeyResp.ProjectID,
 		Status:     "active",
+		LastUsed:   nil, // New keys have never been used
 		CreatedAt:  apiKeyResp.CreatedAt,
+		ExpiresAt:  apiKeyResp.ExpiresAt, // Pointer, will be null if nil
 		CreatedBy:  userID,
-	}
-
-	if apiKeyResp.ExpiresAt != nil {
-		responseKey.ExpiresAt = *apiKeyResp.ExpiresAt
 	}
 
 	h.logger.WithFields(map[string]interface{}{
@@ -474,15 +467,10 @@ func (h *Handler) Update(c *gin.Context) {
 		KeyPreview: updatedKey.KeyPreview,
 		ProjectID:  updatedKey.ProjectID.String(),
 		Status:     getKeyStatus(*updatedKey),
+		LastUsed:   updatedKey.LastUsedAt, // Pointer, will be null if nil
 		CreatedAt:  updatedKey.CreatedAt,
+		ExpiresAt:  updatedKey.ExpiresAt,  // Pointer, will be null if nil
 		CreatedBy:  updatedKey.UserID.String(),
-	}
-
-	if updatedKey.LastUsedAt != nil {
-		responseKey.LastUsed = *updatedKey.LastUsedAt
-	}
-	if updatedKey.ExpiresAt != nil {
-		responseKey.ExpiresAt = *updatedKey.ExpiresAt
 	}
 
 	h.logger.WithFields(map[string]interface{}{

@@ -3,6 +3,23 @@
 // Hooks
 export { useProjectOnly } from './hooks/use-project-only'
 export { useCreateProjectMutation } from './hooks/use-project-queries'
+export {
+  useAPIKeysQuery,
+  useCreateAPIKeyMutation,
+  useUpdateAPIKeyMutation,
+  useDeleteAPIKeyMutation,
+  apiKeyQueryKeys
+} from './hooks/use-api-key-queries'
+
+// API
+export {
+  listAPIKeys,
+  createAPIKey,
+  updateAPIKey,
+  deleteAPIKey,
+  createKeyPreview,
+  validateAPIKeyFormat
+} from './api/api-keys-api'
 
 // Components
 export { CreateProjectDialog } from './components/create-project-dialog'
@@ -21,4 +38,11 @@ export { ProjectDangerSection } from './components/project-danger-section'
 export { useDashboardStore } from './stores/dashboard-store'
 
 // Types
-export type {}
+export type {
+  APIKey,
+  CreateAPIKeyRequest,
+  UpdateAPIKeyRequest,
+  APIKeyFilters,
+  APIKeyListResponse,
+  APIKeyResponse
+} from './types/api-keys'

@@ -218,14 +218,6 @@ func (r *apiKeyRepository) DeactivateAPIKey(ctx context.Context, id ulid.ULID) e
 		Update("is_active", false).Error
 }
 
-// MarkAsUsed updates the last used timestamp for an API key
-func (r *apiKeyRepository) MarkAsUsed(ctx context.Context, id ulid.ULID) error {
-	return r.db.WithContext(ctx).
-		Model(&authDomain.APIKey{}).
-		Where("id = ?", id).
-		Update("last_used_at", time.Now()).Error
-}
-
 // GetAPIKeyCount returns the total count of API keys for a user
 func (r *apiKeyRepository) GetAPIKeyCount(ctx context.Context, userID ulid.ULID) (int, error) {
 	var count int64

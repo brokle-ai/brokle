@@ -75,7 +75,6 @@ type APIKeyService interface {
 
 	// API key validation and usage
 	ValidateAPIKey(ctx context.Context, fullKey string) (*ValidateAPIKeyResponse, error)
-	UpdateLastUsed(ctx context.Context, keyID ulid.ULID) error
 	CheckRateLimit(ctx context.Context, keyID ulid.ULID) (bool, error)
 
 	// API key context and permissions

@@ -202,11 +202,6 @@ func (s *apiKeyService) ValidateAPIKey(ctx context.Context, fullKey string) (*au
 	}, nil
 }
 
-// UpdateLastUsed updates the last used timestamp
-func (s *apiKeyService) UpdateLastUsed(ctx context.Context, keyID ulid.ULID) error {
-	return s.apiKeyRepo.MarkAsUsed(ctx, keyID)
-}
-
 // CheckRateLimit checks if the API key has exceeded rate limits
 func (s *apiKeyService) CheckRateLimit(ctx context.Context, keyID ulid.ULID) (bool, error) {
 	// TODO: Implement rate limiting logic with Redis

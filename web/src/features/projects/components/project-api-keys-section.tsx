@@ -1,9 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { Key, Plus, Copy, Eye, EyeOff, Trash2, Shield } from 'lucide-react'
+import { Plus, Copy, Trash2, Shield, Loader2, AlertCircle } from 'lucide-react'
 import { useWorkspace } from '@/context/workspace-context'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -25,117 +25,96 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { toast } from 'sonner'
-
-interface APIKey {
-  id: string
-  name: string
-  key: string
-  permissions: string[]
-  created_at: string
-  last_used: string | null
-  expires_at: string | null
-  status: 'active' | 'inactive' | 'expired'
-}
-
-const MOCK_API_KEYS: APIKey[] = [
-  {
-    id: 'key-prod-001',
-    name: 'Production API Key',
-    key: 'bk-proj-1234567890abcdef1234567890abcdef',
-    permissions: ['read', 'write'],
-    created_at: '2024-01-15T10:30:00Z',
-    last_used: '2024-03-10T14:20:00Z',
-    expires_at: null,
-    status: 'active'
-  },
-  {
-    id: 'key-dev-002',
-    name: 'Development Testing',
-    key: 'bk-proj-abcdef1234567890abcdef1234567890',
-    permissions: ['read'],
-    created_at: '2024-02-01T09:00:00Z',
-    last_used: '2024-03-09T16:45:00Z',
-    expires_at: '2024-12-31T23:59:59Z',
-    status: 'active'
-  },
-  {
-    id: 'key-old-003',
-    name: 'Legacy Integration',
-    key: 'bk-proj-fedcba0987654321fedcba0987654321',
-    permissions: ['read', 'write'],
-    created_at: '2023-11-20T15:00:00Z',
-    last_used: '2024-01-15T11:30:00Z',
-    expires_at: '2024-01-31T23:59:59Z',
-    status: 'expired'
-  }
-]
+import { useAPIKeysQuery, useCreateAPIKeyMutation, useUpdateAPIKeyMutation, useDeleteAPIKeyMutation } from '../hooks/use-api-key-queries'
+import type { APIKey } from '../types/api-keys'
 
 export function ProjectAPIKeysSection() {
   const { currentProject } = useWorkspace()
 
-  const [apiKeys, setApiKeys] = useState<APIKey[]>(MOCK_API_KEYS)
-  const [visibleKeys, setVisibleKeys] = useState<Set<string>>(new Set())
+  // React Query hooks
+  const { data: apiKeysData, isLoading, error, refetch } = useAPIKeysQuery(currentProject?.id)
+  const createMutation = useCreateAPIKeyMutation(currentProject?.id || '')
+  const updateMutation = useUpdateAPIKeyMutation(currentProject?.id || '')
+  const deleteMutation = useDeleteAPIKeyMutation(currentProject?.id || '')
+
+  // Local state
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [newKeyName, setNewKeyName] = useState('')
-  const [newKeyPermissions, setNewKeyPermissions] = useState<string[]>(['read'])
-  const [newKeyExpiry, setNewKeyExpiry] = useState<string>('never')
+  const [newKeyExpiry, setNewKeyExpiry] = useState<'30days' | '90days' | 'never'>('90days')
+  const [createdKey, setCreatedKey] = useState<APIKey | null>(null)
+  const [showCreatedKeyDialog, setShowCreatedKeyDialog] = useState(false)
 
   if (!currentProject) {
     return null
   }
 
-  const toggleKeyVisibility = (keyId: string) => {
-    const newVisible = new Set(visibleKeys)
-    if (newVisible.has(keyId)) {
-      newVisible.delete(keyId)
-    } else {
-      newVisible.add(keyId)
-    }
-    setVisibleKeys(newVisible)
-  }
+  const apiKeys = apiKeysData?.data || []
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text)
     toast.success('API key copied to clipboard')
   }
 
-  const createAPIKey = async () => {
+  const handleCreateAPIKey = async () => {
     if (!newKeyName.trim()) {
       toast.error('Please enter a name for the API key')
       return
     }
 
-    const newKey: APIKey = {
-      id: `key-${Date.now()}`,
-      name: newKeyName,
-      key: `bk-proj-${Math.random().toString(36).substring(2, 34)}`,
-      permissions: newKeyPermissions,
-      created_at: new Date().toISOString(),
-      last_used: null,
-      expires_at: newKeyExpiry === 'never' ? null : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-      status: 'active'
+    if (newKeyName.length < 2 || newKeyName.length > 100) {
+      toast.error('Name must be between 2 and 100 characters')
+      return
     }
 
-    setApiKeys([newKey, ...apiKeys])
-    setNewKeyName('')
-    setNewKeyPermissions(['read'])
-    setNewKeyExpiry('never')
-    setIsCreateOpen(false)
+    try {
+      const newKey = await createMutation.mutateAsync({
+        name: newKeyName.trim(),
+        expiry_option: newKeyExpiry
+      })
 
-    toast.success('API key created successfully')
+      // Show the created key once
+      setCreatedKey(newKey)
+      setShowCreatedKeyDialog(true)
+
+      // Reset form
+      setNewKeyName('')
+      setNewKeyExpiry('90days')
+      setIsCreateOpen(false)
+    } catch (error) {
+      // Error toast handled by mutation hook
+      console.error('Failed to create API key:', error)
+    }
   }
 
-  const deleteAPIKey = (keyId: string) => {
-    setApiKeys(apiKeys.filter(key => key.id !== keyId))
-    toast.success('API key deleted')
+  const handleDeleteAPIKey = async (keyId: string, keyName: string) => {
+    if (!confirm(`Delete "${keyName}"? This action cannot be undone and will immediately revoke the API key.`)) {
+      return
+    }
+
+    try {
+      await deleteMutation.mutateAsync({ keyId, keyName })
+    } catch (error) {
+      // Error toast handled by mutation hook
+      console.error('Failed to delete API key:', error)
+    }
   }
 
-  const revokeAPIKey = (keyId: string) => {
-    setApiKeys(apiKeys.map(key =>
-      key.id === keyId ? { ...key, status: 'inactive' as const } : key
-    ))
-    toast.success('API key revoked')
+  const handleRevokeAPIKey = async (keyId: string, keyName: string) => {
+    if (!confirm(`Revoke "${keyName}"? This will immediately disable the API key.`)) {
+      return
+    }
+
+    try {
+      await updateMutation.mutateAsync({
+        keyId,
+        data: { is_active: false }
+      })
+    } catch (error) {
+      // Error toast handled by mutation hook
+      console.error('Failed to revoke API key:', error)
+    }
   }
 
   const getStatusColor = (status: APIKey['status']) => {
@@ -151,18 +130,45 @@ export function ProjectAPIKeysSection() {
     }
   }
 
-  const maskKey = (key: string) => {
-    if (key.length <= 8) return key
-    return key.substring(0, 8) + '•'.repeat(24) + key.substring(key.length - 4)
+  const maskKey = (keyPreview: string) => {
+    // Key preview format: bk_AbCd...XyZa
+    return keyPreview
   }
 
   return (
     <>
+      {/* Loading State */}
+      {isLoading && (
+        <Card>
+          <CardContent className="flex items-center justify-center py-12">
+            <div className="flex flex-col items-center gap-2">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">Loading API keys...</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Error State */}
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Error Loading API Keys</AlertTitle>
+          <AlertDescription className="space-y-2">
+            <p>{error instanceof Error ? error.message : 'Failed to load API keys'}</p>
+            <Button variant="outline" size="sm" onClick={() => refetch()}>
+              Try Again
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* API Keys Overview */}
-      <Card>
-        <CardContent className="space-y-6 pt-6">
-          <div className="flex items-center justify-between">
-            <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+      {!isLoading && !error && (
+        <Card>
+          <CardContent className="space-y-6 pt-6">
+            <div className="flex items-center justify-between">
+              <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
               <DialogTrigger asChild>
                 <Button>
                   <Plus className="mr-2 h-4 w-4" />
@@ -174,7 +180,7 @@ export function ProjectAPIKeysSection() {
                 <DialogHeader>
                   <DialogTitle>Create New API Key</DialogTitle>
                   <DialogDescription>
-                    Generate a new API key for this project with specific permissions.
+                    Generate a new API key for this project. You'll only see the full key once.
                   </DialogDescription>
                 </DialogHeader>
 
@@ -186,64 +192,49 @@ export function ProjectAPIKeysSection() {
                       value={newKeyName}
                       onChange={(e) => setNewKeyName(e.target.value)}
                       placeholder="e.g., Production API Key"
+                      maxLength={100}
                     />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Permissions</Label>
-                    <div className="space-y-2">
-                      <label className="flex items-center space-x-2">
-                        <input
-                          type="checkbox"
-                          checked={newKeyPermissions.includes('read')}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setNewKeyPermissions([...newKeyPermissions, 'read'])
-                            } else {
-                              setNewKeyPermissions(newKeyPermissions.filter(p => p !== 'read'))
-                            }
-                          }}
-                        />
-                        <span className="text-sm">Read access</span>
-                      </label>
-                      <label className="flex items-center space-x-2">
-                        <input
-                          type="checkbox"
-                          checked={newKeyPermissions.includes('write')}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setNewKeyPermissions([...newKeyPermissions, 'write'])
-                            } else {
-                              setNewKeyPermissions(newKeyPermissions.filter(p => p !== 'write'))
-                            }
-                          }}
-                        />
-                        <span className="text-sm">Write access</span>
-                      </label>
-                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      2-100 characters
+                    </p>
                   </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="keyExpiry">Expiration</Label>
-                    <Select value={newKeyExpiry} onValueChange={setNewKeyExpiry}>
+                    <Select value={newKeyExpiry} onValueChange={(value) => setNewKeyExpiry(value as '30days' | '90days' | 'never')}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="never">Never expires</SelectItem>
                         <SelectItem value="30days">30 days</SelectItem>
                         <SelectItem value="90days">90 days</SelectItem>
-                        <SelectItem value="1year">1 year</SelectItem>
+                        <SelectItem value="never">Never expires</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
 
                 <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsCreateOpen(false)}>
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsCreateOpen(false)}
+                    disabled={createMutation.isPending}
+                  >
                     Cancel
                   </Button>
-                  <Button onClick={createAPIKey}>Create Key</Button>
+                  <Button
+                    onClick={handleCreateAPIKey}
+                    disabled={createMutation.isPending}
+                  >
+                    {createMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Creating...
+                      </>
+                    ) : (
+                      'Create Key'
+                    )}
+                  </Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
@@ -254,156 +245,205 @@ export function ProjectAPIKeysSection() {
                 <TableRow>
                   <TableHead>Name</TableHead>
                   <TableHead>API Key</TableHead>
-                  <TableHead>Permissions</TableHead>
                   <TableHead>Last Used</TableHead>
+                  <TableHead>Expires</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="w-[50px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {apiKeys.map((apiKey) => (
-                  <TableRow key={apiKey.id}>
-                    <TableCell>
-                      <div>
-                        <div className="font-medium">{apiKey.name}</div>
-                        <div className="text-sm text-muted-foreground">
-                          Created {new Date(apiKey.created_at).toLocaleDateString()}
-                        </div>
-                      </div>
-                    </TableCell>
-
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <code className="text-xs bg-muted px-2 py-1 rounded font-mono">
-                          {visibleKeys.has(apiKey.id) ? apiKey.key : maskKey(apiKey.key)}
-                        </code>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => toggleKeyVisibility(apiKey.id)}
-                        >
-                          {visibleKeys.has(apiKey.id) ? (
-                            <EyeOff className="h-3 w-3" />
-                          ) : (
-                            <Eye className="h-3 w-3" />
-                          )}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => copyToClipboard(apiKey.key)}
-                        >
-                          <Copy className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </TableCell>
-
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {apiKey.permissions.map((permission) => (
-                          <Badge key={permission} variant="secondary" className="text-xs">
-                            {permission}
-                          </Badge>
-                        ))}
-                      </div>
-                    </TableCell>
-
-                    <TableCell>
-                      <div className="text-sm">
-                        {apiKey.last_used ? (
-                          <>
-                            <div>{new Date(apiKey.last_used).toLocaleDateString()}</div>
-                            <div className="text-muted-foreground">
-                              {new Date(apiKey.last_used).toLocaleTimeString()}
-                            </div>
-                          </>
-                        ) : (
-                          <span className="text-muted-foreground">Never</span>
-                        )}
-                      </div>
-                    </TableCell>
-
-                    <TableCell>
-                      <Badge className={getStatusColor(apiKey.status)}>
-                        {apiKey.status}
-                      </Badge>
-                    </TableCell>
-
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm">
-                            •••
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => copyToClipboard(apiKey.key)}>
-                            <Copy className="mr-2 h-4 w-4" />
-                            Copy Key
-                          </DropdownMenuItem>
-                          {apiKey.status === 'active' && (
-                            <DropdownMenuItem onClick={() => revokeAPIKey(apiKey.id)}>
-                              <Shield className="mr-2 h-4 w-4" />
-                              Revoke
-                            </DropdownMenuItem>
-                          )}
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            onClick={() => deleteAPIKey(apiKey.id)}
-                            className="text-red-600"
-                          >
-                            <Trash2 className="mr-2 h-4 w-4" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                {apiKeys.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      No API keys yet. Create your first key to get started.
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : (
+                  apiKeys.map((apiKey) => (
+                    <TableRow key={apiKey.id}>
+                      <TableCell>
+                        <div>
+                          <div className="font-medium">{apiKey.name}</div>
+                          <div className="text-sm text-muted-foreground">
+                            Created {new Date(apiKey.created_at).toLocaleDateString()}
+                          </div>
+                        </div>
+                      </TableCell>
+
+                      <TableCell>
+                        <code className="text-xs bg-muted px-2 py-1 rounded font-mono">
+                          {maskKey(apiKey.key_preview)}
+                        </code>
+                      </TableCell>
+
+                      <TableCell>
+                        <div className="text-sm">
+                          {apiKey.last_used ? (
+                            <>
+                              <div>{new Date(apiKey.last_used).toLocaleDateString()}</div>
+                              <div className="text-muted-foreground">
+                                {new Date(apiKey.last_used).toLocaleTimeString()}
+                              </div>
+                            </>
+                          ) : (
+                            <span className="text-muted-foreground">Never</span>
+                          )}
+                        </div>
+                      </TableCell>
+
+                      <TableCell>
+                        <div className="text-sm">
+                          {apiKey.expires_at ? (
+                            new Date(apiKey.expires_at).toLocaleDateString()
+                          ) : (
+                            <span className="text-muted-foreground">Never</span>
+                          )}
+                        </div>
+                      </TableCell>
+
+                      <TableCell>
+                        <Badge className={getStatusColor(apiKey.status)}>
+                          {apiKey.status}
+                        </Badge>
+                      </TableCell>
+
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              disabled={deleteMutation.isPending || updateMutation.isPending}
+                            >
+                              •••
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            {apiKey.status === 'active' && (
+                              <DropdownMenuItem onClick={() => handleRevokeAPIKey(apiKey.id, apiKey.name)}>
+                                <Shield className="mr-2 h-4 w-4" />
+                                Revoke
+                              </DropdownMenuItem>
+                            )}
+                            {apiKey.status === 'active' && <DropdownMenuSeparator />}
+                            <DropdownMenuItem
+                              onClick={() => handleDeleteAPIKey(apiKey.id, apiKey.name)}
+                              className="text-red-600"
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>
         </CardContent>
       </Card>
+      )}
+
+      {/* Created Key Dialog - Show full key once */}
+      <Dialog open={showCreatedKeyDialog} onOpenChange={setShowCreatedKeyDialog}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>API Key Created Successfully!</DialogTitle>
+            <DialogDescription>
+              Make sure to copy your API key now. You won't be able to see it again!
+            </DialogDescription>
+          </DialogHeader>
+
+          {createdKey && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Key Name</Label>
+                <div className="text-sm font-medium">{createdKey.name}</div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>API Key</Label>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 text-xs bg-muted px-3 py-2 rounded font-mono break-all">
+                    {createdKey.key}
+                  </code>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      if (createdKey.key) {
+                        copyToClipboard(createdKey.key)
+                      }
+                    }}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Important</AlertTitle>
+                <AlertDescription>
+                  This is the only time you'll see the full API key. Store it securely - we only store a hashed version.
+                </AlertDescription>
+              </Alert>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button onClick={() => {
+              setShowCreatedKeyDialog(false)
+              setCreatedKey(null)
+            }}>
+              I've Saved My Key
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Usage Instructions */}
-      <Card>
-        <CardContent className="space-y-6 pt-6">
-          <div>
-            <h4 className="font-medium mb-2">Authentication</h4>
-            <div className="bg-muted p-4 rounded-lg">
-              <code className="text-sm">
-                curl -H "Authorization: Bearer YOUR_API_KEY" \<br />
-                &nbsp;&nbsp;&nbsp;&nbsp; https://api.brokle.com/v1/chat/completions
-              </code>
+      {!isLoading && !error && (
+        <Card>
+          <CardContent className="space-y-6 pt-6">
+            <div>
+              <h4 className="font-medium mb-2">Authentication</h4>
+              <div className="bg-muted p-4 rounded-lg">
+                <code className="text-sm">
+                  curl -H "X-API-Key: YOUR_API_KEY" \<br />
+                  &nbsp;&nbsp;&nbsp;&nbsp; https://api.brokle.com/v1/chat/completions
+                </code>
+              </div>
             </div>
-          </div>
 
-          <div>
-            <h4 className="font-medium mb-2">Environment Variables</h4>
-            <div className="bg-muted p-4 rounded-lg">
-              <code className="text-sm">
-                export BROKLE_API_KEY="YOUR_API_KEY"<br />
-                export BROKLE_PROJECT_ID="{currentProject.id}"
-              </code>
+            <div>
+              <h4 className="font-medium mb-2">Environment Variables</h4>
+              <div className="bg-muted p-4 rounded-lg">
+                <code className="text-sm">
+                  export BROKLE_API_KEY="YOUR_API_KEY"<br />
+                  export BROKLE_PROJECT_ID="{currentProject.id}"
+                </code>
+              </div>
             </div>
-          </div>
 
-          <div>
-            <h4 className="font-medium mb-2">SDK Usage</h4>
-            <div className="bg-muted p-4 rounded-lg">
-              <code className="text-sm">
-                from brokle import Brokle<br />
-                <br />
-                client = Brokle(<br />
-                &nbsp;&nbsp;&nbsp;&nbsp;api_key="YOUR_API_KEY",<br />
-                &nbsp;&nbsp;&nbsp;&nbsp;project_id="{currentProject.id}"<br />
-                )
-              </code>
+            <div>
+              <h4 className="font-medium mb-2">SDK Usage</h4>
+              <div className="bg-muted p-4 rounded-lg">
+                <code className="text-sm">
+                  from brokle import Brokle<br />
+                  <br />
+                  client = Brokle(<br />
+                  &nbsp;&nbsp;&nbsp;&nbsp;api_key="YOUR_API_KEY",<br />
+                  &nbsp;&nbsp;&nbsp;&nbsp;project_id="{currentProject.id}"<br />
+                  )
+                </code>
+              </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
     </>
   )
 }

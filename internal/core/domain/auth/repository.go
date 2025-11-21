@@ -87,7 +87,6 @@ type APIKeyRepository interface {
 
 	// API key management
 	DeactivateAPIKey(ctx context.Context, id ulid.ULID) error
-	MarkAsUsed(ctx context.Context, id ulid.ULID) error
 	UpdateLastUsed(ctx context.Context, id ulid.ULID) error // For async last used updates
 	CleanupExpiredAPIKeys(ctx context.Context) error
 
