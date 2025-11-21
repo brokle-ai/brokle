@@ -33,15 +33,15 @@ func NewUsageRepository(db *gorm.DB, logger *logrus.Logger) *UsageRepository {
 func (r *UsageRepository) InsertUsageRecord(ctx context.Context, record *billingDomain.UsageRecord) error {
 	query := `
 		INSERT INTO usage_records (
-			id, organization_id, request_id, provider_id, model_id,
-			request_type, input_tokens, output_tokens, total_tokens,
-			cost, currency, billing_tier, discounts, net_cost,
-			created_at, processed_at
+			id, organization_id, request_id, provider_id, provider_name,
+			model_id, model_name, request_type, input_tokens, output_tokens,
+			total_tokens, cost, currency, billing_tier, discounts,
+			net_cost, created_at, processed_at
 		) VALUES (
 			?, ?, ?, ?, ?,
-			?, ?, ?, ?,
 			?, ?, ?, ?, ?,
-			?, ?
+			?, ?, ?, ?, ?,
+			?, ?, ?
 		)`
 
 	err := r.db.WithContext(ctx).Exec(query,
@@ -49,7 +49,9 @@ func (r *UsageRepository) InsertUsageRecord(ctx context.Context, record *billing
 		record.OrganizationID,
 		record.RequestID,
 		record.ProviderID,
+		record.ProviderName,
 		record.ModelID,
+		record.ModelName,
 		record.RequestType,
 		record.InputTokens,
 		record.OutputTokens,
@@ -81,10 +83,10 @@ func (r *UsageRepository) InsertUsageRecord(ctx context.Context, record *billing
 func (r *UsageRepository) GetUsageRecords(ctx context.Context, orgID ulid.ULID, start, end time.Time) ([]*billingDomain.UsageRecord, error) {
 	query := `
 		SELECT
-			id, organization_id, request_id, provider_id, model_id,
-			request_type, input_tokens, output_tokens, total_tokens,
-			cost, currency, billing_tier, discounts, net_cost,
-			created_at, processed_at
+			id, organization_id, request_id, provider_id, provider_name,
+			model_id, model_name, request_type, input_tokens, output_tokens,
+			total_tokens, cost, currency, billing_tier, discounts,
+			net_cost, created_at, processed_at
 		FROM usage_records
 		WHERE organization_id = ?
 			AND created_at >= ?

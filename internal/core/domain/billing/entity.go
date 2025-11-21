@@ -7,12 +7,16 @@ import (
 )
 
 // UsageRecord represents a usage tracking record for billing
+// Note: provider_id and model_id are now stored as text (no foreign keys to gateway tables)
+// These values come from ClickHouse spans for cost calculation
 type UsageRecord struct {
 	CreatedAt      time.Time  `json:"created_at"`
 	ProcessedAt    *time.Time `json:"processed_at,omitempty"`
 	RequestType    string     `json:"request_type"`
 	BillingTier    string     `json:"billing_tier"`
 	Currency       string     `json:"currency"`
+	ProviderName   string     `json:"provider_name,omitempty"` // Human-readable provider name (e.g., "openai", "anthropic")
+	ModelName      string     `json:"model_name,omitempty"`    // Human-readable model name (e.g., "gpt-4", "claude-3-opus")
 	Cost           float64    `json:"cost"`
 	NetCost        float64    `json:"net_cost"`
 	Discounts      float64    `json:"discounts"`
@@ -20,8 +24,8 @@ type UsageRecord struct {
 	OutputTokens   int32      `json:"output_tokens"`
 	InputTokens    int32      `json:"input_tokens"`
 	ID             ulid.ULID  `json:"id"`
-	ModelID        ulid.ULID  `json:"model_id"`
-	ProviderID     ulid.ULID  `json:"provider_id"`
+	ModelID        ulid.ULID  `json:"model_id"`     // Model ID from models table (for pricing lookup)
+	ProviderID     ulid.ULID  `json:"provider_id"`  // Provider identifier (text, not FK)
 	RequestID      ulid.ULID  `json:"request_id"`
 	OrganizationID ulid.ULID  `json:"organization_id"`
 }

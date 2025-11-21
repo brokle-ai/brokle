@@ -2,12 +2,16 @@
 -- Migration: 000004_create_billing_tables.up.sql
 
 -- Usage records table for individual billing entries
+-- Note: provider_id and model_id are stored as text (no foreign keys to removed gateway tables)
+-- These reference the ClickHouse spans table for cost calculation
 CREATE TABLE IF NOT EXISTS usage_records (
     id VARCHAR(26) PRIMARY KEY,
     organization_id VARCHAR(26) NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     request_id VARCHAR(26) NOT NULL,
-    provider_id VARCHAR(26) NOT NULL REFERENCES gateway_providers(id) ON DELETE CASCADE,
-    model_id VARCHAR(26) NOT NULL REFERENCES gateway_models(id) ON DELETE CASCADE,
+    provider_id VARCHAR(26) NOT NULL,
+    provider_name VARCHAR(255),
+    model_id VARCHAR(26) NOT NULL,
+    model_name VARCHAR(255),
     request_type VARCHAR(50) NOT NULL,
     input_tokens INTEGER NOT NULL DEFAULT 0,
     output_tokens INTEGER NOT NULL DEFAULT 0,
@@ -189,6 +193,7 @@ CREATE INDEX idx_invoices_issue_date ON invoices(issue_date DESC);
 CREATE INDEX idx_invoices_paid_at ON invoices(paid_at) WHERE paid_at IS NOT NULL;
 
 -- Invoice line items table for detailed billing breakdown
+-- Note: provider_id and model_id are stored as text (no foreign keys to removed gateway tables)
 CREATE TABLE IF NOT EXISTS invoice_line_items (
     id VARCHAR(26) PRIMARY KEY,
     invoice_id VARCHAR(26) NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
@@ -196,9 +201,9 @@ CREATE TABLE IF NOT EXISTS invoice_line_items (
     quantity DECIMAL(12, 6) NOT NULL DEFAULT 1.0,
     unit_price DECIMAL(12, 6) NOT NULL DEFAULT 0.0,
     amount DECIMAL(12, 6) NOT NULL DEFAULT 0.0,
-    provider_id VARCHAR(26) REFERENCES gateway_providers(id) ON DELETE SET NULL,
+    provider_id VARCHAR(26),
     provider_name VARCHAR(255),
-    model_id VARCHAR(26) REFERENCES gateway_models(id) ON DELETE SET NULL,
+    model_id VARCHAR(26),
     model_name VARCHAR(255),
     request_type VARCHAR(50),
     tokens BIGINT,
