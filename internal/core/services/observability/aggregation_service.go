@@ -3,6 +3,8 @@ package observability
 import (
 	"context"
 
+	"github.com/shopspring/decimal"
+
 	"brokle/internal/core/domain/observability"
 )
 
@@ -24,9 +26,9 @@ func NewAggregationService(spanRepo observability.SpanRepository) *AggregationSe
 
 // TraceAggregations represents calculated trace-level metrics
 type TraceAggregations struct {
-	TotalCost   float64 `json:"total_cost"`
-	TotalTokens uint32  `json:"total_tokens"`
-	SpanCount   uint32  `json:"span_count"`
+	TotalCost   decimal.Decimal `json:"total_cost"`
+	TotalTokens uint32          `json:"total_tokens"`
+	SpanCount   uint32          `json:"span_count"`
 }
 
 // CalculateTraceAggregations calculates aggregated metrics for a trace from all its spans
@@ -39,13 +41,13 @@ func (s *AggregationService) CalculateTraceAggregations(ctx context.Context, tra
 	}
 
 	// Calculate aggregations from materialized columns
-	var totalCost float64
+	totalCost := decimal.Zero
 	var totalTokens uint32
 
 	for _, span := range spans {
 		// Sum costs from materialized column (brokle_cost_total)
 		if span.BrokleCostTotal != nil {
-			totalCost += *span.BrokleCostTotal
+			totalCost = totalCost.Add(*span.BrokleCostTotal)
 		}
 
 		// Sum tokens from materialized columns (gen_ai_usage_input_tokens, gen_ai_usage_output_tokens)

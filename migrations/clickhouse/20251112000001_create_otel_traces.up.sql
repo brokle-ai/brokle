@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS traces (
     -- ============================================
     -- RESOURCE ATTRIBUTES (Service Context)
     -- ============================================
-    resource_attributes JSON CODEC(ZSTD(1)),
+    resource_attributes Map(LowCardinality(String), String) CODEC(ZSTD(1)),
         -- OTEL: Resource-level attributes
         -- Contains: service.*, deployment.*, host.*, cloud.*
         -- Example: {"service.name": "brokle-api", "service.version": "1.2.3"}

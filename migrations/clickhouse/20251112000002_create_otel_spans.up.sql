@@ -21,6 +21,11 @@ CREATE TABLE IF NOT EXISTS spans (
     parent_span_id Nullable(String) CODEC(ZSTD(1)),
         -- OTEL: Parent span identifier (NULL for root spans)
 
+    trace_state String CODEC(ZSTD(1)),
+        -- W3C Trace Context: Vendor-specific tracing data
+        -- Format: "key1=value1,key2=value2"
+        -- Used for multi-vendor distributed tracing
+
     -- ============================================
     -- MULTI-TENANCY
     -- ============================================
@@ -78,7 +83,7 @@ CREATE TABLE IF NOT EXISTS spans (
     -- ============================================
     -- OTEL ATTRIBUTES (Single Source of Truth)
     -- ============================================
-    span_attributes JSON CODEC(ZSTD(1)),
+    span_attributes Map(LowCardinality(String), String) CODEC(ZSTD(1)),
         -- OTEL + Brokle attributes (all data stored here)
         -- Namespaces: gen_ai.*, brokle.*, enduser.*, session.*
         -- Example: {
@@ -102,25 +107,60 @@ CREATE TABLE IF NOT EXISTS spans (
         -- }
         -- CRITICAL: Costs MUST be strings (not numbers) for precision
 
-    resource_attributes JSON CODEC(ZSTD(1)),
+    resource_attributes Map(LowCardinality(String), String) CODEC(ZSTD(1)),
         -- OTEL: Resource-level attributes
         -- Contains: service.*, deployment.*, host.*, cloud.*
 
     -- ============================================
-    -- OTEL EVENTS (Span annotations)
+    -- INSTRUMENTATION SCOPE (OTEL 1.38+ REQUIRED)
     -- ============================================
-    events_timestamp Array(DateTime64(3)) CODEC(ZSTD(1)),
-    events_name Array(LowCardinality(String)) CODEC(ZSTD(1)),
-    events_attributes Array(String) CODEC(ZSTD(1)),
-    events_dropped_attributes_count Array(UInt32) CODEC(ZSTD(1)),
+    scope_name String CODEC(ZSTD(1)),
+        -- OTEL: Instrumentation library name (REQUIRED by spec)
+        -- Example: "opentelemetry.instrumentation.django", "@opentelemetry/instrumentation-http"
+
+    scope_version String CODEC(ZSTD(1)),
+        -- OTEL: Instrumentation library version
+        -- Example: "1.20.0", "0.45.1"
+
+    scope_attributes Map(LowCardinality(String), String) CODEC(ZSTD(1)),
+        -- OTEL: Instrumentation scope metadata (optional)
+        -- Rarely used, but required for full OTEL compliance
 
     -- ============================================
-    -- OTEL LINKS (Span relationships)
+    -- OTEL EVENTS (Span annotations)
+    -- ============================================
+    events_timestamp Array(DateTime64(9)) CODEC(ZSTD(1)),
+        -- OTEL standard: Nanosecond precision (DateTime64(9))
+
+    events_name Array(LowCardinality(String)) CODEC(ZSTD(1)),
+        -- Event names (e.g., "exception", "log", "gen_ai.content.prompt")
+
+    events_attributes Array(Map(LowCardinality(String), String)) CODEC(ZSTD(1)),
+        -- OTEL: Event attributes as Map (10x faster than JSON strings)
+        -- Query: events_attributes[1]['exception.type']
+
+    events_dropped_attributes_count Array(UInt32) CODEC(ZSTD(1)),
+        -- Diagnostic: Tracks truncated event attributes
+
+    -- ============================================
+    -- OTEL LINKS (Cross-trace references)
     -- ============================================
     links_trace_id Array(String) CODEC(ZSTD(1)),
+        -- Linked trace IDs (hex strings)
+
     links_span_id Array(String) CODEC(ZSTD(1)),
-    links_attributes Array(String) CODEC(ZSTD(1)),
+        -- Linked span IDs (hex strings)
+
+    links_trace_state Array(String) CODEC(ZSTD(1)),
+        -- W3C TraceState for each linked span
+        -- Propagates vendor context across trace boundaries
+
+    links_attributes Array(Map(LowCardinality(String), String)) CODEC(ZSTD(1)),
+        -- OTEL: Link attributes as Map (10x faster than JSON strings)
+        -- Query: links_attributes[1]['link.type']
+
     links_dropped_attributes_count Array(UInt32) CODEC(ZSTD(1)),
+        -- Diagnostic: Tracks truncated link attributes
 
     -- ============================================
     -- MATERIALIZED: Core Gen AI (9 columns)
@@ -128,39 +168,39 @@ CREATE TABLE IF NOT EXISTS spans (
     -- ============================================
 
     gen_ai_operation_name LowCardinality(String) MATERIALIZED
-        span_attributes.`gen_ai.operation.name` CODEC(ZSTD(1)),
+        span_attributes['gen_ai.operation.name'] CODEC(ZSTD(1)),
         -- Filter: WHERE operation = 'chat'
 
     gen_ai_provider_name LowCardinality(String) MATERIALIZED
-        span_attributes.`gen_ai.provider.name` CODEC(ZSTD(1)),
+        span_attributes['gen_ai.provider.name'] CODEC(ZSTD(1)),
         -- Filter: WHERE provider = 'openai'
 
     gen_ai_request_model LowCardinality(String) MATERIALIZED
-        span_attributes.`gen_ai.request.model` CODEC(ZSTD(1)),
+        span_attributes['gen_ai.request.model'] CODEC(ZSTD(1)),
         -- Filter: WHERE model = 'gpt-4'
 
     gen_ai_response_model LowCardinality(String) MATERIALIZED
-        span_attributes.`gen_ai.response.model` CODEC(ZSTD(1)),
+        span_attributes['gen_ai.response.model'] CODEC(ZSTD(1)),
         -- Analytics: actual model used
 
     gen_ai_usage_input_tokens Nullable(Int32) MATERIALIZED
-        toInt32OrNull(span_attributes.`gen_ai.usage.input_tokens`) CODEC(ZSTD(1)),
+        toInt32OrNull(span_attributes['gen_ai.usage.input_tokens']) CODEC(ZSTD(1)),
         -- Billing: SUM(input_tokens)
 
     gen_ai_usage_output_tokens Nullable(Int32) MATERIALIZED
-        toInt32OrNull(span_attributes.`gen_ai.usage.output_tokens`) CODEC(ZSTD(1)),
+        toInt32OrNull(span_attributes['gen_ai.usage.output_tokens']) CODEC(ZSTD(1)),
         -- Billing: SUM(output_tokens)
 
     gen_ai_response_id String MATERIALIZED
-        span_attributes.`gen_ai.response.id` CODEC(ZSTD(1)),
+        span_attributes['gen_ai.response.id'] CODEC(ZSTD(1)),
         -- Link to provider logs
 
     gen_ai_conversation_id String MATERIALIZED
-        span_attributes.`gen_ai.conversation.id` CODEC(ZSTD(1)),
+        span_attributes['gen_ai.conversation.id'] CODEC(ZSTD(1)),
         -- v1.38: Multi-turn conversation tracking
 
     gen_ai_output_type LowCardinality(String) MATERIALIZED
-        span_attributes.`gen_ai.output.type` CODEC(ZSTD(1)),
+        span_attributes['gen_ai.output.type'] CODEC(ZSTD(1)),
         -- v1.38: text, json, function_call
 
     -- ============================================
@@ -169,23 +209,23 @@ CREATE TABLE IF NOT EXISTS spans (
     -- ============================================
 
     brokle_span_type LowCardinality(String) MATERIALIZED
-        span_attributes.`brokle.span.type` CODEC(ZSTD(1)),
+        span_attributes['brokle.span.type'] CODEC(ZSTD(1)),
         -- Filter: WHERE type = 'generation'
         -- Values: generation, agent, tool, retrieval, embedding, chain, event
 
     brokle_cost_input Nullable(Decimal(18, 9)) MATERIALIZED
-        toDecimal64OrNull(span_attributes.`brokle.cost.input`, 9) CODEC(ZSTD(1)),
+        toDecimal64OrNull(span_attributes['brokle.cost.input'], 9) CODEC(ZSTD(1)),
         -- CRITICAL: Extract from STRING (no Float64 loss)
 
     brokle_cost_output Nullable(Decimal(18, 9)) MATERIALIZED
-        toDecimal64OrNull(span_attributes.`brokle.cost.output`, 9) CODEC(ZSTD(1)),
+        toDecimal64OrNull(span_attributes['brokle.cost.output'], 9) CODEC(ZSTD(1)),
 
     brokle_cost_total Nullable(Decimal(18, 9)) MATERIALIZED
-        toDecimal64OrNull(span_attributes.`brokle.cost.total`, 9) CODEC(ZSTD(1)),
+        toDecimal64OrNull(span_attributes['brokle.cost.total'], 9) CODEC(ZSTD(1)),
         -- Billing analytics - exact precision
 
     brokle_prompt_id String MATERIALIZED
-        span_attributes.`brokle.prompt.id` CODEC(ZSTD(1)),
+        span_attributes['brokle.prompt.id'] CODEC(ZSTD(1)),
         -- Prompt analytics
 
     -- ============================================
@@ -194,15 +234,15 @@ CREATE TABLE IF NOT EXISTS spans (
     -- ============================================
 
     gen_ai_agent_name String MATERIALIZED
-        span_attributes.`gen_ai.agent.name` CODEC(ZSTD(1)),
+        span_attributes['gen_ai.agent.name'] CODEC(ZSTD(1)),
         -- Agent performance tracking
 
     gen_ai_tool_name String MATERIALIZED
-        span_attributes.`gen_ai.tool.name` CODEC(ZSTD(1)),
+        span_attributes['gen_ai.tool.name'] CODEC(ZSTD(1)),
         -- Tool usage analytics
 
     -- ============================================
-    -- NOT MATERIALIZED (Queryable via JSON)
+    -- NOT MATERIALIZED (Queryable via Map)
     -- ============================================
     -- These remain in span_attributes, extracted on-demand:
     --
@@ -224,7 +264,7 @@ CREATE TABLE IF NOT EXISTS spans (
     -- Embeddings (if used):
     --   - gen_ai.embeddings.dimension.count
     --
-    -- Query these with: span_attributes.`gen_ai.tool.call.id`
+    -- Query these with: span_attributes['gen_ai.tool.call.id']
 
     -- ============================================
     -- SYSTEM TIMESTAMPS
@@ -233,7 +273,7 @@ CREATE TABLE IF NOT EXISTS spans (
     updated_at DateTime64(3) DEFAULT now64(),
 
     -- ============================================
-    -- INDEXES (14 total)
+    -- INDEXES (15 total)
     -- ============================================
 
     -- Core OTEL
@@ -241,6 +281,7 @@ CREATE TABLE IF NOT EXISTS spans (
     INDEX idx_trace_id trace_id TYPE bloom_filter(0.001) GRANULARITY 1,
     INDEX idx_parent_span_id parent_span_id TYPE bloom_filter(0.001) GRANULARITY 1,
     INDEX idx_project_id project_id TYPE bloom_filter(0.001) GRANULARITY 1,
+    INDEX idx_scope_name scope_name TYPE bloom_filter(0.01) GRANULARITY 1,
 
     -- Materialized Gen AI (most queried)
     INDEX idx_gen_ai_operation gen_ai_operation_name TYPE bloom_filter(0.01) GRANULARITY 1,

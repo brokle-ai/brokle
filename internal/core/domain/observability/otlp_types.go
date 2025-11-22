@@ -65,6 +65,7 @@ type Event struct {
 type Link struct {
 	TraceID                interface{} `json:"traceId"`                          // Linked trace ID (Buffer or hex string)
 	SpanID                 interface{} `json:"spanId"`                           // Linked span ID (Buffer or hex string)
+	TraceState             interface{} `json:"traceState,omitempty"`             // W3C TraceState for linked span
 	Attributes             []KeyValue  `json:"attributes,omitempty"`             // Link metadata
 	DroppedAttributesCount uint32      `json:"droppedAttributesCount,omitempty"` // Number of dropped attributes
 }

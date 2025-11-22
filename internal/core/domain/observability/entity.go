@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"brokle/pkg/ulid"
 )
 
@@ -32,6 +34,12 @@ type Trace struct {
 	Name               string                 `json:"name" db:"name"`
 	ProjectID          string                 `json:"project_id" db:"project_id"`
 	Tags               []string               `json:"tags" db:"tags"`
+
+	// Aggregations (calculated from spans - ReplacingMergeTree)
+	TotalCost          *decimal.Decimal       `json:"total_cost,omitempty" db:"total_cost"`
+	TotalTokens        *uint32                `json:"total_tokens,omitempty" db:"total_tokens"`
+	SpanCount          *uint32                `json:"span_count,omitempty" db:"span_count"`
+
 	Spans              []*Span                `json:"spans,omitempty" db:"-"`
 	Scores             []*Score               `json:"scores,omitempty" db:"-"`
 	Bookmarked         bool                   `json:"bookmarked" db:"bookmarked"`
@@ -46,39 +54,57 @@ type Span struct {
 	CreatedAt               time.Time              `json:"created_at" db:"created_at"`
 	GenAIUsageOutputTokens  *int32                 `json:"gen_ai_usage_output_tokens,omitempty" db:"gen_ai_usage_output_tokens"`
 	BrokleSpanType          *string                `json:"brokle_span_type,omitempty" db:"brokle_span_type"`
-	BrokleInternalModelID   *string                `json:"brokle_internal_model_id,omitempty" db:"brokle_internal_model_id"`
-	BroklePromptVersion     *uint16                `json:"brokle_prompt_version,omitempty" db:"brokle_prompt_version"`
 	EndTime                 *time.Time             `json:"end_time,omitempty" db:"end_time"`
 	DurationMs              *uint32                `json:"duration_ms,omitempty" db:"duration_ms"`
-	BroklePromptName        *string                `json:"brokle_prompt_name,omitempty" db:"brokle_prompt_name"`
 	StatusMessage           *string                `json:"status_message,omitempty" db:"status_message"`
 	SpanAttributes          map[string]interface{} `json:"span_attributes" db:"span_attributes"`
 	ResourceAttributes      map[string]interface{} `json:"resource_attributes" db:"resource_attributes"`
+
+	// OTEL 1.38+ Instrumentation Scope
+	ScopeName               string                 `json:"scope_name" db:"scope_name"`
+	ScopeVersion            string                 `json:"scope_version" db:"scope_version"`
+	ScopeAttributes         map[string]interface{} `json:"scope_attributes" db:"scope_attributes"`
+
+	// W3C Trace Context
+	TraceState              string                 `json:"trace_state" db:"trace_state"`
+
+	// Input/Output
 	Input                   *string                `json:"input,omitempty" db:"input"`
 	Output                  *string                `json:"output,omitempty" db:"output"`
 	BroklePromptID          *string                `json:"brokle_prompt_id,omitempty" db:"brokle_prompt_id"`
-	BrokleCostTotal         *float64               `json:"brokle_cost_total,omitempty" db:"brokle_cost_total"`
-	BrokleCostOutput        *float64               `json:"brokle_cost_output,omitempty" db:"brokle_cost_output"`
-	BrokleCostInput         *float64               `json:"brokle_cost_input,omitempty" db:"brokle_cost_input"`
-	BrokleSpanLevel         *string                `json:"brokle_span_level,omitempty" db:"brokle_span_level"`
+	BrokleCostTotal         *decimal.Decimal       `json:"brokle_cost_total,omitempty" db:"brokle_cost_total"`
+	BrokleCostOutput        *decimal.Decimal       `json:"brokle_cost_output,omitempty" db:"brokle_cost_output"`
+	BrokleCostInput         *decimal.Decimal       `json:"brokle_cost_input,omitempty" db:"brokle_cost_input"`
 	ParentSpanID            *string                `json:"parent_span_id,omitempty" db:"parent_span_id"`
 	GenAIUsageInputTokens   *int32                 `json:"gen_ai_usage_input_tokens,omitempty" db:"gen_ai_usage_input_tokens"`
-	GenAIRequestTopP        *float32               `json:"gen_ai_request_top_p,omitempty" db:"gen_ai_request_top_p"`
-	GenAIRequestMaxTokens   *uint16                `json:"gen_ai_request_max_tokens,omitempty" db:"gen_ai_request_max_tokens"`
 	GenAIProviderName       *string                `json:"gen_ai_provider_name,omitempty" db:"gen_ai_provider_name"`
 	GenAIRequestModel       *string                `json:"gen_ai_request_model,omitempty" db:"gen_ai_request_model"`
 	GenAIOperationName      *string                `json:"gen_ai_operation_name,omitempty" db:"gen_ai_operation_name"`
-	GenAIRequestTemperature *float32               `json:"gen_ai_request_temperature,omitempty" db:"gen_ai_request_temperature"`
+
+	// OTEL 1.38+ Gen AI Materialized (Missing fields)
+	GenAIResponseModel      *string                `json:"gen_ai_response_model,omitempty" db:"gen_ai_response_model"`
+	GenAIResponseID         *string                `json:"gen_ai_response_id,omitempty" db:"gen_ai_response_id"`
+	GenAIConversationID     *string                `json:"gen_ai_conversation_id,omitempty" db:"gen_ai_conversation_id"`
+	GenAIOutputType         *string                `json:"gen_ai_output_type,omitempty" db:"gen_ai_output_type"`
+	GenAIAgentName          *string                `json:"gen_ai_agent_name,omitempty" db:"gen_ai_agent_name"`
+	GenAIToolName           *string                `json:"gen_ai_tool_name,omitempty" db:"gen_ai_tool_name"`
+
 	TraceID                 string                 `json:"trace_id" db:"trace_id"`
 	SpanName                string                 `json:"span_name" db:"span_name"`
 	SpanID                  string                 `json:"span_id" db:"span_id"`
 	ProjectID               string                 `json:"project_id" db:"project_id"`
-	EventsAttributes        []string               `json:"events_attributes,omitempty" db:"events_attributes"`
-	LinksSpanID             []string               `json:"links_span_id,omitempty" db:"links_span_id"`
-	LinksTraceID            []string               `json:"links_trace_id,omitempty" db:"links_trace_id"`
-	EventsTimestamp         []time.Time            `json:"events_timestamp,omitempty" db:"events_timestamp"`
-	EventsName              []string               `json:"events_name,omitempty" db:"events_name"`
-	LinksAttributes         []string               `json:"links_attributes,omitempty" db:"links_attributes"`
+	// OTEL Events (Array of maps for performance)
+	EventsTimestamp         []time.Time              `json:"events_timestamp,omitempty" db:"events_timestamp"`
+	EventsName              []string                 `json:"events_name,omitempty" db:"events_name"`
+	EventsAttributes        []map[string]interface{} `json:"events_attributes,omitempty" db:"events_attributes"`
+	EventsDroppedCount      []uint32                 `json:"events_dropped_attributes_count,omitempty" db:"events_dropped_attributes_count"`
+
+	// OTEL Links (Array of maps with TraceState)
+	LinksTraceID            []string                 `json:"links_trace_id,omitempty" db:"links_trace_id"`
+	LinksSpanID             []string                 `json:"links_span_id,omitempty" db:"links_span_id"`
+	LinksTraceState         []string                 `json:"links_trace_state,omitempty" db:"links_trace_state"`
+	LinksAttributes         []map[string]interface{} `json:"links_attributes,omitempty" db:"links_attributes"`
+	LinksDroppedCount       []uint32                 `json:"links_dropped_attributes_count,omitempty" db:"links_dropped_attributes_count"`
 	Scores                  []*Score               `json:"scores,omitempty" db:"-"`
 	ChildSpans              []*Span                `json:"child_spans,omitempty" db:"-"`
 	StatusCode              uint8                  `json:"status_code" db:"status_code"`
@@ -550,20 +576,20 @@ func (s *Span) CalculateDuration() {
 }
 
 // GetTotalCost returns the total cost from materialized BrokleCostTotal field
-func (s *Span) GetTotalCost() float64 {
+func (s *Span) GetTotalCost() decimal.Decimal {
 	// Use materialized column from ClickHouse
 	if s.BrokleCostTotal != nil {
 		return *s.BrokleCostTotal
 	}
 	// Fallback: calculate from input + output materialized columns
-	var inputCost, outputCost float64
+	total := decimal.Zero
 	if s.BrokleCostInput != nil {
-		inputCost = *s.BrokleCostInput
+		total = total.Add(*s.BrokleCostInput)
 	}
 	if s.BrokleCostOutput != nil {
-		outputCost = *s.BrokleCostOutput
+		total = total.Add(*s.BrokleCostOutput)
 	}
-	return inputCost + outputCost
+	return total
 }
 
 // GetTotalTokens returns the total tokens from materialized Gen AI usage fields

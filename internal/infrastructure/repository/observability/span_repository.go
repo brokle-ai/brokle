@@ -31,39 +31,47 @@ func (r *spanRepository) Create(ctx context.Context, span *observability.Span) e
 
 	query := `
 		INSERT INTO spans (
-			span_id, trace_id, parent_span_id, project_id,
+			span_id, trace_id, parent_span_id, trace_state, project_id,
 			span_name, span_kind, start_time, end_time, duration_ms,
 			status_code, status_message,
 			span_attributes, resource_attributes,
+			scope_name, scope_version, scope_attributes,
 			input, output,
-			events_timestamp, events_name, events_attributes,
-			links_trace_id, links_span_id, links_attributes,
+			events_timestamp, events_name, events_attributes, events_dropped_attributes_count,
+			links_trace_id, links_span_id, links_trace_state, links_attributes, links_dropped_attributes_count,
 			created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	return r.db.Exec(ctx, query,
-		span.SpanID, // Renamed from ID
+		span.SpanID,
 		span.TraceID,
 		span.ParentSpanID,
+		span.TraceState, // W3C Trace Context
 		span.ProjectID,
-		span.SpanName, // Renamed from Name
-		span.SpanKind, // Now UInt8 (0-5)
+		span.SpanName,
+		span.SpanKind,
 		span.StartTime,
 		span.EndTime,
 		span.DurationMs,
-		span.StatusCode, // Now UInt8 (0-2)
+		span.StatusCode,
 		span.StatusMessage,
-		span.SpanAttributes,     // All attributes (gen_ai.*, brokle.*, custom)
-		span.ResourceAttributes, // Resource-level attributes
+		span.SpanAttributes,
+		span.ResourceAttributes,
+		span.ScopeName,       // OTEL 1.38+ Instrumentation Scope
+		span.ScopeVersion,
+		span.ScopeAttributes,
 		span.Input,
 		span.Output,
-		span.EventsTimestamp, // OTEL Events arrays
+		span.EventsTimestamp,
 		span.EventsName,
-		span.EventsAttributes,
-		span.LinksTraceID, // OTEL Links arrays
+		span.EventsAttributes,      // Array(Map)
+		span.EventsDroppedCount,
+		span.LinksTraceID,
 		span.LinksSpanID,
-		span.LinksAttributes,
+		span.LinksTraceState,       // W3C TraceState for links
+		span.LinksAttributes,       // Array(Map)
+		span.LinksDroppedCount,
 		span.CreatedAt,
 		span.UpdatedAt,
 		// Note: Materialized columns (gen_ai_*, brokle_*) are NOT inserted - ClickHouse computes them
@@ -107,12 +115,13 @@ func (r *spanRepository) GetByID(ctx context.Context, id string) (*observability
 			created_at, updated_at,
 			gen_ai_operation_name, gen_ai_provider_name, gen_ai_request_model,
 			gen_ai_usage_input_tokens, gen_ai_usage_output_tokens,
-			brokle_span_type, brokle_span_level,
-			CAST(brokle_cost_input AS Nullable(Float64)),
-			CAST(brokle_cost_output AS Nullable(Float64)),
-			CAST(brokle_cost_total AS Nullable(Float64)),
-			brokle_prompt_id, brokle_prompt_name, brokle_prompt_version,
-			brokle_internal_model_id
+			gen_ai_response_model, gen_ai_response_id, gen_ai_conversation_id, gen_ai_output_type,
+			gen_ai_agent_name, gen_ai_tool_name,
+			brokle_span_type,
+			brokle_cost_input,
+			brokle_cost_output,
+			brokle_cost_total,
+			brokle_prompt_id
 		FROM spans
 		WHERE span_id = ?
 		LIMIT 1
@@ -136,12 +145,13 @@ func (r *spanRepository) GetByTraceID(ctx context.Context, traceID string) ([]*o
 			created_at, updated_at,
 			gen_ai_operation_name, gen_ai_provider_name, gen_ai_request_model,
 			gen_ai_usage_input_tokens, gen_ai_usage_output_tokens,
-			brokle_span_type, brokle_span_level,
-			CAST(brokle_cost_input AS Nullable(Float64)),
-			CAST(brokle_cost_output AS Nullable(Float64)),
-			CAST(brokle_cost_total AS Nullable(Float64)),
-			brokle_prompt_id, brokle_prompt_name, brokle_prompt_version,
-			brokle_internal_model_id
+			gen_ai_response_model, gen_ai_response_id, gen_ai_conversation_id, gen_ai_output_type,
+			gen_ai_agent_name, gen_ai_tool_name,
+			brokle_span_type,
+			brokle_cost_input,
+			brokle_cost_output,
+			brokle_cost_total,
+			brokle_prompt_id
 		FROM spans
 		WHERE trace_id = ?
 		ORDER BY start_time ASC
@@ -170,12 +180,13 @@ func (r *spanRepository) GetRootSpan(ctx context.Context, traceID string) (*obse
 			created_at, updated_at,
 			gen_ai_operation_name, gen_ai_provider_name, gen_ai_request_model,
 			gen_ai_usage_input_tokens, gen_ai_usage_output_tokens,
-			brokle_span_type, brokle_span_level,
-			CAST(brokle_cost_input AS Nullable(Float64)),
-			CAST(brokle_cost_output AS Nullable(Float64)),
-			CAST(brokle_cost_total AS Nullable(Float64)),
-			brokle_prompt_id, brokle_prompt_name, brokle_prompt_version,
-			brokle_internal_model_id
+			gen_ai_response_model, gen_ai_response_id, gen_ai_conversation_id, gen_ai_output_type,
+			gen_ai_agent_name, gen_ai_tool_name,
+			brokle_span_type,
+			brokle_cost_input,
+			brokle_cost_output,
+			brokle_cost_total,
+			brokle_prompt_id
 		FROM spans
 		WHERE trace_id = ? AND parent_span_id IS NULL
 		ORDER BY start_time DESC
@@ -200,12 +211,13 @@ func (r *spanRepository) GetChildren(ctx context.Context, parentSpanID string) (
 			created_at, updated_at,
 			gen_ai_operation_name, gen_ai_provider_name, gen_ai_request_model,
 			gen_ai_usage_input_tokens, gen_ai_usage_output_tokens,
-			brokle_span_type, brokle_span_level,
-			CAST(brokle_cost_input AS Nullable(Float64)),
-			CAST(brokle_cost_output AS Nullable(Float64)),
-			CAST(brokle_cost_total AS Nullable(Float64)),
-			brokle_prompt_id, brokle_prompt_name, brokle_prompt_version,
-			brokle_internal_model_id
+			gen_ai_response_model, gen_ai_response_id, gen_ai_conversation_id, gen_ai_output_type,
+			gen_ai_agent_name, gen_ai_tool_name,
+			brokle_span_type,
+			brokle_cost_input,
+			brokle_cost_output,
+			brokle_cost_total,
+			brokle_prompt_id
 		FROM spans
 		WHERE parent_span_id = ?
 		ORDER BY start_time ASC
@@ -240,12 +252,13 @@ func (r *spanRepository) GetByFilter(ctx context.Context, filter *observability.
 			created_at, updated_at,
 			gen_ai_operation_name, gen_ai_provider_name, gen_ai_request_model,
 			gen_ai_usage_input_tokens, gen_ai_usage_output_tokens,
-			brokle_span_type, brokle_span_level,
-			CAST(brokle_cost_input AS Nullable(Float64)),
-			CAST(brokle_cost_output AS Nullable(Float64)),
-			CAST(brokle_cost_total AS Nullable(Float64)),
-			brokle_prompt_id, brokle_prompt_name, brokle_prompt_version,
-			brokle_internal_model_id
+			gen_ai_response_model, gen_ai_response_id, gen_ai_conversation_id, gen_ai_output_type,
+			gen_ai_agent_name, gen_ai_tool_name,
+			brokle_span_type,
+			brokle_cost_input,
+			brokle_cost_output,
+			brokle_cost_total,
+			brokle_prompt_id
 		FROM spans
 		WHERE 1=1
 	`
@@ -482,19 +495,19 @@ func (r *spanRepository) scanSpanRow(row driver.Row) (*observability.Span, error
 		&span.GenAIOperationName,
 		&span.GenAIProviderName,
 		&span.GenAIRequestModel,
-		// Note: GenAIRequestMaxTokens, GenAIRequestTemperature, GenAIRequestTopP
-		// are NOT materialized (remain in span_attributes JSON) - removed from scan
 		&span.GenAIUsageInputTokens,
 		&span.GenAIUsageOutputTokens,
+		&span.GenAIResponseModel,
+		&span.GenAIResponseID,
+		&span.GenAIConversationID,
+		&span.GenAIOutputType,
+		&span.GenAIAgentName,
+		&span.GenAIToolName,
 		&span.BrokleSpanType,
-		&span.BrokleSpanLevel,
-		&span.BrokleCostInput,  // Decimal cast to Float64
-		&span.BrokleCostOutput, // Decimal cast to Float64
-		&span.BrokleCostTotal,  // Decimal cast to Float64
+		&span.BrokleCostInput,  // Now decimal.Decimal (no CAST)
+		&span.BrokleCostOutput,
+		&span.BrokleCostTotal,
 		&span.BroklePromptID,
-		&span.BroklePromptName,
-		&span.BroklePromptVersion,
-		&span.BrokleInternalModelID,
 	)
 
 	if err != nil {
@@ -543,15 +556,17 @@ func (r *spanRepository) scanSpans(rows driver.Rows) ([]*observability.Span, err
 			// are NOT materialized (remain in span_attributes JSON) - removed from scan
 			&span.GenAIUsageInputTokens,
 			&span.GenAIUsageOutputTokens,
+			&span.GenAIResponseModel,
+			&span.GenAIResponseID,
+			&span.GenAIConversationID,
+			&span.GenAIOutputType,
+			&span.GenAIAgentName,
+			&span.GenAIToolName,
 			&span.BrokleSpanType,
-			&span.BrokleSpanLevel,
-			&span.BrokleCostInput,  // Decimal cast to Float64
-			&span.BrokleCostOutput, // Decimal cast to Float64
-			&span.BrokleCostTotal,  // Decimal cast to Float64
+			&span.BrokleCostInput,
+			&span.BrokleCostOutput,
+			&span.BrokleCostTotal,
 			&span.BroklePromptID,
-			&span.BroklePromptName,
-			&span.BroklePromptVersion,
-			&span.BrokleInternalModelID,
 		)
 
 		if err != nil {

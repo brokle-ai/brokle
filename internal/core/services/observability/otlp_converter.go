@@ -14,6 +14,10 @@ import (
 	"brokle/pkg/ulid"
 )
 
+// MaxAttributeValueSize defines the maximum size for input/output attribute values
+// Matches common OTEL collector limits (1MB) to prevent oversized spans
+const MaxAttributeValueSize = 1024 * 1024 // 1MB
+
 // OTLPConverterService handles conversion of OTLP traces to Brokle telemetry events
 type OTLPConverterService struct {
 	logger         *logrus.Logger
@@ -128,9 +132,9 @@ func (s *OTLPConverterService) ConvertOTLPToBrokleEvents(ctx context.Context, ot
 				}
 
 				// Convert OTLP span to Brokle span event (with cost calculation)
-				obsEvent, err := s.convertSpanToEvent(ctx, span, resourceAttrs, scopeAttrs, scopeSpan.Scope, projectID)
+				obsEvent, err := s.createSpanEvent(ctx, span, resourceAttrs, scopeAttrs, scopeSpan.Scope, projectID)
 				if err != nil {
-					return nil, fmt.Errorf("failed to convert span: %w", err)
+					return nil, fmt.Errorf("failed to create span event: %w", err)
 				}
 				internalEvents = append(internalEvents, obsEvent)
 			}
@@ -139,6 +143,121 @@ func (s *OTLPConverterService) ConvertOTLPToBrokleEvents(ctx context.Context, ot
 
 	// Convert internal events to domain events
 	return convertToDomainEvents(internalEvents), nil
+}
+
+// truncateWithIndicator truncates a string value and sets a truncation indicator
+// Returns the (possibly truncated) value and whether it was truncated
+func truncateWithIndicator(value string, maxSize int) (string, bool) {
+	if len(value) <= maxSize {
+		return value, false
+	}
+	return value[:maxSize] + "...[truncated]", true
+}
+
+// validateMimeType validates MIME type against actual content, auto-detecting if missing
+// Returns validated/corrected MIME type
+func validateMimeType(value string, declaredMimeType string) string {
+	// If MIME type missing, auto-detect
+	if declaredMimeType == "" {
+		if json.Valid([]byte(value)) {
+			return "application/json"
+		}
+		return "text/plain"
+	}
+
+	// Validate declared type matches content
+	if declaredMimeType == "application/json" && !json.Valid([]byte(value)) {
+		// Content is not valid JSON but declared as JSON - override to text/plain
+		return "text/plain"
+	}
+
+	return declaredMimeType
+}
+
+// extractLLMMetadata extracts LLM-specific metadata from ChatML formatted input
+// Returns metadata map with brokle.llm.* attributes (empty if not ChatML format)
+func extractLLMMetadata(inputValue string) map[string]interface{} {
+	metadata := make(map[string]interface{})
+
+	// Try to parse as JSON array (ChatML format)
+	var messages []map[string]interface{}
+	if err := json.Unmarshal([]byte(inputValue), &messages); err != nil {
+		return metadata // Not ChatML, return empty
+	}
+
+	// Validate ChatML structure
+	if len(messages) == 0 {
+		return metadata // Empty array, not ChatML
+	}
+
+	// Check first message has required "role" field (ChatML requirement)
+	if _, hasRole := messages[0]["role"]; !hasRole {
+		return metadata // Missing role field, not ChatML format
+	}
+
+	// Extract metadata
+	metadata["brokle.llm.message_count"] = len(messages)
+
+	// Count messages by role
+	var userCount, assistantCount, systemCount, toolCount int
+	var firstRole, lastRole string
+	hasToolCalls := false
+
+	for i, msg := range messages {
+		role, _ := msg["role"].(string)
+
+		// Track first and last roles
+		if i == 0 {
+			firstRole = role
+		}
+		if i == len(messages)-1 {
+			lastRole = role
+		}
+
+		// Count by role
+		switch role {
+		case "user":
+			userCount++
+		case "assistant":
+			assistantCount++
+		case "system":
+			systemCount++
+		case "tool":
+			toolCount++
+		}
+
+		// Check for tool calls
+		if toolCalls, ok := msg["tool_calls"]; ok && toolCalls != nil {
+			hasToolCalls = true
+		}
+	}
+
+	// Add role counts
+	if userCount > 0 {
+		metadata["brokle.llm.user_message_count"] = userCount
+	}
+	if assistantCount > 0 {
+		metadata["brokle.llm.assistant_message_count"] = assistantCount
+	}
+	if systemCount > 0 {
+		metadata["brokle.llm.system_message_count"] = systemCount
+	}
+	if toolCount > 0 {
+		metadata["brokle.llm.tool_message_count"] = toolCount
+	}
+
+	// Add role tracking
+	if firstRole != "" {
+		metadata["brokle.llm.first_role"] = firstRole
+	}
+	if lastRole != "" {
+		metadata["brokle.llm.last_role"] = lastRole
+	}
+
+	// Add tool call indicator
+	metadata["brokle.llm.has_tool_calls"] = hasToolCalls
+
+	return metadata
 }
 
 // createTraceEvent creates a trace event from a root span
@@ -160,15 +279,21 @@ func (s *OTLPConverterService) createTraceEvent(span observability.OTLPSpan, res
 	payload := map[string]interface{}{
 		"trace_id":            traceID, // Renamed from "id"
 		"name":                span.Name,
-		"start_time":          startTime.Format(time.RFC3339Nano),
 		"status_code":         statusCode,    // Now UInt8 (0-2)
 		"resource_attributes": resourceAttrs, // OTEL resource attributes as map
 	}
 
+	// Add start_time if available
+	if startTime != nil {
+		payload["start_time"] = startTime.Format(time.RFC3339Nano)
+	}
+
 	if endTime != nil {
 		payload["end_time"] = endTime.Format(time.RFC3339Nano)
-		duration := uint32(endTime.Sub(*startTime).Milliseconds())
-		payload["duration_ms"] = duration
+		if startTime != nil {
+			duration := uint32(endTime.Sub(*startTime).Milliseconds())
+			payload["duration_ms"] = duration
+		}
 	}
 
 	if span.Status != nil && span.Status.Message != "" {
@@ -183,18 +308,101 @@ func (s *OTLPConverterService) createTraceEvent(span observability.OTLPSpan, res
 		payload["service_version"] = serviceVersion
 	}
 
-	// Extract trace-level input/output using official OTel format
-	// Supports: gen_ai.input.messages and gen_ai.output.messages (OTel 1.28+)
+	// Extract trace-level input/output with priority order:
+	// Priority 1: gen_ai.input.messages (OTLP standard for LLM)
+	// Priority 2: input.value (OpenInference pattern for generic data)
 	// Note: Data stored directly in ClickHouse with ZSTD compression
+
+	// ========== INPUT EXTRACTION ==========
+	var inputValue string
+	var inputMimeType string
+
+	// Try gen_ai.input.messages first (LLM messages - OTLP standard)
 	if messages, ok := allAttrs["gen_ai.input.messages"].([]interface{}); ok {
 		if messagesJSON, err := json.Marshal(messages); err == nil {
-			payload["input"] = string(messagesJSON)
+			inputValue = string(messagesJSON)
+			inputMimeType = "application/json" // LLM messages are always JSON
+		}
+	} else if messages, ok := allAttrs["gen_ai.input.messages"].(string); ok && messages != "" {
+		// Already JSON string from SDK
+		inputValue = messages
+		inputMimeType = "application/json"
+	}
+
+	// Fallback to input.value (generic input - OpenInference pattern)
+	if inputValue == "" {
+		if genericInput, ok := allAttrs["input.value"].(string); ok && genericInput != "" {
+			inputValue = genericInput
+			// Get MIME type (auto-detect if missing)
+			if mimeType, ok := allAttrs["input.mime_type"].(string); ok {
+				inputMimeType = validateMimeType(inputValue, mimeType)
+			} else {
+				inputMimeType = validateMimeType(inputValue, "")
+			}
 		}
 	}
 
+	// Truncate if needed (1MB limit)
+	if inputValue != "" {
+		truncated := false
+		inputValue, truncated = truncateWithIndicator(inputValue, MaxAttributeValueSize)
+		if truncated {
+			payload["input_truncated"] = true
+		}
+		payload["input"] = inputValue
+		if inputMimeType != "" {
+			payload["input_mime_type"] = inputMimeType
+		}
+
+		// Extract LLM metadata if input is ChatML format
+		if inputMimeType == "application/json" {
+			if llmMetadata := extractLLMMetadata(inputValue); len(llmMetadata) > 0 {
+				// Add LLM metadata to payload for attributes column
+				for key, value := range llmMetadata {
+					payload[key] = value
+				}
+			}
+		}
+	}
+
+	// ========== OUTPUT EXTRACTION ==========
+	var outputValue string
+	var outputMimeType string
+
+	// Try gen_ai.output.messages first (LLM messages - OTLP standard)
 	if messages, ok := allAttrs["gen_ai.output.messages"].([]interface{}); ok {
 		if messagesJSON, err := json.Marshal(messages); err == nil {
-			payload["output"] = string(messagesJSON)
+			outputValue = string(messagesJSON)
+			outputMimeType = "application/json"
+		}
+	} else if messages, ok := allAttrs["gen_ai.output.messages"].(string); ok && messages != "" {
+		outputValue = messages
+		outputMimeType = "application/json"
+	}
+
+	// Fallback to output.value (generic output - OpenInference pattern)
+	if outputValue == "" {
+		if genericOutput, ok := allAttrs["output.value"].(string); ok && genericOutput != "" {
+			outputValue = genericOutput
+			// Get MIME type (auto-detect if missing)
+			if mimeType, ok := allAttrs["output.mime_type"].(string); ok {
+				outputMimeType = validateMimeType(outputValue, mimeType)
+			} else {
+				outputMimeType = validateMimeType(outputValue, "")
+			}
+		}
+	}
+
+	// Truncate if needed (1MB limit)
+	if outputValue != "" {
+		truncated := false
+		outputValue, truncated = truncateWithIndicator(outputValue, MaxAttributeValueSize)
+		if truncated {
+			payload["output_truncated"] = true
+		}
+		payload["output"] = outputValue
+		if outputMimeType != "" {
+			payload["output_mime_type"] = outputMimeType
 		}
 	}
 
@@ -259,16 +467,20 @@ func (s *OTLPConverterService) createTraceEvent(span observability.OTLPSpan, res
 		EventType: "trace",
 		Payload:   payload,
 		Timestamp: func() *int64 {
-			ts := startTime.Unix()
-			return &ts
+			if startTime != nil {
+				ts := startTime.Unix()
+				return &ts
+			}
+			return nil
 		}(),
 	}
 
 	return event, nil
 }
 
-// convertSpanToEvent converts a single OTLP span to a Brokle telemetry event
-func (s *OTLPConverterService) convertSpanToEvent(ctx context.Context, span observability.OTLPSpan, resourceAttrs, scopeAttrs map[string]interface{}, scope *observability.Scope, projectID string) (*brokleEvent, error) {
+// createSpanEvent creates a span event with complete input/output extraction
+// Mirrors createTraceEvent() logic for consistency (spans also have input/output columns)
+func (s *OTLPConverterService) createSpanEvent(ctx context.Context, span observability.OTLPSpan, resourceAttrs, scopeAttrs map[string]interface{}, scope *observability.Scope, projectID string) (*brokleEvent, error) {
 	// Convert OTLP IDs to hex strings
 	traceID, err := convertTraceID(span.TraceID)
 	if err != nil {
@@ -294,9 +506,6 @@ func (s *OTLPConverterService) convertSpanToEvent(ctx context.Context, span obse
 	// Merge all attributes (resource + scope + span)
 	allAttrs := mergeAttributes(resourceAttrs, scopeAttrs, spanAttrs)
 
-	// Note: brokle.span.type is now stored in span_attributes JSON
-	// and will be extracted to materialized column brokle_span_type in ClickHouse
-
 	// Convert start/end times
 	startTime := convertUnixNano(span.StartTimeUnixNano)
 	endTime := convertUnixNano(span.EndTimeUnixNano)
@@ -309,15 +518,18 @@ func (s *OTLPConverterService) convertSpanToEvent(ctx context.Context, span obse
 
 	// Build span payload with new OTEL-native field names
 	payload := map[string]interface{}{
-		"span_id":             spanID, // Renamed from "id"
+		"span_id":             spanID,
 		"trace_id":            traceID,
 		"parent_span_id":      parentSpanID,
-		"span_name":           span.Name, // Renamed from "name"
-		"span_kind":           spanKind,  // Now UInt8 (0-5)
-		"start_time":          startTime.Format(time.RFC3339Nano),
-		"status_code":         statusCode,    // Now UInt8 (0-2)
-		"span_attributes":     spanAttrs,     // Span-level attributes as map
-		"resource_attributes": resourceAttrs, // Resource-level attributes as map
+		"span_name":           span.Name,
+		"span_kind":           spanKind,
+		"status_code":         statusCode,
+		"span_attributes":     spanAttrs,
+		"resource_attributes": resourceAttrs,
+	}
+
+	if startTime != nil {
+		payload["start_time"] = startTime.Format(time.RFC3339Nano)
 	}
 
 	if endTime != nil {
@@ -327,24 +539,141 @@ func (s *OTLPConverterService) convertSpanToEvent(ctx context.Context, span obse
 		payload["status_message"] = span.Status.Message
 	}
 
-	// Extract Gen AI semantic conventions from attributes
+	// ========== SPAN-LEVEL INPUT/OUTPUT EXTRACTION (Same as Traces) ==========
+	// Extract input/output with priority order (identical to createTraceEvent logic)
+	var inputValue string
+	var inputMimeType string
+
+	// Try gen_ai.input.messages first (LLM messages - OTLP standard)
+	if messages, ok := allAttrs["gen_ai.input.messages"].([]interface{}); ok {
+		if messagesJSON, err := json.Marshal(messages); err == nil {
+			inputValue = string(messagesJSON)
+			inputMimeType = "application/json"
+		}
+	} else if messages, ok := allAttrs["gen_ai.input.messages"].(string); ok && messages != "" {
+		inputValue = messages
+		inputMimeType = "application/json"
+	}
+
+	// Fallback to input.value (generic input - OpenInference pattern)
+	if inputValue == "" {
+		if genericInput, ok := allAttrs["input.value"].(string); ok && genericInput != "" {
+			inputValue = genericInput
+			// Get MIME type (auto-detect if missing)
+			if mimeType, ok := allAttrs["input.mime_type"].(string); ok {
+				inputMimeType = validateMimeType(inputValue, mimeType)
+			} else {
+				inputMimeType = validateMimeType(inputValue, "")
+			}
+		}
+	}
+
+	// Truncate if needed (1MB limit)
+	if inputValue != "" {
+		truncated := false
+		inputValue, truncated = truncateWithIndicator(inputValue, MaxAttributeValueSize)
+		if truncated {
+			payload["input_truncated"] = true
+		}
+		payload["input"] = inputValue
+		if inputMimeType != "" {
+			payload["input_mime_type"] = inputMimeType
+		}
+
+		// Extract LLM metadata if input is ChatML format
+		if inputMimeType == "application/json" {
+			if llmMetadata := extractLLMMetadata(inputValue); len(llmMetadata) > 0 {
+				// Add LLM metadata to payload for attributes column
+				for key, value := range llmMetadata {
+					payload[key] = value
+				}
+			}
+		}
+	}
+
+	// ========== OUTPUT EXTRACTION ==========
+	var outputValue string
+	var outputMimeType string
+
+	// Try gen_ai.output.messages first (LLM messages - OTLP standard)
+	if messages, ok := allAttrs["gen_ai.output.messages"].([]interface{}); ok {
+		if messagesJSON, err := json.Marshal(messages); err == nil {
+			outputValue = string(messagesJSON)
+			outputMimeType = "application/json"
+		}
+	} else if messages, ok := allAttrs["gen_ai.output.messages"].(string); ok && messages != "" {
+		outputValue = messages
+		outputMimeType = "application/json"
+	}
+
+	// Fallback to output.value (generic output - OpenInference pattern)
+	if outputValue == "" {
+		if genericOutput, ok := allAttrs["output.value"].(string); ok && genericOutput != "" {
+			outputValue = genericOutput
+			// Get MIME type (auto-detect if missing)
+			if mimeType, ok := allAttrs["output.mime_type"].(string); ok {
+				outputMimeType = validateMimeType(outputValue, mimeType)
+			} else {
+				outputMimeType = validateMimeType(outputValue, "")
+			}
+		}
+	}
+
+	// Truncate if needed (1MB limit)
+	if outputValue != "" {
+		truncated := false
+		outputValue, truncated = truncateWithIndicator(outputValue, MaxAttributeValueSize)
+		if truncated {
+			payload["output_truncated"] = true
+		}
+		payload["output"] = outputValue
+		if outputMimeType != "" {
+			payload["output_mime_type"] = outputMimeType
+		}
+	}
+
+	// ========== Continue with existing Gen AI extraction ==========
+	// Extract Gen AI semantic conventions (model, provider, tokens, etc.)
 	extractGenAIFields(allAttrs, payload)
 
-	// Calculate costs based on token usage and model pricing
+	// Calculate costs
 	s.calculateAndInjectCosts(ctx, allAttrs, projectID)
 
-	// Extract Brokle extensions from attributes (now includes calculated costs)
+	// Extract Brokle extensions
 	extractBrokleFields(allAttrs, payload)
+
+	// ========== OTEL 1.38+ INSTRUMENTATION SCOPE ==========
+	// Extract scope information from scopeSpan
+	if scope != nil {
+		if scope.Name != "" {
+			payload["scope_name"] = scope.Name
+		}
+		if scope.Version != "" {
+			payload["scope_version"] = scope.Version
+		}
+		// Extract scope attributes if present
+		if len(scopeAttrs) > 0 {
+			payload["scope_attributes"] = scopeAttrs
+		}
+	}
+
+	// ========== W3C TRACE CONTEXT: TraceState ==========
+	// Extract TraceState from span (vendor-specific tracing data)
+	// Note: TraceState not directly in OTLP span, comes from SpanContext
+	// For now, extract from attributes if SDK sets it
+	if traceState, ok := allAttrs["trace_state"].(string); ok && traceState != "" {
+		payload["trace_state"] = traceState
+	}
 
 	// Extract OTLP Events (timeline annotations within span)
 	if len(span.Events) > 0 {
 		eventsTimestamp := make([]string, len(span.Events))
 		eventsName := make([]string, len(span.Events))
-		eventsAttributes := make([]string, len(span.Events))
+		eventsAttributes := make([]map[string]interface{}, len(span.Events)) // Map type (OTEL standard)
 		eventsDroppedCount := make([]uint32, len(span.Events))
 
 		for i, event := range span.Events {
-			// Convert event timestamp
+			// Convert event timestamp (nanosecond precision)
 			if eventTime := convertUnixNano(event.TimeUnixNano); eventTime != nil {
 				eventsTimestamp[i] = eventTime.Format(time.RFC3339Nano)
 			}
@@ -352,9 +681,9 @@ func (s *OTLPConverterService) convertSpanToEvent(ctx context.Context, span obse
 			// Extract event name
 			eventsName[i] = event.Name
 
-			// Extract event attributes as JSON
+			// Extract event attributes as Map (not JSON string)
 			eventAttrs := extractAttributesFromKeyValues(event.Attributes)
-			eventsAttributes[i] = marshalAttributes(eventAttrs)
+			eventsAttributes[i] = eventAttrs // Direct map, ClickHouse converts to Map(String,String)
 
 			// Track dropped attributes
 			eventsDroppedCount[i] = event.DroppedAttributesCount
@@ -362,7 +691,7 @@ func (s *OTLPConverterService) convertSpanToEvent(ctx context.Context, span obse
 
 		payload["events_timestamp"] = eventsTimestamp
 		payload["events_name"] = eventsName
-		payload["events_attributes"] = eventsAttributes
+		payload["events_attributes"] = eventsAttributes // Array of maps
 		payload["events_dropped_attributes_count"] = eventsDroppedCount
 	}
 
@@ -370,7 +699,8 @@ func (s *OTLPConverterService) convertSpanToEvent(ctx context.Context, span obse
 	if len(span.Links) > 0 {
 		linksTraceID := make([]string, len(span.Links))
 		linksSpanID := make([]string, len(span.Links))
-		linksAttributes := make([]string, len(span.Links))
+		linksTraceState := make([]string, len(span.Links)) // W3C TraceState for links
+		linksAttributes := make([]map[string]interface{}, len(span.Links)) // Map type (OTEL standard)
 		linksDroppedCount := make([]uint32, len(span.Links))
 
 		for i, link := range span.Links {
@@ -384,9 +714,16 @@ func (s *OTLPConverterService) convertSpanToEvent(ctx context.Context, span obse
 				linksSpanID[i] = spanID
 			}
 
-			// Extract link attributes as JSON
+			// Extract TraceState for this link (W3C Trace Context)
+			if link.TraceState != nil {
+				if ts, ok := link.TraceState.(string); ok {
+					linksTraceState[i] = ts
+				}
+			}
+
+			// Extract link attributes as Map (not JSON string)
 			linkAttrs := extractAttributesFromKeyValues(link.Attributes)
-			linksAttributes[i] = marshalAttributes(linkAttrs)
+			linksAttributes[i] = linkAttrs // Direct map, ClickHouse converts to Map(String,String)
 
 			// Track dropped attributes
 			linksDroppedCount[i] = link.DroppedAttributesCount
@@ -394,26 +731,24 @@ func (s *OTLPConverterService) convertSpanToEvent(ctx context.Context, span obse
 
 		payload["links_trace_id"] = linksTraceID
 		payload["links_span_id"] = linksSpanID
-		payload["links_attributes"] = linksAttributes
+		payload["links_trace_state"] = linksTraceState // NEW: W3C TraceState array
+		payload["links_attributes"] = linksAttributes // Array of maps
 		payload["links_dropped_attributes_count"] = linksDroppedCount
 	}
-
-	// Note: span_attributes and resource_attributes already set above
-	// All attributes are now properly namespaced:
-	// - gen_ai.* → OTEL Gen AI conventions
-	// - brokle.* → Brokle custom attributes
-	// - service.*, deployment.* → OTEL resource attributes
 
 	// Create span event
 	event := &brokleEvent{
 		EventID:   ulid.New().String(),
-		SpanID:    spanID,  // OTLP span_id (16 hex chars)
-		TraceID:   traceID, // OTLP trace_id (32 hex chars)
+		SpanID:    spanID,
+		TraceID:   traceID,
 		EventType: "span",
 		Payload:   payload,
 		Timestamp: func() *int64 {
-			ts := startTime.Unix()
-			return &ts
+			if startTime != nil {
+				ts := startTime.Unix()
+				return &ts
+			}
+			return nil
 		}(),
 	}
 

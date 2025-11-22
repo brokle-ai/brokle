@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
 
 	"brokle/internal/core/domain/observability"
@@ -400,12 +401,12 @@ func (s *SpanService) CalculateTraceCost(ctx context.Context, traceID string) (f
 		return 0, appErrors.NewInternalError("failed to get spans", err)
 	}
 
-	var totalCost float64
+	totalCost := decimal.Zero
 	for _, span := range spans {
-		totalCost += span.GetTotalCost()
+		totalCost = totalCost.Add(span.GetTotalCost())
 	}
 
-	return totalCost, nil
+	return totalCost.InexactFloat64(), nil
 }
 
 // CalculateTraceTokens calculates total tokens for all spans in a trace
