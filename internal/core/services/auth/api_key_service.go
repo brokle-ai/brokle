@@ -108,37 +108,27 @@ func (s *apiKeyService) CountAPIKeys(ctx context.Context, filters *authDomain.AP
 	return s.apiKeyRepo.CountByFilters(ctx, filters)
 }
 
-// UpdateAPIKey updates an existing API key
-func (s *apiKeyService) UpdateAPIKey(ctx context.Context, keyID ulid.ULID, req *authDomain.UpdateAPIKeyRequest) error {
-	// Get existing key
+// DeleteAPIKey deletes (soft deletes) an API key with project ownership verification
+func (s *apiKeyService) DeleteAPIKey(ctx context.Context, keyID ulid.ULID, projectID ulid.ULID) error {
+	// Verify API key exists (filters out already-deleted keys)
 	apiKey, err := s.apiKeyRepo.GetByID(ctx, keyID)
 	if err != nil {
-		return fmt.Errorf("get API key: %w", err)
+		if errors.Is(err, authDomain.ErrNotFound) {
+			return appErrors.NewNotFoundError("API key not found")
+		}
+		return appErrors.NewInternalError("Failed to get API key", err)
 	}
 
-	// Update fields
-	if req.Name != nil {
-		apiKey.Name = *req.Name
-	}
-	if req.IsActive != nil {
-		apiKey.IsActive = *req.IsActive
+	// Verify API key belongs to specified project (security check)
+	if apiKey.ProjectID != projectID {
+		return appErrors.NewNotFoundError("API key not found in this project")
 	}
 
-	apiKey.UpdatedAt = time.Now()
-
-	// Save changes
-	if err := s.apiKeyRepo.Update(ctx, apiKey); err != nil {
-		return fmt.Errorf("update API key: %w", err)
+	// Perform soft delete
+	if err := s.apiKeyRepo.Delete(ctx, keyID); err != nil {
+		return appErrors.NewInternalError("Failed to delete API key", err)
 	}
 
-	return nil
-}
-
-// RevokeAPIKey revokes an API key
-func (s *apiKeyService) RevokeAPIKey(ctx context.Context, keyID ulid.ULID) error {
-	if err := s.apiKeyRepo.DeactivateAPIKey(ctx, keyID); err != nil {
-		return fmt.Errorf("revoke API key: %w", err)
-	}
 	return nil
 }
 
@@ -168,12 +158,7 @@ func (s *apiKeyService) ValidateAPIKey(ctx context.Context, fullKey string) (*au
 		return nil, appErrors.NewInternalError("Failed to validate API key", err)
 	}
 
-	// Check if key is active
-	if !apiKey.IsActive {
-		return nil, appErrors.NewUnauthorizedError("API key is inactive")
-	}
-
-	// Check expiration
+	// Check expiration (deleted keys filtered by GORM soft delete)
 	if apiKey.ExpiresAt != nil && time.Now().After(*apiKey.ExpiresAt) {
 		return nil, appErrors.NewUnauthorizedError("API key has expired")
 	}
@@ -202,11 +187,6 @@ func (s *apiKeyService) ValidateAPIKey(ctx context.Context, fullKey string) (*au
 	}, nil
 }
 
-// UpdateLastUsed updates the last used timestamp
-func (s *apiKeyService) UpdateLastUsed(ctx context.Context, keyID ulid.ULID) error {
-	return s.apiKeyRepo.MarkAsUsed(ctx, keyID)
-}
-
 // CheckRateLimit checks if the API key has exceeded rate limits
 func (s *apiKeyService) CheckRateLimit(ctx context.Context, keyID ulid.ULID) (bool, error) {
 	// TODO: Implement rate limiting logic with Redis
@@ -228,7 +208,7 @@ func (s *apiKeyService) GetAPIKeyContext(ctx context.Context, keyID ulid.ULID) (
 }
 
 // CanAPIKeyAccessResource checks if an API key can access a specific resource
-// Note: With scopes removed, this now checks if the key is active
+// Note: All non-deleted, non-expired API keys have full access to their project
 // Access control should be handled at the organization RBAC level
 func (s *apiKeyService) CanAPIKeyAccessResource(ctx context.Context, keyID ulid.ULID, resource string) (bool, error) {
 	apiKey, err := s.apiKeyRepo.GetByID(ctx, keyID)
@@ -236,9 +216,9 @@ func (s *apiKeyService) CanAPIKeyAccessResource(ctx context.Context, keyID ulid.
 		return false, fmt.Errorf("get API key: %w", err)
 	}
 
-	// All active API keys have full access to their project
+	// All API keys have full access to their project (deleted keys filtered by GORM)
 	// Fine-grained permissions handled by organization RBAC
-	return apiKey.IsActive, nil
+	return !apiKey.IsExpired(), nil
 }
 
 // Scoped access methods

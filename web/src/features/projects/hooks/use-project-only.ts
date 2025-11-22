@@ -8,6 +8,7 @@
  */
 
 import { useWorkspace } from '@/context/workspace-context'
+import type { WorkspaceError } from '@/context/workspace-errors'
 import { useRouter } from 'next/navigation'
 import type { OrganizationWithProjects, ProjectSummary } from '@/features/authentication'
 
@@ -17,7 +18,7 @@ export interface ProjectOnlyContext {
   projects: ProjectSummary[]
   organization: OrganizationWithProjects | null
   isLoading: boolean
-  error: string | null
+  error: WorkspaceError | null
 
   // Project Actions
   switchProject: (projectSlug: string) => void
@@ -41,20 +42,19 @@ export interface ProjectOnlyContext {
  * @example
  * ```tsx
  * function ProjectDashboard() {
- *   const { 
- *     currentProject, 
- *     currentProjectMetrics,
+ *   const {
+ *     currentProject,
  *     hasProject,
- *     isLoading 
+ *     isLoading
  *   } = useProjectOnly()
- *   
+ *
  *   if (isLoading) return <LoadingSpinner />
  *   if (!hasProject) return <NoProjectSelected />
- *   
+ *
  *   return (
  *     <div>
  *       <h1>{currentProject.name}</h1>
- *       <MetricsDashboard metrics={currentProjectMetrics} />
+ *       <MetricsDashboard metrics={currentProject.metrics} />
  *     </div>
  *   )
  * }
@@ -108,10 +108,10 @@ export function useProjectOnly(): ProjectOnlyContext {
  *     <div>
  *       <Dropdown>
  *         {availableProjects.map(project => (
- *           <DropdownItem 
+ *           <DropdownItem
  *             key={project.id}
- *             onClick={() => selectProject(project.slug)}
- *             selected={selectedProjectSlug === project.slug}
+ *             onClick={() => selectProject(project.compositeSlug)}
+ *             selected={selectedProjectSlug === project.compositeSlug}
  *           >
  *             {project.name}
  *           </DropdownItem>
@@ -131,7 +131,7 @@ export function useProjectSelector() {
 
   return {
     availableProjects: project.projects,
-    selectedProjectSlug: project.currentProject?.slug || null,
+    selectedProjectSlug: project.currentProject?.compositeSlug || null,
     selectProject: project.switchProject,
     hasMultipleOptions: project.hasMultipleProjects,
     isLoading: project.isLoading,
@@ -185,7 +185,7 @@ export function useProjectSelector() {
  */
 export function useProjectMetrics() {
   const project = useProjectOnly()
-  const metrics = project.currentProjectMetrics
+  const metrics = project.currentProject?.metrics || null
 
   return {
     // Raw metrics
@@ -248,7 +248,7 @@ export function useProjectInfo() {
     name: current?.name || '',
     description: current?.description || '',
     status: current?.status || 'inactive',
-    slug: current?.slug || '',
+    compositeSlug: current?.compositeSlug || '',
 
     // Computed properties
     isActive: current?.status === 'active',

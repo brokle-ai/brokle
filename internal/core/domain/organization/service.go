@@ -53,6 +53,10 @@ type ProjectService interface {
 	UpdateProject(ctx context.Context, projectID ulid.ULID, req *UpdateProjectRequest) error
 	DeleteProject(ctx context.Context, projectID ulid.ULID) error
 
+	// Archive lifecycle
+	ArchiveProject(ctx context.Context, projectID ulid.ULID) error
+	UnarchiveProject(ctx context.Context, projectID ulid.ULID) error
+
 	// Organization projects
 	GetProjectsByOrganization(ctx context.Context, orgID ulid.ULID) ([]*Project, error)
 	GetProjectCount(ctx context.Context, orgID ulid.ULID) (int, error)

@@ -333,6 +333,11 @@ export class BrokleAPIClient {
 
   // Extract data from API response wrapper
   private extractData<T>(response: AxiosResponse<APIResponse<T>>): T {
+    // Handle 204 No Content responses (DELETE endpoints, etc.)
+    if (response.status === 204) {
+      return undefined as T
+    }
+
     const responseData = response.data
 
     // Defensive validation with helpful error messages

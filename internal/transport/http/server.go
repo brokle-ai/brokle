@@ -248,7 +248,7 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 		orgs.GET("", s.handlers.Organization.List) // No org context required for listing user's orgs
 		orgs.POST("", s.handlers.Organization.Create)
 		orgs.GET("/:orgId", s.handlers.Organization.Get)
-		orgs.PUT("/:orgId", s.authMiddleware.RequirePermission("organizations:write"), s.handlers.Organization.Update)
+		orgs.PATCH("/:orgId", s.authMiddleware.RequirePermission("organizations:write"), s.handlers.Organization.Update)
 		orgs.DELETE("/:orgId", s.authMiddleware.RequirePermission("organizations:delete"), s.handlers.Organization.Delete)
 		orgs.GET("/:orgId/members", s.authMiddleware.RequirePermission("members:read"), s.handlers.Organization.ListMembers)
 		orgs.POST("/:orgId/members", s.authMiddleware.RequirePermission("members:invite"), s.handlers.Organization.InviteMember)
@@ -280,12 +280,13 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 		projects.POST("", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Project.Create)
 		projects.GET("/:projectId", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Project.Get)
 		projects.PUT("/:projectId", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Project.Update)
+		projects.POST("/:projectId/archive", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Project.Archive)
+		projects.POST("/:projectId/unarchive", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Project.Unarchive)
 		projects.DELETE("/:projectId", s.authMiddleware.RequirePermission("projects:delete"), s.handlers.Project.Delete)
 
 		// API key routes nested under projects (double-nesting only)
 		projects.GET("/:projectId/api-keys", s.authMiddleware.RequirePermission("api-keys:read"), s.handlers.APIKey.List)
 		projects.POST("/:projectId/api-keys", s.authMiddleware.RequirePermission("api-keys:create"), s.handlers.APIKey.Create)
-		projects.PATCH("/:projectId/api-keys/:keyId", s.authMiddleware.RequirePermission("api-keys:update"), s.handlers.APIKey.Update)
 		projects.DELETE("/:projectId/api-keys/:keyId", s.authMiddleware.RequirePermission("api-keys:delete"), s.handlers.APIKey.Delete)
 	}
 

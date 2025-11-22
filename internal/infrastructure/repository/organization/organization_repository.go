@@ -147,6 +147,7 @@ type orgProjectRow struct {
 	ProjectOrgID   *ulid.ULID
 	ProjectCreated *time.Time
 	ProjectUpdated *time.Time
+	ProjectStatus  *string
 	OrgName        string
 	OrgPlan        string
 	RoleName       string
@@ -174,7 +175,8 @@ func (r *organizationRepository) GetUserOrganizationsWithProjectsBatch(
 			projects.description as project_desc,
 			projects.organization_id as project_org_id,
 			projects.created_at as project_created,
-			projects.updated_at as project_updated
+			projects.updated_at as project_updated,
+			projects.status as project_status
 		`).
 		Joins("INNER JOIN organization_members ON organization_members.organization_id = organizations.id").
 		Joins("INNER JOIN roles ON roles.id = organization_members.role_id").
@@ -246,6 +248,7 @@ func groupByOrganization(rows []orgProjectRow) []*orgDomain.OrganizationWithProj
 					Name:           *row.ProjectName,
 					Description:    description,
 					OrganizationID: *row.ProjectOrgID,
+					Status:         *row.ProjectStatus,
 					CreatedAt:      createdAt,
 					UpdatedAt:      updatedAt,
 				}

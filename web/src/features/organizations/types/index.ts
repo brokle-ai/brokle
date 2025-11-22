@@ -81,7 +81,7 @@ export type SubscriptionPlan = 'free' | 'pro' | 'business' | 'enterprise'
 
 export type OrganizationRole = 'owner' | 'admin' | 'developer' | 'viewer'
 
-export type ProjectStatus = 'active' | 'inactive' | 'archived'
+export type ProjectStatus = 'active' | 'archived'
 
 // Context types for state management
 export interface OrganizationContext {

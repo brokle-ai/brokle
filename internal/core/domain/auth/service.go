@@ -70,12 +70,10 @@ type APIKeyService interface {
 	CreateAPIKey(ctx context.Context, userID ulid.ULID, req *CreateAPIKeyRequest) (*CreateAPIKeyResponse, error)
 	GetAPIKey(ctx context.Context, keyID ulid.ULID) (*APIKey, error)
 	GetAPIKeys(ctx context.Context, filters *APIKeyFilters) ([]*APIKey, error)
-	UpdateAPIKey(ctx context.Context, keyID ulid.ULID, req *UpdateAPIKeyRequest) error
-	RevokeAPIKey(ctx context.Context, keyID ulid.ULID) error
+	DeleteAPIKey(ctx context.Context, keyID ulid.ULID, projectID ulid.ULID) error
 
 	// API key validation and usage
 	ValidateAPIKey(ctx context.Context, fullKey string) (*ValidateAPIKeyResponse, error)
-	UpdateLastUsed(ctx context.Context, keyID ulid.ULID) error
 	CheckRateLimit(ctx context.Context, keyID ulid.ULID) (bool, error)
 
 	// API key context and permissions
@@ -273,19 +271,13 @@ type CreateSessionRequest struct {
 	Remember  bool    `json:"remember"` // Extend session duration
 }
 
-type UpdateAPIKeyRequest struct {
-	Name     *string `json:"name,omitempty" validate:"omitempty,min=1,max=100"`
-	IsActive *bool   `json:"is_active,omitempty"`
-}
-
 // Filter types
 type APIKeyFilters struct {
 	// Domain filters
 	UserID         *ulid.ULID `json:"user_id,omitempty"`
 	OrganizationID *ulid.ULID `json:"organization_id,omitempty"`
 	ProjectID      *ulid.ULID `json:"project_id,omitempty"`
-	IsActive       *bool      `json:"is_active,omitempty"`
-	IsExpired      *bool      `json:"is_expired,omitempty"`
+	IsExpired      *bool      `json:"is_expired,omitempty"` // Filter by expiration status
 
 	// Pagination (embedded for DRY)
 	pagination.Params `json:",inline"`

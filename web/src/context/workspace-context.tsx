@@ -1,16 +1,26 @@
 'use client'
 
-import { createContext, useContext, ReactNode, useMemo, useState, useEffect } from 'react'
+import { createContext, useContext, ReactNode, useMemo, useState, useEffect, useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { usePathname } from 'next/navigation'
 import { BrokleAPIClient } from '@/lib/api/core/client'
 import { extractIdFromCompositeSlug, isValidCompositeSlug } from '@/lib/utils/slug-utils'
+import { setDefaultOrganization } from '@/features/authentication/api/auth-api'
+import {
+  createWorkspaceError,
+  classifySlugError,
+  classifyAPIError,
+  WorkspaceErrorCode,
+  type WorkspaceError,
+} from './workspace-errors'
 import type {
   User,
   OrganizationWithProjects,
   ProjectSummary,
   SubscriptionPlan,
   OrganizationRole,
+  ProjectStatus,
+  OrganizationMember,
 } from '@/features/authentication'
 import type {
   EnhancedUserProfileResponse,
@@ -20,6 +30,22 @@ import type {
 
 const client = new BrokleAPIClient('/api')
 
+/**
+ * WorkspaceContext value interface
+ *
+ * Provides centralized state management for organizations, projects, and workspace operations.
+ * Includes granular loading states and error classification for optimal UX.
+ *
+ * @example
+ * ```tsx
+ * const {
+ *   currentOrganization,
+ *   loadingState,
+ *   canInteract,
+ *   switchOrganization
+ * } = useWorkspace()
+ * ```
+ */
 interface WorkspaceContextValue {
   // Data
   user: User | null
@@ -32,10 +58,23 @@ interface WorkspaceContextValue {
   // State
   isLoading: boolean
   isInitialized: boolean
-  error: string | null
+  error: WorkspaceError | null
+
+  // Granular loading states
+  loadingState: {
+    isInitializing: boolean       // First-time load
+    isRefreshing: boolean         // Background refresh
+    isSwitchingOrg: boolean       // Organization switch in progress
+    isSwitchingProject: boolean   // Project switch in progress
+  }
+
+  // Computed convenience flags
+  canInteract: boolean            // Can user interact with switchers?
 
   // Actions
   refresh: () => Promise<void>
+  switchOrganization: (compositeSlug: string) => Promise<string>  // Returns org ID
+  switchProject: (compositeSlug: string) => Promise<string>        // Returns project ID
   clearError: () => void
 }
 
@@ -49,7 +88,15 @@ interface WorkspaceData {
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname()
   const queryClient = useQueryClient()
-  const [urlError, setUrlError] = useState<string | null>(null)
+  const [urlError, setUrlError] = useState<WorkspaceError | null>(null)
+
+  // Centralized loading state
+  const [loadingState, setLoadingState] = useState({
+    isInitializing: true,
+    isRefreshing: false,
+    isSwitchingOrg: false,
+    isSwitchingProject: false,
+  })
 
   // Fetch workspace data with React Query
   const { data, isLoading, error: queryError } = useQuery<WorkspaceData>({
@@ -89,9 +136,22 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           compositeSlug: proj.composite_slug,
           description: proj.description || '',
           organizationId: proj.organization_id,
+          status: proj.status as ProjectStatus,
           createdAt: proj.created_at,
           updatedAt: proj.updated_at,
+          metrics: {
+            requests_today: 0,
+            cost_today: 0,
+            avg_latency: 0,
+            error_rate: 0,
+          },
         })),
+        members: [] as OrganizationMember[], // Will be populated from API when needed
+        usage: {
+          requests_this_month: 0,
+          cost_this_month: 0,
+          models_used: 0,
+        },
       }))
 
       user.organizations = organizations
@@ -115,27 +175,92 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),  // Exponential backoff
   })
 
-  // Auto-detect context from URL (no side effects in useMemo)
-  const { currentOrganization, currentProject } = useMemo(() => {
-    if (!data) return { currentOrganization: null, currentProject: null }
+  // Update loading state when query state changes
+  useEffect(() => {
+    setLoadingState(prev => ({
+      ...prev,
+      isInitializing: isLoading && !data,
+      isRefreshing: isLoading && !!data,
+    }))
+  }, [isLoading, data])
+
+  // Organization switch handler
+  const switchOrganization = useCallback(async (compositeSlug: string): Promise<string> => {
+    setLoadingState(prev => ({ ...prev, isSwitchingOrg: true }))
+
+    try {
+      const targetOrgId = extractIdFromCompositeSlug(compositeSlug)
+
+      // Update backend default org
+      await setDefaultOrganization(targetOrgId)
+
+      // Refresh workspace data
+      await queryClient.refetchQueries({ queryKey: ['workspace'] })
+
+      return targetOrgId
+    } catch (error) {
+      throw classifyAPIError(error)
+    } finally {
+      setLoadingState(prev => ({ ...prev, isSwitchingOrg: false }))
+    }
+  }, [queryClient])
+
+  // Project switch handler
+  const switchProject = useCallback(async (compositeSlug: string): Promise<string> => {
+    setLoadingState(prev => ({ ...prev, isSwitchingProject: true }))
+
+    try {
+      const projectId = extractIdFromCompositeSlug(compositeSlug)
+
+      // No API call needed - just navigate
+      // Loading state cleared after navigation completes
+      return projectId
+    } catch {
+      throw classifySlugError(compositeSlug, 'project')
+    } finally {
+      setLoadingState(prev => ({ ...prev, isSwitchingProject: false }))
+    }
+  }, [])
+
+  // Auto-detect context from URL with proper error handling
+  const { currentOrganization, currentProject, detectedUrlError } = useMemo(() => {
+    if (!data) return {
+      currentOrganization: null,
+      currentProject: null,
+      detectedUrlError: null
+    }
+
+    let urlError: WorkspaceError | null = null
 
     // Try to detect organization from /organizations/[orgSlug]
     const orgMatch = pathname.match(/\/organizations\/([^/]+)/)
     if (orgMatch) {
       const compositeSlug = orgMatch[1]
-      if (isValidCompositeSlug(compositeSlug)) {
+
+      if (!isValidCompositeSlug(compositeSlug)) {
+        urlError = classifySlugError(compositeSlug, 'organization')
+      } else {
         try {
           const orgId = extractIdFromCompositeSlug(compositeSlug)
           const org = data.organizations.find(o => o.id === orgId)
-          if (org) {
+
+          if (!org) {
+            urlError = createWorkspaceError(
+              WorkspaceErrorCode.ORG_NOT_FOUND,
+              { slug: compositeSlug, orgId }
+            )
+          } else {
             if (process.env.NODE_ENV === 'development') {
               console.log('[Workspace] Detected org from URL:', org.name)
             }
-            return { currentOrganization: org, currentProject: null }
+            return {
+              currentOrganization: org,
+              currentProject: null,
+              detectedUrlError: null
+            }
           }
-        } catch (err) {
-          // Invalid slug - will be handled in useEffect
-          console.warn('[Workspace] Failed to extract org ID from slug:', compositeSlug)
+        } catch {
+          urlError = classifySlugError(compositeSlug, 'organization')
         }
       }
     }
@@ -144,7 +269,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     const projectMatch = pathname.match(/\/projects\/([^/]+)/)
     if (projectMatch) {
       const compositeSlug = projectMatch[1]
-      if (isValidCompositeSlug(compositeSlug)) {
+
+      if (!isValidCompositeSlug(compositeSlug)) {
+        urlError = classifySlugError(compositeSlug, 'project')
+      } else {
         try {
           const projectId = extractIdFromCompositeSlug(compositeSlug)
 
@@ -155,39 +283,51 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
               if (process.env.NODE_ENV === 'development') {
                 console.log('[Workspace] Detected project from URL:', project.name, 'in org:', org.name)
               }
-              return { currentOrganization: org, currentProject: project }
+              return {
+                currentOrganization: org,
+                currentProject: project,
+                detectedUrlError: null
+              }
             }
           }
-        } catch (err) {
-          // Invalid slug - will be handled in useEffect
-          console.warn('[Workspace] Failed to extract project ID from slug:', compositeSlug)
+
+          // Project not found in any organization
+          urlError = createWorkspaceError(
+            WorkspaceErrorCode.PROJECT_NOT_FOUND,
+            { slug: compositeSlug, projectId }
+          )
+        } catch {
+          urlError = classifySlugError(compositeSlug, 'project')
         }
       }
     }
 
     // Default: use user's default organization
-    if (data.user.defaultOrganizationId) {
+    if (!urlError && data.user.defaultOrganizationId) {
       const defaultOrg = data.organizations.find(o => o.id === data.user.defaultOrganizationId)
       if (defaultOrg) {
         if (process.env.NODE_ENV === 'development') {
           console.log('[Workspace] Using default org:', defaultOrg.name)
         }
-        return { currentOrganization: defaultOrg, currentProject: null }
+        return {
+          currentOrganization: defaultOrg,
+          currentProject: null,
+          detectedUrlError: null
+        }
       }
     }
 
-    return { currentOrganization: null, currentProject: null }
+    return {
+      currentOrganization: null,
+      currentProject: null,
+      detectedUrlError: urlError
+    }
   }, [data, pathname])
 
-  // Handle URL errors in useEffect (side effects belong here, not useMemo)
+  // Set URL error from useMemo detection
   useEffect(() => {
-    const hasOrgOrProjectInURL = pathname.match(/\/(organizations|projects)\//)
-    if (hasOrgOrProjectInURL && !currentOrganization && !isLoading) {
-      setUrlError('Organization or project not found')
-    } else {
-      setUrlError(null)
-    }
-  }, [currentOrganization, currentProject, pathname, isLoading])
+    setUrlError(detectedUrlError)
+  }, [detectedUrlError])
 
   const value: WorkspaceContextValue = {
     user: data?.user || null,
@@ -196,10 +336,20 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     currentProject,
     isLoading: isLoading && !data,  // Only loading if no data yet (prevents shimmer during refetch)
     isInitialized: !!data,
-    error: queryError?.message || urlError,
+    error: queryError ? classifyAPIError(queryError) : urlError,
+
+    // Granular loading states
+    loadingState,
+
+    // Computed convenience flags
+    canInteract: !loadingState.isSwitchingOrg && !loadingState.isSwitchingProject,
+
+    // Actions
     refresh: async () => {
       await queryClient.refetchQueries({ queryKey: ['workspace'] })
     },
+    switchOrganization,
+    switchProject,
     clearError: () => setUrlError(null),
   }
 
@@ -210,7 +360,34 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   )
 }
 
-// Export useWorkspace hook
+/**
+ * Hook to access workspace context
+ *
+ * Provides access to current organization, project, loading states, and switch methods.
+ * Must be used within a WorkspaceProvider.
+ *
+ * @throws {Error} If used outside of WorkspaceProvider
+ *
+ * @example
+ * ```tsx
+ * function MyComponent() {
+ *   const {
+ *     currentOrganization,
+ *     currentProject,
+ *     loadingState,
+ *     canInteract,
+ *     switchOrganization,
+ *     error
+ *   } = useWorkspace()
+ *
+ *   if (error) {
+ *     return <ErrorMessage>{error.userMessage}</ErrorMessage>
+ *   }
+ *
+ *   return <div>...</div>
+ * }
+ * ```
+ */
 export function useWorkspace(): WorkspaceContextValue {
   const context = useContext(WorkspaceContext)
   if (context === undefined) {

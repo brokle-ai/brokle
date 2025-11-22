@@ -37,26 +37,20 @@ func NewHandler(
 type APIKey struct {
 	ID         string    `json:"id" example:"key_01234567890123456789012345" description:"Unique API key identifier"`
 	Name       string    `json:"name" example:"Production API Key" description:"Human-readable name for the API key"`
-	Key        string    `json:"key,omitempty" example:"bk_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789AbCd" description:"The actual API key (only shown on creation)"`
-	KeyPreview string    `json:"key_preview" example:"bk_AbCd...AbCd" description:"Truncated version of the key for display"`
-	ProjectID  string    `json:"project_id" example:"proj_01234567890123456789012345" description:"Project ID this key belongs to"`
-	Status     string    `json:"status" example:"active" description:"API key status (active, inactive, expired)"`
-	LastUsed   time.Time `json:"last_used,omitempty" example:"2024-01-01T00:00:00Z" description:"Last time this key was used (null if never used)"`
-	CreatedAt  time.Time `json:"created_at" example:"2024-01-01T00:00:00Z" description:"Creation timestamp"`
-	ExpiresAt  time.Time `json:"expires_at,omitempty" example:"2024-12-31T23:59:59Z" description:"Expiration timestamp (null if never expires)"`
-	CreatedBy  string    `json:"created_by" example:"usr_01234567890123456789012345" description:"User ID who created this key"`
+	Key        string     `json:"key,omitempty" example:"bk_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789AbCd" description:"The actual API key (only shown on creation)"`
+	KeyPreview string     `json:"key_preview" example:"bk_AbCd...AbCd" description:"Truncated version of the key for display"`
+	ProjectID  string     `json:"project_id" example:"proj_01234567890123456789012345" description:"Project ID this key belongs to"`
+	Status     string     `json:"status" example:"active" description:"API key status (active, expired)"`
+	LastUsed   *time.Time `json:"last_used,omitempty" example:"2024-01-01T00:00:00Z" description:"Last time this key was used (null if never used)"`
+	CreatedAt  time.Time  `json:"created_at" example:"2024-01-01T00:00:00Z" description:"Creation timestamp"`
+	ExpiresAt  *time.Time `json:"expires_at,omitempty" example:"2024-12-31T23:59:59Z" description:"Expiration timestamp (null if never expires)"`
+	CreatedBy  string     `json:"created_by" example:"usr_01234567890123456789012345" description:"User ID who created this key"`
 }
 
 // CreateAPIKeyRequest represents the request to create an API key
 type CreateAPIKeyRequest struct {
 	Name         string `json:"name" binding:"required,min=2,max=100" example:"Production API Key" description:"Human-readable name for the API key (2-100 characters)"`
 	ExpiryOption string `json:"expiry_option" binding:"required,oneof=30days 90days never" example:"90days" description:"Expiration option: '30days', '90days', or 'never'"`
-}
-
-// UpdateAPIKeyRequest represents the request to update an API key
-type UpdateAPIKeyRequest struct {
-	Name     *string `json:"name,omitempty" binding:"omitempty,min=2,max=100" example:"Updated Production Key" description:"New name for the API key (2-100 characters)"`
-	IsActive *bool   `json:"is_active,omitempty" example:"false" description:"Active status (true=active, false=inactive)"`
 }
 
 // ListAPIKeysResponse represents the response when listing API keys
@@ -74,7 +68,7 @@ type ListAPIKeysResponse struct {
 // @Accept json
 // @Produce json
 // @Param projectId path string true "Project ID" example("proj_01234567890123456789012345")
-// @Param status query string false "Filter by API key status" Enums(active,inactive,expired)
+// @Param status query string false "Filter by API key status" Enums(active,expired)
 // @Param cursor query string false "Pagination cursor" example("eyJjcmVhdGVkX2F0IjoiMjAyNC0wMS0wMVQxMjowMDowMFoiLCJpZCI6IjAxSDJYM1k0WjUifQ==")
 // @Param page_size query int false "Items per page" Enums(10,20,30,40,50) default(50)
 // @Param sort_by query string false "Sort field" Enums(created_at,name,last_used_at) default("created_at")
@@ -125,8 +119,13 @@ func (h *Handler) List(c *gin.Context) {
 
 	// Filter by status if provided
 	if status != "" {
-		isActive := status == "active"
-		filters.IsActive = &isActive
+		if status == "active" {
+			isExpired := false
+			filters.IsExpired = &isExpired
+		} else if status == "expired" {
+			isExpired := true
+			filters.IsExpired = &isExpired
+		}
 	}
 
 	// Get API keys
@@ -146,15 +145,10 @@ func (h *Handler) List(c *gin.Context) {
 			KeyPreview: key.KeyPreview, // Use stored preview
 			ProjectID:  key.ProjectID.String(),
 			Status:     getKeyStatus(*key),
+			LastUsed:   key.LastUsedAt,  // Pointer, will be null if nil
 			CreatedAt:  key.CreatedAt,
+			ExpiresAt:  key.ExpiresAt,   // Pointer, will be null if nil
 			CreatedBy:  key.UserID.String(),
-		}
-
-		if key.LastUsedAt != nil {
-			responseKeys[i].LastUsed = *key.LastUsedAt
-		}
-		if key.ExpiresAt != nil {
-			responseKeys[i].ExpiresAt = *key.ExpiresAt
 		}
 	}
 
@@ -180,9 +174,8 @@ func (h *Handler) List(c *gin.Context) {
 
 // getKeyStatus determines the status of an API key
 func getKeyStatus(key auth.APIKey) string {
-	if !key.IsActive {
-		return "inactive"
-	}
+	// Deleted keys are filtered by GORM soft delete
+	// Only check if expired
 	if key.IsExpired() {
 		return "expired"
 	}
@@ -274,12 +267,10 @@ func (h *Handler) Create(c *gin.Context) {
 		KeyPreview: apiKeyResp.KeyPreview,
 		ProjectID:  apiKeyResp.ProjectID,
 		Status:     "active",
+		LastUsed:   nil, // New keys have never been used
 		CreatedAt:  apiKeyResp.CreatedAt,
+		ExpiresAt:  apiKeyResp.ExpiresAt, // Pointer, will be null if nil
 		CreatedBy:  userID,
-	}
-
-	if apiKeyResp.ExpiresAt != nil {
-		responseKey.ExpiresAt = *apiKeyResp.ExpiresAt
 	}
 
 	h.logger.WithFields(map[string]interface{}{
@@ -333,27 +324,8 @@ func (h *Handler) Delete(c *gin.Context) {
 		return
 	}
 
-	// Get the API key to verify it exists and belongs to the project
-	apiKey, err := h.apiKeyService.GetAPIKey(c.Request.Context(), keyID)
-	if err != nil {
-		h.logger.WithError(err).Error("Failed to get API key for deletion")
-		response.Error(c, err)
-		return
-	}
-
-	// Verify the API key belongs to the specified project (since API keys are now project-scoped)
-	if apiKey.ProjectID != projectID {
-		h.logger.WithFields(map[string]interface{}{
-			"api_key_id":     keyID,
-			"project_id":     projectID,
-			"key_project_id": apiKey.ProjectID,
-		}).Warn("API key does not belong to specified project")
-		response.NotFound(c, "API key not found in this project")
-		return
-	}
-
-	// Revoke the API key
-	if err := h.apiKeyService.RevokeAPIKey(c.Request.Context(), keyID); err != nil {
+	// Delete the API key (service validates existence and project ownership)
+	if err := h.apiKeyService.DeleteAPIKey(c.Request.Context(), keyID, projectID); err != nil {
 		h.logger.WithError(err).Error("Failed to delete API key")
 		response.Error(c, err)
 		return
@@ -363,134 +335,8 @@ func (h *Handler) Delete(c *gin.Context) {
 		"user_id":    userID,
 		"api_key_id": keyID,
 		"project_id": projectID,
-		"key_name":   apiKey.Name,
 	}).Info("API key deleted successfully")
 
 	response.NoContent(c)
 }
 
-// Update handles PATCH /api/v1/projects/:projectId/api-keys/:keyId
-// @Summary Update API key
-// @Description Update an existing API key's name or active status. Only name and is_active can be modified. The API key secret cannot be changed.
-// @Tags API Keys
-// @Accept json
-// @Produce json
-// @Param projectId path string true "Project ID" example("proj_01234567890123456789012345")
-// @Param keyId path string true "API Key ID" example("key_01234567890123456789012345")
-// @Param request body UpdateAPIKeyRequest true "Fields to update (at least one required)"
-// @Success 200 {object} response.SuccessResponse{data=APIKey} "API key updated successfully"
-// @Failure 400 {object} response.ErrorResponse "Bad request - invalid project ID, key ID, validation errors, or no fields provided"
-// @Failure 401 {object} response.ErrorResponse "Unauthorized - authentication required"
-// @Failure 403 {object} response.ErrorResponse "Forbidden - insufficient permissions to update API keys"
-// @Failure 404 {object} response.ErrorResponse "Project or API key not found"
-// @Failure 409 {object} response.ErrorResponse "Conflict - API key name already exists in project"
-// @Failure 500 {object} response.ErrorResponse "Internal server error"
-// @Security BearerAuth
-// @Router /api/v1/projects/{projectId}/api-keys/{keyId} [patch]
-func (h *Handler) Update(c *gin.Context) {
-	// Get project ID from URL path
-	projectID, err := ulid.Parse(c.Param("projectId"))
-	if err != nil {
-		h.logger.WithError(err).Error("Invalid project ID")
-		response.BadRequest(c, "Invalid project ID", err.Error())
-		return
-	}
-
-	// Get API key ID from URL path
-	keyID, err := ulid.Parse(c.Param("keyId"))
-	if err != nil {
-		h.logger.WithError(err).Error("Invalid API key ID")
-		response.BadRequest(c, "Invalid API key ID", err.Error())
-		return
-	}
-
-	// Parse request body
-	var req UpdateAPIKeyRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.WithError(err).Error("Invalid update API key request")
-		response.BadRequest(c, "Invalid request payload", err.Error())
-		return
-	}
-
-	// Validate at least one field is provided
-	if req.Name == nil && req.IsActive == nil {
-		h.logger.Warn("Update request with no fields")
-		response.BadRequest(c, "At least one field must be provided", "name or is_active required")
-		return
-	}
-
-	// Get authenticated user from context
-	userID, exists := middleware.GetUserID(c)
-	if !exists {
-		h.logger.Error("User ID not found in context")
-		response.Unauthorized(c, "Authentication required")
-		return
-	}
-
-	// Get the API key to verify it exists and belongs to the project
-	apiKey, err := h.apiKeyService.GetAPIKey(c.Request.Context(), keyID)
-	if err != nil {
-		h.logger.WithError(err).Error("Failed to get API key for update")
-		response.Error(c, err)
-		return
-	}
-
-	// Verify the API key belongs to the specified project
-	if apiKey.ProjectID != projectID {
-		h.logger.WithFields(map[string]interface{}{
-			"api_key_id":     keyID,
-			"project_id":     projectID,
-			"key_project_id": apiKey.ProjectID,
-		}).Warn("API key does not belong to specified project")
-		response.NotFound(c, "API key not found in this project")
-		return
-	}
-
-	// Create service request
-	serviceReq := &auth.UpdateAPIKeyRequest{
-		Name:     req.Name,
-		IsActive: req.IsActive,
-	}
-
-	// Update the API key
-	if err := h.apiKeyService.UpdateAPIKey(c.Request.Context(), keyID, serviceReq); err != nil {
-		h.logger.WithError(err).Error("Failed to update API key")
-		response.Error(c, err)
-		return
-	}
-
-	// Fetch updated API key for response
-	updatedKey, err := h.apiKeyService.GetAPIKey(c.Request.Context(), keyID)
-	if err != nil {
-		h.logger.WithError(err).Error("Failed to fetch updated API key")
-		response.Error(c, err)
-		return
-	}
-
-	// Convert to response format
-	responseKey := APIKey{
-		ID:         updatedKey.ID.String(),
-		Name:       updatedKey.Name,
-		KeyPreview: updatedKey.KeyPreview,
-		ProjectID:  updatedKey.ProjectID.String(),
-		Status:     getKeyStatus(*updatedKey),
-		CreatedAt:  updatedKey.CreatedAt,
-		CreatedBy:  updatedKey.UserID.String(),
-	}
-
-	if updatedKey.LastUsedAt != nil {
-		responseKey.LastUsed = *updatedKey.LastUsedAt
-	}
-	if updatedKey.ExpiresAt != nil {
-		responseKey.ExpiresAt = *updatedKey.ExpiresAt
-	}
-
-	h.logger.WithFields(map[string]interface{}{
-		"user_id":    userID,
-		"api_key_id": keyID,
-		"project_id": projectID,
-		"key_name":   updatedKey.Name,
-	}).Info("API key updated successfully")
-
-	response.Success(c, responseKey)
-}

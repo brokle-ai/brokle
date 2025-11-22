@@ -1,50 +1,93 @@
 'use client'
 
 import { useState } from 'react'
-import { Save, RefreshCw, AlertCircle, Copy } from 'lucide-react'
+import { Save, Copy, Loader2, Archive, AlertCircle } from 'lucide-react'
 import { useWorkspace } from '@/context/workspace-context'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Switch } from '@/components/ui/switch'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { toast } from 'sonner'
+import { useUpdateProjectMutation } from '../hooks/use-project-queries'
 import type { ProjectStatus } from '@/features/organizations'
 
 export function ProjectGeneralSection() {
   const { currentProject, currentOrganization } = useWorkspace()
+  const updateMutation = useUpdateProjectMutation()
 
-  const [isLoading, setIsLoading] = useState(false)
-  const [projectName, setProjectName] = useState(currentProject?.name || '')
-  const [projectDescription, setProjectDescription] = useState(currentProject?.description || '')
-  const [projectStatus, setProjectStatus] = useState<ProjectStatus>(currentProject?.status || 'active')
-  const [isPublic, setIsPublic] = useState(currentProject?.settings?.public || false)
-  const [webhookUrl, setWebhookUrl] = useState(currentProject?.settings?.webhook_url || '')
-  const [retryAttempts, setRetryAttempts] = useState(currentProject?.settings?.retry_attempts?.toString() || '3')
-  const [timeoutMs, setTimeoutMs] = useState(currentProject?.settings?.timeout_ms?.toString() || '30000')
+  // Track user edits (null = not edited, use currentProject value)
+  const [editedName, setEditedName] = useState<string | null>(null)
+  const [editedDescription, setEditedDescription] = useState<string | null>(null)
 
+  // Derive display values: use edited value if exists, otherwise currentProject value
+  const projectName = editedName ?? currentProject?.name ?? ''
+  const projectDescription = editedDescription ?? currentProject?.description ?? ''
+
+  // Defensive check - DashboardLayoutContent already handles workspace errors
+  // This should never happen in normal flow, but good for component resilience
   if (!currentProject || !currentOrganization) {
-    return null
+    return (
+      <Alert>
+        <AlertCircle className="h-4 w-4" />
+        <AlertDescription>
+          Project context is required to view settings.
+        </AlertDescription>
+      </Alert>
+    )
   }
 
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault()
-    setIsLoading(true)
+
+    // Check if project is archived
+    if (currentProject.status === 'archived') {
+      toast.error('Cannot Update Archived Project', {
+        description: 'Please unarchive the project first from the Danger Zone settings.'
+      })
+      return
+    }
+
+    // Validation
+    if (projectName.trim().length < 2 || projectName.trim().length > 100) {
+      toast.error('Project name must be between 2 and 100 characters')
+      return
+    }
+
+    if (projectDescription.length > 500) {
+      toast.error('Description must be less than 500 characters')
+      return
+    }
 
     try {
-      // TODO: Implement API call to update project settings
-      await new Promise(resolve => setTimeout(resolve, 1000)) // Simulate API call
+      await updateMutation.mutateAsync({
+        projectId: currentProject.id,
+        data: {
+          name: projectName.trim(),
+          description: projectDescription.trim()
+          // Status NOT included - use Archive/Unarchive endpoints
+        }
+      })
 
-      toast.success('Project settings updated successfully')
-    } catch (error) {
-      console.error('Failed to update project settings:', error)
-      toast.error('Failed to update settings. Please try again.')
-    } finally {
-      setIsLoading(false)
+      // Clear edit tracking after successful save
+      setEditedName(null)
+      setEditedDescription(null)
+    } catch (error: any) {
+      // Check for archived project error from backend
+      const errorMessage = error?.response?.data?.error?.message || error?.message || ''
+
+      if (errorMessage.toLowerCase().includes('archived')) {
+        toast.error('Cannot Update Archived Project', {
+          description: 'Please unarchive the project first from the Danger Zone settings.'
+        })
+      } else {
+        toast.error('Failed to update project', {
+          description: errorMessage || 'Please try again or contact support if the issue persists.'
+        })
+      }
+      console.error('Failed to update project:', error)
     }
   }
 
@@ -57,8 +100,6 @@ export function ProjectGeneralSection() {
     switch (status) {
       case 'active':
         return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
-      case 'inactive':
-        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300'
       case 'archived':
         return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300'
       default:
@@ -66,8 +107,21 @@ export function ProjectGeneralSection() {
     }
   }
 
+  const isArchived = currentProject.status === 'archived'
+
   return (
     <form onSubmit={handleSaveSettings} className="space-y-8">
+      {/* Archived Project Warning */}
+      {isArchived && (
+        <Alert className="border-yellow-200 bg-yellow-50">
+          <Archive className="h-4 w-4 text-yellow-600" />
+          <AlertDescription className="text-yellow-700">
+            <strong>This project is archived.</strong> It's read-only and cannot be edited.
+            Go to the Danger Zone tab to unarchive it if you need to make changes.
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Project Information Section */}
       <div className="space-y-4">
         <div className="space-y-2">
@@ -75,8 +129,9 @@ export function ProjectGeneralSection() {
           <Input
             id="projectName"
             value={projectName}
-            onChange={(e) => setProjectName(e.target.value)}
+            onChange={(e) => setEditedName(e.target.value)}
             placeholder="Enter project name"
+            disabled={isArchived}
             required
           />
         </div>
@@ -86,97 +141,17 @@ export function ProjectGeneralSection() {
           <Textarea
             id="projectDescription"
             value={projectDescription}
-            onChange={(e) => setProjectDescription(e.target.value)}
+            onChange={(e) => setEditedDescription(e.target.value)}
             placeholder="Describe what this project is for..."
+            disabled={isArchived}
             rows={3}
           />
         </div>
       </div>
 
-      {/* Status Section */}
-      <div className="space-y-2">
-        <Label htmlFor="projectStatus">Status</Label>
-        <Select value={projectStatus} onValueChange={(value: ProjectStatus) => setProjectStatus(value)}>
-          <SelectTrigger id="projectStatus" className="max-w-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="inactive">Inactive</SelectItem>
-            <SelectItem value="archived">Archived</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Public Project Toggle */}
-      <div className="flex flex-row items-center justify-between rounded-lg border p-4">
-        <div className="space-y-0.5">
-          <Label className="text-base">Public Project</Label>
-          <p className="text-sm text-muted-foreground">
-            Allow other organization members to view this project
-          </p>
-        </div>
-        <Switch
-          checked={isPublic}
-          onCheckedChange={setIsPublic}
-        />
-      </div>
-
-      {/* API Configuration Section */}
-      <div className="space-y-4">
-        <h3 className="text-lg font-medium">API Configuration</h3>
-
-        <div className="space-y-2">
-          <Label htmlFor="webhookUrl">Webhook URL</Label>
-          <Input
-            id="webhookUrl"
-            value={webhookUrl}
-            onChange={(e) => setWebhookUrl(e.target.value)}
-            placeholder="https://your-app.com/webhooks/brokle"
-            type="url"
-          />
-          <p className="text-xs text-muted-foreground">
-            Receive real-time notifications about project events
-          </p>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="retryAttempts">Retry Attempts</Label>
-            <Input
-              id="retryAttempts"
-              value={retryAttempts}
-              onChange={(e) => setRetryAttempts(e.target.value)}
-              placeholder="3"
-              type="number"
-              min="0"
-              max="10"
-            />
-            <p className="text-xs text-muted-foreground">
-              Number of retry attempts for failed requests
-            </p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="timeoutMs">Request Timeout (ms)</Label>
-            <Input
-              id="timeoutMs"
-              value={timeoutMs}
-              onChange={(e) => setTimeoutMs(e.target.value)}
-              placeholder="30000"
-              type="number"
-              min="1000"
-              max="300000"
-            />
-            <p className="text-xs text-muted-foreground">
-              Maximum time to wait for API responses
-            </p>
-          </div>
-        </div>
-      </div>
-
       {/* Project Information Display */}
       <div className="rounded-lg border p-4 space-y-4">
-        <div className="grid grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 gap-6">
           <div>
             <div className="text-sm font-medium text-muted-foreground">Current Status</div>
             <Badge className={getStatusColor(currentProject.status || 'active')}>
@@ -184,14 +159,6 @@ export function ProjectGeneralSection() {
                 ? currentProject.status.charAt(0).toUpperCase() + currentProject.status.slice(1)
                 : 'Active'}
             </Badge>
-          </div>
-          <div>
-            <div className="text-sm font-medium text-muted-foreground">Created</div>
-            <div className="text-sm">{new Date(currentProject.createdAt).toLocaleDateString()}</div>
-          </div>
-          <div>
-            <div className="text-sm font-medium text-muted-foreground">Last Updated</div>
-            <div className="text-sm">{new Date(currentProject.updatedAt).toLocaleDateString()}</div>
           </div>
         </div>
 
@@ -207,35 +174,23 @@ export function ProjectGeneralSection() {
               size="sm"
               onClick={copyProjectId}
             >
-              <Copy className="h-3 w-3 mr-1" />
-              Copy
+              <Copy className="h-3 w-3" />
             </Button>
           </div>
         </div>
       </div>
 
-      {/* Status Change Warning */}
-      {projectStatus !== currentProject.status && projectStatus === 'archived' && (
-        <Alert>
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            Archiving this project will make it read-only and stop all API requests.
-            You can reactivate it later if needed.
-          </AlertDescription>
-        </Alert>
-      )}
-
       {/* Submit Button */}
-      <Button type="submit" disabled={isLoading}>
-        {isLoading ? (
+      <Button type="submit" disabled={updateMutation.isPending || isArchived}>
+        {updateMutation.isPending ? (
           <>
-            <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             Saving...
           </>
         ) : (
           <>
             <Save className="mr-2 h-4 w-4" />
-            Save Changes
+            {isArchived ? 'Project is Archived' : 'Save Changes'}
           </>
         )}
       </Button>

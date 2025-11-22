@@ -1,16 +1,13 @@
 'use client'
 
-import { useEffect } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { useProjectOnly } from '@/features/projects'
 import { DashboardView } from '@/features/projects'
 import { DashboardHeader } from '@/components/layout/dashboard-header'
 import { Main } from '@/components/layout/main'
 import { Skeleton } from '@/components/ui/skeleton'
-import type { ProjectParams } from '@/features/organizations'
 
 export default function ProjectPage() {
-  const params = useParams() as ProjectParams
   const router = useRouter()
   const {
     currentProject,
@@ -52,7 +49,7 @@ export default function ProjectPage() {
             Project Not Found
           </h1>
           <p className="text-muted-foreground mb-4">
-            {error || "The requested project could not be found."}
+            {error?.userMessage || "The requested project could not be found."}
           </p>
           <button 
             onClick={() => router.push('/')}

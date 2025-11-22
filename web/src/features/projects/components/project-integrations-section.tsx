@@ -140,8 +140,8 @@ export function ProjectIntegrationsSection() {
     <div className="space-y-6">
       {/* Header with Add Button */}
       <div className="flex items-center justify-between">
-        <div className="text-sm font-medium">
-          Active Integrations ({integrations.filter(i => i.enabled).length})
+        <div>
+          <h3 className="text-lg font-medium">Active Integrations ({integrations.filter(i => i.enabled).length})</h3>
         </div>
         <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
           <DialogTrigger asChild>

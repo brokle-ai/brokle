@@ -86,8 +86,6 @@ type APIKeyRepository interface {
 	GetByProjectID(ctx context.Context, projectID ulid.ULID) ([]*APIKey, error)
 
 	// API key management
-	DeactivateAPIKey(ctx context.Context, id ulid.ULID) error
-	MarkAsUsed(ctx context.Context, id ulid.ULID) error
 	UpdateLastUsed(ctx context.Context, id ulid.ULID) error // For async last used updates
 	CleanupExpiredAPIKeys(ctx context.Context) error
 

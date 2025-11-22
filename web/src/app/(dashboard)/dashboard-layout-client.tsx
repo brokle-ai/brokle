@@ -2,13 +2,14 @@
 
 import { useEffect } from 'react'
 import { AuthenticatedLayout } from "@/components/layout/authenticated-layout"
-import { WorkspaceProvider } from '@/context/workspace-context'
+import { WorkspaceProvider, useWorkspace } from '@/context/workspace-context'
 import { useAuthStore } from '@/features/authentication'
 import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar'
 import { AppSidebar } from '@/components/layout/app-sidebar'
 import { useNavigationContext } from '@/hooks/use-navigation-context'
 import { processNavigation } from '@/lib/navigation/process-routes'
 import { ROUTES } from '@/lib/navigation/routes'
+import { WorkspaceErrorPage } from '@/components/errors/workspace-error-page'
 
 interface DashboardLayoutClientProps {
   children: React.ReactNode
@@ -52,7 +53,25 @@ function DashboardLayoutContent({
   children: React.ReactNode
   defaultOpen: boolean
 }) {
+  const { error, isLoading } = useWorkspace()
   const navigationContext = useNavigationContext()
+
+  // Show full-page error (no sidebar, no header chrome)
+  if (error) {
+    return <WorkspaceErrorPage error={error} />
+  }
+
+  // Show loading state during workspace initialization
+  if (isLoading) {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <div className="text-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto mb-4" />
+          <p className="text-sm text-muted-foreground">Loading workspace...</p>
+        </div>
+      </div>
+    )
+  }
 
   const { mainNavigation, secondaryNavigation } = processNavigation({
     routes: ROUTES,

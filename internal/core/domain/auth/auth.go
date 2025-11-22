@@ -77,6 +77,7 @@ type OrganizationRepository interface {
 // Format: bk_{40_char_random}
 // Security: Full key is hashed with SHA-256 (deterministic, enables O(1) lookup)
 // Organization is derived via projects.organization_id (no redundant storage)
+// Status: Determined by deleted_at (soft delete) and expires_at (expiration)
 type APIKey struct {
 	CreatedAt  time.Time      `json:"created_at"`
 	UpdatedAt  time.Time      `json:"updated_at"`
@@ -89,7 +90,6 @@ type APIKey struct {
 	ID         ulid.ULID      `json:"id" gorm:"type:char(26);primaryKey"`
 	ProjectID  ulid.ULID      `json:"project_id" gorm:"type:char(26);not null;index"`
 	UserID     ulid.ULID      `json:"user_id" gorm:"type:char(26);not null;index"`
-	IsActive   bool           `json:"is_active" gorm:"default:true"`
 }
 
 // Role represents both system template roles and custom scoped roles
@@ -431,7 +431,6 @@ func NewAPIKey(userID, projectID ulid.ULID, name, keyHash, keyPreview string, ex
 		ProjectID:  projectID,
 		UserID:     userID,
 		Name:       name,
-		IsActive:   true,
 		ExpiresAt:  expiresAt,
 		CreatedAt:  time.Now(),
 		UpdatedAt:  time.Now(),
@@ -598,18 +597,15 @@ func (k *APIKey) IsExpired() bool {
 }
 
 func (k *APIKey) IsValid() bool {
-	return k.IsActive && !k.IsExpired()
+	// Deleted keys are filtered by GORM soft delete
+	// Only check if not expired
+	return !k.IsExpired()
 }
 
 func (k *APIKey) MarkAsUsed() {
 	now := time.Now()
 	k.LastUsedAt = &now
 	k.UpdatedAt = now
-}
-
-func (k *APIKey) Deactivate() {
-	k.IsActive = false
-	k.UpdatedAt = time.Now()
 }
 
 func (r *Role) AddPermission(permissionID ulid.ULID, grantedBy *ulid.ULID) *RolePermission {

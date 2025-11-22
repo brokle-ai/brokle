@@ -25,7 +25,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -60,11 +59,11 @@ import { InviteMemberModal } from './invite-member-modal'
 import { toast } from 'sonner'
 import type { OrganizationRole, OrganizationMember } from '../types'
 
-interface MemberManagementProps {
+interface OrganizationMembersSectionProps {
   className?: string
 }
 
-export function MemberManagement({ className }: MemberManagementProps) {
+export function OrganizationMembersSection({ className }: OrganizationMembersSectionProps) {
   const { user } = useAuth()
   const { currentOrganization } = useWorkspace()
 
@@ -150,75 +149,64 @@ export function MemberManagement({ className }: MemberManagementProps) {
   }
 
   return (
-    <div className={className}>
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5" />
-                Team Members
-              </CardTitle>
-              <CardDescription>
-                Manage who has access to {currentOrganization.name} and their permissions
-              </CardDescription>
-            </div>
-            
-            {canInviteMembers && (
-              <InviteMemberModal
-                trigger={
-                  <Button>
-                    <UserPlus className="mr-2 h-4 w-4" />
-                    Invite Member
-                  </Button>
-                }
-              />
-            )}
-          </div>
-        </CardHeader>
-        
-        <CardContent className="space-y-4">
-          {/* Filters */}
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-              <Input
-                placeholder="Search members..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
-            </div>
-            
-            <Select value={roleFilter} onValueChange={setRoleFilter}>
-              <SelectTrigger className="w-full sm:w-40">
-                <SelectValue placeholder="All Roles" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Roles</SelectItem>
-                <SelectItem value="owner">Owner</SelectItem>
-                <SelectItem value="admin">Admin</SelectItem>
-                <SelectItem value="developer">Developer</SelectItem>
-                <SelectItem value="viewer">Viewer</SelectItem>
-              </SelectContent>
-            </Select>
+    <div className="space-y-8">
+      {/* Members Table Section */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-medium">Team Members ({members.length})</h3>
+          {canInviteMembers && (
+            <InviteMemberModal
+              trigger={
+                <Button>
+                  <UserPlus className="mr-2 h-4 w-4" />
+                  Invite Member
+                </Button>
+              }
+            />
+          )}
+        </div>
+
+        {/* Filters */}
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+            <Input
+              placeholder="Search members..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
           </div>
 
-          {/* Members Table */}
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Member</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Joined</TableHead>
-                  <TableHead className="w-[70px]"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredMembers.map((member) => (
-                  <TableRow key={member.id}>
-                    <TableCell>
+          <Select value={roleFilter} onValueChange={setRoleFilter}>
+            <SelectTrigger className="w-full sm:w-40">
+              <SelectValue placeholder="All Roles" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Roles</SelectItem>
+              <SelectItem value="owner">Owner</SelectItem>
+              <SelectItem value="admin">Admin</SelectItem>
+              <SelectItem value="developer">Developer</SelectItem>
+              <SelectItem value="viewer">Viewer</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Members Table */}
+        <div className="rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Member</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Joined</TableHead>
+                <TableHead className="w-[70px]"></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredMembers.map((member) => (
+                <TableRow key={member.id}>
+                  <TableCell>
                       <div className="flex items-center gap-2">
                         <Avatar className="h-7 w-7">
                           <AvatarImage src={member.avatar} alt={member.name} />
@@ -337,61 +325,62 @@ export function MemberManagement({ className }: MemberManagementProps) {
             </Table>
           </div>
 
-          {filteredMembers.length === 0 && (
-            <div className="text-center py-8">
-              <Users className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-medium mb-2">No members found</h3>
-              <p className="text-muted-foreground">
-                {searchTerm || roleFilter !== 'all'
-                  ? 'Try adjusting your search or filters'
-                  : 'Invite team members to start collaborating'}
+        {filteredMembers.length === 0 && (
+          <div className="text-center py-8">
+            <Users className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-medium mb-2">No members found</h3>
+            <p className="text-muted-foreground">
+              {searchTerm || roleFilter !== 'all'
+                ? 'Try adjusting your search or filters'
+                : 'Invite team members to start collaborating'}
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Role Permissions Section */}
+      <div className="space-y-4">
+        <h3 className="text-lg font-medium">Role Permissions</h3>
+        <div className="rounded-lg border p-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Crown className="h-4 w-4 text-yellow-500" />
+                <span className="font-medium">Owner</span>
+              </div>
+              <p className="text-muted-foreground text-xs pl-6">
+                Full control over the organization, billing, and all projects
+              </p>
+
+              <div className="flex items-center gap-2">
+                <Shield className="h-4 w-4 text-blue-500" />
+                <span className="font-medium">Admin</span>
+              </div>
+              <p className="text-muted-foreground text-xs pl-6">
+                Manage members, projects, and organization settings
               </p>
             </div>
-          )}
 
-          {/* Role Descriptions */}
-          <div className="border-t pt-4">
-            <h4 className="font-medium mb-3">Role Permissions</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Crown className="h-4 w-4 text-yellow-500" />
-                  <span className="font-medium">Owner</span>
-                </div>
-                <p className="text-muted-foreground text-xs pl-6">
-                  Full control over the organization, billing, and all projects
-                </p>
-                
-                <div className="flex items-center gap-2">
-                  <Shield className="h-4 w-4 text-blue-500" />
-                  <span className="font-medium">Admin</span>
-                </div>
-                <p className="text-muted-foreground text-xs pl-6">
-                  Manage members, projects, and organization settings
-                </p>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <User className="h-4 w-4 text-green-500" />
+                <span className="font-medium">Developer</span>
               </div>
-              
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <User className="h-4 w-4 text-green-500" />
-                  <span className="font-medium">Developer</span>
-                </div>
-                <p className="text-muted-foreground text-xs pl-6">
-                  Create and manage projects, view analytics and costs
-                </p>
-                
-                <div className="flex items-center gap-2">
-                  <Eye className="h-4 w-4 text-gray-500" />
-                  <span className="font-medium">Viewer</span>
-                </div>
-                <p className="text-muted-foreground text-xs pl-6">
-                  Read-only access to projects and basic analytics
-                </p>
+              <p className="text-muted-foreground text-xs pl-6">
+                Create and manage projects, view analytics and costs
+              </p>
+
+              <div className="flex items-center gap-2">
+                <Eye className="h-4 w-4 text-gray-500" />
+                <span className="font-medium">Viewer</span>
               </div>
+              <p className="text-muted-foreground text-xs pl-6">
+                Read-only access to projects and basic analytics
+              </p>
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   )
 }

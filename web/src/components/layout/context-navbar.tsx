@@ -30,7 +30,7 @@ export function ContextNavbar({ className }: ContextNavbarProps) {
             <Slash className="h-4 w-4" />
           </span>
 
-          <ProjectSelector />
+          <ProjectSelector showStatusBadge />
         </>
       )}
     </nav>

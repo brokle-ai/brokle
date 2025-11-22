@@ -151,9 +151,9 @@ export const updateOrganization = async (organizationId: string, data: Partial<{
     subscription_plan: 'free' | 'pro' | 'business' | 'enterprise'
   }>): Promise<Organization> => {
     const response = await client.patch<OrganizationAPIResponse>(
-      `/organizations/${organizationId}`,
+      `/v1/organizations/${organizationId}`,
       data,
-      { 
+      {
         includeOrgContext: true,
         customOrgId: organizationId
       }

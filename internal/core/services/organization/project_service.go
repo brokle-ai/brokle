@@ -64,6 +64,11 @@ func (s *projectService) UpdateProject(ctx context.Context, projectID ulid.ULID,
 		return appErrors.NewNotFoundError("Project not found")
 	}
 
+	// Block updates to archived projects
+	if project.IsArchived() {
+		return appErrors.NewBadRequestError("Cannot update archived project", "Unarchive the project first")
+	}
+
 	// Update fields if provided
 	if req.Name != nil {
 		project.Name = *req.Name
@@ -77,6 +82,52 @@ func (s *projectService) UpdateProject(ctx context.Context, projectID ulid.ULID,
 	err = s.projectRepo.Update(ctx, project)
 	if err != nil {
 		return appErrors.NewInternalError("Failed to update project", err)
+	}
+
+	return nil
+}
+
+// ArchiveProject archives a project (sets status to archived, read-only, reversible)
+func (s *projectService) ArchiveProject(ctx context.Context, projectID ulid.ULID) error {
+	// Verify project exists
+	project, err := s.projectRepo.GetByID(ctx, projectID)
+	if err != nil {
+		return appErrors.NewNotFoundError("Project not found")
+	}
+
+	// Check if already archived
+	if project.IsArchived() {
+		return appErrors.NewBadRequestError("Project is already archived", "")
+	}
+
+	// Archive the project
+	project.Archive()
+
+	if err := s.projectRepo.Update(ctx, project); err != nil {
+		return appErrors.NewInternalError("Failed to archive project", err)
+	}
+
+	return nil
+}
+
+// UnarchiveProject unarchives a project (sets status back to active)
+func (s *projectService) UnarchiveProject(ctx context.Context, projectID ulid.ULID) error {
+	// Verify project exists
+	project, err := s.projectRepo.GetByID(ctx, projectID)
+	if err != nil {
+		return appErrors.NewNotFoundError("Project not found")
+	}
+
+	// Check if not archived
+	if project.IsActive() {
+		return appErrors.NewBadRequestError("Project is already active", "")
+	}
+
+	// Unarchive the project
+	project.Unarchive()
+
+	if err := s.projectRepo.Update(ctx, project); err != nil {
+		return appErrors.NewInternalError("Failed to unarchive project", err)
 	}
 
 	return nil
