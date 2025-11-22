@@ -48,13 +48,13 @@ export interface OrganizationOnlyContext {
  *   } = useOrganizationOnly()
  *   
  *   return (
- *     <Select 
- *       value={currentOrganization?.slug}
+ *     <Select
+ *       value={currentOrganization?.compositeSlug}
  *       onChange={switchOrganization}
  *       loading={isLoading}
  *     >
  *       {organizations.map(org => (
- *         <Option key={org.id} value={org.slug}>
+ *         <Option key={org.id} value={org.compositeSlug}>
  *           {org.name}
  *         </Option>
  *       ))}
@@ -149,10 +149,10 @@ export function useOrganizationManagement() {
  *   return (
  *     <Dropdown>
  *       {availableOrganizations.map(org => (
- *         <DropdownItem 
+ *         <DropdownItem
  *           key={org.id}
- *           onClick={() => selectOrganization(org.slug)}
- *           selected={selectedOrgSlug === org.slug}
+ *           onClick={() => selectOrganization(org.compositeSlug)}
+ *           selected={selectedOrgSlug === org.compositeSlug}
  *         >
  *           {org.name}
  *         </DropdownItem>

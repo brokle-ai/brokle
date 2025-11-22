@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Save, Copy, Loader2, Archive } from 'lucide-react'
+import { Save, Copy, Loader2, Archive, AlertCircle } from 'lucide-react'
 import { useWorkspace } from '@/context/workspace-context'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -26,8 +26,17 @@ export function ProjectGeneralSection() {
   const projectName = editedName ?? currentProject?.name ?? ''
   const projectDescription = editedDescription ?? currentProject?.description ?? ''
 
+  // Defensive check - DashboardLayoutContent already handles workspace errors
+  // This should never happen in normal flow, but good for component resilience
   if (!currentProject || !currentOrganization) {
-    return null
+    return (
+      <Alert>
+        <AlertCircle className="h-4 w-4" />
+        <AlertDescription>
+          Project context is required to view settings.
+        </AlertDescription>
+      </Alert>
+    )
   }
 
   const handleSaveSettings = async (e: React.FormEvent) => {
