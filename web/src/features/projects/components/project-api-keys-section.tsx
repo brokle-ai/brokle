@@ -32,11 +32,11 @@ export function ProjectAPIKeysSection() {
   const deleteMutation = useDeleteAPIKeyMutation(currentProject?.id || '')
 
   // Local state
-  const [isCreateOpen, setIsCreateOpen] = useState(false)
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [dialogMode, setDialogMode] = useState<'create' | 'success'>('create')
   const [newKeyName, setNewKeyName] = useState('')
   const [newKeyExpiry, setNewKeyExpiry] = useState<'30days' | '90days' | 'never'>('90days')
   const [createdKey, setCreatedKey] = useState<APIKey | null>(null)
-  const [showCreatedKeyDialog, setShowCreatedKeyDialog] = useState(false)
 
   if (!currentProject) {
     return null
@@ -66,17 +66,32 @@ export function ProjectAPIKeysSection() {
         expiry_option: newKeyExpiry
       })
 
-      // Show the created key once
+      // Store the created key
       setCreatedKey(newKey)
-      setShowCreatedKeyDialog(true)
 
-      // Reset form
+      // Switch to success mode (dialog stays open, content changes)
+      setDialogMode('success')
+
+      // Reset form for next creation
       setNewKeyName('')
       setNewKeyExpiry('90days')
-      setIsCreateOpen(false)
     } catch (error) {
       // Error toast handled by mutation hook
       console.error('Failed to create API key:', error)
+    }
+  }
+
+  const handleDialogClose = (open: boolean) => {
+    setIsDialogOpen(open)
+
+    if (!open) {
+      // Reset state when dialog closes (after animation completes)
+      setTimeout(() => {
+        setDialogMode('create')
+        setCreatedKey(null)
+        setNewKeyName('')
+        setNewKeyExpiry('90days')
+      }, 200)
     }
   }
 
@@ -143,77 +158,138 @@ export function ProjectAPIKeysSection() {
         <Card>
           <CardContent className="space-y-6 pt-6">
             <div className="flex items-center justify-between">
-              <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create API Key
-                </Button>
-              </DialogTrigger>
-
-              <DialogContent className="sm:max-w-[425px]">
-                <DialogHeader>
-                  <DialogTitle>Create New API Key</DialogTitle>
-                  <DialogDescription>
-                    Generate a new API key for this project. You'll only see the full key once.
-                  </DialogDescription>
-                </DialogHeader>
-
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="keyName">Key Name *</Label>
-                    <Input
-                      id="keyName"
-                      value={newKeyName}
-                      onChange={(e) => setNewKeyName(e.target.value)}
-                      placeholder="e.g., Production API Key"
-                      maxLength={100}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      2-100 characters
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="keyExpiry">Expiration</Label>
-                    <Select value={newKeyExpiry} onValueChange={(value) => setNewKeyExpiry(value as '30days' | '90days' | 'never')}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="30days">30 days</SelectItem>
-                        <SelectItem value="90days">90 days</SelectItem>
-                        <SelectItem value="never">Never expires</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <DialogFooter>
-                  <Button
-                    variant="outline"
-                    onClick={() => setIsCreateOpen(false)}
-                    disabled={createMutation.isPending}
-                  >
-                    Cancel
+              <Dialog open={isDialogOpen} onOpenChange={handleDialogClose}>
+                <DialogTrigger asChild>
+                  <Button onClick={() => setDialogMode('create')}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Create API Key
                   </Button>
-                  <Button
-                    onClick={handleCreateAPIKey}
-                    disabled={createMutation.isPending}
-                  >
-                    {createMutation.isPending ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Creating...
-                      </>
-                    ) : (
-                      'Create Key'
-                    )}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          </div>
+                </DialogTrigger>
+
+                <DialogContent className="sm:max-w-[500px]">
+                  {dialogMode === 'create' ? (
+                    // ===== CREATE MODE =====
+                    <>
+                      <DialogHeader>
+                        <DialogTitle>Create New API Key</DialogTitle>
+                        <DialogDescription>
+                          Generate a new API key for this project. You'll only see the full key once.
+                        </DialogDescription>
+                      </DialogHeader>
+
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="keyName">Key Name *</Label>
+                          <Input
+                            id="keyName"
+                            value={newKeyName}
+                            onChange={(e) => setNewKeyName(e.target.value)}
+                            placeholder="e.g., Production API Key"
+                            maxLength={100}
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            2-100 characters
+                          </p>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="keyExpiry">Expiration</Label>
+                          <Select
+                            value={newKeyExpiry}
+                            onValueChange={(value) => setNewKeyExpiry(value as '30days' | '90days' | 'never')}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="30days">30 days</SelectItem>
+                              <SelectItem value="90days">90 days</SelectItem>
+                              <SelectItem value="never">Never expires</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      <DialogFooter>
+                        <Button
+                          variant="outline"
+                          onClick={() => setIsDialogOpen(false)}
+                          disabled={createMutation.isPending}
+                        >
+                          Cancel
+                        </Button>
+                        <Button
+                          onClick={handleCreateAPIKey}
+                          disabled={createMutation.isPending}
+                        >
+                          {createMutation.isPending ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Creating...
+                            </>
+                          ) : (
+                            'Create Key'
+                          )}
+                        </Button>
+                      </DialogFooter>
+                    </>
+                  ) : (
+                    // ===== SUCCESS MODE =====
+                    <>
+                      <DialogHeader>
+                        <DialogTitle>API Key Created Successfully!</DialogTitle>
+                        <DialogDescription>
+                          Make sure to copy your API key now. You won't be able to see it again!
+                        </DialogDescription>
+                      </DialogHeader>
+
+                      {createdKey && (
+                        <div className="space-y-4">
+                          <div className="space-y-2">
+                            <Label>Key Name</Label>
+                            <div className="text-sm font-medium">{createdKey.name}</div>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label>API Key</Label>
+                            <div className="flex items-center gap-2">
+                              <code className="flex-1 text-xs bg-muted px-3 py-2 rounded font-mono break-all">
+                                {createdKey.key}
+                              </code>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  if (createdKey.key) {
+                                    copyToClipboard(createdKey.key)
+                                  }
+                                }}
+                              >
+                                <Copy className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+
+                          <Alert>
+                            <AlertCircle className="h-4 w-4" />
+                            <AlertTitle>Important</AlertTitle>
+                            <AlertDescription>
+                              This is the only time you'll see the full API key. Store it securely - we only store a hashed version.
+                            </AlertDescription>
+                          </Alert>
+                        </div>
+                      )}
+
+                      <DialogFooter>
+                        <Button onClick={() => setIsDialogOpen(false)}>
+                          I've Saved My Key
+                        </Button>
+                      </DialogFooter>
+                    </>
+                  )}
+                </DialogContent>
+              </Dialog>
+            </div>
           <div className="rounded-md border">
             <Table>
               <TableHeader>
@@ -307,64 +383,6 @@ export function ProjectAPIKeysSection() {
         </CardContent>
       </Card>
       )}
-
-      {/* Created Key Dialog - Show full key once */}
-      <Dialog open={showCreatedKeyDialog} onOpenChange={setShowCreatedKeyDialog}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle>API Key Created Successfully!</DialogTitle>
-            <DialogDescription>
-              Make sure to copy your API key now. You won't be able to see it again!
-            </DialogDescription>
-          </DialogHeader>
-
-          {createdKey && (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Key Name</Label>
-                <div className="text-sm font-medium">{createdKey.name}</div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>API Key</Label>
-                <div className="flex items-center gap-2">
-                  <code className="flex-1 text-xs bg-muted px-3 py-2 rounded font-mono break-all">
-                    {createdKey.key}
-                  </code>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      if (createdKey.key) {
-                        copyToClipboard(createdKey.key)
-                      }
-                    }}
-                  >
-                    <Copy className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-
-              <Alert>
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Important</AlertTitle>
-                <AlertDescription>
-                  This is the only time you'll see the full API key. Store it securely - we only store a hashed version.
-                </AlertDescription>
-              </Alert>
-            </div>
-          )}
-
-          <DialogFooter>
-            <Button onClick={() => {
-              setShowCreatedKeyDialog(false)
-              setCreatedKey(null)
-            }}>
-              I've Saved My Key
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Usage Instructions */}
       {!isLoading && !error && (
