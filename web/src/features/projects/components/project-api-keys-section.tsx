@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Copy, Trash2, Loader2, AlertCircle } from 'lucide-react'
+import { Plus, Copy, Trash2, Loader2, AlertCircle, AlertTriangle } from 'lucide-react'
 import { useWorkspace } from '@/context/workspace-context'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -37,6 +37,10 @@ export function ProjectAPIKeysSection() {
   const [newKeyName, setNewKeyName] = useState('')
   const [newKeyExpiry, setNewKeyExpiry] = useState<'30days' | '90days' | 'never'>('90days')
   const [createdKey, setCreatedKey] = useState<APIKey | null>(null)
+
+  // Delete confirmation dialog state
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [selectedKey, setSelectedKey] = useState<APIKey | null>(null)
 
   if (!currentProject) {
     return null
@@ -95,13 +99,30 @@ export function ProjectAPIKeysSection() {
     }
   }
 
-  const handleDeleteAPIKey = async (keyId: string, keyName: string) => {
-    if (!confirm(`Delete "${keyName}"?\n\nThis will immediately revoke access and cannot be undone.`)) {
-      return
+  const openDeleteDialog = (apiKey: APIKey) => {
+    setSelectedKey(apiKey)
+    setIsDeleteDialogOpen(true)
+  }
+
+  const handleDeleteDialogClose = (open: boolean) => {
+    setIsDeleteDialogOpen(open)
+    if (!open) {
+      // Reset state after close animation completes
+      setTimeout(() => {
+        setSelectedKey(null)
+      }, 200)
     }
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!selectedKey) return
 
     try {
-      await deleteMutation.mutateAsync({ keyId, keyName })
+      await deleteMutation.mutateAsync({
+        keyId: selectedKey.id,
+        keyName: selectedKey.name
+      })
+      setIsDeleteDialogOpen(false)
     } catch (error) {
       // Error toast handled by mutation hook
       console.error('Failed to delete API key:', error)
@@ -362,7 +383,7 @@ export function ProjectAPIKeysSection() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleDeleteAPIKey(apiKey.id, apiKey.name)}
+                          onClick={() => openDeleteDialog(apiKey)}
                           disabled={deleteMutation.isPending}
                           className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
                           title="Delete API key"
@@ -383,6 +404,60 @@ export function ProjectAPIKeysSection() {
         </CardContent>
       </Card>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={handleDeleteDialogClose}>
+        <DialogContent className="sm:max-w-[450px]">
+          <DialogHeader>
+            <DialogTitle className="text-red-600">Delete API Key</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this API key? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {/* Key Info Display */}
+            {selectedKey && (
+              <div className="rounded-lg bg-muted p-3 space-y-1">
+                <div className="text-sm font-medium">{selectedKey.name}</div>
+                <code className="text-xs text-muted-foreground">{selectedKey.key_preview}</code>
+              </div>
+            )}
+
+            {/* Warning Alert */}
+            <Alert className="border-red-200 bg-red-50 dark:bg-red-950/20">
+              <AlertTriangle className="h-4 w-4 text-red-500" />
+              <AlertDescription className="text-red-600 dark:text-red-400">
+                <strong>Warning:</strong> Applications using this key will immediately lose access.
+              </AlertDescription>
+            </Alert>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsDeleteDialogOpen(false)}
+              disabled={deleteMutation.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleConfirmDelete}
+              disabled={deleteMutation.isPending}
+            >
+              {deleteMutation.isPending ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                'Delete API Key'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Usage Instructions */}
       {!isLoading && !error && (
