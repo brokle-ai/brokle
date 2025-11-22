@@ -87,6 +87,7 @@ type ProjectSummary struct {
 	CompositeSlug  string    `json:"composite_slug"`
 	Description    string    `json:"description,omitempty"`
 	OrganizationID string    `json:"organization_id"`
+	Status         string    `json:"status"`
 }
 
 // EnhancedUserProfileResponse extends UserProfileResponse with organizations hierarchy
@@ -208,6 +209,7 @@ func (h *Handler) GetProfile(c *gin.Context) {
 				CompositeSlug:  projectCompositeSlug,
 				Description:    proj.Description,
 				OrganizationID: proj.OrganizationID.String(),
+				Status:         proj.Status,
 				CreatedAt:      proj.CreatedAt,
 				UpdatedAt:      proj.UpdatedAt,
 			})

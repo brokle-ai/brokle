@@ -7,7 +7,7 @@ import type { QueryParams } from '@/lib/api/core/types'
 export interface UpdateProjectRequest {
   name?: string
   description?: string
-  status?: 'active' | 'paused' | 'archived'
+  // Status removed - use archive/unarchive functions instead
 }
 
 export interface Project {
@@ -15,7 +15,7 @@ export interface Project {
   name: string
   slug: string
   description: string
-  status: 'active' | 'paused' | 'archived'
+  status: 'active' | 'archived'
   organization_id: string
   created_at: string
   updated_at: string
@@ -121,15 +121,14 @@ export const getDashboardConfig = async (): Promise<{
  * Update project settings
  *
  * @param projectId - Project ID (ULID)
- * @param data - Fields to update (name, description, status)
+ * @param data - Fields to update (name, description only - use archive/unarchive for status)
  * @returns Updated project
  *
  * @example
  * ```ts
  * await updateProject('proj_123', {
  *   name: 'Updated Name',
- *   description: 'New description',
- *   status: 'active'
+ *   description: 'New description'
  * })
  * ```
  */
@@ -139,5 +138,35 @@ export async function updateProject(
 ): Promise<Project> {
   const endpoint = `/v1/projects/${projectId}`
   return client.put<Project, UpdateProjectRequest>(endpoint, data)
+}
+
+/**
+ * Archive a project (sets status to archived, read-only, reversible)
+ *
+ * @param projectId - Project ID (ULID)
+ *
+ * @example
+ * ```ts
+ * await archiveProject('proj_123')
+ * ```
+ */
+export async function archiveProject(projectId: string): Promise<void> {
+  const endpoint = `/v1/projects/${projectId}/archive`
+  await client.post<void>(endpoint)
+}
+
+/**
+ * Unarchive a project (sets status back to active)
+ *
+ * @param projectId - Project ID (ULID)
+ *
+ * @example
+ * ```ts
+ * await unarchiveProject('proj_123')
+ * ```
+ */
+export async function unarchiveProject(projectId: string): Promise<void> {
+  const endpoint = `/v1/projects/${projectId}/unarchive`
+  await client.post<void>(endpoint)
 }
 

@@ -1,16 +1,15 @@
 'use client'
 
 import { useState } from 'react'
-import { Save, AlertCircle, Copy, Loader2 } from 'lucide-react'
+import { Save, Copy, Loader2, Archive } from 'lucide-react'
 import { useWorkspace } from '@/context/workspace-context'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { toast } from 'sonner'
 import { useUpdateProjectMutation } from '../hooks/use-project-queries'
 import type { ProjectStatus } from '@/features/organizations'
@@ -22,12 +21,10 @@ export function ProjectGeneralSection() {
   // Track user edits (null = not edited, use currentProject value)
   const [editedName, setEditedName] = useState<string | null>(null)
   const [editedDescription, setEditedDescription] = useState<string | null>(null)
-  const [editedStatus, setEditedStatus] = useState<ProjectStatus | null>(null)
 
   // Derive display values: use edited value if exists, otherwise currentProject value
   const projectName = editedName ?? currentProject?.name ?? ''
   const projectDescription = editedDescription ?? currentProject?.description ?? ''
-  const projectStatus = editedStatus ?? currentProject?.status ?? 'active'
 
   if (!currentProject || !currentOrganization) {
     return null
@@ -35,6 +32,14 @@ export function ProjectGeneralSection() {
 
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    // Check if project is archived
+    if (currentProject.status === 'archived') {
+      toast.error('Cannot Update Archived Project', {
+        description: 'Please unarchive the project first from the Danger Zone settings.'
+      })
+      return
+    }
 
     // Validation
     if (projectName.trim().length < 2 || projectName.trim().length > 100) {
@@ -52,17 +57,27 @@ export function ProjectGeneralSection() {
         projectId: currentProject.id,
         data: {
           name: projectName.trim(),
-          description: projectDescription.trim(),
-          status: projectStatus as 'active' | 'paused' | 'archived'
+          description: projectDescription.trim()
+          // Status NOT included - use Archive/Unarchive endpoints
         }
       })
 
       // Clear edit tracking after successful save
       setEditedName(null)
       setEditedDescription(null)
-      setEditedStatus(null)
-    } catch (error) {
-      // Error toast handled by mutation hook
+    } catch (error: any) {
+      // Check for archived project error from backend
+      const errorMessage = error?.response?.data?.error?.message || error?.message || ''
+
+      if (errorMessage.toLowerCase().includes('archived')) {
+        toast.error('Cannot Update Archived Project', {
+          description: 'Please unarchive the project first from the Danger Zone settings.'
+        })
+      } else {
+        toast.error('Failed to update project', {
+          description: errorMessage || 'Please try again or contact support if the issue persists.'
+        })
+      }
       console.error('Failed to update project:', error)
     }
   }
@@ -76,8 +91,6 @@ export function ProjectGeneralSection() {
     switch (status) {
       case 'active':
         return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
-      case 'paused':
-        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300'
       case 'archived':
         return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300'
       default:
@@ -85,8 +98,21 @@ export function ProjectGeneralSection() {
     }
   }
 
+  const isArchived = currentProject.status === 'archived'
+
   return (
     <form onSubmit={handleSaveSettings} className="space-y-8">
+      {/* Archived Project Warning */}
+      {isArchived && (
+        <Alert className="border-yellow-200 bg-yellow-50">
+          <Archive className="h-4 w-4 text-yellow-600" />
+          <AlertDescription className="text-yellow-700">
+            <strong>This project is archived.</strong> It's read-only and cannot be edited.
+            Go to the Danger Zone tab to unarchive it if you need to make changes.
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Project Information Section */}
       <div className="space-y-4">
         <div className="space-y-2">
@@ -96,6 +122,7 @@ export function ProjectGeneralSection() {
             value={projectName}
             onChange={(e) => setEditedName(e.target.value)}
             placeholder="Enter project name"
+            disabled={isArchived}
             required
           />
         </div>
@@ -107,24 +134,10 @@ export function ProjectGeneralSection() {
             value={projectDescription}
             onChange={(e) => setEditedDescription(e.target.value)}
             placeholder="Describe what this project is for..."
+            disabled={isArchived}
             rows={3}
           />
         </div>
-      </div>
-
-      {/* Status Section */}
-      <div className="space-y-2">
-        <Label htmlFor="projectStatus">Status</Label>
-        <Select value={projectStatus} onValueChange={(value: ProjectStatus) => setEditedStatus(value)}>
-          <SelectTrigger id="projectStatus" className="max-w-xs">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="paused">Paused</SelectItem>
-            <SelectItem value="archived">Archived</SelectItem>
-          </SelectContent>
-        </Select>
       </div>
 
       {/* Project Information Display */}
@@ -167,19 +180,8 @@ export function ProjectGeneralSection() {
         </div>
       </div>
 
-      {/* Status Change Warning */}
-      {projectStatus !== currentProject.status && projectStatus === 'archived' && (
-        <Alert>
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            Archiving this project will make it read-only and stop all API requests.
-            You can reactivate it later if needed.
-          </AlertDescription>
-        </Alert>
-      )}
-
       {/* Submit Button */}
-      <Button type="submit" disabled={updateMutation.isPending}>
+      <Button type="submit" disabled={updateMutation.isPending || isArchived}>
         {updateMutation.isPending ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -188,7 +190,7 @@ export function ProjectGeneralSection() {
         ) : (
           <>
             <Save className="mr-2 h-4 w-4" />
-            Save Changes
+            {isArchived ? 'Project is Archived' : 'Save Changes'}
           </>
         )}
       </Button>

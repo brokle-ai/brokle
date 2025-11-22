@@ -89,6 +89,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           compositeSlug: proj.composite_slug,
           description: proj.description || '',
           organizationId: proj.organization_id,
+          status: proj.status as ProjectStatus,
           createdAt: proj.created_at,
           updatedAt: proj.updated_at,
         })),

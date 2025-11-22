@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { AlertTriangle, Trash2, Download, Archive } from 'lucide-react'
+import { AlertTriangle, Trash2, Download, Archive, RefreshCw, AlertCircle } from 'lucide-react'
 import { useWorkspace } from '@/context/workspace-context'
 import { getOrgSlug, getProjectSlug } from '@/lib/utils/slug-utils'
 import { Button } from '@/components/ui/button'
@@ -13,18 +13,20 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Checkbox } from '@/components/ui/checkbox'
 import { Separator } from '@/components/ui/separator'
 import { toast } from 'sonner'
+import { archiveProject, unarchiveProject } from '../api/projects-api'
+import { useQueryClient } from '@tanstack/react-query'
 
 export function ProjectDangerSection() {
   const router = useRouter()
+  const queryClient = useQueryClient()
   const { currentProject, currentOrganization } = useWorkspace()
 
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
   const [isArchiveOpen, setIsArchiveOpen] = useState(false)
+  const [isUnarchiveOpen, setIsUnarchiveOpen] = useState(false)
   const [deleteConfirmation, setDeleteConfirmation] = useState('')
-  const [archiveConfirmation, setArchiveConfirmation] = useState('')
   const [acknowledgedRisks, setAcknowledgedRisks] = useState<string[]>([])
   const [isDeleting, setIsDeleting] = useState(false)
-  const [isArchiving, setIsArchiving] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
 
   if (!currentProject || !currentOrganization) {
@@ -60,25 +62,40 @@ export function ProjectDangerSection() {
   }
 
   const handleArchiveProject = async () => {
-    if (archiveConfirmation !== 'ARCHIVE') {
-      toast.error('Please type "ARCHIVE" to confirm')
-      return
-    }
-
-    setIsArchiving(true)
+    if (!currentProject) return
 
     try {
-      // TODO: Implement API call to archive project
-      await new Promise(resolve => setTimeout(resolve, 1500))
-
-      toast.success('Project archived successfully')
-      router.push(`/organizations/${getOrgSlug(currentOrganization)}`)
+      await archiveProject(currentProject.id)
+      toast.success('Project Archived!', {
+        description: `${currentProject.name} has been archived successfully.`
+      })
       setIsArchiveOpen(false)
+      // Refresh workspace to show updated status
+      queryClient.invalidateQueries({ queryKey: ['workspace'] })
     } catch (error) {
       console.error('Failed to archive project:', error)
-      toast.error('Failed to archive project. Please try again.')
-    } finally {
-      setIsArchiving(false)
+      toast.error('Failed to Archive Project', {
+        description: 'Could not archive project. Please try again.'
+      })
+    }
+  }
+
+  const handleUnarchiveProject = async () => {
+    if (!currentProject) return
+
+    try {
+      await unarchiveProject(currentProject.id)
+      toast.success('Project Unarchived!', {
+        description: `${currentProject.name} is now active.`
+      })
+      setIsUnarchiveOpen(false)
+      // Refresh workspace to show updated status
+      queryClient.invalidateQueries({ queryKey: ['workspace'] })
+    } catch (error) {
+      console.error('Failed to unarchive project:', error)
+      toast.error('Failed to Unarchive Project', {
+        description: 'Could not unarchive project. Please try again.'
+      })
     }
   }
 
@@ -176,79 +193,125 @@ export function ProjectDangerSection() {
         </Button>
       </div>
 
-      {/* Archive Project */}
-      <div className="rounded-lg border border-yellow-200 p-4 space-y-4">
-        <div>
-          <h4 className="font-medium mb-2 flex items-center gap-2">
-            <Archive className="h-4 w-4 text-yellow-500" />
-            Archive Project
-          </h4>
-          <p className="text-sm text-muted-foreground mb-4">
-            Archive this project to make it read-only while preserving all data
-          </p>
-        </div>
+      {/* Show Unarchive button if project is archived */}
+      {currentProject.status === 'archived' && (
+        <div className="rounded-lg border border-blue-200 p-4 space-y-4 bg-blue-50 dark:bg-blue-950/20">
+          <div>
+            <h4 className="font-medium mb-2 text-blue-600 flex items-center gap-2">
+              <RefreshCw className="h-4 w-4" />
+              Unarchive Project
+            </h4>
+            <p className="text-sm text-blue-600 mb-4">
+              Restore this archived project to active status. All features will be re-enabled.
+            </p>
+          </div>
 
-        <div className="text-sm text-muted-foreground">
-          Archiving will:
-          <ul className="list-disc list-inside mt-2 space-y-1">
-            <li>Stop all API requests to this project</li>
-            <li>Revoke all active API keys</li>
-            <li>Preserve all data and analytics</li>
-            <li>Allow data export and viewing</li>
-            <li>Can be reversed by project owners</li>
-          </ul>
-        </div>
+          <div className="text-sm text-blue-600">
+            Unarchiving will:
+            <ul className="list-disc list-inside mt-2 space-y-1">
+              <li>Restore the project to active status</li>
+              <li>Re-enable all API requests</li>
+              <li>Allow creating new API keys</li>
+              <li>Enable project editing and updates</li>
+              <li>Resume normal project operations</li>
+            </ul>
+          </div>
 
-        <Dialog open={isArchiveOpen} onOpenChange={setIsArchiveOpen}>
-          <DialogTrigger asChild>
-            <Button variant="outline" className="w-full border-yellow-200 text-yellow-700 hover:bg-yellow-50">
-              <Archive className="mr-2 h-4 w-4" />
-              Archive Project
-            </Button>
-          </DialogTrigger>
+          <Dialog open={isUnarchiveOpen} onOpenChange={setIsUnarchiveOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" className="w-full border-blue-200 text-blue-700 hover:bg-blue-50">
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Unarchive Project
+              </Button>
+            </DialogTrigger>
 
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Archive Project</DialogTitle>
-              <DialogDescription>
-                This will archive "{currentProject.name}" and stop all API requests.
-                The project can be restored later by organization owners.
-              </DialogDescription>
-            </DialogHeader>
+            <DialogContent className="sm:max-w-[500px]">
+              <DialogHeader>
+                <DialogTitle>Unarchive Project</DialogTitle>
+                <DialogDescription>
+                  Are you sure you want to restore "{currentProject.name}" to active status?
+                </DialogDescription>
+              </DialogHeader>
 
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Type "ARCHIVE" to confirm</Label>
-                <Input
-                  value={archiveConfirmation}
-                  onChange={(e) => setArchiveConfirmation(e.target.value)}
-                  placeholder="ARCHIVE"
-                />
-              </div>
-
-              <Alert>
-                <AlertTriangle className="h-4 w-4" />
-                <AlertDescription>
-                  All API keys will be immediately revoked when archived.
+              <Alert className="border-blue-200 bg-blue-50">
+                <AlertCircle className="h-4 w-4 text-blue-500" />
+                <AlertDescription className="text-blue-600">
+                  This will restore full access to the project. You'll be able to create API keys and make requests again.
                 </AlertDescription>
               </Alert>
-            </div>
 
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsArchiveOpen(false)}>
-                Cancel
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsUnarchiveOpen(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleUnarchiveProject}>
+                  Unarchive Project
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
+      )}
+
+      {/* Show Archive button if project is active */}
+      {currentProject.status === 'active' && (
+        <div className="rounded-lg border border-yellow-200 p-4 space-y-4">
+          <div>
+            <h4 className="font-medium mb-2 flex items-center gap-2">
+              <Archive className="h-4 w-4 text-yellow-500" />
+              Archive Project
+            </h4>
+            <p className="text-sm text-muted-foreground mb-4">
+              Archive this project to make it read-only while preserving all data
+            </p>
+          </div>
+
+          <div className="text-sm text-muted-foreground">
+            Archiving will:
+            <ul className="list-disc list-inside mt-2 space-y-1">
+              <li>Stop all API requests to this project</li>
+              <li>Make the project read-only</li>
+              <li>Preserve all data and analytics</li>
+              <li>Allow data export and viewing</li>
+              <li>Can be reversed by unarchiving</li>
+            </ul>
+          </div>
+
+          <Dialog open={isArchiveOpen} onOpenChange={setIsArchiveOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" className="w-full border-yellow-200 text-yellow-700 hover:bg-yellow-50">
+                <Archive className="mr-2 h-4 w-4" />
+                Archive Project
               </Button>
-              <Button
-                onClick={handleArchiveProject}
-                disabled={isArchiving || archiveConfirmation !== 'ARCHIVE'}
-                className="bg-yellow-600 hover:bg-yellow-700"
-              >
-                {isArchiving ? 'Archiving...' : 'Archive Project'}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
+            </DialogTrigger>
+
+            <DialogContent className="sm:max-w-[500px]">
+              <DialogHeader>
+                <DialogTitle>Archive Project</DialogTitle>
+                <DialogDescription>
+                  Are you sure you want to archive "{currentProject.name}"?
+                </DialogDescription>
+              </DialogHeader>
+
+              <Alert className="border-yellow-200 bg-yellow-50">
+                <AlertCircle className="h-4 w-4 text-yellow-500" />
+                <AlertDescription className="text-yellow-600">
+                  This will make the project read-only. You can unarchive it later to restore full access.
+                </AlertDescription>
+              </Alert>
+
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsArchiveOpen(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleArchiveProject} className="bg-yellow-600 hover:bg-yellow-700">
+                  Archive Project
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
+      )}
 
       <Separator />
 

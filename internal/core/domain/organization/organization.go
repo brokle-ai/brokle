@@ -51,6 +51,7 @@ type Project struct {
 	DeletedAt      gorm.DeletedAt `json:"deleted_at,omitempty" gorm:"index"`
 	Name           string         `json:"name" gorm:"size:255;not null"`
 	Description    string         `json:"description,omitempty" gorm:"text"`
+	Status         string         `json:"status" gorm:"size:20;not null;default:active;check:status IN ('active','archived')"`
 	Organization   Organization   `json:"organization,omitempty" gorm:"foreignKey:OrganizationID"`
 	ID             ulid.ULID      `json:"id" gorm:"type:char(26);primaryKey"`
 	OrganizationID ulid.ULID      `json:"organization_id" gorm:"type:char(26);not null"`
@@ -129,6 +130,7 @@ func NewProject(orgID ulid.ULID, name, description string) *Project {
 		OrganizationID: orgID,
 		Name:           name,
 		Description:    description,
+		Status:         "active",
 		CreatedAt:      time.Now(),
 		UpdatedAt:      time.Now(),
 	}
@@ -181,6 +183,25 @@ func (i *Invitation) Accept() {
 func (i *Invitation) Revoke() {
 	i.Status = InvitationStatusRevoked
 	i.UpdatedAt = time.Now()
+}
+
+// Project utility methods
+func (p *Project) IsActive() bool {
+	return p.Status == "active"
+}
+
+func (p *Project) IsArchived() bool {
+	return p.Status == "archived"
+}
+
+func (p *Project) Archive() {
+	p.Status = "archived"
+	p.UpdatedAt = time.Now()
+}
+
+func (p *Project) Unarchive() {
+	p.Status = "active"
+	p.UpdatedAt = time.Now()
 }
 
 // OrganizationSettings represents key-value settings for an organization.

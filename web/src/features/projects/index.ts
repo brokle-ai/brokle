@@ -18,7 +18,7 @@ export {
   createKeyPreview,
   validateAPIKeyFormat
 } from './api/api-keys-api'
-export { updateProject } from './api/projects-api'
+export { updateProject, archiveProject, unarchiveProject } from './api/projects-api'
 
 // Components
 export { CreateProjectDialog } from './components/create-project-dialog'

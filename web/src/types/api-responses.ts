@@ -31,6 +31,7 @@ export interface BackendProjectSummary {
   composite_slug: string
   description: string
   organization_id: string
+  status: string
   created_at: string
   updated_at: string
 }

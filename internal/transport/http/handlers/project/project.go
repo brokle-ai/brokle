@@ -58,7 +58,7 @@ type Project struct {
 	Name           string    `json:"name" example:"AI Chatbot" description:"Project name"`
 	Description    string    `json:"description,omitempty" example:"Customer support AI chatbot" description:"Optional project description"`
 	OrganizationID string    `json:"organization_id" example:"org_1234567890" description:"Organization ID this project belongs to"`
-	Status         string    `json:"status" example:"active" description:"Project status (active, paused, archived)"`
+	Status         string    `json:"status" example:"active" description:"Project status (active, archived)"`
 }
 
 // CreateProjectRequest represents the request to create a project
@@ -72,7 +72,7 @@ type CreateProjectRequest struct {
 type UpdateProjectRequest struct {
 	Name        string `json:"name,omitempty" binding:"omitempty,min=2,max=100" example:"AI Chatbot" description:"Project name (2-100 characters)"`
 	Description string `json:"description,omitempty" binding:"omitempty,max=500" example:"Customer support AI chatbot" description:"Description (max 500 characters)"`
-	Status      string `json:"status,omitempty" binding:"omitempty,oneof=active paused archived" example:"active" description:"Project status (active, paused, archived)"`
+	// Status removed - use Archive/Unarchive endpoints instead
 }
 
 // List handles GET /api/v1/projects
@@ -279,7 +279,7 @@ func (h *Handler) List(c *gin.Context) {
 			Name:           proj.Name,
 			Description:    proj.Description,
 			OrganizationID: proj.OrganizationID.String(),
-			Status:         "active", // Default status - extend when status field is added
+			Status:         proj.Status,
 			CreatedAt:      proj.CreatedAt,
 			UpdatedAt:      proj.UpdatedAt,
 		}
@@ -436,7 +436,7 @@ func (h *Handler) Create(c *gin.Context) {
 		Name:           project.Name,
 		Description:    project.Description,
 		OrganizationID: project.OrganizationID.String(),
-		Status:         "active", // Default status
+		Status:         project.Status,
 		CreatedAt:      project.CreatedAt,
 		UpdatedAt:      project.UpdatedAt,
 	}
@@ -567,7 +567,7 @@ func (h *Handler) Get(c *gin.Context) {
 		Name:           project.Name,
 		Description:    project.Description,
 		OrganizationID: project.OrganizationID.String(),
-		Status:         "active", // Default status
+		Status:         project.Status,
 		CreatedAt:      project.CreatedAt,
 		UpdatedAt:      project.UpdatedAt,
 	}
@@ -707,7 +707,7 @@ func (h *Handler) Update(c *gin.Context) {
 			"project_id": projectIDStr,
 			"error":      err.Error(),
 		}).Error("Failed to update project")
-		response.InternalServerError(c, "Failed to update project")
+		response.Error(c, err)
 		return
 	}
 
@@ -732,16 +732,9 @@ func (h *Handler) Update(c *gin.Context) {
 		Name:           project.Name,
 		Description:    project.Description,
 		OrganizationID: project.OrganizationID.String(),
-		Status:         req.Status,
+		Status:         project.Status,
 		CreatedAt:      project.CreatedAt,
 		UpdatedAt:      project.UpdatedAt,
-	}
-
-	// Handle status field from request if provided
-	if req.Status != "" {
-		responseProject.Status = req.Status
-	} else {
-		responseProject.Status = "active"
 	}
 
 	response.Success(c, responseProject)
@@ -751,7 +744,7 @@ func (h *Handler) Update(c *gin.Context) {
 		"user_id":      userULID.String(),
 		"project_id":   project.ID.String(),
 		"project_name": project.Name,
-		"changes":      fmt.Sprintf("name=%v, description=%v, status=%v", req.Name != "", req.Description != "", req.Status != ""),
+		"changes":      fmt.Sprintf("name=%v, description=%v", req.Name != "", req.Description != ""),
 	}).Info("Project updated successfully")
 }
 
@@ -892,4 +885,236 @@ func (h *Handler) Delete(c *gin.Context) {
 		"project_name":    project.Name,
 		"organization_id": project.OrganizationID.String(),
 	}).Info("Project deleted successfully")
+}
+
+// Archive handles POST /api/v1/projects/:projectId/archive
+// @Summary Archive project
+// @Description Archive a project (sets status to archived, read-only, reversible)
+// @Tags Projects
+// @Accept json
+// @Produce json
+// @Param projectId path string true "Project ID" example("proj_1234567890")
+// @Success 204 "Project archived successfully"
+// @Failure 400 {object} response.ErrorResponse "Bad request - project already archived"
+// @Failure 401 {object} response.ErrorResponse "Unauthorized"
+// @Failure 403 {object} response.ErrorResponse "Forbidden - insufficient permissions"
+// @Failure 404 {object} response.ErrorResponse "Project not found"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Security BearerAuth
+// @Router /api/v1/projects/{projectId}/archive [post]
+func (h *Handler) Archive(c *gin.Context) {
+	// Extract user ID from JWT
+	userID, exists := c.Get("user_id")
+	if !exists {
+		h.logger.WithField("endpoint", "Archive").Error("User not authenticated")
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+
+	userULID, ok := userID.(ulid.ULID)
+	if !ok {
+		h.logger.WithFields(logrus.Fields{
+			"endpoint": "Archive",
+			"user_id":  userID,
+		}).Error("Invalid user ID type")
+		response.BadRequest(c, "Invalid user ID", "")
+		return
+	}
+
+	// Parse and validate project ID from path parameter
+	projectIDStr := c.Param("projectId")
+	if projectIDStr == "" {
+		h.logger.WithFields(logrus.Fields{
+			"endpoint": "Archive",
+			"user_id":  userULID.String(),
+		}).Error("Project ID parameter missing")
+		response.BadRequest(c, "Project ID is required", "")
+		return
+	}
+
+	projectID, err := ulid.Parse(projectIDStr)
+	if err != nil {
+		h.logger.WithFields(logrus.Fields{
+			"endpoint":   "Archive",
+			"user_id":    userULID.String(),
+			"project_id": projectIDStr,
+			"error":      err.Error(),
+		}).Error("Invalid project ID format")
+		response.BadRequest(c, "Invalid project ID", "")
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	// Validate user can access this project
+	err = h.projectService.ValidateProjectAccess(ctx, userULID, projectID)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			h.logger.WithFields(logrus.Fields{
+				"endpoint":   "Archive",
+				"user_id":    userULID.String(),
+				"project_id": projectIDStr,
+				"error":      err.Error(),
+			}).Warn("Project not found")
+			response.NotFound(c, "Project")
+			return
+		}
+
+		if strings.Contains(err.Error(), "access") {
+			h.logger.WithFields(logrus.Fields{
+				"endpoint":   "Archive",
+				"user_id":    userULID.String(),
+				"project_id": projectIDStr,
+				"error":      err.Error(),
+			}).Warn("User attempted to archive project without permission")
+			response.Forbidden(c, "You don't have permission to archive this project")
+			return
+		}
+
+		h.logger.WithFields(logrus.Fields{
+			"endpoint":   "Archive",
+			"user_id":    userULID.String(),
+			"project_id": projectIDStr,
+			"error":      err.Error(),
+		}).Error("Failed to validate project access")
+		response.InternalServerError(c, "Failed to validate project access")
+		return
+	}
+
+	// Archive project via service
+	err = h.projectService.ArchiveProject(ctx, projectID)
+	if err != nil {
+		h.logger.WithFields(logrus.Fields{
+			"endpoint":   "Archive",
+			"user_id":    userULID.String(),
+			"project_id": projectIDStr,
+			"error":      err.Error(),
+		}).Error("Failed to archive project")
+		response.Error(c, err)
+		return
+	}
+
+	response.NoContent(c)
+
+	h.logger.WithFields(logrus.Fields{
+		"endpoint":   "Archive",
+		"user_id":    userULID.String(),
+		"project_id": projectID.String(),
+	}).Info("Project archived successfully")
+}
+
+// Unarchive handles POST /api/v1/projects/:projectId/unarchive
+// @Summary Unarchive project
+// @Description Unarchive a project (sets status back to active)
+// @Tags Projects
+// @Accept json
+// @Produce json
+// @Param projectId path string true "Project ID" example("proj_1234567890")
+// @Success 204 "Project unarchived successfully"
+// @Failure 400 {object} response.ErrorResponse "Bad request - project already active"
+// @Failure 401 {object} response.ErrorResponse "Unauthorized"
+// @Failure 403 {object} response.ErrorResponse "Forbidden - insufficient permissions"
+// @Failure 404 {object} response.ErrorResponse "Project not found"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Security BearerAuth
+// @Router /api/v1/projects/{projectId}/unarchive [post]
+func (h *Handler) Unarchive(c *gin.Context) {
+	// Extract user ID from JWT
+	userID, exists := c.Get("user_id")
+	if !exists {
+		h.logger.WithField("endpoint", "Unarchive").Error("User not authenticated")
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+
+	userULID, ok := userID.(ulid.ULID)
+	if !ok {
+		h.logger.WithFields(logrus.Fields{
+			"endpoint": "Unarchive",
+			"user_id":  userID,
+		}).Error("Invalid user ID type")
+		response.BadRequest(c, "Invalid user ID", "")
+		return
+	}
+
+	// Parse and validate project ID from path parameter
+	projectIDStr := c.Param("projectId")
+	if projectIDStr == "" {
+		h.logger.WithFields(logrus.Fields{
+			"endpoint": "Unarchive",
+			"user_id":  userULID.String(),
+		}).Error("Project ID parameter missing")
+		response.BadRequest(c, "Project ID is required", "")
+		return
+	}
+
+	projectID, err := ulid.Parse(projectIDStr)
+	if err != nil {
+		h.logger.WithFields(logrus.Fields{
+			"endpoint":   "Unarchive",
+			"user_id":    userULID.String(),
+			"project_id": projectIDStr,
+			"error":      err.Error(),
+		}).Error("Invalid project ID format")
+		response.BadRequest(c, "Invalid project ID", "")
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	// Validate user can access this project
+	err = h.projectService.ValidateProjectAccess(ctx, userULID, projectID)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			h.logger.WithFields(logrus.Fields{
+				"endpoint":   "Unarchive",
+				"user_id":    userULID.String(),
+				"project_id": projectIDStr,
+				"error":      err.Error(),
+			}).Warn("Project not found")
+			response.NotFound(c, "Project")
+			return
+		}
+
+		if strings.Contains(err.Error(), "access") {
+			h.logger.WithFields(logrus.Fields{
+				"endpoint":   "Unarchive",
+				"user_id":    userULID.String(),
+				"project_id": projectIDStr,
+				"error":      err.Error(),
+			}).Warn("User attempted to unarchive project without permission")
+			response.Forbidden(c, "You don't have permission to unarchive this project")
+			return
+		}
+
+		h.logger.WithFields(logrus.Fields{
+			"endpoint":   "Unarchive",
+			"user_id":    userULID.String(),
+			"project_id": projectIDStr,
+			"error":      err.Error(),
+		}).Error("Failed to validate project access")
+		response.InternalServerError(c, "Failed to validate project access")
+		return
+	}
+
+	// Unarchive project via service
+	err = h.projectService.UnarchiveProject(ctx, projectID)
+	if err != nil {
+		h.logger.WithFields(logrus.Fields{
+			"endpoint":   "Unarchive",
+			"user_id":    userULID.String(),
+			"project_id": projectIDStr,
+			"error":      err.Error(),
+		}).Error("Failed to unarchive project")
+		response.Error(c, err)
+		return
+	}
+
+	response.NoContent(c)
+
+	h.logger.WithFields(logrus.Fields{
+		"endpoint":   "Unarchive",
+		"user_id":    userULID.String(),
+		"project_id": projectID.String(),
+	}).Info("Project unarchived successfully")
 }

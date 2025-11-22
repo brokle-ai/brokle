@@ -280,6 +280,8 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 		projects.POST("", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Project.Create)
 		projects.GET("/:projectId", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Project.Get)
 		projects.PUT("/:projectId", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Project.Update)
+		projects.POST("/:projectId/archive", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Project.Archive)
+		projects.POST("/:projectId/unarchive", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Project.Unarchive)
 		projects.DELETE("/:projectId", s.authMiddleware.RequirePermission("projects:delete"), s.handlers.Project.Delete)
 
 		// API key routes nested under projects (double-nesting only)
