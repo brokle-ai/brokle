@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { Plus, Copy, Trash2, Loader2, AlertCircle, AlertTriangle } from 'lucide-react'
 import { useWorkspace } from '@/context/workspace-context'
-import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -147,17 +146,15 @@ export function ProjectAPIKeysSection() {
   }
 
   return (
-    <>
+    <div className="space-y-8">
       {/* Loading State */}
       {isLoading && (
-        <Card>
-          <CardContent className="flex items-center justify-center py-12">
-            <div className="flex flex-col items-center gap-2">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">Loading API keys...</p>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="flex items-center justify-center py-12">
+          <div className="flex flex-col items-center gap-2">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">Loading API keys...</p>
+          </div>
+        </div>
       )}
 
       {/* Error State */}
@@ -174,12 +171,14 @@ export function ProjectAPIKeysSection() {
         </Alert>
       )}
 
-      {/* API Keys Overview */}
+      {/* API Keys Management Section */}
       {!isLoading && !error && (
-        <Card>
-          <CardContent className="space-y-6 pt-6">
-            <div className="flex items-center justify-between">
-              <Dialog open={isDialogOpen} onOpenChange={handleDialogClose}>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-medium">API Keys ({apiKeys.length})</h3>
+            </div>
+            <Dialog open={isDialogOpen} onOpenChange={handleDialogClose}>
                 <DialogTrigger asChild>
                   <Button onClick={() => setDialogMode('create')}>
                     <Plus className="mr-2 h-4 w-4" />
@@ -401,8 +400,7 @@ export function ProjectAPIKeysSection() {
               </TableBody>
             </Table>
           </div>
-        </CardContent>
-      </Card>
+        </div>
       )}
 
       {/* Delete Confirmation Dialog */}
@@ -459,10 +457,12 @@ export function ProjectAPIKeysSection() {
         </DialogContent>
       </Dialog>
 
-      {/* Usage Instructions */}
+      {/* Usage Instructions Section */}
       {!isLoading && !error && (
-        <Card>
-          <CardContent className="space-y-6 pt-6">
+        <div className="space-y-4">
+          <h3 className="text-lg font-medium">Usage Instructions</h3>
+
+          <div className="space-y-6">
             <div>
               <h4 className="font-medium mb-2">Authentication</h4>
               <div className="bg-muted p-4 rounded-lg">
@@ -496,9 +496,9 @@ export function ProjectAPIKeysSection() {
                 </code>
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       )}
-    </>
+    </div>
   )
 }
