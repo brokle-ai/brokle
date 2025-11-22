@@ -108,11 +108,27 @@ func (s *apiKeyService) CountAPIKeys(ctx context.Context, filters *authDomain.AP
 	return s.apiKeyRepo.CountByFilters(ctx, filters)
 }
 
-// DeleteAPIKey deletes (soft deletes) an API key
-func (s *apiKeyService) DeleteAPIKey(ctx context.Context, keyID ulid.ULID) error {
-	if err := s.apiKeyRepo.Delete(ctx, keyID); err != nil {
-		return fmt.Errorf("delete API key: %w", err)
+// DeleteAPIKey deletes (soft deletes) an API key with project ownership verification
+func (s *apiKeyService) DeleteAPIKey(ctx context.Context, keyID ulid.ULID, projectID ulid.ULID) error {
+	// Verify API key exists (filters out already-deleted keys)
+	apiKey, err := s.apiKeyRepo.GetByID(ctx, keyID)
+	if err != nil {
+		if errors.Is(err, authDomain.ErrNotFound) {
+			return appErrors.NewNotFoundError("API key not found")
+		}
+		return appErrors.NewInternalError("Failed to get API key", err)
 	}
+
+	// Verify API key belongs to specified project (security check)
+	if apiKey.ProjectID != projectID {
+		return appErrors.NewNotFoundError("API key not found in this project")
+	}
+
+	// Perform soft delete
+	if err := s.apiKeyRepo.Delete(ctx, keyID); err != nil {
+		return appErrors.NewInternalError("Failed to delete API key", err)
+	}
+
 	return nil
 }
 

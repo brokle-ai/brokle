@@ -124,13 +124,12 @@ func (r *apiKeyRepository) GetByFilters(ctx context.Context, filters *authDomain
 	if filters.ProjectID != nil {
 		query = query.Where("project_id = ?", *filters.ProjectID)
 	}
-	if filters.IsActive != nil {
-		query = query.Where("is_active = ?", *filters.IsActive)
-	}
 	if filters.IsExpired != nil {
 		if *filters.IsExpired {
+			// Filter for expired keys
 			query = query.Where("expires_at IS NOT NULL AND expires_at < ?", time.Now())
 		} else {
+			// Filter for active (non-expired) keys
 			query = query.Where("expires_at IS NULL OR expires_at > ?", time.Now())
 		}
 	}
@@ -188,13 +187,12 @@ func (r *apiKeyRepository) CountByFilters(ctx context.Context, filters *authDoma
 	if filters.ProjectID != nil {
 		query = query.Where("project_id = ?", *filters.ProjectID)
 	}
-	if filters.IsActive != nil {
-		query = query.Where("is_active = ?", *filters.IsActive)
-	}
 	if filters.IsExpired != nil {
 		if *filters.IsExpired {
+			// Count expired keys
 			query = query.Where("expires_at IS NOT NULL AND expires_at < ?", time.Now())
 		} else {
+			// Count active (non-expired) keys
 			query = query.Where("expires_at IS NULL OR expires_at > ?", time.Now())
 		}
 	}
@@ -220,12 +218,12 @@ func (r *apiKeyRepository) GetAPIKeyCount(ctx context.Context, userID ulid.ULID)
 	return int(count), err
 }
 
-// GetActiveAPIKeyCount returns the count of active API keys for a user
+// GetActiveAPIKeyCount returns the count of active (non-expired, non-deleted) API keys for a user
 func (r *apiKeyRepository) GetActiveAPIKeyCount(ctx context.Context, userID ulid.ULID) (int, error) {
 	var count int64
 	err := r.db.WithContext(ctx).
 		Model(&authDomain.APIKey{}).
-		Where("user_id = ? AND is_active = true AND deleted_at IS NULL", userID).
+		Where("user_id = ? AND (expires_at IS NULL OR expires_at > ?) AND deleted_at IS NULL", userID, time.Now()).
 		Count(&count).Error
 	return int(count), err
 }

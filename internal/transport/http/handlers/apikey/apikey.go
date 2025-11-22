@@ -40,7 +40,7 @@ type APIKey struct {
 	Key        string     `json:"key,omitempty" example:"bk_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789AbCd" description:"The actual API key (only shown on creation)"`
 	KeyPreview string     `json:"key_preview" example:"bk_AbCd...AbCd" description:"Truncated version of the key for display"`
 	ProjectID  string     `json:"project_id" example:"proj_01234567890123456789012345" description:"Project ID this key belongs to"`
-	Status     string     `json:"status" example:"active" description:"API key status (active, inactive, expired)"`
+	Status     string     `json:"status" example:"active" description:"API key status (active, expired)"`
 	LastUsed   *time.Time `json:"last_used,omitempty" example:"2024-01-01T00:00:00Z" description:"Last time this key was used (null if never used)"`
 	CreatedAt  time.Time  `json:"created_at" example:"2024-01-01T00:00:00Z" description:"Creation timestamp"`
 	ExpiresAt  *time.Time `json:"expires_at,omitempty" example:"2024-12-31T23:59:59Z" description:"Expiration timestamp (null if never expires)"`
@@ -68,7 +68,7 @@ type ListAPIKeysResponse struct {
 // @Accept json
 // @Produce json
 // @Param projectId path string true "Project ID" example("proj_01234567890123456789012345")
-// @Param status query string false "Filter by API key status" Enums(active,inactive,expired)
+// @Param status query string false "Filter by API key status" Enums(active,expired)
 // @Param cursor query string false "Pagination cursor" example("eyJjcmVhdGVkX2F0IjoiMjAyNC0wMS0wMVQxMjowMDowMFoiLCJpZCI6IjAxSDJYM1k0WjUifQ==")
 // @Param page_size query int false "Items per page" Enums(10,20,30,40,50) default(50)
 // @Param sort_by query string false "Sort field" Enums(created_at,name,last_used_at) default("created_at")
@@ -119,8 +119,13 @@ func (h *Handler) List(c *gin.Context) {
 
 	// Filter by status if provided
 	if status != "" {
-		isActive := status == "active"
-		filters.IsActive = &isActive
+		if status == "active" {
+			isExpired := false
+			filters.IsExpired = &isExpired
+		} else if status == "expired" {
+			isExpired := true
+			filters.IsExpired = &isExpired
+		}
 	}
 
 	// Get API keys
@@ -319,27 +324,8 @@ func (h *Handler) Delete(c *gin.Context) {
 		return
 	}
 
-	// Get the API key to verify it exists and belongs to the project
-	apiKey, err := h.apiKeyService.GetAPIKey(c.Request.Context(), keyID)
-	if err != nil {
-		h.logger.WithError(err).Error("Failed to get API key for deletion")
-		response.Error(c, err)
-		return
-	}
-
-	// Verify the API key belongs to the specified project (since API keys are now project-scoped)
-	if apiKey.ProjectID != projectID {
-		h.logger.WithFields(map[string]interface{}{
-			"api_key_id":     keyID,
-			"project_id":     projectID,
-			"key_project_id": apiKey.ProjectID,
-		}).Warn("API key does not belong to specified project")
-		response.NotFound(c, "API key not found in this project")
-		return
-	}
-
-	// Delete the API key (soft delete)
-	if err := h.apiKeyService.DeleteAPIKey(c.Request.Context(), keyID); err != nil {
+	// Delete the API key (service validates existence and project ownership)
+	if err := h.apiKeyService.DeleteAPIKey(c.Request.Context(), keyID, projectID); err != nil {
 		h.logger.WithError(err).Error("Failed to delete API key")
 		response.Error(c, err)
 		return
@@ -349,7 +335,6 @@ func (h *Handler) Delete(c *gin.Context) {
 		"user_id":    userID,
 		"api_key_id": keyID,
 		"project_id": projectID,
-		"key_name":   apiKey.Name,
 	}).Info("API key deleted successfully")
 
 	response.NoContent(c)

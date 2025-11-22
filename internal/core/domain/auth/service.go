@@ -70,7 +70,7 @@ type APIKeyService interface {
 	CreateAPIKey(ctx context.Context, userID ulid.ULID, req *CreateAPIKeyRequest) (*CreateAPIKeyResponse, error)
 	GetAPIKey(ctx context.Context, keyID ulid.ULID) (*APIKey, error)
 	GetAPIKeys(ctx context.Context, filters *APIKeyFilters) ([]*APIKey, error)
-	DeleteAPIKey(ctx context.Context, keyID ulid.ULID) error
+	DeleteAPIKey(ctx context.Context, keyID ulid.ULID, projectID ulid.ULID) error
 
 	// API key validation and usage
 	ValidateAPIKey(ctx context.Context, fullKey string) (*ValidateAPIKeyResponse, error)
@@ -277,8 +277,7 @@ type APIKeyFilters struct {
 	UserID         *ulid.ULID `json:"user_id,omitempty"`
 	OrganizationID *ulid.ULID `json:"organization_id,omitempty"`
 	ProjectID      *ulid.ULID `json:"project_id,omitempty"`
-	IsActive       *bool      `json:"is_active,omitempty"`
-	IsExpired      *bool      `json:"is_expired,omitempty"`
+	IsExpired      *bool      `json:"is_expired,omitempty"` // Filter by expiration status
 
 	// Pagination (embedded for DRY)
 	pagination.Params `json:",inline"`
