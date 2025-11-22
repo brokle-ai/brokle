@@ -564,16 +564,6 @@ curl -X POST https://api.brokle.com/v1/traces \
 
 ---
 
-### POST /v1/otlp/traces
-
-**Alternative OTLP endpoint** (same functionality as `/v1/traces`)
-
-This endpoint provides compatibility with OTEL tools that expect the `/otlp/` path prefix.
-
-**All features identical to `/v1/traces`** - use either endpoint based on your preference.
-
----
-
 ## Analytics & Observability
 
 ### GET /analytics/metrics

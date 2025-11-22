@@ -213,13 +213,13 @@ handlers := initHandlers(services)
 
 ## OTLP Telemetry Ingestion
 
-**Endpoints**:
-- `POST /v1/otlp/traces` - Primary OTLP endpoint
-- `POST /v1/traces` - Alternative endpoint
+**Endpoint**:
+- `POST /v1/traces` - OTLP standard endpoint (OpenTelemetry specification)
 
 **Processing**:
-- Supports: Protobuf (binary) and JSON payloads
-- Compression: Automatic gzip decompression
+- Supports: Protobuf (binary) and JSON payloads with explicit Content-Type validation
+- Compression: Automatic gzip decompression via Content-Encoding header
+- Security: 10MB request size limit (DoS protection), HTTP 415 for invalid Content-Types
 - Handler: `OTLPHandler` converts OTLP → Brokle schema
 - Converter: `OTLPConverterService` with intelligent root span detection
 - Storage: Events → Redis streams → `TelemetryStreamConsumer` worker → ClickHouse

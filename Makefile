@@ -4,7 +4,7 @@
 # and deployment of the Brokle platform.
 
 # Available commands:
-.PHONY: help setup install-deps setup-databases
+.PHONY: help setup install-deps install-tools setup-databases
 .PHONY: dev dev-server dev-worker dev-frontend
 .PHONY: build build-oss build-enterprise build-server-oss build-worker-oss
 .PHONY: build-server-enterprise build-worker-enterprise build-frontend build-all
@@ -37,6 +37,12 @@ install-deps: ## Install Go and Node.js dependencies
 	@echo "📦 Installing dependencies..."
 	go mod download
 	cd web && pnpm install
+
+install-tools: ## Install development tools (golangci-lint, etc.)
+	@echo "🔧 Installing development tools..."
+	@echo "Installing golangci-lint v2.6.2 (Go 1.25 compatible)..."
+	@curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(shell go env GOPATH)/bin v2.6.2
+	@echo "✅ Tools installed successfully"
 
 setup-databases: ## Start databases with Docker Compose
 	@echo "🗄️ Starting databases..."

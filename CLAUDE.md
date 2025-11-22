@@ -136,6 +136,9 @@ brokle/
 # First time setup (installs deps, starts DBs, runs migrations, seeds data)
 make setup
 
+# Install development tools (golangci-lint v2.6.2 for Go 1.25 compatibility)
+make install-tools
+
 # Start full development stack (Server + Worker)
 make dev              # Starts both server and worker with hot reload
 
@@ -294,7 +297,7 @@ make test-coverage
 # Lint all code
 make lint
 
-# Lint Go code only
+# Lint Go code only (requires golangci-lint v2.6.2+ for Go 1.25 compatibility)
 make lint-go
 
 # Lint frontend code only
@@ -304,6 +307,8 @@ make lint-frontend
 make fmt
 make fmt-frontend
 ```
+
+**Note**: golangci-lint v2.6.2+ is required for Go 1.25 compatibility. Install with `make install-tools`.
 
 ### Build Variants
 ```bash
@@ -377,10 +382,10 @@ The platform implements a clean separation between SDK and Dashboard routes:
 - `POST /v1/route` - AI routing decisions
 
 **Telemetry Ingestion (OpenTelemetry Protocol)**:
-- `POST /v1/otlp/traces` - OTLP traces ingestion (primary endpoint)
-- `POST /v1/traces` - Alternative OTLP traces endpoint
-- Supports: Protobuf (binary) and JSON payloads
+- `POST /v1/traces` - OTLP traces ingestion endpoint (OpenTelemetry standard)
+- Supports: Protobuf (binary) and JSON payloads with explicit Content-Type validation
 - Compression: Automatic gzip decompression via Content-Encoding header
+- Request Limit: 10MB max (DoS protection)
 - Handler: `OTLPHandler` in `internal/transport/http/handlers/observability/otlp.go`
 - Converter: `OTLPConverterService` with intelligent root span detection
 - Processing: Events consumed via Redis streams by `TelemetryStreamConsumer` worker

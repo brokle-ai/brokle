@@ -257,11 +257,10 @@ processors:
 | **OTLP/HTTP** | 4318 | ✅ | HTTP with protobuf or JSON |
 | **Gzip compression** | - | ✅ | Recommended (80% bandwidth reduction) |
 
-**Brokle endpoints:**
-- Production: `https://api.brokle.com/v1/traces`
-- Alternative: `https://api.brokle.com/v1/otlp/traces`
+**Brokle endpoint:**
+- Production: `https://api.brokle.com/v1/traces` (OpenTelemetry standard)
 
-Both endpoints support the same protocols.
+Supports Protobuf and JSON formats with gzip compression.
 
 ---
 
