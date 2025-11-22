@@ -142,7 +142,7 @@ export function ProjectGeneralSection() {
 
       {/* Project Information Display */}
       <div className="rounded-lg border p-4 space-y-4">
-        <div className="grid grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 gap-6">
           <div>
             <div className="text-sm font-medium text-muted-foreground">Current Status</div>
             <Badge className={getStatusColor(currentProject.status || 'active')}>
@@ -150,14 +150,6 @@ export function ProjectGeneralSection() {
                 ? currentProject.status.charAt(0).toUpperCase() + currentProject.status.slice(1)
                 : 'Active'}
             </Badge>
-          </div>
-          <div>
-            <div className="text-sm font-medium text-muted-foreground">Created</div>
-            <div className="text-sm">{new Date(currentProject.createdAt).toLocaleDateString()}</div>
-          </div>
-          <div>
-            <div className="text-sm font-medium text-muted-foreground">Last Updated</div>
-            <div className="text-sm">{new Date(currentProject.updatedAt).toLocaleDateString()}</div>
           </div>
         </div>
 
@@ -173,8 +165,7 @@ export function ProjectGeneralSection() {
               size="sm"
               onClick={copyProjectId}
             >
-              <Copy className="h-3 w-3 mr-1" />
-              Copy
+              <Copy className="h-3 w-3" />
             </Button>
           </div>
         </div>

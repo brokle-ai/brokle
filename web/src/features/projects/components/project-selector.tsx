@@ -20,13 +20,25 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
+
+const getStatusBadgeColor = (status: string) => {
+  switch (status) {
+    case 'archived':
+      return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300'
+    case 'active':
+    default:
+      return ''
+  }
+}
 
 interface ProjectSelectorProps {
   className?: string
+  showStatusBadge?: boolean
 }
 
-export function ProjectSelector({ className }: ProjectSelectorProps) {
+export function ProjectSelector({ className, showStatusBadge = true }: ProjectSelectorProps) {
   const {
     currentOrganization,
     currentProject,
@@ -104,6 +116,17 @@ export function ProjectSelector({ className }: ProjectSelectorProps) {
         disabled={isSwitchLoading}
       >
         <span className="font-normal">{currentProject.name}</span>
+        {showStatusBadge && currentProject.status === 'archived' && (
+          <Badge
+            variant="secondary"
+            className={cn(
+              "ml-1 px-1 py-0 text-xs font-normal capitalize",
+              getStatusBadgeColor(currentProject.status)
+            )}
+          >
+            Archived
+          </Badge>
+        )}
         <ChevronDown className="size-4" />
       </DropdownMenuTrigger>
       
@@ -144,7 +167,7 @@ export function ProjectSelector({ className }: ProjectSelectorProps) {
                         targetProjectName: project.name
                       })
                 }
-                className="flex cursor-pointer justify-between"
+                className="flex cursor-pointer justify-between items-center"
                 onClick={(e) => {
                   if (project.id === currentProject.id) {
                     e.preventDefault()
@@ -153,12 +176,25 @@ export function ProjectSelector({ className }: ProjectSelectorProps) {
                   setIsSwitchLoading(true)
                 }}
               >
-                <span
-                  className="max-w-36 overflow-hidden overflow-ellipsis whitespace-nowrap"
-                  title={project.name}
-                >
-                  {project.name}
-                </span>
+                <div className="flex items-center gap-2 min-w-0">
+                  <span
+                    className="overflow-hidden overflow-ellipsis whitespace-nowrap"
+                    title={project.name}
+                  >
+                    {project.name}
+                  </span>
+                  {showStatusBadge && project.status === 'archived' && (
+                    <Badge
+                      variant="secondary"
+                      className={cn(
+                        "px-1 py-0 text-xs font-normal capitalize shrink-0",
+                        getStatusBadgeColor(project.status)
+                      )}
+                    >
+                      Archived
+                    </Badge>
+                  )}
+                </div>
                 <Button
                   variant="ghost"
                   size="icon"
