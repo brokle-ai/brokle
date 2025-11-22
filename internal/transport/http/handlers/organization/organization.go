@@ -34,13 +34,13 @@ type Handler struct {
 
 // Organization represents an organization entity
 type Organization struct {
-	CreatedAt   time.Time `json:"created_at" example:"2024-01-01T00:00:00Z" description:"Creation timestamp"`
-	UpdatedAt   time.Time `json:"updated_at" example:"2024-01-01T00:00:00Z" description:"Last update timestamp"`
-	ID          string    `json:"id" example:"org_1234567890" description:"Unique organization identifier"`
-	Name        string    `json:"name" example:"Acme Corporation" description:"Organization name"`
-	Description string    `json:"description,omitempty" example:"Leading AI solutions provider" description:"Optional organization description"`
-	Plan        string    `json:"plan" example:"pro" description:"Subscription plan (free, pro, business, enterprise)"`
-	Status      string    `json:"status" example:"active" description:"Organization status (active, suspended, deleted)"`
+	CreatedAt          time.Time `json:"created_at" example:"2024-01-01T00:00:00Z" description:"Creation timestamp"`
+	UpdatedAt          time.Time `json:"updated_at" example:"2024-01-01T00:00:00Z" description:"Last update timestamp"`
+	ID                 string    `json:"id" example:"org_1234567890" description:"Unique organization identifier"`
+	Name               string    `json:"name" example:"Acme Corporation" description:"Organization name"`
+	Description        string    `json:"description,omitempty" example:"Leading AI solutions provider" description:"Optional organization description"`
+	Plan               string    `json:"plan" example:"pro" description:"Subscription plan (free, pro, business, enterprise)"`
+	SubscriptionStatus string    `json:"subscription_status" example:"active" description:"Subscription status (active, trialing, past_due, canceled, inactive)"`
 }
 
 // CreateOrganizationRequest represents the request to create an organization
@@ -51,8 +51,9 @@ type CreateOrganizationRequest struct {
 
 // UpdateOrganizationRequest represents the request to update an organization
 type UpdateOrganizationRequest struct {
-	Name        string `json:"name,omitempty" binding:"omitempty,min=2,max=100" example:"Acme Corporation" description:"Organization name (2-100 characters)"`
-	Description string `json:"description,omitempty" binding:"omitempty,max=500" example:"Leading AI solutions provider" description:"Description (max 500 characters)"`
+	Name         string `json:"name,omitempty" binding:"omitempty,min=2,max=100" example:"Acme Corporation" description:"Organization name (2-100 characters)"`
+	BillingEmail string `json:"billing_email,omitempty" binding:"omitempty,email" example:"billing@acme.com" description:"Billing email address"`
+	Description  string `json:"description,omitempty" binding:"omitempty,max=500" example:"Leading AI solutions provider" description:"Description (max 500 characters)"`
 }
 
 // OrganizationMember represents a member of an organization
@@ -185,12 +186,12 @@ func (h *Handler) List(c *gin.Context) {
 		}
 
 		filteredOrgs = append(filteredOrgs, Organization{
-			ID:        org.ID.String(),
-			Name:      org.Name,
-			Plan:      org.Plan,
-			Status:    org.SubscriptionStatus,
-			CreatedAt: org.CreatedAt,
-			UpdatedAt: org.UpdatedAt,
+			ID:                 org.ID.String(),
+			Name:               org.Name,
+			Plan:               org.Plan,
+			SubscriptionStatus: org.SubscriptionStatus,
+			CreatedAt:          org.CreatedAt,
+			UpdatedAt:          org.UpdatedAt,
 		})
 	}
 
@@ -304,12 +305,12 @@ func (h *Handler) Create(c *gin.Context) {
 
 	// Convert to response format
 	responseData := Organization{
-		ID:        org.ID.String(),
-		Name:      org.Name,
-		Plan:      org.Plan,
-		Status:    org.SubscriptionStatus,
-		CreatedAt: org.CreatedAt,
-		UpdatedAt: org.UpdatedAt,
+		ID:                 org.ID.String(),
+		Name:               org.Name,
+		Plan:               org.Plan,
+		SubscriptionStatus: org.SubscriptionStatus,
+		CreatedAt:          org.CreatedAt,
+		UpdatedAt:          org.UpdatedAt,
 	}
 
 	h.logger.WithFields(logrus.Fields{
@@ -403,12 +404,12 @@ func (h *Handler) Get(c *gin.Context) {
 
 	// Convert to response format
 	responseData := Organization{
-		ID:        org.ID.String(),
-		Name:      org.Name,
-		Plan:      org.Plan,
-		Status:    org.SubscriptionStatus,
-		CreatedAt: org.CreatedAt,
-		UpdatedAt: org.UpdatedAt,
+		ID:                 org.ID.String(),
+		Name:               org.Name,
+		Plan:               org.Plan,
+		SubscriptionStatus: org.SubscriptionStatus,
+		CreatedAt:          org.CreatedAt,
+		UpdatedAt:          org.UpdatedAt,
 	}
 
 	h.logger.WithFields(logrus.Fields{
@@ -419,14 +420,14 @@ func (h *Handler) Get(c *gin.Context) {
 	response.Success(c, responseData)
 }
 
-// Update handles PUT /organizations/:orgId
+// Update handles PATCH /organizations/:orgId
 // @Summary Update organization
-// @Description Update organization details. Only owners and admins can update organization settings.
+// @Description Partially update organization details. Only owners and admins can update organization settings.
 // @Tags Organizations
 // @Accept json
 // @Produce json
 // @Param orgId path string true "Organization ID" example("org_1234567890")
-// @Param request body UpdateOrganizationRequest true "Updated organization details"
+// @Param request body UpdateOrganizationRequest true "Updated organization details (partial)"
 // @Success 200 {object} response.SuccessResponse{data=Organization} "Organization updated successfully"
 // @Failure 400 {object} response.ErrorResponse "Bad request - invalid input or validation errors"
 // @Failure 401 {object} response.ErrorResponse "Unauthorized"
@@ -434,7 +435,7 @@ func (h *Handler) Get(c *gin.Context) {
 // @Failure 404 {object} response.ErrorResponse "Organization not found"
 // @Failure 500 {object} response.ErrorResponse "Internal server error"
 // @Security BearerAuth
-// @Router /api/v1/organizations/{orgId} [put]
+// @Router /api/v1/organizations/{orgId} [patch]
 func (h *Handler) Update(c *gin.Context) {
 	var uriReq GetRequest
 	if err := c.ShouldBindUri(&uriReq); err != nil {
@@ -494,9 +495,12 @@ func (h *Handler) Update(c *gin.Context) {
 	}
 
 	// Create update request
-	updateReq := &organization.UpdateOrganizationRequest{
-		Name:         &req.Name,
-		BillingEmail: &req.Description, // Using description field temporarily
+	updateReq := &organization.UpdateOrganizationRequest{}
+	if req.Name != "" {
+		updateReq.Name = &req.Name
+	}
+	if req.BillingEmail != "" {
+		updateReq.BillingEmail = &req.BillingEmail
 	}
 
 	// Update organization
@@ -520,12 +524,12 @@ func (h *Handler) Update(c *gin.Context) {
 
 	// Convert to response format
 	responseData := Organization{
-		ID:        org.ID.String(),
-		Name:      org.Name,
-		Plan:      org.Plan,
-		Status:    org.SubscriptionStatus,
-		CreatedAt: org.CreatedAt,
-		UpdatedAt: org.UpdatedAt,
+		ID:                 org.ID.String(),
+		Name:               org.Name,
+		Plan:               org.Plan,
+		SubscriptionStatus: org.SubscriptionStatus,
+		CreatedAt:          org.CreatedAt,
+		UpdatedAt:          org.UpdatedAt,
 	}
 
 	h.logger.WithFields(logrus.Fields{

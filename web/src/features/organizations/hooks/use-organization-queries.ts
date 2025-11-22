@@ -1,7 +1,7 @@
 'use client'
 
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { createOrganization } from '../api/organizations-api'
+import { createOrganization, updateOrganization } from '../api/organizations-api'
 import { getCurrentUser } from '@/lib/api'
 import { authQueryKeys } from '@/features/authentication'
 import { toast } from 'sonner'
@@ -48,6 +48,44 @@ export function useCreateOrganizationMutation() {
       const apiError = error as { message?: string }
       toast.error('Failed to Create Organization', {
         description: apiError?.message || 'Could not create organization. Please try again.',
+      })
+    },
+  })
+}
+
+// Update organization mutation
+export function useUpdateOrganizationMutation() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async ({
+      orgId,
+      data
+    }: {
+      orgId: string
+      data: { name?: string; billing_email?: string }
+    }) => {
+      return updateOrganization(orgId, data)
+    },
+    onSuccess: (updatedOrg: Organization) => {
+      // Invalidate workspace context
+      queryClient.invalidateQueries({ queryKey: ['workspace'] })
+
+      // Invalidate organizations list
+      queryClient.invalidateQueries({ queryKey: organizationQueryKeys.lists() })
+
+      // Invalidate specific org detail
+      queryClient.invalidateQueries({ queryKey: organizationQueryKeys.detail(updatedOrg.id) })
+
+      // Show success toast
+      toast.success('Organization Updated!', {
+        description: `${updatedOrg.name} has been updated successfully.`,
+      })
+    },
+    onError: (error: unknown) => {
+      const apiError = error as { message?: string }
+      toast.error('Failed to Update Organization', {
+        description: apiError?.message || 'Could not update organization. Please try again.',
       })
     },
   })

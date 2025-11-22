@@ -248,7 +248,7 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 		orgs.GET("", s.handlers.Organization.List) // No org context required for listing user's orgs
 		orgs.POST("", s.handlers.Organization.Create)
 		orgs.GET("/:orgId", s.handlers.Organization.Get)
-		orgs.PUT("/:orgId", s.authMiddleware.RequirePermission("organizations:write"), s.handlers.Organization.Update)
+		orgs.PATCH("/:orgId", s.authMiddleware.RequirePermission("organizations:write"), s.handlers.Organization.Update)
 		orgs.DELETE("/:orgId", s.authMiddleware.RequirePermission("organizations:delete"), s.handlers.Organization.Delete)
 		orgs.GET("/:orgId/members", s.authMiddleware.RequirePermission("members:read"), s.handlers.Organization.ListMembers)
 		orgs.POST("/:orgId/members", s.authMiddleware.RequirePermission("members:invite"), s.handlers.Organization.InviteMember)

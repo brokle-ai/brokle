@@ -3,10 +3,10 @@
 // Hooks
 export { useOrganizationOnly } from './hooks/use-organization-only'
 export { useOrganizationProjects } from './hooks/use-organization-projects'
-export { useCreateOrganizationMutation } from './hooks/use-organization-queries'
+export { useCreateOrganizationMutation, useUpdateOrganizationMutation } from './hooks/use-organization-queries'
 
 // API Functions
-export { createProject, createOrganization } from './api/organizations-api'
+export { createProject, createOrganization, updateOrganization } from './api/organizations-api'
 
 // Components
 export { CreateOrganizationDialog } from './components/create-organization-dialog'

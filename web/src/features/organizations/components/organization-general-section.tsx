@@ -1,21 +1,23 @@
 'use client'
 
 import { useState } from 'react'
-import { Save, RefreshCw, Copy } from 'lucide-react'
+import { Save, Copy, Loader2 } from 'lucide-react'
 import { useWorkspace } from '@/context/workspace-context'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
 import { toast } from 'sonner'
+import { useUpdateOrganizationMutation } from '../hooks/use-organization-queries'
 
 export function OrganizationGeneralSection() {
   const { currentOrganization } = useWorkspace()
+  const updateMutation = useUpdateOrganizationMutation()
 
-  const [isLoading, setIsLoading] = useState(false)
-  const [organizationName, setOrganizationName] = useState(currentOrganization?.name || '')
-  const [billingEmail, setBillingEmail] = useState(currentOrganization?.billing_email || '')
+  // Track user edits (null = not edited, use currentOrganization value)
+  const [editedName, setEditedName] = useState<string | null>(null)
+
+  // Derive display value
+  const organizationName = editedName ?? currentOrganization?.name ?? ''
 
   if (!currentOrganization) {
     return null
@@ -23,39 +25,33 @@ export function OrganizationGeneralSection() {
 
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault()
-    setIsLoading(true)
+
+    if (!currentOrganization) return
+
+    // Validation
+    if (organizationName.trim().length < 2 || organizationName.trim().length > 100) {
+      toast.error('Organization name must be between 2 and 100 characters')
+      return
+    }
 
     try {
-      // TODO: Implement API call to update organization
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      await updateMutation.mutateAsync({
+        orgId: currentOrganization.id,
+        data: {
+          name: organizationName.trim()
+        }
+      })
 
-      toast.success('Organization settings updated successfully')
+      // Clear edit tracking after success
+      setEditedName(null)
     } catch (error) {
-      console.error('Failed to update organization settings:', error)
-      toast.error('Failed to update settings. Please try again.')
-    } finally {
-      setIsLoading(false)
+      console.error('Failed to update organization:', error)
     }
   }
 
   const copyOrganizationId = () => {
     navigator.clipboard.writeText(currentOrganization.id)
     toast.success('Organization ID copied to clipboard')
-  }
-
-  const getPlanColor = (plan: string) => {
-    switch (plan) {
-      case 'enterprise':
-        return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300'
-      case 'business':
-        return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300'
-      case 'pro':
-        return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
-      case 'free':
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300'
-      default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300'
-    }
   }
 
   return (
@@ -67,74 +63,41 @@ export function OrganizationGeneralSection() {
           <Input
             id="organizationName"
             value={organizationName}
-            onChange={(e) => setOrganizationName(e.target.value)}
+            onChange={(e) => setEditedName(e.target.value)}
             placeholder="Enter organization name"
             required
           />
         </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="billingEmail">Billing Email</Label>
-          <Input
-            id="billingEmail"
-            type="email"
-            value={billingEmail}
-            onChange={(e) => setBillingEmail(e.target.value)}
-            placeholder="billing@example.com"
-          />
-          <p className="text-xs text-muted-foreground">
-            Invoices and billing notifications will be sent to this email
-          </p>
-        </div>
       </div>
 
-      {/* Subscription Information */}
-      <div className="rounded-lg border p-4 space-y-4">
-        <div className="grid grid-cols-2 gap-6">
-          <div>
-            <div className="text-sm font-medium text-muted-foreground">Current Plan</div>
-            <Badge className={getPlanColor(currentOrganization.plan)}>
-              {currentOrganization.plan.charAt(0).toUpperCase() + currentOrganization.plan.slice(1)}
-            </Badge>
-          </div>
-          <div>
-            <div className="text-sm font-medium text-muted-foreground">Subscription Status</div>
-            <Badge variant="outline">Active</Badge>
-          </div>
-          <div>
-            <div className="text-sm font-medium text-muted-foreground">Created</div>
-            <div className="text-sm">{new Date(currentOrganization.created_at).toLocaleDateString()}</div>
-          </div>
-          <div>
-            <div className="text-sm font-medium text-muted-foreground">Last Updated</div>
-            <div className="text-sm">{new Date(currentOrganization.updated_at).toLocaleDateString()}</div>
-          </div>
-        </div>
-
-        <Separator />
-
-        <div>
-          <div className="text-sm font-medium text-muted-foreground mb-2">Organization ID</div>
+      {/* Organization Identification */}
+      <div className="rounded-lg border p-4">
+        <div className="space-y-2">
+          <div className="text-sm font-medium text-muted-foreground">Organization ID</div>
           <div className="flex items-center gap-2">
-            <code className="text-xs bg-muted px-2 py-1 rounded">{currentOrganization.id}</code>
+            <code className="text-xs bg-muted px-2 py-1 rounded font-mono">
+              {currentOrganization.id}
+            </code>
             <Button
               type="button"
               variant="ghost"
               size="sm"
               onClick={copyOrganizationId}
             >
-              <Copy className="h-3 w-3 mr-1" />
-              Copy
+              <Copy className="h-3 w-3" />
             </Button>
           </div>
+          <p className="text-xs text-muted-foreground">
+            Use this ID for API integration and support requests
+          </p>
         </div>
       </div>
 
       {/* Submit Button */}
-      <Button type="submit" disabled={isLoading}>
-        {isLoading ? (
+      <Button type="submit" disabled={updateMutation.isPending}>
+        {updateMutation.isPending ? (
           <>
-            <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             Saving...
           </>
         ) : (
