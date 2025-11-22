@@ -2,7 +2,7 @@
 
 // Hooks
 export { useProjectOnly } from './hooks/use-project-only'
-export { useCreateProjectMutation } from './hooks/use-project-queries'
+export { useCreateProjectMutation, useUpdateProjectMutation } from './hooks/use-project-queries'
 export {
   useAPIKeysQuery,
   useCreateAPIKeyMutation,
@@ -18,6 +18,7 @@ export {
   createKeyPreview,
   validateAPIKeyFormat
 } from './api/api-keys-api'
+export { updateProject } from './api/projects-api'
 
 // Components
 export { CreateProjectDialog } from './components/create-project-dialog'
@@ -43,3 +44,4 @@ export type {
   APIKeyListResponse,
   APIKeyResponse
 } from './types/api-keys'
+export type { UpdateProjectRequest, Project } from './api/projects-api'

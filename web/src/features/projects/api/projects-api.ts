@@ -3,6 +3,24 @@
 import { BrokleAPIClient } from '@/lib/api/core/client'
 import type { QueryParams } from '@/lib/api/core/types'
 
+// Project types
+export interface UpdateProjectRequest {
+  name?: string
+  description?: string
+  status?: 'active' | 'paused' | 'archived'
+}
+
+export interface Project {
+  id: string
+  name: string
+  slug: string
+  description: string
+  status: 'active' | 'paused' | 'archived'
+  organization_id: string
+  created_at: string
+  updated_at: string
+}
+
 // Dashboard-specific types
 export interface QuickStat {
   label: string
@@ -98,4 +116,28 @@ export const getDashboardConfig = async (): Promise<{
   }> => {
     return client.get('/dashboard/config')
   }
+
+/**
+ * Update project settings
+ *
+ * @param projectId - Project ID (ULID)
+ * @param data - Fields to update (name, description, status)
+ * @returns Updated project
+ *
+ * @example
+ * ```ts
+ * await updateProject('proj_123', {
+ *   name: 'Updated Name',
+ *   description: 'New description',
+ *   status: 'active'
+ * })
+ * ```
+ */
+export async function updateProject(
+  projectId: string,
+  data: UpdateProjectRequest
+): Promise<Project> {
+  const endpoint = `/v1/projects/${projectId}`
+  return client.put<Project, UpdateProjectRequest>(endpoint, data)
+}
 
