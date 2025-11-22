@@ -1,15 +1,15 @@
 'use client'
 
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { ChevronDown, Settings, Plus, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { useWorkspace } from '@/context/workspace-context'
+import { WorkspaceError, classifyAPIError } from '@/context/workspace-errors'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { getSmartRedirectUrl } from '@/lib/utils/smart-redirect'
-import { generateCompositeSlug, extractIdFromCompositeSlug } from '@/lib/utils/slug-utils'
-import { setDefaultOrganization } from '@/features/authentication/api/auth-api'
+import { generateCompositeSlug, extractIdFromCompositeSlug, buildOrgUrl } from '@/lib/utils/slug-utils'
 import { CreateOrganizationDialog } from '@/features/organizations'
 import {
   DropdownMenu,
@@ -48,25 +48,16 @@ export function OrganizationSelector({ className, showPlanBadge = false }: Organ
     organizations,
     currentOrganization,
     isInitialized,
-    refresh,
+    loadingState,
+    canInteract,
+    switchOrganization,
   } = useWorkspace()
-  
+
   const pathname = usePathname()
   const router = useRouter()
   const isMobile = useIsMobile()
-  const [isOrgLoading, setIsOrgLoading] = useState(false)
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
-
-  // Ref to track if component is mounted (prevent state updates on unmounted component)
-  const isMountedRef = useRef(true)
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      isMountedRef.current = false
-    }
-  }, [])
 
   const handleOrgSwitch = useCallback(async (compositeSlug: string) => {
     // Generate current composite slug for comparison
@@ -74,30 +65,23 @@ export function OrganizationSelector({ className, showPlanBadge = false }: Organ
       ? generateCompositeSlug(currentOrganization.name, currentOrganization.id)
       : null
 
-    if (isOrgLoading || compositeSlug === currentCompositeSlug) return
+    if (compositeSlug === currentCompositeSlug) return
 
-    // Extract ID from composite slug
+    // Extract ID to find target org
     const targetOrgId = extractIdFromCompositeSlug(compositeSlug)
-
-    // Find the organization object by ID
     const targetOrg = organizations.find(org => org.id === targetOrgId)
     if (!targetOrg) {
       if (process.env.NODE_ENV === 'development') {
-        console.error('Organization not found for composite slug:', compositeSlug)
+        console.error('[OrganizationSelector] Organization not found:', compositeSlug)
       }
       return
     }
 
     try {
-      setIsOrgLoading(true)
+      // Use context method (handles loading state internally)
+      await switchOrganization(compositeSlug)
 
-      // Update default organization in backend
-      await setDefaultOrganization(targetOrgId)
-
-      // Refresh workspace context to get updated user data
-      await refresh()
-
-      // Use smart redirect to determine the appropriate URL
+      // Calculate redirect URL
       const redirectUrl = getSmartRedirectUrl({
         currentPath: pathname,
         targetOrgSlug: compositeSlug,
@@ -105,25 +89,26 @@ export function OrganizationSelector({ className, showPlanBadge = false }: Organ
         targetOrgName: targetOrg.name
       })
 
-      // Navigate to smart redirect URL
+      // Navigate
       router.push(redirectUrl)
     } catch (error) {
-      // Check if component is still mounted before showing error
-      if (!isMountedRef.current) return
+      // Preserve already-classified WorkspaceError, only classify if needed
+      const workspaceError = error instanceof WorkspaceError
+        ? error  // Use as-is to preserve specific error codes/messages
+        : classifyAPIError(error)  // Only classify unknown errors
 
-      // Extract error message with fallback
-      const errorMessage = error instanceof Error
-        ? error.message
-        : 'Failed to switch organization. Please try again.'
+      toast.error(workspaceError.userMessage)
 
-      toast.error(errorMessage)
       if (process.env.NODE_ENV === 'development') {
-        console.error('Failed to switch organization:', error)
+        console.error('[OrganizationSelector] Switch failed:', {
+          code: workspaceError.code,
+          message: workspaceError.message,
+          context: workspaceError.context,
+          originalError: workspaceError.originalError
+        })
       }
-    } finally {
-      setIsOrgLoading(false)
     }
-  }, [isOrgLoading, currentOrganization, organizations, pathname, router, refresh])
+  }, [currentOrganization, organizations, pathname, router, switchOrganization])
 
   // Loading state - show shimmer only if not initialized yet
   if (!isInitialized) {
@@ -144,10 +129,10 @@ export function OrganizationSelector({ className, showPlanBadge = false }: Organ
         className={cn(
           "flex items-center gap-1 [&_svg]:pointer-events-none [&_svg]:shrink-0",
           "text-sm text-primary hover:text-primary/80 transition-colors",
-          isOrgLoading && "opacity-50 cursor-not-allowed",
+          !canInteract && "opacity-50 cursor-not-allowed",
           className
         )}
-        disabled={isOrgLoading}
+        disabled={!canInteract}
       >
         <span className="font-normal">{currentOrganization.name}</span>
         {showPlanBadge && (
@@ -161,7 +146,7 @@ export function OrganizationSelector({ className, showPlanBadge = false }: Organ
             {currentOrganization.plan}
           </Badge>
         )}
-        {isOrgLoading ? (
+        {loadingState.isSwitchingOrg ? (
           <Loader2 className="size-4 animate-spin" />
         ) : (
           <ChevronDown className="size-4" />
@@ -233,7 +218,7 @@ export function OrganizationSelector({ className, showPlanBadge = false }: Organ
                   onClick={(e) => {
                     e.preventDefault()
                     e.stopPropagation()
-                    router.push(`/organizations/${org.id}/settings`)
+                    router.push(buildOrgUrl(org.name, org.id, 'settings'))
                   }}
                 >
                   <Settings className="h-3 w-3" />

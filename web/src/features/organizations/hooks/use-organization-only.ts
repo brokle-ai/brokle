@@ -6,6 +6,7 @@
  */
 
 import { useWorkspace } from '@/context/workspace-context'
+import type { WorkspaceError } from '@/context/workspace-errors'
 import { useRouter } from 'next/navigation'
 import type { OrganizationWithProjects } from '@/features/authentication'
 
@@ -14,7 +15,7 @@ export interface OrganizationOnlyContext {
   organizations: OrganizationWithProjects[]
   currentOrganization: OrganizationWithProjects | null
   isLoading: boolean
-  error: string | null
+  error: WorkspaceError | null
 
   // Organization Actions
   switchOrganization: (compositeSlug: string) => void

@@ -1,21 +1,21 @@
 'use client'
 
-import * as React from 'react'
 import { useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
-import { ChevronDown, FolderOpen, Plus, Settings } from 'lucide-react'
+import { ChevronDown, Loader2, Plus, Settings } from 'lucide-react'
 import Link from 'next/link'
 import { useWorkspace } from '@/context/workspace-context'
-import { useProjectOnly } from '../hooks/use-project-only'
+import { WorkspaceError, classifyAPIError } from '@/context/workspace-errors'
 import { useIsMobile } from '@/hooks/use-mobile'
-import { buildProjectUrl, getProjectSlug } from '@/lib/utils/slug-utils'
+import { buildProjectUrl, buildOrgUrl, getProjectSlug } from '@/lib/utils/slug-utils'
+import type { ProjectSummary } from '@/features/authentication'
 import { getSmartRedirectUrl } from '@/lib/utils/smart-redirect'
+import { toast } from 'sonner'
 import { CreateProjectDialog } from './create-project-dialog'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
@@ -43,58 +43,51 @@ export function ProjectSelector({ className, showStatusBadge = true }: ProjectSe
     currentOrganization,
     currentProject,
     isInitialized,
+    loadingState,
+    canInteract,
+    switchProject,
   } = useWorkspace()
 
   // Projects come from current organization
   const projects = currentOrganization?.projects || []
-  
+
   const router = useRouter()
   const pathname = usePathname()
   const isMobile = useIsMobile()
-  const [isSwitchLoading, setIsSwitchLoading] = useState(false)
   const [dialogOpen, setDialogOpen] = useState(false)
 
-  const handleProjectSwitch = async (project: any) => {
-    if (isSwitchLoading || project.id === currentProject?.id) return
-    
+  const handleProjectSwitch = async (project: ProjectSummary) => {
+    if (project.id === currentProject?.id) return
+
     try {
-      setIsSwitchLoading(true)
-      
-      // Use smart redirect to determine the appropriate URL
+      // Use context method (handles loading state internally)
+      await switchProject(getProjectSlug(project))
+
+      // Calculate redirect URL
       const redirectUrl = getSmartRedirectUrl({
         currentPath: pathname,
         targetProjectSlug: getProjectSlug(project),
         targetProjectId: project.id,
         targetProjectName: project.name
       })
-      
-      router.push(redirectUrl)
-    } catch (error) {
-      console.error('Failed to switch project:', error)
-    } finally {
-      setIsSwitchLoading(false)
-    }
-  }
 
-  const handleGoToOrganization = async () => {
-    if (!currentOrganization || isSwitchLoading) return
-    
-    try {
-      setIsSwitchLoading(true)
-      
-      // Use smart redirect to determine the appropriate URL (cross-context switch)
-      const redirectUrl = getSmartRedirectUrl({
-        currentPath: pathname,
-        targetOrgSlug: currentOrganization.slug,
-        targetOrgId: currentOrganization.id,
-        targetOrgName: currentOrganization.name
-      })
-      
       router.push(redirectUrl)
     } catch (error) {
-      console.error('Failed to navigate to organization:', error)
-    } finally {
-      setIsSwitchLoading(false)
+      // Preserve already-classified WorkspaceError, only classify if needed
+      const workspaceError = error instanceof WorkspaceError
+        ? error  // Use as-is to preserve specific error codes/messages
+        : classifyAPIError(error)  // Only classify unknown errors
+
+      toast.error(workspaceError.userMessage)
+
+      if (process.env.NODE_ENV === 'development') {
+        console.error('[ProjectSelector] Switch failed:', {
+          code: workspaceError.code,
+          message: workspaceError.message,
+          context: workspaceError.context,
+          originalError: workspaceError.originalError
+        })
+      }
     }
   }
 
@@ -110,10 +103,10 @@ export function ProjectSelector({ className, showStatusBadge = true }: ProjectSe
         className={cn(
           "flex items-center gap-1 [&_svg]:pointer-events-none [&_svg]:shrink-0",
           "text-sm text-primary hover:text-primary/80 transition-colors",
-          isSwitchLoading && "opacity-50 cursor-not-allowed",
+          !canInteract && "opacity-50 cursor-not-allowed",
           className
         )}
-        disabled={isSwitchLoading}
+        disabled={!canInteract}
       >
         <span className="font-normal">{currentProject.name}</span>
         {showStatusBadge && currentProject.status === 'archived' && (
@@ -127,7 +120,11 @@ export function ProjectSelector({ className, showStatusBadge = true }: ProjectSe
             Archived
           </Badge>
         )}
-        <ChevronDown className="size-4" />
+        {loadingState.isSwitchingProject ? (
+          <Loader2 className="size-4 animate-spin" />
+        ) : (
+          <ChevronDown className="size-4" />
+        )}
       </DropdownMenuTrigger>
       
       <DropdownMenuContent
@@ -140,7 +137,7 @@ export function ProjectSelector({ className, showStatusBadge = true }: ProjectSe
         {/* Projects overview link */}
         <DropdownMenuItem className="font-semibold" asChild>
           <Link
-            href={`/organization/${currentOrganization.id}`}
+            href={buildOrgUrl(currentOrganization.name, currentOrganization.id)}
             className="cursor-pointer"
           >
             Projects
@@ -173,7 +170,8 @@ export function ProjectSelector({ className, showStatusBadge = true }: ProjectSe
                     e.preventDefault()
                     return
                   }
-                  setIsSwitchLoading(true)
+                  // Loading state handled by context
+                  handleProjectSwitch(project)
                 }}
               >
                 <div className="flex items-center gap-2 min-w-0">
@@ -203,7 +201,7 @@ export function ProjectSelector({ className, showStatusBadge = true }: ProjectSe
                   onClick={(e) => {
                     e.preventDefault()
                     e.stopPropagation()
-                    router.push(`/project/${project.id}/settings`)
+                    router.push(buildProjectUrl(project.name, project.id, 'settings'))
                   }}
                 >
                   <Settings className="h-3 w-3" />

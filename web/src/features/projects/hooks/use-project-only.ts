@@ -8,6 +8,7 @@
  */
 
 import { useWorkspace } from '@/context/workspace-context'
+import type { WorkspaceError } from '@/context/workspace-errors'
 import { useRouter } from 'next/navigation'
 import type { OrganizationWithProjects, ProjectSummary } from '@/features/authentication'
 
@@ -17,7 +18,7 @@ export interface ProjectOnlyContext {
   projects: ProjectSummary[]
   organization: OrganizationWithProjects | null
   isLoading: boolean
-  error: string | null
+  error: WorkspaceError | null
 
   // Project Actions
   switchProject: (projectSlug: string) => void
