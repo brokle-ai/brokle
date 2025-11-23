@@ -8,8 +8,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
 
+	"brokle/internal/core/domain/analytics"
 	"brokle/internal/core/domain/observability"
 	"brokle/pkg/ulid"
 )
@@ -20,15 +22,18 @@ const MaxAttributeValueSize = 1024 * 1024 // 1MB
 
 // OTLPConverterService handles conversion of OTLP traces to Brokle telemetry events
 type OTLPConverterService struct {
-	logger         *logrus.Logger
-	costCalculator observability.CostCalculator
+	logger                 *logrus.Logger
+	providerPricingService analytics.ProviderPricingService
 }
 
 // NewOTLPConverterService creates a new OTLP converter service
-func NewOTLPConverterService(logger *logrus.Logger, costCalculator observability.CostCalculator) *OTLPConverterService {
+func NewOTLPConverterService(
+	logger *logrus.Logger,
+	providerPricingService analytics.ProviderPricingService,
+) *OTLPConverterService {
 	return &OTLPConverterService{
-		logger:         logger,
-		costCalculator: costCalculator,
+		logger:                 logger,
+		providerPricingService: providerPricingService,
 	}
 }
 
@@ -277,10 +282,9 @@ func (s *OTLPConverterService) createTraceEvent(span observability.OTLPSpan, res
 
 	// Build trace payload with new OTEL-native field names
 	payload := map[string]interface{}{
-		"trace_id":            traceID, // Renamed from "id"
-		"name":                span.Name,
-		"status_code":         statusCode,    // Now UInt8 (0-2)
-		"resource_attributes": resourceAttrs, // OTEL resource attributes as map
+		"trace_id":    traceID, // Renamed from "id"
+		"name":        span.Name,
+		"status_code": statusCode, // Now UInt8 (0-2)
 	}
 
 	// Add start_time if available
@@ -423,15 +427,31 @@ func (s *OTLPConverterService) createTraceEvent(span observability.OTLPSpan, res
 	}
 	payload["environment"] = environment
 
-	// Extract release (optional)
+	// ========== Build metadata JSON (OTEL resource attributes + Brokle attributes) ==========
+	metadata := buildOTELMetadata(resourceAttrs, scopeAttrs, scope)
+
+	// Add Brokle-specific attributes to metadata
 	if release, ok := allAttrs["brokle.release"].(string); ok && release != "" {
-		payload["release"] = release
+		metadata["brokle.release"] = release
 	}
 
-	// Extract version (optional)
 	if version, ok := allAttrs["brokle.version"].(string); ok && version != "" {
-		payload["version"] = version
+		metadata["brokle.version"] = version
 	}
+
+	// Extract user-provided custom metadata (brokle.trace.metadata)
+	if userMetadata, ok := allAttrs["brokle.trace.metadata"].(string); ok && userMetadata != "" {
+		var metadataMap map[string]interface{}
+		if err := json.Unmarshal([]byte(userMetadata), &metadataMap); err == nil {
+			// Merge user metadata at top level (matches brokle.release/version pattern)
+			for k, v := range metadataMap {
+				metadata[k] = v
+			}
+		}
+	}
+
+	// Always store metadata (even if empty, for schema consistency)
+	payload["metadata"] = metadata
 
 	// Extract tags (trace-level categorization)
 	if tagsAttr, ok := allAttrs["brokle.trace.tags"]; ok {
@@ -518,14 +538,12 @@ func (s *OTLPConverterService) createSpanEvent(ctx context.Context, span observa
 
 	// Build span payload with new OTEL-native field names
 	payload := map[string]interface{}{
-		"span_id":             spanID,
-		"trace_id":            traceID,
-		"parent_span_id":      parentSpanID,
-		"span_name":           span.Name,
-		"span_kind":           spanKind,
-		"status_code":         statusCode,
-		"span_attributes":     spanAttrs,
-		"resource_attributes": resourceAttrs,
+		"span_id":        spanID,
+		"trace_id":       traceID,
+		"parent_span_id": parentSpanID,
+		"span_name":      span.Name,
+		"span_kind":      spanKind,
+		"status_code":    statusCode,
 	}
 
 	if startTime != nil {
@@ -636,11 +654,12 @@ func (s *OTLPConverterService) createSpanEvent(ctx context.Context, span observa
 	// Extract Gen AI semantic conventions (model, provider, tokens, etc.)
 	extractGenAIFields(allAttrs, payload)
 
-	// Calculate costs
-	s.calculateAndInjectCosts(ctx, allAttrs, projectID)
+	// ========== NEW: PROVIDER PRICING - Calculate Provider Costs + Store Maps ==========
+	s.calculateProviderCostsAtIngestion(ctx, allAttrs, payload, projectID)
 
-	// Extract Brokle extensions
-	extractBrokleFields(allAttrs, payload)
+	// Store all span attributes in payload (will become attributes JSON in ClickHouse)
+	// All OTEL + Brokle attributes already in spanAttrs from line 516
+	payload["span_attributes"] = spanAttrs
 
 	// ========== OTEL 1.38+ INSTRUMENTATION SCOPE ==========
 	// Extract scope information from scopeSpan
@@ -699,7 +718,7 @@ func (s *OTLPConverterService) createSpanEvent(ctx context.Context, span observa
 	if len(span.Links) > 0 {
 		linksTraceID := make([]string, len(span.Links))
 		linksSpanID := make([]string, len(span.Links))
-		linksTraceState := make([]string, len(span.Links)) // W3C TraceState for links
+		linksTraceState := make([]string, len(span.Links))                 // W3C TraceState for links
 		linksAttributes := make([]map[string]interface{}, len(span.Links)) // Map type (OTEL standard)
 		linksDroppedCount := make([]uint32, len(span.Links))
 
@@ -732,9 +751,27 @@ func (s *OTLPConverterService) createSpanEvent(ctx context.Context, span observa
 		payload["links_trace_id"] = linksTraceID
 		payload["links_span_id"] = linksSpanID
 		payload["links_trace_state"] = linksTraceState // NEW: W3C TraceState array
-		payload["links_attributes"] = linksAttributes // Array of maps
+		payload["links_attributes"] = linksAttributes  // Array of maps
 		payload["links_dropped_attributes_count"] = linksDroppedCount
 	}
+
+	// ========== Build attributes JSON (all OTEL + Brokle span attributes) ==========
+	// Get the attributes map from payload (extractBrokleFields may have modified it)
+	attributes, ok := payload["span_attributes"].(map[string]interface{})
+	if !ok {
+		attributes = spanAttrs
+	}
+	payload["attributes"] = attributes
+	delete(payload, "span_attributes") // Remove old key
+
+	// ========== Build metadata JSON (OTEL resource attributes + scope) ==========
+	spanMetadata := buildOTELMetadata(resourceAttrs, scopeAttrs, scope)
+	payload["metadata"] = spanMetadata
+
+	// Remove old scope fields (now in metadata)
+	delete(payload, "scope_name")
+	delete(payload, "scope_version")
+	delete(payload, "scope_attributes")
 
 	// Create span event
 	event := &brokleEvent{
@@ -1120,50 +1157,10 @@ func extractGenAIFields(attrs map[string]interface{}, payload map[string]interfa
 	// No need to duplicate them in separate columns!
 }
 
-// extractBrokleFields extracts Brokle extension fields from attributes
-// CRITICAL: This function ensures costs extracted from attributes are stored as STRINGS
-// in span_attributes to avoid Float64 precision loss when written to ClickHouse JSON.
-// ClickHouse will then extract these STRING values to Decimal(18,9) materialized columns.
-func extractBrokleFields(attrs map[string]interface{}, payload map[string]interface{}) {
-	// ==================================
-	// COST PRECISION CRITICAL SECTION
-	// ==================================
-	// Costs MUST be formatted as STRINGS in attributes to avoid Float64 precision loss.
-	// Flow: SDK → Float64 in attributes → FORMAT AS STRING → ClickHouse JSON (String) →
-	//       Materialized Decimal(18,9) column → Zero precision loss
-
-	// Get span_attributes map for modification (now already a map, not JSON string)
-	spanAttrs, ok := payload["span_attributes"].(map[string]interface{})
-	if !ok || spanAttrs == nil {
-		spanAttrs = make(map[string]interface{})
-	}
-
-	// Extract and format costs as STRINGS (9 decimal places for exact billing)
-	if costTotal, ok := attrs["brokle.cost.total"].(float64); ok {
-		spanAttrs["brokle.cost.total"] = fmt.Sprintf("%.9f", costTotal) // STRING!
-	} else if costStr, ok := attrs["brokle.cost.total"].(string); ok {
-		spanAttrs["brokle.cost.total"] = costStr // Already string
-	}
-
-	if costInput, ok := attrs["brokle.cost.input"].(float64); ok {
-		spanAttrs["brokle.cost.input"] = fmt.Sprintf("%.9f", costInput) // STRING!
-	} else if costStr, ok := attrs["brokle.cost.input"].(string); ok {
-		spanAttrs["brokle.cost.input"] = costStr // Already string
-	}
-
-	if costOutput, ok := attrs["brokle.cost.output"].(float64); ok {
-		spanAttrs["brokle.cost.output"] = fmt.Sprintf("%.9f", costOutput) // STRING!
-	} else if costStr, ok := attrs["brokle.cost.output"].(string); ok {
-		spanAttrs["brokle.cost.output"] = costStr // Already string
-	}
-
-	// Update payload with modified span_attributes (now as map, not JSON string)
-	payload["span_attributes"] = spanAttrs
-
-	// Note: ALL Brokle attributes (span.type, span.level, prompt.*, etc.) are now
-	// stored in span_attributes JSON with brokle.* namespace.
-	// Materialized columns will extract them automatically in ClickHouse.
-}
+// extractBrokleFields function removed - no longer needed
+// Costs now stored in cost_details Map
+// All span attributes directly stored in payload["span_attributes"]
+// Zero users, clean architecture - no legacy compatibility needed
 
 // Helper function to convert byte array to hex
 func bytesToHex(data []interface{}) string {
@@ -1203,83 +1200,159 @@ func convertToDomainEvents(events []*brokleEvent) []*observability.TelemetryEven
 	return result
 }
 
-// calculateAndInjectCosts calculates costs based on token usage and injects them into attributes
-// CRITICAL: Costs are calculated backend-side (NOT from SDK) and injected as STRINGS
-// This ensures proper Decimal(18,9) precision in ClickHouse without Float64 loss
-func (s *OTLPConverterService) calculateAndInjectCosts(ctx context.Context, attrs map[string]interface{}, projectID string) {
-	// Extract required attributes for cost calculation
+// calculateProviderCostsAtIngestion calculates user spending with AI providers at ingestion time
+// Purpose: Cost visibility ("You spent $X with OpenAI") - NOT for billing users
+// Creates: usage_details, cost_details, pricing_snapshot maps for ClickHouse
+// Pricing snapshot = audit trail for "What was OpenAI's rate on this date?"
+func (s *OTLPConverterService) calculateProviderCostsAtIngestion(
+	ctx context.Context,
+	attrs map[string]interface{},
+	payload map[string]interface{},
+	projectID string,
+) {
+	// Extract model name
 	modelName := extractStringFromInterface(attrs["gen_ai.request.model"])
 	if modelName == "" {
-		// No model name - skip cost calculation
 		return
 	}
 
-	// Extract token usage (OTEL 1.38+ standard attributes)
-	var inputTokens, outputTokens int32
+	// ========== STEP 1: Extract Usage from OTEL Attributes ==========
+	usage := make(map[string]uint64)
 
-	if val, ok := attrs["gen_ai.usage.input_tokens"].(float64); ok {
-		inputTokens = int32(val)
-	} else if val, ok := attrs["gen_ai.usage.input_tokens"].(int64); ok {
-		inputTokens = int32(val)
-	} else if val, ok := attrs["gen_ai.usage.input_tokens"].(int32); ok {
-		inputTokens = val
+	// Standard tokens (OTEL semantic conventions)
+	if val := extractUint64FromInterface(attrs["gen_ai.usage.input_tokens"]); val > 0 {
+		usage["input"] = val
+	}
+	if val := extractUint64FromInterface(attrs["gen_ai.usage.output_tokens"]); val > 0 {
+		usage["output"] = val
 	}
 
-	if val, ok := attrs["gen_ai.usage.output_tokens"].(float64); ok {
-		outputTokens = int32(val)
-	} else if val, ok := attrs["gen_ai.usage.output_tokens"].(int64); ok {
-		outputTokens = int32(val)
-	} else if val, ok := attrs["gen_ai.usage.output_tokens"].(int32); ok {
-		outputTokens = val
+	// Cache tokens (OTEL proposed convention - not yet standard)
+	if val := extractUint64FromInterface(attrs["gen_ai.usage.input_tokens.cache_read"]); val > 0 {
+		usage["cache_read_input_tokens"] = val
+	}
+	if val := extractUint64FromInterface(attrs["gen_ai.usage.input_tokens.cache_creation"]); val > 0 {
+		usage["cache_creation_input_tokens"] = val
 	}
 
-	if inputTokens == 0 && outputTokens == 0 {
-		// No tokens - skip cost calculation
+	// Audio tokens (multi-modal)
+	if val := extractUint64FromInterface(attrs["gen_ai.usage.input_audio_tokens"]); val > 0 {
+		usage["audio_input"] = val
+	}
+	if val := extractUint64FromInterface(attrs["gen_ai.usage.output_audio_tokens"]); val > 0 {
+		usage["audio_output"] = val
+	}
+
+	// Reasoning tokens (OpenAI o1 models)
+	if val := extractUint64FromInterface(attrs["gen_ai.usage.reasoning_tokens"]); val > 0 {
+		usage["reasoning_tokens"] = val
+	}
+
+	// Image tokens (vision models)
+	if val := extractUint64FromInterface(attrs["gen_ai.usage.image_tokens"]); val > 0 {
+		usage["image_tokens"] = val
+	}
+
+	// Video tokens (future)
+	if val := extractUint64FromInterface(attrs["gen_ai.usage.video_tokens"]); val > 0 {
+		usage["video_tokens"] = val
+	}
+
+	// Calculate total (only sum base + additive tokens, exclude cache subsets)
+	var total uint64
+
+	// Base text tokens (always additive)
+	if input, ok := usage["input"]; ok {
+		total += input
+	}
+	if output, ok := usage["output"]; ok {
+		total += output
+	}
+
+	// Reasoning tokens (additive for OpenAI o1 models)
+	if reasoning, ok := usage["reasoning_tokens"]; ok {
+		total += reasoning
+	}
+
+	// Audio tokens (separate pricing, additive)
+	if audioIn, ok := usage["audio_input"]; ok {
+		total += audioIn
+	}
+	if audioOut, ok := usage["audio_output"]; ok {
+		total += audioOut
+	}
+
+	// Multimodal tokens (separate pricing, additive)
+	if image, ok := usage["image_tokens"]; ok {
+		total += image
+	}
+	if video, ok := usage["video_tokens"]; ok {
+		total += video
+	}
+
+	// Store total (excludes cache subsets which are already counted in input)
+	if total > 0 {
+		usage["total"] = total
+	}
+
+	// Note: Cache tokens explicitly EXCLUDED from total:
+	// - cache_read_input_tokens (subset of input, reused from previous calls)
+	// - cache_creation_input_tokens (subset of input, written to cache)
+	// These are tracked separately for cost breakdown but not added to total count
+
+	if len(usage) == 0 {
 		return
 	}
 
-	// Extract optional cost optimization flags
-	cacheHit := extractBoolFromInterface(attrs["gen_ai.prompt.cache_hit"])
-	batchMode := extractBoolFromInterface(attrs["brokle.batch"])
+	// ========== STEP 2: Lookup Pricing from PostgreSQL ==========
+	projectIDPtr := (*ulid.ULID)(nil)
+	if projectID != "" {
+		if pid, err := ulid.Parse(projectID); err == nil {
+			projectIDPtr = &pid
+		}
+	}
 
-	// Calculate costs using cost calculator service
-	costBreakdown, err := s.costCalculator.CalculateCost(ctx, observability.CostCalculationInput{
-		ModelName:    modelName,
-		ProjectID:    projectID,
-		InputTokens:  inputTokens,
-		OutputTokens: outputTokens,
-		CacheHit:     cacheHit,
-		BatchMode:    batchMode,
-	})
-
+	providerPricing, err := s.providerPricingService.GetProviderPricingSnapshot(ctx, projectIDPtr, modelName, time.Now())
 	if err != nil {
 		s.logger.WithFields(logrus.Fields{
 			"model":      modelName,
 			"project_id": projectID,
 			"error":      err,
-		}).Warn("Failed to calculate costs - continuing without cost data")
+		}).Warn("Failed to get provider pricing - continuing without cost data")
+
+		// Store usage even without pricing
+		payload["usage_details"] = usage
 		return
 	}
 
-	if costBreakdown == nil {
-		// No pricing found - continue without costs
-		return
+	// ========== STEP 3: Calculate Provider Costs ==========
+	providerCost := s.providerPricingService.CalculateProviderCost(usage, providerPricing)
+
+	// ========== STEP 4: Build Provider Pricing Snapshot for Audit Trail ==========
+	providerPricingSnapshot := make(map[string]decimal.Decimal)
+	for usageType, price := range providerPricing.Pricing {
+		// Store with descriptive key
+		key := fmt.Sprintf("%s_price_per_million", usageType)
+		providerPricingSnapshot[key] = price
 	}
 
-	// Inject calculated costs as STRINGS into attributes
-	// CRITICAL: Must be strings for ClickHouse Decimal(18,9) precision
-	attrs["brokle.cost.input"] = costBreakdown.InputCost
-	attrs["brokle.cost.output"] = costBreakdown.OutputCost
-	attrs["brokle.cost.total"] = costBreakdown.TotalCost
+	// ========== STEP 5: Store in Payload (for ClickHouse) ==========
+	payload["usage_details"] = usage
+	payload["cost_details"] = providerCost               // Store as map[string]decimal.Decimal (matches ClickHouse schema)
+	payload["pricing_snapshot"] = providerPricingSnapshot // Store as map[string]decimal.Decimal (matches ClickHouse schema)
+
+	// Extract total_cost for fast aggregation
+	if totalCost, ok := providerCost["total"]; ok {
+		payload["total_cost"] = totalCost // Store as decimal.Decimal (matches ClickHouse Decimal(18,12))
+	}
 
 	s.logger.WithFields(logrus.Fields{
-		"model":         modelName,
-		"input_tokens":  inputTokens,
-		"output_tokens": outputTokens,
-		"total_cost":    costBreakdown.TotalCost,
-		"cache_hit":     cacheHit,
-		"batch_mode":    batchMode,
-	}).Debug("Costs calculated successfully")
+		"model":                 modelName,
+		"usage_types":           len(usage),
+		"total_tokens":          total,
+		"provider_cost_usd":     providerCost["total"],
+		"provider_pricing_date": providerPricing.SnapshotTime,
+	}).Debug("Provider costs calculated successfully")
 }
 
 // extractStringFromInterface safely extracts a string from interface{}
@@ -1288,6 +1361,28 @@ func extractStringFromInterface(val interface{}) string {
 		return str
 	}
 	return ""
+}
+
+// extractUint64FromInterface safely extracts a uint64 from interface{}
+func extractUint64FromInterface(val interface{}) uint64 {
+	switch v := val.(type) {
+	case float64:
+		return uint64(v)
+	case int64:
+		return uint64(v)
+	case int32:
+		return uint64(v)
+	case int:
+		return uint64(v)
+	case uint64:
+		return v
+	case uint32:
+		return uint64(v)
+	case uint:
+		return uint64(v)
+	default:
+		return 0
+	}
 }
 
 // extractBoolFromInterface safely extracts a boolean from interface{}

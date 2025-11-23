@@ -616,26 +616,7 @@ type TimeSeriesPoint struct {
 }
 
 // ==================================
-// Cost Calculation Service
+// DEPRECATED: Cost Calculation - Removed
 // ==================================
-
-// CostCalculator defines the interface for cost calculation during telemetry ingestion
-// Used by OTLP converter to calculate costs based on token usage and model pricing
-type CostCalculator interface {
-	// CalculateCost calculates cost breakdown for a span based on token usage
-	// Returns nil breakdown with zero costs if no pricing found (ingestion continues)
-	CalculateCost(ctx context.Context, input CostCalculationInput) (*CostBreakdown, error)
-
-	// CalculateCostWithPricing calculates cost using provided pricing (for testing/preview)
-	CalculateCostWithPricing(input CostCalculationInput, pricing *Model) *CostBreakdown
-}
-
-// CostCalculationInput represents input for cost calculation
-type CostCalculationInput struct {
-	ModelName    string `json:"model_name"`
-	ProjectID    string `json:"project_id"`
-	InputTokens  int32  `json:"input_tokens"`
-	OutputTokens int32  `json:"output_tokens"`
-	CacheHit     bool   `json:"cache_hit"`  // From gen_ai.prompt.cache_hit attribute
-	BatchMode    bool   `json:"batch_mode"` // From brokle.batch attribute
-}
+// Cost calculation now handled by analytics.ProviderPricingService
+// See: internal/core/services/analytics/provider_pricing_service.go

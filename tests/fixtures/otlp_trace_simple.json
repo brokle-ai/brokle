@@ -142,24 +142,6 @@
                   }
                 },
                 {
-                  "key": "brokle.cost.total",
-                  "value": {
-                    "doubleValue": 0.0024
-                  }
-                },
-                {
-                  "key": "brokle.cost.input",
-                  "value": {
-                    "doubleValue": 0.0012
-                  }
-                },
-                {
-                  "key": "brokle.cost.output",
-                  "value": {
-                    "doubleValue": 0.0012
-                  }
-                },
-                {
                   "key": "brokle.cache.hit",
                   "value": {
                     "boolValue": false

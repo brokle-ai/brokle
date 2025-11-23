@@ -66,12 +66,12 @@ func (rs *RBACSeeder) SeedPermissions(ctx context.Context, permissionSeeds []Per
 		category := resource
 
 		projectResources := map[string]bool{
-			"traces":    true,
-			"analytics": true,
-			"models":    true,
-			"providers": true,
-			"costs":     true,
-			"prompts":   true,
+			"traces":          true,
+			"analytics":       true,
+			"provider_models": true,
+			"providers":       true,
+			"costs":           true,
+			"prompts":         true,
 		}
 
 		if projectResources[resource] {

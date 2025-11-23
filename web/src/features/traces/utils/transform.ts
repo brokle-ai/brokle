@@ -278,13 +278,13 @@ export function transformSpan(raw: any): Span {
     status_code: raw.status_code ?? raw.statusCode ?? 0,
     status_message: raw.status_message || raw.statusMessage || undefined,
 
-    // Attributes (parse JSON strings)
-    span_attributes: typeof raw.span_attributes === 'string'
-      ? parseAttributes(raw.span_attributes)
-      : (raw.span_attributes || raw.spanAttributes || {}),
-    resource_attributes: typeof raw.resource_attributes === 'string'
-      ? parseAttributes(raw.resource_attributes)
-      : (raw.resource_attributes || raw.resourceAttributes || {}),
+    // Attributes (new schema names - parse JSON strings if needed)
+    attributes: typeof raw.attributes === 'string'
+      ? parseAttributes(raw.attributes)
+      : (raw.attributes || {}),
+    metadata: typeof raw.metadata === 'string'
+      ? parseAttributes(raw.metadata)
+      : (raw.metadata || {}),
 
     // I/O data
     input: raw.input || undefined,
@@ -307,14 +307,19 @@ export function transformSpan(raw: any): Span {
     gen_ai_request_top_p: raw.gen_ai_request_top_p || raw.genAiRequestTopP || undefined,
     gen_ai_usage_input_tokens: raw.gen_ai_usage_input_tokens || raw.genAiUsageInputTokens || undefined,
     gen_ai_usage_output_tokens: raw.gen_ai_usage_output_tokens || raw.genAiUsageOutputTokens || undefined,
-    brokle_span_type: raw.brokle_span_type || raw.brokleSpanType || undefined,
-    brokle_span_level: raw.brokle_span_level || raw.brokleSpanLevel || undefined,
-    brokle_cost_input: raw.brokle_cost_input || raw.brokleCostInput || undefined,
-    brokle_cost_output: raw.brokle_cost_output || raw.brokleCostOutput || undefined,
-    brokle_cost_total: raw.brokle_cost_total || raw.brokleCostTotal || undefined,
-    brokle_prompt_id: raw.brokle_prompt_id || raw.broklePromptId || undefined,
-    brokle_prompt_name: raw.brokle_prompt_name || raw.broklePromptName || undefined,
-    brokle_prompt_version: raw.brokle_prompt_version || raw.broklePromptVersion || undefined,
+
+    // Materialized columns (new schema)
+    model_name: raw.model_name || raw.modelName || undefined,
+    provider_name: raw.provider_name || raw.providerName || undefined,
+    span_type: raw.span_type || raw.spanType || undefined,
+    version: raw.version || undefined,
+    level: raw.level || undefined,
+
+    // Usage & Cost Maps
+    usage_details: raw.usage_details || raw.usageDetails || undefined,
+    cost_details: raw.cost_details || raw.costDetails || undefined,
+    pricing_snapshot: raw.pricing_snapshot || raw.pricingSnapshot || undefined,
+    total_cost: raw.total_cost || raw.totalCost || undefined,
 
     // Timestamps
     created_at: parseTimestamp(raw.created_at || raw.createdAt) || new Date(),

@@ -1,13 +1,13 @@
 -- ============================================================================
--- OTEL-Native: Quality Scores Table
+-- Scores Table
 -- ============================================================================
 -- Purpose: Post-hoc evaluation scores for LLM quality monitoring
--- Design: Separate table (Langfuse pattern - not OTEL Events)
+-- Design: Separate table
 -- Rationale: Post-hoc evaluations, multiple evaluators, longer retention (90d)
 -- Engine: MergeTree (immutable scores)
 -- ============================================================================
 
-CREATE TABLE IF NOT EXISTS quality_scores (
+CREATE TABLE IF NOT EXISTS scores (
     -- ============================================
     -- IDENTITY
     -- ============================================

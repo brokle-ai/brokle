@@ -5,8 +5,6 @@
  * - application/json + ChatML → Chat messages UI
  * - application/json + generic → JSON viewer
  * - text/plain → Text viewer
- *
- * Follows Langfuse pattern with graceful error fallbacks.
  */
 
 'use client';

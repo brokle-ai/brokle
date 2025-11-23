@@ -65,9 +65,9 @@ export type Span = {
   status_code: number // UInt8: 0=UNSET, 1=OK, 2=ERROR
   status_message?: string
 
-  // Attributes
-  span_attributes?: Record<string, any>
-  resource_attributes?: Record<string, any>
+  // Attributes (new schema names)
+  attributes?: Record<string, any>
+  metadata?: Record<string, any>
 
   // I/O Data
   input?: string
@@ -91,15 +91,18 @@ export type Span = {
   gen_ai_usage_input_tokens?: number
   gen_ai_usage_output_tokens?: number
 
-  // Materialized Columns - brokle.*
-  brokle_span_type?: string
-  brokle_span_level?: string
-  brokle_cost_input?: number
-  brokle_cost_output?: number
-  brokle_cost_total?: number
-  brokle_prompt_id?: string
-  brokle_prompt_name?: string
-  brokle_prompt_version?: number
+  // Materialized Columns (from attributes JSON)
+  model_name?: string          // From attributes.gen_ai.request.model
+  provider_name?: string       // From attributes.gen_ai.provider.name
+  span_type?: string          // From attributes.brokle.span.type
+  version?: string            // From attributes.brokle.span.version
+  level?: string              // From attributes.brokle.span.level
+
+  // Usage & Cost Maps
+  usage_details?: Record<string, number>       // Map: {"input": 100, "output": 50, "total": 150}
+  cost_details?: Record<string, string>        // Map: {"input": "0.001", "output": "0.002", "total": "0.003"}
+  pricing_snapshot?: Record<string, string>    // Map: {"input_price_per_million": "5.00", ...}
+  total_cost?: number                          // Decimal(18,12): Pre-computed total
 
   // Timestamps
   created_at?: Date
@@ -232,9 +235,9 @@ export const spanSchema: z.ZodType<Span> = z.lazy(() =>
     status_code: z.number(), // UInt8: 0=UNSET, 1=OK, 2=ERROR
     status_message: z.string().optional(),
 
-    // Attributes (already parsed JSON objects, not strings)
-    span_attributes: z.record(z.string(), z.any()).optional(),
-    resource_attributes: z.record(z.string(), z.any()).optional(),
+    // Attributes (new schema names - already parsed JSON objects, not strings)
+    attributes: z.record(z.string(), z.any()).optional(),
+    metadata: z.record(z.string(), z.any()).optional(),
 
     // I/O Data
     input: z.string().optional(),
@@ -259,15 +262,18 @@ export const spanSchema: z.ZodType<Span> = z.lazy(() =>
     gen_ai_usage_input_tokens: z.number().optional(),
     gen_ai_usage_output_tokens: z.number().optional(),
 
-    // brokle.* attributes
-    brokle_span_type: z.string().optional(),
-    brokle_span_level: z.string().optional(),
-    brokle_cost_input: z.number().optional(),
-    brokle_cost_output: z.number().optional(),
-    brokle_cost_total: z.number().optional(),
-    brokle_prompt_id: z.string().optional(),
-    brokle_prompt_name: z.string().optional(),
-    brokle_prompt_version: z.number().optional(),
+    // Materialized columns (from attributes JSON)
+    model_name: z.string().optional(),
+    provider_name: z.string().optional(),
+    span_type: z.string().optional(),
+    version: z.string().optional(),
+    level: z.string().optional(),
+
+    // Usage & Cost Maps
+    usage_details: z.record(z.number()).optional(),
+    cost_details: z.record(z.string()).optional(),
+    pricing_snapshot: z.record(z.string()).optional(),
+    total_cost: z.number().optional(),
 
     // Timestamps
     created_at: z.date().optional(),

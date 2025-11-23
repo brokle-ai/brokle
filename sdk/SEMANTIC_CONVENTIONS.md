@@ -62,19 +62,20 @@ Brokle follows **OpenTelemetry (OTEL) semantic conventions** with extensions fro
 **For Brokle-specific features**:
 
 #### Trace Management
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| `brokle.trace.tags` | JSON Array | Filterable tags |
-| `brokle.trace.metadata` | JSON Object | Custom metadata |
-| `brokle.version` | String | App version for A/B testing |
-| `brokle.environment` | String | Environment (production/staging/dev) |
-| `brokle.release` | String | Release identifier |
+| Attribute | Type | Description | Storage Location |
+|-----------|------|-------------|------------------|
+| `brokle.trace.tags` | JSON Array | Filterable tags | `traces.tags` |
+| `brokle.trace.metadata` | JSON Object | Custom metadata | `traces.metadata` |
+| `brokle.release` | String | Global app version (e.g., "v2.1.24") | `traces.metadata.brokle.release` → materialized column `traces.release` |
+| `brokle.version` | String | Trace-level experiment/version (e.g., "experiment-A") | `traces.metadata.brokle.version` → materialized column `traces.version` |
+| `brokle.environment` | String | Environment (production/staging/dev) | `traces.environment` |
 
 #### Span Categorization
-| Attribute | Type | Description | Values |
-|-----------|------|-------------|--------|
-| `brokle.span.type` | String | Operation type | `generation`, `span`, `tool`, `agent`, `chain`, `retrieval` |
-| `brokle.span.level` | String | Importance level | `DEBUG`, `DEFAULT`, `WARNING`, `ERROR` |
+| Attribute | Type | Description | Values | Storage Location |
+|-----------|------|-------------|--------|------------------|
+| `brokle.span.type` | String | Operation type | `generation`, `span`, `tool`, `agent`, `chain`, `retrieval` | `spans.attributes.brokle.span.type` → materialized column `spans.span_type` |
+| `brokle.span.level` | String | Importance level | `DEBUG`, `DEFAULT`, `WARNING`, `ERROR` | `spans.attributes.brokle.span.level` |
+| `brokle.span.version` | String | Span-level version (e.g., "prompt-v2", "model-exp-1") | `spans.attributes.brokle.span.version` → materialized column `spans.version` |
 
 #### LLM Analytics (Extracted by Backend)
 | Attribute | Type | Description |
@@ -90,14 +91,30 @@ Brokle follows **OpenTelemetry (OTEL) semantic conventions** with extensions fro
 
 **Note**: LLM analytics attributes are **auto-extracted by backend** from ChatML data in `input.value` or `gen_ai.input.messages`. SDKs do NOT set these directly.
 
-#### Cost Tracking (Backend-Calculated)
-| Attribute | Type | Description |
-|-----------|------|-------------|
-| `brokle.cost.input` | Decimal(18,9) | Input cost (USD) |
-| `brokle.cost.output` | Decimal(18,9) | Output cost (USD) |
-| `brokle.cost.total` | Decimal(18,9) | Total cost (USD) |
+#### Cost Tracking (Backend-Calculated, Map Storage)
 
-**Note**: Costs are **calculated by backend**, not set by SDKs.
+**ARCHITECTURE**: Costs are calculated by backend and stored in dedicated ClickHouse Map columns (NOT in attributes).
+
+**Storage Locations**:
+- `spans.cost_details` Map - Per-usage-type cost breakdown: `{"input": "0.001", "output": "0.002", "total": "0.003"}`
+- `spans.pricing_snapshot` Map - Historical pricing audit: `{"input_price_per_million": "5.00", "output_price_per_million": "15.00"}`
+- `spans.total_cost` Decimal(18,12) - Pre-computed total for fast SUM() aggregation
+
+**Query Examples**:
+```sql
+-- Cost breakdown
+SELECT
+    cost_details['input'] as input_cost,
+    cost_details['output'] as output_cost,
+    total_cost
+FROM spans WHERE span_id = '...'
+
+-- Aggregate total spend
+SELECT SUM(total_cost) as total_spend
+FROM spans WHERE project_id = '...' AND start_time >= '2025-01-01'
+```
+
+**Note**: SDKs should NOT set cost attributes. Backend calculates from usage tokens + provider pricing tables.
 
 ---
 
@@ -120,6 +137,90 @@ When multiple attributes are present, backend uses this priority:
 **Auto-detection in SDKs**:
 - ChatML format (`[{"role":"user",...}]`) → Sets `gen_ai.input.messages`
 - Generic data → Sets `input.value` + `input.mime_type`
+
+---
+
+## Release & Version Fields: Three Distinct Concepts
+
+Brokle supports three different version fields for different use cases:
+
+### Field Comparison Table
+
+| Field | Set By | SDK Support | Namespace Key | Storage Location | Use Case |
+|-------|--------|-------------|---------------|------------------|----------|
+| **release** (trace) | User (global app version) | `Brokle(release="v2.1.24")` | `brokle.release` | `traces.metadata.brokle.release` → `traces.release` | Track which app version generated this trace |
+| **version** (trace) | User (trace-level experiment) | `Brokle(version="experiment-A")` | `brokle.version` | `traces.metadata.brokle.version` → `traces.version` | A/B testing trace-level experiments |
+| **version** (span) | User (span-level version) | `start_span(..., version="prompt-v2")` | `brokle.span.version` | `spans.attributes.brokle.span.version` → `spans.version` | Fine-grained per-span versioning |
+
+### Usage Examples
+
+**Python - Setting All Three Fields**:
+```python
+from brokle import Brokle
+
+# Initialize with release and trace-level version
+client = Brokle(
+    release="v2.1.24",              # Global app version
+    version="experiment-fast-mode"   # Trace-level experiment
+)
+
+# Start span with span-level version
+with client.start_as_current_span(
+    "llm-generation",
+    version="prompt-v3"  # Span-level version (overrides trace version for this span)
+) as span:
+    # Do work
+    pass
+```
+
+**JavaScript - Setting All Three Fields**:
+```typescript
+import { Brokle } from '@brokle/sdk';
+
+// Initialize with release and trace-level version
+const client = new Brokle({
+  release: 'v2.1.24',              // Global app version
+  version: 'experiment-fast-mode'   // Trace-level experiment
+});
+
+// Start span with span-level version
+await client.traced('llm-generation', async (span) => {
+  // Do work
+}, undefined, {
+  version: 'prompt-v3'  // Span-level version
+});
+```
+
+**Storage Behavior**:
+- `release="v2.1.24"` → Stored in `traces.metadata.brokle.release` → Materialized to `traces.release` column
+- `version="experiment-A"` (trace) → Stored in `traces.metadata.brokle.version` → Materialized to `traces.version` column
+- `version="prompt-v3"` (span) → Stored in `spans.attributes.brokle.span.version` → Materialized to `spans.version` column
+
+### Query Examples
+
+**Filter traces by release**:
+```sql
+SELECT trace_id, name, release
+FROM traces
+WHERE release = 'v2.1.24'
+ORDER BY start_time DESC;
+```
+
+**Filter traces by experiment version**:
+```sql
+SELECT trace_id, name, version
+FROM traces
+WHERE version = 'experiment-fast-mode'
+ORDER BY start_time DESC;
+```
+
+**Filter spans by span version**:
+```sql
+SELECT span_id, span_name, version
+FROM spans
+WHERE version = 'prompt-v3'
+ORDER BY start_time DESC;
+```
 
 ---
 
@@ -394,6 +495,114 @@ if (looksLikeJSON(input)) { ... }
 
 ---
 
+## Extended Token Usage (Cache, Audio, Multi-modal)
+
+The backend supports 10+ token types for flexible cost tracking. SDKs can send any combination based on provider capabilities.
+
+### Cache Tokens (Anthropic, OpenAI)
+
+**Python - Prompt Caching**:
+```python
+from brokle.types.attributes import Attrs
+
+span.set_attribute(Attrs.GEN_AI_USAGE_INPUT_TOKENS, 1000)
+span.set_attribute(Attrs.GEN_AI_USAGE_INPUT_TOKENS_CACHE_READ, 500)  # Cache hit
+span.set_attribute(Attrs.GEN_AI_USAGE_OUTPUT_TOKENS, 200)
+
+# Backend stores in usage_details map:
+# {"input": 1000, "cache_read_input_tokens": 500, "output": 200, "total": 1200}
+```
+
+**JavaScript - Prompt Caching**:
+```typescript
+import { Attrs } from '@brokle/sdk';
+
+span.setAttribute(Attrs.GEN_AI_USAGE_INPUT_TOKENS, 1000);
+span.setAttribute(Attrs.GEN_AI_USAGE_INPUT_TOKENS_CACHE_READ, 500);  // Cache hit
+span.setAttribute(Attrs.GEN_AI_USAGE_INPUT_TOKENS_CACHE_CREATION, 100);  // Cache write
+span.setAttribute(Attrs.GEN_AI_USAGE_OUTPUT_TOKENS, 200);
+```
+
+### Audio Tokens (OpenAI Whisper, TTS, Realtime API)
+
+**Python - Audio Usage**:
+```python
+# Whisper transcription
+span.set_attribute(Attrs.GEN_AI_USAGE_INPUT_AUDIO_TOKENS, 10000)
+
+# TTS synthesis
+span.set_attribute(Attrs.GEN_AI_USAGE_OUTPUT_AUDIO_TOKENS, 5000)
+
+# Realtime API (both directions)
+span.set_attribute(Attrs.GEN_AI_USAGE_INPUT_AUDIO_TOKENS, 8000)
+span.set_attribute(Attrs.GEN_AI_USAGE_OUTPUT_AUDIO_TOKENS, 6000)
+```
+
+**JavaScript - Audio Usage**:
+```typescript
+// Whisper
+span.setAttribute(Attrs.GEN_AI_USAGE_INPUT_AUDIO_TOKENS, 10000);
+
+// TTS
+span.setAttribute(Attrs.GEN_AI_USAGE_OUTPUT_AUDIO_TOKENS, 5000);
+```
+
+### Reasoning Tokens (OpenAI o1 Models)
+
+**Python - o1 Models with Internal Reasoning**:
+```python
+# OpenAI o1-preview/o1-mini
+span.set_attribute(Attrs.GEN_AI_USAGE_INPUT_TOKENS, 500)
+span.set_attribute(Attrs.GEN_AI_USAGE_REASONING_TOKENS, 15000)  # Internal CoT
+span.set_attribute(Attrs.GEN_AI_USAGE_OUTPUT_TOKENS, 200)
+
+# Backend calculates costs separately for reasoning tokens
+# pricing_snapshot: {"input_price_per_million": 2.50, "reasoning_price_per_million": 10.00, ...}
+```
+
+**JavaScript - o1 Models**:
+```typescript
+span.setAttribute(Attrs.GEN_AI_USAGE_INPUT_TOKENS, 500);
+span.setAttribute(Attrs.GEN_AI_USAGE_REASONING_TOKENS, 15000);
+span.setAttribute(Attrs.GEN_AI_USAGE_OUTPUT_TOKENS, 200);
+```
+
+### Image Tokens (Vision Models)
+
+**Python - GPT-4V, Claude Vision**:
+```python
+# Vision model usage
+span.set_attribute(Attrs.GEN_AI_USAGE_INPUT_TOKENS, 300)
+span.set_attribute(Attrs.GEN_AI_USAGE_IMAGE_TOKENS, 1500)  # Image processing
+span.set_attribute(Attrs.GEN_AI_USAGE_OUTPUT_TOKENS, 400)
+```
+
+**JavaScript - Vision Models**:
+```typescript
+span.setAttribute(Attrs.GEN_AI_USAGE_IMAGE_TOKENS, 1500);
+```
+
+### Flexible Backend Storage
+
+**Backend stores all token types in `usage_details` Map:**
+```sql
+-- ClickHouse query
+SELECT
+  usage_details,  -- {"input": 1000, "cache_read_input_tokens": 500, "output": 200, "audio_input": 5000}
+  cost_details,   -- {"input": "0.002500", "cache_read": "0.000625", "output": "0.002000", "audio_input": "0.500000"}
+  total_cost      -- Pre-computed sum for fast aggregation
+FROM spans
+WHERE model_name = 'gpt-4o-realtime'
+```
+
+**Benefits:**
+- ✅ No schema changes needed for new token types
+- ✅ Infinite flexibility (video, batch, future modalities)
+- ✅ Per-usage-type cost breakdown
+- ✅ Audit trail via pricing_snapshot
+
+---
+
 ## Backward Compatibility
 
 ### Migration from Old Attributes
@@ -505,6 +714,35 @@ def test_is_chatml_format():
 
 ## Changelog
 
+### Version 1.1.0 (November 22, 2025)
+
+**Added**:
+- Extended token type constants (7 new):
+  - `gen_ai.usage.input_tokens.cache_read` - Cache hit tokens (Anthropic/OpenAI)
+  - `gen_ai.usage.input_tokens.cache_creation` - Cache write tokens
+  - `gen_ai.usage.input_audio_tokens` - Audio input (Whisper, Realtime API)
+  - `gen_ai.usage.output_audio_tokens` - Audio output (TTS, Realtime API)
+  - `gen_ai.usage.reasoning_tokens` - Reasoning tokens (OpenAI o1 models)
+  - `gen_ai.usage.image_tokens` - Image processing tokens (Vision models)
+  - `gen_ai.usage.video_tokens` - Video tokens (future multi-modal)
+- Release & Version fields (3 distinct):
+  - `brokle.release` - Global app version (trace-level, in metadata)
+  - `brokle.version` - Trace-level experiment ID (in metadata)
+  - `brokle.span.version` - Span-level version (in attributes)
+- Span types: `agent`, `chain` for AI agent workflows
+- Flexible backend storage via usage_details/cost_details Maps
+- Pricing snapshot for billing audit trail
+
+**Changed**:
+- Backend schema: Materialized columns reduced from 16 → 3 (model_name, provider_name, span_type)
+- Storage pattern: Individual columns → JSON attributes + Maps
+- Cost precision: Decimal(18,9) → Decimal(18,12)
+- JavaScript SDK: Release/version now sent as Resource attributes (not headers)
+
+**Fixed**:
+- JavaScript SDK critical bug: Release sent as header instead of Resource attribute
+- Schema transition completed: All old field references removed
+
 ### Version 1.0.0 (November 19, 2025)
 
 **Added**:
@@ -525,4 +763,4 @@ def test_is_chatml_format():
 ---
 
 **Maintained by**: Brokle Platform Team
-**Last Updated**: November 19, 2025
+**Last Updated**: November 22, 2025

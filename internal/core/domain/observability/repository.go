@@ -103,7 +103,8 @@ type TraceFilter struct {
 	StartTime   *time.Time
 	EndTime     *time.Time
 	Environment *string
-	ServiceName *string
+	// ServiceName removed - service.name now in metadata JSON only (not denormalized)
+	// For filtering by service name, use JSONExtractString(metadata, 'service.name') in custom queries
 	StatusCode  *string
 	Bookmarked  *bool
 	Public      *bool
@@ -191,41 +192,8 @@ type TelemetryDeduplicationRepository interface {
 	CountByProjectID(ctx context.Context, projectID ulid.ULID) (int64, error)
 }
 
-// ModelRepository defines the interface for model pricing data access (PostgreSQL)
-// Used for cost calculation during telemetry ingestion
-type ModelRepository interface {
-	// FindByModelName finds pricing for a model using regex pattern matching
-	// Implements Langfuse pattern: project-scoped with global fallback
-	// Returns nil if no pricing found (allows ingestion to continue without costs)
-	FindByModelName(ctx context.Context, modelName, projectID string) (*Model, error)
-
-	// FindByID retrieves pricing by ID
-	GetByID(ctx context.Context, id string) (*Model, error)
-
-	// CRUD operations for pricing management
-	Create(ctx context.Context, pricing *Model) error
-	Update(ctx context.Context, pricing *Model) error
-	Delete(ctx context.Context, id string) error // Soft delete (set end_date)
-
-	// List operations
-	List(ctx context.Context, filter *ModelFilter) ([]*Model, error)
-	Count(ctx context.Context, filter *ModelFilter) (int64, error)
-
-	// Historical pricing queries
-	FindHistoricalPricing(ctx context.Context, modelName, projectID string, timestamp time.Time) (*Model, error)
-}
-
-// ModelFilter represents filters for model pricing queries
-type ModelFilter struct {
-	// Domain filters
-	ProjectID    *string
-	Provider     *string
-	ModelName    *string
-	IsActive     *bool // Filter by active pricing (end_date IS NULL)
-	IsDeprecated *bool
-	StartDate    *time.Time
-	EndDate      *time.Time
-
-	// Pagination (embedded for DRY)
-	pagination.Params
-}
+// ==================================
+// DEPRECATED: ModelRepository - Removed
+// ==================================
+// Provider pricing now handled by analytics.ProviderModelRepository
+// See: internal/infrastructure/repository/analytics/provider_model_repository.go

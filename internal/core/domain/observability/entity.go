@@ -14,101 +14,113 @@ import (
 
 // Trace represents an OTEL trace (root span) with trace-level context
 type Trace struct {
-	StartTime          time.Time              `json:"start_time" db:"start_time"`
-	UpdatedAt          time.Time              `json:"updated_at" db:"updated_at"`
-	CreatedAt          time.Time              `json:"created_at" db:"created_at"`
-	Output             *string                `json:"output,omitempty" db:"output"`
-	ServiceName        *string                `json:"service_name,omitempty" db:"service_name"`
-	UserID             *string                `json:"user_id,omitempty" db:"user_id"`
-	EndTime            *time.Time             `json:"end_time,omitempty" db:"end_time"`
-	DurationMs         *uint32                `json:"duration_ms,omitempty" db:"duration_ms"`
-	Version            *string                `json:"version,omitempty" db:"version"`
-	StatusMessage      *string                `json:"status_message,omitempty" db:"status_message"`
-	ResourceAttributes map[string]interface{} `json:"resource_attributes" db:"resource_attributes"`
-	Input              *string                `json:"input,omitempty" db:"input"`
-	Release            *string                `json:"release,omitempty" db:"release"`
-	ServiceVersion     *string                `json:"service_version,omitempty" db:"service_version"`
-	SessionID          *string                `json:"session_id,omitempty" db:"session_id"`
-	Environment        string                 `json:"environment" db:"environment"`
-	TraceID            string                 `json:"trace_id" db:"trace_id"`
-	Name               string                 `json:"name" db:"name"`
-	ProjectID          string                 `json:"project_id" db:"project_id"`
-	Tags               []string               `json:"tags" db:"tags"`
+	StartTime     time.Time  `json:"start_time" db:"start_time"`
+	UpdatedAt     time.Time  `json:"updated_at" db:"updated_at"`
+	CreatedAt     time.Time  `json:"created_at" db:"created_at"`
+	UserID        *string    `json:"user_id,omitempty" db:"user_id"`
+	SessionID     *string    `json:"session_id,omitempty" db:"session_id"`
+	EndTime       *time.Time `json:"end_time,omitempty" db:"end_time"`
+	DurationMs    *uint32    `json:"duration_ms,omitempty" db:"duration_ms"`
+	StatusMessage *string    `json:"status_message,omitempty" db:"status_message"`
+	Input         *string    `json:"input,omitempty" db:"input"`
+	Output        *string    `json:"output,omitempty" db:"output"`
+	Environment   string     `json:"environment" db:"environment"`
+	TraceID       string     `json:"trace_id" db:"trace_id"`
+	Name          string     `json:"name" db:"name"`
+	ProjectID     string     `json:"project_id" db:"project_id"`
+	Tags          []string   `json:"tags" db:"tags"`
 
 	// Aggregations (calculated from spans - ReplacingMergeTree)
-	TotalCost          *decimal.Decimal       `json:"total_cost,omitempty" db:"total_cost"`
-	TotalTokens        *uint32                `json:"total_tokens,omitempty" db:"total_tokens"`
-	SpanCount          *uint32                `json:"span_count,omitempty" db:"span_count"`
+	TotalCost   *decimal.Decimal `json:"total_cost,omitempty" db:"total_cost"`
+	TotalTokens *uint32          `json:"total_tokens,omitempty" db:"total_tokens"`
+	SpanCount   *uint32          `json:"span_count,omitempty" db:"span_count"`
 
-	Spans              []*Span                `json:"spans,omitempty" db:"-"`
-	Scores             []*Score               `json:"scores,omitempty" db:"-"`
-	Bookmarked         bool                   `json:"bookmarked" db:"bookmarked"`
-	Public             bool                   `json:"public" db:"public"`
-	StatusCode         uint8                  `json:"status_code" db:"status_code"`
+	// Modern: JSON Metadata
+	Metadata map[string]interface{} `json:"metadata,omitempty" db:"metadata"`
+
+	// Versioning & Release (Materialized from metadata)
+	Release *string `json:"release,omitempty" db:"release"`
+	Version *string `json:"version,omitempty" db:"version"`
+
+	// Soft Delete
+	DeletedAt *time.Time `json:"deleted_at,omitempty" db:"deleted_at"`
+
+	Spans      []*Span  `json:"spans,omitempty" db:"-"`
+	Scores     []*Score `json:"scores,omitempty" db:"-"`
+	Bookmarked bool     `json:"bookmarked" db:"bookmarked"`
+	Public     bool     `json:"public" db:"public"`
+	StatusCode uint8    `json:"status_code" db:"status_code"`
 }
 
 // Span represents an OTEL span with Gen AI semantic conventions and Brokle extensions
 type Span struct {
-	StartTime               time.Time              `json:"start_time" db:"start_time"`
-	UpdatedAt               time.Time              `json:"updated_at" db:"updated_at"`
-	CreatedAt               time.Time              `json:"created_at" db:"created_at"`
-	GenAIUsageOutputTokens  *int32                 `json:"gen_ai_usage_output_tokens,omitempty" db:"gen_ai_usage_output_tokens"`
-	BrokleSpanType          *string                `json:"brokle_span_type,omitempty" db:"brokle_span_type"`
-	EndTime                 *time.Time             `json:"end_time,omitempty" db:"end_time"`
-	DurationMs              *uint32                `json:"duration_ms,omitempty" db:"duration_ms"`
-	StatusMessage           *string                `json:"status_message,omitempty" db:"status_message"`
-	SpanAttributes          map[string]interface{} `json:"span_attributes" db:"span_attributes"`
-	ResourceAttributes      map[string]interface{} `json:"resource_attributes" db:"resource_attributes"`
-
-	// OTEL 1.38+ Instrumentation Scope
-	ScopeName               string                 `json:"scope_name" db:"scope_name"`
-	ScopeVersion            string                 `json:"scope_version" db:"scope_version"`
-	ScopeAttributes         map[string]interface{} `json:"scope_attributes" db:"scope_attributes"`
+	StartTime     time.Time  `json:"start_time" db:"start_time"`
+	UpdatedAt     time.Time  `json:"updated_at" db:"updated_at"`
+	CreatedAt     time.Time  `json:"created_at" db:"created_at"`
+	EndTime       *time.Time `json:"end_time,omitempty" db:"end_time"`
+	DurationMs    *uint32    `json:"duration_ms,omitempty" db:"duration_ms"`
+	StatusMessage *string    `json:"status_message,omitempty" db:"status_message"`
+	ParentSpanID  *string    `json:"parent_span_id,omitempty" db:"parent_span_id"`
 
 	// W3C Trace Context
-	TraceState              string                 `json:"trace_state" db:"trace_state"`
+	TraceState *string `json:"trace_state,omitempty" db:"trace_state"`
 
 	// Input/Output
-	Input                   *string                `json:"input,omitempty" db:"input"`
-	Output                  *string                `json:"output,omitempty" db:"output"`
-	BroklePromptID          *string                `json:"brokle_prompt_id,omitempty" db:"brokle_prompt_id"`
-	BrokleCostTotal         *decimal.Decimal       `json:"brokle_cost_total,omitempty" db:"brokle_cost_total"`
-	BrokleCostOutput        *decimal.Decimal       `json:"brokle_cost_output,omitempty" db:"brokle_cost_output"`
-	BrokleCostInput         *decimal.Decimal       `json:"brokle_cost_input,omitempty" db:"brokle_cost_input"`
-	ParentSpanID            *string                `json:"parent_span_id,omitempty" db:"parent_span_id"`
-	GenAIUsageInputTokens   *int32                 `json:"gen_ai_usage_input_tokens,omitempty" db:"gen_ai_usage_input_tokens"`
-	GenAIProviderName       *string                `json:"gen_ai_provider_name,omitempty" db:"gen_ai_provider_name"`
-	GenAIRequestModel       *string                `json:"gen_ai_request_model,omitempty" db:"gen_ai_request_model"`
-	GenAIOperationName      *string                `json:"gen_ai_operation_name,omitempty" db:"gen_ai_operation_name"`
+	Input  *string `json:"input,omitempty" db:"input"`
+	Output *string `json:"output,omitempty" db:"output"`
 
-	// OTEL 1.38+ Gen AI Materialized (Missing fields)
-	GenAIResponseModel      *string                `json:"gen_ai_response_model,omitempty" db:"gen_ai_response_model"`
-	GenAIResponseID         *string                `json:"gen_ai_response_id,omitempty" db:"gen_ai_response_id"`
-	GenAIConversationID     *string                `json:"gen_ai_conversation_id,omitempty" db:"gen_ai_conversation_id"`
-	GenAIOutputType         *string                `json:"gen_ai_output_type,omitempty" db:"gen_ai_output_type"`
-	GenAIAgentName          *string                `json:"gen_ai_agent_name,omitempty" db:"gen_ai_agent_name"`
-	GenAIToolName           *string                `json:"gen_ai_tool_name,omitempty" db:"gen_ai_tool_name"`
-
-	TraceID                 string                 `json:"trace_id" db:"trace_id"`
-	SpanName                string                 `json:"span_name" db:"span_name"`
-	SpanID                  string                 `json:"span_id" db:"span_id"`
-	ProjectID               string                 `json:"project_id" db:"project_id"`
+	TraceID   string `json:"trace_id" db:"trace_id"`
+	SpanName  string `json:"span_name" db:"span_name"`
+	SpanID    string `json:"span_id" db:"span_id"`
+	ProjectID string `json:"project_id" db:"project_id"`
 	// OTEL Events (Array of maps for performance)
-	EventsTimestamp         []time.Time              `json:"events_timestamp,omitempty" db:"events_timestamp"`
-	EventsName              []string                 `json:"events_name,omitempty" db:"events_name"`
-	EventsAttributes        []map[string]interface{} `json:"events_attributes,omitempty" db:"events_attributes"`
-	EventsDroppedCount      []uint32                 `json:"events_dropped_attributes_count,omitempty" db:"events_dropped_attributes_count"`
+	EventsTimestamp    []time.Time              `json:"events_timestamp,omitempty" db:"events_timestamp"`
+	EventsName         []string                 `json:"events_name,omitempty" db:"events_name"`
+	EventsAttributes   []map[string]interface{} `json:"events_attributes,omitempty" db:"events_attributes"`
+	EventsDroppedCount []uint32                 `json:"events_dropped_attributes_count,omitempty" db:"events_dropped_attributes_count"`
 
 	// OTEL Links (Array of maps with TraceState)
-	LinksTraceID            []string                 `json:"links_trace_id,omitempty" db:"links_trace_id"`
-	LinksSpanID             []string                 `json:"links_span_id,omitempty" db:"links_span_id"`
-	LinksTraceState         []string                 `json:"links_trace_state,omitempty" db:"links_trace_state"`
-	LinksAttributes         []map[string]interface{} `json:"links_attributes,omitempty" db:"links_attributes"`
-	LinksDroppedCount       []uint32                 `json:"links_dropped_attributes_count,omitempty" db:"links_dropped_attributes_count"`
-	Scores                  []*Score               `json:"scores,omitempty" db:"-"`
-	ChildSpans              []*Span                `json:"child_spans,omitempty" db:"-"`
-	StatusCode              uint8                  `json:"status_code" db:"status_code"`
-	SpanKind                uint8                  `json:"span_kind" db:"span_kind"`
+	LinksTraceID      []string                 `json:"links_trace_id,omitempty" db:"links_trace_id"`
+	LinksSpanID       []string                 `json:"links_span_id,omitempty" db:"links_span_id"`
+	LinksTraceState   []string                 `json:"links_trace_state,omitempty" db:"links_trace_state"`
+	LinksAttributes   []map[string]interface{} `json:"links_attributes,omitempty" db:"links_attributes"`
+	LinksDroppedCount []uint32                 `json:"links_dropped_attributes_count,omitempty" db:"links_dropped_attributes_count"`
+
+	// ============================================
+	// Modern: JSON Attributes + Usage/Cost Maps
+	// ============================================
+	Attributes map[string]interface{} `json:"attributes,omitempty" db:"attributes"`
+	Metadata   map[string]interface{} `json:"metadata,omitempty" db:"metadata"`
+
+	UsageDetails    map[string]uint64      `json:"usage_details,omitempty" db:"usage_details"`
+	CostDetails     map[string]decimal.Decimal `json:"cost_details,omitempty" db:"cost_details"`
+	PricingSnapshot map[string]decimal.Decimal `json:"pricing_snapshot,omitempty" db:"pricing_snapshot"`
+	TotalCost       *decimal.Decimal       `json:"total_cost,omitempty" db:"total_cost"`
+
+	// ============================================
+	// A/B Testing & Versioning
+	// ============================================
+	Version             *string    `json:"version,omitempty" db:"version"`
+	CompletionStartTime *time.Time `json:"completion_start_time,omitempty" db:"completion_start_time"`
+
+	// ============================================
+	// Materialized Columns (from attributes JSON)
+	// For fast filtering/sorting + API display
+	// ============================================
+	ModelName    *string `json:"model_name,omitempty" db:"-"`    // Materialized from attributes["gen_ai.request.model"]
+	ProviderName *string `json:"provider_name,omitempty" db:"-"` // Materialized from attributes["gen_ai.provider.name"]
+	SpanType     *string `json:"span_type,omitempty" db:"-"`     // Materialized from attributes["brokle.span.type"]
+	Level        *string `json:"level,omitempty" db:"-"`         // Materialized from attributes["brokle.span.level"]
+
+	// ============================================
+	// Soft Delete
+	// ============================================
+	DeletedAt *time.Time `json:"deleted_at,omitempty" db:"deleted_at"`
+
+	Scores     []*Score `json:"scores,omitempty" db:"-"`
+	ChildSpans []*Span  `json:"child_spans,omitempty" db:"-"`
+	StatusCode uint8    `json:"status_code" db:"status_code"`
+	SpanKind   uint8    `json:"span_kind" db:"span_kind"`
 }
 
 // Score represents a quality evaluation score linked to traces and spans
@@ -575,33 +587,40 @@ func (s *Span) CalculateDuration() {
 	}
 }
 
-// GetTotalCost returns the total cost from materialized BrokleCostTotal field
+// GetTotalCost returns the total cost from TotalCost field or CostDetails map
 func (s *Span) GetTotalCost() decimal.Decimal {
-	// Use materialized column from ClickHouse
-	if s.BrokleCostTotal != nil {
-		return *s.BrokleCostTotal
+	// Use pre-computed total_cost field
+	if s.TotalCost != nil {
+		return *s.TotalCost
 	}
-	// Fallback: calculate from input + output materialized columns
+	// Fallback: sum from cost_details map
 	total := decimal.Zero
-	if s.BrokleCostInput != nil {
-		total = total.Add(*s.BrokleCostInput)
-	}
-	if s.BrokleCostOutput != nil {
-		total = total.Add(*s.BrokleCostOutput)
+	if s.CostDetails != nil {
+		for _, cost := range s.CostDetails {
+			total = total.Add(cost)
+		}
 	}
 	return total
 }
 
-// GetTotalTokens returns the total tokens from materialized Gen AI usage fields
+// GetTotalTokens returns the total tokens from usage_details map
 func (s *Span) GetTotalTokens() uint64 {
-	var total uint64
-	if s.GenAIUsageInputTokens != nil {
-		total += uint64(*s.GenAIUsageInputTokens)
+	// Return from usage_details["total"] if available
+	if s.UsageDetails != nil {
+		if total, ok := s.UsageDetails["total"]; ok {
+			return total
+		}
+		// Fallback: sum input + output
+		var sum uint64
+		if input, ok := s.UsageDetails["input"]; ok {
+			sum += input
+		}
+		if output, ok := s.UsageDetails["output"]; ok {
+			sum += output
+		}
+		return sum
 	}
-	if s.GenAIUsageOutputTokens != nil {
-		total += uint64(*s.GenAIUsageOutputTokens)
-	}
-	return total
+	return 0
 }
 
 // ===== Score Helper Methods =====

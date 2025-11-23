@@ -7,6 +7,10 @@ import (
 	"brokle/pkg/ulid"
 )
 
+// ============================================================================
+// Usage & Billing Repositories
+// ============================================================================
+
 // UsageRepository handles usage tracking data access
 type UsageRepository interface {
 	InsertUsageRecord(ctx context.Context, record *UsageRecord) error
