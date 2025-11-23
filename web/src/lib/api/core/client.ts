@@ -391,7 +391,7 @@ export class BrokleAPIClient {
     }
 
     return {
-      data,
+      data: data ?? [], // Normalize null to empty array (defensive against backend bugs)
       pagination: this.convertPagination(backendPagination)
     }
   }

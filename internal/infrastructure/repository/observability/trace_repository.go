@@ -16,6 +16,18 @@ type traceRepository struct {
 	db clickhouse.Conn
 }
 
+// traceSelectFields defines the SELECT clause for trace queries (reused across all queries)
+const traceSelectFields = `
+	trace_id, project_id, name, user_id, session_id, version, release,
+	tags, environment, metadata,
+	start_time, end_time, duration_ms,
+	status_code, status_message,
+	input, output,
+	total_cost, total_tokens, span_count,
+	bookmarked, public,
+	created_at, updated_at, deleted_at
+`
+
 // NewTraceRepository creates a new trace repository instance
 func NewTraceRepository(db clickhouse.Conn) observability.TraceRepository {
 	return &traceRepository{db: db}
@@ -32,10 +44,13 @@ func (r *traceRepository) Create(ctx context.Context, trace *observability.Trace
 	query := `
 		INSERT INTO traces (
 			trace_id, project_id, name, user_id, session_id,
-			start_time, end_time, duration_ms, status_code, status_message,
-			resource_attributes, input, output, tags,
-			environment, service_name, service_version, release,
-			bookmarked, public, created_at, updated_at, version
+			tags, environment, metadata,
+			start_time, end_time, duration_ms,
+			status_code, status_message,
+			input, output,
+			total_cost, total_tokens, span_count,
+			bookmarked, public,
+			created_at, updated_at, deleted_at
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
@@ -45,25 +60,25 @@ func (r *traceRepository) Create(ctx context.Context, trace *observability.Trace
 		trace.Name,
 		trace.UserID,
 		trace.SessionID,
+		// version and release omitted - MATERIALIZED from metadata JSON
+		trace.Tags,
+		trace.Environment,
+		trace.Metadata,           // JSON: Contains brokle.version and brokle.release (auto-computed to materialized columns)
 		trace.StartTime,
 		trace.EndTime,
 		trace.DurationMs,
 		trace.StatusCode,
 		trace.StatusMessage,
-		trace.ResourceAttributes,
 		trace.Input,
 		trace.Output,
-		trace.Tags,
-		trace.Environment,
-		trace.ServiceName,
-		trace.ServiceVersion,
-		trace.Release,
+		trace.TotalCost,         // Pre-computed aggregation
+		trace.TotalTokens,
+		trace.SpanCount,
 		trace.Bookmarked,
 		trace.Public,
 		trace.CreatedAt,
 		trace.UpdatedAt,
-		trace.Version,
-		// Removed: total_cost, total_tokens, span_count (calculated on-demand from spans)
+		trace.DeletedAt,         // Soft delete
 	)
 }
 
@@ -88,35 +103,14 @@ func (r *traceRepository) Delete(ctx context.Context, id string) error {
 
 // GetByID retrieves a trace by its OTEL trace_id
 func (r *traceRepository) GetByID(ctx context.Context, id string) (*observability.Trace, error) {
-	query := `
-		SELECT
-			trace_id, project_id, name, user_id, session_id,
-			start_time, end_time, duration_ms, status_code, status_message,
-			resource_attributes, input, output, tags,
-			environment, service_name, service_version, release,
-			bookmarked, public, created_at, updated_at, version
-		FROM traces
-		WHERE trace_id = ?
-		LIMIT 1
-	`
-
+	query := "SELECT " + traceSelectFields + " FROM traces WHERE trace_id = ? AND deleted_at IS NULL LIMIT 1"
 	row := r.db.QueryRow(ctx, query, id)
 	return r.scanTraceRow(row)
 }
 
 // GetByProjectID retrieves traces by project ID with cursor-based pagination
 func (r *traceRepository) GetByProjectID(ctx context.Context, projectID string, filter *observability.TraceFilter) ([]*observability.Trace, error) {
-	query := `
-		SELECT
-			trace_id, project_id, name, user_id, session_id,
-			start_time, end_time, duration_ms, status_code, status_message,
-			resource_attributes, input, output, tags,
-			environment, service_name, service_version, release,
-			bookmarked, public, created_at, updated_at, version
-		FROM traces
-		WHERE project_id = ?
-	`
-
+	query := "SELECT " + traceSelectFields + " FROM traces WHERE project_id = ? AND deleted_at IS NULL"
 	args := []interface{}{projectID}
 
 	// Apply filters
@@ -133,10 +127,8 @@ func (r *traceRepository) GetByProjectID(ctx context.Context, projectID string, 
 			query += " AND environment = ?"
 			args = append(args, *filter.Environment)
 		}
-		if filter.ServiceName != nil {
-			query += " AND service_name = ?"
-			args = append(args, *filter.ServiceName)
-		}
+		// ServiceName filter removed - service.name now in metadata JSON (not a column)
+		// For filtering by service name, use JSONExtractString(metadata, 'service.name') in custom queries
 		if filter.StatusCode != nil {
 			query += " AND status_code = ?"
 			args = append(args, *filter.StatusCode)
@@ -212,14 +204,10 @@ func (r *traceRepository) GetByProjectID(ctx context.Context, projectID string, 
 // GetBySessionID retrieves all traces in a virtual session
 func (r *traceRepository) GetBySessionID(ctx context.Context, sessionID string) ([]*observability.Trace, error) {
 	query := `
-		SELECT
-			trace_id, project_id, name, user_id, session_id,
-			start_time, end_time, duration_ms, status_code, status_message,
-			resource_attributes, input, output, tags,
-			environment, service_name, service_version, release,
-			bookmarked, public, created_at, updated_at, version
+		SELECT ` + traceSelectFields + `
 		FROM traces
 		WHERE session_id = ?
+			AND deleted_at IS NULL
 		ORDER BY start_time ASC
 	`
 
@@ -235,14 +223,10 @@ func (r *traceRepository) GetBySessionID(ctx context.Context, sessionID string) 
 // GetByUserID retrieves traces by user ID with cursor-based pagination
 func (r *traceRepository) GetByUserID(ctx context.Context, userID string, filter *observability.TraceFilter) ([]*observability.Trace, error) {
 	query := `
-		SELECT
-			trace_id, project_id, name, user_id, session_id,
-			start_time, end_time, duration_ms, status_code, status_message,
-			resource_attributes, input, output, tags,
-			environment, service_name, service_version, release,
-			bookmarked, public, created_at, updated_at, version
+		SELECT ` + traceSelectFields + `
 		FROM traces
 		WHERE user_id = ?
+			AND deleted_at IS NULL
 	`
 
 	args := []interface{}{userID}
@@ -324,10 +308,13 @@ func (r *traceRepository) CreateBatch(ctx context.Context, traces []*observabili
 	batch, err := r.db.PrepareBatch(ctx, `
 		INSERT INTO traces (
 			trace_id, project_id, name, user_id, session_id,
-			start_time, end_time, duration_ms, status_code, status_message,
-			resource_attributes, input, output, tags,
-			environment, service_name, service_version, release,
-			bookmarked, public, created_at, updated_at, version
+			tags, environment, metadata,
+			start_time, end_time, duration_ms,
+			status_code, status_message,
+			input, output,
+			total_cost, total_tokens, span_count,
+			bookmarked, public,
+			created_at, updated_at, deleted_at
 		)
 	`)
 	if err != nil {
@@ -344,30 +331,29 @@ func (r *traceRepository) CreateBatch(ctx context.Context, traces []*observabili
 		trace.CalculateDuration()
 
 		err = batch.Append(
-			trace.TraceID, // Renamed from ID
+			trace.TraceID,
 			trace.ProjectID,
 			trace.Name,
 			trace.UserID,
 			trace.SessionID,
+			trace.Tags,
+			trace.Environment,
+			trace.Metadata,     // JSON: Contains brokle.release and brokle.version (materialized columns auto-computed)
 			trace.StartTime,
 			trace.EndTime,
 			trace.DurationMs,
-			trace.StatusCode, // Now UInt8
+			trace.StatusCode,
 			trace.StatusMessage,
-			trace.ResourceAttributes, // Renamed from Attributes, removed Metadata
 			trace.Input,
 			trace.Output,
-			trace.Tags,
-			trace.Environment,
-			trace.ServiceName,
-			trace.ServiceVersion,
-			trace.Release,
+			trace.TotalCost,
+			trace.TotalTokens,
+			trace.SpanCount,
 			trace.Bookmarked,
 			trace.Public,
 			trace.CreatedAt,
 			trace.UpdatedAt,
-			trace.Version,
-			// Removed: event_ts, is_deleted
+			trace.DeletedAt,
 		)
 		if err != nil {
 			return fmt.Errorf("append to batch: %w", err)
@@ -402,10 +388,8 @@ func (r *traceRepository) Count(ctx context.Context, filter *observability.Trace
 			query += " AND environment = ?"
 			args = append(args, *filter.Environment)
 		}
-		if filter.ServiceName != nil {
-			query += " AND service_name = ?"
-			args = append(args, *filter.ServiceName)
-		}
+		// ServiceName filter removed - service.name now in metadata JSON (not a column)
+		// For filtering by service name, use JSONExtractString(metadata, 'service.name') in custom queries
 		if filter.StatusCode != nil {
 			query += " AND status_code = ?"
 			args = append(args, *filter.StatusCode)
@@ -442,30 +426,31 @@ func (r *traceRepository) scanTraceRow(row driver.Row) (*observability.Trace, er
 	var trace observability.Trace
 
 	err := row.Scan(
-		&trace.TraceID, // Renamed from ID
+		&trace.TraceID,
 		&trace.ProjectID,
 		&trace.Name,
 		&trace.UserID,
 		&trace.SessionID,
+		&trace.Version,           // Materialized from metadata.brokle.version
+		&trace.Release,           // Materialized from metadata.brokle.release
+		&trace.Tags,
+		&trace.Environment,
+		&trace.Metadata,          // JSON type
 		&trace.StartTime,
 		&trace.EndTime,
 		&trace.DurationMs,
-		&trace.StatusCode, // Now UInt8
+		&trace.StatusCode,
 		&trace.StatusMessage,
-		&trace.ResourceAttributes, // Renamed from Attributes, removed Metadata
 		&trace.Input,
 		&trace.Output,
-		&trace.Tags,
-		&trace.Environment,
-		&trace.ServiceName,
-		&trace.ServiceVersion,
-		&trace.Release,
+		&trace.TotalCost,        // Pre-computed aggregation
+		&trace.TotalTokens,
+		&trace.SpanCount,
 		&trace.Bookmarked,
 		&trace.Public,
 		&trace.CreatedAt,
 		&trace.UpdatedAt,
-		&trace.Version,
-		// Removed: event_ts, is_deleted
+		&trace.DeletedAt,        // Soft delete
 	)
 
 	if err != nil {
@@ -477,36 +462,37 @@ func (r *traceRepository) scanTraceRow(row driver.Row) (*observability.Trace, er
 
 // Helper function to scan traces from query rows
 func (r *traceRepository) scanTraces(rows driver.Rows) ([]*observability.Trace, error) {
-	var traces []*observability.Trace
+	traces := make([]*observability.Trace, 0) // Initialize empty slice to return [] instead of nil
 
 	for rows.Next() {
 		var trace observability.Trace
 
 		err := rows.Scan(
-			&trace.TraceID, // Renamed from ID
+			&trace.TraceID,
 			&trace.ProjectID,
 			&trace.Name,
 			&trace.UserID,
 			&trace.SessionID,
+			&trace.Version,           // Materialized from metadata.brokle.version
+			&trace.Release,           // Materialized from metadata.brokle.release
+			&trace.Tags,
+			&trace.Environment,
+			&trace.Metadata,          // JSON type
 			&trace.StartTime,
 			&trace.EndTime,
 			&trace.DurationMs,
-			&trace.StatusCode, // Now UInt8
+			&trace.StatusCode,
 			&trace.StatusMessage,
-			&trace.ResourceAttributes, // Renamed from Attributes, removed Metadata
 			&trace.Input,
 			&trace.Output,
-			&trace.Tags,
-			&trace.Environment,
-			&trace.ServiceName,
-			&trace.ServiceVersion,
-			&trace.Release,
+			&trace.TotalCost,        // Pre-computed aggregation
+			&trace.TotalTokens,
+			&trace.SpanCount,
 			&trace.Bookmarked,
 			&trace.Public,
 			&trace.CreatedAt,
 			&trace.UpdatedAt,
-			&trace.Version,
-			// Removed: event_ts, is_deleted
+			&trace.DeletedAt,        // Soft delete
 		)
 
 		if err != nil {

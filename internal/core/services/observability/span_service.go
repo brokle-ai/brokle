@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
 
 	"brokle/internal/core/domain/observability"
@@ -72,26 +73,26 @@ func (s *SpanService) CreateSpan(ctx context.Context, span *observability.Span) 
 	if span.SpanKind == 0 {
 		span.SpanKind = observability.SpanKindInternal // UInt8: 1
 	}
-	if span.SpanAttributes == nil {
-		span.SpanAttributes = make(map[string]interface{})
+	if span.Attributes == nil {
+		span.Attributes = make(map[string]interface{})
 	}
-	if span.ResourceAttributes == nil {
-		span.ResourceAttributes = make(map[string]interface{})
+	if span.Metadata == nil {
+		span.Metadata = make(map[string]interface{})
 	}
 	if span.CreatedAt.IsZero() {
 		span.CreatedAt = time.Now()
 	}
 
-	// Note: Old dedicated fields (Type, Level, Provider, ModelName, etc.) are now
-	// stored in span_attributes JSON with proper namespaces:
-	// - brokle.span.type, brokle.span.level
-	// - gen_ai.provider.name, gen_ai.request.model
-	// - brokle.cost.*, gen_ai.usage.*
-	// These will be extracted to materialized columns by ClickHouse.
+	// Note: All OTEL and Brokle span attributes stored in attributes JSON:
+	// - brokle.span.type, brokle.span.level, brokle.span.version
+	// - gen_ai.provider.name, gen_ai.request.model, gen_ai.usage.*
+	// Materialized columns extract frequently-filtered attributes: model_name, provider_name, span_type, level, version
 
-	// Note: Old map fields removed (no longer exist in entity):
-	// - Metadata, ProvidedUsageDetails, UsageDetails, ProvidedCostDetails, CostDetails
-	// All data now stored in span_attributes JSON with proper namespaces
+	// Note: Usage and cost data stored in dedicated Map columns:
+	// - usage_details: Flexible token tracking (input, output, cache, audio, etc.)
+	// - cost_details: Flexible cost breakdown by usage type
+	// - pricing_snapshot: Audit trail for billing dispute resolution
+	// - total_cost: Pre-computed total for fast SUM() aggregation
 
 	// Calculate duration if not set
 	span.CalculateDuration()
@@ -135,24 +136,24 @@ func (s *SpanService) UpdateSpan(ctx context.Context, span *observability.Span) 
 }
 
 // SetSpanCost sets cost details for a span
-// Note: Costs are now stored in span_attributes JSON as STRINGS (brokle.cost.*)
-// and extracted to materialized columns (brokle_cost_input, brokle_cost_output, brokle_cost_total)
+// Note: Costs stored in cost_details Map and total_cost Decimal
 func (s *SpanService) SetSpanCost(ctx context.Context, spanID string, inputCost, outputCost float64) error {
 	span, err := s.spanRepo.GetByID(ctx, spanID)
 	if err != nil {
 		return appErrors.NewNotFoundError("span " + spanID)
 	}
 
-	// Update span_attributes map with cost values as STRINGS
-	// Get or initialize attributes map
-	if span.SpanAttributes == nil {
-		span.SpanAttributes = make(map[string]interface{})
+	// Store in cost_details Map (as decimal.Decimal for precision)
+	if span.CostDetails == nil {
+		span.CostDetails = make(map[string]decimal.Decimal)
 	}
+	span.CostDetails["input"] = decimal.NewFromFloat(inputCost)
+	span.CostDetails["output"] = decimal.NewFromFloat(outputCost)
+	span.CostDetails["total"] = decimal.NewFromFloat(inputCost + outputCost)
 
-	// CRITICAL: Format costs as STRINGS (9 decimal places)
-	span.SpanAttributes["brokle.cost.input"] = fmt.Sprintf("%.9f", inputCost)
-	span.SpanAttributes["brokle.cost.output"] = fmt.Sprintf("%.9f", outputCost)
-	span.SpanAttributes["brokle.cost.total"] = fmt.Sprintf("%.9f", inputCost+outputCost)
+	// Update total_cost for fast SUM() queries
+	totalCost := decimal.NewFromFloat(inputCost + outputCost)
+	span.TotalCost = &totalCost
 
 	// Update span
 	if err := s.spanRepo.Update(ctx, span); err != nil {
@@ -163,23 +164,29 @@ func (s *SpanService) SetSpanCost(ctx context.Context, spanID string, inputCost,
 }
 
 // SetSpanUsage sets usage details for a span
-// Note: Usage tokens are now stored in span_attributes JSON as STRINGS (gen_ai.usage.*)
-// and extracted to materialized columns (gen_ai_usage_input_tokens, gen_ai_usage_output_tokens)
+// Note: Usage tokens stored in attributes JSON (gen_ai.usage.*) and usage_details Map
 func (s *SpanService) SetSpanUsage(ctx context.Context, spanID string, promptTokens, completionTokens uint32) error {
 	span, err := s.spanRepo.GetByID(ctx, spanID)
 	if err != nil {
 		return appErrors.NewNotFoundError("span " + spanID)
 	}
 
-	// Update span_attributes map with usage values as STRINGS
-	// Get or initialize attributes map
-	if span.SpanAttributes == nil {
-		span.SpanAttributes = make(map[string]interface{})
+	// Initialize attributes if needed
+	if span.Attributes == nil {
+		span.Attributes = make(map[string]interface{})
 	}
 
-	// Store tokens as strings for consistency with OTEL conventions
-	span.SpanAttributes["gen_ai.usage.input_tokens"] = strconv.FormatUint(uint64(promptTokens), 10)
-	span.SpanAttributes["gen_ai.usage.output_tokens"] = strconv.FormatUint(uint64(completionTokens), 10)
+	// Store in attributes JSON (for ClickHouse JSON queries)
+	span.Attributes["gen_ai.usage.input_tokens"] = strconv.FormatUint(uint64(promptTokens), 10)
+	span.Attributes["gen_ai.usage.output_tokens"] = strconv.FormatUint(uint64(completionTokens), 10)
+
+	// Also store in usage_details Map (for aggregation queries)
+	if span.UsageDetails == nil {
+		span.UsageDetails = make(map[string]uint64)
+	}
+	span.UsageDetails["input"] = uint64(promptTokens)
+	span.UsageDetails["output"] = uint64(completionTokens)
+	span.UsageDetails["total"] = uint64(promptTokens + completionTokens)
 
 	// Update span
 	if err := s.spanRepo.Update(ctx, span); err != nil {
@@ -211,12 +218,26 @@ func mergeSpanFields(dst *observability.Span, src *observability.Span) {
 		dst.StatusMessage = src.StatusMessage
 	}
 
-	// Attribute fields (maps)
-	if src.SpanAttributes != nil && len(src.SpanAttributes) > 0 {
-		dst.SpanAttributes = src.SpanAttributes
+	// Attribute and metadata fields (maps)
+	if src.Attributes != nil && len(src.Attributes) > 0 {
+		dst.Attributes = src.Attributes
 	}
-	if src.ResourceAttributes != nil && len(src.ResourceAttributes) > 0 {
-		dst.ResourceAttributes = src.ResourceAttributes
+	if src.Metadata != nil && len(src.Metadata) > 0 {
+		dst.Metadata = src.Metadata
+	}
+
+	// Usage and cost maps
+	if src.UsageDetails != nil && len(src.UsageDetails) > 0 {
+		dst.UsageDetails = src.UsageDetails
+	}
+	if src.CostDetails != nil && len(src.CostDetails) > 0 {
+		dst.CostDetails = src.CostDetails
+	}
+	if src.PricingSnapshot != nil && len(src.PricingSnapshot) > 0 {
+		dst.PricingSnapshot = src.PricingSnapshot
+	}
+	if src.TotalCost != nil {
+		dst.TotalCost = src.TotalCost
 	}
 
 	// Input/Output
@@ -358,18 +379,18 @@ func (s *SpanService) CreateSpanBatch(ctx context.Context, spans []*observabilit
 		if span.SpanKind == 0 {
 			span.SpanKind = observability.SpanKindInternal // UInt8: 1
 		}
-		if span.SpanAttributes == nil {
-			span.SpanAttributes = make(map[string]interface{})
+		if span.Attributes == nil {
+			span.Attributes = make(map[string]interface{})
 		}
-		if span.ResourceAttributes == nil {
-			span.ResourceAttributes = make(map[string]interface{})
+		if span.Metadata == nil {
+			span.Metadata = make(map[string]interface{})
 		}
 		if span.CreatedAt.IsZero() {
 			span.CreatedAt = time.Now()
 		}
 
-		// Note: Old fields (Type, Level, Attributes, Metadata, Usage/Cost maps)
-		// are now stored in span_attributes/resource_attributes JSON
+		// Note: All OTEL and Brokle data stored in attributes JSON and usage/cost Maps
+		// Materialized columns extract frequently-filtered attributes
 
 		// Calculate duration
 		span.CalculateDuration()
@@ -400,12 +421,12 @@ func (s *SpanService) CalculateTraceCost(ctx context.Context, traceID string) (f
 		return 0, appErrors.NewInternalError("failed to get spans", err)
 	}
 
-	var totalCost float64
+	totalCost := decimal.Zero
 	for _, span := range spans {
-		totalCost += span.GetTotalCost()
+		totalCost = totalCost.Add(span.GetTotalCost())
 	}
 
-	return totalCost, nil
+	return totalCost.InexactFloat64(), nil
 }
 
 // CalculateTraceTokens calculates total tokens for all spans in a trace

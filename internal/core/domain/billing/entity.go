@@ -6,6 +6,10 @@ import (
 	"brokle/pkg/ulid"
 )
 
+// ============================================================================
+// Usage & Billing Entities
+// ============================================================================
+
 // UsageRecord represents a usage tracking record for billing
 // Note: provider_id and model_id are now stored as text (no foreign keys to gateway tables)
 // These values come from ClickHouse spans for cost calculation

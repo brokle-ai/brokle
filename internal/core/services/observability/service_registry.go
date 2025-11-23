@@ -2,6 +2,7 @@ package observability
 
 import (
 	"brokle/internal/config"
+	"brokle/internal/core/domain/analytics"
 	"brokle/internal/core/domain/observability"
 	"brokle/internal/infrastructure/storage"
 	"brokle/internal/infrastructure/streams"
@@ -36,9 +37,6 @@ func NewServiceRegistry(
 	scoreRepo observability.ScoreRepository,
 	blobStorageRepo observability.BlobStorageRepository,
 
-	// PostgreSQL repositories (for cost calculation)
-	modelRepo observability.ModelRepository,
-
 	// Blob storage dependencies
 	s3Client *storage.S3Client,
 	blobConfig *config.BlobStorageConfig,
@@ -50,16 +48,16 @@ func NewServiceRegistry(
 	// Telemetry system (keep existing)
 	telemetryService observability.TelemetryService,
 
+	// Pricing service (NEW)
+	providerPricingService analytics.ProviderPricingService,
+
 	logger *logrus.Logger,
 ) *ServiceRegistry {
 	// Create blob storage service (kept for future use: exports, media files, raw events)
 	blobStorageService := NewBlobStorageService(blobStorageRepo, s3Client, blobConfig, logger)
 
-	// Create cost calculator service
-	costCalculator := NewCostCalculatorService(modelRepo)
-
-	// Create OTLP converter service (with cost calculation)
-	otlpConverterService := NewOTLPConverterService(logger, costCalculator)
+	// Create OTLP converter service (with provider pricing service for cost analytics)
+	otlpConverterService := NewOTLPConverterService(logger, providerPricingService)
 
 	// Create ClickHouse-first services (no blob storage for LLM data - stored inline with ZSTD compression)
 	traceService := NewTraceService(traceRepo, spanRepo, scoreRepo, logger)

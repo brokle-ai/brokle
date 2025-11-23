@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-This document outlines a comprehensive release strategy for Brokle's platform (backend + web) and SDKs (Python + JavaScript). The strategy is based on industry best practices from Langfuse, OpenTelemetry, Sentry, and PostHog, with automation-first approach for consistency and developer productivity.
+This document outlines a comprehensive release strategy for Brokle's platform (backend + web) and SDKs (Python + JavaScript). The strategy is based on industry best practices from OpenTelemetry, Sentry, PostHog, and other observability platforms, with automation-first approach for consistency and developer productivity.
 
 ## Current State Analysis
 
@@ -217,7 +217,7 @@ Each component maintains independent versions:
 ### 3. Platform Release Workflow (Backend + Web)
 
 #### Release Trigger
-**Option A: Tag-based (Recommended - matches Langfuse)**
+**Option A: Tag-based**
 ```yaml
 on:
   push:
@@ -1238,7 +1238,7 @@ This release strategy provides:
 - **Speed**: Ship faster with confidence
 - **Quality**: Comprehensive testing before release
 
-By following this strategy, Brokle will have a professional, scalable release process that matches industry leaders like Langfuse, OpenTelemetry, and Sentry.
+By following this strategy, Brokle will have a professional, scalable release process that matches industry leaders like OpenTelemetry, Sentry, and PostHog.
 
 ---
 
@@ -1246,7 +1246,6 @@ By following this strategy, Brokle will have a professional, scalable release pr
 
 - [Semantic Versioning 2.0.0](https://semver.org/)
 - [Changesets Documentation](https://github.com/changesets/changesets)
-- [Langfuse Release Process](https://github.com/langfuse/langfuse)
 - [OpenTelemetry Release Process](https://github.com/open-telemetry)
 - [Sentry Release Documentation](https://develop.sentry.dev/sdk/processes/releases/)
 - [GitHub Actions Publishing Guide](https://docs.github.com/en/actions/publishing-packages)

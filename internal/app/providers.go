@@ -10,23 +10,26 @@ import (
 	"gorm.io/gorm"
 
 	"brokle/internal/config"
+	"brokle/internal/core/domain/analytics"
 	"brokle/internal/core/domain/auth"
 	"brokle/internal/core/domain/billing"
 	"brokle/internal/core/domain/common"
 	"brokle/internal/core/domain/observability"
 	"brokle/internal/core/domain/organization"
 	"brokle/internal/core/domain/user"
+	analyticsService "brokle/internal/core/services/analytics"
 	authService "brokle/internal/core/services/auth"
 	billingService "brokle/internal/core/services/billing"
 	observabilityService "brokle/internal/core/services/observability"
 	orgService "brokle/internal/core/services/organization"
 	registrationService "brokle/internal/core/services/registration"
 	userService "brokle/internal/core/services/user"
-	"brokle/internal/ee/analytics"
+	eeAnalytics "brokle/internal/ee/analytics"
 	"brokle/internal/ee/compliance"
 	"brokle/internal/ee/rbac"
 	"brokle/internal/ee/sso"
 	"brokle/internal/infrastructure/database"
+	analyticsRepo "brokle/internal/infrastructure/repository/analytics"
 	authRepo "brokle/internal/infrastructure/repository/auth"
 	billingRepo "brokle/internal/infrastructure/repository/billing"
 	observabilityRepo "brokle/internal/infrastructure/repository/observability"
@@ -91,6 +94,7 @@ type RepositoryContainer struct {
 	Organization  *OrganizationRepositories
 	Observability *ObservabilityRepositories
 	Billing       *BillingRepositories
+	Analytics     *AnalyticsRepositories
 }
 
 // ServiceContainer holds all service instances organized by domain
@@ -108,6 +112,8 @@ type ServiceContainer struct {
 	Observability *observabilityService.ServiceRegistry
 	// Billing services
 	Billing *BillingServices
+	// Analytics services
+	Analytics *AnalyticsServices
 }
 
 // EnterpriseContainer holds all enterprise service instances
@@ -115,7 +121,7 @@ type EnterpriseContainer struct {
 	SSO        sso.SSOProvider
 	RBAC       rbac.RBACManager
 	Compliance compliance.Compliance
-	Analytics  analytics.EnterpriseAnalytics
+	Analytics  eeAnalytics.EnterpriseAnalytics
 }
 
 // Domain-specific repository containers
@@ -154,7 +160,6 @@ type ObservabilityRepositories struct {
 	Score                  observability.ScoreRepository
 	BlobStorage            observability.BlobStorageRepository
 	TelemetryDeduplication observability.TelemetryDeduplicationRepository
-	Model                  observability.ModelRepository // PostgreSQL repo for cost calculation
 }
 
 // BillingRepositories contains all billing-related repositories
@@ -162,6 +167,11 @@ type BillingRepositories struct {
 	Usage         billing.UsageRepository
 	BillingRecord billing.BillingRecordRepository
 	Quota         billing.QuotaRepository
+}
+
+// AnalyticsRepositories contains all analytics-related repositories
+type AnalyticsRepositories struct {
+	ProviderModel analytics.ProviderModelRepository
 }
 
 // Domain-specific service containers
@@ -189,6 +199,11 @@ type AuthServices struct {
 // BillingServices contains all billing-related services
 type BillingServices struct {
 	Billing *billingService.BillingService
+}
+
+// AnalyticsServices contains all analytics-related services
+type AnalyticsServices struct {
+	ProviderPricing analytics.ProviderPricingService
 }
 
 // Provider functions for modular DI
@@ -289,8 +304,11 @@ func ProvideServerServices(core *CoreContainer) *ServiceContainer {
 	// Create billing services
 	billingServices := ProvideBillingServices(repos.Billing, logger)
 
-	// Create observability services
-	observabilityServices := ProvideObservabilityServices(repos.Observability, databases.Redis, cfg, logger)
+	// Create analytics services (for provider pricing)
+	analyticsServices := ProvideAnalyticsServices(repos.Analytics)
+
+	// Create observability services (needs analytics services for pricing)
+	observabilityServices := ProvideObservabilityServices(repos.Observability, analyticsServices, databases.Redis, cfg, logger)
 
 	// Create auth services
 	authServices := ProvideAuthServices(cfg, repos.User, repos.Auth, databases, logger)
@@ -325,6 +343,7 @@ func ProvideServerServices(core *CoreContainer) *ServiceContainer {
 		SettingsService:     settingsService,
 		Observability:       observabilityServices,
 		Billing:             billingServices,
+		Analytics:           analyticsServices,
 	}
 }
 
@@ -337,7 +356,8 @@ func ProvideWorkerServices(core *CoreContainer) *ServiceContainer {
 
 	// Only services worker uses for processing
 	billingServices := ProvideBillingServices(repos.Billing, logger)
-	observabilityServices := ProvideObservabilityServices(repos.Observability, databases.Redis, cfg, logger)
+	analyticsServices := ProvideAnalyticsServices(repos.Analytics)
+	observabilityServices := ProvideObservabilityServices(repos.Observability, analyticsServices, databases.Redis, cfg, logger)
 
 	return &ServiceContainer{
 		// Worker doesn't need auth/user/org services
@@ -352,6 +372,7 @@ func ProvideWorkerServices(core *CoreContainer) *ServiceContainer {
 		// Worker only needs these
 		Observability: observabilityServices,
 		Billing:       billingServices,
+		Analytics:     analyticsServices,
 	}
 }
 
@@ -438,7 +459,6 @@ func ProvideObservabilityRepositories(clickhouseDB *database.ClickHouseDB, postg
 		Score:                  observabilityRepo.NewScoreRepository(clickhouseDB.Conn),
 		BlobStorage:            observabilityRepo.NewBlobStorageRepository(clickhouseDB.Conn),
 		TelemetryDeduplication: observabilityRepo.NewTelemetryDeduplicationRepository(redisDB),
-		Model:                  observabilityRepo.NewModelRepository(postgresDB), // PostgreSQL for pricing
 	}
 }
 
@@ -451,6 +471,13 @@ func ProvideBillingRepositories(db *gorm.DB, logger *logrus.Logger) *BillingRepo
 	}
 }
 
+// ProvideAnalyticsRepositories creates all analytics-related repositories
+func ProvideAnalyticsRepositories(db *gorm.DB) *AnalyticsRepositories {
+	return &AnalyticsRepositories{
+		ProviderModel: analyticsRepo.NewProviderModelRepository(db),
+	}
+}
+
 // ProvideRepositories creates all repository containers
 func ProvideRepositories(dbs *DatabaseContainer, logger *logrus.Logger) *RepositoryContainer {
 	return &RepositoryContainer{
@@ -459,6 +486,7 @@ func ProvideRepositories(dbs *DatabaseContainer, logger *logrus.Logger) *Reposit
 		Organization:  ProvideOrganizationRepositories(dbs.Postgres.DB),
 		Observability: ProvideObservabilityRepositories(dbs.ClickHouse, dbs.Postgres.DB, dbs.Redis),
 		Billing:       ProvideBillingRepositories(dbs.Postgres.DB, logger),
+		Analytics:     ProvideAnalyticsRepositories(dbs.Postgres.DB),
 	}
 }
 
@@ -642,6 +670,7 @@ func ProvideOrganizationServices(
 // The worker must be injected later via SetAnalyticsWorker() after it's started.
 func ProvideObservabilityServices(
 	observabilityRepos *ObservabilityRepositories,
+	analyticsServices *AnalyticsServices,
 	redisDB *database.RedisDB,
 	cfg *config.Config,
 	logger *logrus.Logger,
@@ -674,12 +703,12 @@ func ProvideObservabilityServices(
 		observabilityRepos.Span,
 		observabilityRepos.Score,
 		observabilityRepos.BlobStorage,
-		observabilityRepos.Model, // Add model repo for cost calculation
 		s3Client,
 		&cfg.BlobStorage,
 		streamProducer,
 		deduplicationService,
 		telemetryService,
+		analyticsServices.ProviderPricing,
 		logger,
 	)
 }
@@ -708,6 +737,18 @@ func ProvideBillingServices(
 	}
 }
 
+// ProvideAnalyticsServices creates all analytics-related services
+func ProvideAnalyticsServices(
+	analyticsRepos *AnalyticsRepositories,
+) *AnalyticsServices {
+	// Create provider pricing service (for AI provider cost analytics)
+	providerPricingServiceImpl := analyticsService.NewProviderPricingService(analyticsRepos.ProviderModel)
+
+	return &AnalyticsServices{
+		ProviderPricing: providerPricingServiceImpl,
+	}
+}
+
 // Event publisher removed - events system deleted (not part of OTEL architecture)
 
 // simpleBillingOrgService is a simple implementation of BillingOrganizationService
@@ -733,10 +774,10 @@ func (s *simpleBillingOrgService) GetPaymentMethod(ctx context.Context, orgID ul
 // ProvideEnterpriseServices creates all enterprise services using build tags
 func ProvideEnterpriseServices(cfg *config.Config, logger *logrus.Logger) *EnterpriseContainer {
 	return &EnterpriseContainer{
-		SSO:        sso.New(),        // Uses stub or real based on build tags
-		RBAC:       rbac.New(),       // Uses stub or real based on build tags
-		Compliance: compliance.New(), // Uses stub or real based on build tags
-		Analytics:  analytics.New(),  // Uses stub or real based on build tags
+		SSO:        sso.New(),           // Uses stub or real based on build tags
+		RBAC:       rbac.New(),          // Uses stub or real based on build tags
+		Compliance: compliance.New(),    // Uses stub or real based on build tags
+		Analytics:  eeAnalytics.New(),   // Uses stub or real based on build tags
 	}
 }
 

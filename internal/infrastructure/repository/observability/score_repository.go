@@ -357,7 +357,7 @@ func (r *scoreRepository) scanScoreRow(row driver.Row) (*observability.Score, er
 
 // Helper function to scan multiple scores from rows
 func (r *scoreRepository) scanScores(rows driver.Rows) ([]*observability.Score, error) {
-	var scores []*observability.Score
+	scores := make([]*observability.Score, 0) // Initialize empty slice to return [] instead of nil
 
 	for rows.Next() {
 		var score observability.Score

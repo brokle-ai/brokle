@@ -109,9 +109,10 @@ brokle/
 
 ### Domain-Driven Architecture
 
-#### Current Domains (10 total)
+#### Current Domains (11 total)
 | Domain | Status | Location | Purpose |
 |--------|--------|----------|---------|
+| analytics | ✅ Active | `internal/core/domain/analytics` | Provider pricing, cost analytics |
 | auth | ✅ Active | `internal/core/domain/auth` | Authentication, sessions, API keys |
 | billing | ✅ Active | `internal/core/domain/billing` | Usage tracking, billing |
 | common | ✅ Active | `internal/core/domain/common` | Transaction patterns, shared utilities |

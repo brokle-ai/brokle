@@ -8,23 +8,32 @@ import (
 	"strings"
 	"time"
 
+	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
 
+	"brokle/internal/core/domain/analytics"
 	"brokle/internal/core/domain/observability"
 	"brokle/pkg/ulid"
 )
 
+// MaxAttributeValueSize defines the maximum size for input/output attribute values
+// Matches common OTEL collector limits (1MB) to prevent oversized spans
+const MaxAttributeValueSize = 1024 * 1024 // 1MB
+
 // OTLPConverterService handles conversion of OTLP traces to Brokle telemetry events
 type OTLPConverterService struct {
-	logger         *logrus.Logger
-	costCalculator observability.CostCalculator
+	logger                 *logrus.Logger
+	providerPricingService analytics.ProviderPricingService
 }
 
 // NewOTLPConverterService creates a new OTLP converter service
-func NewOTLPConverterService(logger *logrus.Logger, costCalculator observability.CostCalculator) *OTLPConverterService {
+func NewOTLPConverterService(
+	logger *logrus.Logger,
+	providerPricingService analytics.ProviderPricingService,
+) *OTLPConverterService {
 	return &OTLPConverterService{
-		logger:         logger,
-		costCalculator: costCalculator,
+		logger:                 logger,
+		providerPricingService: providerPricingService,
 	}
 }
 
@@ -128,9 +137,9 @@ func (s *OTLPConverterService) ConvertOTLPToBrokleEvents(ctx context.Context, ot
 				}
 
 				// Convert OTLP span to Brokle span event (with cost calculation)
-				obsEvent, err := s.convertSpanToEvent(ctx, span, resourceAttrs, scopeAttrs, scopeSpan.Scope, projectID)
+				obsEvent, err := s.createSpanEvent(ctx, span, resourceAttrs, scopeAttrs, scopeSpan.Scope, projectID)
 				if err != nil {
-					return nil, fmt.Errorf("failed to convert span: %w", err)
+					return nil, fmt.Errorf("failed to create span event: %w", err)
 				}
 				internalEvents = append(internalEvents, obsEvent)
 			}
@@ -139,6 +148,121 @@ func (s *OTLPConverterService) ConvertOTLPToBrokleEvents(ctx context.Context, ot
 
 	// Convert internal events to domain events
 	return convertToDomainEvents(internalEvents), nil
+}
+
+// truncateWithIndicator truncates a string value and sets a truncation indicator
+// Returns the (possibly truncated) value and whether it was truncated
+func truncateWithIndicator(value string, maxSize int) (string, bool) {
+	if len(value) <= maxSize {
+		return value, false
+	}
+	return value[:maxSize] + "...[truncated]", true
+}
+
+// validateMimeType validates MIME type against actual content, auto-detecting if missing
+// Returns validated/corrected MIME type
+func validateMimeType(value string, declaredMimeType string) string {
+	// If MIME type missing, auto-detect
+	if declaredMimeType == "" {
+		if json.Valid([]byte(value)) {
+			return "application/json"
+		}
+		return "text/plain"
+	}
+
+	// Validate declared type matches content
+	if declaredMimeType == "application/json" && !json.Valid([]byte(value)) {
+		// Content is not valid JSON but declared as JSON - override to text/plain
+		return "text/plain"
+	}
+
+	return declaredMimeType
+}
+
+// extractLLMMetadata extracts LLM-specific metadata from ChatML formatted input
+// Returns metadata map with brokle.llm.* attributes (empty if not ChatML format)
+func extractLLMMetadata(inputValue string) map[string]interface{} {
+	metadata := make(map[string]interface{})
+
+	// Try to parse as JSON array (ChatML format)
+	var messages []map[string]interface{}
+	if err := json.Unmarshal([]byte(inputValue), &messages); err != nil {
+		return metadata // Not ChatML, return empty
+	}
+
+	// Validate ChatML structure
+	if len(messages) == 0 {
+		return metadata // Empty array, not ChatML
+	}
+
+	// Check first message has required "role" field (ChatML requirement)
+	if _, hasRole := messages[0]["role"]; !hasRole {
+		return metadata // Missing role field, not ChatML format
+	}
+
+	// Extract metadata
+	metadata["brokle.llm.message_count"] = len(messages)
+
+	// Count messages by role
+	var userCount, assistantCount, systemCount, toolCount int
+	var firstRole, lastRole string
+	hasToolCalls := false
+
+	for i, msg := range messages {
+		role, _ := msg["role"].(string)
+
+		// Track first and last roles
+		if i == 0 {
+			firstRole = role
+		}
+		if i == len(messages)-1 {
+			lastRole = role
+		}
+
+		// Count by role
+		switch role {
+		case "user":
+			userCount++
+		case "assistant":
+			assistantCount++
+		case "system":
+			systemCount++
+		case "tool":
+			toolCount++
+		}
+
+		// Check for tool calls
+		if toolCalls, ok := msg["tool_calls"]; ok && toolCalls != nil {
+			hasToolCalls = true
+		}
+	}
+
+	// Add role counts
+	if userCount > 0 {
+		metadata["brokle.llm.user_message_count"] = userCount
+	}
+	if assistantCount > 0 {
+		metadata["brokle.llm.assistant_message_count"] = assistantCount
+	}
+	if systemCount > 0 {
+		metadata["brokle.llm.system_message_count"] = systemCount
+	}
+	if toolCount > 0 {
+		metadata["brokle.llm.tool_message_count"] = toolCount
+	}
+
+	// Add role tracking
+	if firstRole != "" {
+		metadata["brokle.llm.first_role"] = firstRole
+	}
+	if lastRole != "" {
+		metadata["brokle.llm.last_role"] = lastRole
+	}
+
+	// Add tool call indicator
+	metadata["brokle.llm.has_tool_calls"] = hasToolCalls
+
+	return metadata
 }
 
 // createTraceEvent creates a trace event from a root span
@@ -158,17 +282,22 @@ func (s *OTLPConverterService) createTraceEvent(span observability.OTLPSpan, res
 
 	// Build trace payload with new OTEL-native field names
 	payload := map[string]interface{}{
-		"trace_id":            traceID, // Renamed from "id"
-		"name":                span.Name,
-		"start_time":          startTime.Format(time.RFC3339Nano),
-		"status_code":         statusCode,    // Now UInt8 (0-2)
-		"resource_attributes": resourceAttrs, // OTEL resource attributes as map
+		"trace_id":    traceID, // Renamed from "id"
+		"name":        span.Name,
+		"status_code": statusCode, // Now UInt8 (0-2)
+	}
+
+	// Add start_time if available
+	if startTime != nil {
+		payload["start_time"] = startTime.Format(time.RFC3339Nano)
 	}
 
 	if endTime != nil {
 		payload["end_time"] = endTime.Format(time.RFC3339Nano)
-		duration := uint32(endTime.Sub(*startTime).Milliseconds())
-		payload["duration_ms"] = duration
+		if startTime != nil {
+			duration := uint32(endTime.Sub(*startTime).Milliseconds())
+			payload["duration_ms"] = duration
+		}
 	}
 
 	if span.Status != nil && span.Status.Message != "" {
@@ -183,18 +312,101 @@ func (s *OTLPConverterService) createTraceEvent(span observability.OTLPSpan, res
 		payload["service_version"] = serviceVersion
 	}
 
-	// Extract trace-level input/output using official OTel format
-	// Supports: gen_ai.input.messages and gen_ai.output.messages (OTel 1.28+)
+	// Extract trace-level input/output with priority order:
+	// Priority 1: gen_ai.input.messages (OTLP standard for LLM)
+	// Priority 2: input.value (OpenInference pattern for generic data)
 	// Note: Data stored directly in ClickHouse with ZSTD compression
+
+	// ========== INPUT EXTRACTION ==========
+	var inputValue string
+	var inputMimeType string
+
+	// Try gen_ai.input.messages first (LLM messages - OTLP standard)
 	if messages, ok := allAttrs["gen_ai.input.messages"].([]interface{}); ok {
 		if messagesJSON, err := json.Marshal(messages); err == nil {
-			payload["input"] = string(messagesJSON)
+			inputValue = string(messagesJSON)
+			inputMimeType = "application/json" // LLM messages are always JSON
+		}
+	} else if messages, ok := allAttrs["gen_ai.input.messages"].(string); ok && messages != "" {
+		// Already JSON string from SDK
+		inputValue = messages
+		inputMimeType = "application/json"
+	}
+
+	// Fallback to input.value (generic input - OpenInference pattern)
+	if inputValue == "" {
+		if genericInput, ok := allAttrs["input.value"].(string); ok && genericInput != "" {
+			inputValue = genericInput
+			// Get MIME type (auto-detect if missing)
+			if mimeType, ok := allAttrs["input.mime_type"].(string); ok {
+				inputMimeType = validateMimeType(inputValue, mimeType)
+			} else {
+				inputMimeType = validateMimeType(inputValue, "")
+			}
 		}
 	}
 
+	// Truncate if needed (1MB limit)
+	if inputValue != "" {
+		truncated := false
+		inputValue, truncated = truncateWithIndicator(inputValue, MaxAttributeValueSize)
+		if truncated {
+			payload["input_truncated"] = true
+		}
+		payload["input"] = inputValue
+		if inputMimeType != "" {
+			payload["input_mime_type"] = inputMimeType
+		}
+
+		// Extract LLM metadata if input is ChatML format
+		if inputMimeType == "application/json" {
+			if llmMetadata := extractLLMMetadata(inputValue); len(llmMetadata) > 0 {
+				// Add LLM metadata to payload for attributes column
+				for key, value := range llmMetadata {
+					payload[key] = value
+				}
+			}
+		}
+	}
+
+	// ========== OUTPUT EXTRACTION ==========
+	var outputValue string
+	var outputMimeType string
+
+	// Try gen_ai.output.messages first (LLM messages - OTLP standard)
 	if messages, ok := allAttrs["gen_ai.output.messages"].([]interface{}); ok {
 		if messagesJSON, err := json.Marshal(messages); err == nil {
-			payload["output"] = string(messagesJSON)
+			outputValue = string(messagesJSON)
+			outputMimeType = "application/json"
+		}
+	} else if messages, ok := allAttrs["gen_ai.output.messages"].(string); ok && messages != "" {
+		outputValue = messages
+		outputMimeType = "application/json"
+	}
+
+	// Fallback to output.value (generic output - OpenInference pattern)
+	if outputValue == "" {
+		if genericOutput, ok := allAttrs["output.value"].(string); ok && genericOutput != "" {
+			outputValue = genericOutput
+			// Get MIME type (auto-detect if missing)
+			if mimeType, ok := allAttrs["output.mime_type"].(string); ok {
+				outputMimeType = validateMimeType(outputValue, mimeType)
+			} else {
+				outputMimeType = validateMimeType(outputValue, "")
+			}
+		}
+	}
+
+	// Truncate if needed (1MB limit)
+	if outputValue != "" {
+		truncated := false
+		outputValue, truncated = truncateWithIndicator(outputValue, MaxAttributeValueSize)
+		if truncated {
+			payload["output_truncated"] = true
+		}
+		payload["output"] = outputValue
+		if outputMimeType != "" {
+			payload["output_mime_type"] = outputMimeType
 		}
 	}
 
@@ -215,15 +427,31 @@ func (s *OTLPConverterService) createTraceEvent(span observability.OTLPSpan, res
 	}
 	payload["environment"] = environment
 
-	// Extract release (optional)
+	// ========== Build metadata JSON (OTEL resource attributes + Brokle attributes) ==========
+	metadata := buildOTELMetadata(resourceAttrs, scopeAttrs, scope)
+
+	// Add Brokle-specific attributes to metadata
 	if release, ok := allAttrs["brokle.release"].(string); ok && release != "" {
-		payload["release"] = release
+		metadata["brokle.release"] = release
 	}
 
-	// Extract version (optional)
 	if version, ok := allAttrs["brokle.version"].(string); ok && version != "" {
-		payload["version"] = version
+		metadata["brokle.version"] = version
 	}
+
+	// Extract user-provided custom metadata (brokle.trace.metadata)
+	if userMetadata, ok := allAttrs["brokle.trace.metadata"].(string); ok && userMetadata != "" {
+		var metadataMap map[string]interface{}
+		if err := json.Unmarshal([]byte(userMetadata), &metadataMap); err == nil {
+			// Merge user metadata at top level (matches brokle.release/version pattern)
+			for k, v := range metadataMap {
+				metadata[k] = v
+			}
+		}
+	}
+
+	// Always store metadata (even if empty, for schema consistency)
+	payload["metadata"] = metadata
 
 	// Extract tags (trace-level categorization)
 	if tagsAttr, ok := allAttrs["brokle.trace.tags"]; ok {
@@ -259,16 +487,20 @@ func (s *OTLPConverterService) createTraceEvent(span observability.OTLPSpan, res
 		EventType: "trace",
 		Payload:   payload,
 		Timestamp: func() *int64 {
-			ts := startTime.Unix()
-			return &ts
+			if startTime != nil {
+				ts := startTime.Unix()
+				return &ts
+			}
+			return nil
 		}(),
 	}
 
 	return event, nil
 }
 
-// convertSpanToEvent converts a single OTLP span to a Brokle telemetry event
-func (s *OTLPConverterService) convertSpanToEvent(ctx context.Context, span observability.OTLPSpan, resourceAttrs, scopeAttrs map[string]interface{}, scope *observability.Scope, projectID string) (*brokleEvent, error) {
+// createSpanEvent creates a span event with complete input/output extraction
+// Mirrors createTraceEvent() logic for consistency (spans also have input/output columns)
+func (s *OTLPConverterService) createSpanEvent(ctx context.Context, span observability.OTLPSpan, resourceAttrs, scopeAttrs map[string]interface{}, scope *observability.Scope, projectID string) (*brokleEvent, error) {
 	// Convert OTLP IDs to hex strings
 	traceID, err := convertTraceID(span.TraceID)
 	if err != nil {
@@ -294,9 +526,6 @@ func (s *OTLPConverterService) convertSpanToEvent(ctx context.Context, span obse
 	// Merge all attributes (resource + scope + span)
 	allAttrs := mergeAttributes(resourceAttrs, scopeAttrs, spanAttrs)
 
-	// Note: brokle.span.type is now stored in span_attributes JSON
-	// and will be extracted to materialized column brokle_span_type in ClickHouse
-
 	// Convert start/end times
 	startTime := convertUnixNano(span.StartTimeUnixNano)
 	endTime := convertUnixNano(span.EndTimeUnixNano)
@@ -309,15 +538,16 @@ func (s *OTLPConverterService) convertSpanToEvent(ctx context.Context, span obse
 
 	// Build span payload with new OTEL-native field names
 	payload := map[string]interface{}{
-		"span_id":             spanID, // Renamed from "id"
-		"trace_id":            traceID,
-		"parent_span_id":      parentSpanID,
-		"span_name":           span.Name, // Renamed from "name"
-		"span_kind":           spanKind,  // Now UInt8 (0-5)
-		"start_time":          startTime.Format(time.RFC3339Nano),
-		"status_code":         statusCode,    // Now UInt8 (0-2)
-		"span_attributes":     spanAttrs,     // Span-level attributes as map
-		"resource_attributes": resourceAttrs, // Resource-level attributes as map
+		"span_id":        spanID,
+		"trace_id":       traceID,
+		"parent_span_id": parentSpanID,
+		"span_name":      span.Name,
+		"span_kind":      spanKind,
+		"status_code":    statusCode,
+	}
+
+	if startTime != nil {
+		payload["start_time"] = startTime.Format(time.RFC3339Nano)
 	}
 
 	if endTime != nil {
@@ -327,24 +557,142 @@ func (s *OTLPConverterService) convertSpanToEvent(ctx context.Context, span obse
 		payload["status_message"] = span.Status.Message
 	}
 
-	// Extract Gen AI semantic conventions from attributes
+	// ========== SPAN-LEVEL INPUT/OUTPUT EXTRACTION (Same as Traces) ==========
+	// Extract input/output with priority order (identical to createTraceEvent logic)
+	var inputValue string
+	var inputMimeType string
+
+	// Try gen_ai.input.messages first (LLM messages - OTLP standard)
+	if messages, ok := allAttrs["gen_ai.input.messages"].([]interface{}); ok {
+		if messagesJSON, err := json.Marshal(messages); err == nil {
+			inputValue = string(messagesJSON)
+			inputMimeType = "application/json"
+		}
+	} else if messages, ok := allAttrs["gen_ai.input.messages"].(string); ok && messages != "" {
+		inputValue = messages
+		inputMimeType = "application/json"
+	}
+
+	// Fallback to input.value (generic input - OpenInference pattern)
+	if inputValue == "" {
+		if genericInput, ok := allAttrs["input.value"].(string); ok && genericInput != "" {
+			inputValue = genericInput
+			// Get MIME type (auto-detect if missing)
+			if mimeType, ok := allAttrs["input.mime_type"].(string); ok {
+				inputMimeType = validateMimeType(inputValue, mimeType)
+			} else {
+				inputMimeType = validateMimeType(inputValue, "")
+			}
+		}
+	}
+
+	// Truncate if needed (1MB limit)
+	if inputValue != "" {
+		truncated := false
+		inputValue, truncated = truncateWithIndicator(inputValue, MaxAttributeValueSize)
+		if truncated {
+			payload["input_truncated"] = true
+		}
+		payload["input"] = inputValue
+		if inputMimeType != "" {
+			payload["input_mime_type"] = inputMimeType
+		}
+
+		// Extract LLM metadata if input is ChatML format
+		if inputMimeType == "application/json" {
+			if llmMetadata := extractLLMMetadata(inputValue); len(llmMetadata) > 0 {
+				// Add LLM metadata to payload for attributes column
+				for key, value := range llmMetadata {
+					payload[key] = value
+				}
+			}
+		}
+	}
+
+	// ========== OUTPUT EXTRACTION ==========
+	var outputValue string
+	var outputMimeType string
+
+	// Try gen_ai.output.messages first (LLM messages - OTLP standard)
+	if messages, ok := allAttrs["gen_ai.output.messages"].([]interface{}); ok {
+		if messagesJSON, err := json.Marshal(messages); err == nil {
+			outputValue = string(messagesJSON)
+			outputMimeType = "application/json"
+		}
+	} else if messages, ok := allAttrs["gen_ai.output.messages"].(string); ok && messages != "" {
+		outputValue = messages
+		outputMimeType = "application/json"
+	}
+
+	// Fallback to output.value (generic output - OpenInference pattern)
+	if outputValue == "" {
+		if genericOutput, ok := allAttrs["output.value"].(string); ok && genericOutput != "" {
+			outputValue = genericOutput
+			// Get MIME type (auto-detect if missing)
+			if mimeType, ok := allAttrs["output.mime_type"].(string); ok {
+				outputMimeType = validateMimeType(outputValue, mimeType)
+			} else {
+				outputMimeType = validateMimeType(outputValue, "")
+			}
+		}
+	}
+
+	// Truncate if needed (1MB limit)
+	if outputValue != "" {
+		truncated := false
+		outputValue, truncated = truncateWithIndicator(outputValue, MaxAttributeValueSize)
+		if truncated {
+			payload["output_truncated"] = true
+		}
+		payload["output"] = outputValue
+		if outputMimeType != "" {
+			payload["output_mime_type"] = outputMimeType
+		}
+	}
+
+	// ========== Continue with existing Gen AI extraction ==========
+	// Extract Gen AI semantic conventions (model, provider, tokens, etc.)
 	extractGenAIFields(allAttrs, payload)
 
-	// Calculate costs based on token usage and model pricing
-	s.calculateAndInjectCosts(ctx, allAttrs, projectID)
+	// ========== NEW: PROVIDER PRICING - Calculate Provider Costs + Store Maps ==========
+	s.calculateProviderCostsAtIngestion(ctx, allAttrs, payload, projectID)
 
-	// Extract Brokle extensions from attributes (now includes calculated costs)
-	extractBrokleFields(allAttrs, payload)
+	// Store all span attributes in payload (will become attributes JSON in ClickHouse)
+	// All OTEL + Brokle attributes already in spanAttrs from line 516
+	payload["span_attributes"] = spanAttrs
+
+	// ========== OTEL 1.38+ INSTRUMENTATION SCOPE ==========
+	// Extract scope information from scopeSpan
+	if scope != nil {
+		if scope.Name != "" {
+			payload["scope_name"] = scope.Name
+		}
+		if scope.Version != "" {
+			payload["scope_version"] = scope.Version
+		}
+		// Extract scope attributes if present
+		if len(scopeAttrs) > 0 {
+			payload["scope_attributes"] = scopeAttrs
+		}
+	}
+
+	// ========== W3C TRACE CONTEXT: TraceState ==========
+	// Extract TraceState from span (vendor-specific tracing data)
+	// Note: TraceState not directly in OTLP span, comes from SpanContext
+	// For now, extract from attributes if SDK sets it
+	if traceState, ok := allAttrs["trace_state"].(string); ok && traceState != "" {
+		payload["trace_state"] = traceState
+	}
 
 	// Extract OTLP Events (timeline annotations within span)
 	if len(span.Events) > 0 {
 		eventsTimestamp := make([]string, len(span.Events))
 		eventsName := make([]string, len(span.Events))
-		eventsAttributes := make([]string, len(span.Events))
+		eventsAttributes := make([]map[string]interface{}, len(span.Events)) // Map type (OTEL standard)
 		eventsDroppedCount := make([]uint32, len(span.Events))
 
 		for i, event := range span.Events {
-			// Convert event timestamp
+			// Convert event timestamp (nanosecond precision)
 			if eventTime := convertUnixNano(event.TimeUnixNano); eventTime != nil {
 				eventsTimestamp[i] = eventTime.Format(time.RFC3339Nano)
 			}
@@ -352,9 +700,9 @@ func (s *OTLPConverterService) convertSpanToEvent(ctx context.Context, span obse
 			// Extract event name
 			eventsName[i] = event.Name
 
-			// Extract event attributes as JSON
+			// Extract event attributes as Map (not JSON string)
 			eventAttrs := extractAttributesFromKeyValues(event.Attributes)
-			eventsAttributes[i] = marshalAttributes(eventAttrs)
+			eventsAttributes[i] = eventAttrs // Direct map, ClickHouse converts to Map(String,String)
 
 			// Track dropped attributes
 			eventsDroppedCount[i] = event.DroppedAttributesCount
@@ -362,7 +710,7 @@ func (s *OTLPConverterService) convertSpanToEvent(ctx context.Context, span obse
 
 		payload["events_timestamp"] = eventsTimestamp
 		payload["events_name"] = eventsName
-		payload["events_attributes"] = eventsAttributes
+		payload["events_attributes"] = eventsAttributes // Array of maps
 		payload["events_dropped_attributes_count"] = eventsDroppedCount
 	}
 
@@ -370,7 +718,8 @@ func (s *OTLPConverterService) convertSpanToEvent(ctx context.Context, span obse
 	if len(span.Links) > 0 {
 		linksTraceID := make([]string, len(span.Links))
 		linksSpanID := make([]string, len(span.Links))
-		linksAttributes := make([]string, len(span.Links))
+		linksTraceState := make([]string, len(span.Links))                 // W3C TraceState for links
+		linksAttributes := make([]map[string]interface{}, len(span.Links)) // Map type (OTEL standard)
 		linksDroppedCount := make([]uint32, len(span.Links))
 
 		for i, link := range span.Links {
@@ -384,9 +733,16 @@ func (s *OTLPConverterService) convertSpanToEvent(ctx context.Context, span obse
 				linksSpanID[i] = spanID
 			}
 
-			// Extract link attributes as JSON
+			// Extract TraceState for this link (W3C Trace Context)
+			if link.TraceState != nil {
+				if ts, ok := link.TraceState.(string); ok {
+					linksTraceState[i] = ts
+				}
+			}
+
+			// Extract link attributes as Map (not JSON string)
 			linkAttrs := extractAttributesFromKeyValues(link.Attributes)
-			linksAttributes[i] = marshalAttributes(linkAttrs)
+			linksAttributes[i] = linkAttrs // Direct map, ClickHouse converts to Map(String,String)
 
 			// Track dropped attributes
 			linksDroppedCount[i] = link.DroppedAttributesCount
@@ -394,26 +750,42 @@ func (s *OTLPConverterService) convertSpanToEvent(ctx context.Context, span obse
 
 		payload["links_trace_id"] = linksTraceID
 		payload["links_span_id"] = linksSpanID
-		payload["links_attributes"] = linksAttributes
+		payload["links_trace_state"] = linksTraceState // NEW: W3C TraceState array
+		payload["links_attributes"] = linksAttributes  // Array of maps
 		payload["links_dropped_attributes_count"] = linksDroppedCount
 	}
 
-	// Note: span_attributes and resource_attributes already set above
-	// All attributes are now properly namespaced:
-	// - gen_ai.* → OTEL Gen AI conventions
-	// - brokle.* → Brokle custom attributes
-	// - service.*, deployment.* → OTEL resource attributes
+	// ========== Build attributes JSON (all OTEL + Brokle span attributes) ==========
+	// Get the attributes map from payload (extractBrokleFields may have modified it)
+	attributes, ok := payload["span_attributes"].(map[string]interface{})
+	if !ok {
+		attributes = spanAttrs
+	}
+	payload["attributes"] = attributes
+	delete(payload, "span_attributes") // Remove old key
+
+	// ========== Build metadata JSON (OTEL resource attributes + scope) ==========
+	spanMetadata := buildOTELMetadata(resourceAttrs, scopeAttrs, scope)
+	payload["metadata"] = spanMetadata
+
+	// Remove old scope fields (now in metadata)
+	delete(payload, "scope_name")
+	delete(payload, "scope_version")
+	delete(payload, "scope_attributes")
 
 	// Create span event
 	event := &brokleEvent{
 		EventID:   ulid.New().String(),
-		SpanID:    spanID,  // OTLP span_id (16 hex chars)
-		TraceID:   traceID, // OTLP trace_id (32 hex chars)
+		SpanID:    spanID,
+		TraceID:   traceID,
 		EventType: "span",
 		Payload:   payload,
 		Timestamp: func() *int64 {
-			ts := startTime.Unix()
-			return &ts
+			if startTime != nil {
+				ts := startTime.Unix()
+				return &ts
+			}
+			return nil
 		}(),
 	}
 
@@ -785,50 +1157,10 @@ func extractGenAIFields(attrs map[string]interface{}, payload map[string]interfa
 	// No need to duplicate them in separate columns!
 }
 
-// extractBrokleFields extracts Brokle extension fields from attributes
-// CRITICAL: This function ensures costs extracted from attributes are stored as STRINGS
-// in span_attributes to avoid Float64 precision loss when written to ClickHouse JSON.
-// ClickHouse will then extract these STRING values to Decimal(18,9) materialized columns.
-func extractBrokleFields(attrs map[string]interface{}, payload map[string]interface{}) {
-	// ==================================
-	// COST PRECISION CRITICAL SECTION
-	// ==================================
-	// Costs MUST be formatted as STRINGS in attributes to avoid Float64 precision loss.
-	// Flow: SDK → Float64 in attributes → FORMAT AS STRING → ClickHouse JSON (String) →
-	//       Materialized Decimal(18,9) column → Zero precision loss
-
-	// Get span_attributes map for modification (now already a map, not JSON string)
-	spanAttrs, ok := payload["span_attributes"].(map[string]interface{})
-	if !ok || spanAttrs == nil {
-		spanAttrs = make(map[string]interface{})
-	}
-
-	// Extract and format costs as STRINGS (9 decimal places for exact billing)
-	if costTotal, ok := attrs["brokle.cost.total"].(float64); ok {
-		spanAttrs["brokle.cost.total"] = fmt.Sprintf("%.9f", costTotal) // STRING!
-	} else if costStr, ok := attrs["brokle.cost.total"].(string); ok {
-		spanAttrs["brokle.cost.total"] = costStr // Already string
-	}
-
-	if costInput, ok := attrs["brokle.cost.input"].(float64); ok {
-		spanAttrs["brokle.cost.input"] = fmt.Sprintf("%.9f", costInput) // STRING!
-	} else if costStr, ok := attrs["brokle.cost.input"].(string); ok {
-		spanAttrs["brokle.cost.input"] = costStr // Already string
-	}
-
-	if costOutput, ok := attrs["brokle.cost.output"].(float64); ok {
-		spanAttrs["brokle.cost.output"] = fmt.Sprintf("%.9f", costOutput) // STRING!
-	} else if costStr, ok := attrs["brokle.cost.output"].(string); ok {
-		spanAttrs["brokle.cost.output"] = costStr // Already string
-	}
-
-	// Update payload with modified span_attributes (now as map, not JSON string)
-	payload["span_attributes"] = spanAttrs
-
-	// Note: ALL Brokle attributes (span.type, span.level, prompt.*, etc.) are now
-	// stored in span_attributes JSON with brokle.* namespace.
-	// Materialized columns will extract them automatically in ClickHouse.
-}
+// extractBrokleFields function removed - no longer needed
+// Costs now stored in cost_details Map
+// All span attributes directly stored in payload["span_attributes"]
+// Zero users, clean architecture - no legacy compatibility needed
 
 // Helper function to convert byte array to hex
 func bytesToHex(data []interface{}) string {
@@ -868,83 +1200,159 @@ func convertToDomainEvents(events []*brokleEvent) []*observability.TelemetryEven
 	return result
 }
 
-// calculateAndInjectCosts calculates costs based on token usage and injects them into attributes
-// CRITICAL: Costs are calculated backend-side (NOT from SDK) and injected as STRINGS
-// This ensures proper Decimal(18,9) precision in ClickHouse without Float64 loss
-func (s *OTLPConverterService) calculateAndInjectCosts(ctx context.Context, attrs map[string]interface{}, projectID string) {
-	// Extract required attributes for cost calculation
+// calculateProviderCostsAtIngestion calculates user spending with AI providers at ingestion time
+// Purpose: Cost visibility ("You spent $X with OpenAI") - NOT for billing users
+// Creates: usage_details, cost_details, pricing_snapshot maps for ClickHouse
+// Pricing snapshot = audit trail for "What was OpenAI's rate on this date?"
+func (s *OTLPConverterService) calculateProviderCostsAtIngestion(
+	ctx context.Context,
+	attrs map[string]interface{},
+	payload map[string]interface{},
+	projectID string,
+) {
+	// Extract model name
 	modelName := extractStringFromInterface(attrs["gen_ai.request.model"])
 	if modelName == "" {
-		// No model name - skip cost calculation
 		return
 	}
 
-	// Extract token usage (OTEL 1.38+ standard attributes)
-	var inputTokens, outputTokens int32
+	// ========== STEP 1: Extract Usage from OTEL Attributes ==========
+	usage := make(map[string]uint64)
 
-	if val, ok := attrs["gen_ai.usage.input_tokens"].(float64); ok {
-		inputTokens = int32(val)
-	} else if val, ok := attrs["gen_ai.usage.input_tokens"].(int64); ok {
-		inputTokens = int32(val)
-	} else if val, ok := attrs["gen_ai.usage.input_tokens"].(int32); ok {
-		inputTokens = val
+	// Standard tokens (OTEL semantic conventions)
+	if val := extractUint64FromInterface(attrs["gen_ai.usage.input_tokens"]); val > 0 {
+		usage["input"] = val
+	}
+	if val := extractUint64FromInterface(attrs["gen_ai.usage.output_tokens"]); val > 0 {
+		usage["output"] = val
 	}
 
-	if val, ok := attrs["gen_ai.usage.output_tokens"].(float64); ok {
-		outputTokens = int32(val)
-	} else if val, ok := attrs["gen_ai.usage.output_tokens"].(int64); ok {
-		outputTokens = int32(val)
-	} else if val, ok := attrs["gen_ai.usage.output_tokens"].(int32); ok {
-		outputTokens = val
+	// Cache tokens (OTEL proposed convention - not yet standard)
+	if val := extractUint64FromInterface(attrs["gen_ai.usage.input_tokens.cache_read"]); val > 0 {
+		usage["cache_read_input_tokens"] = val
+	}
+	if val := extractUint64FromInterface(attrs["gen_ai.usage.input_tokens.cache_creation"]); val > 0 {
+		usage["cache_creation_input_tokens"] = val
 	}
 
-	if inputTokens == 0 && outputTokens == 0 {
-		// No tokens - skip cost calculation
+	// Audio tokens (multi-modal)
+	if val := extractUint64FromInterface(attrs["gen_ai.usage.input_audio_tokens"]); val > 0 {
+		usage["audio_input"] = val
+	}
+	if val := extractUint64FromInterface(attrs["gen_ai.usage.output_audio_tokens"]); val > 0 {
+		usage["audio_output"] = val
+	}
+
+	// Reasoning tokens (OpenAI o1 models)
+	if val := extractUint64FromInterface(attrs["gen_ai.usage.reasoning_tokens"]); val > 0 {
+		usage["reasoning_tokens"] = val
+	}
+
+	// Image tokens (vision models)
+	if val := extractUint64FromInterface(attrs["gen_ai.usage.image_tokens"]); val > 0 {
+		usage["image_tokens"] = val
+	}
+
+	// Video tokens (future)
+	if val := extractUint64FromInterface(attrs["gen_ai.usage.video_tokens"]); val > 0 {
+		usage["video_tokens"] = val
+	}
+
+	// Calculate total (only sum base + additive tokens, exclude cache subsets)
+	var total uint64
+
+	// Base text tokens (always additive)
+	if input, ok := usage["input"]; ok {
+		total += input
+	}
+	if output, ok := usage["output"]; ok {
+		total += output
+	}
+
+	// Reasoning tokens (additive for OpenAI o1 models)
+	if reasoning, ok := usage["reasoning_tokens"]; ok {
+		total += reasoning
+	}
+
+	// Audio tokens (separate pricing, additive)
+	if audioIn, ok := usage["audio_input"]; ok {
+		total += audioIn
+	}
+	if audioOut, ok := usage["audio_output"]; ok {
+		total += audioOut
+	}
+
+	// Multimodal tokens (separate pricing, additive)
+	if image, ok := usage["image_tokens"]; ok {
+		total += image
+	}
+	if video, ok := usage["video_tokens"]; ok {
+		total += video
+	}
+
+	// Store total (excludes cache subsets which are already counted in input)
+	if total > 0 {
+		usage["total"] = total
+	}
+
+	// Note: Cache tokens explicitly EXCLUDED from total:
+	// - cache_read_input_tokens (subset of input, reused from previous calls)
+	// - cache_creation_input_tokens (subset of input, written to cache)
+	// These are tracked separately for cost breakdown but not added to total count
+
+	if len(usage) == 0 {
 		return
 	}
 
-	// Extract optional cost optimization flags
-	cacheHit := extractBoolFromInterface(attrs["gen_ai.prompt.cache_hit"])
-	batchMode := extractBoolFromInterface(attrs["brokle.batch"])
+	// ========== STEP 2: Lookup Pricing from PostgreSQL ==========
+	projectIDPtr := (*ulid.ULID)(nil)
+	if projectID != "" {
+		if pid, err := ulid.Parse(projectID); err == nil {
+			projectIDPtr = &pid
+		}
+	}
 
-	// Calculate costs using cost calculator service
-	costBreakdown, err := s.costCalculator.CalculateCost(ctx, observability.CostCalculationInput{
-		ModelName:    modelName,
-		ProjectID:    projectID,
-		InputTokens:  inputTokens,
-		OutputTokens: outputTokens,
-		CacheHit:     cacheHit,
-		BatchMode:    batchMode,
-	})
-
+	providerPricing, err := s.providerPricingService.GetProviderPricingSnapshot(ctx, projectIDPtr, modelName, time.Now())
 	if err != nil {
 		s.logger.WithFields(logrus.Fields{
 			"model":      modelName,
 			"project_id": projectID,
 			"error":      err,
-		}).Warn("Failed to calculate costs - continuing without cost data")
+		}).Warn("Failed to get provider pricing - continuing without cost data")
+
+		// Store usage even without pricing
+		payload["usage_details"] = usage
 		return
 	}
 
-	if costBreakdown == nil {
-		// No pricing found - continue without costs
-		return
+	// ========== STEP 3: Calculate Provider Costs ==========
+	providerCost := s.providerPricingService.CalculateProviderCost(usage, providerPricing)
+
+	// ========== STEP 4: Build Provider Pricing Snapshot for Audit Trail ==========
+	providerPricingSnapshot := make(map[string]decimal.Decimal)
+	for usageType, price := range providerPricing.Pricing {
+		// Store with descriptive key
+		key := fmt.Sprintf("%s_price_per_million", usageType)
+		providerPricingSnapshot[key] = price
 	}
 
-	// Inject calculated costs as STRINGS into attributes
-	// CRITICAL: Must be strings for ClickHouse Decimal(18,9) precision
-	attrs["brokle.cost.input"] = costBreakdown.InputCost
-	attrs["brokle.cost.output"] = costBreakdown.OutputCost
-	attrs["brokle.cost.total"] = costBreakdown.TotalCost
+	// ========== STEP 5: Store in Payload (for ClickHouse) ==========
+	payload["usage_details"] = usage
+	payload["cost_details"] = providerCost               // Store as map[string]decimal.Decimal (matches ClickHouse schema)
+	payload["pricing_snapshot"] = providerPricingSnapshot // Store as map[string]decimal.Decimal (matches ClickHouse schema)
+
+	// Extract total_cost for fast aggregation
+	if totalCost, ok := providerCost["total"]; ok {
+		payload["total_cost"] = totalCost // Store as decimal.Decimal (matches ClickHouse Decimal(18,12))
+	}
 
 	s.logger.WithFields(logrus.Fields{
-		"model":         modelName,
-		"input_tokens":  inputTokens,
-		"output_tokens": outputTokens,
-		"total_cost":    costBreakdown.TotalCost,
-		"cache_hit":     cacheHit,
-		"batch_mode":    batchMode,
-	}).Debug("Costs calculated successfully")
+		"model":                 modelName,
+		"usage_types":           len(usage),
+		"total_tokens":          total,
+		"provider_cost_usd":     providerCost["total"],
+		"provider_pricing_date": providerPricing.SnapshotTime,
+	}).Debug("Provider costs calculated successfully")
 }
 
 // extractStringFromInterface safely extracts a string from interface{}
@@ -953,6 +1361,28 @@ func extractStringFromInterface(val interface{}) string {
 		return str
 	}
 	return ""
+}
+
+// extractUint64FromInterface safely extracts a uint64 from interface{}
+func extractUint64FromInterface(val interface{}) uint64 {
+	switch v := val.(type) {
+	case float64:
+		return uint64(v)
+	case int64:
+		return uint64(v)
+	case int32:
+		return uint64(v)
+	case int:
+		return uint64(v)
+	case uint64:
+		return v
+	case uint32:
+		return uint64(v)
+	case uint:
+		return uint64(v)
+	default:
+		return 0
+	}
 }
 
 // extractBoolFromInterface safely extracts a boolean from interface{}
