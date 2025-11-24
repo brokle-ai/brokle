@@ -22,6 +22,7 @@ import (
 // @Param project_id query string true "Project ID"
 // @Param session_id query string false "Filter by session ID"
 // @Param user_id query string false "Filter by user ID"
+// @Param service_name query string false "Filter by service name (OTLP resource attribute)"
 // @Param start_time query int64 false "Start time (Unix timestamp)"
 // @Param end_time query int64 false "End time (Unix timestamp)"
 // @Param limit query int false "Limit (default 50, max 1000)"
@@ -52,6 +53,11 @@ func (h *Handler) ListTraces(c *gin.Context) {
 	// User ID filter
 	if userID := c.Query("user_id"); userID != "" {
 		filter.UserID = &userID
+	}
+
+	// Service name filter (OTLP resource attribute)
+	if serviceName := c.Query("service_name"); serviceName != "" {
+		filter.ServiceName = &serviceName
 	}
 
 	// Time range filters

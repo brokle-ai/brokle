@@ -103,8 +103,7 @@ type TraceFilter struct {
 	StartTime   *time.Time
 	EndTime     *time.Time
 	Environment *string
-	// ServiceName removed - service.name now in metadata JSON only (not denormalized)
-	// For filtering by service name, use JSONExtractString(metadata, 'service.name') in custom queries
+	ServiceName *string // OTLP: service.name (materialized column for fast filtering)
 	StatusCode  *string
 	Bookmarked  *bool
 	Public      *bool
@@ -124,6 +123,7 @@ type SpanFilter struct {
 	Type         *string
 	SpanKind     *string
 	Model        *string
+	ServiceName  *string // OTLP: service.name (materialized column for fast filtering)
 	StartTime    *time.Time
 	EndTime      *time.Time
 	MinLatencyMs *uint32

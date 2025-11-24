@@ -28,7 +28,8 @@ const spanSelectFields = `
 	links_trace_id, links_span_id, links_trace_state, links_attributes,
 	version, deleted_at,
 	created_at, updated_at,
-	model_name, provider_name, span_type, level
+	model_name, provider_name, span_type, level,
+	service_name
 `
 
 // NewSpanRepository creates a new span repository instance
@@ -192,6 +193,10 @@ func (r *spanRepository) GetByFilter(ctx context.Context, filter *observability.
 		if filter.Model != nil {
 			query += " AND model_name = ?" // Use materialized column
 			args = append(args, *filter.Model)
+		}
+		if filter.ServiceName != nil {
+			query += " AND service_name = ?" // Use materialized column (5-10x faster than JSON extraction)
+			args = append(args, *filter.ServiceName)
 		}
 		if filter.Level != nil {
 			query += " AND level = ?" // Use materialized column
@@ -426,6 +431,7 @@ func (r *spanRepository) scanSpanRow(row driver.Row) (*observability.Span, error
 		&span.ProviderName,         // Materialized from attributes (for filtering + API display)
 		&span.SpanType,             // Materialized from attributes (for filtering + API display)
 		&span.Level,                // Materialized from attributes (for filtering/sorting + API display)
+		&span.ServiceName,          // Materialized from metadata.resourceAttributes.service.name (OTLP REQUIRED)
 	)
 
 	if err != nil {
@@ -479,6 +485,7 @@ func (r *spanRepository) scanSpans(rows driver.Rows) ([]*observability.Span, err
 			&span.ProviderName,         // Materialized from attributes (for filtering + API display)
 			&span.SpanType,             // Materialized from attributes (for filtering + API display)
 			&span.Level,                // Materialized from attributes (for filtering/sorting + API display)
+			&span.ServiceName,          // Materialized from metadata.resourceAttributes.service.name (OTLP REQUIRED)
 		)
 
 		if err != nil {

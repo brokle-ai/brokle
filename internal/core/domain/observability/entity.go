@@ -42,6 +42,9 @@ type Trace struct {
 	Release *string `json:"release,omitempty" db:"release"`
 	Version *string `json:"version,omitempty" db:"version"`
 
+	// Resource Attributes (Materialized from metadata.resourceAttributes)
+	ServiceName *string `json:"service_name,omitempty" db:"service_name"` // OTLP: service.name (REQUIRED)
+
 	// Soft Delete
 	DeletedAt *time.Time `json:"deleted_at,omitempty" db:"deleted_at"`
 
@@ -111,6 +114,11 @@ type Span struct {
 	ProviderName *string `json:"provider_name,omitempty" db:"-"` // Materialized from attributes["gen_ai.provider.name"]
 	SpanType     *string `json:"span_type,omitempty" db:"-"`     // Materialized from attributes["brokle.span.type"]
 	Level        *string `json:"level,omitempty" db:"-"`         // Materialized from attributes["brokle.span.level"]
+
+	// ============================================
+	// Resource Attributes (from metadata.resourceAttributes)
+	// ============================================
+	ServiceName *string `json:"service_name,omitempty" db:"service_name"` // OTLP: service.name (REQUIRED)
 
 	// ============================================
 	// Soft Delete

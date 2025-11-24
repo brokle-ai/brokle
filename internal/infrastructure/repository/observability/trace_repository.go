@@ -25,6 +25,7 @@ const traceSelectFields = `
 	input, output,
 	total_cost, total_tokens, span_count,
 	bookmarked, public,
+	service_name,
 	created_at, updated_at, deleted_at
 `
 
@@ -127,8 +128,10 @@ func (r *traceRepository) GetByProjectID(ctx context.Context, projectID string, 
 			query += " AND environment = ?"
 			args = append(args, *filter.Environment)
 		}
-		// ServiceName filter removed - service.name now in metadata JSON (not a column)
-		// For filtering by service name, use JSONExtractString(metadata, 'service.name') in custom queries
+		if filter.ServiceName != nil {
+			query += " AND service_name = ?" // Materialized column (5-10x faster than JSON extraction)
+			args = append(args, *filter.ServiceName)
+		}
 		if filter.StatusCode != nil {
 			query += " AND status_code = ?"
 			args = append(args, *filter.StatusCode)
@@ -388,8 +391,10 @@ func (r *traceRepository) Count(ctx context.Context, filter *observability.Trace
 			query += " AND environment = ?"
 			args = append(args, *filter.Environment)
 		}
-		// ServiceName filter removed - service.name now in metadata JSON (not a column)
-		// For filtering by service name, use JSONExtractString(metadata, 'service.name') in custom queries
+		if filter.ServiceName != nil {
+			query += " AND service_name = ?" // Materialized column (5-10x faster than JSON extraction)
+			args = append(args, *filter.ServiceName)
+		}
 		if filter.StatusCode != nil {
 			query += " AND status_code = ?"
 			args = append(args, *filter.StatusCode)
@@ -448,6 +453,7 @@ func (r *traceRepository) scanTraceRow(row driver.Row) (*observability.Trace, er
 		&trace.SpanCount,
 		&trace.Bookmarked,
 		&trace.Public,
+		&trace.ServiceName,      // Materialized from metadata.resourceAttributes.service.name
 		&trace.CreatedAt,
 		&trace.UpdatedAt,
 		&trace.DeletedAt,        // Soft delete
@@ -490,6 +496,7 @@ func (r *traceRepository) scanTraces(rows driver.Rows) ([]*observability.Trace, 
 			&trace.SpanCount,
 			&trace.Bookmarked,
 			&trace.Public,
+			&trace.ServiceName,      // Materialized from metadata.resourceAttributes.service.name
 			&trace.CreatedAt,
 			&trace.UpdatedAt,
 			&trace.DeletedAt,        // Soft delete
