@@ -177,6 +177,7 @@ export function transformTrace(raw: any): Trace {
     // Status
     status_code: raw.status_code ?? raw.statusCode ?? 0,
     status_message: raw.status_message || raw.statusMessage || undefined,
+    has_error: raw.has_error ?? (raw.status_code === 2 || raw.statusCode === 2),
 
     // Attributes (parse JSON strings)
     resource_attributes: typeof raw.resource_attributes === 'string'
@@ -277,6 +278,7 @@ export function transformSpan(raw: any): Span {
     // Status
     status_code: raw.status_code ?? raw.statusCode ?? 0,
     status_message: raw.status_message || raw.statusMessage || undefined,
+    has_error: raw.has_error ?? (raw.status_code === 2 || raw.statusCode === 2),
 
     // Attributes (new schema names - parse JSON strings if needed)
     attributes: typeof raw.attributes === 'string'

@@ -52,7 +52,8 @@ type Trace struct {
 	Scores     []*Score `json:"scores,omitempty" db:"-"`
 	Bookmarked bool     `json:"bookmarked" db:"bookmarked"`
 	Public     bool     `json:"public" db:"public"`
-	StatusCode uint8    `json:"status_code" db:"status_code"`
+	StatusCode uint8    `json:"status_code" db:"status_code"` // OTLP: 0=UNSET, 1=OK, 2=ERROR
+	HasError   bool     `json:"has_error" db:"has_error"`     // Semantic flag (true when status_code=2)
 }
 
 // Span represents an OTEL span with Gen AI semantic conventions and Brokle extensions
@@ -127,7 +128,8 @@ type Span struct {
 
 	Scores     []*Score `json:"scores,omitempty" db:"-"`
 	ChildSpans []*Span  `json:"child_spans,omitempty" db:"-"`
-	StatusCode uint8    `json:"status_code" db:"status_code"`
+	StatusCode uint8    `json:"status_code" db:"status_code"` // OTLP: 0=UNSET, 1=OK, 2=ERROR
+	HasError   bool     `json:"has_error" db:"has_error"`     // Semantic flag (true when status_code=2)
 	SpanKind   uint8    `json:"span_kind" db:"span_kind"`
 }
 

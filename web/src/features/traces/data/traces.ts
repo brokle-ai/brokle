@@ -11,6 +11,7 @@ const generateMockTraces = (): Trace[] => {
     const spanCount = faker.number.int({ min: 1, max: 15 })
     const tokens = faker.number.int({ min: 100, max: 10000 })
     const cost = (tokens / 1000) * faker.number.float({ min: 0.0001, max: 0.01, fractionDigits: 6 })
+    const statusCode = faker.helpers.arrayElement([0, 1, 2]) as 0 | 1 | 2
 
     return {
       trace_id: faker.string.hexadecimal({ length: 32, prefix: '' }), // Renamed from 'id'
@@ -26,7 +27,8 @@ const generateMockTraces = (): Trace[] => {
       start_time: startTime,
       end_time: endTime,
       duration: durationNano, // Nanoseconds (OTLP spec)
-      status_code: faker.helpers.arrayElement([0, 1, 2]), // UInt8: 0=UNSET, 1=OK, 2=ERROR
+      status_code: statusCode, // UInt8: 0=UNSET, 1=OK, 2=ERROR
+      has_error: statusCode === 2, // Semantic flag (true when ERROR)
       resource_attributes: { 'service.name': 'api-server' }, // JSON object, not string
       cost,
       tokens,

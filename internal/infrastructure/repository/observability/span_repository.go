@@ -20,7 +20,7 @@ type spanRepository struct {
 const spanSelectFields = `
 	span_id, trace_id, parent_span_id, trace_state, project_id,
 	span_name, span_kind, start_time, end_time, duration, completion_start_time,
-	status_code, status_message,
+	status_code, status_message, has_error,
 	input, output,
 	attributes, metadata,
 	usage_details, cost_details, pricing_snapshot, total_cost,
@@ -408,6 +408,7 @@ func (r *spanRepository) scanSpanRow(row driver.Row) (*observability.Span, error
 		&span.CompletionStartTime,
 		&span.StatusCode,
 		&span.StatusMessage,
+		&span.HasError,
 		&span.Input,
 		&span.Output,
 		&span.Attributes,           // JSON: All OTEL + Brokle attributes
@@ -462,6 +463,7 @@ func (r *spanRepository) scanSpans(rows driver.Rows) ([]*observability.Span, err
 			&span.CompletionStartTime,
 			&span.StatusCode,
 			&span.StatusMessage,
+			&span.HasError,
 			&span.Input,
 			&span.Output,
 			&span.Attributes,           // JSON: All OTEL + Brokle attributes
