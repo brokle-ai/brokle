@@ -295,8 +295,8 @@ func (s *OTLPConverterService) createTraceEvent(span observability.OTLPSpan, res
 	if endTime != nil {
 		payload["end_time"] = endTime.Format(time.RFC3339Nano)
 		if startTime != nil {
-			duration := uint32(endTime.Sub(*startTime).Milliseconds())
-			payload["duration_ms"] = duration
+			duration := uint64(endTime.Sub(*startTime).Nanoseconds())
+			payload["duration"] = duration
 		}
 	}
 

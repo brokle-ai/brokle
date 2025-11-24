@@ -59,7 +59,7 @@ export type Span = {
   // Timing
   start_time: Date
   end_time?: Date
-  duration_ms?: number
+  duration?: number // Nanoseconds (OTLP spec)
 
   // OTEL Status
   status_code: number // UInt8: 0=UNSET, 1=OK, 2=ERROR
@@ -128,7 +128,7 @@ export type Trace = {
   // Timing
   start_time: Date
   end_time?: Date
-  duration_ms?: number
+  duration?: number // Nanoseconds (OTLP spec)
 
   // OTEL Status
   status_code: number // UInt8: 0=UNSET, 1=OK, 2=ERROR
@@ -229,7 +229,7 @@ export const spanSchema: z.ZodType<Span> = z.lazy(() =>
     // Timing
     start_time: z.date(),
     end_time: z.date().optional(),
-    duration_ms: z.number().optional(),
+    duration: z.number().optional(), // Nanoseconds (OTLP spec)
 
     // OTEL Status
     status_code: z.number(), // UInt8: 0=UNSET, 1=OK, 2=ERROR
@@ -304,7 +304,7 @@ export const traceSchema: z.ZodType<Trace> = z.lazy(() =>
     // Timing
     start_time: z.date(),
     end_time: z.date().optional(),
-    duration_ms: z.number().optional(),
+    duration: z.number().optional(), // Nanoseconds (OTLP spec)
 
     // OTEL Status
     status_code: z.number(), // UInt8: 0=UNSET, 1=OK, 2=ERROR

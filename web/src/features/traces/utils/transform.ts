@@ -172,7 +172,7 @@ export function transformTrace(raw: any): Trace {
     // Timestamps
     start_time: parseTimestamp(raw.start_time || raw.startTime) || new Date(),
     end_time: parseTimestamp(raw.end_time || raw.endTime),
-    duration_ms: raw.duration_ms || raw.durationMs || undefined,
+    duration: raw.duration || undefined, // Nanoseconds (OTLP spec)
 
     // Status
     status_code: raw.status_code ?? raw.statusCode ?? 0,
@@ -272,7 +272,7 @@ export function transformSpan(raw: any): Span {
     // Timestamps
     start_time: parseTimestamp(raw.start_time || raw.startTime) || new Date(),
     end_time: parseTimestamp(raw.end_time || raw.endTime),
-    duration_ms: raw.duration_ms || raw.durationMs || undefined,
+    duration: raw.duration || undefined, // Nanoseconds (OTLP spec)
 
     // Status
     status_code: raw.status_code ?? raw.statusCode ?? 0,

@@ -20,7 +20,7 @@ type traceRepository struct {
 const traceSelectFields = `
 	trace_id, project_id, name, user_id, session_id, version, release,
 	tags, environment, metadata,
-	start_time, end_time, duration_ms,
+	start_time, end_time, duration,
 	status_code, status_message,
 	input, output,
 	total_cost, total_tokens, span_count,
@@ -45,7 +45,7 @@ func (r *traceRepository) Create(ctx context.Context, trace *observability.Trace
 		INSERT INTO traces (
 			trace_id, project_id, name, user_id, session_id,
 			tags, environment, metadata,
-			start_time, end_time, duration_ms,
+			start_time, end_time, duration,
 			status_code, status_message,
 			input, output,
 			total_cost, total_tokens, span_count,
@@ -66,7 +66,7 @@ func (r *traceRepository) Create(ctx context.Context, trace *observability.Trace
 		trace.Metadata,           // JSON: Contains brokle.version and brokle.release (auto-computed to materialized columns)
 		trace.StartTime,
 		trace.EndTime,
-		trace.DurationMs,
+		trace.Duration,
 		trace.StatusCode,
 		trace.StatusMessage,
 		trace.Input,
@@ -157,7 +157,7 @@ func (r *traceRepository) GetByProjectID(ctx context.Context, projectID string, 
 	}
 
 	// Determine sort field and direction with SQL injection protection
-	allowedSortFields := []string{"start_time", "end_time", "duration_ms", "status_code", "created_at", "updated_at", "trace_id"}
+	allowedSortFields := []string{"start_time", "end_time", "duration", "status_code", "created_at", "updated_at", "trace_id"}
 	sortField := "start_time" // default
 	sortDir := "DESC"
 
@@ -244,7 +244,7 @@ func (r *traceRepository) GetByUserID(ctx context.Context, userID string, filter
 	}
 
 	// Determine sort field and direction with SQL injection protection
-	allowedSortFields := []string{"start_time", "end_time", "duration_ms", "status_code", "created_at", "updated_at", "trace_id"}
+	allowedSortFields := []string{"start_time", "end_time", "duration", "status_code", "created_at", "updated_at", "trace_id"}
 	sortField := "start_time" // default
 	sortDir := "DESC"
 
@@ -309,7 +309,7 @@ func (r *traceRepository) CreateBatch(ctx context.Context, traces []*observabili
 		INSERT INTO traces (
 			trace_id, project_id, name, user_id, session_id,
 			tags, environment, metadata,
-			start_time, end_time, duration_ms,
+			start_time, end_time, duration,
 			status_code, status_message,
 			input, output,
 			total_cost, total_tokens, span_count,
@@ -341,7 +341,7 @@ func (r *traceRepository) CreateBatch(ctx context.Context, traces []*observabili
 			trace.Metadata,     // JSON: Contains brokle.release and brokle.version (materialized columns auto-computed)
 			trace.StartTime,
 			trace.EndTime,
-			trace.DurationMs,
+			trace.Duration,
 			trace.StatusCode,
 			trace.StatusMessage,
 			trace.Input,
@@ -438,7 +438,7 @@ func (r *traceRepository) scanTraceRow(row driver.Row) (*observability.Trace, er
 		&trace.Metadata,          // JSON type
 		&trace.StartTime,
 		&trace.EndTime,
-		&trace.DurationMs,
+		&trace.Duration,
 		&trace.StatusCode,
 		&trace.StatusMessage,
 		&trace.Input,
@@ -480,7 +480,7 @@ func (r *traceRepository) scanTraces(rows driver.Rows) ([]*observability.Trace, 
 			&trace.Metadata,          // JSON type
 			&trace.StartTime,
 			&trace.EndTime,
-			&trace.DurationMs,
+			&trace.Duration,
 			&trace.StatusCode,
 			&trace.StatusMessage,
 			&trace.Input,

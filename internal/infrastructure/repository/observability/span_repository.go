@@ -19,7 +19,7 @@ type spanRepository struct {
 // spanSelectFields defines the SELECT clause for span queries (reused across all queries)
 const spanSelectFields = `
 	span_id, trace_id, parent_span_id, trace_state, project_id,
-	span_name, span_kind, start_time, end_time, duration_ms, completion_start_time,
+	span_name, span_kind, start_time, end_time, duration, completion_start_time,
 	status_code, status_message,
 	input, output,
 	attributes, metadata,
@@ -47,7 +47,7 @@ func (r *spanRepository) Create(ctx context.Context, span *observability.Span) e
 	query := `
 		INSERT INTO spans (
 			span_id, trace_id, parent_span_id, trace_state, project_id,
-			span_name, span_kind, start_time, end_time, duration_ms, completion_start_time,
+			span_name, span_kind, start_time, end_time, duration, completion_start_time,
 			status_code, status_message,
 			input, output,
 			attributes, metadata,
@@ -69,7 +69,7 @@ func (r *spanRepository) Create(ctx context.Context, span *observability.Span) e
 		span.SpanKind,
 		span.StartTime,
 		span.EndTime,
-		span.DurationMs,
+		span.Duration,
 		span.CompletionStartTime,
 		span.StatusCode,
 		span.StatusMessage,
@@ -206,12 +206,14 @@ func (r *spanRepository) GetByFilter(ctx context.Context, filter *observability.
 			args = append(args, *filter.EndTime)
 		}
 		if filter.MinLatencyMs != nil {
-			query += " AND duration_ms >= ?"
-			args = append(args, *filter.MinLatencyMs)
+			// Convert milliseconds to nanoseconds for duration field
+			query += " AND duration >= ?"
+			args = append(args, uint64(*filter.MinLatencyMs)*1000000)
 		}
 		if filter.MaxLatencyMs != nil {
-			query += " AND duration_ms <= ?"
-			args = append(args, *filter.MaxLatencyMs)
+			// Convert milliseconds to nanoseconds for duration field
+			query += " AND duration <= ?"
+			args = append(args, uint64(*filter.MaxLatencyMs)*1000000)
 		}
 		if filter.MinCost != nil {
 			query += " AND total_cost >= ?"
@@ -232,7 +234,7 @@ func (r *spanRepository) GetByFilter(ctx context.Context, filter *observability.
 	}
 
 	// Determine sort field and direction with SQL injection protection
-	allowedSortFields := []string{"start_time", "end_time", "duration_ms", "span_name", "level", "status_code", "created_at", "updated_at", "span_id"}
+	allowedSortFields := []string{"start_time", "end_time", "duration", "span_name", "level", "status_code", "created_at", "updated_at", "span_id"}
 	sortField := "start_time" // default
 	sortDir := "DESC"
 
@@ -284,7 +286,7 @@ func (r *spanRepository) CreateBatch(ctx context.Context, spans []*observability
 	batch, err := r.db.PrepareBatch(ctx, `
 		INSERT INTO spans (
 			span_id, trace_id, parent_span_id, trace_state, project_id,
-			span_name, span_kind, start_time, end_time, duration_ms, completion_start_time,
+			span_name, span_kind, start_time, end_time, duration, completion_start_time,
 			status_code, status_message,
 			input, output,
 			attributes, metadata,
@@ -318,7 +320,7 @@ func (r *spanRepository) CreateBatch(ctx context.Context, spans []*observability
 			span.SpanKind,
 			span.StartTime,
 			span.EndTime,
-			span.DurationMs,
+			span.Duration,
 			span.CompletionStartTime,
 			span.StatusCode,
 			span.StatusMessage,
@@ -397,7 +399,7 @@ func (r *spanRepository) scanSpanRow(row driver.Row) (*observability.Span, error
 		&span.SpanKind,
 		&span.StartTime,
 		&span.EndTime,
-		&span.DurationMs,
+		&span.Duration,
 		&span.CompletionStartTime,
 		&span.StatusCode,
 		&span.StatusMessage,
@@ -450,7 +452,7 @@ func (r *spanRepository) scanSpans(rows driver.Rows) ([]*observability.Span, err
 			&span.SpanKind,
 			&span.StartTime,
 			&span.EndTime,
-			&span.DurationMs,
+			&span.Duration,
 			&span.CompletionStartTime,
 			&span.StatusCode,
 			&span.StatusMessage,

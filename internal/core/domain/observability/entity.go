@@ -20,7 +20,7 @@ type Trace struct {
 	UserID        *string    `json:"user_id,omitempty" db:"user_id"`
 	SessionID     *string    `json:"session_id,omitempty" db:"session_id"`
 	EndTime       *time.Time `json:"end_time,omitempty" db:"end_time"`
-	DurationMs    *uint32    `json:"duration_ms,omitempty" db:"duration_ms"`
+	Duration      *uint64    `json:"duration,omitempty" db:"duration"` // Nanoseconds (OTLP spec)
 	StatusMessage *string    `json:"status_message,omitempty" db:"status_message"`
 	Input         *string    `json:"input,omitempty" db:"input"`
 	Output        *string    `json:"output,omitempty" db:"output"`
@@ -58,7 +58,7 @@ type Span struct {
 	UpdatedAt     time.Time  `json:"updated_at" db:"updated_at"`
 	CreatedAt     time.Time  `json:"created_at" db:"created_at"`
 	EndTime       *time.Time `json:"end_time,omitempty" db:"end_time"`
-	DurationMs    *uint32    `json:"duration_ms,omitempty" db:"duration_ms"`
+	Duration      *uint64    `json:"duration,omitempty" db:"duration"` // Nanoseconds (OTLP spec)
 	StatusMessage *string    `json:"status_message,omitempty" db:"status_message"`
 	ParentSpanID  *string    `json:"parent_span_id,omitempty" db:"parent_span_id"`
 
@@ -556,9 +556,9 @@ func (t *Trace) IsCompleted() bool {
 
 // CalculateDuration calculates and sets the duration if not already set
 func (t *Trace) CalculateDuration() {
-	if t.EndTime != nil && t.DurationMs == nil {
-		duration := uint32(t.EndTime.Sub(t.StartTime).Milliseconds())
-		t.DurationMs = &duration
+	if t.EndTime != nil && t.Duration == nil {
+		duration := uint64(t.EndTime.Sub(t.StartTime).Nanoseconds())
+		t.Duration = &duration
 	}
 }
 
@@ -581,9 +581,9 @@ func (s *Span) IsRootSpan() bool {
 
 // CalculateDuration calculates and sets the duration if not already set
 func (s *Span) CalculateDuration() {
-	if s.EndTime != nil && s.DurationMs == nil {
-		duration := uint32(s.EndTime.Sub(s.StartTime).Milliseconds())
-		s.DurationMs = &duration
+	if s.EndTime != nil && s.Duration == nil {
+		duration := uint64(s.EndTime.Sub(s.StartTime).Nanoseconds())
+		s.Duration = &duration
 	}
 }
 
