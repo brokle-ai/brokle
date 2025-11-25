@@ -24,8 +24,8 @@ const spanSelectFields = `
 	input, output,
 	attributes, metadata,
 	usage_details, cost_details, pricing_snapshot, total_cost,
-	events_timestamp, events_name, events_attributes,
-	links_trace_id, links_span_id, links_trace_state, links_attributes,
+	events.timestamp, events.name, events.attributes, events.dropped_attributes_count,
+	links.trace_id, links.span_id, links.trace_state, links.attributes, links.dropped_attributes_count,
 	version, deleted_at,
 	created_at, updated_at,
 	model_name, provider_name, span_type, level,
@@ -53,8 +53,8 @@ func (r *spanRepository) Create(ctx context.Context, span *observability.Span) e
 			input, output,
 			attributes, metadata,
 			usage_details, cost_details, pricing_snapshot, total_cost,
-			events_timestamp, events_name, events_attributes,
-			links_trace_id, links_span_id, links_trace_state, links_attributes,
+			events,
+			links,
 			deleted_at,
 			created_at, updated_at
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -82,13 +82,8 @@ func (r *spanRepository) Create(ctx context.Context, span *observability.Span) e
 		span.CostDetails,       // Map(String, Decimal)
 		span.PricingSnapshot,   // Map(String, Decimal) - CRITICAL: audit trail
 		span.TotalCost,         // Nullable(Decimal)
-		span.EventsTimestamp,
-		span.EventsName,
-		span.EventsAttributes,  // Array(Map)
-		span.LinksTraceID,
-		span.LinksSpanID,
-		span.LinksTraceState,
-		span.LinksAttributes,   // Array(Map)
+		span.Events,            // Nested type
+		span.Links,             // Nested type
 		// version, model_name, provider_name, span_type, level omitted - MATERIALIZED from attributes JSON
 		span.DeletedAt,         // Soft delete
 		span.CreatedAt,
@@ -296,8 +291,8 @@ func (r *spanRepository) CreateBatch(ctx context.Context, spans []*observability
 			input, output,
 			attributes, metadata,
 			usage_details, cost_details, pricing_snapshot, total_cost,
-			events_timestamp, events_name, events_attributes,
-			links_trace_id, links_span_id, links_trace_state, links_attributes,
+			events,
+			links,
 			deleted_at,
 			created_at, updated_at
 		)
@@ -337,13 +332,8 @@ func (r *spanRepository) CreateBatch(ctx context.Context, spans []*observability
 			span.CostDetails,       // Map: Flexible cost breakdown
 			span.PricingSnapshot,   // Map: Audit trail
 			span.TotalCost,         // Decimal: Pre-computed total
-			span.EventsTimestamp,
-			span.EventsName,
-			span.EventsAttributes,
-			span.LinksTraceID,
-			span.LinksSpanID,
-			span.LinksTraceState,
-			span.LinksAttributes,
+			span.Events,            // Nested type
+			span.Links,             // Nested type
 			// version, model_name, provider_name, span_type, level omitted - MATERIALIZED from attributes JSON
 			span.DeletedAt,
 			span.CreatedAt,
@@ -417,13 +407,8 @@ func (r *spanRepository) scanSpanRow(row driver.Row) (*observability.Span, error
 		&span.CostDetails,          // Map: Flexible cost breakdown
 		&span.PricingSnapshot,      // Map: Audit trail
 		&span.TotalCost,            // Decimal: Pre-computed total
-		&span.EventsTimestamp,
-		&span.EventsName,
-		&span.EventsAttributes,     // Array(Map)
-		&span.LinksTraceID,
-		&span.LinksSpanID,
-		&span.LinksTraceState,
-		&span.LinksAttributes,      // Array(Map)
+		&span.Events,               // Nested type
+		&span.Links,                // Nested type
 		&span.Version,              // Materialized from attributes.brokle.span.version
 		&span.DeletedAt,
 		&span.CreatedAt,
@@ -472,13 +457,8 @@ func (r *spanRepository) scanSpans(rows driver.Rows) ([]*observability.Span, err
 			&span.CostDetails,          // Map: Flexible cost breakdown
 			&span.PricingSnapshot,      // Map: Audit trail
 			&span.TotalCost,            // Decimal: Pre-computed total
-			&span.EventsTimestamp,
-			&span.EventsName,
-			&span.EventsAttributes,     // Array(Map)
-			&span.LinksTraceID,
-			&span.LinksSpanID,
-			&span.LinksTraceState,
-			&span.LinksAttributes,      // Array(Map)
+			&span.Events,               // Nested type
+			&span.Links,                // Nested type
 			&span.Version,              // Materialized from attributes.brokle.span.version
 			&span.DeletedAt,
 			&span.CreatedAt,

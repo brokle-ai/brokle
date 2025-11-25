@@ -248,16 +248,12 @@ func mergeSpanFields(dst *observability.Span, src *observability.Span) {
 		dst.Output = src.Output
 	}
 
-	// Events/Links arrays
-	if len(src.EventsTimestamp) > 0 {
-		dst.EventsTimestamp = src.EventsTimestamp
-		dst.EventsName = src.EventsName
-		dst.EventsAttributes = src.EventsAttributes
+	// Events/Links (Nested type)
+	if len(src.Events) > 0 {
+		dst.Events = src.Events
 	}
-	if len(src.LinksTraceID) > 0 {
-		dst.LinksTraceID = src.LinksTraceID
-		dst.LinksSpanID = src.LinksSpanID
-		dst.LinksAttributes = src.LinksAttributes
+	if len(src.Links) > 0 {
+		dst.Links = src.Links
 	}
 
 	// Note: Old dedicated fields (ModelName, Provider, InternalModelID, ModelParameters,

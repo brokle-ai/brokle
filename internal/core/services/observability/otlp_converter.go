@@ -684,75 +684,65 @@ func (s *OTLPConverterService) createSpanEvent(ctx context.Context, span observa
 		payload["trace_state"] = traceState
 	}
 
-	// Extract OTLP Events (timeline annotations within span)
+	// Extract OTLP Events (Nested type - OTLP Collector standard)
 	if len(span.Events) > 0 {
-		eventsTimestamp := make([]string, len(span.Events))
-		eventsName := make([]string, len(span.Events))
-		eventsAttributes := make([]map[string]interface{}, len(span.Events)) // Map type (OTEL standard)
-		eventsDroppedCount := make([]uint32, len(span.Events))
-
+		events := make([]map[string]interface{}, len(span.Events))
 		for i, event := range span.Events {
-			// Convert event timestamp (nanosecond precision)
+			eventMap := make(map[string]interface{})
+
+			// Convert timestamp (nanosecond precision)
 			if eventTime := convertUnixNano(event.TimeUnixNano); eventTime != nil {
-				eventsTimestamp[i] = eventTime.Format(time.RFC3339Nano)
+				eventMap["timestamp"] = eventTime.Format(time.RFC3339Nano)
 			}
 
-			// Extract event name
-			eventsName[i] = event.Name
+			// Event name
+			eventMap["name"] = event.Name
 
-			// Extract event attributes as Map (not JSON string)
-			eventAttrs := extractAttributesFromKeyValues(event.Attributes)
-			eventsAttributes[i] = eventAttrs // Direct map, ClickHouse converts to Map(String,String)
+			// Event attributes as Map
+			eventMap["attributes"] = extractAttributesFromKeyValues(event.Attributes)
 
-			// Track dropped attributes
-			eventsDroppedCount[i] = event.DroppedAttributesCount
+			// Dropped attributes count (OTLP spec field)
+			eventMap["dropped_attributes_count"] = event.DroppedAttributesCount
+
+			events[i] = eventMap
 		}
 
-		payload["events_timestamp"] = eventsTimestamp
-		payload["events_name"] = eventsName
-		payload["events_attributes"] = eventsAttributes // Array of maps
-		payload["events_dropped_attributes_count"] = eventsDroppedCount
+		payload["events"] = events // Nested type (ClickHouse driver handles structure)
 	}
 
-	// Extract OTLP Links (cross-trace references)
+	// Extract OTLP Links (Nested type - OTLP Collector standard)
 	if len(span.Links) > 0 {
-		linksTraceID := make([]string, len(span.Links))
-		linksSpanID := make([]string, len(span.Links))
-		linksTraceState := make([]string, len(span.Links))                 // W3C TraceState for links
-		linksAttributes := make([]map[string]interface{}, len(span.Links)) // Map type (OTEL standard)
-		linksDroppedCount := make([]uint32, len(span.Links))
-
+		links := make([]map[string]interface{}, len(span.Links))
 		for i, link := range span.Links {
+			linkMap := make(map[string]interface{})
+
 			// Convert linked trace ID
 			if traceID, err := convertTraceID(link.TraceID); err == nil {
-				linksTraceID[i] = traceID
+				linkMap["trace_id"] = traceID
 			}
 
 			// Convert linked span ID
 			if spanID, err := convertSpanID(link.SpanID); err == nil {
-				linksSpanID[i] = spanID
+				linkMap["span_id"] = spanID
 			}
 
-			// Extract TraceState for this link (W3C Trace Context)
+			// W3C TraceState
 			if link.TraceState != nil {
 				if ts, ok := link.TraceState.(string); ok {
-					linksTraceState[i] = ts
+					linkMap["trace_state"] = ts
 				}
 			}
 
-			// Extract link attributes as Map (not JSON string)
-			linkAttrs := extractAttributesFromKeyValues(link.Attributes)
-			linksAttributes[i] = linkAttrs // Direct map, ClickHouse converts to Map(String,String)
+			// Link attributes as Map
+			linkMap["attributes"] = extractAttributesFromKeyValues(link.Attributes)
 
-			// Track dropped attributes
-			linksDroppedCount[i] = link.DroppedAttributesCount
+			// Dropped attributes count (OTLP spec field)
+			linkMap["dropped_attributes_count"] = link.DroppedAttributesCount
+
+			links[i] = linkMap
 		}
 
-		payload["links_trace_id"] = linksTraceID
-		payload["links_span_id"] = linksSpanID
-		payload["links_trace_state"] = linksTraceState // NEW: W3C TraceState array
-		payload["links_attributes"] = linksAttributes  // Array of maps
-		payload["links_dropped_attributes_count"] = linksDroppedCount
+		payload["links"] = links // Nested type (ClickHouse driver handles structure)
 	}
 
 	// ========== Build attributes JSON (all OTEL + Brokle span attributes) ==========

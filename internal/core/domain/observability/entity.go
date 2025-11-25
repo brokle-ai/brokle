@@ -12,6 +12,23 @@ import (
 	"brokle/pkg/ulid"
 )
 
+// SpanEvent represents an OTLP span event (Nested type for ClickHouse)
+type SpanEvent struct {
+	Timestamp             time.Time              `json:"timestamp" db:"timestamp"`
+	Name                  string                 `json:"name" db:"name"`
+	Attributes            map[string]interface{} `json:"attributes" db:"attributes"`
+	DroppedAttributesCount uint32                `json:"dropped_attributes_count" db:"dropped_attributes_count"`
+}
+
+// SpanLink represents an OTLP span link (Nested type for ClickHouse)
+type SpanLink struct {
+	TraceID               string                 `json:"trace_id" db:"trace_id"`
+	SpanID                string                 `json:"span_id" db:"span_id"`
+	TraceState            string                 `json:"trace_state" db:"trace_state"`
+	Attributes            map[string]interface{} `json:"attributes" db:"attributes"`
+	DroppedAttributesCount uint32                `json:"dropped_attributes_count" db:"dropped_attributes_count"`
+}
+
 // Trace represents an OTEL trace (root span) with trace-level context
 type Trace struct {
 	StartTime     time.Time  `json:"start_time" db:"start_time"`
@@ -77,18 +94,12 @@ type Span struct {
 	SpanName  string `json:"span_name" db:"span_name"`
 	SpanID    string `json:"span_id" db:"span_id"`
 	ProjectID string `json:"project_id" db:"project_id"`
-	// OTEL Events (Array of maps for performance)
-	EventsTimestamp    []time.Time              `json:"events_timestamp,omitempty" db:"events_timestamp"`
-	EventsName         []string                 `json:"events_name,omitempty" db:"events_name"`
-	EventsAttributes   []map[string]interface{} `json:"events_attributes,omitempty" db:"events_attributes"`
-	EventsDroppedCount []uint32                 `json:"events_dropped_attributes_count,omitempty" db:"events_dropped_attributes_count"`
 
-	// OTEL Links (Array of maps with TraceState)
-	LinksTraceID      []string                 `json:"links_trace_id,omitempty" db:"links_trace_id"`
-	LinksSpanID       []string                 `json:"links_span_id,omitempty" db:"links_span_id"`
-	LinksTraceState   []string                 `json:"links_trace_state,omitempty" db:"links_trace_state"`
-	LinksAttributes   []map[string]interface{} `json:"links_attributes,omitempty" db:"links_attributes"`
-	LinksDroppedCount []uint32                 `json:"links_dropped_attributes_count,omitempty" db:"links_dropped_attributes_count"`
+	// OTLP Events (Nested type - OTLP Collector standard)
+	Events []SpanEvent `json:"events,omitempty" db:"events"`
+
+	// OTLP Links (Nested type - OTLP Collector standard)
+	Links []SpanLink `json:"links,omitempty" db:"links"`
 
 	// ============================================
 	// Modern: JSON Attributes + Usage/Cost Maps
