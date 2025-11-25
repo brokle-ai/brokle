@@ -120,7 +120,17 @@ func (a *App) Start() error {
 				}
 			}
 		}()
-		a.logger.WithField("port", a.config.Server.Port).Info("Brokle Platform started successfully")
+		a.logger.WithField("port", a.config.Server.Port).Info("HTTP server started")
+
+		// Start gRPC OTLP server (always enabled)
+		go func() {
+			if err := a.providers.Server.GRPCServer.Start(); err != nil {
+				a.logger.WithError(err).Error("gRPC server failed")
+			}
+		}()
+		a.logger.WithField("port", a.config.GRPC.Port).Info("gRPC OTLP server started")
+
+		a.logger.Info("Brokle Platform started successfully")
 
 	case ModeWorker:
 		// Start telemetry stream consumer
@@ -142,6 +152,15 @@ func (a *App) Shutdown(ctx context.Context) error {
 
 	switch a.mode {
 	case ModeServer:
+		// Shutdown gRPC server first
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := a.providers.Server.GRPCServer.Shutdown(ctx); err != nil {
+				a.logger.WithError(err).Error("Failed to shutdown gRPC server")
+			}
+		}()
+
 		// Shutdown HTTP server
 		wg.Add(1)
 		go func() {

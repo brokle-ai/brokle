@@ -65,7 +65,8 @@ services:
       context: .
     container_name: brokle-backend
     ports:
-      - "8080:8080"
+      - "8080:8080"  # HTTP API + Dashboard
+      - "4317:4317"  # gRPC OTLP (OpenTelemetry Protocol)
     environment:
       - APP_MODE=server  # Server mode - validates JWT_SECRET
       - ENV=${ENV:-development}
@@ -74,6 +75,7 @@ services:
       - CLICKHOUSE_URL=clickhouse://brokle:brokle_password@clickhouse:9000/default
       - REDIS_URL=redis://redis:6379/0
       - JWT_SECRET=${JWT_SECRET:-dev-jwt-secret-change-in-production}
+      - GRPC_PORT=4317
       - LOG_LEVEL=${LOG_LEVEL:-debug}
     depends_on:
       postgres:

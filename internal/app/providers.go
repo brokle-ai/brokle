@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"time"
 
@@ -37,6 +38,7 @@ import (
 	userRepo "brokle/internal/infrastructure/repository/user"
 	"brokle/internal/infrastructure/storage"
 	"brokle/internal/infrastructure/streams"
+	grpcTransport "brokle/internal/transport/grpc"
 	"brokle/internal/transport/http"
 	"brokle/internal/transport/http/handlers"
 	"brokle/internal/workers"
@@ -62,9 +64,10 @@ type CoreContainer struct {
 	Enterprise *EnterpriseContainer
 }
 
-// ServerContainer holds HTTP server components
+// ServerContainer holds HTTP and gRPC server components
 type ServerContainer struct {
 	HTTPServer *http.Server
+	GRPCServer *grpcTransport.Server
 }
 
 // ProviderContainer holds all provider instances for dependency injection
@@ -413,8 +416,42 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 		core.Databases.Redis.Client,
 	)
 
+	// Initialize gRPC OTLP server (always enabled)
+	// Convert logrus.Logger to slog.Logger for gRPC
+	slogLogger := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	}))
+
+	// Create gRPC OTLP handler (reuses service layer)
+	grpcOTLPHandler := grpcTransport.NewOTLPHandler(
+		core.Services.Observability.StreamProducer,
+		core.Services.Observability.DeduplicationService,
+		core.Services.Observability.OTLPConverterService,
+		slogLogger,
+	)
+
+	// Create gRPC auth interceptor (reuses APIKeyService)
+	grpcAuthInterceptor := grpcTransport.NewAuthInterceptor(
+		core.Services.Auth.APIKey,
+		slogLogger,
+	)
+
+	// Create gRPC server
+	grpcServer, err := grpcTransport.NewServer(
+		core.Config.GRPC.Port,
+		grpcOTLPHandler,
+		grpcAuthInterceptor,
+		slogLogger,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create gRPC server: %w", err)
+	}
+
+	core.Logger.WithField("port", core.Config.GRPC.Port).Info("gRPC OTLP server initialized")
+
 	return &ServerContainer{
 		HTTPServer: httpServer,
+		GRPCServer: grpcServer,
 	}, nil
 }
 

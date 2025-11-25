@@ -27,6 +27,7 @@ type Config struct {
 	Notifications NotificationsConfig `mapstructure:"notifications"`
 	Enterprise    EnterpriseConfig    `mapstructure:"enterprise"`
 	Server        ServerConfig        `mapstructure:"server"`
+	GRPC          GRPCConfig          `mapstructure:"grpc"`
 	BlobStorage   BlobStorageConfig   `mapstructure:"blob_storage"`
 	Monitoring    MonitoringConfig    `mapstructure:"monitoring"`
 	Logging       LoggingConfig       `mapstructure:"logging"`
@@ -56,6 +57,11 @@ type ServerConfig struct {
 	WriteTimeout       time.Duration `mapstructure:"write_timeout"`
 	Port               int           `mapstructure:"port"`
 	EnableCORS         bool          `mapstructure:"enable_cors"`
+}
+
+// GRPCConfig contains gRPC server configuration for OTLP ingestion
+type GRPCConfig struct {
+	Port int `mapstructure:"port"`
 }
 
 // DatabaseConfig contains PostgreSQL database configuration.
@@ -799,6 +805,9 @@ func setDefaults() {
 	viper.SetDefault("server.cors_allowed_origins", []string{"http://localhost:3000", "http://localhost:3001"})
 	viper.SetDefault("server.cors_allowed_methods", []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"})
 	viper.SetDefault("server.cors_allowed_headers", []string{"Content-Type", "Authorization", "X-API-Key"})
+
+	// gRPC OTLP defaults (industry standard port 4317)
+	viper.SetDefault("grpc.port", 4317) // OTLP gRPC standard port
 
 	// Database defaults (URL-first, individual fields as fallback)
 	viper.SetDefault("database.url", "") // Preferred: Set via DATABASE_URL env var

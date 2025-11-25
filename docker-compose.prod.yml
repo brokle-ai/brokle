@@ -13,6 +13,7 @@ services:
       CLICKHOUSE_URL: ${CLICKHOUSE_URL}  # Production ClickHouse URL
       REDIS_URL: ${REDIS_URL}  # Production Redis URL
       JWT_SECRET: ${JWT_SECRET}  # Production JWT secret
+      GRPC_PORT: 4317  # Industry standard OTLP gRPC port
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
       GOOGLE_AI_API_KEY: ${GOOGLE_AI_API_KEY}
