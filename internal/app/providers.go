@@ -159,7 +159,6 @@ type OrganizationRepositories struct {
 // ObservabilityRepositories contains all observability-related repositories
 type ObservabilityRepositories struct {
 	Trace                  observability.TraceRepository
-	Span                   observability.SpanRepository
 	Score                  observability.ScoreRepository
 	Metrics                observability.MetricsRepository
 	Logs                   observability.LogsRepository
@@ -266,7 +265,6 @@ func ProvideWorkers(core *CoreContainer) (*WorkerContainer, error) {
 		core.Logger,
 		consumerConfig,
 		core.Services.Observability.TraceService,
-		core.Services.Observability.SpanService,
 		core.Services.Observability.ScoreService,
 		core.Services.Observability.MetricsService,
 		core.Services.Observability.LogsService,
@@ -513,7 +511,6 @@ func ProvideOrganizationRepositories(db *gorm.DB) *OrganizationRepositories {
 func ProvideObservabilityRepositories(clickhouseDB *database.ClickHouseDB, postgresDB *gorm.DB, redisDB *database.RedisDB) *ObservabilityRepositories {
 	return &ObservabilityRepositories{
 		Trace:                  observabilityRepo.NewTraceRepository(clickhouseDB.Conn),
-		Span:                   observabilityRepo.NewSpanRepository(clickhouseDB.Conn),
 		Score:                  observabilityRepo.NewScoreRepository(clickhouseDB.Conn),
 		Metrics:                observabilityRepo.NewMetricsRepository(clickhouseDB.Conn),
 		Logs:                   observabilityRepo.NewLogsRepository(clickhouseDB.Conn),
@@ -761,7 +758,6 @@ func ProvideObservabilityServices(
 
 	return observabilityService.NewServiceRegistry(
 		observabilityRepos.Trace,
-		observabilityRepos.Span,
 		observabilityRepos.Score,
 		observabilityRepos.Metrics,
 		observabilityRepos.Logs,

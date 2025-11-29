@@ -12,29 +12,22 @@ import (
 	"brokle/pkg/ulid"
 )
 
-// ScoreService implements business logic for quality score management
 type ScoreService struct {
 	scoreRepo observability.ScoreRepository
 	traceRepo observability.TraceRepository
-	spanRepo  observability.SpanRepository
 }
 
-// NewScoreService creates a new score service instance
 func NewScoreService(
 	scoreRepo observability.ScoreRepository,
 	traceRepo observability.TraceRepository,
-	spanRepo observability.SpanRepository,
 ) *ScoreService {
 	return &ScoreService{
 		scoreRepo: scoreRepo,
 		traceRepo: traceRepo,
-		spanRepo:  spanRepo,
 	}
 }
 
-// CreateScore creates a new quality score with validation
 func (s *ScoreService) CreateScore(ctx context.Context, score *observability.Score) error {
-	// Validate required fields
 	if score.ProjectID == "" {
 		return appErrors.NewValidationError("project_id is required", "score must have a valid project_id")
 	}
@@ -42,35 +35,24 @@ func (s *ScoreService) CreateScore(ctx context.Context, score *observability.Sco
 		return appErrors.NewValidationError("name is required", "score name cannot be empty")
 	}
 
-	// Validate trace and span IDs are set
 	if score.TraceID == "" {
 		return appErrors.NewValidationError("trace_id is required", "score must have a trace_id")
 	}
 	if score.SpanID == "" {
 		return appErrors.NewValidationError("span_id is required", "score must have a span_id")
 	}
-
-	// Validate data type and value consistency
 	if err := s.validateScoreData(score); err != nil {
 		return err
 	}
-
-	// Generate new ID if not provided
 	if score.ID == "" {
 		score.ID = ulid.New().String()
 	}
-
-	// Set timestamp if not provided
 	if score.Timestamp.IsZero() {
 		score.Timestamp = time.Now()
 	}
-
-	// Validate targets exist
 	if err := s.validateScoreTargets(ctx, score); err != nil {
 		return err
 	}
-
-	// Create score
 	if err := s.scoreRepo.Create(ctx, score); err != nil {
 		return appErrors.NewInternalError("failed to create score", err)
 	}
@@ -78,9 +60,7 @@ func (s *ScoreService) CreateScore(ctx context.Context, score *observability.Sco
 	return nil
 }
 
-// UpdateScore updates an existing score
 func (s *ScoreService) UpdateScore(ctx context.Context, score *observability.Score) error {
-	// Validate score exists
 	existing, err := s.scoreRepo.GetByID(ctx, score.ID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -89,17 +69,11 @@ func (s *ScoreService) UpdateScore(ctx context.Context, score *observability.Sco
 		return appErrors.NewInternalError("failed to get score", err)
 	}
 
-	// Merge non-zero fields from incoming score into existing
 	mergeScoreFields(existing, score)
 
-	// Preserve version for increment in repository layer
-
-	// Validate data type and value consistency
 	if err := s.validateScoreData(existing); err != nil {
 		return err
 	}
-
-	// Update score
 	if err := s.scoreRepo.Update(ctx, existing); err != nil {
 		return appErrors.NewInternalError("failed to update score", err)
 	}
@@ -107,9 +81,7 @@ func (s *ScoreService) UpdateScore(ctx context.Context, score *observability.Sco
 	return nil
 }
 
-// mergeScoreFields merges non-zero fields from src into dst
 func mergeScoreFields(dst *observability.Score, src *observability.Score) {
-	// Update optional fields only if non-zero
 	if src.Name != "" {
 		dst.Name = src.Name
 	}
@@ -145,9 +117,7 @@ func mergeScoreFields(dst *observability.Score, src *observability.Score) {
 	}
 }
 
-// DeleteScore soft deletes a score
 func (s *ScoreService) DeleteScore(ctx context.Context, id string) error {
-	// Validate score exists
 	_, err := s.scoreRepo.GetByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -155,8 +125,6 @@ func (s *ScoreService) DeleteScore(ctx context.Context, id string) error {
 		}
 		return appErrors.NewInternalError("failed to get score", err)
 	}
-
-	// Delete score
 	if err := s.scoreRepo.Delete(ctx, id); err != nil {
 		return appErrors.NewInternalError("failed to delete score", err)
 	}
@@ -164,7 +132,6 @@ func (s *ScoreService) DeleteScore(ctx context.Context, id string) error {
 	return nil
 }
 
-// GetScoreByID retrieves a score by ID
 func (s *ScoreService) GetScoreByID(ctx context.Context, id string) (*observability.Score, error) {
 	score, err := s.scoreRepo.GetByID(ctx, id)
 	if err != nil {
@@ -174,7 +141,6 @@ func (s *ScoreService) GetScoreByID(ctx context.Context, id string) (*observabil
 	return score, nil
 }
 
-// GetScoresByTraceID retrieves all scores for a trace
 func (s *ScoreService) GetScoresByTraceID(ctx context.Context, traceID string) ([]*observability.Score, error) {
 	if traceID == "" {
 		return nil, appErrors.NewValidationError("trace_id is required", "scores query requires a valid trace_id")
@@ -188,7 +154,6 @@ func (s *ScoreService) GetScoresByTraceID(ctx context.Context, traceID string) (
 	return scores, nil
 }
 
-// GetScoresBySpanID retrieves all scores for a span
 func (s *ScoreService) GetScoresBySpanID(ctx context.Context, spanID string) ([]*observability.Score, error) {
 	if spanID == "" {
 		return nil, appErrors.NewValidationError("span_id is required", "scores query requires a valid span_id")
@@ -202,7 +167,6 @@ func (s *ScoreService) GetScoresBySpanID(ctx context.Context, spanID string) ([]
 	return scores, nil
 }
 
-// GetScoresByFilter retrieves scores matching filter criteria
 func (s *ScoreService) GetScoresByFilter(ctx context.Context, filter *observability.ScoreFilter) ([]*observability.Score, error) {
 	scores, err := s.scoreRepo.GetByFilter(ctx, filter)
 	if err != nil {
@@ -212,7 +176,6 @@ func (s *ScoreService) GetScoresByFilter(ctx context.Context, filter *observabil
 	return scores, nil
 }
 
-// CreateScoreBatch creates multiple scores in a single batch operation
 func (s *ScoreService) CreateScoreBatch(ctx context.Context, scores []*observability.Score) error {
 	if len(scores) == 0 {
 		return appErrors.NewValidationError("scores array cannot be empty", "batch create requires at least one score")
@@ -271,7 +234,6 @@ func (s *ScoreService) CreateScoreBatch(ctx context.Context, scores []*observabi
 	return nil
 }
 
-// CountScores returns the count of scores matching the filter
 func (s *ScoreService) CountScores(ctx context.Context, filter *observability.ScoreFilter) (int64, error) {
 	count, err := s.scoreRepo.Count(ctx, filter)
 	if err != nil {
@@ -281,9 +243,6 @@ func (s *ScoreService) CountScores(ctx context.Context, filter *observability.Sc
 	return count, nil
 }
 
-// Helper methods
-
-// validateScoreData validates score data type and value consistency
 func (s *ScoreService) validateScoreData(score *observability.Score) error {
 	switch score.DataType {
 	case observability.ScoreDataTypeNumeric:
@@ -320,9 +279,7 @@ func (s *ScoreService) validateScoreData(score *observability.Score) error {
 	return nil
 }
 
-// validateScoreTargets validates that score targets exist
 func (s *ScoreService) validateScoreTargets(ctx context.Context, score *observability.Score) error {
-	// Validate trace exists (check root span in OTEL-native architecture)
 	if score.TraceID != "" {
 		_, err := s.traceRepo.GetRootSpan(ctx, score.TraceID)
 		if err != nil {
@@ -330,9 +287,8 @@ func (s *ScoreService) validateScoreTargets(ctx context.Context, score *observab
 		}
 	}
 
-	// Validate span exists
 	if score.SpanID != "" {
-		_, err := s.spanRepo.GetByID(ctx, score.SpanID)
+		_, err := s.traceRepo.GetSpan(ctx, score.SpanID)
 		if err != nil {
 			return appErrors.NewNotFoundError("span " + score.SpanID)
 		}

@@ -2,12 +2,16 @@ package observability
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"brokle/internal/core/domain/observability"
+	"brokle/pkg/pagination"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
+	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 	"github.com/shopspring/decimal"
 )
 
@@ -15,15 +19,611 @@ type traceRepository struct {
 	db clickhouse.Conn
 }
 
-// NewTraceRepository creates a new trace repository instance
 func NewTraceRepository(db clickhouse.Conn) observability.TraceRepository {
 	return &traceRepository{db: db}
 }
 
-// GetRootSpan retrieves the root span for a trace (parent_span_id IS NULL)
-// OTEL-Native: Root spans represent traces in OTLP
+func marshalJSON(m map[string]interface{}) string {
+	if m == nil || len(m) == 0 {
+		return "{}"
+	}
+	jsonBytes, err := json.Marshal(m)
+	if err != nil {
+		// Log error but return empty JSON to prevent batch failure
+		return "{}"
+	}
+	return string(jsonBytes)
+}
+
+const spanSelectFields = `
+	span_id, trace_id, parent_span_id, trace_state, project_id,
+	span_name, span_kind, start_time, end_time, duration_nano, completion_start_time,
+	status_code, status_message, has_error,
+	input, output,
+	resource_attributes, span_attributes, scope_name, scope_version, scope_attributes,
+	resource_schema_url, scope_schema_url,
+	usage_details, cost_details, pricing_snapshot, total_cost,
+	events_timestamp, events_name, events_attributes,
+	links_trace_id, links_span_id, links_trace_state, links_attributes,
+	brokle_version, deleted_at,
+	model_name, provider_name, span_type, span_level,
+	service_name
+`
+
+func convertEventsToArrays(events []observability.SpanEvent) (
+	timestamps []time.Time,
+	names []string,
+	attributes []map[string]string,
+) {
+	if len(events) == 0 {
+		return []time.Time{}, []string{}, []map[string]string{}
+	}
+
+	timestamps = make([]time.Time, len(events))
+	names = make([]string, len(events))
+	attributes = make([]map[string]string, len(events))
+
+	for i, event := range events {
+		timestamps[i] = event.Timestamp
+		names[i] = event.Name
+		attrs := make(map[string]string)
+		for k, v := range event.Attributes {
+			attrs[k] = fmt.Sprint(v)
+		}
+		attributes[i] = attrs
+	}
+	return
+}
+
+func convertLinksToArrays(links []observability.SpanLink) (
+	traceIDs []string,
+	spanIDs []string,
+	traceStates []string,
+	attributes []map[string]string,
+) {
+	if len(links) == 0 {
+		return []string{}, []string{}, []string{}, []map[string]string{}
+	}
+
+	traceIDs = make([]string, len(links))
+	spanIDs = make([]string, len(links))
+	traceStates = make([]string, len(links))
+	attributes = make([]map[string]string, len(links))
+
+	for i, link := range links {
+		traceIDs[i] = link.TraceID
+		spanIDs[i] = link.SpanID
+		traceStates[i] = link.TraceState
+		attrs := make(map[string]string)
+		for k, v := range link.Attributes {
+			attrs[k] = fmt.Sprint(v)
+		}
+		attributes[i] = attrs
+	}
+	return
+}
+
+func convertArraysToEvents(
+	timestamps []time.Time,
+	names []string,
+	attributes []map[string]string,
+) []observability.SpanEvent {
+	if len(timestamps) == 0 {
+		return nil
+	}
+
+	events := make([]observability.SpanEvent, len(timestamps))
+	for i := range timestamps {
+		// Attributes are already map[string]string from ClickHouse
+		var attrs map[string]string
+		if i < len(attributes) && attributes[i] != nil {
+			attrs = attributes[i]
+		} else {
+			attrs = make(map[string]string)
+		}
+		events[i] = observability.SpanEvent{
+			Timestamp:  timestamps[i],
+			Name:       names[i],
+			Attributes: attrs,
+		}
+	}
+	return events
+}
+
+func convertArraysToLinks(
+	traceIDs []string,
+	spanIDs []string,
+	traceStates []string,
+	attributes []map[string]string,
+) []observability.SpanLink {
+	if len(traceIDs) == 0 {
+		return nil
+	}
+
+	links := make([]observability.SpanLink, len(traceIDs))
+	for i := range traceIDs {
+		// Attributes are already map[string]string from ClickHouse
+		var attrs map[string]string
+		if i < len(attributes) && attributes[i] != nil {
+			attrs = attributes[i]
+		} else {
+			attrs = make(map[string]string)
+		}
+		links[i] = observability.SpanLink{
+			TraceID:    traceIDs[i],
+			SpanID:     spanIDs[i],
+			TraceState: traceStates[i],
+			Attributes: attrs,
+		}
+	}
+	return links
+}
+
+func ScanSpanRow(row driver.Row) (*observability.Span, error) {
+	var span observability.Span
+
+	var eventsTimestamps []time.Time
+	var eventsNames []string
+	var eventsAttributes []map[string]string
+
+	var linksTraceIDs []string
+	var linksSpanIDs []string
+	var linksTraceStates []string
+	var linksAttributes []map[string]string
+
+	err := row.Scan(
+		&span.SpanID,
+		&span.TraceID,
+		&span.ParentSpanID,
+		&span.TraceState,
+		&span.ProjectID,
+		&span.SpanName,
+		&span.SpanKind,
+		&span.StartTime,
+		&span.EndTime,
+		&span.Duration,
+		&span.CompletionStartTime,
+		&span.StatusCode,
+		&span.StatusMessage,
+		&span.HasError,
+		&span.Input,
+		&span.Output,
+		&span.ResourceAttributes,
+		&span.SpanAttributes,
+		&span.ScopeName,
+		&span.ScopeVersion,
+		&span.ScopeAttributes,
+		&span.ResourceSchemaURL,
+		&span.ScopeSchemaURL,
+		&span.UsageDetails,
+		&span.CostDetails,
+		&span.PricingSnapshot,
+		&span.TotalCost,
+		&eventsTimestamps,
+		&eventsNames,
+		&eventsAttributes,
+		&linksTraceIDs,
+		&linksSpanIDs,
+		&linksTraceStates,
+		&linksAttributes,
+		&span.Version,
+		&span.DeletedAt,
+		&span.ModelName,
+		&span.ProviderName,
+		&span.SpanType,
+		&span.Level,
+		&span.ServiceName,
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("scan span: %w", err)
+	}
+
+	span.Events = convertArraysToEvents(eventsTimestamps, eventsNames, eventsAttributes)
+	span.Links = convertArraysToLinks(linksTraceIDs, linksSpanIDs, linksTraceStates, linksAttributes)
+
+	return &span, nil
+}
+
+func (r *traceRepository) scanSpans(rows driver.Rows) ([]*observability.Span, error) {
+	spans := make([]*observability.Span, 0)
+
+	for rows.Next() {
+		var span observability.Span
+
+		var eventsTimestamps []time.Time
+		var eventsNames []string
+		var eventsAttributes []map[string]string
+
+		var linksTraceIDs []string
+		var linksSpanIDs []string
+		var linksTraceStates []string
+		var linksAttributes []map[string]string
+
+		err := rows.Scan(
+			&span.SpanID,
+			&span.TraceID,
+			&span.ParentSpanID,
+			&span.TraceState,
+			&span.ProjectID,
+			&span.SpanName,
+			&span.SpanKind,
+			&span.StartTime,
+			&span.EndTime,
+			&span.Duration,
+			&span.CompletionStartTime,
+			&span.StatusCode,
+			&span.StatusMessage,
+			&span.HasError,
+			&span.Input,
+			&span.Output,
+			&span.ResourceAttributes,
+			&span.SpanAttributes,
+			&span.ScopeName,
+			&span.ScopeVersion,
+			&span.ScopeAttributes,
+			&span.ResourceSchemaURL,
+			&span.ScopeSchemaURL,
+			&span.UsageDetails,
+			&span.CostDetails,
+			&span.PricingSnapshot,
+			&span.TotalCost,
+			&eventsTimestamps,
+			&eventsNames,
+			&eventsAttributes,
+			&linksTraceIDs,
+			&linksSpanIDs,
+			&linksTraceStates,
+			&linksAttributes,
+			&span.Version,
+			&span.DeletedAt,
+			&span.ModelName,
+			&span.ProviderName,
+			&span.SpanType,
+			&span.Level,
+			&span.ServiceName,
+		)
+
+		if err != nil {
+			return nil, fmt.Errorf("scan span: %w", err)
+		}
+
+		span.Events = convertArraysToEvents(eventsTimestamps, eventsNames, eventsAttributes)
+		span.Links = convertArraysToLinks(linksTraceIDs, linksSpanIDs, linksTraceStates, linksAttributes)
+
+		spans = append(spans, &span)
+	}
+
+	return spans, rows.Err()
+}
+
+// OTLP spans are immutable - no Update method per OTEL specification
+func (r *traceRepository) InsertSpan(ctx context.Context, span *observability.Span) error {
+	span.CalculateDuration()
+
+	eventsTimestamps, eventsNames, eventsAttributes := convertEventsToArrays(span.Events)
+	linksTraceIDs, linksSpanIDs, linksTraceStates, linksAttributes := convertLinksToArrays(span.Links)
+
+	query := `
+		INSERT INTO otel_traces (
+			span_id, trace_id, parent_span_id, trace_state, project_id,
+			span_name, span_kind, start_time, end_time, duration_nano, completion_start_time,
+			status_code, status_message,
+			input, output,
+			resource_attributes, span_attributes, scope_name, scope_version, scope_attributes,
+			resource_schema_url, scope_schema_url,
+			usage_details, cost_details, pricing_snapshot, total_cost,
+			events_timestamp, events_name, events_attributes,
+			links_trace_id, links_span_id, links_trace_state, links_attributes,
+			deleted_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`
+
+	return r.db.Exec(ctx, query,
+		span.SpanID,
+		span.TraceID,
+		span.ParentSpanID,
+		span.TraceState,
+		span.ProjectID,
+		span.SpanName,
+		span.SpanKind,
+		span.StartTime,
+		span.EndTime,
+		span.Duration,
+		span.CompletionStartTime,
+		span.StatusCode,
+		span.StatusMessage,
+		span.Input,
+		span.Output,
+		span.ResourceAttributes,
+		span.SpanAttributes,
+		span.ScopeName,
+		span.ScopeVersion,
+		span.ScopeAttributes,
+		span.ResourceSchemaURL,
+		span.ScopeSchemaURL,
+		span.UsageDetails,
+		span.CostDetails,
+		span.PricingSnapshot,
+		span.TotalCost,
+		eventsTimestamps,
+		eventsNames,
+		eventsAttributes,
+		linksTraceIDs,
+		linksSpanIDs,
+		linksTraceStates,
+		linksAttributes,
+		span.DeletedAt,
+	)
+}
+
+func (r *traceRepository) InsertSpanBatch(ctx context.Context, spans []*observability.Span) error {
+	if len(spans) == 0 {
+		return nil
+	}
+
+	batch, err := r.db.PrepareBatch(ctx, `
+		INSERT INTO otel_traces (
+			span_id, trace_id, parent_span_id, trace_state, project_id,
+			span_name, span_kind, start_time, end_time, duration_nano, completion_start_time,
+			status_code, status_message,
+			input, output,
+			resource_attributes, span_attributes, scope_name, scope_version, scope_attributes,
+			resource_schema_url, scope_schema_url,
+			usage_details, cost_details, pricing_snapshot, total_cost,
+			events_timestamp, events_name, events_attributes,
+			links_trace_id, links_span_id, links_trace_state, links_attributes,
+			deleted_at
+		)
+	`)
+	if err != nil {
+		return fmt.Errorf("prepare batch: %w", err)
+	}
+
+	for _, span := range spans {
+		span.CalculateDuration()
+
+		eventsTimestamps, eventsNames, eventsAttributes := convertEventsToArrays(span.Events)
+		linksTraceIDs, linksSpanIDs, linksTraceStates, linksAttributes := convertLinksToArrays(span.Links)
+
+		err = batch.Append(
+			span.SpanID,
+			span.TraceID,
+			span.ParentSpanID,
+			span.TraceState,
+			span.ProjectID,
+			span.SpanName,
+			span.SpanKind,
+			span.StartTime,
+			span.EndTime,
+			span.Duration,
+			span.CompletionStartTime,
+			span.StatusCode,
+			span.StatusMessage,
+			span.Input,
+			span.Output,
+			span.ResourceAttributes,
+			span.SpanAttributes,
+			span.ScopeName,
+			span.ScopeVersion,
+			span.ScopeAttributes,
+			span.ResourceSchemaURL,
+			span.ScopeSchemaURL,
+			span.UsageDetails,
+			span.CostDetails,
+			span.PricingSnapshot,
+			span.TotalCost,
+			eventsTimestamps,
+			eventsNames,
+			eventsAttributes,
+			linksTraceIDs,
+			linksSpanIDs,
+			linksTraceStates,
+			linksAttributes,
+			span.DeletedAt,
+		)
+		if err != nil {
+			return fmt.Errorf("append to batch: %w", err)
+		}
+	}
+
+	return batch.Send()
+}
+
+func (r *traceRepository) DeleteSpan(ctx context.Context, spanID string) error {
+	query := `ALTER TABLE otel_traces DELETE WHERE span_id = ?`
+	return r.db.Exec(ctx, query, spanID)
+}
+
+func (r *traceRepository) GetSpan(ctx context.Context, spanID string) (*observability.Span, error) {
+	query := "SELECT " + spanSelectFields + " FROM otel_traces WHERE span_id = ? AND deleted_at IS NULL LIMIT 1"
+
+	row := r.db.QueryRow(ctx, query, spanID)
+	return ScanSpanRow(row)
+}
+
+func (r *traceRepository) GetSpansByTraceID(ctx context.Context, traceID string) ([]*observability.Span, error) {
+	query := "SELECT " + spanSelectFields + " FROM otel_traces WHERE trace_id = ? AND deleted_at IS NULL ORDER BY start_time ASC"
+
+	rows, err := r.db.Query(ctx, query, traceID)
+	if err != nil {
+		return nil, fmt.Errorf("query spans by trace: %w", err)
+	}
+	defer rows.Close()
+
+	return r.scanSpans(rows)
+}
+
+func (r *traceRepository) GetSpanChildren(ctx context.Context, parentSpanID string) ([]*observability.Span, error) {
+	query := "SELECT " + spanSelectFields + " FROM otel_traces WHERE parent_span_id = ? AND deleted_at IS NULL ORDER BY start_time ASC"
+	rows, err := r.db.Query(ctx, query, parentSpanID)
+	if err != nil {
+		return nil, fmt.Errorf("query child spans: %w", err)
+	}
+	defer rows.Close()
+
+	return r.scanSpans(rows)
+}
+
+func (r *traceRepository) GetSpanTree(ctx context.Context, traceID string) ([]*observability.Span, error) {
+	return r.GetSpansByTraceID(ctx, traceID)
+}
+
+func (r *traceRepository) GetSpansByFilter(ctx context.Context, filter *observability.SpanFilter) ([]*observability.Span, error) {
+	query := `
+		SELECT ` + spanSelectFields + `
+		FROM otel_traces
+		WHERE 1=1
+			AND deleted_at IS NULL
+	`
+
+	args := []interface{}{}
+
+	if filter != nil {
+		if filter.ProjectID != "" {
+			query += " AND project_id = ?"
+			args = append(args, filter.ProjectID)
+		}
+		if filter.TraceID != nil {
+			query += " AND trace_id = ?"
+			args = append(args, *filter.TraceID)
+		}
+		if filter.ParentID != nil {
+			query += " AND parent_span_id = ?"
+			args = append(args, *filter.ParentID)
+		}
+		if filter.Type != nil {
+			query += " AND span_type = ?" // Use materialized column
+			args = append(args, *filter.Type)
+		}
+		if filter.SpanKind != nil {
+			query += " AND span_kind = ?"
+			args = append(args, *filter.SpanKind)
+		}
+		if filter.Model != nil {
+			query += " AND model_name = ?"
+			args = append(args, *filter.Model)
+		}
+		if filter.ServiceName != nil {
+			query += " AND service_name = ?"
+			args = append(args, *filter.ServiceName)
+		}
+		if filter.Level != nil {
+			query += " AND span_level = ?"
+			args = append(args, *filter.Level)
+		}
+		if filter.StartTime != nil {
+			query += " AND start_time >= ?"
+			args = append(args, *filter.StartTime)
+		}
+		if filter.EndTime != nil {
+			query += " AND start_time <= ?"
+			args = append(args, *filter.EndTime)
+		}
+		if filter.MinLatencyMs != nil {
+			query += " AND duration_nano >= ?"
+			args = append(args, uint64(*filter.MinLatencyMs)*1000000)
+		}
+		if filter.MaxLatencyMs != nil {
+			query += " AND duration_nano <= ?"
+			args = append(args, uint64(*filter.MaxLatencyMs)*1000000)
+		}
+		if filter.MinCost != nil {
+			query += " AND total_cost >= ?"
+			args = append(args, *filter.MinCost)
+		}
+		if filter.MaxCost != nil {
+			query += " AND total_cost <= ?"
+			args = append(args, *filter.MaxCost)
+		}
+		if filter.IsCompleted != nil {
+			if *filter.IsCompleted {
+				query += " AND end_time IS NOT NULL"
+			} else {
+				query += " AND end_time IS NULL"
+			}
+		}
+
+	}
+
+	allowedSortFields := []string{"start_time", "end_time", "duration_nano", "span_name", "span_level", "status_code", "span_id"}
+	sortField := "start_time" // default
+	sortDir := "DESC"
+
+	if filter != nil {
+		if filter.Params.SortBy != "" {
+			validated, err := pagination.ValidateSortField(filter.Params.SortBy, allowedSortFields)
+			if err != nil {
+				return nil, fmt.Errorf("invalid sort field: %w", err)
+			}
+			if validated != "" {
+				sortField = validated
+			}
+		}
+		if filter.Params.SortDir == "asc" {
+			sortDir = "ASC"
+		}
+	}
+
+	query += fmt.Sprintf(" ORDER BY %s %s, span_id %s", sortField, sortDir, sortDir)
+
+	limit := pagination.DefaultPageSize
+	offset := 0
+	if filter != nil {
+		if filter.Params.Limit > 0 {
+			limit = filter.Params.Limit
+		}
+		offset = filter.Params.GetOffset()
+	}
+	query += " LIMIT ? OFFSET ?"
+	args = append(args, limit, offset)
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query spans by filter: %w", err)
+	}
+	defer rows.Close()
+
+	return r.scanSpans(rows)
+}
+
+func (r *traceRepository) CountSpansByFilter(ctx context.Context, filter *observability.SpanFilter) (int64, error) {
+	query := "SELECT count() FROM otel_traces WHERE 1=1 AND deleted_at IS NULL"
+	args := []interface{}{}
+
+	if filter != nil {
+		if filter.ProjectID != "" {
+			query += " AND project_id = ?"
+			args = append(args, filter.ProjectID)
+		}
+		if filter.TraceID != nil {
+			query += " AND trace_id = ?"
+			args = append(args, *filter.TraceID)
+		}
+		if filter.Type != nil {
+			query += " AND span_type = ?" // Use materialized column
+			args = append(args, *filter.Type)
+		}
+		if filter.Level != nil {
+			query += " AND span_level = ?" // Use materialized column
+			args = append(args, *filter.Level)
+		}
+		if filter.StartTime != nil {
+			query += " AND start_time >= ?"
+			args = append(args, *filter.StartTime)
+		}
+		if filter.EndTime != nil {
+			query += " AND start_time <= ?"
+			args = append(args, *filter.EndTime)
+		}
+	}
+
+	var count uint64
+	err := r.db.QueryRow(ctx, query, args...).Scan(&count)
+	return int64(count), err
+}
+
 func (r *traceRepository) GetRootSpan(ctx context.Context, traceID string) (*observability.Span, error) {
-	// Reuse span repository's select fields and scan logic
 	query := `
 		SELECT ` + spanSelectFields + `
 		FROM otel_traces
@@ -37,17 +637,15 @@ func (r *traceRepository) GetRootSpan(ctx context.Context, traceID string) (*obs
 	return ScanSpanRow(row)
 }
 
-// GetTraceMetrics calculates aggregated trace-level metrics on-demand
-// Uses GROUP BY query for real-time aggregation
-func (r *traceRepository) GetTraceMetrics(ctx context.Context, traceID string) (*observability.TraceMetrics, error) {
+func (r *traceRepository) GetTraceSummary(ctx context.Context, traceID string) (*observability.TraceSummary, error) {
 	query := `
 		SELECT
 			trace_id,
 			anyIf(span_id, parent_span_id IS NULL) as root_span_id,
 			anyIf(project_id, parent_span_id IS NULL) as project_id,
 			min(start_time) as trace_start,
-			max(end_time) as trace_end,
-			max(end_time) - min(start_time) as trace_duration_nano,
+			maxOrNull(end_time) as trace_end,
+			if(maxOrNull(end_time) IS NOT NULL, maxOrNull(end_time) - min(start_time), NULL) as trace_duration_nano,
 
 			-- Cost and usage aggregations
 			sum(total_cost) as total_cost,
@@ -74,89 +672,49 @@ func (r *traceRepository) GetTraceMetrics(ctx context.Context, traceID string) (
 
 	row := r.db.QueryRow(ctx, query, traceID)
 
-	var metrics observability.TraceMetrics
+	var summary observability.TraceSummary
 	var totalCostFloat float64
 
 	err := row.Scan(
-		&metrics.TraceID,
-		&metrics.RootSpanID,
-		&metrics.ProjectID,
-		&metrics.StartTime,
-		&metrics.EndTime,
-		&metrics.Duration,
+		&summary.TraceID,
+		&summary.RootSpanID,
+		&summary.ProjectID,
+		&summary.StartTime,
+		&summary.EndTime,
+		&summary.Duration,
 		&totalCostFloat,
-		&metrics.InputTokens,
-		&metrics.OutputTokens,
-		&metrics.TotalTokens,
-		&metrics.SpanCount,
-		&metrics.ErrorSpanCount,
-		&metrics.HasError,
-		&metrics.ServiceName,
-		&metrics.ModelName,
-		&metrics.ProviderName,
-		&metrics.UserID,
-		&metrics.SessionID,
+		&summary.InputTokens,
+		&summary.OutputTokens,
+		&summary.TotalTokens,
+		&summary.SpanCount,
+		&summary.ErrorSpanCount,
+		&summary.HasError,
+		&summary.ServiceName,
+		&summary.ModelName,
+		&summary.ProviderName,
+		&summary.UserID,
+		&summary.SessionID,
 	)
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to scan trace metrics: %w", err)
+		return nil, fmt.Errorf("failed to scan trace summary: %w", err)
 	}
 
-	// Convert float to decimal for cost
-	metrics.TotalCost = decimal.NewFromFloat(totalCostFloat)
+	summary.TotalCost = decimal.NewFromFloat(totalCostFloat)
 
-	return &metrics, nil
+	return &summary, nil
 }
 
-// CalculateTotalCost calculates the total cost for a trace
-func (r *traceRepository) CalculateTotalCost(ctx context.Context, traceID string) (float64, error) {
-	query := `
-		SELECT sum(total_cost) as total
-		FROM otel_traces
-		WHERE trace_id = ?
-		  AND deleted_at IS NULL
-	`
-
-	var total float64
-	err := r.db.QueryRow(ctx, query, traceID).Scan(&total)
-	if err != nil {
-		return 0, fmt.Errorf("failed to calculate total cost: %w", err)
-	}
-
-	return total, nil
-}
-
-// CountSpans counts the number of spans in a trace
-func (r *traceRepository) CountSpans(ctx context.Context, traceID string) (int64, error) {
-	query := `
-		SELECT count() as span_count
-		FROM otel_traces
-		WHERE trace_id = ?
-		  AND deleted_at IS NULL
-	`
-
-	var count int64
-	err := r.db.QueryRow(ctx, query, traceID).Scan(&count)
-	if err != nil {
-		return 0, fmt.Errorf("failed to count spans: %w", err)
-	}
-
-	return count, nil
-}
-
-// ListTraces queries traces with filters and returns aggregated trace metrics
-// Uses GROUP BY to aggregate across all spans in each trace (matching GetTraceMetrics pattern)
-// IMPORTANT: Attribute filters (user_id, session_id, service_name) are applied via HAVING clause
-// AFTER aggregation to ensure full trace metrics are calculated correctly.
-func (r *traceRepository) ListTraces(ctx context.Context, filter *observability.TraceFilter) ([]*observability.TraceMetrics, error) {
+// Attribute filters (user_id, session_id, service_name) use HAVING clause to preserve full trace metrics
+func (r *traceRepository) ListTraces(ctx context.Context, filter *observability.TraceFilter) ([]*observability.TraceSummary, error) {
 	query := `
 		SELECT
 			trace_id,
 			anyIf(span_id, parent_span_id IS NULL) as root_span_id,
 			anyIf(project_id, parent_span_id IS NULL) as project_id,
 			min(start_time) as trace_start,
-			max(end_time) as trace_end,
-			max(end_time) - min(start_time) as trace_duration_nano,
+			maxOrNull(end_time) as trace_end,
+			if(maxOrNull(end_time) IS NOT NULL, maxOrNull(end_time) - min(start_time), NULL) as trace_duration_nano,
 
 			-- Aggregated cost and usage across all spans
 			sum(total_cost) as total_cost,
@@ -183,11 +741,7 @@ func (r *traceRepository) ListTraces(ctx context.Context, filter *observability.
 	havingClauses := []string{}
 	havingArgs := []interface{}{}
 
-	// Apply filters
-	// WHERE clause: span-level filters that should apply BEFORE aggregation
-	// HAVING clause: trace-level filters that should apply AFTER aggregation
 	if filter != nil {
-		// WHERE clause filters (safe before GROUP BY - all spans have these)
 		if filter.ProjectID != "" {
 			query += " AND project_id = ?"
 			args = append(args, filter.ProjectID)
@@ -201,8 +755,6 @@ func (r *traceRepository) ListTraces(ctx context.Context, filter *observability.
 			args = append(args, *filter.EndTime)
 		}
 
-		// HAVING clause filters (applied after aggregation to preserve full trace metrics)
-		// These filter on root span attributes to avoid excluding root span from aggregation
 		if filter.UserID != nil {
 			havingClauses = append(havingClauses, "user_id = ?")
 			havingArgs = append(havingArgs, *filter.UserID)
@@ -216,23 +768,42 @@ func (r *traceRepository) ListTraces(ctx context.Context, filter *observability.
 			havingArgs = append(havingArgs, *filter.ServiceName)
 		}
 		if filter.StatusCode != nil {
-			// Filter traces where root span has this status code
 			havingClauses = append(havingClauses, "anyIf(status_code, parent_span_id IS NULL) = ?")
 			havingArgs = append(havingArgs, *filter.StatusCode)
 		}
 	}
 
-	// Group by trace_id to aggregate all spans per trace
 	query += " GROUP BY trace_id"
 
-	// Add HAVING clause if needed (filters applied after aggregation)
 	if len(havingClauses) > 0 {
 		query += " HAVING " + strings.Join(havingClauses, " AND ")
 		args = append(args, havingArgs...)
 	}
 
-	// Order by trace start time (use the aggregated min)
-	query += " ORDER BY trace_start DESC"
+	allowedSortFields := []string{
+		"trace_start", "trace_end", "trace_duration_nano",
+		"total_cost", "input_tokens", "output_tokens", "total_tokens",
+		"span_count", "error_span_count", "service_name", "model_name",
+	}
+	sortField := "trace_start"
+	sortDir := "DESC"
+
+	if filter != nil {
+		if filter.Params.SortBy != "" {
+			validated, err := pagination.ValidateSortField(filter.Params.SortBy, allowedSortFields)
+			if err != nil {
+				return nil, fmt.Errorf("invalid sort field: %w", err)
+			}
+			if validated != "" {
+				sortField = validated
+			}
+		}
+		if filter.Params.SortDir == "asc" {
+			sortDir = "ASC"
+		}
+	}
+
+	query += fmt.Sprintf(" ORDER BY %s %s, trace_id %s", sortField, sortDir, sortDir)
 
 	if filter != nil && filter.Limit > 0 {
 		query += " LIMIT ?"
@@ -253,9 +824,9 @@ func (r *traceRepository) ListTraces(ctx context.Context, filter *observability.
 	}
 	defer rows.Close()
 
-	var traces []*observability.TraceMetrics
+	var traces []*observability.TraceSummary
 	for rows.Next() {
-		var trace observability.TraceMetrics
+		var trace observability.TraceSummary
 		var totalCostFloat float64
 
 		err := rows.Scan(
@@ -289,29 +860,7 @@ func (r *traceRepository) ListTraces(ctx context.Context, filter *observability.
 	return traces, nil
 }
 
-// GetBySessionID retrieves traces by session ID (virtual session analytics)
-func (r *traceRepository) GetBySessionID(ctx context.Context, sessionID string) ([]*observability.TraceMetrics, error) {
-	filter := &observability.TraceFilter{
-		SessionID: &sessionID,
-	}
-	filter.Limit = 1000 // Higher limit for session analytics
-	return r.ListTraces(ctx, filter)
-}
-
-// GetByUserID retrieves traces by user ID
-func (r *traceRepository) GetByUserID(ctx context.Context, userID string, filter *observability.TraceFilter) ([]*observability.TraceMetrics, error) {
-	if filter == nil {
-		filter = &observability.TraceFilter{}
-	}
-	filter.UserID = &userID
-	return r.ListTraces(ctx, filter)
-}
-
-// Count counts traces matching the filter
-// IMPORTANT: Uses the same filtering semantics as ListTraces (subquery + GROUP BY + HAVING)
-// to ensure count matches the actual number of traces returned by ListTraces.
-func (r *traceRepository) Count(ctx context.Context, filter *observability.TraceFilter) (int64, error) {
-	// Build inner query with same logic as ListTraces
+func (r *traceRepository) CountTraces(ctx context.Context, filter *observability.TraceFilter) (int64, error) {
 	innerQuery := `
 		SELECT trace_id
 		FROM otel_traces
@@ -322,9 +871,7 @@ func (r *traceRepository) Count(ctx context.Context, filter *observability.Trace
 	havingClauses := []string{}
 	havingArgs := []interface{}{}
 
-	// Apply filters (mirrors ListTraces exactly)
 	if filter != nil {
-		// WHERE clause filters (safe before GROUP BY - all spans have these)
 		if filter.ProjectID != "" {
 			innerQuery += " AND project_id = ?"
 			args = append(args, filter.ProjectID)
@@ -338,7 +885,6 @@ func (r *traceRepository) Count(ctx context.Context, filter *observability.Trace
 			args = append(args, *filter.EndTime)
 		}
 
-		// HAVING clause filters (applied after aggregation - mirrors ListTraces)
 		if filter.UserID != nil {
 			havingClauses = append(havingClauses, "anyIf(span_attributes['user.id'], parent_span_id IS NULL) = ?")
 			havingArgs = append(havingArgs, *filter.UserID)
@@ -359,13 +905,11 @@ func (r *traceRepository) Count(ctx context.Context, filter *observability.Trace
 
 	innerQuery += " GROUP BY trace_id"
 
-	// Add HAVING clause if needed
 	if len(havingClauses) > 0 {
 		innerQuery += " HAVING " + strings.Join(havingClauses, " AND ")
 		args = append(args, havingArgs...)
 	}
 
-	// Wrap in count query
 	query := "SELECT count() FROM (" + innerQuery + ")"
 
 	var count int64
@@ -375,4 +919,76 @@ func (r *traceRepository) Count(ctx context.Context, filter *observability.Trace
 	}
 
 	return count, nil
+}
+
+func (r *traceRepository) CountSpansInTrace(ctx context.Context, traceID string) (int64, error) {
+	query := `
+		SELECT count() as span_count
+		FROM otel_traces
+		WHERE trace_id = ?
+		  AND deleted_at IS NULL
+	`
+
+	var count int64
+	err := r.db.QueryRow(ctx, query, traceID).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count spans: %w", err)
+	}
+
+	return count, nil
+}
+
+func (r *traceRepository) DeleteTrace(ctx context.Context, traceID string) error {
+	query := `ALTER TABLE otel_traces DELETE WHERE trace_id = ?`
+	return r.db.Exec(ctx, query, traceID)
+}
+
+func (r *traceRepository) GetTracesBySessionID(ctx context.Context, sessionID string) ([]*observability.TraceSummary, error) {
+	filter := &observability.TraceFilter{
+		SessionID: &sessionID,
+	}
+	filter.Limit = 1000 // Higher limit for session analytics
+	return r.ListTraces(ctx, filter)
+}
+
+func (r *traceRepository) GetTracesByUserID(ctx context.Context, userID string, filter *observability.TraceFilter) ([]*observability.TraceSummary, error) {
+	if filter == nil {
+		filter = &observability.TraceFilter{}
+	}
+	filter.UserID = &userID
+	return r.ListTraces(ctx, filter)
+}
+
+func (r *traceRepository) CalculateTotalCost(ctx context.Context, traceID string) (float64, error) {
+	query := `
+		SELECT sum(total_cost) as total
+		FROM otel_traces
+		WHERE trace_id = ?
+		  AND deleted_at IS NULL
+	`
+
+	var total float64
+	err := r.db.QueryRow(ctx, query, traceID).Scan(&total)
+	if err != nil {
+		return 0, fmt.Errorf("failed to calculate total cost: %w", err)
+	}
+
+	return total, nil
+}
+
+func (r *traceRepository) CalculateTotalTokens(ctx context.Context, traceID string) (uint64, error) {
+	query := `
+		SELECT sum(usage_details['total']) as total
+		FROM otel_traces
+		WHERE trace_id = ?
+		  AND deleted_at IS NULL
+	`
+
+	var total uint64
+	err := r.db.QueryRow(ctx, query, traceID).Scan(&total)
+	if err != nil {
+		return 0, fmt.Errorf("failed to calculate total tokens: %w", err)
+	}
+
+	return total, nil
 }

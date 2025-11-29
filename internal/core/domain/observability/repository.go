@@ -8,51 +8,33 @@ import (
 	"brokle/pkg/ulid"
 )
 
-// TraceRepository defines the interface for trace-level operations (ClickHouse)
-// OTEL-Native: Traces are virtual (derived from root spans where parent_span_id IS NULL)
-// Focuses on aggregations and trace-level queries
+// TraceRepository defines the interface for trace and span operations (ClickHouse).
+// Traces are virtual (derived from root spans where parent_span_id IS NULL).
 type TraceRepository interface {
-	// Root span queries (traces are root spans in OTLP)
+	// Span Operations
+	InsertSpan(ctx context.Context, span *Span) error
+	InsertSpanBatch(ctx context.Context, spans []*Span) error
+	DeleteSpan(ctx context.Context, spanID string) error
+	GetSpan(ctx context.Context, spanID string) (*Span, error)
+	GetSpansByTraceID(ctx context.Context, traceID string) ([]*Span, error)
+	GetSpanChildren(ctx context.Context, parentSpanID string) ([]*Span, error)
+	GetSpanTree(ctx context.Context, traceID string) ([]*Span, error)
+	GetSpansByFilter(ctx context.Context, filter *SpanFilter) ([]*Span, error)
+	CountSpansByFilter(ctx context.Context, filter *SpanFilter) (int64, error)
+
+	// Trace Operations
 	GetRootSpan(ctx context.Context, traceID string) (*Span, error)
+	GetTraceSummary(ctx context.Context, traceID string) (*TraceSummary, error)
+	ListTraces(ctx context.Context, filter *TraceFilter) ([]*TraceSummary, error)
+	CountTraces(ctx context.Context, filter *TraceFilter) (int64, error)
+	CountSpansInTrace(ctx context.Context, traceID string) (int64, error)
+	DeleteTrace(ctx context.Context, traceID string) error
 
-	// Aggregation queries (on-demand calculations via GROUP BY)
-	GetTraceMetrics(ctx context.Context, traceID string) (*TraceMetrics, error)
+	// Analytics
+	GetTracesBySessionID(ctx context.Context, sessionID string) ([]*TraceSummary, error)
+	GetTracesByUserID(ctx context.Context, userID string, filter *TraceFilter) ([]*TraceSummary, error)
 	CalculateTotalCost(ctx context.Context, traceID string) (float64, error)
-	CountSpans(ctx context.Context, traceID string) (int64, error)
-
-	// Trace listing (root spans with filters)
-	ListTraces(ctx context.Context, filter *TraceFilter) ([]*TraceMetrics, error)
-
-	// Virtual session analytics (query by session_id attribute)
-	GetBySessionID(ctx context.Context, sessionID string) ([]*TraceMetrics, error)
-	GetByUserID(ctx context.Context, userID string, filter *TraceFilter) ([]*TraceMetrics, error)
-
-	// Count operations
-	Count(ctx context.Context, filter *TraceFilter) (int64, error)
-}
-
-// SpanRepository defines the interface for span data access (ClickHouse)
-type SpanRepository interface {
-	// Basic operations (ReplacingMergeTree pattern)
-	Create(ctx context.Context, span *Span) error
-	Update(ctx context.Context, span *Span) error
-	Delete(ctx context.Context, id string) error // Soft delete (OTEL span_id)
-	GetByID(ctx context.Context, id string) (*Span, error)
-
-	// Queries
-	GetByTraceID(ctx context.Context, traceID string) ([]*Span, error)
-	GetRootSpan(ctx context.Context, traceID string) (*Span, error) // Get span with parent_span_id IS NULL
-	GetChildren(ctx context.Context, parentSpanID string) ([]*Span, error)
-	GetTreeByTraceID(ctx context.Context, traceID string) ([]*Span, error) // Recursive tree
-
-	// Filters
-	GetByFilter(ctx context.Context, filter *SpanFilter) ([]*Span, error)
-
-	// Batch operations
-	CreateBatch(ctx context.Context, spans []*Span) error
-
-	// Count
-	Count(ctx context.Context, filter *SpanFilter) (int64, error)
+	CalculateTotalTokens(ctx context.Context, traceID string) (uint64, error)
 }
 
 // ScoreRepository defines the interface for score data access (ClickHouse)
@@ -93,9 +75,6 @@ type BlobStorageRepository interface {
 	Count(ctx context.Context, filter *BlobStorageFilter) (int64, error)
 }
 
-// Filter types
-
-// TraceFilter represents filters for trace queries
 type TraceFilter struct {
 	UserID      *string
 	SessionID   *string
@@ -111,7 +90,6 @@ type TraceFilter struct {
 	Tags      []string
 }
 
-// SpanFilter represents filters for span queries
 type SpanFilter struct {
 	// Scope
 	ProjectID string // Required for scoping queries to project
@@ -136,7 +114,6 @@ type SpanFilter struct {
 	pagination.Params
 }
 
-// ScoreFilter represents filters for score queries
 type ScoreFilter struct {
 	// Scope
 	ProjectID string // Required for scoping queries to project
@@ -157,7 +134,6 @@ type ScoreFilter struct {
 	pagination.Params
 }
 
-// BlobStorageFilter represents filters for blob storage queries
 type BlobStorageFilter struct {
 	// Domain filters
 	EntityType   *string
@@ -212,8 +188,4 @@ type GenAIEventsRepository interface {
 	CreateGenAIEventBatch(ctx context.Context, events []*GenAIEvent) error
 }
 
-// ==================================
-// DEPRECATED: ModelRepository - Removed
-// ==================================
-// Provider pricing now handled by analytics.ProviderModelRepository
-// See: internal/infrastructure/repository/analytics/provider_model_repository.go
+// ModelRepository removed - use analytics.ProviderModelRepository instead

@@ -12,56 +12,35 @@ import (
 // internal/workers and internal/services/observability packages.
 // Concrete implementations are in internal/services/observability/.
 
-// TraceService defines the comprehensive interface for trace operations
-// OTEL-Native: Traces are virtual (derived from root spans where parent_span_id IS NULL)
-// Used by handlers (GetRootSpan, GetTraceMetrics, ListTraces, etc.)
+// TraceService defines the interface for trace and span operations.
+// Traces are virtual (derived from root spans where parent_span_id IS NULL).
 type TraceService interface {
-	// Root span operations (traces = root spans in OTLP)
-	GetRootSpan(ctx context.Context, traceID string) (*Span, error)
+	// Span Ingestion
+	IngestSpan(ctx context.Context, span *Span) error
+	IngestSpanBatch(ctx context.Context, spans []*Span) error
 
-	// Trace-level aggregations (on-demand calculations via GROUP BY)
-	GetTraceMetrics(ctx context.Context, traceID string) (*TraceMetrics, error)
-	CalculateTraceCost(ctx context.Context, traceID string) (float64, error)
-
-	// Trace queries (root spans with filters)
-	ListTraces(ctx context.Context, filter *TraceFilter) ([]*TraceMetrics, error)
-	GetTraceWithAllSpans(ctx context.Context, traceID string) ([]*Span, error)
-
-	// Virtual session analytics (query spans by session_id attribute)
-	GetTracesBySessionID(ctx context.Context, sessionID string) ([]*TraceMetrics, error)
-	GetTracesByUserID(ctx context.Context, userID string, filter *TraceFilter) ([]*TraceMetrics, error)
-
-	// Analytics operations
-	CountTraces(ctx context.Context, filter *TraceFilter) (int64, error)
-}
-
-// SpanService defines the comprehensive interface for span operations
-// Used by both workers (CreateSpan) and handlers (GetSpansByFilter, etc.)
-type SpanService interface {
-	// Create operations
-	CreateSpan(ctx context.Context, span *Span) error
-	CreateSpanBatch(ctx context.Context, spans []*Span) error
-
-	// Read operations
-	GetSpanByID(ctx context.Context, id string) (*Span, error)
-	GetSpansByTraceID(ctx context.Context, traceID string) ([]*Span, error)
-	GetRootSpan(ctx context.Context, traceID string) (*Span, error)
-	GetSpanTreeByTraceID(ctx context.Context, traceID string) ([]*Span, error)
-	GetChildSpans(ctx context.Context, parentSpanID string) ([]*Span, error)
+	// Span Queries
+	GetSpan(ctx context.Context, spanID string) (*Span, error)
 	GetSpansByFilter(ctx context.Context, filter *SpanFilter) ([]*Span, error)
-
-	// Update operations
-	UpdateSpan(ctx context.Context, span *Span) error
-	SetSpanCost(ctx context.Context, spanID string, inputCost, outputCost float64) error
-	SetSpanUsage(ctx context.Context, spanID string, promptTokens, completionTokens uint32) error
-
-	// Delete operations
-	DeleteSpan(ctx context.Context, id string) error
-
-	// Analytics operations
 	CountSpans(ctx context.Context, filter *SpanFilter) (int64, error)
+
+	// Trace Queries
+	GetTrace(ctx context.Context, traceID string) (*TraceSummary, error)
+	GetTraceSpans(ctx context.Context, traceID string) ([]*Span, error)
+	GetTraceTree(ctx context.Context, traceID string) ([]*Span, error)
+	GetRootSpan(ctx context.Context, traceID string) (*Span, error)
+	ListTraces(ctx context.Context, filter *TraceFilter) ([]*TraceSummary, error)
+	CountTraces(ctx context.Context, filter *TraceFilter) (int64, error)
+
+	// Analytics
+	GetTracesBySession(ctx context.Context, sessionID string) ([]*TraceSummary, error)
+	GetTracesByUser(ctx context.Context, userID string, filter *TraceFilter) ([]*TraceSummary, error)
 	CalculateTraceCost(ctx context.Context, traceID string) (float64, error)
-	CalculateTraceTokens(ctx context.Context, traceID string) (uint32, error)
+	CalculateTraceTokens(ctx context.Context, traceID string) (uint64, error)
+
+	// Deletion
+	DeleteSpan(ctx context.Context, spanID string) error
+	DeleteTrace(ctx context.Context, traceID string) error
 }
 
 // ScoreService defines the comprehensive interface for quality score operations
@@ -109,27 +88,21 @@ type BlobStorageService interface {
 	DownloadFromS3(ctx context.Context, blobID string) (string, error)
 }
 
-// MetricsService defines the comprehensive interface for metrics operations
-// Used by workers (CreateMetricBatch) for OTLP metrics processing
+// MetricsService defines the interface for OTLP metrics operations
 type MetricsService interface {
-	// Batch create operations (worker-only, follows SpanService pattern)
 	CreateMetricSumBatch(ctx context.Context, metricsSums []*MetricSum) error
 	CreateMetricGaugeBatch(ctx context.Context, metricsGauges []*MetricGauge) error
 	CreateMetricHistogramBatch(ctx context.Context, metricsHistograms []*MetricHistogram) error
 	CreateMetricExponentialHistogramBatch(ctx context.Context, metricsExpHistograms []*MetricExponentialHistogram) error
 }
 
-// LogsService defines the comprehensive interface for logs operations
-// Used by workers (CreateLogBatch) for OTLP logs processing
+// LogsService defines the interface for OTLP logs operations
 type LogsService interface {
-	// Batch create operations (worker-only, follows SpanService pattern)
 	CreateLogBatch(ctx context.Context, logs []*Log) error
 }
 
-// GenAIEventsService defines the comprehensive interface for GenAI events operations
-// Used by workers (CreateGenAIEventBatch) for OTLP GenAI events processing
+// GenAIEventsService defines the interface for OTLP GenAI events operations
 type GenAIEventsService interface {
-	// Batch create operations (worker-only, follows SpanService pattern)
 	CreateGenAIEventBatch(ctx context.Context, events []*GenAIEvent) error
 }
 
@@ -216,8 +189,9 @@ type CostCalculation struct {
 }
 
 // BatchIngestRequest represents a batch ingestion request
+// Note: Uses Span as traces are virtual in OTLP (root spans = traces)
 type BatchIngestRequest struct {
-	Traces    []*Trace  `json:"traces"`
+	Spans     []*Span   `json:"spans"`
 	ProjectID ulid.ULID `json:"project_id"`
 	Async     bool      `json:"async"`
 }
@@ -439,12 +413,13 @@ type BulkEvaluationError struct {
 }
 
 // EvaluationInput represents input for quality evaluation
+// Note: Uses TraceSummary as traces are virtual in OTLP
 type EvaluationInput struct {
-	TraceID *ulid.ULID     `json:"trace_id,omitempty"`
-	SpanID  *ulid.ULID     `json:"span_id,omitempty"`
-	Trace   *Trace         `json:"trace,omitempty"`
-	Span    *Span          `json:"span,omitempty"`
-	Context map[string]any `json:"context,omitempty"`
+	TraceID      *ulid.ULID    `json:"trace_id,omitempty"`
+	SpanID       *ulid.ULID    `json:"span_id,omitempty"`
+	TraceSummary *TraceSummary `json:"trace_summary,omitempty"`
+	Span         *Span         `json:"span,omitempty"`
+	Context      map[string]any `json:"context,omitempty"`
 }
 
 // QualityEvaluatorInfo represents information about a quality evaluator
@@ -618,23 +593,11 @@ type Report struct {
 	ID          ulid.ULID      `json:"id"`
 }
 
-// ==================================
-// Legacy/Placeholder Types (not actively used in clean implementation)
-// ==================================
+// Placeholder types (will be implemented with analytics features)
 
-// AnalyticsFilter - placeholder for analytics filtering (not actively used)
-type AnalyticsFilter struct {
-	// Placeholder - will be implemented when analytics features are added
-}
+type AnalyticsFilter struct{}
 
-// TimeSeriesPoint - placeholder for time series data (not actively used)
 type TimeSeriesPoint struct {
 	Timestamp time.Time `json:"timestamp"`
 	Value     float64   `json:"value"`
 }
-
-// ==================================
-// DEPRECATED: Cost Calculation - Removed
-// ==================================
-// Cost calculation now handled by analytics.ProviderPricingService
-// See: internal/core/services/analytics/provider_pricing_service.go

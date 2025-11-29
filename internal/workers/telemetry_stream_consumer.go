@@ -43,7 +43,6 @@ const (
 type TelemetryStreamConsumer struct {
 	deduplicationSvc    observability.TelemetryDeduplicationService
 	traceService        observability.TraceService
-	spanService         observability.SpanService
 	scoreService        observability.ScoreService
 	metricsService      observability.MetricsService
 	logsService         observability.LogsService
@@ -92,8 +91,8 @@ func NewTelemetryStreamConsumer(
 	logger *logrus.Logger,
 	config *TelemetryStreamConsumerConfig,
 	// Observability services for structured events
+	// Note: TraceService handles both traces and spans (OTEL-native consolidation)
 	traceService observability.TraceService,
-	spanService observability.SpanService,
 	scoreService observability.ScoreService,
 	metricsService observability.MetricsService,
 	logsService observability.LogsService,
@@ -116,8 +115,7 @@ func NewTelemetryStreamConsumer(
 		redis:               redis,
 		deduplicationSvc:    deduplicationSvc,
 		logger:              logger,
-		traceService:        traceService,
-		spanService:         spanService,
+		traceService:        traceService, // Handles both traces and spans (OTEL-native)
 		scoreService:        scoreService,
 		metricsService:      metricsService,
 		logsService:         logsService,
@@ -533,9 +531,6 @@ func (c *TelemetryStreamConsumer) processMessage(ctx context.Context, streamKey 
 }
 
 // sortEventsByDependency sorts events to ensure dependencies are processed first
-// OTEL-Native Order: span → quality_score
-// Traces are derived from root spans (no separate trace events)
-// Sessions are virtual groupings (no separate session events)
 func (c *TelemetryStreamConsumer) sortEventsByDependency(events []streams.TelemetryEventData) []streams.TelemetryEventData {
 	// Define processing priority (lower = processed first)
 	eventPriority := map[observability.TelemetryEventType]int{
@@ -622,7 +617,7 @@ func (c *TelemetryStreamConsumer) processBatch(ctx context.Context, batch *strea
 	// This ensures parent entities exist before children are created
 	sortedEvents := c.sortEventsByDependency(batch.Events)
 
-	// OTEL-Native Bulk Processing: Group events by type for batch insertion
+	// Group events by type for batch insertion
 	spans := make([]*observability.Span, 0, len(sortedEvents))
 	scores := make([]*observability.Score, 0)
 	metricsSums := make([]*observability.MetricSum, 0)
@@ -758,13 +753,13 @@ func (c *TelemetryStreamConsumer) processBatch(ctx context.Context, batch *strea
 		}
 	}
 
-	// Bulk insert spans (1 DB call for all spans)
+	// Bulk insert spans
 	if len(spans) > 0 {
-		if err := c.spanService.CreateSpanBatch(ctx, spans); err != nil {
+		if err := c.traceService.IngestSpanBatch(ctx, spans); err != nil {
 			c.logger.WithError(err).WithFields(logrus.Fields{
 				"batch_id":   batch.BatchID.String(),
 				"span_count": len(spans),
-			}).Error("Failed to create span batch")
+			}).Error("Failed to ingest span batch")
 			failedCount += len(spans)
 			lastError = err
 		} else {
