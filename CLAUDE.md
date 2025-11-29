@@ -98,10 +98,10 @@ brokle/
 │   ├── utils/             # Common utilities
 │   └── websocket/         # WebSocket utilities
 ├── migrations/            # Database migration files (27 PostgreSQL, 4 ClickHouse)
-├── seeds/                 # YAML-based seeding data
-│   ├── dev.yaml          # Development seed data
-│   ├── demo.yaml         # Demo seed data
-│   └── test.yaml         # Test seed data
+├── seeds/                 # System template seed data
+│   ├── permissions.yaml  # 63 system permissions
+│   ├── roles.yaml        # 4 role templates (owner, admin, developer, viewer)
+│   └── pricing.yaml      # Provider pricing (20 models, 78 prices)
 ├── web/                   # Next.js 15.5.2 frontend
 └── docs/                  # Public OSS documentation
 ```
@@ -210,8 +210,8 @@ make migrate-status
 make create-migration DB=postgres NAME=add_users_table
 make create-migration DB=clickhouse NAME=add_metrics_table
 
-# Seed with development data
-make seed-dev
+# Seed system data (permissions, roles, pricing)
+make seed
 
 # Database shell access
 make shell-db          # PostgreSQL
@@ -277,9 +277,40 @@ go run cmd/migrate/main.go -dry-run up          # Preview migrations without exe
 - Health monitoring with dirty state detection
 
 #### Database Schema
-- **PostgreSQL**: User auth, organizations, projects, API keys, gateway config, billing
+- **PostgreSQL**: User auth, organizations, projects, API keys, gateway config, billing, provider pricing
 - **ClickHouse**: Traces, spans, quality_scores, request_logs (with TTL retention)
-- **Seeding**: YAML files in `/seeds/` (dev.yaml, demo.yaml, test.yaml)
+- **Seeding**: YAML files in `/seeds/` (permissions.yaml, roles.yaml, pricing.yaml)
+
+#### Seeding System Data
+System template data (permissions, roles, pricing) is managed via YAML seeds, not migrations:
+
+```bash
+# Seed all system data (permissions, roles, pricing)
+go run cmd/migrate/main.go seed
+
+# Seed with verbose output
+go run cmd/migrate/main.go seed -verbose
+
+# Reset and reseed all
+go run cmd/migrate/main.go seed -reset
+
+# Seed only RBAC (permissions and roles)
+go run cmd/migrate/main.go seed-rbac
+
+# Seed only provider pricing
+go run cmd/migrate/main.go seed-pricing
+go run cmd/migrate/main.go seed-pricing -reset -verbose
+```
+
+**Seed Files:**
+- `seeds/permissions.yaml` - 63 system permissions
+- `seeds/roles.yaml` - 4 role templates (owner, admin, developer, viewer)
+- `seeds/pricing.yaml` - 20 AI models, 78 prices (OpenAI, Anthropic, Google)
+
+**Why YAML Seeds?** System data changes frequently. YAML seeds are:
+- Easy to update without new migrations
+- Idempotent (existing records are skipped)
+- No environment complexity (single set of seed files)
 
 ### Testing & Quality
 ```bash

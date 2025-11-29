@@ -9,7 +9,7 @@
 .PHONY: build build-oss build-enterprise build-server-oss build-worker-oss
 .PHONY: build-server-enterprise build-worker-enterprise build-frontend build-all
 .PHONY: build-dev-server build-dev-worker
-.PHONY: migrate-up migrate-down migrate-status seed-dev create-migration
+.PHONY: migrate-up migrate-down migrate-status seed create-migration
 .PHONY: test test-coverage test-unit test-integration
 .PHONY: lint lint-go lint-frontend fmt fmt-frontend
 .PHONY: docs-generate
@@ -30,7 +30,7 @@ setup: ## Setup development environment
 	@$(MAKE) install-deps
 	@$(MAKE) setup-databases
 	@$(MAKE) migrate-up
-	@$(MAKE) seed-dev
+	@$(MAKE) seed
 	@echo "✅ Development environment ready!"
 
 install-deps: ## Install Go and Node.js dependencies
@@ -131,9 +131,9 @@ migrate-status: ## Show migration status
 	@echo "📊 Migration status:"
 	go run cmd/migrate/main.go status
 
-seed-dev: ## Seed databases with development data
-	@echo "🌱 Seeding databases with development data..."
-	go run cmd/migrate/main.go seed -env dev
+seed: ## Seed system data (permissions, roles, pricing)
+	@echo "🌱 Seeding system data..."
+	go run cmd/migrate/main.go seed
 
 create-migration: ## Create new migration (usage: make create-migration DB=postgres NAME=add_users_table)
 	@if [ -z "$(DB)" ] || [ -z "$(NAME)" ]; then \
