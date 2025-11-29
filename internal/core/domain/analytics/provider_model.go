@@ -19,30 +19,36 @@ import (
 // ProviderModel represents an AI provider's LLM model definition (OpenAI, Anthropic, Google)
 // Used to track provider pricing for cost analytics, NOT for billing users
 type ProviderModel struct {
-	ID              ulid.ULID              `json:"id" db:"id"`
-	CreatedAt       time.Time              `json:"created_at" db:"created_at"`
-	UpdatedAt       time.Time              `json:"updated_at" db:"updated_at"`
-	ProjectID       *ulid.ULID             `json:"project_id,omitempty" db:"project_id"`
-	ModelName       string                 `json:"model_name" db:"model_name"`
-	MatchPattern    string                 `json:"match_pattern" db:"match_pattern"`
-	StartDate       time.Time              `json:"start_date" db:"start_date"`
-	Unit            string                 `json:"unit" db:"unit"`
-	TokenizerID     *string                `json:"tokenizer_id,omitempty" db:"tokenizer_id"`
-	TokenizerConfig map[string]interface{} `json:"tokenizer_config,omitempty" db:"tokenizer_config"`
+	ID              ulid.ULID              `json:"id" gorm:"type:char(26);primaryKey"`
+	CreatedAt       time.Time              `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt       time.Time              `json:"updated_at" gorm:"autoUpdateTime"`
+	ProjectID       *ulid.ULID             `json:"project_id,omitempty" gorm:"type:char(26)"`
+	ModelName       string                 `json:"model_name" gorm:"column:model_name;size:255;not null"`
+	MatchPattern    string                 `json:"match_pattern" gorm:"column:match_pattern;size:500;not null"`
+	StartDate       time.Time              `json:"start_date" gorm:"not null;default:now()"`
+	Unit            string                 `json:"unit" gorm:"size:50;not null;default:'TOKENS'"`
+	TokenizerID     *string                `json:"tokenizer_id,omitempty" gorm:"size:100"`
+	TokenizerConfig map[string]interface{} `json:"tokenizer_config,omitempty" gorm:"type:jsonb;serializer:json"`
 }
+
+// TableName returns the table name for GORM
+func (ProviderModel) TableName() string { return "provider_models" }
 
 // ProviderPrice represents AI provider pricing per usage type
 // Examples: OpenAI charges $2.50/1M input tokens, Anthropic charges $3.00/1M
 // Supports: input, output, cache_read_input_tokens, audio_input, batch_input, etc.
 type ProviderPrice struct {
-	ID              ulid.ULID       `json:"id" db:"id"`
-	CreatedAt       time.Time       `json:"created_at" db:"created_at"`
-	UpdatedAt       time.Time       `json:"updated_at" db:"updated_at"`
-	ProviderModelID ulid.ULID       `json:"provider_model_id" db:"provider_model_id"`
-	ProjectID       *ulid.ULID      `json:"project_id,omitempty" db:"project_id"`
-	UsageType       string          `json:"usage_type" db:"usage_type"`
-	Price           decimal.Decimal `json:"price" db:"price"`
+	ID              ulid.ULID       `json:"id" gorm:"type:char(26);primaryKey"`
+	CreatedAt       time.Time       `json:"created_at" gorm:"autoCreateTime"`
+	UpdatedAt       time.Time       `json:"updated_at" gorm:"autoUpdateTime"`
+	ProviderModelID ulid.ULID       `json:"provider_model_id" gorm:"type:char(26);not null"`
+	ProjectID       *ulid.ULID      `json:"project_id,omitempty" gorm:"type:char(26)"`
+	UsageType       string          `json:"usage_type" gorm:"size:100;not null"`
+	Price           decimal.Decimal `json:"price" gorm:"type:decimal(20,12);not null"`
 }
+
+// TableName returns the table name for GORM
+func (ProviderPrice) TableName() string { return "provider_prices" }
 
 // ProviderPricingSnapshot represents provider pricing snapshot captured at ingestion time
 // Purpose: Audit trail for "What was OpenAI's pricing on Nov 22, 2025?"

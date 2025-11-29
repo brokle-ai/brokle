@@ -16,10 +16,16 @@ type ServiceRegistry struct {
 	TraceService       *TraceService
 	SpanService        *SpanService
 	ScoreService       *ScoreService
+	MetricsService     *MetricsService
+	LogsService        *LogsService
+	GenAIEventsService *GenAIEventsService
 	BlobStorageService *BlobStorageService
 
-	// OTLP conversion service
-	OTLPConverterService *OTLPConverterService
+	// OTLP conversion services
+	OTLPConverterService        *OTLPConverterService
+	OTLPMetricsConverterService *OTLPMetricsConverterService
+	OTLPLogsConverterService    *OTLPLogsConverterService
+	OTLPEventsConverterService  *OTLPEventsConverterService
 
 	// Stream infrastructure (for OTLP direct access)
 	StreamProducer       *streams.TelemetryStreamProducer
@@ -35,6 +41,9 @@ func NewServiceRegistry(
 	traceRepo observability.TraceRepository,
 	spanRepo observability.SpanRepository,
 	scoreRepo observability.ScoreRepository,
+	metricsRepo observability.MetricsRepository,
+	logsRepo observability.LogsRepository,
+	genaiEventsRepo observability.GenAIEventsRepository,
 	blobStorageRepo observability.BlobStorageRepository,
 
 	// Blob storage dependencies
@@ -51,28 +60,43 @@ func NewServiceRegistry(
 	// Pricing service (NEW)
 	providerPricingService analytics.ProviderPricingService,
 
+	// Observability configuration
+	observabilityConfig *config.ObservabilityConfig,
+
 	logger *logrus.Logger,
 ) *ServiceRegistry {
 	// Create blob storage service (kept for future use: exports, media files, raw events)
 	blobStorageService := NewBlobStorageService(blobStorageRepo, s3Client, blobConfig, logger)
 
-	// Create OTLP converter service (with provider pricing service for cost analytics)
-	otlpConverterService := NewOTLPConverterService(logger, providerPricingService)
+	// Create OTLP converter services (with provider pricing service for cost analytics)
+	otlpConverterService := NewOTLPConverterService(logger, providerPricingService, observabilityConfig)
+	otlpMetricsConverterService := NewOTLPMetricsConverterService(logger)
+	otlpLogsConverterService := NewOTLPLogsConverterService(logger)
+	otlpEventsConverterService := NewOTLPEventsConverterService(logger)
 
 	// Create ClickHouse-first services (no blob storage for LLM data - stored inline with ZSTD compression)
-	traceService := NewTraceService(traceRepo, spanRepo, scoreRepo, logger)
+	traceService := NewTraceService(traceRepo, spanRepo, logger)
 	spanService := NewSpanService(spanRepo, traceRepo, scoreRepo, logger)
 	scoreService := NewScoreService(scoreRepo, traceRepo, spanRepo)
+	metricsService := NewMetricsService(metricsRepo, logger)
+	logsService := NewLogsService(logsRepo, logger)
+	genaiEventsService := NewGenAIEventsService(genaiEventsRepo, logger)
 
 	return &ServiceRegistry{
-		TraceService:         traceService,
-		SpanService:          spanService,
-		ScoreService:         scoreService,
-		BlobStorageService:   blobStorageService,
-		OTLPConverterService: otlpConverterService,
-		StreamProducer:       streamProducer,
-		DeduplicationService: deduplicationService,
-		TelemetryService:     telemetryService,
+		TraceService:                traceService,
+		SpanService:                 spanService,
+		ScoreService:                scoreService,
+		MetricsService:              metricsService,
+		LogsService:                 logsService,
+		GenAIEventsService:          genaiEventsService,
+		BlobStorageService:          blobStorageService,
+		OTLPConverterService:        otlpConverterService,
+		OTLPMetricsConverterService: otlpMetricsConverterService,
+		OTLPLogsConverterService:    otlpLogsConverterService,
+		OTLPEventsConverterService:  otlpEventsConverterService,
+		StreamProducer:              streamProducer,
+		DeduplicationService:        deduplicationService,
+		TelemetryService:            telemetryService,
 	}
 }
 

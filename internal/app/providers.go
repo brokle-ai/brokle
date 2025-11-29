@@ -161,6 +161,9 @@ type ObservabilityRepositories struct {
 	Trace                  observability.TraceRepository
 	Span                   observability.SpanRepository
 	Score                  observability.ScoreRepository
+	Metrics                observability.MetricsRepository
+	Logs                   observability.LogsRepository
+	GenAIEvents            observability.GenAIEventsRepository
 	BlobStorage            observability.BlobStorageRepository
 	TelemetryDeduplication observability.TelemetryDeduplicationRepository
 }
@@ -265,6 +268,9 @@ func ProvideWorkers(core *CoreContainer) (*WorkerContainer, error) {
 		core.Services.Observability.TraceService,
 		core.Services.Observability.SpanService,
 		core.Services.Observability.ScoreService,
+		core.Services.Observability.MetricsService,
+		core.Services.Observability.LogsService,
+		core.Services.Observability.GenAIEventsService,
 	)
 
 	return &WorkerContainer{
@@ -422,11 +428,24 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 		Level: slog.LevelInfo,
 	}))
 
-	// Create gRPC OTLP handler (reuses service layer)
+	// Create gRPC OTLP handlers (reuse service layer)
 	grpcOTLPHandler := grpcTransport.NewOTLPHandler(
 		core.Services.Observability.StreamProducer,
 		core.Services.Observability.DeduplicationService,
 		core.Services.Observability.OTLPConverterService,
+		slogLogger,
+	)
+
+	grpcOTLPMetricsHandler := grpcTransport.NewOTLPMetricsHandler(
+		core.Services.Observability.StreamProducer,
+		core.Services.Observability.OTLPMetricsConverterService,
+		slogLogger,
+	)
+
+	grpcOTLPLogsHandler := grpcTransport.NewOTLPLogsHandler(
+		core.Services.Observability.StreamProducer,
+		core.Services.Observability.OTLPLogsConverterService,
+		core.Services.Observability.OTLPEventsConverterService,
 		slogLogger,
 	)
 
@@ -436,10 +455,12 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 		slogLogger,
 	)
 
-	// Create gRPC server
+	// Create gRPC server with all OTLP signal handlers
 	grpcServer, err := grpcTransport.NewServer(
 		core.Config.GRPC.Port,
 		grpcOTLPHandler,
+		grpcOTLPMetricsHandler,
+		grpcOTLPLogsHandler,
 		grpcAuthInterceptor,
 		slogLogger,
 	)
@@ -494,6 +515,9 @@ func ProvideObservabilityRepositories(clickhouseDB *database.ClickHouseDB, postg
 		Trace:                  observabilityRepo.NewTraceRepository(clickhouseDB.Conn),
 		Span:                   observabilityRepo.NewSpanRepository(clickhouseDB.Conn),
 		Score:                  observabilityRepo.NewScoreRepository(clickhouseDB.Conn),
+		Metrics:                observabilityRepo.NewMetricsRepository(clickhouseDB.Conn),
+		Logs:                   observabilityRepo.NewLogsRepository(clickhouseDB.Conn),
+		GenAIEvents:            observabilityRepo.NewGenAIEventsRepository(clickhouseDB.Conn),
 		BlobStorage:            observabilityRepo.NewBlobStorageRepository(clickhouseDB.Conn),
 		TelemetryDeduplication: observabilityRepo.NewTelemetryDeduplicationRepository(redisDB),
 	}
@@ -739,6 +763,9 @@ func ProvideObservabilityServices(
 		observabilityRepos.Trace,
 		observabilityRepos.Span,
 		observabilityRepos.Score,
+		observabilityRepos.Metrics,
+		observabilityRepos.Logs,
+		observabilityRepos.GenAIEvents,
 		observabilityRepos.BlobStorage,
 		s3Client,
 		&cfg.BlobStorage,
@@ -746,6 +773,7 @@ func ProvideObservabilityServices(
 		deduplicationService,
 		telemetryService,
 		analyticsServices.ProviderPricing,
+		&cfg.Observability,  // Pass config object like BlobStorageConfig
 		logger,
 	)
 }

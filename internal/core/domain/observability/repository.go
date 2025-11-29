@@ -8,27 +8,26 @@ import (
 	"brokle/pkg/ulid"
 )
 
-// TraceRepository defines the interface for trace data access (ClickHouse)
+// TraceRepository defines the interface for trace-level operations (ClickHouse)
+// OTEL-Native: Traces are virtual (derived from root spans where parent_span_id IS NULL)
+// Focuses on aggregations and trace-level queries
 type TraceRepository interface {
-	// Basic operations (ReplacingMergeTree pattern)
-	Create(ctx context.Context, trace *Trace) error
-	Update(ctx context.Context, trace *Trace) error // Inserts with higher version
-	Delete(ctx context.Context, id string) error    // Soft delete (OTEL trace_id)
-	GetByID(ctx context.Context, id string) (*Trace, error)
+	// Root span queries (traces are root spans in OTLP)
+	GetRootSpan(ctx context.Context, traceID string) (*Span, error)
 
-	// Queries
-	GetByProjectID(ctx context.Context, projectID string, filter *TraceFilter) ([]*Trace, error)
-	GetBySessionID(ctx context.Context, sessionID string) ([]*Trace, error) // Virtual session analytics
-	GetByUserID(ctx context.Context, userID string, filter *TraceFilter) ([]*Trace, error)
+	// Aggregation queries (on-demand calculations via GROUP BY)
+	GetTraceMetrics(ctx context.Context, traceID string) (*TraceMetrics, error)
+	CalculateTotalCost(ctx context.Context, traceID string) (float64, error)
+	CountSpans(ctx context.Context, traceID string) (int64, error)
 
-	// With relations
-	GetWithSpans(ctx context.Context, id string) (*Trace, error)
-	GetWithScores(ctx context.Context, id string) (*Trace, error)
+	// Trace listing (root spans with filters)
+	ListTraces(ctx context.Context, filter *TraceFilter) ([]*TraceMetrics, error)
 
-	// Batch operations
-	CreateBatch(ctx context.Context, traces []*Trace) error
+	// Virtual session analytics (query by session_id attribute)
+	GetBySessionID(ctx context.Context, sessionID string) ([]*TraceMetrics, error)
+	GetByUserID(ctx context.Context, userID string, filter *TraceFilter) ([]*TraceMetrics, error)
 
-	// Count
+	// Count operations
 	Count(ctx context.Context, filter *TraceFilter) (int64, error)
 }
 
@@ -190,6 +189,27 @@ type TelemetryDeduplicationRepository interface {
 
 	// Statistics
 	CountByProjectID(ctx context.Context, projectID ulid.ULID) (int64, error)
+}
+
+// MetricsRepository defines the interface for OTLP metrics data access (ClickHouse)
+type MetricsRepository interface {
+	// Batch operations (primary API for metrics ingestion)
+	CreateMetricSumBatch(ctx context.Context, metricsSums []*MetricSum) error
+	CreateMetricGaugeBatch(ctx context.Context, metricsGauges []*MetricGauge) error
+	CreateMetricHistogramBatch(ctx context.Context, metricsHistograms []*MetricHistogram) error
+	CreateMetricExponentialHistogramBatch(ctx context.Context, metricsExpHistograms []*MetricExponentialHistogram) error
+}
+
+// LogsRepository defines the interface for OTLP logs data access (ClickHouse)
+type LogsRepository interface {
+	// Batch operations (primary API for logs ingestion)
+	CreateLogBatch(ctx context.Context, logs []*Log) error
+}
+
+// GenAIEventsRepository defines the interface for OTLP GenAI events data access (ClickHouse)
+type GenAIEventsRepository interface {
+	// Batch operations (primary API for GenAI events ingestion)
+	CreateGenAIEventBatch(ctx context.Context, events []*GenAIEvent) error
 }
 
 // ==================================

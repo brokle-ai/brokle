@@ -24,13 +24,17 @@ type Server struct {
 func NewServer(
 	port int,
 	otlpHandler *OTLPHandler,
+	otlpMetricsHandler *OTLPMetricsHandler,
+	otlpLogsHandler *OTLPLogsHandler,
 	authInterceptor *AuthInterceptor,
 	logger *slog.Logger,
 ) (*Server, error) {
 	// Create gRPC server with interceptors
 	grpcServer := grpc.NewServer(
-		// Chain interceptors (auth first, then logging)
+		// Chain interceptors (memory limiter → auth → logging)
+		// Memory limiter FIRST to reject requests before auth/processing
 		grpc.ChainUnaryInterceptor(
+			MemoryLimiterInterceptor(DefaultMemoryLimiterConfig(), logger),
 			authInterceptor.Unary(),
 			LoggingInterceptor(logger),
 		),
@@ -52,8 +56,10 @@ func NewServer(
 		}),
 	)
 
-	// Register OTLP trace service handler
+	// Register OTLP service handlers (all three signal types)
 	RegisterOTLPTraceService(grpcServer, otlpHandler)
+	RegisterOTLPMetricsService(grpcServer, otlpMetricsHandler)
+	RegisterOTLPLogsService(grpcServer, otlpLogsHandler)
 
 	return &Server{
 		grpcServer: grpcServer,

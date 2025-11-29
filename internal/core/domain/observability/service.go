@@ -13,26 +13,23 @@ import (
 // Concrete implementations are in internal/services/observability/.
 
 // TraceService defines the comprehensive interface for trace operations
-// Used by both workers (CreateTrace) and handlers (GetTraceByID, GetTraceWithSpans, etc.)
+// OTEL-Native: Traces are virtual (derived from root spans where parent_span_id IS NULL)
+// Used by handlers (GetRootSpan, GetTraceMetrics, ListTraces, etc.)
 type TraceService interface {
-	// Create operations
-	CreateTrace(ctx context.Context, trace *Trace) error
-	CreateTraceBatch(ctx context.Context, traces []*Trace) error
+	// Root span operations (traces = root spans in OTLP)
+	GetRootSpan(ctx context.Context, traceID string) (*Span, error)
 
-	// Read operations
-	GetTraceByID(ctx context.Context, id string) (*Trace, error)
-	GetTraceWithSpans(ctx context.Context, id string) (*Trace, error)
-	GetTraceWithScores(ctx context.Context, id string) (*Trace, error)
-	GetTracesByProjectID(ctx context.Context, projectID string, filter *TraceFilter) ([]*Trace, error)
-	GetTracesBySessionID(ctx context.Context, sessionID string) ([]*Trace, error) // Virtual session analytics
-	GetTracesByUserID(ctx context.Context, userID string, filter *TraceFilter) ([]*Trace, error)
+	// Trace-level aggregations (on-demand calculations via GROUP BY)
+	GetTraceMetrics(ctx context.Context, traceID string) (*TraceMetrics, error)
+	CalculateTraceCost(ctx context.Context, traceID string) (float64, error)
 
-	// Update operations
-	UpdateTrace(ctx context.Context, trace *Trace) error
-	// Note: UpdateTraceMetrics removed - aggregations calculated on-demand
+	// Trace queries (root spans with filters)
+	ListTraces(ctx context.Context, filter *TraceFilter) ([]*TraceMetrics, error)
+	GetTraceWithAllSpans(ctx context.Context, traceID string) ([]*Span, error)
 
-	// Delete operations
-	DeleteTrace(ctx context.Context, id string) error
+	// Virtual session analytics (query spans by session_id attribute)
+	GetTracesBySessionID(ctx context.Context, sessionID string) ([]*TraceMetrics, error)
+	GetTracesByUserID(ctx context.Context, userID string, filter *TraceFilter) ([]*TraceMetrics, error)
 
 	// Analytics operations
 	CountTraces(ctx context.Context, filter *TraceFilter) (int64, error)
@@ -110,9 +107,30 @@ type BlobStorageService interface {
 	ShouldOffload(content string) bool
 	UploadToS3(ctx context.Context, content string, entityType, entityID, eventID string) (*BlobStorageFileLog, error)
 	DownloadFromS3(ctx context.Context, blobID string) (string, error)
+}
 
-	// Analytics operations
-	CountBlobs(ctx context.Context, filter *BlobStorageFilter) (int64, error)
+// MetricsService defines the comprehensive interface for metrics operations
+// Used by workers (CreateMetricBatch) for OTLP metrics processing
+type MetricsService interface {
+	// Batch create operations (worker-only, follows SpanService pattern)
+	CreateMetricSumBatch(ctx context.Context, metricsSums []*MetricSum) error
+	CreateMetricGaugeBatch(ctx context.Context, metricsGauges []*MetricGauge) error
+	CreateMetricHistogramBatch(ctx context.Context, metricsHistograms []*MetricHistogram) error
+	CreateMetricExponentialHistogramBatch(ctx context.Context, metricsExpHistograms []*MetricExponentialHistogram) error
+}
+
+// LogsService defines the comprehensive interface for logs operations
+// Used by workers (CreateLogBatch) for OTLP logs processing
+type LogsService interface {
+	// Batch create operations (worker-only, follows SpanService pattern)
+	CreateLogBatch(ctx context.Context, logs []*Log) error
+}
+
+// GenAIEventsService defines the comprehensive interface for GenAI events operations
+// Used by workers (CreateGenAIEventBatch) for OTLP GenAI events processing
+type GenAIEventsService interface {
+	// Batch create operations (worker-only, follows SpanService pattern)
+	CreateGenAIEventBatch(ctx context.Context, events []*GenAIEvent) error
 }
 
 // TelemetryDeduplicationService defines the interface for ULID-based deduplication

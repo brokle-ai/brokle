@@ -322,9 +322,9 @@ func (s *ScoreService) validateScoreData(score *observability.Score) error {
 
 // validateScoreTargets validates that score targets exist
 func (s *ScoreService) validateScoreTargets(ctx context.Context, score *observability.Score) error {
-	// Validate trace exists
+	// Validate trace exists (check root span in OTEL-native architecture)
 	if score.TraceID != "" {
-		_, err := s.traceRepo.GetByID(ctx, score.TraceID)
+		_, err := s.traceRepo.GetRootSpan(ctx, score.TraceID)
 		if err != nil {
 			return appErrors.NewNotFoundError("trace " + score.TraceID)
 		}

@@ -14,19 +14,19 @@ import (
 
 // SpanEvent represents an OTLP span event (Nested type for ClickHouse)
 type SpanEvent struct {
-	Timestamp             time.Time              `json:"timestamp" db:"timestamp"`
-	Name                  string                 `json:"name" db:"name"`
-	Attributes            map[string]interface{} `json:"attributes" db:"attributes"`
-	DroppedAttributesCount uint32                `json:"dropped_attributes_count" db:"dropped_attributes_count"`
+	Timestamp             time.Time         `json:"timestamp" db:"timestamp"`
+	Name                  string            `json:"name" db:"name"`
+	Attributes            map[string]string `json:"attributes" db:"attributes"`
+	DroppedAttributesCount uint32           `json:"dropped_attributes_count" db:"dropped_attributes_count"`
 }
 
 // SpanLink represents an OTLP span link (Nested type for ClickHouse)
 type SpanLink struct {
-	TraceID               string                 `json:"trace_id" db:"trace_id"`
-	SpanID                string                 `json:"span_id" db:"span_id"`
-	TraceState            string                 `json:"trace_state" db:"trace_state"`
-	Attributes            map[string]interface{} `json:"attributes" db:"attributes"`
-	DroppedAttributesCount uint32                `json:"dropped_attributes_count" db:"dropped_attributes_count"`
+	TraceID               string            `json:"trace_id" db:"trace_id"`
+	SpanID                string            `json:"span_id" db:"span_id"`
+	TraceState            string            `json:"trace_state" db:"trace_state"`
+	Attributes            map[string]string `json:"attributes" db:"attributes"`
+	DroppedAttributesCount uint32           `json:"dropped_attributes_count" db:"dropped_attributes_count"`
 }
 
 // Trace represents an OTEL trace (root span) with trace-level context
@@ -73,12 +73,33 @@ type Trace struct {
 	HasError   bool     `json:"has_error" db:"has_error"`     // Semantic flag (true when status_code=2)
 }
 
+// TraceMetrics represents on-demand aggregated trace-level metrics
+// Computed from spans via GROUP BY queries (OTEL-native approach)
+type TraceMetrics struct {
+	TraceID       string           `json:"trace_id" db:"trace_id"`
+	RootSpanID    string           `json:"root_span_id" db:"root_span_id"`
+	ProjectID     string           `json:"project_id" db:"project_id"`
+	StartTime     time.Time        `json:"start_time" db:"start_time"`
+	EndTime       time.Time        `json:"end_time" db:"end_time"`
+	Duration      uint64           `json:"duration" db:"duration"` // Nanoseconds
+	TotalCost     decimal.Decimal  `json:"total_cost" db:"total_cost"`
+	InputTokens   uint64           `json:"input_tokens" db:"input_tokens"`
+	OutputTokens  uint64           `json:"output_tokens" db:"output_tokens"`
+	TotalTokens   uint64           `json:"total_tokens" db:"total_tokens"`
+	SpanCount     int64            `json:"span_count" db:"span_count"`
+	ErrorSpanCount int64           `json:"error_span_count" db:"error_span_count"`
+	HasError      bool             `json:"has_error" db:"has_error"`
+	ServiceName   *string          `json:"service_name,omitempty" db:"service_name"`
+	ModelName     *string          `json:"model_name,omitempty" db:"model_name"`
+	ProviderName  *string          `json:"provider_name,omitempty" db:"provider_name"`
+	UserID        *string          `json:"user_id,omitempty" db:"user_id"`
+	SessionID     *string          `json:"session_id,omitempty" db:"session_id"`
+}
+
 // Span represents an OTEL span with Gen AI semantic conventions and Brokle extensions
 type Span struct {
-	StartTime     time.Time  `json:"start_time" db:"start_time"`
-	UpdatedAt     time.Time  `json:"updated_at" db:"updated_at"`
-	CreatedAt     time.Time  `json:"created_at" db:"created_at"`
-	EndTime       *time.Time `json:"end_time,omitempty" db:"end_time"`
+	StartTime time.Time  `json:"start_time" db:"start_time"`
+	EndTime   *time.Time `json:"end_time,omitempty" db:"end_time"`
 	Duration      *uint64    `json:"duration,omitempty" db:"duration"` // Nanoseconds (OTLP spec)
 	StatusMessage *string    `json:"status_message,omitempty" db:"status_message"`
 	ParentSpanID  *string    `json:"parent_span_id,omitempty" db:"parent_span_id"`
@@ -102,10 +123,15 @@ type Span struct {
 	Links []SpanLink `json:"links,omitempty" db:"links"`
 
 	// ============================================
-	// Modern: JSON Attributes + Usage/Cost Maps
+	// OTLP-Standard Attributes (Map type matching metrics/logs)
 	// ============================================
-	Attributes map[string]interface{} `json:"attributes,omitempty" db:"attributes"`
-	Metadata   map[string]interface{} `json:"metadata,omitempty" db:"metadata"`
+	ResourceAttributes map[string]string `json:"resource_attributes,omitempty" db:"resource_attributes"`
+	SpanAttributes     map[string]string `json:"span_attributes,omitempty" db:"span_attributes"`
+	ScopeName          *string           `json:"scope_name,omitempty" db:"scope_name"`
+	ScopeVersion       *string           `json:"scope_version,omitempty" db:"scope_version"`
+	ScopeAttributes    map[string]string `json:"scope_attributes,omitempty" db:"scope_attributes"`
+	ResourceSchemaURL  *string           `json:"resource_schema_url,omitempty" db:"resource_schema_url"`
+	ScopeSchemaURL     *string           `json:"scope_schema_url,omitempty" db:"scope_schema_url"`
 
 	UsageDetails    map[string]uint64      `json:"usage_details,omitempty" db:"usage_details"`
 	CostDetails     map[string]decimal.Decimal `json:"cost_details,omitempty" db:"cost_details"`
@@ -780,6 +806,18 @@ const (
 	TelemetryEventTypeSession      TelemetryEventType = "session"
 	TelemetryEventTypeSpan         TelemetryEventType = "span"
 	TelemetryEventTypeQualityScore TelemetryEventType = "quality_score"
+
+	// OTLP Metrics event types (routed by worker)
+	TelemetryEventTypeMetricSum                   TelemetryEventType = "metric_sum"
+	TelemetryEventTypeMetricGauge                 TelemetryEventType = "metric_gauge"
+	TelemetryEventTypeMetricHistogram             TelemetryEventType = "metric_histogram"
+	TelemetryEventTypeMetricExponentialHistogram  TelemetryEventType = "metric_exponential_histogram"
+
+	// OTLP Logs event type (routed by worker)
+	TelemetryEventTypeLog TelemetryEventType = "log"
+
+	// OTLP GenAI Events type (routed by worker)
+	TelemetryEventTypeGenAIEvent TelemetryEventType = "genai_event"
 )
 
 // TelemetryEventDeduplication represents a deduplication entry for telemetry events

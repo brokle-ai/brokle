@@ -28,12 +28,13 @@ type Config struct {
 	Enterprise    EnterpriseConfig    `mapstructure:"enterprise"`
 	Server        ServerConfig        `mapstructure:"server"`
 	GRPC          GRPCConfig          `mapstructure:"grpc"`
-	BlobStorage   BlobStorageConfig   `mapstructure:"blob_storage"`
-	Monitoring    MonitoringConfig    `mapstructure:"monitoring"`
-	Logging       LoggingConfig       `mapstructure:"logging"`
-	Redis         RedisConfig         `mapstructure:"redis"`
-	Workers       WorkersConfig       `mapstructure:"workers"`
-	Features      FeatureConfig       `mapstructure:"features"`
+	BlobStorage     BlobStorageConfig     `mapstructure:"blob_storage"`
+	Monitoring      MonitoringConfig      `mapstructure:"monitoring"`
+	Observability   ObservabilityConfig   `mapstructure:"observability"`
+	Logging         LoggingConfig         `mapstructure:"logging"`
+	Redis           RedisConfig           `mapstructure:"redis"`
+	Workers         WorkersConfig         `mapstructure:"workers"`
+	Features        FeatureConfig         `mapstructure:"features"`
 }
 
 // AppConfig contains application-level configuration.
@@ -196,6 +197,11 @@ type MonitoringConfig struct {
 	SampleRate     float64       `mapstructure:"sample_rate"`
 	FlushInterval  time.Duration `mapstructure:"flush_interval"`
 	Enabled        bool          `mapstructure:"enabled"`
+}
+
+// ObservabilityConfig contains OTLP and telemetry configuration.
+type ObservabilityConfig struct {
+	PreserveRawOTLP bool `mapstructure:"preserve_raw_otlp" env:"OTLP_PRESERVE_RAW" envDefault:"true"`
 }
 
 // WorkersConfig contains background worker configuration.

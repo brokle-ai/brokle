@@ -408,9 +408,9 @@ func (s *Server) setupSDKRoutes(router *gin.RouterGroup) {
 	// Compatible with: OpenTelemetry Collector, OTLP SDKs, direct integrations
 	router.POST("/traces", s.handlers.OTLP.HandleTraces)
 
-	// Future OTLP standard endpoints (OpenTelemetry specification):
-	// router.POST("/metrics", s.handlers.OTLP.HandleMetrics) // POST /v1/metrics - OTLP metrics ingestion
-	// router.POST("/logs", s.handlers.OTLP.HandleLogs)       // POST /v1/logs - OTLP logs ingestion
+	// OTLP metrics and logs endpoints (OpenTelemetry specification)
+	router.POST("/metrics", s.handlers.OTLPMetrics.HandleMetrics) // POST /v1/metrics - OTLP metrics ingestion
+	router.POST("/logs", s.handlers.OTLPLogs.HandleLogs)          // POST /v1/logs - OTLP logs ingestion
 }
 
 // Shutdown gracefully shuts down the server

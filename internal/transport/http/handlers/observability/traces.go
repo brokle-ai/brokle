@@ -92,8 +92,8 @@ func (h *Handler) ListTraces(c *gin.Context) {
 	// Set embedded pagination fields
 	filter.Params = params
 
-	// Get traces from service
-	traces, err := h.services.GetTraceService().GetTracesByProjectID(c.Request.Context(), projectID, filter)
+	// Get traces from service (OTEL-native: returns TraceMetrics)
+	traces, err := h.services.GetTraceService().ListTraces(c.Request.Context(), filter)
 	if err != nil {
 		h.logger.WithError(err).Error("Failed to list traces")
 		response.Error(c, err)
@@ -133,14 +133,15 @@ func (h *Handler) GetTrace(c *gin.Context) {
 		return
 	}
 
-	trace, err := h.services.GetTraceService().GetTraceByID(c.Request.Context(), traceID)
+	// OTEL-Native: Get trace metrics (aggregated from spans)
+	traceMetrics, err := h.services.GetTraceService().GetTraceMetrics(c.Request.Context(), traceID)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to get trace")
+		h.logger.WithError(err).Error("Failed to get trace metrics")
 		response.Error(c, err)
 		return
 	}
 
-	response.Success(c, trace)
+	response.Success(c, traceMetrics)
 }
 
 // GetTraceWithSpans handles GET /api/v1/traces/:id/spans
@@ -162,14 +163,15 @@ func (h *Handler) GetTraceWithSpans(c *gin.Context) {
 		return
 	}
 
-	trace, err := h.services.GetTraceService().GetTraceWithSpans(c.Request.Context(), traceID)
+	// OTEL-Native: Get all spans for trace
+	spans, err := h.services.GetTraceService().GetTraceWithAllSpans(c.Request.Context(), traceID)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to get trace with spans")
+		h.logger.WithError(err).Error("Failed to get spans for trace")
 		response.Error(c, err)
 		return
 	}
 
-	response.Success(c, trace)
+	response.Success(c, spans)
 }
 
 // GetTraceWithScores handles GET /api/v1/traces/:id/scores
@@ -191,26 +193,27 @@ func (h *Handler) GetTraceWithScores(c *gin.Context) {
 		return
 	}
 
-	trace, err := h.services.GetTraceService().GetTraceWithScores(c.Request.Context(), traceID)
+	// OTEL-Native: Get scores directly via ScoreService
+	scores, err := h.services.GetScoreService().GetScoresByTraceID(c.Request.Context(), traceID)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to get trace with scores")
+		h.logger.WithError(err).Error("Failed to get scores for trace")
 		response.Error(c, err)
 		return
 	}
 
-	response.Success(c, trace)
+	response.Success(c, scores)
 }
 
 // UpdateTrace handles PUT /api/v1/traces/:id
 // @Summary Update trace metadata
-// @Description Update trace name, tags, or metadata (corrections/enrichment via dashboard)
+// @Description Update root span attributes (OTEL-native: traces are root spans)
 // @Tags Traces
 // @Accept json
 // @Produce json
 // @Security BearerAuth
 // @Param id path string true "Trace ID"
-// @Param trace body observability.Trace true "Updated trace data"
-// @Success 200 {object} response.APIResponse{data=observability.Trace} "Updated trace"
+// @Param span body observability.Span true "Updated root span data"
+// @Success 200 {object} response.APIResponse{data=observability.Span} "Updated root span"
 // @Failure 400 {object} response.APIResponse{error=response.APIError} "Invalid request"
 // @Failure 404 {object} response.APIResponse{error=response.APIError} "Trace not found"
 // @Failure 500 {object} response.APIResponse{error=response.APIError} "Internal server error"
@@ -222,26 +225,38 @@ func (h *Handler) UpdateTrace(c *gin.Context) {
 		return
 	}
 
-	var trace observability.Trace
-	if err := c.ShouldBindJSON(&trace); err != nil {
-		response.ValidationError(c, "invalid request body", err.Error())
-		return
-	}
-
-	// Ensure TraceID matches path parameter
-	trace.TraceID = traceID
-
-	// Update via service
-	if err := h.services.GetTraceService().UpdateTrace(c.Request.Context(), &trace); err != nil {
-		h.logger.WithError(err).Error("Failed to update trace")
+	// OTEL-Native: Get existing root span first to get span_id
+	existingRootSpan, err := h.services.GetTraceService().GetRootSpan(c.Request.Context(), traceID)
+	if err != nil {
+		h.logger.WithError(err).Error("Failed to get root span for update")
 		response.Error(c, err)
 		return
 	}
 
-	// Fetch updated trace
-	updated, err := h.services.GetTraceService().GetTraceByID(c.Request.Context(), traceID)
+	// Bind update data from request body
+	var rootSpan observability.Span
+	if err := c.ShouldBindJSON(&rootSpan); err != nil {
+		response.ValidationError(c, "invalid request body", err.Error())
+		return
+	}
+
+	// CRITICAL: Set IDs from existing root span (span_id is required for UpdateSpan to work)
+	rootSpan.SpanID = existingRootSpan.SpanID
+	rootSpan.TraceID = existingRootSpan.TraceID
+	rootSpan.ParentSpanID = existingRootSpan.ParentSpanID
+	rootSpan.ProjectID = existingRootSpan.ProjectID
+
+	// Update root span via SpanService
+	if err := h.services.GetSpanService().UpdateSpan(c.Request.Context(), &rootSpan); err != nil {
+		h.logger.WithError(err).Error("Failed to update root span")
+		response.Error(c, err)
+		return
+	}
+
+	// Fetch updated root span
+	updated, err := h.services.GetTraceService().GetRootSpan(c.Request.Context(), traceID)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to fetch updated trace")
+		h.logger.WithError(err).Error("Failed to fetch updated root span")
 		response.Error(c, err)
 		return
 	}

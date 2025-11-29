@@ -5,65 +5,9 @@ import (
 )
 
 // Trace request/response types
-
-// CreateTraceRequest represents a request to create a new trace
-type CreateTraceRequest struct {
-	Tags            map[string]interface{} `json:"tags,omitempty"`
-	Metadata        map[string]interface{} `json:"metadata,omitempty"`
-	ProjectID       string                 `json:"project_id" binding:"required"`
-	ExternalTraceID string                 `json:"external_trace_id" binding:"required"`
-	Name            string                 `json:"name" binding:"required"`
-	UserID          string                 `json:"user_id,omitempty"`
-	SessionID       string                 `json:"session_id,omitempty"`
-	ParentTraceID   string                 `json:"parent_trace_id,omitempty"`
-}
-
-// UpdateTraceRequest represents a request to update an existing trace
-type UpdateTraceRequest struct {
-	Tags     map[string]interface{} `json:"tags,omitempty"`
-	Metadata map[string]interface{} `json:"metadata,omitempty"`
-	Name     string                 `json:"name,omitempty"`
-	UserID   string                 `json:"user_id,omitempty"`
-}
-
-// TraceResponse represents a trace response
-type TraceResponse struct {
-	CreatedAt       time.Time              `json:"created_at"`
-	UpdatedAt       time.Time              `json:"updated_at"`
-	Tags            map[string]interface{} `json:"tags,omitempty"`
-	Metadata        map[string]interface{} `json:"metadata,omitempty"`
-	ID              string                 `json:"id"`
-	ProjectID       string                 `json:"project_id"`
-	ExternalTraceID string                 `json:"external_trace_id"`
-	Name            string                 `json:"name"`
-	UserID          string                 `json:"user_id,omitempty"`
-	SessionID       string                 `json:"session_id,omitempty"`
-	ParentTraceID   string                 `json:"parent_trace_id,omitempty"`
-}
-
-// TraceWithSpansResponse represents a trace with its spans
-type TraceWithSpansResponse struct {
-	TraceResponse
-	Spans []SpanResponse `json:"spans"`
-}
-
-// TraceStatsResponse represents trace statistics
-type TraceStatsResponse struct {
-	TraceID     string  `json:"trace_id"`
-	TotalCost   float64 `json:"total_cost"`
-	TotalTokens int     `json:"total_tokens"`
-}
-
-// BatchCreateTracesRequest represents a batch create request
-type BatchCreateTracesRequest struct {
-	Traces []CreateTraceRequest `json:"traces" binding:"required"`
-}
-
-// BatchCreateTracesResponse represents a batch create response
-type BatchCreateTracesResponse struct {
-	Traces         []TraceResponse `json:"traces"`
-	ProcessedCount int             `json:"processed_count"`
-}
+// Note: Trace CRUD endpoints removed in OTEL-native architecture
+// Traces are now virtual (derived from root spans)
+// API returns TraceMetrics (aggregated) or Span (root span)
 
 // Span request/response types
 

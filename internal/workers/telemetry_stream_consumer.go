@@ -45,6 +45,9 @@ type TelemetryStreamConsumer struct {
 	traceService        observability.TraceService
 	spanService         observability.SpanService
 	scoreService        observability.ScoreService
+	metricsService      observability.MetricsService
+	logsService         observability.LogsService
+	genaiEventsService  observability.GenAIEventsService
 	redis               *database.RedisDB
 	logger              *logrus.Logger
 	activeStreams       map[string]bool
@@ -92,6 +95,9 @@ func NewTelemetryStreamConsumer(
 	traceService observability.TraceService,
 	spanService observability.SpanService,
 	scoreService observability.ScoreService,
+	metricsService observability.MetricsService,
+	logsService observability.LogsService,
+	genaiEventsService observability.GenAIEventsService,
 ) *TelemetryStreamConsumer {
 	if config == nil {
 		config = &TelemetryStreamConsumerConfig{
@@ -113,6 +119,9 @@ func NewTelemetryStreamConsumer(
 		traceService:        traceService,
 		spanService:         spanService,
 		scoreService:        scoreService,
+		metricsService:      metricsService,
+		logsService:         logsService,
+		genaiEventsService:  genaiEventsService,
 		consumerGroup:       config.ConsumerGroup,
 		consumerID:          config.ConsumerID,
 		batchSize:           config.BatchSize,
@@ -524,15 +533,14 @@ func (c *TelemetryStreamConsumer) processMessage(ctx context.Context, streamKey 
 }
 
 // sortEventsByDependency sorts events to ensure dependencies are processed first
-// Order: trace → session → span → quality_score
-// This prevents "parent not found" errors during batch processing
+// OTEL-Native Order: span → quality_score
+// Traces are derived from root spans (no separate trace events)
+// Sessions are virtual groupings (no separate session events)
 func (c *TelemetryStreamConsumer) sortEventsByDependency(events []streams.TelemetryEventData) []streams.TelemetryEventData {
 	// Define processing priority (lower = processed first)
 	eventPriority := map[observability.TelemetryEventType]int{
-		observability.TelemetryEventTypeTrace:        1, // Traces first (parents)
-		observability.TelemetryEventTypeSession:      2, // Sessions second
-		observability.TelemetryEventTypeSpan:         3, // Spans third (require traces)
-		observability.TelemetryEventTypeQualityScore: 4, // Scores last (require traces/spans)
+		observability.TelemetryEventTypeSpan:         1, // Spans first
+		observability.TelemetryEventTypeQualityScore: 2, // Scores last (require spans)
 	}
 
 	// Create a copy to avoid modifying original slice
@@ -580,82 +588,6 @@ func safeExtractFromPayload(payload map[string]interface{}, key string) string {
 	return strVal
 }
 
-// processTraceEvent processes a trace event using TraceService
-func (c *TelemetryStreamConsumer) processTraceEvent(ctx context.Context, eventData *streams.TelemetryEventData, projectID ulid.ULID) error {
-	// Map event payload to Trace struct
-	var trace observability.Trace
-	if err := mapToStruct(eventData.EventPayload, &trace); err != nil {
-		return fmt.Errorf("failed to unmarshal trace payload: %w", err)
-	}
-
-	// Set project_id from authentication context
-	trace.ProjectID = projectID.String()
-
-	// Use service layer (handles validation, business logic, and repository)
-	if err := c.traceService.CreateTrace(ctx, &trace); err != nil {
-		return fmt.Errorf("failed to create trace via service: %w", err)
-	}
-
-	return nil
-}
-
-// processSpanEvent processes an span event using SpanService
-func (c *TelemetryStreamConsumer) processSpanEvent(ctx context.Context, eventData *streams.TelemetryEventData, projectID ulid.ULID) error {
-	// Debug: Log payload structure to identify ULID format issues
-	c.logger.WithFields(logrus.Fields{
-		"event_id": eventData.EventID.String(),
-		"payload_keys": func() []string {
-			keys := make([]string, 0, len(eventData.EventPayload))
-			for k := range eventData.EventPayload {
-				keys = append(keys, k)
-			}
-			return keys
-		}(),
-	}).Debug("Processing span payload")
-
-	// Map event payload to Span struct
-	var span observability.Span
-	if err := mapToStruct(eventData.EventPayload, &span); err != nil {
-		// Log detailed error with sample payload data
-		c.logger.WithFields(logrus.Fields{
-			"event_id":     eventData.EventID.String(),
-			"trace_id_raw": eventData.EventPayload["trace_id"],
-			"id_raw":       eventData.EventPayload["id"],
-			"error":        err.Error(),
-		}).Error("Failed to unmarshal span - payload debug")
-		return fmt.Errorf("failed to unmarshal span payload: %w", err)
-	}
-
-	// Set context from stream message
-	span.ProjectID = projectID.String()
-
-	// Use service layer
-	if err := c.spanService.CreateSpan(ctx, &span); err != nil {
-		return fmt.Errorf("failed to create span via service: %w", err)
-	}
-
-	return nil
-}
-
-// processScoreEvent processes a quality score event using ScoreService
-func (c *TelemetryStreamConsumer) processScoreEvent(ctx context.Context, eventData *streams.TelemetryEventData, projectID ulid.ULID) error {
-	// Map event payload to Score struct
-	var score observability.Score
-	if err := mapToStruct(eventData.EventPayload, &score); err != nil {
-		return fmt.Errorf("failed to unmarshal score payload: %w", err)
-	}
-
-	// Set context from stream message
-	score.ProjectID = projectID.String()
-
-	// Use service layer
-	if err := c.scoreService.CreateScore(ctx, &score); err != nil {
-		return fmt.Errorf("failed to create score via service: %w", err)
-	}
-
-	return nil
-}
-
 // mapToStruct converts map[string]interface{} to a struct using JSON marshaling
 // This is a type-safe way to convert event payloads to domain types
 func mapToStruct(input map[string]interface{}, output interface{}) error {
@@ -690,25 +622,130 @@ func (c *TelemetryStreamConsumer) processBatch(ctx context.Context, batch *strea
 	// This ensures parent entities exist before children are created
 	sortedEvents := c.sortEventsByDependency(batch.Events)
 
-	// Process each event based on its type
+	// OTEL-Native Bulk Processing: Group events by type for batch insertion
+	spans := make([]*observability.Span, 0, len(sortedEvents))
+	scores := make([]*observability.Score, 0)
+	metricsSums := make([]*observability.MetricSum, 0)
+	metricsGauges := make([]*observability.MetricGauge, 0)
+	metricsHistograms := make([]*observability.MetricHistogram, 0)
+	metricsExpHistograms := make([]*observability.MetricExponentialHistogram, 0)
+	logs := make([]*observability.Log, 0)
+	genaiEvents := make([]*observability.GenAIEvent, 0)
+
+	// Group events by type
 	for _, event := range sortedEvents {
-		var err error
-
-		// Route event to appropriate service based on event_type
 		switch observability.TelemetryEventType(event.EventType) {
-		case observability.TelemetryEventTypeTrace:
-			// Structured trace event → TraceService → traces table
-			err = c.processTraceEvent(ctx, &event, projectID)
-
-		// Session events removed - sessions are now virtual groupings via session_id attribute
-
 		case observability.TelemetryEventTypeSpan:
-			// Structured span event → SpanService → spans table
-			err = c.processSpanEvent(ctx, &event, projectID)
+			// Map event to Span struct
+			var span observability.Span
+			if err := mapToStruct(event.EventPayload, &span); err != nil {
+				c.logger.WithError(err).WithFields(logrus.Fields{
+					"event_id": event.EventID.String(),
+					"batch_id": batch.BatchID.String(),
+				}).Error("Failed to unmarshal span payload")
+				failedCount++
+				continue
+			}
+			span.ProjectID = projectID.String()
+			spans = append(spans, &span)
 
 		case observability.TelemetryEventTypeQualityScore:
-			// Structured score event → ScoreService → scores table
-			err = c.processScoreEvent(ctx, &event, projectID)
+			// Map event to Score struct
+			var score observability.Score
+			if err := mapToStruct(event.EventPayload, &score); err != nil {
+				c.logger.WithError(err).WithFields(logrus.Fields{
+					"event_id": event.EventID.String(),
+					"batch_id": batch.BatchID.String(),
+				}).Error("Failed to unmarshal score payload")
+				failedCount++
+				continue
+			}
+			score.ProjectID = projectID.String()
+			scores = append(scores, &score)
+
+		case observability.TelemetryEventTypeMetricSum:
+			// Map event to MetricSum struct
+			var metricSum observability.MetricSum
+			if err := mapToStruct(event.EventPayload, &metricSum); err != nil {
+				c.logger.WithError(err).WithFields(logrus.Fields{
+					"event_id": event.EventID.String(),
+					"batch_id": batch.BatchID.String(),
+				}).Error("Failed to unmarshal metric_sum payload")
+				failedCount++
+				continue
+			}
+			metricSum.ProjectID = projectID.String()
+			metricsSums = append(metricsSums, &metricSum)
+
+		case observability.TelemetryEventTypeMetricGauge:
+			// Map event to MetricGauge struct
+			var metricGauge observability.MetricGauge
+			if err := mapToStruct(event.EventPayload, &metricGauge); err != nil {
+				c.logger.WithError(err).WithFields(logrus.Fields{
+					"event_id": event.EventID.String(),
+					"batch_id": batch.BatchID.String(),
+				}).Error("Failed to unmarshal metric_gauge payload")
+				failedCount++
+				continue
+			}
+			metricGauge.ProjectID = projectID.String()
+			metricsGauges = append(metricsGauges, &metricGauge)
+
+		case observability.TelemetryEventTypeMetricHistogram:
+			// Map event to MetricHistogram struct
+			var metricHistogram observability.MetricHistogram
+			if err := mapToStruct(event.EventPayload, &metricHistogram); err != nil {
+				c.logger.WithError(err).WithFields(logrus.Fields{
+					"event_id": event.EventID.String(),
+					"batch_id": batch.BatchID.String(),
+				}).Error("Failed to unmarshal metric_histogram payload")
+				failedCount++
+				continue
+			}
+			metricHistogram.ProjectID = projectID.String()
+			metricsHistograms = append(metricsHistograms, &metricHistogram)
+
+		case observability.TelemetryEventTypeMetricExponentialHistogram:
+			// Map event to MetricExponentialHistogram struct
+			var metricExpHistogram observability.MetricExponentialHistogram
+			if err := mapToStruct(event.EventPayload, &metricExpHistogram); err != nil {
+				c.logger.WithError(err).WithFields(logrus.Fields{
+					"event_id": event.EventID.String(),
+					"batch_id": batch.BatchID.String(),
+				}).Error("Failed to unmarshal metric_exponential_histogram payload")
+				failedCount++
+				continue
+			}
+			metricExpHistogram.ProjectID = projectID.String()
+			metricsExpHistograms = append(metricsExpHistograms, &metricExpHistogram)
+
+		case observability.TelemetryEventTypeLog:
+			// Map event to Log struct
+			var log observability.Log
+			if err := mapToStruct(event.EventPayload, &log); err != nil {
+				c.logger.WithError(err).WithFields(logrus.Fields{
+					"event_id": event.EventID.String(),
+					"batch_id": batch.BatchID.String(),
+				}).Error("Failed to unmarshal log payload")
+				failedCount++
+				continue
+			}
+			log.ProjectID = projectID.String()
+			logs = append(logs, &log)
+
+		case observability.TelemetryEventTypeGenAIEvent:
+			// Map event to GenAIEvent struct
+			var genaiEvent observability.GenAIEvent
+			if err := mapToStruct(event.EventPayload, &genaiEvent); err != nil {
+				c.logger.WithError(err).WithFields(logrus.Fields{
+					"event_id": event.EventID.String(),
+					"batch_id": batch.BatchID.String(),
+				}).Error("Failed to unmarshal genai_event payload")
+				failedCount++
+				continue
+			}
+			genaiEvent.ProjectID = projectID.String()
+			genaiEvents = append(genaiEvents, &genaiEvent)
 
 		default:
 			// Unknown event type - log warning and skip
@@ -718,22 +755,119 @@ func (c *TelemetryStreamConsumer) processBatch(ctx context.Context, batch *strea
 				"batch_id":   batch.BatchID.String(),
 			}).Warn("Unknown event type, skipping")
 			failedCount++
-			continue
 		}
+	}
 
-		if err != nil {
-			// Log error but continue processing other events (partial success model)
+	// Bulk insert spans (1 DB call for all spans)
+	if len(spans) > 0 {
+		if err := c.spanService.CreateSpanBatch(ctx, spans); err != nil {
 			c.logger.WithError(err).WithFields(logrus.Fields{
-				"event_id":   event.EventID.String(),
-				"event_type": event.EventType,
 				"batch_id":   batch.BatchID.String(),
-			}).Error("Failed to process event")
-			failedCount++
+				"span_count": len(spans),
+			}).Error("Failed to create span batch")
+			failedCount += len(spans)
 			lastError = err
-			continue
+		} else {
+			processedCount += len(spans)
 		}
+	}
 
-		processedCount++
+	// Bulk insert scores (1 DB call for all scores)
+	if len(scores) > 0 {
+		if err := c.scoreService.CreateScoreBatch(ctx, scores); err != nil {
+			c.logger.WithError(err).WithFields(logrus.Fields{
+				"batch_id":    batch.BatchID.String(),
+				"score_count": len(scores),
+			}).Error("Failed to create score batch")
+			failedCount += len(scores)
+			lastError = err
+		} else {
+			processedCount += len(scores)
+		}
+	}
+
+	// Bulk insert metric sums (1 DB call for all metric sums)
+	if len(metricsSums) > 0 {
+		if err := c.metricsService.CreateMetricSumBatch(ctx, metricsSums); err != nil {
+			c.logger.WithError(err).WithFields(logrus.Fields{
+				"batch_id":         batch.BatchID.String(),
+				"metric_sum_count": len(metricsSums),
+			}).Error("Failed to create metric sum batch")
+			failedCount += len(metricsSums)
+			lastError = err
+		} else {
+			processedCount += len(metricsSums)
+		}
+	}
+
+	// Bulk insert metric gauges (1 DB call for all metric gauges)
+	if len(metricsGauges) > 0 {
+		if err := c.metricsService.CreateMetricGaugeBatch(ctx, metricsGauges); err != nil{
+			c.logger.WithError(err).WithFields(logrus.Fields{
+				"batch_id":           batch.BatchID.String(),
+				"metric_gauge_count": len(metricsGauges),
+			}).Error("Failed to create metric gauge batch")
+			failedCount += len(metricsGauges)
+			lastError = err
+		} else {
+			processedCount += len(metricsGauges)
+		}
+	}
+
+	// Bulk insert metric histograms (1 DB call for all metric histograms)
+	if len(metricsHistograms) > 0 {
+		if err := c.metricsService.CreateMetricHistogramBatch(ctx, metricsHistograms); err != nil {
+			c.logger.WithError(err).WithFields(logrus.Fields{
+				"batch_id":               batch.BatchID.String(),
+				"metric_histogram_count": len(metricsHistograms),
+			}).Error("Failed to create metric histogram batch")
+			failedCount += len(metricsHistograms)
+			lastError = err
+		} else {
+			processedCount += len(metricsHistograms)
+		}
+	}
+
+	// Bulk insert exponential histograms (1 DB call for all exponential histograms)
+	if len(metricsExpHistograms) > 0 {
+		if err := c.metricsService.CreateMetricExponentialHistogramBatch(ctx, metricsExpHistograms); err != nil {
+			c.logger.WithError(err).WithFields(logrus.Fields{
+				"batch_id":                         batch.BatchID.String(),
+				"metric_exponential_histogram_count": len(metricsExpHistograms),
+			}).Error("Failed to create metric exponential histogram batch")
+			failedCount += len(metricsExpHistograms)
+			lastError = err
+		} else {
+			processedCount += len(metricsExpHistograms)
+		}
+	}
+
+	// Bulk insert logs (1 DB call for all logs)
+	if len(logs) > 0 {
+		if err := c.logsService.CreateLogBatch(ctx, logs); err != nil {
+			c.logger.WithError(err).WithFields(logrus.Fields{
+				"batch_id":  batch.BatchID.String(),
+				"log_count": len(logs),
+			}).Error("Failed to create log batch")
+			failedCount += len(logs)
+			lastError = err
+		} else {
+			processedCount += len(logs)
+		}
+	}
+
+	// Bulk insert GenAI events (1 DB call for all GenAI events)
+	if len(genaiEvents) > 0 {
+		if err := c.genaiEventsService.CreateGenAIEventBatch(ctx, genaiEvents); err != nil {
+			c.logger.WithError(err).WithFields(logrus.Fields{
+				"batch_id":          batch.BatchID.String(),
+				"genai_event_count": len(genaiEvents),
+			}).Error("Failed to create GenAI event batch")
+			failedCount += len(genaiEvents)
+			lastError = err
+		} else {
+			processedCount += len(genaiEvents)
+		}
 	}
 
 	// Determine success: At least one event processed successfully

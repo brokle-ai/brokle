@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-	"time"
 
 	"github.com/shopspring/decimal"
 	"github.com/sirupsen/logrus"
@@ -73,14 +72,14 @@ func (s *SpanService) CreateSpan(ctx context.Context, span *observability.Span) 
 	if span.SpanKind == 0 {
 		span.SpanKind = observability.SpanKindInternal // UInt8: 1
 	}
-	if span.Attributes == nil {
-		span.Attributes = make(map[string]interface{})
+	if span.SpanAttributes == nil {
+		span.SpanAttributes = make(map[string]string)
 	}
-	if span.Metadata == nil {
-		span.Metadata = make(map[string]interface{})
+	if span.ResourceAttributes == nil {
+		span.ResourceAttributes = make(map[string]string)
 	}
-	if span.CreatedAt.IsZero() {
-		span.CreatedAt = time.Now()
+	if span.ScopeAttributes == nil {
+		span.ScopeAttributes = make(map[string]string)
 	}
 
 	// Note: All OTEL and Brokle span attributes stored in attributes JSON:
@@ -171,14 +170,14 @@ func (s *SpanService) SetSpanUsage(ctx context.Context, spanID string, promptTok
 		return appErrors.NewNotFoundError("span " + spanID)
 	}
 
-	// Initialize attributes if needed
-	if span.Attributes == nil {
-		span.Attributes = make(map[string]interface{})
+	// Initialize span attributes if needed
+	if span.SpanAttributes == nil {
+		span.SpanAttributes = make(map[string]string)
 	}
 
-	// Store in attributes JSON (for ClickHouse JSON queries)
-	span.Attributes["gen_ai.usage.input_tokens"] = strconv.FormatUint(uint64(promptTokens), 10)
-	span.Attributes["gen_ai.usage.output_tokens"] = strconv.FormatUint(uint64(completionTokens), 10)
+	// Store in span_attributes Map (OTLP-standard)
+	span.SpanAttributes["gen_ai.usage.input_tokens"] = strconv.FormatUint(uint64(promptTokens), 10)
+	span.SpanAttributes["gen_ai.usage.output_tokens"] = strconv.FormatUint(uint64(completionTokens), 10)
 
 	// Also store in usage_details Map (for aggregation queries)
 	if span.UsageDetails == nil {
@@ -218,12 +217,27 @@ func mergeSpanFields(dst *observability.Span, src *observability.Span) {
 		dst.StatusMessage = src.StatusMessage
 	}
 
-	// Attribute and metadata fields (maps)
-	if src.Attributes != nil && len(src.Attributes) > 0 {
-		dst.Attributes = src.Attributes
+	// OTLP-standard attribute fields (maps)
+	if src.ResourceAttributes != nil && len(src.ResourceAttributes) > 0 {
+		dst.ResourceAttributes = src.ResourceAttributes
 	}
-	if src.Metadata != nil && len(src.Metadata) > 0 {
-		dst.Metadata = src.Metadata
+	if src.SpanAttributes != nil && len(src.SpanAttributes) > 0 {
+		dst.SpanAttributes = src.SpanAttributes
+	}
+	if src.ScopeAttributes != nil && len(src.ScopeAttributes) > 0 {
+		dst.ScopeAttributes = src.ScopeAttributes
+	}
+	if src.ScopeName != nil {
+		dst.ScopeName = src.ScopeName
+	}
+	if src.ScopeVersion != nil {
+		dst.ScopeVersion = src.ScopeVersion
+	}
+	if src.ResourceSchemaURL != nil {
+		dst.ResourceSchemaURL = src.ResourceSchemaURL
+	}
+	if src.ScopeSchemaURL != nil {
+		dst.ScopeSchemaURL = src.ScopeSchemaURL
 	}
 
 	// Usage and cost maps
@@ -375,14 +389,14 @@ func (s *SpanService) CreateSpanBatch(ctx context.Context, spans []*observabilit
 		if span.SpanKind == 0 {
 			span.SpanKind = observability.SpanKindInternal // UInt8: 1
 		}
-		if span.Attributes == nil {
-			span.Attributes = make(map[string]interface{})
+		if span.SpanAttributes == nil {
+			span.SpanAttributes = make(map[string]string)
 		}
-		if span.Metadata == nil {
-			span.Metadata = make(map[string]interface{})
+		if span.ResourceAttributes == nil {
+			span.ResourceAttributes = make(map[string]string)
 		}
-		if span.CreatedAt.IsZero() {
-			span.CreatedAt = time.Now()
+		if span.ScopeAttributes == nil {
+			span.ScopeAttributes = make(map[string]string)
 		}
 
 		// Note: All OTEL and Brokle data stored in attributes JSON and usage/cost Maps
