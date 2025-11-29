@@ -59,22 +59,6 @@ type ScoreRepository interface {
 	Count(ctx context.Context, filter *ScoreFilter) (int64, error)
 }
 
-// BlobStorageRepository defines the interface for blob storage file log data access (ClickHouse)
-type BlobStorageRepository interface {
-	// Basic operations (ReplacingMergeTree pattern)
-	Create(ctx context.Context, blob *BlobStorageFileLog) error
-	Update(ctx context.Context, blob *BlobStorageFileLog) error
-	Delete(ctx context.Context, id string) error
-	GetByID(ctx context.Context, id string) (*BlobStorageFileLog, error)
-
-	// Queries
-	GetByEntityID(ctx context.Context, entityType, entityID string) ([]*BlobStorageFileLog, error)
-	GetByProjectID(ctx context.Context, projectID string, filter *BlobStorageFilter) ([]*BlobStorageFileLog, error)
-
-	// Count
-	Count(ctx context.Context, filter *BlobStorageFilter) (int64, error)
-}
-
 type TraceFilter struct {
 	UserID      *string
 	SessionID   *string
@@ -129,18 +113,6 @@ type ScoreFilter struct {
 	MaxValue      *float64
 	StartTime     *time.Time
 	EndTime       *time.Time
-
-	// Pagination (embedded for DRY)
-	pagination.Params
-}
-
-type BlobStorageFilter struct {
-	// Domain filters
-	EntityType   *string
-	StartTime    *time.Time
-	EndTime      *time.Time
-	MinSizeBytes *uint64
-	MaxSizeBytes *uint64
 
 	// Pagination (embedded for DRY)
 	pagination.Params

@@ -22,9 +22,6 @@ func NewScoreRepository(db clickhouse.Conn) observability.ScoreRepository {
 
 // Create inserts a new score into ClickHouse
 func (r *scoreRepository) Create(ctx context.Context, score *observability.Score) error {
-	// Set version and event_ts for new scores
-	// Version is now optional application version (not row version)
-
 	query := `
 		INSERT INTO scores (
 			id, project_id, trace_id, span_id,
@@ -55,12 +52,8 @@ func (r *scoreRepository) Create(ctx context.Context, score *observability.Score
 	)
 }
 
-// Update performs an update using ReplacingMergeTree pattern (insert with higher version)
+// Update performs an upsert by re-inserting with updated values
 func (r *scoreRepository) Update(ctx context.Context, score *observability.Score) error {
-	// ReplacingMergeTree pattern: increment version and update event_ts
-	// Version is now optional application version (not auto-incremented)
-
-	// Same INSERT query as Create - ClickHouse will handle merging
 	return r.Create(ctx, score)
 }
 
@@ -143,7 +136,7 @@ func (r *scoreRepository) GetByFilter(ctx context.Context, filter *observability
 			author_user_id, timestamp,
 			version
 		FROM scores
-		WHERE is_deleted = 0
+		WHERE 1=1
 	`
 
 	args := []interface{}{}
@@ -273,7 +266,6 @@ func (r *scoreRepository) CreateBatch(ctx context.Context, scores []*observabili
 			score.AuthorUserID,
 			score.Timestamp,
 			score.Version,
-			// Removed: event_ts, is_deleted
 		)
 		if err != nil {
 			return fmt.Errorf("append to batch: %w", err)
@@ -345,7 +337,6 @@ func (r *scoreRepository) scanScoreRow(row driver.Row) (*observability.Score, er
 		&score.AuthorUserID,
 		&score.Timestamp,
 		&score.Version,
-		// Removed: event_ts, is_deleted
 	)
 
 	if err != nil {
@@ -379,7 +370,6 @@ func (r *scoreRepository) scanScores(rows driver.Rows) ([]*observability.Score, 
 			&score.AuthorUserID,
 			&score.Timestamp,
 			&score.Version,
-			// Removed: event_ts, is_deleted
 		)
 
 		if err != nil {

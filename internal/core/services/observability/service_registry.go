@@ -4,7 +4,8 @@ import (
 	"brokle/internal/config"
 	"brokle/internal/core/domain/analytics"
 	"brokle/internal/core/domain/observability"
-	"brokle/internal/infrastructure/storage"
+	storageDomain "brokle/internal/core/domain/storage"
+	infraStorage "brokle/internal/infrastructure/storage"
 	"brokle/internal/infrastructure/streams"
 
 	"github.com/sirupsen/logrus"
@@ -16,20 +17,17 @@ type ServiceRegistry struct {
 	MetricsService     *MetricsService
 	LogsService        *LogsService
 	GenAIEventsService *GenAIEventsService
-	BlobStorageService *BlobStorageService
+	BlobStorageService storageDomain.BlobStorageService
+	ArchiveService     *ArchiveService
 
-	// OTLP conversion services
 	OTLPConverterService        *OTLPConverterService
 	OTLPMetricsConverterService *OTLPMetricsConverterService
 	OTLPLogsConverterService    *OTLPLogsConverterService
 	OTLPEventsConverterService  *OTLPEventsConverterService
 
-	// Stream infrastructure (for OTLP direct access)
 	StreamProducer       *streams.TelemetryStreamProducer
 	DeduplicationService observability.TelemetryDeduplicationService
-
-	// Existing telemetry service (Redis Streams + async processing)
-	TelemetryService observability.TelemetryService
+	TelemetryService     observability.TelemetryService
 }
 
 func NewServiceRegistry(
@@ -38,10 +36,9 @@ func NewServiceRegistry(
 	metricsRepo observability.MetricsRepository,
 	logsRepo observability.LogsRepository,
 	genaiEventsRepo observability.GenAIEventsRepository,
-	blobStorageRepo observability.BlobStorageRepository,
-
-	s3Client *storage.S3Client,
-	blobConfig *config.BlobStorageConfig,
+	blobStorageService storageDomain.BlobStorageService,
+	s3Client *infraStorage.S3Client,
+	archiveConfig *config.ArchiveConfig,
 
 	streamProducer *streams.TelemetryStreamProducer,
 	deduplicationService observability.TelemetryDeduplicationService,
@@ -52,7 +49,6 @@ func NewServiceRegistry(
 
 	logger *logrus.Logger,
 ) *ServiceRegistry {
-	blobStorageService := NewBlobStorageService(blobStorageRepo, s3Client, blobConfig, logger)
 	otlpConverterService := NewOTLPConverterService(logger, providerPricingService, observabilityConfig)
 	otlpMetricsConverterService := NewOTLPMetricsConverterService(logger)
 	otlpLogsConverterService := NewOTLPLogsConverterService(logger)
@@ -63,6 +59,17 @@ func NewServiceRegistry(
 	logsService := NewLogsService(logsRepo, logger)
 	genaiEventsService := NewGenAIEventsService(genaiEventsRepo, logger)
 
+	var archiveService *ArchiveService
+	if archiveConfig != nil && archiveConfig.Enabled && s3Client != nil {
+		parquetWriter := NewParquetWriter(archiveConfig.CompressionLevel)
+		archiveService = NewArchiveService(s3Client, parquetWriter, blobStorageService, archiveConfig, logger)
+		logger.WithFields(logrus.Fields{
+			"bucket":            s3Client.GetBucketName(),
+			"path_prefix":       archiveConfig.PathPrefix,
+			"compression_level": archiveConfig.CompressionLevel,
+		}).Info("Archive service initialized for S3 raw telemetry archival")
+	}
+
 	return &ServiceRegistry{
 		TraceService:                traceService,
 		ScoreService:                scoreService,
@@ -70,6 +77,7 @@ func NewServiceRegistry(
 		LogsService:                 logsService,
 		GenAIEventsService:          genaiEventsService,
 		BlobStorageService:          blobStorageService,
+		ArchiveService:              archiveService,
 		OTLPConverterService:        otlpConverterService,
 		OTLPMetricsConverterService: otlpMetricsConverterService,
 		OTLPLogsConverterService:    otlpLogsConverterService,
@@ -88,7 +96,7 @@ func (r *ServiceRegistry) GetScoreService() *ScoreService {
 	return r.ScoreService
 }
 
-func (r *ServiceRegistry) GetBlobStorageService() *BlobStorageService {
+func (r *ServiceRegistry) GetBlobStorageService() storageDomain.BlobStorageService {
 	return r.BlobStorageService
 }
 

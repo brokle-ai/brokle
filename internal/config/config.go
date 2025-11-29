@@ -31,6 +31,7 @@ type Config struct {
 	BlobStorage     BlobStorageConfig     `mapstructure:"blob_storage"`
 	Monitoring      MonitoringConfig      `mapstructure:"monitoring"`
 	Observability   ObservabilityConfig   `mapstructure:"observability"`
+	Archive         ArchiveConfig         `mapstructure:"archive"`
 	Logging         LoggingConfig         `mapstructure:"logging"`
 	Redis           RedisConfig           `mapstructure:"redis"`
 	Workers         WorkersConfig         `mapstructure:"workers"`
@@ -202,6 +203,14 @@ type MonitoringConfig struct {
 // ObservabilityConfig contains OTLP and telemetry configuration.
 type ObservabilityConfig struct {
 	PreserveRawOTLP bool `mapstructure:"preserve_raw_otlp" env:"OTLP_PRESERVE_RAW" envDefault:"true"`
+}
+
+// ArchiveConfig contains S3 raw telemetry archival configuration.
+type ArchiveConfig struct {
+	Enabled              bool   `mapstructure:"enabled"`
+	PathPrefix           string `mapstructure:"path_prefix"`
+	CompressionLevel     int    `mapstructure:"compression_level"`
+	DefaultRetentionDays int    `mapstructure:"default_retention_days"`
 }
 
 // WorkersConfig contains background worker configuration.
@@ -660,6 +669,17 @@ func Load() (*Config, error) {
 	viper.BindEnv("blob_storage.use_path_style", "BLOB_STORAGE_USE_PATH_STYLE")
 	//nolint:errcheck
 	viper.BindEnv("blob_storage.threshold", "BLOB_STORAGE_THRESHOLD")
+
+	// Archive configuration (S3 raw telemetry archival)
+	//nolint:errcheck
+	viper.BindEnv("archive.enabled", "ARCHIVE_ENABLED")
+	//nolint:errcheck
+	viper.BindEnv("archive.path_prefix", "ARCHIVE_PATH_PREFIX")
+	//nolint:errcheck
+	viper.BindEnv("archive.compression_level", "ARCHIVE_COMPRESSION_LEVEL")
+	//nolint:errcheck
+	viper.BindEnv("archive.default_retention_days", "ARCHIVE_DEFAULT_RETENTION_DAYS")
+
 	//nolint:errcheck
 	viper.BindEnv("external.stripe.publishable_key", "STRIPE_PUBLISHABLE_KEY")
 	//nolint:errcheck
@@ -945,7 +965,12 @@ func setDefaults() {
 	viper.SetDefault("blob_storage.region", "us-east-1")
 	viper.SetDefault("blob_storage.endpoint", "http://localhost:9100")
 	viper.SetDefault("blob_storage.use_path_style", true)
-	viper.SetDefault("blob_storage.threshold", 10_000) // 10KB threshold for S3 offload
+	viper.SetDefault("blob_storage.threshold", 10_000)
+
+	viper.SetDefault("archive.enabled", false)
+	viper.SetDefault("archive.path_prefix", "telemetry/")
+	viper.SetDefault("archive.compression_level", 3)
+	viper.SetDefault("archive.default_retention_days", 2555)
 }
 
 // GetServerAddress returns the server address string.
@@ -1057,3 +1082,4 @@ func (c *Config) CanUseFeature(feature string) bool {
 	// Non-enterprise features are always available
 	return true
 }
+

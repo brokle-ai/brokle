@@ -1,40 +1,34 @@
-package observability
+package storage
 
 import (
 	"context"
 	"fmt"
-	"time"
 
-	"brokle/internal/core/domain/observability"
+	"brokle/internal/core/domain/storage"
 	"brokle/pkg/pagination"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 )
 
+var _ storage.BlobStorageRepository = (*blobStorageRepository)(nil)
+
 type blobStorageRepository struct {
 	db clickhouse.Conn
 }
 
-// NewBlobStorageRepository creates a new blob storage repository instance
-func NewBlobStorageRepository(db clickhouse.Conn) observability.BlobStorageRepository {
+func NewBlobStorageRepository(db clickhouse.Conn) storage.BlobStorageRepository {
 	return &blobStorageRepository{db: db}
 }
 
-// Create inserts a new blob storage reference into ClickHouse
-func (r *blobStorageRepository) Create(ctx context.Context, blob *observability.BlobStorageFileLog) error {
-	// Set version and event_ts for new blob references
-	// Version is now optional application version
-	blob.UpdatedAt = time.Now()
-
+func (r *blobStorageRepository) Create(ctx context.Context, blob *storage.BlobStorageFileLog) error {
 	query := `
 		INSERT INTO blob_storage_file_log (
 			id, project_id, entity_type, entity_id, event_id,
 			bucket_name, bucket_path,
 			file_size_bytes, content_type, compression,
-			created_at, updated_at,
-			version
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			created_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	return r.db.Exec(ctx, query,
@@ -49,53 +43,28 @@ func (r *blobStorageRepository) Create(ctx context.Context, blob *observability.
 		blob.ContentType,
 		blob.Compression,
 		blob.CreatedAt,
-		blob.UpdatedAt,
-		blob.Version,
-		// Removed: event_ts, is_deleted
 	)
 }
 
-// Update performs an update using ReplacingMergeTree pattern (insert with higher version)
-func (r *blobStorageRepository) Update(ctx context.Context, blob *observability.BlobStorageFileLog) error {
-	// ReplacingMergeTree pattern: increment version and update event_ts
-	// Version is now optional application version (not auto-incremented)
-	blob.UpdatedAt = time.Now()
-
-	// Same INSERT query as Create - ClickHouse will handle merging
+func (r *blobStorageRepository) Update(ctx context.Context, blob *storage.BlobStorageFileLog) error {
 	return r.Create(ctx, blob)
 }
 
-// Delete performs soft deletion by inserting a record with is_deleted = true
 func (r *blobStorageRepository) Delete(ctx context.Context, id string) error {
-	query := `
-		INSERT INTO blob_storage_file_log
-		SELECT
-			id, project_id, entity_type, entity_id, event_id,
-			bucket_name, bucket_path,
-			file_size_bytes, content_type, compression,
-			created_at, updated_at,
-			version + 1 as version,
-			now64() as event_ts,
-			1 as is_deleted
-		FROM blob_storage_file_log
-		WHERE id = ?		ORDER BY event_ts DESC
-		LIMIT 1
-	`
-
+	query := `ALTER TABLE blob_storage_file_log DELETE WHERE id = ?`
 	return r.db.Exec(ctx, query, id)
 }
 
-// GetByID retrieves a blob storage reference by its ID (returns latest version)
-func (r *blobStorageRepository) GetByID(ctx context.Context, id string) (*observability.BlobStorageFileLog, error) {
+func (r *blobStorageRepository) GetByID(ctx context.Context, id string) (*storage.BlobStorageFileLog, error) {
 	query := `
 		SELECT
 			id, project_id, entity_type, entity_id, event_id,
 			bucket_name, bucket_path,
 			file_size_bytes, content_type, compression,
-			created_at, updated_at,
-			version
+			created_at
 		FROM blob_storage_file_log
-		WHERE id = ?		ORDER BY event_ts DESC
+		WHERE id = ?
+		ORDER BY created_at DESC
 		LIMIT 1
 	`
 
@@ -103,17 +72,16 @@ func (r *blobStorageRepository) GetByID(ctx context.Context, id string) (*observ
 	return r.scanBlobRow(row)
 }
 
-// GetByEntityID retrieves all blob storage references for an entity
-func (r *blobStorageRepository) GetByEntityID(ctx context.Context, entityType, entityID string) ([]*observability.BlobStorageFileLog, error) {
+func (r *blobStorageRepository) GetByEntityID(ctx context.Context, entityType, entityID string) ([]*storage.BlobStorageFileLog, error) {
 	query := `
 		SELECT
 			id, project_id, entity_type, entity_id, event_id,
 			bucket_name, bucket_path,
 			file_size_bytes, content_type, compression,
-			created_at, updated_at,
-			version
+			created_at
 		FROM blob_storage_file_log
-		WHERE entity_type = ? AND entity_id = ?		ORDER BY created_at DESC
+		WHERE entity_type = ? AND entity_id = ?
+		ORDER BY created_at DESC
 	`
 
 	rows, err := r.db.Query(ctx, query, entityType, entityID)
@@ -125,21 +93,19 @@ func (r *blobStorageRepository) GetByEntityID(ctx context.Context, entityType, e
 	return r.scanBlobs(rows)
 }
 
-// GetByProjectID retrieves blob storage references by project ID with optional filters
-func (r *blobStorageRepository) GetByProjectID(ctx context.Context, projectID string, filter *observability.BlobStorageFilter) ([]*observability.BlobStorageFileLog, error) {
+func (r *blobStorageRepository) GetByProjectID(ctx context.Context, projectID string, filter *storage.BlobStorageFilter) ([]*storage.BlobStorageFileLog, error) {
 	query := `
 		SELECT
 			id, project_id, entity_type, entity_id, event_id,
 			bucket_name, bucket_path,
 			file_size_bytes, content_type, compression,
-			created_at, updated_at,
-			version
+			created_at
 		FROM blob_storage_file_log
-		WHERE project_id = ?	`
+		WHERE project_id = ?
+	`
 
 	args := []interface{}{projectID}
 
-	// Apply filters
 	if filter != nil {
 		if filter.EntityType != nil {
 			query += " AND entity_type = ?"
@@ -163,13 +129,12 @@ func (r *blobStorageRepository) GetByProjectID(ctx context.Context, projectID st
 		}
 	}
 
-	// Determine sort field and direction with SQL injection protection
+	// SQL injection protection via whitelist validation
 	allowedSortFields := []string{"created_at", "file_size_bytes", "id"}
-	sortField := "created_at" // default
+	sortField := "created_at"
 	sortDir := "DESC"
 
 	if filter != nil {
-		// Validate sort field against whitelist
 		if filter.Params.SortBy != "" {
 			validated, err := pagination.ValidateSortField(filter.Params.SortBy, allowedSortFields)
 			if err != nil {
@@ -186,7 +151,6 @@ func (r *blobStorageRepository) GetByProjectID(ctx context.Context, projectID st
 
 	query += fmt.Sprintf(" ORDER BY %s %s", sortField, sortDir)
 
-	// Apply limit and offset for pagination
 	limit := pagination.DefaultPageSize
 	offset := 0
 	if filter != nil {
@@ -207,9 +171,8 @@ func (r *blobStorageRepository) GetByProjectID(ctx context.Context, projectID st
 	return r.scanBlobs(rows)
 }
 
-// Count returns the count of blob storage references matching the filter
-func (r *blobStorageRepository) Count(ctx context.Context, filter *observability.BlobStorageFilter) (int64, error) {
-	query := "SELECT count() FROM blob_storage_file_log WHERE is_deleted = 0"
+func (r *blobStorageRepository) Count(ctx context.Context, filter *storage.BlobStorageFilter) (int64, error) {
+	query := "SELECT count() FROM blob_storage_file_log WHERE 1=1"
 	args := []interface{}{}
 
 	if filter != nil {
@@ -232,9 +195,8 @@ func (r *blobStorageRepository) Count(ctx context.Context, filter *observability
 	return count, err
 }
 
-// Helper function to scan a single blob from query row
-func (r *blobStorageRepository) scanBlobRow(row driver.Row) (*observability.BlobStorageFileLog, error) {
-	var blob observability.BlobStorageFileLog
+func (r *blobStorageRepository) scanBlobRow(row driver.Row) (*storage.BlobStorageFileLog, error) {
+	var blob storage.BlobStorageFileLog
 
 	err := row.Scan(
 		&blob.ID,
@@ -248,9 +210,6 @@ func (r *blobStorageRepository) scanBlobRow(row driver.Row) (*observability.Blob
 		&blob.ContentType,
 		&blob.Compression,
 		&blob.CreatedAt,
-		&blob.UpdatedAt,
-		&blob.Version,
-		// Removed: event_ts, is_deleted
 	)
 
 	if err != nil {
@@ -260,12 +219,11 @@ func (r *blobStorageRepository) scanBlobRow(row driver.Row) (*observability.Blob
 	return &blob, nil
 }
 
-// Helper function to scan multiple blobs from rows
-func (r *blobStorageRepository) scanBlobs(rows driver.Rows) ([]*observability.BlobStorageFileLog, error) {
-	var blobs []*observability.BlobStorageFileLog
+func (r *blobStorageRepository) scanBlobs(rows driver.Rows) ([]*storage.BlobStorageFileLog, error) {
+	var blobs []*storage.BlobStorageFileLog
 
 	for rows.Next() {
-		var blob observability.BlobStorageFileLog
+		var blob storage.BlobStorageFileLog
 
 		err := rows.Scan(
 			&blob.ID,
@@ -279,9 +237,6 @@ func (r *blobStorageRepository) scanBlobs(rows driver.Rows) ([]*observability.Bl
 			&blob.ContentType,
 			&blob.Compression,
 			&blob.CreatedAt,
-			&blob.UpdatedAt,
-			&blob.Version,
-			// Removed: event_ts, is_deleted
 		)
 
 		if err != nil {

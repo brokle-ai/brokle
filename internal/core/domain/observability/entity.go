@@ -123,24 +123,6 @@ type Score struct {
 	ProjectID        string            `json:"project_id" db:"project_id"`
 }
 
-// BlobStorageFileLog represents a reference to S3-stored large payload
-// Used when payload > 10KB threshold
-type BlobStorageFileLog struct {
-	UpdatedAt     time.Time `json:"updated_at" db:"updated_at"`
-	CreatedAt     time.Time `json:"created_at" db:"created_at"`
-	FileSizeBytes *uint64   `json:"file_size_bytes,omitempty" db:"file_size_bytes"`
-	Version       *string   `json:"version,omitempty" db:"version"`
-	Compression   *string   `json:"compression,omitempty" db:"compression"`
-	ContentType   *string   `json:"content_type,omitempty" db:"content_type"`
-	EntityID      string    `json:"entity_id" db:"entity_id"`
-	BucketPath    string    `json:"bucket_path" db:"bucket_path"`
-	BucketName    string    `json:"bucket_name" db:"bucket_name"`
-	EventID       string    `json:"event_id" db:"event_id"`
-	ID            string    `json:"id" db:"id"`
-	EntityType    string    `json:"entity_type" db:"entity_type"`
-	ProjectID     string    `json:"project_id" db:"project_id"`
-}
-
 // Model represents an LLM/API model with pricing information (PostgreSQL)
 // Used for cost calculation via internal_model_id lookup
 type Model struct {
@@ -451,11 +433,6 @@ func (s *Score) GetScoreLevel() string {
 func (s *Score) IsNumeric() bool     { return s.DataType == ScoreDataTypeNumeric }
 func (s *Score) IsCategorical() bool { return s.DataType == ScoreDataTypeCategorical }
 func (s *Score) IsBoolean() bool     { return s.DataType == ScoreDataTypeBoolean }
-
-func (b *BlobStorageFileLog) GetS3URI() string { return "s3://" + b.BucketName + "/" + b.BucketPath }
-func (b *BlobStorageFileLog) IsCompressed() bool {
-	return b.Compression != nil && *b.Compression != ""
-}
 
 func ConvertStatusCodeToEnum(statusStr string) uint8 {
 	switch statusStr {
