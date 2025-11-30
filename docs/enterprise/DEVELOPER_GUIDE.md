@@ -78,7 +78,7 @@ build-backend-enterprise: ## Build Go API server (Enterprise version)
 
 ```dockerfile
 # Dockerfile (OSS version)
-FROM golang:1.24-alpine AS builder
+FROM golang:1.25-alpine AS builder
 WORKDIR /app
 COPY . .
 RUN CGO_ENABLED=0 go build -ldflags="-w -s" -o brokle cmd/server/main.go
@@ -88,7 +88,7 @@ COPY --from=builder /app/brokle .
 CMD ["./brokle"]
 
 # Dockerfile.enterprise
-FROM golang:1.24-alpine AS builder
+FROM golang:1.25-alpine AS builder
 WORKDIR /app  
 COPY . .
 RUN CGO_ENABLED=0 go build -tags="enterprise" -ldflags="-w -s" -o brokle-enterprise cmd/server/main.go

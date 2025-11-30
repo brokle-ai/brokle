@@ -482,10 +482,10 @@ make test-integration
 make test-coverage
 
 # Run specific package tests
-go test ./internal/services/observability -v
+go test ./internal/core/services/observability -v
 
 # Run specific test
-go test ./internal/services/observability -run TestTraceService_CreateTraceWithSpans -v
+go test ./internal/core/services/observability -run TestTraceService_CreateTraceWithSpans -v
 
 # Run tests with race detection
 go test -race ./...
@@ -520,14 +520,14 @@ Before committing tests:
 
 See the observability domain for complete examples:
 
-- **Service Tests**: `internal/services/observability/*_test.go` (3,485 lines)
-  - `trace_service_test.go` (831 lines)
-  - `span_service_test.go` (442 lines)
-  - `telemetry_event_service_test.go` (848 lines)
-  - `telemetry_batch_service_test.go` (670 lines)
-  - `quality_service_test.go` (516 lines)
+- **Service Tests**: `internal/core/services/observability/*_test.go`
+  - `trace_service_test.go`
+  - `span_service_test.go`
+  - `telemetry_event_service_test.go`
+  - `telemetry_batch_service_test.go`
+  - `quality_service_test.go`
 
-- **Domain Tests**: `internal/core/domain/observability/*_test.go` (594 lines)
+- **Domain Tests**: `internal/core/domain/observability/*_test.go`
   - `entity_test.go` (258 lines) - Business logic calculations
   - `errors_test.go` (66 lines) - Error wrapping/chaining
   - `events_test.go` (270 lines) - Event creation with calculations

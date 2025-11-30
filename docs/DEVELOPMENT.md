@@ -6,7 +6,7 @@
 
 Ensure you have these tools installed:
 
-- **Go 1.24+** - Backend development
+- **Go 1.25+** - Backend development
 - **Node.js 18+** & **npm/yarn** - Frontend development  
 - **PostgreSQL 16+** - Primary database
 - **ClickHouse 24+** - Analytics database
@@ -58,9 +58,9 @@ Access the application:
 ```
 brokle/
 ├── cmd/                    # Application entry points
-│   ├── server/            # Main API server
-│   ├── migrate/           # Database migration tool
-│   └── seed/              # Database seeding tool
+│   ├── server/            # HTTP API server
+│   ├── worker/            # Background workers
+│   └── migrate/           # Database migration & seeding tool
 ├── internal/              # Private application code
 │   ├── core/              # Business logic
 │   │   ├── domain/        # Domain models and interfaces
@@ -71,8 +71,8 @@ brokle/
 │   └── config/            # Configuration management
 ├── web/                   # Next.js frontend
 ├── pkg/                   # Reusable Go packages
-├── migrations/            # Database migrations
-├── seeders/              # Database seeders
+├── migrations/            # Database migrations (PostgreSQL + ClickHouse)
+├── seeds/                # YAML seed data (permissions, roles, pricing)
 └── docs/                 # Documentation
 ```
 
@@ -475,7 +475,7 @@ make vuln-check
 
 ### Next.js Structure
 
-The frontend uses Next.js 14+ with App Router:
+The frontend uses Next.js 16+ with App Router:
 
 ```
 web/src/
@@ -746,12 +746,12 @@ Create `.vscode/launch.json`:
 
 ```go
 // Use structured logging
-import "github.com/sirupsen/logrus"
+import "log/slog"
 
-logger := logrus.WithFields(logrus.Fields{
-    "user_id": userID,
-    "request_id": requestID,
-})
+logger := slog.With(
+    "user_id", userID,
+    "request_id", requestID,
+)
 logger.Info("Processing user request")
 ```
 

@@ -41,7 +41,7 @@ graph TB
 - **Mobile Responsive** - Adaptive UI across devices
 
 **Technology Stack**:
-- Next.js 14+ with App Router
+- Next.js 16+ with App Router
 - TypeScript for type safety
 - Tailwind CSS + shadcn/ui for styling
 - Zustand for state management
@@ -59,7 +59,7 @@ graph TB
 - **Multi-Database Support** - PostgreSQL + ClickHouse + Redis
 
 **Technology Stack**:
-- Go 1.24+ with net/http + Gorilla Mux
+- Go 1.25+ with net/http + Gorilla Mux
 - Gorilla WebSocket for real-time features
 - GORM for PostgreSQL operations
 - ClickHouse Go client for analytics
@@ -82,15 +82,12 @@ graph TB
 - `configs` - Application and feature configurations
 
 #### ClickHouse - Analytical Data
-**Purpose**: High-performance time-series analytics and observability
+**Purpose**: High-performance time-series analytics and observability (OTEL-native)
 
 **Tables**:
-- `metrics` - Real-time platform metrics
-- `events` - Business and system events
-- `traces` - Distributed tracing data
-- `request_logs` - API request and response logs
-- `ai_routing_metrics` - AI provider routing decisions
-- `quality_scores` - AI response quality assessments
+- `otel_traces` - Unified OTLP traces and spans (365 day TTL)
+- `quality_scores` - Model performance metrics
+- `request_logs` - API request logs (60 day TTL)
 
 #### Redis - Caching & Messaging
 **Purpose**: High-speed caching, session storage, pub/sub messaging
@@ -113,30 +110,33 @@ The monolith is organized using Domain-Driven Design principles:
 1. **User Domain** (`/internal/core/domain/user/`)
    - User management, profiles, preferences
    - Repository: PostgreSQL users table
-   
+
 2. **Organization Domain** (`/internal/core/domain/organization/`)
    - Multi-tenant organization management
    - Repository: PostgreSQL organizations table
-   
+
 3. **Auth Domain** (`/internal/core/domain/auth/`)
    - Authentication, authorization, API keys
    - Repository: PostgreSQL auth_sessions, api_keys tables
-   
-4. **Routing Domain** (`/internal/core/domain/routing/`)
-   - AI provider management and routing logic
-   - Repository: PostgreSQL routing_providers table
-   
-5. **Billing Domain** (`/internal/core/domain/billing/`)
+
+4. **Billing Domain** (`/internal/core/domain/billing/`)
    - Usage tracking, invoicing, subscription management
    - Repository: PostgreSQL billing_usage table
-   
-6. **Config Domain** (`/internal/core/domain/config/`)
-   - Application configuration and feature flags
-   - Repository: PostgreSQL configs table
-   
-7. **Observability Domain** (`/internal/core/domain/observability/`)
-   - Metrics, events, tracing, analytics
-   - Repository: ClickHouse metrics, events, traces tables
+
+5. **Analytics Domain** (`/internal/core/domain/analytics/`)
+   - Provider pricing, cost analytics
+   - Repository: PostgreSQL provider_models, model_prices tables
+
+6. **Observability Domain** (`/internal/core/domain/observability/`)
+   - OTEL-native traces, spans, quality scores
+   - Repository: ClickHouse otel_traces table
+
+7. **Storage Domain** (`/internal/core/domain/storage/`)
+   - Blob storage for exports, media, raw events
+   - Infrastructure: S3/MinIO compatible storage
+
+8. **Common Domain** (`/internal/core/domain/common/`)
+   - Transaction patterns, shared utilities
 
 ### Interface-Based Design
 

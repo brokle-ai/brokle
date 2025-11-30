@@ -26,7 +26,7 @@ The Brokle API implements a **dual route architecture** with separate authentica
 - `POST /v1/completions` - OpenAI-compatible text completions
 - `POST /v1/embeddings` - OpenAI-compatible embeddings
 - `GET /v1/models` - Available AI models
-- `POST /v1/ingest/batch` - Unified telemetry batch processing
+- `POST /v1/traces` - OTLP trace ingestion (OpenTelemetry standard)
 - `POST /v1/route` - AI routing decisions
 
 **Example:**
@@ -325,7 +325,7 @@ List user's API keys.
     {
       "id": "ulid",
       "name": "Production API Key",
-      "key_prefix": "bk_live_123...",
+      "key_preview": "bk_AbCd...yym0",
       "scopes": ["read:metrics", "write:routing"],
       "last_used_at": "2024-01-01T11:30:00Z",
       "created_at": "2024-01-01T10:00:00Z"
@@ -354,8 +354,8 @@ Create a new API key.
   "data": {
     "id": "ulid",
     "name": "New API Key",
-    "key": "bk_live_1234567890abcdef...",
-    "key_prefix": "bk_live_123...",
+    "key": "bk_AbCdEfGhIjKlMnOpQrStUvWxYz0123456789AbCd",
+    "key_preview": "bk_AbCd...yym0",
     "scopes": ["read:metrics", "write:routing"],
     "expires_at": "2025-01-01T00:00:00Z"
   }
