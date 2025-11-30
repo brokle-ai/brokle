@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"time"
@@ -26,12 +27,14 @@ type Server struct {
 	config              *config.Config
 	logger              *slog.Logger
 	server              *http.Server
+	listener            net.Listener
 	handlers            *handlers.Handlers
 	engine              *gin.Engine
 	authMiddleware      *middleware.AuthMiddleware
 	sdkAuthMiddleware   *middleware.SDKAuthMiddleware
 	rateLimitMiddleware *middleware.RateLimitMiddleware
 	csrfMiddleware      *middleware.CSRFMiddleware
+	serveErr            chan error
 }
 
 // NewServer creates a new HTTP server instance
@@ -126,7 +129,6 @@ func (s *Server) Start() error {
 	// Setup routes
 	s.setupRoutes()
 
-	// Create HTTP server
 	s.server = &http.Server{
 		Addr:         fmt.Sprintf(":%d", s.config.Server.Port),
 		Handler:      s.engine,
@@ -135,12 +137,27 @@ func (s *Server) Start() error {
 		IdleTimeout:  time.Duration(s.config.Server.IdleTimeout) * time.Second,
 	}
 
-	// Start server (blocking - signal handling done by cmd/server/main.go)
-	s.logger.Info("Starting HTTP server", "port", s.config.Server.Port)
-	if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		return err
+	s.serveErr = make(chan error, 1)
+
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", s.config.Server.Port))
+	if err != nil {
+		return fmt.Errorf("failed to bind HTTP server: %w", err)
 	}
+	s.listener = lis
+
+	s.logger.Info("HTTP server listening", "port", s.config.Server.Port)
+
+	go func() {
+		if err := s.server.Serve(lis); err != nil && err != http.ErrServerClosed {
+			s.serveErr <- err
+		}
+	}()
+
 	return nil
+}
+
+func (s *Server) ServeErr() <-chan error {
+	return s.serveErr
 }
 
 // setupRoutes configures all HTTP routes

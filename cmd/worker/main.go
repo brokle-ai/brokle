@@ -33,11 +33,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to initialize worker: %v", err)
 	}
-	defer func() {
-		if err := worker.Shutdown(context.Background()); err != nil {
-			log.Printf("Error during shutdown: %v", err)
-		}
-	}()
 
 	// Start workers
 	if err := worker.Start(); err != nil {
