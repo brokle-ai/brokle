@@ -642,28 +642,28 @@ func (r *traceRepository) GetTraceSummary(ctx context.Context, traceID string) (
 		SELECT
 			trace_id,
 			anyIf(span_id, parent_span_id IS NULL) as root_span_id,
-			anyIf(project_id, parent_span_id IS NULL) as project_id,
+			anyIf(project_id, parent_span_id IS NULL) as root_project_id,
 			min(start_time) as trace_start,
 			maxOrNull(end_time) as trace_end,
-			if(maxOrNull(end_time) IS NOT NULL, maxOrNull(end_time) - min(start_time), NULL) as trace_duration_nano,
+			if(maxOrNull(end_time) IS NOT NULL, toUInt64(maxOrNull(end_time) - min(start_time)), NULL) as trace_duration_nano,
 
 			-- Cost and usage aggregations
-			sum(total_cost) as total_cost,
+			toFloat64(sum(total_cost)) as total_cost,
 			sum(usage_details['input']) as total_input_tokens,
 			sum(usage_details['output']) as total_output_tokens,
 			sum(usage_details['total']) as total_tokens,
 
 			-- Span metrics
-			count() as span_count,
-			countIf(has_error = true) as error_span_count,
-			max(has_error) as has_error,
+			toInt64(count()) as span_count,
+			toInt64(countIf(has_error = true)) as error_span_count,
+			max(has_error) as trace_has_error,
 
 			-- Root span metadata (materialized columns for fast access)
-			anyIf(service_name, parent_span_id IS NULL) as service_name,
-			anyIf(model_name, parent_span_id IS NULL) as model_name,
-			anyIf(provider_name, parent_span_id IS NULL) as provider_name,
-			anyIf(span_attributes['user.id'], parent_span_id IS NULL) as user_id,
-			anyIf(span_attributes['session.id'], parent_span_id IS NULL) as session_id
+			anyIf(service_name, parent_span_id IS NULL) as root_service_name,
+			anyIf(model_name, parent_span_id IS NULL) as root_model_name,
+			anyIf(provider_name, parent_span_id IS NULL) as root_provider_name,
+			anyIf(span_attributes['user.id'], parent_span_id IS NULL) as root_user_id,
+			anyIf(span_attributes['session.id'], parent_span_id IS NULL) as root_session_id
 		FROM otel_traces
 		WHERE trace_id = ?
 		  AND deleted_at IS NULL
@@ -711,28 +711,28 @@ func (r *traceRepository) ListTraces(ctx context.Context, filter *observability.
 		SELECT
 			trace_id,
 			anyIf(span_id, parent_span_id IS NULL) as root_span_id,
-			anyIf(project_id, parent_span_id IS NULL) as project_id,
+			anyIf(project_id, parent_span_id IS NULL) as root_project_id,
 			min(start_time) as trace_start,
 			maxOrNull(end_time) as trace_end,
-			if(maxOrNull(end_time) IS NOT NULL, maxOrNull(end_time) - min(start_time), NULL) as trace_duration_nano,
+			if(maxOrNull(end_time) IS NOT NULL, toUInt64(maxOrNull(end_time) - min(start_time)), NULL) as trace_duration_nano,
 
 			-- Aggregated cost and usage across all spans
-			sum(total_cost) as total_cost,
+			toFloat64(sum(total_cost)) as total_cost,
 			sum(usage_details['input']) as input_tokens,
 			sum(usage_details['output']) as output_tokens,
 			sum(usage_details['total']) as total_tokens,
 
 			-- Aggregated span metrics
-			count() as span_count,
-			countIf(has_error = true) as error_span_count,
-			max(has_error) as has_error,
+			toInt64(count()) as span_count,
+			toInt64(countIf(has_error = true)) as error_span_count,
+			max(has_error) as trace_has_error,
 
 			-- Root span metadata (use anyIf to get from root span)
-			anyIf(service_name, parent_span_id IS NULL) as service_name,
-			anyIf(model_name, parent_span_id IS NULL) as model_name,
-			anyIf(provider_name, parent_span_id IS NULL) as provider_name,
-			anyIf(span_attributes['user.id'], parent_span_id IS NULL) as user_id,
-			anyIf(span_attributes['session.id'], parent_span_id IS NULL) as session_id
+			anyIf(service_name, parent_span_id IS NULL) as root_service_name,
+			anyIf(model_name, parent_span_id IS NULL) as root_model_name,
+			anyIf(provider_name, parent_span_id IS NULL) as root_provider_name,
+			anyIf(span_attributes['user.id'], parent_span_id IS NULL) as root_user_id,
+			anyIf(span_attributes['session.id'], parent_span_id IS NULL) as root_session_id
 		FROM otel_traces
 		WHERE deleted_at IS NULL
 	`
@@ -756,15 +756,15 @@ func (r *traceRepository) ListTraces(ctx context.Context, filter *observability.
 		}
 
 		if filter.UserID != nil {
-			havingClauses = append(havingClauses, "user_id = ?")
+			havingClauses = append(havingClauses, "root_user_id = ?")
 			havingArgs = append(havingArgs, *filter.UserID)
 		}
 		if filter.SessionID != nil {
-			havingClauses = append(havingClauses, "session_id = ?")
+			havingClauses = append(havingClauses, "root_session_id = ?")
 			havingArgs = append(havingArgs, *filter.SessionID)
 		}
 		if filter.ServiceName != nil {
-			havingClauses = append(havingClauses, "service_name = ?")
+			havingClauses = append(havingClauses, "root_service_name = ?")
 			havingArgs = append(havingArgs, *filter.ServiceName)
 		}
 		if filter.StatusCode != nil {
@@ -910,7 +910,7 @@ func (r *traceRepository) CountTraces(ctx context.Context, filter *observability
 		args = append(args, havingArgs...)
 	}
 
-	query := "SELECT count() FROM (" + innerQuery + ")"
+	query := "SELECT toInt64(count()) FROM (" + innerQuery + ")"
 
 	var count int64
 	err := r.db.QueryRow(ctx, query, args...).Scan(&count)
