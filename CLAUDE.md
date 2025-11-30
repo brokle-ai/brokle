@@ -98,10 +98,10 @@ brokle/
 │   ├── utils/             # Common utilities
 │   └── websocket/         # WebSocket utilities
 ├── migrations/            # Database migration files (27 PostgreSQL, 4 ClickHouse)
-├── seeds/                 # YAML-based seeding data
-│   ├── dev.yaml          # Development seed data
-│   ├── demo.yaml         # Demo seed data
-│   └── test.yaml         # Test seed data
+├── seeds/                 # System template seed data
+│   ├── permissions.yaml  # 63 system permissions
+│   ├── roles.yaml        # 4 role templates (owner, admin, developer, viewer)
+│   └── pricing.yaml      # Provider pricing (20 models, 78 prices)
 ├── web/                   # Next.js 15.5.2 frontend
 └── docs/                  # Public OSS documentation
 ```
@@ -210,8 +210,8 @@ make migrate-status
 make create-migration DB=postgres NAME=add_users_table
 make create-migration DB=clickhouse NAME=add_metrics_table
 
-# Seed with development data
-make seed-dev
+# Seed system data (permissions, roles, pricing)
+make seed
 
 # Database shell access
 make shell-db          # PostgreSQL
@@ -277,9 +277,40 @@ go run cmd/migrate/main.go -dry-run up          # Preview migrations without exe
 - Health monitoring with dirty state detection
 
 #### Database Schema
-- **PostgreSQL**: User auth, organizations, projects, API keys, gateway config, billing
+- **PostgreSQL**: User auth, organizations, projects, API keys, gateway config, billing, provider pricing
 - **ClickHouse**: Traces, spans, quality_scores, request_logs (with TTL retention)
-- **Seeding**: YAML files in `/seeds/` (dev.yaml, demo.yaml, test.yaml)
+- **Seeding**: YAML files in `/seeds/` (permissions.yaml, roles.yaml, pricing.yaml)
+
+#### Seeding System Data
+System template data (permissions, roles, pricing) is managed via YAML seeds, not migrations:
+
+```bash
+# Seed all system data (permissions, roles, pricing)
+go run cmd/migrate/main.go seed
+
+# Seed with verbose output
+go run cmd/migrate/main.go seed -verbose
+
+# Reset and reseed all
+go run cmd/migrate/main.go seed -reset
+
+# Seed only RBAC (permissions and roles)
+go run cmd/migrate/main.go seed-rbac
+
+# Seed only provider pricing
+go run cmd/migrate/main.go seed-pricing
+go run cmd/migrate/main.go seed-pricing -reset -verbose
+```
+
+**Seed Files:**
+- `seeds/permissions.yaml` - 63 system permissions
+- `seeds/roles.yaml` - 4 role templates (owner, admin, developer, viewer)
+- `seeds/pricing.yaml` - 20 AI models, 78 prices (OpenAI, Anthropic, Google)
+
+**Why YAML Seeds?** System data changes frequently. YAML seeds are:
+- Easy to update without new migrations
+- Idempotent (existing records are skipped)
+- No environment complexity (single set of seed files)
 
 ### Testing & Quality
 ```bash
@@ -487,23 +518,41 @@ Single database with domain-separated tables:
 ### Analytics Database (ClickHouse)
 Time-series data optimized for analytical queries with TTL-based retention:
 
-#### Observability Tables
-- **spans** - LLM call spans with request/response data
-  - `attributes` (String) - All OTEL + Brokle attributes with namespace prefixes
-  - `metadata` (String) - OTEL metadata (resourceAttributes + instrumentation scope)
-  - `version` (Nullable(String)) - Application version for A/B testing
-  - ZSTD compression for input/output fields (78% cost reduction vs S3)
-  - **OTEL-native**: Brokle data stored in attributes with `brokle.*` namespace
+#### Observability Tables (OTEL-Native Architecture)
 
-- **traces** - Distributed tracing data (30 day TTL)
-  - `attributes` (String) - All OTEL + Brokle attributes with namespace prefixes
-  - `metadata` (String) - OTEL metadata (resourceAttributes + scope)
-  - `version` (Nullable(String)) - Application version for experiment tracking
-  - Hierarchical trace organization with parent/child relationships
-  - **OTEL-native**: Follows OpenTelemetry standard
+- **otel_traces** - OTLP 1.38+ compliant traces and spans (unified table)
+  - **Core OTLP Fields**:
+    - `span_id`, `trace_id`, `parent_span_id` (hex strings per OTLP spec)
+    - `duration_nano` (UInt64) - Nanosecond precision timing
+    - `status_code` (UInt8) - OTLP status: 0=UNSET, 1=OK, 2=ERROR
+    - `span_kind` (UInt8) - OTLP span kind enum
+  - **OTLP-Standard Attributes** (Map type matching metrics/logs):
+    - `resource_attributes Map(LowCardinality(String), String)` - OTLP resource attributes
+    - `span_attributes Map(LowCardinality(String), String)` - OTLP span attributes
+    - `scope_name`, `scope_version` - Instrumentation scope (separate fields)
+    - `scope_attributes Map(...)` - Scope metadata
+    - `resource_schema_url`, `scope_schema_url` - OTLP 1.38+ schema versioning
+    - Brokle extensions use `brokle.*` namespace in span_attributes
+  - **OTLP Preservation** (Lossless Export):
+    - `otlp_span_raw` (String, ZSTD(3)) - Original OTLP span as JSON
+    - `otlp_resource_attributes` (String, ZSTD(3)) - Resource attributes
+    - `otlp_scope_attributes` (String, ZSTD(3)) - Scope attributes
+  - **Materialized Columns** (Fast Queries):
+    - `service_name` - From metadata.resourceAttributes.service.name
+    - `model_name` - From attributes.gen_ai.request.model
+    - `provider_name` - Dual support: `coalesce(attributes.gen_ai.provider.name, attributes.gen_ai.system)`
+      - Supports OTLP 1.38+ (`gen_ai.provider.name`) and legacy/OpenLLMetry (`gen_ai.system`)
+      - Ensures compatibility with both new and older SDKs
+    - `is_root_span` - Derived from `parent_span_id IS NULL`
+    - `has_error` - Derived from `status_code = 2`
+  - **Nested Types** (OTLP Collector Standard):
+    - `events` - Nested(timestamp, name, attributes, dropped_attributes_count)
+    - `links` - Nested(trace_id, span_id, trace_state, attributes, dropped_attributes_count)
+  - **Trace Derivation**: Traces are virtual (query `WHERE parent_span_id IS NULL`)
+  - **TTL**: 365 days automatic retention
 
 - **quality_scores** - Model performance metrics
-  - Links to traces and spans for evaluation context
+  - Links to traces and spans via trace_id/span_id (hex format)
 
 - **request_logs** - API request logging (60 day TTL)
 
@@ -521,6 +570,48 @@ Time-series data optimized for analytical queries with TTL-based retention:
 - Real-time event pub/sub for WebSocket
 
 ## Development Patterns
+
+### OTEL-Native Observability Architecture
+
+**Architecture**: 100% OpenTelemetry Protocol compliant (OTLP 1.38+)
+
+**Key Concepts**:
+- **Traces are Virtual**: Derived from root spans (`WHERE parent_span_id IS NULL`)
+- **Single Table**: `otel_traces` stores both traces and spans
+- **On-Demand Aggregations**: Trace metrics calculated via GROUP BY queries
+- **Bulk Processing**: Worker uses batch inserts (16x performance improvement)
+
+**Querying Traces**:
+```go
+// Get trace metrics (aggregated from spans)
+metrics, err := traceService.GetTraceMetrics(ctx, traceID)
+
+// Get root span (root span = trace in OTLP)
+rootSpan, err := traceService.GetRootSpan(ctx, traceID)
+
+// Get all spans for a trace
+spans, err := traceService.GetTraceWithAllSpans(ctx, traceID)
+
+// List traces with filters (returns TraceMetrics)
+filter := &TraceFilter{ProjectID: "proj123"}
+traces, err := traceService.ListTraces(ctx, filter)
+```
+
+**OTLP Preservation** (Lossless Export):
+```env
+OTLP_PRESERVE_RAW=true  # Default: ON
+```
+Stores raw OTLP in `otlp_span_raw` field (ZSTD compressed) for vendor migration.
+
+**Performance**:
+- Bulk inserts: 50 events = 2 DB calls (was 50 calls)
+- Trace queries: ~50-100ms (GROUP BY aggregation)
+- Root span queries: ~10-20ms (indexed)
+
+**GenAI Semantic Conventions Compatibility**:
+- Supports both OTLP 1.38+ (`gen_ai.provider.name`) and legacy (`gen_ai.system`)
+- Compatible with OpenLLMetry, LangChain, LlamaIndex, and other GenAI SDKs
+- Automatic fallback ensures `provider_name` is populated regardless of SDK version
 
 ### API Key Management
 **Utilities** (`internal/core/domain/auth/apikey_utils.go`):

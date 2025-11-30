@@ -7,8 +7,6 @@ import (
 	"brokle/pkg/response"
 )
 
-// Span Handlers for Dashboard (JWT-authenticated, read + update operations)
-
 // ListSpans handles GET /api/v1/spans
 // @Summary List spans with filtering
 // @Description Retrieve paginated list of spans
@@ -29,54 +27,41 @@ import (
 func (h *Handler) ListSpans(c *gin.Context) {
 	filter := &observability.SpanFilter{}
 
-	// Trace ID filter
 	if traceID := c.Query("trace_id"); traceID != "" {
 		filter.TraceID = &traceID
 	}
-
-	// Type filter
 	if obsType := c.Query("type"); obsType != "" {
 		filter.Type = &obsType
 	}
-
-	// Model filter
 	if model := c.Query("model"); model != "" {
 		filter.Model = &model
 	}
-
-	// Level filter
 	if level := c.Query("level"); level != "" {
 		filter.Level = &level
 	}
 
-	// Offset pagination
 	params := response.ParsePaginationParams(
 		c.Query("page"),
 		c.Query("limit"),
 		c.Query("sort_by"),
 		c.Query("sort_dir"),
 	)
-
-	// Set embedded pagination fields
 	filter.Params = params
 
-	// Get spans from service
-	spans, err := h.services.GetSpanService().GetSpansByFilter(c.Request.Context(), filter)
+	spans, err := h.services.GetTraceService().GetSpansByFilter(c.Request.Context(), filter)
 	if err != nil {
 		h.logger.WithError(err).Error("Failed to list spans")
 		response.Error(c, err)
 		return
 	}
 
-	// Get total count for pagination metadata
-	totalCount, err := h.services.GetSpanService().CountSpans(c.Request.Context(), filter)
+	totalCount, err := h.services.GetTraceService().CountSpans(c.Request.Context(), filter)
 	if err != nil {
 		h.logger.WithError(err).Error("Failed to count spans")
 		response.Error(c, err)
 		return
 	}
 
-	// Build pagination metadata (NewPagination calculates has_next, has_prev, total_pages)
 	paginationMeta := response.NewPagination(params.Page, params.Limit, totalCount)
 
 	response.SuccessWithPagination(c, spans, paginationMeta)
@@ -89,7 +74,7 @@ func (h *Handler) ListSpans(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param id path string true "Span ID"
+// @Param id path string true "Span ID (OTEL 16-character hex)"
 // @Success 200 {object} response.APIResponse{data=observability.Span} "Span details"
 // @Failure 404 {object} response.APIResponse{error=response.APIError} "Span not found"
 // @Failure 500 {object} response.APIResponse{error=response.APIError} "Internal server error"
@@ -101,7 +86,7 @@ func (h *Handler) GetSpan(c *gin.Context) {
 		return
 	}
 
-	span, err := h.services.GetSpanService().GetSpanByID(c.Request.Context(), spanID)
+	span, err := h.services.GetTraceService().GetSpan(c.Request.Context(), spanID)
 	if err != nil {
 		h.logger.WithError(err).Error("Failed to get span")
 		response.Error(c, err)
@@ -111,50 +96,30 @@ func (h *Handler) GetSpan(c *gin.Context) {
 	response.Success(c, span)
 }
 
-// UpdateSpan handles PUT /api/v1/spans/:id
-// @Summary Update span by ID
-// @Description Update an existing span (for corrections/enrichment after initial creation)
+// DeleteSpan handles DELETE /api/v1/spans/:id
+// @Summary Delete a span
+// @Description Delete a span by its OTEL span_id
 // @Tags Spans
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param id path string true "Span ID"
-// @Param span body observability.Span true "Updated span data"
-// @Success 200 {object} response.APIResponse{data=observability.Span} "Updated span"
-// @Failure 400 {object} response.APIResponse{error=response.APIError} "Invalid request"
+// @Param id path string true "Span ID (OTEL 16-character hex)"
+// @Success 200 {object} response.APIResponse "Span deleted"
 // @Failure 404 {object} response.APIResponse{error=response.APIError} "Span not found"
 // @Failure 500 {object} response.APIResponse{error=response.APIError} "Internal server error"
-// @Router /api/v1/spans/{id} [put]
-func (h *Handler) UpdateSpan(c *gin.Context) {
+// @Router /api/v1/spans/{id} [delete]
+func (h *Handler) DeleteSpan(c *gin.Context) {
 	spanID := c.Param("id")
 	if spanID == "" {
 		response.ValidationError(c, "invalid span_id", "span_id is required")
 		return
 	}
 
-	var span observability.Span
-	if err := c.ShouldBindJSON(&span); err != nil {
-		response.ValidationError(c, "invalid request body", err.Error())
-		return
-	}
-
-	// Ensure SpanID matches path parameter
-	span.SpanID = spanID
-
-	// Update via service
-	if err := h.services.GetSpanService().UpdateSpan(c.Request.Context(), &span); err != nil {
-		h.logger.WithError(err).Error("Failed to update span")
+	if err := h.services.GetTraceService().DeleteSpan(c.Request.Context(), spanID); err != nil {
+		h.logger.WithError(err).Error("Failed to delete span")
 		response.Error(c, err)
 		return
 	}
 
-	// Fetch updated span
-	updated, err := h.services.GetSpanService().GetSpanByID(c.Request.Context(), spanID)
-	if err != nil {
-		h.logger.WithError(err).Error("Failed to fetch updated span")
-		response.Error(c, err)
-		return
-	}
-
-	response.Success(c, updated)
+	response.Success(c, gin.H{"message": "span deleted successfully"})
 }

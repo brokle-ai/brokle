@@ -172,11 +172,12 @@ export function transformTrace(raw: any): Trace {
     // Timestamps
     start_time: parseTimestamp(raw.start_time || raw.startTime) || new Date(),
     end_time: parseTimestamp(raw.end_time || raw.endTime),
-    duration_ms: raw.duration_ms || raw.durationMs || undefined,
+    duration: raw.duration || undefined, // Nanoseconds (OTLP spec)
 
     // Status
     status_code: raw.status_code ?? raw.statusCode ?? 0,
     status_message: raw.status_message || raw.statusMessage || undefined,
+    has_error: raw.has_error ?? (raw.status_code === 2 || raw.statusCode === 2),
 
     // Attributes (parse JSON strings)
     resource_attributes: typeof raw.resource_attributes === 'string'
@@ -272,11 +273,12 @@ export function transformSpan(raw: any): Span {
     // Timestamps
     start_time: parseTimestamp(raw.start_time || raw.startTime) || new Date(),
     end_time: parseTimestamp(raw.end_time || raw.endTime),
-    duration_ms: raw.duration_ms || raw.durationMs || undefined,
+    duration: raw.duration || undefined, // Nanoseconds (OTLP spec)
 
     // Status
     status_code: raw.status_code ?? raw.statusCode ?? 0,
     status_message: raw.status_message || raw.statusMessage || undefined,
+    has_error: raw.has_error ?? (raw.status_code === 2 || raw.statusCode === 2),
 
     // Attributes (new schema names - parse JSON strings if needed)
     attributes: typeof raw.attributes === 'string'

@@ -59,11 +59,12 @@ export type Span = {
   // Timing
   start_time: Date
   end_time?: Date
-  duration_ms?: number
+  duration?: number // Nanoseconds (OTLP spec)
 
   // OTEL Status
   status_code: number // UInt8: 0=UNSET, 1=OK, 2=ERROR
   status_message?: string
+  has_error: boolean // Semantic flag (true when status_code=2)
 
   // Attributes (new schema names)
   attributes?: Record<string, any>
@@ -128,11 +129,12 @@ export type Trace = {
   // Timing
   start_time: Date
   end_time?: Date
-  duration_ms?: number
+  duration?: number // Nanoseconds (OTLP spec)
 
   // OTEL Status
   status_code: number // UInt8: 0=UNSET, 1=OK, 2=ERROR
   status_message?: string
+  has_error: boolean // Semantic flag (true when status_code=2)
 
   // Attributes
   resource_attributes?: Record<string, any>
@@ -229,11 +231,12 @@ export const spanSchema: z.ZodType<Span> = z.lazy(() =>
     // Timing
     start_time: z.date(),
     end_time: z.date().optional(),
-    duration_ms: z.number().optional(),
+    duration: z.number().optional(), // Nanoseconds (OTLP spec)
 
     // OTEL Status
     status_code: z.number(), // UInt8: 0=UNSET, 1=OK, 2=ERROR
     status_message: z.string().optional(),
+    has_error: z.boolean(), // Semantic flag (true when status_code=2)
 
     // Attributes (new schema names - already parsed JSON objects, not strings)
     attributes: z.record(z.string(), z.any()).optional(),
@@ -304,11 +307,12 @@ export const traceSchema: z.ZodType<Trace> = z.lazy(() =>
     // Timing
     start_time: z.date(),
     end_time: z.date().optional(),
-    duration_ms: z.number().optional(),
+    duration: z.number().optional(), // Nanoseconds (OTLP spec)
 
     // OTEL Status
     status_code: z.number(), // UInt8: 0=UNSET, 1=OK, 2=ERROR
     status_message: z.string().optional(),
+    has_error: z.boolean(), // Semantic flag (true when status_code=2)
 
     // Attributes (already parsed JSON object, not string)
     resource_attributes: z.record(z.string(), z.any()).optional(),

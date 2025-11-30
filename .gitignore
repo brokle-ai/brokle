@@ -178,8 +178,11 @@ __pycache__/
 docs/build/
 site/
 
-# Internal documentation (not for public repo)
+# Internal documentation
 internal-docs/
+
+# Claude documentation
+claudedocs/
 
 # pnpm
 .pnpm-debug.log*

@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"time"
 
@@ -37,6 +38,7 @@ import (
 	userRepo "brokle/internal/infrastructure/repository/user"
 	"brokle/internal/infrastructure/storage"
 	"brokle/internal/infrastructure/streams"
+	grpcTransport "brokle/internal/transport/grpc"
 	"brokle/internal/transport/http"
 	"brokle/internal/transport/http/handlers"
 	"brokle/internal/workers"
@@ -62,9 +64,10 @@ type CoreContainer struct {
 	Enterprise *EnterpriseContainer
 }
 
-// ServerContainer holds HTTP server components
+// ServerContainer holds HTTP and gRPC server components
 type ServerContainer struct {
 	HTTPServer *http.Server
+	GRPCServer *grpcTransport.Server
 }
 
 // ProviderContainer holds all provider instances for dependency injection
@@ -156,8 +159,10 @@ type OrganizationRepositories struct {
 // ObservabilityRepositories contains all observability-related repositories
 type ObservabilityRepositories struct {
 	Trace                  observability.TraceRepository
-	Span                   observability.SpanRepository
 	Score                  observability.ScoreRepository
+	Metrics                observability.MetricsRepository
+	Logs                   observability.LogsRepository
+	GenAIEvents            observability.GenAIEventsRepository
 	BlobStorage            observability.BlobStorageRepository
 	TelemetryDeduplication observability.TelemetryDeduplicationRepository
 }
@@ -260,8 +265,10 @@ func ProvideWorkers(core *CoreContainer) (*WorkerContainer, error) {
 		core.Logger,
 		consumerConfig,
 		core.Services.Observability.TraceService,
-		core.Services.Observability.SpanService,
 		core.Services.Observability.ScoreService,
+		core.Services.Observability.MetricsService,
+		core.Services.Observability.LogsService,
+		core.Services.Observability.GenAIEventsService,
 	)
 
 	return &WorkerContainer{
@@ -413,8 +420,57 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 		core.Databases.Redis.Client,
 	)
 
+	// Initialize gRPC OTLP server (always enabled)
+	// Convert logrus.Logger to slog.Logger for gRPC
+	slogLogger := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	}))
+
+	// Create gRPC OTLP handlers (reuse service layer)
+	grpcOTLPHandler := grpcTransport.NewOTLPHandler(
+		core.Services.Observability.StreamProducer,
+		core.Services.Observability.DeduplicationService,
+		core.Services.Observability.OTLPConverterService,
+		slogLogger,
+	)
+
+	grpcOTLPMetricsHandler := grpcTransport.NewOTLPMetricsHandler(
+		core.Services.Observability.StreamProducer,
+		core.Services.Observability.OTLPMetricsConverterService,
+		slogLogger,
+	)
+
+	grpcOTLPLogsHandler := grpcTransport.NewOTLPLogsHandler(
+		core.Services.Observability.StreamProducer,
+		core.Services.Observability.OTLPLogsConverterService,
+		core.Services.Observability.OTLPEventsConverterService,
+		slogLogger,
+	)
+
+	// Create gRPC auth interceptor (reuses APIKeyService)
+	grpcAuthInterceptor := grpcTransport.NewAuthInterceptor(
+		core.Services.Auth.APIKey,
+		slogLogger,
+	)
+
+	// Create gRPC server with all OTLP signal handlers
+	grpcServer, err := grpcTransport.NewServer(
+		core.Config.GRPC.Port,
+		grpcOTLPHandler,
+		grpcOTLPMetricsHandler,
+		grpcOTLPLogsHandler,
+		grpcAuthInterceptor,
+		slogLogger,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create gRPC server: %w", err)
+	}
+
+	core.Logger.WithField("port", core.Config.GRPC.Port).Info("gRPC OTLP server initialized")
+
 	return &ServerContainer{
 		HTTPServer: httpServer,
+		GRPCServer: grpcServer,
 	}, nil
 }
 
@@ -455,8 +511,10 @@ func ProvideOrganizationRepositories(db *gorm.DB) *OrganizationRepositories {
 func ProvideObservabilityRepositories(clickhouseDB *database.ClickHouseDB, postgresDB *gorm.DB, redisDB *database.RedisDB) *ObservabilityRepositories {
 	return &ObservabilityRepositories{
 		Trace:                  observabilityRepo.NewTraceRepository(clickhouseDB.Conn),
-		Span:                   observabilityRepo.NewSpanRepository(clickhouseDB.Conn),
 		Score:                  observabilityRepo.NewScoreRepository(clickhouseDB.Conn),
+		Metrics:                observabilityRepo.NewMetricsRepository(clickhouseDB.Conn),
+		Logs:                   observabilityRepo.NewLogsRepository(clickhouseDB.Conn),
+		GenAIEvents:            observabilityRepo.NewGenAIEventsRepository(clickhouseDB.Conn),
 		BlobStorage:            observabilityRepo.NewBlobStorageRepository(clickhouseDB.Conn),
 		TelemetryDeduplication: observabilityRepo.NewTelemetryDeduplicationRepository(redisDB),
 	}
@@ -700,8 +758,10 @@ func ProvideObservabilityServices(
 
 	return observabilityService.NewServiceRegistry(
 		observabilityRepos.Trace,
-		observabilityRepos.Span,
 		observabilityRepos.Score,
+		observabilityRepos.Metrics,
+		observabilityRepos.Logs,
+		observabilityRepos.GenAIEvents,
 		observabilityRepos.BlobStorage,
 		s3Client,
 		&cfg.BlobStorage,
@@ -709,6 +769,7 @@ func ProvideObservabilityServices(
 		deduplicationService,
 		telemetryService,
 		analyticsServices.ProviderPricing,
+		&cfg.Observability,  // Pass config object like BlobStorageConfig
 		logger,
 	)
 }

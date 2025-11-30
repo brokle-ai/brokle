@@ -27,12 +27,14 @@ type Config struct {
 	Notifications NotificationsConfig `mapstructure:"notifications"`
 	Enterprise    EnterpriseConfig    `mapstructure:"enterprise"`
 	Server        ServerConfig        `mapstructure:"server"`
-	BlobStorage   BlobStorageConfig   `mapstructure:"blob_storage"`
-	Monitoring    MonitoringConfig    `mapstructure:"monitoring"`
-	Logging       LoggingConfig       `mapstructure:"logging"`
-	Redis         RedisConfig         `mapstructure:"redis"`
-	Workers       WorkersConfig       `mapstructure:"workers"`
-	Features      FeatureConfig       `mapstructure:"features"`
+	GRPC          GRPCConfig          `mapstructure:"grpc"`
+	BlobStorage     BlobStorageConfig     `mapstructure:"blob_storage"`
+	Monitoring      MonitoringConfig      `mapstructure:"monitoring"`
+	Observability   ObservabilityConfig   `mapstructure:"observability"`
+	Logging         LoggingConfig         `mapstructure:"logging"`
+	Redis           RedisConfig           `mapstructure:"redis"`
+	Workers         WorkersConfig         `mapstructure:"workers"`
+	Features        FeatureConfig         `mapstructure:"features"`
 }
 
 // AppConfig contains application-level configuration.
@@ -56,6 +58,11 @@ type ServerConfig struct {
 	WriteTimeout       time.Duration `mapstructure:"write_timeout"`
 	Port               int           `mapstructure:"port"`
 	EnableCORS         bool          `mapstructure:"enable_cors"`
+}
+
+// GRPCConfig contains gRPC server configuration for OTLP ingestion
+type GRPCConfig struct {
+	Port int `mapstructure:"port"`
 }
 
 // DatabaseConfig contains PostgreSQL database configuration.
@@ -190,6 +197,11 @@ type MonitoringConfig struct {
 	SampleRate     float64       `mapstructure:"sample_rate"`
 	FlushInterval  time.Duration `mapstructure:"flush_interval"`
 	Enabled        bool          `mapstructure:"enabled"`
+}
+
+// ObservabilityConfig contains OTLP and telemetry configuration.
+type ObservabilityConfig struct {
+	PreserveRawOTLP bool `mapstructure:"preserve_raw_otlp" env:"OTLP_PRESERVE_RAW" envDefault:"true"`
 }
 
 // WorkersConfig contains background worker configuration.
@@ -799,6 +811,9 @@ func setDefaults() {
 	viper.SetDefault("server.cors_allowed_origins", []string{"http://localhost:3000", "http://localhost:3001"})
 	viper.SetDefault("server.cors_allowed_methods", []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"})
 	viper.SetDefault("server.cors_allowed_headers", []string{"Content-Type", "Authorization", "X-API-Key"})
+
+	// gRPC OTLP defaults (industry standard port 4317)
+	viper.SetDefault("grpc.port", 4317) // OTLP gRPC standard port
 
 	// Database defaults (URL-first, individual fields as fallback)
 	viper.SetDefault("database.url", "") // Preferred: Set via DATABASE_URL env var

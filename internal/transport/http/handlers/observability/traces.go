@@ -10,8 +10,6 @@ import (
 	"brokle/pkg/response"
 )
 
-// Trace Handlers for Dashboard (JWT-authenticated, read + update operations)
-
 // ListTraces handles GET /api/v1/traces
 // @Summary List traces for a project
 // @Description Retrieve paginated list of traces with optional filtering
@@ -22,39 +20,36 @@ import (
 // @Param project_id query string true "Project ID"
 // @Param session_id query string false "Filter by session ID"
 // @Param user_id query string false "Filter by user ID"
+// @Param service_name query string false "Filter by service name (OTLP resource attribute)"
 // @Param start_time query int64 false "Start time (Unix timestamp)"
 // @Param end_time query int64 false "End time (Unix timestamp)"
 // @Param limit query int false "Limit (default 50, max 1000)"
 // @Param offset query int false "Offset (default 0)"
-// @Success 200 {object} response.APIResponse{data=[]observability.Trace} "List of traces"
+// @Success 200 {object} response.APIResponse{data=[]observability.TraceSummary} "List of trace summaries"
 // @Failure 400 {object} response.APIResponse{error=response.APIError} "Invalid parameters"
 // @Failure 401 {object} response.APIResponse{error=response.APIError} "Unauthorized"
 // @Failure 500 {object} response.APIResponse{error=response.APIError} "Internal server error"
 // @Router /api/v1/traces [get]
 func (h *Handler) ListTraces(c *gin.Context) {
-	// Get project ID from query
 	projectID := c.Query("project_id")
 	if projectID == "" {
 		response.ValidationError(c, "project_id is required", "project_id query parameter is required")
 		return
 	}
 
-	// Build filter from query parameters
 	filter := &observability.TraceFilter{
-		ProjectID: projectID, // Set project scope
+		ProjectID: projectID,
 	}
 
-	// Session ID filter (virtual session)
 	if sessionID := c.Query("session_id"); sessionID != "" {
 		filter.SessionID = &sessionID
 	}
-
-	// User ID filter
 	if userID := c.Query("user_id"); userID != "" {
 		filter.UserID = &userID
 	}
-
-	// Time range filters
+	if serviceName := c.Query("service_name"); serviceName != "" {
+		filter.ServiceName = &serviceName
+	}
 	if startTimeStr := c.Query("start_time"); startTimeStr != "" {
 		startTimeInt, err := strconv.ParseInt(startTimeStr, 10, 64)
 		if err != nil {
@@ -75,26 +70,21 @@ func (h *Handler) ListTraces(c *gin.Context) {
 		filter.EndTime = &endTime
 	}
 
-	// Offset pagination
 	params := response.ParsePaginationParams(
 		c.Query("page"),
 		c.Query("limit"),
 		c.Query("sort_by"),
 		c.Query("sort_dir"),
 	)
-
-	// Set embedded pagination fields
 	filter.Params = params
 
-	// Get traces from service
-	traces, err := h.services.GetTraceService().GetTracesByProjectID(c.Request.Context(), projectID, filter)
+	traces, err := h.services.GetTraceService().ListTraces(c.Request.Context(), filter)
 	if err != nil {
 		h.logger.WithError(err).Error("Failed to list traces")
 		response.Error(c, err)
 		return
 	}
 
-	// Get total count for pagination metadata
 	totalCount, err := h.services.GetTraceService().CountTraces(c.Request.Context(), filter)
 	if err != nil {
 		h.logger.WithError(err).Error("Failed to count traces")
@@ -102,7 +92,6 @@ func (h *Handler) ListTraces(c *gin.Context) {
 		return
 	}
 
-	// Build pagination metadata (NewPagination calculates has_next, has_prev, total_pages)
 	paginationMeta := response.NewPagination(params.Page, params.Limit, totalCount)
 
 	response.SuccessWithPagination(c, traces, paginationMeta)
@@ -110,13 +99,13 @@ func (h *Handler) ListTraces(c *gin.Context) {
 
 // GetTrace handles GET /api/v1/traces/:id
 // @Summary Get trace by ID
-// @Description Retrieve detailed trace information
+// @Description Retrieve detailed trace information (aggregated from spans)
 // @Tags Traces
 // @Accept json
 // @Produce json
 // @Security BearerAuth
 // @Param id path string true "Trace ID"
-// @Success 200 {object} response.APIResponse{data=observability.Trace} "Trace details"
+// @Success 200 {object} response.APIResponse{data=observability.TraceSummary} "Trace summary"
 // @Failure 404 {object} response.APIResponse{error=response.APIError} "Trace not found"
 // @Failure 500 {object} response.APIResponse{error=response.APIError} "Internal server error"
 // @Router /api/v1/traces/{id} [get]
@@ -127,14 +116,14 @@ func (h *Handler) GetTrace(c *gin.Context) {
 		return
 	}
 
-	trace, err := h.services.GetTraceService().GetTraceByID(c.Request.Context(), traceID)
+	traceSummary, err := h.services.GetTraceService().GetTrace(c.Request.Context(), traceID)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to get trace")
+		h.logger.WithError(err).Error("Failed to get trace summary")
 		response.Error(c, err)
 		return
 	}
 
-	response.Success(c, trace)
+	response.Success(c, traceSummary)
 }
 
 // GetTraceWithSpans handles GET /api/v1/traces/:id/spans
@@ -145,7 +134,7 @@ func (h *Handler) GetTrace(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path string true "Trace ID"
-// @Success 200 {object} response.APIResponse{data=observability.Trace} "Trace with spans"
+// @Success 200 {object} response.APIResponse{data=[]observability.Span} "Spans for trace"
 // @Failure 404 {object} response.APIResponse{error=response.APIError} "Trace not found"
 // @Failure 500 {object} response.APIResponse{error=response.APIError} "Internal server error"
 // @Router /api/v1/traces/{id}/spans [get]
@@ -156,14 +145,14 @@ func (h *Handler) GetTraceWithSpans(c *gin.Context) {
 		return
 	}
 
-	trace, err := h.services.GetTraceService().GetTraceWithSpans(c.Request.Context(), traceID)
+	spans, err := h.services.GetTraceService().GetTraceSpans(c.Request.Context(), traceID)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to get trace with spans")
+		h.logger.WithError(err).Error("Failed to get spans for trace")
 		response.Error(c, err)
 		return
 	}
 
-	response.Success(c, trace)
+	response.Success(c, spans)
 }
 
 // GetTraceWithScores handles GET /api/v1/traces/:id/scores
@@ -174,7 +163,7 @@ func (h *Handler) GetTraceWithSpans(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param id path string true "Trace ID"
-// @Success 200 {object} response.APIResponse{data=observability.Trace} "Trace with scores"
+// @Success 200 {object} response.APIResponse{data=[]observability.Score} "Scores for trace"
 // @Failure 404 {object} response.APIResponse{error=response.APIError} "Trace not found"
 // @Failure 500 {object} response.APIResponse{error=response.APIError} "Internal server error"
 // @Router /api/v1/traces/{id}/scores [get]
@@ -185,60 +174,40 @@ func (h *Handler) GetTraceWithScores(c *gin.Context) {
 		return
 	}
 
-	trace, err := h.services.GetTraceService().GetTraceWithScores(c.Request.Context(), traceID)
+	scores, err := h.services.GetScoreService().GetScoresByTraceID(c.Request.Context(), traceID)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to get trace with scores")
+		h.logger.WithError(err).Error("Failed to get scores for trace")
 		response.Error(c, err)
 		return
 	}
 
-	response.Success(c, trace)
+	response.Success(c, scores)
 }
 
-// UpdateTrace handles PUT /api/v1/traces/:id
-// @Summary Update trace metadata
-// @Description Update trace name, tags, or metadata (corrections/enrichment via dashboard)
+// DeleteTrace handles DELETE /api/v1/traces/:id
+// @Summary Delete a trace
+// @Description Delete all spans belonging to a trace
 // @Tags Traces
 // @Accept json
 // @Produce json
 // @Security BearerAuth
 // @Param id path string true "Trace ID"
-// @Param trace body observability.Trace true "Updated trace data"
-// @Success 200 {object} response.APIResponse{data=observability.Trace} "Updated trace"
-// @Failure 400 {object} response.APIResponse{error=response.APIError} "Invalid request"
+// @Success 200 {object} response.APIResponse "Trace deleted"
 // @Failure 404 {object} response.APIResponse{error=response.APIError} "Trace not found"
 // @Failure 500 {object} response.APIResponse{error=response.APIError} "Internal server error"
-// @Router /api/v1/traces/{id} [put]
-func (h *Handler) UpdateTrace(c *gin.Context) {
+// @Router /api/v1/traces/{id} [delete]
+func (h *Handler) DeleteTrace(c *gin.Context) {
 	traceID := c.Param("id")
 	if traceID == "" {
 		response.ValidationError(c, "invalid trace_id", "trace_id is required")
 		return
 	}
 
-	var trace observability.Trace
-	if err := c.ShouldBindJSON(&trace); err != nil {
-		response.ValidationError(c, "invalid request body", err.Error())
-		return
-	}
-
-	// Ensure TraceID matches path parameter
-	trace.TraceID = traceID
-
-	// Update via service
-	if err := h.services.GetTraceService().UpdateTrace(c.Request.Context(), &trace); err != nil {
-		h.logger.WithError(err).Error("Failed to update trace")
+	if err := h.services.GetTraceService().DeleteTrace(c.Request.Context(), traceID); err != nil {
+		h.logger.WithError(err).Error("Failed to delete trace")
 		response.Error(c, err)
 		return
 	}
 
-	// Fetch updated trace
-	updated, err := h.services.GetTraceService().GetTraceByID(c.Request.Context(), traceID)
-	if err != nil {
-		h.logger.WithError(err).Error("Failed to fetch updated trace")
-		response.Error(c, err)
-		return
-	}
-
-	response.Success(c, updated)
+	response.Success(c, gin.H{"message": "trace deleted successfully"})
 }

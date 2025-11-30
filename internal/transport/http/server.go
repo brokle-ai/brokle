@@ -300,7 +300,7 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 		analytics.GET("/models", s.handlers.Analytics.Models)
 	}
 
-	// Traces routes - observability data
+	// Traces routes
 	traces := protected.Group("/traces")
 	{
 		// Read operations
@@ -308,18 +308,18 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 		traces.GET("/:id", s.handlers.Observability.GetTrace)
 		traces.GET("/:id/spans", s.handlers.Observability.GetTraceWithSpans)
 		traces.GET("/:id/scores", s.handlers.Observability.GetTraceWithScores)
-		// Write operations (corrections/enrichment via dashboard)
-		traces.PUT("/:id", s.handlers.Observability.UpdateTrace)
+		// Delete operations (admin data cleanup)
+		traces.DELETE("/:id", s.handlers.Observability.DeleteTrace)
 	}
 
-	// Spans routes - observability data (ClickHouse)
+	// Spans routes
 	spans := protected.Group("/spans")
 	{
 		// Read operations
 		spans.GET("", s.handlers.Observability.ListSpans)
 		spans.GET("/:id", s.handlers.Observability.GetSpan)
-		// Write operations (corrections/enrichment via dashboard)
-		spans.PUT("/:id", s.handlers.Observability.UpdateSpan)
+		// Delete operations (admin data cleanup)
+		spans.DELETE("/:id", s.handlers.Observability.DeleteSpan)
 	}
 
 	// Quality Scores routes - observability data (ClickHouse)
@@ -408,9 +408,9 @@ func (s *Server) setupSDKRoutes(router *gin.RouterGroup) {
 	// Compatible with: OpenTelemetry Collector, OTLP SDKs, direct integrations
 	router.POST("/traces", s.handlers.OTLP.HandleTraces)
 
-	// Future OTLP standard endpoints (OpenTelemetry specification):
-	// router.POST("/metrics", s.handlers.OTLP.HandleMetrics) // POST /v1/metrics - OTLP metrics ingestion
-	// router.POST("/logs", s.handlers.OTLP.HandleLogs)       // POST /v1/logs - OTLP logs ingestion
+	// OTLP metrics and logs endpoints (OpenTelemetry specification)
+	router.POST("/metrics", s.handlers.OTLPMetrics.HandleMetrics) // POST /v1/metrics - OTLP metrics ingestion
+	router.POST("/logs", s.handlers.OTLPLogs.HandleLogs)          // POST /v1/logs - OTLP logs ingestion
 }
 
 // Shutdown gracefully shuts down the server

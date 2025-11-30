@@ -43,6 +43,8 @@ type Handlers struct {
 	RBAC          *rbac.Handler
 	Observability *observability.Handler
 	OTLP          *observability.OTLPHandler
+	OTLPMetrics   *observability.OTLPMetricsHandler
+	OTLPLogs      *observability.OTLPLogsHandler
 }
 
 // NewHandlers creates a new handlers instance with all dependencies
@@ -83,5 +85,7 @@ func NewHandlers(
 		RBAC:          rbac.NewHandler(cfg, logger, roleService, permissionService, organizationMemberService, scopeService),
 		Observability: observability.NewHandler(cfg, logger, observabilityServices),
 		OTLP:          observability.NewOTLPHandler(observabilityServices.StreamProducer, observabilityServices.DeduplicationService, observabilityServices.OTLPConverterService, logger),
+		OTLPMetrics:   observability.NewOTLPMetricsHandler(observabilityServices.StreamProducer, observabilityServices.OTLPMetricsConverterService, logger),
+		OTLPLogs:      observability.NewOTLPLogsHandler(observabilityServices.StreamProducer, observabilityServices.OTLPLogsConverterService, observabilityServices.OTLPEventsConverterService, logger),
 	}
 }

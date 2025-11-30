@@ -347,28 +347,23 @@ CREATE INDEX idx_projects_created_at ON projects(created_at);
 DROP TABLE IF EXISTS projects;
 ```
 
-#### Seeding Data
+#### Seeding System Data
 
 ```bash
-# Seed with development data
-make seed-dev
+# Seed system data (permissions, roles, pricing)
+make seed
 
-# Seed with production data
-make seed-prod
-
-# Seed specific database
-make seed-postgres
-make seed-clickhouse
+# Or use CLI directly with options
+go run cmd/migrate/main.go seed -verbose    # With detailed output
+go run cmd/migrate/main.go seed -reset      # Reset and reseed
+go run cmd/migrate/main.go seed-rbac        # RBAC only
+go run cmd/migrate/main.go seed-pricing     # Pricing only
 ```
 
-Creating new seeders:
-```bash
-# Create SQL seeder
-make create-seeder DB=postgres NAME=sample_projects
-
-# Create Go seeder (for complex logic)
-make create-seeder DB=postgres NAME=sample_projects TYPE=go
-```
+Seed files are in `seeds/`:
+- `permissions.yaml` - 63 system permissions
+- `roles.yaml` - 4 role templates
+- `pricing.yaml` - 20 AI models, 78 prices
 
 ### Testing
 

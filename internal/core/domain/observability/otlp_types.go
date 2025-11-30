@@ -17,6 +17,7 @@ type ResourceSpan struct {
 // Resource represents OTEL resource attributes
 type Resource struct {
 	Attributes []KeyValue `json:"attributes"`
+	SchemaUrl  string     `json:"schemaUrl,omitempty"`
 }
 
 // ScopeSpan represents a collection of spans from a single instrumentation scope
@@ -30,6 +31,7 @@ type Scope struct {
 	Name       string     `json:"name"`
 	Version    string     `json:"version,omitempty"`
 	Attributes []KeyValue `json:"attributes,omitempty"`
+	SchemaUrl  string     `json:"schemaUrl,omitempty"`
 }
 
 // OTLPSpan represents an OTLP span (wire format)

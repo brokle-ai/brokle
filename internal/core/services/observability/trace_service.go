@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/sirupsen/logrus"
 
@@ -13,247 +12,244 @@ import (
 	appErrors "brokle/pkg/errors"
 )
 
-// TraceService implements business logic for trace management
 type TraceService struct {
 	traceRepo observability.TraceRepository
-	spanRepo  observability.SpanRepository
-	scoreRepo observability.ScoreRepository
 	logger    *logrus.Logger
 }
 
-// NewTraceService creates a new trace service instance
 func NewTraceService(
 	traceRepo observability.TraceRepository,
-	spanRepo observability.SpanRepository,
-	scoreRepo observability.ScoreRepository,
 	logger *logrus.Logger,
 ) *TraceService {
 	return &TraceService{
 		traceRepo: traceRepo,
-		spanRepo:  spanRepo,
-		scoreRepo: scoreRepo,
 		logger:    logger,
 	}
 }
 
-// CreateTrace creates a new OTEL trace with validation
-func (s *TraceService) CreateTrace(ctx context.Context, trace *observability.Trace) error {
-	// Validate required fields
-	if trace.ProjectID == "" {
-		return appErrors.NewValidationError("project_id is required", "trace must have a valid project_id")
+func (s *TraceService) IngestSpan(ctx context.Context, span *observability.Span) error {
+	if span.TraceID == "" {
+		return appErrors.NewValidationError("trace_id is required", "span must be linked to a trace")
 	}
-	if trace.Name == "" {
-		return appErrors.NewValidationError("name is required", "trace name cannot be empty")
+	if span.ProjectID == "" {
+		return appErrors.NewValidationError("project_id is required", "span must have a valid project_id")
 	}
-	if trace.TraceID == "" {
-		return appErrors.NewValidationError("trace_id is required", "trace must have OTEL trace_id")
+	if span.SpanName == "" {
+		return appErrors.NewValidationError("span_name is required", "span name cannot be empty")
 	}
-
-	// Validate OTEL trace_id format (32 hex chars)
-	if len(trace.TraceID) != 32 {
-		return appErrors.NewValidationError("invalid trace_id", "OTEL trace_id must be 32 hex characters")
+	if span.SpanID == "" {
+		return appErrors.NewValidationError("span_id is required", "span must have OTEL span_id")
+	}
+	if len(span.SpanID) != 16 {
+		return appErrors.NewValidationError("invalid span_id", "OTEL span_id must be 16 hex characters")
 	}
 
 	// Set defaults
-	if trace.StatusCode == 0 {
-		trace.StatusCode = observability.StatusCodeUnset // UInt8: 0
+	if span.StatusCode == 0 {
+		span.StatusCode = observability.StatusCodeUnset
 	}
-	if trace.Environment == "" {
-		trace.Environment = "production"
+	if span.SpanKind == 0 {
+		span.SpanKind = observability.SpanKindInternal
 	}
-	if trace.Metadata == nil {
-		trace.Metadata = make(map[string]interface{})
+	if span.SpanAttributes == nil {
+		span.SpanAttributes = make(map[string]string)
 	}
-	if trace.CreatedAt.IsZero() {
-		trace.CreatedAt = time.Now()
+	if span.ResourceAttributes == nil {
+		span.ResourceAttributes = make(map[string]string)
 	}
-
-	// Calculate duration if not set
-	trace.CalculateDuration()
-
-	// Store trace directly in ClickHouse (ZSTD compression handles all sizes)
-	if err := s.traceRepo.Create(ctx, trace); err != nil {
-		return appErrors.NewInternalError("failed to create trace", err)
+	if span.ScopeAttributes == nil {
+		span.ScopeAttributes = make(map[string]string)
 	}
 
-	return nil
-}
+	span.CalculateDuration()
 
-// UpdateTrace updates an existing trace
-func (s *TraceService) UpdateTrace(ctx context.Context, trace *observability.Trace) error {
-	// Validate trace exists
-	existing, err := s.traceRepo.GetByID(ctx, trace.TraceID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return appErrors.NewNotFoundError("trace " + trace.TraceID)
-		}
-		return appErrors.NewInternalError("failed to get trace", err)
-	}
-
-	// Merge non-zero fields from incoming trace into existing
-	mergeTraceFields(existing, trace)
-
-	// Preserve version for increment in repository layer
-
-	// Update trace
-	if err := s.traceRepo.Update(ctx, existing); err != nil {
-		return appErrors.NewInternalError("failed to update trace", err)
+	if err := s.traceRepo.InsertSpan(ctx, span); err != nil {
+		return appErrors.NewInternalError("failed to create span", err)
 	}
 
 	return nil
 }
 
-// Note: UpdateTraceMetrics removed - aggregations calculated on-demand
-// See aggregation_service.go for query-time aggregation logic
-
-// mergeTraceFields merges non-zero fields from src into dst
-// This prevents zero-value corruption from partial JSON updates
-func mergeTraceFields(dst *observability.Trace, src *observability.Trace) {
-	// Immutable fields (never update):
-	// - TraceID (primary key)
-	// - ProjectID (security boundary)
-	// - Version (managed by repository)
-
-	// Update optional fields only if non-zero
-	if src.Name != "" {
-		dst.Name = src.Name
-	}
-	if src.UserID != nil && *src.UserID != "" {
-		dst.UserID = src.UserID
-	}
-	if src.SessionID != nil && *src.SessionID != "" {
-		dst.SessionID = src.SessionID
-	}
-	if src.Input != nil {
-		dst.Input = src.Input
-	}
-	if src.Output != nil {
-		dst.Output = src.Output
-	}
-	if src.Metadata != nil && len(src.Metadata) > 0 {
-		dst.Metadata = src.Metadata
-	}
-	if src.Tags != nil {
-		dst.Tags = src.Tags
-	}
-	if src.Environment != "" {
-		dst.Environment = src.Environment
-	}
-	if src.Release != nil {
-		dst.Release = src.Release
-	}
-	if !src.StartTime.IsZero() {
-		dst.StartTime = src.StartTime
-	}
-	if src.EndTime != nil {
-		dst.EndTime = src.EndTime
-		// Recalculate duration when end time is updated
-		dst.CalculateDuration()
-	}
-	if src.StatusCode != 0 {
-		dst.StatusCode = src.StatusCode
-	}
-	if src.StatusMessage != nil {
-		dst.StatusMessage = src.StatusMessage
+func (s *TraceService) IngestSpanBatch(ctx context.Context, spans []*observability.Span) error {
+	if len(spans) == 0 {
+		return nil
 	}
 
-	// Note: ServiceName, ServiceVersion, Release now in metadata JSON
-	// Version and Release are materialized columns from metadata
-
-	// Bookmarked and Public are bool, so always update
-	dst.Bookmarked = src.Bookmarked
-	dst.Public = src.Public
-}
-
-// DeleteTrace soft deletes a trace
-func (s *TraceService) DeleteTrace(ctx context.Context, id string) error {
-	// Validate trace exists
-	_, err := s.traceRepo.GetByID(ctx, id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return appErrors.NewNotFoundError("trace " + id)
+	for i, span := range spans {
+		if span.TraceID == "" {
+			return appErrors.NewValidationError(fmt.Sprintf("span[%d].trace_id", i), "trace_id is required")
 		}
-		return appErrors.NewInternalError("failed to get trace", err)
+		if span.ProjectID == "" {
+			return appErrors.NewValidationError(fmt.Sprintf("span[%d].project_id", i), "project_id is required")
+		}
+		if span.SpanName == "" {
+			return appErrors.NewValidationError(fmt.Sprintf("span[%d].span_name", i), "span_name is required")
+		}
+		if span.SpanID == "" {
+			return appErrors.NewValidationError(fmt.Sprintf("span[%d].span_id", i), "OTEL span_id is required")
+		}
+
+		// Set defaults
+		if span.StatusCode == 0 {
+			span.StatusCode = observability.StatusCodeUnset
+		}
+		if span.SpanKind == 0 {
+			span.SpanKind = observability.SpanKindInternal
+		}
+		if span.SpanAttributes == nil {
+			span.SpanAttributes = make(map[string]string)
+		}
+		if span.ResourceAttributes == nil {
+			span.ResourceAttributes = make(map[string]string)
+		}
+		if span.ScopeAttributes == nil {
+			span.ScopeAttributes = make(map[string]string)
+		}
+
+		span.CalculateDuration()
 	}
 
-	// Delete trace
-	if err := s.traceRepo.Delete(ctx, id); err != nil {
-		return appErrors.NewInternalError("failed to delete trace", err)
+	if err := s.traceRepo.InsertSpanBatch(ctx, spans); err != nil {
+		return appErrors.NewInternalError("failed to create span batch", err)
 	}
 
 	return nil
 }
 
-// GetTraceByID retrieves a trace by its OTEL trace_id
-func (s *TraceService) GetTraceByID(ctx context.Context, id string) (*observability.Trace, error) {
-	trace, err := s.traceRepo.GetByID(ctx, id)
+func (s *TraceService) GetSpan(ctx context.Context, spanID string) (*observability.Span, error) {
+	span, err := s.traceRepo.GetSpan(ctx, spanID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, appErrors.NewNotFoundError("trace " + id)
+			return nil, appErrors.NewNotFoundError("span " + spanID)
 		}
-		return nil, appErrors.NewInternalError("failed to get trace", err)
+		return nil, appErrors.NewInternalError("failed to get span", err)
 	}
 
-	return trace, nil
+	return span, nil
 }
 
-// GetTraceWithSpans retrieves a trace with all its spans
-func (s *TraceService) GetTraceWithSpans(ctx context.Context, id string) (*observability.Trace, error) {
-	// Get trace
-	trace, err := s.traceRepo.GetByID(ctx, id)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, appErrors.NewNotFoundError("trace " + id)
-		}
-		return nil, appErrors.NewInternalError("failed to get trace", err)
-	}
-
-	// Get spans
-	spans, err := s.spanRepo.GetByTraceID(ctx, id)
+func (s *TraceService) GetSpansByFilter(ctx context.Context, filter *observability.SpanFilter) ([]*observability.Span, error) {
+	spans, err := s.traceRepo.GetSpansByFilter(ctx, filter)
 	if err != nil {
 		return nil, appErrors.NewInternalError("failed to get spans", err)
 	}
 
-	trace.Spans = spans
-
-	return trace, nil
+	return spans, nil
 }
 
-// GetTraceWithScores retrieves a trace with all its scores
-func (s *TraceService) GetTraceWithScores(ctx context.Context, id string) (*observability.Trace, error) {
-	// Get trace
-	trace, err := s.traceRepo.GetByID(ctx, id)
+func (s *TraceService) CountSpans(ctx context.Context, filter *observability.SpanFilter) (int64, error) {
+	count, err := s.traceRepo.CountSpansByFilter(ctx, filter)
+	if err != nil {
+		return 0, appErrors.NewInternalError("failed to count spans", err)
+	}
+
+	return count, nil
+}
+
+func (s *TraceService) GetSpanChildren(ctx context.Context, parentSpanID string) ([]*observability.Span, error) {
+	spans, err := s.traceRepo.GetSpanChildren(ctx, parentSpanID)
+	if err != nil {
+		return nil, appErrors.NewInternalError("failed to get child spans", err)
+	}
+
+	return spans, nil
+}
+
+func (s *TraceService) GetTrace(ctx context.Context, traceID string) (*observability.TraceSummary, error) {
+	if len(traceID) != 32 {
+		return nil, appErrors.NewValidationError("invalid trace_id", "OTEL trace_id must be 32 hex characters")
+	}
+
+	summary, err := s.traceRepo.GetTraceSummary(ctx, traceID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, appErrors.NewNotFoundError("trace " + id)
+			return nil, appErrors.NewNotFoundError("trace " + traceID)
 		}
-		return nil, appErrors.NewInternalError("failed to get trace", err)
+		return nil, appErrors.NewInternalError("failed to get trace summary", err)
 	}
 
-	// Get scores
-	scores, err := s.scoreRepo.GetByTraceID(ctx, id)
-	if err != nil {
-		return nil, appErrors.NewInternalError("failed to get scores", err)
-	}
-
-	trace.Scores = scores
-
-	return trace, nil
+	return summary, nil
 }
 
-// GetTracesByProjectID retrieves traces by project ID with optional filters
-func (s *TraceService) GetTracesByProjectID(ctx context.Context, projectID string, filter *observability.TraceFilter) ([]*observability.Trace, error) {
-	traces, err := s.traceRepo.GetByProjectID(ctx, projectID, filter)
+func (s *TraceService) GetTraceSpans(ctx context.Context, traceID string) ([]*observability.Span, error) {
+	if len(traceID) != 32 {
+		return nil, appErrors.NewValidationError("invalid trace_id", "OTEL trace_id must be 32 hex characters")
+	}
+
+	spans, err := s.traceRepo.GetSpansByTraceID(ctx, traceID)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to get traces", err)
+		return nil, appErrors.NewInternalError("failed to get spans by trace", err)
+	}
+
+	return spans, nil
+}
+
+func (s *TraceService) GetTraceTree(ctx context.Context, traceID string) ([]*observability.Span, error) {
+	if len(traceID) != 32 {
+		return nil, appErrors.NewValidationError("invalid trace_id", "OTEL trace_id must be 32 hex characters")
+	}
+
+	spans, err := s.traceRepo.GetSpanTree(ctx, traceID)
+	if err != nil {
+		return nil, appErrors.NewInternalError("failed to get span tree", err)
+	}
+
+	return spans, nil
+}
+
+func (s *TraceService) GetRootSpan(ctx context.Context, traceID string) (*observability.Span, error) {
+	if len(traceID) != 32 {
+		return nil, appErrors.NewValidationError("invalid trace_id", "OTEL trace_id must be 32 hex characters")
+	}
+
+	rootSpan, err := s.traceRepo.GetRootSpan(ctx, traceID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, appErrors.NewNotFoundError("root span for trace " + traceID)
+		}
+		return nil, appErrors.NewInternalError("failed to get root span", err)
+	}
+
+	return rootSpan, nil
+}
+
+func (s *TraceService) ListTraces(ctx context.Context, filter *observability.TraceFilter) ([]*observability.TraceSummary, error) {
+	if filter == nil {
+		return nil, appErrors.NewValidationError("filter is required", "trace filter cannot be nil")
+	}
+	if filter.ProjectID == "" {
+		return nil, appErrors.NewValidationError("project_id is required", "filter must include project_id for scoping")
+	}
+
+	filter.SetDefaults("trace_start")
+
+	traces, err := s.traceRepo.ListTraces(ctx, filter)
+	if err != nil {
+		return nil, appErrors.NewInternalError("failed to list traces", err)
 	}
 
 	return traces, nil
 }
 
-// GetTracesBySessionID retrieves all traces in a virtual session
-func (s *TraceService) GetTracesBySessionID(ctx context.Context, sessionID string) ([]*observability.Trace, error) {
-	traces, err := s.traceRepo.GetBySessionID(ctx, sessionID)
+func (s *TraceService) CountTraces(ctx context.Context, filter *observability.TraceFilter) (int64, error) {
+	if filter == nil {
+		return 0, appErrors.NewValidationError("filter is required", "trace filter cannot be nil")
+	}
+
+	count, err := s.traceRepo.CountTraces(ctx, filter)
+	if err != nil {
+		return 0, appErrors.NewInternalError("failed to count traces", err)
+	}
+
+	return count, nil
+}
+
+func (s *TraceService) GetTracesBySession(ctx context.Context, sessionID string) ([]*observability.TraceSummary, error) {
+	if sessionID == "" {
+		return nil, appErrors.NewValidationError("session_id is required", "session_id cannot be empty")
+	}
+
+	traces, err := s.traceRepo.GetTracesBySessionID(ctx, sessionID)
 	if err != nil {
 		return nil, appErrors.NewInternalError("failed to get traces by session", err)
 	}
@@ -261,9 +257,12 @@ func (s *TraceService) GetTracesBySessionID(ctx context.Context, sessionID strin
 	return traces, nil
 }
 
-// GetTracesByUserID retrieves traces by user ID
-func (s *TraceService) GetTracesByUserID(ctx context.Context, userID string, filter *observability.TraceFilter) ([]*observability.Trace, error) {
-	traces, err := s.traceRepo.GetByUserID(ctx, userID, filter)
+func (s *TraceService) GetTracesByUser(ctx context.Context, userID string, filter *observability.TraceFilter) ([]*observability.TraceSummary, error) {
+	if userID == "" {
+		return nil, appErrors.NewValidationError("user_id is required", "user_id cannot be empty")
+	}
+
+	traces, err := s.traceRepo.GetTracesByUserID(ctx, userID, filter)
 	if err != nil {
 		return nil, appErrors.NewInternalError("failed to get traces by user", err)
 	}
@@ -271,56 +270,64 @@ func (s *TraceService) GetTracesByUserID(ctx context.Context, userID string, fil
 	return traces, nil
 }
 
-// CreateTraceBatch creates multiple traces in a batch
-func (s *TraceService) CreateTraceBatch(ctx context.Context, traces []*observability.Trace) error {
-	if len(traces) == 0 {
-		return nil
+func (s *TraceService) CalculateTraceCost(ctx context.Context, traceID string) (float64, error) {
+	if len(traceID) != 32 {
+		return 0, appErrors.NewValidationError("invalid trace_id", "OTEL trace_id must be 32 hex characters")
 	}
 
-	// Validate all traces
-	for i, trace := range traces {
-		if trace.ProjectID == "" {
-			return appErrors.NewValidationError(fmt.Sprintf("trace[%d].project_id", i), "project_id is required")
-		}
-		if trace.Name == "" {
-			return appErrors.NewValidationError(fmt.Sprintf("trace[%d].name", i), "name is required")
-		}
-		if trace.TraceID == "" {
-			return appErrors.NewValidationError(fmt.Sprintf("trace[%d].trace_id", i), "OTEL trace_id is required")
-		}
-
-		// Set defaults
-		if trace.StatusCode == 0 {
-			trace.StatusCode = observability.StatusCodeUnset // UInt8: 0
-		}
-		if trace.Environment == "" {
-			trace.Environment = "production"
-		}
-		if trace.Metadata == nil {
-			trace.Metadata = make(map[string]interface{})
-		}
-		if trace.CreatedAt.IsZero() {
-			trace.CreatedAt = time.Now()
-		}
-
-		// Calculate duration
-		trace.CalculateDuration()
+	totalCost, err := s.traceRepo.CalculateTotalCost(ctx, traceID)
+	if err != nil {
+		return 0, appErrors.NewInternalError("failed to calculate trace cost", err)
 	}
 
-	// Create batch
-	if err := s.traceRepo.CreateBatch(ctx, traces); err != nil {
-		return appErrors.NewInternalError("failed to create trace batch", err)
+	return totalCost, nil
+}
+
+func (s *TraceService) CalculateTraceTokens(ctx context.Context, traceID string) (uint64, error) {
+	if len(traceID) != 32 {
+		return 0, appErrors.NewValidationError("invalid trace_id", "OTEL trace_id must be 32 hex characters")
+	}
+
+	totalTokens, err := s.traceRepo.CalculateTotalTokens(ctx, traceID)
+	if err != nil {
+		return 0, appErrors.NewInternalError("failed to calculate trace tokens", err)
+	}
+
+	return totalTokens, nil
+}
+
+func (s *TraceService) DeleteSpan(ctx context.Context, spanID string) error {
+	_, err := s.traceRepo.GetSpan(ctx, spanID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return appErrors.NewNotFoundError("span " + spanID)
+		}
+		return appErrors.NewInternalError("failed to get span", err)
+	}
+
+	if err := s.traceRepo.DeleteSpan(ctx, spanID); err != nil {
+		return appErrors.NewInternalError("failed to delete span", err)
 	}
 
 	return nil
 }
 
-// CountTraces returns the count of traces matching the filter
-func (s *TraceService) CountTraces(ctx context.Context, filter *observability.TraceFilter) (int64, error) {
-	count, err := s.traceRepo.Count(ctx, filter)
-	if err != nil {
-		return 0, appErrors.NewInternalError("failed to count traces", err)
+func (s *TraceService) DeleteTrace(ctx context.Context, traceID string) error {
+	if len(traceID) != 32 {
+		return appErrors.NewValidationError("invalid trace_id", "OTEL trace_id must be 32 hex characters")
 	}
 
-	return count, nil
+	count, err := s.traceRepo.CountSpansInTrace(ctx, traceID)
+	if err != nil {
+		return appErrors.NewInternalError("failed to check trace existence", err)
+	}
+	if count == 0 {
+		return appErrors.NewNotFoundError("trace " + traceID)
+	}
+
+	if err := s.traceRepo.DeleteTrace(ctx, traceID); err != nil {
+		return appErrors.NewInternalError("failed to delete trace", err)
+	}
+
+	return nil
 }

@@ -12,10 +12,17 @@ import { Copy } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 
-// Helper to format duration
-function formatDuration(ms: number | undefined): string {
-  if (!ms) return '-'
-  if (ms < 1000) return `${ms}ms`
+// Helper to format duration (nanoseconds)
+function formatDuration(nanos: number | undefined): string {
+  if (!nanos) return '-'
+
+  // Convert nanoseconds to appropriate unit
+  const ms = nanos / 1_000_000
+  const us = nanos / 1_000
+
+  if (nanos < 1_000) return `${nanos}ns`
+  if (nanos < 1_000_000) return `${us.toFixed(3)}µs`
+  if (ms < 1000) return `${ms.toFixed(3)}ms`
   return `${(ms / 1000).toFixed(2)}s`
 }
 
@@ -93,12 +100,12 @@ export const tracesColumns: ColumnDef<Trace>[] = [
     enableSorting: true,
   },
   {
-    accessorKey: 'duration_ms',
+    accessorKey: 'duration',
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title='Duration' />
     ),
     cell: ({ row }) => {
-      const duration = row.getValue('duration_ms') as number | undefined
+      const duration = row.getValue('duration') as number | undefined
       return <div className='font-mono text-sm'>{formatDuration(duration)}</div>
     },
     enableSorting: true,

@@ -12,9 +12,16 @@ interface TraceDetailViewProps {
   trace: Trace
 }
 
-function formatDuration(ms: number | undefined): string {
-  if (!ms) return '-'
-  if (ms < 1000) return `${ms}ms`
+function formatDuration(nanos: number | undefined): string {
+  if (!nanos) return '-'
+
+  // Convert nanoseconds to appropriate unit
+  const ms = nanos / 1_000_000
+  const us = nanos / 1_000
+
+  if (nanos < 1_000) return `${nanos}ns`
+  if (nanos < 1_000_000) return `${us.toFixed(3)}µs`
+  if (ms < 1000) return `${ms.toFixed(3)}ms`
   return `${(ms / 1000).toFixed(2)}s`
 }
 
@@ -54,7 +61,7 @@ export function TraceDetailView({ trace }: TraceDetailViewProps) {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className='text-2xl font-bold'>{formatDuration(trace.duration_ms)}</div>
+            <div className='text-2xl font-bold'>{formatDuration(trace.duration)}</div>
           </CardContent>
         </Card>
 

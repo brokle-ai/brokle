@@ -38,14 +38,13 @@ import (
 
 // MigrateFlags holds all parsed command-line flags
 type MigrateFlags struct {
-	Database    string
-	Name        string
-	Environment string
-	Steps       int
-	Version     int
-	DryRun      bool
-	Reset       bool
-	Verbose     bool
+	Database string
+	Name     string
+	Steps    int
+	Version  int
+	DryRun   bool
+	Reset    bool
+	Verbose  bool
 }
 
 // parseFlags parses flags from arguments, supporting flags before or after the command
@@ -72,7 +71,6 @@ func parseFlags(args []string) (*MigrateFlags, string, error) {
 	fs.IntVar(&flags.Version, "version", 0, "Target version for goto/force commands")
 	fs.StringVar(&flags.Name, "name", "", "Migration name for create command")
 	fs.BoolVar(&flags.DryRun, "dry-run", false, "Show what would be migrated without executing")
-	fs.StringVar(&flags.Environment, "env", "development", "Environment for seeding: development, demo, test")
 	fs.BoolVar(&flags.Reset, "reset", false, "Reset existing data before seeding")
 	fs.BoolVar(&flags.Verbose, "verbose", false, "Verbose output for seeding")
 
@@ -226,10 +224,22 @@ func main() {
 		}
 
 	case "seed":
-		if err := runSeeding(ctx, cfg, flags.Environment, flags.Reset, flags.DryRun, flags.Verbose); err != nil {
+		if err := runSeeding(ctx, cfg, flags.Reset, flags.DryRun, flags.Verbose); err != nil {
 			log.Fatalf("Seeding failed: %v", err)
 		}
-		fmt.Printf("✅ Seeding completed successfully with environment: %s\n", flags.Environment)
+		fmt.Println("✅ Seeding completed successfully")
+
+	case "seed-pricing":
+		if err := runPricingSeeding(ctx, cfg, flags.Reset, flags.DryRun, flags.Verbose); err != nil {
+			log.Fatalf("Pricing seeding failed: %v", err)
+		}
+		fmt.Println("✅ Provider pricing seeding completed successfully")
+
+	case "seed-rbac":
+		if err := runRBACSeeding(ctx, cfg, flags.Reset, flags.DryRun, flags.Verbose); err != nil {
+			log.Fatalf("RBAC seeding failed: %v", err)
+		}
+		fmt.Println("✅ RBAC seeding completed successfully")
 
 	default:
 		fmt.Printf("❌ Unknown command: %s\n", command)
@@ -488,7 +498,9 @@ func printUsage() {
 	fmt.Println("  steps -steps N        Run N migration steps (negative for rollback)")
 	fmt.Println("  info                  Show detailed migration information")
 	fmt.Println("  create -name NAME     Create new migration files")
-	fmt.Println("  seed                  Seed database with test data")
+	fmt.Println("  seed                  Seed system data (permissions, roles, pricing)")
+	fmt.Println("  seed-rbac             Seed RBAC data only (permissions and roles)")
+	fmt.Println("  seed-pricing          Seed provider pricing data only")
 	fmt.Println()
 	fmt.Println("FLAGS:")
 	fmt.Println("  -db string           Database to target: all, postgres, clickhouse (default: all)")
@@ -496,7 +508,6 @@ func printUsage() {
 	fmt.Println("  -version int         Target version for goto/force commands")
 	fmt.Println("  -name string         Migration name for create command")
 	fmt.Println("  -dry-run             Show what would happen without executing")
-	fmt.Println("  -env string          Seeding environment: development, demo, test (default: development)")
 	fmt.Println("  -reset               Reset existing data before seeding (DANGEROUS)")
 	fmt.Println("  -verbose             Verbose output for seeding operations")
 	fmt.Println()
@@ -513,9 +524,11 @@ func printUsage() {
 	fmt.Println("  migrate create -name 'add_users'        # Create new migration")
 	fmt.Println("  migrate info                            # Show detailed information")
 	fmt.Println("  migrate up -dry-run                     # Preview migrations")
-	fmt.Println("  migrate seed                            # Seed with development data")
-	fmt.Println("  migrate seed -env demo                  # Seed with demo data")
-	fmt.Println("  migrate seed -env test -reset -verbose  # Reset and seed with verbose output")
+	fmt.Println("  migrate seed                            # Seed permissions, roles, pricing")
+	fmt.Println("  migrate seed -reset -verbose            # Reset and seed with verbose output")
+	fmt.Println("  migrate seed-rbac                       # Seed permissions and roles only")
+	fmt.Println("  migrate seed-pricing                    # Seed provider pricing only")
+	fmt.Println("  migrate seed-pricing -reset             # Reset and reseed pricing")
 	fmt.Println()
 	fmt.Println("NOTE:")
 	fmt.Println("  Flags can be placed before or after the command:")
@@ -526,48 +539,99 @@ func printUsage() {
 	fmt.Println("  🛡️  Destructive operations require explicit 'yes' confirmation")
 	fmt.Println("  🔍 Use -dry-run to preview changes safely")
 	fmt.Println("  📊 Check 'status' and 'info' before running migrations")
-	fmt.Println("  🌱 Use 'seed' to populate database with test data")
+	fmt.Println("  🌱 Use 'seed' to populate database with system data")
 }
 
 // runSeeding handles database seeding operations
-func runSeeding(ctx context.Context, cfg *config.Config, environment string, reset, dryRun, verbose bool) error {
-	// Initialize seeder manager
-	manager, err := seeder.NewManager(cfg)
+func runSeeding(ctx context.Context, cfg *config.Config, reset, dryRun, verbose bool) error {
+	// Initialize seeder
+	s, err := seeder.New(cfg)
 	if err != nil {
-		return fmt.Errorf("failed to initialize seeder manager: %w", err)
+		return fmt.Errorf("failed to initialize seeder: %w", err)
 	}
-	defer manager.Close()
+	defer s.Close()
 
 	// Configure seeder options
 	options := &seeder.Options{
-		Environment: environment,
-		Reset:       reset,
-		DryRun:      dryRun,
-		Verbose:     verbose,
+		Reset:   reset,
+		DryRun:  dryRun,
+		Verbose: verbose,
 	}
 
 	// Confirm reset operation if requested
 	if reset && !dryRun {
-		if !confirmDestructiveOperation(fmt.Sprintf("RESET ALL DATA and seed with %s environment", environment)) {
+		if !confirmDestructiveOperation("RESET ALL DATA and reseed") {
 			return errors.New("seeding cancelled by user")
 		}
 	}
 
 	// Show seed plan in dry-run mode
 	if dryRun {
-		fmt.Printf("🔍 DRY RUN: Seeding plan for environment '%s':\n", environment)
+		fmt.Println("🔍 DRY RUN: Seeding plan:")
 
-		// Load seed data to show plan
-		dataLoader := seeder.NewDataLoader()
-		seedData, err := dataLoader.LoadSeedData(environment)
+		seedData, err := s.LoadSeedData()
 		if err != nil {
 			return fmt.Errorf("failed to load seed data for preview: %w", err)
 		}
 
-		manager.PrintSeedPlan(seedData)
+		s.PrintSeedPlan(seedData)
 		return nil
 	}
 
-	// Run actual seeding (PostgreSQL only for now)
-	return manager.SeedPostgres(ctx, options)
+	// Run actual seeding
+	return s.SeedAll(ctx, options)
+}
+
+// runPricingSeeding handles provider pricing seeding operations (standalone)
+func runPricingSeeding(ctx context.Context, cfg *config.Config, reset, dryRun, verbose bool) error {
+	// Initialize seeder
+	s, err := seeder.New(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to initialize seeder: %w", err)
+	}
+	defer s.Close()
+
+	// Configure seeder options
+	options := &seeder.Options{
+		Reset:   reset,
+		DryRun:  dryRun,
+		Verbose: verbose,
+	}
+
+	// Confirm reset operation if requested
+	if reset && !dryRun {
+		if !confirmDestructiveOperation("RESET ALL PRICING DATA and reseed") {
+			return errors.New("pricing seeding cancelled by user")
+		}
+	}
+
+	// Run pricing seeding
+	return s.SeedPricing(ctx, options)
+}
+
+// runRBACSeeding handles RBAC seeding operations (standalone)
+func runRBACSeeding(ctx context.Context, cfg *config.Config, reset, dryRun, verbose bool) error {
+	// Initialize seeder
+	s, err := seeder.New(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to initialize seeder: %w", err)
+	}
+	defer s.Close()
+
+	// Configure seeder options
+	options := &seeder.Options{
+		Reset:   reset,
+		DryRun:  dryRun,
+		Verbose: verbose,
+	}
+
+	// Confirm reset operation if requested
+	if reset && !dryRun {
+		if !confirmDestructiveOperation("RESET ALL RBAC DATA and reseed") {
+			return errors.New("RBAC seeding cancelled by user")
+		}
+	}
+
+	// Run RBAC seeding
+	return s.SeedRBAC(ctx, options)
 }

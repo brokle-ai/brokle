@@ -51,9 +51,8 @@ go run cmd/migrate/main.go -dry-run up              # Preview without executing
 make create-migration DB=postgres NAME=add_users_table
 make create-migration DB=clickhouse NAME=add_metrics_table
 
-# Data seeding
-make seed-dev         # Development data
-make seed-prod        # Production data
+# System data seeding
+make seed             # Seed permissions, roles, pricing
 
 # Database shell access
 make shell-db         # PostgreSQL psql

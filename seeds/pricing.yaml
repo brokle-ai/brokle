@@ -1,0 +1,349 @@
+# AI Provider Pricing (20 models, 78 prices)
+# Prices are per 1M tokens
+# Sources: openai.com/api/pricing, docs.claude.com, ai.google.dev/gemini-api/docs/pricing
+
+version: "2025.11.29"
+
+provider_models:
+  # OpenAI Models
+  - model_name: "gpt-4o"
+    match_pattern: "^gpt-4o$"
+    start_date: "2024-05-13"
+    unit: "TOKENS"
+    tokenizer_id: "openai"
+    tokenizer_config:
+      tokens_per_message: 3
+      tokens_per_name: 1
+      tokenizer_model: "gpt-4o"
+    prices:
+      - usage_type: "input"
+        price: 2.50
+      - usage_type: "output"
+        price: 10.00
+      - usage_type: "cache_read_input_tokens"
+        price: 1.25
+      - usage_type: "batch_input"
+        price: 1.25
+      - usage_type: "batch_output"
+        price: 5.00
+
+  - model_name: "gpt-4o-mini"
+    match_pattern: "^gpt-4o-mini"
+    start_date: "2024-07-18"
+    unit: "TOKENS"
+    tokenizer_id: "openai"
+    tokenizer_config:
+      tokens_per_message: 3
+      tokens_per_name: 1
+      tokenizer_model: "gpt-4o-mini"
+    prices:
+      - usage_type: "input"
+        price: 0.150
+      - usage_type: "output"
+        price: 0.600
+      - usage_type: "cache_read_input_tokens"
+        price: 0.075
+      - usage_type: "batch_input"
+        price: 0.075
+      - usage_type: "batch_output"
+        price: 0.300
+
+  - model_name: "gpt-4o-realtime"
+    match_pattern: "^gpt-4o-realtime"
+    start_date: "2024-10-01"
+    unit: "TOKENS"
+    tokenizer_id: "openai"
+    tokenizer_config:
+      tokenizer_model: "gpt-4o-realtime"
+    prices:
+      - usage_type: "input"
+        price: 5.00
+      - usage_type: "output"
+        price: 20.00
+      - usage_type: "audio_input"
+        price: 100.00
+      - usage_type: "audio_output"
+        price: 200.00
+
+  - model_name: "gpt-3.5-turbo"
+    match_pattern: "^gpt-3\\.5-turbo"
+    start_date: "2023-11-01"
+    unit: "TOKENS"
+    tokenizer_id: "openai"
+    tokenizer_config:
+      tokenizer_model: "gpt-3.5-turbo"
+    prices:
+      - usage_type: "input"
+        price: 0.500
+      - usage_type: "output"
+        price: 1.500
+
+  - model_name: "gpt-4"
+    match_pattern: "^gpt-4$"
+    start_date: "2023-03-14"
+    unit: "TOKENS"
+    tokenizer_id: "openai"
+    tokenizer_config:
+      tokenizer_model: "gpt-4"
+    prices:
+      - usage_type: "input"
+        price: 30.00
+      - usage_type: "output"
+        price: 60.00
+
+  - model_name: "gpt-4-turbo"
+    match_pattern: "^gpt-4-turbo$"
+    start_date: "2024-04-09"
+    unit: "TOKENS"
+    tokenizer_id: "openai"
+    tokenizer_config:
+      tokenizer_model: "gpt-4-turbo"
+    prices:
+      - usage_type: "input"
+        price: 10.00
+      - usage_type: "output"
+        price: 30.00
+
+  - model_name: "gpt-4-turbo-preview"
+    match_pattern: "^gpt-4-turbo-preview$"
+    start_date: "2023-11-06"
+    unit: "TOKENS"
+    tokenizer_id: "openai"
+    tokenizer_config:
+      tokenizer_model: "gpt-4-turbo-preview"
+    prices:
+      - usage_type: "input"
+        price: 10.00
+      - usage_type: "output"
+        price: 30.00
+
+  - model_name: "gpt-4-0613"
+    match_pattern: "^gpt-4-0613$"
+    start_date: "2023-06-13"
+    unit: "TOKENS"
+    tokenizer_id: "openai"
+    tokenizer_config:
+      tokenizer_model: "gpt-4-0613"
+    prices:
+      - usage_type: "input"
+        price: 30.00
+      - usage_type: "output"
+        price: 60.00
+
+  - model_name: "gpt-4-0125-preview"
+    match_pattern: "^gpt-4-0125-preview$"
+    start_date: "2024-01-25"
+    unit: "TOKENS"
+    tokenizer_id: "openai"
+    tokenizer_config:
+      tokenizer_model: "gpt-4-0125-preview"
+    prices:
+      - usage_type: "input"
+        price: 10.00
+      - usage_type: "output"
+        price: 30.00
+
+  - model_name: "gpt-4-1106-preview"
+    match_pattern: "^gpt-4-1106-preview$"
+    start_date: "2023-11-06"
+    unit: "TOKENS"
+    tokenizer_id: "openai"
+    tokenizer_config:
+      tokenizer_model: "gpt-4-1106-preview"
+    prices:
+      - usage_type: "input"
+        price: 10.00
+      - usage_type: "output"
+        price: 30.00
+
+  # Anthropic Models
+  - model_name: "claude-3-7-sonnet"
+    match_pattern: "^claude-3-7-sonnet"
+    start_date: "2025-01-01"
+    unit: "TOKENS"
+    tokenizer_id: "claude"
+    tokenizer_config:
+      tokenizer_model: "claude-3-7-sonnet"
+    prices:
+      - usage_type: "input"
+        price: 3.00
+      - usage_type: "output"
+        price: 15.00
+      - usage_type: "cache_read_input_tokens"
+        price: 0.30
+      - usage_type: "cache_creation_input_tokens"
+        price: 3.75
+      - usage_type: "batch_input"
+        price: 1.50
+      - usage_type: "batch_output"
+        price: 7.50
+
+  - model_name: "claude-3-5-sonnet"
+    match_pattern: "^claude-3-5-sonnet"
+    start_date: "2024-10-22"
+    unit: "TOKENS"
+    tokenizer_id: "claude"
+    tokenizer_config:
+      tokenizer_model: "claude-3-5-sonnet"
+    prices:
+      - usage_type: "input"
+        price: 3.00
+      - usage_type: "output"
+        price: 15.00
+      - usage_type: "cache_read_input_tokens"
+        price: 0.30
+      - usage_type: "cache_creation_input_tokens"
+        price: 3.75
+      - usage_type: "batch_input"
+        price: 1.50
+      - usage_type: "batch_output"
+        price: 7.50
+
+  - model_name: "claude-3-opus"
+    match_pattern: "^claude-3-opus"
+    start_date: "2024-03-04"
+    unit: "TOKENS"
+    tokenizer_id: "claude"
+    tokenizer_config:
+      tokenizer_model: "claude-3-opus"
+    prices:
+      - usage_type: "input"
+        price: 15.00
+      - usage_type: "output"
+        price: 75.00
+      - usage_type: "cache_creation_input_tokens"
+        price: 18.75
+      - usage_type: "cache_read_input_tokens"
+        price: 1.50
+      - usage_type: "batch_input"
+        price: 7.50
+      - usage_type: "batch_output"
+        price: 37.50
+
+  - model_name: "claude-3-haiku"
+    match_pattern: "^claude-3-haiku"
+    start_date: "2024-03-13"
+    unit: "TOKENS"
+    tokenizer_id: "claude"
+    tokenizer_config:
+      tokenizer_model: "claude-3-haiku"
+    prices:
+      - usage_type: "input"
+        price: 0.25
+      - usage_type: "output"
+        price: 1.25
+      - usage_type: "cache_creation_input_tokens"
+        price: 0.30
+      - usage_type: "cache_read_input_tokens"
+        price: 0.025
+      - usage_type: "batch_input"
+        price: 0.125
+      - usage_type: "batch_output"
+        price: 0.625
+
+  - model_name: "claude-3-5-haiku"
+    match_pattern: "^claude-3-5-haiku"
+    start_date: "2024-11-04"
+    unit: "TOKENS"
+    tokenizer_id: "claude"
+    tokenizer_config:
+      tokenizer_model: "claude-3-5-haiku"
+    prices:
+      - usage_type: "input"
+        price: 0.80
+      - usage_type: "output"
+        price: 4.00
+      - usage_type: "cache_creation_input_tokens"
+        price: 1.00
+      - usage_type: "cache_read_input_tokens"
+        price: 0.08
+      - usage_type: "batch_input"
+        price: 0.40
+      - usage_type: "batch_output"
+        price: 2.00
+
+  # Google Models
+  - model_name: "gemini-2.5-pro"
+    match_pattern: "^gemini-2\\.5-pro"
+    start_date: "2025-04-04"
+    unit: "TOKENS"
+    tokenizer_id: "gemini"
+    tokenizer_config:
+      tokenizer_model: "gemini-2.5-pro"
+    prices:
+      - usage_type: "input"
+        price: 1.25
+      - usage_type: "output"
+        price: 10.00
+      - usage_type: "batch_input"
+        price: 0.625
+      - usage_type: "batch_output"
+        price: 5.00
+
+  - model_name: "gemini-2.5-flash"
+    match_pattern: "^gemini-2\\.5-flash"
+    start_date: "2025-04-04"
+    unit: "TOKENS"
+    tokenizer_id: "gemini"
+    tokenizer_config:
+      tokenizer_model: "gemini-2.5-flash"
+    prices:
+      - usage_type: "input"
+        price: 0.30
+      - usage_type: "output"
+        price: 2.50
+      - usage_type: "batch_input"
+        price: 0.15
+      - usage_type: "batch_output"
+        price: 1.25
+
+  - model_name: "gemini-2.0-flash"
+    match_pattern: "^gemini-2\\.0-flash"
+    start_date: "2024-12-01"
+    unit: "TOKENS"
+    tokenizer_id: "gemini"
+    tokenizer_config:
+      tokenizer_model: "gemini-2.0-flash"
+    prices:
+      - usage_type: "input"
+        price: 0.10
+      - usage_type: "output"
+        price: 0.40
+      - usage_type: "batch_input"
+        price: 0.05
+      - usage_type: "batch_output"
+        price: 0.20
+
+  - model_name: "gemini-1.5-pro"
+    match_pattern: "^gemini-1\\.5-pro"
+    start_date: "2024-05-14"
+    unit: "TOKENS"
+    tokenizer_id: "gemini"
+    tokenizer_config:
+      tokenizer_model: "gemini-1.5-pro"
+    prices:
+      - usage_type: "input"
+        price: 1.25
+      - usage_type: "output"
+        price: 5.00
+      - usage_type: "batch_input"
+        price: 0.625
+      - usage_type: "batch_output"
+        price: 2.50
+
+  - model_name: "gemini-1.5-flash"
+    match_pattern: "^gemini-1\\.5-flash"
+    start_date: "2024-05-14"
+    unit: "TOKENS"
+    tokenizer_id: "gemini"
+    tokenizer_config:
+      tokenizer_model: "gemini-1.5-flash"
+    prices:
+      - usage_type: "input"
+        price: 0.075
+      - usage_type: "output"
+        price: 0.30
+      - usage_type: "batch_input"
+        price: 0.0375
+      - usage_type: "batch_output"
+        price: 0.15
