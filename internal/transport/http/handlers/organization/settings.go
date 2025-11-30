@@ -1,10 +1,10 @@
 package organization
 
 import (
+	"log/slog"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 
 	"brokle/internal/config"
 	"brokle/internal/core/domain/organization"
@@ -15,14 +15,14 @@ import (
 // SettingsHandler handles organization settings endpoints
 type SettingsHandler struct {
 	config          *config.Config
-	logger          *logrus.Logger
+	logger          *slog.Logger
 	settingsService organization.OrganizationSettingsService
 }
 
 // NewSettingsHandler creates a new organization settings handler
 func NewSettingsHandler(
 	config *config.Config,
-	logger *logrus.Logger,
+	logger *slog.Logger,
 	settingsService organization.OrganizationSettingsService,
 ) *SettingsHandler {
 	return &SettingsHandler{
@@ -84,7 +84,7 @@ func (h *SettingsHandler) GetAllSettings(c *gin.Context) {
 	orgIDStr := c.Param("orgId")
 	orgID, err := ulid.Parse(orgIDStr)
 	if err != nil {
-		h.logger.WithError(err).Error("Invalid organization ID")
+		h.logger.Error("Invalid organization ID", "error", err)
 		response.ErrorWithStatus(c, http.StatusBadRequest, "invalid_id", "Invalid organization ID", "")
 		return
 	}
@@ -109,7 +109,7 @@ func (h *SettingsHandler) GetAllSettings(c *gin.Context) {
 
 	settings, err := h.settingsService.GetAllSettings(c.Request.Context(), orgID)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to get organization settings")
+		h.logger.Error("Failed to get organization settings", "error", err)
 		response.ErrorWithStatus(c, http.StatusInternalServerError, "internal_error", "Failed to retrieve settings", "")
 		return
 	}
@@ -139,7 +139,7 @@ func (h *SettingsHandler) GetSetting(c *gin.Context) {
 	orgIDStr := c.Param("orgId")
 	orgID, err := ulid.Parse(orgIDStr)
 	if err != nil {
-		h.logger.WithError(err).Error("Invalid organization ID")
+		h.logger.Error("Invalid organization ID", "error", err)
 		response.ErrorWithStatus(c, http.StatusBadRequest, "invalid_id", "Invalid organization ID", "")
 		return
 	}
@@ -152,7 +152,7 @@ func (h *SettingsHandler) GetSetting(c *gin.Context) {
 
 	setting, err := h.settingsService.GetSetting(c.Request.Context(), orgID, key)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to get organization setting")
+		h.logger.Error("Failed to get organization setting", "error", err)
 		if err.Error() == "organization setting not found" {
 			response.ErrorWithStatus(c, http.StatusNotFound, "setting_not_found", "Setting not found", "")
 			return
@@ -192,14 +192,14 @@ func (h *SettingsHandler) CreateSetting(c *gin.Context) {
 	orgIDStr := c.Param("orgId")
 	orgID, err := ulid.Parse(orgIDStr)
 	if err != nil {
-		h.logger.WithError(err).Error("Invalid organization ID")
+		h.logger.Error("Invalid organization ID", "error", err)
 		response.ErrorWithStatus(c, http.StatusBadRequest, "invalid_id", "Invalid organization ID", "")
 		return
 	}
 
 	var req CreateSettingRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.WithError(err).Error("Invalid request body")
+		h.logger.Error("Invalid request body", "error", err)
 		response.ErrorWithStatus(c, http.StatusBadRequest, "validation_error", "Invalid request body", err.Error())
 		return
 	}
@@ -226,7 +226,7 @@ func (h *SettingsHandler) CreateSetting(c *gin.Context) {
 
 	setting, err := h.settingsService.CreateSetting(c.Request.Context(), orgID, userID, domainReq)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to create organization setting")
+		h.logger.Error("Failed to create organization setting", "error", err)
 		if err.Error() == "setting with this key already exists" {
 			response.ErrorWithStatus(c, http.StatusConflict, "setting_exists", "Setting with this key already exists", "")
 			return
@@ -267,7 +267,7 @@ func (h *SettingsHandler) UpdateSetting(c *gin.Context) {
 	orgIDStr := c.Param("orgId")
 	orgID, err := ulid.Parse(orgIDStr)
 	if err != nil {
-		h.logger.WithError(err).Error("Invalid organization ID")
+		h.logger.Error("Invalid organization ID", "error", err)
 		response.ErrorWithStatus(c, http.StatusBadRequest, "invalid_id", "Invalid organization ID", "")
 		return
 	}
@@ -280,7 +280,7 @@ func (h *SettingsHandler) UpdateSetting(c *gin.Context) {
 
 	var req UpdateSettingRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.WithError(err).Error("Invalid request body")
+		h.logger.Error("Invalid request body", "error", err)
 		response.ErrorWithStatus(c, http.StatusBadRequest, "validation_error", "Invalid request body", err.Error())
 		return
 	}
@@ -306,7 +306,7 @@ func (h *SettingsHandler) UpdateSetting(c *gin.Context) {
 
 	err = h.settingsService.UpdateSetting(c.Request.Context(), orgID, key, userID, domainReq)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to update organization setting")
+		h.logger.Error("Failed to update organization setting", "error", err)
 		if err.Error() == "setting not found" {
 			response.ErrorWithStatus(c, http.StatusNotFound, "setting_not_found", "Setting not found", "")
 			return
@@ -338,7 +338,7 @@ func (h *SettingsHandler) DeleteSetting(c *gin.Context) {
 	orgIDStr := c.Param("orgId")
 	orgID, err := ulid.Parse(orgIDStr)
 	if err != nil {
-		h.logger.WithError(err).Error("Invalid organization ID")
+		h.logger.Error("Invalid organization ID", "error", err)
 		response.ErrorWithStatus(c, http.StatusBadRequest, "invalid_id", "Invalid organization ID", "")
 		return
 	}
@@ -366,7 +366,7 @@ func (h *SettingsHandler) DeleteSetting(c *gin.Context) {
 
 	err = h.settingsService.DeleteSetting(c.Request.Context(), orgID, key, userID)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to delete organization setting")
+		h.logger.Error("Failed to delete organization setting", "error", err)
 		if err.Error() == "setting not found" {
 			response.ErrorWithStatus(c, http.StatusNotFound, "setting_not_found", "Setting not found", "")
 			return

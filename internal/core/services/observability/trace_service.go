@@ -1,12 +1,12 @@
 package observability
 
 import (
+	"log/slog"
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 
-	"github.com/sirupsen/logrus"
 
 	"brokle/internal/core/domain/observability"
 	appErrors "brokle/pkg/errors"
@@ -14,12 +14,12 @@ import (
 
 type TraceService struct {
 	traceRepo observability.TraceRepository
-	logger    *logrus.Logger
+	logger    *slog.Logger
 }
 
 func NewTraceService(
 	traceRepo observability.TraceRepository,
-	logger *logrus.Logger,
+	logger *slog.Logger,
 ) *TraceService {
 	return &TraceService{
 		traceRepo: traceRepo,

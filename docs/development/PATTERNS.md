@@ -127,7 +127,7 @@ Location: `internal/transport/http/middleware/`
 ```go
 type SDKAuthMiddleware struct {
     apiKeyService auth.APIKeyService
-    logger        *logrus.Logger
+    logger        *slog.Logger
 }
 
 // RequireSDKAuth validates API keys for SDK routes

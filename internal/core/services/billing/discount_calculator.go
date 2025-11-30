@@ -1,11 +1,11 @@
 package billing
 
 import (
+	"log/slog"
 	"context"
 	"fmt"
 	"time"
 
-	"github.com/sirupsen/logrus"
 
 	billingDomain "brokle/internal/core/domain/billing"
 	"brokle/pkg/ulid"
@@ -13,7 +13,7 @@ import (
 
 // DiscountCalculator handles discount calculations for billing
 type DiscountCalculator struct {
-	logger *logrus.Logger
+	logger *slog.Logger
 }
 
 // DiscountRule represents a discount rule
@@ -58,7 +58,7 @@ type UsageData struct {
 }
 
 // NewDiscountCalculator creates a new discount calculator
-func NewDiscountCalculator(logger *logrus.Logger) *DiscountCalculator {
+func NewDiscountCalculator(logger *slog.Logger) *DiscountCalculator {
 	return &DiscountCalculator{
 		logger: logger,
 	}
@@ -87,11 +87,7 @@ func (c *DiscountCalculator) CalculateDiscounts(
 		return calculation, nil
 	}
 
-	c.logger.WithFields(logrus.Fields{
-		"org_id":           discountContext.OrganizationID,
-		"original_amount":  amount,
-		"applicable_rules": len(applicableRules),
-	}).Debug("Calculating discounts")
+	c.logger.Debug("Calculating discounts", "org_id", discountContext.OrganizationID, "original_amount", amount, "applicable_rules", len(applicableRules))
 
 	// Apply discounts in priority order
 	currentAmount := amount
@@ -99,7 +95,7 @@ func (c *DiscountCalculator) CalculateDiscounts(
 	for _, rule := range applicableRules {
 		discount, err := c.calculateSingleDiscount(rule, currentAmount, discountContext)
 		if err != nil {
-			c.logger.WithError(err).WithField("rule_id", rule.ID).Error("Failed to calculate discount")
+			c.logger.Error("Failed to calculate discount", "error", err, "rule_id", rule.ID)
 			continue
 		}
 
@@ -124,13 +120,7 @@ func (c *DiscountCalculator) CalculateDiscounts(
 
 	calculation.NetAmount = currentAmount
 
-	c.logger.WithFields(logrus.Fields{
-		"org_id":          discountContext.OrganizationID,
-		"original_amount": amount,
-		"total_discount":  calculation.TotalDiscount,
-		"net_amount":      calculation.NetAmount,
-		"discounts_count": len(calculation.AppliedDiscounts),
-	}).Debug("Discount calculation completed")
+	c.logger.Debug("Discount calculation completed", "org_id", discountContext.OrganizationID, "original_amount", amount, "total_discount", calculation.TotalDiscount, "net_amount", calculation.NetAmount, "discounts_count", len(calculation.AppliedDiscounts))
 
 	return calculation, nil
 }

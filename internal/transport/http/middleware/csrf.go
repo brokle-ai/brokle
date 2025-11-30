@@ -1,21 +1,21 @@
 package middleware
 
 import (
+	"log/slog"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 
 	"brokle/pkg/response"
 )
 
 // CSRFMiddleware handles CSRF token validation using double-submit cookie pattern
 type CSRFMiddleware struct {
-	logger *logrus.Logger
+	logger *slog.Logger
 }
 
 // NewCSRFMiddleware creates a new CSRF validation middleware
-func NewCSRFMiddleware(logger *logrus.Logger) *CSRFMiddleware {
+func NewCSRFMiddleware(logger *slog.Logger) *CSRFMiddleware {
 	return &CSRFMiddleware{
 		logger: logger,
 	}
@@ -35,10 +35,7 @@ func (m *CSRFMiddleware) ValidateCSRF() gin.HandlerFunc {
 		// Get CSRF token from cookie
 		cookieToken, err := c.Cookie("csrf_token")
 		if err != nil || cookieToken == "" {
-			m.logger.WithFields(logrus.Fields{
-				"method": c.Request.Method,
-				"path":   c.Request.URL.Path,
-			}).Warn("CSRF validation failed: cookie missing")
+			m.logger.Warn("CSRF validation failed: cookie missing", "method", c.Request.Method, "path", c.Request.URL.Path)
 			response.ErrorWithStatus(c, http.StatusForbidden, "CSRF_TOKEN_MISSING", "CSRF token missing in cookie", "")
 			c.Abort()
 			return
@@ -47,10 +44,7 @@ func (m *CSRFMiddleware) ValidateCSRF() gin.HandlerFunc {
 		// Get CSRF token from request header
 		headerToken := c.GetHeader("X-CSRF-Token")
 		if headerToken == "" {
-			m.logger.WithFields(logrus.Fields{
-				"method": c.Request.Method,
-				"path":   c.Request.URL.Path,
-			}).Warn("CSRF validation failed: header missing")
+			m.logger.Warn("CSRF validation failed: header missing", "method", c.Request.Method, "path", c.Request.URL.Path)
 			response.ErrorWithStatus(c, http.StatusForbidden, "CSRF_HEADER_MISSING", "CSRF header missing", "")
 			c.Abort()
 			return
@@ -58,12 +52,7 @@ func (m *CSRFMiddleware) ValidateCSRF() gin.HandlerFunc {
 
 		// Validate tokens match (double-submit cookie pattern)
 		if cookieToken != headerToken {
-			m.logger.WithFields(logrus.Fields{
-				"method":         c.Request.Method,
-				"path":           c.Request.URL.Path,
-				"cookie_preview": cookieToken[:min(len(cookieToken), 10)] + "...",
-				"header_preview": headerToken[:min(len(headerToken), 10)] + "...",
-			}).Warn("CSRF validation failed: token mismatch")
+			m.logger.Warn("CSRF validation failed: token mismatch", "method", c.Request.Method, "path", c.Request.URL.Path)
 			response.ErrorWithStatus(c, http.StatusForbidden, "CSRF_TOKEN_INVALID", "CSRF token mismatch", "")
 			c.Abort()
 			return

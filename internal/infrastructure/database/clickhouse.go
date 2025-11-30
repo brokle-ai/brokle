@@ -1,13 +1,13 @@
 package database
 
 import (
+	"log/slog"
 	"context"
 	"fmt"
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
-	"github.com/sirupsen/logrus"
 
 	"brokle/internal/config"
 )
@@ -16,11 +16,11 @@ import (
 type ClickHouseDB struct {
 	Conn   driver.Conn
 	config *config.Config
-	logger *logrus.Logger
+	logger *slog.Logger
 }
 
 // NewClickHouseDB creates a new ClickHouse database connection
-func NewClickHouseDB(cfg *config.Config, logger *logrus.Logger) (*ClickHouseDB, error) {
+func NewClickHouseDB(cfg *config.Config, logger *slog.Logger) (*ClickHouseDB, error) {
 	// Parse connection options from URL
 	options, err := clickhouse.ParseDSN(cfg.GetClickHouseURL())
 	if err != nil {

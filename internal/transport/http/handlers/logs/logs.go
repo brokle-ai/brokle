@@ -1,21 +1,21 @@
 package logs
 
 import (
+	"log/slog"
 	"time"
 
 	"brokle/internal/config"
 	"brokle/pkg/response"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 )
 
 type Handler struct {
 	config *config.Config
-	logger *logrus.Logger
+	logger *slog.Logger
 }
 
-func NewHandler(config *config.Config, logger *logrus.Logger) *Handler {
+func NewHandler(config *config.Config, logger *slog.Logger) *Handler {
 	return &Handler{config: config, logger: logger}
 }
 

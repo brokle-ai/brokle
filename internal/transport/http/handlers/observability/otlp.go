@@ -1,6 +1,7 @@
 package observability
 
 import (
+	"log/slog"
 	"bytes"
 	"compress/gzip"
 	"encoding/hex"
@@ -11,7 +12,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 	coltracepb "go.opentelemetry.io/proto/otlp/collector/trace/v1"
 	commonpb "go.opentelemetry.io/proto/otlp/common/v1"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -30,7 +30,7 @@ type OTLPHandler struct {
 	streamProducer       *streams.TelemetryStreamProducer
 	deduplicationService observability.TelemetryDeduplicationService
 	otlpConverter        *obsServices.OTLPConverterService
-	logger               *logrus.Logger
+	logger               *slog.Logger
 }
 
 // NewOTLPHandler creates a new OTLP handler
@@ -38,7 +38,7 @@ func NewOTLPHandler(
 	streamProducer *streams.TelemetryStreamProducer,
 	deduplicationService observability.TelemetryDeduplicationService,
 	otlpConverter *obsServices.OTLPConverterService,
-	logger *logrus.Logger,
+	logger *slog.Logger,
 ) *OTLPHandler {
 	return &OTLPHandler{
 		streamProducer:       streamProducer,
@@ -80,7 +80,7 @@ func (h *OTLPHandler) HandleTraces(c *gin.Context) {
 		strings.Contains(contentType, "application/json")
 
 	if !validContentType {
-		h.logger.WithField("content_type", contentType).Warn("Unsupported Content-Type for OTLP endpoint")
+		h.logger.Warn("Unsupported Content-Type for OTLP endpoint", "content_type", contentType)
 		response.ErrorWithStatus(c, 415, "unsupported_media_type",
 			"Content-Type must be 'application/x-protobuf' or 'application/json'", "")
 		return
@@ -95,16 +95,13 @@ func (h *OTLPHandler) HandleTraces(c *gin.Context) {
 	if err != nil {
 		// Check if error is due to size limit
 		if err.Error() == "http: request body too large" {
-			h.logger.WithFields(logrus.Fields{
-				"max_size": maxRequestSize,
-				"error":    err.Error(),
-			}).Warn("OTLP request exceeds maximum size limit")
+			h.logger.Warn("OTLP request exceeds maximum size limit", "max_size", maxRequestSize, "error", err.Error())
 			response.ErrorWithStatus(c, 413, "payload_too_large",
 				fmt.Sprintf("Request body exceeds maximum size of %d bytes", maxRequestSize), "")
 			return
 		}
 
-		h.logger.WithError(err).Error("Failed to read OTLP request body")
+		h.logger.Error("Failed to read OTLP request body", "error", err)
 		response.BadRequest(c, "invalid request", "Failed to read request body")
 		return
 	}
@@ -118,28 +115,24 @@ func (h *OTLPHandler) HandleTraces(c *gin.Context) {
 
 		gzipReader, err := gzip.NewReader(bytes.NewReader(body))
 		if err != nil {
-			h.logger.WithError(err).Error("Failed to create gzip reader")
+			h.logger.Error("Failed to create gzip reader", "error", err)
 			response.BadRequest(c, "invalid encoding", "Failed to decompress gzip data")
 			return
 		}
 		defer func() {
 			if err := gzipReader.Close(); err != nil {
-				h.logger.WithError(err).Warn("Failed to close gzip reader")
+				h.logger.Warn("Failed to close gzip reader", "error", err)
 			}
 		}()
 
 		body, err = io.ReadAll(gzipReader)
 		if err != nil {
-			h.logger.WithError(err).Error("Failed to decompress gzip data")
+			h.logger.Error("Failed to decompress gzip data", "error", err)
 			response.BadRequest(c, "invalid encoding", "Failed to read decompressed data")
 			return
 		}
 
-		h.logger.WithFields(logrus.Fields{
-			"original_size":     originalSize,
-			"decompressed_size": len(body),
-			"compression_ratio": float64(originalSize) / float64(len(body)),
-		}).Info("Gzip decompression successful")
+		h.logger.Info("Gzip decompression successful", "original_size", originalSize, "decompressed_size", len(body), "compression_ratio", float64(originalSize) / float64(len(body)))
 	}
 
 	// Parse request based on content type (already validated above)
@@ -151,7 +144,7 @@ func (h *OTLPHandler) HandleTraces(c *gin.Context) {
 
 		var protoReq coltracepb.ExportTraceServiceRequest
 		if err := proto.Unmarshal(body, &protoReq); err != nil {
-			h.logger.WithError(err).Error("Failed to unmarshal OTLP protobuf")
+			h.logger.Error("Failed to unmarshal OTLP protobuf", "error", err)
 			response.ValidationError(c, "invalid OTLP protobuf", err.Error())
 			return
 		}
@@ -159,7 +152,7 @@ func (h *OTLPHandler) HandleTraces(c *gin.Context) {
 		// Convert protobuf to internal format
 		otlpReq, err = convertProtoToInternal(&protoReq)
 		if err != nil {
-			h.logger.WithError(err).Error("Failed to convert protobuf to internal format")
+			h.logger.Error("Failed to convert protobuf to internal format", "error", err)
 			response.InternalServerError(c, "Failed to process OTLP protobuf")
 			return
 		}
@@ -169,7 +162,7 @@ func (h *OTLPHandler) HandleTraces(c *gin.Context) {
 
 		var protoReq coltracepb.ExportTraceServiceRequest
 		if err := protojson.Unmarshal(body, &protoReq); err != nil {
-			h.logger.WithError(err).Error("Failed to parse OTLP JSON")
+			h.logger.Error("Failed to parse OTLP JSON", "error", err)
 			response.ValidationError(c, "invalid OTLP JSON", err.Error())
 			return
 		}
@@ -177,7 +170,7 @@ func (h *OTLPHandler) HandleTraces(c *gin.Context) {
 		// Convert protobuf to internal format (same as Protobuf path)
 		otlpReq, err = convertProtoToInternal(&protoReq)
 		if err != nil {
-			h.logger.WithError(err).Error("Failed to convert JSON to internal format")
+			h.logger.Error("Failed to convert JSON to internal format", "error", err)
 			response.InternalServerError(c, "Failed to process OTLP JSON")
 			return
 		}
@@ -189,24 +182,17 @@ func (h *OTLPHandler) HandleTraces(c *gin.Context) {
 		return
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"project_id":     projectID,
-		"resource_spans": len(otlpReq.ResourceSpans),
-	}).Debug("Received OTLP trace request")
+	h.logger.Debug("Received OTLP trace request", "project_id", projectID, "resource_spans", len(otlpReq.ResourceSpans))
 
 	// Convert OTLP spans to Brokle telemetry events using converter service (with cost calculation)
 	brokleEvents, err := h.otlpConverter.ConvertOTLPToBrokleEvents(c.Request.Context(), &otlpReq, projectID)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to convert OTLP to Brokle events")
+		h.logger.Error("Failed to convert OTLP to Brokle events", "error", err)
 		response.InternalServerError(c, "Failed to process OTLP traces")
 		return
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"project_id":    projectID,
-		"otlp_spans":    countSpans(&otlpReq),
-		"brokle_events": len(brokleEvents),
-	}).Debug("Converted OTLP spans to Brokle events")
+	h.logger.Debug("Converted OTLP spans to Brokle events", "project_id", projectID, "otlp_spans", countSpans(&otlpReq), "brokle_events", len(brokleEvents))
 
 	// OTLP-native processing: deduplication + Redis Streams publishing
 
@@ -218,11 +204,7 @@ func (h *OTLPHandler) HandleTraces(c *gin.Context) {
 		// Only deduplicate spans (spans have unique span_id)
 		if event.EventType == observability.TelemetryEventTypeSpan {
 			if event.SpanID == "" {
-				h.logger.WithFields(logrus.Fields{
-					"event_id":   event.EventID.String(),
-					"trace_id":   event.TraceID,
-					"event_type": event.EventType,
-				}).Error("Span missing span_id, skipping deduplication")
+				h.logger.Error("Span missing span_id, skipping deduplication", "event_id", event.EventID.String(), "trace_id", event.TraceID, "event_type", event.EventType)
 				continue
 			}
 
@@ -246,7 +228,7 @@ func (h *OTLPHandler) HandleTraces(c *gin.Context) {
 			ctx, *projectIDPtr, batchID, dedupIDs, 24*time.Hour,
 		)
 		if err != nil {
-			h.logger.WithError(err).Error("Failed to claim OTLP spans for deduplication")
+			h.logger.Error("Failed to claim OTLP spans for deduplication", "error", err)
 			response.InternalServerError(c, "Failed to claim events for deduplication")
 			return
 		}
@@ -262,10 +244,7 @@ func (h *OTLPHandler) HandleTraces(c *gin.Context) {
 	}
 
 	if len(claimedIDs) == 0 && !hasTraces {
-		h.logger.WithFields(logrus.Fields{
-			"project_id": projectID,
-			"duplicates": len(duplicateIDs),
-		}).Info("All OTLP spans were duplicates, skipping")
+		h.logger.Info("All OTLP spans were duplicates, skipping", "project_id", projectID, "duplicates", len(duplicateIDs))
 
 		response.Success(c, map[string]interface{}{
 			"status":          "all_duplicates",
@@ -335,23 +314,13 @@ func (h *OTLPHandler) HandleTraces(c *gin.Context) {
 	if err != nil {
 		// CRITICAL: Rollback claimed events on publish failure
 		if rollbackErr := h.deduplicationService.ReleaseEvents(ctx, claimedIDs); rollbackErr != nil {
-			h.logger.WithFields(logrus.Fields{
-				"rollback_error": rollbackErr.Error(),
-				"original_error": err.Error(),
-				"batch_id":       batchID.String(),
-			}).Error("CRITICAL: Failed to rollback OTLP deduplication claims after publish failure")
+			h.logger.Error("CRITICAL: Failed to rollback OTLP deduplication claims after publish failure", "rollback_error", rollbackErr.Error(), "original_error", err.Error(), "batch_id", batchID.String())
 		}
 		response.InternalServerError(c, "Failed to publish events to stream")
 		return
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"batch_id":       batchID.String(),
-		"stream_id":      streamID,
-		"claimed_events": len(claimedIDs),
-		"duplicates":     len(duplicateIDs),
-		"project_id":     projectID,
-	}).Info("OTLP traces published to stream successfully")
+	h.logger.Info("OTLP traces published to stream successfully", "batch_id", batchID.String(), "stream_id", streamID, "claimed_events", len(claimedIDs), "duplicates", len(duplicateIDs), "project_id", projectID)
 
 	// 6. Return OTLP-compatible success response (using standard APIResponse envelope)
 	response.Success(c, map[string]interface{}{

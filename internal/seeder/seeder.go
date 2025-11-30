@@ -10,8 +10,9 @@ import (
 	"strings"
 	"time"
 
+	"log/slog"
+
 	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v3"
 	"gorm.io/gorm"
 
@@ -21,6 +22,7 @@ import (
 	"brokle/internal/infrastructure/database"
 	analyticsRepo "brokle/internal/infrastructure/repository/analytics"
 	authRepo "brokle/internal/infrastructure/repository/auth"
+	"brokle/pkg/logging"
 	"brokle/pkg/ulid"
 )
 
@@ -38,9 +40,8 @@ type Seeder struct {
 
 // New creates a new Seeder with the required dependencies
 func New(cfg *config.Config) (*Seeder, error) {
-	// Create logger for database connection
-	logger := logrus.New()
-	logger.SetLevel(logrus.WarnLevel) // Less verbose for seeding
+	// Create logger for database connection (less verbose for seeding)
+	logger := logging.NewLogger(slog.LevelWarn)
 
 	// Initialize PostgreSQL database
 	postgresDB, err := database.NewPostgresDB(cfg, logger)

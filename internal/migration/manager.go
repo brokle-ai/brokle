@@ -10,20 +10,22 @@ import (
 	"strings"
 	"time"
 
+	"log/slog"
+
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/clickhouse"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
-	"github.com/sirupsen/logrus"
 
 	"brokle/internal/config"
 	"brokle/internal/infrastructure/database"
+	"brokle/pkg/logging"
 )
 
 // Manager coordinates migrations across multiple databases
 type Manager struct {
 	config           *config.Config
-	logger           *logrus.Logger
+	logger           *slog.Logger
 	postgresRunner   *migrate.Migrate
 	clickhouseRunner *migrate.Migrate
 	postgresDB       *database.PostgresDB
@@ -38,16 +40,10 @@ func NewManager(cfg *config.Config) (*Manager, error) {
 // NewManagerWithDatabases creates a new migration manager with only specified databases
 func NewManagerWithDatabases(cfg *config.Config, databases []DatabaseType) (*Manager, error) {
 	// Initialize logger with clean text output for CLI
-	logger := logrus.New()
-	logger.SetFormatter(&logrus.TextFormatter{
-		DisableTimestamp: true,
-		DisableColors:    false,
-	})
-
 	// Force WarnLevel for migration CLI to keep output clean
 	// Migration CLI should only show errors and warnings, not info/debug messages
 	// This ensures clean output regardless of LOG_LEVEL environment variable
-	logger.SetLevel(logrus.WarnLevel)
+	logger := logging.NewTextLogger(slog.LevelWarn)
 
 	manager := &Manager{
 		config: cfg,
@@ -94,7 +90,7 @@ func NewManagerWithDatabases(cfg *config.Config, databases []DatabaseType) (*Man
 		logger.Info("ClickHouse migration manager initialized")
 	}
 
-	logger.WithField("databases", databases).Info("Migration manager initialized successfully")
+	logger.Info("Migration manager initialized successfully", "databases", databases)
 	return manager, nil
 }
 
@@ -133,7 +129,7 @@ func (m *Manager) initPostgresRunner() error {
 	}
 
 	m.postgresRunner = runner
-	m.logger.WithField("migrations_path", migrationsPath).Info("PostgreSQL migration runner initialized")
+	m.logger.Info("PostgreSQL migration runner initialized", "migrations_path", migrationsPath)
 	return nil
 }
 
@@ -157,7 +153,7 @@ func (m *Manager) initClickHouseRunner() error {
 	}
 
 	m.clickhouseRunner = runner
-	m.logger.WithField("migrations_path", migrationsPath).Info("ClickHouse migration runner initialized")
+	m.logger.Info("ClickHouse migration runner initialized", "migrations_path", migrationsPath)
 	return nil
 }
 
@@ -192,7 +188,7 @@ func (m *Manager) MigratePostgresUp(ctx context.Context, steps int, dryRun bool)
 		return nil
 	}
 
-	m.logger.WithField("steps", steps).Info("Running PostgreSQL migrations up")
+	m.logger.Info("Running PostgreSQL migrations up", "steps", steps)
 
 	if steps == 0 {
 		return m.postgresRunner.Up()
@@ -211,7 +207,7 @@ func (m *Manager) MigratePostgresDown(ctx context.Context, steps int, dryRun boo
 		return nil
 	}
 
-	m.logger.WithField("steps", steps).Info("Running PostgreSQL migrations down")
+	m.logger.Info("Running PostgreSQL migrations down", "steps", steps)
 
 	if steps == 0 {
 		return m.postgresRunner.Down()
@@ -230,7 +226,7 @@ func (m *Manager) MigrateClickHouseUp(ctx context.Context, steps int, dryRun boo
 		return nil
 	}
 
-	m.logger.WithField("steps", steps).Info("Running ClickHouse migrations up")
+	m.logger.Info("Running ClickHouse migrations up", "steps", steps)
 
 	if steps == 0 {
 		return m.clickhouseRunner.Up()
@@ -249,7 +245,7 @@ func (m *Manager) MigrateClickHouseDown(ctx context.Context, steps int, dryRun b
 		return nil
 	}
 
-	m.logger.WithField("steps", steps).Info("Running ClickHouse migrations down")
+	m.logger.Info("Running ClickHouse migrations down", "steps", steps)
 
 	if steps == 0 {
 		return m.clickhouseRunner.Down()
@@ -621,11 +617,7 @@ func (m *Manager) CreatePostgresMigration(name string) error {
 		return fmt.Errorf("failed to create down migration file: %w", err)
 	}
 
-	m.logger.WithFields(logrus.Fields{
-		"name":      name,
-		"up_file":   upFile,
-		"down_file": downFile,
-	}).Info("PostgreSQL migration files created")
+	m.logger.Info("PostgreSQL migration files created", "name", name, "up_file", upFile, "down_file", downFile)
 
 	fmt.Printf("PostgreSQL migration files created:\n")
 	fmt.Printf("  Up:   %s\n", upFile)
@@ -657,11 +649,7 @@ func (m *Manager) CreateClickHouseMigration(name string) error {
 		return fmt.Errorf("failed to create down migration file: %w", err)
 	}
 
-	m.logger.WithFields(logrus.Fields{
-		"name":      name,
-		"up_file":   upFile,
-		"down_file": downFile,
-	}).Info("ClickHouse migration files created")
+	m.logger.Info("ClickHouse migration files created", "name", name, "up_file", upFile, "down_file", downFile)
 
 	fmt.Printf("ClickHouse migration files created:\n")
 	fmt.Printf("  Up:   %s\n", upFile)
@@ -679,7 +667,7 @@ func (m *Manager) Shutdown() error {
 	// Close PostgreSQL runner
 	if m.postgresRunner != nil {
 		if _, err := m.postgresRunner.Close(); err != nil {
-			m.logger.WithError(err).Error("Failed to close PostgreSQL migration runner")
+			m.logger.Error("Failed to close PostgreSQL migration runner", "error", err)
 			lastErr = err
 		}
 	}
@@ -687,7 +675,7 @@ func (m *Manager) Shutdown() error {
 	// Close ClickHouse runner
 	if m.clickhouseRunner != nil {
 		if _, err := m.clickhouseRunner.Close(); err != nil {
-			m.logger.WithError(err).Error("Failed to close ClickHouse migration runner")
+			m.logger.Error("Failed to close ClickHouse migration runner", "error", err)
 			lastErr = err
 		}
 	}
@@ -696,7 +684,7 @@ func (m *Manager) Shutdown() error {
 	// Close PostgreSQL
 	if m.postgresDB != nil {
 		if err := m.postgresDB.Close(); err != nil {
-			m.logger.WithError(err).Error("Failed to close PostgreSQL connection")
+			m.logger.Error("Failed to close PostgreSQL connection", "error", err)
 			lastErr = err
 		}
 	}
@@ -704,7 +692,7 @@ func (m *Manager) Shutdown() error {
 	// Close ClickHouse
 	if m.clickhouseDB != nil {
 		if err := m.clickhouseDB.Close(); err != nil {
-			m.logger.WithError(err).Error("Failed to close ClickHouse connection")
+			m.logger.Error("Failed to close ClickHouse connection", "error", err)
 			lastErr = err
 		}
 	}

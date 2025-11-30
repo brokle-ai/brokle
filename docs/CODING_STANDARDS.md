@@ -588,16 +588,16 @@ func TestUserIntegration(t *testing.T) {
 
 ```go
 // Use structured logging
-import "github.com/sirupsen/logrus"
+import "log/slog"
 
 // Good - structured logging with context
 func (s *userService) Register(ctx context.Context, email, name, password string) (*user.User, error) {
-    logger := logrus.WithFields(logrus.Fields{
-        "operation": "user.register",
-        "email":     email,
-        "request_id": GetRequestID(ctx),
-    })
-    
+    logger := s.logger.With(
+        "operation", "user.register",
+        "email", email,
+        "request_id", GetRequestID(ctx),
+    )
+
     logger.Info("Starting user registration")
     
     // ... business logic

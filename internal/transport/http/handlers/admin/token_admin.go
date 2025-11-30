@@ -1,10 +1,10 @@
 package admin
 
 import (
+	"log/slog"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 
 	"brokle/internal/core/domain/auth"
 	"brokle/internal/transport/http/middleware"
@@ -16,14 +16,14 @@ import (
 type TokenAdminHandler struct {
 	authService       auth.AuthService
 	blacklistedTokens auth.BlacklistedTokenService
-	logger            *logrus.Logger
+	logger            *slog.Logger
 }
 
 // NewTokenAdminHandler creates a new token admin handler
 func NewTokenAdminHandler(
 	authService auth.AuthService,
 	blacklistedTokens auth.BlacklistedTokenService,
-	logger *logrus.Logger,
+	logger *slog.Logger,
 ) *TokenAdminHandler {
 	return &TokenAdminHandler{
 		authService:       authService,
@@ -86,7 +86,7 @@ type BlacklistedTokenResponse struct {
 func (h *TokenAdminHandler) RevokeToken(c *gin.Context) {
 	var req RevokeTokenRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.WithError(err).Warn("Invalid revoke token request")
+		h.logger.Warn("Invalid revoke token request", "error", err)
 		response.BadRequest(c, "Invalid request payload", err.Error())
 		return
 	}
@@ -101,7 +101,7 @@ func (h *TokenAdminHandler) RevokeToken(c *gin.Context) {
 	// Parse admin user ID for audit logging
 	adminUserID, err := ulid.Parse(authContext.UserID.String())
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to parse admin user ID")
+		h.logger.Error("Failed to parse admin user ID", "error", err)
 		response.InternalServerError(c, "Authentication error")
 		return
 	}
@@ -109,7 +109,7 @@ func (h *TokenAdminHandler) RevokeToken(c *gin.Context) {
 	// Check if token is already revoked
 	isRevoked, err := h.authService.IsTokenRevoked(c.Request.Context(), req.JTI)
 	if err != nil {
-		h.logger.WithError(err).WithField("jti", req.JTI).Error("Failed to check token revocation status")
+		h.logger.Error("Failed to check token revocation status", "error", err, "jti", req.JTI)
 		response.InternalServerError(c, "Failed to check token status")
 		return
 	}
@@ -125,21 +125,12 @@ func (h *TokenAdminHandler) RevokeToken(c *gin.Context) {
 	// In a production system, you might want to store JTI->UserID mapping
 	err = h.authService.RevokeAccessToken(c.Request.Context(), req.JTI, adminUserID, req.Reason)
 	if err != nil {
-		h.logger.WithError(err).WithFields(logrus.Fields{
-			"jti":    req.JTI,
-			"reason": req.Reason,
-			"admin":  adminUserID,
-		}).Error("Failed to revoke token")
+		h.logger.Error("Failed to revoke token", "error", err, "jti", req.JTI, "reason", req.Reason, "admin", adminUserID)
 		response.InternalServerError(c, "Failed to revoke token")
 		return
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"jti":        req.JTI,
-		"reason":     req.Reason,
-		"admin_user": adminUserID,
-		"request_id": c.GetString("request_id"),
-	}).Info("Token revoked by admin")
+	h.logger.Info("Token revoked by admin", "jti", req.JTI, "reason", req.Reason, "admin_user", adminUserID, "request_id", c.GetString("request_id"))
 
 	response.Success(c, gin.H{
 		"message": "Token revoked successfully",
@@ -178,7 +169,7 @@ func (h *TokenAdminHandler) RevokeUserTokens(c *gin.Context) {
 
 	var req RevokeUserTokensRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.WithError(err).Warn("Invalid revoke user tokens request")
+		h.logger.Warn("Invalid revoke user tokens request", "error", err)
 		response.BadRequest(c, "Invalid request payload", err.Error())
 		return
 	}
@@ -193,21 +184,12 @@ func (h *TokenAdminHandler) RevokeUserTokens(c *gin.Context) {
 	// Revoke all user tokens
 	err = h.authService.RevokeUserAccessTokens(c.Request.Context(), userID, req.Reason)
 	if err != nil {
-		h.logger.WithError(err).WithFields(logrus.Fields{
-			"user_id": userID,
-			"reason":  req.Reason,
-			"admin":   authContext.UserID,
-		}).Error("Failed to revoke user tokens")
+		h.logger.Error("Failed to revoke user tokens", "error", err, "user_id", userID, "reason", req.Reason, "admin", authContext.UserID)
 		response.InternalServerError(c, "Failed to revoke user tokens")
 		return
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"user_id":    userID,
-		"reason":     req.Reason,
-		"admin_user": authContext.UserID,
-		"request_id": c.GetString("request_id"),
-	}).Info("All user tokens revoked by admin")
+	h.logger.Info("All user tokens revoked by admin", "user_id", userID, "reason", req.Reason, "admin_user", authContext.UserID, "request_id", c.GetString("request_id"))
 
 	response.Success(c, gin.H{
 		"message": "All user tokens revoked successfully",
@@ -299,7 +281,7 @@ func (h *TokenAdminHandler) ListBlacklistedTokens(c *gin.Context) {
 	}
 
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to retrieve blacklisted tokens")
+		h.logger.Error("Failed to retrieve blacklisted tokens", "error", err)
 		response.InternalServerError(c, "Failed to retrieve tokens")
 		return
 	}
@@ -337,7 +319,7 @@ func (h *TokenAdminHandler) GetTokenStats(c *gin.Context) {
 	// Get total blacklisted tokens count
 	totalCount, err := h.blacklistedTokens.GetBlacklistedTokensCount(c.Request.Context())
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to get blacklisted tokens count")
+		h.logger.Error("Failed to get blacklisted tokens count", "error", err)
 		response.InternalServerError(c, "Failed to retrieve token statistics")
 		return
 	}
@@ -353,7 +335,7 @@ func (h *TokenAdminHandler) GetTokenStats(c *gin.Context) {
 	for _, reason := range commonReasons {
 		tokens, reasonErr := h.blacklistedTokens.GetTokensByReason(c.Request.Context(), reason)
 		if reasonErr != nil {
-			h.logger.WithError(reasonErr).WithField("reason", reason).Warn("Failed to get tokens by reason")
+			h.logger.Warn("Failed to get tokens by reason", "error", reasonErr, "reason", reason)
 			continue
 		}
 

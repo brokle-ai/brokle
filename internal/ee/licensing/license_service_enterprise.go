@@ -4,6 +4,7 @@
 package license
 
 import (
+	"log/slog"
 	"context"
 	"crypto/rsa"
 	"encoding/json"
@@ -14,7 +15,6 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/redis/go-redis/v9"
-	"github.com/sirupsen/logrus"
 
 	"brokle/internal/config"
 )
@@ -22,7 +22,7 @@ import (
 // LicenseService handles license validation and management
 type LicenseService struct {
 	config     *config.Config
-	logger     *logrus.Logger
+	logger     *slog.Logger
 	redis      *redis.Client
 	httpClient *http.Client
 	publicKey  *rsa.PublicKey
@@ -67,7 +67,7 @@ const (
 )
 
 // NewLicenseService creates a new license service instance
-func NewLicenseService(cfg *config.Config, logger *logrus.Logger, redisClient *redis.Client) (*LicenseService, error) {
+func NewLicenseService(cfg *config.Config, logger *slog.Logger, redisClient *redis.Client) (*LicenseService, error) {
 	service := &LicenseService{
 		config: cfg,
 		logger: logger,
@@ -112,7 +112,7 @@ func (ls *LicenseService) ValidateLicense(ctx context.Context) (*LicenseStatus, 
 	// Perform fresh license validation
 	licenseInfo, err := ls.performLicenseValidation(ctx)
 	if err != nil {
-		ls.logger.WithError(err).Warn("License validation failed")
+		ls.logger.Warn("License validation failed", "error", err)
 
 		// Check if we can use offline validation
 		if cachedLicense, cacheErr := ls.getCachedLicense(ctx); cacheErr == nil && cachedLicense != nil {
@@ -134,7 +134,7 @@ func (ls *LicenseService) ValidateLicense(ctx context.Context) (*LicenseStatus, 
 
 	// Cache the validated license
 	if err := ls.cacheLicense(ctx, licenseInfo); err != nil {
-		ls.logger.WithError(err).Warn("Failed to cache license information")
+		ls.logger.Warn("Failed to cache license information", "error", err)
 	}
 
 	usage, _ := ls.getCurrentUsage(ctx)

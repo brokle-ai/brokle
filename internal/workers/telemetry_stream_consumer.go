@@ -1,6 +1,7 @@
 package workers
 
 import (
+	"log/slog"
 	"context"
 	"encoding/json"
 	"errors"
@@ -12,7 +13,6 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
-	"github.com/sirupsen/logrus"
 
 	"brokle/internal/config"
 	"brokle/internal/core/domain/observability"
@@ -43,7 +43,7 @@ type TelemetryStreamConsumer struct {
 	archiveService      *observabilitySvc.ArchiveService
 	archiveConfig       *config.ArchiveConfig
 	redis               *database.RedisDB
-	logger              *logrus.Logger
+	logger              *slog.Logger
 	activeStreams       map[string]bool
 	quit                chan struct{}
 	consumerGroup       string
@@ -84,7 +84,7 @@ type TelemetryStreamConsumerConfig struct {
 func NewTelemetryStreamConsumer(
 	redis *database.RedisDB,
 	deduplicationSvc observability.TelemetryDeduplicationService,
-	logger *logrus.Logger,
+	logger *slog.Logger,
 	consumerConfig *TelemetryStreamConsumerConfig,
 	traceService observability.TraceService,
 	scoreService observability.ScoreService,
@@ -139,13 +139,7 @@ func (c *TelemetryStreamConsumer) Start(ctx context.Context) error {
 		return errors.New("consumer already running")
 	}
 
-	c.logger.WithFields(logrus.Fields{
-		"consumer_group":     c.consumerGroup,
-		"consumer_id":        c.consumerID,
-		"batch_size":         c.batchSize,
-		"discovery_interval": c.discoveryInterval,
-		"max_streams":        c.maxStreamsPerRead,
-	}).Info("Starting telemetry stream consumer")
+	c.logger.Info("Starting telemetry stream consumer", "consumer_group", c.consumerGroup, "consumer_id", c.consumerID, "batch_size", c.batchSize, "discovery_interval", c.discoveryInterval, "max_streams", c.maxStreamsPerRead)
 
 	// Start consumption loop
 	c.wg.Add(1)
@@ -169,11 +163,7 @@ func (c *TelemetryStreamConsumer) Stop() {
 	c.wg.Wait()
 
 	c.statsLock.RLock()
-	c.logger.WithFields(logrus.Fields{
-		"batches_processed": c.batchesProcessed,
-		"events_processed":  c.eventsProcessed,
-		"errors_count":      c.errorsCount,
-	}).Info("Telemetry stream consumer stopped")
+	c.logger.Info("Telemetry stream consumer stopped", "batches_processed", c.batchesProcessed, "events_processed", c.eventsProcessed, "errors_count", c.errorsCount)
 	c.statsLock.RUnlock()
 }
 
@@ -186,7 +176,7 @@ func (c *TelemetryStreamConsumer) discoveryLoop(ctx context.Context) {
 
 	// Initial discovery on startup
 	if err := c.performDiscovery(ctx); err != nil {
-		c.logger.WithError(err).Error("Initial stream discovery failed")
+		c.logger.Error("Initial stream discovery failed", "error", err)
 	}
 
 	for {
@@ -197,9 +187,7 @@ func (c *TelemetryStreamConsumer) discoveryLoop(ctx context.Context) {
 			return
 		case <-ticker.C:
 			if err := c.performDiscovery(ctx); err != nil {
-				c.logger.WithError(err).WithFields(logrus.Fields{
-					"backoff": c.discoveryBackoff,
-				}).Error("Stream discovery failed, backing off")
+				c.logger.Error("Stream discovery failed, backing off", "error", err, "backoff", c.discoveryBackoff)
 
 				// Exponential backoff on failure
 				time.Sleep(c.discoveryBackoff)
@@ -251,10 +239,7 @@ func (c *TelemetryStreamConsumer) discoverStreams(ctx context.Context) ([]string
 		}
 	}
 
-	c.logger.WithFields(logrus.Fields{
-		"stream_count": len(allStreams),
-		"pattern":      pattern,
-	}).Debug("Discovered telemetry streams")
+	c.logger.Debug("Discovered telemetry streams", "stream_count", len(allStreams), "pattern", pattern)
 
 	return allStreams, nil
 }
@@ -277,7 +262,7 @@ func (c *TelemetryStreamConsumer) ensureConsumerGroups(ctx context.Context, stre
 		if err != nil {
 			// Ignore BUSYGROUP error (group already exists)
 			if !strings.Contains(err.Error(), "BUSYGROUP") {
-				c.logger.WithError(err).WithField("stream", streamKey).Warn("Failed to create consumer group")
+				c.logger.Warn("Failed to create consumer group", "error", err, "stream", streamKey)
 				continue
 			}
 		}
@@ -287,10 +272,7 @@ func (c *TelemetryStreamConsumer) ensureConsumerGroups(ctx context.Context, stre
 		c.activeStreams[streamKey] = true
 		c.streamsMutex.Unlock()
 
-		c.logger.WithFields(logrus.Fields{
-			"stream":         streamKey,
-			"consumer_group": c.consumerGroup,
-		}).Debug("Consumer group initialized for stream")
+		c.logger.Debug("Consumer group initialized for stream", "stream", streamKey, "consumer_group", c.consumerGroup)
 	}
 
 	return nil
@@ -317,10 +299,7 @@ func (c *TelemetryStreamConsumer) cleanupInactiveStreams(discoveredStreams []str
 	}
 
 	if len(removedStreams) > 0 {
-		c.logger.WithFields(logrus.Fields{
-			"removed_count": len(removedStreams),
-			"streams":       removedStreams,
-		}).Info("Cleaned up inactive streams")
+		c.logger.Info("Cleaned up inactive streams", "removed_count", len(removedStreams), "streams", removedStreams)
 	}
 }
 
@@ -345,7 +324,7 @@ func (c *TelemetryStreamConsumer) consumeLoop(ctx context.Context) {
 		default:
 			if err := c.consumeBatch(ctx); err != nil {
 				if err != redis.Nil {
-					c.logger.WithError(err).Error("Error consuming batch")
+					c.logger.Error("Error consuming batch", "error", err)
 					c.incrementErrors()
 				}
 				// Brief pause on error to prevent tight error loops
@@ -411,7 +390,7 @@ func (c *TelemetryStreamConsumer) consumeBatch(ctx context.Context) error {
 			// No messages available - normal condition (this is expected most of the time)
 			return nil
 		}
-		c.logger.WithError(err).Error("XReadGroup failed")
+		c.logger.Error("XReadGroup failed", "error", err)
 		return err
 	}
 
@@ -430,17 +409,13 @@ func (c *TelemetryStreamConsumer) consumeBatch(ctx context.Context) error {
 			if shouldAck {
 				// Acknowledge message - either processed successfully or safely in DLQ
 				if ackErr := c.redis.Client.XAck(ctx, stream.Stream, c.consumerGroup, msg.ID).Err(); ackErr != nil {
-					c.logger.WithError(ackErr).WithFields(logrus.Fields{
-						"stream":     stream.Stream,
-						"message_id": msg.ID,
-					}).Warn("Failed to acknowledge message")
+					c.logger.Warn("Failed to acknowledge message", "error", ackErr,
+						"stream", stream.Stream,
+						"message_id", msg.ID)
 				}
 			} else {
 				// Leave message pending for retry (parse errors, DLQ write failures, etc.)
-				c.logger.WithError(err).WithFields(logrus.Fields{
-					"stream":     stream.Stream,
-					"message_id": msg.ID,
-				}).Error("Message processing failed - leaving pending for retry")
+				c.logger.Error("Message processing failed - leaving pending for retry", "error", err, "stream", stream.Stream, "message_id", msg.ID)
 			}
 
 			// Track errors for non-DLQ failures
@@ -477,11 +452,7 @@ func (c *TelemetryStreamConsumer) processMessage(ctx context.Context, streamKey 
 	for attempt := 0; attempt <= c.maxRetries; attempt++ {
 		if attempt > 0 {
 			backoff := time.Duration(attempt) * c.retryBackoff
-			c.logger.WithFields(logrus.Fields{
-				"batch_id": batch.BatchID.String(),
-				"attempt":  attempt,
-				"backoff":  backoff,
-			}).Info("Retrying batch processing")
+			c.logger.Info("Retrying batch processing", "batch_id", batch.BatchID.String(), "attempt", attempt, "backoff", backoff)
 			time.Sleep(backoff)
 		}
 
@@ -492,18 +463,13 @@ func (c *TelemetryStreamConsumer) processMessage(ctx context.Context, streamKey 
 
 		// Success
 		c.incrementStats(1, int64(len(batch.Events)))
-		c.logger.WithFields(logrus.Fields{
-			"batch_id":    batch.BatchID.String(),
-			"project_id":  batch.ProjectID.String(),
-			"event_count": len(batch.Events),
-			"message_id":  msg.ID,
-		}).Debug("Successfully processed batch from stream")
+		c.logger.Debug("Successfully processed batch from stream", "batch_id", batch.BatchID.String(), "project_id", batch.ProjectID.String(), "event_count", len(batch.Events), "message_id", msg.ID)
 		return nil
 	}
 
 	// Max retries exceeded - move to DLQ
 	if err := c.moveToDLQ(ctx, streamKey, msg, &batch, lastErr); err != nil {
-		c.logger.WithError(err).Error("Failed to move message to DLQ")
+		c.logger.Error("Failed to move message to DLQ", "error", err)
 		// DLQ write failed - keep claims held, message stays pending
 		return fmt.Errorf("max retries exceeded AND failed to move to DLQ: %w", lastErr)
 	}
@@ -511,16 +477,10 @@ func (c *TelemetryStreamConsumer) processMessage(ctx context.Context, streamKey 
 	// DLQ write succeeded - release claims so client retries can proceed
 	if len(batch.ClaimedSpanIDs) > 0 {
 		if releaseErr := c.deduplicationSvc.ReleaseEvents(ctx, batch.ClaimedSpanIDs); releaseErr != nil {
-			c.logger.WithError(releaseErr).WithFields(logrus.Fields{
-				"batch_id":    batch.BatchID.String(),
-				"event_count": len(batch.ClaimedSpanIDs),
-			}).Error("Failed to release claims after DLQ write")
+			c.logger.Error("Failed to release claims after DLQ write", "error", releaseErr, "batch_id", batch.BatchID.String(), "event_count", len(batch.ClaimedSpanIDs))
 			// Don't fail - DLQ write succeeded, worst case: 24h TTL expires
 		} else {
-			c.logger.WithFields(logrus.Fields{
-				"batch_id":    batch.BatchID.String(),
-				"event_count": len(batch.ClaimedSpanIDs),
-			}).Info("Released claims after moving batch to DLQ")
+			c.logger.Info("Released claims after moving batch to DLQ", "batch_id", batch.BatchID.String(), "event_count", len(batch.ClaimedSpanIDs))
 		}
 	}
 
@@ -632,10 +592,7 @@ func (c *TelemetryStreamConsumer) processBatch(ctx context.Context, batch *strea
 			// Map event to Span struct
 			var span observability.Span
 			if err := mapToStruct(event.EventPayload, &span); err != nil {
-				c.logger.WithError(err).WithFields(logrus.Fields{
-					"event_id": event.EventID.String(),
-					"batch_id": batch.BatchID.String(),
-				}).Error("Failed to unmarshal span payload")
+				c.logger.Error("Failed to unmarshal span payload", "error", err, "event_id", event.EventID.String(), "batch_id", batch.BatchID.String())
 				failedCount++
 				continue
 			}
@@ -646,10 +603,7 @@ func (c *TelemetryStreamConsumer) processBatch(ctx context.Context, batch *strea
 			// Map event to Score struct
 			var score observability.Score
 			if err := mapToStruct(event.EventPayload, &score); err != nil {
-				c.logger.WithError(err).WithFields(logrus.Fields{
-					"event_id": event.EventID.String(),
-					"batch_id": batch.BatchID.String(),
-				}).Error("Failed to unmarshal score payload")
+				c.logger.Error("Failed to unmarshal score payload", "error", err, "event_id", event.EventID.String(), "batch_id", batch.BatchID.String())
 				failedCount++
 				continue
 			}
@@ -660,10 +614,7 @@ func (c *TelemetryStreamConsumer) processBatch(ctx context.Context, batch *strea
 			// Map event to MetricSum struct
 			var metricSum observability.MetricSum
 			if err := mapToStruct(event.EventPayload, &metricSum); err != nil {
-				c.logger.WithError(err).WithFields(logrus.Fields{
-					"event_id": event.EventID.String(),
-					"batch_id": batch.BatchID.String(),
-				}).Error("Failed to unmarshal metric_sum payload")
+				c.logger.Error("Failed to unmarshal metric_sum payload", "error", err, "event_id", event.EventID.String(), "batch_id", batch.BatchID.String())
 				failedCount++
 				continue
 			}
@@ -674,10 +625,7 @@ func (c *TelemetryStreamConsumer) processBatch(ctx context.Context, batch *strea
 			// Map event to MetricGauge struct
 			var metricGauge observability.MetricGauge
 			if err := mapToStruct(event.EventPayload, &metricGauge); err != nil {
-				c.logger.WithError(err).WithFields(logrus.Fields{
-					"event_id": event.EventID.String(),
-					"batch_id": batch.BatchID.String(),
-				}).Error("Failed to unmarshal metric_gauge payload")
+				c.logger.Error("Failed to unmarshal metric_gauge payload", "error", err, "event_id", event.EventID.String(), "batch_id", batch.BatchID.String())
 				failedCount++
 				continue
 			}
@@ -688,10 +636,7 @@ func (c *TelemetryStreamConsumer) processBatch(ctx context.Context, batch *strea
 			// Map event to MetricHistogram struct
 			var metricHistogram observability.MetricHistogram
 			if err := mapToStruct(event.EventPayload, &metricHistogram); err != nil {
-				c.logger.WithError(err).WithFields(logrus.Fields{
-					"event_id": event.EventID.String(),
-					"batch_id": batch.BatchID.String(),
-				}).Error("Failed to unmarshal metric_histogram payload")
+				c.logger.Error("Failed to unmarshal metric_histogram payload", "error", err, "event_id", event.EventID.String(), "batch_id", batch.BatchID.String())
 				failedCount++
 				continue
 			}
@@ -702,10 +647,7 @@ func (c *TelemetryStreamConsumer) processBatch(ctx context.Context, batch *strea
 			// Map event to MetricExponentialHistogram struct
 			var metricExpHistogram observability.MetricExponentialHistogram
 			if err := mapToStruct(event.EventPayload, &metricExpHistogram); err != nil {
-				c.logger.WithError(err).WithFields(logrus.Fields{
-					"event_id": event.EventID.String(),
-					"batch_id": batch.BatchID.String(),
-				}).Error("Failed to unmarshal metric_exponential_histogram payload")
+				c.logger.Error("Failed to unmarshal metric_exponential_histogram payload", "error", err, "event_id", event.EventID.String(), "batch_id", batch.BatchID.String())
 				failedCount++
 				continue
 			}
@@ -716,10 +658,7 @@ func (c *TelemetryStreamConsumer) processBatch(ctx context.Context, batch *strea
 			// Map event to Log struct
 			var log observability.Log
 			if err := mapToStruct(event.EventPayload, &log); err != nil {
-				c.logger.WithError(err).WithFields(logrus.Fields{
-					"event_id": event.EventID.String(),
-					"batch_id": batch.BatchID.String(),
-				}).Error("Failed to unmarshal log payload")
+				c.logger.Error("Failed to unmarshal log payload", "error", err, "event_id", event.EventID.String(), "batch_id", batch.BatchID.String())
 				failedCount++
 				continue
 			}
@@ -730,10 +669,7 @@ func (c *TelemetryStreamConsumer) processBatch(ctx context.Context, batch *strea
 			// Map event to GenAIEvent struct
 			var genaiEvent observability.GenAIEvent
 			if err := mapToStruct(event.EventPayload, &genaiEvent); err != nil {
-				c.logger.WithError(err).WithFields(logrus.Fields{
-					"event_id": event.EventID.String(),
-					"batch_id": batch.BatchID.String(),
-				}).Error("Failed to unmarshal genai_event payload")
+				c.logger.Error("Failed to unmarshal genai_event payload", "error", err, "event_id", event.EventID.String(), "batch_id", batch.BatchID.String())
 				failedCount++
 				continue
 			}
@@ -742,11 +678,7 @@ func (c *TelemetryStreamConsumer) processBatch(ctx context.Context, batch *strea
 
 		default:
 			// Unknown event type - log warning and skip
-			c.logger.WithFields(logrus.Fields{
-				"event_id":   event.EventID.String(),
-				"event_type": event.EventType,
-				"batch_id":   batch.BatchID.String(),
-			}).Warn("Unknown event type, skipping")
+			c.logger.Warn("Unknown event type, skipping", "event_id", event.EventID.String(), "event_type", event.EventType, "batch_id", batch.BatchID.String())
 			failedCount++
 		}
 	}
@@ -754,10 +686,7 @@ func (c *TelemetryStreamConsumer) processBatch(ctx context.Context, batch *strea
 	// Bulk insert spans
 	if len(spans) > 0 {
 		if err := c.traceService.IngestSpanBatch(ctx, spans); err != nil {
-			c.logger.WithError(err).WithFields(logrus.Fields{
-				"batch_id":   batch.BatchID.String(),
-				"span_count": len(spans),
-			}).Error("Failed to ingest span batch")
+			c.logger.Error("Failed to ingest span batch", "error", err, "batch_id", batch.BatchID.String(), "span_count", len(spans))
 			failedCount += len(spans)
 			lastError = err
 		} else {
@@ -768,10 +697,7 @@ func (c *TelemetryStreamConsumer) processBatch(ctx context.Context, batch *strea
 	// Bulk insert scores (1 DB call for all scores)
 	if len(scores) > 0 {
 		if err := c.scoreService.CreateScoreBatch(ctx, scores); err != nil {
-			c.logger.WithError(err).WithFields(logrus.Fields{
-				"batch_id":    batch.BatchID.String(),
-				"score_count": len(scores),
-			}).Error("Failed to create score batch")
+			c.logger.Error("Failed to create score batch", "error", err, "batch_id", batch.BatchID.String(), "score_count", len(scores))
 			failedCount += len(scores)
 			lastError = err
 		} else {
@@ -782,10 +708,7 @@ func (c *TelemetryStreamConsumer) processBatch(ctx context.Context, batch *strea
 	// Bulk insert metric sums (1 DB call for all metric sums)
 	if len(metricsSums) > 0 {
 		if err := c.metricsService.CreateMetricSumBatch(ctx, metricsSums); err != nil {
-			c.logger.WithError(err).WithFields(logrus.Fields{
-				"batch_id":         batch.BatchID.String(),
-				"metric_sum_count": len(metricsSums),
-			}).Error("Failed to create metric sum batch")
+			c.logger.Error("Failed to create metric sum batch", "error", err, "batch_id", batch.BatchID.String(), "metric_sum_count", len(metricsSums))
 			failedCount += len(metricsSums)
 			lastError = err
 		} else {
@@ -796,10 +719,7 @@ func (c *TelemetryStreamConsumer) processBatch(ctx context.Context, batch *strea
 	// Bulk insert metric gauges (1 DB call for all metric gauges)
 	if len(metricsGauges) > 0 {
 		if err := c.metricsService.CreateMetricGaugeBatch(ctx, metricsGauges); err != nil{
-			c.logger.WithError(err).WithFields(logrus.Fields{
-				"batch_id":           batch.BatchID.String(),
-				"metric_gauge_count": len(metricsGauges),
-			}).Error("Failed to create metric gauge batch")
+			c.logger.Error("Failed to create metric gauge batch", "error", err, "batch_id", batch.BatchID.String(), "metric_gauge_count", len(metricsGauges))
 			failedCount += len(metricsGauges)
 			lastError = err
 		} else {
@@ -810,10 +730,7 @@ func (c *TelemetryStreamConsumer) processBatch(ctx context.Context, batch *strea
 	// Bulk insert metric histograms (1 DB call for all metric histograms)
 	if len(metricsHistograms) > 0 {
 		if err := c.metricsService.CreateMetricHistogramBatch(ctx, metricsHistograms); err != nil {
-			c.logger.WithError(err).WithFields(logrus.Fields{
-				"batch_id":               batch.BatchID.String(),
-				"metric_histogram_count": len(metricsHistograms),
-			}).Error("Failed to create metric histogram batch")
+			c.logger.Error("Failed to create metric histogram batch", "error", err, "batch_id", batch.BatchID.String(), "metric_histogram_count", len(metricsHistograms))
 			failedCount += len(metricsHistograms)
 			lastError = err
 		} else {
@@ -824,10 +741,7 @@ func (c *TelemetryStreamConsumer) processBatch(ctx context.Context, batch *strea
 	// Bulk insert exponential histograms (1 DB call for all exponential histograms)
 	if len(metricsExpHistograms) > 0 {
 		if err := c.metricsService.CreateMetricExponentialHistogramBatch(ctx, metricsExpHistograms); err != nil {
-			c.logger.WithError(err).WithFields(logrus.Fields{
-				"batch_id":                         batch.BatchID.String(),
-				"metric_exponential_histogram_count": len(metricsExpHistograms),
-			}).Error("Failed to create metric exponential histogram batch")
+			c.logger.Error("Failed to create metric exponential histogram batch", "error", err, "batch_id", batch.BatchID.String(), "metric_exponential_histogram_count", len(metricsExpHistograms))
 			failedCount += len(metricsExpHistograms)
 			lastError = err
 		} else {
@@ -838,10 +752,7 @@ func (c *TelemetryStreamConsumer) processBatch(ctx context.Context, batch *strea
 	// Bulk insert logs (1 DB call for all logs)
 	if len(logs) > 0 {
 		if err := c.logsService.CreateLogBatch(ctx, logs); err != nil {
-			c.logger.WithError(err).WithFields(logrus.Fields{
-				"batch_id":  batch.BatchID.String(),
-				"log_count": len(logs),
-			}).Error("Failed to create log batch")
+			c.logger.Error("Failed to create log batch", "error", err, "batch_id", batch.BatchID.String(), "log_count", len(logs))
 			failedCount += len(logs)
 			lastError = err
 		} else {
@@ -852,10 +763,7 @@ func (c *TelemetryStreamConsumer) processBatch(ctx context.Context, batch *strea
 	// Bulk insert GenAI events (1 DB call for all GenAI events)
 	if len(genaiEvents) > 0 {
 		if err := c.genaiEventsService.CreateGenAIEventBatch(ctx, genaiEvents); err != nil {
-			c.logger.WithError(err).WithFields(logrus.Fields{
-				"batch_id":          batch.BatchID.String(),
-				"genai_event_count": len(genaiEvents),
-			}).Error("Failed to create GenAI event batch")
+			c.logger.Error("Failed to create GenAI event batch", "error", err, "batch_id", batch.BatchID.String(), "genai_event_count", len(genaiEvents))
 			failedCount += len(genaiEvents)
 			lastError = err
 		} else {
@@ -870,12 +778,7 @@ func (c *TelemetryStreamConsumer) processBatch(ctx context.Context, batch *strea
 
 	// Log partial failures
 	if failedCount > 0 {
-		c.logger.WithFields(logrus.Fields{
-			"batch_id":        batch.BatchID.String(),
-			"total_events":    len(batch.Events),
-			"processed_count": processedCount,
-			"failed_count":    failedCount,
-		}).Warn("Batch processed with partial failures")
+		c.logger.Warn("Batch processed with partial failures", "batch_id", batch.BatchID.String(), "total_events", len(batch.Events), "processed_count", processedCount, "failed_count", failedCount)
 	}
 
 	// ✅ Deduplication already handled synchronously in HTTP handler via ClaimEvents
@@ -919,7 +822,7 @@ func (c *TelemetryStreamConsumer) serializeMetadata(metadata map[string]interfac
 
 	data, err := json.Marshal(metadata)
 	if err != nil {
-		c.logger.WithError(err).Warn("Failed to serialize metadata")
+		c.logger.Warn("Failed to serialize metadata", "error", err)
 		return "{}"
 	}
 
@@ -968,20 +871,13 @@ func (c *TelemetryStreamConsumer) moveToDLQ(ctx context.Context, streamKey strin
 
 	// Set TTL on DLQ stream (7 days retention)
 	if err := c.redis.Client.Expire(ctx, dlqKey, dlqRetentionPeriod).Err(); err != nil {
-		c.logger.WithError(err).Warn("Failed to set DLQ TTL")
+		c.logger.Warn("Failed to set DLQ TTL", "error", err)
 	}
 
 	// Increment DLQ counter
 	atomic.AddInt64(&c.dlqMessagesCount, 1)
 
-	c.logger.WithFields(logrus.Fields{
-		"dlq_id":      result,
-		"dlq_key":     dlqKey,
-		"batch_id":    batch.BatchID.String(),
-		"project_id":  batch.ProjectID.String(),
-		"error":       err.Error(),
-		"retry_count": c.maxRetries,
-	}).Warn("Moved failed batch to Dead Letter Queue")
+	c.logger.Warn("Moved failed batch to Dead Letter Queue", "dlq_id", result, "dlq_key", dlqKey, "batch_id", batch.BatchID.String(), "project_id", batch.ProjectID.String(), "error", err.Error(), "retry_count", c.maxRetries)
 
 	return nil
 }
@@ -1054,14 +950,10 @@ func (c *TelemetryStreamConsumer) RetryDLQMessage(ctx context.Context, projectID
 
 	// Remove from DLQ on success
 	if err := c.redis.Client.XDel(ctx, dlqKey, messageID).Err(); err != nil {
-		c.logger.WithError(err).Warn("Failed to remove message from DLQ after successful retry")
+		c.logger.Warn("Failed to remove message from DLQ after successful retry", "error", err)
 	}
 
-	c.logger.WithFields(logrus.Fields{
-		"message_id": messageID,
-		"batch_id":   batch.BatchID.String(),
-		"project_id": projectID.String(),
-	}).Info("Successfully retried DLQ message")
+	c.logger.Info("Successfully retried DLQ message", "message_id", messageID, "batch_id", batch.BatchID.String(), "project_id", projectID.String())
 
 	return nil
 }
@@ -1097,10 +989,7 @@ func (c *TelemetryStreamConsumer) extractRawRecords(batch *streams.TelemetryStre
 		// Serialize the full event payload to JSON for raw storage
 		rawJSON, err := json.Marshal(event.EventPayload)
 		if err != nil {
-			c.logger.WithError(err).WithFields(logrus.Fields{
-				"event_id": event.EventID.String(),
-				"batch_id": batch.BatchID.String(),
-			}).Warn("Failed to marshal event payload for archive")
+			c.logger.Warn("Failed to marshal event payload for archive", "error", err, "event_id", event.EventID.String(), "batch_id", batch.BatchID.String())
 			continue
 		}
 
@@ -1220,25 +1109,13 @@ func (c *TelemetryStreamConsumer) archiveSignalGroup(
 			backoff := archiveBaseBackoff * time.Duration(1<<uint(attempt-1)) //nolint:gosec // attempt is always small (0-2)
 			time.Sleep(backoff)
 
-			c.logger.WithFields(logrus.Fields{
-				"batch_id":    signalBatchID.String(),
-				"signal_type": signalType,
-				"attempt":     attempt + 1,
-				"backoff":     backoff,
-			}).Debug("Retrying S3 archive")
+			c.logger.Debug("Retrying S3 archive", "batch_id", signalBatchID.String(), "signal_type", signalType, "attempt", attempt + 1, "backoff", backoff)
 		}
 
 		result, err := c.archiveService.ArchiveBatch(ctx, batch.ProjectID.String(), signalBatchID, records)
 		if err == nil {
 			// Success!
-			c.logger.WithFields(logrus.Fields{
-				"batch_id":     signalBatchID.String(),
-				"project_id":   batch.ProjectID.String(),
-				"signal_type":  signalType,
-				"s3_path":      result.S3Path,
-				"record_count": result.RecordCount,
-				"file_size":    result.FileSizeBytes,
-			}).Debug("Successfully archived batch to S3")
+			c.logger.Debug("Successfully archived batch to S3", "batch_id", signalBatchID.String(), "project_id", batch.ProjectID.String(), "signal_type", signalType, "s3_path", result.S3Path, "record_count", result.RecordCount, "file_size", result.FileSizeBytes)
 			return
 		}
 
@@ -1246,24 +1123,21 @@ func (c *TelemetryStreamConsumer) archiveSignalGroup(
 
 		// Check if error is transient (worth retrying)
 		if !isTransientS3Error(err) {
-			c.logger.WithError(err).WithFields(logrus.Fields{
-				"batch_id":    signalBatchID.String(),
-				"project_id":  batch.ProjectID.String(),
-				"signal_type": signalType,
-			}).Warn("Non-transient S3 archive error, not retrying")
+			c.logger.Warn("Non-transient S3 archive error, not retrying", "error", err, "batch_id", signalBatchID.String(), "project_id", batch.ProjectID.String(), "signal_type", signalType)
 			break
 		}
 	}
 
 	// All retries exhausted or non-transient error
 	atomic.AddInt64(&c.archiveErrorsCount, 1)
-	c.logger.WithError(lastErr).WithFields(logrus.Fields{
-		"batch_id":     signalBatchID.String(),
-		"project_id":   batch.ProjectID.String(),
-		"signal_type":  signalType,
-		"record_count": len(records),
-		"max_retries":  archiveMaxRetries,
-	}).Error("Failed to archive batch to S3 after retries")
+	c.logger.Error("Failed to archive batch to S3 after retries",
+		"error", lastErr,
+		"batch_id", signalBatchID.String(),
+		"project_id", batch.ProjectID.String(),
+		"signal_type", signalType,
+		"record_count", len(records),
+		"max_retries", archiveMaxRetries,
+	)
 }
 
 // isTransientS3Error checks if an error is transient and worth retrying.

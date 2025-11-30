@@ -1,10 +1,10 @@
 package rbac
 
 import (
+	"log/slog"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 
 	"brokle/internal/config"
 	"brokle/internal/core/domain/auth"
@@ -15,7 +15,7 @@ import (
 // Handler handles RBAC-related HTTP requests (roles and permissions) - Clean version
 type Handler struct {
 	config                    *config.Config
-	logger                    *logrus.Logger
+	logger                    *slog.Logger
 	roleService               auth.RoleService
 	permissionService         auth.PermissionService
 	organizationMemberService auth.OrganizationMemberService
@@ -25,7 +25,7 @@ type Handler struct {
 // NewHandler creates a new clean RBAC handler
 func NewHandler(
 	config *config.Config,
-	logger *logrus.Logger,
+	logger *slog.Logger,
 	roleService auth.RoleService,
 	permissionService auth.PermissionService,
 	organizationMemberService auth.OrganizationMemberService,
@@ -49,26 +49,19 @@ func NewHandler(
 func (h *Handler) CreateRole(c *gin.Context) {
 	var req auth.CreateRoleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.WithError(err).Error("Invalid create role request")
+		h.logger.Error("Invalid create role request", "error", err)
 		response.BadRequest(c, "Invalid request payload", err.Error())
 		return
 	}
 
 	role, err := h.roleService.CreateRole(c.Request.Context(), &req)
 	if err != nil {
-		h.logger.WithError(err).WithFields(logrus.Fields{
-			"scope_type": req.ScopeType,
-			"role_name":  req.Name,
-		}).Error("Failed to create role")
+		h.logger.Error("Failed to create role", "error", err, "scope_type", req.ScopeType, "role_name", req.Name)
 		response.InternalServerError(c, "Failed to create role")
 		return
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"role_id":    role.ID,
-		"role_name":  role.Name,
-		"scope_type": role.ScopeType,
-	}).Info("Role created successfully")
+	h.logger.Info("Role created successfully", "role_id", role.ID, "role_name", role.Name, "scope_type", role.ScopeType)
 	response.Created(c, role)
 }
 
@@ -77,19 +70,19 @@ func (h *Handler) GetRole(c *gin.Context) {
 	roleIDStr := c.Param("roleId")
 	roleID, err := ulid.Parse(roleIDStr)
 	if err != nil {
-		h.logger.WithError(err).WithField("role_id", roleIDStr).Error("Invalid role ID")
+		h.logger.Error("Invalid role ID", "error", err, "role_id", roleIDStr)
 		response.BadRequest(c, "Invalid role ID", err.Error())
 		return
 	}
 
 	role, err := h.roleService.GetRoleByID(c.Request.Context(), roleID)
 	if err != nil {
-		h.logger.WithError(err).WithField("role_id", roleID).Error("Failed to get role")
+		h.logger.Error("Failed to get role", "error", err, "role_id", roleID)
 		response.NotFound(c, "Role not found")
 		return
 	}
 
-	h.logger.WithField("role_id", roleID).Info("Role retrieved successfully")
+	h.logger.Info("Role retrieved successfully", "role_id", roleID)
 	response.Success(c, role)
 }
 
@@ -98,26 +91,26 @@ func (h *Handler) UpdateRole(c *gin.Context) {
 	roleIDStr := c.Param("roleId")
 	roleID, err := ulid.Parse(roleIDStr)
 	if err != nil {
-		h.logger.WithError(err).WithField("role_id", roleIDStr).Error("Invalid role ID")
+		h.logger.Error("Invalid role ID", "error", err, "role_id", roleIDStr)
 		response.BadRequest(c, "Invalid role ID", err.Error())
 		return
 	}
 
 	var req auth.UpdateRoleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.WithError(err).Error("Invalid update role request")
+		h.logger.Error("Invalid update role request", "error", err)
 		response.BadRequest(c, "Invalid request payload", err.Error())
 		return
 	}
 
 	updatedRole, err := h.roleService.UpdateRole(c.Request.Context(), roleID, &req)
 	if err != nil {
-		h.logger.WithError(err).WithField("role_id", roleID).Error("Failed to update role")
+		h.logger.Error("Failed to update role", "error", err, "role_id", roleID)
 		response.InternalServerError(c, "Failed to update role")
 		return
 	}
 
-	h.logger.WithField("role_id", roleID).Info("Role updated successfully")
+	h.logger.Info("Role updated successfully", "role_id", roleID)
 	response.Success(c, updatedRole)
 }
 
@@ -126,7 +119,7 @@ func (h *Handler) DeleteRole(c *gin.Context) {
 	roleIDStr := c.Param("roleId")
 	roleID, err := ulid.Parse(roleIDStr)
 	if err != nil {
-		h.logger.WithError(err).WithField("role_id", roleIDStr).Error("Invalid role ID")
+		h.logger.Error("Invalid role ID", "error", err, "role_id", roleIDStr)
 		response.BadRequest(c, "Invalid role ID", err.Error())
 		return
 	}
@@ -134,7 +127,7 @@ func (h *Handler) DeleteRole(c *gin.Context) {
 	// Get role first to check if it's a system role
 	role, err := h.roleService.GetRoleByID(c.Request.Context(), roleID)
 	if err != nil {
-		h.logger.WithError(err).WithField("role_id", roleID).Error("Failed to get role")
+		h.logger.Error("Failed to get role", "error", err, "role_id", roleID)
 		response.NotFound(c, "Role not found")
 		return
 	}
@@ -148,7 +141,7 @@ func (h *Handler) DeleteRole(c *gin.Context) {
 	}
 
 	if builtinRoles[role.Name] {
-		h.logger.WithField("role_id", roleID).Warn("Attempted to delete built-in role")
+		h.logger.Warn("Attempted to delete built-in role", "role_id", roleID)
 		response.Forbidden(c, "Cannot delete built-in role")
 		return
 	}
@@ -156,12 +149,12 @@ func (h *Handler) DeleteRole(c *gin.Context) {
 	// Delete role
 	err = h.roleService.DeleteRole(c.Request.Context(), roleID)
 	if err != nil {
-		h.logger.WithError(err).WithField("role_id", roleID).Error("Failed to delete role")
+		h.logger.Error("Failed to delete role", "error", err, "role_id", roleID)
 		response.InternalServerError(c, "Failed to delete role")
 		return
 	}
 
-	h.logger.WithField("role_id", roleID).Info("Role deleted successfully")
+	h.logger.Info("Role deleted successfully", "role_id", roleID)
 	response.NoContent(c)
 }
 
@@ -175,15 +168,12 @@ func (h *Handler) ListRoles(c *gin.Context) {
 
 	roles, err := h.roleService.GetRolesByScopeType(c.Request.Context(), scopeType)
 	if err != nil {
-		h.logger.WithError(err).WithField("scope_type", scopeType).Error("Failed to list roles")
+		h.logger.Error("Failed to list roles", "error", err, "scope_type", scopeType)
 		response.InternalServerError(c, "Failed to list roles")
 		return
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"scope_type":  scopeType,
-		"roles_count": len(roles),
-	}).Info("Roles listed successfully")
+	h.logger.Info("Roles listed successfully", "scope_type", scopeType, "roles_count", len(roles))
 	response.Success(c, roles)
 }
 
@@ -196,22 +186,19 @@ func (h *Handler) GetUserRoles(c *gin.Context) {
 	userIDStr := c.Param("userId")
 	userID, err := ulid.Parse(userIDStr)
 	if err != nil {
-		h.logger.WithError(err).WithField("user_id", userIDStr).Error("Invalid user ID")
+		h.logger.Error("Invalid user ID", "error", err, "user_id", userIDStr)
 		response.BadRequest(c, "Invalid user ID", err.Error())
 		return
 	}
 
 	userMemberships, err := h.organizationMemberService.GetUserMemberships(c.Request.Context(), userID)
 	if err != nil {
-		h.logger.WithError(err).WithField("user_id", userID).Error("Failed to get user memberships")
+		h.logger.Error("Failed to get user memberships", "error", err, "user_id", userID)
 		response.NotFound(c, "User memberships not found")
 		return
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"user_id":           userID,
-		"memberships_count": len(userMemberships),
-	}).Info("User memberships retrieved successfully")
+	h.logger.Info("User memberships retrieved successfully", "user_id", userID, "memberships_count", len(userMemberships))
 	response.Success(c, userMemberships)
 }
 
@@ -220,22 +207,19 @@ func (h *Handler) GetUserPermissions(c *gin.Context) {
 	userIDStr := c.Param("userId")
 	userID, err := ulid.Parse(userIDStr)
 	if err != nil {
-		h.logger.WithError(err).WithField("user_id", userIDStr).Error("Invalid user ID")
+		h.logger.Error("Invalid user ID", "error", err, "user_id", userIDStr)
 		response.BadRequest(c, "Invalid user ID", err.Error())
 		return
 	}
 
 	permissions, err := h.organizationMemberService.GetUserEffectivePermissions(c.Request.Context(), userID)
 	if err != nil {
-		h.logger.WithError(err).WithField("user_id", userID).Error("Failed to get user permissions")
+		h.logger.Error("Failed to get user permissions", "error", err, "user_id", userID)
 		response.NotFound(c, "User permissions not found")
 		return
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"user_id":           userID,
-		"permissions_count": len(permissions),
-	}).Info("User permissions retrieved successfully")
+	h.logger.Info("User permissions retrieved successfully", "user_id", userID, "permissions_count", len(permissions))
 	response.Success(c, permissions)
 }
 
@@ -244,7 +228,7 @@ func (h *Handler) AssignOrganizationRole(c *gin.Context) {
 	userIDStr := c.Param("userId")
 	userID, err := ulid.Parse(userIDStr)
 	if err != nil {
-		h.logger.WithError(err).WithField("user_id", userIDStr).Error("Invalid user ID")
+		h.logger.Error("Invalid user ID", "error", err, "user_id", userIDStr)
 		response.BadRequest(c, "Invalid user ID", err.Error())
 		return
 	}
@@ -252,14 +236,14 @@ func (h *Handler) AssignOrganizationRole(c *gin.Context) {
 	orgIDStr := c.Param("orgId")
 	orgID, err := ulid.Parse(orgIDStr)
 	if err != nil {
-		h.logger.WithError(err).WithField("org_id", orgIDStr).Error("Invalid organization ID")
+		h.logger.Error("Invalid organization ID", "error", err, "org_id", orgIDStr)
 		response.BadRequest(c, "Invalid organization ID", err.Error())
 		return
 	}
 
 	var req auth.AssignRoleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.WithError(err).Error("Invalid assign role request")
+		h.logger.Error("Invalid assign role request", "error", err)
 		response.BadRequest(c, "Invalid request payload", err.Error())
 		return
 	}
@@ -267,20 +251,12 @@ func (h *Handler) AssignOrganizationRole(c *gin.Context) {
 	// Create organization membership with role
 	member, err := h.organizationMemberService.AddMember(c.Request.Context(), userID, orgID, req.RoleID, nil)
 	if err != nil {
-		h.logger.WithError(err).WithFields(logrus.Fields{
-			"user_id": userID,
-			"org_id":  orgID,
-			"role_id": req.RoleID,
-		}).Error("Failed to assign role to user in organization")
+		h.logger.Error("Failed to assign role to user in organization", "error", err, "user_id", userID, "org_id", orgID, "role_id", req.RoleID)
 		response.InternalServerError(c, "Failed to assign role to user in organization")
 		return
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"user_id": userID,
-		"org_id":  orgID,
-		"role_id": req.RoleID,
-	}).Info("Role assigned to user in organization successfully")
+	h.logger.Info("Role assigned to user in organization successfully", "user_id", userID, "org_id", orgID, "role_id", req.RoleID)
 	response.Created(c, member)
 }
 
@@ -289,7 +265,7 @@ func (h *Handler) RemoveOrganizationMember(c *gin.Context) {
 	userIDStr := c.Param("userId")
 	userID, err := ulid.Parse(userIDStr)
 	if err != nil {
-		h.logger.WithError(err).WithField("user_id", userIDStr).Error("Invalid user ID")
+		h.logger.Error("Invalid user ID", "error", err, "user_id", userIDStr)
 		response.BadRequest(c, "Invalid user ID", err.Error())
 		return
 	}
@@ -297,25 +273,19 @@ func (h *Handler) RemoveOrganizationMember(c *gin.Context) {
 	orgIDStr := c.Param("orgId")
 	orgID, err := ulid.Parse(orgIDStr)
 	if err != nil {
-		h.logger.WithError(err).WithField("org_id", orgIDStr).Error("Invalid organization ID")
+		h.logger.Error("Invalid organization ID", "error", err, "org_id", orgIDStr)
 		response.BadRequest(c, "Invalid organization ID", err.Error())
 		return
 	}
 
 	err = h.organizationMemberService.RemoveMember(c.Request.Context(), userID, orgID)
 	if err != nil {
-		h.logger.WithError(err).WithFields(logrus.Fields{
-			"user_id": userID,
-			"org_id":  orgID,
-		}).Error("Failed to remove user from organization")
+		h.logger.Error("Failed to remove user from organization", "error", err, "user_id", userID, "org_id", orgID)
 		response.InternalServerError(c, "Failed to remove user from organization")
 		return
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"user_id": userID,
-		"org_id":  orgID,
-	}).Info("User removed from organization successfully")
+	h.logger.Info("User removed from organization successfully", "user_id", userID, "org_id", orgID)
 	response.NoContent(c)
 }
 
@@ -324,32 +294,26 @@ func (h *Handler) CheckUserPermissions(c *gin.Context) {
 	userIDStr := c.Param("userId")
 	userID, err := ulid.Parse(userIDStr)
 	if err != nil {
-		h.logger.WithError(err).WithField("user_id", userIDStr).Error("Invalid user ID")
+		h.logger.Error("Invalid user ID", "error", err, "user_id", userIDStr)
 		response.BadRequest(c, "Invalid user ID", err.Error())
 		return
 	}
 
 	var req auth.CheckPermissionsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.WithError(err).Error("Invalid check permissions request")
+		h.logger.Error("Invalid check permissions request", "error", err)
 		response.BadRequest(c, "Invalid request payload", err.Error())
 		return
 	}
 
 	result, err := h.organizationMemberService.CheckUserPermissions(c.Request.Context(), userID, req.ResourceActions)
 	if err != nil {
-		h.logger.WithError(err).WithFields(logrus.Fields{
-			"user_id":           userID,
-			"permissions_count": len(req.ResourceActions),
-		}).Error("Failed to check user permissions")
+		h.logger.Error("Failed to check user permissions", "error", err, "user_id", userID, "permissions_count", len(req.ResourceActions))
 		response.InternalServerError(c, "Failed to check permissions")
 		return
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"user_id":           userID,
-		"permissions_count": len(req.ResourceActions),
-	}).Info("User permissions checked successfully")
+	h.logger.Info("User permissions checked successfully", "user_id", userID, "permissions_count", len(req.ResourceActions))
 	response.Success(c, result)
 }
 
@@ -357,7 +321,7 @@ func (h *Handler) CheckUserPermissions(c *gin.Context) {
 func (h *Handler) GetRoleStatistics(c *gin.Context) {
 	stats, err := h.roleService.GetRoleStatistics(c.Request.Context())
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to get role statistics")
+		h.logger.Error("Failed to get role statistics", "error", err)
 		response.InternalServerError(c, "Failed to get role statistics")
 		return
 	}
@@ -380,12 +344,12 @@ func (h *Handler) ListPermissions(c *gin.Context) {
 
 	result, err := h.permissionService.ListPermissions(c.Request.Context(), limit, offset)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to list permissions")
+		h.logger.Error("Failed to list permissions", "error", err)
 		response.InternalServerError(c, "Failed to list permissions")
 		return
 	}
 
-	h.logger.WithField("permissions_count", result.TotalCount).Info("Permissions listed successfully")
+	h.logger.Info("Permissions listed successfully", "permissions_count", result.TotalCount)
 	response.Success(c, result)
 }
 
@@ -393,26 +357,19 @@ func (h *Handler) ListPermissions(c *gin.Context) {
 func (h *Handler) CreatePermission(c *gin.Context) {
 	var req auth.CreatePermissionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.WithError(err).Error("Invalid create permission request")
+		h.logger.Error("Invalid create permission request", "error", err)
 		response.BadRequest(c, "Invalid request payload", err.Error())
 		return
 	}
 
 	permission, err := h.permissionService.CreatePermission(c.Request.Context(), &req)
 	if err != nil {
-		h.logger.WithError(err).WithFields(logrus.Fields{
-			"resource": req.Resource,
-			"action":   req.Action,
-		}).Error("Failed to create permission")
+		h.logger.Error("Failed to create permission", "error", err, "resource", req.Resource, "action", req.Action)
 		response.InternalServerError(c, "Failed to create permission")
 		return
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"permission_id": permission.ID,
-		"resource":      permission.Resource,
-		"action":        permission.Action,
-	}).Info("Permission created successfully")
+	h.logger.Info("Permission created successfully", "permission_id", permission.ID, "resource", permission.Resource, "action", permission.Action)
 	response.Created(c, permission)
 }
 
@@ -421,19 +378,19 @@ func (h *Handler) GetPermission(c *gin.Context) {
 	permissionIDStr := c.Param("permissionId")
 	permissionID, err := ulid.Parse(permissionIDStr)
 	if err != nil {
-		h.logger.WithError(err).WithField("permission_id", permissionIDStr).Error("Invalid permission ID")
+		h.logger.Error("Invalid permission ID", "error", err, "permission_id", permissionIDStr)
 		response.BadRequest(c, "Invalid permission ID", err.Error())
 		return
 	}
 
 	permission, err := h.permissionService.GetPermission(c.Request.Context(), permissionID)
 	if err != nil {
-		h.logger.WithError(err).WithField("permission_id", permissionID).Error("Failed to get permission")
+		h.logger.Error("Failed to get permission", "error", err, "permission_id", permissionID)
 		response.NotFound(c, "Permission not found")
 		return
 	}
 
-	h.logger.WithField("permission_id", permissionID).Info("Permission retrieved successfully")
+	h.logger.Info("Permission retrieved successfully", "permission_id", permissionID)
 	response.Success(c, permission)
 }
 
@@ -441,12 +398,12 @@ func (h *Handler) GetPermission(c *gin.Context) {
 func (h *Handler) GetAvailableResources(c *gin.Context) {
 	resources, err := h.permissionService.GetAvailableResources(c.Request.Context())
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to get available resources")
+		h.logger.Error("Failed to get available resources", "error", err)
 		response.InternalServerError(c, "Failed to get available resources")
 		return
 	}
 
-	h.logger.WithField("resources_count", len(resources)).Info("Available resources retrieved successfully")
+	h.logger.Info("Available resources retrieved successfully", "resources_count", len(resources))
 	response.Success(c, resources)
 }
 
@@ -460,15 +417,12 @@ func (h *Handler) GetActionsForResource(c *gin.Context) {
 
 	actions, err := h.permissionService.GetActionsForResource(c.Request.Context(), resource)
 	if err != nil {
-		h.logger.WithError(err).WithField("resource", resource).Error("Failed to get actions for resource")
+		h.logger.Error("Failed to get actions for resource", "error", err, "resource", resource)
 		response.InternalServerError(c, "Failed to get actions for resource")
 		return
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"resource":      resource,
-		"actions_count": len(actions),
-	}).Info("Actions for resource retrieved successfully")
+	h.logger.Info("Actions for resource retrieved successfully", "resource", resource, "actions_count", len(actions))
 	response.Success(c, actions)
 }
 
@@ -478,7 +432,7 @@ func (h *Handler) GetUserRole(c *gin.Context) {
 	userIDStr := c.Param("userId")
 	userID, err := ulid.Parse(userIDStr)
 	if err != nil {
-		h.logger.WithError(err).WithField("user_id", userIDStr).Error("Invalid user ID")
+		h.logger.Error("Invalid user ID", "error", err, "user_id", userIDStr)
 		response.BadRequest(c, "Invalid user ID", err.Error())
 		return
 	}
@@ -486,7 +440,7 @@ func (h *Handler) GetUserRole(c *gin.Context) {
 	// Get all user memberships instead of direct roles
 	userMemberships, err := h.organizationMemberService.GetUserMemberships(c.Request.Context(), userID)
 	if err != nil {
-		h.logger.WithError(err).WithField("user_id", userID).Error("Failed to get user memberships")
+		h.logger.Error("Failed to get user memberships", "error", err, "user_id", userID)
 		response.NotFound(c, "User memberships not found")
 		return
 	}
@@ -507,14 +461,14 @@ func (h *Handler) CreateCustomRole(c *gin.Context) {
 	orgIDStr := c.Param("orgId")
 	orgID, err := ulid.Parse(orgIDStr)
 	if err != nil {
-		h.logger.WithError(err).WithField("org_id", orgIDStr).Error("Invalid organization ID")
+		h.logger.Error("Invalid organization ID", "error", err, "org_id", orgIDStr)
 		response.BadRequest(c, "Invalid organization ID", err.Error())
 		return
 	}
 
 	var req auth.CreateRoleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.WithError(err).Error("Failed to bind custom role request")
+		h.logger.Error("Failed to bind custom role request", "error", err)
 		response.BadRequest(c, "Invalid request format", err.Error())
 		return
 	}
@@ -527,11 +481,7 @@ func (h *Handler) CreateCustomRole(c *gin.Context) {
 
 	role, err := h.roleService.CreateCustomRole(c.Request.Context(), auth.ScopeOrganization, orgID, &req)
 	if err != nil {
-		h.logger.WithError(err).WithFields(logrus.Fields{
-			"org_id":     orgID,
-			"role_name":  req.Name,
-			"scope_type": req.ScopeType,
-		}).Error("Failed to create custom role")
+		h.logger.Error("Failed to create custom role", "error", err, "org_id", orgID, "role_name", req.Name, "scope_type", req.ScopeType)
 
 		if err.Error() == "custom role with name "+req.Name+" already exists in this scope" {
 			response.Conflict(c, err.Error())
@@ -542,11 +492,7 @@ func (h *Handler) CreateCustomRole(c *gin.Context) {
 		return
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"role_id":   role.ID,
-		"role_name": role.Name,
-		"org_id":    orgID,
-	}).Info("Custom role created successfully")
+	h.logger.Info("Custom role created successfully", "role_id", role.ID, "role_name", role.Name, "org_id", orgID)
 
 	response.Success(c, role)
 }
@@ -557,14 +503,14 @@ func (h *Handler) GetCustomRoles(c *gin.Context) {
 	orgIDStr := c.Param("orgId")
 	orgID, err := ulid.Parse(orgIDStr)
 	if err != nil {
-		h.logger.WithError(err).WithField("org_id", orgIDStr).Error("Invalid organization ID")
+		h.logger.Error("Invalid organization ID", "error", err, "org_id", orgIDStr)
 		response.BadRequest(c, "Invalid organization ID", err.Error())
 		return
 	}
 
 	roles, err := h.roleService.GetCustomRolesByOrganization(c.Request.Context(), orgID)
 	if err != nil {
-		h.logger.WithError(err).WithField("org_id", orgID).Error("Failed to get custom roles")
+		h.logger.Error("Failed to get custom roles", "error", err, "org_id", orgID)
 		response.InternalServerError(c, "Failed to retrieve custom roles")
 		return
 	}
@@ -580,14 +526,14 @@ func (h *Handler) GetCustomRole(c *gin.Context) {
 	roleIDStr := c.Param("roleId")
 	roleID, err := ulid.Parse(roleIDStr)
 	if err != nil {
-		h.logger.WithError(err).WithField("role_id", roleIDStr).Error("Invalid role ID")
+		h.logger.Error("Invalid role ID", "error", err, "role_id", roleIDStr)
 		response.BadRequest(c, "Invalid role ID", err.Error())
 		return
 	}
 
 	role, err := h.roleService.GetRoleByID(c.Request.Context(), roleID)
 	if err != nil {
-		h.logger.WithError(err).WithField("role_id", roleID).Error("Failed to get custom role")
+		h.logger.Error("Failed to get custom role", "error", err, "role_id", roleID)
 		response.NotFound(c, "Custom role not found")
 		return
 	}
@@ -606,21 +552,21 @@ func (h *Handler) UpdateCustomRole(c *gin.Context) {
 	roleIDStr := c.Param("roleId")
 	roleID, err := ulid.Parse(roleIDStr)
 	if err != nil {
-		h.logger.WithError(err).WithField("role_id", roleIDStr).Error("Invalid role ID")
+		h.logger.Error("Invalid role ID", "error", err, "role_id", roleIDStr)
 		response.BadRequest(c, "Invalid role ID", err.Error())
 		return
 	}
 
 	var req auth.UpdateRoleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.WithError(err).Error("Failed to bind update custom role request")
+		h.logger.Error("Failed to bind update custom role request", "error", err)
 		response.BadRequest(c, "Invalid request format", err.Error())
 		return
 	}
 
 	role, err := h.roleService.UpdateCustomRole(c.Request.Context(), roleID, &req)
 	if err != nil {
-		h.logger.WithError(err).WithField("role_id", roleID).Error("Failed to update custom role")
+		h.logger.Error("Failed to update custom role", "error", err, "role_id", roleID)
 
 		if err.Error() == "cannot update system role" {
 			response.Forbidden(c, err.Error())
@@ -631,10 +577,7 @@ func (h *Handler) UpdateCustomRole(c *gin.Context) {
 		return
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"role_id":   role.ID,
-		"role_name": role.Name,
-	}).Info("Custom role updated successfully")
+	h.logger.Info("Custom role updated successfully", "role_id", role.ID, "role_name", role.Name)
 
 	response.Success(c, role)
 }
@@ -644,14 +587,14 @@ func (h *Handler) DeleteCustomRole(c *gin.Context) {
 	roleIDStr := c.Param("roleId")
 	roleID, err := ulid.Parse(roleIDStr)
 	if err != nil {
-		h.logger.WithError(err).WithField("role_id", roleIDStr).Error("Invalid role ID")
+		h.logger.Error("Invalid role ID", "error", err, "role_id", roleIDStr)
 		response.BadRequest(c, "Invalid role ID", err.Error())
 		return
 	}
 
 	err = h.roleService.DeleteCustomRole(c.Request.Context(), roleID)
 	if err != nil {
-		h.logger.WithError(err).WithField("role_id", roleID).Error("Failed to delete custom role")
+		h.logger.Error("Failed to delete custom role", "error", err, "role_id", roleID)
 
 		if err.Error() == "cannot delete system role" {
 			response.Forbidden(c, err.Error())
@@ -662,7 +605,7 @@ func (h *Handler) DeleteCustomRole(c *gin.Context) {
 		return
 	}
 
-	h.logger.WithField("role_id", roleID).Info("Custom role deleted successfully")
+	h.logger.Info("Custom role deleted successfully", "role_id", roleID)
 	response.Success(c, gin.H{"message": "Custom role deleted successfully"})
 }
 
@@ -682,14 +625,14 @@ func (h *Handler) CheckUserScopes(c *gin.Context) {
 	userIDStr := c.Param("userId")
 	userID, err := ulid.Parse(userIDStr)
 	if err != nil {
-		h.logger.WithError(err).WithField("user_id", userIDStr).Error("Invalid user ID")
+		h.logger.Error("Invalid user ID", "error", err, "user_id", userIDStr)
 		response.BadRequest(c, "Invalid user ID", err.Error())
 		return
 	}
 
 	var req CheckUserScopesRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.WithError(err).Error("Invalid check scopes request")
+		h.logger.Error("Invalid check scopes request", "error", err)
 		response.BadRequest(c, "Invalid request payload", err.Error())
 		return
 	}
@@ -721,10 +664,7 @@ func (h *Handler) CheckUserScopes(c *gin.Context) {
 	for _, scope := range req.Scopes {
 		hasScope, err := h.scopeService.HasScope(c.Request.Context(), userID, scope, orgID, projectID)
 		if err != nil {
-			h.logger.WithError(err).WithFields(logrus.Fields{
-				"user_id": userID,
-				"scope":   scope,
-			}).Error("Failed to check scope")
+			h.logger.Error("Failed to check scope", "error", err, "user_id", userID, "scope", scope)
 			// On error, mark as false (safe default)
 			result[scope] = false
 			continue
@@ -732,12 +672,7 @@ func (h *Handler) CheckUserScopes(c *gin.Context) {
 		result[scope] = hasScope
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"user_id":      userID,
-		"org_id":       orgID,
-		"project_id":   projectID,
-		"scopes_count": len(req.Scopes),
-	}).Info("User scopes checked successfully")
+	h.logger.Info("User scopes checked successfully", "user_id", userID, "org_id", orgID, "project_id", projectID, "scopes_count", len(req.Scopes))
 
 	response.Success(c, result)
 }
@@ -747,7 +682,7 @@ func (h *Handler) GetUserScopes(c *gin.Context) {
 	userIDStr := c.Param("userId")
 	userID, err := ulid.Parse(userIDStr)
 	if err != nil {
-		h.logger.WithError(err).WithField("user_id", userIDStr).Error("Invalid user ID")
+		h.logger.Error("Invalid user ID", "error", err, "user_id", userIDStr)
 		response.BadRequest(c, "Invalid user ID", err.Error())
 		return
 	}
@@ -777,21 +712,12 @@ func (h *Handler) GetUserScopes(c *gin.Context) {
 	// Get user scopes
 	scopeResolution, err := h.scopeService.GetUserScopes(c.Request.Context(), userID, orgID, projectID)
 	if err != nil {
-		h.logger.WithError(err).WithFields(logrus.Fields{
-			"user_id":    userID,
-			"org_id":     orgID,
-			"project_id": projectID,
-		}).Error("Failed to get user scopes")
+		h.logger.Error("Failed to get user scopes", "error", err, "user_id", userID, "org_id", orgID, "project_id", projectID)
 		response.InternalServerError(c, "Failed to get user scopes")
 		return
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"user_id":         userID,
-		"org_id":          orgID,
-		"project_id":      projectID,
-		"effective_count": len(scopeResolution.EffectiveScopes),
-	}).Info("User scopes retrieved successfully")
+	h.logger.Info("User scopes retrieved successfully", "user_id", userID, "org_id", orgID, "project_id", projectID, "effective_count", len(scopeResolution.EffectiveScopes))
 
 	response.Success(c, scopeResolution)
 }
@@ -800,12 +726,12 @@ func (h *Handler) GetUserScopes(c *gin.Context) {
 func (h *Handler) GetScopeCategories(c *gin.Context) {
 	categories, err := h.scopeService.GetScopesByCategory(c.Request.Context())
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to get scope categories")
+		h.logger.Error("Failed to get scope categories", "error", err)
 		response.InternalServerError(c, "Failed to get scope categories")
 		return
 	}
 
-	h.logger.WithField("categories_count", len(categories)).Info("Scope categories retrieved successfully")
+	h.logger.Info("Scope categories retrieved successfully", "categories_count", len(categories))
 	response.Success(c, categories)
 }
 
@@ -825,15 +751,12 @@ func (h *Handler) GetAvailableScopes(c *gin.Context) {
 
 	scopes, err := h.scopeService.GetAvailableScopes(c.Request.Context(), level)
 	if err != nil {
-		h.logger.WithError(err).WithField("level", level).Error("Failed to get available scopes")
+		h.logger.Error("Failed to get available scopes", "error", err, "level", level)
 		response.InternalServerError(c, "Failed to get available scopes")
 		return
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"level":        level,
-		"scopes_count": len(scopes),
-	}).Info("Available scopes retrieved successfully")
+	h.logger.Info("Available scopes retrieved successfully", "level", level, "scopes_count", len(scopes))
 
 	response.Success(c, scopes)
 }

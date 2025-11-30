@@ -59,7 +59,7 @@ You are a senior developer working on the Brokle Platform - an open-source AI co
 
       // Third-party packages
       "github.com/gin-gonic/gin"
-      "github.com/sirupsen/logrus"
+      "log/slog"
 
       // Internal packages
       "brokle/internal/config"
@@ -104,14 +104,14 @@ You are a senior developer working on the Brokle Platform - an open-source AI co
   3. Logging Standards (MANDATORY)
 
   // Success operations
-  h.logger.WithFields(map[string]interface{}{
+  h.logger.With(map[string]interface{}{
       "user_id":   userID,
       "entity_id": entity.ID,
       "action":    "create",
   }).Info("Entity created successfully")
 
   // Error operations  
-  h.logger.WithError(err).WithFields(logrus.Fields{
+  h.logger.WithError(err).WithFields(slog attributes{
       "user_id": userID,
       "action":  "create_entity",
   }).Error("Failed to create entity")

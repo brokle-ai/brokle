@@ -1,13 +1,13 @@
 package storage
 
 import (
+	"log/slog"
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 	"time"
 
-	"github.com/sirupsen/logrus"
 
 	"brokle/internal/config"
 	"brokle/internal/core/domain/storage"
@@ -25,7 +25,7 @@ type BlobStorageService struct {
 	blobRepo storage.BlobStorageRepository
 	s3Client *infraStorage.S3Client
 	config   *config.BlobStorageConfig
-	logger   *logrus.Logger
+	logger   *slog.Logger
 }
 
 // NewBlobStorageService creates a new blob storage service instance
@@ -33,7 +33,7 @@ func NewBlobStorageService(
 	blobRepo storage.BlobStorageRepository,
 	s3Client *infraStorage.S3Client,
 	cfg *config.BlobStorageConfig,
-	logger *logrus.Logger,
+	logger *slog.Logger,
 ) *BlobStorageService {
 	return &BlobStorageService{
 		blobRepo: blobRepo,
@@ -110,7 +110,7 @@ func (s *BlobStorageService) DeleteBlobReference(ctx context.Context, id string)
 	// S3 deletion is best-effort
 	if s.s3Client != nil {
 		if err := s.s3Client.Delete(ctx, blob.BucketPath); err != nil {
-			s.logger.WithError(err).Warn("Failed to delete from S3, continuing with reference deletion")
+			s.logger.Warn("Failed to delete from S3, continuing with reference deletion", "error", err)
 		}
 	}
 

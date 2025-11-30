@@ -1,6 +1,7 @@
 package observability
 
 import (
+	"log/slog"
 	"bytes"
 	"compress/gzip"
 	"fmt"
@@ -9,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 	colmetricspb "go.opentelemetry.io/proto/otlp/collector/metrics/v1"
 	metricspb "go.opentelemetry.io/proto/otlp/metrics/v1"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -26,14 +26,14 @@ import (
 type OTLPMetricsHandler struct {
 	streamProducer    *streams.TelemetryStreamProducer
 	metricsConverter  *obsServices.OTLPMetricsConverterService
-	logger            *logrus.Logger
+	logger            *slog.Logger
 }
 
 // NewOTLPMetricsHandler creates a new OTLP metrics handler
 func NewOTLPMetricsHandler(
 	streamProducer *streams.TelemetryStreamProducer,
 	metricsConverter *obsServices.OTLPMetricsConverterService,
-	logger *logrus.Logger,
+	logger *slog.Logger,
 ) *OTLPMetricsHandler {
 	return &OTLPMetricsHandler{
 		streamProducer:   streamProducer,
@@ -73,7 +73,7 @@ func (h *OTLPMetricsHandler) HandleMetrics(c *gin.Context) {
 		strings.Contains(contentType, "application/json")
 
 	if !validContentType {
-		h.logger.WithField("content_type", contentType).Warn("Unsupported Content-Type for OTLP metrics endpoint")
+		h.logger.Warn("Unsupported Content-Type for OTLP metrics endpoint", "content_type", contentType)
 		response.ErrorWithStatus(c, 415, "unsupported_media_type",
 			"Content-Type must be 'application/x-protobuf' or 'application/json'", "")
 		return
@@ -88,16 +88,13 @@ func (h *OTLPMetricsHandler) HandleMetrics(c *gin.Context) {
 	if err != nil {
 		// Check if error is due to size limit
 		if err.Error() == "http: request body too large" {
-			h.logger.WithFields(logrus.Fields{
-				"max_size": maxRequestSize,
-				"error":    err.Error(),
-			}).Warn("OTLP metrics request exceeds maximum size limit")
+			h.logger.Warn("OTLP metrics request exceeds maximum size limit", "max_size", maxRequestSize, "error", err.Error())
 			response.ErrorWithStatus(c, 413, "payload_too_large",
 				fmt.Sprintf("Request body exceeds maximum size of %d bytes", maxRequestSize), "")
 			return
 		}
 
-		h.logger.WithError(err).Error("Failed to read OTLP metrics request body")
+		h.logger.Error("Failed to read OTLP metrics request body", "error", err)
 		response.BadRequest(c, "invalid request", "Failed to read request body")
 		return
 	}
@@ -111,28 +108,24 @@ func (h *OTLPMetricsHandler) HandleMetrics(c *gin.Context) {
 
 		gzipReader, err := gzip.NewReader(bytes.NewReader(body))
 		if err != nil {
-			h.logger.WithError(err).Error("Failed to create gzip reader")
+			h.logger.Error("Failed to create gzip reader", "error", err)
 			response.BadRequest(c, "invalid encoding", "Failed to decompress gzip data")
 			return
 		}
 		defer func() {
 			if err := gzipReader.Close(); err != nil {
-				h.logger.WithError(err).Warn("Failed to close gzip reader")
+				h.logger.Warn("Failed to close gzip reader", "error", err)
 			}
 		}()
 
 		body, err = io.ReadAll(gzipReader)
 		if err != nil {
-			h.logger.WithError(err).Error("Failed to decompress gzip data")
+			h.logger.Error("Failed to decompress gzip data", "error", err)
 			response.BadRequest(c, "invalid encoding", "Failed to read decompressed data")
 			return
 		}
 
-		h.logger.WithFields(logrus.Fields{
-			"original_size":     originalSize,
-			"decompressed_size": len(body),
-			"compression_ratio": float64(originalSize) / float64(len(body)),
-		}).Info("Gzip decompression successful")
+		h.logger.Info("Gzip decompression successful", "original_size", originalSize, "decompressed_size", len(body), "compression_ratio", float64(originalSize) / float64(len(body)))
 	}
 
 	// Parse request based on content type (already validated above)
@@ -143,7 +136,7 @@ func (h *OTLPMetricsHandler) HandleMetrics(c *gin.Context) {
 		h.logger.Debug("Parsing OTLP metrics Protobuf request")
 
 		if err := proto.Unmarshal(body, &protoReq); err != nil {
-			h.logger.WithError(err).Error("Failed to unmarshal OTLP metrics protobuf")
+			h.logger.Error("Failed to unmarshal OTLP metrics protobuf", "error", err)
 			response.ValidationError(c, "invalid OTLP protobuf", err.Error())
 			return
 		}
@@ -152,7 +145,7 @@ func (h *OTLPMetricsHandler) HandleMetrics(c *gin.Context) {
 		h.logger.Debug("Parsing OTLP metrics JSON request")
 
 		if err := protojson.Unmarshal(body, &protoReq); err != nil {
-			h.logger.WithError(err).Error("Failed to parse OTLP metrics JSON")
+			h.logger.Error("Failed to parse OTLP metrics JSON", "error", err)
 			response.ValidationError(c, "invalid OTLP JSON", err.Error())
 			return
 		}
@@ -164,10 +157,7 @@ func (h *OTLPMetricsHandler) HandleMetrics(c *gin.Context) {
 		return
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"project_id":       projectIDPtr.String(),
-		"resource_metrics": len(protoReq.GetResourceMetrics()),
-	}).Debug("Received OTLP metrics request")
+	h.logger.Debug("Received OTLP metrics request", "project_id", projectIDPtr.String(), "resource_metrics", len(protoReq.GetResourceMetrics()))
 
 	// Wrap ResourceMetrics in MetricsData for converter (OTLP spec structure)
 	metricsData := &metricspb.MetricsData{
@@ -177,15 +167,12 @@ func (h *OTLPMetricsHandler) HandleMetrics(c *gin.Context) {
 	// Convert OTLP metrics to Brokle telemetry events using converter service
 	brokleEvents, err := h.metricsConverter.ConvertMetricsRequest(ctx, metricsData, *projectIDPtr)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to convert OTLP metrics to Brokle events")
+		h.logger.Error("Failed to convert OTLP metrics to Brokle events", "error", err)
 		response.InternalServerError(c, "Failed to process OTLP metrics")
 		return
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"project_id":    projectIDPtr.String(),
-		"brokle_events": len(brokleEvents),
-	}).Debug("Converted OTLP metrics to Brokle events")
+	h.logger.Debug("Converted OTLP metrics to Brokle events", "project_id", projectIDPtr.String(), "brokle_events", len(brokleEvents))
 
 	// NO DEDUPLICATION for metrics (metrics are timeseries data - idempotent inserts)
 	// Publish directly to Redis Streams for async processing by worker
@@ -214,17 +201,12 @@ func (h *OTLPMetricsHandler) HandleMetrics(c *gin.Context) {
 	// Publish batch to Redis Streams (single stream per project with event_type routing)
 	streamID, err := h.streamProducer.PublishBatch(ctx, streamMessage)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to publish metrics batch to Redis Streams")
+		h.logger.Error("Failed to publish metrics batch to Redis Streams", "error", err)
 		response.InternalServerError(c, "Failed to process metrics batch")
 		return
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"project_id":    projectIDPtr.String(),
-		"batch_id":      batchID.String(),
-		"stream_id":     streamID,
-		"event_count":   len(brokleEvents),
-	}).Info("Successfully published OTLP metrics batch to Redis Streams")
+	h.logger.Info("Successfully published OTLP metrics batch to Redis Streams", "project_id", projectIDPtr.String(), "batch_id", batchID.String(), "stream_id", streamID, "event_count", len(brokleEvents))
 
 	// OTLP spec: Return success response
 	response.Success(c, gin.H{

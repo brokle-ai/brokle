@@ -1,12 +1,12 @@
 package middleware
 
 import (
+	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 
 	"brokle/internal/config"
 	license "brokle/internal/ee/licensing"
@@ -14,7 +14,7 @@ import (
 )
 
 // EnterpriseFeature middleware checks if an enterprise feature is enabled
-func EnterpriseFeature(feature string, licenseService *license.LicenseService, logger *logrus.Logger) gin.HandlerFunc {
+func EnterpriseFeature(feature string, licenseService *license.LicenseService, logger *slog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		cfg := c.MustGet("config").(*config.Config)
 
@@ -28,7 +28,7 @@ func EnterpriseFeature(feature string, licenseService *license.LicenseService, l
 		// Check if feature is available in current license
 		available, err := licenseService.CheckFeatureEntitlement(c.Request.Context(), feature)
 		if err != nil {
-			logger.WithError(err).WithField("feature", feature).Error("Failed to check feature entitlement")
+			logger.Error("Failed to check feature entitlement", "error", err, "feature", feature)
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error":   "Failed to validate feature access",
 				"feature": feature,
@@ -42,13 +42,7 @@ func EnterpriseFeature(feature string, licenseService *license.LicenseService, l
 			requiredTier := getRequiredTierForFeature(feature)
 
 			// Log feature access attempt for analytics
-			logger.WithFields(logrus.Fields{
-				"feature":       feature,
-				"current_tier":  currentTier,
-				"required_tier": requiredTier,
-				"user_agent":    c.Request.UserAgent(),
-				"ip":            c.ClientIP(),
-			}).Info("Enterprise feature access denied")
+			logger.Info("Enterprise feature access denied", "feature", feature, "current_tier", currentTier, "required_tier", requiredTier, "user_agent", c.Request.UserAgent(), "ip", c.ClientIP())
 
 			enterpriseError := errors.NewFeatureNotAvailableError(feature, currentTier, requiredTier)
 			c.JSON(enterpriseError.HTTPStatus(), gin.H{
@@ -66,7 +60,7 @@ func EnterpriseFeature(feature string, licenseService *license.LicenseService, l
 }
 
 // RequireEnterpriseLicense checks for valid enterprise license
-func RequireEnterpriseLicense(licenseService *license.LicenseService, logger *logrus.Logger) gin.HandlerFunc {
+func RequireEnterpriseLicense(licenseService *license.LicenseService, logger *slog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		cfg := c.MustGet("config").(*config.Config)
 
@@ -79,7 +73,7 @@ func RequireEnterpriseLicense(licenseService *license.LicenseService, logger *lo
 
 		status, err := licenseService.ValidateLicense(c.Request.Context())
 		if err != nil {
-			logger.WithError(err).Error("Failed to validate license")
+			logger.Error("Failed to validate license", "error", err)
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": "License validation failed",
 			})
@@ -88,10 +82,7 @@ func RequireEnterpriseLicense(licenseService *license.LicenseService, logger *lo
 		}
 
 		if !status.IsValid || !cfg.IsEnterpriseLicense() {
-			logger.WithFields(logrus.Fields{
-				"is_valid": status.IsValid,
-				"tier":     cfg.GetLicenseTier(),
-			}).Info("Enterprise license required")
+			logger.Info("Enterprise license required", "is_valid", status.IsValid, "tier", cfg.GetLicenseTier())
 
 			enterpriseError := errors.NewLicenseRequiredError(cfg.GetLicenseTier())
 			c.JSON(enterpriseError.HTTPStatus(), gin.H{
@@ -108,7 +99,7 @@ func RequireEnterpriseLicense(licenseService *license.LicenseService, logger *lo
 }
 
 // CheckUsageLimit middleware validates usage against license limits
-func CheckUsageLimit(limitType string, licenseService *license.LicenseService, logger *logrus.Logger) gin.HandlerFunc {
+func CheckUsageLimit(limitType string, licenseService *license.LicenseService, logger *slog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		cfg := c.MustGet("config").(*config.Config)
 
@@ -120,7 +111,7 @@ func CheckUsageLimit(limitType string, licenseService *license.LicenseService, l
 
 		withinLimit, remaining, err := licenseService.CheckUsageLimit(c.Request.Context(), limitType)
 		if err != nil {
-			logger.WithError(err).WithField("limit_type", limitType).Error("Failed to check usage limit")
+			logger.Error("Failed to check usage limit", "error", err, "limit_type", limitType)
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": "Failed to validate usage limits",
 			})
@@ -129,11 +120,7 @@ func CheckUsageLimit(limitType string, licenseService *license.LicenseService, l
 		}
 
 		if !withinLimit {
-			logger.WithFields(logrus.Fields{
-				"limit_type": limitType,
-				"remaining":  remaining,
-				"tier":       cfg.GetLicenseTier(),
-			}).Info("Usage limit exceeded")
+			logger.Info("Usage limit exceeded", "limit_type", limitType, "remaining", remaining, "tier", cfg.GetLicenseTier())
 
 			// Calculate next reset date (monthly reset)
 			resetDate := time.Now().AddDate(0, 1, -time.Now().Day()).Add(-time.Hour * time.Duration(time.Now().Hour()))
@@ -153,14 +140,14 @@ func CheckUsageLimit(limitType string, licenseService *license.LicenseService, l
 		// Increment usage after successful request (in background)
 		go func() {
 			if err := licenseService.UpdateUsage(c.Request.Context(), limitType, 1); err != nil {
-				logger.WithError(err).WithField("limit_type", limitType).Error("Failed to update usage")
+				logger.Error("Failed to update usage", "error", err, "limit_type", limitType)
 			}
 		}()
 	}
 }
 
 // EnterpriseFeatureWithFallback allows graceful degradation
-func EnterpriseFeatureWithFallback(feature string, fallbackHandler gin.HandlerFunc, licenseService *license.LicenseService, logger *logrus.Logger) gin.HandlerFunc {
+func EnterpriseFeatureWithFallback(feature string, fallbackHandler gin.HandlerFunc, licenseService *license.LicenseService, logger *slog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		cfg := c.MustGet("config").(*config.Config)
 
@@ -174,9 +161,9 @@ func EnterpriseFeatureWithFallback(feature string, fallbackHandler gin.HandlerFu
 		available, err := licenseService.CheckFeatureEntitlement(c.Request.Context(), feature)
 		if err != nil || !available {
 			if err != nil {
-				logger.WithError(err).WithField("feature", feature).Warn("Feature check failed, using fallback")
+				logger.Warn("Feature check failed, using fallback", "error", err, "feature", feature)
 			} else {
-				logger.WithField("feature", feature).Info("Feature not available, using fallback")
+				logger.Info("Feature not available, using fallback", "feature", feature)
 			}
 
 			// Use fallback handler

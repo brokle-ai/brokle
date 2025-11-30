@@ -1,23 +1,23 @@
 package migration
 
 import (
+	"log/slog"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
 
-	"github.com/sirupsen/logrus"
 )
 
 // HealthService provides migration health check capabilities
 type HealthService struct {
 	manager *Manager
-	logger  *logrus.Logger
+	logger  *slog.Logger
 }
 
 // NewHealthService creates a new migration health service
-func NewHealthService(manager *Manager, logger *logrus.Logger) *HealthService {
+func NewHealthService(manager *Manager, logger *slog.Logger) *HealthService {
 	return &HealthService{
 		manager: manager,
 		logger:  logger,
@@ -128,12 +128,7 @@ func (hs *HealthService) GetHealthStatus(ctx context.Context) (*HealthCheckRespo
 	}
 
 	duration := time.Since(startTime)
-	hs.logger.WithFields(logrus.Fields{
-		"status":      response.Status,
-		"duration":    duration,
-		"healthy_dbs": healthyCount,
-		"total_dbs":   response.Overall.TotalDatabases,
-	}).Info("Migration health check completed")
+	hs.logger.Info("Migration health check completed", "status", response.Status, "duration", duration, "healthy_dbs", healthyCount, "total_dbs", response.Overall.TotalDatabases)
 
 	return response, nil
 }
@@ -153,7 +148,7 @@ func (hs *HealthService) checkPostgreSQLHealth(ctx context.Context) DatabaseHeal
 	if err != nil {
 		health.Status = "error"
 		health.Error = err.Error()
-		hs.logger.WithError(err).Error("PostgreSQL migration health check failed")
+		hs.logger.Error("PostgreSQL migration health check failed", "error", err)
 		return health
 	}
 
@@ -162,10 +157,10 @@ func (hs *HealthService) checkPostgreSQLHealth(ctx context.Context) DatabaseHeal
 
 	if dirty {
 		health.Status = "dirty"
-		hs.logger.WithField("version", version).Warn("PostgreSQL migrations are in dirty state")
+		hs.logger.Warn("PostgreSQL migrations are in dirty state", "version", version)
 	} else {
 		health.Status = "healthy"
-		hs.logger.WithField("version", version).Debug("PostgreSQL migrations are healthy")
+		hs.logger.Debug("PostgreSQL migrations are healthy", "version", version)
 	}
 
 	return health
@@ -186,7 +181,7 @@ func (hs *HealthService) checkClickHouseHealth(ctx context.Context) DatabaseHeal
 	if err != nil {
 		health.Status = "error"
 		health.Error = err.Error()
-		hs.logger.WithError(err).Error("ClickHouse migration health check failed")
+		hs.logger.Error("ClickHouse migration health check failed", "error", err)
 		return health
 	}
 
@@ -195,10 +190,10 @@ func (hs *HealthService) checkClickHouseHealth(ctx context.Context) DatabaseHeal
 
 	if dirty {
 		health.Status = "dirty"
-		hs.logger.WithField("version", version).Warn("ClickHouse migrations are in dirty state")
+		hs.logger.Warn("ClickHouse migrations are in dirty state", "version", version)
 	} else {
 		health.Status = "healthy"
-		hs.logger.WithField("version", version).Debug("ClickHouse migrations are healthy")
+		hs.logger.Debug("ClickHouse migrations are healthy", "version", version)
 	}
 
 	return health
@@ -219,7 +214,7 @@ func (hs *HealthService) HTTPHealthHandler() http.HandlerFunc {
 
 		health, err := hs.GetHealthStatus(ctx)
 		if err != nil {
-			hs.logger.WithError(err).Error("Failed to get migration health status")
+			hs.logger.Error("Failed to get migration health status", "error", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
@@ -239,7 +234,7 @@ func (hs *HealthService) HTTPHealthHandler() http.HandlerFunc {
 		}
 
 		if err := json.NewEncoder(w).Encode(health); err != nil {
-			hs.logger.WithError(err).Error("Failed to encode health response")
+			hs.logger.Error("Failed to encode health response", "error", err)
 		}
 	}
 }
@@ -400,7 +395,7 @@ func (hs *HealthService) StartPeriodicHealthCheck(ctx context.Context, interval 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	hs.logger.WithField("interval", interval).Info("Starting periodic migration health checks")
+	hs.logger.Info("Starting periodic migration health checks", "interval", interval)
 
 	for {
 		select {
@@ -410,26 +405,16 @@ func (hs *HealthService) StartPeriodicHealthCheck(ctx context.Context, interval 
 		case <-ticker.C:
 			health, err := hs.GetHealthStatus(ctx)
 			if err != nil {
-				hs.logger.WithError(err).Error("Periodic health check failed")
+				hs.logger.Error("Periodic health check failed", "error", err)
 				continue
 			}
 
 			// Log health status periodically
-			hs.logger.WithFields(logrus.Fields{
-				"status":            health.Status,
-				"healthy_dbs":       health.Overall.HealthyDatabases,
-				"total_dbs":         health.Overall.TotalDatabases,
-				"avg_response_time": health.Overall.AverageResponseTime,
-			}).Info("Periodic migration health check completed")
+			hs.logger.Info("Periodic migration health check completed", "status", health.Status, "healthy_dbs", health.Overall.HealthyDatabases, "total_dbs", health.Overall.TotalDatabases, "avg_response_time", health.Overall.AverageResponseTime)
 
 			// Alert on degraded health
 			if health.Status != "healthy" {
-				hs.logger.WithFields(logrus.Fields{
-					"status":          health.Status,
-					"dirty_databases": health.Overall.DirtyDatabases,
-					"error_databases": health.Overall.ErrorDatabases,
-					"recommendations": health.Overall.Recommendations,
-				}).Warn("Migration system health is degraded")
+				hs.logger.Warn("Migration system health is degraded", "status", health.Status, "dirty_databases", health.Overall.DirtyDatabases, "error_databases", health.Overall.ErrorDatabases, "recommendations", health.Overall.Recommendations)
 			}
 		}
 	}

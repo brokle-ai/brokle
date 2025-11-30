@@ -1,10 +1,10 @@
 package user
 
 import (
+	"log/slog"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 
 	"brokle/internal/config"
 	"brokle/internal/core/domain/organization"
@@ -17,14 +17,14 @@ import (
 // Handler handles user endpoints
 type Handler struct {
 	config              *config.Config
-	logger              *logrus.Logger
+	logger              *slog.Logger
 	userService         user.UserService
 	profileService      user.ProfileService
 	organizationService organization.OrganizationService
 }
 
 // NewHandler creates a new user handler
-func NewHandler(config *config.Config, logger *logrus.Logger, userService user.UserService, profileService user.ProfileService, organizationService organization.OrganizationService) *Handler {
+func NewHandler(config *config.Config, logger *slog.Logger, userService user.UserService, profileService user.ProfileService, organizationService organization.OrganizationService) *Handler {
 	return &Handler{
 		config:              config,
 		logger:              logger,
@@ -126,7 +126,7 @@ func (h *Handler) GetProfile(c *gin.Context) {
 	// Get basic user information
 	userData, err := h.userService.GetUser(c.Request.Context(), userID)
 	if err != nil {
-		h.logger.WithError(err).WithField("user_id", userID).Error("Failed to get user")
+		h.logger.Error("Failed to get user", "error", err, "user_id", userID)
 		response.NotFound(c, "User not found")
 		return
 	}
@@ -135,14 +135,14 @@ func (h *Handler) GetProfile(c *gin.Context) {
 	profileData, err := h.profileService.GetProfile(c.Request.Context(), userID)
 	if err != nil {
 		// Profile might not exist yet, which is okay
-		h.logger.WithError(err).WithField("user_id", userID).Debug("Profile not found, using defaults")
+		h.logger.Debug("Profile not found, using defaults", "error", err, "user_id", userID)
 		profileData = nil
 	}
 
 	// Get profile completeness
 	completeness, err := h.profileService.GetProfileCompleteness(c.Request.Context(), userID)
 	if err != nil {
-		h.logger.WithError(err).WithField("user_id", userID).Error("Failed to get profile completeness")
+		h.logger.Error("Failed to get profile completeness", "error", err, "user_id", userID)
 		// Continue with 0% completeness
 	}
 
@@ -188,7 +188,7 @@ func (h *Handler) GetProfile(c *gin.Context) {
 		userID,
 	)
 	if err != nil {
-		h.logger.WithError(err).Warn("Failed to load organizations hierarchy, returning empty array")
+		h.logger.Warn("Failed to load organizations hierarchy, returning empty array", "error", err)
 		userOrgsWithProjects = []*organization.OrganizationWithProjectsAndRole{}
 	}
 
@@ -233,7 +233,7 @@ func (h *Handler) GetProfile(c *gin.Context) {
 		Organizations:       organizationsWithProjects,
 	}
 
-	h.logger.WithField("user_id", userID).Info("User profile retrieved successfully")
+	h.logger.Info("User profile retrieved successfully", "user_id", userID)
 	response.Success(c, enhancedResponse)
 }
 
@@ -280,7 +280,7 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 	// Parse request body
 	var req UpdateProfileRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.WithError(err).Error("Invalid profile update request")
+		h.logger.Error("Invalid profile update request", "error", err)
 		response.BadRequest(c, "Invalid request payload", err.Error())
 		return
 	}
@@ -294,7 +294,7 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 
 		_, err := h.userService.UpdateUser(c.Request.Context(), userID, userUpdateReq)
 		if err != nil {
-			h.logger.WithError(err).WithField("user_id", userID).Error("Failed to update user")
+			h.logger.Error("Failed to update user", "error", err, "user_id", userID)
 			response.InternalServerError(c, "Failed to update user information")
 			return
 		}
@@ -310,14 +310,14 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 		_, err := h.profileService.UpdateProfile(c.Request.Context(), userID, profileUpdateReq)
 		if err != nil {
 			// Profile might not exist yet - log but don't fail the entire operation
-			h.logger.WithError(err).WithField("user_id", userID).Debug("Profile update failed, profile may not exist yet")
+			h.logger.Debug("Profile update failed, profile may not exist yet", "error", err, "user_id", userID)
 			// For now, we'll skip profile updates if the profile doesn't exist
 			// In a future iteration, we could create the profile automatically
 		}
 	}
 
 	// Return updated profile (call GetProfile internally to get consistent response)
-	h.logger.WithField("user_id", userID).Info("Profile updated successfully")
+	h.logger.Info("Profile updated successfully", "user_id", userID)
 
 	// Re-fetch and return updated profile
 	h.GetProfile(c)
@@ -361,7 +361,7 @@ func (h *Handler) SetDefaultOrganization(c *gin.Context) {
 	// Parse request body
 	var req SetDefaultOrgRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.WithError(err).Error("Invalid set default organization request")
+		h.logger.Error("Invalid set default organization request", "error", err)
 		response.BadRequest(c, "Invalid request body", err.Error())
 		return
 	}
@@ -369,7 +369,7 @@ func (h *Handler) SetDefaultOrganization(c *gin.Context) {
 	// Parse organization ID
 	orgID, err := ulid.Parse(req.OrganizationID)
 	if err != nil {
-		h.logger.WithError(err).WithField("organization_id", req.OrganizationID).Error("Invalid organization ID format")
+		h.logger.Error("Invalid organization ID format", "error", err, "organization_id", req.OrganizationID)
 		response.BadRequest(c, "Invalid organization ID format", err.Error())
 		return
 	}
@@ -377,37 +377,25 @@ func (h *Handler) SetDefaultOrganization(c *gin.Context) {
 	// Validate that user is a member of the organization
 	isMember, err := h.userService.ValidateUserOrgMembership(c.Request.Context(), userID, orgID)
 	if err != nil {
-		h.logger.WithError(err).WithFields(logrus.Fields{
-			"user_id":         userID,
-			"organization_id": orgID,
-		}).Error("Failed to validate organization membership")
+		h.logger.Error("Failed to validate organization membership", "error", err, "user_id", userID, "organization_id", orgID)
 		response.InternalServerError(c, "Failed to validate organization membership")
 		return
 	}
 
 	if !isMember {
-		h.logger.WithFields(logrus.Fields{
-			"user_id":         userID,
-			"organization_id": orgID,
-		}).Warn("User attempted to set default organization they are not a member of")
+		h.logger.Warn("User attempted to set default organization they are not a member of", "user_id", userID, "organization_id", orgID)
 		response.Forbidden(c, "You are not a member of this organization")
 		return
 	}
 
 	// Set default organization
 	if err := h.userService.SetDefaultOrganization(c.Request.Context(), userID, orgID); err != nil {
-		h.logger.WithError(err).WithFields(logrus.Fields{
-			"user_id":         userID,
-			"organization_id": orgID,
-		}).Error("Failed to update default organization")
+		h.logger.Error("Failed to update default organization", "error", err, "user_id", userID, "organization_id", orgID)
 		response.InternalServerError(c, "Failed to update default organization")
 		return
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"user_id":         userID,
-		"organization_id": orgID,
-	}).Info("Default organization updated successfully")
+	h.logger.Info("Default organization updated successfully", "user_id", userID, "organization_id", orgID)
 
 	response.Success(c, map[string]string{
 		"message": "Default organization updated successfully",

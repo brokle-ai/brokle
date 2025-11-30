@@ -633,6 +633,8 @@ func Load() (*Config, error) {
 	//nolint:errcheck
 	//nolint:errcheck
 	viper.BindEnv("logging.level", "LOG_LEVEL")
+	//nolint:errcheck
+	viper.BindEnv("logging.format", "LOG_FORMAT")
 
 	// CORS configuration (OSS-standard naming)
 	//nolint:errcheck

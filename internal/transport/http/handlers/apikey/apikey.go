@@ -1,6 +1,7 @@
 package apikey
 
 import (
+	"log/slog"
 	"time"
 
 	"brokle/internal/config"
@@ -10,18 +11,17 @@ import (
 	"brokle/pkg/ulid"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 )
 
 type Handler struct {
 	config        *config.Config
-	logger        *logrus.Logger
+	logger        *slog.Logger
 	apiKeyService auth.APIKeyService
 }
 
 func NewHandler(
 	config *config.Config,
-	logger *logrus.Logger,
+	logger *slog.Logger,
 	apiKeyService auth.APIKeyService,
 ) *Handler {
 	return &Handler{
@@ -85,7 +85,7 @@ func (h *Handler) List(c *gin.Context) {
 	// Get project ID from URL path
 	projectID, err := ulid.Parse(c.Param("projectId"))
 	if err != nil {
-		h.logger.WithError(err).Error("Invalid project ID")
+		h.logger.Error("Invalid project ID", "error", err)
 		response.BadRequest(c, "Invalid project ID", err.Error())
 		return
 	}
@@ -131,7 +131,7 @@ func (h *Handler) List(c *gin.Context) {
 	// Get API keys
 	apiKeys, err := h.apiKeyService.GetAPIKeys(c.Request.Context(), filters)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to list API keys")
+		h.logger.Error("Failed to list API keys", "error", err)
 		response.Error(c, err)
 		return
 	}
@@ -155,7 +155,7 @@ func (h *Handler) List(c *gin.Context) {
 	// Get total count for accurate pagination metadata
 	total, err := h.apiKeyService.CountAPIKeys(c.Request.Context(), filters)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to count API keys")
+		h.logger.Error("Failed to count API keys", "error", err)
 		response.Error(c, err)
 		return
 	}
@@ -163,11 +163,11 @@ func (h *Handler) List(c *gin.Context) {
 	// Create offset pagination
 	pag := response.NewPagination(params.Page, params.Limit, total)
 
-	h.logger.WithFields(map[string]interface{}{
-		"user_id":    userID,
-		"project_id": projectID,
-		"count":      len(responseKeys),
-	}).Debug("Listed API keys")
+	h.logger.Debug("Listed API keys",
+		"user_id", userID,
+		"project_id", projectID,
+		"count", len(responseKeys),
+	)
 
 	response.SuccessWithPagination(c, responseKeys, pag)
 }
@@ -203,7 +203,7 @@ func (h *Handler) Create(c *gin.Context) {
 	// Get project ID from URL path
 	projectID, err := ulid.Parse(c.Param("projectId"))
 	if err != nil {
-		h.logger.WithError(err).Error("Invalid project ID")
+		h.logger.Error("Invalid project ID", "error", err)
 		response.BadRequest(c, "Invalid project ID", err.Error())
 		return
 	}
@@ -211,7 +211,7 @@ func (h *Handler) Create(c *gin.Context) {
 	// Parse request body
 	var req CreateAPIKeyRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.WithError(err).Error("Invalid create API key request")
+		h.logger.Error("Invalid create API key request", "error", err)
 		response.BadRequest(c, "Invalid request payload", err.Error())
 		return
 	}
@@ -226,7 +226,7 @@ func (h *Handler) Create(c *gin.Context) {
 
 	userIDParsed, err := ulid.Parse(userID)
 	if err != nil {
-		h.logger.WithError(err).Error("Invalid user ID format")
+		h.logger.Error("Invalid user ID format", "error", err)
 		response.InternalServerError(c, "Authentication error")
 		return
 	}
@@ -254,7 +254,7 @@ func (h *Handler) Create(c *gin.Context) {
 	// Create the API key
 	apiKeyResp, err := h.apiKeyService.CreateAPIKey(c.Request.Context(), userIDParsed, serviceReq)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to create API key")
+		h.logger.Error("Failed to create API key", "error", err)
 		response.Error(c, err)
 		return
 	}
@@ -273,12 +273,12 @@ func (h *Handler) Create(c *gin.Context) {
 		CreatedBy:  userID,
 	}
 
-	h.logger.WithFields(map[string]interface{}{
-		"user_id":    userID,
-		"api_key_id": apiKeyResp.ID,
-		"project_id": projectID,
-		"key_name":   req.Name,
-	}).Info("API key created successfully")
+	h.logger.Info("API key created successfully",
+		"user_id", userID,
+		"api_key_id", apiKeyResp.ID,
+		"project_id", projectID,
+		"key_name", req.Name,
+	)
 
 	response.Created(c, responseKey)
 }
@@ -303,7 +303,7 @@ func (h *Handler) Delete(c *gin.Context) {
 	// Get project ID from URL path
 	projectID, err := ulid.Parse(c.Param("projectId"))
 	if err != nil {
-		h.logger.WithError(err).Error("Invalid project ID")
+		h.logger.Error("Invalid project ID", "error", err)
 		response.BadRequest(c, "Invalid project ID", err.Error())
 		return
 	}
@@ -311,7 +311,7 @@ func (h *Handler) Delete(c *gin.Context) {
 	// Get API key ID from URL path
 	keyID, err := ulid.Parse(c.Param("keyId"))
 	if err != nil {
-		h.logger.WithError(err).Error("Invalid API key ID")
+		h.logger.Error("Invalid API key ID", "error", err)
 		response.BadRequest(c, "Invalid API key ID", err.Error())
 		return
 	}
@@ -326,16 +326,16 @@ func (h *Handler) Delete(c *gin.Context) {
 
 	// Delete the API key (service validates existence and project ownership)
 	if err := h.apiKeyService.DeleteAPIKey(c.Request.Context(), keyID, projectID); err != nil {
-		h.logger.WithError(err).Error("Failed to delete API key")
+		h.logger.Error("Failed to delete API key", "error", err)
 		response.Error(c, err)
 		return
 	}
 
-	h.logger.WithFields(map[string]interface{}{
-		"user_id":    userID,
-		"api_key_id": keyID,
-		"project_id": projectID,
-	}).Info("API key deleted successfully")
+	h.logger.Info("API key deleted successfully",
+		"user_id", userID,
+		"api_key_id", keyID,
+		"project_id", projectID,
+	)
 
 	response.NoContent(c)
 }

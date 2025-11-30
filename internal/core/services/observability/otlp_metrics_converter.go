@@ -1,12 +1,12 @@
 package observability
 
 import (
+	"log/slog"
 	"context"
 	"encoding/hex"
 	"fmt"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	commonpb "go.opentelemetry.io/proto/otlp/common/v1"
 	metricspb "go.opentelemetry.io/proto/otlp/metrics/v1"
 
@@ -17,11 +17,11 @@ import (
 // OTLPMetricsConverterService handles conversion of OTLP metrics to Brokle domain entities
 // Follows the proven traces converter pattern with type-safe conversions
 type OTLPMetricsConverterService struct {
-	logger *logrus.Logger
+	logger *slog.Logger
 }
 
 // NewOTLPMetricsConverterService creates a new OTLP metrics converter service
-func NewOTLPMetricsConverterService(logger *logrus.Logger) *OTLPMetricsConverterService {
+func NewOTLPMetricsConverterService(logger *slog.Logger) *OTLPMetricsConverterService {
 	return &OTLPMetricsConverterService{
 		logger: logger,
 	}
@@ -127,10 +127,7 @@ func (s *OTLPMetricsConverterService) ConvertMetricsRequest(
 
 				default:
 					// Skip unsupported metric types (Summary)
-					s.logger.WithFields(logrus.Fields{
-						"metric_name": metricName,
-						"metric_type": fmt.Sprintf("%T", data),
-					}).Warn("unsupported metric type, skipping")
+					s.logger.Warn("unsupported metric type, skipping", "metric_name", metricName, "metric_type", fmt.Sprintf("%T", metric.Data))
 				}
 			}
 		}

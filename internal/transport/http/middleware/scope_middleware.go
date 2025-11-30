@@ -1,8 +1,8 @@
 package middleware
 
 import (
+	"log/slog"
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 
 	"brokle/internal/core/domain/auth"
 	"brokle/pkg/response"
@@ -13,13 +13,13 @@ import (
 // This is the NEW middleware that replaces RequirePermission*
 type ScopeMiddleware struct {
 	scopeService auth.ScopeService
-	logger       *logrus.Logger
+	logger       *slog.Logger
 }
 
 // NewScopeMiddleware creates a new scope-based authorization middleware
 func NewScopeMiddleware(
 	scopeService auth.ScopeService,
-	logger *logrus.Logger,
+	logger *slog.Logger,
 ) *ScopeMiddleware {
 	return &ScopeMiddleware{
 		scopeService: scopeService,
@@ -65,24 +65,14 @@ func (m *ScopeMiddleware) RequireScope(scope string) gin.HandlerFunc {
 		)
 
 		if err != nil {
-			m.logger.WithError(err).WithFields(logrus.Fields{
-				"user_id":    userID,
-				"scope":      scope,
-				"org_id":     resolver.OrganizationID,
-				"project_id": resolver.ProjectID,
-			}).Error("Failed to check user scope")
+			m.logger.Error("Failed to check user scope", "error", err, "user_id", userID, "scope", scope, "org_id", resolver.OrganizationID, "project_id", resolver.ProjectID)
 			response.InternalServerError(c, "Scope verification failed")
 			c.Abort()
 			return
 		}
 
 		if !hasScope {
-			m.logger.WithFields(logrus.Fields{
-				"user_id":    userID,
-				"scope":      scope,
-				"org_id":     resolver.OrganizationID,
-				"project_id": resolver.ProjectID,
-			}).Warn("Insufficient scopes")
+			m.logger.Warn("Insufficient scopes", "user_id", userID, "scope", scope, "org_id", resolver.OrganizationID, "project_id", resolver.ProjectID)
 			response.Forbidden(c, "Insufficient permissions")
 			c.Abort()
 			return
@@ -97,12 +87,7 @@ func (m *ScopeMiddleware) RequireScope(scope string) gin.HandlerFunc {
 		}
 		c.Set(ScopeContextKey, scopeContext)
 
-		m.logger.WithFields(logrus.Fields{
-			"user_id":    userID,
-			"scope":      scope,
-			"org_id":     resolver.OrganizationID,
-			"project_id": resolver.ProjectID,
-		}).Debug("Scope check passed")
+		m.logger.Debug("Scope check passed", "user_id", userID, "scope", scope, "org_id", resolver.OrganizationID, "project_id", resolver.ProjectID)
 
 		c.Next()
 	}
@@ -133,24 +118,14 @@ func (m *ScopeMiddleware) RequireAnyScope(scopes []string) gin.HandlerFunc {
 		)
 
 		if err != nil {
-			m.logger.WithError(err).WithFields(logrus.Fields{
-				"user_id":    userID,
-				"scopes":     scopes,
-				"org_id":     resolver.OrganizationID,
-				"project_id": resolver.ProjectID,
-			}).Error("Failed to check user scopes")
+			m.logger.Error("Failed to check user scopes", "error", err, "user_id", userID, "scopes", scopes, "org_id", resolver.OrganizationID, "project_id", resolver.ProjectID)
 			response.InternalServerError(c, "Scope verification failed")
 			c.Abort()
 			return
 		}
 
 		if !hasAny {
-			m.logger.WithFields(logrus.Fields{
-				"user_id":    userID,
-				"scopes":     scopes,
-				"org_id":     resolver.OrganizationID,
-				"project_id": resolver.ProjectID,
-			}).Warn("Insufficient scopes - none of the required scopes found")
+			m.logger.Warn("Insufficient scopes - none of the required scopes found", "user_id", userID, "scopes", scopes, "org_id", resolver.OrganizationID, "project_id", resolver.ProjectID)
 			response.Forbidden(c, "Insufficient permissions")
 			c.Abort()
 			return
@@ -185,24 +160,14 @@ func (m *ScopeMiddleware) RequireAllScopes(scopes []string) gin.HandlerFunc {
 		)
 
 		if err != nil {
-			m.logger.WithError(err).WithFields(logrus.Fields{
-				"user_id":    userID,
-				"scopes":     scopes,
-				"org_id":     resolver.OrganizationID,
-				"project_id": resolver.ProjectID,
-			}).Error("Failed to check user scopes")
+			m.logger.Error("Failed to check user scopes", "error", err, "user_id", userID, "scopes", scopes, "org_id", resolver.OrganizationID, "project_id", resolver.ProjectID)
 			response.InternalServerError(c, "Scope verification failed")
 			c.Abort()
 			return
 		}
 
 		if !hasAll {
-			m.logger.WithFields(logrus.Fields{
-				"user_id":    userID,
-				"scopes":     scopes,
-				"org_id":     resolver.OrganizationID,
-				"project_id": resolver.ProjectID,
-			}).Warn("Insufficient scopes - missing required scopes")
+			m.logger.Warn("Insufficient scopes - missing required scopes", "user_id", userID, "scopes", scopes, "org_id", resolver.OrganizationID, "project_id", resolver.ProjectID)
 			response.Forbidden(c, "Insufficient permissions")
 			c.Abort()
 			return

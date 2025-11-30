@@ -1,12 +1,12 @@
 package database
 
 import (
+	"log/slog"
 	"context"
 	"fmt"
 	"time"
 
 	"github.com/redis/go-redis/v9"
-	"github.com/sirupsen/logrus"
 
 	"brokle/internal/config"
 )
@@ -15,11 +15,11 @@ import (
 type RedisDB struct {
 	Client *redis.Client
 	config *config.Config
-	logger *logrus.Logger
+	logger *slog.Logger
 }
 
 // NewRedisDB creates a new Redis database connection
-func NewRedisDB(cfg *config.Config, logger *logrus.Logger) (*RedisDB, error) {
+func NewRedisDB(cfg *config.Config, logger *slog.Logger) (*RedisDB, error) {
 	// Parse Redis URL
 	opt, err := redis.ParseURL(cfg.GetRedisURL())
 	if err != nil {

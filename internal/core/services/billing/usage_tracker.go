@@ -1,12 +1,12 @@
 package billing
 
 import (
+	"log/slog"
 	"context"
 	"fmt"
 	"sync"
 	"time"
 
-	"github.com/sirupsen/logrus"
 
 	billingDomain "brokle/internal/core/domain/billing"
 	"brokle/pkg/ulid"
@@ -16,7 +16,7 @@ import (
 type UsageTracker struct {
 	usageRepo    billingDomain.UsageRepository
 	quotaRepo    billingDomain.QuotaRepository
-	logger       *logrus.Logger
+	logger       *slog.Logger
 	quotaCache   map[ulid.ULID]*billingDomain.UsageQuota
 	stopCh       chan struct{}
 	wg           sync.WaitGroup
@@ -37,7 +37,7 @@ type UsageUpdate struct {
 
 // NewUsageTracker creates a new usage tracker instance
 func NewUsageTracker(
-	logger *logrus.Logger,
+	logger *slog.Logger,
 	usageRepo billingDomain.UsageRepository,
 	quotaRepo billingDomain.QuotaRepository,
 ) *UsageTracker {
@@ -106,7 +106,7 @@ func (t *UsageTracker) UpdateUsage(ctx context.Context, orgID ulid.ULID, record 
 		defer cancel()
 
 		if err := t.quotaRepo.UpdateUsageQuota(ctx, orgID, quota); err != nil {
-			t.logger.WithError(err).WithField("org_id", orgID).Error("Failed to persist usage quota")
+			t.logger.Error("Failed to persist usage quota", "error", err, "org_id", orgID)
 		}
 	}()
 
@@ -135,12 +135,7 @@ func (t *UsageTracker) SetUsageQuota(ctx context.Context, orgID ulid.ULID, quota
 	t.quotaCache[orgID] = quota
 	t.cacheMutex.Unlock()
 
-	t.logger.WithFields(logrus.Fields{
-		"org_id":        orgID,
-		"request_limit": quota.MonthlyRequestLimit,
-		"token_limit":   quota.MonthlyTokenLimit,
-		"cost_limit":    quota.MonthlyCostLimit,
-	}).Info("Updated usage quota")
+	t.logger.Info("Updated usage quota", "org_id", orgID, "request_limit", quota.MonthlyRequestLimit, "token_limit", quota.MonthlyTokenLimit, "cost_limit", quota.MonthlyCostLimit)
 
 	return nil
 }
@@ -233,7 +228,7 @@ func (t *UsageTracker) ResetMonthlyUsage(ctx context.Context, orgID ulid.ULID) e
 		return fmt.Errorf("failed to reset usage quota: %w", err)
 	}
 
-	t.logger.WithField("org_id", orgID).Info("Reset monthly usage counters")
+	t.logger.Info("Reset monthly usage counters", "org_id", orgID)
 	return nil
 }
 
@@ -335,9 +330,9 @@ func (t *UsageTracker) syncQuotas() {
 
 			// Persist reset
 			if err := t.quotaRepo.UpdateUsageQuota(ctx, orgID, quota); err != nil {
-				t.logger.WithError(err).WithField("org_id", orgID).Error("Failed to sync quota reset")
+				t.logger.Error("Failed to sync quota reset", "error", err, "org_id", orgID)
 			} else {
-				t.logger.WithField("org_id", orgID).Info("Monthly usage quota reset")
+				t.logger.Info("Monthly usage quota reset", "org_id", orgID)
 			}
 
 			cancel()
@@ -350,7 +345,7 @@ func (t *UsageTracker) syncQuotas() {
 	}
 
 	if len(expiredOrgs) > 0 {
-		t.logger.WithField("expired_count", len(expiredOrgs)).Debug("Cleared expired quota cache entries")
+		t.logger.Debug("Cleared expired quota cache entries", "expired_count", len(expiredOrgs))
 	}
 }
 

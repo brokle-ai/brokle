@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	"github.com/sirupsen/logrus"
+	"log/slog"
 
 	"brokle/internal/config"
 	"brokle/internal/core/domain/auth"
@@ -50,7 +50,7 @@ type Handlers struct {
 // NewHandlers creates a new handlers instance with all dependencies
 func NewHandlers(
 	cfg *config.Config,
-	logger *logrus.Logger,
+	logger *slog.Logger,
 	authService auth.AuthService,
 	apiKeyService auth.APIKeyService,
 	blacklistedTokens auth.BlacklistedTokenService,

@@ -328,7 +328,7 @@ type NewFeatureConfig struct {
 
 ```go
 // internal/middleware/enterprise.go
-func EnterpriseFeature(feature string, licenseService *services.LicenseService, logger *logrus.Logger) gin.HandlerFunc {
+func EnterpriseFeature(feature string, licenseService *services.LicenseService, logger *slog.Logger) gin.HandlerFunc {
     return func(c *gin.Context) {
         cfg := c.MustGet("config").(*config.Config)
         
@@ -368,7 +368,7 @@ func EnterpriseFeature(feature string, licenseService *services.LicenseService, 
 ### Usage Limit Middleware
 
 ```go
-func CheckUsageLimit(limitType string, licenseService *services.LicenseService, logger *logrus.Logger) gin.HandlerFunc {
+func CheckUsageLimit(limitType string, licenseService *services.LicenseService, logger *slog.Logger) gin.HandlerFunc {
     return func(c *gin.Context) {
         withinLimit, remaining, err := licenseService.CheckUsageLimit(c.Request.Context(), limitType)
         if err != nil {
@@ -419,7 +419,7 @@ router.Group("/api/v1/enterprise").Use(
 // internal/services/license/
 type LicenseService struct {
     config     *config.Config
-    logger     *logrus.Logger
+    logger     *slog.Logger
     redis      *redis.Client
     httpClient *http.Client
     publicKey  *rsa.PublicKey
@@ -785,7 +785,7 @@ if cfg.IsDevelopment() {
 
 ```go
 // Structured logging for enterprise features
-logger.WithFields(logrus.Fields{
+logger.With(slog attributes{
     "feature":      "advanced_rbac",
     "user_id":      userID,
     "license_tier": cfg.GetLicenseTier(),
@@ -793,7 +793,7 @@ logger.WithFields(logrus.Fields{
 }).Info("Enterprise feature accessed")
 
 // Log license validation events
-logger.WithFields(logrus.Fields{
+logger.With(slog attributes{
     "license_type": license.Type,
     "valid_until":  license.ValidUntil,
     "features":     license.Features,

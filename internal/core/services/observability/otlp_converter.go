@@ -1,6 +1,7 @@
 package observability
 
 import (
+	"log/slog"
 	"context"
 	"encoding/hex"
 	"encoding/json"
@@ -8,7 +9,6 @@ import (
 	"time"
 
 	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 
 	"brokle/internal/config"
 	"brokle/internal/core/domain/analytics"
@@ -22,14 +22,14 @@ const MaxAttributeValueSize = 1024 * 1024 // 1MB
 
 // OTLPConverterService handles conversion of OTLP traces to Brokle telemetry events
 type OTLPConverterService struct {
-	logger                 *logrus.Logger
+	logger                 *slog.Logger
 	providerPricingService analytics.ProviderPricingService
 	config                 *config.ObservabilityConfig
 }
 
 // NewOTLPConverterService creates a new OTLP converter service
 func NewOTLPConverterService(
-	logger *logrus.Logger,
+	logger *slog.Logger,
 	providerPricingService analytics.ProviderPricingService,
 	observabilityConfig *config.ObservabilityConfig,
 ) *OTLPConverterService {
@@ -420,7 +420,7 @@ func (s *OTLPConverterService) createSpanEvent(ctx context.Context, span observa
 		if err == nil {
 			payload["otlp_span_raw"] = string(rawOTLPJSON)
 		} else {
-			s.logger.WithError(err).Warn("Failed to marshal raw OTLP span")
+			s.logger.Warn("Failed to marshal raw OTLP span", "error", err)
 		}
 
 		if len(resourceAttrs) > 0 {
@@ -864,11 +864,7 @@ func (s *OTLPConverterService) calculateProviderCostsAtIngestion(
 
 	providerPricing, err := s.providerPricingService.GetProviderPricingSnapshot(ctx, projectIDPtr, modelName, time.Now())
 	if err != nil {
-		s.logger.WithFields(logrus.Fields{
-			"model":      modelName,
-			"project_id": projectID,
-			"error":      err,
-		}).Warn("Failed to get provider pricing - continuing without cost data")
+		s.logger.Warn("Failed to get provider pricing - continuing without cost data", "model", modelName, "project_id", projectID, "error", err)
 		payload["usage_details"] = usage
 		return
 	}
@@ -889,13 +885,7 @@ func (s *OTLPConverterService) calculateProviderCostsAtIngestion(
 		payload["total_cost"] = totalCost
 	}
 
-	s.logger.WithFields(logrus.Fields{
-		"model":                 modelName,
-		"usage_types":           len(usage),
-		"total_tokens":          total,
-		"provider_cost_usd":     providerCost["total"],
-		"provider_pricing_date": providerPricing.SnapshotTime,
-	}).Debug("Provider costs calculated successfully")
+	s.logger.Debug("Provider costs calculated successfully", "model", modelName, "usage_types", len(usage), "total_tokens", total, "provider_cost_usd", providerCost["total"], "provider_pricing_date", providerPricing.SnapshotTime)
 }
 
 func extractStringFromInterface(val interface{}) string {

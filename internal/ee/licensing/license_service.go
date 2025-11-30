@@ -4,12 +4,12 @@
 package license
 
 import (
+	"log/slog"
 	"context"
 	"fmt"
 	"time"
 
 	"github.com/redis/go-redis/v9"
-	"github.com/sirupsen/logrus"
 
 	"brokle/internal/config"
 )
@@ -17,7 +17,7 @@ import (
 // LicenseService OSS stub - all enterprise features disabled
 type LicenseService struct {
 	config *config.Config
-	logger *logrus.Logger
+	logger *slog.Logger
 	redis  *redis.Client
 }
 
@@ -53,7 +53,7 @@ type LicenseStatus struct {
 }
 
 // NewLicenseService creates OSS license service stub (matches enterprise signature)
-func NewLicenseService(cfg *config.Config, logger *logrus.Logger, redisClient *redis.Client) (*LicenseService, error) {
+func NewLicenseService(cfg *config.Config, logger *slog.Logger, redisClient *redis.Client) (*LicenseService, error) {
 	logger.Info("Brokle OSS - Enterprise license features disabled")
 	return &LicenseService{
 		config: cfg,
@@ -89,7 +89,7 @@ func (ls *LicenseService) ValidateLicense(ctx context.Context) (*LicenseStatus, 
 
 // CheckFeatureEntitlement - OSS denies all enterprise features
 func (ls *LicenseService) CheckFeatureEntitlement(ctx context.Context, feature string) (bool, error) {
-	ls.logger.Debugf("Enterprise feature '%s' not available in OSS build", feature)
+	ls.logger.Debug("Enterprise feature not available in OSS build", "feature", feature)
 	return false, fmt.Errorf("enterprise feature '%s' requires enterprise license", feature)
 }
 

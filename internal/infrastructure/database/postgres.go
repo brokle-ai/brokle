@@ -1,11 +1,11 @@
 package database
 
 import (
+	"log/slog"
 	"database/sql"
 	"fmt"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	gormLogger "gorm.io/gorm/logger"
@@ -18,11 +18,11 @@ type PostgresDB struct {
 	DB     *gorm.DB
 	SqlDB  *sql.DB
 	config *config.Config
-	logger *logrus.Logger
+	logger *slog.Logger
 }
 
 // NewPostgresDB creates a new PostgreSQL database connection
-func NewPostgresDB(cfg *config.Config, logger *logrus.Logger) (*PostgresDB, error) {
+func NewPostgresDB(cfg *config.Config, logger *slog.Logger) (*PostgresDB, error) {
 	// Configure GORM logger
 	glogger := gormLogger.Default
 

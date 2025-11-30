@@ -1,11 +1,11 @@
 package billing
 
 import (
+	"log/slog"
 	"context"
 	"fmt"
 	"time"
 
-	"github.com/sirupsen/logrus"
 
 	billingDomain "brokle/internal/core/domain/billing"
 	"brokle/pkg/ulid"
@@ -13,7 +13,7 @@ import (
 
 // BillingService implements billing operations for gateway usage
 type BillingService struct {
-	logger             *logrus.Logger
+	logger             *slog.Logger
 	usageRepo          billingDomain.UsageRepository
 	billingRecordRepo  billingDomain.BillingRecordRepository
 	quotaRepo          billingDomain.QuotaRepository
@@ -47,7 +47,7 @@ func DefaultBillingConfig() *BillingConfig {
 
 // NewBillingService creates a new billing service instance
 func NewBillingService(
-	logger *logrus.Logger,
+	logger *slog.Logger,
 	config *BillingConfig,
 	usageRepo billingDomain.UsageRepository,
 	billingRecordRepo billingDomain.BillingRecordRepository,
@@ -75,14 +75,14 @@ func (s *BillingService) RecordUsage(ctx context.Context, usage *billingDomain.C
 	// Get organization billing tier
 	billingTier, err := s.orgService.GetBillingTier(ctx, usage.OrganizationID)
 	if err != nil {
-		s.logger.WithError(err).WithField("org_id", usage.OrganizationID).Error("Failed to get billing tier")
+		s.logger.Error("Failed to get billing tier", "error", err, "org_id", usage.OrganizationID)
 		billingTier = "free" // Default fallback
 	}
 
 	// Calculate discounts
 	discountRate, err := s.orgService.GetDiscountRate(ctx, usage.OrganizationID)
 	if err != nil {
-		s.logger.WithError(err).WithField("org_id", usage.OrganizationID).Error("Failed to get discount rate")
+		s.logger.Error("Failed to get discount rate", "error", err, "org_id", usage.OrganizationID)
 		discountRate = 0.0 // No discount on error
 	}
 
@@ -110,22 +110,17 @@ func (s *BillingService) RecordUsage(ctx context.Context, usage *billingDomain.C
 
 	// Store usage record
 	if err := s.usageRepo.InsertUsageRecord(ctx, record); err != nil {
-		s.logger.WithError(err).WithField("record_id", record.ID).Error("Failed to insert usage record")
+		s.logger.Error("Failed to insert usage record", "error", err, "record_id", record.ID)
 		return fmt.Errorf("failed to record usage: %w", err)
 	}
 
 	// Update usage tracking
 	if err := s.usageTracker.UpdateUsage(ctx, usage.OrganizationID, record); err != nil {
-		s.logger.WithError(err).WithField("org_id", usage.OrganizationID).Error("Failed to update usage tracking")
+		s.logger.Error("Failed to update usage tracking", "error", err, "org_id", usage.OrganizationID)
 		// Don't fail the entire operation for tracking errors
 	}
 
-	s.logger.WithFields(logrus.Fields{
-		"org_id":     usage.OrganizationID,
-		"request_id": usage.RequestID,
-		"cost":       usage.TotalCost,
-		"net_cost":   netCost,
-	}).Debug("Recorded usage for billing")
+	s.logger.Debug("Recorded usage for billing", "org_id", usage.OrganizationID, "request_id", usage.RequestID, "cost", usage.TotalCost, "net_cost", netCost)
 
 	return nil
 }
@@ -216,7 +211,7 @@ func (s *BillingService) CalculateBill(ctx context.Context, orgID ulid.ULID, per
 
 	// Store the billing summary
 	if err := s.billingRecordRepo.InsertBillingSummary(ctx, summary); err != nil {
-		s.logger.WithError(err).WithField("org_id", orgID).Error("Failed to store billing summary")
+		s.logger.Error("Failed to store billing summary", "error", err, "org_id", orgID)
 		// Continue without failing - the summary is still valid
 	}
 
@@ -265,12 +260,7 @@ func (s *BillingService) ProcessPayment(ctx context.Context, billingRecordID uli
 		return fmt.Errorf("failed to update billing record: %w", err)
 	}
 
-	s.logger.WithFields(logrus.Fields{
-		"billing_record_id": billingRecordID,
-		"organization_id":   record.OrganizationID,
-		"amount":            record.Amount,
-		"transaction_id":    transactionID,
-	}).Info("Payment processed successfully")
+	s.logger.Info("Payment processed successfully", "billing_record_id", billingRecordID, "organization_id", record.OrganizationID, "amount", record.Amount, "transaction_id", transactionID)
 
 	return nil
 }
@@ -346,12 +336,7 @@ func (s *BillingService) CreateBillingRecord(ctx context.Context, summary *billi
 		return nil, fmt.Errorf("failed to create billing record: %w", err)
 	}
 
-	s.logger.WithFields(logrus.Fields{
-		"billing_record_id": record.ID,
-		"organization_id":   record.OrganizationID,
-		"amount":            record.Amount,
-		"period":            record.Period,
-	}).Info("Created billing record")
+	s.logger.Info("Created billing record", "billing_record_id", record.ID, "organization_id", record.OrganizationID, "amount", record.Amount, "period", record.Period)
 
 	return record, nil
 }

@@ -80,14 +80,14 @@ func (h *Handler) ListTraces(c *gin.Context) {
 
 	traces, err := h.services.GetTraceService().ListTraces(c.Request.Context(), filter)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to list traces")
+		h.logger.Error("Failed to list traces", "error", err)
 		response.Error(c, err)
 		return
 	}
 
 	totalCount, err := h.services.GetTraceService().CountTraces(c.Request.Context(), filter)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to count traces")
+		h.logger.Error("Failed to count traces", "error", err)
 		response.Error(c, err)
 		return
 	}
@@ -118,7 +118,7 @@ func (h *Handler) GetTrace(c *gin.Context) {
 
 	traceSummary, err := h.services.GetTraceService().GetTrace(c.Request.Context(), traceID)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to get trace summary")
+		h.logger.Error("Failed to get trace summary", "error", err)
 		response.Error(c, err)
 		return
 	}
@@ -147,7 +147,7 @@ func (h *Handler) GetTraceWithSpans(c *gin.Context) {
 
 	spans, err := h.services.GetTraceService().GetTraceSpans(c.Request.Context(), traceID)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to get spans for trace")
+		h.logger.Error("Failed to get spans for trace", "error", err)
 		response.Error(c, err)
 		return
 	}
@@ -176,7 +176,7 @@ func (h *Handler) GetTraceWithScores(c *gin.Context) {
 
 	scores, err := h.services.GetScoreService().GetScoresByTraceID(c.Request.Context(), traceID)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to get scores for trace")
+		h.logger.Error("Failed to get scores for trace", "error", err)
 		response.Error(c, err)
 		return
 	}
@@ -204,7 +204,7 @@ func (h *Handler) DeleteTrace(c *gin.Context) {
 	}
 
 	if err := h.services.GetTraceService().DeleteTrace(c.Request.Context(), traceID); err != nil {
-		h.logger.WithError(err).Error("Failed to delete trace")
+		h.logger.Error("Failed to delete trace", "error", err)
 		response.Error(c, err)
 		return
 	}

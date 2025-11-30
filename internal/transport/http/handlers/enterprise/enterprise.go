@@ -1,11 +1,11 @@
 package enterprise
 
 import (
+	"log/slog"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 
 	"brokle/internal/config"
 	"brokle/internal/ee/analytics"
@@ -19,7 +19,7 @@ import (
 // Handler handles enterprise-specific endpoints
 type Handler struct {
 	config              *config.Config
-	logger              *logrus.Logger
+	logger              *slog.Logger
 	licenseService      *license.LicenseService
 	complianceService   compliance.Compliance
 	ssoService          sso.SSOProvider
@@ -30,7 +30,7 @@ type Handler struct {
 // NewHandler creates a new enterprise handler
 func NewHandler(
 	cfg *config.Config,
-	logger *logrus.Logger,
+	logger *slog.Logger,
 	licenseService *license.LicenseService,
 	complianceService compliance.Compliance,
 	ssoService sso.SSOProvider,
@@ -112,7 +112,7 @@ func (h *Handler) RegisterRoutes(r *gin.RouterGroup) {
 func (h *Handler) GetLicenseStatus(c *gin.Context) {
 	status, err := h.licenseService.ValidateLicense(c.Request.Context())
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to validate license")
+		h.logger.Error("Failed to validate license", "error", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate license"})
 		return
 	}

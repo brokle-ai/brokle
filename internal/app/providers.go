@@ -7,7 +7,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 
 	"brokle/internal/config"
@@ -59,7 +58,7 @@ const (
 // CoreContainer holds shared infrastructure (databases, repos, services)
 type CoreContainer struct {
 	Config     *config.Config
-	Logger     *logrus.Logger
+	Logger     *slog.Logger
 	Databases  *DatabaseContainer
 	Repos      *RepositoryContainer
 	TxManager  common.TransactionManager
@@ -106,17 +105,17 @@ type RepositoryContainer struct {
 
 // ServiceContainer holds all service instances organized by domain
 type ServiceContainer struct {
-	User         *UserServices
-	Auth         *AuthServices
+	User                *UserServices
+	Auth                *AuthServices
 	Registration        registrationService.RegistrationService
 	OrganizationService organization.OrganizationService
 	MemberService       organization.MemberService
 	ProjectService      organization.ProjectService
 	InvitationService   organization.InvitationService
-	SettingsService organization.OrganizationSettingsService
-	Observability   *observabilityService.ServiceRegistry
-	Billing         *BillingServices
-	Analytics       *AnalyticsServices
+	SettingsService     organization.OrganizationSettingsService
+	Observability       *observabilityService.ServiceRegistry
+	Billing             *BillingServices
+	Analytics           *AnalyticsServices
 }
 
 // EnterpriseContainer holds all enterprise service instances
@@ -218,7 +217,7 @@ type AnalyticsServices struct {
 // Provider functions for modular DI
 
 // ProvideDatabases initializes all database connections
-func ProvideDatabases(cfg *config.Config, logger *logrus.Logger) (*DatabaseContainer, error) {
+func ProvideDatabases(cfg *config.Config, logger *slog.Logger) (*DatabaseContainer, error) {
 	// Initialize PostgreSQL
 	postgres, err := database.NewPostgresDB(cfg, logger)
 	if err != nil {
@@ -283,7 +282,7 @@ func ProvideWorkers(core *CoreContainer) (*WorkerContainer, error) {
 }
 
 // ProvideCore creates shared infrastructure (used by both server and worker)
-func ProvideCore(cfg *config.Config, logger *logrus.Logger) (*CoreContainer, error) {
+func ProvideCore(cfg *config.Config, logger *slog.Logger) (*CoreContainer, error) {
 	// Initialize databases
 	databases, err := ProvideDatabases(cfg, logger)
 	if err != nil {
@@ -427,10 +426,8 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 	)
 
 	// Initialize gRPC OTLP server (always enabled)
-	// Convert logrus.Logger to slog.Logger for gRPC
-	slogLogger := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	}))
+	// Reuse the main logger (respects LOG_FORMAT from config)
+	slogLogger := core.Logger
 
 	// Create gRPC OTLP handlers (reuse service layer)
 	grpcOTLPHandler := grpcTransport.NewOTLPHandler(
@@ -472,7 +469,7 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 		return nil, fmt.Errorf("failed to create gRPC server: %w", err)
 	}
 
-	core.Logger.WithField("port", core.Config.GRPC.Port).Info("gRPC OTLP server initialized")
+	core.Logger.Info("gRPC OTLP server initialized", "port", core.Config.GRPC.Port)
 
 	return &ServerContainer{
 		HTTPServer: httpServer,
@@ -533,7 +530,7 @@ func ProvideStorageRepositories(clickhouseDB *database.ClickHouseDB) *StorageRep
 }
 
 // ProvideBillingRepositories creates all billing-related repositories
-func ProvideBillingRepositories(db *gorm.DB, logger *logrus.Logger) *BillingRepositories {
+func ProvideBillingRepositories(db *gorm.DB, logger *slog.Logger) *BillingRepositories {
 	return &BillingRepositories{
 		Usage:         billingRepo.NewUsageRepository(db, logger),
 		BillingRecord: billingRepo.NewBillingRecordRepository(db, logger),
@@ -549,7 +546,7 @@ func ProvideAnalyticsRepositories(db *gorm.DB) *AnalyticsRepositories {
 }
 
 // ProvideRepositories creates all repository containers
-func ProvideRepositories(dbs *DatabaseContainer, logger *logrus.Logger) *RepositoryContainer {
+func ProvideRepositories(dbs *DatabaseContainer, logger *slog.Logger) *RepositoryContainer {
 	return &RepositoryContainer{
 		User:          ProvideUserRepositories(dbs.Postgres.DB),
 		Auth:          ProvideAuthRepositories(dbs.Postgres.DB),
@@ -565,7 +562,7 @@ func ProvideRepositories(dbs *DatabaseContainer, logger *logrus.Logger) *Reposit
 func ProvideUserServices(
 	userRepos *UserRepositories,
 	authRepos *AuthRepositories,
-	logger *logrus.Logger,
+	logger *slog.Logger,
 ) *UserServices {
 	// Import the actual user service implementations
 	userSvc := userService.NewUserService(
@@ -590,12 +587,13 @@ func ProvideAuthServices(
 	userRepos *UserRepositories,
 	authRepos *AuthRepositories,
 	databases *DatabaseContainer,
-	logger *logrus.Logger,
+	logger *slog.Logger,
 ) *AuthServices {
 	// Create JWT service with auth config
 	jwtService, err := authService.NewJWTService(&cfg.Auth)
 	if err != nil {
-		logger.WithError(err).Fatal("Failed to create JWT service")
+		logger.Error("Failed to create JWT service", "error", err)
+		os.Exit(1)
 	}
 
 	// Create permission service with comprehensive permission management
@@ -688,7 +686,7 @@ func ProvideOrganizationServices(
 	authRepos *AuthRepositories,
 	orgRepos *OrganizationRepositories,
 	authServices *AuthServices,
-	logger *logrus.Logger,
+	logger *slog.Logger,
 ) (
 	organization.OrganizationService,
 	organization.MemberService,
@@ -745,7 +743,7 @@ func ProvideObservabilityServices(
 	analyticsServices *AnalyticsServices,
 	redisDB *database.RedisDB,
 	cfg *config.Config,
-	logger *logrus.Logger,
+	logger *slog.Logger,
 ) *observabilityService.ServiceRegistry {
 	// Create deduplication service for telemetry
 	deduplicationService := observabilityService.NewTelemetryDeduplicationService(observabilityRepos.TelemetryDeduplication)
@@ -766,7 +764,7 @@ func ProvideObservabilityServices(
 		var err error
 		s3Client, err = storage.NewS3Client(&cfg.BlobStorage, logger)
 		if err != nil {
-			logger.WithError(err).Warn("Failed to initialize S3 client, blob storage will be disabled")
+			logger.Warn("Failed to initialize S3 client, blob storage will be disabled", "error", err)
 		}
 	}
 
@@ -799,7 +797,7 @@ func ProvideObservabilityServices(
 // ProvideBillingServices creates all billing-related services
 func ProvideBillingServices(
 	billingRepos *BillingRepositories,
-	logger *logrus.Logger,
+	logger *slog.Logger,
 ) *BillingServices {
 	// Create organization service interface implementation
 	// This is a simple implementation - in production you'd inject the real org service
@@ -836,7 +834,7 @@ func ProvideAnalyticsServices(
 
 // simpleBillingOrgService is a simple implementation of BillingOrganizationService
 type simpleBillingOrgService struct {
-	logger *logrus.Logger
+	logger *slog.Logger
 }
 
 func (s *simpleBillingOrgService) GetBillingTier(ctx context.Context, orgID ulid.ULID) (string, error) {
@@ -855,12 +853,12 @@ func (s *simpleBillingOrgService) GetPaymentMethod(ctx context.Context, orgID ul
 }
 
 // ProvideEnterpriseServices creates all enterprise services using build tags
-func ProvideEnterpriseServices(cfg *config.Config, logger *logrus.Logger) *EnterpriseContainer {
+func ProvideEnterpriseServices(cfg *config.Config, logger *slog.Logger) *EnterpriseContainer {
 	return &EnterpriseContainer{
-		SSO:        sso.New(),           // Uses stub or real based on build tags
-		RBAC:       rbac.New(),          // Uses stub or real based on build tags
-		Compliance: compliance.New(),    // Uses stub or real based on build tags
-		Analytics:  eeAnalytics.New(),   // Uses stub or real based on build tags
+		SSO:        sso.New(),         // Uses stub or real based on build tags
+		RBAC:       rbac.New(),        // Uses stub or real based on build tags
+		Compliance: compliance.New(),  // Uses stub or real based on build tags
+		Analytics:  eeAnalytics.New(), // Uses stub or real based on build tags
 	}
 }
 
@@ -942,21 +940,21 @@ func (pc *ProviderContainer) Shutdown() error {
 	if pc.Core != nil && pc.Core.Databases != nil {
 		if pc.Core.Databases.Postgres != nil {
 			if err := pc.Core.Databases.Postgres.Close(); err != nil {
-				logger.WithError(err).Error("Failed to close PostgreSQL connection")
+				logger.Error("Failed to close PostgreSQL connection", "error", err)
 				lastErr = err
 			}
 		}
 
 		if pc.Core.Databases.Redis != nil {
 			if err := pc.Core.Databases.Redis.Close(); err != nil {
-				logger.WithError(err).Error("Failed to close Redis connection")
+				logger.Error("Failed to close Redis connection", "error", err)
 				lastErr = err
 			}
 		}
 
 		if pc.Core.Databases.ClickHouse != nil {
 			if err := pc.Core.Databases.ClickHouse.Close(); err != nil {
-				logger.WithError(err).Error("Failed to close ClickHouse connection")
+				logger.Error("Failed to close ClickHouse connection", "error", err)
 				lastErr = err
 			}
 		}
