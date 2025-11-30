@@ -1,13 +1,13 @@
 package observability
 
 import (
+	"log/slog"
 	"context"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	logspb "go.opentelemetry.io/proto/otlp/logs/v1"
 
 	"brokle/internal/core/domain/observability"
@@ -18,11 +18,11 @@ import (
 // GenAI events are sent via OTLP Logs API as structured log records with specific event names
 // OTEL Specification: https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-events/
 type OTLPEventsConverterService struct {
-	logger *logrus.Logger
+	logger *slog.Logger
 }
 
 // NewOTLPEventsConverterService creates a new OTLP events converter service
-func NewOTLPEventsConverterService(logger *logrus.Logger) *OTLPEventsConverterService {
+func NewOTLPEventsConverterService(logger *slog.Logger) *OTLPEventsConverterService {
 	return &OTLPEventsConverterService{
 		logger: logger,
 	}
@@ -204,7 +204,7 @@ func (s *OTLPEventsConverterService) extractMessagesJSON(value string) string {
 	// Validate JSON (basic check)
 	var test interface{}
 	if err := json.Unmarshal([]byte(value), &test); err != nil {
-		s.logger.WithError(err).Warn("invalid JSON in messages attribute, storing as-is")
+		s.logger.Warn("invalid JSON in messages attribute, storing as-is", "error", err)
 	}
 
 	return value
@@ -218,7 +218,7 @@ func (s *OTLPEventsConverterService) extractUInt32(value string) uint32 {
 
 	var result uint32
 	if _, err := fmt.Sscanf(value, "%d", &result); err != nil {
-		s.logger.WithError(err).Warn("failed to parse uint32 attribute")
+		s.logger.Warn("failed to parse uint32 attribute", "error", err)
 		return 0
 	}
 
@@ -261,7 +261,7 @@ func (s *OTLPEventsConverterService) extractStringArray(value string) []string {
 
 	var result []string
 	if err := json.Unmarshal([]byte(value), &result); err != nil {
-		s.logger.WithError(err).Warn("failed to parse string array attribute")
+		s.logger.Warn("failed to parse string array attribute", "error", err)
 		return []string{}
 	}
 

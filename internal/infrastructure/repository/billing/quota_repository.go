@@ -1,12 +1,12 @@
 package billing
 
 import (
+	"log/slog"
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 
-	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 
 	billingDomain "brokle/internal/core/domain/billing"
@@ -19,11 +19,11 @@ var _ billingDomain.QuotaRepository = (*QuotaRepository)(nil)
 // QuotaRepository handles usage quota management
 type QuotaRepository struct {
 	db     *gorm.DB
-	logger *logrus.Logger
+	logger *slog.Logger
 }
 
 // NewQuotaRepository creates a new quota repository instance
-func NewQuotaRepository(db *gorm.DB, logger *logrus.Logger) *QuotaRepository {
+func NewQuotaRepository(db *gorm.DB, logger *slog.Logger) *QuotaRepository {
 	return &QuotaRepository{
 		db:     db,
 		logger: logger,
@@ -98,16 +98,11 @@ func (r *QuotaRepository) UpdateUsageQuota(ctx context.Context, orgID ulid.ULID,
 	).Error
 
 	if err != nil {
-		r.logger.WithError(err).WithField("org_id", orgID).Error("Failed to update usage quota")
+		r.logger.Error("Failed to update usage quota", "error", err, "org_id", orgID)
 		return fmt.Errorf("failed to update usage quota: %w", err)
 	}
 
-	r.logger.WithFields(logrus.Fields{
-		"org_id":        orgID,
-		"billing_tier":  quota.BillingTier,
-		"request_limit": quota.MonthlyRequestLimit,
-		"cost_limit":    quota.MonthlyCostLimit,
-	}).Debug("Updated usage quota")
+	r.logger.Debug("Updated usage quota", "org_id", orgID, "billing_tier", quota.BillingTier, "request_limit", quota.MonthlyRequestLimit, "cost_limit", quota.MonthlyCostLimit)
 
 	return nil
 }

@@ -1,7 +1,7 @@
 package observability
 
 import (
-	"github.com/sirupsen/logrus"
+	"log/slog"
 
 	"brokle/internal/config"
 	obsServices "brokle/internal/core/services/observability"
@@ -10,7 +10,7 @@ import (
 // Handler contains all observability-related HTTP handlers
 type Handler struct {
 	config   *config.Config
-	logger   *logrus.Logger
+	logger   *slog.Logger
 	services *obsServices.ServiceRegistry
 }
 
@@ -43,7 +43,7 @@ type EventResponse struct {
 // NewHandler creates a new observability handler
 func NewHandler(
 	cfg *config.Config,
-	logger *logrus.Logger,
+	logger *slog.Logger,
 	services *obsServices.ServiceRegistry,
 ) *Handler {
 	return &Handler{

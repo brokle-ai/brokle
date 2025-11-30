@@ -2,11 +2,12 @@ package observability
 
 import (
 	"context"
+	"log/slog"
+	"os"
 	"testing"
 	"time"
 
 	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
@@ -178,7 +179,7 @@ func TestTraceService_GetRootSpan(t *testing.T) {
 			mockRepo := new(MockTraceRepository)
 			tt.mockSetup(mockRepo)
 
-			service := NewTraceService(mockRepo, logrus.New())
+			service := NewTraceService(mockRepo, slog.New(slog.NewJSONHandler(os.Stderr, nil)))
 			result, err := service.GetRootSpan(context.Background(), tt.traceID)
 
 			if tt.expectedErr {
@@ -237,7 +238,7 @@ func TestTraceService_GetTrace(t *testing.T) {
 			mockRepo := new(MockTraceRepository)
 			tt.mockSetup(mockRepo)
 
-			service := NewTraceService(mockRepo, logrus.New())
+			service := NewTraceService(mockRepo, slog.New(slog.NewJSONHandler(os.Stderr, nil)))
 			result, err := service.GetTrace(context.Background(), tt.traceID)
 
 			if tt.expectedErr {
@@ -321,7 +322,7 @@ func TestTraceService_ListTraces(t *testing.T) {
 			mockRepo := new(MockTraceRepository)
 			tt.mockSetup(mockRepo)
 
-			service := NewTraceService(mockRepo, logrus.New())
+			service := NewTraceService(mockRepo, slog.New(slog.NewJSONHandler(os.Stderr, nil)))
 			result, err := service.ListTraces(context.Background(), tt.filter)
 
 			if tt.expectedErr {
@@ -377,7 +378,7 @@ func TestTraceService_GetTraceSpans(t *testing.T) {
 			mockRepo := new(MockTraceRepository)
 			tt.mockSetup(mockRepo)
 
-			service := NewTraceService(mockRepo, logrus.New())
+			service := NewTraceService(mockRepo, slog.New(slog.NewJSONHandler(os.Stderr, nil)))
 			result, err := service.GetTraceSpans(context.Background(), tt.traceID)
 
 			if tt.expectedErr {
@@ -426,7 +427,7 @@ func TestTraceService_CalculateTraceCost(t *testing.T) {
 			mockRepo := new(MockTraceRepository)
 			tt.mockSetup(mockRepo)
 
-			service := NewTraceService(mockRepo, logrus.New())
+			service := NewTraceService(mockRepo, slog.New(slog.NewJSONHandler(os.Stderr, nil)))
 			result, err := service.CalculateTraceCost(context.Background(), tt.traceID)
 
 			if tt.expectedErr {
@@ -500,7 +501,7 @@ func TestTraceService_IngestSpan(t *testing.T) {
 			mockRepo := new(MockTraceRepository)
 			tt.mockSetup(mockRepo)
 
-			service := NewTraceService(mockRepo, logrus.New())
+			service := NewTraceService(mockRepo, slog.New(slog.NewJSONHandler(os.Stderr, nil)))
 			err := service.IngestSpan(context.Background(), tt.span)
 
 			if tt.expectedErr {
@@ -554,7 +555,7 @@ func TestTraceService_DeleteTrace(t *testing.T) {
 			mockRepo := new(MockTraceRepository)
 			tt.mockSetup(mockRepo)
 
-			service := NewTraceService(mockRepo, logrus.New())
+			service := NewTraceService(mockRepo, slog.New(slog.NewJSONHandler(os.Stderr, nil)))
 			err := service.DeleteTrace(context.Background(), tt.traceID)
 
 			if tt.expectedErr {

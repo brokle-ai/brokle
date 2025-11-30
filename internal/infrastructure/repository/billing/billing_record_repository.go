@@ -1,6 +1,7 @@
 package billing
 
 import (
+	"log/slog"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -8,7 +9,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 
 	billingDomain "brokle/internal/core/domain/billing"
@@ -24,11 +24,11 @@ var _ billingDomain.BillingRecordRepository = (*BillingRecordRepository)(nil)
 // BillingRecordRepository handles billing records and summaries persistence
 type BillingRecordRepository struct {
 	db     *gorm.DB
-	logger *logrus.Logger
+	logger *slog.Logger
 }
 
 // NewBillingRecordRepository creates a new billing record repository instance
-func NewBillingRecordRepository(db *gorm.DB, logger *logrus.Logger) *BillingRecordRepository {
+func NewBillingRecordRepository(db *gorm.DB, logger *slog.Logger) *BillingRecordRepository {
 	return &BillingRecordRepository{
 		db:     db,
 		logger: logger,
@@ -60,16 +60,11 @@ func (r *BillingRecordRepository) InsertBillingRecord(ctx context.Context, recor
 	).Error
 
 	if err != nil {
-		r.logger.WithError(err).WithField("record_id", record.ID).Error("Failed to insert billing record")
+		r.logger.Error("Failed to insert billing record", "error", err, "record_id", record.ID)
 		return fmt.Errorf("failed to insert billing record: %w", err)
 	}
 
-	r.logger.WithFields(logrus.Fields{
-		"record_id":       record.ID,
-		"organization_id": record.OrganizationID,
-		"amount":          record.Amount,
-		"period":          record.Period,
-	}).Debug("Inserted billing record")
+	r.logger.Debug("Inserted billing record", "record_id", record.ID, "organization_id", record.OrganizationID, "amount", record.Amount, "period", record.Period)
 
 	return nil
 }
@@ -213,16 +208,11 @@ func (r *BillingRecordRepository) InsertBillingSummary(ctx context.Context, summ
 	).Error
 
 	if err != nil {
-		r.logger.WithError(err).WithField("summary_id", summary.ID).Error("Failed to insert billing summary")
+		r.logger.Error("Failed to insert billing summary", "error", err, "summary_id", summary.ID)
 		return fmt.Errorf("failed to insert billing summary: %w", err)
 	}
 
-	r.logger.WithFields(logrus.Fields{
-		"summary_id":      summary.ID,
-		"organization_id": summary.OrganizationID,
-		"period":          summary.Period,
-		"net_cost":        summary.NetCost,
-	}).Debug("Inserted billing summary")
+	r.logger.Debug("Inserted billing summary", "summary_id", summary.ID, "organization_id", summary.OrganizationID, "period", summary.Period, "net_cost", summary.NetCost)
 
 	return nil
 }

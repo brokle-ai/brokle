@@ -2,14 +2,15 @@ package http
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"log/slog"
+	"net"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 	swaggerfiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 
@@ -24,20 +25,22 @@ import (
 // Server represents the HTTP server
 type Server struct {
 	config              *config.Config
-	logger              *logrus.Logger
+	logger              *slog.Logger
 	server              *http.Server
+	listener            net.Listener
 	handlers            *handlers.Handlers
 	engine              *gin.Engine
 	authMiddleware      *middleware.AuthMiddleware
 	sdkAuthMiddleware   *middleware.SDKAuthMiddleware
 	rateLimitMiddleware *middleware.RateLimitMiddleware
 	csrfMiddleware      *middleware.CSRFMiddleware
+	serveErr            chan error
 }
 
 // NewServer creates a new HTTP server instance
 func NewServer(
 	cfg *config.Config,
-	logger *logrus.Logger,
+	logger *slog.Logger,
 	handlers *handlers.Handlers,
 	jwtService auth.JWTService,
 	blacklistedTokens auth.BlacklistedTokenService,
@@ -98,9 +101,9 @@ func (s *Server) Start() error {
 	// Validate wildcard incompatibility with credentials
 	if len(s.config.Server.CORSAllowedOrigins) == 1 && s.config.Server.CORSAllowedOrigins[0] == "*" {
 		// CRITICAL: Wildcard incompatible with AllowCredentials (cookies won't work)
-		s.logger.Fatal("CORS misconfiguration: cannot use wildcard (*) origins with AllowCredentials (httpOnly cookies require specific origins). " +
+		s.logger.Error("CORS misconfiguration: cannot use wildcard (*) origins with AllowCredentials (httpOnly cookies require specific origins). " +
 			"Set specific origins in CORS_ALLOWED_ORIGINS environment variable.")
-		return errors.New("invalid CORS configuration: wildcard origins incompatible with credentials")
+		os.Exit(1)
 	}
 
 	// Configure specific origins (only reached if not wildcard)
@@ -108,9 +111,9 @@ func (s *Server) Start() error {
 
 	// Validate at least one origin is configured
 	if len(s.config.Server.CORSAllowedOrigins) == 0 {
-		s.logger.Fatal("CORS misconfiguration: AllowCredentials requires specific AllowedOrigins. " +
+		s.logger.Error("CORS misconfiguration: AllowCredentials requires specific AllowedOrigins. " +
 			"Set CORS_ALLOWED_ORIGINS environment variable.")
-		return errors.New("invalid CORS configuration: no origins specified")
+		os.Exit(1)
 	}
 
 	corsConfig.AllowMethods = s.config.Server.CORSAllowedMethods
@@ -126,7 +129,6 @@ func (s *Server) Start() error {
 	// Setup routes
 	s.setupRoutes()
 
-	// Create HTTP server
 	s.server = &http.Server{
 		Addr:         fmt.Sprintf(":%d", s.config.Server.Port),
 		Handler:      s.engine,
@@ -135,12 +137,27 @@ func (s *Server) Start() error {
 		IdleTimeout:  time.Duration(s.config.Server.IdleTimeout) * time.Second,
 	}
 
-	// Start server (blocking - signal handling done by cmd/server/main.go)
-	s.logger.WithField("port", s.config.Server.Port).Info("Starting HTTP server")
-	if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		return err
+	s.serveErr = make(chan error, 1)
+
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", s.config.Server.Port))
+	if err != nil {
+		return fmt.Errorf("failed to bind HTTP server: %w", err)
 	}
+	s.listener = lis
+
+	s.logger.Info("HTTP server listening", "port", s.config.Server.Port)
+
+	go func() {
+		if err := s.server.Serve(lis); err != nil && err != http.ErrServerClosed {
+			s.serveErr <- err
+		}
+	}()
+
 	return nil
+}
+
+func (s *Server) ServeErr() <-chan error {
+	return s.serveErr
 }
 
 // setupRoutes configures all HTTP routes

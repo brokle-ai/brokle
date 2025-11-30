@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"log/slog"
 	"bytes"
 	"context"
 	"fmt"
@@ -10,7 +11,6 @@ import (
 	awsConfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/sirupsen/logrus"
 
 	"brokle/internal/config"
 )
@@ -18,12 +18,12 @@ import (
 // S3Client wraps AWS S3 SDK for blob storage operations
 type S3Client struct {
 	client     *s3.Client
-	logger     *logrus.Logger
+	logger     *slog.Logger
 	bucketName string
 }
 
 // NewS3Client creates a new S3 client instance
-func NewS3Client(cfg *config.BlobStorageConfig, logger *logrus.Logger) (*S3Client, error) {
+func NewS3Client(cfg *config.BlobStorageConfig, logger *slog.Logger) (*S3Client, error) {
 	var awsCfg aws.Config
 	var err error
 
@@ -64,13 +64,7 @@ func NewS3Client(cfg *config.BlobStorageConfig, logger *logrus.Logger) (*S3Clien
 		o.UsePathStyle = cfg.UsePathStyle
 	})
 
-	logger.WithFields(logrus.Fields{
-		"provider":   cfg.Provider,
-		"bucket":     cfg.BucketName,
-		"region":     cfg.Region,
-		"endpoint":   cfg.Endpoint,
-		"path_style": cfg.UsePathStyle,
-	}).Info("S3 client initialized")
+	logger.Info("S3 client initialized", "provider", cfg.Provider, "bucket", cfg.BucketName, "region", cfg.Region, "endpoint", cfg.Endpoint, "path_style", cfg.UsePathStyle)
 
 	return &S3Client{
 		client:     s3Client,
@@ -90,18 +84,11 @@ func (c *S3Client) Upload(ctx context.Context, key string, content []byte, conte
 
 	_, err := c.client.PutObject(ctx, input)
 	if err != nil {
-		c.logger.WithError(err).WithFields(logrus.Fields{
-			"bucket": c.bucketName,
-			"key":    key,
-		}).Error("Failed to upload to S3")
+		c.logger.Error("Failed to upload to S3", "error", err, "bucket", c.bucketName, "key", key)
 		return fmt.Errorf("failed to upload to S3: %w", err)
 	}
 
-	c.logger.WithFields(logrus.Fields{
-		"bucket": c.bucketName,
-		"key":    key,
-		"size":   len(content),
-	}).Debug("Successfully uploaded to S3")
+	c.logger.Debug("Successfully uploaded to S3", "bucket", c.bucketName, "key", key, "size", len(content))
 
 	return nil
 }
@@ -120,25 +107,18 @@ func (c *S3Client) Download(ctx context.Context, key string) ([]byte, error) {
 
 	result, err := c.client.GetObject(ctx, input)
 	if err != nil {
-		c.logger.WithError(err).WithFields(logrus.Fields{
-			"bucket": c.bucketName,
-			"key":    key,
-		}).Error("Failed to download from S3")
+		c.logger.Error("Failed to download from S3", "error", err, "bucket", c.bucketName, "key", key)
 		return nil, fmt.Errorf("failed to download from S3: %w", err)
 	}
 	defer result.Body.Close()
 
 	content, err := io.ReadAll(result.Body)
 	if err != nil {
-		c.logger.WithError(err).Error("Failed to read S3 object body")
+		c.logger.Error("Failed to read S3 object body", "error", err)
 		return nil, fmt.Errorf("failed to read S3 object body: %w", err)
 	}
 
-	c.logger.WithFields(logrus.Fields{
-		"bucket": c.bucketName,
-		"key":    key,
-		"size":   len(content),
-	}).Debug("Successfully downloaded from S3")
+	c.logger.Debug("Successfully downloaded from S3", "bucket", c.bucketName, "key", key, "size", len(content))
 
 	return content, nil
 }
@@ -152,17 +132,11 @@ func (c *S3Client) Delete(ctx context.Context, key string) error {
 
 	_, err := c.client.DeleteObject(ctx, input)
 	if err != nil {
-		c.logger.WithError(err).WithFields(logrus.Fields{
-			"bucket": c.bucketName,
-			"key":    key,
-		}).Error("Failed to delete from S3")
+		c.logger.Error("Failed to delete from S3", "error", err, "bucket", c.bucketName, "key", key)
 		return fmt.Errorf("failed to delete from S3: %w", err)
 	}
 
-	c.logger.WithFields(logrus.Fields{
-		"bucket": c.bucketName,
-		"key":    key,
-	}).Debug("Successfully deleted from S3")
+	c.logger.Debug("Successfully deleted from S3", "bucket", c.bucketName, "key", key)
 
 	return nil
 }

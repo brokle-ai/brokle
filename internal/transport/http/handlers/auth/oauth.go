@@ -6,7 +6,6 @@ import (
 	"os"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 
 	authService "brokle/internal/core/services/auth"
 	"brokle/pkg/response"
@@ -37,7 +36,7 @@ func (h *Handler) InitiateGoogleOAuth(c *gin.Context) {
 	// Generate CSRF state token
 	state, err := h.oauthProvider.GenerateState(c.Request.Context(), invitePtr)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to generate OAuth state")
+		h.logger.Error("Failed to generate OAuth state", "error", err)
 		response.Error(c, err)
 		return
 	}
@@ -45,7 +44,7 @@ func (h *Handler) InitiateGoogleOAuth(c *gin.Context) {
 	// Get authorization URL
 	authURL, err := h.oauthProvider.GetAuthorizationURL("google", state)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to get Google authorization URL")
+		h.logger.Error("Failed to get Google authorization URL", "error", err)
 		response.Error(c, err)
 		return
 	}
@@ -75,7 +74,7 @@ func (h *Handler) GoogleCallback(c *gin.Context) {
 	// Validate state token (CSRF protection)
 	invitationToken, err := h.oauthProvider.ValidateState(c.Request.Context(), state)
 	if err != nil {
-		h.logger.WithError(err).Error("Invalid OAuth state token")
+		h.logger.Error("Invalid OAuth state token", "error", err)
 		c.Redirect(http.StatusTemporaryRedirect, getFrontendURL()+"/auth/signin?error=invalid_state")
 		return
 	}
@@ -83,7 +82,7 @@ func (h *Handler) GoogleCallback(c *gin.Context) {
 	// Exchange code for token
 	token, err := h.oauthProvider.ExchangeCode(c.Request.Context(), "google", code)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to exchange Google code")
+		h.logger.Error("Failed to exchange Google code", "error", err)
 		c.Redirect(http.StatusTemporaryRedirect, getFrontendURL()+"/auth/signin?error=token_exchange_failed")
 		return
 	}
@@ -91,7 +90,7 @@ func (h *Handler) GoogleCallback(c *gin.Context) {
 	// Get user profile from Google
 	userProfile, err := h.oauthProvider.GetUserProfile(c.Request.Context(), "google", token)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to fetch Google user profile")
+		h.logger.Error("Failed to fetch Google user profile", "error", err)
 		c.Redirect(http.StatusTemporaryRedirect, getFrontendURL()+"/auth/signin?error=profile_fetch_failed")
 		return
 	}
@@ -101,10 +100,7 @@ func (h *Handler) GoogleCallback(c *gin.Context) {
 	if err == nil && existingUser != nil {
 		// SECURITY CHECK 1: Verify auth method is OAuth (prevent password account takeover)
 		if existingUser.AuthMethod != "oauth" {
-			h.logger.WithFields(logrus.Fields{
-				"email":       userProfile.Email,
-				"auth_method": existingUser.AuthMethod,
-			}).Warn("Password account attempted OAuth login - blocked for security")
+			h.logger.Warn("Password account attempted OAuth login - blocked for security", "email", userProfile.Email, "auth_method", existingUser.AuthMethod)
 
 			c.Redirect(http.StatusTemporaryRedirect,
 				getFrontendURL()+"/auth/signin?error=account_exists_use_password")
@@ -118,11 +114,7 @@ func (h *Handler) GoogleCallback(c *gin.Context) {
 				existingProviderName = *existingUser.OAuthProvider
 			}
 
-			h.logger.WithFields(logrus.Fields{
-				"email":              userProfile.Email,
-				"stored_provider":    existingProviderName,
-				"attempted_provider": "google",
-			}).Warn("OAuth account with wrong provider")
+			h.logger.Warn("OAuth account with wrong provider", "email", userProfile.Email, "stored_provider", existingProviderName, "attempted_provider", "google")
 
 			c.Redirect(http.StatusTemporaryRedirect,
 				fmt.Sprintf("%s/auth/signin?error=use_%s", getFrontendURL(), existingProviderName))
@@ -131,10 +123,7 @@ func (h *Handler) GoogleCallback(c *gin.Context) {
 
 		// SECURITY CHECK 3: Verify provider ID matches (prevents account takeover)
 		if existingUser.OAuthProviderID != nil && *existingUser.OAuthProviderID != userProfile.ProviderID {
-			h.logger.WithFields(logrus.Fields{
-				"email":    userProfile.Email,
-				"provider": "google",
-			}).Error("OAuth provider ID mismatch - possible account takeover attempt")
+			h.logger.Error("OAuth provider ID mismatch - possible account takeover attempt", "email", userProfile.Email, "provider", "google")
 
 			c.Redirect(http.StatusTemporaryRedirect,
 				getFrontendURL()+"/auth/signin?error=authentication_failed")
@@ -142,16 +131,12 @@ func (h *Handler) GoogleCallback(c *gin.Context) {
 		}
 
 		// All security checks passed - safe to auto-login
-		h.logger.WithFields(logrus.Fields{
-			"email":    userProfile.Email,
-			"provider": "google",
-			"user_id":  existingUser.ID,
-		}).Info("Existing OAuth user logging in")
+		h.logger.Info("Existing OAuth user logging in", "email", userProfile.Email, "provider", "google", "user_id", existingUser.ID)
 
 		// Generate login tokens
 		loginTokens, err := h.authService.GenerateTokensForUser(c.Request.Context(), existingUser.ID)
 		if err != nil {
-			h.logger.WithError(err).Error("Failed to generate login tokens for existing user")
+			h.logger.Error("Failed to generate login tokens for existing user", "error", err)
 			c.Redirect(http.StatusTemporaryRedirect, getFrontendURL()+"/auth/signin?error=login_failed")
 			return
 		}
@@ -165,7 +150,7 @@ func (h *Handler) GoogleCallback(c *gin.Context) {
 			existingUser.ID,
 		)
 		if err != nil {
-			h.logger.WithError(err).Error("Failed to create login session")
+			h.logger.Error("Failed to create login session", "error", err)
 			c.Redirect(http.StatusTemporaryRedirect, getFrontendURL()+"/auth/signin?error=session_failed")
 			return
 		}
@@ -187,16 +172,12 @@ func (h *Handler) GoogleCallback(c *gin.Context) {
 
 	sessionID, err := h.authService.CreateOAuthSession(c.Request.Context(), session)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to create OAuth session")
+		h.logger.Error("Failed to create OAuth session", "error", err)
 		c.Redirect(http.StatusTemporaryRedirect, getFrontendURL()+"/auth/signin?error=session_creation_failed")
 		return
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"email":      userProfile.Email,
-		"provider":   "google",
-		"session_id": sessionID,
-	}).Info("OAuth session created, redirecting to Step 2")
+	h.logger.Info("OAuth session created, redirecting to Step 2", "email", userProfile.Email, "provider", "google", "session_id", sessionID)
 
 	// Redirect to frontend Step 2 (personalization)
 	c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/auth/signup?session=%s", getFrontendURL(), sessionID))
@@ -219,7 +200,7 @@ func (h *Handler) InitiateGitHubOAuth(c *gin.Context) {
 	// Generate CSRF state token
 	state, err := h.oauthProvider.GenerateState(c.Request.Context(), invitePtr)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to generate OAuth state")
+		h.logger.Error("Failed to generate OAuth state", "error", err)
 		response.Error(c, err)
 		return
 	}
@@ -227,7 +208,7 @@ func (h *Handler) InitiateGitHubOAuth(c *gin.Context) {
 	// Get authorization URL
 	authURL, err := h.oauthProvider.GetAuthorizationURL("github", state)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to get GitHub authorization URL")
+		h.logger.Error("Failed to get GitHub authorization URL", "error", err)
 		response.Error(c, err)
 		return
 	}
@@ -257,7 +238,7 @@ func (h *Handler) GitHubCallback(c *gin.Context) {
 	// Validate state token (CSRF protection)
 	invitationToken, err := h.oauthProvider.ValidateState(c.Request.Context(), state)
 	if err != nil {
-		h.logger.WithError(err).Error("Invalid OAuth state token")
+		h.logger.Error("Invalid OAuth state token", "error", err)
 		c.Redirect(http.StatusTemporaryRedirect, getFrontendURL()+"/auth/signin?error=invalid_state")
 		return
 	}
@@ -265,7 +246,7 @@ func (h *Handler) GitHubCallback(c *gin.Context) {
 	// Exchange code for token
 	token, err := h.oauthProvider.ExchangeCode(c.Request.Context(), "github", code)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to exchange GitHub code")
+		h.logger.Error("Failed to exchange GitHub code", "error", err)
 		c.Redirect(http.StatusTemporaryRedirect, getFrontendURL()+"/auth/signin?error=token_exchange_failed")
 		return
 	}
@@ -273,7 +254,7 @@ func (h *Handler) GitHubCallback(c *gin.Context) {
 	// Get user profile from GitHub
 	userProfile, err := h.oauthProvider.GetUserProfile(c.Request.Context(), "github", token)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to fetch GitHub user profile")
+		h.logger.Error("Failed to fetch GitHub user profile", "error", err)
 		c.Redirect(http.StatusTemporaryRedirect, getFrontendURL()+"/auth/signin?error=profile_fetch_failed")
 		return
 	}
@@ -283,10 +264,7 @@ func (h *Handler) GitHubCallback(c *gin.Context) {
 	if err == nil && existingUser != nil {
 		// SECURITY CHECK 1: Verify auth method is OAuth (prevent password account takeover)
 		if existingUser.AuthMethod != "oauth" {
-			h.logger.WithFields(logrus.Fields{
-				"email":       userProfile.Email,
-				"auth_method": existingUser.AuthMethod,
-			}).Warn("Password account attempted OAuth login - blocked for security")
+			h.logger.Warn("Password account attempted OAuth login - blocked for security", "email", userProfile.Email, "auth_method", existingUser.AuthMethod)
 
 			c.Redirect(http.StatusTemporaryRedirect,
 				getFrontendURL()+"/auth/signin?error=account_exists_use_password")
@@ -300,11 +278,7 @@ func (h *Handler) GitHubCallback(c *gin.Context) {
 				existingProviderName = *existingUser.OAuthProvider
 			}
 
-			h.logger.WithFields(logrus.Fields{
-				"email":              userProfile.Email,
-				"stored_provider":    existingProviderName,
-				"attempted_provider": "github",
-			}).Warn("OAuth account with wrong provider")
+			h.logger.Warn("OAuth account with wrong provider", "email", userProfile.Email, "stored_provider", existingProviderName, "attempted_provider", "github")
 
 			c.Redirect(http.StatusTemporaryRedirect,
 				fmt.Sprintf("%s/auth/signin?error=use_%s", getFrontendURL(), existingProviderName))
@@ -313,10 +287,7 @@ func (h *Handler) GitHubCallback(c *gin.Context) {
 
 		// SECURITY CHECK 3: Verify provider ID matches (prevents account takeover)
 		if existingUser.OAuthProviderID != nil && *existingUser.OAuthProviderID != userProfile.ProviderID {
-			h.logger.WithFields(logrus.Fields{
-				"email":    userProfile.Email,
-				"provider": "github",
-			}).Error("OAuth provider ID mismatch - possible account takeover attempt")
+			h.logger.Error("OAuth provider ID mismatch - possible account takeover attempt", "email", userProfile.Email, "provider", "github")
 
 			c.Redirect(http.StatusTemporaryRedirect,
 				getFrontendURL()+"/auth/signin?error=authentication_failed")
@@ -324,16 +295,12 @@ func (h *Handler) GitHubCallback(c *gin.Context) {
 		}
 
 		// All security checks passed - safe to auto-login
-		h.logger.WithFields(logrus.Fields{
-			"email":    userProfile.Email,
-			"provider": "github",
-			"user_id":  existingUser.ID,
-		}).Info("Existing OAuth user logging in")
+		h.logger.Info("Existing OAuth user logging in", "email", userProfile.Email, "provider", "github", "user_id", existingUser.ID)
 
 		// Generate login tokens
 		loginTokens, err := h.authService.GenerateTokensForUser(c.Request.Context(), existingUser.ID)
 		if err != nil {
-			h.logger.WithError(err).Error("Failed to generate login tokens for existing user")
+			h.logger.Error("Failed to generate login tokens for existing user", "error", err)
 			c.Redirect(http.StatusTemporaryRedirect, getFrontendURL()+"/auth/signin?error=login_failed")
 			return
 		}
@@ -347,7 +314,7 @@ func (h *Handler) GitHubCallback(c *gin.Context) {
 			existingUser.ID,
 		)
 		if err != nil {
-			h.logger.WithError(err).Error("Failed to create login session")
+			h.logger.Error("Failed to create login session", "error", err)
 			c.Redirect(http.StatusTemporaryRedirect, getFrontendURL()+"/auth/signin?error=session_failed")
 			return
 		}
@@ -369,16 +336,12 @@ func (h *Handler) GitHubCallback(c *gin.Context) {
 
 	sessionID, err := h.authService.CreateOAuthSession(c.Request.Context(), session)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to create OAuth session")
+		h.logger.Error("Failed to create OAuth session", "error", err)
 		c.Redirect(http.StatusTemporaryRedirect, getFrontendURL()+"/auth/signin?error=session_creation_failed")
 		return
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"email":      userProfile.Email,
-		"provider":   "github",
-		"session_id": sessionID,
-	}).Info("OAuth session created, redirecting to Step 2")
+	h.logger.Info("OAuth session created, redirecting to Step 2", "email", userProfile.Email, "provider", "github", "session_id", sessionID)
 
 	// Redirect to frontend Step 2 (personalization)
 	c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("%s/auth/signup?session=%s", getFrontendURL(), sessionID))

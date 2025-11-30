@@ -70,7 +70,7 @@ func (h *Handler) ListScores(c *gin.Context) {
 	// Get scores from service
 	scores, err := h.services.GetScoreService().GetScoresByFilter(c.Request.Context(), filter)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to list scores")
+		h.logger.Error("Failed to list scores", "error", err)
 		response.Error(c, err)
 		return
 	}
@@ -78,7 +78,7 @@ func (h *Handler) ListScores(c *gin.Context) {
 	// Get total count for pagination metadata
 	totalCount, err := h.services.GetScoreService().CountScores(c.Request.Context(), filter)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to count scores")
+		h.logger.Error("Failed to count scores", "error", err)
 		response.Error(c, err)
 		return
 	}
@@ -110,7 +110,7 @@ func (h *Handler) GetScore(c *gin.Context) {
 
 	score, err := h.services.GetScoreService().GetScoreByID(c.Request.Context(), scoreID)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to get score")
+		h.logger.Error("Failed to get score", "error", err)
 		response.Error(c, err)
 		return
 	}
@@ -150,7 +150,7 @@ func (h *Handler) UpdateScore(c *gin.Context) {
 
 	// Update via service
 	if err := h.services.GetScoreService().UpdateScore(c.Request.Context(), &score); err != nil {
-		h.logger.WithError(err).Error("Failed to update score")
+		h.logger.Error("Failed to update score", "error", err)
 		response.Error(c, err)
 		return
 	}
@@ -158,7 +158,7 @@ func (h *Handler) UpdateScore(c *gin.Context) {
 	// Fetch updated score
 	updated, err := h.services.GetScoreService().GetScoreByID(c.Request.Context(), scoreID)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to fetch updated score")
+		h.logger.Error("Failed to fetch updated score", "error", err)
 		response.Error(c, err)
 		return
 	}

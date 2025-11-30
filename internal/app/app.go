@@ -3,47 +3,42 @@ package app
 import (
 	"context"
 	"fmt"
-	"net/http"
+	"log/slog"
+	"os"
 	"sync"
+	"time"
 
-	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/errgroup"
 
 	"brokle/internal/config"
+	"brokle/pkg/logging"
 	httpTransport "brokle/internal/transport/http"
 )
 
 // App represents the main application
 type App struct {
-	config     *config.Config
-	logger     *logrus.Logger
-	providers  *ProviderContainer
-	httpServer *httpTransport.Server
-	mode       DeploymentMode
+	config       *config.Config
+	logger       *slog.Logger
+	providers    *ProviderContainer
+	httpServer   *httpTransport.Server
+	mode         DeploymentMode
+	shutdownOnce sync.Once
 }
 
-// NewServer creates a new API server application (HTTP only, no workers)
 func NewServer(cfg *config.Config) (*App, error) {
-	// Setup logger
-	logger := logrus.New()
-	logger.SetFormatter(&logrus.JSONFormatter{})
+	logger := logging.NewLoggerWithFormat(
+		logging.ParseLevel(cfg.Logging.Level),
+		cfg.Logging.Format,
+	)
 
-	level, err := logrus.ParseLevel(cfg.Logging.Level)
-	if err != nil {
-		level = logrus.InfoLevel
-	}
-	logger.SetLevel(level)
-
-	// Initialize core infrastructure
 	core, err := ProvideCore(cfg, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize core: %w", err)
 	}
 
-	// Create ALL services for server
 	core.Services = ProvideServerServices(core)
 	core.Enterprise = ProvideEnterpriseServices(cfg, logger)
 
-	// Initialize HTTP server
 	server, err := ProvideServer(core)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize server: %w", err)
@@ -57,35 +52,26 @@ func NewServer(cfg *config.Config) (*App, error) {
 		providers: &ProviderContainer{
 			Core:    core,
 			Server:  server,
-			Workers: nil, // No workers in server mode
+			Workers: nil,
 			Mode:    ModeServer,
 		},
 	}, nil
 }
 
-// NewWorker creates a new worker application (background workers only, no HTTP)
 func NewWorker(cfg *config.Config) (*App, error) {
-	// Setup logger
-	logger := logrus.New()
-	logger.SetFormatter(&logrus.JSONFormatter{})
+	logger := logging.NewLoggerWithFormat(
+		logging.ParseLevel(cfg.Logging.Level),
+		cfg.Logging.Format,
+	)
 
-	level, err := logrus.ParseLevel(cfg.Logging.Level)
-	if err != nil {
-		level = logrus.InfoLevel
-	}
-	logger.SetLevel(level)
-
-	// Initialize core infrastructure
 	core, err := ProvideCore(cfg, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize core: %w", err)
 	}
 
-	// Create ONLY worker services (minimal - no auth)
 	core.Services = ProvideWorkerServices(core)
-	core.Enterprise = nil // Worker doesn't need enterprise
+	core.Enterprise = nil
 
-	// Initialize workers
 	workers, err := ProvideWorkers(core)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize workers: %w", err)
@@ -95,47 +81,58 @@ func NewWorker(cfg *config.Config) (*App, error) {
 		mode:       ModeWorker,
 		config:     cfg,
 		logger:     logger,
-		httpServer: nil, // No HTTP server in worker mode
+		httpServer: nil,
 		providers: &ProviderContainer{
 			Core:    core,
-			Server:  nil, // No HTTP in worker mode
+			Server:  nil,
 			Workers: workers,
 			Mode:    ModeWorker,
 		},
 	}, nil
 }
 
-// Start starts the application and returns immediately without blocking on shutdown signals
 func (a *App) Start() error {
-	a.logger.WithField("mode", a.mode).Info("Starting Brokle Platform...")
+	a.logger.Info("Starting Brokle Platform...", "mode", a.mode)
 
 	switch a.mode {
 	case ModeServer:
-		// Start HTTP server
-		go func() {
-			if err := a.httpServer.Start(); err != nil {
-				// http.ErrServerClosed is expected during graceful shutdown
-				if err != http.ErrServerClosed {
-					a.logger.WithError(err).Error("HTTP server failed")
-				}
-			}
-		}()
-		a.logger.WithField("port", a.config.Server.Port).Info("HTTP server started")
+		var g errgroup.Group
 
-		// Start gRPC OTLP server (always enabled)
-		go func() {
-			if err := a.providers.Server.GRPCServer.Start(); err != nil {
-				a.logger.WithError(err).Error("gRPC server failed")
-			}
-		}()
-		a.logger.WithField("port", a.config.GRPC.Port).Info("gRPC OTLP server started")
+		g.Go(func() error {
+			return a.httpServer.Start()
+		})
+
+		g.Go(func() error {
+			return a.providers.Server.GRPCServer.Start()
+		})
+
+		if err := g.Wait(); err != nil {
+			return err
+		}
 
 		a.logger.Info("Brokle Platform started successfully")
 
+		go func() {
+			select {
+			case err := <-a.httpServer.ServeErr():
+				a.logger.Error("HTTP server failed unexpectedly", "error", err)
+				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer cancel()
+				_ = a.Shutdown(ctx)
+				os.Exit(1)
+
+			case err := <-a.providers.Server.GRPCServer.ServeErr():
+				a.logger.Error("gRPC server failed unexpectedly", "error", err)
+				ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+				defer cancel()
+				_ = a.Shutdown(ctx)
+				os.Exit(1)
+			}
+		}()
+
 	case ModeWorker:
-		// Start telemetry stream consumer
 		if err := a.providers.Workers.TelemetryConsumer.Start(context.Background()); err != nil {
-			a.logger.WithError(err).Error("Failed to start telemetry stream consumer")
+			a.logger.Error("Failed to start telemetry stream consumer", "error", err)
 			return err
 		}
 		a.logger.Info("Telemetry stream consumer started")
@@ -144,36 +141,42 @@ func (a *App) Start() error {
 	return nil
 }
 
-// Shutdown gracefully shuts down the application
 func (a *App) Shutdown(ctx context.Context) error {
-	a.logger.WithField("mode", a.mode).Info("Shutting down Brokle Platform...")
+	var shutdownErr error
+
+	a.shutdownOnce.Do(func() {
+		shutdownErr = a.doShutdown(ctx)
+	})
+
+	return shutdownErr
+}
+
+func (a *App) doShutdown(ctx context.Context) error {
+	a.logger.Info("Shutting down Brokle Platform...", "mode", a.mode)
 
 	var wg sync.WaitGroup
 
 	switch a.mode {
 	case ModeServer:
-		// Shutdown gRPC server first
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			if err := a.providers.Server.GRPCServer.Shutdown(ctx); err != nil {
-				a.logger.WithError(err).Error("Failed to shutdown gRPC server")
+				a.logger.Error("Failed to shutdown gRPC server", "error", err)
 			}
 		}()
 
-		// Shutdown HTTP server
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			if a.httpServer != nil {
 				if err := a.httpServer.Shutdown(ctx); err != nil {
-					a.logger.WithError(err).Error("Failed to shutdown HTTP server")
+					a.logger.Error("Failed to shutdown HTTP server", "error", err)
 				}
 			}
 		}()
 
 	case ModeWorker:
-		// Shutdown workers
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -185,18 +188,15 @@ func (a *App) Shutdown(ctx context.Context) error {
 		}()
 	}
 
-	// Shutdown all providers (databases)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		if a.providers != nil {
 			if err := a.providers.Shutdown(); err != nil {
-				a.logger.WithError(err).Error("Failed to shutdown providers")
+				a.logger.Error("Failed to shutdown providers", "error", err)
 			}
 		}
 	}()
-
-	// Wait for all shutdowns
 	done := make(chan struct{})
 	go func() {
 		wg.Wait()
@@ -238,7 +238,7 @@ func (a *App) GetWorkers() *WorkerContainer {
 }
 
 // GetLogger returns the application logger
-func (a *App) GetLogger() *logrus.Logger {
+func (a *App) GetLogger() *slog.Logger {
 	return a.logger
 }
 

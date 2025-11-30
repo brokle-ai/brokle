@@ -1,13 +1,13 @@
 package observability
 
 import (
+	"log/slog"
 	"context"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	commonpb "go.opentelemetry.io/proto/otlp/common/v1"
 	logspb "go.opentelemetry.io/proto/otlp/logs/v1"
 
@@ -18,11 +18,11 @@ import (
 // OTLPLogsConverterService handles conversion of OTLP logs to Brokle domain entities
 // Follows the proven traces/metrics converter pattern with type-safe conversions
 type OTLPLogsConverterService struct {
-	logger *logrus.Logger
+	logger *slog.Logger
 }
 
 // NewOTLPLogsConverterService creates a new OTLP logs converter service
-func NewOTLPLogsConverterService(logger *logrus.Logger) *OTLPLogsConverterService {
+func NewOTLPLogsConverterService(logger *slog.Logger) *OTLPLogsConverterService {
 	return &OTLPLogsConverterService{
 		logger: logger,
 	}
@@ -152,7 +152,7 @@ func (s *OTLPLogsConverterService) extractLogBody(body *commonpb.AnyValue) strin
 		array := anyValueArrayToInterface(v.ArrayValue)
 		jsonBytes, err := json.Marshal(array)
 		if err != nil {
-			s.logger.WithError(err).Warn("failed to marshal array body, using empty string")
+			s.logger.Warn("failed to marshal array body, using empty string", "error", err)
 			return ""
 		}
 		return string(jsonBytes)
@@ -162,7 +162,7 @@ func (s *OTLPLogsConverterService) extractLogBody(body *commonpb.AnyValue) strin
 		kvMap := convertKeyValuesToMap(v.KvlistValue.GetValues())
 		jsonBytes, err := json.Marshal(kvMap)
 		if err != nil {
-			s.logger.WithError(err).Warn("failed to marshal kvlist body, using empty string")
+			s.logger.Warn("failed to marshal kvlist body, using empty string", "error", err)
 			return ""
 		}
 		return string(jsonBytes)

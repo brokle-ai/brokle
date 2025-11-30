@@ -1,10 +1,10 @@
 package middleware
 
 import (
+	"log/slog"
 	"errors"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 
 	"brokle/internal/core/domain/auth"
 	"brokle/pkg/response"
@@ -16,7 +16,7 @@ type AuthMiddleware struct {
 	jwtService        auth.JWTService
 	blacklistedTokens auth.BlacklistedTokenService
 	orgMemberService  auth.OrganizationMemberService
-	logger            *logrus.Logger
+	logger            *slog.Logger
 }
 
 // NewAuthMiddleware creates a new stateless authentication middleware
@@ -24,7 +24,7 @@ func NewAuthMiddleware(
 	jwtService auth.JWTService,
 	blacklistedTokens auth.BlacklistedTokenService,
 	orgMemberService auth.OrganizationMemberService,
-	logger *logrus.Logger,
+	logger *slog.Logger,
 ) *AuthMiddleware {
 	return &AuthMiddleware{
 		jwtService:        jwtService,
@@ -47,7 +47,7 @@ func (m *AuthMiddleware) RequireAuth() gin.HandlerFunc {
 		// Extract token from Authorization header
 		token, err := m.extractToken(c)
 		if err != nil {
-			m.logger.WithError(err).Warn("Failed to extract authentication token")
+			m.logger.Warn("Failed to extract authentication token", "error", err)
 			response.Unauthorized(c, "Authentication token required")
 			c.Abort()
 			return
@@ -56,8 +56,7 @@ func (m *AuthMiddleware) RequireAuth() gin.HandlerFunc {
 		// Validate JWT token structure and signature
 		claims, err := m.jwtService.ValidateAccessToken(c.Request.Context(), token)
 		if err != nil {
-			m.logger.WithError(err).WithField("token_prefix", token[:min(len(token), 10)]).
-				Warn("Invalid JWT token")
+			m.logger.Warn("Invalid JWT token", "error", err, "token_prefix", token[:min(len(token), 10)])
 			response.Unauthorized(c, "Invalid authentication token")
 			c.Abort()
 			return
@@ -66,16 +65,14 @@ func (m *AuthMiddleware) RequireAuth() gin.HandlerFunc {
 		// Check if token is blacklisted (immediate revocation check)
 		isBlacklisted, err := m.blacklistedTokens.IsTokenBlacklisted(c.Request.Context(), claims.JWTID)
 		if err != nil {
-			m.logger.WithError(err).WithField("jti", claims.JWTID).
-				Error("Failed to check token blacklist status")
+			m.logger.Error("Failed to check token blacklist status", "error", err, "jti", claims.JWTID)
 			response.InternalServerError(c, "Authentication verification failed")
 			c.Abort()
 			return
 		}
 
 		if isBlacklisted {
-			m.logger.WithField("jti", claims.JWTID).WithField("user_id", claims.UserID).
-				Warn("Blacklisted token attempted access")
+			m.logger.Warn("Blacklisted token attempted access", "jti", claims.JWTID, "user_id", claims.UserID)
 			response.Unauthorized(c, "Authentication token has been revoked")
 			c.Abort()
 			return
@@ -86,21 +83,14 @@ func (m *AuthMiddleware) RequireAuth() gin.HandlerFunc {
 		isUserBlacklisted, err := m.blacklistedTokens.IsUserBlacklistedAfterTimestamp(
 			c.Request.Context(), claims.UserID, claims.IssuedAt)
 		if err != nil {
-			m.logger.WithError(err).WithFields(logrus.Fields{
-				"user_id": claims.UserID,
-				"iat":     claims.IssuedAt,
-			}).Error("Failed to check user timestamp blacklist status")
+			m.logger.Error("Failed to check user timestamp blacklist status", "error", err, "user_id", claims.UserID, "iat", claims.IssuedAt)
 			response.InternalServerError(c, "Authentication verification failed")
 			c.Abort()
 			return
 		}
 
 		if isUserBlacklisted {
-			m.logger.WithFields(logrus.Fields{
-				"user_id": claims.UserID,
-				"jti":     claims.JWTID,
-				"iat":     claims.IssuedAt,
-			}).Warn("User token revoked - all sessions were revoked")
+			m.logger.Warn("User token revoked - all sessions were revoked", "user_id", claims.UserID, "jti", claims.JWTID, "iat", claims.IssuedAt)
 			response.Unauthorized(c, "All user sessions have been revoked")
 			c.Abort()
 			return
@@ -113,10 +103,7 @@ func (m *AuthMiddleware) RequireAuth() gin.HandlerFunc {
 		c.Set(TokenClaimsKey, claims)
 
 		// Log successful authentication
-		m.logger.WithFields(logrus.Fields{
-			"user_id": claims.UserID,
-			"jti":     claims.JWTID,
-		}).Debug("Authentication successful")
+		m.logger.Debug("Authentication successful", "user_id", claims.UserID, "jti", claims.JWTID)
 
 		c.Next()
 	})
@@ -136,7 +123,7 @@ func (m *AuthMiddleware) RequirePermission(permission string) gin.HandlerFunc {
 
 		userIDParsed, err := ulid.Parse(userID)
 		if err != nil {
-			m.logger.WithError(err).Error("Invalid user ID format in context")
+			m.logger.Error("Invalid user ID format in context", "error", err)
 			response.InternalServerError(c, "Authentication error")
 			c.Abort()
 			return
@@ -149,10 +136,7 @@ func (m *AuthMiddleware) RequirePermission(permission string) gin.HandlerFunc {
 			[]string{permission},
 		)
 		if err != nil {
-			m.logger.WithError(err).WithFields(logrus.Fields{
-				"user_id":    userID,
-				"permission": permission,
-			}).Error("Failed to check user permissions")
+			m.logger.Error("Failed to check user permissions", "error", err, "user_id", userID, "permission", permission)
 			response.InternalServerError(c, "Permission verification failed")
 			c.Abort()
 			return
@@ -160,10 +144,7 @@ func (m *AuthMiddleware) RequirePermission(permission string) gin.HandlerFunc {
 
 		// Check if user has the required permission
 		if !hasPermission[permission] {
-			m.logger.WithFields(logrus.Fields{
-				"user_id":    userID,
-				"permission": permission,
-			}).Warn("Insufficient permissions")
+			m.logger.Warn("Insufficient permissions", "user_id", userID, "permission", permission)
 			response.Forbidden(c, "Insufficient permissions")
 			c.Abort()
 			return
@@ -186,7 +167,7 @@ func (m *AuthMiddleware) RequireAnyPermission(permissions []string) gin.HandlerF
 
 		userIDParsed, err := ulid.Parse(userID)
 		if err != nil {
-			m.logger.WithError(err).Error("Invalid user ID format in context")
+			m.logger.Error("Invalid user ID format in context", "error", err)
 			response.InternalServerError(c, "Authentication error")
 			c.Abort()
 			return
@@ -199,10 +180,7 @@ func (m *AuthMiddleware) RequireAnyPermission(permissions []string) gin.HandlerF
 			permissions,
 		)
 		if err != nil {
-			m.logger.WithError(err).WithFields(logrus.Fields{
-				"user_id":     userID,
-				"permissions": permissions,
-			}).Error("Failed to check user permissions")
+			m.logger.Error("Failed to check user permissions", "error", err, "user_id", userID, "permissions", permissions)
 			response.InternalServerError(c, "Permission verification failed")
 			c.Abort()
 			return
@@ -218,10 +196,7 @@ func (m *AuthMiddleware) RequireAnyPermission(permissions []string) gin.HandlerF
 		}
 
 		if !hasAnyPermission {
-			m.logger.WithFields(logrus.Fields{
-				"user_id":     userID,
-				"permissions": permissions,
-			}).Warn("Insufficient permissions - none of the required permissions found")
+			m.logger.Warn("Insufficient permissions - none of the required permissions found", "user_id", userID, "permissions", permissions)
 			response.Forbidden(c, "Insufficient permissions")
 			c.Abort()
 			return
@@ -244,7 +219,7 @@ func (m *AuthMiddleware) RequireAllPermissions(permissions []string) gin.Handler
 
 		userIDParsed, err := ulid.Parse(userID)
 		if err != nil {
-			m.logger.WithError(err).Error("Invalid user ID format in context")
+			m.logger.Error("Invalid user ID format in context", "error", err)
 			response.InternalServerError(c, "Authentication error")
 			c.Abort()
 			return
@@ -257,10 +232,7 @@ func (m *AuthMiddleware) RequireAllPermissions(permissions []string) gin.Handler
 			permissions,
 		)
 		if err != nil {
-			m.logger.WithError(err).WithFields(logrus.Fields{
-				"user_id":     userID,
-				"permissions": permissions,
-			}).Error("Failed to check user permissions")
+			m.logger.Error("Failed to check user permissions", "error", err, "user_id", userID, "permissions", permissions)
 			response.InternalServerError(c, "Permission verification failed")
 			c.Abort()
 			return
@@ -269,11 +241,7 @@ func (m *AuthMiddleware) RequireAllPermissions(permissions []string) gin.Handler
 		// Check if user has ALL required permissions
 		for _, permission := range permissions {
 			if !hasPermission[permission] {
-				m.logger.WithFields(logrus.Fields{
-					"user_id":     userID,
-					"permissions": permissions,
-					"failed_on":   permission,
-				}).Warn("Insufficient permissions - missing required permission")
+				m.logger.Warn("Insufficient permissions - missing required permission", "user_id", userID, "permissions", permissions, "failed_on", permission)
 				response.Forbidden(c, "Insufficient permissions")
 				c.Abort()
 				return

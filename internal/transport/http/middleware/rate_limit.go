@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"log/slog"
 	"context"
 	"fmt"
 	"strconv"
@@ -8,7 +9,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
-	"github.com/sirupsen/logrus"
 
 	"brokle/internal/config"
 	"brokle/pkg/response"
@@ -19,14 +19,14 @@ import (
 type RateLimitMiddleware struct {
 	redis  *redis.Client
 	config *config.AuthConfig
-	logger *logrus.Logger
+	logger *slog.Logger
 }
 
 // NewRateLimitMiddleware creates a new rate limiting middleware
 func NewRateLimitMiddleware(
 	redis *redis.Client,
 	config *config.AuthConfig,
-	logger *logrus.Logger,
+	logger *slog.Logger,
 ) *RateLimitMiddleware {
 	return &RateLimitMiddleware{
 		redis:  redis,
@@ -50,14 +50,14 @@ func (m *RateLimitMiddleware) RateLimitByIP() gin.HandlerFunc {
 
 		allowed, err := m.checkRateLimit(c.Request.Context(), key, m.config.RateLimitPerIP, m.config.RateLimitWindow)
 		if err != nil {
-			m.logger.WithError(err).WithField("ip", clientIP).Error("Rate limit check failed")
+			m.logger.Error("Rate limit check failed", "error", err, "ip", clientIP)
 			// On error, allow request to continue
 			c.Next()
 			return
 		}
 
 		if !allowed {
-			m.logger.WithField("ip", clientIP).Warn("Rate limit exceeded for IP")
+			m.logger.Warn("Rate limit exceeded for IP", "ip", clientIP)
 			response.TooManyRequests(c, "Rate limit exceeded. Please try again later.")
 			c.Abort()
 			return
@@ -95,14 +95,14 @@ func (m *RateLimitMiddleware) RateLimitByUser() gin.HandlerFunc {
 
 		allowed, err := m.checkRateLimit(c.Request.Context(), key, m.config.RateLimitPerUser, m.config.RateLimitWindow)
 		if err != nil {
-			m.logger.WithError(err).WithField("user_id", userIDStr).Error("User rate limit check failed")
+			m.logger.Error("User rate limit check failed", "error", err, "user_id", userIDStr)
 			// On error, allow request to continue
 			c.Next()
 			return
 		}
 
 		if !allowed {
-			m.logger.WithField("user_id", userIDStr).Warn("Rate limit exceeded for user")
+			m.logger.Warn("Rate limit exceeded for user", "user_id", userIDStr)
 			response.TooManyRequests(c, "Rate limit exceeded. Please try again later.")
 			c.Abort()
 			return
@@ -145,21 +145,21 @@ func (m *RateLimitMiddleware) RateLimitByAPIKey() gin.HandlerFunc {
 
 		allowed, err := m.checkRateLimit(c.Request.Context(), key, apiKeyLimit, m.config.RateLimitWindow)
 		if err != nil {
-			m.logger.WithError(err).WithField("api_key_id", apiKeyID).Error("API key rate limit check failed")
+			m.logger.Error("API key rate limit check failed", "error", err, "api_key_id", apiKeyID)
 			// On error, allow request to continue (fail open for availability)
 			c.Next()
 			return
 		}
 
 		if !allowed {
-			m.logger.WithField("api_key_id", apiKeyID).Warn("Rate limit exceeded for API key")
+			m.logger.Warn("Rate limit exceeded for API key", "api_key_id", apiKeyID)
 			response.TooManyRequests(c, "API key rate limit exceeded. Please try again later.")
 			c.Abort()
 			return
 		}
 
 		// Log successful rate limit check
-		m.logger.WithField("api_key_id", apiKeyID).WithField("limit", apiKeyLimit).Debug("API key rate limit check passed")
+		m.logger.Debug("API key rate limit check passed", "api_key_id", apiKeyID, "limit", apiKeyLimit)
 
 		c.Next()
 	}

@@ -1,11 +1,11 @@
 package observability
 
 import (
+	"log/slog"
 	"context"
 	"fmt"
 	"time"
 
-	"github.com/sirupsen/logrus"
 
 	"brokle/internal/config"
 	"brokle/internal/core/domain/observability"
@@ -20,7 +20,7 @@ type ArchiveService struct {
 	parquetWriter      *ParquetWriter
 	blobStorageService storageDomain.BlobStorageService
 	config             *config.ArchiveConfig
-	logger             *logrus.Logger
+	logger             *slog.Logger
 }
 
 func NewArchiveService(
@@ -28,7 +28,7 @@ func NewArchiveService(
 	parquetWriter *ParquetWriter,
 	blobStorageService storageDomain.BlobStorageService,
 	cfg *config.ArchiveConfig,
-	logger *logrus.Logger,
+	logger *slog.Logger,
 ) *ArchiveService {
 	return &ArchiveService{
 		s3Client:           s3Client,
@@ -88,10 +88,7 @@ func (s *ArchiveService) ArchiveBatch(
 	}
 
 	if err := s.blobStorageService.CreateBlobReference(ctx, blobRef); err != nil {
-		s.logger.WithError(err).WithFields(logrus.Fields{
-			"batch_id": batchID.String(),
-			"s3_path":  s3Path,
-		}).Warn("Failed to create blob reference (S3 upload succeeded)")
+		s.logger.Warn("Failed to create blob reference (S3 upload succeeded)", "error", err, "batch_id", batchID.String(), "s3_path", s3Path)
 	}
 
 	return &observability.ArchiveBatchResult{

@@ -1,13 +1,12 @@
 package project
 
 import (
-	"fmt"
+	"log/slog"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 
 	"brokle/internal/config"
 	"brokle/internal/core/domain/organization"
@@ -17,7 +16,7 @@ import (
 
 type Handler struct {
 	config              *config.Config
-	logger              *logrus.Logger
+	logger              *slog.Logger
 	projectService      organization.ProjectService
 	organizationService organization.OrganizationService
 	memberService       organization.MemberService
@@ -25,7 +24,7 @@ type Handler struct {
 
 func NewHandler(
 	config *config.Config,
-	logger *logrus.Logger,
+	logger *slog.Logger,
 	projectService organization.ProjectService,
 	organizationService organization.OrganizationService,
 	memberService organization.MemberService,
@@ -98,17 +97,14 @@ func (h *Handler) List(c *gin.Context) {
 	// Extract user ID from JWT
 	userID, exists := c.Get("user_id")
 	if !exists {
-		h.logger.WithField("endpoint", "List").Error("User not authenticated")
+		h.logger.Error("User not authenticated", "endpoint", "List")
 		response.Unauthorized(c, "User not authenticated")
 		return
 	}
 
 	userULID, ok := userID.(ulid.ULID)
 	if !ok {
-		h.logger.WithFields(logrus.Fields{
-			"endpoint": "List",
-			"user_id":  userID,
-		}).Error("Invalid user ID type")
+		h.logger.Error("Invalid user ID type", "endpoint", "List", "user_id", userID)
 		response.BadRequest(c, "Invalid user ID", "")
 		return
 	}
@@ -116,11 +112,7 @@ func (h *Handler) List(c *gin.Context) {
 	// Bind and validate query parameters
 	var req ListRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
-		h.logger.WithFields(logrus.Fields{
-			"endpoint": "List",
-			"user_id":  userULID.String(),
-			"error":    err.Error(),
-		}).Error("Invalid request parameters")
+		h.logger.Error("Invalid request parameters", "endpoint", "List", "user_id", userULID.String(), "error", err.Error())
 		response.BadRequest(c, "Invalid request parameters", "")
 		return
 	}
@@ -141,12 +133,7 @@ func (h *Handler) List(c *gin.Context) {
 	if req.OrganizationID != "" {
 		orgULID, err := ulid.Parse(req.OrganizationID)
 		if err != nil {
-			h.logger.WithFields(logrus.Fields{
-				"endpoint":        "List",
-				"user_id":         userULID.String(),
-				"organization_id": req.OrganizationID,
-				"error":           err.Error(),
-			}).Error("Invalid organization ID format")
+			h.logger.Error("Invalid organization ID format", "endpoint", "List", "user_id", userULID.String(), "organization_id", req.OrganizationID, "error", err.Error())
 			response.BadRequest(c, "Invalid organization ID", "")
 			return
 		}
@@ -154,22 +141,13 @@ func (h *Handler) List(c *gin.Context) {
 		// Validate user is member of organization
 		isMember, err := h.memberService.IsMember(ctx, userULID, orgULID)
 		if err != nil {
-			h.logger.WithFields(logrus.Fields{
-				"endpoint":        "List",
-				"user_id":         userULID.String(),
-				"organization_id": req.OrganizationID,
-				"error":           err.Error(),
-			}).Error("Failed to check organization membership")
+			h.logger.Error("Failed to check organization membership", "endpoint", "List", "user_id", userULID.String(), "organization_id", req.OrganizationID, "error", err.Error())
 			response.InternalServerError(c, "Failed to verify organization access")
 			return
 		}
 
 		if !isMember {
-			h.logger.WithFields(logrus.Fields{
-				"endpoint":        "List",
-				"user_id":         userULID.String(),
-				"organization_id": req.OrganizationID,
-			}).Warn("User attempted to access organization projects without membership")
+			h.logger.Warn("User attempted to access organization projects without membership", "endpoint", "List", "user_id", userULID.String(), "organization_id", req.OrganizationID)
 			response.Forbidden(c, "You don't have access to this organization")
 			return
 		}
@@ -177,12 +155,7 @@ func (h *Handler) List(c *gin.Context) {
 		// Get projects for the specific organization
 		orgProjects, err := h.projectService.GetProjectsByOrganization(ctx, orgULID)
 		if err != nil {
-			h.logger.WithFields(logrus.Fields{
-				"endpoint":        "List",
-				"user_id":         userULID.String(),
-				"organization_id": req.OrganizationID,
-				"error":           err.Error(),
-			}).Error("Failed to get organization projects")
+			h.logger.Error("Failed to get organization projects", "endpoint", "List", "user_id", userULID.String(), "organization_id", req.OrganizationID, "error", err.Error())
 			response.InternalServerError(c, "Failed to retrieve projects")
 			return
 		}
@@ -193,11 +166,7 @@ func (h *Handler) List(c *gin.Context) {
 		// Get projects from all user's organizations
 		userOrgs, err := h.organizationService.GetUserOrganizations(ctx, userULID)
 		if err != nil {
-			h.logger.WithFields(logrus.Fields{
-				"endpoint": "List",
-				"user_id":  userULID.String(),
-				"error":    err.Error(),
-			}).Error("Failed to get user organizations")
+			h.logger.Error("Failed to get user organizations", "endpoint", "List", "user_id", userULID.String(), "error", err.Error())
 			response.InternalServerError(c, "Failed to retrieve projects")
 			return
 		}
@@ -207,12 +176,7 @@ func (h *Handler) List(c *gin.Context) {
 		for _, org := range userOrgs {
 			orgProjects, err := h.projectService.GetProjectsByOrganization(ctx, org.ID)
 			if err != nil {
-				h.logger.WithFields(logrus.Fields{
-					"endpoint":        "List",
-					"user_id":         userULID.String(),
-					"organization_id": org.ID.String(),
-					"error":           err.Error(),
-				}).Error("Failed to get projects for organization")
+				h.logger.Error("Failed to get projects for organization", "endpoint", "List", "user_id", userULID.String(), "organization_id", org.ID.String(), "error", err.Error())
 				continue // Skip this organization but continue with others
 			}
 			allProjects = append(allProjects, orgProjects...)
@@ -290,15 +254,7 @@ func (h *Handler) List(c *gin.Context) {
 
 	response.SuccessWithPagination(c, responseProjects, pag)
 
-	h.logger.WithFields(logrus.Fields{
-		"endpoint":        "List",
-		"user_id":         userULID.String(),
-		"organization_id": req.OrganizationID,
-		"total_projects":  total,
-		"returned":        len(responseProjects),
-		"page":            req.Page,
-		"limit":           req.Limit,
-	}).Info("Projects listed successfully")
+	h.logger.Info("Projects listed successfully", "endpoint", "List", "user_id", userULID.String(), "organization_id", req.OrganizationID, "total_projects", total, "returned", len(responseProjects), "page", req.Page, "limit", req.Limit)
 }
 
 // Create handles POST /api/v1/projects
@@ -321,17 +277,14 @@ func (h *Handler) Create(c *gin.Context) {
 	// Extract user ID from JWT
 	userID, exists := c.Get("user_id")
 	if !exists {
-		h.logger.WithField("endpoint", "Create").Error("User not authenticated")
+		h.logger.Error("User not authenticated", "endpoint", "Create")
 		response.Unauthorized(c, "User not authenticated")
 		return
 	}
 
 	userULID, ok := userID.(ulid.ULID)
 	if !ok {
-		h.logger.WithFields(logrus.Fields{
-			"endpoint": "Create",
-			"user_id":  userID,
-		}).Error("Invalid user ID type")
+		h.logger.Error("Invalid user ID type", "endpoint", "Create", "user_id", userID)
 		response.BadRequest(c, "Invalid user ID", "")
 		return
 	}
@@ -339,11 +292,7 @@ func (h *Handler) Create(c *gin.Context) {
 	// Bind and validate request body
 	var req CreateProjectRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.WithFields(logrus.Fields{
-			"endpoint": "Create",
-			"user_id":  userULID.String(),
-			"error":    err.Error(),
-		}).Error("Invalid request body")
+		h.logger.Error("Invalid request body", "endpoint", "Create", "user_id", userULID.String(), "error", err.Error())
 		response.BadRequest(c, "Invalid request body", "")
 		return
 	}
@@ -353,12 +302,7 @@ func (h *Handler) Create(c *gin.Context) {
 	// Parse and validate organization ID from request body
 	orgULID, err := ulid.Parse(req.OrganizationID)
 	if err != nil {
-		h.logger.WithFields(logrus.Fields{
-			"endpoint":        "Create",
-			"user_id":         userULID.String(),
-			"organization_id": req.OrganizationID,
-			"error":           err.Error(),
-		}).Error("Invalid organization ID format")
+		h.logger.Error("Invalid organization ID format", "endpoint", "Create", "user_id", userULID.String(), "organization_id", req.OrganizationID, "error", err.Error())
 		response.BadRequest(c, "Invalid organization ID", "")
 		return
 	}
@@ -366,22 +310,13 @@ func (h *Handler) Create(c *gin.Context) {
 	// Validate user is member of organization
 	isMember, err := h.memberService.IsMember(ctx, userULID, orgULID)
 	if err != nil {
-		h.logger.WithFields(logrus.Fields{
-			"endpoint":        "Create",
-			"user_id":         userULID.String(),
-			"organization_id": req.OrganizationID,
-			"error":           err.Error(),
-		}).Error("Failed to check organization membership")
+		h.logger.Error("Failed to check organization membership", "endpoint", "Create", "user_id", userULID.String(), "organization_id", req.OrganizationID, "error", err.Error())
 		response.InternalServerError(c, "Failed to verify organization access")
 		return
 	}
 
 	if !isMember {
-		h.logger.WithFields(logrus.Fields{
-			"endpoint":        "Create",
-			"user_id":         userULID.String(),
-			"organization_id": req.OrganizationID,
-		}).Warn("User attempted to create project in organization without membership")
+		h.logger.Warn("User attempted to create project in organization without membership", "endpoint", "Create", "user_id", userULID.String(), "organization_id", req.OrganizationID)
 		response.Forbidden(c, "You don't have permission to create projects in this organization")
 		return
 	}
@@ -395,35 +330,18 @@ func (h *Handler) Create(c *gin.Context) {
 	project, err := h.projectService.CreateProject(ctx, orgULID, createReq)
 	if err != nil {
 		if strings.Contains(err.Error(), "already exists") {
-			h.logger.WithFields(logrus.Fields{
-				"endpoint":        "Create",
-				"user_id":         userULID.String(),
-				"organization_id": req.OrganizationID,
-				"name":            req.Name,
-				"error":           err.Error(),
-			}).Warn("Project name already exists")
+			h.logger.Warn("Project name already exists", "endpoint", "Create", "user_id", userULID.String(), "organization_id", req.OrganizationID, "name", req.Name, "error", err.Error())
 			response.Conflict(c, "Project with this slug already exists in organization")
 			return
 		}
 
 		if strings.Contains(err.Error(), "not found") {
-			h.logger.WithFields(logrus.Fields{
-				"endpoint":        "Create",
-				"user_id":         userULID.String(),
-				"organization_id": req.OrganizationID,
-				"error":           err.Error(),
-			}).Error("Organization not found")
+			h.logger.Error("Organization not found", "endpoint", "Create", "user_id", userULID.String(), "organization_id", req.OrganizationID, "error", err.Error())
 			response.NotFound(c, "Organization")
 			return
 		}
 
-		h.logger.WithFields(logrus.Fields{
-			"endpoint":        "Create",
-			"user_id":         userULID.String(),
-			"organization_id": req.OrganizationID,
-			"project_name":    req.Name,
-			"error":           err.Error(),
-		}).Error("Failed to create project")
+		h.logger.Error("Failed to create project", "endpoint", "Create", "user_id", userULID.String(), "organization_id", req.OrganizationID, "project_name", req.Name, "error", err.Error())
 		response.InternalServerError(c, "Failed to create project")
 		return
 	}
@@ -443,13 +361,7 @@ func (h *Handler) Create(c *gin.Context) {
 
 	response.Created(c, responseProject)
 
-	h.logger.WithFields(logrus.Fields{
-		"endpoint":        "Create",
-		"user_id":         userULID.String(),
-		"organization_id": req.OrganizationID,
-		"project_id":      project.ID.String(),
-		"project_name":    project.Name,
-	}).Info("Project created successfully")
+	h.logger.Info("Project created successfully", "endpoint", "Create", "user_id", userULID.String(), "organization_id", req.OrganizationID, "project_id", project.ID.String(), "project_name", project.Name)
 }
 
 // Get handles GET /api/v1/projects/:projectId
@@ -471,17 +383,14 @@ func (h *Handler) Get(c *gin.Context) {
 	// Extract user ID from JWT
 	userID, exists := c.Get("user_id")
 	if !exists {
-		h.logger.WithField("endpoint", "Get").Error("User not authenticated")
+		h.logger.Error("User not authenticated", "endpoint", "Get")
 		response.Unauthorized(c, "User not authenticated")
 		return
 	}
 
 	userULID, ok := userID.(ulid.ULID)
 	if !ok {
-		h.logger.WithFields(logrus.Fields{
-			"endpoint": "Get",
-			"user_id":  userID,
-		}).Error("Invalid user ID type")
+		h.logger.Error("Invalid user ID type", "endpoint", "Get", "user_id", userID)
 		response.BadRequest(c, "Invalid user ID", "")
 		return
 	}
@@ -489,22 +398,14 @@ func (h *Handler) Get(c *gin.Context) {
 	// Parse and validate project ID from path parameter
 	projectIDStr := c.Param("projectId")
 	if projectIDStr == "" {
-		h.logger.WithFields(logrus.Fields{
-			"endpoint": "Get",
-			"user_id":  userULID.String(),
-		}).Error("Project ID parameter missing")
+		h.logger.Error("Project ID parameter missing", "endpoint", "Get", "user_id", userULID.String())
 		response.BadRequest(c, "Project ID is required", "")
 		return
 	}
 
 	projectID, err := ulid.Parse(projectIDStr)
 	if err != nil {
-		h.logger.WithFields(logrus.Fields{
-			"endpoint":   "Get",
-			"user_id":    userULID.String(),
-			"project_id": projectIDStr,
-			"error":      err.Error(),
-		}).Error("Invalid project ID format")
+		h.logger.Error("Invalid project ID format", "endpoint", "Get", "user_id", userULID.String(), "project_id", projectIDStr, "error", err.Error())
 		response.BadRequest(c, "Invalid project ID", "")
 		return
 	}
@@ -515,33 +416,18 @@ func (h *Handler) Get(c *gin.Context) {
 	err = h.projectService.ValidateProjectAccess(ctx, userULID, projectID)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			h.logger.WithFields(logrus.Fields{
-				"endpoint":   "Get",
-				"user_id":    userULID.String(),
-				"project_id": projectIDStr,
-				"error":      err.Error(),
-			}).Warn("Project not found")
+			h.logger.Warn("Project not found", "endpoint", "Get", "user_id", userULID.String(), "project_id", projectIDStr, "error", err.Error())
 			response.NotFound(c, "Project")
 			return
 		}
 
 		if strings.Contains(err.Error(), "access") {
-			h.logger.WithFields(logrus.Fields{
-				"endpoint":   "Get",
-				"user_id":    userULID.String(),
-				"project_id": projectIDStr,
-				"error":      err.Error(),
-			}).Warn("User attempted to access project without permission")
+			h.logger.Warn("User attempted to access project without permission", "endpoint", "Get", "user_id", userULID.String(), "project_id", projectIDStr, "error", err.Error())
 			response.Forbidden(c, "You don't have access to this project")
 			return
 		}
 
-		h.logger.WithFields(logrus.Fields{
-			"endpoint":   "Get",
-			"user_id":    userULID.String(),
-			"project_id": projectIDStr,
-			"error":      err.Error(),
-		}).Error("Failed to validate project access")
+		h.logger.Error("Failed to validate project access", "endpoint", "Get", "user_id", userULID.String(), "project_id", projectIDStr, "error", err.Error())
 		response.InternalServerError(c, "Failed to validate project access")
 		return
 	}
@@ -549,12 +435,7 @@ func (h *Handler) Get(c *gin.Context) {
 	// Get project details
 	project, err := h.projectService.GetProject(ctx, projectID)
 	if err != nil {
-		h.logger.WithFields(logrus.Fields{
-			"endpoint":   "Get",
-			"user_id":    userULID.String(),
-			"project_id": projectIDStr,
-			"error":      err.Error(),
-		}).Error("Failed to get project")
+		h.logger.Error("Failed to get project", "endpoint", "Get", "user_id", userULID.String(), "project_id", projectIDStr, "error", err.Error())
 		response.InternalServerError(c, "Failed to retrieve project")
 		return
 	}
@@ -574,12 +455,7 @@ func (h *Handler) Get(c *gin.Context) {
 
 	response.Success(c, responseProject)
 
-	h.logger.WithFields(logrus.Fields{
-		"endpoint":     "Get",
-		"user_id":      userULID.String(),
-		"project_id":   project.ID.String(),
-		"project_name": project.Name,
-	}).Info("Project retrieved successfully")
+	h.logger.Info("Project retrieved successfully", "endpoint", "Get", "user_id", userULID.String(), "project_id", project.ID.String(), "project_name", project.Name)
 }
 
 // Update handles PUT /api/v1/projects/:projectId
@@ -602,17 +478,14 @@ func (h *Handler) Update(c *gin.Context) {
 	// Extract user ID from JWT
 	userID, exists := c.Get("user_id")
 	if !exists {
-		h.logger.WithField("endpoint", "Update").Error("User not authenticated")
+		h.logger.Error("User not authenticated", "endpoint", "Update")
 		response.Unauthorized(c, "User not authenticated")
 		return
 	}
 
 	userULID, ok := userID.(ulid.ULID)
 	if !ok {
-		h.logger.WithFields(logrus.Fields{
-			"endpoint": "Update",
-			"user_id":  userID,
-		}).Error("Invalid user ID type")
+		h.logger.Error("Invalid user ID type", "endpoint", "Update", "user_id", userID)
 		response.BadRequest(c, "Invalid user ID", "")
 		return
 	}
@@ -620,22 +493,14 @@ func (h *Handler) Update(c *gin.Context) {
 	// Parse and validate project ID from path parameter
 	projectIDStr := c.Param("projectId")
 	if projectIDStr == "" {
-		h.logger.WithFields(logrus.Fields{
-			"endpoint": "Update",
-			"user_id":  userULID.String(),
-		}).Error("Project ID parameter missing")
+		h.logger.Error("Project ID parameter missing", "endpoint", "Update", "user_id", userULID.String())
 		response.BadRequest(c, "Project ID is required", "")
 		return
 	}
 
 	projectID, err := ulid.Parse(projectIDStr)
 	if err != nil {
-		h.logger.WithFields(logrus.Fields{
-			"endpoint":   "Update",
-			"user_id":    userULID.String(),
-			"project_id": projectIDStr,
-			"error":      err.Error(),
-		}).Error("Invalid project ID format")
+		h.logger.Error("Invalid project ID format", "endpoint", "Update", "user_id", userULID.String(), "project_id", projectIDStr, "error", err.Error())
 		response.BadRequest(c, "Invalid project ID", "")
 		return
 	}
@@ -643,12 +508,7 @@ func (h *Handler) Update(c *gin.Context) {
 	// Bind and validate request body
 	var req UpdateProjectRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.WithFields(logrus.Fields{
-			"endpoint":   "Update",
-			"user_id":    userULID.String(),
-			"project_id": projectIDStr,
-			"error":      err.Error(),
-		}).Error("Invalid request body")
+		h.logger.Error("Invalid request body", "endpoint", "Update", "user_id", userULID.String(), "project_id", projectIDStr, "error", err.Error())
 		response.BadRequest(c, "Invalid request body", "")
 		return
 	}
@@ -659,33 +519,18 @@ func (h *Handler) Update(c *gin.Context) {
 	err = h.projectService.ValidateProjectAccess(ctx, userULID, projectID)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			h.logger.WithFields(logrus.Fields{
-				"endpoint":   "Update",
-				"user_id":    userULID.String(),
-				"project_id": projectIDStr,
-				"error":      err.Error(),
-			}).Warn("Project not found")
+			h.logger.Warn("Project not found", "endpoint", "Update", "user_id", userULID.String(), "project_id", projectIDStr, "error", err.Error())
 			response.NotFound(c, "Project")
 			return
 		}
 
 		if strings.Contains(err.Error(), "access") {
-			h.logger.WithFields(logrus.Fields{
-				"endpoint":   "Update",
-				"user_id":    userULID.String(),
-				"project_id": projectIDStr,
-				"error":      err.Error(),
-			}).Warn("User attempted to update project without permission")
+			h.logger.Warn("User attempted to update project without permission", "endpoint", "Update", "user_id", userULID.String(), "project_id", projectIDStr, "error", err.Error())
 			response.Forbidden(c, "You don't have permission to update this project")
 			return
 		}
 
-		h.logger.WithFields(logrus.Fields{
-			"endpoint":   "Update",
-			"user_id":    userULID.String(),
-			"project_id": projectIDStr,
-			"error":      err.Error(),
-		}).Error("Failed to validate project access")
+		h.logger.Error("Failed to validate project access", "endpoint", "Update", "user_id", userULID.String(), "project_id", projectIDStr, "error", err.Error())
 		response.InternalServerError(c, "Failed to validate project access")
 		return
 	}
@@ -701,12 +546,7 @@ func (h *Handler) Update(c *gin.Context) {
 
 	err = h.projectService.UpdateProject(ctx, projectID, updateReq)
 	if err != nil {
-		h.logger.WithFields(logrus.Fields{
-			"endpoint":   "Update",
-			"user_id":    userULID.String(),
-			"project_id": projectIDStr,
-			"error":      err.Error(),
-		}).Error("Failed to update project")
+		h.logger.Error("Failed to update project", "endpoint", "Update", "user_id", userULID.String(), "project_id", projectIDStr, "error", err.Error())
 		response.Error(c, err)
 		return
 	}
@@ -714,12 +554,7 @@ func (h *Handler) Update(c *gin.Context) {
 	// Get updated project details
 	project, err := h.projectService.GetProject(ctx, projectID)
 	if err != nil {
-		h.logger.WithFields(logrus.Fields{
-			"endpoint":   "Update",
-			"user_id":    userULID.String(),
-			"project_id": projectIDStr,
-			"error":      err.Error(),
-		}).Error("Failed to get updated project")
+		h.logger.Error("Failed to get updated project", "endpoint", "Update", "user_id", userULID.String(), "project_id", projectIDStr, "error", err.Error())
 		response.InternalServerError(c, "Failed to retrieve updated project")
 		return
 	}
@@ -739,13 +574,7 @@ func (h *Handler) Update(c *gin.Context) {
 
 	response.Success(c, responseProject)
 
-	h.logger.WithFields(logrus.Fields{
-		"endpoint":     "Update",
-		"user_id":      userULID.String(),
-		"project_id":   project.ID.String(),
-		"project_name": project.Name,
-		"changes":      fmt.Sprintf("name=%v, description=%v", req.Name != "", req.Description != ""),
-	}).Info("Project updated successfully")
+	h.logger.Info("Project updated successfully", "endpoint", "Update", "user_id", userULID.String(), "project_id", project.ID.String(), "project_name", project.Name)
 }
 
 // Delete handles DELETE /api/v1/projects/:projectId
@@ -768,17 +597,14 @@ func (h *Handler) Delete(c *gin.Context) {
 	// Extract user ID from JWT
 	userID, exists := c.Get("user_id")
 	if !exists {
-		h.logger.WithField("endpoint", "Delete").Error("User not authenticated")
+		h.logger.Error("User not authenticated", "endpoint", "Delete")
 		response.Unauthorized(c, "User not authenticated")
 		return
 	}
 
 	userULID, ok := userID.(ulid.ULID)
 	if !ok {
-		h.logger.WithFields(logrus.Fields{
-			"endpoint": "Delete",
-			"user_id":  userID,
-		}).Error("Invalid user ID type")
+		h.logger.Error("Invalid user ID type", "endpoint", "Delete", "user_id", userID)
 		response.BadRequest(c, "Invalid user ID", "")
 		return
 	}
@@ -786,22 +612,14 @@ func (h *Handler) Delete(c *gin.Context) {
 	// Parse and validate project ID from path parameter
 	projectIDStr := c.Param("projectId")
 	if projectIDStr == "" {
-		h.logger.WithFields(logrus.Fields{
-			"endpoint": "Delete",
-			"user_id":  userULID.String(),
-		}).Error("Project ID parameter missing")
+		h.logger.Error("Project ID parameter missing", "endpoint", "Delete", "user_id", userULID.String())
 		response.BadRequest(c, "Project ID is required", "")
 		return
 	}
 
 	projectID, err := ulid.Parse(projectIDStr)
 	if err != nil {
-		h.logger.WithFields(logrus.Fields{
-			"endpoint":   "Delete",
-			"user_id":    userULID.String(),
-			"project_id": projectIDStr,
-			"error":      err.Error(),
-		}).Error("Invalid project ID format")
+		h.logger.Error("Invalid project ID format", "endpoint", "Delete", "user_id", userULID.String(), "project_id", projectIDStr, "error", err.Error())
 		response.BadRequest(c, "Invalid project ID", "")
 		return
 	}
@@ -812,33 +630,18 @@ func (h *Handler) Delete(c *gin.Context) {
 	err = h.projectService.ValidateProjectAccess(ctx, userULID, projectID)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			h.logger.WithFields(logrus.Fields{
-				"endpoint":   "Delete",
-				"user_id":    userULID.String(),
-				"project_id": projectIDStr,
-				"error":      err.Error(),
-			}).Warn("Project not found")
+			h.logger.Warn("Project not found", "endpoint", "Delete", "user_id", userULID.String(), "project_id", projectIDStr, "error", err.Error())
 			response.NotFound(c, "Project")
 			return
 		}
 
 		if strings.Contains(err.Error(), "access") {
-			h.logger.WithFields(logrus.Fields{
-				"endpoint":   "Delete",
-				"user_id":    userULID.String(),
-				"project_id": projectIDStr,
-				"error":      err.Error(),
-			}).Warn("User attempted to delete project without permission")
+			h.logger.Warn("User attempted to delete project without permission", "endpoint", "Delete", "user_id", userULID.String(), "project_id", projectIDStr, "error", err.Error())
 			response.Forbidden(c, "You don't have permission to delete this project")
 			return
 		}
 
-		h.logger.WithFields(logrus.Fields{
-			"endpoint":   "Delete",
-			"user_id":    userULID.String(),
-			"project_id": projectIDStr,
-			"error":      err.Error(),
-		}).Error("Failed to validate project access")
+		h.logger.Error("Failed to validate project access", "endpoint", "Delete", "user_id", userULID.String(), "project_id", projectIDStr, "error", err.Error())
 		response.InternalServerError(c, "Failed to validate project access")
 		return
 	}
@@ -846,12 +649,7 @@ func (h *Handler) Delete(c *gin.Context) {
 	// Get project details before deletion for logging
 	project, err := h.projectService.GetProject(ctx, projectID)
 	if err != nil {
-		h.logger.WithFields(logrus.Fields{
-			"endpoint":   "Delete",
-			"user_id":    userULID.String(),
-			"project_id": projectIDStr,
-			"error":      err.Error(),
-		}).Error("Failed to get project for deletion")
+		h.logger.Error("Failed to get project for deletion", "endpoint", "Delete", "user_id", userULID.String(), "project_id", projectIDStr, "error", err.Error())
 		response.InternalServerError(c, "Failed to get project")
 		return
 	}
@@ -865,26 +663,14 @@ func (h *Handler) Delete(c *gin.Context) {
 	// Delete project via service (soft delete)
 	err = h.projectService.DeleteProject(ctx, projectID)
 	if err != nil {
-		h.logger.WithFields(logrus.Fields{
-			"endpoint":     "Delete",
-			"user_id":      userULID.String(),
-			"project_id":   projectIDStr,
-			"project_name": project.Name,
-			"error":        err.Error(),
-		}).Error("Failed to delete project")
+		h.logger.Error("Failed to delete project", "endpoint", "Delete", "user_id", userULID.String(), "project_id", projectIDStr, "project_name", project.Name, "error", err.Error())
 		response.InternalServerError(c, "Failed to delete project")
 		return
 	}
 
 	response.NoContent(c)
 
-	h.logger.WithFields(logrus.Fields{
-		"endpoint":        "Delete",
-		"user_id":         userULID.String(),
-		"project_id":      project.ID.String(),
-		"project_name":    project.Name,
-		"organization_id": project.OrganizationID.String(),
-	}).Info("Project deleted successfully")
+	h.logger.Info("Project deleted successfully", "endpoint", "Delete", "user_id", userULID.String(), "project_id", project.ID.String(), "project_name", project.Name, "organization_id", project.OrganizationID.String())
 }
 
 // Archive handles POST /api/v1/projects/:projectId/archive
@@ -906,17 +692,14 @@ func (h *Handler) Archive(c *gin.Context) {
 	// Extract user ID from JWT
 	userID, exists := c.Get("user_id")
 	if !exists {
-		h.logger.WithField("endpoint", "Archive").Error("User not authenticated")
+		h.logger.Error("User not authenticated", "endpoint", "Archive")
 		response.Unauthorized(c, "User not authenticated")
 		return
 	}
 
 	userULID, ok := userID.(ulid.ULID)
 	if !ok {
-		h.logger.WithFields(logrus.Fields{
-			"endpoint": "Archive",
-			"user_id":  userID,
-		}).Error("Invalid user ID type")
+		h.logger.Error("Invalid user ID type", "endpoint", "Archive", "user_id", userID)
 		response.BadRequest(c, "Invalid user ID", "")
 		return
 	}
@@ -924,22 +707,14 @@ func (h *Handler) Archive(c *gin.Context) {
 	// Parse and validate project ID from path parameter
 	projectIDStr := c.Param("projectId")
 	if projectIDStr == "" {
-		h.logger.WithFields(logrus.Fields{
-			"endpoint": "Archive",
-			"user_id":  userULID.String(),
-		}).Error("Project ID parameter missing")
+		h.logger.Error("Project ID parameter missing", "endpoint", "Archive", "user_id", userULID.String())
 		response.BadRequest(c, "Project ID is required", "")
 		return
 	}
 
 	projectID, err := ulid.Parse(projectIDStr)
 	if err != nil {
-		h.logger.WithFields(logrus.Fields{
-			"endpoint":   "Archive",
-			"user_id":    userULID.String(),
-			"project_id": projectIDStr,
-			"error":      err.Error(),
-		}).Error("Invalid project ID format")
+		h.logger.Error("Invalid project ID format", "endpoint", "Archive", "user_id", userULID.String(), "project_id", projectIDStr, "error", err.Error())
 		response.BadRequest(c, "Invalid project ID", "")
 		return
 	}
@@ -950,33 +725,18 @@ func (h *Handler) Archive(c *gin.Context) {
 	err = h.projectService.ValidateProjectAccess(ctx, userULID, projectID)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			h.logger.WithFields(logrus.Fields{
-				"endpoint":   "Archive",
-				"user_id":    userULID.String(),
-				"project_id": projectIDStr,
-				"error":      err.Error(),
-			}).Warn("Project not found")
+			h.logger.Warn("Project not found", "endpoint", "Archive", "user_id", userULID.String(), "project_id", projectIDStr, "error", err.Error())
 			response.NotFound(c, "Project")
 			return
 		}
 
 		if strings.Contains(err.Error(), "access") {
-			h.logger.WithFields(logrus.Fields{
-				"endpoint":   "Archive",
-				"user_id":    userULID.String(),
-				"project_id": projectIDStr,
-				"error":      err.Error(),
-			}).Warn("User attempted to archive project without permission")
+			h.logger.Warn("User attempted to archive project without permission", "endpoint", "Archive", "user_id", userULID.String(), "project_id", projectIDStr, "error", err.Error())
 			response.Forbidden(c, "You don't have permission to archive this project")
 			return
 		}
 
-		h.logger.WithFields(logrus.Fields{
-			"endpoint":   "Archive",
-			"user_id":    userULID.String(),
-			"project_id": projectIDStr,
-			"error":      err.Error(),
-		}).Error("Failed to validate project access")
+		h.logger.Error("Failed to validate project access", "endpoint", "Archive", "user_id", userULID.String(), "project_id", projectIDStr, "error", err.Error())
 		response.InternalServerError(c, "Failed to validate project access")
 		return
 	}
@@ -984,23 +744,14 @@ func (h *Handler) Archive(c *gin.Context) {
 	// Archive project via service
 	err = h.projectService.ArchiveProject(ctx, projectID)
 	if err != nil {
-		h.logger.WithFields(logrus.Fields{
-			"endpoint":   "Archive",
-			"user_id":    userULID.String(),
-			"project_id": projectIDStr,
-			"error":      err.Error(),
-		}).Error("Failed to archive project")
+		h.logger.Error("Failed to archive project", "endpoint", "Archive", "user_id", userULID.String(), "project_id", projectIDStr, "error", err.Error())
 		response.Error(c, err)
 		return
 	}
 
 	response.NoContent(c)
 
-	h.logger.WithFields(logrus.Fields{
-		"endpoint":   "Archive",
-		"user_id":    userULID.String(),
-		"project_id": projectID.String(),
-	}).Info("Project archived successfully")
+	h.logger.Info("Project archived successfully", "endpoint", "Archive", "user_id", userULID.String(), "project_id", projectID.String())
 }
 
 // Unarchive handles POST /api/v1/projects/:projectId/unarchive
@@ -1022,17 +773,14 @@ func (h *Handler) Unarchive(c *gin.Context) {
 	// Extract user ID from JWT
 	userID, exists := c.Get("user_id")
 	if !exists {
-		h.logger.WithField("endpoint", "Unarchive").Error("User not authenticated")
+		h.logger.Error("User not authenticated", "endpoint", "Unarchive")
 		response.Unauthorized(c, "User not authenticated")
 		return
 	}
 
 	userULID, ok := userID.(ulid.ULID)
 	if !ok {
-		h.logger.WithFields(logrus.Fields{
-			"endpoint": "Unarchive",
-			"user_id":  userID,
-		}).Error("Invalid user ID type")
+		h.logger.Error("Invalid user ID type", "endpoint", "Unarchive", "user_id", userID)
 		response.BadRequest(c, "Invalid user ID", "")
 		return
 	}
@@ -1040,22 +788,14 @@ func (h *Handler) Unarchive(c *gin.Context) {
 	// Parse and validate project ID from path parameter
 	projectIDStr := c.Param("projectId")
 	if projectIDStr == "" {
-		h.logger.WithFields(logrus.Fields{
-			"endpoint": "Unarchive",
-			"user_id":  userULID.String(),
-		}).Error("Project ID parameter missing")
+		h.logger.Error("Project ID parameter missing", "endpoint", "Unarchive", "user_id", userULID.String())
 		response.BadRequest(c, "Project ID is required", "")
 		return
 	}
 
 	projectID, err := ulid.Parse(projectIDStr)
 	if err != nil {
-		h.logger.WithFields(logrus.Fields{
-			"endpoint":   "Unarchive",
-			"user_id":    userULID.String(),
-			"project_id": projectIDStr,
-			"error":      err.Error(),
-		}).Error("Invalid project ID format")
+		h.logger.Error("Invalid project ID format", "endpoint", "Unarchive", "user_id", userULID.String(), "project_id", projectIDStr, "error", err.Error())
 		response.BadRequest(c, "Invalid project ID", "")
 		return
 	}
@@ -1066,33 +806,18 @@ func (h *Handler) Unarchive(c *gin.Context) {
 	err = h.projectService.ValidateProjectAccess(ctx, userULID, projectID)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			h.logger.WithFields(logrus.Fields{
-				"endpoint":   "Unarchive",
-				"user_id":    userULID.String(),
-				"project_id": projectIDStr,
-				"error":      err.Error(),
-			}).Warn("Project not found")
+			h.logger.Warn("Project not found", "endpoint", "Unarchive", "user_id", userULID.String(), "project_id", projectIDStr, "error", err.Error())
 			response.NotFound(c, "Project")
 			return
 		}
 
 		if strings.Contains(err.Error(), "access") {
-			h.logger.WithFields(logrus.Fields{
-				"endpoint":   "Unarchive",
-				"user_id":    userULID.String(),
-				"project_id": projectIDStr,
-				"error":      err.Error(),
-			}).Warn("User attempted to unarchive project without permission")
+			h.logger.Warn("User attempted to unarchive project without permission", "endpoint", "Unarchive", "user_id", userULID.String(), "project_id", projectIDStr, "error", err.Error())
 			response.Forbidden(c, "You don't have permission to unarchive this project")
 			return
 		}
 
-		h.logger.WithFields(logrus.Fields{
-			"endpoint":   "Unarchive",
-			"user_id":    userULID.String(),
-			"project_id": projectIDStr,
-			"error":      err.Error(),
-		}).Error("Failed to validate project access")
+		h.logger.Error("Failed to validate project access", "endpoint", "Unarchive", "user_id", userULID.String(), "project_id", projectIDStr, "error", err.Error())
 		response.InternalServerError(c, "Failed to validate project access")
 		return
 	}
@@ -1100,21 +825,12 @@ func (h *Handler) Unarchive(c *gin.Context) {
 	// Unarchive project via service
 	err = h.projectService.UnarchiveProject(ctx, projectID)
 	if err != nil {
-		h.logger.WithFields(logrus.Fields{
-			"endpoint":   "Unarchive",
-			"user_id":    userULID.String(),
-			"project_id": projectIDStr,
-			"error":      err.Error(),
-		}).Error("Failed to unarchive project")
+		h.logger.Error("Failed to unarchive project", "endpoint", "Unarchive", "user_id", userULID.String(), "project_id", projectIDStr, "error", err.Error())
 		response.Error(c, err)
 		return
 	}
 
 	response.NoContent(c)
 
-	h.logger.WithFields(logrus.Fields{
-		"endpoint":   "Unarchive",
-		"user_id":    userULID.String(),
-		"project_id": projectID.String(),
-	}).Info("Project unarchived successfully")
+	h.logger.Info("Project unarchived successfully", "endpoint", "Unarchive", "user_id", userULID.String(), "project_id", projectID.String())
 }

@@ -1,6 +1,7 @@
 package observability
 
 import (
+	"log/slog"
 	"brokle/internal/config"
 	"brokle/internal/core/domain/analytics"
 	"brokle/internal/core/domain/observability"
@@ -8,7 +9,6 @@ import (
 	infraStorage "brokle/internal/infrastructure/storage"
 	"brokle/internal/infrastructure/streams"
 
-	"github.com/sirupsen/logrus"
 )
 
 type ServiceRegistry struct {
@@ -47,7 +47,7 @@ func NewServiceRegistry(
 	providerPricingService analytics.ProviderPricingService,
 	observabilityConfig *config.ObservabilityConfig,
 
-	logger *logrus.Logger,
+	logger *slog.Logger,
 ) *ServiceRegistry {
 	otlpConverterService := NewOTLPConverterService(logger, providerPricingService, observabilityConfig)
 	otlpMetricsConverterService := NewOTLPMetricsConverterService(logger)
@@ -63,11 +63,7 @@ func NewServiceRegistry(
 	if archiveConfig != nil && archiveConfig.Enabled && s3Client != nil {
 		parquetWriter := NewParquetWriter(archiveConfig.CompressionLevel)
 		archiveService = NewArchiveService(s3Client, parquetWriter, blobStorageService, archiveConfig, logger)
-		logger.WithFields(logrus.Fields{
-			"bucket":            s3Client.GetBucketName(),
-			"path_prefix":       archiveConfig.PathPrefix,
-			"compression_level": archiveConfig.CompressionLevel,
-		}).Info("Archive service initialized for S3 raw telemetry archival")
+		logger.Info("Archive service initialized for S3 raw telemetry archival", "bucket", s3Client.GetBucketName(), "path_prefix", archiveConfig.PathPrefix, "compression_level", archiveConfig.CompressionLevel)
 	}
 
 	return &ServiceRegistry{

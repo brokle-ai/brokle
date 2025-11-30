@@ -1,11 +1,11 @@
 package observability
 
 import (
+	"log/slog"
 	"context"
 	"sync"
 	"time"
 
-	"github.com/sirupsen/logrus"
 
 	"brokle/internal/core/domain/observability"
 	"brokle/internal/infrastructure/streams"
@@ -16,7 +16,7 @@ type TelemetryService struct {
 	lastProcessingTime   time.Time
 	deduplicationService observability.TelemetryDeduplicationService
 	streamProducer       *streams.TelemetryStreamProducer
-	logger               *logrus.Logger
+	logger               *slog.Logger
 	batchesProcessed     uint64
 	eventsProcessed      uint64
 	avgProcessingTime    time.Duration
@@ -27,7 +27,7 @@ type TelemetryService struct {
 func NewTelemetryService(
 	deduplicationService observability.TelemetryDeduplicationService,
 	streamProducer *streams.TelemetryStreamProducer,
-	logger *logrus.Logger,
+	logger *slog.Logger,
 ) observability.TelemetryService {
 	return &TelemetryService{
 		deduplicationService: deduplicationService,

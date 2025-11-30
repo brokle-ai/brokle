@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -20,9 +19,6 @@ func TestClickHouseConnectionPoolingConfig(t *testing.T) {
 			URL: "clickhouse://brokle:brokle_password@localhost:9000/default",
 		},
 	}
-
-	logger := logrus.New()
-	logger.SetLevel(logrus.WarnLevel)
 
 	t.Run("ConfigurationParsing", func(t *testing.T) {
 		// This should parse correctly even without ClickHouse running

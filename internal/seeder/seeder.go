@@ -4,14 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/shopspring/decimal"
-	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v3"
 	"gorm.io/gorm"
 
@@ -21,13 +20,15 @@ import (
 	"brokle/internal/infrastructure/database"
 	analyticsRepo "brokle/internal/infrastructure/repository/analytics"
 	authRepo "brokle/internal/infrastructure/repository/auth"
+	"brokle/pkg/logging"
 	"brokle/pkg/ulid"
 )
 
 // Seeder handles all database seeding operations
 type Seeder struct {
-	db  *gorm.DB
-	cfg *config.Config
+	db     *gorm.DB
+	cfg    *config.Config
+	logger *slog.Logger
 
 	// Repositories
 	roleRepo          auth.RoleRepository
@@ -38,9 +39,8 @@ type Seeder struct {
 
 // New creates a new Seeder with the required dependencies
 func New(cfg *config.Config) (*Seeder, error) {
-	// Create logger for database connection
-	logger := logrus.New()
-	logger.SetLevel(logrus.WarnLevel) // Less verbose for seeding
+	// Create logger for seeding - use Info level so progress and verbose output are visible
+	logger := logging.NewLoggerWithFormat(slog.LevelInfo, cfg.Logging.Format)
 
 	// Initialize PostgreSQL database
 	postgresDB, err := database.NewPostgresDB(cfg, logger)
@@ -49,8 +49,9 @@ func New(cfg *config.Config) (*Seeder, error) {
 	}
 
 	s := &Seeder{
-		db:  postgresDB.DB,
-		cfg: cfg,
+		db:     postgresDB.DB,
+		cfg:    cfg,
+		logger: logger,
 	}
 
 	// Initialize repositories
@@ -81,11 +82,11 @@ func (s *Seeder) SeedAll(ctx context.Context, opts *Options) error {
 		return nil
 	}
 
-	log.Println("Starting PostgreSQL seeding...")
+	s.logger.Info("Starting PostgreSQL seeding...")
 
 	// Reset data if requested
 	if opts.Reset {
-		log.Println("Resetting existing data...")
+		s.logger.Info("Resetting existing data...")
 		if err := s.Reset(ctx, opts.Verbose); err != nil {
 			return fmt.Errorf("failed to reset data: %w", err)
 		}
@@ -104,7 +105,7 @@ func (s *Seeder) SeedAll(ctx context.Context, opts *Options) error {
 
 	entityMaps := NewEntityMaps()
 
-	log.Printf("Starting seeding process with %d permissions, %d roles", len(permissions), len(roles))
+	s.logger.Debug("Starting seeding process", "permissions", len(permissions), "roles", len(roles))
 
 	// 1. Seed permissions (no dependencies)
 	if err := s.seedPermissions(ctx, permissions, entityMaps, opts.Verbose); err != nil {
@@ -121,7 +122,7 @@ func (s *Seeder) SeedAll(ctx context.Context, opts *Options) error {
 		return fmt.Errorf("failed to seed pricing: %w", err)
 	}
 
-	log.Println("PostgreSQL seeding completed successfully")
+	s.logger.Info("PostgreSQL seeding completed successfully")
 	return nil
 }
 
@@ -132,11 +133,11 @@ func (s *Seeder) SeedRBAC(ctx context.Context, opts *Options) error {
 		return nil
 	}
 
-	log.Println("Starting RBAC seeding...")
+	s.logger.Info("Starting RBAC seeding...")
 
 	// Reset RBAC data if requested
 	if opts.Reset {
-		log.Println("Resetting existing RBAC data...")
+		s.logger.Info("Resetting existing RBAC data...")
 		if err := s.resetRBAC(ctx, opts.Verbose); err != nil {
 			return fmt.Errorf("failed to reset RBAC data: %w", err)
 		}
@@ -168,10 +169,10 @@ func (s *Seeder) SeedRBAC(ctx context.Context, opts *Options) error {
 	// Print statistics
 	stats, err := s.GetRBACStatistics(ctx)
 	if err == nil {
-		log.Printf("RBAC Statistics: %d permissions, %d roles", stats.TotalPermissions, stats.TotalRoles)
+		s.logger.Debug("RBAC Statistics", "permissions", stats.TotalPermissions, "roles", stats.TotalRoles)
 	}
 
-	log.Println("RBAC seeding completed successfully")
+	s.logger.Info("RBAC seeding completed successfully")
 	return nil
 }
 
@@ -182,11 +183,11 @@ func (s *Seeder) SeedPricing(ctx context.Context, opts *Options) error {
 		return nil
 	}
 
-	log.Println("Starting provider pricing seeding...")
+	s.logger.Info("Starting provider pricing seeding...")
 
 	// Reset pricing data if requested
 	if opts.Reset {
-		log.Println("Resetting existing pricing data...")
+		s.logger.Info("Resetting existing pricing data...")
 		if err := s.resetPricing(ctx, opts.Verbose); err != nil {
 			return fmt.Errorf("failed to reset pricing data: %w", err)
 		}
@@ -200,28 +201,28 @@ func (s *Seeder) SeedPricing(ctx context.Context, opts *Options) error {
 	// Print statistics
 	stats, err := s.GetPricingStatistics(ctx)
 	if err == nil {
-		log.Printf("Pricing Statistics: %d models, %d prices", stats.TotalModels, stats.TotalPrices)
+		s.logger.Debug("Pricing Statistics", "models", stats.TotalModels, "prices", stats.TotalPrices)
 	}
 
-	log.Println("Provider pricing seeding completed successfully")
+	s.logger.Info("Provider pricing seeding completed successfully")
 	return nil
 }
 
 // Reset removes all seeded data
 func (s *Seeder) Reset(ctx context.Context, verbose bool) error {
-	log.Println("Starting data reset...")
+	s.logger.Info("Starting data reset...")
 
 	// Reset RBAC data
 	if err := s.resetRBAC(ctx, verbose); err != nil {
-		log.Printf("Warning: Could not reset RBAC data: %v", err)
+		s.logger.Warn(" Could not reset RBAC data", "error", err)
 	}
 
 	// Reset pricing data
 	if err := s.resetPricing(ctx, verbose); err != nil {
-		log.Printf("Warning: Could not reset pricing data: %v", err)
+		s.logger.Warn(" Could not reset pricing data", "error", err)
 	}
 
-	log.Println("Data reset completed")
+	s.logger.Info("Data reset completed")
 	return nil
 }
 
@@ -408,7 +409,7 @@ func findSeedFile(seedFile string) string {
 // seedPermissions seeds permissions from the provided seed data
 func (s *Seeder) seedPermissions(ctx context.Context, permissionSeeds []PermissionSeed, entityMaps *EntityMaps, verbose bool) error {
 	if verbose {
-		log.Printf("Seeding %d permissions...", len(permissionSeeds))
+		s.logger.Info("Seeding permissions", "count", len(permissionSeeds))
 	}
 
 	for _, permSeed := range permissionSeeds {
@@ -425,7 +426,7 @@ func (s *Seeder) seedPermissions(ctx context.Context, permissionSeeds []Permissi
 		existing, err := s.permissionRepo.GetByResourceAction(ctx, resource, action)
 		if err == nil && existing != nil {
 			if verbose {
-				log.Printf("   Permission %s already exists, skipping", permSeed.Name)
+				s.logger.Info("Permission already exists, skipping", "name", permSeed.Name)
 			}
 			entityMaps.Permissions[permSeed.Name] = existing.ID
 			continue
@@ -464,7 +465,7 @@ func (s *Seeder) seedPermissions(ctx context.Context, permissionSeeds []Permissi
 		entityMaps.Permissions[permSeed.Name] = permission.ID
 
 		if verbose {
-			log.Printf("   Created permission: %s", permSeed.Name)
+			s.logger.Info("Created permission", "name", permSeed.Name)
 		}
 	}
 
@@ -474,7 +475,7 @@ func (s *Seeder) seedPermissions(ctx context.Context, permissionSeeds []Permissi
 // seedRoles seeds template roles from the provided seed data
 func (s *Seeder) seedRoles(ctx context.Context, roleSeeds []RoleSeed, entityMaps *EntityMaps, verbose bool) error {
 	if verbose {
-		log.Printf("Seeding %d template roles...", len(roleSeeds))
+		s.logger.Info("Seeding template roles", "count", len(roleSeeds))
 	}
 
 	for _, roleSeed := range roleSeeds {
@@ -500,8 +501,7 @@ func (s *Seeder) seedRoles(ctx context.Context, roleSeeds []RoleSeed, entityMaps
 			}
 
 			if verbose {
-				log.Printf("   Synced role %s (%s) with %d permissions",
-					roleSeed.Name, roleSeed.ScopeType, len(roleSeed.Permissions))
+				s.logger.Info("Synced role", "name", roleSeed.Name, "scope", roleSeed.ScopeType, "permissions", len(roleSeed.Permissions))
 			}
 			continue
 		}
@@ -532,8 +532,7 @@ func (s *Seeder) seedRoles(ctx context.Context, roleSeeds []RoleSeed, entityMaps
 		}
 
 		if verbose {
-			log.Printf("   Created template role: %s (%s scope) with %d permissions",
-				roleSeed.Name, roleSeed.ScopeType, len(roleSeed.Permissions))
+			s.logger.Info("Created template role", "name", roleSeed.Name, "scope", roleSeed.ScopeType, "permissions", len(roleSeed.Permissions))
 		}
 	}
 
@@ -545,7 +544,7 @@ func (s *Seeder) seedPricingFromFile(ctx context.Context, verbose bool) error {
 	pricingData, err := s.loadPricing()
 	if err != nil {
 		// Pricing data is optional - log warning but don't fail
-		log.Printf("Warning: Could not load pricing data: %v", err)
+		s.logger.Warn(" Could not load pricing data", "error", err)
 		return nil
 	}
 
@@ -555,7 +554,7 @@ func (s *Seeder) seedPricingFromFile(ctx context.Context, verbose bool) error {
 // seedPricingData seeds provider models and prices
 func (s *Seeder) seedPricingData(ctx context.Context, data *ProviderPricingSeedData, verbose bool) error {
 	if verbose {
-		log.Printf("Seeding %d provider models with pricing...", len(data.ProviderModels))
+		s.logger.Info("Seeding provider models with pricing", "count", len(data.ProviderModels))
 	}
 
 	for _, modelSeed := range data.ProviderModels {
@@ -565,7 +564,7 @@ func (s *Seeder) seedPricingData(ctx context.Context, data *ProviderPricingSeedD
 	}
 
 	if verbose {
-		log.Printf("Provider pricing seeded successfully (version: %s)", data.Version)
+		s.logger.Info("Provider pricing seeded successfully", "version", data.Version)
 	}
 	return nil
 }
@@ -582,7 +581,7 @@ func (s *Seeder) seedModel(ctx context.Context, modelSeed ProviderModelSeed, ver
 	existing, _ := s.providerModelRepo.GetProviderModelByName(ctx, nil, modelSeed.ModelName)
 	if existing != nil {
 		if verbose {
-			log.Printf("   Model %s already exists (ID: %s), skipping", modelSeed.ModelName, existing.ID.String())
+			s.logger.Info("Model already exists, skipping", "name", modelSeed.ModelName, "id", existing.ID.String())
 		}
 		return nil
 	}
@@ -616,7 +615,7 @@ func (s *Seeder) seedModel(ctx context.Context, modelSeed ProviderModelSeed, ver
 	}
 
 	if verbose {
-		log.Printf("   Created model: %s (ID: %s)", model.ModelName, model.ID.String())
+		s.logger.Info("Created model", "name", model.ModelName, "id", model.ID.String())
 	}
 
 	// Create prices for this model
@@ -633,7 +632,7 @@ func (s *Seeder) seedModel(ctx context.Context, modelSeed ProviderModelSeed, ver
 		}
 
 		if verbose {
-			log.Printf("      %s: $%.6f/1M tokens", priceSeed.UsageType, priceSeed.Price)
+			s.logger.Info("Created price", "usage_type", priceSeed.UsageType, "price", priceSeed.Price)
 		}
 	}
 
@@ -647,7 +646,7 @@ func (s *Seeder) seedModel(ctx context.Context, modelSeed ProviderModelSeed, ver
 // resetRBAC removes all existing RBAC data
 func (s *Seeder) resetRBAC(ctx context.Context, verbose bool) error {
 	if verbose {
-		log.Println("Resetting RBAC data...")
+		s.logger.Info("Resetting RBAC data...")
 	}
 
 	// Get all roles and delete them
@@ -659,11 +658,11 @@ func (s *Seeder) resetRBAC(ctx context.Context, verbose bool) error {
 	deletedRoles := 0
 	for _, role := range roles {
 		if err := s.roleRepo.Delete(ctx, role.ID); err != nil {
-			log.Printf("Warning: Could not delete role %s: %v", role.Name, err)
+			s.logger.Warn(" Could not delete role", "name", role.Name, "error", err)
 		} else {
 			deletedRoles++
 			if verbose {
-				log.Printf("   Deleted role: %s", role.Name)
+				s.logger.Info("Deleted role", "name", role.Name)
 			}
 		}
 	}
@@ -677,17 +676,17 @@ func (s *Seeder) resetRBAC(ctx context.Context, verbose bool) error {
 	deletedPerms := 0
 	for _, perm := range permissions {
 		if err := s.permissionRepo.Delete(ctx, perm.ID); err != nil {
-			log.Printf("Warning: Could not delete permission %s:%s: %v", perm.Resource, perm.Action, err)
+			s.logger.Warn(" Could not delete permission", "resource", perm.Resource, "action", perm.Action, "error", err)
 		} else {
 			deletedPerms++
 			if verbose {
-				log.Printf("   Deleted permission: %s:%s", perm.Resource, perm.Action)
+				s.logger.Info("Deleted permission", "resource", perm.Resource, "action", perm.Action)
 			}
 		}
 	}
 
 	if verbose {
-		log.Printf("RBAC reset completed (%d roles, %d permissions deleted)", deletedRoles, deletedPerms)
+		s.logger.Info("RBAC reset completed", "roles_deleted", deletedRoles, "permissions_deleted", deletedPerms)
 	}
 	return nil
 }
@@ -695,7 +694,7 @@ func (s *Seeder) resetRBAC(ctx context.Context, verbose bool) error {
 // resetPricing removes all existing pricing data
 func (s *Seeder) resetPricing(ctx context.Context, verbose bool) error {
 	if verbose {
-		log.Println("Resetting provider pricing data...")
+		s.logger.Info("Resetting provider pricing data...")
 	}
 
 	// Get all models and delete them (cascade deletes prices)
@@ -707,17 +706,17 @@ func (s *Seeder) resetPricing(ctx context.Context, verbose bool) error {
 	deletedCount := 0
 	for _, model := range models {
 		if err := s.providerModelRepo.DeleteProviderModel(ctx, model.ID); err != nil {
-			log.Printf("Warning: Could not delete model %s: %v", model.ModelName, err)
+			s.logger.Warn(" Could not delete model", "name", model.ModelName, "error", err)
 		} else {
 			deletedCount++
 			if verbose {
-				log.Printf("   Deleted model: %s", model.ModelName)
+				s.logger.Info("Deleted model", "name", model.ModelName)
 			}
 		}
 	}
 
 	if verbose {
-		log.Printf("Provider pricing reset completed (%d models deleted)", deletedCount)
+		s.logger.Info("Provider pricing reset completed", "models_deleted", deletedCount)
 	}
 	return nil
 }

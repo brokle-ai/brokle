@@ -276,13 +276,13 @@ The migration CLI includes comprehensive safety features:
 ### Error Handling & Logging
 **Structured Logging** with correlation IDs:
 ```go
-import "github.com/sirupsen/logrus"
+import "log/slog"
 
-logger := logrus.WithFields(logrus.Fields{
-    "user_id": userID,
-    "request_id": requestID,
-    "organization_id": orgID,
-})
+logger := baseLogger.With(
+    "user_id", userID,
+    "request_id", requestID,
+    "organization_id", orgID,
+)
 logger.Info("Processing user request")
 ```
 

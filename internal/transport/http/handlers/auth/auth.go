@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"log/slog"
 	"context"
 	"net/http"
 	"sort"
@@ -8,7 +9,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 
 	"brokle/internal/config"
 	"brokle/internal/core/domain/auth"
@@ -22,7 +22,7 @@ import (
 // Handler handles authentication endpoints
 type Handler struct {
 	config              *config.Config
-	logger              *logrus.Logger
+	logger              *slog.Logger
 	authService         auth.AuthService
 	apiKeyService       auth.APIKeyService
 	userService         user.UserService
@@ -33,7 +33,7 @@ type Handler struct {
 // NewHandler creates a new auth handler
 func NewHandler(
 	config *config.Config,
-	logger *logrus.Logger,
+	logger *slog.Logger,
 	authService auth.AuthService,
 	apiKeyService auth.APIKeyService,
 	userService user.UserService,
@@ -77,7 +77,7 @@ type LoginRequest struct {
 func (h *Handler) Login(c *gin.Context) {
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.WithError(err).Error("Invalid login request")
+		h.logger.Error("Invalid login request", "error", err)
 		response.BadRequest(c, "Invalid request payload", err.Error())
 		return
 	}
@@ -92,7 +92,7 @@ func (h *Handler) Login(c *gin.Context) {
 	// Attempt login
 	loginResp, err := h.authService.Login(c.Request.Context(), authReq)
 	if err != nil {
-		h.logger.WithError(err).WithField("email", req.Email).Error("Login failed")
+		h.logger.Error("Login failed", "error", err, "email", req.Email)
 		response.Error(c, err)
 		return
 	}
@@ -100,7 +100,7 @@ func (h *Handler) Login(c *gin.Context) {
 	// Fetch user data BEFORE setting cookies (atomic authentication)
 	userInterface, err := h.userService.GetUserByEmail(c.Request.Context(), req.Email)
 	if err != nil {
-		h.logger.WithError(err).WithField("email", req.Email).Error("Failed to get user data after login")
+		h.logger.Error("Failed to get user data after login", "error", err, "email", req.Email)
 		response.InternalServerError(c, "Failed to complete authentication")
 		return
 	}
@@ -108,7 +108,7 @@ func (h *Handler) Login(c *gin.Context) {
 	// Generate CSRF token with error handling
 	csrfToken, err := generateCSRFToken()
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to generate CSRF token")
+		h.logger.Error("Failed to generate CSRF token", "error", err)
 		response.InternalServerError(c, "Authentication setup failed")
 		return
 	}
@@ -128,7 +128,7 @@ func (h *Handler) Login(c *gin.Context) {
 		"expires_in": expiresInMs,   // Milliseconds
 	}
 
-	h.logger.WithField("email", req.Email).Info("User logged in successfully")
+	h.logger.Info("User logged in successfully", "email", req.Email)
 	response.Success(c, responseData)
 }
 
@@ -163,7 +163,7 @@ type RegisterRequest struct {
 func (h *Handler) Signup(c *gin.Context) {
 	var req RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.WithError(err).Error("Invalid registration request")
+		h.logger.Error("Invalid registration request", "error", err)
 		response.BadRequest(c, "Invalid request payload", err.Error())
 		return
 	}
@@ -201,7 +201,7 @@ func (h *Handler) Signup(c *gin.Context) {
 	}
 
 	if err != nil {
-		h.logger.WithError(err).WithField("email", req.Email).Error("Registration failed")
+		h.logger.Error("Registration failed", "error", err, "email", req.Email)
 		response.Error(c, err)
 		return
 	}
@@ -209,7 +209,7 @@ func (h *Handler) Signup(c *gin.Context) {
 	// Fetch user data BEFORE setting cookies (atomic authentication)
 	userInterface, err := h.userService.GetUserByEmail(c.Request.Context(), req.Email)
 	if err != nil {
-		h.logger.WithError(err).WithField("email", req.Email).Error("Failed to get user data after signup")
+		h.logger.Error("Failed to get user data after signup", "error", err, "email", req.Email)
 		response.InternalServerError(c, "Failed to complete authentication")
 		return
 	}
@@ -217,7 +217,7 @@ func (h *Handler) Signup(c *gin.Context) {
 	// Generate CSRF token with error handling
 	csrfToken, err := generateCSRFToken()
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to generate CSRF token during signup")
+		h.logger.Error("Failed to generate CSRF token during signup", "error", err)
 		response.InternalServerError(c, "Authentication setup failed")
 		return
 	}
@@ -237,10 +237,7 @@ func (h *Handler) Signup(c *gin.Context) {
 		"expires_in": expiresInMs,   // Milliseconds
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"email":  req.Email,
-		"org_id": regResp.Organization.ID,
-	}).Info("User registered successfully")
+	h.logger.Info("User registered successfully", "email", req.Email, "org_id", regResp.Organization.ID)
 
 	response.Success(c, responseData)
 }
@@ -269,7 +266,7 @@ type CompleteOAuthSignupRequest struct {
 func (h *Handler) CompleteOAuthSignup(c *gin.Context) {
 	var req CompleteOAuthSignupRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.WithError(err).Error("Invalid OAuth signup completion request")
+		h.logger.Error("Invalid OAuth signup completion request", "error", err)
 		response.BadRequest(c, "Invalid request payload", err.Error())
 		return
 	}
@@ -277,7 +274,7 @@ func (h *Handler) CompleteOAuthSignup(c *gin.Context) {
 	// Get OAuth session from Redis
 	sessionInterface, err := h.authService.GetOAuthSession(c.Request.Context(), req.SessionID)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to get OAuth session")
+		h.logger.Error("Failed to get OAuth session", "error", err)
 		response.Error(c, err)
 		return
 	}
@@ -333,7 +330,7 @@ func (h *Handler) CompleteOAuthSignup(c *gin.Context) {
 	// Complete OAuth registration
 	regResp, err := h.registrationService.CompleteOAuthRegistration(c.Request.Context(), oauthReq)
 	if err != nil {
-		h.logger.WithError(err).WithField("email", session.Email).Error("OAuth registration failed")
+		h.logger.Error("OAuth registration failed", "error", err, "email", session.Email)
 		response.Error(c, err)
 		return
 	}
@@ -344,7 +341,7 @@ func (h *Handler) CompleteOAuthSignup(c *gin.Context) {
 	// Fetch user data BEFORE setting cookies (atomic authentication)
 	userInterface, err := h.userService.GetUserByEmail(c.Request.Context(), session.Email)
 	if err != nil {
-		h.logger.WithError(err).WithField("email", session.Email).Error("Failed to get user data after OAuth signup")
+		h.logger.Error("Failed to get user data after OAuth signup", "error", err, "email", session.Email)
 		response.InternalServerError(c, "Failed to complete authentication")
 		return
 	}
@@ -352,7 +349,7 @@ func (h *Handler) CompleteOAuthSignup(c *gin.Context) {
 	// Generate CSRF token with error handling
 	csrfToken, err := generateCSRFToken()
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to generate CSRF token during OAuth signup")
+		h.logger.Error("Failed to generate CSRF token during OAuth signup", "error", err)
 		response.InternalServerError(c, "Authentication setup failed")
 		return
 	}
@@ -373,11 +370,7 @@ func (h *Handler) CompleteOAuthSignup(c *gin.Context) {
 		"expires_in":   expiresInMs,          // Milliseconds
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"email":    session.Email,
-		"provider": session.Provider,
-		"org_id":   regResp.Organization.ID,
-	}).Info("OAuth registration completed successfully")
+	h.logger.Info("OAuth registration completed successfully", "email", session.Email, "provider", session.Provider, "org_id", regResp.Organization.ID)
 
 	response.Success(c, responseData)
 }
@@ -397,7 +390,7 @@ func (h *Handler) ExchangeLoginSession(c *gin.Context) {
 	// Get login tokens from session (one-time use)
 	sessionData, err := h.authService.GetLoginTokenSession(c.Request.Context(), sessionID)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to get login session")
+		h.logger.Error("Failed to get login session", "error", err)
 		response.Error(c, err)
 		return
 	}
@@ -437,7 +430,7 @@ func (h *Handler) ExchangeLoginSession(c *gin.Context) {
 	// Parse user ID
 	userID, err := ulid.Parse(userIDStr)
 	if err != nil {
-		h.logger.WithError(err).Error("Invalid user ID format in session")
+		h.logger.Error("Invalid user ID format in session", "error", err)
 		response.BadRequest(c, "Invalid session data: malformed user ID", "")
 		return
 	}
@@ -445,7 +438,7 @@ func (h *Handler) ExchangeLoginSession(c *gin.Context) {
 	// Fetch user data BEFORE setting cookies (atomic authentication)
 	userInterface, err := h.userService.GetUser(c.Request.Context(), userID)
 	if err != nil {
-		h.logger.WithError(err).WithField("user_id", userID).Error("Failed to get user data during session exchange")
+		h.logger.Error("Failed to get user data during session exchange", "error", err, "user_id", userID)
 		response.InternalServerError(c, "Failed to complete authentication")
 		return
 	}
@@ -453,7 +446,7 @@ func (h *Handler) ExchangeLoginSession(c *gin.Context) {
 	// Generate CSRF token with error handling
 	csrfToken, err := generateCSRFToken()
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to generate CSRF token during session exchange")
+		h.logger.Error("Failed to generate CSRF token during session exchange", "error", err)
 		response.InternalServerError(c, "Authentication setup failed")
 		return
 	}
@@ -500,7 +493,7 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 	// Read refresh token from httpOnly cookie
 	refreshToken, err := c.Cookie("refresh_token")
 	if err != nil {
-		h.logger.WithError(err).Error("Refresh token cookie not found")
+		h.logger.Error("Refresh token cookie not found", "error", err)
 		clearAuthCookies(c.Writer)
 		response.ErrorWithStatus(c, http.StatusUnauthorized, "REFRESH_EXPIRED", "Refresh token not found", "")
 		return
@@ -514,7 +507,7 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 	// Refresh token
 	loginResp, err := h.authService.RefreshToken(c.Request.Context(), authReq)
 	if err != nil {
-		h.logger.WithError(err).Error("Token refresh failed")
+		h.logger.Error("Token refresh failed", "error", err)
 		clearAuthCookies(c.Writer)
 		response.ErrorWithStatus(c, http.StatusUnauthorized, "REFRESH_EXPIRED", "Refresh token invalid or expired", err.Error())
 		return
@@ -523,7 +516,7 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 	// Generate new CSRF token with error handling
 	csrfToken, err := generateCSRFToken()
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to generate CSRF token during refresh")
+		h.logger.Error("Failed to generate CSRF token during refresh", "error", err)
 		clearAuthCookies(c.Writer)
 		response.InternalServerError(c, "Token refresh setup failed")
 		return
@@ -596,7 +589,7 @@ func (h *Handler) GetCurrentUser(c *gin.Context) {
 	// Get user data
 	user, err := h.userService.GetUser(c.Request.Context(), userID)
 	if err != nil {
-		h.logger.WithError(err).WithField("user_id", userID).Error("Failed to get user")
+		h.logger.Error("Failed to get user", "error", err, "user_id", userID)
 		response.NotFound(c, "User")
 		return
 	}
@@ -636,7 +629,7 @@ type ForgotPasswordRequest struct {
 func (h *Handler) ForgotPassword(c *gin.Context) {
 	var req ForgotPasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.WithError(err).Error("Invalid forgot password request")
+		h.logger.Error("Invalid forgot password request", "error", err)
 		response.BadRequest(c, "Invalid request payload", err.Error())
 		return
 	}
@@ -644,11 +637,11 @@ func (h *Handler) ForgotPassword(c *gin.Context) {
 	// Initiate password reset
 	err := h.authService.ResetPassword(c.Request.Context(), req.Email)
 	if err != nil {
-		h.logger.WithError(err).WithField("email", req.Email).Error("Password reset initiation failed")
+		h.logger.Error("Password reset initiation failed", "error", err, "email", req.Email)
 		// Don't reveal if email exists or not
 	}
 
-	h.logger.WithField("email", req.Email).Info("Password reset initiated")
+	h.logger.Info("Password reset initiated", "email", req.Email)
 	response.Success(c, gin.H{
 		"message": "If the email exists, a password reset link has been sent",
 	})
@@ -675,7 +668,7 @@ type ResetPasswordRequest struct {
 func (h *Handler) ResetPassword(c *gin.Context) {
 	var req ResetPasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.WithError(err).Error("Invalid reset password request")
+		h.logger.Error("Invalid reset password request", "error", err)
 		response.BadRequest(c, "Invalid request payload", err.Error())
 		return
 	}
@@ -683,7 +676,7 @@ func (h *Handler) ResetPassword(c *gin.Context) {
 	// Confirm password reset
 	err := h.authService.ConfirmPasswordReset(c.Request.Context(), req.Token, req.NewPassword)
 	if err != nil {
-		h.logger.WithError(err).Error("Password reset failed")
+		h.logger.Error("Password reset failed", "error", err)
 		response.BadRequest(c, "Password reset failed", err.Error())
 		return
 	}
@@ -732,10 +725,7 @@ func (h *Handler) Logout(c *gin.Context) {
 	// Logout user by blacklisting current access token JTI
 	err := h.authService.Logout(c.Request.Context(), claims.JWTID, claims.UserID)
 	if err != nil {
-		h.logger.WithError(err).WithFields(logrus.Fields{
-			"jti":     claims.JWTID,
-			"user_id": claims.UserID,
-		}).Error("Logout failed")
+		h.logger.Error("Logout failed", "error", err, "jti", claims.JWTID, "user_id", claims.UserID)
 		// Clear cookies even if logout fails (best effort)
 		clearAuthCookies(c.Writer)
 		response.ErrorWithStatus(c, http.StatusInternalServerError, "logout_failed", "Logout failed", err.Error())
@@ -745,10 +735,7 @@ func (h *Handler) Logout(c *gin.Context) {
 	// Clear httpOnly cookies
 	clearAuthCookies(c.Writer)
 
-	h.logger.WithFields(logrus.Fields{
-		"jti":     claims.JWTID,
-		"user_id": claims.UserID,
-	}).Info("User logged out successfully")
+	h.logger.Info("User logged out successfully", "jti", claims.JWTID, "user_id", claims.UserID)
 	response.Success(c, gin.H{
 		"message": "Logged out successfully",
 	})
@@ -774,7 +761,7 @@ func (h *Handler) GetProfile(c *gin.Context) {
 	// Get current user
 	user, err := h.userService.GetUser(c.Request.Context(), userID)
 	if err != nil {
-		h.logger.WithError(err).WithField("user_id", userID).Error("Failed to get user profile")
+		h.logger.Error("Failed to get user profile", "error", err, "user_id", userID)
 		response.ErrorWithStatus(c, http.StatusNotFound, "user_not_found", "User not found", err.Error())
 		return
 	}
@@ -797,7 +784,7 @@ type UpdateProfileRequest struct {
 func (h *Handler) UpdateProfile(c *gin.Context) {
 	var req UpdateProfileRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.WithError(err).Error("Invalid update profile request")
+		h.logger.Error("Invalid update profile request", "error", err)
 		response.ErrorWithStatus(c, http.StatusBadRequest, "invalid_request", "Invalid request payload", err.Error())
 		return
 	}
@@ -826,12 +813,12 @@ func (h *Handler) UpdateProfile(c *gin.Context) {
 	// Update profile
 	_, err := h.userService.UpdateUser(c.Request.Context(), userID, updateReq)
 	if err != nil {
-		h.logger.WithError(err).WithField("user_id", userID).Error("Profile update failed")
+		h.logger.Error("Profile update failed", "error", err, "user_id", userID)
 		response.ErrorWithStatus(c, http.StatusInternalServerError, "profile_update_failed", "Profile update failed", err.Error())
 		return
 	}
 
-	h.logger.WithField("user_id", userID).Info("Profile updated successfully")
+	h.logger.Info("Profile updated successfully", "user_id", userID)
 	response.Success(c, gin.H{
 		"message": "Profile updated successfully",
 	})
@@ -862,7 +849,7 @@ type ChangePasswordRequest struct {
 func (h *Handler) ChangePassword(c *gin.Context) {
 	var req ChangePasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.WithError(err).Error("Invalid change password request")
+		h.logger.Error("Invalid change password request", "error", err)
 		response.ErrorWithStatus(c, http.StatusBadRequest, "invalid_request", "Invalid request payload", err.Error())
 		return
 	}
@@ -883,12 +870,12 @@ func (h *Handler) ChangePassword(c *gin.Context) {
 	// Change password
 	err := h.userService.ChangePassword(c.Request.Context(), userID, req.CurrentPassword, req.NewPassword)
 	if err != nil {
-		h.logger.WithError(err).WithField("user_id", userID).Error("Password change failed")
+		h.logger.Error("Password change failed", "error", err, "user_id", userID)
 		response.ErrorWithStatus(c, http.StatusBadRequest, "password_change_failed", "Password change failed", err.Error())
 		return
 	}
 
-	h.logger.WithField("user_id", userID).Info("Password changed successfully")
+	h.logger.Info("Password changed successfully", "user_id", userID)
 	response.Success(c, gin.H{
 		"message": "Password changed successfully",
 	})
@@ -907,7 +894,7 @@ func (h *Handler) ValidateAPIKey(apiKey string) (*auth.AuthContext, error) {
 	key, err := h.apiKeyService.ValidateAPIKey(ctx, apiKey)
 	if err != nil {
 		// Log validation failure without exposing the full key (security best practice)
-		h.logger.WithError(err).Warn("API key validation failed")
+		h.logger.Warn("API key validation failed", "error", err)
 		return nil, err
 	}
 
@@ -915,11 +902,11 @@ func (h *Handler) ValidateAPIKey(apiKey string) (*auth.AuthContext, error) {
 	authContext := key.AuthContext
 
 	// Log successful validation (without the actual key)
-	h.logger.WithFields(map[string]interface{}{
-		"user_id":    key.AuthContext.UserID,
-		"api_key_id": key.AuthContext.APIKeyID,
-		"project_id": key.ProjectID,
-	}).Debug("API key validation successful")
+	h.logger.Debug("API key validation successful",
+		"user_id", key.AuthContext.UserID,
+		"api_key_id", key.AuthContext.APIKeyID,
+		"project_id", key.ProjectID,
+	)
 
 	return authContext, nil
 }
@@ -958,17 +945,13 @@ func (h *Handler) ValidateAPIKeyHandler(c *gin.Context) {
 	resp, err := h.apiKeyService.ValidateAPIKey(c.Request.Context(), apiKey)
 	if err != nil {
 		// Log validation failure without exposing the full key (security best practice)
-		h.logger.WithError(err).Warn("API key validation failed")
+		h.logger.Warn("API key validation failed", "error", err)
 		response.Error(c, err) // Properly propagate AppError status codes (401, etc.)
 		return
 	}
 
 	// Log successful validation (without the actual key)
-	h.logger.WithFields(logrus.Fields{
-		"user_id":    resp.AuthContext.UserID,
-		"api_key_id": resp.AuthContext.APIKeyID,
-		"project_id": resp.ProjectID,
-	}).Info("API key validation successful")
+	h.logger.Info("API key validation successful", "user_id", resp.AuthContext.UserID, "api_key_id", resp.AuthContext.APIKeyID, "project_id", resp.ProjectID)
 
 	response.Success(c, resp)
 }
@@ -999,7 +982,7 @@ type ListSessionsRequest struct {
 func (h *Handler) ListSessions(c *gin.Context) {
 	var req ListSessionsRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
-		h.logger.WithError(err).Error("Invalid list sessions request")
+		h.logger.Error("Invalid list sessions request", "error", err)
 		response.BadRequest(c, "Invalid request parameters", err.Error())
 		return
 	}
@@ -1020,7 +1003,7 @@ func (h *Handler) ListSessions(c *gin.Context) {
 	// Get user sessions (using GetUserSessions method)
 	sessions, err := h.authService.GetUserSessions(c.Request.Context(), userID)
 	if err != nil {
-		h.logger.WithError(err).WithField("user_id", userID).Error("Failed to list sessions")
+		h.logger.Error("Failed to list sessions", "error", err, "user_id", userID)
 		response.InternalServerError(c, "Failed to retrieve sessions")
 		return
 	}
@@ -1075,11 +1058,7 @@ func (h *Handler) ListSessions(c *gin.Context) {
 	// Create offset pagination
 	pag := response.NewPagination(params.Page, params.Limit, total)
 
-	h.logger.WithFields(logrus.Fields{
-		"user_id": userID,
-		"count":   len(filteredSessions),
-		"total":   total,
-	}).Info("Sessions listed successfully")
+	h.logger.Info("Sessions listed successfully", "user_id", userID, "count", len(filteredSessions), "total", total)
 
 	response.SuccessWithPagination(c, filteredSessions, pag)
 }
@@ -1105,7 +1084,7 @@ type GetSessionRequest struct {
 func (h *Handler) GetSession(c *gin.Context) {
 	var req GetSessionRequest
 	if err := c.ShouldBindUri(&req); err != nil {
-		h.logger.WithError(err).Error("Invalid get session request")
+		h.logger.Error("Invalid get session request", "error", err)
 		response.BadRequest(c, "Invalid session ID", err.Error())
 		return
 	}
@@ -1126,10 +1105,7 @@ func (h *Handler) GetSession(c *gin.Context) {
 	// Get all user sessions first, then filter by session ID
 	sessions, err := h.authService.GetUserSessions(c.Request.Context(), userID)
 	if err != nil {
-		h.logger.WithError(err).WithFields(logrus.Fields{
-			"user_id":    userID,
-			"session_id": req.SessionID,
-		}).Error("Failed to get sessions")
+		h.logger.Error("Failed to get sessions", "error", err, "user_id", userID, "session_id", req.SessionID)
 		response.InternalServerError(c, "Failed to retrieve session")
 		return
 	}
@@ -1144,18 +1120,12 @@ func (h *Handler) GetSession(c *gin.Context) {
 	}
 
 	if session == nil {
-		h.logger.WithFields(logrus.Fields{
-			"user_id":    userID,
-			"session_id": req.SessionID,
-		}).Warn("Session not found")
+		h.logger.Warn("Session not found", "user_id", userID, "session_id", req.SessionID)
 		response.NotFound(c, "Session")
 		return
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"user_id":    userID,
-		"session_id": req.SessionID,
-	}).Info("Session retrieved successfully")
+	h.logger.Info("Session retrieved successfully", "user_id", userID, "session_id", req.SessionID)
 
 	response.Success(c, session)
 }
@@ -1181,7 +1151,7 @@ type RevokeSessionRequest struct {
 func (h *Handler) RevokeSession(c *gin.Context) {
 	var req RevokeSessionRequest
 	if err := c.ShouldBindUri(&req); err != nil {
-		h.logger.WithError(err).Error("Invalid revoke session request")
+		h.logger.Error("Invalid revoke session request", "error", err)
 		response.BadRequest(c, "Invalid session ID", err.Error())
 		return
 	}
@@ -1202,18 +1172,12 @@ func (h *Handler) RevokeSession(c *gin.Context) {
 	// Revoke session
 	err := h.authService.RevokeSession(c.Request.Context(), userID, req.SessionID)
 	if err != nil {
-		h.logger.WithError(err).WithFields(logrus.Fields{
-			"user_id":    userID,
-			"session_id": req.SessionID,
-		}).Error("Failed to revoke session")
+		h.logger.Error("Failed to revoke session", "error", err, "user_id", userID, "session_id", req.SessionID)
 		response.NotFound(c, "Session")
 		return
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"user_id":    userID,
-		"session_id": req.SessionID,
-	}).Info("Session revoked successfully")
+	h.logger.Info("Session revoked successfully", "user_id", userID, "session_id", req.SessionID)
 
 	response.Success(c, gin.H{
 		"message": "Session revoked successfully",
@@ -1258,7 +1222,7 @@ func (h *Handler) RevokeAllSessions(c *gin.Context) {
 	// Get current sessions count before revoking
 	sessions, err := h.authService.GetUserSessions(c.Request.Context(), userID)
 	if err != nil {
-		h.logger.WithError(err).WithField("user_id", userID).Error("Failed to get sessions for count")
+		h.logger.Error("Failed to get sessions for count", "error", err, "user_id", userID)
 		response.InternalServerError(c, "Failed to revoke sessions")
 		return
 	}
@@ -1273,7 +1237,7 @@ func (h *Handler) RevokeAllSessions(c *gin.Context) {
 	// Revoke all sessions
 	err = h.authService.RevokeAllSessions(c.Request.Context(), userID)
 	if err != nil {
-		h.logger.WithError(err).WithField("user_id", userID).Error("Failed to revoke all sessions")
+		h.logger.Error("Failed to revoke all sessions", "error", err, "user_id", userID)
 		response.InternalServerError(c, "Failed to revoke sessions")
 		return
 	}
@@ -1282,15 +1246,12 @@ func (h *Handler) RevokeAllSessions(c *gin.Context) {
 	// This ensures complete compliance - any token issued before this timestamp is immediately invalid
 	err = h.authService.RevokeUserAccessTokens(c.Request.Context(), userID, "user_requested_revoke_all_sessions")
 	if err != nil {
-		h.logger.WithError(err).WithField("user_id", userID).Error("Failed to create user-wide token blacklist")
+		h.logger.Error("Failed to create user-wide token blacklist", "error", err, "user_id", userID)
 		// Log error but don't fail the request since sessions were already revoked
 		// This maintains partial security even if timestamp blacklisting fails
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"user_id":       userID,
-		"revoked_count": count,
-	}).Info("All sessions and access tokens revoked successfully")
+	h.logger.Info("All sessions and access tokens revoked successfully", "user_id", userID, "revoked_count", count)
 
 	response.Success(c, gin.H{
 		"message": "All sessions revoked successfully",

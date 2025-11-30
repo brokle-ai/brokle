@@ -1,6 +1,7 @@
 package streams
 
 import (
+	"log/slog"
 	"context"
 	"encoding/json"
 	"errors"
@@ -8,7 +9,6 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
-	"github.com/sirupsen/logrus"
 
 	"brokle/internal/infrastructure/database"
 	"brokle/pkg/ulid"
@@ -37,11 +37,11 @@ type TelemetryEventData struct {
 // TelemetryStreamProducer handles publishing telemetry data to Redis Streams
 type TelemetryStreamProducer struct {
 	redis  *database.RedisDB
-	logger *logrus.Logger
+	logger *slog.Logger
 }
 
 // NewTelemetryStreamProducer creates a new telemetry stream producer
-func NewTelemetryStreamProducer(redis *database.RedisDB, logger *logrus.Logger) *TelemetryStreamProducer {
+func NewTelemetryStreamProducer(redis *database.RedisDB, logger *slog.Logger) *TelemetryStreamProducer {
 	return &TelemetryStreamProducer{
 		redis:  redis,
 		logger: logger,
@@ -90,17 +90,11 @@ func (p *TelemetryStreamProducer) PublishBatch(ctx context.Context, batch *Telem
 		return "", fmt.Errorf("failed to add batch to stream: %w", err)
 	}
 
-	p.logger.WithFields(logrus.Fields{
-		"stream_id":   result,
-		"batch_id":    batch.BatchID.String(),
-		"project_id":  batch.ProjectID.String(),
-		"event_count": len(batch.Events),
-		"stream_key":  streamKey,
-	}).Debug("Published telemetry batch to Redis Stream")
+	p.logger.Debug("Published telemetry batch to Redis Stream", "stream_id", result, "batch_id", batch.BatchID.String(), "project_id", batch.ProjectID.String(), "event_count", len(batch.Events), "stream_key", streamKey)
 
 	// Set stream TTL for GDPR compliance (30 days)
 	if err := p.SetStreamTTL(ctx, batch.ProjectID, 30*24*time.Hour); err != nil {
-		p.logger.WithError(err).Warn("Failed to set stream TTL (GDPR compliance)")
+		p.logger.Warn("Failed to set stream TTL (GDPR compliance)", "error", err)
 		// Don't return error - TTL is best-effort for compliance
 	}
 
@@ -145,11 +139,7 @@ func (p *TelemetryStreamProducer) SetStreamTTL(ctx context.Context, projectID ul
 		return fmt.Errorf("failed to set stream TTL: %w", err)
 	}
 
-	p.logger.WithFields(logrus.Fields{
-		"project_id": projectID,
-		"stream_key": streamKey,
-		"ttl_hours":  ttl.Hours(),
-	}).Debug("Set stream TTL for GDPR compliance")
+	p.logger.Debug("Set stream TTL for GDPR compliance", "project_id", projectID, "stream_key", streamKey, "ttl_hours", ttl.Hours())
 
 	return nil
 }
@@ -163,10 +153,7 @@ func (p *TelemetryStreamProducer) DeleteStream(ctx context.Context, projectID ul
 		return fmt.Errorf("failed to delete stream: %w", err)
 	}
 
-	p.logger.WithFields(logrus.Fields{
-		"project_id": projectID.String(),
-		"stream_key": streamKey,
-	}).Warn("Deleted telemetry stream")
+	p.logger.Warn("Deleted telemetry stream", "project_id", projectID.String(), "stream_key", streamKey)
 
 	return nil
 }

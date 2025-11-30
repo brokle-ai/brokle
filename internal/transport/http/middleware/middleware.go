@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"log/slog"
 	"net/http"
 	"runtime/debug"
 	"strconv"
@@ -12,7 +13,6 @@ import (
 	"github.com/oklog/ulid/v2"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
-	"github.com/sirupsen/logrus"
 )
 
 // Prometheus metrics
@@ -53,29 +53,21 @@ func RequestID() gin.HandlerFunc {
 }
 
 // Logger middleware logs HTTP requests
-func Logger(logger *logrus.Logger) gin.HandlerFunc {
+func Logger(logger *slog.Logger) gin.HandlerFunc {
 	return gin.LoggerWithFormatter(func(param gin.LogFormatterParams) string {
 		requestID, exists := param.Keys["request_id"]
 		if !exists {
 			requestID = "unknown"
 		}
 
-		logger.WithFields(logrus.Fields{
-			"method":     param.Method,
-			"path":       param.Path,
-			"status":     param.StatusCode,
-			"duration":   param.Latency,
-			"ip":         param.ClientIP,
-			"user_agent": param.Request.UserAgent(),
-			"request_id": requestID,
-		}).Info("HTTP request")
+		logger.Info("HTTP request", "method", param.Method, "path", param.Path, "status", param.StatusCode, "duration", param.Latency, "ip", param.ClientIP, "user_agent", param.Request.UserAgent(), "request_id", requestID)
 
 		return ""
 	})
 }
 
 // Recovery middleware recovers from panics
-func Recovery(logger *logrus.Logger) gin.HandlerFunc {
+func Recovery(logger *slog.Logger) gin.HandlerFunc {
 	return gin.CustomRecovery(func(c *gin.Context, recovered interface{}) {
 		// Get request ID from context
 		requestID, exists := c.Get("request_id")
@@ -84,13 +76,7 @@ func Recovery(logger *logrus.Logger) gin.HandlerFunc {
 		}
 
 		// Log panic
-		logger.WithFields(logrus.Fields{
-			"error":      recovered,
-			"stack":      string(debug.Stack()),
-			"method":     c.Request.Method,
-			"path":       c.Request.URL.Path,
-			"request_id": requestID,
-		}).Error("Panic recovered")
+		logger.Error("Panic recovered", "error", recovered, "stack", string(debug.Stack()), "method", c.Request.Method, "path", c.Request.URL.Path, "request_id", requestID)
 
 		// Return error response
 		c.JSON(http.StatusInternalServerError, gin.H{

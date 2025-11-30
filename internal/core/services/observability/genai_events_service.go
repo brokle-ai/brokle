@@ -1,9 +1,9 @@
 package observability
 
 import (
+	"log/slog"
 	"context"
 
-	"github.com/sirupsen/logrus"
 
 	"brokle/internal/core/domain/observability"
 )
@@ -11,13 +11,13 @@ import (
 // GenAIEventsService implements business logic for OTLP GenAI events management
 type GenAIEventsService struct {
 	genaiEventsRepo observability.GenAIEventsRepository
-	logger          *logrus.Logger
+	logger          *slog.Logger
 }
 
 // NewGenAIEventsService creates a new GenAI events service instance
 func NewGenAIEventsService(
 	genaiEventsRepo observability.GenAIEventsRepository,
-	logger *logrus.Logger,
+	logger *slog.Logger,
 ) *GenAIEventsService {
 	return &GenAIEventsService{
 		genaiEventsRepo: genaiEventsRepo,

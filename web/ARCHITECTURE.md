@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Brokle frontend follows a **feature-based architecture** that aligns with Next.js 15 best practices while maintaining clear domain boundaries.
+The Brokle frontend follows a **feature-based architecture** that aligns with Next.js 16 best practices while maintaining clear domain boundaries.
 
 ## Directory Structure
 
@@ -149,10 +149,10 @@ Only use `'use client'` when you need:
 
 ## Tech Stack
 
-- **Framework**: Next.js 15.5.2 (App Router, Turbopack)
+- **Framework**: Next.js 16.0.1 (App Router, Turbopack)
 - **React**: 19.2.0
-- **TypeScript**: 5.9.3 (strict mode enabled)
-- **Styling**: Tailwind CSS 4.1.15
+- **TypeScript**: 5.x (strict mode enabled)
+- **Styling**: Tailwind CSS 4.x
 - **UI Components**: shadcn/ui
 - **State Management**: Zustand (client) + React Query (server)
 - **Forms**: React Hook Form + Zod

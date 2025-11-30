@@ -1,13 +1,13 @@
 package organization
 
 import (
+	"log/slog"
 	"fmt"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 
 	"brokle/internal/config"
 	"brokle/internal/core/domain/auth"
@@ -20,7 +20,7 @@ import (
 // Handler handles organization endpoints
 type Handler struct {
 	config              *config.Config
-	logger              *logrus.Logger
+	logger              *slog.Logger
 	organizationService organization.OrganizationService
 	memberService       organization.MemberService
 	projectService      organization.ProjectService
@@ -105,7 +105,7 @@ type GetRequest struct {
 // NewHandler creates a new organization handler
 func NewHandler(
 	config *config.Config,
-	logger *logrus.Logger,
+	logger *slog.Logger,
 	organizationService organization.OrganizationService,
 	memberService organization.MemberService,
 	projectService organization.ProjectService,
@@ -147,7 +147,7 @@ func NewHandler(
 func (h *Handler) List(c *gin.Context) {
 	var req ListRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
-		h.logger.WithError(err).Error("Invalid list organizations request")
+		h.logger.Error("Invalid list organizations request", "error", err)
 		response.BadRequest(c, "Invalid request parameters", err.Error())
 		return
 	}
@@ -170,7 +170,7 @@ func (h *Handler) List(c *gin.Context) {
 	// Get user organizations
 	organizations, err := h.organizationService.GetUserOrganizations(c.Request.Context(), userID)
 	if err != nil {
-		h.logger.WithError(err).WithField("user_id", userID).Error("Failed to get user organizations")
+		h.logger.Error("Failed to get user organizations", "error", err, "user_id", userID)
 		response.InternalServerError(c, "Failed to retrieve organizations")
 		return
 	}
@@ -233,11 +233,7 @@ func (h *Handler) List(c *gin.Context) {
 	// Create offset pagination
 	pag := response.NewPagination(params.Page, params.Limit, int64(total))
 
-	h.logger.WithFields(logrus.Fields{
-		"user_id": userID,
-		"count":   len(filteredOrgs),
-		"total":   total,
-	}).Info("Organizations listed successfully")
+	h.logger.Info("Organizations listed successfully", "user_id", userID, "count", len(filteredOrgs), "total", total)
 
 	response.SuccessWithPagination(c, filteredOrgs, pag)
 }
@@ -259,7 +255,7 @@ func (h *Handler) List(c *gin.Context) {
 func (h *Handler) Create(c *gin.Context) {
 	var req CreateOrganizationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.WithError(err).Error("Invalid create organization request")
+		h.logger.Error("Invalid create organization request", "error", err)
 		response.BadRequest(c, "Invalid request payload", err.Error())
 		return
 	}
@@ -288,10 +284,7 @@ func (h *Handler) Create(c *gin.Context) {
 	// Create organization
 	org, err := h.organizationService.CreateOrganization(c.Request.Context(), userID, createReq)
 	if err != nil {
-		h.logger.WithError(err).WithFields(logrus.Fields{
-			"user_id": userID,
-			"name":    req.Name,
-		}).Error("Failed to create organization")
+		h.logger.Error("Failed to create organization", "error", err, "user_id", userID, "name", req.Name)
 
 		// Handle specific errors
 		if strings.Contains(err.Error(), "already exists") || strings.Contains(err.Error(), "duplicate") {
@@ -313,11 +306,7 @@ func (h *Handler) Create(c *gin.Context) {
 		UpdatedAt:          org.UpdatedAt,
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"user_id":         userID,
-		"organization_id": org.ID,
-		"name":            org.Name,
-	}).Info("Organization created successfully")
+	h.logger.Info("Organization created successfully", "user_id", userID, "organization_id", org.ID, "name", org.Name)
 
 	c.Header("Location", fmt.Sprintf("/api/v1/organizations/%s", org.ID))
 	response.Success(c, responseData)
@@ -342,7 +331,7 @@ func (h *Handler) Create(c *gin.Context) {
 func (h *Handler) Get(c *gin.Context) {
 	var req GetRequest
 	if err := c.ShouldBindUri(&req); err != nil {
-		h.logger.WithError(err).Error("Invalid get organization request")
+		h.logger.Error("Invalid get organization request", "error", err)
 		response.BadRequest(c, "Invalid organization ID", err.Error())
 		return
 	}
@@ -365,7 +354,7 @@ func (h *Handler) Get(c *gin.Context) {
 	// Parse organization ID
 	orgID, err := ulid.Parse(req.OrgID)
 	if err != nil {
-		h.logger.WithError(err).WithField("org_id", req.OrgID).Error("Invalid organization ID format")
+		h.logger.Error("Invalid organization ID format", "error", err, "org_id", req.OrgID)
 		response.BadRequest(c, "Invalid organization ID format", err.Error())
 		return
 	}
@@ -373,19 +362,13 @@ func (h *Handler) Get(c *gin.Context) {
 	// Check if user can access this organization
 	canAccess, err := h.memberService.CanUserAccessOrganization(c.Request.Context(), userID, orgID)
 	if err != nil {
-		h.logger.WithError(err).WithFields(logrus.Fields{
-			"user_id": userID,
-			"org_id":  orgID,
-		}).Error("Failed to check organization access")
+		h.logger.Error("Failed to check organization access", "error", err, "user_id", userID, "org_id", orgID)
 		response.InternalServerError(c, "Failed to check organization access")
 		return
 	}
 
 	if !canAccess {
-		h.logger.WithFields(logrus.Fields{
-			"user_id": userID,
-			"org_id":  orgID,
-		}).Warn("User attempted to access organization without permission")
+		h.logger.Warn("User attempted to access organization without permission", "user_id", userID, "org_id", orgID)
 		response.Forbidden(c, "Insufficient permissions to access this organization")
 		return
 	}
@@ -393,7 +376,7 @@ func (h *Handler) Get(c *gin.Context) {
 	// Get organization
 	org, err := h.organizationService.GetOrganization(c.Request.Context(), orgID)
 	if err != nil {
-		h.logger.WithError(err).WithField("org_id", orgID).Error("Failed to get organization")
+		h.logger.Error("Failed to get organization", "error", err, "org_id", orgID)
 		if strings.Contains(err.Error(), "not found") {
 			response.NotFound(c, "Organization")
 			return
@@ -412,10 +395,7 @@ func (h *Handler) Get(c *gin.Context) {
 		UpdatedAt:          org.UpdatedAt,
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"user_id": userID,
-		"org_id":  orgID,
-	}).Info("Organization retrieved successfully")
+	h.logger.Info("Organization retrieved successfully", "user_id", userID, "org_id", orgID)
 
 	response.Success(c, responseData)
 }
@@ -439,14 +419,14 @@ func (h *Handler) Get(c *gin.Context) {
 func (h *Handler) Update(c *gin.Context) {
 	var uriReq GetRequest
 	if err := c.ShouldBindUri(&uriReq); err != nil {
-		h.logger.WithError(err).Error("Invalid update organization URI request")
+		h.logger.Error("Invalid update organization URI request", "error", err)
 		response.BadRequest(c, "Invalid organization ID", err.Error())
 		return
 	}
 
 	var req UpdateOrganizationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.WithError(err).Error("Invalid update organization request")
+		h.logger.Error("Invalid update organization request", "error", err)
 		response.BadRequest(c, "Invalid request payload", err.Error())
 		return
 	}
@@ -469,7 +449,7 @@ func (h *Handler) Update(c *gin.Context) {
 	// Parse organization ID
 	orgID, err := ulid.Parse(uriReq.OrgID)
 	if err != nil {
-		h.logger.WithError(err).WithField("org_id", uriReq.OrgID).Error("Invalid organization ID format")
+		h.logger.Error("Invalid organization ID format", "error", err, "org_id", uriReq.OrgID)
 		response.BadRequest(c, "Invalid organization ID format", err.Error())
 		return
 	}
@@ -477,19 +457,13 @@ func (h *Handler) Update(c *gin.Context) {
 	// Check if user can access this organization
 	canAccess, err := h.memberService.CanUserAccessOrganization(c.Request.Context(), userID, orgID)
 	if err != nil {
-		h.logger.WithError(err).WithFields(logrus.Fields{
-			"user_id": userID,
-			"org_id":  orgID,
-		}).Error("Failed to check organization access")
+		h.logger.Error("Failed to check organization access", "error", err, "user_id", userID, "org_id", orgID)
 		response.InternalServerError(c, "Failed to check organization access")
 		return
 	}
 
 	if !canAccess {
-		h.logger.WithFields(logrus.Fields{
-			"user_id": userID,
-			"org_id":  orgID,
-		}).Warn("User attempted to update organization without permission")
+		h.logger.Warn("User attempted to update organization without permission", "user_id", userID, "org_id", orgID)
 		response.Forbidden(c, "Insufficient permissions to update this organization")
 		return
 	}
@@ -506,10 +480,7 @@ func (h *Handler) Update(c *gin.Context) {
 	// Update organization
 	err = h.organizationService.UpdateOrganization(c.Request.Context(), orgID, updateReq)
 	if err != nil {
-		h.logger.WithError(err).WithFields(logrus.Fields{
-			"user_id": userID,
-			"org_id":  orgID,
-		}).Error("Failed to update organization")
+		h.logger.Error("Failed to update organization", "error", err, "user_id", userID, "org_id", orgID)
 		response.InternalServerError(c, "Failed to update organization")
 		return
 	}
@@ -517,7 +488,7 @@ func (h *Handler) Update(c *gin.Context) {
 	// Get updated organization
 	org, err := h.organizationService.GetOrganization(c.Request.Context(), orgID)
 	if err != nil {
-		h.logger.WithError(err).WithField("org_id", orgID).Error("Failed to get updated organization")
+		h.logger.Error("Failed to get updated organization", "error", err, "org_id", orgID)
 		response.InternalServerError(c, "Failed to retrieve updated organization")
 		return
 	}
@@ -532,10 +503,7 @@ func (h *Handler) Update(c *gin.Context) {
 		UpdatedAt:          org.UpdatedAt,
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"user_id": userID,
-		"org_id":  orgID,
-	}).Info("Organization updated successfully")
+	h.logger.Info("Organization updated successfully", "user_id", userID, "org_id", orgID)
 
 	response.Success(c, responseData)
 }
@@ -559,7 +527,7 @@ func (h *Handler) Update(c *gin.Context) {
 func (h *Handler) Delete(c *gin.Context) {
 	var req GetRequest
 	if err := c.ShouldBindUri(&req); err != nil {
-		h.logger.WithError(err).Error("Invalid delete organization request")
+		h.logger.Error("Invalid delete organization request", "error", err)
 		response.BadRequest(c, "Invalid organization ID", err.Error())
 		return
 	}
@@ -582,7 +550,7 @@ func (h *Handler) Delete(c *gin.Context) {
 	// Parse organization ID
 	orgID, err := ulid.Parse(req.OrgID)
 	if err != nil {
-		h.logger.WithError(err).WithField("org_id", req.OrgID).Error("Invalid organization ID format")
+		h.logger.Error("Invalid organization ID format", "error", err, "org_id", req.OrgID)
 		response.BadRequest(c, "Invalid organization ID format", err.Error())
 		return
 	}
@@ -590,19 +558,13 @@ func (h *Handler) Delete(c *gin.Context) {
 	// Check if user can access this organization
 	canAccess, err := h.memberService.CanUserAccessOrganization(c.Request.Context(), userID, orgID)
 	if err != nil {
-		h.logger.WithError(err).WithFields(logrus.Fields{
-			"user_id": userID,
-			"org_id":  orgID,
-		}).Error("Failed to check organization access")
+		h.logger.Error("Failed to check organization access", "error", err, "user_id", userID, "org_id", orgID)
 		response.InternalServerError(c, "Failed to check organization access")
 		return
 	}
 
 	if !canAccess {
-		h.logger.WithFields(logrus.Fields{
-			"user_id": userID,
-			"org_id":  orgID,
-		}).Warn("User attempted to delete organization without permission")
+		h.logger.Warn("User attempted to delete organization without permission", "user_id", userID, "org_id", orgID)
 		response.Forbidden(c, "Insufficient permissions to delete this organization")
 		return
 	}
@@ -610,10 +572,7 @@ func (h *Handler) Delete(c *gin.Context) {
 	// Delete organization
 	err = h.organizationService.DeleteOrganization(c.Request.Context(), orgID)
 	if err != nil {
-		h.logger.WithError(err).WithFields(logrus.Fields{
-			"user_id": userID,
-			"org_id":  orgID,
-		}).Error("Failed to delete organization")
+		h.logger.Error("Failed to delete organization", "error", err, "user_id", userID, "org_id", orgID)
 
 		if strings.Contains(err.Error(), "not found") {
 			response.NotFound(c, "Organization")
@@ -624,10 +583,7 @@ func (h *Handler) Delete(c *gin.Context) {
 		return
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"user_id": userID,
-		"org_id":  orgID,
-	}).Info("Organization deleted successfully")
+	h.logger.Info("Organization deleted successfully", "user_id", userID, "org_id", orgID)
 
 	c.Status(204) // No Content
 }
@@ -652,13 +608,13 @@ func (h *Handler) Delete(c *gin.Context) {
 func (h *Handler) ListMembers(c *gin.Context) {
 	var req ListMembersRequest
 	if err := c.ShouldBindUri(&req); err != nil {
-		h.logger.WithError(err).Error("Invalid list members URI request")
+		h.logger.Error("Invalid list members URI request", "error", err)
 		response.BadRequest(c, "Invalid organization ID", err.Error())
 		return
 	}
 
 	if err := c.ShouldBindQuery(&req); err != nil {
-		h.logger.WithError(err).Error("Invalid list members query request")
+		h.logger.Error("Invalid list members query request", "error", err)
 		response.BadRequest(c, "Invalid query parameters", err.Error())
 		return
 	}
@@ -681,7 +637,7 @@ func (h *Handler) ListMembers(c *gin.Context) {
 	// Parse organization ID
 	orgID, err := ulid.Parse(req.OrgID)
 	if err != nil {
-		h.logger.WithError(err).WithField("org_id", req.OrgID).Error("Invalid organization ID format")
+		h.logger.Error("Invalid organization ID format", "error", err, "org_id", req.OrgID)
 		response.BadRequest(c, "Invalid organization ID format", err.Error())
 		return
 	}
@@ -689,19 +645,13 @@ func (h *Handler) ListMembers(c *gin.Context) {
 	// Check if user can access this organization
 	canAccess, err := h.memberService.CanUserAccessOrganization(c.Request.Context(), userID, orgID)
 	if err != nil {
-		h.logger.WithError(err).WithFields(logrus.Fields{
-			"user_id": userID,
-			"org_id":  orgID,
-		}).Error("Failed to check organization access")
+		h.logger.Error("Failed to check organization access", "error", err, "user_id", userID, "org_id", orgID)
 		response.InternalServerError(c, "Failed to check organization access")
 		return
 	}
 
 	if !canAccess {
-		h.logger.WithFields(logrus.Fields{
-			"user_id": userID,
-			"org_id":  orgID,
-		}).Warn("User attempted to list members without permission")
+		h.logger.Warn("User attempted to list members without permission", "user_id", userID, "org_id", orgID)
 		response.Forbidden(c, "Insufficient permissions to view organization members")
 		return
 	}
@@ -709,7 +659,7 @@ func (h *Handler) ListMembers(c *gin.Context) {
 	// Get organization members
 	members, err := h.memberService.GetMembers(c.Request.Context(), orgID)
 	if err != nil {
-		h.logger.WithError(err).WithField("org_id", orgID).Error("Failed to get organization members")
+		h.logger.Error("Failed to get organization members", "error", err, "org_id", orgID)
 		response.InternalServerError(c, "Failed to retrieve organization members")
 		return
 	}
@@ -720,11 +670,7 @@ func (h *Handler) ListMembers(c *gin.Context) {
 		// Resolve user details - this should always succeed if data integrity is maintained
 		userDetails, err := h.userService.GetUser(c.Request.Context(), member.UserID)
 		if err != nil {
-			h.logger.WithError(err).WithFields(logrus.Fields{
-				"user_id":         member.UserID,
-				"organization_id": orgID,
-				"member_status":   member.Status,
-			}).Error("CRITICAL: Member references non-existent user - data integrity violation")
+			h.logger.Error("CRITICAL: Member references non-existent user - data integrity violation", "error", err, "user_id", member.UserID, "organization_id", orgID, "member_status", member.Status)
 			response.InternalServerError(c, "Data integrity error - please contact support")
 			return
 		}
@@ -732,11 +678,7 @@ func (h *Handler) ListMembers(c *gin.Context) {
 		// Resolve role details - this should always succeed if data integrity is maintained
 		role, err := h.roleService.GetRoleByID(c.Request.Context(), member.RoleID)
 		if err != nil {
-			h.logger.WithError(err).WithFields(logrus.Fields{
-				"role_id":         member.RoleID,
-				"organization_id": orgID,
-				"user_id":         member.UserID,
-			}).Error("CRITICAL: Member references non-existent role - data integrity violation")
+			h.logger.Error("CRITICAL: Member references non-existent role - data integrity violation", "error", err, "role_id", member.RoleID, "organization_id", orgID, "user_id", member.UserID)
 			response.InternalServerError(c, "Data integrity error - please contact support")
 			return
 		}
@@ -746,7 +688,7 @@ func (h *Handler) ListMembers(c *gin.Context) {
 		if member.InvitedBy != nil {
 			inviter, err := h.userService.GetUser(c.Request.Context(), *member.InvitedBy)
 			if err != nil {
-				h.logger.WithError(err).WithField("inviter_id", *member.InvitedBy).Warn("Failed to get inviter details - continuing without inviter info")
+				h.logger.Warn("Failed to get inviter details - continuing without inviter info", "error", err, "inviter_id", *member.InvitedBy)
 				// For inviter, we can continue without this data as it's not critical
 			} else {
 				invitedByEmail = &inviter.Email
@@ -805,11 +747,7 @@ func (h *Handler) ListMembers(c *gin.Context) {
 	// Create offset pagination
 	pag := response.NewPagination(params.Page, params.Limit, int64(total))
 
-	h.logger.WithFields(logrus.Fields{
-		"user_id": userID,
-		"org_id":  orgID,
-		"count":   len(memberList),
-	}).Info("Organization members listed successfully")
+	h.logger.Info("Organization members listed successfully", "user_id", userID, "org_id", orgID, "count", len(memberList))
 
 	response.SuccessWithPagination(c, memberList, pag)
 }
@@ -834,14 +772,14 @@ func (h *Handler) ListMembers(c *gin.Context) {
 func (h *Handler) InviteMember(c *gin.Context) {
 	var uriReq InviteMemberRequest
 	if err := c.ShouldBindUri(&uriReq); err != nil {
-		h.logger.WithError(err).Error("Invalid invite member URI request")
+		h.logger.Error("Invalid invite member URI request", "error", err)
 		response.BadRequest(c, "Invalid organization ID", err.Error())
 		return
 	}
 
 	var req InviteMemberRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.WithError(err).Error("Invalid invite member request")
+		h.logger.Error("Invalid invite member request", "error", err)
 		response.BadRequest(c, "Invalid request payload", err.Error())
 		return
 	}
@@ -867,7 +805,7 @@ func (h *Handler) InviteMember(c *gin.Context) {
 	// Parse organization ID
 	orgID, err := ulid.Parse(req.OrgID)
 	if err != nil {
-		h.logger.WithError(err).WithField("org_id", req.OrgID).Error("Invalid organization ID format")
+		h.logger.Error("Invalid organization ID format", "error", err, "org_id", req.OrgID)
 		response.BadRequest(c, "Invalid organization ID format", err.Error())
 		return
 	}
@@ -875,19 +813,13 @@ func (h *Handler) InviteMember(c *gin.Context) {
 	// Check if user can access this organization
 	canAccess, err := h.memberService.CanUserAccessOrganization(c.Request.Context(), userID, orgID)
 	if err != nil {
-		h.logger.WithError(err).WithFields(logrus.Fields{
-			"user_id": userID,
-			"org_id":  orgID,
-		}).Error("Failed to check organization access")
+		h.logger.Error("Failed to check organization access", "error", err, "user_id", userID, "org_id", orgID)
 		response.InternalServerError(c, "Failed to check organization access")
 		return
 	}
 
 	if !canAccess {
-		h.logger.WithFields(logrus.Fields{
-			"user_id": userID,
-			"org_id":  orgID,
-		}).Warn("User attempted to invite member without permission")
+		h.logger.Warn("User attempted to invite member without permission", "user_id", userID, "org_id", orgID)
 		response.Forbidden(c, "Insufficient permissions to invite members to this organization")
 		return
 	}
@@ -904,11 +836,7 @@ func (h *Handler) InviteMember(c *gin.Context) {
 	// Send invitation
 	invitation, err := h.invitationService.InviteUser(c.Request.Context(), orgID, userID, inviteReq)
 	if err != nil {
-		h.logger.WithError(err).WithFields(logrus.Fields{
-			"user_id":      userID,
-			"org_id":       orgID,
-			"invite_email": req.Email,
-		}).Error("Failed to invite user")
+		h.logger.Error("Failed to invite user", "error", err, "user_id", userID, "org_id", orgID, "invite_email", req.Email)
 
 		if strings.Contains(err.Error(), "already exists") || strings.Contains(err.Error(), "already member") {
 			response.Conflict(c, "User is already a member or has pending invitation")
@@ -936,12 +864,7 @@ func (h *Handler) InviteMember(c *gin.Context) {
 		UpdatedAt: invitation.UpdatedAt,
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"user_id":       userID,
-		"org_id":        orgID,
-		"invite_email":  req.Email,
-		"invitation_id": invitation.ID,
-	}).Info("User invited successfully")
+	h.logger.Info("User invited successfully", "user_id", userID, "org_id", orgID, "invite_email", req.Email, "invitation_id", invitation.ID)
 
 	c.Header("Location", fmt.Sprintf("/api/v1/organizations/%s/members", orgID))
 	response.Success(c, responseData)
@@ -967,7 +890,7 @@ func (h *Handler) InviteMember(c *gin.Context) {
 func (h *Handler) RemoveMember(c *gin.Context) {
 	var req RemoveMemberRequest
 	if err := c.ShouldBindUri(&req); err != nil {
-		h.logger.WithError(err).Error("Invalid remove member request")
+		h.logger.Error("Invalid remove member request", "error", err)
 		response.BadRequest(c, "Invalid organization ID or user ID", err.Error())
 		return
 	}
@@ -990,7 +913,7 @@ func (h *Handler) RemoveMember(c *gin.Context) {
 	// Parse organization ID
 	orgID, err := ulid.Parse(req.OrgID)
 	if err != nil {
-		h.logger.WithError(err).WithField("org_id", req.OrgID).Error("Invalid organization ID format")
+		h.logger.Error("Invalid organization ID format", "error", err, "org_id", req.OrgID)
 		response.BadRequest(c, "Invalid organization ID format", err.Error())
 		return
 	}
@@ -998,7 +921,7 @@ func (h *Handler) RemoveMember(c *gin.Context) {
 	// Parse user ID to remove
 	userToRemoveID, err := ulid.Parse(req.UserID)
 	if err != nil {
-		h.logger.WithError(err).WithField("user_id", req.UserID).Error("Invalid user ID format")
+		h.logger.Error("Invalid user ID format", "error", err, "user_id", req.UserID)
 		response.BadRequest(c, "Invalid user ID format", err.Error())
 		return
 	}
@@ -1006,19 +929,13 @@ func (h *Handler) RemoveMember(c *gin.Context) {
 	// Check if current user can access this organization
 	canAccess, err := h.memberService.CanUserAccessOrganization(c.Request.Context(), currentUserID, orgID)
 	if err != nil {
-		h.logger.WithError(err).WithFields(logrus.Fields{
-			"current_user_id": currentUserID,
-			"org_id":          orgID,
-		}).Error("Failed to check organization access")
+		h.logger.Error("Failed to check organization access", "error", err, "current_user_id", currentUserID, "org_id", orgID)
 		response.InternalServerError(c, "Failed to check organization access")
 		return
 	}
 
 	if !canAccess {
-		h.logger.WithFields(logrus.Fields{
-			"current_user_id": currentUserID,
-			"org_id":          orgID,
-		}).Warn("User attempted to remove member without permission")
+		h.logger.Warn("User attempted to remove member without permission", "current_user_id", currentUserID, "org_id", orgID)
 		response.Forbidden(c, "Insufficient permissions to remove members from this organization")
 		return
 	}
@@ -1026,11 +943,7 @@ func (h *Handler) RemoveMember(c *gin.Context) {
 	// Remove member
 	err = h.memberService.RemoveMember(c.Request.Context(), orgID, userToRemoveID, currentUserID)
 	if err != nil {
-		h.logger.WithError(err).WithFields(logrus.Fields{
-			"current_user_id":   currentUserID,
-			"user_to_remove_id": userToRemoveID,
-			"org_id":            orgID,
-		}).Error("Failed to remove member")
+		h.logger.Error("Failed to remove member", "error", err, "current_user_id", currentUserID, "user_to_remove_id", userToRemoveID, "org_id", orgID)
 
 		if strings.Contains(err.Error(), "not found") {
 			response.NotFound(c, "Member")
@@ -1041,11 +954,7 @@ func (h *Handler) RemoveMember(c *gin.Context) {
 		return
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"current_user_id":   currentUserID,
-		"user_to_remove_id": userToRemoveID,
-		"org_id":            orgID,
-	}).Info("Member removed successfully")
+	h.logger.Info("Member removed successfully", "current_user_id", currentUserID, "user_to_remove_id", userToRemoveID, "org_id", orgID)
 
 	c.Status(204) // No Content
 }
@@ -1088,7 +997,7 @@ func (h *Handler) ValidateInvitationToken(c *gin.Context) {
 	// Get invitation by token
 	invitation, err := h.invitationService.GetInvitationByToken(c.Request.Context(), token)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to get invitation")
+		h.logger.Error("Failed to get invitation", "error", err)
 		response.Error(c, err)
 		return
 	}
@@ -1105,7 +1014,7 @@ func (h *Handler) ValidateInvitationToken(c *gin.Context) {
 	// Get organization details
 	org, err := h.organizationService.GetOrganization(c.Request.Context(), invitation.OrganizationID)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to get organization")
+		h.logger.Error("Failed to get organization", "error", err)
 		response.Error(c, err)
 		return
 	}
@@ -1113,14 +1022,14 @@ func (h *Handler) ValidateInvitationToken(c *gin.Context) {
 	// Get inviter details
 	inviter, err := h.userService.GetUser(c.Request.Context(), invitation.InvitedByID)
 	if err != nil {
-		h.logger.WithError(err).Warn("Failed to get inviter details")
+		h.logger.Warn("Failed to get inviter details", "error", err)
 		// Non-critical - continue with unknown inviter
 	}
 
 	// Get role details
 	role, err := h.roleService.GetRoleByID(c.Request.Context(), invitation.RoleID)
 	if err != nil {
-		h.logger.WithError(err).Warn("Failed to get role details")
+		h.logger.Warn("Failed to get role details", "error", err)
 	}
 
 	inviterName := "Unknown"

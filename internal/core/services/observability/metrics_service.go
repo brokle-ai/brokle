@@ -1,9 +1,9 @@
 package observability
 
 import (
+	"log/slog"
 	"context"
 
-	"github.com/sirupsen/logrus"
 
 	"brokle/internal/core/domain/observability"
 )
@@ -11,13 +11,13 @@ import (
 // MetricsService implements business logic for OTLP metrics management
 type MetricsService struct {
 	metricsRepo observability.MetricsRepository
-	logger      *logrus.Logger
+	logger      *slog.Logger
 }
 
 // NewMetricsService creates a new metrics service instance
 func NewMetricsService(
 	metricsRepo observability.MetricsRepository,
-	logger *logrus.Logger,
+	logger *slog.Logger,
 ) *MetricsService {
 	return &MetricsService{
 		metricsRepo: metricsRepo,

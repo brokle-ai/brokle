@@ -1,13 +1,13 @@
 package workers
 
 import (
+	"log/slog"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
 
-	"github.com/sirupsen/logrus"
 
 	"brokle/internal/config"
 )
@@ -15,7 +15,7 @@ import (
 // NotificationWorker handles async notification processing
 type NotificationWorker struct {
 	config *config.Config
-	logger *logrus.Logger
+	logger *slog.Logger
 	queue  chan NotificationJob
 	quit   chan bool
 }
@@ -86,7 +86,7 @@ type PushJob struct {
 // NewNotificationWorker creates a new notification worker
 func NewNotificationWorker(
 	config *config.Config,
-	logger *logrus.Logger,
+	logger *slog.Logger,
 ) *NotificationWorker {
 	return &NotificationWorker{
 		config: config,
@@ -128,9 +128,9 @@ func (w *NotificationWorker) QueueJob(jobType string, data interface{}) {
 
 	select {
 	case w.queue <- job:
-		w.logger.WithField("type", jobType).Debug("Notification job queued")
+		w.logger.Debug("Notification job queued", "type", jobType)
 	default:
-		w.logger.WithField("type", jobType).Warn("Notification queue full, dropping job")
+		w.logger.Warn("Notification queue full, dropping job", "type", jobType)
 	}
 }
 
@@ -161,7 +161,7 @@ func (w *NotificationWorker) QueuePush(push PushJob) {
 
 // worker processes jobs from the queue
 func (w *NotificationWorker) worker(id int) {
-	w.logger.WithField("worker_id", id).Info("Notification worker started")
+	w.logger.Info("Notification worker started", "worker_id", id)
 
 	for {
 		select {
@@ -169,7 +169,7 @@ func (w *NotificationWorker) worker(id int) {
 			w.processJob(id, job)
 
 		case <-w.quit:
-			w.logger.WithField("worker_id", id).Info("Notification worker stopping")
+			w.logger.Info("Notification worker stopping", "worker_id", id)
 			return
 		}
 	}
@@ -180,11 +180,7 @@ func (w *NotificationWorker) processJob(workerID int, job NotificationJob) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	logger := w.logger.WithFields(logrus.Fields{
-		"worker_id": workerID,
-		"job_type":  job.Type,
-		"retry":     job.Retry,
-	})
+	logger := w.logger
 
 	logger.Debug("Processing notification job")
 
@@ -206,7 +202,7 @@ func (w *NotificationWorker) processJob(workerID int, job NotificationJob) {
 	}
 
 	if err != nil {
-		logger.WithError(err).Error("Failed to process notification job")
+		logger.Error("Failed to process notification job", "error", err)
 
 		// Retry logic with exponential backoff
 		if job.Retry < 3 {
@@ -214,7 +210,7 @@ func (w *NotificationWorker) processJob(workerID int, job NotificationJob) {
 			delay := time.Duration(job.Retry*job.Retry) * time.Minute
 			time.Sleep(delay)
 			w.queue <- job
-			logger.WithField("retry", job.Retry).Info("Retrying notification job")
+			logger.Info("Retrying notification job", "retry", job.Retry)
 		} else {
 			logger.Error("Max retries exceeded, dropping notification job")
 		}
@@ -241,11 +237,7 @@ func (w *NotificationWorker) processEmail(ctx context.Context, data interface{})
 		}
 	}
 
-	w.logger.WithFields(logrus.Fields{
-		"to":       jobData.To,
-		"subject":  jobData.Subject,
-		"template": jobData.Template,
-	}).Info("Sending email")
+	w.logger.Info("Sending email", "to", jobData.To, "subject", jobData.Subject, "template", jobData.Template)
 
 	// TODO: Implement actual email sending logic
 	// This would integrate with services like SendGrid, AWS SES, etc.
@@ -253,7 +245,7 @@ func (w *NotificationWorker) processEmail(ctx context.Context, data interface{})
 	// Simulate email sending
 	time.Sleep(100 * time.Millisecond)
 
-	w.logger.WithField("to", jobData.To).Info("Email sent successfully")
+	w.logger.Info("Email sent successfully", "to", jobData.To)
 	return nil
 }
 
@@ -275,11 +267,7 @@ func (w *NotificationWorker) processWebhook(ctx context.Context, data interface{
 		}
 	}
 
-	w.logger.WithFields(logrus.Fields{
-		"url":        jobData.URL,
-		"method":     jobData.Method,
-		"event_type": jobData.EventType,
-	}).Info("Sending webhook")
+	w.logger.Info("Sending webhook", "url", jobData.URL, "method", jobData.Method, "event_type", jobData.EventType)
 
 	// TODO: Implement actual webhook sending logic
 	// This would make HTTP requests to the specified URLs
@@ -287,7 +275,7 @@ func (w *NotificationWorker) processWebhook(ctx context.Context, data interface{
 	// Simulate webhook sending
 	time.Sleep(200 * time.Millisecond)
 
-	w.logger.WithField("url", jobData.URL).Info("Webhook sent successfully")
+	w.logger.Info("Webhook sent successfully", "url", jobData.URL)
 	return nil
 }
 
@@ -309,10 +297,7 @@ func (w *NotificationWorker) processSlack(ctx context.Context, data interface{})
 		}
 	}
 
-	w.logger.WithFields(logrus.Fields{
-		"channel":    jobData.Channel,
-		"event_type": jobData.EventType,
-	}).Info("Sending Slack message")
+	w.logger.Info("Sending Slack message", "channel", jobData.Channel, "event_type", jobData.EventType)
 
 	// TODO: Implement actual Slack API integration
 	// This would use Slack's Web API to send messages
@@ -320,7 +305,7 @@ func (w *NotificationWorker) processSlack(ctx context.Context, data interface{})
 	// Simulate Slack sending
 	time.Sleep(150 * time.Millisecond)
 
-	w.logger.WithField("channel", jobData.Channel).Info("Slack message sent successfully")
+	w.logger.Info("Slack message sent successfully", "channel", jobData.Channel)
 	return nil
 }
 
@@ -342,7 +327,7 @@ func (w *NotificationWorker) processSMS(ctx context.Context, data interface{}) e
 		}
 	}
 
-	w.logger.WithField("to", jobData.To).Info("Sending SMS")
+	w.logger.Info("Sending SMS", "to", jobData.To)
 
 	// TODO: Implement actual SMS sending logic
 	// This would integrate with services like Twilio, AWS SNS, etc.
@@ -350,7 +335,7 @@ func (w *NotificationWorker) processSMS(ctx context.Context, data interface{}) e
 	// Simulate SMS sending
 	time.Sleep(100 * time.Millisecond)
 
-	w.logger.WithField("to", jobData.To).Info("SMS sent successfully")
+	w.logger.Info("SMS sent successfully", "to", jobData.To)
 	return nil
 }
 
@@ -372,10 +357,7 @@ func (w *NotificationWorker) processPush(ctx context.Context, data interface{}) 
 		}
 	}
 
-	w.logger.WithFields(logrus.Fields{
-		"devices": len(jobData.DeviceTokens),
-		"title":   jobData.Title,
-	}).Info("Sending push notifications")
+	w.logger.Info("Sending push notifications", "devices", len(jobData.DeviceTokens), "title", jobData.Title)
 
 	// TODO: Implement actual push notification logic
 	// This would integrate with Firebase Cloud Messaging, Apple Push Notifications, etc.
@@ -383,7 +365,7 @@ func (w *NotificationWorker) processPush(ctx context.Context, data interface{}) 
 	// Simulate push sending
 	time.Sleep(300 * time.Millisecond)
 
-	w.logger.WithField("devices", len(jobData.DeviceTokens)).Info("Push notifications sent successfully")
+	w.logger.Info("Push notifications sent successfully", "devices", len(jobData.DeviceTokens))
 	return nil
 }
 

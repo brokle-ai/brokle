@@ -1,9 +1,9 @@
 package metrics
 
 import (
+	"log/slog"
 	"github.com/gin-gonic/gin"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/sirupsen/logrus"
 
 	"brokle/internal/config"
 )
@@ -11,11 +11,11 @@ import (
 // Handler handles metrics endpoints
 type Handler struct {
 	config *config.Config
-	logger *logrus.Logger
+	logger *slog.Logger
 }
 
 // NewHandler creates a new metrics handler
-func NewHandler(config *config.Config, logger *logrus.Logger) *Handler {
+func NewHandler(config *config.Config, logger *slog.Logger) *Handler {
 	return &Handler{
 		config: config,
 		logger: logger,

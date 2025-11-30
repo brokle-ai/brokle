@@ -1,11 +1,11 @@
 package billing
 
 import (
+	"log/slog"
 	"context"
 	"fmt"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"gorm.io/gorm"
 
 	billingDomain "brokle/internal/core/domain/billing"
@@ -18,11 +18,11 @@ var _ billingDomain.UsageRepository = (*UsageRepository)(nil)
 // UsageRepository handles usage tracking persistence
 type UsageRepository struct {
 	db     *gorm.DB
-	logger *logrus.Logger
+	logger *slog.Logger
 }
 
 // NewUsageRepository creates a new usage repository instance
-func NewUsageRepository(db *gorm.DB, logger *logrus.Logger) *UsageRepository {
+func NewUsageRepository(db *gorm.DB, logger *slog.Logger) *UsageRepository {
 	return &UsageRepository{
 		db:     db,
 		logger: logger,
@@ -66,15 +66,11 @@ func (r *UsageRepository) InsertUsageRecord(ctx context.Context, record *billing
 	).Error
 
 	if err != nil {
-		r.logger.WithError(err).WithField("record_id", record.ID).Error("Failed to insert usage record")
+		r.logger.Error("Failed to insert usage record", "error", err, "record_id", record.ID)
 		return fmt.Errorf("failed to insert usage record: %w", err)
 	}
 
-	r.logger.WithFields(logrus.Fields{
-		"record_id":       record.ID,
-		"organization_id": record.OrganizationID,
-		"net_cost":        record.NetCost,
-	}).Debug("Inserted usage record")
+	r.logger.Debug("Inserted usage record", "record_id", record.ID, "organization_id", record.OrganizationID, "net_cost", record.NetCost)
 
 	return nil
 }

@@ -89,11 +89,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to initialize server: %v", err)
 	}
-	defer func() {
-		if err := application.Shutdown(context.Background()); err != nil {
-			log.Printf("Error during shutdown: %v", err)
-		}
-	}()
 
 	// Start the HTTP server
 	if err := application.Start(); err != nil {

@@ -50,14 +50,14 @@ func (h *Handler) ListSpans(c *gin.Context) {
 
 	spans, err := h.services.GetTraceService().GetSpansByFilter(c.Request.Context(), filter)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to list spans")
+		h.logger.Error("Failed to list spans", "error", err)
 		response.Error(c, err)
 		return
 	}
 
 	totalCount, err := h.services.GetTraceService().CountSpans(c.Request.Context(), filter)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to count spans")
+		h.logger.Error("Failed to count spans", "error", err)
 		response.Error(c, err)
 		return
 	}
@@ -88,7 +88,7 @@ func (h *Handler) GetSpan(c *gin.Context) {
 
 	span, err := h.services.GetTraceService().GetSpan(c.Request.Context(), spanID)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to get span")
+		h.logger.Error("Failed to get span", "error", err)
 		response.Error(c, err)
 		return
 	}
@@ -116,7 +116,7 @@ func (h *Handler) DeleteSpan(c *gin.Context) {
 	}
 
 	if err := h.services.GetTraceService().DeleteSpan(c.Request.Context(), spanID); err != nil {
-		h.logger.WithError(err).Error("Failed to delete span")
+		h.logger.Error("Failed to delete span", "error", err)
 		response.Error(c, err)
 		return
 	}

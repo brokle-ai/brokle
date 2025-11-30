@@ -1,6 +1,7 @@
 package websocket
 
 import (
+	"log/slog"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -9,7 +10,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
-	"github.com/sirupsen/logrus"
 
 	"brokle/internal/config"
 	_ "brokle/pkg/response" // Import for Swagger documentation types
@@ -18,13 +18,13 @@ import (
 // Handler handles WebSocket connections
 type Handler struct {
 	config   *config.Config
-	logger   *logrus.Logger
+	logger   *slog.Logger
 	upgrader websocket.Upgrader
 	hub      *Hub
 }
 
 // NewHandler creates a new WebSocket handler
-func NewHandler(config *config.Config, logger *logrus.Logger) *Handler {
+func NewHandler(config *config.Config, logger *slog.Logger) *Handler {
 	upgrader := websocket.Upgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
@@ -64,7 +64,7 @@ func (h *Handler) Handle(c *gin.Context) {
 	// Upgrade HTTP connection to WebSocket
 	conn, err := h.upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to upgrade WebSocket connection")
+		h.logger.Error("Failed to upgrade WebSocket connection", "error", err)
 		return
 	}
 
@@ -86,10 +86,7 @@ func (h *Handler) Handle(c *gin.Context) {
 		logger: h.logger,
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"client_id": client.ID,
-		"user_id":   userID,
-	}).Info("New WebSocket connection established")
+	h.logger.Info("New WebSocket connection established", "client_id", client.ID, "user_id", userID)
 
 	// Register client with hub
 	h.hub.register <- client
@@ -162,12 +159,12 @@ type Hub struct {
 	broadcast   chan []byte
 	register    chan *Client
 	unregister  chan *Client
-	logger      *logrus.Logger
+	logger      *slog.Logger
 	mu          sync.RWMutex
 }
 
 // NewHub creates a new WebSocket hub
-func NewHub(logger *logrus.Logger) *Hub {
+func NewHub(logger *slog.Logger) *Hub {
 	return &Hub{
 		clients:     make(map[*Client]bool),
 		userClients: make(map[string]map[*Client]bool),
@@ -207,11 +204,7 @@ func (h *Hub) registerClient(client *Client) {
 	}
 	h.userClients[client.UserID][client] = true
 
-	h.logger.WithFields(logrus.Fields{
-		"client_id":     client.ID,
-		"user_id":       client.UserID,
-		"total_clients": len(h.clients),
-	}).Info("Client registered")
+	h.logger.Info("Client registered", "client_id", client.ID, "user_id", client.UserID, "total_clients", len(h.clients))
 
 	// Send welcome message
 	welcomeMsg := Message{
@@ -240,11 +233,7 @@ func (h *Hub) unregisterClient(client *Client) {
 
 		close(client.Send)
 
-		h.logger.WithFields(logrus.Fields{
-			"client_id":     client.ID,
-			"user_id":       client.UserID,
-			"total_clients": len(h.clients),
-		}).Info("Client unregistered")
+		h.logger.Info("Client unregistered", "client_id", client.ID, "user_id", client.UserID, "total_clients", len(h.clients))
 	}
 }
 
@@ -275,7 +264,7 @@ func (h *Hub) BroadcastToUser(userID string, message Message) {
 
 	messageBytes, err := json.Marshal(message)
 	if err != nil {
-		h.logger.WithError(err).Error("Failed to marshal WebSocket message")
+		h.logger.Error("Failed to marshal WebSocket message", "error", err)
 		return
 	}
 
@@ -294,14 +283,14 @@ func (h *Hub) BroadcastToUser(userID string, message Message) {
 func (h *Hub) BroadcastToOrganization(orgID string, message Message) {
 	// TODO: Implement organization-based broadcasting
 	// This would require storing organization membership for each client
-	h.logger.WithField("org_id", orgID).Debug("Organization broadcast not yet implemented")
+	h.logger.Debug("Organization broadcast not yet implemented", "org_id", orgID)
 }
 
 // BroadcastToProject broadcasts to all users in a project
 func (h *Hub) BroadcastToProject(projectID string, message Message) {
 	// TODO: Implement project-based broadcasting
 	// This would require storing project membership for each client
-	h.logger.WithField("project_id", projectID).Debug("Project broadcast not yet implemented")
+	h.logger.Debug("Project broadcast not yet implemented", "project_id", projectID)
 }
 
 // GetConnectedUsers returns a list of currently connected user IDs
@@ -332,7 +321,7 @@ type Client struct {
 	Conn   *websocket.Conn
 	Send   chan []byte
 	hub    *Hub
-	logger *logrus.Logger
+	logger *slog.Logger
 }
 
 const (
@@ -360,7 +349,7 @@ func (c *Client) readPump() {
 		_, message, err := c.Conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				c.logger.WithError(err).Error("Unexpected WebSocket close error")
+				c.logger.Error("Unexpected WebSocket close error", "error", err)
 			}
 			break
 		}
@@ -417,14 +406,11 @@ func (c *Client) writePump() {
 func (c *Client) handleMessage(message []byte) {
 	var msg Message
 	if err := json.Unmarshal(message, &msg); err != nil {
-		c.logger.WithError(err).Error("Failed to unmarshal WebSocket message")
+		c.logger.Error("Failed to unmarshal WebSocket message", "error", err)
 		return
 	}
 
-	c.logger.WithFields(logrus.Fields{
-		"client_id": c.ID,
-		"type":      msg.Type,
-	}).Debug("Received WebSocket message")
+	c.logger.Debug("Received WebSocket message", "client_id", c.ID, "type", msg.Type)
 
 	// Handle different message types
 	switch msg.Type {
@@ -444,7 +430,7 @@ func (c *Client) handleMessage(message []byte) {
 		c.logger.Debug("Subscription management not yet implemented")
 
 	default:
-		c.logger.WithField("type", msg.Type).Warn("Unknown message type")
+		c.logger.Warn("Unknown message type", "type", msg.Type)
 	}
 }
 
@@ -452,7 +438,7 @@ func (c *Client) handleMessage(message []byte) {
 func (c *Client) SendMessage(message Message) {
 	messageBytes, err := json.Marshal(message)
 	if err != nil {
-		c.logger.WithError(err).Error("Failed to marshal message")
+		c.logger.Error("Failed to marshal message", "error", err)
 		return
 	}
 

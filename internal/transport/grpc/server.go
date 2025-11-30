@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"time"
@@ -18,6 +19,7 @@ type Server struct {
 	listener   net.Listener
 	logger     *slog.Logger
 	port       int
+	serveErr   chan error
 }
 
 // NewServer creates a new gRPC server for OTLP ingestion
@@ -68,23 +70,28 @@ func NewServer(
 	}, nil
 }
 
-// Start begins listening and serving gRPC requests (blocking)
 func (s *Server) Start() error {
-	// Create TCP listener
+	s.serveErr = make(chan error, 1)
+
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", s.port))
 	if err != nil {
-		return fmt.Errorf("failed to listen on port %d: %w", s.port, err)
+		return fmt.Errorf("failed to bind gRPC server: %w", err)
 	}
 	s.listener = lis
 
-	s.logger.Info("Starting gRPC OTLP server", "port", s.port)
+	s.logger.Info("gRPC OTLP server listening", "port", s.port)
 
-	// Start serving (blocks until server stops)
-	if err := s.grpcServer.Serve(lis); err != nil {
-		return fmt.Errorf("gRPC server failed: %w", err)
-	}
+	go func() {
+		if err := s.grpcServer.Serve(lis); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
+			s.serveErr <- err
+		}
+	}()
 
 	return nil
+}
+
+func (s *Server) ServeErr() <-chan error {
+	return s.serveErr
 }
 
 // Shutdown gracefully stops the gRPC server

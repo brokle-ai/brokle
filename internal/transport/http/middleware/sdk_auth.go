@@ -1,10 +1,10 @@
 package middleware
 
 import (
+	"log/slog"
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/sirupsen/logrus"
 
 	"brokle/internal/core/domain/auth"
 	"brokle/pkg/response"
@@ -14,13 +14,13 @@ import (
 // SDKAuthMiddleware handles API key authentication for SDK routes
 type SDKAuthMiddleware struct {
 	apiKeyService auth.APIKeyService
-	logger        *logrus.Logger
+	logger        *slog.Logger
 }
 
 // NewSDKAuthMiddleware creates a new SDK authentication middleware
 func NewSDKAuthMiddleware(
 	apiKeyService auth.APIKeyService,
-	logger *logrus.Logger,
+	logger *slog.Logger,
 ) *SDKAuthMiddleware {
 	return &SDKAuthMiddleware{
 		apiKeyService: apiKeyService,
@@ -60,7 +60,7 @@ func (m *SDKAuthMiddleware) RequireSDKAuth() gin.HandlerFunc {
 		// Validate API key (self-contained, extracts project ID automatically)
 		validateResp, err := m.apiKeyService.ValidateAPIKey(c.Request.Context(), apiKey)
 		if err != nil {
-			m.logger.WithError(err).Warn("API key validation failed")
+			m.logger.Warn("API key validation failed", "error", err)
 			response.Error(c, err) // Properly propagate AppError status codes (401, 403, etc.)
 			c.Abort()
 			return
@@ -74,10 +74,7 @@ func (m *SDKAuthMiddleware) RequireSDKAuth() gin.HandlerFunc {
 		c.Set(ProjectIDKey, &projectID)
 
 		// Log successful SDK authentication
-		m.logger.WithFields(logrus.Fields{
-			"api_key_id": validateResp.AuthContext.APIKeyID,
-			"project_id": validateResp.ProjectID,
-		}).Debug("SDK authentication successful")
+		m.logger.Debug("SDK authentication successful", "api_key_id", validateResp.AuthContext.APIKeyID, "project_id", validateResp.ProjectID)
 
 		c.Next()
 	})

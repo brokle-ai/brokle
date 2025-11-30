@@ -1,13 +1,13 @@
 package billing
 
 import (
+	"log/slog"
 	"bytes"
 	"context"
 	"fmt"
 	"html/template"
 	"time"
 
-	"github.com/sirupsen/logrus"
 
 	billingDomain "brokle/internal/core/domain/billing"
 	"brokle/pkg/ulid"
@@ -15,14 +15,14 @@ import (
 
 // InvoiceGenerator handles invoice generation and management
 type InvoiceGenerator struct {
-	logger *logrus.Logger
+	logger *slog.Logger
 	config *BillingConfig
 }
 
 // Invoice represents a generated invoice
 
 // NewInvoiceGenerator creates a new invoice generator instance
-func NewInvoiceGenerator(logger *logrus.Logger, config *BillingConfig) *InvoiceGenerator {
+func NewInvoiceGenerator(logger *slog.Logger, config *BillingConfig) *InvoiceGenerator {
 	return &InvoiceGenerator{
 		logger: logger,
 		config: config,
@@ -90,13 +90,7 @@ func (g *InvoiceGenerator) GenerateInvoice(
 		"billing_period":     summary.Period,
 	}
 
-	g.logger.WithFields(logrus.Fields{
-		"invoice_id":      invoice.ID,
-		"invoice_number":  invoice.InvoiceNumber,
-		"organization_id": invoice.OrganizationID,
-		"total_amount":    invoice.TotalAmount,
-		"currency":        invoice.Currency,
-	}).Info("Generated invoice")
+	g.logger.Info("Generated invoice", "invoice_id", invoice.ID, "invoice_number", invoice.InvoiceNumber, "organization_id", invoice.OrganizationID, "total_amount", invoice.TotalAmount, "currency", invoice.Currency)
 
 	return invoice, nil
 }
@@ -251,12 +245,7 @@ func (g *InvoiceGenerator) MarkInvoiceAsPaid(ctx context.Context, invoice *billi
 	invoice.PaidAt = &paidAt
 	invoice.UpdatedAt = time.Now()
 
-	g.logger.WithFields(logrus.Fields{
-		"invoice_id":      invoice.ID,
-		"invoice_number":  invoice.InvoiceNumber,
-		"organization_id": invoice.OrganizationID,
-		"paid_at":         paidAt,
-	}).Info("Invoice marked as paid")
+	g.logger.Info("Invoice marked as paid", "invoice_id", invoice.ID, "invoice_number", invoice.InvoiceNumber, "organization_id", invoice.OrganizationID, "paid_at", paidAt)
 
 	return nil
 }
@@ -270,12 +259,7 @@ func (g *InvoiceGenerator) MarkInvoiceAsOverdue(ctx context.Context, invoice *bi
 	invoice.Status = billingDomain.InvoiceStatusOverdue
 	invoice.UpdatedAt = time.Now()
 
-	g.logger.WithFields(logrus.Fields{
-		"invoice_id":      invoice.ID,
-		"invoice_number":  invoice.InvoiceNumber,
-		"organization_id": invoice.OrganizationID,
-		"due_date":        invoice.DueDate,
-	}).Warn("Invoice marked as overdue")
+	g.logger.Warn("Invoice marked as overdue", "invoice_id", invoice.ID, "invoice_number", invoice.InvoiceNumber, "organization_id", invoice.OrganizationID, "due_date", invoice.DueDate)
 
 	return nil
 }
@@ -295,12 +279,7 @@ func (g *InvoiceGenerator) CancelInvoice(ctx context.Context, invoice *billingDo
 	invoice.Metadata["cancellation_reason"] = reason
 	invoice.Metadata["cancelled_at"] = time.Now()
 
-	g.logger.WithFields(logrus.Fields{
-		"invoice_id":      invoice.ID,
-		"invoice_number":  invoice.InvoiceNumber,
-		"organization_id": invoice.OrganizationID,
-		"reason":          reason,
-	}).Info("Invoice cancelled")
+	g.logger.Info("Invoice cancelled", "invoice_id", invoice.ID, "invoice_number", invoice.InvoiceNumber, "organization_id", invoice.OrganizationID, "reason", reason)
 
 	return nil
 }
