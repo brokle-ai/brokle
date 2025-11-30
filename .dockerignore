@@ -1,0 +1,65 @@
+# Git
+.git
+.gitignore
+.gitmodules
+
+# Build artifacts
+bin/
+build/
+tmp/
+dist/
+
+# Dependencies (rebuilt in Docker)
+vendor/
+web/node_modules/
+web/.next/
+web/.turbo/
+node_modules/
+
+# Development files
+.env
+.env.*
+!.env.example
+*.log
+*.tmp
+
+# Documentation and non-runtime files (keep docs/swagger for API docs)
+docs/*
+!docs/swagger/
+internal-docs/
+claudedocs/
+competitors/
+*.md
+!README.md
+
+# SDK submodule (separate build)
+sdk/
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Test files
+coverage/
+*.test.go
+*_test.go
+tests/
+test/
+__tests__/
+
+# Docker files (not needed in context)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Misc
+*.bak
+*.backup
+examples/

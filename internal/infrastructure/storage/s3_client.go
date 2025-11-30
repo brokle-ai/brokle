@@ -24,13 +24,10 @@ type S3Client struct {
 
 // NewS3Client creates a new S3 client instance
 func NewS3Client(cfg *config.BlobStorageConfig, logger *logrus.Logger) (*S3Client, error) {
-	// Build AWS config
 	var awsCfg aws.Config
 	var err error
 
-	// Check if using custom endpoint (MinIO, LocalStack, etc.)
 	if cfg.Endpoint != "" {
-		// Custom endpoint with static credentials
 		awsCfg, err = awsConfig.LoadDefaultConfig(context.Background(),
 			awsConfig.WithRegion(cfg.Region),
 			awsConfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
@@ -42,11 +39,8 @@ func NewS3Client(cfg *config.BlobStorageConfig, logger *logrus.Logger) (*S3Clien
 		if err != nil {
 			return nil, fmt.Errorf("failed to load AWS config: %w", err)
 		}
-
-		// Override endpoint for MinIO/custom S3
 		awsCfg.BaseEndpoint = aws.String(cfg.Endpoint)
 	} else {
-		// Standard AWS S3 (uses default credential chain)
 		if cfg.AccessKeyID != "" && cfg.SecretAccessKey != "" {
 			awsCfg, err = awsConfig.LoadDefaultConfig(context.Background(),
 				awsConfig.WithRegion(cfg.Region),
@@ -57,7 +51,6 @@ func NewS3Client(cfg *config.BlobStorageConfig, logger *logrus.Logger) (*S3Clien
 				)),
 			)
 		} else {
-			// Use default credential chain (IAM role, env vars, etc.)
 			awsCfg, err = awsConfig.LoadDefaultConfig(context.Background(),
 				awsConfig.WithRegion(cfg.Region),
 			)
@@ -67,9 +60,7 @@ func NewS3Client(cfg *config.BlobStorageConfig, logger *logrus.Logger) (*S3Clien
 		}
 	}
 
-	// Create S3 client
 	s3Client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
-		// Use path-style addressing for MinIO compatibility
 		o.UsePathStyle = cfg.UsePathStyle
 	})
 
@@ -88,7 +79,7 @@ func NewS3Client(cfg *config.BlobStorageConfig, logger *logrus.Logger) (*S3Clien
 	}, nil
 }
 
-// Upload uploads content to S3
+// Upload uploads content to S3 using the configured bucket
 func (c *S3Client) Upload(ctx context.Context, key string, content []byte, contentType string) error {
 	input := &s3.PutObjectInput{
 		Bucket:      aws.String(c.bucketName),
@@ -113,6 +104,11 @@ func (c *S3Client) Upload(ctx context.Context, key string, content []byte, conte
 	}).Debug("Successfully uploaded to S3")
 
 	return nil
+}
+
+// GetBucketName returns the configured bucket name
+func (c *S3Client) GetBucketName() string {
+	return c.bucketName
 }
 
 // Download downloads content from S3
@@ -180,7 +176,6 @@ func (c *S3Client) Exists(ctx context.Context, key string) (bool, error) {
 
 	_, err := c.client.HeadObject(ctx, input)
 	if err != nil {
-		// Check if error is "not found"
 		return false, nil
 	}
 

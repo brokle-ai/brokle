@@ -156,6 +156,67 @@ provider_models:
       - usage_type: "output"
         price: 30.00
 
+  # OpenAI Vision Models
+  - model_name: "gpt-4-vision-preview"
+    match_pattern: "^gpt-4-vision-preview"
+    start_date: "2023-11-06"
+    unit: "TOKENS"
+    tokenizer_id: "openai"
+    tokenizer_config:
+      tokenizer_model: "gpt-4-vision-preview"
+    prices:
+      - usage_type: "input"
+        price: 10.00
+      - usage_type: "output"
+        price: 30.00
+
+  - model_name: "gpt-4o-vision"
+    match_pattern: "^gpt-4o.*vision"
+    start_date: "2024-05-13"
+    unit: "TOKENS"
+    tokenizer_id: "openai"
+    tokenizer_config:
+      tokenizer_model: "gpt-4o"
+    prices:
+      - usage_type: "input"
+        price: 2.50
+      - usage_type: "output"
+        price: 10.00
+
+  # OpenAI Embedding Models
+  - model_name: "text-embedding-3-large"
+    match_pattern: "^text-embedding-3-large"
+    start_date: "2024-01-25"
+    unit: "TOKENS"
+    tokenizer_id: "openai"
+    tokenizer_config:
+      tokenizer_model: "text-embedding-3-large"
+    prices:
+      - usage_type: "input"
+        price: 0.13
+
+  - model_name: "text-embedding-3-small"
+    match_pattern: "^text-embedding-3-small"
+    start_date: "2024-01-25"
+    unit: "TOKENS"
+    tokenizer_id: "openai"
+    tokenizer_config:
+      tokenizer_model: "text-embedding-3-small"
+    prices:
+      - usage_type: "input"
+        price: 0.02
+
+  - model_name: "text-embedding-ada-002"
+    match_pattern: "^text-embedding-ada-002"
+    start_date: "2022-12-15"
+    unit: "TOKENS"
+    tokenizer_id: "openai"
+    tokenizer_config:
+      tokenizer_model: "text-embedding-ada-002"
+    prices:
+      - usage_type: "input"
+        price: 0.10
+
   # Anthropic Models
   - model_name: "claude-3-7-sonnet"
     match_pattern: "^claude-3-7-sonnet"

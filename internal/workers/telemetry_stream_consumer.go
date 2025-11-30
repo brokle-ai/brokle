@@ -14,29 +14,22 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
 
+	"brokle/internal/config"
 	"brokle/internal/core/domain/observability"
+	observabilitySvc "brokle/internal/core/services/observability"
 	"brokle/internal/infrastructure/database"
 	"brokle/internal/infrastructure/streams"
 	"brokle/pkg/ulid"
 )
 
-// Sentinel errors for message processing states
 var (
-	// ErrMovedToDLQ indicates message was successfully moved to Dead Letter Queue
-	// This signals that the message can be safely acknowledged (data preserved in DLQ)
 	ErrMovedToDLQ = errors.New("message moved to DLQ")
 )
 
-// Dead Letter Queue constants
 const (
-	// DLQ stream key prefix
-	dlqStreamPrefix = "telemetry:dlq:batches"
-
-	// DLQ retention period (7 days)
+	dlqStreamPrefix    = "telemetry:dlq:batches"
 	dlqRetentionPeriod = 7 * 24 * time.Hour
-
-	// DLQ max length (prevent unbounded growth)
-	dlqMaxLength = 1000
+	dlqMaxLength       = 1000
 )
 
 // TelemetryStreamConsumer consumes telemetry batches from Redis Streams and writes to ClickHouse
@@ -47,6 +40,8 @@ type TelemetryStreamConsumer struct {
 	metricsService      observability.MetricsService
 	logsService         observability.LogsService
 	genaiEventsService  observability.GenAIEventsService
+	archiveService      *observabilitySvc.ArchiveService
+	archiveConfig       *config.ArchiveConfig
 	redis               *database.RedisDB
 	logger              *logrus.Logger
 	activeStreams       map[string]bool
@@ -65,6 +60,7 @@ type TelemetryStreamConsumer struct {
 	eventsProcessed     int64
 	errorsCount         int64
 	dlqMessagesCount    int64
+	archiveErrorsCount  int64
 	batchSize           int
 	discoveryBackoff    time.Duration
 	streamRotation      int
@@ -89,20 +85,20 @@ func NewTelemetryStreamConsumer(
 	redis *database.RedisDB,
 	deduplicationSvc observability.TelemetryDeduplicationService,
 	logger *logrus.Logger,
-	config *TelemetryStreamConsumerConfig,
-	// Observability services for structured events
-	// Note: TraceService handles both traces and spans (OTEL-native consolidation)
+	consumerConfig *TelemetryStreamConsumerConfig,
 	traceService observability.TraceService,
 	scoreService observability.ScoreService,
 	metricsService observability.MetricsService,
 	logsService observability.LogsService,
 	genaiEventsService observability.GenAIEventsService,
+	archiveService *observabilitySvc.ArchiveService,
+	archiveConfig *config.ArchiveConfig,
 ) *TelemetryStreamConsumer {
-	if config == nil {
-		config = &TelemetryStreamConsumerConfig{
+	if consumerConfig == nil {
+		consumerConfig = &TelemetryStreamConsumerConfig{
 			ConsumerGroup:     "telemetry-workers",
 			ConsumerID:        "worker-" + ulid.New().String(),
-			BatchSize:         50, // Optimized for lower latency and better worker utilization
+			BatchSize:         50,
 			BlockDuration:     time.Second,
 			MaxRetries:        3,
 			RetryBackoff:      500 * time.Millisecond,
@@ -115,19 +111,21 @@ func NewTelemetryStreamConsumer(
 		redis:               redis,
 		deduplicationSvc:    deduplicationSvc,
 		logger:              logger,
-		traceService:        traceService, // Handles both traces and spans (OTEL-native)
+		traceService:        traceService,
 		scoreService:        scoreService,
 		metricsService:      metricsService,
 		logsService:         logsService,
 		genaiEventsService:  genaiEventsService,
-		consumerGroup:       config.ConsumerGroup,
-		consumerID:          config.ConsumerID,
-		batchSize:           config.BatchSize,
-		blockDuration:       config.BlockDuration,
-		maxRetries:          config.MaxRetries,
-		retryBackoff:        config.RetryBackoff,
-		discoveryInterval:   config.DiscoveryInterval,
-		maxStreamsPerRead:   config.MaxStreamsPerRead,
+		archiveService:      archiveService,
+		archiveConfig:       archiveConfig,
+		consumerGroup:       consumerConfig.ConsumerGroup,
+		consumerID:          consumerConfig.ConsumerID,
+		batchSize:           consumerConfig.BatchSize,
+		blockDuration:       consumerConfig.BlockDuration,
+		maxRetries:          consumerConfig.MaxRetries,
+		retryBackoff:        consumerConfig.RetryBackoff,
+		discoveryInterval:   consumerConfig.DiscoveryInterval,
+		maxStreamsPerRead:   consumerConfig.MaxStreamsPerRead,
 		quit:                make(chan struct{}),
 		activeStreams:       make(map[string]bool),
 		discoveryBackoff:    time.Second,
@@ -884,6 +882,27 @@ func (c *TelemetryStreamConsumer) processBatch(ctx context.Context, batch *strea
 	// Events are claimed atomically before publishing to stream, so no async registration needed
 	// This eliminates the race condition where duplicate check happens before async registration completes
 
+	// ============================================================================
+	// Fire-and-Forget S3 Archival (Non-Blocking)
+	// ============================================================================
+	// Archive raw telemetry to S3 for:
+	// - Long-term compliance retention (6+ years)
+	// - Vendor portability (replay capability)
+	// - Cost-efficient cold storage (~50% savings)
+	//
+	// This runs in a goroutine to NOT block message ACK.
+	// ClickHouse is source of truth; S3 archival is best-effort.
+	if c.isArchiveEnabled() && processedCount > 0 {
+		// Extract raw records from batch events
+		rawRecords := c.extractRawRecords(batch)
+		if len(rawRecords) > 0 {
+			// Fire-and-forget: goroutine handles S3 upload with retry
+			// Note: We intentionally use a fresh context here because the parent context
+			// may be cancelled after message ACK, but we want the archive to complete.
+			go c.archiveBatchToS3(context.Background(), batch, rawRecords) //nolint:contextcheck // intentional - fire-and-forget pattern
+		}
+	}
+
 	return nil
 }
 
@@ -978,6 +997,7 @@ func (c *TelemetryStreamConsumer) GetStats() map[string]int64 {
 		"events_processed":  atomic.LoadInt64(&c.eventsProcessed),
 		"errors_count":      atomic.LoadInt64(&c.errorsCount),
 		"dlq_messages":      atomic.LoadInt64(&c.dlqMessagesCount),
+		"archive_errors":    atomic.LoadInt64(&c.archiveErrorsCount),
 		"active_streams":    activeStreamCount,
 	}
 }
@@ -1044,4 +1064,245 @@ func (c *TelemetryStreamConsumer) RetryDLQMessage(ctx context.Context, projectID
 	}).Info("Successfully retried DLQ message")
 
 	return nil
+}
+
+// ============================================================================
+// S3 Raw Telemetry Archival (Fire-and-Forget)
+// ============================================================================
+
+// Archive constants
+const (
+	// archiveTimeout is the maximum time to wait for S3 upload
+	archiveTimeout = 30 * time.Second
+
+	// archiveMaxRetries is the number of retry attempts for transient S3 errors
+	archiveMaxRetries = 3
+
+	// archiveBaseBackoff is the initial backoff duration for retries
+	archiveBaseBackoff = 100 * time.Millisecond
+)
+
+// extractRawRecords extracts raw OTLP JSON from batch events for S3 archival.
+// This is an extraction-layer approach - we pull raw data from the batch
+// without modifying the existing converters or data flow.
+func (c *TelemetryStreamConsumer) extractRawRecords(batch *streams.TelemetryStreamMessage) []observability.RawTelemetryRecord {
+	if batch == nil || len(batch.Events) == 0 {
+		return nil
+	}
+
+	now := time.Now()
+	records := make([]observability.RawTelemetryRecord, 0, len(batch.Events))
+
+	for _, event := range batch.Events {
+		// Serialize the full event payload to JSON for raw storage
+		rawJSON, err := json.Marshal(event.EventPayload)
+		if err != nil {
+			c.logger.WithError(err).WithFields(logrus.Fields{
+				"event_id": event.EventID.String(),
+				"batch_id": batch.BatchID.String(),
+			}).Warn("Failed to marshal event payload for archive")
+			continue
+		}
+
+		// Extract trace/span IDs - use event fields first, then fallback to payload
+		traceID := event.TraceID
+		if traceID == "" {
+			traceID = safeExtractFromPayload(event.EventPayload, "trace_id")
+		}
+		spanID := event.SpanID
+		if spanID == "" {
+			spanID = safeExtractFromPayload(event.EventPayload, "span_id")
+		}
+
+		// Map event type to signal type
+		signalType := mapEventTypeToSignal(observability.TelemetryEventType(event.EventType))
+
+		// Extract timestamp from event payload or use current time as fallback
+		timestamp := now
+		if ts, ok := event.EventPayload["timestamp"].(string); ok {
+			if parsedTS, err := time.Parse(time.RFC3339Nano, ts); err == nil {
+				timestamp = parsedTS
+			}
+		} else if ts, ok := event.EventPayload["start_time"].(string); ok {
+			// Span events use start_time
+			if parsedTS, err := time.Parse(time.RFC3339Nano, ts); err == nil {
+				timestamp = parsedTS
+			}
+		}
+
+		records = append(records, observability.RawTelemetryRecord{
+			RecordID:    event.EventID.String(),
+			ProjectID:   batch.ProjectID.String(),
+			SignalType:  signalType,
+			Timestamp:   timestamp,
+			TraceID:     traceID,
+			SpanID:      spanID,
+			SpanJSONRaw: string(rawJSON),
+			ArchivedAt:  now,
+		})
+	}
+
+	return records
+}
+
+// mapEventTypeToSignal converts TelemetryEventType to archive signal type
+func mapEventTypeToSignal(eventType observability.TelemetryEventType) string {
+	switch eventType {
+	case observability.TelemetryEventTypeSpan:
+		return observability.SignalTypeTraces
+	case observability.TelemetryEventTypeLog:
+		return observability.SignalTypeLogs
+	case observability.TelemetryEventTypeMetricSum,
+		observability.TelemetryEventTypeMetricGauge,
+		observability.TelemetryEventTypeMetricHistogram,
+		observability.TelemetryEventTypeMetricExponentialHistogram:
+		return observability.SignalTypeMetrics
+	case observability.TelemetryEventTypeGenAIEvent:
+		return observability.SignalTypeGenAI
+	default:
+		return observability.SignalTypeTraces // Default to traces for unknown types
+	}
+}
+
+// groupRecordsBySignalAndDay groups raw telemetry records by signal type AND day.
+// This ensures each Parquet file contains only one signal type for one day,
+// enabling correct Hive-style partitioning (project_id/signal/year/month/day).
+// Returns: signalType -> dateKey (YYYY-MM-DD) -> []records
+func (c *TelemetryStreamConsumer) groupRecordsBySignalAndDay(records []observability.RawTelemetryRecord) map[string]map[string][]observability.RawTelemetryRecord {
+	groups := make(map[string]map[string][]observability.RawTelemetryRecord)
+	for _, r := range records {
+		dateKey := r.Timestamp.Format("2006-01-02")
+		if groups[r.SignalType] == nil {
+			groups[r.SignalType] = make(map[string][]observability.RawTelemetryRecord)
+		}
+		groups[r.SignalType][dateKey] = append(groups[r.SignalType][dateKey], r)
+	}
+	return groups
+}
+
+// archiveBatchToS3 archives raw telemetry records to S3 using fire-and-forget pattern.
+// This method runs in a goroutine and does NOT block the main message ACK flow.
+// S3 archival is best-effort - failures are logged but don't affect ClickHouse writes.
+// Records are grouped by signal type AND day to ensure correct Hive-style partitioning.
+func (c *TelemetryStreamConsumer) archiveBatchToS3(parentCtx context.Context, batch *streams.TelemetryStreamMessage, records []observability.RawTelemetryRecord) {
+	// Create timeout context for S3 operations (derived from parent)
+	ctx, cancel := context.WithTimeout(parentCtx, archiveTimeout)
+	defer cancel()
+
+	// Group records by signal type AND day to ensure correct partitioning
+	// Each signal+day combination gets its own Parquet file in the correct partition
+	recordsBySignalAndDay := c.groupRecordsBySignalAndDay(records)
+
+	for signalType, dayGroups := range recordsBySignalAndDay {
+		for _, dayRecords := range dayGroups {
+			// Generate a unique batch ID for each signal+day group
+			// This ensures each Parquet file has a unique name
+			signalBatchID := ulid.New()
+
+			c.archiveSignalGroup(ctx, batch, signalType, signalBatchID, dayRecords)
+		}
+	}
+}
+
+// archiveSignalGroup archives a group of records of the same signal type to S3.
+func (c *TelemetryStreamConsumer) archiveSignalGroup(
+	ctx context.Context,
+	batch *streams.TelemetryStreamMessage,
+	signalType string,
+	signalBatchID ulid.ULID,
+	records []observability.RawTelemetryRecord,
+) {
+	// Retry logic with exponential backoff
+	var lastErr error
+	for attempt := range archiveMaxRetries {
+		if attempt > 0 {
+			// Exponential backoff: 100ms, 200ms, 400ms
+			backoff := archiveBaseBackoff * time.Duration(1<<uint(attempt-1)) //nolint:gosec // attempt is always small (0-2)
+			time.Sleep(backoff)
+
+			c.logger.WithFields(logrus.Fields{
+				"batch_id":    signalBatchID.String(),
+				"signal_type": signalType,
+				"attempt":     attempt + 1,
+				"backoff":     backoff,
+			}).Debug("Retrying S3 archive")
+		}
+
+		result, err := c.archiveService.ArchiveBatch(ctx, batch.ProjectID.String(), signalBatchID, records)
+		if err == nil {
+			// Success!
+			c.logger.WithFields(logrus.Fields{
+				"batch_id":     signalBatchID.String(),
+				"project_id":   batch.ProjectID.String(),
+				"signal_type":  signalType,
+				"s3_path":      result.S3Path,
+				"record_count": result.RecordCount,
+				"file_size":    result.FileSizeBytes,
+			}).Debug("Successfully archived batch to S3")
+			return
+		}
+
+		lastErr = err
+
+		// Check if error is transient (worth retrying)
+		if !isTransientS3Error(err) {
+			c.logger.WithError(err).WithFields(logrus.Fields{
+				"batch_id":    signalBatchID.String(),
+				"project_id":  batch.ProjectID.String(),
+				"signal_type": signalType,
+			}).Warn("Non-transient S3 archive error, not retrying")
+			break
+		}
+	}
+
+	// All retries exhausted or non-transient error
+	atomic.AddInt64(&c.archiveErrorsCount, 1)
+	c.logger.WithError(lastErr).WithFields(logrus.Fields{
+		"batch_id":     signalBatchID.String(),
+		"project_id":   batch.ProjectID.String(),
+		"signal_type":  signalType,
+		"record_count": len(records),
+		"max_retries":  archiveMaxRetries,
+	}).Error("Failed to archive batch to S3 after retries")
+}
+
+// isTransientS3Error checks if an error is transient and worth retrying.
+// Transient errors include network timeouts, temporary service unavailability, etc.
+func isTransientS3Error(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	errStr := err.Error()
+
+	// Check for common transient error patterns
+	transientPatterns := []string{
+		"timeout",
+		"connection refused",
+		"connection reset",
+		"temporary failure",
+		"service unavailable",
+		"503",
+		"500",
+		"429", // Rate limiting
+		"net/http",
+		"i/o timeout",
+		"TLS handshake",
+	}
+
+	for _, pattern := range transientPatterns {
+		if strings.Contains(strings.ToLower(errStr), strings.ToLower(pattern)) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// isArchiveEnabled returns true if S3 archival is enabled and properly configured
+func (c *TelemetryStreamConsumer) isArchiveEnabled() bool {
+	return c.archiveService != nil &&
+		c.archiveConfig != nil &&
+		c.archiveConfig.Enabled &&
+		c.archiveService.IsEnabled()
 }

@@ -17,6 +17,7 @@ import (
 	"brokle/internal/core/domain/common"
 	"brokle/internal/core/domain/observability"
 	"brokle/internal/core/domain/organization"
+	storageDomain "brokle/internal/core/domain/storage"
 	"brokle/internal/core/domain/user"
 	analyticsService "brokle/internal/core/services/analytics"
 	authService "brokle/internal/core/services/auth"
@@ -24,6 +25,7 @@ import (
 	observabilityService "brokle/internal/core/services/observability"
 	orgService "brokle/internal/core/services/organization"
 	registrationService "brokle/internal/core/services/registration"
+	storageService "brokle/internal/core/services/storage"
 	userService "brokle/internal/core/services/user"
 	eeAnalytics "brokle/internal/ee/analytics"
 	"brokle/internal/ee/compliance"
@@ -35,6 +37,7 @@ import (
 	billingRepo "brokle/internal/infrastructure/repository/billing"
 	observabilityRepo "brokle/internal/infrastructure/repository/observability"
 	orgRepo "brokle/internal/infrastructure/repository/organization"
+	storageRepo "brokle/internal/infrastructure/repository/storage"
 	userRepo "brokle/internal/infrastructure/repository/user"
 	"brokle/internal/infrastructure/storage"
 	"brokle/internal/infrastructure/streams"
@@ -96,6 +99,7 @@ type RepositoryContainer struct {
 	Auth          *AuthRepositories
 	Organization  *OrganizationRepositories
 	Observability *ObservabilityRepositories
+	Storage       *StorageRepositories
 	Billing       *BillingRepositories
 	Analytics     *AnalyticsRepositories
 }
@@ -104,19 +108,15 @@ type RepositoryContainer struct {
 type ServiceContainer struct {
 	User         *UserServices
 	Auth         *AuthServices
-	Registration registrationService.RegistrationService // Registration orchestrator
-	// Direct organization services - no wrapper
+	Registration        registrationService.RegistrationService
 	OrganizationService organization.OrganizationService
 	MemberService       organization.MemberService
 	ProjectService      organization.ProjectService
 	InvitationService   organization.InvitationService
-	SettingsService     organization.OrganizationSettingsService
-	// Observability services
-	Observability *observabilityService.ServiceRegistry
-	// Billing services
-	Billing *BillingServices
-	// Analytics services
-	Analytics *AnalyticsServices
+	SettingsService organization.OrganizationSettingsService
+	Observability   *observabilityService.ServiceRegistry
+	Billing         *BillingServices
+	Analytics       *AnalyticsServices
 }
 
 // EnterpriseContainer holds all enterprise service instances
@@ -163,8 +163,12 @@ type ObservabilityRepositories struct {
 	Metrics                observability.MetricsRepository
 	Logs                   observability.LogsRepository
 	GenAIEvents            observability.GenAIEventsRepository
-	BlobStorage            observability.BlobStorageRepository
 	TelemetryDeduplication observability.TelemetryDeduplicationRepository
+}
+
+// StorageRepositories contains all storage-related repositories
+type StorageRepositories struct {
+	BlobStorage storageDomain.BlobStorageRepository
 }
 
 // BillingRepositories contains all billing-related repositories
@@ -269,6 +273,8 @@ func ProvideWorkers(core *CoreContainer) (*WorkerContainer, error) {
 		core.Services.Observability.MetricsService,
 		core.Services.Observability.LogsService,
 		core.Services.Observability.GenAIEventsService,
+		core.Services.Observability.ArchiveService, // S3 raw telemetry archival (nil if disabled)
+		&core.Config.Archive,                       // Archive config
 	)
 
 	return &WorkerContainer{
@@ -314,8 +320,8 @@ func ProvideServerServices(core *CoreContainer) *ServiceContainer {
 	// Create analytics services (for provider pricing)
 	analyticsServices := ProvideAnalyticsServices(repos.Analytics)
 
-	// Create observability services (needs analytics services for pricing)
-	observabilityServices := ProvideObservabilityServices(repos.Observability, analyticsServices, databases.Redis, cfg, logger)
+	// Create observability services (needs analytics services for pricing and storage for blob management)
+	observabilityServices := ProvideObservabilityServices(repos.Observability, repos.Storage, analyticsServices, databases.Redis, cfg, logger)
 
 	// Create auth services
 	authServices := ProvideAuthServices(cfg, repos.User, repos.Auth, databases, logger)
@@ -364,7 +370,7 @@ func ProvideWorkerServices(core *CoreContainer) *ServiceContainer {
 	// Only services worker uses for processing
 	billingServices := ProvideBillingServices(repos.Billing, logger)
 	analyticsServices := ProvideAnalyticsServices(repos.Analytics)
-	observabilityServices := ProvideObservabilityServices(repos.Observability, analyticsServices, databases.Redis, cfg, logger)
+	observabilityServices := ProvideObservabilityServices(repos.Observability, repos.Storage, analyticsServices, databases.Redis, cfg, logger)
 
 	return &ServiceContainer{
 		// Worker doesn't need auth/user/org services
@@ -515,8 +521,14 @@ func ProvideObservabilityRepositories(clickhouseDB *database.ClickHouseDB, postg
 		Metrics:                observabilityRepo.NewMetricsRepository(clickhouseDB.Conn),
 		Logs:                   observabilityRepo.NewLogsRepository(clickhouseDB.Conn),
 		GenAIEvents:            observabilityRepo.NewGenAIEventsRepository(clickhouseDB.Conn),
-		BlobStorage:            observabilityRepo.NewBlobStorageRepository(clickhouseDB.Conn),
 		TelemetryDeduplication: observabilityRepo.NewTelemetryDeduplicationRepository(redisDB),
+	}
+}
+
+// ProvideStorageRepositories creates all storage-related repositories
+func ProvideStorageRepositories(clickhouseDB *database.ClickHouseDB) *StorageRepositories {
+	return &StorageRepositories{
+		BlobStorage: storageRepo.NewBlobStorageRepository(clickhouseDB.Conn),
 	}
 }
 
@@ -543,6 +555,7 @@ func ProvideRepositories(dbs *DatabaseContainer, logger *logrus.Logger) *Reposit
 		Auth:          ProvideAuthRepositories(dbs.Postgres.DB),
 		Organization:  ProvideOrganizationRepositories(dbs.Postgres.DB),
 		Observability: ProvideObservabilityRepositories(dbs.ClickHouse, dbs.Postgres.DB, dbs.Redis),
+		Storage:       ProvideStorageRepositories(dbs.ClickHouse),
 		Billing:       ProvideBillingRepositories(dbs.Postgres.DB, logger),
 		Analytics:     ProvideAnalyticsRepositories(dbs.Postgres.DB),
 	}
@@ -728,6 +741,7 @@ func ProvideOrganizationServices(
 // The worker must be injected later via SetAnalyticsWorker() after it's started.
 func ProvideObservabilityServices(
 	observabilityRepos *ObservabilityRepositories,
+	storageRepos *StorageRepositories,
 	analyticsServices *AnalyticsServices,
 	redisDB *database.RedisDB,
 	cfg *config.Config,
@@ -756,20 +770,28 @@ func ProvideObservabilityServices(
 		}
 	}
 
+	// Create blob storage service from storage domain
+	blobStorageSvc := storageService.NewBlobStorageService(
+		storageRepos.BlobStorage,
+		s3Client,
+		&cfg.BlobStorage,
+		logger,
+	)
+
 	return observabilityService.NewServiceRegistry(
 		observabilityRepos.Trace,
 		observabilityRepos.Score,
 		observabilityRepos.Metrics,
 		observabilityRepos.Logs,
 		observabilityRepos.GenAIEvents,
-		observabilityRepos.BlobStorage,
+		blobStorageSvc,
 		s3Client,
-		&cfg.BlobStorage,
+		&cfg.Archive, // Archive config for S3 raw telemetry archival
 		streamProducer,
 		deduplicationService,
 		telemetryService,
 		analyticsServices.ProviderPricing,
-		&cfg.Observability,  // Pass config object like BlobStorageConfig
+		&cfg.Observability,
 		logger,
 	)
 }

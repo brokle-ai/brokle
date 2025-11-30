@@ -137,9 +137,6 @@ temp/
 ehthumbs.db
 Thumbs.db
 
-# Docker
-.dockerignore
-
 # Kubernetes
 *.kubeconfig
 

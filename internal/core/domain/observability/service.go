@@ -66,28 +66,6 @@ type ScoreService interface {
 	CountScores(ctx context.Context, filter *ScoreFilter) (int64, error)
 }
 
-// BlobStorageService defines the comprehensive interface for blob storage operations
-type BlobStorageService interface {
-	// Create operations
-	CreateBlobReference(ctx context.Context, blob *BlobStorageFileLog) error
-
-	// Read operations
-	GetBlobByID(ctx context.Context, id string) (*BlobStorageFileLog, error)
-	GetBlobsByEntityID(ctx context.Context, entityType, entityID string) ([]*BlobStorageFileLog, error)
-	GetBlobsByProjectID(ctx context.Context, projectID string, filter *BlobStorageFilter) ([]*BlobStorageFileLog, error)
-
-	// Update operations
-	UpdateBlobReference(ctx context.Context, blob *BlobStorageFileLog) error
-
-	// Delete operations
-	DeleteBlobReference(ctx context.Context, id string) error
-
-	// Storage operations
-	ShouldOffload(content string) bool
-	UploadToS3(ctx context.Context, content string, entityType, entityID, eventID string) (*BlobStorageFileLog, error)
-	DownloadFromS3(ctx context.Context, blobID string) (string, error)
-}
-
 // MetricsService defines the interface for OTLP metrics operations
 type MetricsService interface {
 	CreateMetricSumBatch(ctx context.Context, metricsSums []*MetricSum) error
