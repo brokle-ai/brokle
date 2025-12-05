@@ -224,27 +224,3 @@ func (r *CacheRepository) apiKeyKey(apiKey string) string {
 func (r *CacheRepository) userKey(userID string) string {
 	return "user:" + userID
 }
-
-func (r *CacheRepository) semanticCacheKey(hash string) string {
-	return "semantic_cache:" + hash
-}
-
-// Semantic cache methods for AI requests
-
-// SetSemanticCache stores AI request/response in semantic cache
-func (r *CacheRepository) SetSemanticCache(ctx context.Context, hash string, response interface{}, expiration time.Duration) error {
-	key := r.semanticCacheKey(hash)
-	return r.Set(ctx, key, response, expiration)
-}
-
-// GetSemanticCache retrieves cached AI response
-func (r *CacheRepository) GetSemanticCache(ctx context.Context, hash string, dest interface{}) error {
-	key := r.semanticCacheKey(hash)
-	return r.Get(ctx, key, dest)
-}
-
-// CheckSemanticCacheExists checks if semantic cache entry exists
-func (r *CacheRepository) CheckSemanticCacheExists(ctx context.Context, hash string) (bool, error) {
-	key := r.semanticCacheKey(hash)
-	return r.Exists(ctx, key)
-}

@@ -7,18 +7,16 @@ import type {
   DashboardPreferences
 } from '@/types/dashboard'
 import type { TimeRange } from '@/types/api'
-import type { AIRequest, AIProvider, AIModel } from '@/types/ai'
 
 interface DashboardState {
   // Dashboard data
   data: DashboardData | null
-  
+
   // Time range and filters
   timeRange: TimeRange
-  selectedProviders: string[]
-  
-  // Real-time data
-  realtimeRequests: AIRequest[]
+
+  // Real-time data (placeholder for future implementation)
+  realtimeRequests: unknown[]
   realtimeEnabled: boolean
   
   // Customization
@@ -37,9 +35,8 @@ interface DashboardState {
   // Actions
   setData: (data: DashboardData) => void
   setTimeRange: (range: TimeRange) => void
-  setSelectedProviders: (providers: string[]) => void
   setRealtimeEnabled: (enabled: boolean) => void
-  addRealtimeRequest: (request: AIRequest) => void
+  addRealtimeRequest: (request: unknown) => void
   setCurrentLayout: (layout: DashboardLayout) => void
   updateWidget: (widgetId: string, updates: Partial<DashboardWidget>) => void
   addWidget: (widget: DashboardWidget) => void
@@ -58,7 +55,6 @@ export const useDashboardStore = create<DashboardState>()(
       // Initial state
       data: null,
       timeRange: '24h',
-      selectedProviders: [],
       realtimeRequests: [],
       realtimeEnabled: false,
       currentLayout: null,
@@ -77,8 +73,6 @@ export const useDashboardStore = create<DashboardState>()(
       }),
       
       setTimeRange: (range) => set({ timeRange: range }),
-
-      setSelectedProviders: (providers) => set({ selectedProviders: providers }),
 
       setRealtimeEnabled: (enabled) => set({ 
         realtimeEnabled: enabled,
