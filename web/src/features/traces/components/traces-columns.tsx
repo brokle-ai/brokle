@@ -7,30 +7,11 @@ import { DataTableColumnHeader } from './data-table-column-header'
 import { DataTableRowActions } from './data-table-row-actions'
 import { statuses, statusCodeToString } from '../data/constants'
 import type { Trace } from '../data/schema'
+import { formatDuration, formatCost } from '../utils/format-helpers'
 import { formatDistanceToNow } from 'date-fns'
 import { Copy } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
-
-// Helper to format duration (nanoseconds)
-function formatDuration(nanos: number | undefined): string {
-  if (!nanos) return '-'
-
-  // Convert nanoseconds to appropriate unit
-  const ms = nanos / 1_000_000
-  const us = nanos / 1_000
-
-  if (nanos < 1_000) return `${nanos}ns`
-  if (nanos < 1_000_000) return `${us.toFixed(3)}µs`
-  if (ms < 1000) return `${ms.toFixed(3)}ms`
-  return `${(ms / 1000).toFixed(2)}s`
-}
-
-// Helper to format cost
-function formatCost(cost: number | undefined): string {
-  if (!cost) return '-'
-  return `$${cost.toFixed(4)}`
-}
 
 export const tracesColumns: ColumnDef<Trace>[] = [
   {
@@ -139,13 +120,69 @@ export const tracesColumns: ColumnDef<Trace>[] = [
     enableSorting: false,
   },
   {
+    accessorKey: 'model_name',
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title='Model' />
+    ),
+    cell: ({ row }) => {
+      const model = row.getValue('model_name') as string | undefined
+      if (!model) return <span className='text-muted-foreground'>-</span>
+      return (
+        <Badge variant='secondary' className='font-mono text-xs'>
+          {model}
+        </Badge>
+      )
+    },
+    filterFn: (row, id, value) => {
+      const model = row.getValue(id) as string | undefined
+      if (!model) return false
+      return value.includes(model)
+    },
+    enableSorting: true,
+  },
+  {
+    accessorKey: 'provider_name',
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title='Provider' />
+    ),
+    cell: ({ row }) => {
+      const provider = row.getValue('provider_name') as string | undefined
+      if (!provider) return <span className='text-muted-foreground'>-</span>
+      return (
+        <span className='text-sm capitalize'>{provider}</span>
+      )
+    },
+    filterFn: (row, id, value) => {
+      const provider = row.getValue(id) as string | undefined
+      if (!provider) return false
+      return value.includes(provider)
+    },
+    enableSorting: true,
+  },
+  {
     accessorKey: 'cost',
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title='Cost' />
     ),
     cell: ({ row }) => {
-      const cost = row.getValue('cost') as number | undefined
+      const cost = row.getValue('cost') as number | string | undefined
       return <div className='font-mono text-sm'>{formatCost(cost)}</div>
+    },
+    enableSorting: true,
+  },
+  {
+    accessorKey: 'tokens',
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title='Tokens' />
+    ),
+    cell: ({ row }) => {
+      const tokens = row.getValue('tokens') as number | undefined
+      if (!tokens) return <span className='text-muted-foreground'>-</span>
+      return (
+        <div className='font-mono text-sm'>
+          {tokens.toLocaleString()}
+        </div>
+      )
     },
     enableSorting: true,
   },

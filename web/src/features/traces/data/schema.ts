@@ -152,6 +152,10 @@ export type Trace = {
   service_version?: string
   release?: string
 
+  // Model/Provider info (from root span)
+  model_name?: string
+  provider_name?: string
+
   // Flags
   bookmarked: boolean
   public: boolean
@@ -329,6 +333,10 @@ export const traceSchema: z.ZodType<Trace> = z.lazy(() =>
     service_name: z.string().optional(),
     service_version: z.string().optional(),
     release: z.string().optional(),
+
+    // Model/Provider info (from root span)
+    model_name: z.string().optional(),
+    provider_name: z.string().optional(),
 
     // Flags
     bookmarked: z.boolean().default(false),

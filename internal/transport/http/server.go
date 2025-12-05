@@ -322,6 +322,7 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 	{
 		// Read operations
 		traces.GET("", s.handlers.Observability.ListTraces)
+		traces.GET("/filter-options", s.handlers.Observability.GetTraceFilterOptions) // Must be before /:id
 		traces.GET("/:id", s.handlers.Observability.GetTrace)
 		traces.GET("/:id/spans", s.handlers.Observability.GetTraceWithSpans)
 		traces.GET("/:id/scores", s.handlers.Observability.GetTraceWithScores)

@@ -259,7 +259,7 @@ func (s *OTLPConverterService) createSpanEvent(ctx context.Context, span observa
 		payload["status_message"] = span.Status.Message
 	}
 
-	// Extract input with priority: gen_ai.input.messages > input.value
+	// Extract input: gen_ai.input.messages (OTEL GenAI convention) or input.value (fallback)
 	var inputValue string
 	var inputMimeType string
 
@@ -304,7 +304,7 @@ func (s *OTLPConverterService) createSpanEvent(ctx context.Context, span observa
 		}
 	}
 
-	// Extract output with priority: gen_ai.output.messages > output.value
+	// Extract output: gen_ai.output.messages (OTEL GenAI convention) or output.value (fallback)
 	var outputValue string
 	var outputMimeType string
 
@@ -922,3 +922,4 @@ func extractBoolFromInterface(val interface{}) bool {
 	}
 	return false
 }
+

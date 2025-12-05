@@ -643,9 +643,10 @@ func (r *traceRepository) GetTraceSummary(ctx context.Context, traceID string) (
 			trace_id,
 			anyIf(span_id, parent_span_id IS NULL) as root_span_id,
 			anyIf(project_id, parent_span_id IS NULL) as root_project_id,
+			anyIf(span_name, parent_span_id IS NULL) as root_span_name,
 			min(start_time) as trace_start,
 			maxOrNull(end_time) as trace_end,
-			if(maxOrNull(end_time) IS NOT NULL, toUInt64(maxOrNull(end_time) - min(start_time)), NULL) as trace_duration_nano,
+			anyIf(duration_nano, parent_span_id IS NULL) as trace_duration_nano,
 
 			-- Cost and usage aggregations
 			toFloat64(sum(total_cost)) as total_cost,
@@ -657,6 +658,7 @@ func (r *traceRepository) GetTraceSummary(ctx context.Context, traceID string) (
 			toInt64(count()) as span_count,
 			toInt64(countIf(has_error = true)) as error_span_count,
 			max(has_error) as trace_has_error,
+			anyIf(status_code, parent_span_id IS NULL) as root_status_code,
 
 			-- Root span metadata (materialized columns for fast access)
 			anyIf(service_name, parent_span_id IS NULL) as root_service_name,
@@ -679,6 +681,7 @@ func (r *traceRepository) GetTraceSummary(ctx context.Context, traceID string) (
 		&summary.TraceID,
 		&summary.RootSpanID,
 		&summary.ProjectID,
+		&summary.Name,
 		&summary.StartTime,
 		&summary.EndTime,
 		&summary.Duration,
@@ -689,6 +692,7 @@ func (r *traceRepository) GetTraceSummary(ctx context.Context, traceID string) (
 		&summary.SpanCount,
 		&summary.ErrorSpanCount,
 		&summary.HasError,
+		&summary.StatusCode,
 		&summary.ServiceName,
 		&summary.ModelName,
 		&summary.ProviderName,
@@ -712,9 +716,10 @@ func (r *traceRepository) ListTraces(ctx context.Context, filter *observability.
 			trace_id,
 			anyIf(span_id, parent_span_id IS NULL) as root_span_id,
 			anyIf(project_id, parent_span_id IS NULL) as root_project_id,
+			anyIf(span_name, parent_span_id IS NULL) as root_span_name,
 			min(start_time) as trace_start,
 			maxOrNull(end_time) as trace_end,
-			if(maxOrNull(end_time) IS NOT NULL, toUInt64(maxOrNull(end_time) - min(start_time)), NULL) as trace_duration_nano,
+			anyIf(duration_nano, parent_span_id IS NULL) as trace_duration_nano,
 
 			-- Aggregated cost and usage across all spans
 			toFloat64(sum(total_cost)) as total_cost,
@@ -726,6 +731,7 @@ func (r *traceRepository) ListTraces(ctx context.Context, filter *observability.
 			toInt64(count()) as span_count,
 			toInt64(countIf(has_error = true)) as error_span_count,
 			max(has_error) as trace_has_error,
+			anyIf(status_code, parent_span_id IS NULL) as root_status_code,
 
 			-- Root span metadata (use anyIf to get from root span)
 			anyIf(service_name, parent_span_id IS NULL) as root_service_name,
@@ -770,6 +776,44 @@ func (r *traceRepository) ListTraces(ctx context.Context, filter *observability.
 		if filter.StatusCode != nil {
 			havingClauses = append(havingClauses, "anyIf(status_code, parent_span_id IS NULL) = ?")
 			havingArgs = append(havingArgs, *filter.StatusCode)
+		}
+
+		// Advanced filters
+		if filter.ModelName != nil {
+			havingClauses = append(havingClauses, "root_model_name = ?")
+			havingArgs = append(havingArgs, *filter.ModelName)
+		}
+		if filter.ProviderName != nil {
+			havingClauses = append(havingClauses, "root_provider_name = ?")
+			havingArgs = append(havingArgs, *filter.ProviderName)
+		}
+		if filter.MinCost != nil {
+			havingClauses = append(havingClauses, "total_cost >= ?")
+			havingArgs = append(havingArgs, *filter.MinCost)
+		}
+		if filter.MaxCost != nil {
+			havingClauses = append(havingClauses, "total_cost <= ?")
+			havingArgs = append(havingArgs, *filter.MaxCost)
+		}
+		if filter.MinTokens != nil {
+			havingClauses = append(havingClauses, "total_tokens >= ?")
+			havingArgs = append(havingArgs, *filter.MinTokens)
+		}
+		if filter.MaxTokens != nil {
+			havingClauses = append(havingClauses, "total_tokens <= ?")
+			havingArgs = append(havingArgs, *filter.MaxTokens)
+		}
+		if filter.MinDuration != nil {
+			havingClauses = append(havingClauses, "trace_duration_nano >= ?")
+			havingArgs = append(havingArgs, *filter.MinDuration)
+		}
+		if filter.MaxDuration != nil {
+			havingClauses = append(havingClauses, "trace_duration_nano <= ?")
+			havingArgs = append(havingArgs, *filter.MaxDuration)
+		}
+		if filter.HasError != nil && *filter.HasError {
+			havingClauses = append(havingClauses, "trace_has_error = ?")
+			havingArgs = append(havingArgs, true)
 		}
 	}
 
@@ -833,6 +877,7 @@ func (r *traceRepository) ListTraces(ctx context.Context, filter *observability.
 			&trace.TraceID,
 			&trace.RootSpanID,
 			&trace.ProjectID,
+			&trace.Name,
 			&trace.StartTime,
 			&trace.EndTime,
 			&trace.Duration,
@@ -843,6 +888,7 @@ func (r *traceRepository) ListTraces(ctx context.Context, filter *observability.
 			&trace.SpanCount,
 			&trace.ErrorSpanCount,
 			&trace.HasError,
+			&trace.StatusCode,
 			&trace.ServiceName,
 			&trace.ModelName,
 			&trace.ProviderName,
@@ -862,7 +908,17 @@ func (r *traceRepository) ListTraces(ctx context.Context, filter *observability.
 
 func (r *traceRepository) CountTraces(ctx context.Context, filter *observability.TraceFilter) (int64, error) {
 	innerQuery := `
-		SELECT trace_id
+		SELECT
+			trace_id,
+			toFloat64(sum(total_cost)) as total_cost,
+			sum(usage_details['total']) as total_tokens,
+			if(maxOrNull(end_time) IS NOT NULL, toUInt64(maxOrNull(end_time) - min(start_time)), NULL) as trace_duration_nano,
+			max(has_error) as trace_has_error,
+			anyIf(service_name, parent_span_id IS NULL) as root_service_name,
+			anyIf(model_name, parent_span_id IS NULL) as root_model_name,
+			anyIf(provider_name, parent_span_id IS NULL) as root_provider_name,
+			anyIf(span_attributes['user.id'], parent_span_id IS NULL) as root_user_id,
+			anyIf(span_attributes['session.id'], parent_span_id IS NULL) as root_session_id
 		FROM otel_traces
 		WHERE deleted_at IS NULL
 	`
@@ -886,20 +942,58 @@ func (r *traceRepository) CountTraces(ctx context.Context, filter *observability
 		}
 
 		if filter.UserID != nil {
-			havingClauses = append(havingClauses, "anyIf(span_attributes['user.id'], parent_span_id IS NULL) = ?")
+			havingClauses = append(havingClauses, "root_user_id = ?")
 			havingArgs = append(havingArgs, *filter.UserID)
 		}
 		if filter.SessionID != nil {
-			havingClauses = append(havingClauses, "anyIf(span_attributes['session.id'], parent_span_id IS NULL) = ?")
+			havingClauses = append(havingClauses, "root_session_id = ?")
 			havingArgs = append(havingArgs, *filter.SessionID)
 		}
 		if filter.ServiceName != nil {
-			havingClauses = append(havingClauses, "anyIf(service_name, parent_span_id IS NULL) = ?")
+			havingClauses = append(havingClauses, "root_service_name = ?")
 			havingArgs = append(havingArgs, *filter.ServiceName)
 		}
 		if filter.StatusCode != nil {
 			havingClauses = append(havingClauses, "anyIf(status_code, parent_span_id IS NULL) = ?")
 			havingArgs = append(havingArgs, *filter.StatusCode)
+		}
+
+		// Advanced filters
+		if filter.ModelName != nil {
+			havingClauses = append(havingClauses, "root_model_name = ?")
+			havingArgs = append(havingArgs, *filter.ModelName)
+		}
+		if filter.ProviderName != nil {
+			havingClauses = append(havingClauses, "root_provider_name = ?")
+			havingArgs = append(havingArgs, *filter.ProviderName)
+		}
+		if filter.MinCost != nil {
+			havingClauses = append(havingClauses, "total_cost >= ?")
+			havingArgs = append(havingArgs, *filter.MinCost)
+		}
+		if filter.MaxCost != nil {
+			havingClauses = append(havingClauses, "total_cost <= ?")
+			havingArgs = append(havingArgs, *filter.MaxCost)
+		}
+		if filter.MinTokens != nil {
+			havingClauses = append(havingClauses, "total_tokens >= ?")
+			havingArgs = append(havingArgs, *filter.MinTokens)
+		}
+		if filter.MaxTokens != nil {
+			havingClauses = append(havingClauses, "total_tokens <= ?")
+			havingArgs = append(havingArgs, *filter.MaxTokens)
+		}
+		if filter.MinDuration != nil {
+			havingClauses = append(havingClauses, "trace_duration_nano >= ?")
+			havingArgs = append(havingArgs, *filter.MinDuration)
+		}
+		if filter.MaxDuration != nil {
+			havingClauses = append(havingClauses, "trace_duration_nano <= ?")
+			havingArgs = append(havingArgs, *filter.MaxDuration)
+		}
+		if filter.HasError != nil && *filter.HasError {
+			havingClauses = append(havingClauses, "trace_has_error = ?")
+			havingArgs = append(havingArgs, true)
 		}
 	}
 
@@ -991,4 +1085,129 @@ func (r *traceRepository) CalculateTotalTokens(ctx context.Context, traceID stri
 	}
 
 	return total, nil
+}
+
+// GetFilterOptions returns available filter values for the traces filter UI
+// This queries distinct values from actual trace data for dropdowns and range sliders
+func (r *traceRepository) GetFilterOptions(ctx context.Context, projectID string) (*observability.TraceFilterOptions, error) {
+	// Query to get distinct values and ranges from trace data
+	// We aggregate at trace level (GROUP BY trace_id) to get trace-level values
+	query := `
+		SELECT
+			arrayDistinct(groupArray(root_model_name)) as models,
+			arrayDistinct(groupArray(root_provider_name)) as providers,
+			arrayDistinct(groupArray(root_service_name)) as services,
+			arrayDistinct(groupArray(root_deployment_environment)) as environments,
+			arrayDistinct(groupArray(root_user_id)) as users,
+			arrayDistinct(groupArray(root_session_id)) as sessions,
+			minOrNull(total_cost) as min_cost,
+			maxOrNull(total_cost) as max_cost,
+			minOrNull(total_tokens) as min_tokens,
+			maxOrNull(total_tokens) as max_tokens,
+			minOrNull(trace_duration_nano) as min_duration,
+			maxOrNull(trace_duration_nano) as max_duration
+		FROM (
+			SELECT
+				trace_id,
+				anyIf(model_name, parent_span_id IS NULL) as root_model_name,
+				anyIf(provider_name, parent_span_id IS NULL) as root_provider_name,
+				anyIf(service_name, parent_span_id IS NULL) as root_service_name,
+				anyIf(deployment_environment, parent_span_id IS NULL) as root_deployment_environment,
+				anyIf(span_attributes['user.id'], parent_span_id IS NULL) as root_user_id,
+				anyIf(span_attributes['session.id'], parent_span_id IS NULL) as root_session_id,
+				toFloat64(sum(total_cost)) as total_cost,
+				sum(usage_details['total']) as total_tokens,
+				if(maxOrNull(end_time) IS NOT NULL, toUInt64(maxOrNull(end_time) - min(start_time)), NULL) as trace_duration_nano
+			FROM otel_traces
+			WHERE project_id = ? AND deleted_at IS NULL
+			GROUP BY trace_id
+		)
+	`
+
+	var (
+		models       []string
+		providers    []string
+		services     []string
+		environments []string
+		users        []string
+		sessions     []string
+		minCost      *float64
+		maxCost      *float64
+		minTokens    *uint64
+		maxTokens    *uint64
+		minDuration  *uint64
+		maxDuration  *uint64
+	)
+
+	err := r.db.QueryRow(ctx, query, projectID).Scan(
+		&models,
+		&providers,
+		&services,
+		&environments,
+		&users,
+		&sessions,
+		&minCost,
+		&maxCost,
+		&minTokens,
+		&maxTokens,
+		&minDuration,
+		&maxDuration,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get filter options: %w", err)
+	}
+
+	// Filter out empty strings from arrays
+	models = filterEmptyStrings(models)
+	providers = filterEmptyStrings(providers)
+	services = filterEmptyStrings(services)
+	environments = filterEmptyStrings(environments)
+	users = filterEmptyStrings(users)
+	sessions = filterEmptyStrings(sessions)
+
+	options := &observability.TraceFilterOptions{
+		Models:       models,
+		Providers:    providers,
+		Services:     services,
+		Environments: environments,
+		Users:        users,
+		Sessions:     sessions,
+	}
+
+	// Set cost range if we have data
+	if minCost != nil && maxCost != nil {
+		options.CostRange = &observability.Range{
+			Min: *minCost,
+			Max: *maxCost,
+		}
+	}
+
+	// Set token range if we have data
+	if minTokens != nil && maxTokens != nil {
+		options.TokenRange = &observability.Range{
+			Min: float64(*minTokens),
+			Max: float64(*maxTokens),
+		}
+	}
+
+	// Set duration range if we have data
+	if minDuration != nil && maxDuration != nil {
+		options.DurationRange = &observability.Range{
+			Min: float64(*minDuration),
+			Max: float64(*maxDuration),
+		}
+	}
+
+	return options, nil
+}
+
+// filterEmptyStrings removes empty strings from slice
+func filterEmptyStrings(slice []string) []string {
+	result := make([]string, 0, len(slice))
+	for _, s := range slice {
+		if s != "" {
+			result = append(result, s)
+		}
+	}
+	return result
 }

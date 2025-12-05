@@ -36,6 +36,7 @@ type TraceSummary struct {
 	TraceID        string          `json:"trace_id" db:"trace_id"`
 	RootSpanID     string          `json:"root_span_id" db:"root_span_id"`
 	ProjectID      string          `json:"project_id" db:"project_id"`
+	Name           string          `json:"name" db:"name"` // Root span's span_name
 	StartTime      time.Time       `json:"start_time" db:"start_time"`
 	EndTime        *time.Time      `json:"end_time,omitempty" db:"end_time"` // Nullable for in-flight traces
 	Duration       *uint64         `json:"duration,omitempty" db:"duration"` // Nullable for in-flight traces (nanoseconds)
@@ -46,6 +47,7 @@ type TraceSummary struct {
 	SpanCount      int64           `json:"span_count" db:"span_count"`
 	ErrorSpanCount int64           `json:"error_span_count" db:"error_span_count"`
 	HasError       bool            `json:"has_error" db:"has_error"`
+	StatusCode     *uint8          `json:"status_code,omitempty" db:"status_code"` // Root span's status code
 	ServiceName    *string         `json:"service_name,omitempty" db:"service_name"`
 	ModelName      *string         `json:"model_name,omitempty" db:"model_name"`
 	ProviderName   *string         `json:"provider_name,omitempty" db:"provider_name"`
