@@ -9,7 +9,6 @@
 
 'use client';
 
-import { useState } from 'react';
 import { isChatMLFormat, type ChatMessage } from '@/utils/chatml';
 
 interface IOPreviewProps {
@@ -28,8 +27,6 @@ interface IOPreviewProps {
  * @param truncated - Whether the value was truncated by backend
  */
 export function IOPreview({ value, mimeType, label, truncated }: IOPreviewProps) {
-  const [renderError, setRenderError] = useState<string | null>(null);
-
   if (!value) {
     return (
       <div className="text-sm text-muted-foreground italic">
@@ -83,14 +80,13 @@ export function IOPreview({ value, mimeType, label, truncated }: IOPreviewProps)
   } catch (error) {
     // Fallback to text if JSON parsing fails
     const err = error as Error;
-    setRenderError(`Invalid JSON format: ${err.message}`);
+    const errorMessage = `Invalid JSON format: ${err.message}`;
+
     return (
       <div className="space-y-2">
-        {renderError && (
-          <div className="text-sm text-amber-600 dark:text-amber-400">
-            ⚠️ {renderError} - displaying as text
-          </div>
-        )}
+        <div className="text-sm text-amber-600 dark:text-amber-400">
+          ⚠️ {errorMessage} - displaying as text
+        </div>
         <TextViewer value={value} label={label} />
       </div>
     );
