@@ -4,4 +4,4 @@
  * This version is automatically updated during the release process.
  * Displayed in the UI footer and about page.
  */
-export const VERSION = "v0.1.3";
+export const VERSION = "v0.1.4";
