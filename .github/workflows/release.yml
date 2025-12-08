@@ -234,24 +234,8 @@ jobs:
         with:
           tag_name: ${{ github.event.release.tag_name || needs.validate.outputs.version }}
           name: ${{ needs.validate.outputs.version }}
-          body: |
-            ## Brokle Platform ${{ needs.validate.outputs.version }}
-
-            ### Docker Images
-            **Docker Hub**: `brokle/brokle-server:${{ needs.validate.outputs.version }}`
-            **GHCR**: `ghcr.io/brokle-ai/brokle-server:${{ needs.validate.outputs.version }}`
-
-            Multi-arch: linux/amd64, linux/arm64
-
-            ### Binary Downloads
-            - brokle-server (OSS)
-            - brokle-server-enterprise
-            - brokle-worker (OSS)
-            - brokle-worker-enterprise
-
-            See SHA256SUMS.txt for checksums.
           files: release-assets/*
           draft: false
           prerelease: ${{ needs.validate.outputs.is_prerelease == 'true' }}
           generate_release_notes: true
-          allowUpdates: true
+          append_body: true
