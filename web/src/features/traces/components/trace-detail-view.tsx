@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { IOPreview } from '@/components/traces/IOPreview'
 import type { Trace, Span } from '../data/schema'
 import { statuses, statusCodeToString } from '../data/constants'
 import { safeFormat, formatDuration, formatCost } from '../utils/format-helpers'
@@ -14,7 +15,7 @@ import { getSpansForTrace, getTraceWithScores } from '../api/traces-api'
 import { SpanTree } from './span-tree'
 import { SpanTimeline } from './span-timeline'
 import { SpanDetailPanel } from './span-detail-panel'
-import { Clock, DollarSign, Layers, Server, Tag, TreeDeciduous, GanttChart, MessageSquare, Info } from 'lucide-react'
+import { Clock, DollarSign, Layers, Server, Tag, TreeDeciduous, GanttChart, MessageSquare, Info, FileInput } from 'lucide-react'
 
 // ============================================================================
 // Types
@@ -394,6 +395,53 @@ function ScoresTabContent({ projectId, traceId }: ScoresTabContentProps) {
 }
 
 // ============================================================================
+// I/O Tab Content Component
+// ============================================================================
+
+function IOTabContent({ trace }: { trace: Trace }) {
+  if (!trace.input && !trace.output) {
+    return (
+      <Card>
+        <CardContent className='py-8'>
+          <div className='text-center text-muted-foreground'>
+            <FileInput className='h-12 w-12 mx-auto mb-4 opacity-50' />
+            <p>No input/output data available for this trace</p>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className='flex items-center gap-2'>
+          <FileInput className='h-5 w-5' />
+          Input / Output
+        </CardTitle>
+      </CardHeader>
+      <CardContent className='space-y-6'>
+        {trace.input && (
+          <IOPreview
+            value={trace.input}
+            mimeType='application/json'
+            label='Input'
+          />
+        )}
+        {trace.input && trace.output && <Separator />}
+        {trace.output && (
+          <IOPreview
+            value={trace.output}
+            mimeType='application/json'
+            label='Output'
+          />
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+// ============================================================================
 // Main TraceDetailView Component
 // ============================================================================
 
@@ -432,6 +480,10 @@ export function TraceDetailView({ trace, projectId }: TraceDetailViewProps) {
             <MessageSquare className='h-4 w-4' />
             Scores
           </TabsTrigger>
+          <TabsTrigger value='io' className='gap-2'>
+            <FileInput className='h-4 w-4' />
+            I/O
+          </TabsTrigger>
           <TabsTrigger value='metadata' className='gap-2'>
             <Info className='h-4 w-4' />
             Metadata
@@ -448,6 +500,10 @@ export function TraceDetailView({ trace, projectId }: TraceDetailViewProps) {
 
         <TabsContent value='scores'>
           <ScoresTabContent projectId={projectId} traceId={trace.trace_id} />
+        </TabsContent>
+
+        <TabsContent value='io'>
+          <IOTabContent trace={trace} />
         </TabsContent>
 
         <TabsContent value='metadata'>

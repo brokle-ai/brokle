@@ -70,6 +70,41 @@ brokle.score.*    - Quality scores
 
 ---
 
+### Generic Input/Output Attributes (OpenInference)
+
+These attributes capture arbitrary function arguments and return values for non-LLM operations (tools, agents, chains, etc.):
+
+| Attribute | Type | Example | Description |
+|-----------|------|---------|-------------|
+| `input.value` | JSON string | `'{"location":"NYC"}'` | Serialized function arguments |
+| `input.mime_type` | string | `"application/json"` | MIME type of input |
+| `output.value` | JSON string | `'"sunny, 72°F"'` | Serialized return value |
+| `output.mime_type` | string | `"text/plain"` | MIME type of output |
+| `gen_ai.tool.name` | string | `"get_weather"` | Tool/function name |
+| `gen_ai.tool.parameters` | JSON string | `'{"location":"NYC"}'` | Tool parameters |
+| `gen_ai.tool.result` | JSON string | `'"sunny"'` | Tool result |
+
+**Priority Chain** (Backend Extraction):
+1. `gen_ai.input.messages` (LLM messages format - takes precedence)
+2. `input.value` (Generic function arguments)
+
+**Supported Types for Serialization**:
+
+| Python Type | Serialization | JavaScript Type | Serialization |
+|-------------|---------------|-----------------|---------------|
+| `datetime` | ISO 8601 string | `Date` | ISO string |
+| `Pydantic BaseModel` | `model_dump()` | Object | JSON.stringify |
+| `dataclass` | `asdict()` | `Map` | Object |
+| `numpy.ndarray` | `tolist()` | `Set` | Array |
+| `Enum` | `.value` | `BigInt` | String |
+| `UUID`, `Path` | `str()` | `Symbol` | `<symbol:name>` |
+| `bytes` | UTF-8 decode or placeholder | `Function` | `<function:name>` |
+| `Exception` | `"{Type}: {message}"` | `Error` | `{type, message, stack}` |
+| `tuple`, `set` | Convert to list | `TypedArray` | Array |
+| Circular ref | `"<TypeName>"` | Circular ref | `<circular reference>` |
+
+---
+
 ### Brokle Custom Attributes
 
 #### Span Management
@@ -205,6 +240,39 @@ with client.start_as_current_span("llm-call", as_type="generation") as span:
 client.flush()
 ```
 
+### Python SDK - Generic I/O Capture
+
+```python
+from brokle import observe
+from pydantic import BaseModel
+
+class WeatherRequest(BaseModel):
+    location: str
+    unit: str = "celsius"
+
+class WeatherResponse(BaseModel):
+    temperature: float
+    condition: str
+
+@observe(capture_input=True, capture_output=True, as_type="tool")
+def get_weather(request: WeatherRequest) -> WeatherResponse:
+    """Tool call with automatic I/O capture"""
+    # SDK automatically captures:
+    # input.value = '{"location": "NYC", "unit": "celsius"}'
+    # input.mime_type = "application/json"
+    # gen_ai.tool.name = "get_weather"
+    return WeatherResponse(temperature=22.5, condition="sunny")
+    # output.value = '{"temperature": 22.5, "condition": "sunny"}'
+    # output.mime_type = "application/json"
+
+# Works with any types - datetime, numpy, dataclasses, etc.
+@observe(capture_input=True, capture_output=True)
+def process_data(data: list[float], timestamp: datetime) -> np.ndarray:
+    # datetime serialized as ISO string
+    # numpy array serialized as list
+    return np.array([1, 2, 3])
+```
+
 ### JavaScript SDK v1.3.0+
 
 ```typescript
@@ -226,6 +294,37 @@ await client.traced('llm-call', async (span) => {
 
   return response
 })
+```
+
+### JavaScript SDK - Generic I/O Capture
+
+```typescript
+import { Brokle, serializeValue, serializeFunctionArgs } from 'brokle'
+
+const client = new Brokle({ apiKey: 'bk_...' })
+
+// Using traced() with input/output options
+await client.traced('get-weather', async (span) => {
+  const result = await fetchWeather({ location: 'NYC' })
+  return result
+}, undefined, {
+  input: { location: 'NYC', unit: 'celsius' },  // Auto-serialized
+  output: result  // Auto-serialized
+})
+
+// Manual serialization for complex types
+import { serializeValue, serializeFunctionArgs } from 'brokle'
+
+// Serialize individual values
+const date = new Date('2024-01-15')
+serializeValue(date)  // → "2024-01-15T00:00:00.000Z"
+
+const map = new Map([['a', 1], ['b', 2]])
+serializeValue(map)  // → { a: 1, b: 2 }
+
+// Serialize function arguments with parameter names
+serializeFunctionArgs(['NYC', 'celsius'], ['location', 'unit'])
+// → { location: 'NYC', unit: 'celsius' }
 ```
 
 ---
