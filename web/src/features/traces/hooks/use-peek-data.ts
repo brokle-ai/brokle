@@ -62,5 +62,6 @@ export function usePeekData() {
     isLoading,
     error: error instanceof Error ? error : null,
     peekId,
+    projectId: projectId ?? null,
   }
 }

@@ -142,20 +142,13 @@ var ScopeCategories = []ScopeCategory{
 		Level:       ScopeLevelProject,
 		Scopes:      []string{"traces:read", "traces:create", "traces:delete", "traces:export", "traces:share", "analytics:read", "analytics:export", "analytics:dashboards", "analytics:admin", "costs:read", "costs:export"},
 	},
-	{
-		Name:        "gateway",
-		DisplayName: "AI Gateway",
-		Description: "Models, providers, and prompts",
-		Level:       ScopeLevelProject,
-		Scopes:      []string{"models:read", "models:configure", "models:admin", "providers:read", "providers:configure", "prompts:read", "prompts:create", "prompts:update", "prompts:delete"},
-	},
 }
 
 // GetScopeLevel determines the level of a scope from its name
 // This is a helper for validation and UI purposes
 func GetScopeLevel(scopeName string) ScopeLevel {
 	// Project-level scope prefixes
-	projectPrefixes := []string{"traces:", "analytics:", "models:", "providers:", "costs:", "prompts:"}
+	projectPrefixes := []string{"traces:", "analytics:", "costs:"}
 
 	for _, prefix := range projectPrefixes {
 		if len(scopeName) > len(prefix) && scopeName[:len(prefix)] == prefix {

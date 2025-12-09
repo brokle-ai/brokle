@@ -28,6 +28,33 @@ export interface GetTracesParams {
   endTime?: Date
   sortBy?: string
   sortOrder?: 'asc' | 'desc'
+  modelName?: string
+  providerName?: string
+  serviceName?: string
+  minCost?: number
+  maxCost?: number
+  minTokens?: number
+  maxTokens?: number
+  minDuration?: number // nanoseconds
+  maxDuration?: number // nanoseconds
+  hasError?: boolean
+}
+
+export interface FilterRange {
+  min: number
+  max: number
+}
+
+export interface TraceFilterOptions {
+  models: string[]
+  providers: string[]
+  services: string[]
+  environments: string[]
+  users: string[]
+  sessions: string[]
+  costRange: FilterRange | null
+  tokenRange: FilterRange | null
+  durationRange: FilterRange | null
 }
 
 export interface GetSpansParams {
@@ -103,6 +130,16 @@ export const getProjectTraces = async (params: GetTracesParams): Promise<{
     endTime,
     sortBy,
     sortOrder,
+    modelName,
+    providerName,
+    serviceName,
+    minCost,
+    maxCost,
+    minTokens,
+    maxTokens,
+    minDuration,
+    maxDuration,
+    hasError,
   } = params
 
   // Build query parameters
@@ -116,8 +153,8 @@ export const getProjectTraces = async (params: GetTracesParams): Promise<{
   if (search) queryParams.search = search
   if (sessionId) queryParams.session_id = sessionId
   if (userId) queryParams.user_id = userId
-  if (startTime) queryParams.start_time = startTime.toISOString()
-  if (endTime) queryParams.end_time = endTime.toISOString()
+  if (startTime) queryParams.start_time = Math.floor(startTime.getTime() / 1000)
+  if (endTime) queryParams.end_time = Math.floor(endTime.getTime() / 1000)
   if (sortBy) queryParams.sort_by = sortBy
   if (sortOrder) queryParams.sort_dir = sortOrder
 
@@ -126,6 +163,17 @@ export const getProjectTraces = async (params: GetTracesParams): Promise<{
     const statusCodes = status.map(stringToStatusCode)
     queryParams.status = statusCodes.join(',')
   }
+
+  if (modelName) queryParams.model_name = modelName
+  if (providerName) queryParams.provider_name = providerName
+  if (serviceName) queryParams.service_name = serviceName
+  if (minCost !== undefined) queryParams.min_cost = minCost
+  if (maxCost !== undefined) queryParams.max_cost = maxCost
+  if (minTokens !== undefined) queryParams.min_tokens = minTokens
+  if (maxTokens !== undefined) queryParams.max_tokens = maxTokens
+  if (minDuration !== undefined) queryParams.min_duration = minDuration
+  if (maxDuration !== undefined) queryParams.max_duration = maxDuration
+  if (hasError !== undefined) queryParams.has_error = hasError
 
   // Make API request using getPaginated (preserves pagination metadata)
   const response = await client.getPaginated<any>('/v1/traces', queryParams)
@@ -160,23 +208,32 @@ export const getTraceById = async (
 }
 
 /**
- * Get trace with hierarchical spans tree
+ * Get all spans for a trace
  *
  * Backend endpoint: GET /api/v1/traces/:id/spans
+ * Returns spans array directly (not wrapped in trace object)
  *
  * @param projectId - Project ULID
  * @param traceId - Trace ID
- * @returns Trace with nested spans
+ * @returns Array of spans for the trace
  */
-export const getTraceWithSpans = async (
+export const getSpansForTrace = async (
   projectId: string,
   traceId: string
-): Promise<Trace> => {
-  const response = await client.get(`/v1/traces/${traceId}/spans`, {
+): Promise<Span[]> => {
+  const response = await client.get<any>(`/v1/traces/${traceId}/spans`, {
     project_id: projectId,
   })
-  return transformTraceResponse(response)
+  // Backend returns spans array directly in response (via response.Success(c, spans))
+  // The BrokleAPIClient unwraps the response, so we get the data directly
+  const spansData = Array.isArray(response) ? response : []
+  return spansData.map(transformSpan)
 }
+
+/**
+ * @deprecated Use getSpansForTrace instead - clearer naming
+ */
+export const getTraceWithSpans = getSpansForTrace
 
 /**
  * Get trace with quality scores
@@ -272,6 +329,48 @@ export const exportTraces = async (
   //   format: 'csv',
   // })
   // return response as Blob
+}
+
+/**
+ * Get available filter options for traces
+ *
+ * Backend endpoint: GET /api/v1/traces/filter-options
+ *
+ * Returns distinct values for filter dropdowns and min/max ranges for sliders.
+ * Used to populate the advanced filter UI dynamically based on actual data.
+ *
+ * @param projectId - Project ULID
+ * @returns Filter options with available values and ranges
+ */
+export const getTraceFilterOptions = async (
+  projectId: string
+): Promise<TraceFilterOptions> => {
+  const response = await client.get<{
+    models: string[]
+    providers: string[]
+    services: string[]
+    environments: string[]
+    users: string[]
+    sessions: string[]
+    cost_range: { min: number; max: number } | null
+    token_range: { min: number; max: number } | null
+    duration_range: { min: number; max: number } | null
+  }>('/v1/traces/filter-options', {
+    project_id: projectId,
+  })
+
+  // Transform snake_case to camelCase
+  return {
+    models: response.models || [],
+    providers: response.providers || [],
+    services: response.services || [],
+    environments: response.environments || [],
+    users: response.users || [],
+    sessions: response.sessions || [],
+    costRange: response.cost_range,
+    tokenRange: response.token_range,
+    durationRange: response.duration_range,
+  }
 }
 
 // ============================================================================

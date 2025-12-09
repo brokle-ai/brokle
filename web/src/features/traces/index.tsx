@@ -2,7 +2,7 @@
 
 import { TracesProvider } from './context/traces-context'
 import { TracesTable } from './components/traces-table'
-import { useProjectTraces } from './hooks/use-project-traces'
+import { useProjectTraces, useTraceFilterOptions } from './hooks/use-project-traces'
 
 interface TracesProps {
   projectSlug?: string
@@ -85,3 +85,21 @@ export function Traces({ projectSlug }: TracesProps) {
 }
 
 export { TraceDetailView } from './components/trace-detail-view'
+export { TraceDetailLayout } from './components/trace-detail-layout'
+
+// Context
+export { TracesProvider, useTraces } from './context/traces-context'
+
+// Hooks
+export { useProjectTraces, useTraceFilterOptions } from './hooks/use-project-traces'
+export { useTraceDetailState } from './hooks/use-trace-detail-state'
+export { usePeekSheetState } from './hooks/use-peek-sheet-state'
+export { usePeekData } from './hooks/use-peek-data'
+
+// Types
+export type { TraceFilterOptions, FilterRange, GetTracesParams } from './api/traces-api'
+export type { UseProjectTracesReturn, UseTraceFilterOptionsReturn } from './hooks/use-project-traces'
+export type { ViewMode } from './hooks/use-trace-detail-state'
+
+// API
+export { getProjectTraces, getTraceFilterOptions, getTraceById, getSpansForTrace } from './api/traces-api'

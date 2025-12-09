@@ -45,7 +45,6 @@ type AIRequest struct {
 	TokensIn     int64                  `json:"tokens_in" example:"150" description:"Input tokens"`
 	Latency      int64                  `json:"latency_ms" example:"850" description:"Response latency in milliseconds"`
 	Status       int                    `json:"status" example:"200" description:"HTTP response status code"`
-	CacheHit     bool                   `json:"cache_hit" example:"false" description:"Whether response was served from cache"`
 }
 
 // AIRequestDetail provides detailed information about a specific request
@@ -55,23 +54,6 @@ type AIRequestDetail struct {
 	ResponseBody interface{}       `json:"response_body,omitempty" description:"Response payload (may be truncated)"`
 	Headers      map[string]string `json:"headers,omitempty" description:"Request headers (sensitive headers removed)"`
 	Trace        []TraceEvent      `json:"trace,omitempty" description:"Detailed execution trace"`
-	RoutingInfo  RoutingInfo       `json:"routing_info" description:"AI provider routing details"`
-}
-
-// RoutingInfo provides details about AI provider routing decisions
-type RoutingInfo struct {
-	Strategy     string                `json:"strategy" example:"performance" description:"Routing strategy used"`
-	Reason       string                `json:"reason" example:"Provider has lowest latency" description:"Reason for provider selection"`
-	Alternatives []AlternativeProvider `json:"alternatives,omitempty" description:"Other providers considered"`
-	Failovers    int                   `json:"failovers" example:"0" description:"Number of failover attempts"`
-	RoutingTime  int64                 `json:"routing_time_ms" example:"5" description:"Time spent on routing decision"`
-}
-
-// AlternativeProvider represents an alternative provider that was considered
-type AlternativeProvider struct {
-	Provider string  `json:"provider" example:"anthropic" description:"Provider name"`
-	Reason   string  `json:"reason" example:"Higher latency" description:"Why this provider wasn't selected"`
-	Score    float64 `json:"score" example:"0.85" description:"Provider score for this request"`
 }
 
 // TraceEvent represents an event in the request execution trace
@@ -127,7 +109,6 @@ type ExportResponse struct {
 // @Param end_time query string false "End time filter (RFC3339)" example("2024-01-01T23:59:59Z")
 // @Param min_latency query int false "Minimum latency filter (ms)" example("1000")
 // @Param max_latency query int false "Maximum latency filter (ms)" example("5000")
-// @Param cache_hit query bool false "Filter by cache hit status" example("false")
 // @Param search query string false "Search in request content" example("error")
 // @Param cursor query string false "Pagination cursor" example("eyJjcmVhdGVkX2F0IjoiMjAyNC0wMS0wMVQxMjowMDowMFoiLCJpZCI6IjAxSDJYM1k0WjUifQ==")
 // @Param page_size query int false "Items per page" Enums(10,20,30,40,50) default(50)
@@ -145,7 +126,7 @@ func (h *Handler) ListRequests(c *gin.Context) {
 
 // GetRequest handles GET /logs/requests/:requestId
 // @Summary Get detailed request information
-// @Description Get comprehensive details about a specific AI request including full trace and routing information
+// @Description Get comprehensive details about a specific AI request including full execution trace
 // @Tags Logs
 // @Accept json
 // @Produce json

@@ -331,3 +331,17 @@ func (s *TraceService) DeleteTrace(ctx context.Context, traceID string) error {
 
 	return nil
 }
+
+// GetFilterOptions returns available filter values for the traces filter UI
+func (s *TraceService) GetFilterOptions(ctx context.Context, projectID string) (*observability.TraceFilterOptions, error) {
+	if projectID == "" {
+		return nil, appErrors.NewValidationError("project_id is required", "project_id cannot be empty")
+	}
+
+	options, err := s.traceRepo.GetFilterOptions(ctx, projectID)
+	if err != nil {
+		return nil, appErrors.NewInternalError("failed to get filter options", err)
+	}
+
+	return options, nil
+}

@@ -153,6 +153,114 @@ export function toISOString(date: Date | null | undefined): string | null {
 }
 
 // ============================================================================
+// Events/Links Transformers
+// ============================================================================
+
+/**
+ * Transform events timestamps from backend format
+ * Backend may return nested Events array or separate arrays
+ */
+function transformEventsTimestamps(raw: any): Date[] {
+  // Direct array columns (ClickHouse format)
+  if (raw.events_timestamp || raw.eventsTimestamp) {
+    const timestamps = raw.events_timestamp || raw.eventsTimestamp || []
+    return timestamps.map((ts: string | Date) =>
+      typeof ts === 'string' ? new Date(ts) : ts
+    )
+  }
+  // Nested Events array (Go struct format)
+  if (raw.events && Array.isArray(raw.events)) {
+    return raw.events.map((e: any) =>
+      typeof e.timestamp === 'string' ? new Date(e.timestamp) : e.timestamp
+    )
+  }
+  return []
+}
+
+/**
+ * Transform events names from backend format
+ */
+function transformEventsNames(raw: any): string[] {
+  // Direct array columns
+  if (raw.events_name || raw.eventsName) {
+    return raw.events_name || raw.eventsName || []
+  }
+  // Nested Events array
+  if (raw.events && Array.isArray(raw.events)) {
+    return raw.events.map((e: any) => e.name || '')
+  }
+  return []
+}
+
+/**
+ * Transform events attributes from backend format
+ */
+function transformEventsAttributes(raw: any): string[] {
+  // Direct array columns (already JSON strings)
+  if (raw.events_attributes || raw.eventsAttributes) {
+    const attrs = raw.events_attributes || raw.eventsAttributes || []
+    // Ensure they are strings (may be objects from Go)
+    return attrs.map((a: any) =>
+      typeof a === 'string' ? a : JSON.stringify(a || {})
+    )
+  }
+  // Nested Events array
+  if (raw.events && Array.isArray(raw.events)) {
+    return raw.events.map((e: any) => JSON.stringify(e.attributes || {}))
+  }
+  return []
+}
+
+/**
+ * Transform links trace IDs from backend format
+ */
+function transformLinksTraceIds(raw: any): string[] {
+  // Direct array columns
+  if (raw.links_trace_id || raw.linksTraceId) {
+    return raw.links_trace_id || raw.linksTraceId || []
+  }
+  // Nested Links array
+  if (raw.links && Array.isArray(raw.links)) {
+    return raw.links.map((l: any) => l.trace_id || l.traceId || '')
+  }
+  return []
+}
+
+/**
+ * Transform links span IDs from backend format
+ */
+function transformLinksSpanIds(raw: any): string[] {
+  // Direct array columns
+  if (raw.links_span_id || raw.linksSpanId) {
+    return raw.links_span_id || raw.linksSpanId || []
+  }
+  // Nested Links array
+  if (raw.links && Array.isArray(raw.links)) {
+    return raw.links.map((l: any) => l.span_id || l.spanId || '')
+  }
+  return []
+}
+
+/**
+ * Transform links attributes from backend format
+ */
+function transformLinksAttributes(raw: any): string[] {
+  // Direct array columns (already JSON strings)
+  if (raw.links_attributes || raw.linksAttributes) {
+    const attrs = raw.links_attributes || raw.linksAttributes || []
+    // Ensure they are strings (may be objects from Go)
+    return attrs.map((a: any) =>
+      typeof a === 'string' ? a : JSON.stringify(a || {})
+    )
+  }
+  // Nested Links array
+  if (raw.links && Array.isArray(raw.links)) {
+    return raw.links.map((l: any) => JSON.stringify(l.attributes || {}))
+  }
+  return []
+}
+
+// ============================================================================
 // Trace Transformers
 // ============================================================================
 
@@ -197,6 +305,10 @@ export function transformTrace(raw: any): Trace {
     service_version: raw.service_version || raw.serviceVersion || undefined,
     release: raw.release || undefined,
 
+    // Model/Provider info (from TraceSummary)
+    model_name: raw.model_name || raw.modelName || undefined,
+    provider_name: raw.provider_name || raw.providerName || undefined,
+
     // Flags
     bookmarked: raw.bookmarked ?? false,
     public: raw.public ?? false,
@@ -204,9 +316,9 @@ export function transformTrace(raw: any): Trace {
     // Versioning
     version: raw.version || undefined,
 
-    // Computed fields
-    cost: raw.cost || undefined,
-    tokens: raw.tokens || undefined,
+    // Computed fields (from TraceSummary)
+    cost: raw.total_cost || raw.cost || undefined,
+    tokens: raw.total_tokens || raw.tokens || undefined,
     spanCount: raw.span_count || raw.spanCount || 0,
 
     // Timestamps (duplicates for compatibility)
@@ -233,7 +345,7 @@ export function serializeTrace(trace: Partial<Trace>): any {
     session_id: trace.session_id,
     start_time: toISOString(trace.start_time),
     end_time: toISOString(trace.end_time),
-    duration_ms: trace.duration_ms,
+    duration: trace.duration,
     status_code: trace.status_code,
     status_message: trace.status_message,
     resource_attributes: stringifyAttributes(trace.resource_attributes),
@@ -281,9 +393,10 @@ export function transformSpan(raw: any): Span {
     has_error: raw.has_error ?? (raw.status_code === 2 || raw.statusCode === 2),
 
     // Attributes (new schema names - parse JSON strings if needed)
-    attributes: typeof raw.attributes === 'string'
-      ? parseAttributes(raw.attributes)
-      : (raw.attributes || {}),
+    // Backend returns span_attributes, frontend uses attributes
+    attributes: typeof (raw.span_attributes || raw.attributes) === 'string'
+      ? parseAttributes(raw.span_attributes || raw.attributes)
+      : (raw.span_attributes || raw.attributes || {}),
     metadata: typeof raw.metadata === 'string'
       ? parseAttributes(raw.metadata)
       : (raw.metadata || {}),
@@ -293,12 +406,13 @@ export function transformSpan(raw: any): Span {
     output: raw.output || undefined,
 
     // OTEL Events/Links (arrays)
-    events_timestamp: raw.events_timestamp || raw.eventsTimestamp || [],
-    events_name: raw.events_name || raw.eventsName || [],
-    events_attributes: raw.events_attributes || raw.eventsAttributes || [],
-    links_trace_id: raw.links_trace_id || raw.linksTraceId || [],
-    links_span_id: raw.links_span_id || raw.linksSpanId || [],
-    links_attributes: raw.links_attributes || raw.linksAttributes || [],
+    // Backend may return nested Events/Links or array columns
+    events_timestamp: transformEventsTimestamps(raw),
+    events_name: transformEventsNames(raw),
+    events_attributes: transformEventsAttributes(raw),
+    links_trace_id: transformLinksTraceIds(raw),
+    links_span_id: transformLinksSpanIds(raw),
+    links_attributes: transformLinksAttributes(raw),
 
     // Materialized Columns (16 total)
     gen_ai_operation_name: raw.gen_ai_operation_name || raw.genAiOperationName || undefined,

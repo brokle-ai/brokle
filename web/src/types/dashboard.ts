@@ -1,5 +1,4 @@
-import { AIRequest, AIProvider, AIModel } from './ai'
-import { TimeSeries, ModelUsage, ProviderUsage } from './api'
+import { TimeSeries } from './api'
 
 export interface DashboardData {
   overview: DashboardOverview
@@ -14,7 +13,6 @@ export interface DashboardOverview {
   totalCost: number
   averageLatency: number
   errorRate: number
-  cacheHitRate: number
   costOptimization: number
 }
 
@@ -78,23 +76,21 @@ export interface AlertAction {
   url?: string
 }
 
-export type ActivityType = 
-  | 'request' 
-  | 'error' 
-  | 'provider_change' 
-  | 'model_update' 
-  | 'cost_alert' 
+export type ActivityType =
+  | 'request'
+  | 'error'
+  | 'provider_change'
+  | 'model_update'
+  | 'cost_alert'
   | 'quality_degradation'
   | 'rate_limit'
-  | 'cache_miss'
 
 export type ActivitySeverity = 'info' | 'warning' | 'error' | 'critical'
 
-export type AlertType = 
-  | 'cost_budget' 
-  | 'error_rate' 
-  | 'latency_spike' 
-  | 'provider_down' 
+export type AlertType =
+  | 'cost_budget'
+  | 'error_rate'
+  | 'latency_spike'
   | 'quality_drop'
   | 'rate_limit_hit'
   | 'token_limit'

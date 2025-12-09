@@ -13,7 +13,7 @@ import {
 } from '@tanstack/react-table'
 import { useTableSearchParams } from '@/hooks/use-table-search-params'
 import { useTableNavigation } from '../hooks/use-table-navigation'
-import { usePeekNavigation } from '../hooks/use-peek-navigation'
+import { useTraceDetailState } from '../hooks/use-trace-detail-state'
 import { useTraces } from '../context/traces-context'
 import {
   Table,
@@ -28,7 +28,7 @@ import { DataTableBulkActions } from './data-table-bulk-actions'
 import { DataTablePagination } from './data-table-pagination'
 import { DataTableToolbar } from './data-table-toolbar'
 import { tracesColumns as columns } from './traces-columns'
-import { TracesPeekView } from './traces-peek-view'
+import { TraceDetailContainer } from './trace-detail-container'
 
 type DataTableProps = {
   data: Trace[]
@@ -39,7 +39,7 @@ export function TracesTable({ data, totalCount }: DataTableProps) {
   const searchParams = useSearchParams()
   const [isPending, startTransition] = useTransition()
   const { setCurrentPageTraceIds } = useTraces()
-  const { openPeek } = usePeekNavigation()
+  const { openTrace } = useTraceDetailState()
 
   // Parse URL state (single source of truth)
   const {
@@ -170,9 +170,9 @@ export function TracesTable({ data, totalCount }: DataTableProps) {
       if ((e.target as HTMLElement).closest('[role="checkbox"], button, a')) {
         return
       }
-      openPeek(trace.trace_id)
+      openTrace(trace.trace_id)
     },
-    [openPeek]
+    [openTrace]
   )
 
   return (
@@ -225,7 +225,7 @@ export function TracesTable({ data, totalCount }: DataTableProps) {
       <DataTablePagination table={table} isPending={isPending} />
       <DataTableBulkActions table={table} />
     </div>
-    <TracesPeekView />
+    <TraceDetailContainer />
     </>
   )
 }

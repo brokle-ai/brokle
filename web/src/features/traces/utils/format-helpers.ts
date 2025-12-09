@@ -51,3 +51,52 @@ export function safeFormatDuration(
 
   return `${(durationMs / 1000).toFixed(2)}s`
 }
+
+/**
+ * Format duration from nanoseconds to adaptive human-readable string
+ * Uses industry-standard adaptive formatting (Datadog, Jaeger, Google Cloud Trace)
+ *
+ * @param nanos - Duration in nanoseconds
+ * @returns Formatted duration string (e.g., '500ns', '250µs', '45.3ms', '2.50s')
+ */
+export function formatDuration(nanos: number | undefined | null): string {
+  if (!nanos) return '-'
+
+  const ms = nanos / 1_000_000
+  const us = nanos / 1_000
+
+  if (nanos < 1_000) return `${nanos}ns`
+  if (nanos < 1_000_000) return `${Math.round(us)}µs`
+  if (ms < 100) return `${ms.toFixed(1)}ms`
+  if (ms < 1000) return `${Math.round(ms)}ms`
+  if (ms < 10000) return `${(ms / 1000).toFixed(2)}s`
+  return `${(ms / 1000).toFixed(1)}s`
+}
+
+/**
+ * Format cost value to currency string
+ * Handles both string (from ClickHouse Decimal) and number types
+ *
+ * @param cost - Cost value (can be string from DB or number)
+ * @returns Formatted cost string (e.g., '$0.0012') or '-' if invalid
+ */
+export function formatCost(cost: number | string | undefined | null): string {
+  if (cost === undefined || cost === null || cost === '') return '-'
+  const numCost = typeof cost === 'string' ? parseFloat(cost) : cost
+  if (isNaN(numCost) || numCost === 0) return '-'
+  return `$${numCost.toFixed(4)}`
+}
+
+/**
+ * Format cost with more precision (for detailed views)
+ * Handles both string (from ClickHouse Decimal) and number types
+ *
+ * @param cost - Cost value (can be string from DB or number)
+ * @returns Formatted cost string with 6 decimal places
+ */
+export function formatCostDetailed(cost: number | string | undefined | null): string {
+  if (cost === undefined || cost === null || cost === '') return '-'
+  const numCost = typeof cost === 'string' ? parseFloat(cost) : cost
+  if (isNaN(numCost) || numCost === 0) return '-'
+  return `$${numCost.toFixed(6)}`
+}

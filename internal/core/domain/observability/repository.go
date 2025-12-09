@@ -30,6 +30,9 @@ type TraceRepository interface {
 	CountSpansInTrace(ctx context.Context, traceID string) (int64, error)
 	DeleteTrace(ctx context.Context, traceID string) error
 
+	// GetFilterOptions returns available filter values for populating the traces filter UI
+	GetFilterOptions(ctx context.Context, projectID string) (*TraceFilterOptions, error)
+
 	// Analytics
 	GetTracesBySessionID(ctx context.Context, sessionID string) ([]*TraceSummary, error)
 	GetTracesByUserID(ctx context.Context, userID string, filter *TraceFilter) ([]*TraceSummary, error)
@@ -69,6 +72,17 @@ type TraceFilter struct {
 	StatusCode  *string
 	Bookmarked  *bool
 	Public      *bool
+
+	ModelName    *string
+	ProviderName *string
+	MinCost      *float64
+	MaxCost      *float64
+	MinTokens    *int64
+	MaxTokens    *int64
+	MinDuration  *int64
+	MaxDuration  *int64
+	HasError     *bool
+
 	pagination.Params
 	ProjectID string
 	Tags      []string
@@ -116,6 +130,25 @@ type ScoreFilter struct {
 
 	// Pagination (embedded for DRY)
 	pagination.Params
+}
+
+// TraceFilterOptions represents available filter values for populating filter UI
+type TraceFilterOptions struct {
+	Models        []string `json:"models"`
+	Providers     []string `json:"providers"`
+	Services      []string `json:"services"`
+	Environments  []string `json:"environments"`
+	Users         []string `json:"users"`
+	Sessions      []string `json:"sessions"`
+	CostRange     *Range   `json:"cost_range"`
+	TokenRange    *Range   `json:"token_range"`
+	DurationRange *Range   `json:"duration_range"`
+}
+
+// Range represents a min/max numeric range for filter options
+type Range struct {
+	Min float64 `json:"min"`
+	Max float64 `json:"max"`
 }
 
 // TelemetryDeduplicationRepository defines methods for telemetry deduplication

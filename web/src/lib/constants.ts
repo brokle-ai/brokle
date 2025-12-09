@@ -34,38 +34,6 @@ export const API_ENDPOINTS = {
     PROVIDERS: '/api/v1/analytics/providers',
     MODELS: '/api/v1/analytics/models',
   },
-  
-  // AI Models and Providers
-  AI: {
-    PROVIDERS: '/api/v1/ai/providers',
-    MODELS: '/api/v1/ai/models',
-    REQUESTS: '/api/v1/ai/requests',
-    ROUTING: '/api/v1/ai/routing',
-  },
-} as const
-
-// AI Provider Constants
-export const AI_PROVIDERS = {
-  OPENAI: {
-    id: 'openai',
-    name: 'OpenAI',
-    models: ['gpt-4', 'gpt-4-turbo', 'gpt-3.5-turbo', 'text-embedding-ada-002'],
-  },
-  ANTHROPIC: {
-    id: 'anthropic',
-    name: 'Anthropic',
-    models: ['claude-3-opus', 'claude-3-sonnet', 'claude-3-haiku'],
-  },
-  GOOGLE: {
-    id: 'google',
-    name: 'Google AI',
-    models: ['gemini-pro', 'gemini-pro-vision', 'text-embedding-004'],
-  },
-  COHERE: {
-    id: 'cohere',
-    name: 'Cohere',
-    models: ['command-r', 'command-r-plus', 'embed-english-v3.0'],
-  },
 } as const
 
 // Time Range Constants
@@ -127,7 +95,7 @@ export const SUBSCRIPTION_PLANS = {
     id: 'pro',
     name: 'Pro',
     requestLimit: 100000,
-    features: ['advanced_analytics', 'priority_support', 'intelligent_routing'],
+    features: ['advanced_analytics', 'priority_support', 'quality_scoring'],
   },
   BUSINESS: {
     id: 'business',
@@ -169,13 +137,6 @@ export const REQUEST_STATUS = {
   FAILED: 'failed',
   TIMEOUT: 'timeout',
   RATE_LIMITED: 'rate_limited',
-} as const
-
-export const PROVIDER_STATUS = {
-  ACTIVE: 'active',
-  DEGRADED: 'degraded',
-  DOWN: 'down',
-  MAINTENANCE: 'maintenance',
 } as const
 
 // Error Codes
@@ -248,8 +209,8 @@ export const VALIDATION = {
 // Feature Flags
 export const FEATURE_FLAGS = {
   REALTIME_ANALYTICS: 'realtime_analytics',
-  ADVANCED_ROUTING: 'advanced_routing',
   COST_OPTIMIZATION: 'cost_optimization',
+  QUALITY_SCORING: 'quality_scoring',
   CUSTOM_MODELS: 'custom_models',
   TEAM_COLLABORATION: 'team_collaboration',
   AUDIT_LOGS: 'audit_logs',

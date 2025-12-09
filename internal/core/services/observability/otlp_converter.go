@@ -139,6 +139,114 @@ func validateMimeType(value string, declaredMimeType string) string {
 	return declaredMimeType
 }
 
+// extractGenericInput extracts input with extended priority chain.
+// Priority: gen_ai.input.messages > input.value (string, []interface{}, or map[string]interface{})
+// This supports both LLM ChatML format and generic function arguments.
+func extractGenericInput(allAttrs map[string]interface{}) (value string, mimeType string) {
+	// Priority 1: gen_ai.input.messages (LLM ChatML format)
+	if messages, ok := allAttrs["gen_ai.input.messages"].([]interface{}); ok {
+		if messagesJSON, err := json.Marshal(messages); err == nil {
+			return string(messagesJSON), "application/json"
+		}
+	} else if messages, ok := allAttrs["gen_ai.input.messages"].(string); ok && messages != "" {
+		return messages, "application/json"
+	}
+
+	// Priority 2: input.value (generic input - supports string, array, or object)
+	if inputVal, ok := allAttrs["input.value"]; ok && inputVal != nil {
+		declaredMime, _ := allAttrs["input.mime_type"].(string)
+
+		switch v := inputVal.(type) {
+		case string:
+			if v != "" {
+				return v, validateMimeType(v, declaredMime)
+			}
+		case []interface{}:
+			// Array input (e.g., function positional arguments)
+			if inputJSON, err := json.Marshal(v); err == nil {
+				return string(inputJSON), "application/json"
+			}
+		case map[string]interface{}:
+			// Object input (e.g., function kwargs or structured data)
+			if inputJSON, err := json.Marshal(v); err == nil {
+				return string(inputJSON), "application/json"
+			}
+		}
+	}
+
+	return "", ""
+}
+
+// extractGenericOutput extracts output with extended priority chain.
+// Priority: gen_ai.output.messages > output.value (string, []interface{}, or map[string]interface{})
+// This supports both LLM ChatML format and generic function return values.
+func extractGenericOutput(allAttrs map[string]interface{}) (value string, mimeType string) {
+	// Priority 1: gen_ai.output.messages (LLM ChatML format)
+	if messages, ok := allAttrs["gen_ai.output.messages"].([]interface{}); ok {
+		if messagesJSON, err := json.Marshal(messages); err == nil {
+			return string(messagesJSON), "application/json"
+		}
+	} else if messages, ok := allAttrs["gen_ai.output.messages"].(string); ok && messages != "" {
+		return messages, "application/json"
+	}
+
+	// Priority 2: output.value (generic output - supports string, array, or object)
+	if outputVal, ok := allAttrs["output.value"]; ok && outputVal != nil {
+		declaredMime, _ := allAttrs["output.mime_type"].(string)
+
+		switch v := outputVal.(type) {
+		case string:
+			if v != "" {
+				return v, validateMimeType(v, declaredMime)
+			}
+		case []interface{}:
+			// Array output (e.g., multiple return values)
+			if outputJSON, err := json.Marshal(v); err == nil {
+				return string(outputJSON), "application/json"
+			}
+		case map[string]interface{}:
+			// Object output (e.g., structured return value)
+			if outputJSON, err := json.Marshal(v); err == nil {
+				return string(outputJSON), "application/json"
+			}
+		}
+	}
+
+	return "", ""
+}
+
+// extractToolMetadata extracts tool/function-specific attributes for non-LLM operations.
+// Supports gen_ai.tool.* attributes for tool calls and function instrumentation.
+func extractToolMetadata(allAttrs map[string]interface{}, payload map[string]interface{}) {
+	// Tool name from gen_ai.tool.name
+	if toolName, ok := allAttrs["gen_ai.tool.name"].(string); ok && toolName != "" {
+		payload["tool_name"] = toolName
+	}
+
+	// Tool parameters (function input arguments as JSON)
+	if params, ok := allAttrs["gen_ai.tool.parameters"].(string); ok && params != "" {
+		payload["tool_parameters"] = params
+	} else if params, ok := allAttrs["gen_ai.tool.parameters"].(map[string]interface{}); ok {
+		if paramsJSON, err := json.Marshal(params); err == nil {
+			payload["tool_parameters"] = string(paramsJSON)
+		}
+	}
+
+	// Tool result (function return value)
+	if result, ok := allAttrs["gen_ai.tool.result"].(string); ok && result != "" {
+		payload["tool_result"] = result
+	} else if result, ok := allAttrs["gen_ai.tool.result"].(map[string]interface{}); ok {
+		if resultJSON, err := json.Marshal(result); err == nil {
+			payload["tool_result"] = string(resultJSON)
+		}
+	}
+
+	// Tool call ID (for tracking tool invocations in agentic workflows)
+	if toolCallID, ok := allAttrs["gen_ai.tool.call.id"].(string); ok && toolCallID != "" {
+		payload["tool_call_id"] = toolCallID
+	}
+}
+
 // extractLLMMetadata extracts LLM-specific metadata from ChatML formatted input.
 func extractLLMMetadata(inputValue string) map[string]interface{} {
 	metadata := make(map[string]interface{})
@@ -259,31 +367,7 @@ func (s *OTLPConverterService) createSpanEvent(ctx context.Context, span observa
 		payload["status_message"] = span.Status.Message
 	}
 
-	// Extract input with priority: gen_ai.input.messages > input.value
-	var inputValue string
-	var inputMimeType string
-
-	if messages, ok := allAttrs["gen_ai.input.messages"].([]interface{}); ok {
-		if messagesJSON, err := json.Marshal(messages); err == nil {
-			inputValue = string(messagesJSON)
-			inputMimeType = "application/json"
-		}
-	} else if messages, ok := allAttrs["gen_ai.input.messages"].(string); ok && messages != "" {
-		inputValue = messages
-		inputMimeType = "application/json"
-	}
-
-	if inputValue == "" {
-		if genericInput, ok := allAttrs["input.value"].(string); ok && genericInput != "" {
-			inputValue = genericInput
-			if mimeType, ok := allAttrs["input.mime_type"].(string); ok {
-				inputMimeType = validateMimeType(inputValue, mimeType)
-			} else {
-				inputMimeType = validateMimeType(inputValue, "")
-			}
-		}
-	}
-
+	inputValue, inputMimeType := extractGenericInput(allAttrs)
 	if inputValue != "" {
 		truncated := false
 		inputValue, truncated = truncateWithIndicator(inputValue, MaxAttributeValueSize)
@@ -304,31 +388,7 @@ func (s *OTLPConverterService) createSpanEvent(ctx context.Context, span observa
 		}
 	}
 
-	// Extract output with priority: gen_ai.output.messages > output.value
-	var outputValue string
-	var outputMimeType string
-
-	if messages, ok := allAttrs["gen_ai.output.messages"].([]interface{}); ok {
-		if messagesJSON, err := json.Marshal(messages); err == nil {
-			outputValue = string(messagesJSON)
-			outputMimeType = "application/json"
-		}
-	} else if messages, ok := allAttrs["gen_ai.output.messages"].(string); ok && messages != "" {
-		outputValue = messages
-		outputMimeType = "application/json"
-	}
-
-	if outputValue == "" {
-		if genericOutput, ok := allAttrs["output.value"].(string); ok && genericOutput != "" {
-			outputValue = genericOutput
-			if mimeType, ok := allAttrs["output.mime_type"].(string); ok {
-				outputMimeType = validateMimeType(outputValue, mimeType)
-			} else {
-				outputMimeType = validateMimeType(outputValue, "")
-			}
-		}
-	}
-
+	outputValue, outputMimeType := extractGenericOutput(allAttrs)
 	if outputValue != "" {
 		truncated := false
 		outputValue, truncated = truncateWithIndicator(outputValue, MaxAttributeValueSize)
@@ -340,6 +400,8 @@ func (s *OTLPConverterService) createSpanEvent(ctx context.Context, span observa
 			payload["output_mime_type"] = outputMimeType
 		}
 	}
+
+	extractToolMetadata(allAttrs, payload)
 
 	extractGenAIFields(allAttrs, payload)
 	s.calculateProviderCostsAtIngestion(ctx, allAttrs, payload, projectID)
@@ -922,3 +984,4 @@ func extractBoolFromInterface(val interface{}) bool {
 	}
 	return false
 }
+

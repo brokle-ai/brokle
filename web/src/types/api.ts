@@ -100,26 +100,6 @@ export interface DashboardStats {
   errorRate: number
   costTrend: TimeSeries[]
   requestTrend: TimeSeries[]
-  providerDistribution: ProviderUsage[]
-}
-
-export interface ModelUsage {
-  modelId: string
-  modelName: string
-  providerId: string
-  requests: number
-  cost: number
-  avgLatency: number
-  errorRate: number
-}
-
-export interface ProviderUsage {
-  providerId: string
-  providerName: string
-  requests: number
-  percentage: number
-  cost: number
-  avgLatency: number
 }
 
 export interface TimeSeries {

@@ -10,7 +10,7 @@ import { AlertCircle } from 'lucide-react'
  * Fetches trace data and renders detail view or loading/error states
  */
 export function PeekViewTraceDetail() {
-  const { trace, isLoading, error, peekId } = usePeekData()
+  const { trace, isLoading, error, peekId, projectId } = usePeekData()
 
   if (!peekId) {
     return (
@@ -46,5 +46,5 @@ export function PeekViewTraceDetail() {
     )
   }
 
-  return <TraceDetailView trace={trace} />
+  return <TraceDetailView trace={trace} projectId={projectId!} />
 }

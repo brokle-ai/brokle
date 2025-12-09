@@ -180,9 +180,7 @@ type EmailConfig struct {
 
 // FeatureConfig contains feature flag configuration.
 type FeatureConfig struct {
-	SemanticCaching bool `mapstructure:"semantic_caching"`
 	RealTimeMetrics bool `mapstructure:"real_time_metrics"`
-	MLRouting       bool `mapstructure:"ml_routing"`
 	CustomModels    bool `mapstructure:"custom_models"`
 	MultiModal      bool `mapstructure:"multi_modal"`
 	BackgroundJobs  bool `mapstructure:"background_jobs"`
@@ -913,9 +911,7 @@ func setDefaults() {
 	viper.SetDefault("external.cohere.base_url", "https://api.cohere.ai/v1")
 
 	// Feature flags defaults
-	viper.SetDefault("features.semantic_caching", true)
 	viper.SetDefault("features.real_time_metrics", true)
-	viper.SetDefault("features.ml_routing", true)
 	viper.SetDefault("features.background_jobs", true)
 	viper.SetDefault("features.rate_limiting", true)
 	viper.SetDefault("features.audit_logging", true)

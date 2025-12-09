@@ -34,7 +34,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Platform Overview
 
-**Brokle** is an open-source AI control plane providing observability, routing, and governance for AI applications. Scalable monolith architecture with separate server and worker binaries.
+**Brokle** is an open-source AI observability platform providing tracing, evaluation, cost analytics, and prompt management for AI applications. Scalable monolith architecture with separate server and worker binaries.
 
 ## Architecture
 
@@ -51,7 +51,7 @@ brokle/
 ├── internal/
 │   ├── app/               # DI container, bootstrap
 │   ├── core/
-│   │   ├── domain/        # Entities, interfaces (11 domains)
+│   │   ├── domain/        # Entities, interfaces (6 domains)
 │   │   └── services/      # Business logic
 │   ├── infrastructure/
 │   │   ├── repository/    # Database implementations
@@ -73,7 +73,6 @@ brokle/
 |--------|----------|---------|
 | auth | `internal/core/domain/auth` | Authentication, sessions, API keys |
 | billing | `internal/core/domain/billing` | Usage tracking, billing |
-| gateway | `internal/core/domain/gateway` | AI provider routing |
 | observability | `internal/core/domain/observability` | Traces, spans, quality scores |
 | organization | `internal/core/domain/organization` | Multi-tenant org management |
 | user | `internal/core/domain/user` | User management |
@@ -135,9 +134,8 @@ Copy `.env.example` to `.env`. Key variables:
 ### Dual Route System
 
 **SDK Routes** (`/v1/*`) - API Key Auth (`bk_{40_char}`):
-- `POST /v1/chat/completions` - OpenAI-compatible
 - `POST /v1/traces` - OTLP telemetry ingestion
-- `POST /v1/route` - AI routing
+- `POST /v1/evaluations` - Quality evaluations
 
 **Dashboard Routes** (`/api/v1/*`) - JWT Auth:
 - `/api/v1/auth/*` - Authentication

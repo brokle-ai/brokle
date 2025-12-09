@@ -156,7 +156,7 @@ type SubscriptionPlan struct {
 	Name             string   `json:"name" example:"Pro Plan" description:"Plan name"`
 	Currency         string   `json:"currency" example:"USD" description:"Plan currency"`
 	Interval         string   `json:"interval" example:"month" description:"Billing interval (month, year)"`
-	FeaturesIncluded []string `json:"features_included" example:"[\"advanced_analytics\", \"semantic_caching\"]" description:"Features included in plan"`
+	FeaturesIncluded []string `json:"features_included" example:"[\"advanced_analytics\", \"quality_scoring\"]" description:"Features included in plan"`
 	Price            float64  `json:"price" example:"29.00" description:"Monthly price in USD"`
 	RequestsLimit    int64    `json:"requests_limit" example:"100000" description:"Monthly requests limit (0 = unlimited)"`
 }

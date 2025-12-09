@@ -10,6 +10,42 @@ import (
 	"brokle/pkg/response"
 )
 
+// parseFloat64 parses a query param to float64, returns nil if empty
+func parseFloat64(value string) *float64 {
+	if value == "" {
+		return nil
+	}
+	f, err := strconv.ParseFloat(value, 64)
+	if err != nil {
+		return nil
+	}
+	return &f
+}
+
+// parseInt64 parses a query param to int64, returns nil if empty
+func parseInt64(value string) *int64 {
+	if value == "" {
+		return nil
+	}
+	i, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		return nil
+	}
+	return &i
+}
+
+// parseBool parses a query param to bool, returns nil if empty
+func parseBool(value string) *bool {
+	if value == "" {
+		return nil
+	}
+	b, err := strconv.ParseBool(value)
+	if err != nil {
+		return nil
+	}
+	return &b
+}
+
 // ListTraces handles GET /api/v1/traces
 // @Summary List traces for a project
 // @Description Retrieve paginated list of traces with optional filtering
@@ -21,6 +57,15 @@ import (
 // @Param session_id query string false "Filter by session ID"
 // @Param user_id query string false "Filter by user ID"
 // @Param service_name query string false "Filter by service name (OTLP resource attribute)"
+// @Param model_name query string false "Filter by AI model name (e.g., gpt-4, claude-3-opus)"
+// @Param provider_name query string false "Filter by provider name (e.g., openai, anthropic)"
+// @Param min_cost query number false "Minimum total cost filter"
+// @Param max_cost query number false "Maximum total cost filter"
+// @Param min_tokens query int64 false "Minimum total tokens filter"
+// @Param max_tokens query int64 false "Maximum total tokens filter"
+// @Param min_duration query int64 false "Minimum duration filter (nanoseconds)"
+// @Param max_duration query int64 false "Maximum duration filter (nanoseconds)"
+// @Param has_error query boolean false "Filter traces with errors only"
 // @Param start_time query int64 false "Start time (Unix timestamp)"
 // @Param end_time query int64 false "End time (Unix timestamp)"
 // @Param limit query int false "Limit (default 50, max 1000)"
@@ -41,6 +86,7 @@ func (h *Handler) ListTraces(c *gin.Context) {
 		ProjectID: projectID,
 	}
 
+	// Basic filters
 	if sessionID := c.Query("session_id"); sessionID != "" {
 		filter.SessionID = &sessionID
 	}
@@ -50,6 +96,23 @@ func (h *Handler) ListTraces(c *gin.Context) {
 	if serviceName := c.Query("service_name"); serviceName != "" {
 		filter.ServiceName = &serviceName
 	}
+
+	// Advanced filters
+	if modelName := c.Query("model_name"); modelName != "" {
+		filter.ModelName = &modelName
+	}
+	if providerName := c.Query("provider_name"); providerName != "" {
+		filter.ProviderName = &providerName
+	}
+	filter.MinCost = parseFloat64(c.Query("min_cost"))
+	filter.MaxCost = parseFloat64(c.Query("max_cost"))
+	filter.MinTokens = parseInt64(c.Query("min_tokens"))
+	filter.MaxTokens = parseInt64(c.Query("max_tokens"))
+	filter.MinDuration = parseInt64(c.Query("min_duration"))
+	filter.MaxDuration = parseInt64(c.Query("max_duration"))
+	filter.HasError = parseBool(c.Query("has_error"))
+
+	// Time filters
 	if startTimeStr := c.Query("start_time"); startTimeStr != "" {
 		startTimeInt, err := strconv.ParseInt(startTimeStr, 10, 64)
 		if err != nil {
@@ -210,4 +273,33 @@ func (h *Handler) DeleteTrace(c *gin.Context) {
 	}
 
 	response.Success(c, gin.H{"message": "trace deleted successfully"})
+}
+
+// GetTraceFilterOptions handles GET /api/v1/traces/filter-options
+// @Summary Get available filter options for traces
+// @Description Retrieve available filter values from actual trace data for populating filter UI
+// @Tags Traces
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param project_id query string true "Project ID"
+// @Success 200 {object} response.APIResponse{data=observability.TraceFilterOptions} "Filter options"
+// @Failure 400 {object} response.APIResponse{error=response.APIError} "Invalid parameters"
+// @Failure 401 {object} response.APIResponse{error=response.APIError} "Unauthorized"
+// @Failure 500 {object} response.APIResponse{error=response.APIError} "Internal server error"
+// @Router /api/v1/traces/filter-options [get]
+func (h *Handler) GetTraceFilterOptions(c *gin.Context) {
+	projectID := c.Query("project_id")
+	if projectID == "" {
+		response.ValidationError(c, "project_id is required", "project_id query parameter is required")
+		return
+	}
+
+	options, err := h.services.GetTraceService().GetFilterOptions(c.Request.Context(), projectID)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	response.Success(c, options)
 }
