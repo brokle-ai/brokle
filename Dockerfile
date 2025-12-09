@@ -48,6 +48,9 @@ COPY --from=builder /app/configs ./configs
 # Copy migrations for database initialization
 COPY --from=builder /app/migrations ./migrations
 
+# Copy seed data
+COPY --from=builder /app/seeds ./seeds
+
 # Create necessary directories
 RUN mkdir -p logs tmp && chown -R brokle:brokle /app
 
