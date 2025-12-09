@@ -143,6 +143,14 @@ func (m *MockTraceRepository) DeleteTrace(ctx context.Context, traceID string) e
 	return args.Error(0)
 }
 
+func (m *MockTraceRepository) GetFilterOptions(ctx context.Context, projectID string) (*observability.TraceFilterOptions, error) {
+	args := m.Called(ctx, projectID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*observability.TraceFilterOptions), args.Error(1)
+}
+
 func TestTraceService_GetRootSpan(t *testing.T) {
 	tests := []struct {
 		name        string

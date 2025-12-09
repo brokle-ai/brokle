@@ -727,6 +727,8 @@ func marshalAttributes(attrs map[string]interface{}) string {
 }
 
 // extractGenAIFields extracts Gen AI semantic conventions from attributes.
+// Note: input/output extraction is handled in createSpanEvent() with proper
+// truncation and MIME type handling. This function only extracts non-I/O fields.
 func extractGenAIFields(attrs map[string]interface{}, payload map[string]interface{}) {
 	if provider, ok := attrs["gen_ai.provider.name"].(string); ok {
 		payload["provider"] = provider
@@ -736,22 +738,6 @@ func extractGenAIFields(attrs map[string]interface{}, payload map[string]interfa
 		payload["model_name"] = responseModel
 	} else if requestModel, ok := attrs["gen_ai.request.model"].(string); ok {
 		payload["model_name"] = requestModel
-	}
-
-	if messages, ok := attrs["gen_ai.input.messages"].(string); ok {
-		payload["input"] = messages
-	} else if messages, ok := attrs["gen_ai.input.messages"].([]interface{}); ok {
-		if messagesJSON, err := json.Marshal(messages); err == nil {
-			payload["input"] = string(messagesJSON)
-		}
-	}
-
-	if messages, ok := attrs["gen_ai.output.messages"].(string); ok {
-		payload["output"] = messages
-	} else if messages, ok := attrs["gen_ai.output.messages"].([]interface{}); ok {
-		if messagesJSON, err := json.Marshal(messages); err == nil {
-			payload["output"] = string(messagesJSON)
-		}
 	}
 
 	modelParams := make(map[string]interface{})

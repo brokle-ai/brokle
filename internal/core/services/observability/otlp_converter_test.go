@@ -341,3 +341,31 @@ func TestTruncateWithIndicator_Truncation(t *testing.T) {
 	assert.Contains(t, result, "...[truncated]")
 	assert.True(t, len(result) < len(value)+15) // Original truncated + indicator
 }
+
+// Regression test: extractGenAIFields should NOT overwrite payload["input"]/["output"]
+// These are already set by createSpanEvent with proper truncation and MIME type handling.
+func TestExtractGenAIFields_DoesNotOverwriteExistingInputOutput(t *testing.T) {
+	attrs := map[string]interface{}{
+		"gen_ai.input.messages":  `[{"role":"user","content":"from attrs"}]`,
+		"gen_ai.output.messages": `[{"role":"assistant","content":"from attrs"}]`,
+		"gen_ai.provider.name":   "openai",
+		"gen_ai.request.model":   "gpt-4",
+	}
+
+	payload := map[string]interface{}{
+		"input":           "already set with truncation",
+		"input_mime_type": "application/json",
+		"output":          "already set with truncation",
+	}
+
+	extractGenAIFields(attrs, payload)
+
+	// Input/output should NOT be overwritten by extractGenAIFields
+	assert.Equal(t, "already set with truncation", payload["input"])
+	assert.Equal(t, "already set with truncation", payload["output"])
+	assert.Equal(t, "application/json", payload["input_mime_type"])
+
+	// Other fields should still be extracted
+	assert.Equal(t, "openai", payload["provider"])
+	assert.Equal(t, "gpt-4", payload["model_name"])
+}
