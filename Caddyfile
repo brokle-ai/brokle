@@ -1,0 +1,83 @@
+# Caddyfile - Automatic HTTPS with Let's Encrypt
+# Domain: app.brokle.com
+
+{
+    # Global options
+    email info@brokle.com
+
+    # Uncomment for staging SSL certificates (testing)
+    # acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
+}
+
+# Main domain - Frontend + API
+app.brokle.com {
+    # Automatic HTTPS via Let's Encrypt
+
+    # API Routes (Dashboard API with JWT auth)
+    handle /api/* {
+        reverse_proxy backend:8080 {
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # SDK Routes (OTLP ingestion with API key auth)
+    handle /v1/* {
+        reverse_proxy backend:8080 {
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # Health check
+    handle /health {
+        reverse_proxy backend:8080
+    }
+
+    # Frontend - Next.js app (default route)
+    handle {
+        reverse_proxy frontend:3000 {
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # Security headers
+    header {
+        # Prevent clickjacking
+        X-Frame-Options "DENY"
+        # XSS protection
+        X-Content-Type-Options "nosniff"
+        # Referrer policy
+        Referrer-Policy "strict-origin-when-cross-origin"
+        # Remove server header
+        -Server
+    }
+
+    # Enable gzip compression
+    encode gzip
+
+    # Access logs
+    log {
+        output file /var/log/caddy/access.log
+        format json
+    }
+}
+
+# Redirect www to non-www
+www.app.brokle.com {
+    redir https://app.brokle.com{uri} permanent
+}
+
+# OTLP gRPC endpoint (separate subdomain for SDK traffic)
+# Optional: Use if you want dedicated subdomain for telemetry ingestion
+# otlp.brokle.com {
+#     reverse_proxy backend:4317 {
+#         transport http {
+#             versions h2c 2
+#         }
+#     }
+# }
