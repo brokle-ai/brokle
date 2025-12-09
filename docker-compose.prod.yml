@@ -175,6 +175,9 @@ services:
     build:
       context: ./web
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: https://${DOMAIN}
+        NEXT_PUBLIC_WS_URL: wss://${DOMAIN}
     container_name: brokle-frontend
     restart: unless-stopped
     environment:
