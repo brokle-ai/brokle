@@ -110,7 +110,7 @@ services:
     environment:
       APP_MODE: server
       ENV: production
-      DB_AUTO_MIGRATE: "true"
+      DB_AUTO_MIGRATE: "false"
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
       CLICKHOUSE_URL: clickhouse://${CLICKHOUSE_USER}:${CLICKHOUSE_PASSWORD}@clickhouse:9000/${CLICKHOUSE_DB:-default}
       REDIS_URL: redis://redis:6379/0

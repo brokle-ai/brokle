@@ -116,6 +116,11 @@ if grep -q "CHANGE_ME" .env; then
 fi
 
 # Secure .env file
+# Take ownership if needed
+if [ ! -O .env ]; then
+    warn ".env file not owned by current user. Taking ownership..."
+    sudo chown $USER:$USER .env
+fi
 chmod 600 .env
 info "✓ .env file permissions secured (600)"
 
