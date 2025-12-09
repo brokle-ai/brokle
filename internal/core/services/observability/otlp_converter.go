@@ -35,8 +35,9 @@ const (
 	AttrVercelResultToolCalls   = "ai.result.toolCalls"
 
 	// OTEL GenAI
-	AttrGenAIInputMessages  = "gen_ai.input.messages"
-	AttrGenAIOutputMessages = "gen_ai.output.messages"
+	AttrGenAIInputMessages       = "gen_ai.input.messages"
+	AttrGenAIOutputMessages      = "gen_ai.output.messages"
+	AttrGenAISystemInstructions  = "gen_ai.system_instructions"
 
 	// OpenInference
 	AttrInputValue     = "input.value"
@@ -59,8 +60,9 @@ var frameworkIOKeys = map[string]bool{
 	AttrVercelResponseToolCalls: true,
 	AttrVercelResultToolCalls:   true,
 	// OTEL GenAI
-	AttrGenAIInputMessages:  true,
-	AttrGenAIOutputMessages: true,
+	AttrGenAIInputMessages:      true,
+	AttrGenAIOutputMessages:     true,
+	AttrGenAISystemInstructions: true,
 	// OpenInference
 	AttrInputValue:     true,
 	AttrOutputValue:    true,
@@ -1227,7 +1229,17 @@ func extractInputOutput(params ExtractIOParams) (input, output, inputMime, outpu
 	}
 
 	// Priority 3: OTEL GenAI Messages (existing implementation)
-	input, output = extractGenAIMessages(attrs)
+	input, output, systemInstructions := extractGenAIMessages(attrs)
+
+	// Combine system instructions with input for complete LLM context
+	if input == "" && systemInstructions != "" {
+		// System instructions only (no input messages)
+		input = systemInstructions
+	} else if input != "" && systemInstructions != "" {
+		// Prepend system instructions to input messages
+		input = combineMessagesJSON(systemInstructions, input)
+	}
+
 	if input != "" || output != "" {
 		return applyTruncationAndMime(input, output, maxSize)
 	}
@@ -1236,8 +1248,9 @@ func extractInputOutput(params ExtractIOParams) (input, output, inputMime, outpu
 	return extractOpenInference(attrs, maxSize)
 }
 
-// extractGenAIMessages extracts I/O from gen_ai.input/output.messages attributes
-func extractGenAIMessages(attrs map[string]interface{}) (input, output string) {
+// extractGenAIMessages extracts I/O from gen_ai.input/output.messages and system_instructions attributes
+// Returns: input, output, systemInstructions
+func extractGenAIMessages(attrs map[string]interface{}) (input, output, systemInstructions string) {
 	// Input: gen_ai.input.messages
 	if messages, ok := attrs[AttrGenAIInputMessages].([]interface{}); ok {
 		if jsonBytes, err := json.Marshal(messages); err == nil {
@@ -1256,7 +1269,36 @@ func extractGenAIMessages(attrs map[string]interface{}) (input, output string) {
 		output = messages
 	}
 
-	return input, output
+	// System Instructions: gen_ai.system_instructions (OTEL GenAI 1.28+)
+	if instructions, ok := attrs[AttrGenAISystemInstructions].([]interface{}); ok {
+		if jsonBytes, err := json.Marshal(instructions); err == nil {
+			systemInstructions = string(jsonBytes)
+		}
+	} else if instructions, ok := attrs[AttrGenAISystemInstructions].(string); ok && instructions != "" {
+		systemInstructions = instructions
+	}
+
+	return input, output, systemInstructions
+}
+
+// combineMessagesJSON combines two JSON arrays of messages.
+// Used to prepend system instructions to input messages for complete LLM context.
+func combineMessagesJSON(systemJSON, inputJSON string) string {
+	var systemMsgs, inputMsgs []interface{}
+
+	if err := json.Unmarshal([]byte(systemJSON), &systemMsgs); err != nil {
+		return inputJSON // Fallback to input only
+	}
+	if err := json.Unmarshal([]byte(inputJSON), &inputMsgs); err != nil {
+		return systemJSON // Fallback to system only
+	}
+
+	// Combine: system messages first, then input messages
+	combined := append(systemMsgs, inputMsgs...)
+	if jsonBytes, err := json.Marshal(combined); err == nil {
+		return string(jsonBytes)
+	}
+	return inputJSON
 }
 
 // extractOpenInference extracts I/O from input.value/output.value attributes (OpenInference)

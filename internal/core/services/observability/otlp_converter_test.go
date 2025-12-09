@@ -857,3 +857,158 @@ func TestExtractFromSpanEvents_TypeHandling(t *testing.T) {
 		assert.Contains(t, input, `"role":"user"`)
 	})
 }
+
+// =============================================
+// Tests for gen_ai.system_instructions support
+// =============================================
+
+// TestExtractGenAIMessages_WithSystemInstructions verifies system instructions extraction
+func TestExtractGenAIMessages_WithSystemInstructions(t *testing.T) {
+	t.Run("extracts all three components", func(t *testing.T) {
+		attrs := map[string]interface{}{
+			AttrGenAISystemInstructions: []interface{}{
+				map[string]interface{}{"role": "system", "content": "You are helpful"},
+			},
+			AttrGenAIInputMessages: []interface{}{
+				map[string]interface{}{"role": "user", "content": "Hello"},
+			},
+			AttrGenAIOutputMessages: []interface{}{
+				map[string]interface{}{"role": "assistant", "content": "Hi there!"},
+			},
+		}
+
+		input, output, systemInstructions := extractGenAIMessages(attrs)
+
+		assert.Contains(t, systemInstructions, "You are helpful")
+		assert.Contains(t, input, "Hello")
+		assert.Contains(t, output, "Hi there!")
+	})
+
+	t.Run("handles system instructions as string", func(t *testing.T) {
+		attrs := map[string]interface{}{
+			AttrGenAISystemInstructions: `[{"role":"system","content":"Be concise"}]`,
+		}
+
+		_, _, systemInstructions := extractGenAIMessages(attrs)
+		assert.Contains(t, systemInstructions, "Be concise")
+	})
+
+	t.Run("handles system instructions only", func(t *testing.T) {
+		attrs := map[string]interface{}{
+			AttrGenAISystemInstructions: []interface{}{
+				map[string]interface{}{"role": "system", "content": "System only"},
+			},
+		}
+
+		input, output, systemInstructions := extractGenAIMessages(attrs)
+
+		assert.Contains(t, systemInstructions, "System only")
+		assert.Empty(t, input)
+		assert.Empty(t, output)
+	})
+}
+
+// TestCombineMessagesJSON verifies JSON array merging
+func TestCombineMessagesJSON(t *testing.T) {
+	t.Run("combines system and input messages", func(t *testing.T) {
+		systemJSON := `[{"role":"system","content":"Be helpful"}]`
+		inputJSON := `[{"role":"user","content":"Hello"}]`
+
+		combined := combineMessagesJSON(systemJSON, inputJSON)
+
+		assert.Contains(t, combined, "Be helpful")
+		assert.Contains(t, combined, "Hello")
+		// System should come first
+		assert.True(t, len(combined) > 0)
+	})
+
+	t.Run("falls back to input on invalid system JSON", func(t *testing.T) {
+		systemJSON := `invalid json`
+		inputJSON := `[{"role":"user","content":"Hello"}]`
+
+		combined := combineMessagesJSON(systemJSON, inputJSON)
+		assert.Equal(t, inputJSON, combined)
+	})
+
+	t.Run("falls back to system on invalid input JSON", func(t *testing.T) {
+		systemJSON := `[{"role":"system","content":"System"}]`
+		inputJSON := `invalid json`
+
+		combined := combineMessagesJSON(systemJSON, inputJSON)
+		assert.Equal(t, systemJSON, combined)
+	})
+}
+
+// TestExtractInputOutput_WithSystemInstructions verifies system instructions integration
+func TestExtractInputOutput_WithSystemInstructions(t *testing.T) {
+	t.Run("combines system instructions with input messages", func(t *testing.T) {
+		attrs := map[string]interface{}{
+			AttrGenAISystemInstructions: []interface{}{
+				map[string]interface{}{"role": "system", "content": "You are an AI assistant"},
+			},
+			AttrGenAIInputMessages: []interface{}{
+				map[string]interface{}{"role": "user", "content": "What is 2+2?"},
+			},
+			AttrGenAIOutputMessages: []interface{}{
+				map[string]interface{}{"role": "assistant", "content": "4"},
+			},
+		}
+
+		params := ExtractIOParams{Attributes: attrs}
+		input, output, _, _, _ := extractInputOutput(params)
+
+		// Input should contain BOTH system instructions AND user message
+		assert.Contains(t, input, "You are an AI assistant")
+		assert.Contains(t, input, "What is 2+2?")
+		assert.Contains(t, output, "4")
+	})
+
+	t.Run("system instructions only (no input messages)", func(t *testing.T) {
+		attrs := map[string]interface{}{
+			AttrGenAISystemInstructions: []interface{}{
+				map[string]interface{}{"role": "system", "content": "System prompt only"},
+			},
+		}
+
+		params := ExtractIOParams{Attributes: attrs}
+		input, _, _, _, _ := extractInputOutput(params)
+
+		// Input should be the system instructions
+		assert.Contains(t, input, "System prompt only")
+	})
+
+	t.Run("input messages only (no system instructions)", func(t *testing.T) {
+		attrs := map[string]interface{}{
+			AttrGenAIInputMessages: []interface{}{
+				map[string]interface{}{"role": "user", "content": "User message only"},
+			},
+		}
+
+		params := ExtractIOParams{Attributes: attrs}
+		input, _, _, _, _ := extractInputOutput(params)
+
+		assert.Contains(t, input, "User message only")
+	})
+}
+
+// TestFilterIOKeysFromMetadata_SystemInstructions verifies system instructions are filtered
+func TestFilterIOKeysFromMetadata_SystemInstructions(t *testing.T) {
+	attrs := map[string]interface{}{
+		AttrGenAISystemInstructions: `[{"role":"system","content":"secret system prompt"}]`,
+		AttrGenAIInputMessages:      `[{"role":"user","content":"message"}]`,
+		AttrGenAIOutputMessages:     `[{"role":"assistant","content":"response"}]`,
+		"gen_ai.provider.name":      "openai",
+		"gen_ai.request.model":      "gpt-4",
+	}
+
+	filtered := filterIOKeysFromMetadata(attrs)
+
+	// All I/O keys should be filtered (including system instructions)
+	assert.NotContains(t, filtered, AttrGenAISystemInstructions)
+	assert.NotContains(t, filtered, AttrGenAIInputMessages)
+	assert.NotContains(t, filtered, AttrGenAIOutputMessages)
+
+	// Non-I/O keys should remain
+	assert.Contains(t, filtered, "gen_ai.provider.name")
+	assert.Contains(t, filtered, "gen_ai.request.model")
+}
