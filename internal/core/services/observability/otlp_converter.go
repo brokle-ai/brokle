@@ -1,11 +1,12 @@
 package observability
 
 import (
-	"log/slog"
 	"context"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/shopspring/decimal"
@@ -19,6 +20,67 @@ import (
 // MaxAttributeValueSize defines the maximum size for input/output attribute values
 // Matches common OTEL collector limits (1MB) to prevent oversized spans
 const MaxAttributeValueSize = 1024 * 1024 // 1MB
+
+// Framework-specific attribute keys (Priority 1 frameworks)
+const (
+	// Vercel AI SDK
+	AttrVercelPromptMessages    = "ai.prompt.messages"
+	AttrVercelPrompt            = "ai.prompt"
+	AttrVercelToolCallArgs      = "ai.toolCall.args"
+	AttrVercelResponseText      = "ai.response.text"
+	AttrVercelResponseToolCalls = "ai.response.toolCalls"
+	AttrVercelResponseObject    = "ai.response.object"
+	AttrVercelResultText        = "ai.result.text"   // Legacy <4.0
+	AttrVercelResultObject      = "ai.result.object" // Legacy <4.0
+	AttrVercelResultToolCalls   = "ai.result.toolCalls"
+
+	// OTEL GenAI
+	AttrGenAIInputMessages  = "gen_ai.input.messages"
+	AttrGenAIOutputMessages = "gen_ai.output.messages"
+
+	// OpenInference
+	AttrInputValue     = "input.value"
+	AttrInputMimeType  = "input.mime_type"
+	AttrOutputValue    = "output.value"
+	AttrOutputMimeType = "output.mime_type"
+)
+
+// frameworkIOKeys lists attribute keys that should be filtered from metadata
+// to prevent duplicate I/O data in metadata attributes
+var frameworkIOKeys = map[string]bool{
+	// Vercel AI SDK
+	AttrVercelPromptMessages:    true,
+	AttrVercelPrompt:            true,
+	AttrVercelToolCallArgs:      true,
+	AttrVercelResponseText:      true,
+	AttrVercelResultText:        true,
+	AttrVercelResponseObject:    true,
+	AttrVercelResultObject:      true,
+	AttrVercelResponseToolCalls: true,
+	AttrVercelResultToolCalls:   true,
+	// OTEL GenAI
+	AttrGenAIInputMessages:  true,
+	AttrGenAIOutputMessages: true,
+	// OpenInference
+	AttrInputValue:     true,
+	AttrOutputValue:    true,
+	AttrInputMimeType:  true,
+	AttrOutputMimeType: true,
+}
+
+// ExtractIOParams contains parameters for input/output extraction
+type ExtractIOParams struct {
+	Attributes               map[string]interface{}
+	Events                   []map[string]interface{}
+	InstrumentationScopeName string
+	MaxSize                  int
+}
+
+// InputOutputTruncated tracks whether input/output were truncated
+type InputOutputTruncated struct {
+	Input  bool
+	Output bool
+}
 
 // OTLPConverterService handles conversion of OTLP traces to Brokle telemetry events
 type OTLPConverterService struct {
@@ -367,18 +429,51 @@ func (s *OTLPConverterService) createSpanEvent(ctx context.Context, span observa
 		payload["status_message"] = span.Status.Message
 	}
 
-	inputValue, inputMimeType := extractGenericInput(allAttrs)
-	if inputValue != "" {
-		truncated := false
-		inputValue, truncated = truncateWithIndicator(inputValue, MaxAttributeValueSize)
-		if truncated {
-			payload["input_truncated"] = true
+	// Get instrumentation scope name for framework detection
+	var scopeName string
+	if scope != nil && scope.Name != "" {
+		scopeName = scope.Name
+	}
+
+	// Store instrumentation scope name in payload for debugging and filtering
+	if scopeName != "" {
+		payload["instrumentation_scope_name"] = scopeName
+	}
+
+	// Convert span events to the format expected by extractInputOutput
+	var spanEvents []map[string]interface{}
+	if len(span.Events) > 0 {
+		spanEvents = make([]map[string]interface{}, len(span.Events))
+		for i, event := range span.Events {
+			eventMap := make(map[string]interface{})
+			if eventTime := convertUnixNano(event.TimeUnixNano); eventTime != nil {
+				eventMap["timestamp"] = eventTime.Format(time.RFC3339Nano)
+			}
+			eventMap["name"] = event.Name
+			eventMap["attributes"] = convertToStringMap(extractAttributesFromKeyValues(event.Attributes))
+			eventMap["dropped_attributes_count"] = event.DroppedAttributesCount
+			spanEvents[i] = eventMap
 		}
+	}
+
+	// Extract input/output using unified framework-aware extractor
+	inputValue, outputValue, inputMimeType, outputMimeType, ioTruncated := extractInputOutput(ExtractIOParams{
+		Attributes:               allAttrs,
+		Events:                   spanEvents,
+		InstrumentationScopeName: scopeName,
+		MaxSize:                  MaxAttributeValueSize,
+	})
+
+	if inputValue != "" {
 		payload["input"] = inputValue
 		if inputMimeType != "" {
 			payload["input_mime_type"] = inputMimeType
 		}
+		if ioTruncated.Input {
+			payload["input_truncated"] = true
+		}
 
+		// Extract LLM metadata from ChatML formatted input
 		if inputMimeType == "application/json" {
 			if llmMetadata := extractLLMMetadata(inputValue); len(llmMetadata) > 0 {
 				for key, value := range llmMetadata {
@@ -388,16 +483,13 @@ func (s *OTLPConverterService) createSpanEvent(ctx context.Context, span observa
 		}
 	}
 
-	outputValue, outputMimeType := extractGenericOutput(allAttrs)
 	if outputValue != "" {
-		truncated := false
-		outputValue, truncated = truncateWithIndicator(outputValue, MaxAttributeValueSize)
-		if truncated {
-			payload["output_truncated"] = true
-		}
 		payload["output"] = outputValue
 		if outputMimeType != "" {
 			payload["output_mime_type"] = outputMimeType
+		}
+		if ioTruncated.Output {
+			payload["output_truncated"] = true
 		}
 	}
 
@@ -424,19 +516,9 @@ func (s *OTLPConverterService) createSpanEvent(ctx context.Context, span observa
 		payload["trace_state"] = traceState
 	}
 
-	if len(span.Events) > 0 {
-		events := make([]map[string]interface{}, len(span.Events))
-		for i, event := range span.Events {
-			eventMap := make(map[string]interface{})
-			if eventTime := convertUnixNano(event.TimeUnixNano); eventTime != nil {
-				eventMap["timestamp"] = eventTime.Format(time.RFC3339Nano)
-			}
-			eventMap["name"] = event.Name
-			eventMap["attributes"] = convertToStringMap(extractAttributesFromKeyValues(event.Attributes))
-			eventMap["dropped_attributes_count"] = event.DroppedAttributesCount
-			events[i] = eventMap
-		}
-		payload["events"] = events
+	// Reuse spanEvents that were already converted for I/O extraction
+	if len(spanEvents) > 0 {
+		payload["events"] = spanEvents
 	}
 
 	if len(span.Links) > 0 {
@@ -462,7 +544,7 @@ func (s *OTLPConverterService) createSpanEvent(ctx context.Context, span observa
 	}
 
 	payload["resource_attributes"] = convertToStringMap(resourceAttrs)
-	payload["span_attributes"] = convertToStringMap(spanAttrs)
+	payload["span_attributes"] = convertToStringMap(filterIOKeysFromMetadata(spanAttrs))
 	payload["scope_attributes"] = convertToStringMap(scopeAttrs)
 
 	if scope != nil {
@@ -971,3 +1053,289 @@ func extractBoolFromInterface(val interface{}) bool {
 	return false
 }
 
+// stringify converts various types to JSON string representation
+func stringify(v interface{}) string {
+	if v == nil {
+		return ""
+	}
+	switch val := v.(type) {
+	case string:
+		return val
+	case []interface{}, map[string]interface{}:
+		if jsonBytes, err := json.Marshal(val); err == nil {
+			return string(jsonBytes)
+		}
+	}
+	return fmt.Sprintf("%v", v)
+}
+
+// extractVercelAISDK extracts input/output from Vercel AI SDK attributes.
+// Handles composite output (text + toolCalls) and legacy attributes (<4.0).
+func extractVercelAISDK(attrs map[string]interface{}) (input, output string) {
+	// Input priority: ai.prompt.messages > ai.prompt > ai.toolCall.args
+	if v, ok := attrs[AttrVercelPromptMessages]; ok && v != nil {
+		input = stringify(v)
+	} else if v, ok := attrs[AttrVercelPrompt]; ok && v != nil {
+		input = stringify(v)
+	} else if v, ok := attrs[AttrVercelToolCallArgs]; ok && v != nil {
+		input = stringify(v)
+	}
+
+	// Output: Composite if both text and toolCalls exist
+	responseText, hasText := attrs[AttrVercelResponseText]
+	toolCalls, hasToolCalls := attrs[AttrVercelResponseToolCalls]
+
+	// Also check legacy result attributes (<4.0)
+	if !hasText {
+		if v, ok := attrs[AttrVercelResultText]; ok && v != nil {
+			responseText = v
+			hasText = true
+		}
+	}
+	if !hasToolCalls {
+		if v, ok := attrs[AttrVercelResultToolCalls]; ok && v != nil {
+			toolCalls = v
+			hasToolCalls = true
+		}
+	}
+
+	if hasText && hasToolCalls && responseText != nil && toolCalls != nil {
+		// Combine into ChatML format with both content and tool_calls
+		textStr := stringify(responseText)
+		toolCallsStr := stringify(toolCalls)
+		output = fmt.Sprintf(`{"role":"assistant","content":%s,"tool_calls":%s}`,
+			quoteIfNotJSON(textStr), toolCallsStr)
+	} else if hasText && responseText != nil {
+		output = stringify(responseText)
+	} else if v, ok := attrs[AttrVercelResponseObject]; ok && v != nil {
+		output = stringify(v)
+	} else if v, ok := attrs[AttrVercelResultObject]; ok && v != nil {
+		output = stringify(v)
+	} else if hasToolCalls && toolCalls != nil {
+		output = stringify(toolCalls)
+	}
+
+	return input, output
+}
+
+// quoteIfNotJSON wraps a string in JSON quotes if it's not already valid JSON
+func quoteIfNotJSON(s string) string {
+	if json.Valid([]byte(s)) {
+		return s
+	}
+	// Quote as JSON string
+	if jsonBytes, err := json.Marshal(s); err == nil {
+		return string(jsonBytes)
+	}
+	return `"` + s + `"`
+}
+
+// extractFromSpanEvents extracts input/output from OTEL GenAI span events.
+// Handles gen_ai.user.message, gen_ai.system.message, gen_ai.assistant.message,
+// gen_ai.tool.message (input) and gen_ai.choice (output).
+func extractFromSpanEvents(events []map[string]interface{}) (input, output string) {
+	var inputMessages []map[string]interface{}
+	var outputChoices []map[string]interface{}
+
+	for _, event := range events {
+		eventName, _ := event["name"].(string)
+
+		// Handle both map[string]string and map[string]interface{} for robustness
+		// createSpanEvent() stores attributes as map[string]string via convertToStringMap(),
+		// but we handle both types for flexibility and future-proofing
+		var attrMap map[string]interface{}
+		switch attrs := event["attributes"].(type) {
+		case map[string]string:
+			attrMap = make(map[string]interface{}, len(attrs))
+			for k, v := range attrs {
+				attrMap[k] = v
+			}
+		case map[string]interface{}:
+			attrMap = attrs
+		default:
+			attrMap = make(map[string]interface{})
+		}
+
+		switch eventName {
+		case "gen_ai.system.message", "gen_ai.user.message",
+			"gen_ai.assistant.message", "gen_ai.tool.message":
+			// Extract role from event name
+			role := extractRoleFromEventName(eventName)
+			msg := map[string]interface{}{"role": role}
+			for k, v := range attrMap {
+				msg[k] = v
+			}
+			inputMessages = append(inputMessages, msg)
+		case "gen_ai.choice":
+			outputChoices = append(outputChoices, attrMap)
+		}
+	}
+
+	if len(inputMessages) > 0 {
+		if jsonBytes, err := json.Marshal(inputMessages); err == nil {
+			input = string(jsonBytes)
+		}
+	}
+	if len(outputChoices) == 1 {
+		if jsonBytes, err := json.Marshal(outputChoices[0]); err == nil {
+			output = string(jsonBytes)
+		}
+	} else if len(outputChoices) > 1 {
+		if jsonBytes, err := json.Marshal(outputChoices); err == nil {
+			output = string(jsonBytes)
+		}
+	}
+	return input, output
+}
+
+// extractRoleFromEventName extracts the role from an OTEL GenAI event name.
+// e.g., "gen_ai.user.message" -> "user"
+func extractRoleFromEventName(eventName string) string {
+	// Pattern: gen_ai.<role>.message
+	parts := strings.Split(eventName, ".")
+	if len(parts) >= 3 && parts[0] == "gen_ai" && parts[2] == "message" {
+		return parts[1]
+	}
+	return "unknown"
+}
+
+// extractInputOutput is the unified framework-aware I/O extraction function.
+// It follows a priority chain: Vercel AI SDK > Span Events > OTEL GenAI > OpenInference
+func extractInputOutput(params ExtractIOParams) (input, output, inputMime, outputMime string, truncated InputOutputTruncated) {
+	attrs := params.Attributes
+	events := params.Events
+	scopeName := params.InstrumentationScopeName
+	maxSize := params.MaxSize
+	if maxSize == 0 {
+		maxSize = MaxAttributeValueSize
+	}
+
+	// Priority 1: Vercel AI SDK (instrumentationScopeName === "ai")
+	if scopeName == "ai" {
+		input, output = extractVercelAISDK(attrs)
+		if input != "" || output != "" {
+			return applyTruncationAndMime(input, output, maxSize)
+		}
+	}
+
+	// Priority 2: OTEL GenAI Span Events
+	if len(events) > 0 {
+		input, output = extractFromSpanEvents(events)
+		if input != "" || output != "" {
+			return applyTruncationAndMime(input, output, maxSize)
+		}
+	}
+
+	// Priority 3: OTEL GenAI Messages (existing implementation)
+	input, output = extractGenAIMessages(attrs)
+	if input != "" || output != "" {
+		return applyTruncationAndMime(input, output, maxSize)
+	}
+
+	// Priority 4: OpenInference (existing fallback)
+	return extractOpenInference(attrs, maxSize)
+}
+
+// extractGenAIMessages extracts I/O from gen_ai.input/output.messages attributes
+func extractGenAIMessages(attrs map[string]interface{}) (input, output string) {
+	// Input: gen_ai.input.messages
+	if messages, ok := attrs[AttrGenAIInputMessages].([]interface{}); ok {
+		if jsonBytes, err := json.Marshal(messages); err == nil {
+			input = string(jsonBytes)
+		}
+	} else if messages, ok := attrs[AttrGenAIInputMessages].(string); ok && messages != "" {
+		input = messages
+	}
+
+	// Output: gen_ai.output.messages
+	if messages, ok := attrs[AttrGenAIOutputMessages].([]interface{}); ok {
+		if jsonBytes, err := json.Marshal(messages); err == nil {
+			output = string(jsonBytes)
+		}
+	} else if messages, ok := attrs[AttrGenAIOutputMessages].(string); ok && messages != "" {
+		output = messages
+	}
+
+	return input, output
+}
+
+// extractOpenInference extracts I/O from input.value/output.value attributes (OpenInference)
+func extractOpenInference(attrs map[string]interface{}, maxSize int) (input, output, inputMime, outputMime string, truncated InputOutputTruncated) {
+	declaredInputMime, _ := attrs[AttrInputMimeType].(string)
+	declaredOutputMime, _ := attrs[AttrOutputMimeType].(string)
+
+	// Input: input.value
+	if inputVal, ok := attrs[AttrInputValue]; ok && inputVal != nil {
+		switch v := inputVal.(type) {
+		case string:
+			if v != "" {
+				input = v
+				inputMime = validateMimeType(v, declaredInputMime)
+			}
+		case []interface{}, map[string]interface{}:
+			if jsonBytes, err := json.Marshal(v); err == nil {
+				input = string(jsonBytes)
+				inputMime = "application/json"
+			}
+		}
+	}
+
+	// Output: output.value
+	if outputVal, ok := attrs[AttrOutputValue]; ok && outputVal != nil {
+		switch v := outputVal.(type) {
+		case string:
+			if v != "" {
+				output = v
+				outputMime = validateMimeType(v, declaredOutputMime)
+			}
+		case []interface{}, map[string]interface{}:
+			if jsonBytes, err := json.Marshal(v); err == nil {
+				output = string(jsonBytes)
+				outputMime = "application/json"
+			}
+		}
+	}
+
+	// Apply truncation
+	if input != "" {
+		input, truncated.Input = truncateWithIndicator(input, maxSize)
+	}
+	if output != "" {
+		output, truncated.Output = truncateWithIndicator(output, maxSize)
+	}
+
+	return input, output, inputMime, outputMime, truncated
+}
+
+// applyTruncationAndMime applies truncation and MIME type detection to extracted I/O
+func applyTruncationAndMime(input, output string, maxSize int) (string, string, string, string, InputOutputTruncated) {
+	var truncated InputOutputTruncated
+	var inputMime, outputMime string
+
+	if input != "" {
+		input, truncated.Input = truncateWithIndicator(input, maxSize)
+		inputMime = validateMimeType(input, "")
+	}
+	if output != "" {
+		output, truncated.Output = truncateWithIndicator(output, maxSize)
+		outputMime = validateMimeType(output, "")
+	}
+
+	return input, output, inputMime, outputMime, truncated
+}
+
+// isFrameworkIOKey checks if a key is a framework I/O key that should be filtered from metadata
+func isFrameworkIOKey(key string) bool {
+	return frameworkIOKeys[key]
+}
+
+// filterIOKeysFromMetadata filters framework I/O keys from attributes to prevent duplication
+func filterIOKeysFromMetadata(attrs map[string]interface{}) map[string]interface{} {
+	filtered := make(map[string]interface{})
+	for k, v := range attrs {
+		if !isFrameworkIOKey(k) {
+			filtered[k] = v
+		}
+	}
+	return filtered
+}

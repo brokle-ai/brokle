@@ -369,3 +369,491 @@ func TestExtractGenAIFields_DoesNotOverwriteExistingInputOutput(t *testing.T) {
 	assert.Equal(t, "openai", payload["provider"])
 	assert.Equal(t, "gpt-4", payload["model_name"])
 }
+
+// ============================================================================
+// Tests for extractInputOutput (unified framework-aware I/O extraction)
+// ============================================================================
+
+// Test Vercel AI SDK - Basic Input (ai.prompt.messages)
+func TestExtractInputOutput_VercelAISDK_PromptMessages(t *testing.T) {
+	attrs := map[string]interface{}{
+		AttrVercelPromptMessages: `[{"role":"user","content":"Hello from Vercel"}]`,
+	}
+	input, _, inputMime, _, _ := extractInputOutput(ExtractIOParams{
+		Attributes:               attrs,
+		InstrumentationScopeName: "ai",
+	})
+	assert.Equal(t, `[{"role":"user","content":"Hello from Vercel"}]`, input)
+	assert.Equal(t, "application/json", inputMime)
+}
+
+// Test Vercel AI SDK - ai.prompt (fallback)
+func TestExtractInputOutput_VercelAISDK_Prompt(t *testing.T) {
+	attrs := map[string]interface{}{
+		AttrVercelPrompt: "What is the weather?",
+	}
+	input, _, inputMime, _, _ := extractInputOutput(ExtractIOParams{
+		Attributes:               attrs,
+		InstrumentationScopeName: "ai",
+	})
+	assert.Equal(t, "What is the weather?", input)
+	assert.Equal(t, "text/plain", inputMime)
+}
+
+// Test Vercel AI SDK - ai.toolCall.args
+func TestExtractInputOutput_VercelAISDK_ToolCallArgs(t *testing.T) {
+	attrs := map[string]interface{}{
+		AttrVercelToolCallArgs: `{"location":"Bangalore","units":"celsius"}`,
+	}
+	input, _, inputMime, _, _ := extractInputOutput(ExtractIOParams{
+		Attributes:               attrs,
+		InstrumentationScopeName: "ai",
+	})
+	assert.Equal(t, `{"location":"Bangalore","units":"celsius"}`, input)
+	assert.Equal(t, "application/json", inputMime)
+}
+
+// Test Vercel AI SDK - Basic Output (ai.response.text)
+func TestExtractInputOutput_VercelAISDK_ResponseText(t *testing.T) {
+	attrs := map[string]interface{}{
+		AttrVercelResponseText: "The weather is sunny.",
+	}
+	_, output, _, outputMime, _ := extractInputOutput(ExtractIOParams{
+		Attributes:               attrs,
+		InstrumentationScopeName: "ai",
+	})
+	assert.Equal(t, "The weather is sunny.", output)
+	assert.Equal(t, "text/plain", outputMime)
+}
+
+// Test Vercel AI SDK - Composite Output (text + toolCalls)
+func TestExtractInputOutput_VercelAISDK_CompositeToolCalls(t *testing.T) {
+	attrs := map[string]interface{}{
+		AttrVercelResponseText:      "Let me check the weather.",
+		AttrVercelResponseToolCalls: `[{"name":"get_weather","args":{"location":"Bangalore"}}]`,
+	}
+	_, output, _, outputMime, _ := extractInputOutput(ExtractIOParams{
+		Attributes:               attrs,
+		InstrumentationScopeName: "ai",
+	})
+	assert.Contains(t, output, `"role":"assistant"`)
+	assert.Contains(t, output, `"tool_calls"`)
+	assert.Contains(t, output, `get_weather`)
+	assert.Equal(t, "application/json", outputMime)
+}
+
+// Test Vercel AI SDK - Legacy result attributes (<4.0)
+func TestExtractInputOutput_VercelAISDK_LegacyResult(t *testing.T) {
+	attrs := map[string]interface{}{
+		AttrVercelResultText: "Legacy response text",
+	}
+	_, output, _, outputMime, _ := extractInputOutput(ExtractIOParams{
+		Attributes:               attrs,
+		InstrumentationScopeName: "ai",
+	})
+	assert.Equal(t, "Legacy response text", output)
+	assert.Equal(t, "text/plain", outputMime)
+}
+
+// Test Vercel AI SDK - ai.response.object
+func TestExtractInputOutput_VercelAISDK_ResponseObject(t *testing.T) {
+	attrs := map[string]interface{}{
+		AttrVercelResponseObject: `{"weather":"sunny","temperature":25}`,
+	}
+	_, output, _, outputMime, _ := extractInputOutput(ExtractIOParams{
+		Attributes:               attrs,
+		InstrumentationScopeName: "ai",
+	})
+	assert.Equal(t, `{"weather":"sunny","temperature":25}`, output)
+	assert.Equal(t, "application/json", outputMime)
+}
+
+// Test OTEL GenAI Messages (Priority 3 - existing implementation)
+func TestExtractInputOutput_OTELGenAI_Messages(t *testing.T) {
+	attrs := map[string]interface{}{
+		AttrGenAIInputMessages:  `[{"role":"user","content":"OTEL message"}]`,
+		AttrGenAIOutputMessages: `[{"role":"assistant","content":"OTEL response"}]`,
+	}
+	input, output, inputMime, outputMime, _ := extractInputOutput(ExtractIOParams{
+		Attributes: attrs,
+	})
+	assert.Equal(t, `[{"role":"user","content":"OTEL message"}]`, input)
+	assert.Equal(t, `[{"role":"assistant","content":"OTEL response"}]`, output)
+	assert.Equal(t, "application/json", inputMime)
+	assert.Equal(t, "application/json", outputMime)
+}
+
+// Test OpenInference (Priority 4 - fallback)
+func TestExtractInputOutput_OpenInference(t *testing.T) {
+	attrs := map[string]interface{}{
+		AttrInputValue:  `{"query":"test query"}`,
+		AttrOutputValue: `{"result":"test result"}`,
+	}
+	input, output, inputMime, outputMime, _ := extractInputOutput(ExtractIOParams{
+		Attributes: attrs,
+	})
+	assert.Equal(t, `{"query":"test query"}`, input)
+	assert.Equal(t, `{"result":"test result"}`, output)
+	assert.Equal(t, "application/json", inputMime)
+	assert.Equal(t, "application/json", outputMime)
+}
+
+// Test OpenInference with declared MIME type
+func TestExtractInputOutput_OpenInference_WithMimeType(t *testing.T) {
+	attrs := map[string]interface{}{
+		AttrInputValue:     "Plain text input",
+		AttrInputMimeType:  "text/plain",
+		AttrOutputValue:    "Plain text output",
+		AttrOutputMimeType: "text/plain",
+	}
+	input, output, inputMime, outputMime, _ := extractInputOutput(ExtractIOParams{
+		Attributes: attrs,
+	})
+	assert.Equal(t, "Plain text input", input)
+	assert.Equal(t, "Plain text output", output)
+	assert.Equal(t, "text/plain", inputMime)
+	assert.Equal(t, "text/plain", outputMime)
+}
+
+// Test Priority Order: Vercel AI SDK > OTEL GenAI > OpenInference
+func TestExtractInputOutput_PriorityOrder_VercelOverOTEL(t *testing.T) {
+	attrs := map[string]interface{}{
+		AttrVercelPromptMessages: `[{"role":"user","content":"vercel"}]`,
+		AttrGenAIInputMessages:   `[{"role":"user","content":"otel"}]`,
+		AttrInputValue:           `{"data":"openinference"}`,
+	}
+	input, _, _, _, _ := extractInputOutput(ExtractIOParams{
+		Attributes:               attrs,
+		InstrumentationScopeName: "ai",
+	})
+	assert.Contains(t, input, "vercel")
+	assert.NotContains(t, input, "otel")
+	assert.NotContains(t, input, "openinference")
+}
+
+// Test Priority Order: OTEL GenAI > OpenInference (when not Vercel)
+func TestExtractInputOutput_PriorityOrder_OTELOverOpenInference(t *testing.T) {
+	attrs := map[string]interface{}{
+		AttrGenAIInputMessages: `[{"role":"user","content":"otel"}]`,
+		AttrInputValue:         `{"data":"openinference"}`,
+	}
+	input, _, _, _, _ := extractInputOutput(ExtractIOParams{
+		Attributes: attrs,
+	})
+	assert.Contains(t, input, "otel")
+	assert.NotContains(t, input, "openinference")
+}
+
+// Test that Vercel attributes are ignored when scope is not "ai"
+func TestExtractInputOutput_VercelIgnoredWithoutScope(t *testing.T) {
+	attrs := map[string]interface{}{
+		AttrVercelPromptMessages: `[{"role":"user","content":"vercel"}]`,
+		AttrGenAIInputMessages:   `[{"role":"user","content":"otel"}]`,
+	}
+	input, _, _, _, _ := extractInputOutput(ExtractIOParams{
+		Attributes:               attrs,
+		InstrumentationScopeName: "other-sdk", // Not "ai"
+	})
+	assert.Contains(t, input, "otel")
+	assert.NotContains(t, input, "vercel")
+}
+
+// Test OTEL GenAI Span Events - User message
+func TestExtractInputOutput_SpanEvents_UserMessage(t *testing.T) {
+	events := []map[string]interface{}{
+		{
+			"name":       "gen_ai.user.message",
+			"attributes": map[string]string{"content": "Hello from user"},
+		},
+	}
+	input, _, inputMime, _, _ := extractInputOutput(ExtractIOParams{
+		Events: events,
+	})
+	assert.Contains(t, input, `"role":"user"`)
+	assert.Contains(t, input, `"content":"Hello from user"`)
+	assert.Equal(t, "application/json", inputMime)
+}
+
+// Test OTEL GenAI Span Events - System + User messages
+func TestExtractInputOutput_SpanEvents_MultipleMessages(t *testing.T) {
+	events := []map[string]interface{}{
+		{
+			"name":       "gen_ai.system.message",
+			"attributes": map[string]string{"content": "You are helpful"},
+		},
+		{
+			"name":       "gen_ai.user.message",
+			"attributes": map[string]string{"content": "Hello"},
+		},
+	}
+	input, _, _, _, _ := extractInputOutput(ExtractIOParams{
+		Events: events,
+	})
+	assert.Contains(t, input, `"role":"system"`)
+	assert.Contains(t, input, `"role":"user"`)
+	assert.Contains(t, input, `"content":"You are helpful"`)
+	assert.Contains(t, input, `"content":"Hello"`)
+}
+
+// Test OTEL GenAI Span Events - Choice output
+func TestExtractInputOutput_SpanEvents_Choice(t *testing.T) {
+	events := []map[string]interface{}{
+		{
+			"name":       "gen_ai.choice",
+			"attributes": map[string]string{"content": "AI response", "index": "0"},
+		},
+	}
+	_, output, _, outputMime, _ := extractInputOutput(ExtractIOParams{
+		Events: events,
+	})
+	assert.Contains(t, output, `"content":"AI response"`)
+	assert.Equal(t, "application/json", outputMime)
+}
+
+// Test Truncation
+func TestExtractInputOutput_Truncation(t *testing.T) {
+	longValue := ""
+	for i := 0; i < 100; i++ {
+		longValue += "This is a long string that needs truncation. "
+	}
+	attrs := map[string]interface{}{
+		AttrInputValue: longValue,
+	}
+	input, _, _, _, truncated := extractInputOutput(ExtractIOParams{
+		Attributes: attrs,
+		MaxSize:    100,
+	})
+	assert.True(t, truncated.Input)
+	assert.Contains(t, input, "...[truncated]")
+	assert.LessOrEqual(t, len(input), 120) // 100 + truncation indicator
+}
+
+// Test Empty attributes
+func TestExtractInputOutput_Empty(t *testing.T) {
+	attrs := map[string]interface{}{
+		"other.attribute": "value",
+	}
+	input, output, inputMime, outputMime, truncated := extractInputOutput(ExtractIOParams{
+		Attributes: attrs,
+	})
+	assert.Equal(t, "", input)
+	assert.Equal(t, "", output)
+	assert.Equal(t, "", inputMime)
+	assert.Equal(t, "", outputMime)
+	assert.False(t, truncated.Input)
+	assert.False(t, truncated.Output)
+}
+
+// ============================================================================
+// Tests for extractVercelAISDK
+// ============================================================================
+
+func TestExtractVercelAISDK_InputPriority(t *testing.T) {
+	// Test that ai.prompt.messages takes precedence over ai.prompt
+	attrs := map[string]interface{}{
+		AttrVercelPromptMessages: `[{"role":"user","content":"messages"}]`,
+		AttrVercelPrompt:         "plain prompt",
+	}
+	input, _ := extractVercelAISDK(attrs)
+	assert.Contains(t, input, "messages")
+	assert.NotContains(t, input, "plain prompt")
+}
+
+func TestExtractVercelAISDK_OutputWithToolCallsOnly(t *testing.T) {
+	attrs := map[string]interface{}{
+		AttrVercelResponseToolCalls: `[{"name":"search"}]`,
+	}
+	_, output := extractVercelAISDK(attrs)
+	assert.Equal(t, `[{"name":"search"}]`, output)
+}
+
+// ============================================================================
+// Tests for extractFromSpanEvents
+// ============================================================================
+
+func TestExtractFromSpanEvents_Empty(t *testing.T) {
+	events := []map[string]interface{}{}
+	input, output := extractFromSpanEvents(events)
+	assert.Equal(t, "", input)
+	assert.Equal(t, "", output)
+}
+
+func TestExtractFromSpanEvents_MultipleChoices(t *testing.T) {
+	events := []map[string]interface{}{
+		{
+			"name":       "gen_ai.choice",
+			"attributes": map[string]string{"content": "Choice 1", "index": "0"},
+		},
+		{
+			"name":       "gen_ai.choice",
+			"attributes": map[string]string{"content": "Choice 2", "index": "1"},
+		},
+	}
+	_, output := extractFromSpanEvents(events)
+	// Should return as array when multiple choices
+	assert.Contains(t, output, "Choice 1")
+	assert.Contains(t, output, "Choice 2")
+}
+
+// ============================================================================
+// Tests for extractRoleFromEventName
+// ============================================================================
+
+func TestExtractRoleFromEventName(t *testing.T) {
+	tests := []struct {
+		eventName string
+		expected  string
+	}{
+		{"gen_ai.user.message", "user"},
+		{"gen_ai.system.message", "system"},
+		{"gen_ai.assistant.message", "assistant"},
+		{"gen_ai.tool.message", "tool"},
+		{"unknown_format", "unknown"},
+		{"gen_ai.choice", "unknown"}, // Not a message event
+	}
+	for _, tt := range tests {
+		t.Run(tt.eventName, func(t *testing.T) {
+			result := extractRoleFromEventName(tt.eventName)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+// ============================================================================
+// Tests for isFrameworkIOKey
+// ============================================================================
+
+func TestIsFrameworkIOKey(t *testing.T) {
+	tests := []struct {
+		key      string
+		expected bool
+	}{
+		{"ai.prompt.messages", true},
+		{"ai.response.text", true},
+		{"gen_ai.input.messages", true},
+		{"gen_ai.output.messages", true},
+		{"input.value", true},
+		{"output.value", true},
+		{"other.attribute", false},
+		{"gen_ai.provider.name", false},
+		{"gen_ai.request.model", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.key, func(t *testing.T) {
+			result := isFrameworkIOKey(tt.key)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+// ============================================================================
+// Tests for filterIOKeysFromMetadata
+// ============================================================================
+
+func TestFilterIOKeysFromMetadata(t *testing.T) {
+	attrs := map[string]interface{}{
+		"ai.prompt.messages":    `[{"role":"user"}]`,
+		"ai.response.text":      "response",
+		"gen_ai.provider.name":  "openai",
+		"gen_ai.request.model":  "gpt-4",
+		"custom.attribute":      "value",
+		"gen_ai.input.messages": `[{"role":"user"}]`,
+	}
+	filtered := filterIOKeysFromMetadata(attrs)
+
+	// I/O keys should be filtered out
+	assert.NotContains(t, filtered, "ai.prompt.messages")
+	assert.NotContains(t, filtered, "ai.response.text")
+	assert.NotContains(t, filtered, "gen_ai.input.messages")
+
+	// Non-I/O keys should remain
+	assert.Contains(t, filtered, "gen_ai.provider.name")
+	assert.Contains(t, filtered, "gen_ai.request.model")
+	assert.Contains(t, filtered, "custom.attribute")
+}
+
+// TestFilterIOKeysFromMetadata_IntegrationWithConvertToStringMap verifies that
+// filterIOKeysFromMetadata works correctly when chained with convertToStringMap
+func TestFilterIOKeysFromMetadata_IntegrationWithConvertToStringMap(t *testing.T) {
+	// Simulate span attributes with both I/O keys and regular attributes
+	spanAttrs := map[string]interface{}{
+		"input.value":           `{"query":"test"}`,
+		"output.value":          `{"result":"done"}`,
+		"gen_ai.input.messages": `[{"role":"user"}]`,
+		"ai.prompt.messages":    `[{"role":"user"}]`,
+		"gen_ai.provider.name":  "openai",
+		"gen_ai.request.model":  "gpt-4",
+		"custom.attribute":      "value",
+	}
+
+	// This is the exact call chain used in createSpanEvent()
+	result := convertToStringMap(filterIOKeysFromMetadata(spanAttrs))
+
+	// I/O keys should be filtered out
+	assert.NotContains(t, result, "input.value")
+	assert.NotContains(t, result, "output.value")
+	assert.NotContains(t, result, "gen_ai.input.messages")
+	assert.NotContains(t, result, "ai.prompt.messages")
+
+	// Non-I/O keys should remain and be converted to strings
+	assert.Equal(t, "openai", result["gen_ai.provider.name"])
+	assert.Equal(t, "gpt-4", result["gen_ai.request.model"])
+	assert.Equal(t, "value", result["custom.attribute"])
+}
+
+// TestExtractFromSpanEvents_TypeHandling verifies robust type handling for event attributes
+func TestExtractFromSpanEvents_TypeHandling(t *testing.T) {
+	t.Run("handles map[string]string attributes", func(t *testing.T) {
+		// This is the actual type stored by createSpanEvent()
+		events := []map[string]interface{}{
+			{
+				"name": "gen_ai.user.message",
+				"attributes": map[string]string{
+					"content": "Hello from user",
+				},
+			},
+		}
+		input, _ := extractFromSpanEvents(events)
+		assert.Contains(t, input, "Hello from user")
+		assert.Contains(t, input, `"role":"user"`)
+	})
+
+	t.Run("handles map[string]interface{} attributes", func(t *testing.T) {
+		// Alternative type that might be used in tests or future code
+		events := []map[string]interface{}{
+			{
+				"name": "gen_ai.user.message",
+				"attributes": map[string]interface{}{
+					"content": "Hello from interface",
+				},
+			},
+		}
+		input, _ := extractFromSpanEvents(events)
+		assert.Contains(t, input, "Hello from interface")
+		assert.Contains(t, input, `"role":"user"`)
+	})
+
+	t.Run("handles nil attributes gracefully", func(t *testing.T) {
+		events := []map[string]interface{}{
+			{
+				"name":       "gen_ai.user.message",
+				"attributes": nil,
+			},
+		}
+		input, _ := extractFromSpanEvents(events)
+		// Should still create message with role, even without attributes
+		assert.Contains(t, input, `"role":"user"`)
+	})
+
+	t.Run("handles missing attributes gracefully", func(t *testing.T) {
+		events := []map[string]interface{}{
+			{
+				"name": "gen_ai.user.message",
+				// No attributes key at all
+			},
+		}
+		input, _ := extractFromSpanEvents(events)
+		// Should still create message with role
+		assert.Contains(t, input, `"role":"user"`)
+	})
+}
