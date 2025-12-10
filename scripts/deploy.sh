@@ -2,11 +2,16 @@
 set -e  # Exit on error
 
 # =============================================================================
-# Brokle GCP Deployment Script
+# Brokle Deployment Script
 # =============================================================================
-# This script automates the deployment of Brokle to GCP VM using Docker Compose
-# Usage: ./deploy-gcp.sh
+# This script automates the deployment of Brokle using Docker Compose
+# Usage: ./scripts/deploy.sh (from project root)
 # =============================================================================
+
+# Change to project root directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$PROJECT_ROOT"
 
 # Colors for output
 RED='\033[0;31m'
@@ -176,19 +181,34 @@ if command -v ufw &> /dev/null; then
         info "UFW firewall is active"
 
         # Check if required ports are open
+        
+        PORTS_MISSING=false
         if ! sudo ufw status | grep -q "80/tcp"; then
-            warn "Port 80 (HTTP) not open in UFW. Opening..."
-            sudo ufw allow 80/tcp
+            PORTS_MISSING=true
         fi
         if ! sudo ufw status | grep -q "443/tcp"; then
-            warn "Port 443 (HTTPS) not open in UFW. Opening..."
-            sudo ufw allow 443/tcp
+            PORTS_MISSING=true
         fi
         if ! sudo ufw status | grep -q "4317/tcp"; then
-            warn "Port 4317 (OTLP gRPC) not open in UFW. Opening..."
-            sudo ufw allow 4317/tcp
+            PORTS_MISSING=true
         fi
-        info "✓ Required ports (80, 443, 4317) are open"
+
+        if [ "$PORTS_MISSING" = true ]; then
+            warn "Required ports may not be open in UFW"
+            echo ""
+            echo "  Open required ports manually:"
+            echo "    sudo ufw allow 80/tcp    # HTTP (Caddy)"
+            echo "    sudo ufw allow 443/tcp   # HTTPS (Caddy)"
+            echo "    sudo ufw allow 4317/tcp  # OTLP gRPC (Backend)"
+            echo ""
+            read -p "Continue anyway? (y/N): " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                error "Deployment cancelled. Please configure firewall and try again."
+            fi
+        else
+            info "✓ Required ports (80, 443, 4317) are open"
+        fi
     fi
 else
     info "UFW not installed (OK for GCP - using GCP firewall rules)"
