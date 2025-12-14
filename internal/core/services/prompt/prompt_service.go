@@ -799,9 +799,33 @@ func (s *promptService) SetLabels(ctx context.Context, projectID, promptID, vers
 		return appErrors.NewValidationError("version_id", "version does not belong to this prompt")
 	}
 
+	currentLabels, err := s.labelRepo.ListByVersion(ctx, versionID)
+	if err != nil {
+		return appErrors.NewInternalError("failed to get current labels", err)
+	}
+
+	newLabelSet := make(map[string]bool)
+	for _, labelName := range labels {
+		if labelName != promptDomain.LabelLatest {
+			newLabelSet[labelName] = true
+		}
+	}
+
+	// Remove labels not in new set ("latest" is auto-managed, never removed)
+	for _, currentLabel := range currentLabels {
+		if currentLabel.Name == promptDomain.LabelLatest {
+			continue
+		}
+		if !newLabelSet[currentLabel.Name] {
+			if err := s.labelRepo.RemoveLabel(ctx, promptID, currentLabel.Name); err != nil {
+				return appErrors.NewInternalError(fmt.Sprintf("failed to remove label %s", currentLabel.Name), err)
+			}
+		}
+	}
+
 	for _, labelName := range labels {
 		if labelName == promptDomain.LabelLatest {
-			return appErrors.NewValidationError("labels", "'latest' label is auto-managed and cannot be manually set")
+			continue
 		}
 		if !labelPattern.MatchString(labelName) {
 			return appErrors.NewValidationError("labels", fmt.Sprintf("invalid label name: %s", labelName))
