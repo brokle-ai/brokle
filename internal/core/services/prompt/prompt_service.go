@@ -628,7 +628,7 @@ func (s *promptService) GetVersion(ctx context.Context, projectID, promptID ulid
 	return s.buildVersionResponseWithLabels(v, labelNames)
 }
 
-func (s *promptService) GetVersionByID(ctx context.Context, projectID, promptID, versionID ulid.ULID) (*promptDomain.Version, error) {
+func (s *promptService) GetVersionEntity(ctx context.Context, projectID, promptID, versionID ulid.ULID) (*promptDomain.Version, error) {
 	prompt, err := s.promptRepo.GetByID(ctx, promptID)
 	if err != nil {
 		if promptDomain.IsNotFoundError(err) {
@@ -656,6 +656,47 @@ func (s *promptService) GetVersionByID(ctx context.Context, projectID, promptID,
 	}
 
 	return version, nil
+}
+
+func (s *promptService) GetVersionByID(ctx context.Context, projectID, promptID, versionID ulid.ULID) (*promptDomain.VersionResponse, error) {
+	prompt, err := s.promptRepo.GetByID(ctx, promptID)
+	if err != nil {
+		if promptDomain.IsNotFoundError(err) {
+			return nil, appErrors.NewNotFoundError(fmt.Sprintf("prompt %s", promptID))
+		}
+		return nil, appErrors.NewInternalError("failed to get prompt", err)
+	}
+
+	// CRITICAL: Validate project ownership
+	if prompt.ProjectID != projectID {
+		return nil, appErrors.NewNotFoundError(fmt.Sprintf("prompt %s", promptID))
+	}
+
+	version, err := s.versionRepo.GetByID(ctx, versionID)
+	if err != nil {
+		if promptDomain.IsNotFoundError(err) {
+			return nil, appErrors.NewNotFoundError(fmt.Sprintf("version %s", versionID))
+		}
+		return nil, appErrors.NewInternalError("failed to get version", err)
+	}
+
+	// CRITICAL: Validate version belongs to prompt
+	if version.PromptID != promptID {
+		return nil, appErrors.NewNotFoundError(fmt.Sprintf("version %s", versionID))
+	}
+
+	labels, err := s.labelRepo.ListByVersion(ctx, version.ID)
+	if err != nil {
+		s.logger.Warn("failed to fetch version labels", "error", err, "version_id", version.ID)
+		labels = []*promptDomain.Label{}
+	}
+
+	labelNames := make([]string, 0, len(labels))
+	for _, l := range labels {
+		labelNames = append(labelNames, l.Name)
+	}
+
+	return s.buildVersionResponseWithLabels(version, labelNames)
 }
 
 func (s *promptService) ListVersions(ctx context.Context, projectID, promptID ulid.ULID) ([]*promptDomain.VersionResponse, error) {

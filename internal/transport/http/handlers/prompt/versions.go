@@ -153,14 +153,13 @@ func (h *Handler) GetVersion(c *gin.Context) {
 		return
 	}
 
-	version, err := h.promptService.GetVersionByID(c.Request.Context(), projectID, promptID, versionID)
+	resp, err := h.promptService.GetVersionByID(c.Request.Context(), projectID, promptID, versionID)
 	if err != nil {
 		h.logger.Error("Failed to get version by ID", "version_id", versionID, "error", err)
 		response.Error(c, err)
 		return
 	}
 
-	resp := buildVersionResponse(version, nil)
 	response.Success(c, resp)
 }
 

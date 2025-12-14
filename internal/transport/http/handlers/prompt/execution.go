@@ -62,7 +62,7 @@ func (h *Handler) ExecutePrompt(c *gin.Context) {
 		return
 	}
 
-	version, err := h.promptService.GetVersionByID(c.Request.Context(), projectID, promptID, versionID)
+	version, err := h.promptService.GetVersionEntity(c.Request.Context(), projectID, promptID, versionID)
 	if err != nil {
 		h.logger.Error("Failed to get version", "version_id", versionID, "error", err)
 		response.Error(c, err)

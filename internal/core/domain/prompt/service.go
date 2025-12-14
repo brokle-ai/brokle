@@ -22,7 +22,8 @@ type PromptService interface {
 	// Version operations
 	CreateVersion(ctx context.Context, projectID, promptID ulid.ULID, userID *ulid.ULID, req *CreateVersionRequest) (*Version, []string, error)
 	GetVersion(ctx context.Context, projectID, promptID ulid.ULID, version int) (*VersionResponse, error)
-	GetVersionByID(ctx context.Context, projectID, promptID, versionID ulid.ULID) (*Version, error)
+	GetVersionEntity(ctx context.Context, projectID, promptID, versionID ulid.ULID) (*Version, error)
+	GetVersionByID(ctx context.Context, projectID, promptID, versionID ulid.ULID) (*VersionResponse, error)
 	ListVersions(ctx context.Context, projectID, promptID ulid.ULID) ([]*VersionResponse, error)
 	GetVersionDiff(ctx context.Context, projectID, promptID ulid.ULID, fromVersion, toVersion int) (*VersionDiffResponse, error)
 
