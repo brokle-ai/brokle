@@ -7,7 +7,6 @@ import (
 
 	"github.com/lib/pq"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 
 	promptDomain "brokle/internal/core/domain/prompt"
 	"brokle/pkg/ulid"
@@ -94,20 +93,23 @@ func (r *versionRepository) ListByPrompt(ctx context.Context, promptID ulid.ULID
 // GetNextVersionNumber atomically gets the next version number for a prompt.
 // Uses FOR UPDATE locking to prevent race conditions when called within a transaction.
 func (r *versionRepository) GetNextVersionNumber(ctx context.Context, promptID ulid.ULID) (int, error) {
-	var maxVersion *int
+	var nextVersion int
+	// Subquery pattern: PostgreSQL disallows FOR UPDATE with aggregate functions
 	err := r.db.WithContext(ctx).
-		Model(&promptDomain.Version{}).
-		Where("prompt_id = ?", promptID).
-		Select("MAX(version)").
-		Clauses(clause.Locking{Strength: "UPDATE"}).
-		Scan(&maxVersion).Error
+		Raw(`
+			SELECT COALESCE(MAX(version), 0) + 1
+			FROM (
+				SELECT version
+				FROM prompt_versions
+				WHERE prompt_id = ?
+				FOR UPDATE
+			) locked_rows
+		`, promptID).
+		Scan(&nextVersion).Error
 	if err != nil {
 		return 0, err
 	}
-	if maxVersion == nil {
-		return 1, nil
-	}
-	return *maxVersion + 1, nil
+	return nextVersion, nil
 }
 
 // CountByPrompt counts versions for a prompt
@@ -127,15 +129,12 @@ func (r *versionRepository) GetLatestByPrompts(ctx context.Context, promptIDs []
 		return []*promptDomain.Version{}, nil
 	}
 
-	// Convert ULIDs to strings for PostgreSQL array binding
-	// GORM's Raw() doesn't expand slices, so we use pq.Array()
+	// pq.Array required: GORM Raw() doesn't expand slices for PostgreSQL arrays
 	ids := make([]string, len(promptIDs))
 	for i, id := range promptIDs {
 		ids[i] = id.String()
 	}
 
-	// Use DISTINCT ON to get the latest version for each prompt
-	// This is more efficient than multiple separate queries
 	var versions []*promptDomain.Version
 	err := r.db.WithContext(ctx).
 		Raw(`
