@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/lib/pq"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
@@ -126,6 +127,13 @@ func (r *versionRepository) GetLatestByPrompts(ctx context.Context, promptIDs []
 		return []*promptDomain.Version{}, nil
 	}
 
+	// Convert ULIDs to strings for PostgreSQL array binding
+	// GORM's Raw() doesn't expand slices, so we use pq.Array()
+	ids := make([]string, len(promptIDs))
+	for i, id := range promptIDs {
+		ids[i] = id.String()
+	}
+
 	// Use DISTINCT ON to get the latest version for each prompt
 	// This is more efficient than multiple separate queries
 	var versions []*promptDomain.Version
@@ -135,7 +143,7 @@ func (r *versionRepository) GetLatestByPrompts(ctx context.Context, promptIDs []
 			FROM prompt_versions
 			WHERE prompt_id = ANY(?)
 			ORDER BY prompt_id, version DESC
-		`, promptIDs).
+		`, pq.Array(ids)).
 		Scan(&versions).Error
 
 	if err != nil {
