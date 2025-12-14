@@ -20,6 +20,7 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
+  type DragEndEvent,
 } from '@dnd-kit/core'
 import {
   arrayMove,
@@ -158,7 +159,7 @@ export function ChatMessageEditor({ messages, onChange }: ChatMessageEditorProps
   )
 
   const handleDragEnd = useCallback(
-    (event: any) => {
+    (event: DragEndEvent) => {
       const { active, over } = event
       if (over && active.id !== over.id) {
         const oldIndex = messages.findIndex((_, i) => `message-${i}` === active.id)

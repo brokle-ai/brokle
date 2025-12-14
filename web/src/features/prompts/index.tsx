@@ -154,3 +154,6 @@ export { PromptPlayground } from './components/prompt-playground'
 export { VariableInputs } from './components/playground/VariableInputs'
 export { ExecutionPanel } from './components/playground/ExecutionPanel'
 export { ResponseViewer } from './components/playground/ResponseViewer'
+
+// Utilities
+export { extractVariables } from './utils/variable-extraction'

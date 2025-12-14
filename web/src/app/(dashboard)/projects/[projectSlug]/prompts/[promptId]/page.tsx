@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { DashboardHeader } from '@/components/layout/dashboard-header'
 import { Main } from '@/components/layout/main'
@@ -35,6 +35,7 @@ import {
   VersionHistory,
   LabelBadge,
   VariableList,
+  extractVariables,
 } from '@/features/prompts'
 import type {
   PromptType,
@@ -43,32 +44,6 @@ import type {
   ModelConfig,
   CreateVersionRequest,
 } from '@/features/prompts'
-
-// Extract variables from template
-function extractVariables(template: TextTemplate | ChatTemplate | any, type: PromptType): string[] {
-  const variablePattern = /\{\{(\w+)\}\}/g
-  const variables = new Set<string>()
-
-  if (type === 'text') {
-    const content = (template as TextTemplate).content || ''
-    let match
-    while ((match = variablePattern.exec(content)) !== null) {
-      variables.add(match[1])
-    }
-  } else {
-    const messages = (template as ChatTemplate).messages || []
-    for (const msg of messages) {
-      if (msg.content) {
-        let match
-        while ((match = variablePattern.exec(msg.content)) !== null) {
-          variables.add(match[1])
-        }
-      }
-    }
-  }
-
-  return Array.from(variables)
-}
 
 export default function PromptDetailPage() {
   const params = useParams<{ projectSlug: string; promptId: string }>()
@@ -102,8 +77,7 @@ export default function PromptDetailPage() {
   const [editedConfig, setEditedConfig] = useState<ModelConfig | null>(null)
   const [newCommitMessage, setNewCommitMessage] = useState('')
 
-  // Initialize form when prompt loads
-  useMemo(() => {
+  useEffect(() => {
     if (prompt && !isEditing) {
       setName(prompt.name)
       setDescription(prompt.description || '')

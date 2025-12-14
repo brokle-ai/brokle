@@ -22,6 +22,7 @@ go.work
 /build/
 /dist/
 /server
+/worker
 /main
 /brokle
 /brokle-*
@@ -209,3 +210,5 @@ competitors/
 
 # Claude Code local settings
 .claude/settings.local.json
+
+/venv/

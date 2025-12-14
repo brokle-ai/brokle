@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	promptDomain "brokle/internal/core/domain/prompt"
 	"brokle/pkg/ulid"
@@ -89,13 +90,15 @@ func (r *versionRepository) ListByPrompt(ctx context.Context, promptID ulid.ULID
 	return versions, err
 }
 
-// GetNextVersionNumber atomically gets the next version number for a prompt
+// GetNextVersionNumber atomically gets the next version number for a prompt.
+// Uses FOR UPDATE locking to prevent race conditions when called within a transaction.
 func (r *versionRepository) GetNextVersionNumber(ctx context.Context, promptID ulid.ULID) (int, error) {
 	var maxVersion *int
 	err := r.db.WithContext(ctx).
 		Model(&promptDomain.Version{}).
 		Where("prompt_id = ?", promptID).
 		Select("MAX(version)").
+		Clauses(clause.Locking{Strength: "UPDATE"}).
 		Scan(&maxVersion).Error
 	if err != nil {
 		return 0, err

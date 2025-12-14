@@ -17,6 +17,7 @@ import {
   PromptEditor,
   ModelConfigForm,
   LabelManager,
+  extractVariables,
 } from '@/features/prompts'
 import type {
   PromptType,
@@ -25,32 +26,6 @@ import type {
   ModelConfig,
   CreatePromptRequest,
 } from '@/features/prompts'
-
-// Extract variables from template
-function extractVariables(template: TextTemplate | ChatTemplate, type: PromptType): string[] {
-  const variablePattern = /\{\{(\w+)\}\}/g
-  const variables = new Set<string>()
-
-  if (type === 'text') {
-    const content = (template as TextTemplate).content || ''
-    let match
-    while ((match = variablePattern.exec(content)) !== null) {
-      variables.add(match[1])
-    }
-  } else {
-    const messages = (template as ChatTemplate).messages || []
-    for (const msg of messages) {
-      if (msg.content) {
-        let match
-        while ((match = variablePattern.exec(msg.content)) !== null) {
-          variables.add(match[1])
-        }
-      }
-    }
-  }
-
-  return Array.from(variables)
-}
 
 export default function NewPromptPage() {
   const params = useParams<{ projectSlug: string }>()

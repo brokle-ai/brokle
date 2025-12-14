@@ -392,6 +392,27 @@ export function useSetLabelsMutation(projectId: string, promptId: string) {
       await setLabels(projectId, promptId, versionId, labels)
       return { versionId, labels }
     },
+    onMutate: async ({ versionId, labels }) => {
+      await queryClient.cancelQueries({
+        queryKey: promptQueryKeys.versions(projectId, promptId),
+      })
+
+      const previousVersions = queryClient.getQueryData<PromptVersion[]>(
+        promptQueryKeys.versions(projectId, promptId)
+      )
+
+      queryClient.setQueryData<PromptVersion[]>(
+        promptQueryKeys.versions(projectId, promptId),
+        (old) => {
+          if (!old) return old
+          return old.map((v) =>
+            v.id === versionId ? { ...v, labels } : v
+          )
+        }
+      )
+
+      return { previousVersions }
+    },
     onSuccess: (_data, { labels }) => {
       queryClient.invalidateQueries({
         queryKey: promptQueryKeys.versions(projectId, promptId),
@@ -408,7 +429,13 @@ export function useSetLabelsMutation(projectId: string, promptId: string) {
           : 'Labels cleared.',
       })
     },
-    onError: (error: unknown) => {
+    onError: (error: unknown, _variables, context) => {
+      if (context?.previousVersions) {
+        queryClient.setQueryData(
+          promptQueryKeys.versions(projectId, promptId),
+          context.previousVersions
+        )
+      }
       const apiError = error as { message?: string }
       toast.error('Failed to Update Labels', {
         description: apiError?.message || 'Could not update labels. Please try again.',

@@ -48,4 +48,5 @@ type RepositoryFactory interface {
 	PromptRepository() promptDomain.PromptRepository
 	VersionRepository() promptDomain.VersionRepository
 	LabelRepository() promptDomain.LabelRepository
+	ProtectedLabelRepository() promptDomain.ProtectedLabelRepository
 }

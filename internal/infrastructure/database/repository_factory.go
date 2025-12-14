@@ -28,9 +28,10 @@ type repositoryFactory struct {
 	invitationRepo orgDomain.InvitationRepository
 	roleRepo       authDomain.RoleRepository
 	orgMemberRepo  authDomain.OrganizationMemberRepository
-	promptRepo     promptDomain.PromptRepository
-	versionRepo    promptDomain.VersionRepository
-	labelRepo      promptDomain.LabelRepository
+	promptRepo          promptDomain.PromptRepository
+	versionRepo         promptDomain.VersionRepository
+	labelRepo           promptDomain.LabelRepository
+	protectedLabelRepo  promptDomain.ProtectedLabelRepository
 }
 
 // NewRepositoryFactory creates a new repository factory instance.
@@ -117,4 +118,12 @@ func (f *repositoryFactory) LabelRepository() promptDomain.LabelRepository {
 		f.labelRepo = promptRepo.NewLabelRepository(f.db)
 	}
 	return f.labelRepo
+}
+
+// ProtectedLabelRepository returns a transaction-scoped protected label repository (cached)
+func (f *repositoryFactory) ProtectedLabelRepository() promptDomain.ProtectedLabelRepository {
+	if f.protectedLabelRepo == nil {
+		f.protectedLabelRepo = promptRepo.NewProtectedLabelRepository(f.db)
+	}
+	return f.protectedLabelRepo
 }

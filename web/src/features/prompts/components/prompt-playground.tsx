@@ -111,8 +111,13 @@ function ModelConfigInput({ config, onChange }: ModelConfigInputProps) {
 // Compiled Preview
 // ============================================================================
 
+interface CompiledMessage {
+  role?: string
+  content?: string
+}
+
 interface CompiledPreviewProps {
-  compiled: any
+  compiled: { content?: string; messages?: CompiledMessage[] } | null
   type: 'text' | 'chat'
 }
 
@@ -128,13 +133,13 @@ function CompiledPreview({ compiled, type }: CompiledPreviewProps) {
   if (type === 'text') {
     return (
       <pre className="whitespace-pre-wrap rounded-md bg-muted p-4 font-mono text-sm">
-        {compiled.content || compiled}
+        {compiled.content || ''}
       </pre>
     )
   }
 
-  const messages = compiled.messages || compiled
-  if (!Array.isArray(messages)) {
+  const messages = compiled.messages
+  if (!messages || !Array.isArray(messages)) {
     return (
       <pre className="whitespace-pre-wrap rounded-md bg-muted p-4 font-mono text-sm">
         {JSON.stringify(compiled, null, 2)}
@@ -144,7 +149,7 @@ function CompiledPreview({ compiled, type }: CompiledPreviewProps) {
 
   return (
     <div className="space-y-2">
-      {messages.map((msg: any, i: number) => (
+      {messages.map((msg: CompiledMessage, i: number) => (
         <div
           key={i}
           className={
@@ -192,7 +197,7 @@ export function PromptPlayground({
   const [error, setError] = useState<string | null>(null)
 
   // Compile preview (client-side Mustache-like substitution)
-  const compiledPreview = useMemo(() => {
+  const compiledPreview = useMemo((): { content?: string; messages?: CompiledMessage[] } | null => {
     try {
       if (promptType === 'text') {
         const template = version.template as TextTemplate
@@ -203,18 +208,15 @@ export function PromptPlayground({
         return { content }
       } else {
         const template = version.template as ChatTemplate
-        const messages = (template.messages || [])
+        const messages: CompiledMessage[] = (template.messages || [])
+          .filter((msg) => msg.type !== 'placeholder')
           .map((msg) => {
-            if (msg.type === 'placeholder') {
-              return null
-            }
             let content = msg.content || ''
             for (const [key, value] of Object.entries(variableValues)) {
               content = content.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value)
             }
             return { role: msg.role, content }
           })
-          .filter(Boolean)
         return { messages }
       }
     } catch {
