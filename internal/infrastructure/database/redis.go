@@ -34,7 +34,6 @@ func NewRedisDB(cfg *config.Config, logger *slog.Logger) (*RedisDB, error) {
 	opt.PoolSize = 10
 	opt.PoolTimeout = 30 * time.Second
 	opt.MaxIdleConns = 5
-	// opt.IdleCheckFrequency = 5 * time.Minute // Field not available
 
 	// Create Redis client
 	client := redis.NewClient(opt)
@@ -92,6 +91,11 @@ func (r *RedisDB) Exists(ctx context.Context, keys ...string) (int64, error) {
 // Expire sets expiration for a key
 func (r *RedisDB) Expire(ctx context.Context, key string, expiration time.Duration) error {
 	return r.Client.Expire(ctx, key, expiration).Err()
+}
+
+// Scan iterates keys matching a pattern (cursor-based iteration)
+func (r *RedisDB) Scan(ctx context.Context, cursor uint64, pattern string, count int64) (keys []string, nextCursor uint64, err error) {
+	return r.Client.Scan(ctx, cursor, pattern, count).Result()
 }
 
 // HSet sets hash field

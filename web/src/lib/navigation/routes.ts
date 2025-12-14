@@ -6,6 +6,7 @@ import {
   Home,
   ListTodo,
   Activity,
+  FileText,
 } from 'lucide-react'
 
 export const ROUTES: Route[] = [
@@ -67,11 +68,20 @@ export const ROUTES: Route[] = [
     show: ({ currentProjectSlug }) => !!currentProjectSlug,
   },
 
-  // Observability Group (1 route)
+  // Observability Group (2 routes)
   {
     title: 'Traces',
     pathname: '/projects/[projectSlug]/traces',
     icon: Activity,
+    section: RouteSection.Main,
+    group: RouteGroup.Observability,
+    rbacScope: 'projects:read',
+    show: ({ currentProjectSlug }) => !!currentProjectSlug,
+  },
+  {
+    title: 'Prompts',
+    pathname: '/projects/[projectSlug]/prompts',
+    icon: FileText,
     section: RouteSection.Main,
     group: RouteGroup.Observability,
     rbacScope: 'projects:read',
@@ -101,8 +111,8 @@ export const ROUTES: Route[] = [
   },
 ]
 
-// Total: 8 routes
+// Total: 9 routes
 // - Root: 1 (Dashboard)
 // - Organization: 2 (Projects, Settings)
-// - Project: 4 (2 Project Group + 1 Observability + 1 Other)
+// - Project: 5 (2 Project Group + 2 Observability + 1 Other)
 // - User Settings: 1 (Home - back to dashboard)
