@@ -305,6 +305,31 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 		projects.GET("/:projectId/api-keys", s.authMiddleware.RequirePermission("api-keys:read"), s.handlers.APIKey.List)
 		projects.POST("/:projectId/api-keys", s.authMiddleware.RequirePermission("api-keys:create"), s.handlers.APIKey.Create)
 		projects.DELETE("/:projectId/api-keys/:keyId", s.authMiddleware.RequirePermission("api-keys:delete"), s.handlers.APIKey.Delete)
+
+		// Prompt Management routes nested under projects
+		prompts := projects.Group("/:projectId/prompts")
+		{
+			// Protected labels settings (must come before :promptId routes)
+			prompts.GET("/settings/protected-labels", s.authMiddleware.RequirePermission("prompts:read"), s.handlers.Prompt.GetProtectedLabels)
+			prompts.PUT("/settings/protected-labels", s.authMiddleware.RequirePermission("prompts:update"), s.handlers.Prompt.SetProtectedLabels)
+
+			// Prompt CRUD
+			prompts.GET("", s.authMiddleware.RequirePermission("prompts:read"), s.handlers.Prompt.ListPrompts)
+			prompts.POST("", s.authMiddleware.RequirePermission("prompts:create"), s.handlers.Prompt.CreatePrompt)
+			prompts.GET("/:promptId", s.authMiddleware.RequirePermission("prompts:read"), s.handlers.Prompt.GetPrompt)
+			prompts.PUT("/:promptId", s.authMiddleware.RequirePermission("prompts:update"), s.handlers.Prompt.UpdatePrompt)
+			prompts.DELETE("/:promptId", s.authMiddleware.RequirePermission("prompts:delete"), s.handlers.Prompt.DeletePrompt)
+
+			// Version management
+			prompts.GET("/:promptId/versions", s.authMiddleware.RequirePermission("prompts:read"), s.handlers.Prompt.ListVersions)
+			prompts.POST("/:promptId/versions", s.authMiddleware.RequirePermission("prompts:create"), s.handlers.Prompt.CreateVersion)
+			prompts.GET("/:promptId/versions/:versionId", s.authMiddleware.RequirePermission("prompts:read"), s.handlers.Prompt.GetVersion)
+			prompts.PATCH("/:promptId/versions/:versionId/labels", s.authMiddleware.RequirePermission("prompts:update"), s.handlers.Prompt.SetLabels)
+			prompts.POST("/:promptId/versions/:versionId/execute", s.authMiddleware.RequirePermission("prompts:read"), s.handlers.Prompt.ExecutePrompt)
+
+			// Version diff
+			prompts.GET("/:promptId/diff", s.authMiddleware.RequirePermission("prompts:read"), s.handlers.Prompt.GetVersionDiff)
+		}
 	}
 
 	// Analytics routes
@@ -429,6 +454,15 @@ func (s *Server) setupSDKRoutes(router *gin.RouterGroup) {
 	// OTLP metrics and logs endpoints (OpenTelemetry specification)
 	router.POST("/metrics", s.handlers.OTLPMetrics.HandleMetrics) // POST /v1/metrics - OTLP metrics ingestion
 	router.POST("/logs", s.handlers.OTLPLogs.HandleLogs)          // POST /v1/logs - OTLP logs ingestion
+
+	// Prompt Management SDK routes
+	prompts := router.Group("/prompts")
+	{
+		prompts.GET("", s.handlers.Prompt.ListPromptsSDK)           // List prompts
+		prompts.POST("", s.handlers.Prompt.UpsertPrompt)            // Create or update prompt (upsert)
+		prompts.GET("/:name", s.handlers.Prompt.GetPromptByName)    // Get prompt by name with label/version
+		prompts.POST("/:name/execute", s.handlers.Prompt.ExecutePromptSDK) // Execute prompt by name
+	}
 }
 
 // Shutdown gracefully shuts down the server

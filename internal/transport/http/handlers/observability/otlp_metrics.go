@@ -50,7 +50,7 @@ func NewOTLPMetricsHandler(
 // @Accept application/x-protobuf
 // @Produce json
 // @Security ApiKeyAuth
-// @Param request body colmetricspb.ExportMetricsServiceRequest true "OTLP metrics export request"
+// @Param request body observability.OTLPMetricsRequest true "OTLP metrics export request"
 // @Success 200 {object} response.APIResponse{data=map[string]interface{}} "Metrics accepted"
 // @Failure 400 {object} response.APIResponse{error=response.APIError} "Invalid OTLP request"
 // @Failure 401 {object} response.APIResponse{error=response.APIError} "Invalid or missing API key"

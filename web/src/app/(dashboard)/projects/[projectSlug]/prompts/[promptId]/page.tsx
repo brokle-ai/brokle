@@ -1,0 +1,438 @@
+'use client'
+
+import { useState, useMemo, useEffect } from 'react'
+import { useParams, useRouter } from 'next/navigation'
+import { DashboardHeader } from '@/components/layout/dashboard-header'
+import { Main } from '@/components/layout/main'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { Badge } from '@/components/ui/badge'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Skeleton } from '@/components/ui/skeleton'
+import {
+  ArrowLeft,
+  Save,
+  Loader2,
+  Play,
+  History,
+  Plus,
+  Settings,
+} from 'lucide-react'
+import { useProjectOnly } from '@/features/projects'
+import {
+  usePromptQuery,
+  useVersionsQuery,
+  useProtectedLabelsQuery,
+  useUpdatePromptMutation,
+  useCreateVersionMutation,
+  useSetLabelsMutation,
+  PromptEditor,
+  ModelConfigForm,
+  LabelManager,
+  VersionHistory,
+  LabelBadge,
+  VariableList,
+  extractVariables,
+} from '@/features/prompts'
+import type {
+  PromptType,
+  TextTemplate,
+  ChatTemplate,
+  ModelConfig,
+  CreateVersionRequest,
+} from '@/features/prompts'
+
+export default function PromptDetailPage() {
+  const params = useParams<{ projectSlug: string; promptId: string }>()
+  const router = useRouter()
+  const { currentProject } = useProjectOnly()
+
+  // Queries
+  const { data: prompt, isLoading: promptLoading } = usePromptQuery(
+    currentProject?.id,
+    params.promptId
+  )
+  const { data: versions, isLoading: versionsLoading } = useVersionsQuery(
+    currentProject?.id,
+    params.promptId
+  )
+  const { data: protectedLabels } = useProtectedLabelsQuery(currentProject?.id)
+
+  // Mutations
+  const updateMutation = useUpdatePromptMutation(currentProject?.id || '', params.promptId)
+  const createVersionMutation = useCreateVersionMutation(currentProject?.id || '', params.promptId)
+  const setLabelsMutation = useSetLabelsMutation(currentProject?.id || '', params.promptId)
+
+  // Form state
+  const [isEditing, setIsEditing] = useState(false)
+  const [name, setName] = useState('')
+  const [description, setDescription] = useState('')
+  const [tagsInput, setTagsInput] = useState('')
+
+  // Version editing state
+  const [editedTemplate, setEditedTemplate] = useState<TextTemplate | ChatTemplate | null>(null)
+  const [editedConfig, setEditedConfig] = useState<ModelConfig | null>(null)
+  const [newCommitMessage, setNewCommitMessage] = useState('')
+
+  useEffect(() => {
+    if (prompt && !isEditing) {
+      setName(prompt.name)
+      setDescription(prompt.description || '')
+      setTagsInput(prompt.tags?.join(', ') || '')
+    }
+  }, [prompt, isEditing])
+
+  const variables = useMemo(() => {
+    if (!prompt) return []
+    const tmpl = editedTemplate || prompt.template
+    return extractVariables(tmpl, prompt.type)
+  }, [prompt, editedTemplate])
+
+  const handleSaveMetadata = async () => {
+    const tags = tagsInput
+      .split(',')
+      .map((t) => t.trim())
+      .filter(Boolean)
+
+    await updateMutation.mutateAsync({
+      name: name.trim(),
+      description: description.trim() || undefined,
+      tags: tags.length > 0 ? tags : undefined,
+    })
+    setIsEditing(false)
+  }
+
+  const handleCreateVersion = async () => {
+    if (!editedTemplate && !editedConfig) return
+
+    const request: CreateVersionRequest = {
+      template: editedTemplate || prompt!.template,
+      config: editedConfig || prompt!.config,
+      commit_message: newCommitMessage.trim() || undefined,
+    }
+
+    await createVersionMutation.mutateAsync(request)
+    setEditedTemplate(null)
+    setEditedConfig(null)
+    setNewCommitMessage('')
+  }
+
+  const handleSetLabels = async (versionId: string, labels: string[]) => {
+    await setLabelsMutation.mutateAsync({ versionId, labels })
+  }
+
+  if (promptLoading) {
+    return (
+      <>
+        <DashboardHeader />
+        <Main>
+          <div className="space-y-6">
+            <Skeleton className="h-10 w-48" />
+            <Skeleton className="h-[400px]" />
+          </div>
+        </Main>
+      </>
+    )
+  }
+
+  if (!prompt) {
+    return (
+      <>
+        <DashboardHeader />
+        <Main>
+          <div className="flex flex-col items-center justify-center py-12">
+            <p className="text-muted-foreground">Prompt not found</p>
+            <Button variant="link" onClick={() => router.back()}>
+              Go back
+            </Button>
+          </div>
+        </Main>
+      </>
+    )
+  }
+
+  const latestVersion = versions?.[0]
+
+  return (
+    <>
+      <DashboardHeader />
+      <Main>
+        {/* Header */}
+        <div className="mb-6 flex items-start justify-between">
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="icon" onClick={() => router.back()}>
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-2xl font-bold tracking-tight">{prompt.name}</h2>
+                <Badge variant={prompt.type === 'chat' ? 'default' : 'secondary'}>
+                  {prompt.type}
+                </Badge>
+              </div>
+              {prompt.description && (
+                <p className="text-muted-foreground">{prompt.description}</p>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={() =>
+                router.push(`/projects/${params.projectSlug}/prompts/${params.promptId}/versions`)
+              }
+            >
+              <History className="mr-2 h-4 w-4" />
+              History
+            </Button>
+            <Button
+              onClick={() =>
+                router.push(
+                  `/projects/${params.projectSlug}/prompts/${params.promptId}/playground`
+                )
+              }
+            >
+              <Play className="mr-2 h-4 w-4" />
+              Playground
+            </Button>
+          </div>
+        </div>
+
+        {/* Content */}
+        <Tabs defaultValue="template" className="space-y-6">
+          <TabsList>
+            <TabsTrigger value="template">Template</TabsTrigger>
+            <TabsTrigger value="config">Configuration</TabsTrigger>
+            <TabsTrigger value="settings">Settings</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="template" className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2 space-y-6">
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between">
+                    <CardTitle>
+                      Template (v{prompt.version})
+                      {prompt.is_fallback && (
+                        <Badge variant="destructive" className="ml-2">
+                          Fallback
+                        </Badge>
+                      )}
+                    </CardTitle>
+                    {latestVersion && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setEditedTemplate(prompt.template)
+                          setEditedConfig(prompt.config || null)
+                        }}
+                        disabled={!!editedTemplate}
+                      >
+                        <Plus className="mr-2 h-4 w-4" />
+                        New Version
+                      </Button>
+                    )}
+                  </CardHeader>
+                  <CardContent>
+                    <PromptEditor
+                      type={prompt.type}
+                      template={editedTemplate || prompt.template}
+                      onChange={(t) => setEditedTemplate(t)}
+                      variables={variables}
+                      readOnly={!editedTemplate}
+                    />
+                  </CardContent>
+                </Card>
+
+                {editedTemplate && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Create New Version</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="space-y-2">
+                        <Label>Commit Message</Label>
+                        <Textarea
+                          value={newCommitMessage}
+                          onChange={(e) => setNewCommitMessage(e.target.value)}
+                          placeholder="Describe your changes..."
+                          rows={2}
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={handleCreateVersion}
+                          disabled={createVersionMutation.isPending}
+                        >
+                          {createVersionMutation.isPending ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              Creating...
+                            </>
+                          ) : (
+                            <>
+                              <Save className="mr-2 h-4 w-4" />
+                              Save as New Version
+                            </>
+                          )}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setEditedTemplate(null)
+                            setEditedConfig(null)
+                            setNewCommitMessage('')
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+
+              <div className="space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Labels</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex flex-wrap gap-2">
+                      {prompt.labels.map((label) => (
+                        <LabelBadge
+                          key={label}
+                          label={label}
+                          isProtected={protectedLabels?.includes(label)}
+                        />
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Variables</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <VariableList variables={prompt.variables} />
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Info</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Version</span>
+                      <span className="font-mono">v{prompt.version}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Created</span>
+                      <span>{new Date(prompt.created_at).toLocaleDateString()}</span>
+                    </div>
+                    {prompt.commit_message && (
+                      <div>
+                        <span className="text-muted-foreground">Commit:</span>
+                        <p className="mt-1">{prompt.commit_message}</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="config" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Model Configuration</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ModelConfigForm
+                  config={editedConfig || prompt.config || {}}
+                  onChange={(c) => setEditedConfig(c)}
+                  disabled={!editedTemplate}
+                />
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="settings" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Prompt Metadata</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Name</Label>
+                  <Input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    disabled={!isEditing}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Description</Label>
+                  <Textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    disabled={!isEditing}
+                    rows={2}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Tags</Label>
+                  <Input
+                    value={tagsInput}
+                    onChange={(e) => setTagsInput(e.target.value)}
+                    disabled={!isEditing}
+                    placeholder="tag1, tag2, tag3"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  {isEditing ? (
+                    <>
+                      <Button
+                        onClick={handleSaveMetadata}
+                        disabled={updateMutation.isPending}
+                      >
+                        {updateMutation.isPending ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Save className="mr-2 h-4 w-4" />
+                        )}
+                        Save
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setIsEditing(false)
+                          setName(prompt.name)
+                          setDescription(prompt.description || '')
+                          setTagsInput(prompt.tags?.join(', ') || '')
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </>
+                  ) : (
+                    <Button variant="outline" onClick={() => setIsEditing(true)}>
+                      <Settings className="mr-2 h-4 w-4" />
+                      Edit Metadata
+                    </Button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </Main>
+    </>
+  )
+}

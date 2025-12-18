@@ -26,9 +26,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Use feature imports: `@/features/[feature]` (never import internal paths)
 
 **NEVER:**
-- Log in core services (use decorators instead)
 - Create documentation files unless explicitly requested
 - Add tests for simple CRUD, validation, or constructors
+- Log sensitive data (passwords, tokens, API keys, PII)
 
 ---
 
@@ -195,17 +195,52 @@ traces, err := traceService.ListTraces(ctx, &TraceFilter{ProjectID: "proj123"})
 rootSpan, err := traceService.GetRootSpan(ctx, traceID)
 ```
 
-### Logging
+### Logging Standards
+
+**Where to log:**
+
+| Layer | Logging | Notes |
+|-------|---------|-------|
+| Services | ✅ Direct logging | Use `*slog.Logger` field |
+| Handlers | ❌ No logging | Use `response.Error()` only |
+| Repositories | ❌ No logging | Return errors to service |
+| Workers | ✅ Direct logging | Background job status |
+
+**Exception:** Auth service uses `audit_decorator.go` for security compliance.
+
+**Log levels:**
+
+| Level | When to Use | Example |
+|-------|-------------|---------|
+| `Error` | Operation failed, needs attention | DB connection failed, external API error |
+| `Warn` | Unexpected but handled | Cache miss, retry succeeded, deprecated usage |
+| `Info` | Significant business events | Created, deleted, payment processed |
+| `Debug` | Troubleshooting (not in prod) | Request details, intermediate state |
+
+**Required context** - Always include relevant IDs:
 
 ```go
 import "log/slog"
 
-logger := slog.With(
-    "request_id", middleware.GetRequestID(ctx),
-    "user_id", auth.GetUserID(ctx),
+// Good: structured with context
+s.logger.Info("prompt created",
+    "prompt_id", prompt.ID,
+    "project_id", projectID,
+    "user_id", userID,
 )
-logger.Info("operation completed", "result", result)
+
+// Good: error with context
+s.logger.Error("failed to create prompt",
+    "error", err,
+    "project_id", projectID,
+    "name", req.Name,
+)
+
+// Bad: no context
+s.logger.Info("created")  // Created what?
 ```
+
+**Never log:** passwords, tokens, API keys, full request bodies, PII without masking.
 
 ## Testing Strategy
 

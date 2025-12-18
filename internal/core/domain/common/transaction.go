@@ -5,6 +5,7 @@ import (
 
 	authDomain "brokle/internal/core/domain/auth"
 	orgDomain "brokle/internal/core/domain/organization"
+	promptDomain "brokle/internal/core/domain/prompt"
 	userDomain "brokle/internal/core/domain/user"
 )
 
@@ -42,4 +43,10 @@ type RepositoryFactory interface {
 	// Auth domain repositories
 	RoleRepository() authDomain.RoleRepository
 	OrganizationMemberRepository() authDomain.OrganizationMemberRepository
+
+	// Prompt domain repositories
+	PromptRepository() promptDomain.PromptRepository
+	VersionRepository() promptDomain.VersionRepository
+	LabelRepository() promptDomain.LabelRepository
+	ProtectedLabelRepository() promptDomain.ProtectedLabelRepository
 }

@@ -6,6 +6,7 @@ import (
 	"brokle/internal/config"
 	"brokle/internal/core/domain/auth"
 	"brokle/internal/core/domain/organization"
+	promptDomain "brokle/internal/core/domain/prompt"
 	"brokle/internal/core/domain/user"
 	authService "brokle/internal/core/services/auth"
 	obsServices "brokle/internal/core/services/observability"
@@ -21,6 +22,7 @@ import (
 	"brokle/internal/transport/http/handlers/observability"
 	organizationHandler "brokle/internal/transport/http/handlers/organization"
 	"brokle/internal/transport/http/handlers/project"
+	"brokle/internal/transport/http/handlers/prompt"
 	"brokle/internal/transport/http/handlers/rbac"
 	userHandler "brokle/internal/transport/http/handlers/user"
 	"brokle/internal/transport/http/handlers/websocket"
@@ -45,6 +47,7 @@ type Handlers struct {
 	OTLP          *observability.OTLPHandler
 	OTLPMetrics   *observability.OTLPMetricsHandler
 	OTLPLogs      *observability.OTLPLogsHandler
+	Prompt        *prompt.Handler
 }
 
 // NewHandlers creates a new handlers instance with all dependencies
@@ -68,6 +71,9 @@ func NewHandlers(
 	organizationMemberService auth.OrganizationMemberService,
 	scopeService auth.ScopeService,
 	observabilityServices *obsServices.ServiceRegistry,
+	promptService promptDomain.PromptService,
+	compilerService promptDomain.CompilerService,
+	executionService promptDomain.ExecutionService,
 ) *Handlers {
 	return &Handlers{
 		Health:        health.NewHandler(cfg, logger),
@@ -87,5 +93,6 @@ func NewHandlers(
 		OTLP:          observability.NewOTLPHandler(observabilityServices.StreamProducer, observabilityServices.DeduplicationService, observabilityServices.OTLPConverterService, logger),
 		OTLPMetrics:   observability.NewOTLPMetricsHandler(observabilityServices.StreamProducer, observabilityServices.OTLPMetricsConverterService, logger),
 		OTLPLogs:      observability.NewOTLPLogsHandler(observabilityServices.StreamProducer, observabilityServices.OTLPLogsConverterService, observabilityServices.OTLPEventsConverterService, logger),
+		Prompt:        prompt.NewHandler(cfg, logger, promptService, compilerService, executionService),
 	}
 }

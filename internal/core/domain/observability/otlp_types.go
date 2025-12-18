@@ -77,3 +77,65 @@ type Status struct {
 	Message string `json:"message,omitempty"`
 	Code    int    `json:"code,omitempty"`
 }
+
+// ============================================================================
+// OTLP Logs Types (for swagger documentation)
+// ============================================================================
+
+// OTLPLogsRequest represents an OTLP logs export request
+type OTLPLogsRequest struct {
+	ResourceLogs []ResourceLogs `json:"resourceLogs"`
+}
+
+// ResourceLogs represents a collection of logs from a single resource
+type ResourceLogs struct {
+	Resource  *Resource   `json:"resource,omitempty"`
+	ScopeLogs []ScopeLogs `json:"scopeLogs"`
+}
+
+// ScopeLogs represents a collection of logs from a single instrumentation scope
+type ScopeLogs struct {
+	Scope      *Scope      `json:"scope,omitempty"`
+	LogRecords []LogRecord `json:"logRecords"`
+}
+
+// LogRecord represents an OTLP log record
+type LogRecord struct {
+	TimeUnixNano         interface{} `json:"timeUnixNano"`
+	ObservedTimeUnixNano interface{} `json:"observedTimeUnixNano,omitempty"`
+	SeverityNumber       int         `json:"severityNumber,omitempty"`
+	SeverityText         string      `json:"severityText,omitempty"`
+	Body                 interface{} `json:"body,omitempty"`
+	Attributes           []KeyValue  `json:"attributes,omitempty"`
+	TraceID              interface{} `json:"traceId,omitempty"`
+	SpanID               interface{} `json:"spanId,omitempty"`
+}
+
+// ============================================================================
+// OTLP Metrics Types (for swagger documentation)
+// ============================================================================
+
+// OTLPMetricsRequest represents an OTLP metrics export request
+type OTLPMetricsRequest struct {
+	ResourceMetrics []ResourceMetrics `json:"resourceMetrics"`
+}
+
+// ResourceMetrics represents a collection of metrics from a single resource
+type ResourceMetrics struct {
+	Resource     *Resource      `json:"resource,omitempty"`
+	ScopeMetrics []ScopeMetrics `json:"scopeMetrics"`
+}
+
+// ScopeMetrics represents a collection of metrics from a single instrumentation scope
+type ScopeMetrics struct {
+	Scope   *Scope   `json:"scope,omitempty"`
+	Metrics []Metric `json:"metrics"`
+}
+
+// Metric represents an OTLP metric
+type Metric struct {
+	Name        string      `json:"name"`
+	Description string      `json:"description,omitempty"`
+	Unit        string      `json:"unit,omitempty"`
+	Data        interface{} `json:"data,omitempty"` // Can be Gauge, Sum, Histogram, etc.
+}

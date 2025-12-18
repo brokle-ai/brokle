@@ -53,7 +53,7 @@ func NewOTLPLogsHandler(
 // @Accept application/x-protobuf
 // @Produce json
 // @Security ApiKeyAuth
-// @Param request body collogspb.ExportLogsServiceRequest true "OTLP logs export request"
+// @Param request body observability.OTLPLogsRequest true "OTLP logs export request"
 // @Success 200 {object} response.APIResponse{data=map[string]interface{}} "Logs accepted"
 // @Failure 400 {object} response.APIResponse{error=response.APIError} "Invalid OTLP request"
 // @Failure 401 {object} response.APIResponse{error=response.APIError} "Invalid or missing API key"

@@ -16,6 +16,7 @@ import (
 	"brokle/internal/core/domain/common"
 	"brokle/internal/core/domain/observability"
 	"brokle/internal/core/domain/organization"
+	promptDomain "brokle/internal/core/domain/prompt"
 	storageDomain "brokle/internal/core/domain/storage"
 	"brokle/internal/core/domain/user"
 	analyticsService "brokle/internal/core/services/analytics"
@@ -23,6 +24,7 @@ import (
 	billingService "brokle/internal/core/services/billing"
 	observabilityService "brokle/internal/core/services/observability"
 	orgService "brokle/internal/core/services/organization"
+	promptService "brokle/internal/core/services/prompt"
 	registrationService "brokle/internal/core/services/registration"
 	storageService "brokle/internal/core/services/storage"
 	userService "brokle/internal/core/services/user"
@@ -36,6 +38,7 @@ import (
 	billingRepo "brokle/internal/infrastructure/repository/billing"
 	observabilityRepo "brokle/internal/infrastructure/repository/observability"
 	orgRepo "brokle/internal/infrastructure/repository/organization"
+	promptRepo "brokle/internal/infrastructure/repository/prompt"
 	storageRepo "brokle/internal/infrastructure/repository/storage"
 	userRepo "brokle/internal/infrastructure/repository/user"
 	"brokle/internal/infrastructure/storage"
@@ -101,6 +104,7 @@ type RepositoryContainer struct {
 	Storage       *StorageRepositories
 	Billing       *BillingRepositories
 	Analytics     *AnalyticsRepositories
+	Prompt        *PromptRepositories
 }
 
 // ServiceContainer holds all service instances organized by domain
@@ -116,6 +120,7 @@ type ServiceContainer struct {
 	Observability       *observabilityService.ServiceRegistry
 	Billing             *BillingServices
 	Analytics           *AnalyticsServices
+	Prompt              *PromptServices
 }
 
 // EnterpriseContainer holds all enterprise service instances
@@ -182,6 +187,15 @@ type AnalyticsRepositories struct {
 	ProviderModel analytics.ProviderModelRepository
 }
 
+// PromptRepositories contains all prompt-related repositories
+type PromptRepositories struct {
+	Prompt         promptDomain.PromptRepository
+	Version        promptDomain.VersionRepository
+	Label          promptDomain.LabelRepository
+	ProtectedLabel promptDomain.ProtectedLabelRepository
+	Cache          promptDomain.CacheRepository
+}
+
 // Domain-specific service containers
 
 // UserServices contains all user-related services
@@ -214,23 +228,27 @@ type AnalyticsServices struct {
 	ProviderPricing analytics.ProviderPricingService
 }
 
+// PromptServices contains all prompt-related services
+type PromptServices struct {
+	Prompt    promptDomain.PromptService
+	Compiler  promptDomain.CompilerService
+	Execution promptDomain.ExecutionService
+}
+
 // Provider functions for modular DI
 
 // ProvideDatabases initializes all database connections
 func ProvideDatabases(cfg *config.Config, logger *slog.Logger) (*DatabaseContainer, error) {
-	// Initialize PostgreSQL
 	postgres, err := database.NewPostgresDB(cfg, logger)
 	if err != nil {
 		return nil, err
 	}
 
-	// Initialize Redis
 	redis, err := database.NewRedisDB(cfg, logger)
 	if err != nil {
 		return nil, err
 	}
 
-	// Initialize ClickHouse
 	clickhouse, err := database.NewClickHouseDB(cfg, logger)
 	if err != nil {
 		return nil, err
@@ -245,12 +263,10 @@ func ProvideDatabases(cfg *config.Config, logger *slog.Logger) (*DatabaseContain
 
 // ProvideWorkers creates workers using shared core infrastructure
 func ProvideWorkers(core *CoreContainer) (*WorkerContainer, error) {
-	// Create deduplication service
 	deduplicationService := observabilityService.NewTelemetryDeduplicationService(
 		core.Repos.Observability.TelemetryDeduplication,
 	)
 
-	// Create telemetry stream consumer
 	consumerConfig := &workers.TelemetryStreamConsumerConfig{
 		ConsumerGroup:     "telemetry-workers",
 		ConsumerID:        "worker-" + ulid.New().String(),
@@ -283,16 +299,14 @@ func ProvideWorkers(core *CoreContainer) (*WorkerContainer, error) {
 
 // ProvideCore creates shared infrastructure (used by both server and worker)
 func ProvideCore(cfg *config.Config, logger *slog.Logger) (*CoreContainer, error) {
-	// Initialize databases
 	databases, err := ProvideDatabases(cfg, logger)
 	if err != nil {
 		return nil, err
 	}
 
-	// Initialize repositories
 	repos := ProvideRepositories(databases, logger)
 
-	// Initialize transaction manager (concrete → interface for dependency inversion)
+	// Concrete → interface for dependency inversion
 	txManager := database.NewTransactionManager(databases.Postgres.DB)
 
 	return &CoreContainer{
@@ -313,28 +327,17 @@ func ProvideServerServices(core *CoreContainer) *ServiceContainer {
 	repos := core.Repos
 	databases := core.Databases
 
-	// Create billing services
 	billingServices := ProvideBillingServices(repos.Billing, logger)
-
-	// Create analytics services (for provider pricing)
 	analyticsServices := ProvideAnalyticsServices(repos.Analytics)
-
-	// Create observability services (needs analytics services for pricing and storage for blob management)
 	observabilityServices := ProvideObservabilityServices(repos.Observability, repos.Storage, analyticsServices, databases.Redis, cfg, logger)
-
-	// Create auth services
 	authServices := ProvideAuthServices(cfg, repos.User, repos.Auth, databases, logger)
-
-	// Create user services
 	userServices := ProvideUserServices(repos.User, repos.Auth, logger)
-
-	// Create organization services
 	orgService, memberService, projectService, invitationService, settingsService :=
 		ProvideOrganizationServices(repos.User, repos.Auth, repos.Organization, authServices, logger)
 
-	// Create registration service (orchestrates user, org, project creation)
+	// Orchestrates user, org, project creation atomically
 	registrationSvc := registrationService.NewRegistrationService(
-		core.TxManager, // Transaction manager for atomic multi-repository operations
+		core.TxManager,
 		repos.User.User,
 		orgService,
 		projectService,
@@ -343,6 +346,8 @@ func ProvideServerServices(core *CoreContainer) *ServiceContainer {
 		authServices.Role,
 		authServices.Auth,
 	)
+
+	promptServices := ProvidePromptServices(core.TxManager, repos.Prompt, cfg, logger)
 
 	return &ServiceContainer{
 		User:                userServices,
@@ -356,6 +361,7 @@ func ProvideServerServices(core *CoreContainer) *ServiceContainer {
 		Observability:       observabilityServices,
 		Billing:             billingServices,
 		Analytics:           analyticsServices,
+		Prompt:              promptServices,
 	}
 }
 
@@ -366,14 +372,12 @@ func ProvideWorkerServices(core *CoreContainer) *ServiceContainer {
 	repos := core.Repos
 	databases := core.Databases
 
-	// Only services worker uses for processing
 	billingServices := ProvideBillingServices(repos.Billing, logger)
 	analyticsServices := ProvideAnalyticsServices(repos.Analytics)
 	observabilityServices := ProvideObservabilityServices(repos.Observability, repos.Storage, analyticsServices, databases.Redis, cfg, logger)
 
 	return &ServiceContainer{
-		// Worker doesn't need auth/user/org services
-		User:                nil,
+		User:                nil, // Worker doesn't need auth/user/org/prompt services
 		Auth:                nil,
 		Registration:        nil,
 		OrganizationService: nil,
@@ -381,16 +385,15 @@ func ProvideWorkerServices(core *CoreContainer) *ServiceContainer {
 		ProjectService:      nil,
 		InvitationService:   nil,
 		SettingsService:     nil,
-		// Worker only needs these
-		Observability: observabilityServices,
-		Billing:       billingServices,
-		Analytics:     analyticsServices,
+		Prompt:              nil,
+		Observability:       observabilityServices,
+		Billing:             billingServices,
+		Analytics:           analyticsServices,
 	}
 }
 
 // ProvideServer creates HTTP server using shared core
 func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
-	// Initialize HTTP handlers
 	httpHandlers := handlers.NewHandlers(
 		core.Config,
 		core.Logger,
@@ -411,9 +414,11 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 		core.Services.Auth.OrganizationMembers,
 		core.Services.Auth.Scope,
 		core.Services.Observability,
+		core.Services.Prompt.Prompt,
+		core.Services.Prompt.Compiler,
+		core.Services.Prompt.Execution,
 	)
 
-	// Initialize HTTP server
 	httpServer := http.NewServer(
 		core.Config,
 		core.Logger,
@@ -425,11 +430,8 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 		core.Databases.Redis.Client,
 	)
 
-	// Initialize gRPC OTLP server (always enabled)
-	// Reuse the main logger (respects LOG_FORMAT from config)
 	slogLogger := core.Logger
 
-	// Create gRPC OTLP handlers (reuse service layer)
 	grpcOTLPHandler := grpcTransport.NewOTLPHandler(
 		core.Services.Observability.StreamProducer,
 		core.Services.Observability.DeduplicationService,
@@ -450,13 +452,11 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 		slogLogger,
 	)
 
-	// Create gRPC auth interceptor (reuses APIKeyService)
 	grpcAuthInterceptor := grpcTransport.NewAuthInterceptor(
 		core.Services.Auth.APIKey,
 		slogLogger,
 	)
 
-	// Create gRPC server with all OTLP signal handlers
 	grpcServer, err := grpcTransport.NewServer(
 		core.Config.GRPC.Port,
 		grpcOTLPHandler,
@@ -545,6 +545,17 @@ func ProvideAnalyticsRepositories(db *gorm.DB) *AnalyticsRepositories {
 	}
 }
 
+// ProvidePromptRepositories creates all prompt-related repositories
+func ProvidePromptRepositories(db *gorm.DB, redisDB *database.RedisDB) *PromptRepositories {
+	return &PromptRepositories{
+		Prompt:         promptRepo.NewPromptRepository(db),
+		Version:        promptRepo.NewVersionRepository(db),
+		Label:          promptRepo.NewLabelRepository(db),
+		ProtectedLabel: promptRepo.NewProtectedLabelRepository(db),
+		Cache:          promptRepo.NewCacheRepository(redisDB),
+	}
+}
+
 // ProvideRepositories creates all repository containers
 func ProvideRepositories(dbs *DatabaseContainer, logger *slog.Logger) *RepositoryContainer {
 	return &RepositoryContainer{
@@ -555,6 +566,7 @@ func ProvideRepositories(dbs *DatabaseContainer, logger *slog.Logger) *Repositor
 		Storage:       ProvideStorageRepositories(dbs.ClickHouse),
 		Billing:       ProvideBillingRepositories(dbs.Postgres.DB, logger),
 		Analytics:     ProvideAnalyticsRepositories(dbs.Postgres.DB),
+		Prompt:        ProvidePromptRepositories(dbs.Postgres.DB, dbs.Redis),
 	}
 }
 
@@ -564,11 +576,10 @@ func ProvideUserServices(
 	authRepos *AuthRepositories,
 	logger *slog.Logger,
 ) *UserServices {
-	// Import the actual user service implementations
 	userSvc := userService.NewUserService(
 		userRepos.User,
-		nil,                          // AuthService - would need to be injected if needed
-		authRepos.OrganizationMember, // OrganizationMemberRepository for membership validation
+		nil,
+		authRepos.OrganizationMember,
 	)
 
 	profileSvc := userService.NewProfileService(
@@ -589,37 +600,31 @@ func ProvideAuthServices(
 	databases *DatabaseContainer,
 	logger *slog.Logger,
 ) *AuthServices {
-	// Create JWT service with auth config
 	jwtService, err := authService.NewJWTService(&cfg.Auth)
 	if err != nil {
 		logger.Error("Failed to create JWT service", "error", err)
 		os.Exit(1)
 	}
 
-	// Create permission service with comprehensive permission management
 	permissionService := authService.NewPermissionService(
 		authRepos.Permission,
 		authRepos.RolePermission,
 	)
 
-	// Create role service with clean RBAC (template roles only)
 	roleService := authService.NewRoleService(
 		authRepos.Role,
 		authRepos.RolePermission,
 	)
 
-	// Create organization member service for RBAC membership management
 	orgMemberService := authService.NewOrganizationMemberService(
 		authRepos.OrganizationMember,
 		authRepos.Role,
 	)
 
-	// Create blacklisted token service for immediate revocation
 	blacklistedTokenService := authService.NewBlacklistedTokenService(
 		authRepos.BlacklistedToken,
 	)
 
-	// Create session service for session management
 	sessionService := authService.NewSessionService(
 		&cfg.Auth,
 		authRepos.UserSession,
@@ -627,13 +632,11 @@ func ProvideAuthServices(
 		jwtService,
 	)
 
-	// Create API key service for programmatic authentication
 	apiKeyService := authService.NewAPIKeyService(
 		authRepos.APIKey,
 		authRepos.OrganizationMember,
 	)
 
-	// Create core auth service (without audit logging)
 	coreAuthSvc := authService.NewAuthService(
 		&cfg.Auth,
 		userRepos.User,
@@ -642,21 +645,19 @@ func ProvideAuthServices(
 		roleService,
 		authRepos.PasswordResetToken,
 		blacklistedTokenService,
-		databases.Redis.Client, // Redis client for OAuth session storage
+		databases.Redis.Client,
 	)
 
-	// Wrap with audit decorator for clean separation of concerns
+	// Audit decorator for clean separation of concerns
 	authSvc := authService.NewAuditDecorator(coreAuthSvc, authRepos.AuditLog, logger)
 
-	// Create scope service for scope-based authorization
 	scopeService := authService.NewScopeService(
 		authRepos.OrganizationMember,
 		authRepos.Role,
 		authRepos.Permission,
 	)
 
-	// Create OAuth provider service (Google/GitHub signup)
-	frontendURL := "http://localhost:3000" // Default for development
+	frontendURL := "http://localhost:3000"
 	if url := os.Getenv("NEXT_PUBLIC_APP_URL"); url != "" {
 		frontendURL = url
 	}
@@ -694,7 +695,6 @@ func ProvideOrganizationServices(
 	organization.InvitationService,
 	organization.OrganizationSettingsService,
 ) {
-	// Create individual services
 	memberSvc := orgService.NewMemberService(
 		orgRepos.Member,
 		orgRepos.Organization,
@@ -716,7 +716,6 @@ func ProvideOrganizationServices(
 		authServices.Role,
 	)
 
-	// Create organization service with dependencies on other services
 	orgSvc := orgService.NewOrganizationService(
 		orgRepos.Organization,
 		userRepos.User,
@@ -725,7 +724,6 @@ func ProvideOrganizationServices(
 		authServices.Role,
 	)
 
-	// Create settings service
 	settingsSvc := orgService.NewOrganizationSettingsService(
 		orgRepos.Settings,
 		orgRepos.Member,
@@ -734,9 +732,8 @@ func ProvideOrganizationServices(
 	return orgSvc, memberSvc, projectSvc, invitationSvc, settingsSvc
 }
 
-// ProvideObservabilityServices creates all observability-related services
-// Note: TelemetryService is created without analytics worker (nil).
-// The worker must be injected later via SetAnalyticsWorker() after it's started.
+// ProvideObservabilityServices creates all observability-related services.
+// TelemetryService is created without analytics worker - inject via SetAnalyticsWorker() after startup.
 func ProvideObservabilityServices(
 	observabilityRepos *ObservabilityRepositories,
 	storageRepos *StorageRepositories,
@@ -745,20 +742,14 @@ func ProvideObservabilityServices(
 	cfg *config.Config,
 	logger *slog.Logger,
 ) *observabilityService.ServiceRegistry {
-	// Create deduplication service for telemetry
 	deduplicationService := observabilityService.NewTelemetryDeduplicationService(observabilityRepos.TelemetryDeduplication)
-
-	// Create Redis Streams producer for telemetry
 	streamProducer := streams.NewTelemetryStreamProducer(redisDB, logger)
-
-	// Create telemetry service (health/metrics monitoring only)
 	telemetryService := observabilityService.NewTelemetryService(
 		deduplicationService,
 		streamProducer,
 		logger,
 	)
 
-	// Create S3 client for blob storage (pass nil if not configured)
 	var s3Client *storage.S3Client
 	if cfg.BlobStorage.Provider != "" && cfg.BlobStorage.BucketName != "" {
 		var err error
@@ -768,7 +759,6 @@ func ProvideObservabilityServices(
 		}
 	}
 
-	// Create blob storage service from storage domain
 	blobStorageSvc := storageService.NewBlobStorageService(
 		storageRepos.BlobStorage,
 		s3Client,
@@ -799,11 +789,7 @@ func ProvideBillingServices(
 	billingRepos *BillingRepositories,
 	logger *slog.Logger,
 ) *BillingServices {
-	// Create organization service interface implementation
-	// This is a simple implementation - in production you'd inject the real org service
 	orgService := &simpleBillingOrgService{logger: logger}
-
-	// Create billing service
 	billingServiceImpl := billingService.NewBillingService(
 		logger,
 		nil,                        // config - use defaults
@@ -822,11 +808,45 @@ func ProvideBillingServices(
 func ProvideAnalyticsServices(
 	analyticsRepos *AnalyticsRepositories,
 ) *AnalyticsServices {
-	// Create provider pricing service (for AI provider cost analytics)
 	providerPricingServiceImpl := analyticsService.NewProviderPricingService(analyticsRepos.ProviderModel)
 
 	return &AnalyticsServices{
 		ProviderPricing: providerPricingServiceImpl,
+	}
+}
+
+// ProvidePromptServices creates all prompt-related services
+func ProvidePromptServices(
+	txManager common.TransactionManager,
+	promptRepos *PromptRepositories,
+	cfg *config.Config,
+	logger *slog.Logger,
+) *PromptServices {
+	compilerSvc := promptService.NewCompilerService()
+	llmConfig := &promptService.LLMClientConfig{
+		OpenAIAPIKey:     cfg.External.OpenAI.APIKey,
+		OpenAIBaseURL:    cfg.External.OpenAI.BaseURL,
+		AnthropicAPIKey:  cfg.External.Anthropic.APIKey,
+		AnthropicBaseURL: cfg.External.Anthropic.BaseURL,
+		DefaultTimeout:   cfg.External.OpenAI.Timeout,
+	}
+
+	executionSvc := promptService.NewExecutionService(compilerSvc, llmConfig)
+	promptSvc := promptService.NewPromptService(
+		txManager,
+		promptRepos.Prompt,
+		promptRepos.Version,
+		promptRepos.Label,
+		promptRepos.ProtectedLabel,
+		promptRepos.Cache,
+		compilerSvc,
+		logger,
+	)
+
+	return &PromptServices{
+		Prompt:    promptSvc,
+		Compiler:  compilerSvc,
+		Execution: executionSvc,
 	}
 }
 
@@ -862,11 +882,10 @@ func ProvideEnterpriseServices(cfg *config.Config, logger *slog.Logger) *Enterpr
 	}
 }
 
-// Health checking for all providers (mode-aware)
+// HealthCheck checks health of all providers (mode-aware)
 func (pc *ProviderContainer) HealthCheck() map[string]string {
 	health := make(map[string]string)
 
-	// Check core databases
 	if pc.Core != nil && pc.Core.Databases != nil {
 		if pc.Core.Databases.Postgres != nil {
 			if err := pc.Core.Databases.Postgres.Health(); err != nil {
@@ -893,7 +912,6 @@ func (pc *ProviderContainer) HealthCheck() map[string]string {
 		}
 	}
 
-	// Check worker health
 	if pc.Workers != nil && pc.Workers.TelemetryConsumer != nil {
 		stats := pc.Workers.TelemetryConsumer.GetStats()
 		// Consider healthy if: running (has stats) and error rate < 10% of processed batches
@@ -917,26 +935,22 @@ func (pc *ProviderContainer) HealthCheck() map[string]string {
 		}
 	}
 
-	// Add deployment mode
 	health["mode"] = string(pc.Mode)
 
 	return health
 }
 
-// Graceful shutdown of all providers
+// Shutdown gracefully shuts down all providers
 func (pc *ProviderContainer) Shutdown() error {
 	var lastErr error
-
 	logger := pc.Core.Logger
 
-	// Stop background workers first (if present)
 	if pc.Workers != nil && pc.Workers.TelemetryConsumer != nil {
 		logger.Info("Stopping telemetry stream consumer...")
 		pc.Workers.TelemetryConsumer.Stop()
 		logger.Info("Telemetry stream consumer stopped")
 	}
 
-	// Close database connections
 	if pc.Core != nil && pc.Core.Databases != nil {
 		if pc.Core.Databases.Postgres != nil {
 			if err := pc.Core.Databases.Postgres.Close(); err != nil {

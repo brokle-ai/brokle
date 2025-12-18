@@ -6,10 +6,12 @@ import (
 	authDomain "brokle/internal/core/domain/auth"
 	"brokle/internal/core/domain/common"
 	orgDomain "brokle/internal/core/domain/organization"
+	promptDomain "brokle/internal/core/domain/prompt"
 	userDomain "brokle/internal/core/domain/user"
 
 	authRepo "brokle/internal/infrastructure/repository/auth"
 	orgRepo "brokle/internal/infrastructure/repository/organization"
+	promptRepo "brokle/internal/infrastructure/repository/prompt"
 	userRepo "brokle/internal/infrastructure/repository/user"
 )
 
@@ -26,6 +28,10 @@ type repositoryFactory struct {
 	invitationRepo orgDomain.InvitationRepository
 	roleRepo       authDomain.RoleRepository
 	orgMemberRepo  authDomain.OrganizationMemberRepository
+	promptRepo          promptDomain.PromptRepository
+	versionRepo         promptDomain.VersionRepository
+	labelRepo           promptDomain.LabelRepository
+	protectedLabelRepo  promptDomain.ProtectedLabelRepository
 }
 
 // NewRepositoryFactory creates a new repository factory instance.
@@ -88,4 +94,36 @@ func (f *repositoryFactory) OrganizationMemberRepository() authDomain.Organizati
 		f.orgMemberRepo = authRepo.NewOrganizationMemberRepository(f.db)
 	}
 	return f.orgMemberRepo
+}
+
+// PromptRepository returns a transaction-scoped prompt repository (cached)
+func (f *repositoryFactory) PromptRepository() promptDomain.PromptRepository {
+	if f.promptRepo == nil {
+		f.promptRepo = promptRepo.NewPromptRepository(f.db)
+	}
+	return f.promptRepo
+}
+
+// VersionRepository returns a transaction-scoped version repository (cached)
+func (f *repositoryFactory) VersionRepository() promptDomain.VersionRepository {
+	if f.versionRepo == nil {
+		f.versionRepo = promptRepo.NewVersionRepository(f.db)
+	}
+	return f.versionRepo
+}
+
+// LabelRepository returns a transaction-scoped label repository (cached)
+func (f *repositoryFactory) LabelRepository() promptDomain.LabelRepository {
+	if f.labelRepo == nil {
+		f.labelRepo = promptRepo.NewLabelRepository(f.db)
+	}
+	return f.labelRepo
+}
+
+// ProtectedLabelRepository returns a transaction-scoped protected label repository (cached)
+func (f *repositoryFactory) ProtectedLabelRepository() promptDomain.ProtectedLabelRepository {
+	if f.protectedLabelRepo == nil {
+		f.protectedLabelRepo = promptRepo.NewProtectedLabelRepository(f.db)
+	}
+	return f.protectedLabelRepo
 }
