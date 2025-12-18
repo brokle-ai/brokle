@@ -316,17 +316,6 @@ definitions:
     - expiry_option
     - name
     type: object
-  apikey.UpdateAPIKeyRequest:
-    properties:
-      is_active:
-        example: false
-        type: boolean
-      name:
-        example: Updated Production Key
-        maxLength: 100
-        minLength: 2
-        type: string
-    type: object
   auth.ChangePasswordRequest:
     description: Password change information
     properties:
@@ -653,7 +642,7 @@ definitions:
       features_included:
         example:
         - '["advanced_analytics"'
-        - ' "semantic_caching"]'
+        - ' "quality_scoring"]'
         items:
           type: string
         type: array
@@ -727,6 +716,48 @@ definitions:
         items:
           $ref: '#/definitions/billing.ProviderUsage'
         type: array
+    type: object
+  credentials.CreateOrUpdateRequest:
+    properties:
+      api_key:
+        minLength: 10
+        type: string
+      base_url:
+        type: string
+      provider:
+        enum:
+        - openai
+        - anthropic
+        type: string
+    required:
+    - api_key
+    - provider
+    type: object
+  credentials.LLMProvider:
+    enum:
+    - openai
+    - anthropic
+    type: string
+    x-enum-varnames:
+    - ProviderOpenAI
+    - ProviderAnthropic
+  credentials.LLMProviderCredentialResponse:
+    properties:
+      base_url:
+        type: string
+      created_at:
+        type: string
+      id:
+        $ref: '#/definitions/ulid.ULID'
+      key_preview:
+        description: 'Masked: "sk-***abcd"'
+        type: string
+      project_id:
+        $ref: '#/definitions/ulid.ULID'
+      provider:
+        $ref: '#/definitions/credentials.LLMProvider'
+      updated_at:
+        type: string
     type: object
   health.HealthCheck:
     description: Individual component health check result
@@ -901,7 +932,7 @@ definitions:
       plan:
         example: pro
         type: string
-      status:
+      subscription_status:
         example: active
         type: string
       updated_at:
@@ -910,6 +941,9 @@ definitions:
     type: object
   internal_transport_http_handlers_organization.UpdateOrganizationRequest:
     properties:
+      billing_email:
+        example: billing@acme.com
+        type: string
       description:
         example: Leading AI solutions provider
         maxLength: 500
@@ -919,6 +953,89 @@ definitions:
         maxLength: 100
         minLength: 2
         type: string
+    type: object
+  internal_transport_http_handlers_playground.CreateSessionRequest:
+    properties:
+      config:
+        type: object
+      description:
+        type: string
+      name:
+        maxLength: 200
+        type: string
+      tags:
+        items:
+          type: string
+        maxItems: 10
+        type: array
+      variables:
+        type: object
+      windows:
+        type: object
+    required:
+    - name
+    - windows
+    type: object
+  internal_transport_http_handlers_playground.ExecuteRequest:
+    properties:
+      config_overrides:
+        $ref: '#/definitions/prompt.ModelConfig'
+      project_id:
+        description: 'Required: for project-scoped credentials'
+        type: string
+      prompt_type:
+        $ref: '#/definitions/prompt.PromptType'
+      session_id:
+        description: 'Optional: updates session''s last_run'
+        type: string
+      template: {}
+      variables:
+        additionalProperties:
+          type: string
+        type: object
+    required:
+    - prompt_type
+    - template
+    type: object
+  internal_transport_http_handlers_playground.StreamRequest:
+    properties:
+      config_overrides:
+        $ref: '#/definitions/prompt.ModelConfig'
+      project_id:
+        description: 'Required: for project-scoped credentials'
+        type: string
+      prompt_type:
+        $ref: '#/definitions/prompt.PromptType'
+      session_id:
+        description: 'Optional: updates session''s last_run'
+        type: string
+      template: {}
+      variables:
+        additionalProperties:
+          type: string
+        type: object
+    required:
+    - prompt_type
+    - template
+    type: object
+  internal_transport_http_handlers_playground.UpdateSessionRequest:
+    properties:
+      config:
+        type: object
+      description:
+        type: string
+      name:
+        maxLength: 200
+        type: string
+      tags:
+        items:
+          type: string
+        maxItems: 10
+        type: array
+      variables:
+        type: object
+      windows:
+        type: object
     type: object
   internal_transport_http_handlers_user.UpdateProfileRequest:
     description: User profile update information
@@ -947,9 +1064,6 @@ definitions:
       api_key_id:
         example: key_1234567890
         type: string
-      cache_hit:
-        example: false
-        type: boolean
       cost:
         example: 0.0425
         type: number
@@ -1019,9 +1133,6 @@ definitions:
       api_key_id:
         example: key_1234567890
         type: string
-      cache_hit:
-        example: false
-        type: boolean
       cost:
         example: 0.0425
         type: number
@@ -1073,8 +1184,6 @@ definitions:
         example: 550e8400-e29b-41d4-a716-446655440000
         type: string
       response_body: {}
-      routing_info:
-        $ref: '#/definitions/logs.RoutingInfo'
       status:
         example: 200
         type: integer
@@ -1097,18 +1206,6 @@ definitions:
       user_id:
         example: usr_1234567890
         type: string
-    type: object
-  logs.AlternativeProvider:
-    properties:
-      provider:
-        example: anthropic
-        type: string
-      reason:
-        example: Higher latency
-        type: string
-      score:
-        example: 0.85
-        type: number
     type: object
   logs.ExportResponse:
     properties:
@@ -1150,25 +1247,6 @@ definitions:
         example: 25000
         type: integer
     type: object
-  logs.RoutingInfo:
-    properties:
-      alternatives:
-        items:
-          $ref: '#/definitions/logs.AlternativeProvider'
-        type: array
-      failovers:
-        example: 0
-        type: integer
-      reason:
-        example: Provider has lowest latency
-        type: string
-      routing_time_ms:
-        example: 5
-        type: integer
-      strategy:
-        example: performance
-        type: string
-    type: object
   logs.TraceEvent:
     properties:
       description:
@@ -1204,8 +1282,7 @@ definitions:
     properties:
       key:
         type: string
-      value:
-        description: Can be stringValue, intValue, boolValue, arrayValue, etc.
+      value: {}
     type: object
   observability.Link:
     properties:
@@ -1221,6 +1298,49 @@ definitions:
         description: Linked span ID (Buffer or hex string)
       traceId:
         description: Linked trace ID (Buffer or hex string)
+      traceState:
+        description: W3C TraceState for linked span
+    type: object
+  observability.LogRecord:
+    properties:
+      attributes:
+        items:
+          $ref: '#/definitions/observability.KeyValue'
+        type: array
+      body: {}
+      observedTimeUnixNano: {}
+      severityNumber:
+        type: integer
+      severityText:
+        type: string
+      spanId: {}
+      timeUnixNano: {}
+      traceId: {}
+    type: object
+  observability.Metric:
+    properties:
+      data:
+        description: Can be Gauge, Sum, Histogram, etc.
+      description:
+        type: string
+      name:
+        type: string
+      unit:
+        type: string
+    type: object
+  observability.OTLPLogsRequest:
+    properties:
+      resourceLogs:
+        items:
+          $ref: '#/definitions/observability.ResourceLogs'
+        type: array
+    type: object
+  observability.OTLPMetricsRequest:
+    properties:
+      resourceMetrics:
+        items:
+          $ref: '#/definitions/observability.ResourceMetrics'
+        type: array
     type: object
   observability.OTLPRequest:
     properties:
@@ -1241,31 +1361,52 @@ definitions:
           $ref: '#/definitions/observability.Event'
         type: array
       kind:
-        description: 0=UNSPECIFIED, 1=INTERNAL, 2=SERVER, 3=CLIENT, 4=PRODUCER, 5=CONSUMER
         type: integer
       links:
-        description: OTEL span links (cross-trace references)
         items:
           $ref: '#/definitions/observability.Link'
         type: array
       name:
         type: string
-      parentSpanId:
-        description: Can be Buffer or hex string
-      spanId:
-        description: Can be Buffer or hex string
-      startTimeUnixNano:
-        description: Can be int64 or {low, high}
+      parentSpanId: {}
+      spanId: {}
+      startTimeUnixNano: {}
       status:
         $ref: '#/definitions/observability.Status'
-      traceId:
-        description: Can be Buffer or hex string
+      traceId: {}
+    type: object
+  observability.Range:
+    properties:
+      max:
+        type: number
+      min:
+        type: number
     type: object
   observability.Resource:
     properties:
       attributes:
         items:
           $ref: '#/definitions/observability.KeyValue'
+        type: array
+      schemaUrl:
+        type: string
+    type: object
+  observability.ResourceLogs:
+    properties:
+      resource:
+        $ref: '#/definitions/observability.Resource'
+      scopeLogs:
+        items:
+          $ref: '#/definitions/observability.ScopeLogs'
+        type: array
+    type: object
+  observability.ResourceMetrics:
+    properties:
+      resource:
+        $ref: '#/definitions/observability.Resource'
+      scopeMetrics:
+        items:
+          $ref: '#/definitions/observability.ScopeMetrics'
         type: array
     type: object
   observability.ResourceSpan:
@@ -1285,8 +1426,28 @@ definitions:
         type: array
       name:
         type: string
+      schemaUrl:
+        type: string
       version:
         type: string
+    type: object
+  observability.ScopeLogs:
+    properties:
+      logRecords:
+        items:
+          $ref: '#/definitions/observability.LogRecord'
+        type: array
+      scope:
+        $ref: '#/definitions/observability.Scope'
+    type: object
+  observability.ScopeMetrics:
+    properties:
+      metrics:
+        items:
+          $ref: '#/definitions/observability.Metric'
+        type: array
+      scope:
+        $ref: '#/definitions/observability.Scope'
     type: object
   observability.ScopeSpan:
     properties:
@@ -1304,257 +1465,253 @@ definitions:
       comment:
         type: string
       data_type:
-        description: NUMERIC, CATEGORICAL, BOOLEAN
         type: string
       evaluator_config:
         additionalProperties:
           type: string
         type: object
       evaluator_name:
-        description: Evaluator information
         type: string
       evaluator_version:
         type: string
       id:
-        description: Identifiers
         type: string
       name:
-        description: Score data
         type: string
       project_id:
         type: string
       source:
-        description: Metadata
         type: string
       span_id:
-        description: OTEL span_id
         type: string
       string_value:
         type: string
       timestamp:
-        description: Timestamp
         type: string
       trace_id:
-        description: OTEL trace_id
         type: string
       value:
         type: number
       version:
-        description: Application versioning (experiment tracking)
         type: string
     type: object
   observability.Span:
     properties:
-      brokle_cost_input:
-        description: Decimal(18,9) extracted from STRING
-        type: number
-      brokle_cost_output:
-        description: Decimal(18,9) extracted from STRING
-        type: number
-      brokle_cost_total:
-        description: Decimal(18,9) extracted from STRING
-        type: number
-      brokle_internal_model_id:
-        type: string
-      brokle_prompt_id:
-        type: string
-      brokle_prompt_name:
-        type: string
-      brokle_prompt_version:
-        type: integer
-      brokle_span_level:
-        description: DEBUG, INFO, WARNING, ERROR
-        type: string
-      brokle_span_type:
-        description: Brokle attributes (custom extensions)
-        type: string
       child_spans:
         items:
           $ref: '#/definitions/observability.Span'
         type: array
-      created_at:
-        description: Timestamps
+      completion_start_time:
         type: string
-      duration_ms:
+      cost_details:
+        additionalProperties:
+          type: number
+        type: object
+      deleted_at:
+        type: string
+      duration:
+        description: Nanoseconds (OTLP spec)
         type: integer
       end_time:
         type: string
-      events_attributes:
-        description: JSON strings
+      events:
         items:
-          type: string
+          $ref: '#/definitions/observability.SpanEvent'
         type: array
-      events_name:
-        items:
-          type: string
-        type: array
-      events_timestamp:
-        description: OTEL Events (OTEL spec) - arrays for event tracking
-        items:
-          type: string
-        type: array
-      gen_ai_operation_name:
-        description: |-
-          ===== MATERIALIZED COLUMNS (Read-only, computed by ClickHouse) =====
-          Gen AI attributes (OTEL 1.38+ conventions)
-        type: string
-      gen_ai_provider_name:
-        type: string
-      gen_ai_request_max_tokens:
-        type: integer
-      gen_ai_request_model:
-        type: string
-      gen_ai_request_temperature:
-        type: number
-      gen_ai_request_top_p:
-        type: number
-      gen_ai_usage_input_tokens:
-        type: integer
-      gen_ai_usage_output_tokens:
-        type: integer
+      has_error:
+        description: Semantic flag (true when status_code=2)
+        type: boolean
       input:
-        description: Input/Output (stored in ClickHouse with ZSTD compression)
         type: string
-      links_attributes:
-        description: JSON strings
+      level:
+        type: string
+      links:
         items:
-          type: string
+          $ref: '#/definitions/observability.SpanLink'
         type: array
-      links_span_id:
-        items:
-          type: string
-        type: array
-      links_trace_id:
-        description: OTEL Links (OTEL spec) - arrays for span linking
-        items:
-          type: string
-        type: array
+      model_name:
+        description: Materialized columns (db:"-" = computed by ClickHouse, not stored)
+        type: string
       output:
         type: string
       parent_span_id:
-        description: NULL for root spans
         type: string
+      pricing_snapshot:
+        additionalProperties:
+          type: number
+        type: object
       project_id:
         type: string
-      resource_attributes:
-        additionalProperties: true
-        description: OTEL resource attributes (JSON map with resource-level context)
-        type: object
-      scores:
-        description: Populated from joins (not in ClickHouse)
-        items:
-          $ref: '#/definitions/observability.Score'
-        type: array
-      span_attributes:
-        additionalProperties: true
-        description: |-
-          OTEL attributes (JSON map with all span-level attributes)
-          Stores: gen_ai.*, brokle.*, and custom attributes
-        type: object
-      span_id:
-        description: OTEL identifiers
-        type: string
-      span_kind:
-        description: 'OTEL enum: 0=UNSPECIFIED, 1=INTERNAL, 2=SERVER, 3=CLIENT, 4=PRODUCER,
-          5=CONSUMER'
-        type: integer
-      span_name:
-        description: Span data
-        type: string
-      start_time:
-        type: string
-      status_code:
-        description: OTEL status
-        type: integer
-      status_message:
-        type: string
-      trace_id:
-        description: OTEL trace_id
-        type: string
-      updated_at:
-        type: string
-    type: object
-  observability.Status:
-    properties:
-      code:
-        description: 0=UNSET, 1=OK, 2=ERROR
-        type: integer
-      message:
-        type: string
-    type: object
-  observability.Trace:
-    properties:
-      bookmarked:
-        description: Flags (moved from sessions table)
-        type: boolean
-      created_at:
-        description: Timestamps
-        type: string
-      duration_ms:
-        type: integer
-      end_time:
-        type: string
-      environment:
-        description: OTEL resource attributes (extracted for common queries)
-        type: string
-      input:
-        description: Input/Output (trace-level data stored in ClickHouse with ZSTD
-          compression)
-        type: string
-      name:
-        description: Trace metadata
-        type: string
-      output:
-        type: string
-      project_id:
-        description: Brokle project context
-        type: string
-      public:
-        type: boolean
-      release:
+      provider_name:
         type: string
       resource_attributes:
-        additionalProperties: true
-        description: OTEL resource attributes (JSON map with all resource-level attributes)
+        additionalProperties:
+          type: string
         type: object
+      resource_schema_url:
+        type: string
+      scope_attributes:
+        additionalProperties:
+          type: string
+        type: object
+      scope_name:
+        type: string
+      scope_schema_url:
+        type: string
+      scope_version:
+        type: string
       scores:
         items:
           $ref: '#/definitions/observability.Score'
         type: array
       service_name:
         type: string
-      service_version:
+      span_attributes:
+        additionalProperties:
+          type: string
+        type: object
+      span_id:
         type: string
-      session_id:
-        description: Virtual session (attribute only, not FK)
+      span_kind:
+        type: integer
+      span_name:
         type: string
-      spans:
-        description: Populated from joins (not in ClickHouse)
-        items:
-          $ref: '#/definitions/observability.Span'
-        type: array
+      span_type:
+        type: string
       start_time:
-        description: Timing
         type: string
       status_code:
-        description: OTEL status
+        description: 'OTLP: 0=UNSET, 1=OK, 2=ERROR'
         type: integer
       status_message:
         type: string
-      tags:
-        description: Tags for categorization
+      total_cost:
+        type: number
+      trace_id:
+        type: string
+      trace_state:
+        type: string
+      usage_details:
+        additionalProperties:
+          format: int64
+          type: integer
+        type: object
+      version:
+        type: string
+    type: object
+  observability.SpanEvent:
+    properties:
+      attributes:
+        additionalProperties:
+          type: string
+        type: object
+      dropped_attributes_count:
+        type: integer
+      name:
+        type: string
+      timestamp:
+        type: string
+    type: object
+  observability.SpanLink:
+    properties:
+      attributes:
+        additionalProperties:
+          type: string
+        type: object
+      dropped_attributes_count:
+        type: integer
+      span_id:
+        type: string
+      trace_id:
+        type: string
+      trace_state:
+        type: string
+    type: object
+  observability.Status:
+    properties:
+      code:
+        type: integer
+      message:
+        type: string
+    type: object
+  observability.TraceFilterOptions:
+    properties:
+      cost_range:
+        $ref: '#/definitions/observability.Range'
+      duration_range:
+        $ref: '#/definitions/observability.Range'
+      environments:
         items:
           type: string
         type: array
-      trace_id:
-        description: OTEL identifiers
+      models:
+        items:
+          type: string
+        type: array
+      providers:
+        items:
+          type: string
+        type: array
+      services:
+        items:
+          type: string
+        type: array
+      sessions:
+        items:
+          type: string
+        type: array
+      token_range:
+        $ref: '#/definitions/observability.Range'
+      users:
+        items:
+          type: string
+        type: array
+    type: object
+  observability.TraceSummary:
+    properties:
+      duration:
+        description: Nullable for in-flight traces (nanoseconds)
+        type: integer
+      end_time:
+        description: Nullable for in-flight traces
         type: string
-      updated_at:
+      error_span_count:
+        type: integer
+      has_error:
+        type: boolean
+      input_tokens:
+        type: integer
+      model_name:
+        type: string
+      name:
+        description: Root span's span_name
+        type: string
+      output_tokens:
+        type: integer
+      project_id:
+        type: string
+      provider_name:
+        type: string
+      root_span_id:
+        type: string
+      service_name:
+        type: string
+      session_id:
+        type: string
+      span_count:
+        type: integer
+      start_time:
+        type: string
+      status_code:
+        description: Root span's status code
+        type: integer
+      total_cost:
+        type: number
+      total_tokens:
+        type: integer
+      trace_id:
         type: string
       user_id:
-        type: string
-      version:
-        description: Application versioning (experiment tracking)
         type: string
     type: object
   organization.BulkSettingsRequest:
@@ -1684,6 +1841,62 @@ definitions:
     required:
     - value
     type: object
+  playground.ExecuteResponse:
+    properties:
+      compiled_prompt: {}
+      error:
+        type: string
+      latency_ms:
+        type: integer
+      response:
+        $ref: '#/definitions/prompt.LLMResponse'
+    type: object
+  playground.SessionResponse:
+    properties:
+      config:
+        type: object
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        $ref: '#/definitions/ulid.ULID'
+      last_run:
+        type: object
+      last_used_at:
+        type: string
+      name:
+        type: string
+      project_id:
+        $ref: '#/definitions/ulid.ULID'
+      tags:
+        items:
+          type: string
+        type: array
+      updated_at:
+        type: string
+      variables:
+        type: object
+      windows:
+        type: object
+    type: object
+  playground.SessionSummary:
+    properties:
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        $ref: '#/definitions/ulid.ULID'
+      last_used_at:
+        type: string
+      name:
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+    type: object
   project.CreateProjectRequest:
     properties:
       description:
@@ -1737,13 +1950,308 @@ definitions:
         maxLength: 100
         minLength: 2
         type: string
-      status:
-        enum:
-        - active
-        - paused
-        - archived
-        example: active
+    type: object
+  prompt.CreatePromptRequest:
+    properties:
+      commit_message:
         type: string
+      config:
+        $ref: '#/definitions/prompt.ModelConfig'
+      description:
+        type: string
+      labels:
+        items:
+          type: string
+        type: array
+      name:
+        maxLength: 100
+        minLength: 1
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+      template: {}
+      type:
+        $ref: '#/definitions/prompt.PromptType'
+    required:
+    - name
+    - template
+    type: object
+  prompt.CreateVersionRequest:
+    properties:
+      commit_message:
+        type: string
+      config:
+        $ref: '#/definitions/prompt.ModelConfig'
+      labels:
+        items:
+          type: string
+        type: array
+      template: {}
+    required:
+    - template
+    type: object
+  prompt.ExecutePromptRequest:
+    properties:
+      config_overrides:
+        $ref: '#/definitions/prompt.ModelConfig'
+      variables:
+        additionalProperties:
+          type: string
+        type: object
+    type: object
+  prompt.ExecutePromptResponse:
+    properties:
+      compiled_prompt: {}
+      error:
+        type: string
+      latency_ms:
+        type: integer
+      response:
+        $ref: '#/definitions/prompt.LLMResponse'
+    type: object
+  prompt.LLMResponse:
+    properties:
+      content:
+        type: string
+      cost:
+        type: number
+      model:
+        type: string
+      usage:
+        $ref: '#/definitions/prompt.LLMUsage'
+    type: object
+  prompt.LLMUsage:
+    properties:
+      completion_tokens:
+        type: integer
+      prompt_tokens:
+        type: integer
+      total_tokens:
+        type: integer
+    type: object
+  prompt.ModelConfig:
+    properties:
+      frequency_penalty:
+        type: number
+      max_tokens:
+        type: integer
+      model:
+        type: string
+      presence_penalty:
+        type: number
+      stop:
+        items:
+          type: string
+        type: array
+      temperature:
+        type: number
+      top_p:
+        type: number
+    type: object
+  prompt.PromptListItem:
+    properties:
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      labels:
+        items:
+          $ref: '#/definitions/prompt.PromptListLabelInfo'
+        type: array
+      latest_version:
+        type: integer
+      name:
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+      type:
+        $ref: '#/definitions/prompt.PromptType'
+      updated_at:
+        type: string
+    type: object
+  prompt.PromptListLabelInfo:
+    properties:
+      name:
+        type: string
+      version:
+        type: integer
+    type: object
+  prompt.PromptResponse:
+    properties:
+      commit_message:
+        type: string
+      config:
+        $ref: '#/definitions/prompt.ModelConfig'
+      created_at:
+        type: string
+      created_by:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      is_fallback:
+        type: boolean
+      labels:
+        items:
+          type: string
+        type: array
+      name:
+        type: string
+      project_id:
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+      template: {}
+      type:
+        $ref: '#/definitions/prompt.PromptType'
+      updated_at:
+        type: string
+      variables:
+        items:
+          type: string
+        type: array
+      version:
+        type: integer
+      version_id:
+        description: ULID of the specific version (for linking)
+        type: string
+    type: object
+  prompt.PromptType:
+    enum:
+    - text
+    - chat
+    type: string
+    x-enum-varnames:
+    - PromptTypeText
+    - PromptTypeChat
+  prompt.ProtectedLabelsRequest:
+    properties:
+      protected_labels:
+        items:
+          type: string
+        type: array
+    required:
+    - protected_labels
+    type: object
+  prompt.SetLabelsRequest:
+    properties:
+      labels:
+        items:
+          type: string
+        type: array
+    required:
+    - labels
+    type: object
+  prompt.UpdatePromptRequest:
+    properties:
+      description:
+        type: string
+      name:
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+    type: object
+  prompt.UpsertPromptRequest:
+    properties:
+      commit_message:
+        type: string
+      config:
+        $ref: '#/definitions/prompt.ModelConfig'
+      description:
+        type: string
+      labels:
+        items:
+          type: string
+        type: array
+      name:
+        maxLength: 100
+        minLength: 1
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+      template: {}
+      type:
+        $ref: '#/definitions/prompt.PromptType'
+    required:
+    - name
+    - template
+    type: object
+  prompt.UpsertResponse:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: string
+      is_new_prompt:
+        type: boolean
+      labels:
+        items:
+          type: string
+        type: array
+      name:
+        type: string
+      type:
+        $ref: '#/definitions/prompt.PromptType'
+      version:
+        type: integer
+    type: object
+  prompt.VersionDiffResponse:
+    properties:
+      config_from:
+        $ref: '#/definitions/prompt.ModelConfig'
+      config_to:
+        $ref: '#/definitions/prompt.ModelConfig'
+      from_version:
+        type: integer
+      template_from: {}
+      template_to: {}
+      to_version:
+        type: integer
+      variables_added:
+        items:
+          type: string
+        type: array
+      variables_removed:
+        items:
+          type: string
+        type: array
+    type: object
+  prompt.VersionResponse:
+    properties:
+      commit_message:
+        type: string
+      config:
+        $ref: '#/definitions/prompt.ModelConfig'
+      created_at:
+        type: string
+      created_by:
+        type: string
+      id:
+        type: string
+      labels:
+        items:
+          type: string
+        type: array
+      template: {}
+      variables:
+        items:
+          type: string
+        type: array
+      version:
+        type: integer
     type: object
   response.APIError:
     description: Error details for failed API requests
@@ -1837,6 +2345,9 @@ definitions:
       success:
         example: true
         type: boolean
+    type: object
+  ulid.ULID:
+    description: ULID (Universally Unique Lexicographically Sortable Identifier)
     type: object
   user.SetDefaultOrgRequest:
     properties:
@@ -3529,10 +4040,6 @@ paths:
         in: query
         name: max_latency
         type: integer
-      - description: Filter by cache hit status
-        in: query
-        name: cache_hit
-        type: boolean
       - description: Search in request content
         example: '"error"'
         in: query
@@ -3604,7 +4111,7 @@ paths:
       consumes:
       - application/json
       description: Get comprehensive details about a specific AI request including
-        full trace and routing information
+        full execution trace
       parameters:
       - description: Request ID
         example: '"req_1234567890"'
@@ -3880,11 +4387,11 @@ paths:
       summary: Get organization details
       tags:
       - Organizations
-    put:
+    patch:
       consumes:
       - application/json
-      description: Update organization details. Only owners and admins can update
-        organization settings.
+      description: Partially update organization details. Only owners and admins can
+        update organization settings.
       parameters:
       - description: Organization ID
         example: '"org_1234567890"'
@@ -3892,7 +4399,7 @@ paths:
         name: orgId
         required: true
         type: string
-      - description: Updated organization details
+      - description: Updated organization details (partial)
         in: body
         name: request
         required: true
@@ -4491,6 +4998,68 @@ paths:
       summary: Reset organization settings to defaults
       tags:
       - Organization Settings
+  /api/v1/playground/execute:
+    post:
+      consumes:
+      - application/json
+      description: Executes a prompt template with variables. Optionally updates session's
+        last_run if session_id provided.
+      parameters:
+      - description: Execution request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_transport_http_handlers_playground.ExecuteRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/playground.ExecuteResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Execute a prompt in playground
+      tags:
+      - Playground
+  /api/v1/playground/stream:
+    post:
+      consumes:
+      - application/json
+      description: Streams prompt execution results via SSE. Optionally updates session's
+        last_run if session_id provided.
+      parameters:
+      - description: Streaming execution request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_transport_http_handlers_playground.StreamRequest'
+      produces:
+      - text/event-stream
+      responses:
+        "200":
+          description: SSE stream
+          schema:
+            type: string
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Execute a prompt with streaming
+      tags:
+      - Playground
   /api/v1/projects:
     get:
       consumes:
@@ -4806,7 +5375,6 @@ paths:
       - description: Filter by API key status
         enum:
         - active
-        - inactive
         - expired
         in: query
         name: status
@@ -4999,61 +5567,37 @@ paths:
       summary: Delete project-scoped API key
       tags:
       - API Keys
-    patch:
+  /api/v1/projects/{projectId}/archive:
+    post:
       consumes:
       - application/json
-      description: Update an existing API key's name or active status. Only name and
-        is_active can be modified. The API key secret cannot be changed.
+      description: Archive a project (sets status to archived, read-only, reversible)
       parameters:
       - description: Project ID
-        example: '"proj_01234567890123456789012345"'
+        example: '"proj_1234567890"'
         in: path
         name: projectId
         required: true
         type: string
-      - description: API Key ID
-        example: '"key_01234567890123456789012345"'
-        in: path
-        name: keyId
-        required: true
-        type: string
-      - description: Fields to update (at least one required)
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/apikey.UpdateAPIKeyRequest'
       produces:
       - application/json
       responses:
-        "200":
-          description: API key updated successfully
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.SuccessResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/apikey.APIKey'
-              type: object
+        "204":
+          description: Project archived successfully
         "400":
-          description: Bad request - invalid project ID, key ID, validation errors,
-            or no fields provided
+          description: Bad request - project already archived
           schema:
             $ref: '#/definitions/response.ErrorResponse'
         "401":
-          description: Unauthorized - authentication required
+          description: Unauthorized
           schema:
             $ref: '#/definitions/response.ErrorResponse'
         "403":
-          description: Forbidden - insufficient permissions to update API keys
+          description: Forbidden - insufficient permissions
           schema:
             $ref: '#/definitions/response.ErrorResponse'
         "404":
-          description: Project or API key not found
-          schema:
-            $ref: '#/definitions/response.ErrorResponse'
-        "409":
-          description: Conflict - API key name already exists in project
+          description: Project not found
           schema:
             $ref: '#/definitions/response.ErrorResponse'
         "500":
@@ -5062,9 +5606,1298 @@ paths:
             $ref: '#/definitions/response.ErrorResponse'
       security:
       - BearerAuth: []
-      summary: Update API key
+      summary: Archive project
       tags:
-      - API Keys
+      - Projects
+  /api/v1/projects/{projectId}/credentials/llm:
+    get:
+      description: Returns all configured LLM provider credentials for the project
+        (with masked keys).
+      parameters:
+      - description: Project ID
+        in: path
+        name: projectId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/credentials.LLMProviderCredentialResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: List LLM provider credentials
+      tags:
+      - Credentials
+    post:
+      consumes:
+      - application/json
+      description: Creates a new credential or updates an existing one for the specified
+        provider. The API key is validated before storing.
+      parameters:
+      - description: Project ID
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Credential request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/credentials.CreateOrUpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/credentials.LLMProviderCredentialResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "422":
+          description: API key validation failed
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Create or update LLM provider credential
+      tags:
+      - Credentials
+  /api/v1/projects/{projectId}/credentials/llm/{provider}:
+    delete:
+      description: Removes the credential for a specific provider from the project.
+      parameters:
+      - description: Project ID
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Provider (openai or anthropic)
+        in: path
+        name: provider
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Delete LLM provider credential
+      tags:
+      - Credentials
+    get:
+      description: Returns the credential configuration for a specific provider (with
+        masked key).
+      parameters:
+      - description: Project ID
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Provider (openai or anthropic)
+        in: path
+        name: provider
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/credentials.LLMProviderCredentialResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Get LLM provider credential
+      tags:
+      - Credentials
+  /api/v1/projects/{projectId}/playground/sessions:
+    get:
+      description: Lists all playground sessions for the sidebar.
+      parameters:
+      - description: Project ID
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Maximum number of sessions to return (default 20, max 100)
+        in: query
+        name: limit
+        type: integer
+      - collectionFormat: csv
+        description: Filter by tags (any match)
+        in: query
+        items:
+          type: string
+        name: tags
+        type: array
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/playground.SessionSummary'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: List playground sessions
+      tags:
+      - Playground
+    post:
+      consumes:
+      - application/json
+      description: Creates a new playground session with name and windows.
+      parameters:
+      - description: Project ID
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Session configuration
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_transport_http_handlers_playground.CreateSessionRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/playground.SessionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Create playground session
+      tags:
+      - Playground
+  /api/v1/projects/{projectId}/playground/sessions/{sessionId}:
+    delete:
+      description: Permanently deletes a playground session.
+      parameters:
+      - description: Project ID
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Session ID
+        in: path
+        name: sessionId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Delete playground session
+      tags:
+      - Playground
+    get:
+      description: Retrieves a playground session by its ID.
+      parameters:
+      - description: Project ID
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Session ID
+        in: path
+        name: sessionId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/playground.SessionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Get playground session
+      tags:
+      - Playground
+    put:
+      consumes:
+      - application/json
+      description: Updates a session's name, description, tags, variables, config,
+        or windows.
+      parameters:
+      - description: Project ID
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Session ID
+        in: path
+        name: sessionId
+        required: true
+        type: string
+      - description: Update fields
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_transport_http_handlers_playground.UpdateSessionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/playground.SessionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Update playground session
+      tags:
+      - Playground
+  /api/v1/projects/{projectId}/prompts:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve a paginated list of prompts with optional filtering
+      parameters:
+      - description: Project ID
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Filter by prompt type (text, chat)
+        in: query
+        name: type
+        type: string
+      - description: Filter by tags (comma-separated)
+        in: query
+        name: tags
+        type: string
+      - description: Search in name and description
+        in: query
+        name: search
+        type: string
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Items per page (default: 50, max: 100)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of prompts
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/prompt.PromptListItem'
+                  type: array
+              type: object
+        "400":
+          description: Invalid parameters
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: List prompts for a project
+      tags:
+      - Prompts
+    post:
+      consumes:
+      - application/json
+      description: Create a new prompt with initial version
+      parameters:
+      - description: Project ID
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Create prompt request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/prompt.CreatePromptRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created prompt
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/prompt.PromptResponse'
+              type: object
+        "400":
+          description: Invalid request
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "409":
+          description: Prompt name already exists
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: Create a new prompt
+      tags:
+      - Prompts
+  /api/v1/projects/{projectId}/prompts/{promptId}:
+    delete:
+      consumes:
+      - application/json
+      description: Soft delete a prompt and all its versions
+      parameters:
+      - description: Project ID
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Prompt ID
+        in: path
+        name: promptId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Prompt deleted
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "400":
+          description: Invalid parameters
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "404":
+          description: Prompt not found
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: Delete a prompt
+      tags:
+      - Prompts
+    get:
+      consumes:
+      - application/json
+      description: Retrieve prompt details with latest version
+      parameters:
+      - description: Project ID
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Prompt ID
+        in: path
+        name: promptId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Prompt details
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/prompt.PromptResponse'
+              type: object
+        "400":
+          description: Invalid parameters
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "404":
+          description: Prompt not found
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: Get prompt by ID
+      tags:
+      - Prompts
+    put:
+      consumes:
+      - application/json
+      description: Update prompt name, description, or tags (not template)
+      parameters:
+      - description: Project ID
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Prompt ID
+        in: path
+        name: promptId
+        required: true
+        type: string
+      - description: Update prompt request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/prompt.UpdatePromptRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Prompt updated
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "400":
+          description: Invalid request
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "404":
+          description: Prompt not found
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: Update prompt metadata
+      tags:
+      - Prompts
+  /api/v1/projects/{projectId}/prompts/{promptId}/diff:
+    get:
+      consumes:
+      - application/json
+      description: Get the diff between two versions of a prompt
+      parameters:
+      - description: Project ID
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Prompt ID
+        in: path
+        name: promptId
+        required: true
+        type: string
+      - description: From version number
+        in: query
+        name: from
+        required: true
+        type: integer
+      - description: To version number
+        in: query
+        name: to
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Version diff
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/prompt.VersionDiffResponse'
+              type: object
+        "400":
+          description: Invalid parameters
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "404":
+          description: Version not found
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: Compare two versions
+      tags:
+      - Prompts
+  /api/v1/projects/{projectId}/prompts/{promptId}/versions:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve all versions of a prompt
+      parameters:
+      - description: Project ID
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Prompt ID
+        in: path
+        name: promptId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of versions
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/prompt.VersionResponse'
+                  type: array
+              type: object
+        "400":
+          description: Invalid parameters
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "404":
+          description: Prompt not found
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: List prompt versions
+      tags:
+      - Prompts
+    post:
+      consumes:
+      - application/json
+      description: Create a new version of a prompt
+      parameters:
+      - description: Project ID
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Prompt ID
+        in: path
+        name: promptId
+        required: true
+        type: string
+      - description: Create version request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/prompt.CreateVersionRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created version
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/prompt.VersionResponse'
+              type: object
+        "400":
+          description: Invalid request
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "404":
+          description: Prompt not found
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: Create a new version
+      tags:
+      - Prompts
+  /api/v1/projects/{projectId}/prompts/{promptId}/versions/{versionId}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve a specific version of a prompt
+      parameters:
+      - description: Project ID
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Prompt ID
+        in: path
+        name: promptId
+        required: true
+        type: string
+      - description: Version ID or version number
+        in: path
+        name: versionId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Version details
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/prompt.VersionResponse'
+              type: object
+        "400":
+          description: Invalid parameters
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "404":
+          description: Version not found
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: Get version by ID
+      tags:
+      - Prompts
+  /api/v1/projects/{projectId}/prompts/{promptId}/versions/{versionId}/execute:
+    post:
+      consumes:
+      - application/json
+      description: Execute a prompt version with variable substitution and LLM call
+      parameters:
+      - description: Project ID
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Prompt ID
+        in: path
+        name: promptId
+        required: true
+        type: string
+      - description: Version ID
+        in: path
+        name: versionId
+        required: true
+        type: string
+      - description: Execute prompt request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/prompt.ExecutePromptRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Execution result
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/prompt.ExecutePromptResponse'
+              type: object
+        "400":
+          description: Invalid request
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "404":
+          description: Version not found
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: Execute a prompt with LLM
+      tags:
+      - Prompts
+  /api/v1/projects/{projectId}/prompts/{promptId}/versions/{versionId}/labels:
+    patch:
+      consumes:
+      - application/json
+      description: Add or update labels pointing to a specific version
+      parameters:
+      - description: Project ID
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Prompt ID
+        in: path
+        name: promptId
+        required: true
+        type: string
+      - description: Version ID
+        in: path
+        name: versionId
+        required: true
+        type: string
+      - description: Set labels request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/prompt.SetLabelsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Labels set successfully
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "400":
+          description: Invalid request
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "403":
+          description: Protected label modification forbidden
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "404":
+          description: Version not found
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: Set labels on a version
+      tags:
+      - Prompts
+  /api/v1/projects/{projectId}/prompts/settings/protected-labels:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve the list of protected labels for a project
+      parameters:
+      - description: Project ID
+        in: path
+        name: projectId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of protected labels
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  items:
+                    type: string
+                  type: array
+              type: object
+        "400":
+          description: Invalid parameters
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: Get protected labels
+      tags:
+      - Prompts
+    put:
+      consumes:
+      - application/json
+      description: Update the list of protected labels for a project
+      parameters:
+      - description: Project ID
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Protected labels request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/prompt.ProtectedLabelsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Protected labels updated
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "400":
+          description: Invalid request
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: Set protected labels
+      tags:
+      - Prompts
+  /api/v1/projects/{projectId}/unarchive:
+    post:
+      consumes:
+      - application/json
+      description: Unarchive a project (sets status back to active)
+      parameters:
+      - description: Project ID
+        example: '"proj_1234567890"'
+        in: path
+        name: projectId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Project unarchived successfully
+        "400":
+          description: Bad request - project already active
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "403":
+          description: Forbidden - insufficient permissions
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Project not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Unarchive project
+      tags:
+      - Projects
   /api/v1/scores:
     get:
       consumes:
@@ -5315,12 +7148,52 @@ paths:
       tags:
       - Spans
   /api/v1/spans/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a span by its OTEL span_id
+      parameters:
+      - description: Span ID (OTEL 16-character hex)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Span deleted
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Span not found
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: Delete a span
+      tags:
+      - Spans
     get:
       consumes:
       - application/json
       description: Retrieve detailed span information
       parameters:
-      - description: Span ID
+      - description: Span ID (OTEL 16-character hex)
         in: path
         name: id
         required: true
@@ -5360,67 +7233,6 @@ paths:
       summary: Get span by ID
       tags:
       - Spans
-    put:
-      consumes:
-      - application/json
-      description: Update an existing span (for corrections/enrichment after initial
-        creation)
-      parameters:
-      - description: Span ID
-        in: path
-        name: id
-        required: true
-        type: string
-      - description: Updated span data
-        in: body
-        name: span
-        required: true
-        schema:
-          $ref: '#/definitions/observability.Span'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Updated span
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/observability.Span'
-              type: object
-        "400":
-          description: Invalid request
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-        "404":
-          description: Span not found
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-        "500":
-          description: Internal server error
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-      security:
-      - BearerAuth: []
-      summary: Update span by ID
-      tags:
-      - Spans
   /api/v1/traces:
     get:
       consumes:
@@ -5440,6 +7252,50 @@ paths:
         in: query
         name: user_id
         type: string
+      - description: Filter by service name (OTLP resource attribute)
+        in: query
+        name: service_name
+        type: string
+      - description: Filter by AI model name (e.g., gpt-4, claude-3-opus)
+        in: query
+        name: model_name
+        type: string
+      - description: Filter by provider name (e.g., openai, anthropic)
+        in: query
+        name: provider_name
+        type: string
+      - description: Minimum total cost filter
+        in: query
+        name: min_cost
+        type: number
+      - description: Maximum total cost filter
+        in: query
+        name: max_cost
+        type: number
+      - description: Minimum total tokens filter
+        format: int64
+        in: query
+        name: min_tokens
+        type: integer
+      - description: Maximum total tokens filter
+        format: int64
+        in: query
+        name: max_tokens
+        type: integer
+      - description: Minimum duration filter (nanoseconds)
+        format: int64
+        in: query
+        name: min_duration
+        type: integer
+      - description: Maximum duration filter (nanoseconds)
+        format: int64
+        in: query
+        name: max_duration
+        type: integer
+      - description: Filter traces with errors only
+        in: query
+        name: has_error
+        type: boolean
       - description: Start time (Unix timestamp)
         format: int64
         in: query
@@ -5462,14 +7318,14 @@ paths:
       - application/json
       responses:
         "200":
-          description: List of traces
+          description: List of trace summaries
           schema:
             allOf:
             - $ref: '#/definitions/response.APIResponse'
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/observability.Trace'
+                    $ref: '#/definitions/observability.TraceSummary'
                   type: array
               type: object
         "400":
@@ -5505,10 +7361,10 @@ paths:
       tags:
       - Traces
   /api/v1/traces/{id}:
-    get:
+    delete:
       consumes:
       - application/json
-      description: Retrieve detailed trace information
+      description: Delete all spans belonging to a trace
       parameters:
       - description: Trace ID
         in: path
@@ -5519,13 +7375,53 @@ paths:
       - application/json
       responses:
         "200":
-          description: Trace details
+          description: Trace deleted
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Trace not found
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: Delete a trace
+      tags:
+      - Traces
+    get:
+      consumes:
+      - application/json
+      description: Retrieve detailed trace information (aggregated from spans)
+      parameters:
+      - description: Trace ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Trace summary
           schema:
             allOf:
             - $ref: '#/definitions/response.APIResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/observability.Trace'
+                  $ref: '#/definitions/observability.TraceSummary'
               type: object
         "404":
           description: Trace not found
@@ -5550,67 +7446,6 @@ paths:
       summary: Get trace by ID
       tags:
       - Traces
-    put:
-      consumes:
-      - application/json
-      description: Update trace name, tags, or metadata (corrections/enrichment via
-        dashboard)
-      parameters:
-      - description: Trace ID
-        in: path
-        name: id
-        required: true
-        type: string
-      - description: Updated trace data
-        in: body
-        name: trace
-        required: true
-        schema:
-          $ref: '#/definitions/observability.Trace'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Updated trace
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/observability.Trace'
-              type: object
-        "400":
-          description: Invalid request
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-        "404":
-          description: Trace not found
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-        "500":
-          description: Internal server error
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-      security:
-      - BearerAuth: []
-      summary: Update trace metadata
-      tags:
-      - Traces
   /api/v1/traces/{id}/scores:
     get:
       consumes:
@@ -5626,13 +7461,15 @@ paths:
       - application/json
       responses:
         "200":
-          description: Trace with scores
+          description: Scores for trace
           schema:
             allOf:
             - $ref: '#/definitions/response.APIResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/observability.Trace'
+                  items:
+                    $ref: '#/definitions/observability.Score'
+                  type: array
               type: object
         "404":
           description: Trace not found
@@ -5672,13 +7509,15 @@ paths:
       - application/json
       responses:
         "200":
-          description: Trace with spans
+          description: Spans for trace
           schema:
             allOf:
             - $ref: '#/definitions/response.APIResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/observability.Trace'
+                  items:
+                    $ref: '#/definitions/observability.Span'
+                  type: array
               type: object
         "404":
           description: Trace not found
@@ -5701,6 +7540,62 @@ paths:
       security:
       - BearerAuth: []
       summary: Get trace with spans tree
+      tags:
+      - Traces
+  /api/v1/traces/filter-options:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve available filter values from actual trace data for populating
+        filter UI
+      parameters:
+      - description: Project ID
+        in: query
+        name: project_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Filter options
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/observability.TraceFilterOptions'
+              type: object
+        "400":
+          description: Invalid parameters
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: Get available filter options for traces
       tags:
       - Traces
   /api/v1/users/me:
@@ -5904,6 +7799,405 @@ paths:
       summary: Validate API key
       tags:
       - SDK - Authentication
+  /v1/logs:
+    post:
+      consumes:
+      - application/json
+      - application/x-protobuf
+      description: Accepts OpenTelemetry Protocol (OTLP) logs in JSON or Protobuf
+        format
+      parameters:
+      - description: OTLP logs export request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/observability.OTLPLogsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Logs accepted
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  additionalProperties: true
+                  type: object
+              type: object
+        "400":
+          description: Invalid OTLP request
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "401":
+          description: Invalid or missing API key
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - ApiKeyAuth: []
+      summary: OTLP logs ingestion endpoint (OpenTelemetry spec compliant)
+      tags:
+      - SDK - OTLP
+  /v1/metrics:
+    post:
+      consumes:
+      - application/json
+      - application/x-protobuf
+      description: Accepts OpenTelemetry Protocol (OTLP) metrics in JSON or Protobuf
+        format
+      parameters:
+      - description: OTLP metrics export request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/observability.OTLPMetricsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Metrics accepted
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  additionalProperties: true
+                  type: object
+              type: object
+        "400":
+          description: Invalid OTLP request
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "401":
+          description: Invalid or missing API key
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - ApiKeyAuth: []
+      summary: OTLP metrics ingestion endpoint (OpenTelemetry spec compliant)
+      tags:
+      - SDK - OTLP
+  /v1/prompts:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve a list of prompts for the project
+      parameters:
+      - description: Filter by prompt type (text, chat)
+        in: query
+        name: type
+        type: string
+      - description: Filter by tags (comma-separated)
+        in: query
+        name: tags
+        type: string
+      - description: Search in name and description
+        in: query
+        name: search
+        type: string
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Items per page (default: 50, max: 100)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of prompts
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/prompt.PromptListItem'
+                  type: array
+              type: object
+        "400":
+          description: Invalid parameters
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - APIKeyAuth: []
+      summary: List prompts
+      tags:
+      - SDK Prompts
+    post:
+      consumes:
+      - application/json
+      description: Creates a new prompt or adds a new version if prompt already exists
+      parameters:
+      - description: Prompt upsert request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/prompt.UpsertPromptRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Upsert result
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/prompt.UpsertResponse'
+              type: object
+        "400":
+          description: Invalid request
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - APIKeyAuth: []
+      summary: Create or update a prompt
+      tags:
+      - SDK Prompts
+  /v1/prompts/{name}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve a prompt by name with optional label or version specification
+      parameters:
+      - description: Prompt name
+        in: path
+        name: name
+        required: true
+        type: string
+      - description: 'Label to resolve (default: latest)'
+        in: query
+        name: label
+        type: string
+      - description: Specific version number (takes precedence over label)
+        in: query
+        name: version
+        type: integer
+      - description: 'Cache TTL in seconds (default: 60)'
+        in: query
+        name: cache_ttl
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Prompt data
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/prompt.PromptResponse'
+              type: object
+        "400":
+          description: Invalid parameters
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "404":
+          description: Prompt not found
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - APIKeyAuth: []
+      summary: Get prompt by name
+      tags:
+      - SDK Prompts
+  /v1/prompts/{name}/execute:
+    post:
+      consumes:
+      - application/json
+      description: Execute a prompt with variable substitution and optional LLM call
+      parameters:
+      - description: Prompt name
+        in: path
+        name: name
+        required: true
+        type: string
+      - description: 'Label to resolve (default: latest)'
+        in: query
+        name: label
+        type: string
+      - description: Specific version number (takes precedence over label)
+        in: query
+        name: version
+        type: integer
+      - description: Execute prompt request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/prompt.ExecutePromptRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Execution result
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/prompt.ExecutePromptResponse'
+              type: object
+        "400":
+          description: Invalid request
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "404":
+          description: Prompt not found
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - APIKeyAuth: []
+      summary: Execute a prompt by name
+      tags:
+      - SDK Prompts
   /v1/traces:
     post:
       consumes:
