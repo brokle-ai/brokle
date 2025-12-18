@@ -20,6 +20,7 @@ import {
   History,
   Plus,
   Settings,
+  FlaskConical,
 } from 'lucide-react'
 import { useProjectOnly } from '@/features/projects'
 import {
@@ -31,12 +32,12 @@ import {
   useSetLabelsMutation,
   PromptEditor,
   ModelConfigForm,
-  LabelManager,
   VersionHistory,
   LabelBadge,
   VariableList,
   extractVariables,
 } from '@/features/prompts'
+import { usePlaygroundStore, createMessage } from '@/features/playground'
 import type {
   PromptType,
   TextTemplate,
@@ -50,7 +51,6 @@ export default function PromptDetailPage() {
   const router = useRouter()
   const { currentProject } = useProjectOnly()
 
-  // Queries
   const { data: prompt, isLoading: promptLoading } = usePromptQuery(
     currentProject?.id,
     params.promptId
@@ -61,18 +61,15 @@ export default function PromptDetailPage() {
   )
   const { data: protectedLabels } = useProtectedLabelsQuery(currentProject?.id)
 
-  // Mutations
   const updateMutation = useUpdatePromptMutation(currentProject?.id || '', params.promptId)
   const createVersionMutation = useCreateVersionMutation(currentProject?.id || '', params.promptId)
   const setLabelsMutation = useSetLabelsMutation(currentProject?.id || '', params.promptId)
 
-  // Form state
   const [isEditing, setIsEditing] = useState(false)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [tagsInput, setTagsInput] = useState('')
 
-  // Version editing state
   const [editedTemplate, setEditedTemplate] = useState<TextTemplate | ChatTemplate | null>(null)
   const [editedConfig, setEditedConfig] = useState<ModelConfig | null>(null)
   const [newCommitMessage, setNewCommitMessage] = useState('')
@@ -160,7 +157,6 @@ export default function PromptDetailPage() {
     <>
       <DashboardHeader />
       <Main>
-        {/* Header */}
         <div className="mb-6 flex items-start justify-between">
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="icon" onClick={() => router.back()}>
@@ -189,19 +185,52 @@ export default function PromptDetailPage() {
               History
             </Button>
             <Button
-              onClick={() =>
-                router.push(
-                  `/projects/${params.projectSlug}/prompts/${params.promptId}/playground`
+              onClick={() => {
+                let messages: ReturnType<typeof createMessage>[] = []
+
+                if (prompt.type === 'chat') {
+                  // Chat template: convert messages array
+                  const template = prompt.template as ChatTemplate
+                  messages = template.messages?.map((m) =>
+                    createMessage(
+                      (m.role || 'user') as 'system' | 'user' | 'assistant',
+                      m.content || ''
+                    )
+                  ) || []
+                } else {
+                  // Text template: convert to single user message
+                  const template = prompt.template as { content?: string }
+                  messages = [
+                    createMessage('user', template.content || ''),
+                  ]
+                }
+
+                // Create loadedTemplate for change detection (normalized without IDs)
+                const loadedTemplate = JSON.stringify(
+                  messages.map(({ role, content }) => ({ role, content }))
                 )
-              }
+
+                // Directly populate the store (no sessionStorage, no race conditions)
+                usePlaygroundStore.getState().loadFromPrompt({
+                  messages,
+                  config: prompt.config,
+                  loadedFromPromptId: prompt.id,
+                  loadedFromPromptName: prompt.name,
+                  loadedFromPromptVersionId: prompt.version_id,
+                  loadedFromPromptVersionNumber: prompt.version,
+                  loadedTemplate,
+                })
+
+                // Navigate to playground (no session ID in URL)
+                router.push(`/projects/${params.projectSlug}/playground`)
+              }}
             >
-              <Play className="mr-2 h-4 w-4" />
-              Playground
+              <FlaskConical className="mr-2 h-4 w-4" />
+              Try in Playground
             </Button>
           </div>
         </div>
 
-        {/* Content */}
         <Tabs defaultValue="template" className="space-y-6">
           <TabsList>
             <TabsTrigger value="template">Template</TabsTrigger>

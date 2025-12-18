@@ -433,6 +433,7 @@ func buildPromptResponse(prompt *promptDomain.Prompt, version *promptDomain.Vers
 		Description:   prompt.Description,
 		Tags:          []string(prompt.Tags),
 		Version:       version.Version,
+		VersionID:     version.ID.String(),
 		Labels:        labels,
 		Template:      version.Template,
 		Variables:     []string(version.Variables),

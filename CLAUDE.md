@@ -126,8 +126,10 @@ Copy `.env.example` to `.env`. Key variables:
 | `REDIS_URL` | Redis connection |
 | `CLICKHOUSE_URL` | ClickHouse connection |
 | `JWT_SECRET` | Required for server mode |
-| `OPENAI_API_KEY` | OpenAI integration |
-| `ANTHROPIC_API_KEY` | Anthropic integration |
+| `LLM_KEY_ENCRYPTION_KEY` | Encryption key for LLM credentials (base64, 32 bytes) |
+
+**Note**: LLM API keys (OpenAI, Anthropic, etc.) are NOT configured via environment.
+Configure via dashboard: Settings > LLM Providers (per-project credentials).
 
 ## API Architecture
 

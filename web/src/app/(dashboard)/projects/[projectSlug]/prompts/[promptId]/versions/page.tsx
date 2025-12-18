@@ -23,7 +23,7 @@ import {
   useSetLabelsMutation,
   VersionHistory,
   VersionDiff,
-  LabelManager,
+  LabelSelector,
 } from '@/features/prompts'
 import type { PromptVersion } from '@/features/prompts'
 
@@ -39,7 +39,6 @@ export default function PromptVersionsPage() {
   } | null>(null)
   const [editingLabels, setEditingLabels] = useState<PromptVersion | null>(null)
 
-  // Queries
   const { data: prompt, isLoading: promptLoading } = usePromptQuery(
     currentProject?.id,
     params.promptId
@@ -57,7 +56,6 @@ export default function PromptVersionsPage() {
     { enabled: !!compareVersions }
   )
 
-  // Mutations
   const setLabelsMutation = useSetLabelsMutation(currentProject?.id || '', params.promptId)
 
   const handleVersionSelect = (version: PromptVersion) => {
@@ -111,7 +109,6 @@ export default function PromptVersionsPage() {
     <>
       <DashboardHeader />
       <Main>
-        {/* Header */}
         <div className="mb-6 flex items-start justify-between">
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="icon" onClick={() => router.back()}>
@@ -156,7 +153,6 @@ export default function PromptVersionsPage() {
           </div>
         </div>
 
-        {/* Version History */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div>
             <h3 className="text-lg font-semibold mb-4">All Versions</h3>
@@ -170,7 +166,6 @@ export default function PromptVersionsPage() {
           </div>
 
           <div className="space-y-6">
-            {/* Selected Version Details */}
             {selectedVersion && (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
@@ -226,7 +221,6 @@ export default function PromptVersionsPage() {
               </div>
             )}
 
-            {/* Diff View */}
             {compareVersions && (
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
@@ -251,7 +245,6 @@ export default function PromptVersionsPage() {
           </div>
         </div>
 
-        {/* Edit Labels Dialog */}
         <Dialog open={!!editingLabels} onOpenChange={() => setEditingLabels(null)}>
           <DialogContent>
             <DialogHeader>
@@ -260,7 +253,7 @@ export default function PromptVersionsPage() {
               </DialogTitle>
             </DialogHeader>
             {editingLabels && (
-              <LabelManager
+              <LabelSelector
                 labels={editingLabels.labels}
                 protectedLabels={protectedLabels || []}
                 availableLabels={['production', 'staging', 'development']}

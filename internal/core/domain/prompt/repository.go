@@ -109,6 +109,7 @@ type CachedPrompt struct {
 	Description   string       `json:"description"`
 	Tags          []string     `json:"tags"`
 	Version       int          `json:"version"`
+	VersionID     string       `json:"version_id"`
 	Labels        []string     `json:"labels"`
 	Template      interface{}  `json:"template"`
 	Config        *ModelConfig `json:"config,omitempty"`

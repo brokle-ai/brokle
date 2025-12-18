@@ -325,10 +325,44 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 			prompts.POST("/:promptId/versions", s.authMiddleware.RequirePermission("prompts:create"), s.handlers.Prompt.CreateVersion)
 			prompts.GET("/:promptId/versions/:versionId", s.authMiddleware.RequirePermission("prompts:read"), s.handlers.Prompt.GetVersion)
 			prompts.PATCH("/:promptId/versions/:versionId/labels", s.authMiddleware.RequirePermission("prompts:update"), s.handlers.Prompt.SetLabels)
-			prompts.POST("/:promptId/versions/:versionId/execute", s.authMiddleware.RequirePermission("prompts:read"), s.handlers.Prompt.ExecutePrompt)
 
 			// Version diff
 			prompts.GET("/:promptId/diff", s.authMiddleware.RequirePermission("prompts:read"), s.handlers.Prompt.GetVersionDiff)
+		}
+
+		// Playground routes (execution - global endpoints)
+		playground := protected.Group("/playground")
+		{
+			playground.POST("/execute", s.handlers.Playground.Execute)
+			playground.POST("/stream", s.handlers.Playground.Stream)
+		}
+
+		// Project-scoped playground routes (session management)
+		projectPlayground := projects.Group("/:projectId/playground")
+		{
+			// Session management
+			sessions := projectPlayground.Group("/sessions")
+			{
+				sessions.GET("", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Playground.ListSessions)
+				sessions.POST("", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Playground.CreateSession)
+				sessions.GET("/:sessionId", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Playground.GetSession)
+				sessions.PUT("/:sessionId", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Playground.UpdateSession)
+				sessions.POST("/:sessionId/update", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Playground.UpdateSession) // For sendBeacon (POST only)
+				sessions.DELETE("/:sessionId", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Playground.DeleteSession)
+			}
+		}
+
+		// Credentials routes (LLM provider API key management)
+		credentials := projects.Group("/:projectId/credentials")
+		{
+			// LLM provider credentials
+			llmCreds := credentials.Group("/llm")
+			{
+				llmCreds.POST("", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Credentials.CreateOrUpdate)
+				llmCreds.GET("", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Credentials.List)
+				llmCreds.GET("/:provider", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Credentials.Get)
+				llmCreds.DELETE("/:provider", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Credentials.Delete)
+			}
 		}
 	}
 

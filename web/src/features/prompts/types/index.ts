@@ -32,6 +32,7 @@ export interface Prompt {
   description?: string
   tags: string[]
   version: number
+  version_id: string
   labels: string[]
   template: TextTemplate | ChatTemplate
   config?: ModelConfig

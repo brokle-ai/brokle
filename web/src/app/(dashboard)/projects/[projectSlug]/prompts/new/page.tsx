@@ -16,7 +16,7 @@ import {
   useCreatePromptMutation,
   PromptEditor,
   ModelConfigForm,
-  LabelManager,
+  LabelSelector,
   extractVariables,
 } from '@/features/prompts'
 import type {
@@ -33,7 +33,6 @@ export default function NewPromptPage() {
   const { currentProject } = useProjectOnly()
   const createMutation = useCreatePromptMutation(currentProject?.id || '')
 
-  // Form state
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [type, setType] = useState<PromptType>('text')
@@ -104,7 +103,6 @@ export default function NewPromptPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main Content */}
           <div className="lg:col-span-2 space-y-6">
             <Card>
               <CardHeader>
@@ -164,14 +162,13 @@ export default function NewPromptPage() {
             </Card>
           </div>
 
-          {/* Sidebar */}
           <div className="space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle>Labels</CardTitle>
               </CardHeader>
               <CardContent>
-                <LabelManager
+                <LabelSelector
                   labels={labels}
                   onChange={setLabels}
                   availableLabels={['production', 'staging', 'development']}

@@ -89,6 +89,14 @@ type ModelConfig struct {
 	FrequencyPenalty *float64 `json:"frequency_penalty,omitempty"`
 	PresencePenalty  *float64 `json:"presence_penalty,omitempty"`
 	Stop             []string `json:"stop,omitempty"`
+
+	// APIKey is the resolved API key for execution (not persisted).
+	// Set by handler after credential resolution. Excluded from JSON serialization.
+	APIKey string `json:"-"`
+
+	// ResolvedBaseURL is an optional custom endpoint (Azure OpenAI, proxy, etc.).
+	// Set by handler after credential resolution. Excluded from JSON serialization.
+	ResolvedBaseURL *string `json:"-"`
 }
 
 // TextTemplate represents the template structure for text prompts.
@@ -224,6 +232,7 @@ type PromptResponse struct {
 	Description   string        `json:"description,omitempty"`
 	Tags          []string      `json:"tags"`
 	Version       int           `json:"version"`
+	VersionID     string        `json:"version_id"` // ULID of the specific version (for linking)
 	Labels        []string      `json:"labels"`
 	Template      interface{}   `json:"template"`
 	Config        *ModelConfig  `json:"config,omitempty"`
@@ -300,6 +309,39 @@ type LLMUsage struct {
 	PromptTokens     int `json:"prompt_tokens"`
 	CompletionTokens int `json:"completion_tokens"`
 	TotalTokens      int `json:"total_tokens"`
+}
+
+// ----------------------------
+// Streaming Execution Types
+// ----------------------------
+
+// StreamEventType represents the type of streaming event.
+type StreamEventType string
+
+const (
+	StreamEventStart   StreamEventType = "start"   // Stream started
+	StreamEventContent StreamEventType = "content" // Content chunk received
+	StreamEventEnd     StreamEventType = "end"     // Stream completed
+	StreamEventError   StreamEventType = "error"   // Stream error occurred
+)
+
+// StreamEvent represents a single event in the LLM stream.
+type StreamEvent struct {
+	Type         StreamEventType `json:"type"`
+	Content      string          `json:"content,omitempty"`       // For content events
+	Error        string          `json:"error,omitempty"`         // For error events
+	FinishReason string          `json:"finish_reason,omitempty"` // For end events
+}
+
+// StreamResult contains the final metrics after streaming completes.
+type StreamResult struct {
+	Content       string    `json:"content"`                    // Full accumulated content
+	Model         string    `json:"model"`                      // Model used
+	Usage         *LLMUsage `json:"usage,omitempty"`            // Token usage
+	Cost          *float64  `json:"cost,omitempty"`             // Calculated cost
+	FinishReason  string    `json:"finish_reason,omitempty"`    // Completion reason
+	TTFTMs        *float64  `json:"ttft_ms,omitempty"`          // Time to first token (ms)
+	TotalDuration int64     `json:"total_duration_ms,omitempty"` // Total execution time (ms)
 }
 
 // UpsertResponse is the response for the SDK upsert endpoint.

@@ -1,9 +1,12 @@
 # Brokle AI Control Plane Configuration
-# 
+#
 # This is the main configuration file for the Brokle platform.
 # Environment-specific values can be overridden using environment variables:
-# - Standard infrastructure: DATABASE_URL, OPENAI_API_KEY, STRIPE_SECRET_KEY, etc.
+# - Standard infrastructure: DATABASE_URL, STRIPE_SECRET_KEY, etc.
 # - Brokle-specific features: BROKLE_ENTERPRISE_*, BROKLE_API_KEY, etc.
+#
+# NOTE: LLM API keys (OpenAI, Anthropic, etc.) are NOT configured here.
+# Configure via dashboard: Settings > LLM Providers (per-project credentials)
 
 environment: development
 
@@ -126,26 +129,8 @@ logging:
 
 # External Service Configuration
 external:
-  # OpenAI Configuration
-  openai:
-    api_key: ""      # Set via OPENAI_API_KEY
-    base_url: https://api.openai.com/v1
-    timeout: 60s
-    max_retries: 3
-
-  # Anthropic Configuration
-  anthropic:
-    api_key: ""      # Set via ANTHROPIC_API_KEY
-    base_url: https://api.anthropic.com
-    timeout: 60s
-    max_retries: 3
-
-  # Cohere Configuration
-  cohere:
-    api_key: ""      # Set via COHERE_API_KEY
-    base_url: https://api.cohere.ai/v1
-    timeout: 60s
-    max_retries: 3
+  # LLM timeout for API calls (credentials configured per-project in database)
+  llm_timeout: 30s
 
   # Stripe Configuration
   stripe:

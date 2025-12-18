@@ -5,7 +5,9 @@ import (
 
 	"brokle/internal/config"
 	"brokle/internal/core/domain/auth"
+	credentialsDomain "brokle/internal/core/domain/credentials"
 	"brokle/internal/core/domain/organization"
+	playgroundDomain "brokle/internal/core/domain/playground"
 	promptDomain "brokle/internal/core/domain/prompt"
 	"brokle/internal/core/domain/user"
 	authService "brokle/internal/core/services/auth"
@@ -16,11 +18,13 @@ import (
 	"brokle/internal/transport/http/handlers/apikey"
 	authHandler "brokle/internal/transport/http/handlers/auth"
 	"brokle/internal/transport/http/handlers/billing"
+	"brokle/internal/transport/http/handlers/credentials"
 	"brokle/internal/transport/http/handlers/health"
 	"brokle/internal/transport/http/handlers/logs"
 	"brokle/internal/transport/http/handlers/metrics"
 	"brokle/internal/transport/http/handlers/observability"
 	organizationHandler "brokle/internal/transport/http/handlers/organization"
+	"brokle/internal/transport/http/handlers/playground"
 	"brokle/internal/transport/http/handlers/project"
 	"brokle/internal/transport/http/handlers/prompt"
 	"brokle/internal/transport/http/handlers/rbac"
@@ -48,6 +52,8 @@ type Handlers struct {
 	OTLPMetrics   *observability.OTLPMetricsHandler
 	OTLPLogs      *observability.OTLPLogsHandler
 	Prompt        *prompt.Handler
+	Playground    *playground.Handler
+	Credentials   *credentials.Handler
 }
 
 // NewHandlers creates a new handlers instance with all dependencies
@@ -74,6 +80,8 @@ func NewHandlers(
 	promptService promptDomain.PromptService,
 	compilerService promptDomain.CompilerService,
 	executionService promptDomain.ExecutionService,
+	credentialsService credentialsDomain.LLMProviderCredentialService,
+	playgroundService playgroundDomain.PlaygroundService,
 ) *Handlers {
 	return &Handlers{
 		Health:        health.NewHandler(cfg, logger),
@@ -94,5 +102,7 @@ func NewHandlers(
 		OTLPMetrics:   observability.NewOTLPMetricsHandler(observabilityServices.StreamProducer, observabilityServices.OTLPMetricsConverterService, logger),
 		OTLPLogs:      observability.NewOTLPLogsHandler(observabilityServices.StreamProducer, observabilityServices.OTLPLogsConverterService, observabilityServices.OTLPEventsConverterService, logger),
 		Prompt:        prompt.NewHandler(cfg, logger, promptService, compilerService, executionService),
+		Playground:    playground.NewHandler(cfg, logger, playgroundService, projectService),
+		Credentials:   credentials.NewHandler(cfg, logger, credentialsService),
 	}
 }

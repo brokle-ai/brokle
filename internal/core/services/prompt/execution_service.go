@@ -1,6 +1,7 @@
 package prompt
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -23,12 +24,9 @@ const (
 )
 
 // LLMClientConfig holds the configuration for LLM clients.
+// API keys and base URLs are provided per-request via project credentials.
 type LLMClientConfig struct {
-	OpenAIAPIKey      string
-	OpenAIBaseURL     string
-	AnthropicAPIKey   string
-	AnthropicBaseURL  string
-	DefaultTimeout    time.Duration
+	DefaultTimeout time.Duration
 }
 
 // executionService implements promptDomain.ExecutionService.
@@ -109,6 +107,42 @@ func (s *executionService) Execute(ctx context.Context, prompt *promptDomain.Pro
 	}, nil
 }
 
+// ExecuteStream executes a prompt with real-time streaming.
+func (s *executionService) ExecuteStream(ctx context.Context, prompt *promptDomain.PromptResponse, variables map[string]string, configOverrides *promptDomain.ModelConfig) (<-chan promptDomain.StreamEvent, <-chan *promptDomain.StreamResult, error) {
+	compiled, err := s.compiler.Compile(prompt.Template, prompt.Type, variables)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to compile template: %w", err)
+	}
+
+	effectiveConfig := s.mergeConfig(prompt.Config, configOverrides)
+	if effectiveConfig == nil || effectiveConfig.Model == "" {
+		return nil, nil, errors.NewValidationError("no model specified in config", "")
+	}
+
+	provider := s.detectProvider(effectiveConfig.Model)
+
+	eventChan := make(chan promptDomain.StreamEvent, 100)
+	resultChan := make(chan *promptDomain.StreamResult, 1)
+
+	go func() {
+		switch provider {
+		case ProviderOpenAI:
+			s.streamOpenAI(ctx, prompt.Type, compiled, effectiveConfig, eventChan, resultChan)
+		case ProviderAnthropic:
+			s.streamAnthropic(ctx, prompt.Type, compiled, effectiveConfig, eventChan, resultChan)
+		default:
+			eventChan <- promptDomain.StreamEvent{
+				Type:  promptDomain.StreamEventError,
+				Error: fmt.Sprintf("unsupported provider for model: %s", effectiveConfig.Model),
+			}
+			close(eventChan)
+			close(resultChan)
+		}
+	}()
+
+	return eventChan, resultChan, nil
+}
+
 // Preview compiles and returns the prompt without executing.
 func (s *executionService) Preview(ctx context.Context, prompt *promptDomain.PromptResponse, variables map[string]string) (interface{}, error) {
 	return s.compiler.Compile(prompt.Template, prompt.Type, variables)
@@ -134,6 +168,9 @@ func (s *executionService) mergeConfig(base, overrides *promptDomain.ModelConfig
 		FrequencyPenalty: base.FrequencyPenalty,
 		PresencePenalty:  base.PresencePenalty,
 		Stop:             base.Stop,
+		// Preserve credentials from overrides (set by handler after credential resolution)
+		APIKey:          overrides.APIKey,
+		ResolvedBaseURL: overrides.ResolvedBaseURL,
 	}
 
 	if overrides.Model != "" {
@@ -226,13 +263,13 @@ type openAIResponse struct {
 }
 
 func (s *executionService) executeOpenAI(ctx context.Context, promptType promptDomain.PromptType, compiled interface{}, config *promptDomain.ModelConfig) (*promptDomain.LLMResponse, error) {
-	if s.config.OpenAIAPIKey == "" {
-		return nil, errors.NewValidationError("OPENAI_API_KEY not configured", "")
+	if config.APIKey == "" {
+		return nil, errors.NewValidationError("API key not provided", "OpenAI API key must be provided via project credentials")
 	}
 
-	baseURL := s.config.OpenAIBaseURL
-	if baseURL == "" {
-		baseURL = "https://api.openai.com/v1"
+	baseURL := "https://api.openai.com/v1"
+	if config.ResolvedBaseURL != nil && *config.ResolvedBaseURL != "" {
+		baseURL = *config.ResolvedBaseURL
 	}
 
 	req := openAIRequest{
@@ -287,7 +324,7 @@ func (s *executionService) executeOpenAI(ctx context.Context, promptType promptD
 	}
 
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+s.config.OpenAIAPIKey)
+	httpReq.Header.Set("Authorization", "Bearer "+config.APIKey)
 
 	resp, err := s.httpClient.Do(httpReq)
 	if err != nil {
@@ -374,13 +411,13 @@ type anthropicResponse struct {
 }
 
 func (s *executionService) executeAnthropic(ctx context.Context, promptType promptDomain.PromptType, compiled interface{}, config *promptDomain.ModelConfig) (*promptDomain.LLMResponse, error) {
-	if s.config.AnthropicAPIKey == "" {
-		return nil, errors.NewValidationError("ANTHROPIC_API_KEY not configured", "")
+	if config.APIKey == "" {
+		return nil, errors.NewValidationError("API key not provided", "Anthropic API key must be provided via project credentials")
 	}
 
-	baseURL := s.config.AnthropicBaseURL
-	if baseURL == "" {
-		baseURL = "https://api.anthropic.com"
+	baseURL := "https://api.anthropic.com"
+	if config.ResolvedBaseURL != nil && *config.ResolvedBaseURL != "" {
+		baseURL = *config.ResolvedBaseURL
 	}
 
 	maxTokens := 4096
@@ -442,7 +479,7 @@ func (s *executionService) executeAnthropic(ctx context.Context, promptType prom
 	}
 
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("x-api-key", s.config.AnthropicAPIKey)
+	httpReq.Header.Set("x-api-key", config.APIKey)
 	httpReq.Header.Set("anthropic-version", "2023-06-01")
 
 	resp, err := s.httpClient.Do(httpReq)
@@ -539,4 +576,508 @@ func (s *executionService) calculateAnthropicCost(model string, inputTokens, out
 	}
 
 	return (float64(inputTokens)*inputPrice + float64(outputTokens)*outputPrice) / 1_000_000
+}
+
+// ----------------------------
+// Streaming Implementation
+// ----------------------------
+
+// streamAccumulator accumulates content and metrics during streaming
+type streamAccumulator struct {
+	content      strings.Builder
+	model        string
+	finishReason string
+	usage        *promptDomain.LLMUsage
+}
+
+// OpenAI streaming types
+
+type openAIStreamRequest struct {
+	Model            string          `json:"model"`
+	Messages         []openAIMessage `json:"messages,omitempty"`
+	Prompt           string          `json:"prompt,omitempty"`
+	Temperature      *float64        `json:"temperature,omitempty"`
+	MaxTokens        *int            `json:"max_tokens,omitempty"`
+	TopP             *float64        `json:"top_p,omitempty"`
+	FrequencyPenalty *float64        `json:"frequency_penalty,omitempty"`
+	PresencePenalty  *float64        `json:"presence_penalty,omitempty"`
+	Stop             []string        `json:"stop,omitempty"`
+	Stream           bool            `json:"stream"`
+	StreamOptions    *struct {
+		IncludeUsage bool `json:"include_usage"`
+	} `json:"stream_options,omitempty"`
+}
+
+type openAIStreamChunk struct {
+	ID      string `json:"id"`
+	Object  string `json:"object"`
+	Model   string `json:"model"`
+	Choices []struct {
+		Index int `json:"index"`
+		Delta struct {
+			Role    string `json:"role,omitempty"`
+			Content string `json:"content,omitempty"`
+		} `json:"delta"`
+		FinishReason *string `json:"finish_reason"`
+	} `json:"choices"`
+	Usage *struct {
+		PromptTokens     int `json:"prompt_tokens"`
+		CompletionTokens int `json:"completion_tokens"`
+		TotalTokens      int `json:"total_tokens"`
+	} `json:"usage,omitempty"`
+}
+
+// Anthropic streaming types
+
+type anthropicStreamRequest struct {
+	Model       string             `json:"model"`
+	Messages    []anthropicMessage `json:"messages"`
+	System      string             `json:"system,omitempty"`
+	MaxTokens   int                `json:"max_tokens"`
+	Temperature *float64           `json:"temperature,omitempty"`
+	TopP        *float64           `json:"top_p,omitempty"`
+	StopSeq     []string           `json:"stop_sequences,omitempty"`
+	Stream      bool               `json:"stream"`
+}
+
+type anthropicMessageStart struct {
+	Type    string `json:"type"`
+	Message struct {
+		ID    string `json:"id"`
+		Model string `json:"model"`
+		Usage struct {
+			InputTokens  int `json:"input_tokens"`
+			OutputTokens int `json:"output_tokens"`
+		} `json:"usage"`
+	} `json:"message"`
+}
+
+type anthropicContentBlockDelta struct {
+	Type  string `json:"type"`
+	Index int    `json:"index"`
+	Delta struct {
+		Type string `json:"type"`
+		Text string `json:"text"`
+	} `json:"delta"`
+}
+
+type anthropicMessageDelta struct {
+	Type  string `json:"type"`
+	Delta struct {
+		StopReason string `json:"stop_reason"`
+	} `json:"delta"`
+	Usage struct {
+		OutputTokens int `json:"output_tokens"`
+	} `json:"usage"`
+}
+
+// streamOpenAI handles OpenAI streaming execution
+func (s *executionService) streamOpenAI(
+	ctx context.Context,
+	promptType promptDomain.PromptType,
+	compiled interface{},
+	config *promptDomain.ModelConfig,
+	eventChan chan<- promptDomain.StreamEvent,
+	resultChan chan<- *promptDomain.StreamResult,
+) {
+	defer close(eventChan)
+	defer close(resultChan)
+
+	startTime := time.Now()
+
+	if config.APIKey == "" {
+		eventChan <- promptDomain.StreamEvent{Type: promptDomain.StreamEventError, Error: "OpenAI API key not provided via project credentials"}
+		return
+	}
+
+	baseURL := "https://api.openai.com/v1"
+	if config.ResolvedBaseURL != nil && *config.ResolvedBaseURL != "" {
+		baseURL = *config.ResolvedBaseURL
+	}
+
+	req := openAIStreamRequest{
+		Model:            config.Model,
+		Temperature:      config.Temperature,
+		MaxTokens:        config.MaxTokens,
+		TopP:             config.TopP,
+		FrequencyPenalty: config.FrequencyPenalty,
+		PresencePenalty:  config.PresencePenalty,
+		Stop:             config.Stop,
+		Stream:           true,
+		StreamOptions: &struct {
+			IncludeUsage bool `json:"include_usage"`
+		}{IncludeUsage: true},
+	}
+
+	var endpoint string
+	switch promptType {
+	case promptDomain.PromptTypeChat:
+		messages, ok := compiled.([]promptDomain.ChatMessage)
+		if !ok {
+			eventChan <- promptDomain.StreamEvent{Type: promptDomain.StreamEventError, Error: "invalid compiled chat messages"}
+			return
+		}
+		req.Messages = make([]openAIMessage, len(messages))
+		for i, msg := range messages {
+			req.Messages[i] = openAIMessage{Role: msg.Role, Content: msg.Content}
+		}
+		endpoint = baseURL + "/chat/completions"
+
+	case promptDomain.PromptTypeText:
+		text, ok := compiled.(string)
+		if !ok {
+			eventChan <- promptDomain.StreamEvent{Type: promptDomain.StreamEventError, Error: "invalid compiled text prompt"}
+			return
+		}
+		req.Messages = []openAIMessage{{Role: "user", Content: text}}
+		endpoint = baseURL + "/chat/completions"
+
+	default:
+		eventChan <- promptDomain.StreamEvent{Type: promptDomain.StreamEventError, Error: "unsupported prompt type"}
+		return
+	}
+
+	body, err := json.Marshal(req)
+	if err != nil {
+		eventChan <- promptDomain.StreamEvent{Type: promptDomain.StreamEventError, Error: fmt.Sprintf("failed to marshal request: %v", err)}
+		return
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(body))
+	if err != nil {
+		eventChan <- promptDomain.StreamEvent{Type: promptDomain.StreamEventError, Error: fmt.Sprintf("failed to create request: %v", err)}
+		return
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+config.APIKey)
+
+	streamClient := &http.Client{}
+	resp, err := streamClient.Do(httpReq)
+	if err != nil {
+		eventChan <- promptDomain.StreamEvent{Type: promptDomain.StreamEventError, Error: fmt.Sprintf("failed to execute request: %v", err)}
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		eventChan <- promptDomain.StreamEvent{Type: promptDomain.StreamEventError, Error: fmt.Sprintf("OpenAI error (status %d): %s", resp.StatusCode, string(body))}
+		return
+	}
+
+	eventChan <- promptDomain.StreamEvent{Type: promptDomain.StreamEventStart}
+
+	var acc streamAccumulator
+	reader := bufio.NewReader(resp.Body)
+	var firstTokenTime *time.Time
+
+	for {
+		select {
+		case <-ctx.Done():
+			eventChan <- promptDomain.StreamEvent{Type: promptDomain.StreamEventError, Error: "stream cancelled"}
+			return
+		default:
+		}
+
+		line, err := reader.ReadBytes('\n')
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			eventChan <- promptDomain.StreamEvent{Type: promptDomain.StreamEventError, Error: fmt.Sprintf("stream read error: %v", err)}
+			return
+		}
+
+		lineStr := strings.TrimSpace(string(line))
+		if lineStr == "" || lineStr == "data: [DONE]" {
+			continue
+		}
+
+		if !strings.HasPrefix(lineStr, "data: ") {
+			continue
+		}
+
+		data := strings.TrimPrefix(lineStr, "data: ")
+		var chunk openAIStreamChunk
+		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+			continue
+		}
+
+		if firstTokenTime == nil && len(chunk.Choices) > 0 && chunk.Choices[0].Delta.Content != "" {
+			now := time.Now()
+			firstTokenTime = &now
+		}
+
+		if len(chunk.Choices) > 0 {
+			delta := chunk.Choices[0].Delta
+			if delta.Content != "" {
+				acc.content.WriteString(delta.Content)
+				eventChan <- promptDomain.StreamEvent{
+					Type:    promptDomain.StreamEventContent,
+					Content: delta.Content,
+				}
+			}
+
+			if chunk.Choices[0].FinishReason != nil {
+				acc.finishReason = *chunk.Choices[0].FinishReason
+			}
+		}
+
+		if chunk.Model != "" {
+			acc.model = chunk.Model
+		}
+
+		if chunk.Usage != nil {
+			acc.usage = &promptDomain.LLMUsage{
+				PromptTokens:     chunk.Usage.PromptTokens,
+				CompletionTokens: chunk.Usage.CompletionTokens,
+				TotalTokens:      chunk.Usage.TotalTokens,
+			}
+		}
+	}
+
+	totalDuration := time.Since(startTime).Milliseconds()
+	var ttftMs *float64
+	if firstTokenTime != nil {
+		ttft := float64(firstTokenTime.Sub(startTime).Milliseconds())
+		ttftMs = &ttft
+	}
+
+	var cost *float64
+	if acc.usage != nil {
+		c := s.calculateOpenAICost(config.Model, acc.usage.PromptTokens, acc.usage.CompletionTokens)
+		cost = &c
+	}
+
+	eventChan <- promptDomain.StreamEvent{
+		Type:         promptDomain.StreamEventEnd,
+		FinishReason: acc.finishReason,
+	}
+
+	resultChan <- &promptDomain.StreamResult{
+		Content:       acc.content.String(),
+		Model:         acc.model,
+		Usage:         acc.usage,
+		Cost:          cost,
+		FinishReason:  acc.finishReason,
+		TTFTMs:        ttftMs,
+		TotalDuration: totalDuration,
+	}
+}
+
+// streamAnthropic handles Anthropic streaming execution
+func (s *executionService) streamAnthropic(
+	ctx context.Context,
+	promptType promptDomain.PromptType,
+	compiled interface{},
+	config *promptDomain.ModelConfig,
+	eventChan chan<- promptDomain.StreamEvent,
+	resultChan chan<- *promptDomain.StreamResult,
+) {
+	defer close(eventChan)
+	defer close(resultChan)
+
+	startTime := time.Now()
+
+	if config.APIKey == "" {
+		eventChan <- promptDomain.StreamEvent{Type: promptDomain.StreamEventError, Error: "Anthropic API key not provided via project credentials"}
+		return
+	}
+
+	baseURL := "https://api.anthropic.com"
+	if config.ResolvedBaseURL != nil && *config.ResolvedBaseURL != "" {
+		baseURL = *config.ResolvedBaseURL
+	}
+
+	maxTokens := 4096
+	if config.MaxTokens != nil {
+		maxTokens = *config.MaxTokens
+	}
+
+	req := anthropicStreamRequest{
+		Model:       config.Model,
+		MaxTokens:   maxTokens,
+		Temperature: config.Temperature,
+		TopP:        config.TopP,
+		StopSeq:     config.Stop,
+		Stream:      true,
+	}
+
+	switch promptType {
+	case promptDomain.PromptTypeChat:
+		messages, ok := compiled.([]promptDomain.ChatMessage)
+		if !ok {
+			eventChan <- promptDomain.StreamEvent{Type: promptDomain.StreamEventError, Error: "invalid compiled chat messages"}
+			return
+		}
+
+		// Separate system messages from user/assistant
+		var systemPrompts []string
+		var chatMessages []anthropicMessage
+		for _, msg := range messages {
+			if msg.Role == "system" {
+				systemPrompts = append(systemPrompts, msg.Content)
+			} else {
+				chatMessages = append(chatMessages, anthropicMessage{
+					Role:    msg.Role,
+					Content: msg.Content,
+				})
+			}
+		}
+
+		if len(systemPrompts) > 0 {
+			req.System = strings.Join(systemPrompts, "\n\n")
+		}
+		req.Messages = chatMessages
+
+	case promptDomain.PromptTypeText:
+		text, ok := compiled.(string)
+		if !ok {
+			eventChan <- promptDomain.StreamEvent{Type: promptDomain.StreamEventError, Error: "invalid compiled text prompt"}
+			return
+		}
+		req.Messages = []anthropicMessage{{Role: "user", Content: text}}
+
+	default:
+		eventChan <- promptDomain.StreamEvent{Type: promptDomain.StreamEventError, Error: "unsupported prompt type"}
+		return
+	}
+
+	body, err := json.Marshal(req)
+	if err != nil {
+		eventChan <- promptDomain.StreamEvent{Type: promptDomain.StreamEventError, Error: fmt.Sprintf("failed to marshal request: %v", err)}
+		return
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", baseURL+"/v1/messages", bytes.NewReader(body))
+	if err != nil {
+		eventChan <- promptDomain.StreamEvent{Type: promptDomain.StreamEventError, Error: fmt.Sprintf("failed to create request: %v", err)}
+		return
+	}
+
+	httpReq.Header.Set("x-api-key", config.APIKey)
+	httpReq.Header.Set("anthropic-version", "2023-06-01")
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Accept", "text/event-stream")
+
+	streamClient := &http.Client{}
+	resp, err := streamClient.Do(httpReq)
+	if err != nil {
+		eventChan <- promptDomain.StreamEvent{Type: promptDomain.StreamEventError, Error: fmt.Sprintf("failed to execute request: %v", err)}
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		eventChan <- promptDomain.StreamEvent{Type: promptDomain.StreamEventError, Error: fmt.Sprintf("Anthropic error (status %d): %s", resp.StatusCode, string(body))}
+		return
+	}
+
+	eventChan <- promptDomain.StreamEvent{Type: promptDomain.StreamEventStart}
+
+	var acc streamAccumulator
+	var inputTokens int
+	reader := bufio.NewReader(resp.Body)
+	var firstTokenTime *time.Time
+	var currentEvent string
+
+	for {
+		select {
+		case <-ctx.Done():
+			eventChan <- promptDomain.StreamEvent{Type: promptDomain.StreamEventError, Error: "stream cancelled"}
+			return
+		default:
+		}
+
+		line, err := reader.ReadBytes('\n')
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			eventChan <- promptDomain.StreamEvent{Type: promptDomain.StreamEventError, Error: fmt.Sprintf("stream read error: %v", err)}
+			return
+		}
+
+		lineStr := strings.TrimSpace(string(line))
+		if lineStr == "" {
+			continue
+		}
+
+		if strings.HasPrefix(lineStr, "event: ") {
+			currentEvent = strings.TrimPrefix(lineStr, "event: ")
+			continue
+		}
+
+		if strings.HasPrefix(lineStr, "data: ") {
+			data := strings.TrimPrefix(lineStr, "data: ")
+
+			switch currentEvent {
+			case "message_start":
+				var msg anthropicMessageStart
+				if err := json.Unmarshal([]byte(data), &msg); err == nil {
+					acc.model = msg.Message.Model
+					inputTokens = msg.Message.Usage.InputTokens
+				}
+
+			case "content_block_delta":
+				var delta anthropicContentBlockDelta
+				if err := json.Unmarshal([]byte(data), &delta); err == nil {
+					if delta.Delta.Type == "text_delta" && delta.Delta.Text != "" {
+						if firstTokenTime == nil {
+							now := time.Now()
+							firstTokenTime = &now
+						}
+						acc.content.WriteString(delta.Delta.Text)
+						eventChan <- promptDomain.StreamEvent{
+							Type:    promptDomain.StreamEventContent,
+							Content: delta.Delta.Text,
+						}
+					}
+				}
+
+			case "message_delta":
+				var msgDelta anthropicMessageDelta
+				if err := json.Unmarshal([]byte(data), &msgDelta); err == nil {
+					acc.finishReason = msgDelta.Delta.StopReason
+					acc.usage = &promptDomain.LLMUsage{
+						PromptTokens:     inputTokens,
+						CompletionTokens: msgDelta.Usage.OutputTokens,
+						TotalTokens:      inputTokens + msgDelta.Usage.OutputTokens,
+					}
+				}
+
+			case "message_stop":
+			}
+		}
+	}
+
+	totalDuration := time.Since(startTime).Milliseconds()
+	var ttftMs *float64
+	if firstTokenTime != nil {
+		ttft := float64(firstTokenTime.Sub(startTime).Milliseconds())
+		ttftMs = &ttft
+	}
+
+	var cost *float64
+	if acc.usage != nil {
+		c := s.calculateAnthropicCost(config.Model, acc.usage.PromptTokens, acc.usage.CompletionTokens)
+		cost = &c
+	}
+
+	eventChan <- promptDomain.StreamEvent{
+		Type:         promptDomain.StreamEventEnd,
+		FinishReason: acc.finishReason,
+	}
+
+	resultChan <- &promptDomain.StreamResult{
+		Content:       acc.content.String(),
+		Model:         acc.model,
+		Usage:         acc.usage,
+		Cost:          cost,
+		FinishReason:  acc.finishReason,
+		TTFTMs:        ttftMs,
+		TotalDuration: totalDuration,
+	}
 }

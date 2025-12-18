@@ -14,16 +14,20 @@ import (
 	"brokle/internal/core/domain/auth"
 	"brokle/internal/core/domain/billing"
 	"brokle/internal/core/domain/common"
+	credentialsDomain "brokle/internal/core/domain/credentials"
 	"brokle/internal/core/domain/observability"
 	"brokle/internal/core/domain/organization"
+	playgroundDomain "brokle/internal/core/domain/playground"
 	promptDomain "brokle/internal/core/domain/prompt"
 	storageDomain "brokle/internal/core/domain/storage"
 	"brokle/internal/core/domain/user"
 	analyticsService "brokle/internal/core/services/analytics"
 	authService "brokle/internal/core/services/auth"
 	billingService "brokle/internal/core/services/billing"
+	credentialsService "brokle/internal/core/services/credentials"
 	observabilityService "brokle/internal/core/services/observability"
 	orgService "brokle/internal/core/services/organization"
+	playgroundService "brokle/internal/core/services/playground"
 	promptService "brokle/internal/core/services/prompt"
 	registrationService "brokle/internal/core/services/registration"
 	storageService "brokle/internal/core/services/storage"
@@ -36,8 +40,10 @@ import (
 	analyticsRepo "brokle/internal/infrastructure/repository/analytics"
 	authRepo "brokle/internal/infrastructure/repository/auth"
 	billingRepo "brokle/internal/infrastructure/repository/billing"
+	credentialsRepo "brokle/internal/infrastructure/repository/credentials"
 	observabilityRepo "brokle/internal/infrastructure/repository/observability"
 	orgRepo "brokle/internal/infrastructure/repository/organization"
+	playgroundRepo "brokle/internal/infrastructure/repository/playground"
 	promptRepo "brokle/internal/infrastructure/repository/prompt"
 	storageRepo "brokle/internal/infrastructure/repository/storage"
 	userRepo "brokle/internal/infrastructure/repository/user"
@@ -47,6 +53,7 @@ import (
 	"brokle/internal/transport/http"
 	"brokle/internal/transport/http/handlers"
 	"brokle/internal/workers"
+	"brokle/pkg/encryption"
 	"brokle/pkg/ulid"
 )
 
@@ -105,6 +112,8 @@ type RepositoryContainer struct {
 	Billing       *BillingRepositories
 	Analytics     *AnalyticsRepositories
 	Prompt        *PromptRepositories
+	Credentials   *CredentialsRepositories
+	Playground    *PlaygroundRepositories
 }
 
 // ServiceContainer holds all service instances organized by domain
@@ -121,6 +130,8 @@ type ServiceContainer struct {
 	Billing             *BillingServices
 	Analytics           *AnalyticsServices
 	Prompt              *PromptServices
+	Credentials         *CredentialsServices
+	Playground          *PlaygroundServices
 }
 
 // EnterpriseContainer holds all enterprise service instances
@@ -196,6 +207,16 @@ type PromptRepositories struct {
 	Cache          promptDomain.CacheRepository
 }
 
+// CredentialsRepositories contains all credentials-related repositories
+type CredentialsRepositories struct {
+	LLMProviderCredential credentialsDomain.LLMProviderCredentialRepository
+}
+
+// PlaygroundRepositories contains all playground-related repositories
+type PlaygroundRepositories struct {
+	Session playgroundDomain.SessionRepository
+}
+
 // Domain-specific service containers
 
 // UserServices contains all user-related services
@@ -233,6 +254,16 @@ type PromptServices struct {
 	Prompt    promptDomain.PromptService
 	Compiler  promptDomain.CompilerService
 	Execution promptDomain.ExecutionService
+}
+
+// CredentialsServices contains all credentials-related services
+type CredentialsServices struct {
+	LLMProviderCredential credentialsDomain.LLMProviderCredentialService
+}
+
+// PlaygroundServices contains all playground-related services
+type PlaygroundServices struct {
+	Playground playgroundDomain.PlaygroundService
 }
 
 // Provider functions for modular DI
@@ -348,6 +379,26 @@ func ProvideServerServices(core *CoreContainer) *ServiceContainer {
 	)
 
 	promptServices := ProvidePromptServices(core.TxManager, repos.Prompt, cfg, logger)
+	credentialsServices, err := ProvideCredentialsServices(repos.Credentials, cfg, logger)
+	if err != nil {
+		logger.Error("failed to initialize credentials services", "error", err)
+		// Playground will fail without credentials - no env fallback
+		credentialsServices = nil
+	}
+
+	// Extract credentials service (may be nil if credentials initialization failed)
+	var credSvc credentialsDomain.LLMProviderCredentialService
+	if credentialsServices != nil {
+		credSvc = credentialsServices.LLMProviderCredential
+	}
+
+	playgroundServices := ProvidePlaygroundServices(
+		repos.Playground,
+		credSvc,
+		promptServices.Compiler,
+		promptServices.Execution,
+		logger,
+	)
 
 	return &ServiceContainer{
 		User:                userServices,
@@ -362,6 +413,8 @@ func ProvideServerServices(core *CoreContainer) *ServiceContainer {
 		Billing:             billingServices,
 		Analytics:           analyticsServices,
 		Prompt:              promptServices,
+		Credentials:         credentialsServices,
+		Playground:          playgroundServices,
 	}
 }
 
@@ -377,7 +430,7 @@ func ProvideWorkerServices(core *CoreContainer) *ServiceContainer {
 	observabilityServices := ProvideObservabilityServices(repos.Observability, repos.Storage, analyticsServices, databases.Redis, cfg, logger)
 
 	return &ServiceContainer{
-		User:                nil, // Worker doesn't need auth/user/org/prompt services
+		User:                nil, // Worker doesn't need auth/user/org/prompt/credentials/playground services
 		Auth:                nil,
 		Registration:        nil,
 		OrganizationService: nil,
@@ -386,6 +439,8 @@ func ProvideWorkerServices(core *CoreContainer) *ServiceContainer {
 		InvitationService:   nil,
 		SettingsService:     nil,
 		Prompt:              nil,
+		Credentials:         nil,
+		Playground:          nil,
 		Observability:       observabilityServices,
 		Billing:             billingServices,
 		Analytics:           analyticsServices,
@@ -394,6 +449,18 @@ func ProvideWorkerServices(core *CoreContainer) *ServiceContainer {
 
 // ProvideServer creates HTTP server using shared core
 func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
+	// Get credentials service (may be nil if encryption key not configured)
+	var credentialsService credentialsDomain.LLMProviderCredentialService
+	if core.Services.Credentials != nil {
+		credentialsService = core.Services.Credentials.LLMProviderCredential
+	}
+
+	// Get playground service
+	var playgroundSvc playgroundDomain.PlaygroundService
+	if core.Services.Playground != nil {
+		playgroundSvc = core.Services.Playground.Playground
+	}
+
 	httpHandlers := handlers.NewHandlers(
 		core.Config,
 		core.Logger,
@@ -417,6 +484,8 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 		core.Services.Prompt.Prompt,
 		core.Services.Prompt.Compiler,
 		core.Services.Prompt.Execution,
+		credentialsService,
+		playgroundSvc,
 	)
 
 	httpServer := http.NewServer(
@@ -556,6 +625,20 @@ func ProvidePromptRepositories(db *gorm.DB, redisDB *database.RedisDB) *PromptRe
 	}
 }
 
+// ProvideCredentialsRepositories creates credentials repository container
+func ProvideCredentialsRepositories(db *gorm.DB) *CredentialsRepositories {
+	return &CredentialsRepositories{
+		LLMProviderCredential: credentialsRepo.NewLLMProviderCredentialRepository(db),
+	}
+}
+
+// ProvidePlaygroundRepositories creates playground repository container
+func ProvidePlaygroundRepositories(db *gorm.DB) *PlaygroundRepositories {
+	return &PlaygroundRepositories{
+		Session: playgroundRepo.NewSessionRepository(db),
+	}
+}
+
 // ProvideRepositories creates all repository containers
 func ProvideRepositories(dbs *DatabaseContainer, logger *slog.Logger) *RepositoryContainer {
 	return &RepositoryContainer{
@@ -567,6 +650,8 @@ func ProvideRepositories(dbs *DatabaseContainer, logger *slog.Logger) *Repositor
 		Billing:       ProvideBillingRepositories(dbs.Postgres.DB, logger),
 		Analytics:     ProvideAnalyticsRepositories(dbs.Postgres.DB),
 		Prompt:        ProvidePromptRepositories(dbs.Postgres.DB, dbs.Redis),
+		Credentials:   ProvideCredentialsRepositories(dbs.Postgres.DB),
+		Playground:    ProvidePlaygroundRepositories(dbs.Postgres.DB),
 	}
 }
 
@@ -824,11 +909,7 @@ func ProvidePromptServices(
 ) *PromptServices {
 	compilerSvc := promptService.NewCompilerService()
 	llmConfig := &promptService.LLMClientConfig{
-		OpenAIAPIKey:     cfg.External.OpenAI.APIKey,
-		OpenAIBaseURL:    cfg.External.OpenAI.BaseURL,
-		AnthropicAPIKey:  cfg.External.Anthropic.APIKey,
-		AnthropicBaseURL: cfg.External.Anthropic.BaseURL,
-		DefaultTimeout:   cfg.External.OpenAI.Timeout,
+		DefaultTimeout: cfg.External.LLMTimeout,
 	}
 
 	executionSvc := promptService.NewExecutionService(compilerSvc, llmConfig)
@@ -847,6 +928,50 @@ func ProvidePromptServices(
 		Prompt:    promptSvc,
 		Compiler:  compilerSvc,
 		Execution: executionSvc,
+	}
+}
+
+// ProvideCredentialsServices creates all credentials-related services
+func ProvideCredentialsServices(
+	credentialsRepos *CredentialsRepositories,
+	cfg *config.Config,
+	logger *slog.Logger,
+) (*CredentialsServices, error) {
+	// Create encryption service from config
+	encryptor, err := encryption.NewServiceFromBase64(cfg.Encryption.LLMKeyEncryptionKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize encryption service: %w", err)
+	}
+
+	llmProviderSvc := credentialsService.NewLLMProviderCredentialService(
+		credentialsRepos.LLMProviderCredential,
+		encryptor,
+		logger,
+	)
+
+	return &CredentialsServices{
+		LLMProviderCredential: llmProviderSvc,
+	}, nil
+}
+
+// ProvidePlaygroundServices creates all playground-related services
+func ProvidePlaygroundServices(
+	playgroundRepos *PlaygroundRepositories,
+	credentialsService credentialsDomain.LLMProviderCredentialService,
+	compilerService promptDomain.CompilerService,
+	executionService promptDomain.ExecutionService,
+	logger *slog.Logger,
+) *PlaygroundServices {
+	playgroundSvc := playgroundService.NewPlaygroundService(
+		playgroundRepos.Session,
+		credentialsService,
+		compilerService,
+		executionService,
+		logger,
+	)
+
+	return &PlaygroundServices{
+		Playground: playgroundSvc,
 	}
 }
 

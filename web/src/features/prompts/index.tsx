@@ -59,7 +59,6 @@ export function Prompts({ projectSlug, orgSlug }: PromptsProps) {
         </div>
       </div>
       <div className="-mx-4 flex-1 overflow-auto px-4 py-1">
-        {/* Error State */}
         {error && !isLoading && (
           <div className="flex flex-col items-center justify-center py-12 space-y-4">
             <div className="rounded-lg bg-destructive/10 p-6 text-center max-w-md">
@@ -75,14 +74,12 @@ export function Prompts({ projectSlug, orgSlug }: PromptsProps) {
           </div>
         )}
 
-        {/* No Project State */}
         {!hasProject && !isLoading && !error && (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <p className="text-muted-foreground">No project selected</p>
           </div>
         )}
 
-        {/* Content */}
         {!error && hasProject && (
           <PromptsTable
             data={data}
@@ -139,21 +136,12 @@ export { createPromptsColumns } from './components/prompt-list/prompts-columns'
 // Label Management components (nested directory)
 export { LabelSelector } from './components/label-management/LabelSelector'
 export { ProtectedLabelsConfig } from './components/label-management/ProtectedLabelsConfig'
-// Legacy exports for backward compatibility
-export { LabelSelector as LabelManager } from './components/label-management/LabelSelector'
-export { ProtectedLabelsConfig as ProtectedLabelsSettings } from './components/label-management/ProtectedLabelsConfig'
 
 // Version Management components (nested directory)
 export { VersionHistory } from './components/version-management/VersionHistory'
 export { VersionDiff } from './components/version-management/VersionDiff'
 export { VersionCompare } from './components/version-management/VersionCompare'
 export { VersionDetails } from './components/version-management/VersionDetails'
-
-// Playground components (nested directory)
-export { PromptPlayground } from './components/prompt-playground'
-export { VariableInputs } from './components/playground/VariableInputs'
-export { ExecutionPanel } from './components/playground/ExecutionPanel'
-export { ResponseViewer } from './components/playground/ResponseViewer'
 
 // Utilities
 export { extractVariables } from './utils/variable-extraction'
