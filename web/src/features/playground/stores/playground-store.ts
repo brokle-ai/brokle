@@ -73,7 +73,6 @@ interface PlaygroundState {
   setWindowExecuting: (index: number, isExecuting: boolean) => void
   setWindowOutput: (index: number, output: string, metrics: PlaygroundWindow['lastMetrics']) => void
   setExecutingAll: (isExecuting: boolean) => void
-  executeWindow: (index: number, projectId: string) => Promise<void>
 
   // Reset
   clearAll: () => void
@@ -248,50 +247,6 @@ export const usePlaygroundStore = create<PlaygroundState>()((set, get) => ({
   },
 
   setExecutingAll: (isExecuting) => set({ isExecutingAll: isExecuting }),
-
-  executeWindow: async (index, projectId) => {
-    const { windows, currentSessionId } = get()
-    const window = windows[index]
-
-    // Build execute request - always chat now
-    const request = {
-      template: { messages: window.messages },
-      prompt_type: 'chat' as const,
-      variables: window.variables,
-      config_overrides: window.config || undefined,
-      session_id: currentSessionId || undefined,
-      project_id: projectId,
-    }
-
-    get().setWindowExecuting(index, true)
-
-    try {
-      const response = await fetch('/api/v1/playground/execute', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(request),
-      })
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
-      }
-
-      const result = await response.json()
-
-      get().setWindowOutput(
-        index,
-        result.data?.response?.content || '',
-        {
-          total_duration_ms: result.data?.latency_ms,
-          total_tokens: result.data?.response?.usage?.total_tokens,
-          cost: result.data?.response?.cost,
-        }
-      )
-    } catch (error) {
-      console.error('Execute failed:', error)
-      get().setWindowExecuting(index, false)
-    }
-  },
 
   clearAll: () =>
     set({

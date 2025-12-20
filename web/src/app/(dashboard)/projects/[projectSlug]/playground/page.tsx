@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import {
   Plus,
@@ -43,13 +43,29 @@ export default function PlaygroundPage() {
   const clearAll = usePlaygroundStore((s) => s.clearAll)
   const isExecutingAll = usePlaygroundStore((s) => s.isExecutingAll)
   const setExecutingAll = usePlaygroundStore((s) => s.setExecutingAll)
-  const executeWindow = usePlaygroundStore((s) => s.executeWindow)
+
+  // Refs to track window execute functions for Execute All
+  const windowExecuteRefs = useRef<Map<number, () => Promise<void>>>(new Map())
+
+  const registerWindowExecute = useCallback((index: number, executeFn: () => Promise<void>) => {
+    windowExecuteRefs.current.set(index, executeFn)
+  }, [])
+
+  const unregisterWindowExecute = useCallback((index: number) => {
+    windowExecuteRefs.current.delete(index)
+  }, [])
 
   const handleExecuteAll = async () => {
     setExecutingAll(true)
 
     try {
-      await Promise.all(windows.map((_, index) => executeWindow(index, projectId!)))
+      // Get all registered execute functions and run in parallel
+      const executeFns = Array.from(windowExecuteRefs.current.entries())
+        .sort(([a], [b]) => a - b) // Sort by index
+        .map(([, fn]) => fn)
+
+      // Execute all windows in parallel (each streams independently)
+      await Promise.all(executeFns.map(fn => fn()))
     } catch (error) {
       console.error('Execute all failed:', error)
     } finally {
@@ -155,6 +171,8 @@ export default function PlaygroundPage() {
                 <PlaygroundWindow
                   key={windows[index].id}
                   index={index}
+                  onRegisterExecute={(fn) => registerWindowExecute(index, fn)}
+                  onUnregisterExecute={() => unregisterWindowExecute(index)}
                 />
               ))}
             </div>
@@ -166,7 +184,11 @@ export default function PlaygroundPage() {
                   key={windows[index].id}
                   className="flex-none w-80 sm:w-96 lg:w-[420px] xl:w-[480px] snap-start"
                 >
-                  <PlaygroundWindow index={index} />
+                  <PlaygroundWindow
+                    index={index}
+                    onRegisterExecute={(fn) => registerWindowExecute(index, fn)}
+                    onUnregisterExecute={() => unregisterWindowExecute(index)}
+                  />
                 </div>
               ))}
             </div>

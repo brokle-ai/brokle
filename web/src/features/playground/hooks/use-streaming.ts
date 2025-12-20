@@ -1,4 +1,6 @@
 import { useState, useCallback, useRef } from 'react'
+import { config } from '@/lib/config'
+import { getCookie } from '@/lib/utils/cookies'
 import type { StreamChunk, StreamMetrics, ExecuteRequest } from '../types'
 
 interface UseStreamingOptions {
@@ -25,17 +27,27 @@ export const useStreaming = (options?: UseStreamingOptions) => {
       abortControllerRef.current = new AbortController()
 
       try {
-        const response = await fetch(`/api/v1/playground/stream`, {
+        const headers: HeadersInit = {
+          'Content-Type': 'application/json',
+        }
+
+        const csrfToken = getCookie('csrf_token')
+        if (csrfToken) {
+          headers['X-CSRF-Token'] = csrfToken
+        }
+
+        const response = await fetch(`${config.api.baseUrl}/api/v1/playground/stream`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers,
           body: JSON.stringify(request),
+          credentials: 'include',
           signal: abortControllerRef.current.signal,
         })
 
         if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+          const errorData = await response.json().catch(() => null)
+          const message = errorData?.error?.message || response.statusText
+          throw new Error(`HTTP ${response.status}: ${message}`)
         }
 
         const reader = response.body?.getReader()
@@ -53,10 +65,10 @@ export const useStreaming = (options?: UseStreamingOptions) => {
           if (done) break
 
           const text = decoder.decode(value, { stream: true })
-          const lines = text.split('\n').filter((line) => line.startsWith('data: '))
+          const lines = text.split('\n').filter((line) => line.startsWith('data:'))
 
           for (const line of lines) {
-            const data = line.slice(6) // Remove "data: " prefix
+            const data = line.startsWith('data: ') ? line.slice(6) : line.slice(5)
             if (!data || data === '[DONE]') continue
 
             try {

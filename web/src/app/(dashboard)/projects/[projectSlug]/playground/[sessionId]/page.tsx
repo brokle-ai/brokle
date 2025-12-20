@@ -41,9 +41,19 @@ export default function PlaygroundSessionPage() {
   const clearAll = usePlaygroundStore((s) => s.clearAll)
   const isExecutingAll = usePlaygroundStore((s) => s.isExecutingAll)
   const setExecutingAll = usePlaygroundStore((s) => s.setExecutingAll)
-  const executeWindow = usePlaygroundStore((s) => s.executeWindow)
   const setCurrentSessionId = usePlaygroundStore((s) => s.setCurrentSessionId)
   const loadWindowsFromSession = usePlaygroundStore((s) => s.loadWindowsFromSession)
+
+  // Refs to track window execute functions for Execute All
+  const windowExecuteRefs = useRef<Map<number, () => Promise<void>>>(new Map())
+
+  const registerWindowExecute = useCallback((index: number, executeFn: () => Promise<void>) => {
+    windowExecuteRefs.current.set(index, executeFn)
+  }, [])
+
+  const unregisterWindowExecute = useCallback((index: number) => {
+    windowExecuteRefs.current.delete(index)
+  }, [])
 
   const {
     data: session,
@@ -119,7 +129,13 @@ export default function PlaygroundSessionPage() {
     setExecutingAll(true)
 
     try {
-      await Promise.all(windows.map((_, index) => executeWindow(index, projectId!)))
+      // Get all registered execute functions and run in parallel
+      const executeFns = Array.from(windowExecuteRefs.current.entries())
+        .sort(([a], [b]) => a - b) // Sort by index
+        .map(([, fn]) => fn)
+
+      // Execute all windows in parallel (each streams independently)
+      await Promise.all(executeFns.map(fn => fn()))
     } catch (error) {
       console.error('Execute all failed:', error)
     } finally {
@@ -215,6 +231,8 @@ export default function PlaygroundSessionPage() {
                   key={windows[index].id}
                   index={index}
                   sessionId={params.sessionId}
+                  onRegisterExecute={(fn) => registerWindowExecute(index, fn)}
+                  onUnregisterExecute={() => unregisterWindowExecute(index)}
                 />
               ))}
             </div>
@@ -229,6 +247,8 @@ export default function PlaygroundSessionPage() {
                   <PlaygroundWindow
                     index={index}
                     sessionId={params.sessionId}
+                    onRegisterExecute={(fn) => registerWindowExecute(index, fn)}
+                    onUnregisterExecute={() => unregisterWindowExecute(index)}
                   />
                 </div>
               ))}

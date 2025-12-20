@@ -28,6 +28,8 @@ import type { ExecuteRequest } from '../types'
 interface PlaygroundWindowProps {
   index: number
   sessionId?: string
+  onRegisterExecute?: (executeFn: () => Promise<void>) => void
+  onUnregisterExecute?: () => void
 }
 
 const AUTO_SAVE_DELAY = 1500
@@ -47,7 +49,7 @@ const buildWindowsPayload = (windows: PlaygroundWindow[]): WindowState[] => {
   }))
 }
 
-export function PlaygroundWindow({ index, sessionId }: PlaygroundWindowProps) {
+export function PlaygroundWindow({ index, sessionId, onRegisterExecute, onUnregisterExecute }: PlaygroundWindowProps) {
   const { currentProject } = useProjectOnly()
   const projectId = currentProject?.id || ''
 
@@ -217,7 +219,7 @@ export function PlaygroundWindow({ index, sessionId }: PlaygroundWindowProps) {
     })
   }, [windowState?.messages, updateWindow, index])
 
-  const handleExecute = async () => {
+  const handleExecute = useCallback(async () => {
     if (!windowState) return
 
     if (!windowState.config?.model) {
@@ -242,7 +244,19 @@ export function PlaygroundWindow({ index, sessionId }: PlaygroundWindowProps) {
     }
 
     await stream(request)
-  }
+  }, [windowState, sessionId, projectId, stream])
+
+  // Register execute function for Execute All feature
+  useEffect(() => {
+    if (onRegisterExecute) {
+      onRegisterExecute(handleExecute)
+    }
+    return () => {
+      if (onUnregisterExecute) {
+        onUnregisterExecute()
+      }
+    }
+  }, [handleExecute, onRegisterExecute, onUnregisterExecute])
 
   const extractedVariables = extractVariablesFromMessages(windowState?.messages || [])
 
