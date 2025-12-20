@@ -6,6 +6,7 @@ import (
 	"brokle/internal/config"
 	"brokle/internal/core/domain/auth"
 	credentialsDomain "brokle/internal/core/domain/credentials"
+	evaluationDomain "brokle/internal/core/domain/evaluation"
 	"brokle/internal/core/domain/organization"
 	playgroundDomain "brokle/internal/core/domain/playground"
 	promptDomain "brokle/internal/core/domain/prompt"
@@ -20,6 +21,7 @@ import (
 	authHandler "brokle/internal/transport/http/handlers/auth"
 	"brokle/internal/transport/http/handlers/billing"
 	"brokle/internal/transport/http/handlers/credentials"
+	evaluationHandler "brokle/internal/transport/http/handlers/evaluation"
 	"brokle/internal/transport/http/handlers/health"
 	"brokle/internal/transport/http/handlers/logs"
 	"brokle/internal/transport/http/handlers/metrics"
@@ -54,6 +56,8 @@ type Handlers struct {
 	Prompt        *prompt.Handler
 	Playground    *playground.Handler
 	Credentials   *credentials.Handler
+	Evaluation    *evaluationHandler.ScoreConfigHandler
+	SDKScore      *evaluationHandler.SDKScoreHandler
 }
 
 func NewHandlers(
@@ -81,6 +85,7 @@ func NewHandlers(
 	credentialsSvc credentialsDomain.ProviderCredentialService,
 	modelCatalogSvc credentialsService.ModelCatalogService,
 	playgroundService playgroundDomain.PlaygroundService,
+	scoreConfigService evaluationDomain.ScoreConfigService,
 ) *Handlers {
 	return &Handlers{
 		Health:        health.NewHandler(cfg, logger),
@@ -103,5 +108,7 @@ func NewHandlers(
 		Prompt:        prompt.NewHandler(cfg, logger, promptService, compilerService),
 		Playground:    playground.NewHandler(cfg, logger, playgroundService, projectService),
 		Credentials:   credentials.NewHandler(cfg, logger, credentialsSvc, modelCatalogSvc),
+		Evaluation:    evaluationHandler.NewScoreConfigHandler(logger, scoreConfigService),
+		SDKScore:      evaluationHandler.NewSDKScoreHandler(logger, observabilityServices.ScoreService, scoreConfigService),
 	}
 }

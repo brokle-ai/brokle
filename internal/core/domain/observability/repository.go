@@ -117,16 +117,15 @@ type ScoreFilter struct {
 	ProjectID string // Required for scoping queries to project
 
 	// Domain filters
-	TraceID       *string
-	SpanID        *string
-	Name          *string
-	Source        *string
-	DataType      *string
-	EvaluatorName *string
-	MinValue      *float64
-	MaxValue      *float64
-	StartTime     *time.Time
-	EndTime       *time.Time
+	TraceID   *string
+	SpanID    *string
+	Name      *string
+	Source    *string
+	DataType  *string
+	MinValue  *float64
+	MaxValue  *float64
+	StartTime *time.Time
+	EndTime   *time.Time
 
 	// Pagination (embedded for DRY)
 	pagination.Params

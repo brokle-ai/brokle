@@ -24,12 +24,11 @@ func NewScoreRepository(db clickhouse.Conn) observability.ScoreRepository {
 func (r *scoreRepository) Create(ctx context.Context, score *observability.Score) error {
 	query := `
 		INSERT INTO scores (
-			id, project_id, trace_id, span_id,
-			name, value, string_value, data_type, source, comment,
-			evaluator_name, evaluator_version, evaluator_config,
-			author_user_id, timestamp,
-			version
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			score_id, project_id, trace_id, span_id,
+			name, value, string_value, data_type, source,
+			reason, metadata, experiment_id, experiment_item_id,
+			timestamp
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	return r.db.Exec(ctx, query,
@@ -42,13 +41,11 @@ func (r *scoreRepository) Create(ctx context.Context, score *observability.Score
 		score.StringValue,
 		score.DataType,
 		score.Source,
-		score.Comment,
-		score.EvaluatorName,
-		score.EvaluatorVersion,
-		score.EvaluatorConfig,
-		score.AuthorUserID,
+		score.Reason,
+		score.Metadata,
+		score.ExperimentID,
+		score.ExperimentItemID,
 		score.Timestamp,
-		score.Version,
 	)
 }
 
@@ -60,7 +57,7 @@ func (r *scoreRepository) Update(ctx context.Context, score *observability.Score
 // Delete performs hard deletion (MergeTree supports lightweight deletes with DELETE mutation)
 func (r *scoreRepository) Delete(ctx context.Context, id string) error {
 	// MergeTree lightweight DELETE (async mutation, eventually consistent)
-	query := `ALTER TABLE scores DELETE WHERE id = ?`
+	query := `ALTER TABLE scores DELETE WHERE score_id = ?`
 	return r.db.Exec(ctx, query, id)
 }
 
@@ -68,13 +65,12 @@ func (r *scoreRepository) Delete(ctx context.Context, id string) error {
 func (r *scoreRepository) GetByID(ctx context.Context, id string) (*observability.Score, error) {
 	query := `
 		SELECT
-			id, project_id, trace_id, span_id,
-			name, value, string_value, data_type, source, comment,
-			evaluator_name, evaluator_version, evaluator_config,
-			author_user_id, timestamp,
-			version
+			score_id, project_id, trace_id, span_id,
+			name, value, string_value, data_type, source,
+			reason, metadata, experiment_id, experiment_item_id,
+			timestamp
 		FROM scores
-		WHERE id = ?
+		WHERE score_id = ?
 		LIMIT 1
 	`
 
@@ -86,13 +82,13 @@ func (r *scoreRepository) GetByID(ctx context.Context, id string) (*observabilit
 func (r *scoreRepository) GetByTraceID(ctx context.Context, traceID string) ([]*observability.Score, error) {
 	query := `
 		SELECT
-			id, project_id, trace_id, span_id,
-			name, value, string_value, data_type, source, comment,
-			evaluator_name, evaluator_version, evaluator_config,
-			author_user_id, timestamp,
-			version
+			score_id, project_id, trace_id, span_id,
+			name, value, string_value, data_type, source,
+			reason, metadata, experiment_id, experiment_item_id,
+			timestamp
 		FROM scores
-		WHERE trace_id = ?		ORDER BY timestamp DESC
+		WHERE trace_id = ?
+		ORDER BY timestamp DESC
 	`
 
 	rows, err := r.db.Query(ctx, query, traceID)
@@ -108,13 +104,13 @@ func (r *scoreRepository) GetByTraceID(ctx context.Context, traceID string) ([]*
 func (r *scoreRepository) GetBySpanID(ctx context.Context, spanID string) ([]*observability.Score, error) {
 	query := `
 		SELECT
-			id, project_id, trace_id, span_id,
-			name, value, string_value, data_type, source, comment,
-			evaluator_name, evaluator_version, evaluator_config,
-			author_user_id, timestamp,
-			version
+			score_id, project_id, trace_id, span_id,
+			name, value, string_value, data_type, source,
+			reason, metadata, experiment_id, experiment_item_id,
+			timestamp
 		FROM scores
-		WHERE span_id = ?		ORDER BY timestamp DESC
+		WHERE span_id = ?
+		ORDER BY timestamp DESC
 	`
 
 	rows, err := r.db.Query(ctx, query, spanID)
@@ -130,11 +126,10 @@ func (r *scoreRepository) GetBySpanID(ctx context.Context, spanID string) ([]*ob
 func (r *scoreRepository) GetByFilter(ctx context.Context, filter *observability.ScoreFilter) ([]*observability.Score, error) {
 	query := `
 		SELECT
-			id, project_id, trace_id, span_id,
-			name, value, string_value, data_type, source, comment,
-			evaluator_name, evaluator_version, evaluator_config,
-			author_user_id, timestamp,
-			version
+			score_id, project_id, trace_id, span_id,
+			name, value, string_value, data_type, source,
+			reason, metadata, experiment_id, experiment_item_id,
+			timestamp
 		FROM scores
 		WHERE 1=1
 	`
@@ -162,10 +157,6 @@ func (r *scoreRepository) GetByFilter(ctx context.Context, filter *observability
 			query += " AND data_type = ?"
 			args = append(args, *filter.DataType)
 		}
-		if filter.EvaluatorName != nil {
-			query += " AND evaluator_name = ?"
-			args = append(args, *filter.EvaluatorName)
-		}
 		if filter.MinValue != nil {
 			query += " AND value >= ?"
 			args = append(args, *filter.MinValue)
@@ -186,7 +177,7 @@ func (r *scoreRepository) GetByFilter(ctx context.Context, filter *observability
 	}
 
 	// Determine sort field and direction with SQL injection protection
-	allowedSortFields := []string{"timestamp", "value", "dimension", "data_type", "created_at", "updated_at", "id"}
+	allowedSortFields := []string{"timestamp", "value", "dimension", "data_type", "timestamp", "updated_at", "score_id"}
 	sortField := "timestamp" // default
 	sortDir := "DESC"
 
@@ -206,7 +197,7 @@ func (r *scoreRepository) GetByFilter(ctx context.Context, filter *observability
 		}
 	}
 
-	query += fmt.Sprintf(" ORDER BY %s %s, id %s", sortField, sortDir, sortDir)
+	query += fmt.Sprintf(" ORDER BY %s %s, score_id %s", sortField, sortDir, sortDir)
 
 	// Apply limit and offset for pagination
 	limit := pagination.DefaultPageSize
@@ -237,11 +228,10 @@ func (r *scoreRepository) CreateBatch(ctx context.Context, scores []*observabili
 
 	batch, err := r.db.PrepareBatch(ctx, `
 		INSERT INTO scores (
-			id, project_id, trace_id, span_id,
-			name, value, string_value, data_type, source, comment,
-			evaluator_name, evaluator_version, evaluator_config,
-			author_user_id, timestamp,
-			version
+			score_id, project_id, trace_id, span_id,
+			name, value, string_value, data_type, source,
+			reason, metadata, experiment_id, experiment_item_id,
+			timestamp
 		)
 	`)
 	if err != nil {
@@ -259,13 +249,11 @@ func (r *scoreRepository) CreateBatch(ctx context.Context, scores []*observabili
 			score.StringValue,
 			score.DataType,
 			score.Source,
-			score.Comment,
-			score.EvaluatorName,
-			score.EvaluatorVersion,
-			score.EvaluatorConfig,
-			score.AuthorUserID,
+			score.Reason,
+			score.Metadata,
+			score.ExperimentID,
+			score.ExperimentItemID,
 			score.Timestamp,
-			score.Version,
 		)
 		if err != nil {
 			return fmt.Errorf("append to batch: %w", err)
@@ -330,13 +318,11 @@ func (r *scoreRepository) scanScoreRow(row driver.Row) (*observability.Score, er
 		&score.StringValue,
 		&score.DataType,
 		&score.Source,
-		&score.Comment,
-		&score.EvaluatorName,
-		&score.EvaluatorVersion,
-		&score.EvaluatorConfig,
-		&score.AuthorUserID,
+		&score.Reason,
+		&score.Metadata,
+		&score.ExperimentID,
+		&score.ExperimentItemID,
 		&score.Timestamp,
-		&score.Version,
 	)
 
 	if err != nil {
@@ -363,13 +349,11 @@ func (r *scoreRepository) scanScores(rows driver.Rows) ([]*observability.Score, 
 			&score.StringValue,
 			&score.DataType,
 			&score.Source,
-			&score.Comment,
-			&score.EvaluatorName,
-			&score.EvaluatorVersion,
-			&score.EvaluatorConfig,
-			&score.AuthorUserID,
+			&score.Reason,
+			&score.Metadata,
+			&score.ExperimentID,
+			&score.ExperimentItemID,
 			&score.Timestamp,
-			&score.Version,
 		)
 
 		if err != nil {

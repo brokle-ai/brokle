@@ -15,6 +15,7 @@ import (
 	"brokle/internal/core/domain/billing"
 	"brokle/internal/core/domain/common"
 	credentialsDomain "brokle/internal/core/domain/credentials"
+	evaluationDomain "brokle/internal/core/domain/evaluation"
 	"brokle/internal/core/domain/observability"
 	"brokle/internal/core/domain/organization"
 	playgroundDomain "brokle/internal/core/domain/playground"
@@ -25,6 +26,7 @@ import (
 	authService "brokle/internal/core/services/auth"
 	billingService "brokle/internal/core/services/billing"
 	credentialsService "brokle/internal/core/services/credentials"
+	evaluationService "brokle/internal/core/services/evaluation"
 	observabilityService "brokle/internal/core/services/observability"
 	orgService "brokle/internal/core/services/organization"
 	playgroundService "brokle/internal/core/services/playground"
@@ -41,6 +43,7 @@ import (
 	authRepo "brokle/internal/infrastructure/repository/auth"
 	billingRepo "brokle/internal/infrastructure/repository/billing"
 	credentialsRepo "brokle/internal/infrastructure/repository/credentials"
+	evaluationRepo "brokle/internal/infrastructure/repository/evaluation"
 	observabilityRepo "brokle/internal/infrastructure/repository/observability"
 	orgRepo "brokle/internal/infrastructure/repository/organization"
 	playgroundRepo "brokle/internal/infrastructure/repository/playground"
@@ -114,6 +117,7 @@ type RepositoryContainer struct {
 	Prompt        *PromptRepositories
 	Credentials   *CredentialsRepositories
 	Playground    *PlaygroundRepositories
+	Evaluation    *EvaluationRepositories
 }
 
 // ServiceContainer holds all service instances organized by domain
@@ -132,6 +136,7 @@ type ServiceContainer struct {
 	Prompt              *PromptServices
 	Credentials         *CredentialsServices
 	Playground          *PlaygroundServices
+	Evaluation          *EvaluationServices
 }
 
 // EnterpriseContainer holds all enterprise service instances
@@ -217,6 +222,11 @@ type PlaygroundRepositories struct {
 	Session playgroundDomain.SessionRepository
 }
 
+// EvaluationRepositories contains all evaluation-related repositories
+type EvaluationRepositories struct {
+	ScoreConfig evaluationDomain.ScoreConfigRepository
+}
+
 // Domain-specific service containers
 
 // UserServices contains all user-related services
@@ -265,6 +275,11 @@ type CredentialsServices struct {
 // PlaygroundServices contains all playground-related services
 type PlaygroundServices struct {
 	Playground playgroundDomain.PlaygroundService
+}
+
+// EvaluationServices contains all evaluation-related services
+type EvaluationServices struct {
+	ScoreConfig evaluationDomain.ScoreConfigService
 }
 
 func ProvideDatabases(cfg *config.Config, logger *slog.Logger) (*DatabaseContainer, error) {
@@ -398,6 +413,8 @@ func ProvideServerServices(core *CoreContainer) *ServiceContainer {
 		logger,
 	)
 
+	evaluationServices := ProvideEvaluationServices(repos.Evaluation, logger)
+
 	return &ServiceContainer{
 		User:                userServices,
 		Auth:                authServices,
@@ -413,6 +430,7 @@ func ProvideServerServices(core *CoreContainer) *ServiceContainer {
 		Prompt:              promptServices,
 		Credentials:         credentialsServices,
 		Playground:          playgroundServices,
+		Evaluation:          evaluationServices,
 	}
 }
 
@@ -461,6 +479,12 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 		playgroundSvc = core.Services.Playground.Playground
 	}
 
+	// Get evaluation service
+	var scoreConfigSvc evaluationDomain.ScoreConfigService
+	if core.Services.Evaluation != nil {
+		scoreConfigSvc = core.Services.Evaluation.ScoreConfig
+	}
+
 	httpHandlers := handlers.NewHandlers(
 		core.Config,
 		core.Logger,
@@ -486,6 +510,7 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 		credentialsSvc,
 		modelCatalogSvc,
 		playgroundSvc,
+		scoreConfigSvc,
 	)
 
 	httpServer := http.NewServer(
@@ -639,6 +664,13 @@ func ProvidePlaygroundRepositories(db *gorm.DB) *PlaygroundRepositories {
 	}
 }
 
+// ProvideEvaluationRepositories creates evaluation repository container
+func ProvideEvaluationRepositories(db *gorm.DB) *EvaluationRepositories {
+	return &EvaluationRepositories{
+		ScoreConfig: evaluationRepo.NewScoreConfigRepository(db),
+	}
+}
+
 // ProvideRepositories creates all repository containers
 func ProvideRepositories(dbs *DatabaseContainer, logger *slog.Logger) *RepositoryContainer {
 	return &RepositoryContainer{
@@ -652,6 +684,7 @@ func ProvideRepositories(dbs *DatabaseContainer, logger *slog.Logger) *Repositor
 		Prompt:        ProvidePromptRepositories(dbs.Postgres.DB, dbs.Redis),
 		Credentials:   ProvideCredentialsRepositories(dbs.Postgres.DB),
 		Playground:    ProvidePlaygroundRepositories(dbs.Postgres.DB),
+		Evaluation:    ProvideEvaluationRepositories(dbs.Postgres.DB),
 	}
 }
 
@@ -982,6 +1015,21 @@ func ProvidePlaygroundServices(
 
 	return &PlaygroundServices{
 		Playground: playgroundSvc,
+	}
+}
+
+// ProvideEvaluationServices creates all evaluation-related services
+func ProvideEvaluationServices(
+	evaluationRepos *EvaluationRepositories,
+	logger *slog.Logger,
+) *EvaluationServices {
+	scoreConfigSvc := evaluationService.NewScoreConfigService(
+		evaluationRepos.ScoreConfig,
+		logger,
+	)
+
+	return &EvaluationServices{
+		ScoreConfig: scoreConfigSvc,
 	}
 }
 

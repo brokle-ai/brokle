@@ -157,6 +157,14 @@ func GetErrorType(err error) AppErrorType {
 	return InternalError
 }
 
+// IsNotFound returns true if the error is a NotFoundError
+func IsNotFound(err error) bool {
+	if appErr, ok := IsAppError(err); ok {
+		return appErr.Type == NotFoundError
+	}
+	return false
+}
+
 func WrapValidationError(err error, message string) *AppError {
 	return NewAppError(ValidationError, message, err.Error(), err)
 }

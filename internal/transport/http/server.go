@@ -353,6 +353,16 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 				aiCreds.DELETE("/:credentialId", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Credentials.Delete)
 			}
 		}
+
+		// Score Config routes (Evaluation domain - score definitions)
+		scoreConfigs := projects.Group("/:projectId/score-configs")
+		{
+			scoreConfigs.GET("", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Evaluation.List)
+			scoreConfigs.POST("", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Evaluation.Create)
+			scoreConfigs.GET("/:configId", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Evaluation.Get)
+			scoreConfigs.PUT("/:configId", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Evaluation.Update)
+			scoreConfigs.DELETE("/:configId", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Evaluation.Delete)
+		}
 	}
 
 	// Analytics routes
@@ -479,6 +489,13 @@ func (s *Server) setupSDKRoutes(router *gin.RouterGroup) {
 		prompts.GET("", s.handlers.Prompt.ListPromptsSDK)        // List prompts
 		prompts.POST("", s.handlers.Prompt.UpsertPrompt)         // Create or update prompt (upsert)
 		prompts.GET("/:name", s.handlers.Prompt.GetPromptByName) // Get prompt by name with label/version
+	}
+
+	// Score SDK routes (with optional ScoreConfig validation)
+	scores := router.Group("/scores")
+	{
+		scores.POST("", s.handlers.SDKScore.Create)            // POST /v1/scores - Create single score
+		scores.POST("/batch", s.handlers.SDKScore.CreateBatch) // POST /v1/scores/batch - Batch create scores
 	}
 }
 
