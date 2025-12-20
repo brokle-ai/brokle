@@ -2,7 +2,7 @@
 -- PROMPTS TABLE (PROMPT MANAGEMENT DOMAIN)
 -- ===================================
 -- Core prompt entity: stores prompt metadata and links to versions
--- Uses label-based versioning (Langfuse pattern) for deployment management
+-- Uses label-based versioning for deployment management
 
 CREATE TABLE prompts (
     id CHAR(26) PRIMARY KEY,

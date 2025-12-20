@@ -117,8 +117,7 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       GRPC_PORT: "4317"
       LOG_LEVEL: info
-      # LLM API keys are NOT configured via environment - use dashboard Settings > LLM Providers
-      LLM_KEY_ENCRYPTION_KEY: ${LLM_KEY_ENCRYPTION_KEY:-}  # Required for encrypting user-provided LLM credentials
+      AI_KEY_ENCRYPTION_KEY: ${AI_KEY_ENCRYPTION_KEY:-}
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
     ports:
       - "4317:4317"  # OTLP gRPC (external)

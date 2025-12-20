@@ -124,7 +124,6 @@ export { ChatMessageEditor } from './components/prompt-editor/ChatMessageEditor'
 export { PromptTemplateInput } from './components/prompt-editor/PromptTemplateInput'
 export { PromptEditorToolbar } from './components/prompt-editor/PromptEditorToolbar'
 export { VariableBadge, VariableList } from './components/prompt-editor/VariableExtractor'
-export { ModelConfigForm } from './components/prompt-editor/ModelConfigPanel'
 
 // Prompt List components (nested directory)
 export { PromptsTable } from './components/prompt-list/PromptList'

@@ -23,7 +23,6 @@ var labelPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]*$`)
 // Default cache TTL
 const defaultCacheTTL = 60 * time.Second
 
-// promptService implements promptDomain.PromptService
 type promptService struct {
 	txManager           common.TransactionManager
 	promptRepo          promptDomain.PromptRepository
@@ -35,7 +34,6 @@ type promptService struct {
 	logger              *slog.Logger
 }
 
-// NewPromptService creates a new prompt service instance
 func NewPromptService(
 	txManager common.TransactionManager,
 	promptRepo promptDomain.PromptRepository,
@@ -82,14 +80,6 @@ func (s *promptService) CreatePrompt(ctx context.Context, projectID ulid.ULID, u
 		return nil, nil, nil, appErrors.NewInternalError("failed to marshal template", err)
 	}
 
-	var configJSON []byte
-	if req.Config != nil {
-		configJSON, err = json.Marshal(req.Config)
-		if err != nil {
-			return nil, nil, nil, appErrors.NewInternalError("failed to marshal config", err)
-		}
-	}
-
 	// Validate all labels for format and protection (BEFORE transaction to fail fast)
 	for _, labelName := range req.Labels {
 		if labelName == promptDomain.LabelLatest {
@@ -110,7 +100,7 @@ func (s *promptService) CreatePrompt(ctx context.Context, projectID ulid.ULID, u
 	}
 
 	prompt := promptDomain.NewPrompt(projectID, req.Name, promptType, req.Description, req.Tags)
-	version := promptDomain.NewVersion(prompt.ID, 1, templateJSON, configJSON, variables, req.CommitMessage, userID)
+	version := promptDomain.NewVersion(prompt.ID, 1, templateJSON, variables, req.CommitMessage, userID)
 
 	// TRANSACTION: Create prompt, version, and labels atomically
 	err = s.txManager.WithTransaction(ctx, func(txCtx context.Context, factory common.RepositoryFactory) error {
@@ -439,7 +429,6 @@ func (s *promptService) UpsertPrompt(ctx context.Context, projectID ulid.ULID, u
 			Description:   req.Description,
 			Tags:          req.Tags,
 			Template:      req.Template,
-			Config:        req.Config,
 			Labels:        req.Labels,
 			CommitMessage: req.CommitMessage,
 		}
@@ -462,7 +451,6 @@ func (s *promptService) UpsertPrompt(ctx context.Context, projectID ulid.ULID, u
 
 	versionReq := &promptDomain.CreateVersionRequest{
 		Template:      req.Template,
-		Config:        req.Config,
 		Labels:        req.Labels,
 		CommitMessage: req.CommitMessage,
 	}
@@ -511,14 +499,6 @@ func (s *promptService) CreateVersion(ctx context.Context, projectID, promptID u
 		return nil, nil, appErrors.NewInternalError("failed to marshal template", err)
 	}
 
-	var configJSON []byte
-	if req.Config != nil {
-		configJSON, err = json.Marshal(req.Config)
-		if err != nil {
-			return nil, nil, appErrors.NewInternalError("failed to marshal config", err)
-		}
-	}
-
 	// Validate labels before transaction to fail fast
 	for _, labelName := range req.Labels {
 		if labelName == promptDomain.LabelLatest {
@@ -550,7 +530,7 @@ func (s *promptService) CreateVersion(ctx context.Context, projectID, promptID u
 			return appErrors.NewInternalError("failed to get next version number", err)
 		}
 
-		version = promptDomain.NewVersion(promptID, versionNum, templateJSON, configJSON, variables, req.CommitMessage, userID)
+		version = promptDomain.NewVersion(promptID, versionNum, templateJSON, variables, req.CommitMessage, userID)
 
 		if err := txVersionRepo.Create(txCtx, version); err != nil {
 			return appErrors.NewInternalError("failed to create version", err)
@@ -777,14 +757,6 @@ func (s *promptService) GetVersionDiff(ctx context.Context, projectID, promptID 
 	json.Unmarshal(from.Template, &templateFrom)
 	json.Unmarshal(to.Template, &templateTo)
 
-	var configFrom, configTo *promptDomain.ModelConfig
-	if len(from.Config) > 0 {
-		json.Unmarshal(from.Config, &configFrom)
-	}
-	if len(to.Config) > 0 {
-		json.Unmarshal(to.Config, &configTo)
-	}
-
 	fromVars := make(map[string]bool)
 	for _, v := range from.Variables {
 		fromVars[v] = true
@@ -812,8 +784,6 @@ func (s *promptService) GetVersionDiff(ctx context.Context, projectID, promptID 
 		ToVersion:        toVersion,
 		TemplateFrom:     templateFrom,
 		TemplateTo:       templateTo,
-		ConfigFrom:       configFrom,
-		ConfigTo:         configTo,
 		VariablesAdded:   added,
 		VariablesRemoved: removed,
 	}, nil
@@ -1002,8 +972,6 @@ func (s *promptService) buildPromptResponse(prompt *promptDomain.Prompt, version
 	var template interface{}
 	json.Unmarshal(version.Template, &template)
 
-	config, _ := version.GetModelConfig()
-
 	labelNames := make([]string, 0, len(labels))
 	for _, l := range labels {
 		labelNames = append(labelNames, l.Name)
@@ -1025,7 +993,6 @@ func (s *promptService) buildPromptResponse(prompt *promptDomain.Prompt, version
 		VersionID:     version.ID.String(),
 		Labels:        labelNames,
 		Template:      template,
-		Config:        config,
 		Variables:     []string(version.Variables),
 		CommitMessage: version.CommitMessage,
 		CreatedAt:     version.CreatedAt,
@@ -1042,8 +1009,6 @@ func (s *promptService) buildVersionResponseWithLabels(v *promptDomain.Version, 
 		return nil, err
 	}
 
-	config, _ := v.GetModelConfig()
-
 	if labels == nil {
 		labels = []string{}
 	}
@@ -1057,7 +1022,6 @@ func (s *promptService) buildVersionResponseWithLabels(v *promptDomain.Version, 
 		ID:            v.ID.String(),
 		Version:       v.Version,
 		Template:      template,
-		Config:        config,
 		Variables:     []string(v.Variables),
 		CommitMessage: v.CommitMessage,
 		Labels:        labels,
@@ -1078,7 +1042,6 @@ func (s *promptService) cachedPromptToResponse(cached *promptDomain.CachedPrompt
 		VersionID:     cached.VersionID,
 		Labels:        cached.Labels,
 		Template:      cached.Template,
-		Config:        cached.Config,
 		Variables:     cached.Variables,
 		CommitMessage: cached.CommitMessage,
 		CreatedAt:     cached.CreatedAt,
@@ -1099,7 +1062,6 @@ func (s *promptService) responseToCachedPrompt(resp *promptDomain.PromptResponse
 		VersionID:     resp.VersionID,
 		Labels:        resp.Labels,
 		Template:      resp.Template,
-		Config:        resp.Config,
 		Variables:     resp.Variables,
 		CommitMessage: resp.CommitMessage,
 		CreatedAt:     resp.CreatedAt,
@@ -1108,7 +1070,6 @@ func (s *promptService) responseToCachedPrompt(resp *promptDomain.PromptResponse
 	}
 }
 
-// isDuplicateKeyError checks if the error is a duplicate key constraint violation
 func isDuplicateKeyError(err error) bool {
 	return err != nil && (
 		// PostgreSQL duplicate key error

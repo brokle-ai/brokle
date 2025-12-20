@@ -1,4 +1,3 @@
-// Package credentials provides HTTP handlers for LLM provider credential management.
 package credentials
 
 import (
@@ -8,29 +7,31 @@ import (
 
 	"brokle/internal/config"
 	credentialsDomain "brokle/internal/core/domain/credentials"
+	credentialsService "brokle/internal/core/services/credentials"
 	"brokle/internal/transport/http/middleware"
 	appErrors "brokle/pkg/errors"
 	"brokle/pkg/response"
 	"brokle/pkg/ulid"
 )
 
-// Handler contains all credential-related HTTP handlers.
 type Handler struct {
-	config  *config.Config
-	logger  *slog.Logger
-	service credentialsDomain.LLMProviderCredentialService
+	config       *config.Config
+	logger       *slog.Logger
+	service      credentialsDomain.ProviderCredentialService
+	modelCatalog credentialsService.ModelCatalogService
 }
 
-// NewHandler creates a new credentials handler.
 func NewHandler(
 	cfg *config.Config,
 	logger *slog.Logger,
-	service credentialsDomain.LLMProviderCredentialService,
+	service credentialsDomain.ProviderCredentialService,
+	modelCatalog credentialsService.ModelCatalogService,
 ) *Handler {
 	return &Handler{
-		config:  cfg,
-		logger:  logger,
-		service: service,
+		config:       cfg,
+		logger:       logger,
+		service:      service,
+		modelCatalog: modelCatalog,
 	}
 }
 
@@ -39,34 +40,55 @@ func NewHandler(
 func (h *Handler) serviceUnavailable(c *gin.Context) bool {
 	if h.service == nil {
 		response.Error(c, appErrors.NewServiceUnavailableError(
-			"Credentials feature not configured: LLM_KEY_ENCRYPTION_KEY is required",
+			"Credentials feature not configured: AI_KEY_ENCRYPTION_KEY is required",
 		))
 		return true
 	}
 	return false
 }
 
-// CreateOrUpdateRequest represents the request body for creating/updating a credential.
-type CreateOrUpdateRequest struct {
-	Provider string  `json:"provider" binding:"required,oneof=openai anthropic"`
-	APIKey   string  `json:"api_key" binding:"required,min=10"`
-	BaseURL  *string `json:"base_url,omitempty"`
+type CreateRequest struct {
+	Name         string            `json:"name" binding:"required,min=1,max=100"`
+	Adapter      string            `json:"adapter" binding:"required,oneof=openai anthropic azure gemini openrouter custom"`
+	APIKey       string            `json:"api_key" binding:"required,min=10"`
+	BaseURL      *string           `json:"base_url,omitempty"`
+	Config       map[string]any    `json:"config,omitempty"`
+	CustomModels []string          `json:"custom_models,omitempty"`
+	Headers      map[string]string `json:"headers,omitempty"`
 }
 
-// CreateOrUpdate creates or updates an LLM provider credential.
-// @Summary Create or update LLM provider credential
-// @Description Creates a new credential or updates an existing one for the specified provider. The API key is validated before storing.
+type UpdateRequest struct {
+	Name         *string            `json:"name,omitempty" binding:"omitempty,min=1,max=100"`
+	APIKey       *string            `json:"api_key,omitempty" binding:"omitempty,min=10"`
+	BaseURL      *string            `json:"base_url,omitempty"`
+	Config       map[string]any     `json:"config,omitempty"`
+	CustomModels []string           `json:"custom_models,omitempty"`
+	Headers      *map[string]string `json:"headers,omitempty"` // Pointer allows clearing with empty map
+}
+
+type TestConnectionRequest struct {
+	Adapter string            `json:"adapter" binding:"required,oneof=openai anthropic azure gemini openrouter custom"`
+	APIKey  string            `json:"api_key" binding:"required"`
+	BaseURL *string           `json:"base_url,omitempty"`
+	Config  map[string]any    `json:"config,omitempty"`
+	Headers map[string]string `json:"headers,omitempty"`
+}
+
+// Create creates a new AI provider credential.
+// @Summary Create AI provider credential
+// @Description Creates a new credential configuration. Each configuration has a unique name within the project.
 // @Tags Credentials
 // @Accept json
 // @Produce json
 // @Param projectId path string true "Project ID"
-// @Param request body CreateOrUpdateRequest true "Credential request"
-// @Success 200 {object} credentials.LLMProviderCredentialResponse
+// @Param request body CreateRequest true "Credential request"
+// @Success 201 {object} credentials.ProviderCredentialResponse
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 401 {object} response.ErrorResponse
+// @Failure 409 {object} response.ErrorResponse "Name already exists"
 // @Failure 422 {object} response.ErrorResponse "API key validation failed"
-// @Router /api/v1/projects/{projectId}/credentials/llm [post]
-func (h *Handler) CreateOrUpdate(c *gin.Context) {
+// @Router /api/v1/projects/{projectId}/credentials/ai [post]
+func (h *Handler) Create(c *gin.Context) {
 	if h.serviceUnavailable(c) {
 		return
 	}
@@ -77,7 +99,7 @@ func (h *Handler) CreateOrUpdate(c *gin.Context) {
 		return
 	}
 
-	var req CreateOrUpdateRequest
+	var req CreateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.ValidationError(c, "Invalid request body", err.Error())
 		return
@@ -90,14 +112,75 @@ func (h *Handler) CreateOrUpdate(c *gin.Context) {
 	}
 
 	domainReq := &credentialsDomain.CreateCredentialRequest{
-		ProjectID: projectID,
-		Provider:  credentialsDomain.LLMProvider(req.Provider),
-		APIKey:    req.APIKey,
-		BaseURL:   req.BaseURL,
-		CreatedBy: userIDPtr,
+		ProjectID:    projectID,
+		Name:         req.Name,
+		Adapter:      credentialsDomain.Provider(req.Adapter),
+		APIKey:       req.APIKey,
+		BaseURL:      req.BaseURL,
+		Config:       req.Config,
+		CustomModels: req.CustomModels,
+		Headers:      req.Headers,
+		CreatedBy:    userIDPtr,
 	}
 
-	credential, err := h.service.CreateOrUpdate(c.Request.Context(), domainReq)
+	credential, err := h.service.Create(c.Request.Context(), domainReq)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	response.Created(c, credential)
+}
+
+// Update updates an existing AI provider credential.
+// @Summary Update AI provider credential
+// @Description Updates an existing credential configuration by ID. Name can be changed if unique.
+// @Tags Credentials
+// @Accept json
+// @Produce json
+// @Param projectId path string true "Project ID"
+// @Param credentialId path string true "Credential ID"
+// @Param request body UpdateRequest true "Update request"
+// @Success 200 {object} credentials.ProviderCredentialResponse
+// @Failure 400 {object} response.ErrorResponse
+// @Failure 401 {object} response.ErrorResponse
+// @Failure 404 {object} response.ErrorResponse
+// @Failure 409 {object} response.ErrorResponse "Name already exists"
+// @Failure 422 {object} response.ErrorResponse "API key validation failed"
+// @Router /api/v1/projects/{projectId}/credentials/ai/{credentialId} [patch]
+func (h *Handler) Update(c *gin.Context) {
+	if h.serviceUnavailable(c) {
+		return
+	}
+
+	projectID, err := ulid.Parse(c.Param("projectId"))
+	if err != nil {
+		response.Error(c, appErrors.NewValidationError("Invalid project ID", "projectId must be a valid ULID"))
+		return
+	}
+
+	credentialID, err := ulid.Parse(c.Param("credentialId"))
+	if err != nil {
+		response.Error(c, appErrors.NewValidationError("Invalid credential ID", "credentialId must be a valid ULID"))
+		return
+	}
+
+	var req UpdateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ValidationError(c, "Invalid request body", err.Error())
+		return
+	}
+
+	domainReq := &credentialsDomain.UpdateCredentialRequest{
+		Name:         req.Name,
+		APIKey:       req.APIKey,
+		BaseURL:      req.BaseURL,
+		Config:       req.Config,
+		CustomModels: req.CustomModels,
+		Headers:      req.Headers,
+	}
+
+	credential, err := h.service.Update(c.Request.Context(), credentialID, projectID, domainReq)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -106,16 +189,16 @@ func (h *Handler) CreateOrUpdate(c *gin.Context) {
 	response.Success(c, credential)
 }
 
-// List lists all LLM provider credentials for a project.
-// @Summary List LLM provider credentials
-// @Description Returns all configured LLM provider credentials for the project (with masked keys).
+// List lists all AI provider credentials for a project.
+// @Summary List AI provider credentials
+// @Description Returns all configured AI provider credentials for the project (with masked keys).
 // @Tags Credentials
 // @Produce json
 // @Param projectId path string true "Project ID"
-// @Success 200 {array} credentials.LLMProviderCredentialResponse
+// @Success 200 {array} credentials.ProviderCredentialResponse
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 401 {object} response.ErrorResponse
-// @Router /api/v1/projects/{projectId}/credentials/llm [get]
+// @Router /api/v1/projects/{projectId}/credentials/ai [get]
 func (h *Handler) List(c *gin.Context) {
 	if h.serviceUnavailable(c) {
 		return
@@ -136,18 +219,18 @@ func (h *Handler) List(c *gin.Context) {
 	response.Success(c, credentials)
 }
 
-// Get retrieves a specific LLM provider credential.
-// @Summary Get LLM provider credential
-// @Description Returns the credential configuration for a specific provider (with masked key).
+// Get retrieves a specific AI provider credential by ID.
+// @Summary Get AI provider credential
+// @Description Returns the credential configuration for a specific credential ID (with masked key).
 // @Tags Credentials
 // @Produce json
 // @Param projectId path string true "Project ID"
-// @Param provider path string true "Provider (openai or anthropic)"
-// @Success 200 {object} credentials.LLMProviderCredentialResponse
+// @Param credentialId path string true "Credential ID"
+// @Success 200 {object} credentials.ProviderCredentialResponse
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 401 {object} response.ErrorResponse
 // @Failure 404 {object} response.ErrorResponse
-// @Router /api/v1/projects/{projectId}/credentials/llm/{provider} [get]
+// @Router /api/v1/projects/{projectId}/credentials/ai/{credentialId} [get]
 func (h *Handler) Get(c *gin.Context) {
 	if h.serviceUnavailable(c) {
 		return
@@ -159,13 +242,13 @@ func (h *Handler) Get(c *gin.Context) {
 		return
 	}
 
-	provider := credentialsDomain.LLMProvider(c.Param("provider"))
-	if !provider.IsValid() {
-		response.Error(c, appErrors.NewValidationError("Invalid provider", "provider must be 'openai' or 'anthropic'"))
+	credentialID, err := ulid.Parse(c.Param("credentialId"))
+	if err != nil {
+		response.Error(c, appErrors.NewValidationError("Invalid credential ID", "credentialId must be a valid ULID"))
 		return
 	}
 
-	credential, err := h.service.Get(c.Request.Context(), projectID, provider)
+	credential, err := h.service.GetByID(c.Request.Context(), credentialID, projectID)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -174,18 +257,18 @@ func (h *Handler) Get(c *gin.Context) {
 	response.Success(c, credential)
 }
 
-// Delete removes an LLM provider credential.
-// @Summary Delete LLM provider credential
-// @Description Removes the credential for a specific provider from the project.
+// Delete removes an AI provider credential by ID.
+// @Summary Delete AI provider credential
+// @Description Removes a credential configuration by its ID.
 // @Tags Credentials
 // @Produce json
 // @Param projectId path string true "Project ID"
-// @Param provider path string true "Provider (openai or anthropic)"
+// @Param credentialId path string true "Credential ID"
 // @Success 204 "No Content"
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 401 {object} response.ErrorResponse
 // @Failure 404 {object} response.ErrorResponse
-// @Router /api/v1/projects/{projectId}/credentials/llm/{provider} [delete]
+// @Router /api/v1/projects/{projectId}/credentials/ai/{credentialId} [delete]
 func (h *Handler) Delete(c *gin.Context) {
 	if h.serviceUnavailable(c) {
 		return
@@ -197,16 +280,91 @@ func (h *Handler) Delete(c *gin.Context) {
 		return
 	}
 
-	provider := credentialsDomain.LLMProvider(c.Param("provider"))
-	if !provider.IsValid() {
-		response.Error(c, appErrors.NewValidationError("Invalid provider", "provider must be 'openai' or 'anthropic'"))
+	credentialID, err := ulid.Parse(c.Param("credentialId"))
+	if err != nil {
+		response.Error(c, appErrors.NewValidationError("Invalid credential ID", "credentialId must be a valid ULID"))
 		return
 	}
 
-	if err := h.service.Delete(c.Request.Context(), projectID, provider); err != nil {
+	if err := h.service.Delete(c.Request.Context(), credentialID, projectID); err != nil {
 		response.Error(c, err)
 		return
 	}
 
 	response.NoContent(c)
+}
+
+// TestConnection tests an AI provider connection without saving.
+// @Summary Test AI provider connection
+// @Description Tests the provided API key and configuration without saving. Returns success or error message.
+// @Tags Credentials
+// @Accept json
+// @Produce json
+// @Param projectId path string true "Project ID"
+// @Param request body TestConnectionRequest true "Connection test request"
+// @Success 200 {object} credentials.TestConnectionResponse
+// @Failure 400 {object} response.ErrorResponse
+// @Failure 401 {object} response.ErrorResponse
+// @Router /api/v1/projects/{projectId}/credentials/ai/test [post]
+func (h *Handler) TestConnection(c *gin.Context) {
+	if h.serviceUnavailable(c) {
+		return
+	}
+
+	// We don't need projectId for testing, but keep it for route consistency
+	_, err := ulid.Parse(c.Param("projectId"))
+	if err != nil {
+		response.Error(c, appErrors.NewValidationError("Invalid project ID", "projectId must be a valid ULID"))
+		return
+	}
+
+	var req TestConnectionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ValidationError(c, "Invalid request body", err.Error())
+		return
+	}
+
+	domainReq := &credentialsDomain.TestConnectionRequest{
+		Adapter: credentialsDomain.Provider(req.Adapter),
+		APIKey:  req.APIKey,
+		BaseURL: req.BaseURL,
+		Config:  req.Config,
+		Headers: req.Headers,
+	}
+
+	result := h.service.TestConnection(c.Request.Context(), domainReq)
+	response.Success(c, result)
+}
+
+// GetAvailableModels returns all available LLM models for a project.
+// @Summary Get available models
+// @Description Returns LLM models available based on configured AI providers. Standard providers return default models plus any custom models. Custom providers return only user-defined models.
+// @Tags Credentials
+// @Produce json
+// @Param projectId path string true "Project ID"
+// @Success 200 {array} analytics.AvailableModel
+// @Failure 400 {object} response.ErrorResponse
+// @Failure 401 {object} response.ErrorResponse
+// @Router /api/v1/projects/{projectId}/credentials/ai/models [get]
+func (h *Handler) GetAvailableModels(c *gin.Context) {
+	if h.modelCatalog == nil {
+		response.Error(c, appErrors.NewServiceUnavailableError(
+			"Model catalog feature not configured",
+		))
+		return
+	}
+
+	projectID, err := ulid.Parse(c.Param("projectId"))
+	if err != nil {
+		response.Error(c, appErrors.NewValidationError("Invalid project ID", "projectId must be a valid ULID"))
+		return
+	}
+
+	models, err := h.modelCatalog.GetAvailableModels(c.Request.Context(), projectID)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	response.Success(c, models)
 }

@@ -23,7 +23,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { createPrompt, createVersion } from '@/features/prompts/api/prompts-api'
-import type { ChatMessage, ModelConfig } from '../types'
+import type { ChatMessage } from '../types'
 
 // Callback data when prompt is saved
 export interface PromptSavedData {
@@ -37,7 +37,6 @@ export interface PromptSavedData {
 interface SaveAsPromptDialogProps {
   projectId: string
   messages: ChatMessage[]
-  config: ModelConfig | null
   loadedFromPromptId: string | null
   loadedFromPromptName: string | null
   loadedFromPromptVersionNumber?: number | null
@@ -50,7 +49,6 @@ type SaveMode = 'new' | 'version'
 export function SaveAsPromptDialog({
   projectId,
   messages,
-  config,
   loadedFromPromptId,
   loadedFromPromptName,
   loadedFromPromptVersionNumber,
@@ -89,7 +87,6 @@ export function SaveAsPromptDialog({
         type: 'chat',
         description: description || undefined,
         template,
-        config: config || undefined,
         commit_message: commitMessage || 'Initial version from playground',
       })
     },
@@ -116,7 +113,6 @@ export function SaveAsPromptDialog({
 
       return createVersion(projectId, loadedFromPromptId, {
         template,
-        config: config || undefined,
         commit_message: commitMessage || 'Updated from playground',
       })
     },
@@ -163,7 +159,7 @@ export function SaveAsPromptDialog({
       <Tooltip>
         <TooltipTrigger asChild>
           <DialogTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8" disabled={disabled}>
+            <Button variant="outline" size="icon" className="h-8 w-8" disabled={disabled} aria-label="Save as prompt">
               <Save className="h-4 w-4" />
             </Button>
           </DialogTrigger>

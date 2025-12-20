@@ -14,10 +14,11 @@ import (
 var (
 	// Credential errors
 	ErrCredentialNotFound     = errors.New("credential not found")
-	ErrCredentialExists       = errors.New("credential already exists for this provider")
-	ErrInvalidProvider        = errors.New("invalid LLM provider")
+	ErrCredentialExists       = errors.New("credential with this name already exists")
+	ErrInvalidProvider        = errors.New("invalid adapter type")
 	ErrInvalidAPIKey          = errors.New("invalid API key format")
-	ErrNoKeyConfigured        = errors.New("no API key configured for provider")
+	ErrNoKeyConfigured        = errors.New("no API key configured")
+	ErrAdapterMismatch        = errors.New("credential adapter mismatch")
 
 	// Encryption errors
 	ErrEncryptionFailed       = errors.New("failed to encrypt API key")
@@ -40,56 +41,48 @@ const (
 	ErrCodeValidationFailed     = "VALIDATION_FAILED"
 )
 
-// Convenience functions for creating contextualized errors
-
-// NewCredentialNotFoundError creates a credential not found error with provider context.
-func NewCredentialNotFoundError(provider string, projectID string) error {
-	return fmt.Errorf("%w: provider=%s project=%s", ErrCredentialNotFound, provider, projectID)
+func NewCredentialNotFoundError(identifier string, projectID string) error {
+	return fmt.Errorf("%w: %s in project=%s", ErrCredentialNotFound, identifier, projectID)
 }
 
-// NewCredentialExistsError creates a credential exists error.
-func NewCredentialExistsError(provider string, projectID string) error {
-	return fmt.Errorf("%w: provider=%s already configured for project=%s", ErrCredentialExists, provider, projectID)
+func NewCredentialExistsError(name string, projectID string) error {
+	return fmt.Errorf("%w: name=%s in project=%s", ErrCredentialExists, name, projectID)
 }
 
-// NewInvalidProviderError creates an invalid provider error.
-func NewInvalidProviderError(provider string) error {
-	return fmt.Errorf("%w: '%s' (must be 'openai' or 'anthropic')", ErrInvalidProvider, provider)
+func NewInvalidAdapterError(adapter string) error {
+	return fmt.Errorf("%w: '%s' (must be one of: openai, anthropic, azure, gemini, openrouter, custom)", ErrInvalidProvider, adapter)
 }
 
-// NewAPIKeyValidationError creates an API key validation error with details.
-func NewAPIKeyValidationError(provider string, details string) error {
-	return fmt.Errorf("%w: %s - %s", ErrAPIKeyValidationFailed, provider, details)
+func NewAPIKeyValidationError(adapter string, details string) error {
+	return fmt.Errorf("%w: %s - %s", ErrAPIKeyValidationFailed, adapter, details)
 }
 
-// NewNoKeyConfiguredError creates a no key configured error.
-func NewNoKeyConfiguredError(provider string) error {
-	return fmt.Errorf("%w: %s (set via project settings or environment variable)", ErrNoKeyConfigured, provider)
+func NewNoKeyConfiguredError(adapter string) error {
+	return fmt.Errorf("%w: %s (set via project settings or environment variable)", ErrNoKeyConfigured, adapter)
 }
 
-// Error classification helpers
+func NewAdapterMismatchError(expected, actual string) error {
+	return fmt.Errorf("%w: expected '%s', credential uses '%s'", ErrAdapterMismatch, expected, actual)
+}
 
-// IsNotFoundError checks if the error is a not-found error.
 func IsNotFoundError(err error) bool {
 	return errors.Is(err, ErrCredentialNotFound)
 }
 
-// IsValidationError checks if the error is a validation error.
 func IsValidationError(err error) bool {
 	return errors.Is(err, ErrInvalidProvider) ||
 		errors.Is(err, ErrInvalidAPIKey) ||
 		errors.Is(err, ErrAPIKeyValidationFailed) ||
-		errors.Is(err, ErrInvalidBaseURL)
+		errors.Is(err, ErrInvalidBaseURL) ||
+		errors.Is(err, ErrAdapterMismatch)
 }
 
-// IsEncryptionError checks if the error is an encryption-related error.
 func IsEncryptionError(err error) bool {
 	return errors.Is(err, ErrEncryptionFailed) ||
 		errors.Is(err, ErrDecryptionFailed) ||
 		errors.Is(err, ErrEncryptionKeyMissing)
 }
 
-// IsConflictError checks if the error is a conflict error.
 func IsConflictError(err error) bool {
 	return errors.Is(err, ErrCredentialExists)
 }

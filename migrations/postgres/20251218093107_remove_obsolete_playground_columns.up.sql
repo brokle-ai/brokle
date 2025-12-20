@@ -14,9 +14,9 @@ ALTER TABLE playground_sessions DROP COLUMN IF EXISTS is_saved;
 ALTER TABLE playground_sessions DROP COLUMN IF EXISTS expires_at;
 
 -- Create new simplified index for listing sessions
-CREATE INDEX idx_playground_sessions_project_used
+CREATE INDEX IF NOT EXISTS idx_playground_sessions_project_used
     ON playground_sessions(project_id, last_used_at DESC);
 
 -- Create new GIN index for tags (no is_saved filter)
-CREATE INDEX idx_playground_sessions_tags
+CREATE INDEX IF NOT EXISTS idx_playground_sessions_tags
     ON playground_sessions USING GIN(tags);

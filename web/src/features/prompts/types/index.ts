@@ -9,6 +9,8 @@ export interface ChatMessage {
 
 export interface ModelConfig {
   model?: string
+  provider?: string
+  credential_id?: string
   temperature?: number
   max_tokens?: number
   top_p?: number
@@ -35,7 +37,6 @@ export interface Prompt {
   version_id: string
   labels: string[]
   template: TextTemplate | ChatTemplate
-  config?: ModelConfig
   variables: string[]
   commit_message?: string
   created_at: string
@@ -64,7 +65,6 @@ export interface PromptVersion {
   id: string
   version: number
   template: TextTemplate | ChatTemplate
-  config?: ModelConfig
   variables: string[]
   commit_message?: string
   labels: string[]
@@ -77,30 +77,8 @@ export interface VersionDiff {
   to_version: number
   template_from: TextTemplate | ChatTemplate
   template_to: TextTemplate | ChatTemplate
-  config_from?: ModelConfig
-  config_to?: ModelConfig
   variables_added: string[]
   variables_removed: string[]
-}
-
-export interface ExecutePromptResponse {
-  compiled_prompt: any
-  response?: LLMResponse
-  latency_ms: number
-  error?: string
-}
-
-export interface LLMResponse {
-  content: string
-  model: string
-  usage?: LLMUsage
-  cost?: number
-}
-
-export interface LLMUsage {
-  prompt_tokens: number
-  completion_tokens: number
-  total_tokens: number
 }
 
 export interface UpsertResponse {
@@ -119,7 +97,6 @@ export interface CreatePromptRequest {
   description?: string
   tags?: string[]
   template: TextTemplate | ChatTemplate
-  config?: ModelConfig
   labels?: string[]
   commit_message?: string
 }
@@ -132,18 +109,12 @@ export interface UpdatePromptRequest {
 
 export interface CreateVersionRequest {
   template: TextTemplate | ChatTemplate
-  config?: ModelConfig
   labels?: string[]
   commit_message?: string
 }
 
 export interface SetLabelsRequest {
   labels: string[]
-}
-
-export interface ExecutePromptRequest {
-  variables: Record<string, string>
-  config_overrides?: ModelConfig
 }
 
 export interface GetPromptsParams {

@@ -4,48 +4,67 @@ import (
 	"time"
 
 	"brokle/pkg/ulid"
+
+	"github.com/lib/pq"
 )
 
-// LLMProvider represents supported LLM providers
-type LLMProvider string
+// Provider represents supported AI/LLM providers
+type Provider string
 
 const (
-	ProviderOpenAI    LLMProvider = "openai"
-	ProviderAnthropic LLMProvider = "anthropic"
+	ProviderOpenAI     Provider = "openai"
+	ProviderAnthropic  Provider = "anthropic"
+	ProviderAzure      Provider = "azure"
+	ProviderGemini     Provider = "gemini"
+	ProviderOpenRouter Provider = "openrouter"
+	ProviderCustom     Provider = "custom"
 )
 
 // ValidProviders returns all valid provider values
-func ValidProviders() []LLMProvider {
-	return []LLMProvider{ProviderOpenAI, ProviderAnthropic}
+func ValidProviders() []Provider {
+	return []Provider{
+		ProviderOpenAI,
+		ProviderAnthropic,
+		ProviderAzure,
+		ProviderGemini,
+		ProviderOpenRouter,
+		ProviderCustom,
+	}
 }
 
 // IsValid checks if the provider is a valid value
-func (p LLMProvider) IsValid() bool {
+func (p Provider) IsValid() bool {
 	switch p {
-	case ProviderOpenAI, ProviderAnthropic:
+	case ProviderOpenAI, ProviderAnthropic, ProviderAzure, ProviderGemini, ProviderOpenRouter, ProviderCustom:
 		return true
 	default:
 		return false
 	}
 }
 
-// String returns the string representation
-func (p LLMProvider) String() string {
+func (p Provider) String() string {
 	return string(p)
 }
 
-// LLMProviderCredential represents an encrypted LLM API key for a project.
+// ProviderCredential represents an encrypted AI provider API key for a project.
 // The actual API key is stored encrypted with AES-256-GCM and is never
 // returned to the frontend.
-type LLMProviderCredential struct {
+//
+// Multiple configurations per adapter (provider type) are supported.
+// Each configuration has a unique Name within a project.
+type ProviderCredential struct {
 	// Primary key
 	ID ulid.ULID `json:"id" gorm:"type:char(26);primaryKey"`
 
-	// Project scope (one key per provider per project)
+	// Project scope
 	ProjectID ulid.ULID `json:"project_id" gorm:"type:char(26);not null;index"`
 
-	// Provider type (openai, anthropic)
-	Provider LLMProvider `json:"provider" gorm:"type:llm_provider;not null"`
+	// User-defined name for this configuration (unique per project)
+	// e.g., "OpenAI Production", "Claude Development", "My Custom Provider"
+	Name string `json:"name" gorm:"type:varchar(100);not null"`
+
+	// Adapter type - the API protocol/provider (openai, anthropic, azure, gemini, openrouter, custom)
+	Adapter Provider `json:"adapter" gorm:"column:adapter;type:provider;not null"`
 
 	// Encrypted API key (AES-256-GCM: nonce + ciphertext + tag, base64 encoded)
 	// Never serialized to JSON, never returned to frontend
@@ -57,48 +76,91 @@ type LLMProviderCredential struct {
 	// Optional custom base URL for Azure OpenAI, proxies, etc.
 	BaseURL *string `json:"base_url,omitempty" gorm:"type:text"`
 
+	// Provider-specific configuration (JSONB)
+	// Azure: deployment_id, api_version
+	// Gemini: location
+	// Custom: models list
+	Config map[string]any `json:"config,omitempty" gorm:"type:jsonb;serializer:json;default:'{}'"`
+
+	// Encrypted custom HTTP headers (JSON string)
+	// Used for proxy authentication or custom endpoints
+	// Never serialized to JSON, never returned to frontend
+	Headers string `json:"-" gorm:"type:text"`
+
+	// Custom models defined by user (fine-tuned, private deployments, custom provider models)
+	// For standard providers: optional fine-tuned models (e.g., "ft:gpt-4o:my-org")
+	// For custom provider: required list of available models (e.g., "llama-3.1", "mistral-7b")
+	CustomModels pq.StringArray `json:"custom_models" gorm:"type:text[];default:'{}'"`
+
 	// Audit fields
 	CreatedBy *ulid.ULID `json:"created_by,omitempty" gorm:"type:char(26)"`
 	CreatedAt time.Time  `json:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at"`
 }
 
-// TableName returns the database table name
-func (LLMProviderCredential) TableName() string {
-	return "llm_provider_credentials"
+func (ProviderCredential) TableName() string {
+	return "provider_credentials"
 }
 
-// LLMProviderCredentialResponse is the safe response DTO (no encrypted data).
+// ProviderCredentialResponse is the safe response DTO (no encrypted data).
 // This is what gets returned to the frontend.
-type LLMProviderCredentialResponse struct {
-	ID         ulid.ULID   `json:"id"`
-	ProjectID  ulid.ULID   `json:"project_id"`
-	Provider   LLMProvider `json:"provider"`
-	KeyPreview string      `json:"key_preview"` // Masked: "sk-***abcd"
-	BaseURL    *string     `json:"base_url,omitempty"`
-	CreatedAt  time.Time   `json:"created_at"`
-	UpdatedAt  time.Time   `json:"updated_at"`
+type ProviderCredentialResponse struct {
+	ID           ulid.ULID         `json:"id"`
+	ProjectID    ulid.ULID         `json:"project_id"`
+	Name         string            `json:"name"`                // Unique configuration name
+	Adapter      Provider          `json:"adapter"`             // API protocol/provider type
+	KeyPreview   string            `json:"key_preview"`         // Masked: "sk-***abcd"
+	BaseURL      *string           `json:"base_url,omitempty"`
+	Config       map[string]any    `json:"config,omitempty"`    // Provider-specific config
+	CustomModels []string          `json:"custom_models"`       // User-defined models
+	Headers      map[string]string `json:"headers,omitempty"`   // Custom headers (decrypted for editing)
+	CreatedAt    time.Time         `json:"created_at"`
+	UpdatedAt    time.Time         `json:"updated_at"`
 }
 
-// DecryptedKeyConfig holds the decrypted key configuration for LLM execution.
+// AzureConfig holds Azure OpenAI specific configuration
+type AzureConfig struct {
+	DeploymentID string `json:"deployment_id"`
+	APIVersion   string `json:"api_version,omitempty"`
+}
+
+// GeminiConfig holds Google Gemini specific configuration
+type GeminiConfig struct {
+	Location string `json:"location,omitempty"`
+}
+
+// CustomConfig holds custom provider specific configuration
+type CustomConfig struct {
+	Models []string `json:"models,omitempty"`
+}
+
+// DecryptedKeyConfig holds the decrypted key configuration for AI execution.
 // This is ONLY used internally during prompt execution and is NEVER persisted
 // or returned via API.
 type DecryptedKeyConfig struct {
-	Provider LLMProvider
-	APIKey   string // Decrypted API key - handle with care
-	BaseURL  string // Custom base URL (if configured)
+	Provider Provider
+	APIKey   string            // Decrypted API key - handle with care
+	BaseURL  string            // Custom base URL (if configured)
+	Config   map[string]any    // Provider-specific config (Azure: deployment_id, api_version)
+	Headers  map[string]string // Custom headers (decrypted) for proxies/custom providers
 }
 
-// ToResponse converts an entity to a safe response DTO
-func (c *LLMProviderCredential) ToResponse() *LLMProviderCredentialResponse {
-	return &LLMProviderCredentialResponse{
-		ID:         c.ID,
-		ProjectID:  c.ProjectID,
-		Provider:   c.Provider,
-		KeyPreview: c.KeyPreview,
-		BaseURL:    c.BaseURL,
-		CreatedAt:  c.CreatedAt,
-		UpdatedAt:  c.UpdatedAt,
+func (c *ProviderCredential) ToResponse() *ProviderCredentialResponse {
+	customModels := []string{}
+	if c.CustomModels != nil {
+		customModels = c.CustomModels
+	}
+	return &ProviderCredentialResponse{
+		ID:           c.ID,
+		ProjectID:    c.ProjectID,
+		Name:         c.Name,
+		Adapter:      c.Adapter,
+		KeyPreview:   c.KeyPreview,
+		BaseURL:      c.BaseURL,
+		Config:       c.Config,
+		CustomModels: customModels,
+		CreatedAt:    c.CreatedAt,
+		UpdatedAt:    c.UpdatedAt,
 	}
 }
 
@@ -112,24 +174,30 @@ func MaskAPIKey(key string) string {
 	return key[:3] + "***" + key[len(key)-4:]
 }
 
-// DetectProvider attempts to detect the provider from a model name.
-// Returns empty string if unknown.
-func DetectProvider(model string) LLMProvider {
-	// OpenAI models
-	openAIPrefixes := []string{"gpt-", "o1", "text-", "davinci", "curie", "babbage", "ada"}
-	for _, prefix := range openAIPrefixes {
-		if len(model) >= len(prefix) && model[:len(prefix)] == prefix {
-			return ProviderOpenAI
-		}
+func (p Provider) RequiresBaseURL() bool {
+	switch p {
+	case ProviderAzure, ProviderCustom:
+		return true
+	default:
+		return false
 	}
+}
 
-	// Anthropic models
-	anthropicPrefixes := []string{"claude-"}
-	for _, prefix := range anthropicPrefixes {
-		if len(model) >= len(prefix) && model[:len(prefix)] == prefix {
-			return ProviderAnthropic
-		}
+func (p Provider) DisplayName() string {
+	switch p {
+	case ProviderOpenAI:
+		return "OpenAI"
+	case ProviderAnthropic:
+		return "Anthropic"
+	case ProviderAzure:
+		return "Azure OpenAI"
+	case ProviderGemini:
+		return "Google Gemini"
+	case ProviderOpenRouter:
+		return "OpenRouter"
+	case ProviderCustom:
+		return "Custom"
+	default:
+		return string(p)
 	}
-
-	return ""
 }

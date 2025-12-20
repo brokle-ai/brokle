@@ -41,9 +41,9 @@ type Config struct {
 
 // EncryptionConfig contains encryption settings for sensitive data at rest.
 type EncryptionConfig struct {
-	// LLMKeyEncryptionKey is the 256-bit key for encrypting LLM provider API keys (base64 encoded).
+	// AIKeyEncryptionKey is the 256-bit key for encrypting AI provider API keys (base64 encoded).
 	// Generate with: openssl rand -base64 32
-	LLMKeyEncryptionKey string `mapstructure:"llm_key_encryption_key"`
+	AIKeyEncryptionKey string `mapstructure:"ai_key_encryption_key"`
 }
 
 // AppConfig contains application-level configuration.
@@ -134,8 +134,8 @@ type LoggingConfig struct {
 }
 
 // ExternalConfig contains external service configurations.
-// Note: LLM API keys (OpenAI, Anthropic, etc.) are configured per-project via database,
-// not via environment variables. See: Settings > LLM Providers in the dashboard.
+// Note: AI API keys (OpenAI, Anthropic, etc.) are configured per-project via database,
+// not via environment variables. See: Settings > AI Providers in the dashboard.
 type ExternalConfig struct {
 	Email      EmailConfig   `mapstructure:"email"`
 	Stripe     StripeConfig  `mapstructure:"stripe"`
@@ -577,9 +577,9 @@ func Load() (*Config, error) {
 	viper.BindEnv("server.cors_allowed_headers", "CORS_ALLOWED_HEADERS")
 
 	// External API keys (standard names)
-	// Note: LLM API keys (OpenAI, Anthropic, Cohere, etc.) are no longer loaded from env.
+	// Note: AI API keys (OpenAI, Anthropic, Cohere, etc.) are no longer loaded from env.
 	// Playground uses project-scoped credentials stored in database.
-	// Configure via dashboard: Settings > LLM Providers
+	// Configure via dashboard: Settings > AI Providers
 	//nolint:errcheck
 	viper.BindEnv("external.stripe.secret_key", "STRIPE_SECRET_KEY")
 
@@ -648,7 +648,7 @@ func Load() (*Config, error) {
 
 	// Encryption configuration (for sensitive data at rest)
 	//nolint:errcheck
-	viper.BindEnv("encryption.llm_key_encryption_key", "LLM_KEY_ENCRYPTION_KEY")
+	viper.BindEnv("encryption.ai_key_encryption_key", "AI_KEY_ENCRYPTION_KEY")
 
 	// OAuth configuration (Google/GitHub Signup)
 	//nolint:errcheck
@@ -904,8 +904,8 @@ func setDefaults() {
 	viper.SetDefault("archive.compression_level", 3)
 	viper.SetDefault("archive.default_retention_days", 2555)
 
-	// Encryption defaults (must be set in production via LLM_KEY_ENCRYPTION_KEY env var)
-	viper.SetDefault("encryption.llm_key_encryption_key", "")
+	// Encryption defaults (must be set in production via AI_KEY_ENCRYPTION_KEY env var)
+	viper.SetDefault("encryption.ai_key_encryption_key", "")
 }
 
 // GetServerAddress returns the server address string.

@@ -1,9 +1,3 @@
-// Playground feature types - All sessions are saved to database
-
-// ----------------------------
-// Session Types
-// ----------------------------
-
 export interface PlaygroundSession {
   id: string
   project_id: string
@@ -59,10 +53,6 @@ export interface WindowState {
   loadedTemplate?: string // Original template for change detection
 }
 
-// ----------------------------
-// Session API Request/Response Types
-// ----------------------------
-
 export interface CreateSessionRequest {
   name: string
   description?: string
@@ -81,18 +71,135 @@ export interface UpdateSessionRequest {
   windows?: WindowState[]
 }
 
-// ----------------------------
-// Config Types
-// ----------------------------
-
 export interface ModelConfig {
   model?: string
+  provider?: string // Explicit provider (openai, anthropic, azure, gemini, openrouter, custom)
+  credential_id?: string // Credential ID for multi-credential scenarios
   temperature?: number
   max_tokens?: number
   top_p?: number
   frequency_penalty?: number
   presence_penalty?: number
   stop?: string[]
+  // Enable flags - when false/undefined, parameter uses model default (not sent to API)
+  temperature_enabled?: boolean
+  max_tokens_enabled?: boolean
+  top_p_enabled?: boolean
+  frequency_penalty_enabled?: boolean
+  presence_penalty_enabled?: boolean
+}
+
+export type ParameterKey = 'temperature' | 'max_tokens' | 'top_p' | 'frequency_penalty' | 'presence_penalty'
+
+export interface ParameterDefinition {
+  key: ParameterKey
+  label: string
+  description: string
+  type: 'slider' | 'bipolar-slider' | 'number'
+  min: number
+  max: number
+  step: number
+  defaultValue: number
+  formatValue: (v: number) => string
+}
+
+export const PARAMETER_DEFINITIONS: ParameterDefinition[] = [
+  {
+    key: 'temperature',
+    label: 'Temperature',
+    description: 'Controls randomness: 0 is focused, higher values are more creative',
+    type: 'slider',
+    min: 0,
+    max: 2,
+    step: 0.1,
+    defaultValue: 1.0,
+    formatValue: (v) => v.toFixed(1),
+  },
+  {
+    key: 'max_tokens',
+    label: 'Max Tokens',
+    description: 'Maximum length of generated response',
+    type: 'number',
+    min: 1,
+    max: 128000,
+    step: 1,
+    defaultValue: 4096,
+    formatValue: (v) => v.toString(),
+  },
+  {
+    key: 'top_p',
+    label: 'Top P',
+    description: 'Nucleus sampling threshold (alternative to temperature)',
+    type: 'slider',
+    min: 0,
+    max: 1,
+    step: 0.05,
+    defaultValue: 1.0,
+    formatValue: (v) => v.toFixed(2),
+  },
+  {
+    key: 'frequency_penalty',
+    label: 'Frequency Penalty',
+    description: 'Reduce repetition based on token frequency (0 to 2)',
+    type: 'slider',
+    min: 0,
+    max: 2,
+    step: 0.1,
+    defaultValue: 0,
+    formatValue: (v) => v.toFixed(1),
+  },
+  {
+    key: 'presence_penalty',
+    label: 'Presence Penalty',
+    description: 'Reduce repetition based on token presence (0 to 2)',
+    type: 'slider',
+    min: 0,
+    max: 2,
+    step: 0.1,
+    defaultValue: 0,
+    formatValue: (v) => v.toFixed(1),
+  },
+]
+
+// Provider-specific parameter support
+export const PROVIDER_PARAMETER_SUPPORT: Record<string, ParameterKey[]> = {
+  openai: ['temperature', 'max_tokens', 'top_p', 'frequency_penalty', 'presence_penalty'],
+  anthropic: ['temperature', 'max_tokens', 'top_p'], // No frequency/presence penalty
+  azure: ['temperature', 'max_tokens', 'top_p', 'frequency_penalty', 'presence_penalty'],
+  gemini: ['temperature', 'max_tokens', 'top_p'], // No frequency/presence penalty
+  openrouter: ['temperature', 'max_tokens', 'top_p', 'frequency_penalty', 'presence_penalty'],
+  custom: ['temperature', 'max_tokens', 'top_p', 'frequency_penalty', 'presence_penalty'],
+}
+
+// Helper to filter ModelConfig to only include enabled parameters
+export function getEnabledModelConfig(config: ModelConfig | undefined): ModelConfig | undefined {
+  if (!config) return undefined
+
+  const result: ModelConfig = {
+    model: config.model,
+    provider: config.provider,
+    credential_id: config.credential_id,
+    stop: config.stop,
+  }
+
+  // Only include parameters that are explicitly enabled
+  if (config.temperature_enabled && config.temperature !== undefined) {
+    result.temperature = config.temperature
+  }
+  if (config.max_tokens_enabled && config.max_tokens !== undefined) {
+    result.max_tokens = config.max_tokens
+  }
+  if (config.top_p_enabled && config.top_p !== undefined) {
+    result.top_p = config.top_p
+  }
+  if (config.frequency_penalty_enabled && config.frequency_penalty !== undefined) {
+    result.frequency_penalty = config.frequency_penalty
+  }
+  if (config.presence_penalty_enabled && config.presence_penalty !== undefined) {
+    result.presence_penalty = config.presence_penalty
+  }
+
+  return result
 }
 
 export interface ChatMessage {

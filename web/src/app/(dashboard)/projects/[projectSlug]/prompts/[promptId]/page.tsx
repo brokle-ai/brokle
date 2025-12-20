@@ -16,7 +16,6 @@ import {
   ArrowLeft,
   Save,
   Loader2,
-  Play,
   History,
   Plus,
   Settings,
@@ -31,8 +30,6 @@ import {
   useCreateVersionMutation,
   useSetLabelsMutation,
   PromptEditor,
-  ModelConfigForm,
-  VersionHistory,
   LabelBadge,
   VariableList,
   extractVariables,
@@ -42,7 +39,6 @@ import type {
   PromptType,
   TextTemplate,
   ChatTemplate,
-  ModelConfig,
   CreateVersionRequest,
 } from '@/features/prompts'
 
@@ -71,7 +67,6 @@ export default function PromptDetailPage() {
   const [tagsInput, setTagsInput] = useState('')
 
   const [editedTemplate, setEditedTemplate] = useState<TextTemplate | ChatTemplate | null>(null)
-  const [editedConfig, setEditedConfig] = useState<ModelConfig | null>(null)
   const [newCommitMessage, setNewCommitMessage] = useState('')
 
   useEffect(() => {
@@ -103,17 +98,15 @@ export default function PromptDetailPage() {
   }
 
   const handleCreateVersion = async () => {
-    if (!editedTemplate && !editedConfig) return
+    if (!editedTemplate) return
 
     const request: CreateVersionRequest = {
       template: editedTemplate || prompt!.template,
-      config: editedConfig || prompt!.config,
       commit_message: newCommitMessage.trim() || undefined,
     }
 
     await createVersionMutation.mutateAsync(request)
     setEditedTemplate(null)
-    setEditedConfig(null)
     setNewCommitMessage('')
   }
 
@@ -213,7 +206,6 @@ export default function PromptDetailPage() {
                 // Directly populate the store (no sessionStorage, no race conditions)
                 usePlaygroundStore.getState().loadFromPrompt({
                   messages,
-                  config: prompt.config,
                   loadedFromPromptId: prompt.id,
                   loadedFromPromptName: prompt.name,
                   loadedFromPromptVersionId: prompt.version_id,
@@ -234,7 +226,6 @@ export default function PromptDetailPage() {
         <Tabs defaultValue="template" className="space-y-6">
           <TabsList>
             <TabsTrigger value="template">Template</TabsTrigger>
-            <TabsTrigger value="config">Configuration</TabsTrigger>
             <TabsTrigger value="settings">Settings</TabsTrigger>
           </TabsList>
 
@@ -257,7 +248,6 @@ export default function PromptDetailPage() {
                         size="sm"
                         onClick={() => {
                           setEditedTemplate(prompt.template)
-                          setEditedConfig(prompt.config || null)
                         }}
                         disabled={!!editedTemplate}
                       >
@@ -313,7 +303,6 @@ export default function PromptDetailPage() {
                           variant="outline"
                           onClick={() => {
                             setEditedTemplate(null)
-                            setEditedConfig(null)
                             setNewCommitMessage('')
                           }}
                         >
@@ -375,21 +364,6 @@ export default function PromptDetailPage() {
                 </Card>
               </div>
             </div>
-          </TabsContent>
-
-          <TabsContent value="config" className="space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Model Configuration</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ModelConfigForm
-                  config={editedConfig || prompt.config || {}}
-                  onChange={(c) => setEditedConfig(c)}
-                  disabled={!editedTemplate}
-                />
-              </CardContent>
-            </Card>
           </TabsContent>
 
           <TabsContent value="settings" className="space-y-6">

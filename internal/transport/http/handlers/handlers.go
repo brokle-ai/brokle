@@ -11,6 +11,7 @@ import (
 	promptDomain "brokle/internal/core/domain/prompt"
 	"brokle/internal/core/domain/user"
 	authService "brokle/internal/core/services/auth"
+	credentialsService "brokle/internal/core/services/credentials"
 	obsServices "brokle/internal/core/services/observability"
 	"brokle/internal/core/services/registration"
 	"brokle/internal/transport/http/handlers/admin"
@@ -32,7 +33,6 @@ import (
 	"brokle/internal/transport/http/handlers/websocket"
 )
 
-// Handlers contains all HTTP handlers
 type Handlers struct {
 	Health        *health.Handler
 	Metrics       *metrics.Handler
@@ -56,11 +56,10 @@ type Handlers struct {
 	Credentials   *credentials.Handler
 }
 
-// NewHandlers creates a new handlers instance with all dependencies
 func NewHandlers(
 	cfg *config.Config,
 	logger *slog.Logger,
-	authService auth.AuthService,
+	authSvc auth.AuthService,
 	apiKeyService auth.APIKeyService,
 	blacklistedTokens auth.BlacklistedTokenService,
 	registrationService registration.RegistrationService,
@@ -79,14 +78,14 @@ func NewHandlers(
 	observabilityServices *obsServices.ServiceRegistry,
 	promptService promptDomain.PromptService,
 	compilerService promptDomain.CompilerService,
-	executionService promptDomain.ExecutionService,
-	credentialsService credentialsDomain.LLMProviderCredentialService,
+	credentialsSvc credentialsDomain.ProviderCredentialService,
+	modelCatalogSvc credentialsService.ModelCatalogService,
 	playgroundService playgroundDomain.PlaygroundService,
 ) *Handlers {
 	return &Handlers{
 		Health:        health.NewHandler(cfg, logger),
 		Metrics:       metrics.NewHandler(cfg, logger),
-		Auth:          authHandler.NewHandler(cfg, logger, authService, apiKeyService, userService, registrationService, oauthProvider),
+		Auth:          authHandler.NewHandler(cfg, logger, authSvc, apiKeyService, userService, registrationService, oauthProvider),
 		User:          userHandler.NewHandler(cfg, logger, userService, profileService, organizationService),
 		Organization:  organizationHandler.NewHandler(cfg, logger, organizationService, memberService, projectService, invitationService, settingsService, userService, roleService),
 		Project:       project.NewHandler(cfg, logger, projectService, organizationService, memberService),
@@ -95,14 +94,14 @@ func NewHandlers(
 		Logs:          logs.NewHandler(cfg, logger),
 		Billing:       billing.NewHandler(cfg, logger),
 		WebSocket:     websocket.NewHandler(cfg, logger),
-		Admin:         admin.NewTokenAdminHandler(authService, blacklistedTokens, logger),
+		Admin:         admin.NewTokenAdminHandler(authSvc, blacklistedTokens, logger),
 		RBAC:          rbac.NewHandler(cfg, logger, roleService, permissionService, organizationMemberService, scopeService),
 		Observability: observability.NewHandler(cfg, logger, observabilityServices),
 		OTLP:          observability.NewOTLPHandler(observabilityServices.StreamProducer, observabilityServices.DeduplicationService, observabilityServices.OTLPConverterService, logger),
 		OTLPMetrics:   observability.NewOTLPMetricsHandler(observabilityServices.StreamProducer, observabilityServices.OTLPMetricsConverterService, logger),
 		OTLPLogs:      observability.NewOTLPLogsHandler(observabilityServices.StreamProducer, observabilityServices.OTLPLogsConverterService, observabilityServices.OTLPEventsConverterService, logger),
-		Prompt:        prompt.NewHandler(cfg, logger, promptService, compilerService, executionService),
+		Prompt:        prompt.NewHandler(cfg, logger, promptService, compilerService),
 		Playground:    playground.NewHandler(cfg, logger, playgroundService, projectService),
-		Credentials:   credentials.NewHandler(cfg, logger, credentialsService),
+		Credentials:   credentials.NewHandler(cfg, logger, credentialsSvc, modelCatalogSvc),
 	}
 }

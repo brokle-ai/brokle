@@ -56,6 +56,27 @@ definitions:
         example: 2500000
         type: integer
     type: object
+  analytics.AvailableModel:
+    properties:
+      credential_id:
+        description: credential ID when multiple configs exist
+        type: string
+      credential_name:
+        description: credential name for display
+        type: string
+      id:
+        description: model_name or custom model ID
+        type: string
+      is_custom:
+        description: true for user-defined custom models
+        type: boolean
+      name:
+        description: display_name for UI
+        type: string
+      provider:
+        description: provider type (openai, anthropic, etc.)
+        type: string
+    type: object
   analytics.BudgetStatus:
     properties:
       budget:
@@ -717,46 +738,124 @@ definitions:
           $ref: '#/definitions/billing.ProviderUsage'
         type: array
     type: object
-  credentials.CreateOrUpdateRequest:
+  credentials.CreateRequest:
+    properties:
+      adapter:
+        enum:
+        - openai
+        - anthropic
+        - azure
+        - gemini
+        - openrouter
+        - custom
+        type: string
+      api_key:
+        minLength: 10
+        type: string
+      base_url:
+        type: string
+      config:
+        additionalProperties: {}
+        type: object
+      custom_models:
+        items:
+          type: string
+        type: array
+      headers:
+        additionalProperties:
+          type: string
+        type: object
+      name:
+        maxLength: 100
+        minLength: 1
+        type: string
+    required:
+    - adapter
+    - api_key
+    - name
+    type: object
+  credentials.Provider:
+    enum:
+    - openai
+    - anthropic
+    - azure
+    - gemini
+    - openrouter
+    - custom
+    type: string
+    x-enum-varnames:
+    - ProviderOpenAI
+    - ProviderAnthropic
+    - ProviderAzure
+    - ProviderGemini
+    - ProviderOpenRouter
+    - ProviderCustom
+  credentials.ProviderCredentialResponse:
+    properties:
+      adapter:
+        allOf:
+        - $ref: '#/definitions/credentials.Provider'
+        description: API protocol/provider type
+      base_url:
+        type: string
+      config:
+        additionalProperties: {}
+        description: Provider-specific config
+        type: object
+      created_at:
+        type: string
+      custom_models:
+        description: User-defined models
+        items:
+          type: string
+        type: array
+      headers:
+        additionalProperties:
+          type: string
+        description: Custom headers (decrypted for editing)
+        type: object
+      id:
+        $ref: '#/definitions/ulid.ULID'
+      key_preview:
+        description: 'Masked: "sk-***abcd"'
+        type: string
+      name:
+        description: Unique configuration name
+        type: string
+      project_id:
+        $ref: '#/definitions/ulid.ULID'
+      updated_at:
+        type: string
+    type: object
+  credentials.TestConnectionResponse:
+    properties:
+      error:
+        type: string
+      success:
+        type: boolean
+    type: object
+  credentials.UpdateRequest:
     properties:
       api_key:
         minLength: 10
         type: string
       base_url:
         type: string
-      provider:
-        enum:
-        - openai
-        - anthropic
-        type: string
-    required:
-    - api_key
-    - provider
-    type: object
-  credentials.LLMProvider:
-    enum:
-    - openai
-    - anthropic
-    type: string
-    x-enum-varnames:
-    - ProviderOpenAI
-    - ProviderAnthropic
-  credentials.LLMProviderCredentialResponse:
-    properties:
-      base_url:
-        type: string
-      created_at:
-        type: string
-      id:
-        $ref: '#/definitions/ulid.ULID'
-      key_preview:
-        description: 'Masked: "sk-***abcd"'
-        type: string
-      project_id:
-        $ref: '#/definitions/ulid.ULID'
-      provider:
-        $ref: '#/definitions/credentials.LLMProvider'
-      updated_at:
+      config:
+        additionalProperties: {}
+        type: object
+      custom_models:
+        items:
+          type: string
+        type: array
+      headers:
+        additionalProperties:
+          type: string
+        description: Pointer allows clearing with empty map
+        type: object
+      name:
+        maxLength: 100
+        minLength: 1
         type: string
     type: object
   health.HealthCheck:
@@ -900,6 +999,32 @@ definitions:
       type:
         example: credit_card
         type: string
+    type: object
+  internal_transport_http_handlers_credentials.TestConnectionRequest:
+    properties:
+      adapter:
+        enum:
+        - openai
+        - anthropic
+        - azure
+        - gemini
+        - openrouter
+        - custom
+        type: string
+      api_key:
+        type: string
+      base_url:
+        type: string
+      config:
+        additionalProperties: {}
+        type: object
+      headers:
+        additionalProperties:
+          type: string
+        type: object
+    required:
+    - adapter
+    - api_key
     type: object
   internal_transport_http_handlers_organization.CreateOrganizationRequest:
     properties:
@@ -1955,8 +2080,6 @@ definitions:
     properties:
       commit_message:
         type: string
-      config:
-        $ref: '#/definitions/prompt.ModelConfig'
       description:
         type: string
       labels:
@@ -1982,8 +2105,6 @@ definitions:
     properties:
       commit_message:
         type: string
-      config:
-        $ref: '#/definitions/prompt.ModelConfig'
       labels:
         items:
           type: string
@@ -1991,25 +2112,6 @@ definitions:
       template: {}
     required:
     - template
-    type: object
-  prompt.ExecutePromptRequest:
-    properties:
-      config_overrides:
-        $ref: '#/definitions/prompt.ModelConfig'
-      variables:
-        additionalProperties:
-          type: string
-        type: object
-    type: object
-  prompt.ExecutePromptResponse:
-    properties:
-      compiled_prompt: {}
-      error:
-        type: string
-      latency_ms:
-        type: integer
-      response:
-        $ref: '#/definitions/prompt.LLMResponse'
     type: object
   prompt.LLMResponse:
     properties:
@@ -2033,6 +2135,10 @@ definitions:
     type: object
   prompt.ModelConfig:
     properties:
+      credential_id:
+        description: Specific credential config ID (optional, falls back to adapter-based
+          lookup)
+        type: string
       frequency_penalty:
         type: number
       max_tokens:
@@ -2041,6 +2147,9 @@ definitions:
         type: string
       presence_penalty:
         type: number
+      provider:
+        description: Adapter type (openai, anthropic, azure, gemini, openrouter, custom)
+        type: string
       stop:
         items:
           type: string
@@ -2086,8 +2195,6 @@ definitions:
     properties:
       commit_message:
         type: string
-      config:
-        $ref: '#/definitions/prompt.ModelConfig'
       created_at:
         type: string
       created_by:
@@ -2166,8 +2273,6 @@ definitions:
     properties:
       commit_message:
         type: string
-      config:
-        $ref: '#/definitions/prompt.ModelConfig'
       description:
         type: string
       labels:
@@ -2210,10 +2315,6 @@ definitions:
     type: object
   prompt.VersionDiffResponse:
     properties:
-      config_from:
-        $ref: '#/definitions/prompt.ModelConfig'
-      config_to:
-        $ref: '#/definitions/prompt.ModelConfig'
       from_version:
         type: integer
       template_from: {}
@@ -2233,8 +2334,6 @@ definitions:
     properties:
       commit_message:
         type: string
-      config:
-        $ref: '#/definitions/prompt.ModelConfig'
       created_at:
         type: string
       created_by:
@@ -5609,9 +5708,9 @@ paths:
       summary: Archive project
       tags:
       - Projects
-  /api/v1/projects/{projectId}/credentials/llm:
+  /api/v1/projects/{projectId}/credentials/ai:
     get:
-      description: Returns all configured LLM provider credentials for the project
+      description: Returns all configured AI provider credentials for the project
         (with masked keys).
       parameters:
       - description: Project ID
@@ -5626,7 +5725,7 @@ paths:
           description: OK
           schema:
             items:
-              $ref: '#/definitions/credentials.LLMProviderCredentialResponse'
+              $ref: '#/definitions/credentials.ProviderCredentialResponse'
             type: array
         "400":
           description: Bad Request
@@ -5636,14 +5735,14 @@ paths:
           description: Unauthorized
           schema:
             $ref: '#/definitions/response.ErrorResponse'
-      summary: List LLM provider credentials
+      summary: List AI provider credentials
       tags:
       - Credentials
     post:
       consumes:
       - application/json
-      description: Creates a new credential or updates an existing one for the specified
-        provider. The API key is validated before storing.
+      description: Creates a new credential configuration. Each configuration has
+        a unique name within the project.
       parameters:
       - description: Project ID
         in: path
@@ -5655,14 +5754,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/credentials.CreateOrUpdateRequest'
+          $ref: '#/definitions/credentials.CreateRequest'
       produces:
       - application/json
       responses:
-        "200":
-          description: OK
+        "201":
+          description: Created
           schema:
-            $ref: '#/definitions/credentials.LLMProviderCredentialResponse'
+            $ref: '#/definitions/credentials.ProviderCredentialResponse'
         "400":
           description: Bad Request
           schema:
@@ -5671,25 +5770,29 @@ paths:
           description: Unauthorized
           schema:
             $ref: '#/definitions/response.ErrorResponse'
+        "409":
+          description: Name already exists
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
         "422":
           description: API key validation failed
           schema:
             $ref: '#/definitions/response.ErrorResponse'
-      summary: Create or update LLM provider credential
+      summary: Create AI provider credential
       tags:
       - Credentials
-  /api/v1/projects/{projectId}/credentials/llm/{provider}:
+  /api/v1/projects/{projectId}/credentials/ai/{credentialId}:
     delete:
-      description: Removes the credential for a specific provider from the project.
+      description: Removes a credential configuration by its ID.
       parameters:
       - description: Project ID
         in: path
         name: projectId
         required: true
         type: string
-      - description: Provider (openai or anthropic)
+      - description: Credential ID
         in: path
-        name: provider
+        name: credentialId
         required: true
         type: string
       produces:
@@ -5709,21 +5812,21 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/response.ErrorResponse'
-      summary: Delete LLM provider credential
+      summary: Delete AI provider credential
       tags:
       - Credentials
     get:
-      description: Returns the credential configuration for a specific provider (with
-        masked key).
+      description: Returns the credential configuration for a specific credential
+        ID (with masked key).
       parameters:
       - description: Project ID
         in: path
         name: projectId
         required: true
         type: string
-      - description: Provider (openai or anthropic)
+      - description: Credential ID
         in: path
-        name: provider
+        name: credentialId
         required: true
         type: string
       produces:
@@ -5732,7 +5835,7 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/credentials.LLMProviderCredentialResponse'
+            $ref: '#/definitions/credentials.ProviderCredentialResponse'
         "400":
           description: Bad Request
           schema:
@@ -5745,7 +5848,126 @@ paths:
           description: Not Found
           schema:
             $ref: '#/definitions/response.ErrorResponse'
-      summary: Get LLM provider credential
+      summary: Get AI provider credential
+      tags:
+      - Credentials
+    patch:
+      consumes:
+      - application/json
+      description: Updates an existing credential configuration by ID. Name can be
+        changed if unique.
+      parameters:
+      - description: Project ID
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Credential ID
+        in: path
+        name: credentialId
+        required: true
+        type: string
+      - description: Update request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/credentials.UpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/credentials.ProviderCredentialResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "409":
+          description: Name already exists
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "422":
+          description: API key validation failed
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Update AI provider credential
+      tags:
+      - Credentials
+  /api/v1/projects/{projectId}/credentials/ai/models:
+    get:
+      description: Returns LLM models available based on configured AI providers.
+        Standard providers return default models plus any custom models. Custom providers
+        return only user-defined models.
+      parameters:
+      - description: Project ID
+        in: path
+        name: projectId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/analytics.AvailableModel'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Get available models
+      tags:
+      - Credentials
+  /api/v1/projects/{projectId}/credentials/ai/test:
+    post:
+      consumes:
+      - application/json
+      description: Tests the provided API key and configuration without saving. Returns
+        success or error message.
+      parameters:
+      - description: Project ID
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Connection test request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_transport_http_handlers_credentials.TestConnectionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/credentials.TestConnectionResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Test AI provider connection
       tags:
       - Credentials
   /api/v1/projects/{projectId}/playground/sessions:
@@ -6578,86 +6800,6 @@ paths:
       security:
       - BearerAuth: []
       summary: Get version by ID
-      tags:
-      - Prompts
-  /api/v1/projects/{projectId}/prompts/{promptId}/versions/{versionId}/execute:
-    post:
-      consumes:
-      - application/json
-      description: Execute a prompt version with variable substitution and LLM call
-      parameters:
-      - description: Project ID
-        in: path
-        name: projectId
-        required: true
-        type: string
-      - description: Prompt ID
-        in: path
-        name: promptId
-        required: true
-        type: string
-      - description: Version ID
-        in: path
-        name: versionId
-        required: true
-        type: string
-      - description: Execute prompt request
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/prompt.ExecutePromptRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Execution result
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/prompt.ExecutePromptResponse'
-              type: object
-        "400":
-          description: Invalid request
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-        "401":
-          description: Unauthorized
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-        "404":
-          description: Version not found
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-        "500":
-          description: Internal server error
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-      security:
-      - BearerAuth: []
-      summary: Execute a prompt with LLM
       tags:
       - Prompts
   /api/v1/projects/{projectId}/prompts/{promptId}/versions/{versionId}/labels:
@@ -8118,84 +8260,6 @@ paths:
       security:
       - APIKeyAuth: []
       summary: Get prompt by name
-      tags:
-      - SDK Prompts
-  /v1/prompts/{name}/execute:
-    post:
-      consumes:
-      - application/json
-      description: Execute a prompt with variable substitution and optional LLM call
-      parameters:
-      - description: Prompt name
-        in: path
-        name: name
-        required: true
-        type: string
-      - description: 'Label to resolve (default: latest)'
-        in: query
-        name: label
-        type: string
-      - description: Specific version number (takes precedence over label)
-        in: query
-        name: version
-        type: integer
-      - description: Execute prompt request
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/prompt.ExecutePromptRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Execution result
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/prompt.ExecutePromptResponse'
-              type: object
-        "400":
-          description: Invalid request
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-        "401":
-          description: Unauthorized
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-        "404":
-          description: Prompt not found
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-        "500":
-          description: Internal server error
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.APIResponse'
-            - properties:
-                error:
-                  $ref: '#/definitions/response.APIError'
-              type: object
-      security:
-      - APIKeyAuth: []
-      summary: Execute a prompt by name
       tags:
       - SDK Prompts
   /v1/traces:

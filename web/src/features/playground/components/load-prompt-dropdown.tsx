@@ -135,9 +135,9 @@ export function LoadPromptDropdown({
             </Button>
           ) : (
             <Button variant="outline" size="sm" disabled={disabled}>
-              <FileText className="mr-2 h-4 w-4" />
-              Load Prompt
-              <ChevronDown className="ml-2 h-4 w-4" />
+              <FileText className="mr-2 h-4 w-4 text-muted-foreground" />
+              <span className="text-muted-foreground">Select prompt</span>
+              <ChevronDown className="ml-2 h-4 w-4 text-muted-foreground" />
             </Button>
           )}
         </DropdownMenuTrigger>

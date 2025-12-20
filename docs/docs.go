@@ -4870,16 +4870,16 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/projects/{projectId}/credentials/llm": {
+        "/api/v1/projects/{projectId}/credentials/ai": {
             "get": {
-                "description": "Returns all configured LLM provider credentials for the project (with masked keys).",
+                "description": "Returns all configured AI provider credentials for the project (with masked keys).",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Credentials"
                 ],
-                "summary": "List LLM provider credentials",
+                "summary": "List AI provider credentials",
                 "parameters": [
                     {
                         "type": "string",
@@ -4895,7 +4895,7 @@ const docTemplate = `{
                         "schema": {
                             "type": "array",
                             "items": {
-                                "$ref": "#/definitions/credentials.LLMProviderCredentialResponse"
+                                "$ref": "#/definitions/credentials.ProviderCredentialResponse"
                             }
                         }
                     },
@@ -4914,7 +4914,7 @@ const docTemplate = `{
                 }
             },
             "post": {
-                "description": "Creates a new credential or updates an existing one for the specified provider. The API key is validated before storing.",
+                "description": "Creates a new credential configuration. Each configuration has a unique name within the project.",
                 "consumes": [
                     "application/json"
                 ],
@@ -4924,7 +4924,7 @@ const docTemplate = `{
                 "tags": [
                     "Credentials"
                 ],
-                "summary": "Create or update LLM provider credential",
+                "summary": "Create AI provider credential",
                 "parameters": [
                     {
                         "type": "string",
@@ -4939,15 +4939,15 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/credentials.CreateOrUpdateRequest"
+                            "$ref": "#/definitions/credentials.CreateRequest"
                         }
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "description": "OK",
+                    "201": {
+                        "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/credentials.LLMProviderCredentialResponse"
+                            "$ref": "#/definitions/credentials.ProviderCredentialResponse"
                         }
                     },
                     "400": {
@@ -4962,6 +4962,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/response.ErrorResponse"
                         }
                     },
+                    "409": {
+                        "description": "Name already exists",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
                     "422": {
                         "description": "API key validation failed",
                         "schema": {
@@ -4971,16 +4977,113 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/projects/{projectId}/credentials/llm/{provider}": {
+        "/api/v1/projects/{projectId}/credentials/ai/models": {
             "get": {
-                "description": "Returns the credential configuration for a specific provider (with masked key).",
+                "description": "Returns LLM models available based on configured AI providers. Standard providers return default models plus any custom models. Custom providers return only user-defined models.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Credentials"
                 ],
-                "summary": "Get LLM provider credential",
+                "summary": "Get available models",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project ID",
+                        "name": "projectId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/analytics.AvailableModel"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/projects/{projectId}/credentials/ai/test": {
+            "post": {
+                "description": "Tests the provided API key and configuration without saving. Returns success or error message.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Credentials"
+                ],
+                "summary": "Test AI provider connection",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project ID",
+                        "name": "projectId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Connection test request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_transport_http_handlers_credentials.TestConnectionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/credentials.TestConnectionResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/projects/{projectId}/credentials/ai/{credentialId}": {
+            "get": {
+                "description": "Returns the credential configuration for a specific credential ID (with masked key).",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Credentials"
+                ],
+                "summary": "Get AI provider credential",
                 "parameters": [
                     {
                         "type": "string",
@@ -4991,8 +5094,8 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Provider (openai or anthropic)",
-                        "name": "provider",
+                        "description": "Credential ID",
+                        "name": "credentialId",
                         "in": "path",
                         "required": true
                     }
@@ -5001,7 +5104,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/credentials.LLMProviderCredentialResponse"
+                            "$ref": "#/definitions/credentials.ProviderCredentialResponse"
                         }
                     },
                     "400": {
@@ -5025,14 +5128,14 @@ const docTemplate = `{
                 }
             },
             "delete": {
-                "description": "Removes the credential for a specific provider from the project.",
+                "description": "Removes a credential configuration by its ID.",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Credentials"
                 ],
-                "summary": "Delete LLM provider credential",
+                "summary": "Delete AI provider credential",
                 "parameters": [
                     {
                         "type": "string",
@@ -5043,8 +5146,8 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Provider (openai or anthropic)",
-                        "name": "provider",
+                        "description": "Credential ID",
+                        "name": "credentialId",
                         "in": "path",
                         "required": true
                     }
@@ -5067,6 +5170,82 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "description": "Updates an existing credential configuration by ID. Name can be changed if unique.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Credentials"
+                ],
+                "summary": "Update AI provider credential",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project ID",
+                        "name": "projectId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Credential ID",
+                        "name": "credentialId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Update request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/credentials.UpdateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/credentials.ProviderCredentialResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Name already exists",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "API key validation failed",
                         "schema": {
                             "$ref": "#/definitions/response.ErrorResponse"
                         }
@@ -6655,150 +6834,6 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Invalid parameters",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "404": {
-                        "description": "Version not found",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/projects/{projectId}/prompts/{promptId}/versions/{versionId}/execute": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Execute a prompt version with variable substitution and LLM call",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Prompts"
-                ],
-                "summary": "Execute a prompt with LLM",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Project ID",
-                        "name": "projectId",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Prompt ID",
-                        "name": "promptId",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Version ID",
-                        "name": "versionId",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Execute prompt request",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/prompt.ExecutePromptRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Execution result",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/prompt.ExecutePromptResponse"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request",
                         "schema": {
                             "allOf": [
                                 {
@@ -9223,148 +9258,6 @@ const docTemplate = `{
                 }
             }
         },
-        "/v1/prompts/{name}/execute": {
-            "post": {
-                "security": [
-                    {
-                        "APIKeyAuth": []
-                    }
-                ],
-                "description": "Execute a prompt with variable substitution and optional LLM call",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "SDK Prompts"
-                ],
-                "summary": "Execute a prompt by name",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Prompt name",
-                        "name": "name",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Label to resolve (default: latest)",
-                        "name": "label",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Specific version number (takes precedence over label)",
-                        "name": "version",
-                        "in": "query"
-                    },
-                    {
-                        "description": "Execute prompt request",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/prompt.ExecutePromptRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Execution result",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/prompt.ExecutePromptResponse"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid request",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "404": {
-                        "description": "Prompt not found",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {
-                                            "$ref": "#/definitions/response.APIError"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    }
-                }
-            }
-        },
         "/v1/traces": {
             "post": {
                 "security": [
@@ -9601,6 +9494,35 @@ const docTemplate = `{
                 "total_tokens": {
                     "type": "integer",
                     "example": 2500000
+                }
+            }
+        },
+        "analytics.AvailableModel": {
+            "type": "object",
+            "properties": {
+                "credential_id": {
+                    "description": "credential ID when multiple configs exist",
+                    "type": "string"
+                },
+                "credential_name": {
+                    "description": "credential name for display",
+                    "type": "string"
+                },
+                "id": {
+                    "description": "model_name or custom model ID",
+                    "type": "string"
+                },
+                "is_custom": {
+                    "description": "true for user-defined custom models",
+                    "type": "boolean"
+                },
+                "name": {
+                    "description": "display_name for UI",
+                    "type": "string"
+                },
+                "provider": {
+                    "description": "provider type (openai, anthropic, etc.)",
+                    "type": "string"
                 }
             }
         },
@@ -10524,13 +10446,25 @@ const docTemplate = `{
                 }
             }
         },
-        "credentials.CreateOrUpdateRequest": {
+        "credentials.CreateRequest": {
             "type": "object",
             "required": [
+                "adapter",
                 "api_key",
-                "provider"
+                "name"
             ],
             "properties": {
+                "adapter": {
+                    "type": "string",
+                    "enum": [
+                        "openai",
+                        "anthropic",
+                        "azure",
+                        "gemini",
+                        "openrouter",
+                        "custom"
+                    ]
+                },
                 "api_key": {
                     "type": "string",
                     "minLength": 10
@@ -10538,34 +10472,83 @@ const docTemplate = `{
                 "base_url": {
                     "type": "string"
                 },
-                "provider": {
+                "config": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "custom_models": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "headers": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "name": {
                     "type": "string",
-                    "enum": [
-                        "openai",
-                        "anthropic"
-                    ]
+                    "maxLength": 100,
+                    "minLength": 1
                 }
             }
         },
-        "credentials.LLMProvider": {
+        "credentials.Provider": {
             "type": "string",
             "enum": [
                 "openai",
-                "anthropic"
+                "anthropic",
+                "azure",
+                "gemini",
+                "openrouter",
+                "custom"
             ],
             "x-enum-varnames": [
                 "ProviderOpenAI",
-                "ProviderAnthropic"
+                "ProviderAnthropic",
+                "ProviderAzure",
+                "ProviderGemini",
+                "ProviderOpenRouter",
+                "ProviderCustom"
             ]
         },
-        "credentials.LLMProviderCredentialResponse": {
+        "credentials.ProviderCredentialResponse": {
             "type": "object",
             "properties": {
+                "adapter": {
+                    "description": "API protocol/provider type",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/credentials.Provider"
+                        }
+                    ]
+                },
                 "base_url": {
                     "type": "string"
                 },
+                "config": {
+                    "description": "Provider-specific config",
+                    "type": "object",
+                    "additionalProperties": {}
+                },
                 "created_at": {
                     "type": "string"
+                },
+                "custom_models": {
+                    "description": "User-defined models",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "headers": {
+                    "description": "Custom headers (decrypted for editing)",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
                 },
                 "id": {
                     "$ref": "#/definitions/ulid.ULID"
@@ -10574,14 +10557,60 @@ const docTemplate = `{
                     "description": "Masked: \"sk-***abcd\"",
                     "type": "string"
                 },
+                "name": {
+                    "description": "Unique configuration name",
+                    "type": "string"
+                },
                 "project_id": {
                     "$ref": "#/definitions/ulid.ULID"
                 },
-                "provider": {
-                    "$ref": "#/definitions/credentials.LLMProvider"
-                },
                 "updated_at": {
                     "type": "string"
+                }
+            }
+        },
+        "credentials.TestConnectionResponse": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "type": "string"
+                },
+                "success": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "credentials.UpdateRequest": {
+            "type": "object",
+            "properties": {
+                "api_key": {
+                    "type": "string",
+                    "minLength": 10
+                },
+                "base_url": {
+                    "type": "string"
+                },
+                "config": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "custom_models": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "headers": {
+                    "description": "Pointer allows clearing with empty map",
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 1
                 }
             }
         },
@@ -10778,6 +10807,42 @@ const docTemplate = `{
                 "type": {
                     "type": "string",
                     "example": "credit_card"
+                }
+            }
+        },
+        "internal_transport_http_handlers_credentials.TestConnectionRequest": {
+            "type": "object",
+            "required": [
+                "adapter",
+                "api_key"
+            ],
+            "properties": {
+                "adapter": {
+                    "type": "string",
+                    "enum": [
+                        "openai",
+                        "anthropic",
+                        "azure",
+                        "gemini",
+                        "openrouter",
+                        "custom"
+                    ]
+                },
+                "api_key": {
+                    "type": "string"
+                },
+                "base_url": {
+                    "type": "string"
+                },
+                "config": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "headers": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    }
                 }
             }
         },
@@ -12305,9 +12370,6 @@ const docTemplate = `{
                 "commit_message": {
                     "type": "string"
                 },
-                "config": {
-                    "$ref": "#/definitions/prompt.ModelConfig"
-                },
                 "description": {
                     "type": "string"
                 },
@@ -12343,9 +12405,6 @@ const docTemplate = `{
                 "commit_message": {
                     "type": "string"
                 },
-                "config": {
-                    "$ref": "#/definitions/prompt.ModelConfig"
-                },
                 "labels": {
                     "type": "array",
                     "items": {
@@ -12353,35 +12412,6 @@ const docTemplate = `{
                     }
                 },
                 "template": {}
-            }
-        },
-        "prompt.ExecutePromptRequest": {
-            "type": "object",
-            "properties": {
-                "config_overrides": {
-                    "$ref": "#/definitions/prompt.ModelConfig"
-                },
-                "variables": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
-                }
-            }
-        },
-        "prompt.ExecutePromptResponse": {
-            "type": "object",
-            "properties": {
-                "compiled_prompt": {},
-                "error": {
-                    "type": "string"
-                },
-                "latency_ms": {
-                    "type": "integer"
-                },
-                "response": {
-                    "$ref": "#/definitions/prompt.LLMResponse"
-                }
             }
         },
         "prompt.LLMResponse": {
@@ -12418,6 +12448,10 @@ const docTemplate = `{
         "prompt.ModelConfig": {
             "type": "object",
             "properties": {
+                "credential_id": {
+                    "description": "Specific credential config ID (optional, falls back to adapter-based lookup)",
+                    "type": "string"
+                },
                 "frequency_penalty": {
                     "type": "number"
                 },
@@ -12429,6 +12463,10 @@ const docTemplate = `{
                 },
                 "presence_penalty": {
                     "type": "number"
+                },
+                "provider": {
+                    "description": "Adapter type (openai, anthropic, azure, gemini, openrouter, custom)",
+                    "type": "string"
                 },
                 "stop": {
                     "type": "array",
@@ -12498,9 +12536,6 @@ const docTemplate = `{
             "properties": {
                 "commit_message": {
                     "type": "string"
-                },
-                "config": {
-                    "$ref": "#/definitions/prompt.ModelConfig"
                 },
                 "created_at": {
                     "type": "string"
@@ -12623,9 +12658,6 @@ const docTemplate = `{
                 "commit_message": {
                     "type": "string"
                 },
-                "config": {
-                    "$ref": "#/definitions/prompt.ModelConfig"
-                },
                 "description": {
                     "type": "string"
                 },
@@ -12684,12 +12716,6 @@ const docTemplate = `{
         "prompt.VersionDiffResponse": {
             "type": "object",
             "properties": {
-                "config_from": {
-                    "$ref": "#/definitions/prompt.ModelConfig"
-                },
-                "config_to": {
-                    "$ref": "#/definitions/prompt.ModelConfig"
-                },
                 "from_version": {
                     "type": "integer"
                 },
@@ -12717,9 +12743,6 @@ const docTemplate = `{
             "properties": {
                 "commit_message": {
                     "type": "string"
-                },
-                "config": {
-                    "$ref": "#/definitions/prompt.ModelConfig"
                 },
                 "created_at": {
                     "type": "string"

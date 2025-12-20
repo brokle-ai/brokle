@@ -445,10 +445,5 @@ func buildPromptResponse(prompt *promptDomain.Prompt, version *promptDomain.Vers
 		resp.CreatedBy = version.CreatedBy.String()
 	}
 
-	if len(version.Config) > 0 {
-		config, _ := version.GetModelConfig()
-		resp.Config = config
-	}
-
 	return resp
 }

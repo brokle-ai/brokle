@@ -189,16 +189,6 @@ export default function PromptVersionsPage() {
                       {JSON.stringify(selectedVersion.template, null, 2)}
                     </pre>
                   </div>
-                  {selectedVersion.config && (
-                    <div>
-                      <h4 className="text-sm font-medium text-muted-foreground mb-2">
-                        Config
-                      </h4>
-                      <pre className="whitespace-pre-wrap rounded-md bg-muted p-4 font-mono text-sm">
-                        {JSON.stringify(selectedVersion.config, null, 2)}
-                      </pre>
-                    </div>
-                  )}
                   <div>
                     <h4 className="text-sm font-medium text-muted-foreground mb-2">
                       Variables

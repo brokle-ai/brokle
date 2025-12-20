@@ -4,15 +4,15 @@ import { useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { ChevronRight } from 'lucide-react'
-import { diffWords, diffJson } from 'diff'
-import type { PromptVersion, VersionDiff as VersionDiffType } from '../../types'
+import { diffWords } from 'diff'
+import type { VersionDiff as VersionDiffType } from '../../types'
 
 interface VersionDiffProps {
   diff: VersionDiffType
 }
 
 export function VersionDiff({ diff }: VersionDiffProps) {
-  const { from_version, to_version, template_from, template_to, config_from, config_to, variables_added, variables_removed } = diff
+  const { from_version, to_version, template_from, template_to, variables_added, variables_removed } = diff
 
   // Word-level template diff
   const templateDiff = useMemo(() => {
@@ -27,12 +27,6 @@ export function VersionDiff({ diff }: VersionDiffProps) {
 
     return diffWords(oldTemplate, newTemplate)
   }, [template_from, template_to])
-
-  // JSON config diff
-  const configDiff = useMemo(() => {
-    if (!config_from && !config_to) return null
-    return diffJson(config_from || {}, config_to || {})
-  }, [config_from, config_to])
 
   return (
     <div className="space-y-6">
@@ -120,35 +114,6 @@ export function VersionDiff({ diff }: VersionDiffProps) {
           </div>
         </CardContent>
       </Card>
-
-      {/* Config Diff */}
-      {configDiff && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Configuration Changes</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="rounded-lg bg-muted p-4 font-mono text-sm overflow-x-auto">
-              <pre className="whitespace-pre-wrap">
-                {configDiff.map((part, index) => (
-                  <span
-                    key={index}
-                    className={
-                      part.added
-                        ? 'bg-green-500/20 text-green-700 dark:text-green-300'
-                        : part.removed
-                        ? 'bg-red-500/20 text-red-700 dark:text-red-300'
-                        : ''
-                    }
-                  >
-                    {part.value}
-                  </span>
-                ))}
-              </pre>
-            </div>
-          </CardContent>
-        </Card>
-      )}
     </div>
   )
 }

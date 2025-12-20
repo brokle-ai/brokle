@@ -24,7 +24,6 @@ import (
 	"brokle/pkg/ulid"
 )
 
-// Seeder handles all database seeding operations
 type Seeder struct {
 	db     *gorm.DB
 	cfg    *config.Config
@@ -37,7 +36,6 @@ type Seeder struct {
 	providerModelRepo analytics.ProviderModelRepository
 }
 
-// New creates a new Seeder with the required dependencies
 func New(cfg *config.Config) (*Seeder, error) {
 	// Create logger for seeding - use Info level so progress and verbose output are visible
 	logger := logging.NewLoggerWithFormat(slog.LevelInfo, cfg.Logging.Format)
@@ -63,7 +61,6 @@ func New(cfg *config.Config) (*Seeder, error) {
 	return s, nil
 }
 
-// Close closes the database connection
 func (s *Seeder) Close() error {
 	if sqlDB, err := s.db.DB(); err == nil {
 		return sqlDB.Close()
@@ -71,11 +68,6 @@ func (s *Seeder) Close() error {
 	return nil
 }
 
-// ============================================================================
-// Public API
-// ============================================================================
-
-// SeedAll seeds all system data (permissions, roles, pricing)
 func (s *Seeder) SeedAll(ctx context.Context, opts *Options) error {
 	if opts.DryRun {
 		fmt.Println("DRY RUN: Would seed PostgreSQL with permissions, roles, and pricing")
@@ -126,7 +118,6 @@ func (s *Seeder) SeedAll(ctx context.Context, opts *Options) error {
 	return nil
 }
 
-// SeedRBAC seeds only permissions and roles
 func (s *Seeder) SeedRBAC(ctx context.Context, opts *Options) error {
 	if opts.DryRun {
 		fmt.Println("DRY RUN: Would seed RBAC (permissions and roles)")
@@ -176,7 +167,6 @@ func (s *Seeder) SeedRBAC(ctx context.Context, opts *Options) error {
 	return nil
 }
 
-// SeedPricing seeds only provider pricing data
 func (s *Seeder) SeedPricing(ctx context.Context, opts *Options) error {
 	if opts.DryRun {
 		fmt.Println("DRY RUN: Would seed provider pricing")
@@ -208,7 +198,6 @@ func (s *Seeder) SeedPricing(ctx context.Context, opts *Options) error {
 	return nil
 }
 
-// Reset removes all seeded data
 func (s *Seeder) Reset(ctx context.Context, verbose bool) error {
 	s.logger.Info("Starting data reset...")
 
@@ -226,7 +215,6 @@ func (s *Seeder) Reset(ctx context.Context, verbose bool) error {
 	return nil
 }
 
-// PrintSeedPlan prints a detailed plan of what will be seeded
 func (s *Seeder) PrintSeedPlan(data *SeedData) {
 	fmt.Println("\nSEED PLAN:")
 	fmt.Println("=====================================")
@@ -244,7 +232,7 @@ func (s *Seeder) PrintSeedPlan(data *SeedData) {
 	fmt.Println("=====================================")
 }
 
-// LoadSeedData loads permissions and roles from YAML files (for dry-run preview)
+// For dry-run preview.
 func (s *Seeder) LoadSeedData() (*SeedData, error) {
 	permissions, err := s.loadPermissions()
 	if err != nil {
@@ -262,11 +250,6 @@ func (s *Seeder) LoadSeedData() (*SeedData, error) {
 	}, nil
 }
 
-// ============================================================================
-// File Loading
-// ============================================================================
-
-// loadPermissions loads permissions from seeds/permissions.yaml
 func (s *Seeder) loadPermissions() ([]PermissionSeed, error) {
 	seedFile := findSeedFile("seeds/permissions.yaml")
 	if seedFile == "" {
@@ -298,7 +281,6 @@ func (s *Seeder) loadPermissions() ([]PermissionSeed, error) {
 	return permissionsFile.Permissions, nil
 }
 
-// loadRoles loads roles from seeds/roles.yaml
 func (s *Seeder) loadRoles() ([]RoleSeed, error) {
 	seedFile := findSeedFile("seeds/roles.yaml")
 	if seedFile == "" {
@@ -330,7 +312,6 @@ func (s *Seeder) loadRoles() ([]RoleSeed, error) {
 	return rolesFile.Roles, nil
 }
 
-// loadPricing loads pricing from seeds/pricing.yaml
 func (s *Seeder) loadPricing() (*ProviderPricingSeedData, error) {
 	seedFile := findSeedFile("seeds/pricing.yaml")
 	if seedFile == "" {
@@ -390,7 +371,6 @@ func (s *Seeder) loadPricing() (*ProviderPricingSeedData, error) {
 	return &pricingData, nil
 }
 
-// findSeedFile finds the seed file in current dir or brokle subdir
 func findSeedFile(seedFile string) string {
 	if _, err := os.Stat(seedFile); err == nil {
 		return seedFile
@@ -402,11 +382,6 @@ func findSeedFile(seedFile string) string {
 	return ""
 }
 
-// ============================================================================
-// Seeding Logic
-// ============================================================================
-
-// seedPermissions seeds permissions from the provided seed data
 func (s *Seeder) seedPermissions(ctx context.Context, permissionSeeds []PermissionSeed, entityMaps *EntityMaps, verbose bool) error {
 	if verbose {
 		s.logger.Info("Seeding permissions", "count", len(permissionSeeds))
@@ -472,7 +447,6 @@ func (s *Seeder) seedPermissions(ctx context.Context, permissionSeeds []Permissi
 	return nil
 }
 
-// seedRoles seeds template roles from the provided seed data
 func (s *Seeder) seedRoles(ctx context.Context, roleSeeds []RoleSeed, entityMaps *EntityMaps, verbose bool) error {
 	if verbose {
 		s.logger.Info("Seeding template roles", "count", len(roleSeeds))
@@ -539,7 +513,6 @@ func (s *Seeder) seedRoles(ctx context.Context, roleSeeds []RoleSeed, entityMaps
 	return nil
 }
 
-// seedPricingFromFile loads and seeds pricing data
 func (s *Seeder) seedPricingFromFile(ctx context.Context, verbose bool) error {
 	pricingData, err := s.loadPricing()
 	if err != nil {
@@ -551,7 +524,6 @@ func (s *Seeder) seedPricingFromFile(ctx context.Context, verbose bool) error {
 	return s.seedPricingData(ctx, pricingData, verbose)
 }
 
-// seedPricingData seeds provider models and prices
 func (s *Seeder) seedPricingData(ctx context.Context, data *ProviderPricingSeedData, verbose bool) error {
 	if verbose {
 		s.logger.Info("Seeding provider models with pricing", "count", len(data.ProviderModels))
@@ -569,7 +541,6 @@ func (s *Seeder) seedPricingData(ctx context.Context, data *ProviderPricingSeedD
 	return nil
 }
 
-// seedModel seeds a single provider model with its prices
 func (s *Seeder) seedModel(ctx context.Context, modelSeed ProviderModelSeed, verbose bool) error {
 	// Parse start date
 	startDate, err := time.Parse("2006-01-02", modelSeed.StartDate)
@@ -596,9 +567,15 @@ func (s *Seeder) seedModel(ctx context.Context, modelSeed ProviderModelSeed, ver
 	model := &analytics.ProviderModel{
 		ID:           ulid.New(),
 		ModelName:    modelSeed.ModelName,
+		Provider:     modelSeed.Provider,
 		MatchPattern: modelSeed.MatchPattern,
 		StartDate:    startDate,
 		Unit:         unit,
+	}
+
+	// Set display name if provided
+	if modelSeed.DisplayName != "" {
+		model.DisplayName = &modelSeed.DisplayName
 	}
 
 	// Set tokenizer fields if provided
@@ -615,7 +592,7 @@ func (s *Seeder) seedModel(ctx context.Context, modelSeed ProviderModelSeed, ver
 	}
 
 	if verbose {
-		s.logger.Info("Created model", "name", model.ModelName, "id", model.ID.String())
+		s.logger.Info("Created model", "name", model.ModelName, "provider", model.Provider, "id", model.ID.String())
 	}
 
 	// Create prices for this model
@@ -639,11 +616,6 @@ func (s *Seeder) seedModel(ctx context.Context, modelSeed ProviderModelSeed, ver
 	return nil
 }
 
-// ============================================================================
-// Reset Logic
-// ============================================================================
-
-// resetRBAC removes all existing RBAC data
 func (s *Seeder) resetRBAC(ctx context.Context, verbose bool) error {
 	if verbose {
 		s.logger.Info("Resetting RBAC data...")
@@ -691,7 +663,6 @@ func (s *Seeder) resetRBAC(ctx context.Context, verbose bool) error {
 	return nil
 }
 
-// resetPricing removes all existing pricing data
 func (s *Seeder) resetPricing(ctx context.Context, verbose bool) error {
 	if verbose {
 		s.logger.Info("Resetting provider pricing data...")
@@ -721,11 +692,6 @@ func (s *Seeder) resetPricing(ctx context.Context, verbose bool) error {
 	return nil
 }
 
-// ============================================================================
-// Statistics
-// ============================================================================
-
-// GetRBACStatistics provides statistics about seeded RBAC data
 func (s *Seeder) GetRBACStatistics(ctx context.Context) (*RBACStatistics, error) {
 	allRoles, err := s.roleRepo.GetAllRoles(ctx)
 	if err != nil {
@@ -752,7 +718,6 @@ func (s *Seeder) GetRBACStatistics(ctx context.Context) (*RBACStatistics, error)
 	return stats, nil
 }
 
-// GetPricingStatistics provides statistics about seeded pricing
 func (s *Seeder) GetPricingStatistics(ctx context.Context) (*PricingStatistics, error) {
 	models, err := s.providerModelRepo.ListProviderModels(ctx, nil)
 	if err != nil {
@@ -765,7 +730,11 @@ func (s *Seeder) GetPricingStatistics(ctx context.Context) (*PricingStatistics, 
 	}
 
 	for _, model := range models {
-		provider := InferProvider(model.ModelName)
+		// Use Provider field if set, otherwise infer from model name for backwards compatibility
+		provider := model.Provider
+		if provider == "" {
+			provider = InferProvider(model.ModelName)
+		}
 		stats.ProviderDistribution[provider]++
 
 		prices, err := s.providerModelRepo.GetProviderPrices(ctx, model.ID, nil)

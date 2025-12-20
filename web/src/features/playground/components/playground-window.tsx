@@ -4,10 +4,6 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Play, X, Copy, Loader2, CloudOff, Cloud, Settings2 } from 'lucide-react'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Label } from '@/components/ui/label'
-import { Input } from '@/components/ui/input'
-import { Slider } from '@/components/ui/slider'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Popover,
   PopoverContent,
@@ -15,8 +11,8 @@ import {
 } from '@/components/ui/popover'
 import { useProjectOnly } from '@/features/projects'
 import { usePlaygroundStore, createContentSnapshot, type PlaygroundWindow } from '../stores/playground-store'
-import type { WindowState, ChatMessage } from '../types'
-import { createMessage } from '../types'
+import type { WindowState, ChatMessage, ModelConfig, ParameterKey } from '../types'
+import { createMessage, PARAMETER_DEFINITIONS, PROVIDER_PARAMETER_SUPPORT, getEnabledModelConfig } from '../types'
 import { useStreaming } from '../hooks/use-streaming'
 import { useUpdateSessionMutation } from '../hooks/use-playground-queries'
 import { MessageEditor } from './message-editor'
@@ -26,6 +22,7 @@ import { ModelSelector } from './model-selector'
 import { ToolbarRow } from './toolbar-row'
 import { SaveAsPromptDialog, type PromptSavedData } from './save-as-prompt-dialog'
 import { StreamingOutput } from './streaming-output'
+import { ParameterControl } from './parameter-control'
 import type { ExecuteRequest } from '../types'
 
 interface PlaygroundWindowProps {
@@ -34,27 +31,6 @@ interface PlaygroundWindowProps {
 }
 
 const AUTO_SAVE_DELAY = 1500
-
-const CONFIG_PRESETS = {
-  creative: {
-    temperature: 1.0,
-    top_p: 1.0,
-    frequency_penalty: 0.5,
-    presence_penalty: 0.5,
-  },
-  balanced: {
-    temperature: 0.7,
-    top_p: 0.9,
-    frequency_penalty: 0.0,
-    presence_penalty: 0.0,
-  },
-  precise: {
-    temperature: 0.3,
-    top_p: 0.5,
-    frequency_penalty: 0.0,
-    presence_penalty: 0.0,
-  },
-}
 
 // Helper to convert store windows to backend WindowState format
 const buildWindowsPayload = (windows: PlaygroundWindow[]): WindowState[] => {
@@ -212,16 +188,19 @@ export function PlaygroundWindow({ index, sessionId }: PlaygroundWindowProps) {
   const [configOpen, setConfigOpen] = useState(false)
   const currentConfig = windowState?.config || {}
 
-  const handleConfigChange = (field: string, value: number | undefined) => {
-    updateWindow(index, {
-      config: { ...currentConfig, [field]: value },
-    })
-  }
+  const handleConfigChange = (field: string, value: number | boolean | undefined) => {
+    const newConfig: ModelConfig = { ...currentConfig, [field]: value }
 
-  const applyPreset = (preset: keyof typeof CONFIG_PRESETS) => {
-    updateWindow(index, {
-      config: { ...currentConfig, ...CONFIG_PRESETS[preset] },
-    })
+    // When enabling a parameter, initialize with default value if none exists
+    if (typeof value === 'boolean' && value === true && field.endsWith('_enabled')) {
+      const paramKey = field.replace('_enabled', '') as ParameterKey
+      const def = PARAMETER_DEFINITIONS.find((d) => d.key === paramKey)
+      if (def && newConfig[paramKey] === undefined) {
+        ;(newConfig as Record<string, number | boolean | undefined>)[paramKey] = def.defaultValue
+      }
+    }
+
+    updateWindow(index, { config: newConfig })
   }
 
   const handlePromptSaved = useCallback((data: PromptSavedData) => {
@@ -250,11 +229,14 @@ export function PlaygroundWindow({ index, sessionId }: PlaygroundWindowProps) {
       return
     }
 
+    // Filter to only include enabled parameters
+    const filteredConfig = getEnabledModelConfig(windowState.config)
+
     const request: ExecuteRequest = {
       template: { messages: windowState.messages },
       prompt_type: 'chat',
       variables: windowState.variables,
-      config_overrides: windowState.config || undefined,
+      config_overrides: filteredConfig,
       session_id: sessionId,
       project_id: projectId,
     }
@@ -304,7 +286,6 @@ export function PlaygroundWindow({ index, sessionId }: PlaygroundWindowProps) {
           <SaveAsPromptDialog
             projectId={projectId}
             messages={windowState?.messages ?? []}
-            config={windowState?.config ?? null}
             loadedFromPromptId={windowState?.loadedFromPromptId ?? null}
             loadedFromPromptName={windowState?.loadedFromPromptName ?? null}
             loadedFromPromptVersionNumber={windowState?.loadedFromPromptVersionNumber ?? null}
@@ -313,153 +294,45 @@ export function PlaygroundWindow({ index, sessionId }: PlaygroundWindowProps) {
           />
           <ModelSelector
             value={windowState?.config?.model}
-            onChange={(model) => {
+            credentialId={windowState?.config?.credential_id}
+            onChange={(model, provider, credentialId) => {
               updateWindow(index, {
-                config: { ...(windowState?.config || {}), model },
+                config: { ...(windowState?.config || {}), model, provider, credential_id: credentialId },
               })
             }}
             disabled={isStreaming}
             compact
+            projectId={projectId}
           />
           <Popover open={configOpen} onOpenChange={setConfigOpen}>
             <PopoverTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8" disabled={isStreaming}>
+              <Button variant="outline" size="icon" className="h-8 w-8" disabled={isStreaming} aria-label="Configure parameters">
                 <Settings2 className="h-4 w-4" />
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-80" align="start">
-              <Tabs defaultValue="params" className="w-full">
-                <TabsList className="w-full">
-                  <TabsTrigger value="params" className="flex-1 text-xs">
-                    Parameters
-                  </TabsTrigger>
-                  <TabsTrigger value="presets" className="flex-1 text-xs">
-                    Presets
-                  </TabsTrigger>
-                </TabsList>
+              <div className="space-y-4">
+                <h4 className="text-sm font-medium">Model parameters</h4>
+                {PARAMETER_DEFINITIONS.map((def) => {
+                  const provider = currentConfig.provider || 'openai'
+                  const supportedParams = PROVIDER_PARAMETER_SUPPORT[provider] || PROVIDER_PARAMETER_SUPPORT.openai
+                  const providerSupported = supportedParams.includes(def.key)
+                  const enabledKey = `${def.key}_enabled` as keyof ModelConfig
 
-                <TabsContent value="params" className="space-y-4 mt-4">
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-xs">Temperature</Label>
-                      <span className="text-xs text-muted-foreground">
-                        {currentConfig.temperature?.toFixed(1) ?? '0.7'}
-                      </span>
-                    </div>
-                    <Slider
-                      value={[currentConfig.temperature ?? 0.7]}
-                      onValueChange={([value]) => handleConfigChange('temperature', value)}
-                      min={0}
-                      max={2}
-                      step={0.1}
+                  return (
+                    <ParameterControl
+                      key={def.key}
+                      definition={def}
+                      value={currentConfig[def.key] as number | undefined}
+                      enabled={(currentConfig[enabledKey] as boolean) ?? false}
+                      onValueChange={(v) => handleConfigChange(def.key, v)}
+                      onEnabledChange={(e) => handleConfigChange(enabledKey, e)}
+                      providerSupported={providerSupported}
                       disabled={isStreaming}
                     />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label className="text-xs">Max Tokens</Label>
-                    <Input
-                      type="number"
-                      value={currentConfig.max_tokens || ''}
-                      onChange={(e) =>
-                        handleConfigChange('max_tokens', e.target.value ? parseInt(e.target.value) : undefined)
-                      }
-                      placeholder="Default"
-                      disabled={isStreaming}
-                      className="h-8 text-xs"
-                      min={1}
-                      max={128000}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-xs">Top P</Label>
-                      <span className="text-xs text-muted-foreground">
-                        {currentConfig.top_p?.toFixed(2) ?? '1.00'}
-                      </span>
-                    </div>
-                    <Slider
-                      value={[currentConfig.top_p ?? 1.0]}
-                      onValueChange={([value]) => handleConfigChange('top_p', value)}
-                      min={0}
-                      max={1}
-                      step={0.05}
-                      disabled={isStreaming}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-xs">Frequency Penalty</Label>
-                      <span className="text-xs text-muted-foreground">
-                        {currentConfig.frequency_penalty?.toFixed(1) ?? '0.0'}
-                      </span>
-                    </div>
-                    <Slider
-                      value={[currentConfig.frequency_penalty ?? 0.0]}
-                      onValueChange={([value]) => handleConfigChange('frequency_penalty', value)}
-                      min={-2}
-                      max={2}
-                      step={0.1}
-                      disabled={isStreaming}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-xs">Presence Penalty</Label>
-                      <span className="text-xs text-muted-foreground">
-                        {currentConfig.presence_penalty?.toFixed(1) ?? '0.0'}
-                      </span>
-                    </div>
-                    <Slider
-                      value={[currentConfig.presence_penalty ?? 0.0]}
-                      onValueChange={([value]) => handleConfigChange('presence_penalty', value)}
-                      min={-2}
-                      max={2}
-                      step={0.1}
-                      disabled={isStreaming}
-                    />
-                  </div>
-                </TabsContent>
-
-                <TabsContent value="presets" className="space-y-2 mt-4">
-                  <p className="text-xs text-muted-foreground mb-3">
-                    Quick parameter presets
-                  </p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => applyPreset('creative')}
-                    disabled={isStreaming}
-                    className="w-full justify-start text-xs h-8"
-                  >
-                    <span className="font-medium">Creative</span>
-                    <span className="ml-auto text-muted-foreground">temp=1.0</span>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => applyPreset('balanced')}
-                    disabled={isStreaming}
-                    className="w-full justify-start text-xs h-8"
-                  >
-                    <span className="font-medium">Balanced</span>
-                    <span className="ml-auto text-muted-foreground">temp=0.7</span>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => applyPreset('precise')}
-                    disabled={isStreaming}
-                    className="w-full justify-start text-xs h-8"
-                  >
-                    <span className="font-medium">Precise</span>
-                    <span className="ml-auto text-muted-foreground">temp=0.3</span>
-                  </Button>
-                </TabsContent>
-              </Tabs>
+                  )
+                })}
+              </div>
             </PopoverContent>
           </Popover>
           {saveStatus && (
@@ -487,20 +360,22 @@ export function PlaygroundWindow({ index, sessionId }: PlaygroundWindowProps) {
         </div>
         <div className="flex items-center gap-2">
           <Button
-            variant="ghost"
+            variant="outline"
             size="icon"
             onClick={() => duplicateWindow(index)}
             disabled={windows.length >= 20}
             title="Duplicate window"
+            aria-label="Duplicate window"
           >
             <Copy className="h-4 w-4" />
           </Button>
           <Button
-            variant="ghost"
+            variant="outline"
             size="icon"
             onClick={() => removeWindow(index)}
             disabled={windows.length <= 1}
-            title="Remove window"
+            title="Close window"
+            aria-label="Close window"
           >
             <X className="h-4 w-4" />
           </Button>

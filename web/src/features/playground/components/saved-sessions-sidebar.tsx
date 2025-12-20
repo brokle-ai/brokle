@@ -125,7 +125,7 @@ export function SavedSessionsSidebar({
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent side="right" className="w-80 p-0">
+        <SheetContent side="right" className="sm:max-w-[540px] p-0">
           <SheetHeader className="p-4 pb-2">
             <SheetTitle className="flex items-center gap-2">
               <Bookmark className="h-5 w-5" />

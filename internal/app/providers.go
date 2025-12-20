@@ -209,7 +209,7 @@ type PromptRepositories struct {
 
 // CredentialsRepositories contains all credentials-related repositories
 type CredentialsRepositories struct {
-	LLMProviderCredential credentialsDomain.LLMProviderCredentialRepository
+	ProviderCredential credentialsDomain.ProviderCredentialRepository
 }
 
 // PlaygroundRepositories contains all playground-related repositories
@@ -258,7 +258,8 @@ type PromptServices struct {
 
 // CredentialsServices contains all credentials-related services
 type CredentialsServices struct {
-	LLMProviderCredential credentialsDomain.LLMProviderCredentialService
+	ProviderCredential credentialsDomain.ProviderCredentialService
+	ModelCatalog       credentialsService.ModelCatalogService
 }
 
 // PlaygroundServices contains all playground-related services
@@ -266,9 +267,6 @@ type PlaygroundServices struct {
 	Playground playgroundDomain.PlaygroundService
 }
 
-// Provider functions for modular DI
-
-// ProvideDatabases initializes all database connections
 func ProvideDatabases(cfg *config.Config, logger *slog.Logger) (*DatabaseContainer, error) {
 	postgres, err := database.NewPostgresDB(cfg, logger)
 	if err != nil {
@@ -378,8 +376,8 @@ func ProvideServerServices(core *CoreContainer) *ServiceContainer {
 		authServices.Auth,
 	)
 
-	promptServices := ProvidePromptServices(core.TxManager, repos.Prompt, cfg, logger)
-	credentialsServices, err := ProvideCredentialsServices(repos.Credentials, cfg, logger)
+	promptServices := ProvidePromptServices(core.TxManager, repos.Prompt, analyticsServices.ProviderPricing, cfg, logger)
+	credentialsServices, err := ProvideCredentialsServices(repos.Credentials, repos.Analytics, cfg, logger)
 	if err != nil {
 		logger.Error("failed to initialize credentials services", "error", err)
 		// Playground will fail without credentials - no env fallback
@@ -387,9 +385,9 @@ func ProvideServerServices(core *CoreContainer) *ServiceContainer {
 	}
 
 	// Extract credentials service (may be nil if credentials initialization failed)
-	var credSvc credentialsDomain.LLMProviderCredentialService
+	var credSvc credentialsDomain.ProviderCredentialService
 	if credentialsServices != nil {
-		credSvc = credentialsServices.LLMProviderCredential
+		credSvc = credentialsServices.ProviderCredential
 	}
 
 	playgroundServices := ProvidePlaygroundServices(
@@ -449,10 +447,12 @@ func ProvideWorkerServices(core *CoreContainer) *ServiceContainer {
 
 // ProvideServer creates HTTP server using shared core
 func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
-	// Get credentials service (may be nil if encryption key not configured)
-	var credentialsService credentialsDomain.LLMProviderCredentialService
+	// Get credentials services (may be nil if encryption key not configured)
+	var credentialsSvc credentialsDomain.ProviderCredentialService
+	var modelCatalogSvc credentialsService.ModelCatalogService
 	if core.Services.Credentials != nil {
-		credentialsService = core.Services.Credentials.LLMProviderCredential
+		credentialsSvc = core.Services.Credentials.ProviderCredential
+		modelCatalogSvc = core.Services.Credentials.ModelCatalog
 	}
 
 	// Get playground service
@@ -483,8 +483,8 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 		core.Services.Observability,
 		core.Services.Prompt.Prompt,
 		core.Services.Prompt.Compiler,
-		core.Services.Prompt.Execution,
-		credentialsService,
+		credentialsSvc,
+		modelCatalogSvc,
 		playgroundSvc,
 	)
 
@@ -628,7 +628,7 @@ func ProvidePromptRepositories(db *gorm.DB, redisDB *database.RedisDB) *PromptRe
 // ProvideCredentialsRepositories creates credentials repository container
 func ProvideCredentialsRepositories(db *gorm.DB) *CredentialsRepositories {
 	return &CredentialsRepositories{
-		LLMProviderCredential: credentialsRepo.NewLLMProviderCredentialRepository(db),
+		ProviderCredential: credentialsRepo.NewProviderCredentialRepository(db),
 	}
 }
 
@@ -904,15 +904,16 @@ func ProvideAnalyticsServices(
 func ProvidePromptServices(
 	txManager common.TransactionManager,
 	promptRepos *PromptRepositories,
+	pricingService analytics.ProviderPricingService,
 	cfg *config.Config,
 	logger *slog.Logger,
 ) *PromptServices {
 	compilerSvc := promptService.NewCompilerService()
-	llmConfig := &promptService.LLMClientConfig{
+	aiClientConfig := &promptService.AIClientConfig{
 		DefaultTimeout: cfg.External.LLMTimeout,
 	}
 
-	executionSvc := promptService.NewExecutionService(compilerSvc, llmConfig)
+	executionSvc := promptService.NewExecutionService(compilerSvc, pricingService, aiClientConfig)
 	promptSvc := promptService.NewPromptService(
 		txManager,
 		promptRepos.Prompt,
@@ -934,30 +935,39 @@ func ProvidePromptServices(
 // ProvideCredentialsServices creates all credentials-related services
 func ProvideCredentialsServices(
 	credentialsRepos *CredentialsRepositories,
+	analyticsRepos *AnalyticsRepositories,
 	cfg *config.Config,
 	logger *slog.Logger,
 ) (*CredentialsServices, error) {
 	// Create encryption service from config
-	encryptor, err := encryption.NewServiceFromBase64(cfg.Encryption.LLMKeyEncryptionKey)
+	encryptor, err := encryption.NewServiceFromBase64(cfg.Encryption.AIKeyEncryptionKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize encryption service: %w", err)
 	}
 
-	llmProviderSvc := credentialsService.NewLLMProviderCredentialService(
-		credentialsRepos.LLMProviderCredential,
+	providerSvc := credentialsService.NewProviderCredentialService(
+		credentialsRepos.ProviderCredential,
 		encryptor,
 		logger,
 	)
 
+	// Model catalog combines default models from DB with custom models from credentials
+	modelCatalogSvc := credentialsService.NewModelCatalogService(
+		credentialsRepos.ProviderCredential,
+		analyticsRepos.ProviderModel,
+		logger,
+	)
+
 	return &CredentialsServices{
-		LLMProviderCredential: llmProviderSvc,
+		ProviderCredential: providerSvc,
+		ModelCatalog:       modelCatalogSvc,
 	}, nil
 }
 
 // ProvidePlaygroundServices creates all playground-related services
 func ProvidePlaygroundServices(
 	playgroundRepos *PlaygroundRepositories,
-	credentialsService credentialsDomain.LLMProviderCredentialService,
+	credentialsService credentialsDomain.ProviderCredentialService,
 	compilerService promptDomain.CompilerService,
 	executionService promptDomain.ExecutionService,
 	logger *slog.Logger,
@@ -975,9 +985,6 @@ func ProvidePlaygroundServices(
 	}
 }
 
-// Event publisher removed - events system deleted (not part of OTEL architecture)
-
-// simpleBillingOrgService is a simple implementation of BillingOrganizationService
 type simpleBillingOrgService struct {
 	logger *slog.Logger
 }

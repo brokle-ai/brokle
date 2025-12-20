@@ -1,6 +1,5 @@
 -- LLM Provider Credentials for Playground Execution
 -- Per-project storage with AES-256-GCM encryption at rest
--- Following Langfuse/Opik pattern with Brokle conventions
 
 -- Supported providers enum (extensible for future providers)
 CREATE TYPE llm_provider AS ENUM ('openai', 'anthropic');

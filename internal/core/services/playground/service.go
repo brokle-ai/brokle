@@ -5,9 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
 	credentialsDomain "brokle/internal/core/domain/credentials"
@@ -17,19 +15,17 @@ import (
 	"brokle/pkg/ulid"
 )
 
-// playgroundService implements playgroundDomain.PlaygroundService
 type playgroundService struct {
 	repo               playgroundDomain.SessionRepository
-	credentialsService credentialsDomain.LLMProviderCredentialService
+	credentialsService credentialsDomain.ProviderCredentialService
 	compilerService    promptDomain.CompilerService
 	executionService   promptDomain.ExecutionService
 	logger             *slog.Logger
 }
 
-// NewPlaygroundService creates a new service instance
 func NewPlaygroundService(
 	repo playgroundDomain.SessionRepository,
-	credentialsService credentialsDomain.LLMProviderCredentialService,
+	credentialsService credentialsDomain.ProviderCredentialService,
 	compilerService promptDomain.CompilerService,
 	executionService promptDomain.ExecutionService,
 	logger *slog.Logger,
@@ -43,7 +39,6 @@ func NewPlaygroundService(
 	}
 }
 
-// CreateSession creates a new session.
 // All sessions are saved (no ephemeral sessions).
 func (s *playgroundService) CreateSession(ctx context.Context, req *playgroundDomain.CreateSessionRequest) (*playgroundDomain.SessionResponse, error) {
 	if req.Name == "" {
@@ -108,7 +103,6 @@ func (s *playgroundService) CreateSession(ctx context.Context, req *playgroundDo
 	return session.ToResponse(), nil
 }
 
-// GetSession retrieves a session by ID.
 func (s *playgroundService) GetSession(ctx context.Context, sessionID ulid.ULID) (*playgroundDomain.SessionResponse, error) {
 	session, err := s.repo.GetByID(ctx, sessionID)
 	if err != nil {
@@ -121,7 +115,6 @@ func (s *playgroundService) GetSession(ctx context.Context, sessionID ulid.ULID)
 	return session.ToResponse(), nil
 }
 
-// ListSessions retrieves sessions for a project.
 func (s *playgroundService) ListSessions(ctx context.Context, req *playgroundDomain.ListSessionsRequest) ([]*playgroundDomain.SessionSummary, error) {
 	limit := req.Limit
 	if limit <= 0 {
@@ -152,7 +145,6 @@ func (s *playgroundService) ListSessions(ctx context.Context, req *playgroundDom
 	return summaries, nil
 }
 
-// UpdateSession updates session content and metadata.
 func (s *playgroundService) UpdateSession(ctx context.Context, req *playgroundDomain.UpdateSessionRequest) (*playgroundDomain.SessionResponse, error) {
 	session, err := s.repo.GetByID(ctx, req.SessionID)
 	if err != nil {
@@ -201,7 +193,6 @@ func (s *playgroundService) UpdateSession(ctx context.Context, req *playgroundDo
 	return session.ToResponse(), nil
 }
 
-// DeleteSession removes a session.
 func (s *playgroundService) DeleteSession(ctx context.Context, sessionID ulid.ULID) error {
 	if err := s.repo.Delete(ctx, sessionID); err != nil {
 		if errors.Is(err, playgroundDomain.ErrSessionNotFound) {
@@ -217,7 +208,6 @@ func (s *playgroundService) DeleteSession(ctx context.Context, sessionID ulid.UL
 	return nil
 }
 
-// UpdateLastRun updates the last execution result.
 func (s *playgroundService) UpdateLastRun(ctx context.Context, req *playgroundDomain.UpdateLastRunRequest) error {
 	if req.LastRun == nil {
 		return appErrors.NewValidationError("Last run required", "last_run cannot be empty")
@@ -242,7 +232,6 @@ func (s *playgroundService) UpdateLastRun(ctx context.Context, req *playgroundDo
 	return nil
 }
 
-// UpdateWindows updates the multi-window comparison state.
 func (s *playgroundService) UpdateWindows(ctx context.Context, sessionID ulid.ULID, windows json.RawMessage) error {
 	if err := s.repo.UpdateWindows(ctx, sessionID, playgroundDomain.JSON(windows)); err != nil {
 		if errors.Is(err, playgroundDomain.ErrSessionNotFound) {
@@ -258,7 +247,6 @@ func (s *playgroundService) UpdateWindows(ctx context.Context, sessionID ulid.UL
 	return nil
 }
 
-// ValidateProjectAccess checks if a session belongs to the given project.
 func (s *playgroundService) ValidateProjectAccess(ctx context.Context, sessionID ulid.ULID, projectID ulid.ULID) error {
 	exists, err := s.repo.ExistsByProjectID(ctx, sessionID, projectID)
 	if err != nil {
@@ -269,10 +257,6 @@ func (s *playgroundService) ValidateProjectAccess(ctx context.Context, sessionID
 	}
 	return nil
 }
-
-// ----------------------------
-// Execution Orchestration
-// ----------------------------
 
 // ExecutePrompt executes a prompt with full orchestration:
 // credential resolution → variable extraction → execution → session update
@@ -292,7 +276,6 @@ func (s *playgroundService) ExecutePrompt(ctx context.Context, req *playgroundDo
 	promptResp := &promptDomain.PromptResponse{
 		Type:      req.PromptType,
 		Template:  req.Template,
-		Config:    resolvedConfig,
 		Variables: variables,
 	}
 
@@ -323,7 +306,6 @@ func (s *playgroundService) ExecutePrompt(ctx context.Context, req *playgroundDo
 	}, nil
 }
 
-// StreamPrompt executes a streaming prompt with full orchestration.
 func (s *playgroundService) StreamPrompt(ctx context.Context, req *playgroundDomain.StreamRequest) (*playgroundDomain.StreamResponse, error) {
 	startTime := time.Now()
 
@@ -340,7 +322,6 @@ func (s *playgroundService) StreamPrompt(ctx context.Context, req *playgroundDom
 	promptResp := &promptDomain.PromptResponse{
 		Type:      req.PromptType,
 		Template:  req.Template,
-		Config:    resolvedConfig,
 		Variables: variables,
 	}
 
@@ -363,23 +344,44 @@ func (s *playgroundService) StreamPrompt(ctx context.Context, req *playgroundDom
 }
 
 // resolveCredentials resolves project-scoped credentials for execution.
+// Requires both provider and credential_id to be specified.
 func (s *playgroundService) resolveCredentials(ctx context.Context, projectID ulid.ULID, overrides *promptDomain.ModelConfig) (*promptDomain.ModelConfig, error) {
 	if overrides == nil {
 		overrides = &promptDomain.ModelConfig{}
 	}
 
-	provider := detectProviderFromModel(overrides.Model)
-	if provider == "" {
-		return nil, appErrors.NewValidationError("Invalid model", "could not detect provider from model name")
+	// Provider must be explicitly specified
+	if overrides.Provider == "" {
+		return nil, appErrors.NewValidationError("Provider required", "provider must be specified")
+	}
+
+	// Credential ID is required (no fallback to adapter-based lookup)
+	if overrides.CredentialID == nil || *overrides.CredentialID == "" {
+		return nil, appErrors.NewValidationError("Credential required", "credential_id must be specified")
 	}
 
 	if s.credentialsService == nil {
 		return nil, appErrors.NewInternalError("Credentials service not configured", nil)
 	}
 
-	keyConfig, err := s.credentialsService.GetExecutionConfig(ctx, projectID, credentialsDomain.LLMProvider(provider))
+	credID, err := ulid.Parse(*overrides.CredentialID)
 	if err != nil {
-		return nil, appErrors.NewNotFoundError(fmt.Sprintf("No %s credentials configured for this project", provider))
+		return nil, appErrors.NewValidationError("Invalid credential ID", "credential_id must be a valid ULID")
+	}
+
+	keyConfig, err := s.credentialsService.GetExecutionConfig(ctx, projectID, credID, credentialsDomain.Provider(overrides.Provider))
+	if err != nil {
+		// Handle specific errors for better UX
+		if errors.Is(err, credentialsDomain.ErrAdapterMismatch) {
+			return nil, appErrors.NewValidationError("Credential mismatch", err.Error())
+		}
+		if errors.Is(err, credentialsDomain.ErrCredentialNotFound) {
+			return nil, appErrors.NewNotFoundError("Credential not found")
+		}
+		if errors.Is(err, credentialsDomain.ErrNoKeyConfigured) {
+			return nil, appErrors.NewNotFoundError("No credentials configured")
+		}
+		return nil, appErrors.NewInternalError("Failed to resolve credentials", err)
 	}
 
 	overrides.APIKey = keyConfig.APIKey
@@ -387,40 +389,17 @@ func (s *playgroundService) resolveCredentials(ctx context.Context, projectID ul
 		overrides.ResolvedBaseURL = &keyConfig.BaseURL
 	}
 
+	// Pass provider-specific config (Azure deployment_id, api_version) and custom headers
+	overrides.ProviderConfig = keyConfig.Config
+	overrides.CustomHeaders = keyConfig.Headers
+
 	s.logger.Debug("credentials resolved",
 		"project_id", projectID.String(),
-		"provider", provider,
+		"provider", overrides.Provider,
+		"credential_id", overrides.CredentialID,
 	)
 
 	return overrides, nil
-}
-
-// detectProviderFromModel returns the provider name based on model naming conventions.
-func detectProviderFromModel(model string) string {
-	if model == "" {
-		return ""
-	}
-
-	modelLower := strings.ToLower(model)
-
-	// OpenAI models
-	if strings.HasPrefix(modelLower, "gpt-") ||
-		strings.HasPrefix(modelLower, "o1") ||
-		strings.HasPrefix(modelLower, "chatgpt") ||
-		strings.Contains(modelLower, "davinci") ||
-		strings.Contains(modelLower, "curie") ||
-		strings.Contains(modelLower, "babbage") ||
-		strings.Contains(modelLower, "ada") {
-		return "openai"
-	}
-
-	// Anthropic models
-	if strings.HasPrefix(modelLower, "claude") {
-		return "anthropic"
-	}
-
-	// Default: assume OpenAI-compatible
-	return "openai"
 }
 
 // wrapResultForSessionUpdate intercepts the result channel to update session.
@@ -447,7 +426,6 @@ func (s *playgroundService) wrapResultForSessionUpdate(
 	return wrappedChan
 }
 
-// updateSessionLastRun updates session after non-streaming execution.
 func (s *playgroundService) updateSessionLastRun(
 	ctx context.Context,
 	sessionID ulid.ULID,
@@ -492,7 +470,6 @@ func (s *playgroundService) updateSessionLastRun(
 	}
 }
 
-// updateStreamSessionLastRun updates session after streaming execution.
 func (s *playgroundService) updateStreamSessionLastRun(
 	ctx context.Context,
 	sessionID ulid.ULID,
