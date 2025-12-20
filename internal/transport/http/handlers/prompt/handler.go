@@ -7,28 +7,23 @@ import (
 	promptDomain "brokle/internal/core/domain/prompt"
 )
 
-// Handler contains all prompt-related HTTP handlers
 type Handler struct {
-	config           *config.Config
-	logger           *slog.Logger
-	promptService    promptDomain.PromptService
-	compilerService  promptDomain.CompilerService
-	executionService promptDomain.ExecutionService
+	config          *config.Config
+	logger          *slog.Logger
+	promptService   promptDomain.PromptService
+	compilerService promptDomain.CompilerService
 }
 
-// NewHandler creates a new prompt handler
 func NewHandler(
 	cfg *config.Config,
 	logger *slog.Logger,
 	promptService promptDomain.PromptService,
 	compilerService promptDomain.CompilerService,
-	executionService promptDomain.ExecutionService,
 ) *Handler {
 	return &Handler{
-		config:           cfg,
-		logger:           logger,
-		promptService:    promptService,
-		compilerService:  compilerService,
-		executionService: executionService,
+		config:          cfg,
+		logger:          logger,
+		promptService:   promptService,
+		compilerService: compilerService,
 	}
 }

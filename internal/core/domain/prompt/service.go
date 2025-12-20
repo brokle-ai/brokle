@@ -58,8 +58,13 @@ type CompilerService interface {
 
 // ExecutionService defines the prompt execution service interface.
 type ExecutionService interface {
-	// Execute prompt with LLM
+	// Execute prompt with LLM (non-streaming)
 	Execute(ctx context.Context, prompt *PromptResponse, variables map[string]string, configOverrides *ModelConfig) (*ExecutePromptResponse, error)
+
+	// ExecuteStream executes a prompt with real-time streaming.
+	// Returns two channels: one for events (content chunks) and one for the final result.
+	// The caller must consume both channels until they close.
+	ExecuteStream(ctx context.Context, prompt *PromptResponse, variables map[string]string, configOverrides *ModelConfig) (<-chan StreamEvent, <-chan *StreamResult, error)
 
 	// Compile and preview without execution
 	Preview(ctx context.Context, prompt *PromptResponse, variables map[string]string) (interface{}, error)

@@ -24,6 +24,7 @@ type ProviderModelRepository interface {
 	GetProviderModelByName(ctx context.Context, projectID *ulid.ULID, modelName string) (*ProviderModel, error)
 	GetProviderModelAtTime(ctx context.Context, projectID *ulid.ULID, modelName string, atTime time.Time) (*ProviderModel, error)
 	ListProviderModels(ctx context.Context, projectID *ulid.ULID) ([]*ProviderModel, error)
+	ListByProviders(ctx context.Context, providers []string) ([]*ProviderModel, error)
 	UpdateProviderModel(ctx context.Context, modelID ulid.ULID, model *ProviderModel) error
 	DeleteProviderModel(ctx context.Context, modelID ulid.ULID) error
 

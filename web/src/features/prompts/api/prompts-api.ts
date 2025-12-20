@@ -4,22 +4,14 @@ import type {
   PromptListItem,
   PromptVersion,
   VersionDiff,
-  ExecutePromptResponse,
   UpsertResponse,
   CreatePromptRequest,
   UpdatePromptRequest,
   CreateVersionRequest,
-  SetLabelsRequest,
-  ExecutePromptRequest,
   GetPromptsParams,
-  GetPromptParams,
 } from '../types'
 
 const client = new BrokleAPIClient('/api')
-
-// ============================================================================
-// Prompts API
-// ============================================================================
 
 /**
  * Get all prompts for a project with filtering and pagination
@@ -107,10 +99,6 @@ export const deletePrompt = async (
   await client.delete(`/v1/projects/${projectId}/prompts/${promptId}`)
 }
 
-// ============================================================================
-// Version API
-// ============================================================================
-
 /**
  * Get all versions of a prompt
  *
@@ -189,31 +177,6 @@ export const getVersionDiff = async (
     { from: fromVersion, to: toVersion }
   )
 }
-
-// ============================================================================
-// Execution API
-// ============================================================================
-
-/**
- * Execute a prompt version with LLM
- *
- * Backend endpoint: POST /api/v1/projects/:projectId/prompts/:promptId/versions/:versionId/execute
- */
-export const executePrompt = async (
-  projectId: string,
-  promptId: string,
-  versionId: string,
-  data: ExecutePromptRequest
-): Promise<ExecutePromptResponse> => {
-  return client.post<ExecutePromptResponse>(
-    `/v1/projects/${projectId}/prompts/${promptId}/versions/${versionId}/execute`,
-    data
-  )
-}
-
-// ============================================================================
-// Protected Labels API
-// ============================================================================
 
 /**
  * Get protected labels for a project

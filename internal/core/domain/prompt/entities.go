@@ -40,16 +40,15 @@ type Prompt struct {
 
 // Version represents an immutable version snapshot of a prompt.
 type Version struct {
-	CreatedAt     time.Time   `json:"created_at"`
-	Template      JSON        `json:"template" gorm:"type:jsonb;not null"`
-	Config        JSON        `json:"config,omitempty" gorm:"type:jsonb"`
+	CreatedAt     time.Time      `json:"created_at"`
+	Template      JSON           `json:"template" gorm:"type:jsonb;not null"`
 	Variables     pq.StringArray `json:"variables" gorm:"type:text[];default:'{}'"`
-	CommitMessage string      `json:"commit_message,omitempty" gorm:"type:text"`
-	Labels        []Label     `json:"labels,omitempty" gorm:"foreignKey:VersionID"`
-	ID            ulid.ULID   `json:"id" gorm:"type:char(26);primaryKey"`
-	PromptID      ulid.ULID   `json:"prompt_id" gorm:"type:char(26);not null"`
-	CreatedBy     *ulid.ULID  `json:"created_by,omitempty" gorm:"type:char(26)"`
-	Version       int         `json:"version" gorm:"not null"`
+	CommitMessage string         `json:"commit_message,omitempty" gorm:"type:text"`
+	Labels        []Label        `json:"labels,omitempty" gorm:"foreignKey:VersionID"`
+	ID            ulid.ULID      `json:"id" gorm:"type:char(26);primaryKey"`
+	PromptID      ulid.ULID      `json:"prompt_id" gorm:"type:char(26);not null"`
+	CreatedBy     *ulid.ULID     `json:"created_by,omitempty" gorm:"type:char(26)"`
+	Version       int            `json:"version" gorm:"not null"`
 }
 
 // Label represents a mutable pointer from a label name to a specific version.
@@ -83,12 +82,31 @@ type ChatMessage struct {
 // ModelConfig represents optional model configuration for a prompt version.
 type ModelConfig struct {
 	Model            string   `json:"model,omitempty"`
+	Provider         string   `json:"provider,omitempty"`       // Adapter type (openai, anthropic, azure, gemini, openrouter, custom)
+	CredentialID     *string  `json:"credential_id,omitempty"`  // Specific credential config ID (optional, falls back to adapter-based lookup)
 	Temperature      *float64 `json:"temperature,omitempty"`
 	MaxTokens        *int     `json:"max_tokens,omitempty"`
 	TopP             *float64 `json:"top_p,omitempty"`
 	FrequencyPenalty *float64 `json:"frequency_penalty,omitempty"`
 	PresencePenalty  *float64 `json:"presence_penalty,omitempty"`
 	Stop             []string `json:"stop,omitempty"`
+
+	// APIKey is the resolved API key for execution (not persisted).
+	// Set by handler after credential resolution. Excluded from JSON serialization.
+	APIKey string `json:"-"`
+
+	// ResolvedBaseURL is an optional custom endpoint (Azure OpenAI, proxy, etc.).
+	// Set by handler after credential resolution. Excluded from JSON serialization.
+	ResolvedBaseURL *string `json:"-"`
+
+	// ProviderConfig holds provider-specific configuration (not persisted).
+	// Azure: deployment_id, api_version; Gemini: location.
+	// Set by handler after credential resolution. Excluded from JSON serialization.
+	ProviderConfig map[string]any `json:"-"`
+
+	// CustomHeaders holds custom HTTP headers for proxies/custom providers (not persisted).
+	// Set by handler after credential resolution. Excluded from JSON serialization.
+	CustomHeaders map[string]string `json:"-"`
 }
 
 // TextTemplate represents the template structure for text prompts.
@@ -104,7 +122,6 @@ type ChatTemplate struct {
 // JSON is a custom type for JSONB columns
 type JSON json.RawMessage
 
-// Value returns the JSON value for database storage
 func (j JSON) Value() (interface{}, error) {
 	if len(j) == 0 {
 		return nil, nil
@@ -112,7 +129,6 @@ func (j JSON) Value() (interface{}, error) {
 	return []byte(j), nil
 }
 
-// Scan implements the Scanner interface for reading from the database
 func (j *JSON) Scan(value interface{}) error {
 	if value == nil {
 		*j = nil
@@ -127,7 +143,6 @@ func (j *JSON) Scan(value interface{}) error {
 	return nil
 }
 
-// MarshalJSON returns the JSON encoding
 func (j JSON) MarshalJSON() ([]byte, error) {
 	if len(j) == 0 {
 		return []byte("null"), nil
@@ -135,7 +150,6 @@ func (j JSON) MarshalJSON() ([]byte, error) {
 	return j, nil
 }
 
-// UnmarshalJSON sets the JSON data
 func (j *JSON) UnmarshalJSON(data []byte) error {
 	if j == nil {
 		return nil
@@ -144,55 +158,44 @@ func (j *JSON) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// ----------------------------
-// Request/Response DTOs
-// ----------------------------
-
 // CreatePromptRequest is the request for creating a new prompt with initial version.
 type CreatePromptRequest struct {
-	Name          string       `json:"name" validate:"required,min=1,max=100"`
-	Type          PromptType   `json:"type,omitempty"`
-	Description   string       `json:"description,omitempty"`
-	Tags          []string     `json:"tags,omitempty"`
-	Template      interface{}  `json:"template" validate:"required"`
-	Config        *ModelConfig `json:"config,omitempty"`
-	Labels        []string     `json:"labels,omitempty"`
-	CommitMessage string       `json:"commit_message,omitempty"`
+	Name          string      `json:"name" validate:"required,min=1,max=100"`
+	Type          PromptType  `json:"type,omitempty"`
+	Description   string      `json:"description,omitempty"`
+	Tags          []string    `json:"tags,omitempty"`
+	Template      interface{} `json:"template" validate:"required"`
+	Labels        []string    `json:"labels,omitempty"`
+	CommitMessage string      `json:"commit_message,omitempty"`
 }
 
-// UpdatePromptRequest is the request for updating prompt metadata.
 type UpdatePromptRequest struct {
 	Name        *string  `json:"name,omitempty"`
 	Description *string  `json:"description,omitempty"`
 	Tags        []string `json:"tags,omitempty"`
 }
 
-// CreateVersionRequest is the request for creating a new version.
 type CreateVersionRequest struct {
-	Template      interface{}  `json:"template" validate:"required"`
-	Config        *ModelConfig `json:"config,omitempty"`
-	Labels        []string     `json:"labels,omitempty"`
-	CommitMessage string       `json:"commit_message,omitempty"`
+	Template      interface{} `json:"template" validate:"required"`
+	Labels        []string    `json:"labels,omitempty"`
+	CommitMessage string      `json:"commit_message,omitempty"`
 }
 
 // UpsertPromptRequest is the SDK request for creating or updating a prompt.
 type UpsertPromptRequest struct {
-	Name          string       `json:"name" validate:"required,min=1,max=100"`
-	Type          PromptType   `json:"type,omitempty"`
-	Description   string       `json:"description,omitempty"`
-	Tags          []string     `json:"tags,omitempty"`
-	Template      interface{}  `json:"template" validate:"required"`
-	Config        *ModelConfig `json:"config,omitempty"`
-	Labels        []string     `json:"labels,omitempty"`
-	CommitMessage string       `json:"commit_message,omitempty"`
+	Name          string      `json:"name" validate:"required,min=1,max=100"`
+	Type          PromptType  `json:"type,omitempty"`
+	Description   string      `json:"description,omitempty"`
+	Tags          []string    `json:"tags,omitempty"`
+	Template      interface{} `json:"template" validate:"required"`
+	Labels        []string    `json:"labels,omitempty"`
+	CommitMessage string      `json:"commit_message,omitempty"`
 }
 
-// SetLabelsRequest is the request for setting labels on a version.
 type SetLabelsRequest struct {
 	Labels []string `json:"labels" validate:"required"`
 }
 
-// GetPromptOptions contains options for fetching a prompt.
 type GetPromptOptions struct {
 	Label       string `form:"label"`
 	Version     *int   `form:"version"`
@@ -200,39 +203,28 @@ type GetPromptOptions struct {
 	BypassCache bool   `form:"-"`
 }
 
-// ExecutePromptRequest is the request for executing a prompt with LLM.
-type ExecutePromptRequest struct {
-	Variables       map[string]string `json:"variables"`
-	ConfigOverrides *ModelConfig      `json:"config_overrides,omitempty"`
-}
-
-// ProtectedLabelsRequest is the request for setting protected labels.
 type ProtectedLabelsRequest struct {
 	ProtectedLabels []string `json:"protected_labels" validate:"required"`
 }
 
-// ----------------------------
-// Response DTOs
-// ----------------------------
-
 // PromptResponse is the response for a prompt with version info.
 type PromptResponse struct {
-	ID            string        `json:"id"`
-	ProjectID     string        `json:"project_id"`
-	Name          string        `json:"name"`
-	Type          PromptType    `json:"type"`
-	Description   string        `json:"description,omitempty"`
-	Tags          []string      `json:"tags"`
-	Version       int           `json:"version"`
-	Labels        []string      `json:"labels"`
-	Template      interface{}   `json:"template"`
-	Config        *ModelConfig  `json:"config,omitempty"`
-	Variables     []string      `json:"variables"`
-	CommitMessage string        `json:"commit_message,omitempty"`
-	CreatedAt     time.Time     `json:"created_at"`
-	UpdatedAt     time.Time     `json:"updated_at"`
-	CreatedBy     string        `json:"created_by,omitempty"`
-	IsFallback    bool          `json:"is_fallback,omitempty"`
+	ID            string      `json:"id"`
+	ProjectID     string      `json:"project_id"`
+	Name          string      `json:"name"`
+	Type          PromptType  `json:"type"`
+	Description   string      `json:"description,omitempty"`
+	Tags          []string    `json:"tags"`
+	Version       int         `json:"version"`
+	VersionID     string      `json:"version_id"` // ULID of the specific version (for linking)
+	Labels        []string    `json:"labels"`
+	Template      interface{} `json:"template"`
+	Variables     []string    `json:"variables"`
+	CommitMessage string      `json:"commit_message,omitempty"`
+	CreatedAt     time.Time   `json:"created_at"`
+	UpdatedAt     time.Time   `json:"updated_at"`
+	CreatedBy     string      `json:"created_by,omitempty"`
+	IsFallback    bool        `json:"is_fallback,omitempty"`
 }
 
 // PromptListItem is a summary item for prompt listing.
@@ -254,32 +246,26 @@ type PromptListLabelInfo struct {
 	Version int    `json:"version"`
 }
 
-// VersionResponse is the response for a single version.
 type VersionResponse struct {
-	ID            string       `json:"id"`
-	Version       int          `json:"version"`
-	Template      interface{}  `json:"template"`
-	Config        *ModelConfig `json:"config,omitempty"`
-	Variables     []string     `json:"variables"`
-	CommitMessage string       `json:"commit_message,omitempty"`
-	Labels        []string     `json:"labels"`
-	CreatedAt     time.Time    `json:"created_at"`
-	CreatedBy     string       `json:"created_by,omitempty"`
+	ID            string      `json:"id"`
+	Version       int         `json:"version"`
+	Template      interface{} `json:"template"`
+	Variables     []string    `json:"variables"`
+	CommitMessage string      `json:"commit_message,omitempty"`
+	Labels        []string    `json:"labels"`
+	CreatedAt     time.Time   `json:"created_at"`
+	CreatedBy     string      `json:"created_by,omitempty"`
 }
 
-// VersionDiffResponse is the response for comparing two versions.
 type VersionDiffResponse struct {
-	FromVersion    int          `json:"from_version"`
-	ToVersion      int          `json:"to_version"`
-	TemplateFrom   interface{}  `json:"template_from"`
-	TemplateTo     interface{}  `json:"template_to"`
-	ConfigFrom     *ModelConfig `json:"config_from,omitempty"`
-	ConfigTo       *ModelConfig `json:"config_to,omitempty"`
-	VariablesAdded []string     `json:"variables_added"`
-	VariablesRemoved []string   `json:"variables_removed"`
+	FromVersion      int         `json:"from_version"`
+	ToVersion        int         `json:"to_version"`
+	TemplateFrom     interface{} `json:"template_from"`
+	TemplateTo       interface{} `json:"template_to"`
+	VariablesAdded   []string    `json:"variables_added"`
+	VariablesRemoved []string    `json:"variables_removed"`
 }
 
-// ExecutePromptResponse is the response for prompt execution.
 type ExecutePromptResponse struct {
 	CompiledPrompt interface{}            `json:"compiled_prompt"`
 	Response       *LLMResponse           `json:"response,omitempty"`
@@ -287,7 +273,6 @@ type ExecutePromptResponse struct {
 	Error          string                 `json:"error,omitempty"`
 }
 
-// LLMResponse contains the LLM execution result.
 type LLMResponse struct {
 	Content string    `json:"content"`
 	Model   string    `json:"model"`
@@ -295,11 +280,37 @@ type LLMResponse struct {
 	Cost    *float64  `json:"cost,omitempty"`
 }
 
-// LLMUsage contains token usage information.
 type LLMUsage struct {
 	PromptTokens     int `json:"prompt_tokens"`
 	CompletionTokens int `json:"completion_tokens"`
 	TotalTokens      int `json:"total_tokens"`
+}
+
+type StreamEventType string
+
+const (
+	StreamEventStart   StreamEventType = "start"   // Stream started
+	StreamEventContent StreamEventType = "content" // Content chunk received
+	StreamEventEnd     StreamEventType = "end"     // Stream completed
+	StreamEventError   StreamEventType = "error"   // Stream error occurred
+)
+
+type StreamEvent struct {
+	Type         StreamEventType `json:"type"`
+	Content      string          `json:"content,omitempty"`       // For content events
+	Error        string          `json:"error,omitempty"`         // For error events
+	FinishReason string          `json:"finish_reason,omitempty"` // For end events
+}
+
+// StreamResult contains the final metrics after streaming completes.
+type StreamResult struct {
+	Content       string    `json:"content"`                    // Full accumulated content
+	Model         string    `json:"model"`                      // Model used
+	Usage         *LLMUsage `json:"usage,omitempty"`            // Token usage
+	Cost          *float64  `json:"cost,omitempty"`             // Calculated cost
+	FinishReason  string    `json:"finish_reason,omitempty"`    // Completion reason
+	TTFTMs        *float64  `json:"ttft_ms,omitempty"`          // Time to first token (ms)
+	TotalDuration int64     `json:"total_duration_ms,omitempty"` // Total execution time (ms)
 }
 
 // UpsertResponse is the response for the SDK upsert endpoint.
@@ -313,11 +324,6 @@ type UpsertResponse struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
-// ----------------------------
-// Constructor functions
-// ----------------------------
-
-// NewPrompt creates a new prompt entity.
 func NewPrompt(projectID ulid.ULID, name string, promptType PromptType, description string, tags []string) *Prompt {
 	now := time.Now()
 	return &Prompt{
@@ -332,14 +338,12 @@ func NewPrompt(projectID ulid.ULID, name string, promptType PromptType, descript
 	}
 }
 
-// NewVersion creates a new version entity.
-func NewVersion(promptID ulid.ULID, version int, template JSON, config JSON, variables []string, commitMessage string, createdBy *ulid.ULID) *Version {
+func NewVersion(promptID ulid.ULID, version int, template JSON, variables []string, commitMessage string, createdBy *ulid.ULID) *Version {
 	return &Version{
 		ID:            ulid.New(),
 		PromptID:      promptID,
 		Version:       version,
 		Template:      template,
-		Config:        config,
 		Variables:     pq.StringArray(variables),
 		CommitMessage: commitMessage,
 		CreatedBy:     createdBy,
@@ -347,7 +351,6 @@ func NewVersion(promptID ulid.ULID, version int, template JSON, config JSON, var
 	}
 }
 
-// NewLabel creates a new label entity.
 func NewLabel(promptID, versionID ulid.ULID, name string, createdBy *ulid.ULID) *Label {
 	now := time.Now()
 	return &Label{
@@ -361,7 +364,6 @@ func NewLabel(promptID, versionID ulid.ULID, name string, createdBy *ulid.ULID) 
 	}
 }
 
-// NewProtectedLabel creates a new protected label entity.
 func NewProtectedLabel(projectID ulid.ULID, labelName string, createdBy *ulid.ULID) *ProtectedLabel {
 	return &ProtectedLabel{
 		ID:        ulid.New(),
@@ -372,25 +374,15 @@ func NewProtectedLabel(projectID ulid.ULID, labelName string, createdBy *ulid.UL
 	}
 }
 
-// ----------------------------
-// Table name methods for GORM
-// ----------------------------
-
 func (Prompt) TableName() string         { return "prompts" }
 func (Version) TableName() string        { return "prompt_versions" }
 func (Label) TableName() string          { return "prompt_labels" }
 func (ProtectedLabel) TableName() string { return "prompt_protected_labels" }
 
-// ----------------------------
-// Utility methods
-// ----------------------------
-
-// IsDeleted checks if the prompt is soft-deleted.
 func (p *Prompt) IsDeleted() bool {
 	return p.DeletedAt.Valid
 }
 
-// GetLatestVersion returns the highest version number from loaded versions.
 func (p *Prompt) GetLatestVersion() int {
 	if len(p.Versions) == 0 {
 		return 0
@@ -404,7 +396,6 @@ func (p *Prompt) GetLatestVersion() int {
 	return max
 }
 
-// GetTemplate unmarshals the template as text template.
 func (v *Version) GetTextTemplate() (*TextTemplate, error) {
 	var t TextTemplate
 	if err := json.Unmarshal(v.Template, &t); err != nil {
@@ -413,7 +404,6 @@ func (v *Version) GetTextTemplate() (*TextTemplate, error) {
 	return &t, nil
 }
 
-// GetChatTemplate unmarshals the template as chat template.
 func (v *Version) GetChatTemplate() (*ChatTemplate, error) {
 	var t ChatTemplate
 	if err := json.Unmarshal(v.Template, &t); err != nil {
@@ -422,19 +412,6 @@ func (v *Version) GetChatTemplate() (*ChatTemplate, error) {
 	return &t, nil
 }
 
-// GetModelConfig unmarshals the config.
-func (v *Version) GetModelConfig() (*ModelConfig, error) {
-	if len(v.Config) == 0 {
-		return nil, nil
-	}
-	var c ModelConfig
-	if err := json.Unmarshal(v.Config, &c); err != nil {
-		return nil, err
-	}
-	return &c, nil
-}
-
-// SetTemplate marshals and sets the template.
 func (v *Version) SetTemplate(template interface{}) error {
 	data, err := json.Marshal(template)
 	if err != nil {
@@ -444,21 +421,6 @@ func (v *Version) SetTemplate(template interface{}) error {
 	return nil
 }
 
-// SetConfig marshals and sets the config.
-func (v *Version) SetConfig(config *ModelConfig) error {
-	if config == nil {
-		v.Config = nil
-		return nil
-	}
-	data, err := json.Marshal(config)
-	if err != nil {
-		return err
-	}
-	v.Config = data
-	return nil
-}
-
-// IsLatestLabel checks if this label is the "latest" auto-managed label.
 func (l *Label) IsLatestLabel() bool {
 	return l.Name == "latest"
 }

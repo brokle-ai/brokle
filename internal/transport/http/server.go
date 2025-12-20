@@ -22,7 +22,6 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// Server represents the HTTP server
 type Server struct {
 	config              *config.Config
 	logger              *slog.Logger
@@ -37,7 +36,6 @@ type Server struct {
 	serveErr            chan error
 }
 
-// NewServer creates a new HTTP server instance
 func NewServer(
 	cfg *config.Config,
 	logger *slog.Logger,
@@ -48,7 +46,6 @@ func NewServer(
 	apiKeyService auth.APIKeyService,
 	redisClient *redis.Client,
 ) *Server {
-	// Create stateless auth middleware
 	authMiddleware := middleware.NewAuthMiddleware(
 		jwtService,
 		blacklistedTokens,
@@ -56,20 +53,17 @@ func NewServer(
 		logger,
 	)
 
-	// Create SDK auth middleware for API key authentication
 	sdkAuthMiddleware := middleware.NewSDKAuthMiddleware(
 		apiKeyService,
 		logger,
 	)
 
-	// Create rate limiting middleware
 	rateLimitMiddleware := middleware.NewRateLimitMiddleware(
 		redisClient,
 		&cfg.Auth,
 		logger,
 	)
 
-	// Create CSRF validation middleware
 	csrfMiddleware := middleware.NewCSRFMiddleware(logger)
 
 	return &Server{
@@ -83,19 +77,15 @@ func NewServer(
 	}
 }
 
-// Start starts the HTTP server
 func (s *Server) Start() error {
-	// Setup Gin mode
 	if s.config.Server.Environment == "production" {
 		gin.SetMode(gin.ReleaseMode)
 	} else {
 		gin.SetMode(gin.DebugMode)
 	}
 
-	// Create Gin engine
 	s.engine = gin.New()
 
-	// Setup CORS with security validation
 	corsConfig := cors.DefaultConfig()
 
 	// Validate wildcard incompatibility with credentials
@@ -126,7 +116,6 @@ func (s *Server) Start() error {
 	corsConfig.MaxAge = 5 * time.Minute
 	s.engine.Use(cors.New(corsConfig))
 
-	// Setup routes
 	s.setupRoutes()
 
 	s.server = &http.Server{
@@ -160,9 +149,7 @@ func (s *Server) ServeErr() <-chan error {
 	return s.serveErr
 }
 
-// setupRoutes configures all HTTP routes
 func (s *Server) setupRoutes() {
-	// Global middleware
 	s.engine.Use(middleware.RequestID())
 	s.engine.Use(middleware.Logger(s.logger))
 	s.engine.Use(middleware.Recovery(s.logger))
@@ -206,7 +193,6 @@ func (s *Server) setupRoutes() {
 	s.engine.GET("/ws", s.handlers.WebSocket.Handle)
 }
 
-// setupDashboardRoutes configures dashboard routes (/api/v1/*)
 func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 	// Apply IP-based rate limiting to all API routes
 	router.Use(s.rateLimitMiddleware.RateLimitByIP())
@@ -325,10 +311,47 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 			prompts.POST("/:promptId/versions", s.authMiddleware.RequirePermission("prompts:create"), s.handlers.Prompt.CreateVersion)
 			prompts.GET("/:promptId/versions/:versionId", s.authMiddleware.RequirePermission("prompts:read"), s.handlers.Prompt.GetVersion)
 			prompts.PATCH("/:promptId/versions/:versionId/labels", s.authMiddleware.RequirePermission("prompts:update"), s.handlers.Prompt.SetLabels)
-			prompts.POST("/:promptId/versions/:versionId/execute", s.authMiddleware.RequirePermission("prompts:read"), s.handlers.Prompt.ExecutePrompt)
 
 			// Version diff
 			prompts.GET("/:promptId/diff", s.authMiddleware.RequirePermission("prompts:read"), s.handlers.Prompt.GetVersionDiff)
+		}
+
+		// Playground routes (execution - global endpoints)
+		playground := protected.Group("/playground")
+		{
+			playground.POST("/execute", s.handlers.Playground.Execute)
+			playground.POST("/stream", s.handlers.Playground.Stream)
+		}
+
+		// Project-scoped playground routes (session management)
+		projectPlayground := projects.Group("/:projectId/playground")
+		{
+			// Session management
+			sessions := projectPlayground.Group("/sessions")
+			{
+				sessions.GET("", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Playground.ListSessions)
+				sessions.POST("", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Playground.CreateSession)
+				sessions.GET("/:sessionId", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Playground.GetSession)
+				sessions.PUT("/:sessionId", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Playground.UpdateSession)
+				sessions.POST("/:sessionId/update", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Playground.UpdateSession) // For sendBeacon (POST only)
+				sessions.DELETE("/:sessionId", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Playground.DeleteSession)
+			}
+		}
+
+		// Credentials routes (AI provider API key management)
+		credentials := projects.Group("/:projectId/credentials")
+		{
+			// AI provider credentials - supports multiple configurations per adapter
+			aiCreds := credentials.Group("/ai")
+			{
+				aiCreds.POST("", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Credentials.Create)
+				aiCreds.POST("/test", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Credentials.TestConnection)
+				aiCreds.GET("", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Credentials.List)
+				aiCreds.GET("/models", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Credentials.GetAvailableModels)
+				aiCreds.GET("/:credentialId", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Credentials.Get)
+				aiCreds.PATCH("/:credentialId", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Credentials.Update)
+				aiCreds.DELETE("/:credentialId", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Credentials.Delete)
+			}
 		}
 	}
 
@@ -418,10 +441,6 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 		rbac.GET("/users/:userId/organizations/:orgId/permissions", s.handlers.RBAC.GetUserPermissions)
 		rbac.POST("/users/:userId/organizations/:orgId/permissions/check", s.handlers.RBAC.CheckUserPermissions)
 
-		// ========================================
-		// NEW: Scope-Based Authorization Routes
-		// ========================================
-
 		// Scope checking
 		rbac.POST("/users/:userId/scopes/check", s.handlers.RBAC.CheckUserScopes)
 		rbac.GET("/users/:userId/scopes", s.handlers.RBAC.GetUserScopes)
@@ -443,7 +462,6 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 	}
 }
 
-// setupSDKRoutes configures SDK routes (/v1/*)
 func (s *Server) setupSDKRoutes(router *gin.RouterGroup) {
 	// OTLP (OpenTelemetry Protocol) ingestion - 100% spec compliant
 	// POST /v1/traces - OTLP standard endpoint for trace ingestion
@@ -458,14 +476,12 @@ func (s *Server) setupSDKRoutes(router *gin.RouterGroup) {
 	// Prompt Management SDK routes
 	prompts := router.Group("/prompts")
 	{
-		prompts.GET("", s.handlers.Prompt.ListPromptsSDK)           // List prompts
-		prompts.POST("", s.handlers.Prompt.UpsertPrompt)            // Create or update prompt (upsert)
-		prompts.GET("/:name", s.handlers.Prompt.GetPromptByName)    // Get prompt by name with label/version
-		prompts.POST("/:name/execute", s.handlers.Prompt.ExecutePromptSDK) // Execute prompt by name
+		prompts.GET("", s.handlers.Prompt.ListPromptsSDK)        // List prompts
+		prompts.POST("", s.handlers.Prompt.UpsertPrompt)         // Create or update prompt (upsert)
+		prompts.GET("/:name", s.handlers.Prompt.GetPromptByName) // Get prompt by name with label/version
 	}
 }
 
-// Shutdown gracefully shuts down the server
 func (s *Server) Shutdown(ctx context.Context) error {
 	return s.server.Shutdown(ctx)
 }

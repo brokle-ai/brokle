@@ -25,13 +25,14 @@ type ProviderModel struct {
 	ProjectID       *ulid.ULID             `json:"project_id,omitempty" gorm:"type:char(26)"`
 	ModelName       string                 `json:"model_name" gorm:"column:model_name;size:255;not null"`
 	MatchPattern    string                 `json:"match_pattern" gorm:"column:match_pattern;size:500;not null"`
+	Provider        string                 `json:"provider" gorm:"size:50;not null"`
+	DisplayName     *string                `json:"display_name,omitempty" gorm:"size:255"`
 	StartDate       time.Time              `json:"start_date" gorm:"not null;default:now()"`
 	Unit            string                 `json:"unit" gorm:"size:50;not null;default:'TOKENS'"`
 	TokenizerID     *string                `json:"tokenizer_id,omitempty" gorm:"size:100"`
 	TokenizerConfig map[string]interface{} `json:"tokenizer_config,omitempty" gorm:"type:jsonb;serializer:json"`
 }
 
-// TableName returns the table name for GORM
 func (ProviderModel) TableName() string { return "provider_models" }
 
 // ProviderPrice represents AI provider pricing per usage type
@@ -47,7 +48,6 @@ type ProviderPrice struct {
 	Price           decimal.Decimal `json:"price" gorm:"type:decimal(20,12);not null"`
 }
 
-// TableName returns the table name for GORM
 func (ProviderPrice) TableName() string { return "provider_prices" }
 
 // ProviderPricingSnapshot represents provider pricing snapshot captured at ingestion time
@@ -57,4 +57,15 @@ type ProviderPricingSnapshot struct {
 	ModelName    string
 	Pricing      map[string]decimal.Decimal // usage_type → provider_price_per_million
 	SnapshotTime time.Time
+}
+
+// AvailableModel represents a model available for selection in the UI
+// Combines default models from provider_models table with custom user-defined models
+type AvailableModel struct {
+	ID             string  `json:"id"`                         // model_name or custom model ID
+	Name           string  `json:"name"`                       // display_name for UI
+	Provider       string  `json:"provider"`                   // provider type (openai, anthropic, etc.)
+	CredentialID   *string `json:"credential_id,omitempty"`    // credential ID when multiple configs exist
+	CredentialName *string `json:"credential_name,omitempty"`  // credential name for display
+	IsCustom       bool    `json:"is_custom,omitempty"`        // true for user-defined custom models
 }

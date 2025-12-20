@@ -13,26 +13,17 @@ import {
   getVersion,
   setLabels,
   getVersionDiff,
-  executePrompt,
   getProtectedLabels,
   setProtectedLabels,
 } from '../api/prompts-api'
 import type {
-  Prompt,
   PromptListItem,
   PromptVersion,
-  VersionDiff,
   CreatePromptRequest,
   UpdatePromptRequest,
   CreateVersionRequest,
-  ExecutePromptRequest,
-  ExecutePromptResponse,
   PromptType,
 } from '../types'
-
-// ============================================================================
-// Query Keys Factory
-// ============================================================================
 
 export const promptQueryKeys = {
   all: ['prompts'] as const,
@@ -62,10 +53,6 @@ export const promptQueryKeys = {
     [...promptQueryKeys.all, 'protected-labels', projectId] as const,
 }
 
-// ============================================================================
-// Types
-// ============================================================================
-
 export interface PromptFilters {
   type?: PromptType
   tags?: string[]
@@ -73,10 +60,6 @@ export interface PromptFilters {
   page?: number
   limit?: number
 }
-
-// ============================================================================
-// Query Hooks
-// ============================================================================
 
 /**
  * Query hook to list prompts for a project with filtering and pagination
@@ -224,10 +207,6 @@ export function useProtectedLabelsQuery(
     gcTime: 10 * 60 * 1000,
   })
 }
-
-// ============================================================================
-// Mutation Hooks
-// ============================================================================
 
 /**
  * Mutation hook to create a new prompt
@@ -474,25 +453,3 @@ export function useSetProtectedLabelsMutation(projectId: string) {
   })
 }
 
-/**
- * Mutation hook to execute a prompt with LLM
- */
-export function useExecutePromptMutation(projectId: string, promptId: string) {
-  return useMutation({
-    mutationFn: async ({
-      versionId,
-      request,
-    }: {
-      versionId: string
-      request: ExecutePromptRequest
-    }): Promise<ExecutePromptResponse> => {
-      return executePrompt(projectId, promptId, versionId, request)
-    },
-    onError: (error: unknown) => {
-      const apiError = error as { message?: string }
-      toast.error('Execution Failed', {
-        description: apiError?.message || 'Could not execute prompt. Please try again.',
-      })
-    },
-  })
-}

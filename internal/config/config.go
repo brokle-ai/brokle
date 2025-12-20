@@ -36,6 +36,14 @@ type Config struct {
 	Redis           RedisConfig           `mapstructure:"redis"`
 	Workers         WorkersConfig         `mapstructure:"workers"`
 	Features        FeatureConfig         `mapstructure:"features"`
+	Encryption      EncryptionConfig      `mapstructure:"encryption"`
+}
+
+// EncryptionConfig contains encryption settings for sensitive data at rest.
+type EncryptionConfig struct {
+	// AIKeyEncryptionKey is the 256-bit key for encrypting AI provider API keys (base64 encoded).
+	// Generate with: openssl rand -base64 32
+	AIKeyEncryptionKey string `mapstructure:"ai_key_encryption_key"`
 }
 
 // AppConfig contains application-level configuration.
@@ -126,36 +134,12 @@ type LoggingConfig struct {
 }
 
 // ExternalConfig contains external service configurations.
+// Note: AI API keys (OpenAI, Anthropic, etc.) are configured per-project via database,
+// not via environment variables. See: Settings > AI Providers in the dashboard.
 type ExternalConfig struct {
-	Email     EmailConfig     `mapstructure:"email"`
-	Stripe    StripeConfig    `mapstructure:"stripe"`
-	OpenAI    OpenAIConfig    `mapstructure:"openai"`
-	Anthropic AnthropicConfig `mapstructure:"anthropic"`
-	Cohere    CohereConfig    `mapstructure:"cohere"`
-}
-
-// OpenAIConfig contains OpenAI API configuration.
-type OpenAIConfig struct {
-	APIKey     string        `mapstructure:"api_key"`
-	BaseURL    string        `mapstructure:"base_url"`
-	Timeout    time.Duration `mapstructure:"timeout"`
-	MaxRetries int           `mapstructure:"max_retries"`
-}
-
-// AnthropicConfig contains Anthropic API configuration.
-type AnthropicConfig struct {
-	APIKey     string        `mapstructure:"api_key"`
-	BaseURL    string        `mapstructure:"base_url"`
-	Timeout    time.Duration `mapstructure:"timeout"`
-	MaxRetries int           `mapstructure:"max_retries"`
-}
-
-// CohereConfig contains Cohere API configuration.
-type CohereConfig struct {
-	APIKey     string        `mapstructure:"api_key"`
-	BaseURL    string        `mapstructure:"base_url"`
-	Timeout    time.Duration `mapstructure:"timeout"`
-	MaxRetries int           `mapstructure:"max_retries"`
+	Email      EmailConfig   `mapstructure:"email"`
+	Stripe     StripeConfig  `mapstructure:"stripe"`
+	LLMTimeout time.Duration `mapstructure:"llm_timeout"` // Default timeout for LLM API calls
 }
 
 // StripeConfig contains Stripe API configuration.
@@ -449,64 +433,14 @@ func (lc *LoggingConfig) Validate() error {
 }
 
 // Validate validates external services configuration.
+// Note: LLM API keys are configured per-project, not validated here.
 func (ec *ExternalConfig) Validate() error {
-	if err := ec.OpenAI.Validate(); err != nil {
-		return fmt.Errorf("openai config: %w", err)
-	}
-
-	if err := ec.Anthropic.Validate(); err != nil {
-		return fmt.Errorf("anthropic config: %w", err)
-	}
-
-	if err := ec.Cohere.Validate(); err != nil {
-		return fmt.Errorf("cohere config: %w", err)
-	}
-
 	if err := ec.Stripe.Validate(); err != nil {
 		return fmt.Errorf("stripe config: %w", err)
 	}
 
 	if err := ec.Email.Validate(); err != nil {
 		return fmt.Errorf("email config: %w", err)
-	}
-
-	return nil
-}
-
-// Validate validates OpenAI configuration.
-func (oc *OpenAIConfig) Validate() error {
-	if oc.APIKey != "" && oc.BaseURL == "" {
-		return errors.New("base_url is required when api_key is provided")
-	}
-
-	if oc.MaxRetries < 0 {
-		return errors.New("max_retries cannot be negative")
-	}
-
-	return nil
-}
-
-// Validate validates Anthropic configuration.
-func (ac *AnthropicConfig) Validate() error {
-	if ac.APIKey != "" && ac.BaseURL == "" {
-		return errors.New("base_url is required when api_key is provided")
-	}
-
-	if ac.MaxRetries < 0 {
-		return errors.New("max_retries cannot be negative")
-	}
-
-	return nil
-}
-
-// Validate validates Cohere configuration.
-func (cc *CohereConfig) Validate() error {
-	if cc.APIKey != "" && cc.BaseURL == "" {
-		return errors.New("base_url is required when api_key is provided")
-	}
-
-	if cc.MaxRetries < 0 {
-		return errors.New("max_retries cannot be negative")
 	}
 
 	return nil
@@ -643,12 +577,9 @@ func Load() (*Config, error) {
 	viper.BindEnv("server.cors_allowed_headers", "CORS_ALLOWED_HEADERS")
 
 	// External API keys (standard names)
-	//nolint:errcheck
-	viper.BindEnv("external.openai.api_key", "OPENAI_API_KEY")
-	//nolint:errcheck
-	viper.BindEnv("external.anthropic.api_key", "ANTHROPIC_API_KEY")
-	//nolint:errcheck
-	viper.BindEnv("external.cohere.api_key", "COHERE_API_KEY")
+	// Note: AI API keys (OpenAI, Anthropic, Cohere, etc.) are no longer loaded from env.
+	// Playground uses project-scoped credentials stored in database.
+	// Configure via dashboard: Settings > AI Providers
 	//nolint:errcheck
 	viper.BindEnv("external.stripe.secret_key", "STRIPE_SECRET_KEY")
 
@@ -714,6 +645,10 @@ func Load() (*Config, error) {
 	viper.BindEnv("auth.jwt_private_key_base64", "JWT_PRIVATE_KEY_BASE64")
 	//nolint:errcheck
 	viper.BindEnv("auth.jwt_public_key_base64", "JWT_PUBLIC_KEY_BASE64")
+
+	// Encryption configuration (for sensitive data at rest)
+	//nolint:errcheck
+	viper.BindEnv("encryption.ai_key_encryption_key", "AI_KEY_ENCRYPTION_KEY")
 
 	// OAuth configuration (Google/GitHub Signup)
 	//nolint:errcheck
@@ -906,9 +841,8 @@ func setDefaults() {
 	viper.SetDefault("logging.output", "stdout")
 
 	// External service defaults
-	viper.SetDefault("external.openai.base_url", "https://api.openai.com/v1")
-	viper.SetDefault("external.anthropic.base_url", "https://api.anthropic.com")
-	viper.SetDefault("external.cohere.base_url", "https://api.cohere.ai/v1")
+	// LLM timeout for API calls (per-project credentials are stored in database)
+	viper.SetDefault("external.llm_timeout", 30*time.Second)
 
 	// Feature flags defaults
 	viper.SetDefault("features.real_time_metrics", true)
@@ -969,6 +903,9 @@ func setDefaults() {
 	viper.SetDefault("archive.path_prefix", "telemetry/")
 	viper.SetDefault("archive.compression_level", 3)
 	viper.SetDefault("archive.default_retention_days", 2555)
+
+	// Encryption defaults (must be set in production via AI_KEY_ENCRYPTION_KEY env var)
+	viper.SetDefault("encryption.ai_key_encryption_key", "")
 }
 
 // GetServerAddress returns the server address string.

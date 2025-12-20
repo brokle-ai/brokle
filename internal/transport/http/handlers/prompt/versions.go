@@ -242,10 +242,5 @@ func buildVersionResponse(version *promptDomain.Version, labels []string) *promp
 		resp.CreatedBy = version.CreatedBy.String()
 	}
 
-	if len(version.Config) > 0 {
-		config, _ := version.GetModelConfig()
-		resp.Config = config
-	}
-
 	return resp
 }

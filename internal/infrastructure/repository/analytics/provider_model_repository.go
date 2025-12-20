@@ -12,22 +12,18 @@ import (
 	"gorm.io/gorm"
 )
 
-// ProviderModelRepositoryImpl implements model pricing repository using PostgreSQL
 type ProviderModelRepositoryImpl struct {
 	db *gorm.DB
 }
 
-// NewProviderModelRepository creates a new model repository
 func NewProviderModelRepository(db *gorm.DB) analytics.ProviderModelRepository {
 	return &ProviderModelRepositoryImpl{db: db}
 }
 
-// CreateProviderModel creates a new model definition
 func (r *ProviderModelRepositoryImpl) CreateProviderModel(ctx context.Context, model *analytics.ProviderModel) error {
 	return r.db.WithContext(ctx).Create(model).Error
 }
 
-// GetProviderModel retrieves a model by ID
 func (r *ProviderModelRepositoryImpl) GetProviderModel(ctx context.Context, modelID ulid.ULID) (*analytics.ProviderModel, error) {
 	var model analytics.ProviderModel
 	err := r.db.WithContext(ctx).Where("id = ?", modelID).First(&model).Error
@@ -37,7 +33,6 @@ func (r *ProviderModelRepositoryImpl) GetProviderModel(ctx context.Context, mode
 	return &model, nil
 }
 
-// GetProviderModelByName retrieves the latest model by name
 func (r *ProviderModelRepositoryImpl) GetProviderModelByName(
 	ctx context.Context,
 	projectID *ulid.ULID,
@@ -46,8 +41,7 @@ func (r *ProviderModelRepositoryImpl) GetProviderModelByName(
 	return r.GetProviderModelAtTime(ctx, projectID, modelName, time.Now())
 }
 
-// GetProviderModelAtTime retrieves model with temporal versioning
-// Project-specific pricing takes precedence over global pricing
+// Project-specific pricing takes precedence over global pricing.
 func (r *ProviderModelRepositoryImpl) GetProviderModelAtTime(
 	ctx context.Context,
 	projectID *ulid.ULID,
@@ -82,7 +76,6 @@ func (r *ProviderModelRepositoryImpl) GetProviderModelAtTime(
 	return &model, nil
 }
 
-// ListProviderModels lists all models for a project (or global if projectID is nil)
 func (r *ProviderModelRepositoryImpl) ListProviderModels(ctx context.Context, projectID *ulid.ULID) ([]*analytics.ProviderModel, error) {
 	var models []*analytics.ProviderModel
 
@@ -97,27 +90,35 @@ func (r *ProviderModelRepositoryImpl) ListProviderModels(ctx context.Context, pr
 	return models, err
 }
 
-// UpdateProviderModel updates an existing model
+// Returns default models for configured providers (model catalog).
+func (r *ProviderModelRepositoryImpl) ListByProviders(ctx context.Context, providers []string) ([]*analytics.ProviderModel, error) {
+	if len(providers) == 0 {
+		return []*analytics.ProviderModel{}, nil
+	}
+
+	var models []*analytics.ProviderModel
+	err := r.db.WithContext(ctx).
+		Where("provider IN ?", providers).
+		Where("project_id IS NULL"). // Global models only
+		Order("provider ASC, model_name ASC").
+		Find(&models).Error
+	return models, err
+}
+
 func (r *ProviderModelRepositoryImpl) UpdateProviderModel(ctx context.Context, modelID ulid.ULID, model *analytics.ProviderModel) error {
 	return r.db.WithContext(ctx).Where("id = ?", modelID).Updates(model).Error
 }
 
-// DeleteProviderModel deletes a model (cascade deletes prices)
+// Cascade deletes prices.
 func (r *ProviderModelRepositoryImpl) DeleteProviderModel(ctx context.Context, modelID ulid.ULID) error {
 	return r.db.WithContext(ctx).Where("id = ?", modelID).Delete(&analytics.ProviderModel{}).Error
 }
 
-// ============================================================================
-// Price Methods
-// ============================================================================
-
-// CreateProviderPrice creates a new price for a model
 func (r *ProviderModelRepositoryImpl) CreateProviderPrice(ctx context.Context, price *analytics.ProviderPrice) error {
 	return r.db.WithContext(ctx).Create(price).Error
 }
 
-// GetProviderPrices retrieves all prices for a model
-// Project-specific prices override global prices
+// Project-specific prices override global prices.
 func (r *ProviderModelRepositoryImpl) GetProviderPrices(
 	ctx context.Context,
 	modelID ulid.ULID,
@@ -168,21 +169,14 @@ func (r *ProviderModelRepositoryImpl) GetProviderPrices(
 	return prices, err
 }
 
-// UpdateProviderPrice updates an existing price
 func (r *ProviderModelRepositoryImpl) UpdateProviderPrice(ctx context.Context, priceID ulid.ULID, price *analytics.ProviderPrice) error {
 	return r.db.WithContext(ctx).Where("id = ?", priceID).Updates(price).Error
 }
 
-// DeleteProviderPrice deletes a price
 func (r *ProviderModelRepositoryImpl) DeleteProviderPrice(ctx context.Context, priceID ulid.ULID) error {
 	return r.db.WithContext(ctx).Where("id = ?", priceID).Delete(&analytics.ProviderPrice{}).Error
 }
 
-// ============================================================================
-// Helper Methods
-// ============================================================================
-
-// GetPriceForUsageType retrieves a specific price for a usage type
 func (r *ProviderModelRepositoryImpl) GetPriceForUsageType(
 	ctx context.Context,
 	modelID ulid.ULID,

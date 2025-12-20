@@ -126,8 +126,10 @@ Copy `.env.example` to `.env`. Key variables:
 | `REDIS_URL` | Redis connection |
 | `CLICKHOUSE_URL` | ClickHouse connection |
 | `JWT_SECRET` | Required for server mode |
-| `OPENAI_API_KEY` | OpenAI integration |
-| `ANTHROPIC_API_KEY` | Anthropic integration |
+| `AI_KEY_ENCRYPTION_KEY` | Encryption key for AI credentials (base64, 32 bytes) |
+
+**Note**: AI API keys (OpenAI, Anthropic, etc.) are NOT configured via environment.
+Configure via dashboard: Settings > AI Providers (per-project credentials).
 
 ## API Architecture
 

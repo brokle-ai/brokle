@@ -7,6 +7,7 @@ import {
   ListTodo,
   Activity,
   FileText,
+  FlaskConical,
 } from 'lucide-react'
 
 export const ROUTES: Route[] = [
@@ -68,7 +69,7 @@ export const ROUTES: Route[] = [
     show: ({ currentProjectSlug }) => !!currentProjectSlug,
   },
 
-  // Observability Group (2 routes)
+  // Observability Group (3 routes)
   {
     title: 'Traces',
     pathname: '/projects/[projectSlug]/traces',
@@ -82,6 +83,15 @@ export const ROUTES: Route[] = [
     title: 'Prompts',
     pathname: '/projects/[projectSlug]/prompts',
     icon: FileText,
+    section: RouteSection.Main,
+    group: RouteGroup.Observability,
+    rbacScope: 'projects:read',
+    show: ({ currentProjectSlug }) => !!currentProjectSlug,
+  },
+  {
+    title: 'Playground',
+    pathname: '/projects/[projectSlug]/playground',
+    icon: FlaskConical,
     section: RouteSection.Main,
     group: RouteGroup.Observability,
     rbacScope: 'projects:read',
@@ -111,8 +121,8 @@ export const ROUTES: Route[] = [
   },
 ]
 
-// Total: 9 routes
+// Total: 10 routes
 // - Root: 1 (Dashboard)
 // - Organization: 2 (Projects, Settings)
-// - Project: 5 (2 Project Group + 2 Observability + 1 Other)
+// - Project: 6 (2 Project Group + 3 Observability + 1 Other)
 // - User Settings: 1 (Home - back to dashboard)

@@ -23,9 +23,7 @@ node_modules/
 *.log
 *.tmp
 
-# Documentation and non-runtime files (keep docs/swagger for API docs)
-docs/*
-!docs/swagger/
+# Keep docs/ for API swagger documentation
 internal-docs/
 claudedocs/
 competitors/

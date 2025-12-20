@@ -162,11 +162,13 @@ These attributes capture arbitrary function arguments and return values for non-
 
 #### Prompt Management
 
-| Attribute | Type | Example | SDK Sets? | Backend Extracts? |
-|-----------|------|---------|-----------|-------------------|
-| `brokle.prompt.id` | string | `"prompt-123"` | ✅ Optional | ✅ Materialized |
-| `brokle.prompt.name` | string | `"chat-v1"` | ✅ Optional | ✅ Materialized |
-| `brokle.prompt.version` | string | `"2"` | ✅ Optional | ✅ Materialized |
+| Attribute | Type | Example | SDK Sets? | Backend Storage |
+|-----------|------|---------|-----------|-----------------|
+| `brokle.prompt.id` | string | `"prompt-123"` | ✅ Optional | Map (add columns when needed) |
+| `brokle.prompt.name` | string | `"chat-v1"` | ✅ Optional | Map (add columns when needed) |
+| `brokle.prompt.version` | int | `2` | ✅ Optional | Map (add columns when needed) |
+
+**Note**: Prompt attributes are stored in `span_attributes` Map column. Materialized columns can be added later via `ALTER TABLE` when query performance on prompt filters becomes a bottleneck. Currently, bloom filter indexes on the Map provide acceptable performance for typical workloads.
 
 ---
 

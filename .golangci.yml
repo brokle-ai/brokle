@@ -195,7 +195,7 @@ issues:
         - gosec
 
     # Exclude specific linters for generated code
-    - path: docs/swagger/
+    - path: docs/
       linters:
         - all
 

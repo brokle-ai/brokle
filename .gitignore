@@ -212,3 +212,6 @@ competitors/
 .claude/settings.local.json
 
 /venv/
+
+# Moat task system
+.moat/

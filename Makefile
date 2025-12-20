@@ -187,8 +187,8 @@ fmt-frontend: ## Format frontend code
 
 docs-generate: ## Generate API documentation
 	@echo "📚 Generating API documentation..."
-	swag init -g cmd/server/main.go --output docs/swagger
-	@echo "✅ Swagger documentation generated in docs/swagger/"
+	swag init -g cmd/server/main.go --output docs
+	@echo "✅ Swagger documentation generated in docs/"
 
 ##@ Utilities
 

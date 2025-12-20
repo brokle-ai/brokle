@@ -15,15 +15,13 @@ import { useProjectOnly } from '@/features/projects'
 import {
   useCreatePromptMutation,
   PromptEditor,
-  ModelConfigForm,
-  LabelManager,
+  LabelSelector,
   extractVariables,
 } from '@/features/prompts'
 import type {
   PromptType,
   TextTemplate,
   ChatTemplate,
-  ModelConfig,
   CreatePromptRequest,
 } from '@/features/prompts'
 
@@ -33,16 +31,10 @@ export default function NewPromptPage() {
   const { currentProject } = useProjectOnly()
   const createMutation = useCreatePromptMutation(currentProject?.id || '')
 
-  // Form state
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [type, setType] = useState<PromptType>('text')
   const [template, setTemplate] = useState<TextTemplate | ChatTemplate>({ content: '' })
-  const [config, setConfig] = useState<ModelConfig>({
-    model: 'gpt-4o-mini',
-    temperature: 0.7,
-    max_tokens: 1024,
-  })
   const [labels, setLabels] = useState<string[]>([])
   const [commitMessage, setCommitMessage] = useState('')
   const [tagsInput, setTagsInput] = useState('')
@@ -72,7 +64,6 @@ export default function NewPromptPage() {
       description: description.trim() || undefined,
       tags: tags.length > 0 ? tags : undefined,
       template,
-      config,
       labels: labels.length > 0 ? labels : undefined,
       commit_message: commitMessage.trim() || undefined,
     }
@@ -104,7 +95,6 @@ export default function NewPromptPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main Content */}
           <div className="lg:col-span-2 space-y-6">
             <Card>
               <CardHeader>
@@ -164,27 +154,17 @@ export default function NewPromptPage() {
             </Card>
           </div>
 
-          {/* Sidebar */}
           <div className="space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle>Labels</CardTitle>
               </CardHeader>
               <CardContent>
-                <LabelManager
+                <LabelSelector
                   labels={labels}
                   onChange={setLabels}
                   availableLabels={['production', 'staging', 'development']}
                 />
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Model Configuration</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ModelConfigForm config={config} onChange={setConfig} />
               </CardContent>
             </Card>
 

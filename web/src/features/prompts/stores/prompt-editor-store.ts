@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { PromptType, ChatMessage, ModelConfig, Prompt } from '../types'
+import type { PromptType, ChatMessage, Prompt } from '../types'
 
 interface Variable {
   name: string
@@ -13,7 +13,6 @@ interface PromptEditorState {
   description: string
   type: PromptType
   template: string | ChatMessage[]
-  config: ModelConfig
   variables: Variable[]
   isDirty: boolean
 
@@ -22,7 +21,6 @@ interface PromptEditorState {
   setDescription: (description: string) => void
   setType: (type: PromptType) => void
   setTemplate: (template: string | ChatMessage[]) => void
-  setConfig: (config: ModelConfig) => void
   reset: () => void
   loadPrompt: (prompt: Prompt) => void
 }
@@ -63,7 +61,6 @@ const initialState = {
   description: '',
   type: 'text' as PromptType,
   template: '',
-  config: {},
   variables: [],
   isDirty: false,
 }
@@ -89,8 +86,6 @@ export const usePromptEditorStore = create<PromptEditorState>((set, get) => ({
     set({ template, variables, isDirty: true })
   },
 
-  setConfig: (config) => set({ config, isDirty: true }),
-
   reset: () => set(initialState),
 
   loadPrompt: (prompt) => {
@@ -107,7 +102,6 @@ export const usePromptEditorStore = create<PromptEditorState>((set, get) => ({
       description: prompt.description || '',
       type: prompt.type,
       template,
-      config: prompt.config || {},
       variables: extractVariables(template),
       isDirty: false,
     })
