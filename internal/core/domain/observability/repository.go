@@ -60,6 +60,8 @@ type ScoreRepository interface {
 
 	// Count
 	Count(ctx context.Context, filter *ScoreFilter) (int64, error)
+
+	ExistsByConfigName(ctx context.Context, projectID, configName string) (bool, error)
 }
 
 type TraceFilter struct {

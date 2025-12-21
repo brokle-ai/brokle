@@ -304,6 +304,19 @@ func (r *scoreRepository) Count(ctx context.Context, filter *observability.Score
 	return int64(count), err
 }
 
+// ExistsByConfigName checks if any scores exist for a given config name within a project
+func (r *scoreRepository) ExistsByConfigName(ctx context.Context, projectID, configName string) (bool, error) {
+	query := `SELECT count() > 0 FROM scores WHERE project_id = ? AND name = ? LIMIT 1`
+
+	var exists bool
+	err := r.db.QueryRow(ctx, query, projectID, configName).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("check scores exist by config name: %w", err)
+	}
+
+	return exists, nil
+}
+
 // Helper function to scan a single score from query row
 func (r *scoreRepository) scanScoreRow(row driver.Row) (*observability.Score, error) {
 	var score observability.Score

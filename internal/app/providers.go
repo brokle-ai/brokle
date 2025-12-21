@@ -421,7 +421,7 @@ func ProvideServerServices(core *CoreContainer) *ServiceContainer {
 		logger,
 	)
 
-	evaluationServices := ProvideEvaluationServices(repos.Evaluation, logger)
+	evaluationServices := ProvideEvaluationServices(repos.Evaluation, repos.Observability, logger)
 
 	return &ServiceContainer{
 		User:                userServices,
@@ -1045,10 +1045,12 @@ func ProvidePlaygroundServices(
 // ProvideEvaluationServices creates all evaluation-related services
 func ProvideEvaluationServices(
 	evaluationRepos *EvaluationRepositories,
+	observabilityRepos *ObservabilityRepositories,
 	logger *slog.Logger,
 ) *EvaluationServices {
 	scoreConfigSvc := evaluationService.NewScoreConfigService(
 		evaluationRepos.ScoreConfig,
+		observabilityRepos.Score,
 		logger,
 	)
 

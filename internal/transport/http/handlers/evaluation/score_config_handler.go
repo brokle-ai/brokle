@@ -168,9 +168,16 @@ func (h *ScoreConfigHandler) Update(c *gin.Context) {
 		return
 	}
 
+	var dataType *evaluationDomain.ScoreDataType
+	if req.DataType != nil {
+		dt := evaluationDomain.ScoreDataType(*req.DataType)
+		dataType = &dt
+	}
+
 	domainReq := &evaluationDomain.UpdateScoreConfigRequest{
 		Name:        req.Name,
 		Description: req.Description,
+		DataType:    dataType,
 		MinValue:    req.MinValue,
 		MaxValue:    req.MaxValue,
 		Categories:  req.Categories,

@@ -1205,6 +1205,13 @@ definitions:
         items:
           type: string
         type: array
+      data_type:
+        allOf:
+        - $ref: '#/definitions/internal_transport_http_handlers_evaluation.ScoreDataType'
+        enum:
+        - NUMERIC
+        - CATEGORICAL
+        - BOOLEAN
       description:
         type: string
       max_value:

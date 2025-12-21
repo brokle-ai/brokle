@@ -62,6 +62,7 @@ type CreateRequest struct {
 type UpdateRequest struct {
 	Name        *string                `json:"name,omitempty" binding:"omitempty,min=1,max=100"`
 	Description *string                `json:"description,omitempty"`
+	DataType    *ScoreDataType         `json:"data_type,omitempty" binding:"omitempty,oneof=NUMERIC CATEGORICAL BOOLEAN"`
 	MinValue    *float64               `json:"min_value,omitempty"`
 	MaxValue    *float64               `json:"max_value,omitempty"`
 	Categories  []string               `json:"categories,omitempty"`

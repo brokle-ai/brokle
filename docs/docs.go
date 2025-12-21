@@ -12806,6 +12806,18 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
+                "data_type": {
+                    "enum": [
+                        "NUMERIC",
+                        "CATEGORICAL",
+                        "BOOLEAN"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/internal_transport_http_handlers_evaluation.ScoreDataType"
+                        }
+                    ]
+                },
                 "description": {
                     "type": "string"
                 },

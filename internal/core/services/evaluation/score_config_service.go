@@ -8,22 +8,26 @@ import (
 	"time"
 
 	"brokle/internal/core/domain/evaluation"
+	"brokle/internal/core/domain/observability"
 	appErrors "brokle/pkg/errors"
 	"brokle/pkg/ulid"
 )
 
 type scoreConfigService struct {
-	repo   evaluation.ScoreConfigRepository
-	logger *slog.Logger
+	repo      evaluation.ScoreConfigRepository
+	scoreRepo observability.ScoreRepository
+	logger    *slog.Logger
 }
 
 func NewScoreConfigService(
 	repo evaluation.ScoreConfigRepository,
+	scoreRepo observability.ScoreRepository,
 	logger *slog.Logger,
 ) evaluation.ScoreConfigService {
 	return &scoreConfigService{
-		repo:   repo,
-		logger: logger,
+		repo:      repo,
+		scoreRepo: scoreRepo,
+		logger:    logger,
 	}
 }
 
@@ -75,6 +79,9 @@ func (s *scoreConfigService) Update(ctx context.Context, id ulid.ULID, projectID
 		return nil, appErrors.NewInternalError("failed to get score config", err)
 	}
 
+	// Capture original name before any mutations for score existence check
+	originalName := config.Name
+
 	if req.Name != nil && *req.Name != config.Name {
 		exists, err := s.repo.ExistsByName(ctx, projectID, *req.Name)
 		if err != nil {
@@ -84,6 +91,18 @@ func (s *scoreConfigService) Update(ctx context.Context, id ulid.ULID, projectID
 			return nil, appErrors.NewConflictError(fmt.Sprintf("score config '%s' already exists in this project", *req.Name))
 		}
 		config.Name = *req.Name
+	}
+
+	if req.DataType != nil && *req.DataType != config.DataType {
+		// Check if scores exist for this config (use original name, not potentially renamed one)
+		exists, err := s.scoreRepo.ExistsByConfigName(ctx, projectID.String(), originalName)
+		if err != nil {
+			return nil, appErrors.NewInternalError("failed to check score existence", err)
+		}
+		if exists {
+			return nil, appErrors.NewConflictError("cannot change data type: scores already exist for this config")
+		}
+		config.DataType = *req.DataType
 	}
 
 	if req.Description != nil {
