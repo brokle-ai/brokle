@@ -3,6 +3,7 @@
 import { TracesProvider } from './context/traces-context'
 import { TracesTable } from './components/traces-table'
 import { useProjectTraces, useTraceFilterOptions } from './hooks/use-project-traces'
+import { PageHeader } from '@/components/layout/page-header'
 
 interface TracesProps {
   projectSlug?: string
@@ -13,14 +14,7 @@ function TracesContent() {
 
   return (
     <>
-      <div className='mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between'>
-        <div>
-          <h2 className='text-xl font-bold tracking-tight'>Traces</h2>
-          <p className='text-muted-foreground'>
-            View and analyze distributed traces for this project
-          </p>
-        </div>
-      </div>
+      <PageHeader title="Traces" />
       <div className='-mx-4 flex-1 overflow-auto px-4 py-1'>
         {/* Error State */}
         {error && !isLoading && (

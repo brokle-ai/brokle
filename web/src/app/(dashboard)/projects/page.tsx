@@ -1,4 +1,5 @@
 import { Metadata } from 'next'
+import { PageHeader } from '@/components/layout/page-header'
 
 export const metadata: Metadata = {
   title: 'Projects',
@@ -8,12 +9,7 @@ export const metadata: Metadata = {
 export default function ProjectsPage() {
   return (
     <div className="container mx-auto py-8">
-      <div className="mb-8">
-        <h1 className="text-xl font-bold">Projects</h1>
-        <p className="text-muted-foreground">
-          Manage your projects and their configurations.
-        </p>
-      </div>
+      <PageHeader title="Projects" />
 
       <div className="space-y-4">
         <div className="rounded-lg border p-6">

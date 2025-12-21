@@ -33,7 +33,7 @@ export const Header = ({
   return (
     <header
       className={cn(
-        'bg-background relative h-14',
+        'bg-background relative h-12',
         fixed && 'header-fixed peer/header sticky top-0 z-50 w-[inherit]',
         offset > 10 && fixed && 'after:absolute after:inset-0 after:bg-background/20 after:backdrop-blur-lg after:-z-10',
         offset > 10 && fixed ? 'shadow-sm' : 'shadow-none',

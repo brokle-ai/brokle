@@ -5,6 +5,7 @@ import { useProjectOnly } from '@/features/projects'
 import { DashboardView } from '@/features/projects'
 import { DashboardHeader } from '@/components/layout/dashboard-header'
 import { Main } from '@/components/layout/main'
+import { PageHeader } from '@/components/layout/page-header'
 import { Skeleton } from '@/components/ui/skeleton'
 
 export default function ProjectPage() {
@@ -66,14 +67,7 @@ export default function ProjectPage() {
     <>
       <DashboardHeader />
       <Main>
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold tracking-tight">
-            {currentProject.name}
-          </h1>
-          <p className="text-muted-foreground">
-            Overview of your project metrics and activity
-          </p>
-        </div>
+        <PageHeader title={currentProject.name} />
         <DashboardView />
       </Main>
     </>

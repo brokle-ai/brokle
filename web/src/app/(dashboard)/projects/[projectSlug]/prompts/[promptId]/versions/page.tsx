@@ -7,6 +7,7 @@ import { Main } from '@/components/layout/main'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Separator } from '@/components/ui/separator'
 import {
   Dialog,
   DialogContent,
@@ -109,23 +110,18 @@ export default function PromptVersionsPage() {
     <>
       <DashboardHeader />
       <Main>
-        <div className="mb-6 flex items-start justify-between">
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="icon" onClick={() => router.back()}>
               <ArrowLeft className="h-4 w-4" />
             </Button>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-2xl font-bold tracking-tight">
-                  Version History: {prompt.name}
-                </h2>
-                <Badge variant={prompt.type === 'chat' ? 'default' : 'secondary'}>
-                  {prompt.type}
-                </Badge>
-              </div>
-              <p className="text-muted-foreground">
-                View and compare all versions of this prompt
-              </p>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-semibold">
+                Version History: {prompt.name}
+              </h1>
+              <Badge variant={prompt.type === 'chat' ? 'default' : 'secondary'}>
+                {prompt.type}
+              </Badge>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -152,6 +148,7 @@ export default function PromptVersionsPage() {
             </Button>
           </div>
         </div>
+        <Separator className="my-4" />
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div>
