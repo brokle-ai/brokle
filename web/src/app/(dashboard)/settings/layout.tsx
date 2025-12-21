@@ -43,7 +43,7 @@ export default function SettingsLayout({
         <PageHeader title="Settings" />
 
         {/* Two-column layout: SettingsNav on left, content on right */}
-        <div className='flex flex-1 flex-col space-y-2 overflow-hidden md:space-y-2 lg:flex-row lg:space-y-0 lg:space-x-12'>
+        <div className='flex flex-1 flex-col space-y-2 overflow-hidden md:space-y-2 lg:flex-row lg:space-y-0 lg:space-x-6'>
           <aside className='top-0 lg:sticky lg:w-1/5'>
             <SettingsNav />
           </aside>
