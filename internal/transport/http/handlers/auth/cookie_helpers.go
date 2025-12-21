@@ -8,9 +8,10 @@ import (
 	"os"
 )
 
-// isDevelopment checks if running in development mode
+// isDevelopment returns true if APP_ENV is empty or "development".
 func isDevelopment() bool {
-	return os.Getenv("APP_ENV") == "development"
+	env := os.Getenv("APP_ENV")
+	return env == "" || env == "development"
 }
 
 // generateCSRFToken generates a cryptographically secure CSRF token
