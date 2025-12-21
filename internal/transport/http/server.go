@@ -363,6 +363,34 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 			scoreConfigs.PUT("/:configId", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Evaluation.Update)
 			scoreConfigs.DELETE("/:configId", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Evaluation.Delete)
 		}
+
+		// Dataset routes (Evaluation domain - test case collections)
+		datasets := projects.Group("/:projectId/datasets")
+		{
+			datasets.GET("", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Dataset.List)
+			datasets.POST("", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Dataset.Create)
+			datasets.GET("/:datasetId", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Dataset.Get)
+			datasets.PUT("/:datasetId", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Dataset.Update)
+			datasets.DELETE("/:datasetId", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Dataset.Delete)
+
+			// Dataset Item routes
+			datasets.GET("/:datasetId/items", s.authMiddleware.RequirePermission("projects:read"), s.handlers.DatasetItem.List)
+			datasets.POST("/:datasetId/items", s.authMiddleware.RequirePermission("projects:write"), s.handlers.DatasetItem.Create)
+			datasets.DELETE("/:datasetId/items/:itemId", s.authMiddleware.RequirePermission("projects:write"), s.handlers.DatasetItem.Delete)
+		}
+
+		// Experiment routes (Evaluation domain - batch evaluation runs)
+		experiments := projects.Group("/:projectId/experiments")
+		{
+			experiments.GET("", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Experiment.List)
+			experiments.POST("", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Experiment.Create)
+			experiments.GET("/:experimentId", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Experiment.Get)
+			experiments.PUT("/:experimentId", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Experiment.Update)
+			experiments.DELETE("/:experimentId", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Experiment.Delete)
+
+			// Experiment Item routes (read-only via dashboard)
+			experiments.GET("/:experimentId/items", s.authMiddleware.RequirePermission("projects:read"), s.handlers.ExperimentItem.List)
+		}
 	}
 
 	// Analytics routes
@@ -496,6 +524,24 @@ func (s *Server) setupSDKRoutes(router *gin.RouterGroup) {
 	{
 		scores.POST("", s.handlers.SDKScore.Create)            // POST /v1/scores - Create single score
 		scores.POST("/batch", s.handlers.SDKScore.CreateBatch) // POST /v1/scores/batch - Batch create scores
+	}
+
+	// Dataset SDK routes (evaluation domain) - uses consolidated DatasetHandler
+	sdkDatasets := router.Group("/datasets")
+	{
+		sdkDatasets.POST("", s.handlers.Dataset.Create)                       // POST /v1/datasets - Create dataset
+		sdkDatasets.GET("/:datasetId", s.handlers.Dataset.Get)                // GET /v1/datasets/:datasetId - Get dataset
+		sdkDatasets.POST("/:datasetId/items", s.handlers.Dataset.CreateItems) // POST /v1/datasets/:datasetId/items - Batch create items
+		sdkDatasets.GET("/:datasetId/items", s.handlers.Dataset.ListItems)    // GET /v1/datasets/:datasetId/items - List items
+	}
+
+	// Experiment SDK routes (evaluation domain) - uses consolidated ExperimentHandler
+	sdkExperiments := router.Group("/experiments")
+	{
+		sdkExperiments.POST("", s.handlers.Experiment.Create)                       // POST /v1/experiments - Create experiment
+		sdkExperiments.GET("/:experimentId", s.handlers.Experiment.Get)             // GET /v1/experiments/:experimentId - Get experiment
+		sdkExperiments.PATCH("/:experimentId", s.handlers.Experiment.Update)        // PATCH /v1/experiments/:experimentId - Update experiment
+		sdkExperiments.POST("/:experimentId/items", s.handlers.Experiment.CreateItems) // POST /v1/experiments/:experimentId/items - Batch create items
 	}
 }
 

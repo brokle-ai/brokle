@@ -6,28 +6,47 @@ import (
 	"brokle/pkg/ulid"
 )
 
-// ScoreConfigRepository defines the interface for score config data access.
-// Implemented by PostgreSQL repository.
 type ScoreConfigRepository interface {
-	// Create creates a new score config
 	Create(ctx context.Context, config *ScoreConfig) error
-
-	// GetByID retrieves a score config by ID within a project
 	GetByID(ctx context.Context, id ulid.ULID, projectID ulid.ULID) (*ScoreConfig, error)
-
-	// GetByName retrieves a score config by name within a project
-	// Returns nil, nil if not found (for uniqueness checks)
 	GetByName(ctx context.Context, projectID ulid.ULID, name string) (*ScoreConfig, error)
-
-	// List retrieves all score configs for a project
 	List(ctx context.Context, projectID ulid.ULID) ([]*ScoreConfig, error)
-
-	// Update updates an existing score config
 	Update(ctx context.Context, config *ScoreConfig, projectID ulid.ULID) error
-
-	// Delete permanently deletes a score config
 	Delete(ctx context.Context, id ulid.ULID, projectID ulid.ULID) error
-
-	// ExistsByName checks if a score config with the given name exists in the project
 	ExistsByName(ctx context.Context, projectID ulid.ULID, name string) (bool, error)
+}
+
+type DatasetRepository interface {
+	Create(ctx context.Context, dataset *Dataset) error
+	GetByID(ctx context.Context, id ulid.ULID, projectID ulid.ULID) (*Dataset, error)
+	GetByName(ctx context.Context, projectID ulid.ULID, name string) (*Dataset, error)
+	List(ctx context.Context, projectID ulid.ULID) ([]*Dataset, error)
+	Update(ctx context.Context, dataset *Dataset, projectID ulid.ULID) error
+	Delete(ctx context.Context, id ulid.ULID, projectID ulid.ULID) error
+	ExistsByName(ctx context.Context, projectID ulid.ULID, name string) (bool, error)
+}
+
+type DatasetItemRepository interface {
+	Create(ctx context.Context, item *DatasetItem) error
+	CreateBatch(ctx context.Context, items []*DatasetItem) error
+	GetByID(ctx context.Context, id ulid.ULID, datasetID ulid.ULID) (*DatasetItem, error)
+	GetByIDForProject(ctx context.Context, id ulid.ULID, projectID ulid.ULID) (*DatasetItem, error)
+	List(ctx context.Context, datasetID ulid.ULID, limit, offset int) ([]*DatasetItem, int64, error)
+	Delete(ctx context.Context, id ulid.ULID, datasetID ulid.ULID) error
+	CountByDataset(ctx context.Context, datasetID ulid.ULID) (int64, error)
+}
+
+type ExperimentRepository interface {
+	Create(ctx context.Context, experiment *Experiment) error
+	GetByID(ctx context.Context, id ulid.ULID, projectID ulid.ULID) (*Experiment, error)
+	List(ctx context.Context, projectID ulid.ULID, filter *ExperimentFilter) ([]*Experiment, error)
+	Update(ctx context.Context, experiment *Experiment, projectID ulid.ULID) error
+	Delete(ctx context.Context, id ulid.ULID, projectID ulid.ULID) error
+}
+
+type ExperimentItemRepository interface {
+	Create(ctx context.Context, item *ExperimentItem) error
+	CreateBatch(ctx context.Context, items []*ExperimentItem) error
+	List(ctx context.Context, experimentID ulid.ULID, limit, offset int) ([]*ExperimentItem, int64, error)
+	CountByExperiment(ctx context.Context, experimentID ulid.ULID) (int64, error)
 }

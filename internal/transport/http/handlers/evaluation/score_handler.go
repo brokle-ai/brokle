@@ -35,44 +35,6 @@ func NewSDKScoreHandler(
 	}
 }
 
-type CreateScoreRequest struct {
-	TraceID          string         `json:"trace_id" binding:"required"`
-	SpanID           *string        `json:"span_id,omitempty"`
-	Name             string         `json:"name" binding:"required"`
-	Value            *float64       `json:"value,omitempty"`
-	StringValue      *string        `json:"string_value,omitempty"`
-	DataType         string         `json:"data_type" binding:"required,oneof=NUMERIC CATEGORICAL BOOLEAN"`
-	Reason           *string        `json:"reason,omitempty"`
-	Metadata         map[string]any `json:"metadata,omitempty"`
-	ExperimentID     *string        `json:"experiment_id,omitempty"`
-	ExperimentItemID *string        `json:"experiment_item_id,omitempty"`
-}
-
-type BatchScoreRequest struct {
-	Scores []CreateScoreRequest `json:"scores" binding:"required,dive"`
-}
-
-type ScoreResponse struct {
-	ID               string         `json:"id"`
-	ProjectID        string         `json:"project_id"`
-	TraceID          string         `json:"trace_id"`
-	SpanID           string         `json:"span_id"`
-	Name             string         `json:"name"`
-	Value            *float64       `json:"value,omitempty"`
-	StringValue      *string        `json:"string_value,omitempty"`
-	DataType         string         `json:"data_type"`
-	Source           string         `json:"source"`
-	Reason           *string        `json:"reason,omitempty"`
-	Metadata         map[string]any `json:"metadata,omitempty"`
-	ExperimentID     *string        `json:"experiment_id,omitempty"`
-	ExperimentItemID *string        `json:"experiment_item_id,omitempty"`
-	Timestamp        time.Time      `json:"timestamp"`
-}
-
-type BatchScoreResponse struct {
-	Created int `json:"created"`
-}
-
 // @Summary Create score
 // @Description Creates a score for a trace/span. If a ScoreConfig exists for the score name, validates against it.
 // @Tags SDK - Scores

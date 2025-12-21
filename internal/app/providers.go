@@ -224,7 +224,11 @@ type PlaygroundRepositories struct {
 
 // EvaluationRepositories contains all evaluation-related repositories
 type EvaluationRepositories struct {
-	ScoreConfig evaluationDomain.ScoreConfigRepository
+	ScoreConfig    evaluationDomain.ScoreConfigRepository
+	Dataset        evaluationDomain.DatasetRepository
+	DatasetItem    evaluationDomain.DatasetItemRepository
+	Experiment     evaluationDomain.ExperimentRepository
+	ExperimentItem evaluationDomain.ExperimentItemRepository
 }
 
 // Domain-specific service containers
@@ -279,7 +283,11 @@ type PlaygroundServices struct {
 
 // EvaluationServices contains all evaluation-related services
 type EvaluationServices struct {
-	ScoreConfig evaluationDomain.ScoreConfigService
+	ScoreConfig    evaluationDomain.ScoreConfigService
+	Dataset        evaluationDomain.DatasetService
+	DatasetItem    evaluationDomain.DatasetItemService
+	Experiment     evaluationDomain.ExperimentService
+	ExperimentItem evaluationDomain.ExperimentItemService
 }
 
 func ProvideDatabases(cfg *config.Config, logger *slog.Logger) (*DatabaseContainer, error) {
@@ -479,10 +487,18 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 		playgroundSvc = core.Services.Playground.Playground
 	}
 
-	// Get evaluation service
+	// Get evaluation services
 	var scoreConfigSvc evaluationDomain.ScoreConfigService
+	var datasetSvc evaluationDomain.DatasetService
+	var datasetItemSvc evaluationDomain.DatasetItemService
+	var experimentSvc evaluationDomain.ExperimentService
+	var experimentItemSvc evaluationDomain.ExperimentItemService
 	if core.Services.Evaluation != nil {
 		scoreConfigSvc = core.Services.Evaluation.ScoreConfig
+		datasetSvc = core.Services.Evaluation.Dataset
+		datasetItemSvc = core.Services.Evaluation.DatasetItem
+		experimentSvc = core.Services.Evaluation.Experiment
+		experimentItemSvc = core.Services.Evaluation.ExperimentItem
 	}
 
 	httpHandlers := handlers.NewHandlers(
@@ -511,6 +527,10 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 		modelCatalogSvc,
 		playgroundSvc,
 		scoreConfigSvc,
+		datasetSvc,
+		datasetItemSvc,
+		experimentSvc,
+		experimentItemSvc,
 	)
 
 	httpServer := http.NewServer(
@@ -667,7 +687,11 @@ func ProvidePlaygroundRepositories(db *gorm.DB) *PlaygroundRepositories {
 // ProvideEvaluationRepositories creates evaluation repository container
 func ProvideEvaluationRepositories(db *gorm.DB) *EvaluationRepositories {
 	return &EvaluationRepositories{
-		ScoreConfig: evaluationRepo.NewScoreConfigRepository(db),
+		ScoreConfig:    evaluationRepo.NewScoreConfigRepository(db),
+		Dataset:        evaluationRepo.NewDatasetRepository(db),
+		DatasetItem:    evaluationRepo.NewDatasetItemRepository(db),
+		Experiment:     evaluationRepo.NewExperimentRepository(db),
+		ExperimentItem: evaluationRepo.NewExperimentItemRepository(db),
 	}
 }
 
@@ -1028,8 +1052,36 @@ func ProvideEvaluationServices(
 		logger,
 	)
 
+	datasetSvc := evaluationService.NewDatasetService(
+		evaluationRepos.Dataset,
+		logger,
+	)
+
+	datasetItemSvc := evaluationService.NewDatasetItemService(
+		evaluationRepos.DatasetItem,
+		evaluationRepos.Dataset,
+		logger,
+	)
+
+	experimentSvc := evaluationService.NewExperimentService(
+		evaluationRepos.Experiment,
+		evaluationRepos.Dataset,
+		logger,
+	)
+
+	experimentItemSvc := evaluationService.NewExperimentItemService(
+		evaluationRepos.ExperimentItem,
+		evaluationRepos.Experiment,
+		evaluationRepos.DatasetItem,
+		logger,
+	)
+
 	return &EvaluationServices{
-		ScoreConfig: scoreConfigSvc,
+		ScoreConfig:    scoreConfigSvc,
+		Dataset:        datasetSvc,
+		DatasetItem:    datasetItemSvc,
+		Experiment:     experimentSvc,
+		ExperimentItem: experimentItemSvc,
 	}
 }
 

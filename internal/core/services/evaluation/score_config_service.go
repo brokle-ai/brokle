@@ -2,6 +2,7 @@ package evaluation
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -49,7 +50,7 @@ func (s *scoreConfigService) Create(ctx context.Context, projectID ulid.ULID, re
 	}
 
 	if err := s.repo.Create(ctx, config); err != nil {
-		if err == evaluation.ErrScoreConfigExists {
+		if errors.Is(err, evaluation.ErrScoreConfigExists) {
 			return nil, appErrors.NewConflictError(fmt.Sprintf("score config '%s' already exists in this project", req.Name))
 		}
 		return nil, appErrors.NewInternalError("failed to create score config", err)
@@ -68,7 +69,7 @@ func (s *scoreConfigService) Create(ctx context.Context, projectID ulid.ULID, re
 func (s *scoreConfigService) Update(ctx context.Context, id ulid.ULID, projectID ulid.ULID, req *evaluation.UpdateScoreConfigRequest) (*evaluation.ScoreConfig, error) {
 	config, err := s.repo.GetByID(ctx, id, projectID)
 	if err != nil {
-		if err == evaluation.ErrScoreConfigNotFound {
+		if errors.Is(err, evaluation.ErrScoreConfigNotFound) {
 			return nil, appErrors.NewNotFoundError(fmt.Sprintf("score config %s", id))
 		}
 		return nil, appErrors.NewInternalError("failed to get score config", err)
@@ -108,10 +109,10 @@ func (s *scoreConfigService) Update(ctx context.Context, id ulid.ULID, projectID
 	}
 
 	if err := s.repo.Update(ctx, config, projectID); err != nil {
-		if err == evaluation.ErrScoreConfigNotFound {
+		if errors.Is(err, evaluation.ErrScoreConfigNotFound) {
 			return nil, appErrors.NewNotFoundError(fmt.Sprintf("score config %s", id))
 		}
-		if err == evaluation.ErrScoreConfigExists {
+		if errors.Is(err, evaluation.ErrScoreConfigExists) {
 			return nil, appErrors.NewConflictError(fmt.Sprintf("score config '%s' already exists in this project", config.Name))
 		}
 		return nil, appErrors.NewInternalError("failed to update score config", err)
@@ -128,14 +129,14 @@ func (s *scoreConfigService) Update(ctx context.Context, id ulid.ULID, projectID
 func (s *scoreConfigService) Delete(ctx context.Context, id ulid.ULID, projectID ulid.ULID) error {
 	config, err := s.repo.GetByID(ctx, id, projectID)
 	if err != nil {
-		if err == evaluation.ErrScoreConfigNotFound {
+		if errors.Is(err, evaluation.ErrScoreConfigNotFound) {
 			return appErrors.NewNotFoundError(fmt.Sprintf("score config %s", id))
 		}
 		return appErrors.NewInternalError("failed to get score config", err)
 	}
 
 	if err := s.repo.Delete(ctx, id, projectID); err != nil {
-		if err == evaluation.ErrScoreConfigNotFound {
+		if errors.Is(err, evaluation.ErrScoreConfigNotFound) {
 			return appErrors.NewNotFoundError(fmt.Sprintf("score config %s", id))
 		}
 		return appErrors.NewInternalError("failed to delete score config", err)
@@ -153,7 +154,7 @@ func (s *scoreConfigService) Delete(ctx context.Context, id ulid.ULID, projectID
 func (s *scoreConfigService) GetByID(ctx context.Context, id ulid.ULID, projectID ulid.ULID) (*evaluation.ScoreConfig, error) {
 	config, err := s.repo.GetByID(ctx, id, projectID)
 	if err != nil {
-		if err == evaluation.ErrScoreConfigNotFound {
+		if errors.Is(err, evaluation.ErrScoreConfigNotFound) {
 			return nil, appErrors.NewNotFoundError(fmt.Sprintf("score config %s", id))
 		}
 		return nil, appErrors.NewInternalError("failed to get score config", err)

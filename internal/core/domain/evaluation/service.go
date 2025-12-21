@@ -14,3 +14,31 @@ type ScoreConfigService interface {
 	GetByName(ctx context.Context, projectID ulid.ULID, name string) (*ScoreConfig, error)
 	List(ctx context.Context, projectID ulid.ULID) ([]*ScoreConfig, error)
 }
+
+type DatasetService interface {
+	Create(ctx context.Context, projectID ulid.ULID, req *CreateDatasetRequest) (*Dataset, error)
+	Update(ctx context.Context, id ulid.ULID, projectID ulid.ULID, req *UpdateDatasetRequest) (*Dataset, error)
+	Delete(ctx context.Context, id ulid.ULID, projectID ulid.ULID) error
+	GetByID(ctx context.Context, id ulid.ULID, projectID ulid.ULID) (*Dataset, error)
+	List(ctx context.Context, projectID ulid.ULID) ([]*Dataset, error)
+}
+
+type DatasetItemService interface {
+	Create(ctx context.Context, datasetID ulid.ULID, projectID ulid.ULID, req *CreateDatasetItemRequest) (*DatasetItem, error)
+	CreateBatch(ctx context.Context, datasetID ulid.ULID, projectID ulid.ULID, req *CreateDatasetItemsBatchRequest) (int, error)
+	List(ctx context.Context, datasetID ulid.ULID, projectID ulid.ULID, limit, offset int) ([]*DatasetItem, int64, error)
+	Delete(ctx context.Context, id ulid.ULID, datasetID ulid.ULID, projectID ulid.ULID) error
+}
+
+type ExperimentService interface {
+	Create(ctx context.Context, projectID ulid.ULID, req *CreateExperimentRequest) (*Experiment, error)
+	Update(ctx context.Context, id ulid.ULID, projectID ulid.ULID, req *UpdateExperimentRequest) (*Experiment, error)
+	Delete(ctx context.Context, id ulid.ULID, projectID ulid.ULID) error
+	GetByID(ctx context.Context, id ulid.ULID, projectID ulid.ULID) (*Experiment, error)
+	List(ctx context.Context, projectID ulid.ULID, filter *ExperimentFilter) ([]*Experiment, error)
+}
+
+type ExperimentItemService interface {
+	CreateBatch(ctx context.Context, experimentID ulid.ULID, projectID ulid.ULID, req *CreateExperimentItemsBatchRequest) (int, error)
+	List(ctx context.Context, experimentID ulid.ULID, projectID ulid.ULID, limit, offset int) ([]*ExperimentItem, int64, error)
+}

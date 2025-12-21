@@ -28,25 +28,6 @@ func NewScoreConfigHandler(
 	}
 }
 
-type CreateRequest struct {
-	Name        string                         `json:"name" binding:"required,min=1,max=100"`
-	Description *string                        `json:"description,omitempty"`
-	DataType    evaluationDomain.ScoreDataType `json:"data_type" binding:"required,oneof=NUMERIC CATEGORICAL BOOLEAN"`
-	MinValue    *float64                       `json:"min_value,omitempty"`
-	MaxValue    *float64                       `json:"max_value,omitempty"`
-	Categories  []string                       `json:"categories,omitempty"`
-	Metadata    map[string]interface{}         `json:"metadata,omitempty"`
-}
-
-type UpdateRequest struct {
-	Name        *string                `json:"name,omitempty" binding:"omitempty,min=1,max=100"`
-	Description *string                `json:"description,omitempty"`
-	MinValue    *float64               `json:"min_value,omitempty"`
-	MaxValue    *float64               `json:"max_value,omitempty"`
-	Categories  []string               `json:"categories,omitempty"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
-}
-
 // @Summary Create score config
 // @Description Creates a new score configuration for the project. Score configs define validation rules for scores.
 // @Tags Score Configs
@@ -75,7 +56,7 @@ func (h *ScoreConfigHandler) Create(c *gin.Context) {
 	domainReq := &evaluationDomain.CreateScoreConfigRequest{
 		Name:        req.Name,
 		Description: req.Description,
-		DataType:    req.DataType,
+		DataType:    evaluationDomain.ScoreDataType(req.DataType),
 		MinValue:    req.MinValue,
 		MaxValue:    req.MaxValue,
 		Categories:  req.Categories,
