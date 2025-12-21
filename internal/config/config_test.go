@@ -99,6 +99,7 @@ func TestConfig_LoadDefaults(t *testing.T) {
 	oldDBURL := os.Getenv("DATABASE_URL")
 	oldClickHouseURL := os.Getenv("CLICKHOUSE_URL")
 	oldRedisURL := os.Getenv("REDIS_URL")
+	oldEncryptionKey := os.Getenv("AI_KEY_ENCRYPTION_KEY")
 
 	defer func() {
 		if oldEnv != "" {
@@ -136,6 +137,11 @@ func TestConfig_LoadDefaults(t *testing.T) {
 		} else {
 			os.Unsetenv("REDIS_URL")
 		}
+		if oldEncryptionKey != "" {
+			os.Setenv("AI_KEY_ENCRYPTION_KEY", oldEncryptionKey)
+		} else {
+			os.Unsetenv("AI_KEY_ENCRYPTION_KEY")
+		}
 	}()
 
 	// Clear the env vars for this test
@@ -150,6 +156,9 @@ func TestConfig_LoadDefaults(t *testing.T) {
 	os.Setenv("DATABASE_URL", "postgres://brokle:password@localhost:5432/brokle_test?sslmode=disable")
 	os.Setenv("CLICKHOUSE_URL", "clickhouse://default:password@localhost:9000/brokle_test")
 	os.Setenv("REDIS_URL", "redis://localhost:6379/0")
+
+	// Set encryption key for credentials feature (32 bytes base64 encoded)
+	os.Setenv("AI_KEY_ENCRYPTION_KEY", "dGVzdC1lbmNyeXB0aW9uLWtleS0zMi1ieXRlcyEhISE=") // "test-encryption-key-32-bytes!!!!"
 
 	// Load configuration (should use defaults)
 	cfg, err := Load()

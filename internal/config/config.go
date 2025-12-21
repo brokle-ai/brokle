@@ -7,8 +7,10 @@
 package config
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -44,6 +46,28 @@ type EncryptionConfig struct {
 	// AIKeyEncryptionKey is the 256-bit key for encrypting AI provider API keys (base64 encoded).
 	// Generate with: openssl rand -base64 32
 	AIKeyEncryptionKey string `mapstructure:"ai_key_encryption_key"`
+}
+
+// Validate validates encryption configuration (required for server mode, skipped for workers).
+func (ec *EncryptionConfig) Validate() error {
+	if os.Getenv("APP_MODE") == "worker" {
+		return nil
+	}
+
+	if ec.AIKeyEncryptionKey == "" {
+		return errors.New("AI_KEY_ENCRYPTION_KEY is required for credential management. Generate with: openssl rand -base64 32")
+	}
+
+	key, err := base64.StdEncoding.DecodeString(ec.AIKeyEncryptionKey)
+	if err != nil {
+		return fmt.Errorf("AI_KEY_ENCRYPTION_KEY must be valid base64: %w", err)
+	}
+
+	if len(key) != 32 {
+		return fmt.Errorf("AI_KEY_ENCRYPTION_KEY must be exactly 32 bytes (got %d). Generate with: openssl rand -base64 32", len(key))
+	}
+
+	return nil
 }
 
 // AppConfig contains application-level configuration.
@@ -258,6 +282,10 @@ func (c *Config) Validate() error {
 
 	if err := c.Enterprise.Validate(); err != nil {
 		return fmt.Errorf("enterprise config validation failed: %w", err)
+	}
+
+	if err := c.Encryption.Validate(); err != nil {
+		return fmt.Errorf("encryption config validation failed: %w", err)
 	}
 
 	return nil

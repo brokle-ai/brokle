@@ -35,18 +35,6 @@ func NewHandler(
 	}
 }
 
-// serviceUnavailable checks if the credential service is configured.
-// Returns true and sends error response if service is nil.
-func (h *Handler) serviceUnavailable(c *gin.Context) bool {
-	if h.service == nil {
-		response.Error(c, appErrors.NewServiceUnavailableError(
-			"Credentials feature not configured: AI_KEY_ENCRYPTION_KEY is required",
-		))
-		return true
-	}
-	return false
-}
-
 type CreateRequest struct {
 	Name         string            `json:"name" binding:"required,min=1,max=100"`
 	Adapter      string            `json:"adapter" binding:"required,oneof=openai anthropic azure gemini openrouter custom"`
@@ -89,10 +77,6 @@ type TestConnectionRequest struct {
 // @Failure 422 {object} response.ErrorResponse "API key validation failed"
 // @Router /api/v1/projects/{projectId}/credentials/ai [post]
 func (h *Handler) Create(c *gin.Context) {
-	if h.serviceUnavailable(c) {
-		return
-	}
-
 	projectID, err := ulid.Parse(c.Param("projectId"))
 	if err != nil {
 		response.Error(c, appErrors.NewValidationError("Invalid project ID", "projectId must be a valid ULID"))
@@ -149,10 +133,6 @@ func (h *Handler) Create(c *gin.Context) {
 // @Failure 422 {object} response.ErrorResponse "API key validation failed"
 // @Router /api/v1/projects/{projectId}/credentials/ai/{credentialId} [patch]
 func (h *Handler) Update(c *gin.Context) {
-	if h.serviceUnavailable(c) {
-		return
-	}
-
 	projectID, err := ulid.Parse(c.Param("projectId"))
 	if err != nil {
 		response.Error(c, appErrors.NewValidationError("Invalid project ID", "projectId must be a valid ULID"))
@@ -200,10 +180,6 @@ func (h *Handler) Update(c *gin.Context) {
 // @Failure 401 {object} response.ErrorResponse
 // @Router /api/v1/projects/{projectId}/credentials/ai [get]
 func (h *Handler) List(c *gin.Context) {
-	if h.serviceUnavailable(c) {
-		return
-	}
-
 	projectID, err := ulid.Parse(c.Param("projectId"))
 	if err != nil {
 		response.Error(c, appErrors.NewValidationError("Invalid project ID", "projectId must be a valid ULID"))
@@ -232,10 +208,6 @@ func (h *Handler) List(c *gin.Context) {
 // @Failure 404 {object} response.ErrorResponse
 // @Router /api/v1/projects/{projectId}/credentials/ai/{credentialId} [get]
 func (h *Handler) Get(c *gin.Context) {
-	if h.serviceUnavailable(c) {
-		return
-	}
-
 	projectID, err := ulid.Parse(c.Param("projectId"))
 	if err != nil {
 		response.Error(c, appErrors.NewValidationError("Invalid project ID", "projectId must be a valid ULID"))
@@ -270,10 +242,6 @@ func (h *Handler) Get(c *gin.Context) {
 // @Failure 404 {object} response.ErrorResponse
 // @Router /api/v1/projects/{projectId}/credentials/ai/{credentialId} [delete]
 func (h *Handler) Delete(c *gin.Context) {
-	if h.serviceUnavailable(c) {
-		return
-	}
-
 	projectID, err := ulid.Parse(c.Param("projectId"))
 	if err != nil {
 		response.Error(c, appErrors.NewValidationError("Invalid project ID", "projectId must be a valid ULID"))
@@ -307,10 +275,6 @@ func (h *Handler) Delete(c *gin.Context) {
 // @Failure 401 {object} response.ErrorResponse
 // @Router /api/v1/projects/{projectId}/credentials/ai/test [post]
 func (h *Handler) TestConnection(c *gin.Context) {
-	if h.serviceUnavailable(c) {
-		return
-	}
-
 	// We don't need projectId for testing, but keep it for route consistency
 	_, err := ulid.Parse(c.Param("projectId"))
 	if err != nil {
@@ -347,13 +311,6 @@ func (h *Handler) TestConnection(c *gin.Context) {
 // @Failure 401 {object} response.ErrorResponse
 // @Router /api/v1/projects/{projectId}/credentials/ai/models [get]
 func (h *Handler) GetAvailableModels(c *gin.Context) {
-	if h.modelCatalog == nil {
-		response.Error(c, appErrors.NewServiceUnavailableError(
-			"Model catalog feature not configured",
-		))
-		return
-	}
-
 	projectID, err := ulid.Parse(c.Param("projectId"))
 	if err != nil {
 		response.Error(c, appErrors.NewValidationError("Invalid project ID", "projectId must be a valid ULID"))
