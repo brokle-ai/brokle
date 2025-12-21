@@ -58,7 +58,6 @@ export function ProjectGrid({ className, showCreateButton = true }: ProjectGridP
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
 
   const filteredAndSortedProjects = useMemo(() => {
-    // Ensure projects is always an array
     const safeProjects = projects || []
     const filtered = safeProjects.filter(project => {
       const matchesSearch = project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -68,7 +67,6 @@ export function ProjectGrid({ className, showCreateButton = true }: ProjectGridP
       return matchesSearch && matchesStatus
     })
 
-    // Sort projects
     filtered.sort((a, b) => {
       switch (sortBy) {
         case 'name':
@@ -112,7 +110,6 @@ export function ProjectGrid({ className, showCreateButton = true }: ProjectGridP
   }
 
   const handleProjectAction = (action: string, project: Project) => {
-    // These would typically call API endpoints
     console.log(`Action: ${action} on project:`, project.name)
     // TODO: Implement project actions
   }
@@ -193,7 +190,7 @@ export function ProjectGrid({ className, showCreateButton = true }: ProjectGridP
           {filteredAndSortedProjects.map((project) => (
             <Card
               key={project.id}
-              className="cursor-pointer hover:shadow-md transition-all duration-200 group"
+              className="cursor-pointer group"
               onClick={() => handleProjectClick(project)}
             >
               <CardHeader className="pb-3">

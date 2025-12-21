@@ -9,7 +9,7 @@ export default function ProjectsPage() {
   return (
     <div className="container mx-auto py-8">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold">Projects</h1>
+        <h1 className="text-xl font-bold">Projects</h1>
         <p className="text-muted-foreground">
           Manage your projects and their configurations.
         </p>

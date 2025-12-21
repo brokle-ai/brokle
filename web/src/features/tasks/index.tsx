@@ -17,7 +17,7 @@ function TasksContent() {
     <>
       <div className='mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between'>
         <div>
-          <h2 className='text-2xl font-bold tracking-tight'>Tasks</h2>
+          <h2 className='text-xl font-bold tracking-tight'>Tasks</h2>
           <p className='text-muted-foreground'>
             Manage tasks and track progress for this project
           </p>

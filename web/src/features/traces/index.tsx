@@ -15,7 +15,7 @@ function TracesContent() {
     <>
       <div className='mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between'>
         <div>
-          <h2 className='text-2xl font-bold tracking-tight'>Traces</h2>
+          <h2 className='text-xl font-bold tracking-tight'>Traces</h2>
           <p className='text-muted-foreground'>
             View and analyze distributed traces for this project
           </p>

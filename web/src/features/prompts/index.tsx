@@ -52,7 +52,7 @@ export function Prompts({ projectSlug, orgSlug }: PromptsProps) {
     <>
       <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight">Prompts</h2>
+          <h2 className="text-xl font-bold tracking-tight">Prompts</h2>
           <p className="text-muted-foreground">
             Manage prompt templates with versioning and labels
           </p>
