@@ -1,14 +1,14 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Copy, Trash2, Loader2, AlertCircle, AlertTriangle } from 'lucide-react'
+import { Copy, Trash2, Loader2, AlertCircle, AlertTriangle } from 'lucide-react'
 import { useWorkspace } from '@/context/workspace-context'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
   Table,
   TableBody,
@@ -22,7 +22,15 @@ import { toast } from 'sonner'
 import { useAPIKeysQuery, useCreateAPIKeyMutation, useDeleteAPIKeyMutation } from '../hooks/use-api-key-queries'
 import type { APIKey } from '../types/api-keys'
 
-export function ProjectAPIKeysSection() {
+interface ProjectAPIKeysSectionProps {
+  createDialogOpen?: boolean
+  onCreateDialogOpenChange?: (open: boolean) => void
+}
+
+export function ProjectAPIKeysSection({
+  createDialogOpen,
+  onCreateDialogOpenChange
+}: ProjectAPIKeysSectionProps = {}) {
   const { currentProject } = useWorkspace()
 
   // React Query hooks
@@ -30,8 +38,10 @@ export function ProjectAPIKeysSection() {
   const createMutation = useCreateAPIKeyMutation(currentProject?.id || '')
   const deleteMutation = useDeleteAPIKeyMutation(currentProject?.id || '')
 
-  // Local state
-  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  // Local state - use controlled or uncontrolled mode
+  const [internalDialogOpen, setInternalDialogOpen] = useState(false)
+  const isDialogOpen = createDialogOpen ?? internalDialogOpen
+  const setIsDialogOpen = onCreateDialogOpenChange ?? setInternalDialogOpen
   const [dialogMode, setDialogMode] = useState<'create' | 'success'>('create')
   const [newKeyName, setNewKeyName] = useState('')
   const [newKeyExpiry, setNewKeyExpiry] = useState<'30days' | '90days' | 'never'>('90days')
@@ -174,19 +184,8 @@ export function ProjectAPIKeysSection() {
       {/* API Keys Management Section */}
       {!isLoading && !error && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-medium">API Keys ({apiKeys.length})</h3>
-            </div>
-            <Dialog open={isDialogOpen} onOpenChange={handleDialogClose}>
-                <DialogTrigger asChild>
-                  <Button onClick={() => setDialogMode('create')}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    Create API Key
-                  </Button>
-                </DialogTrigger>
-
-                <DialogContent className="sm:max-w-[500px]">
+          <Dialog open={isDialogOpen} onOpenChange={handleDialogClose}>
+            <DialogContent className="sm:max-w-[500px]">
                   {dialogMode === 'create' ? (
                     // ===== CREATE MODE =====
                     <>
@@ -309,7 +308,6 @@ export function ProjectAPIKeysSection() {
                   )}
                 </DialogContent>
               </Dialog>
-            </div>
           <div className="rounded-md border">
             <Table>
               <TableHeader>
