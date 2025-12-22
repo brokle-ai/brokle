@@ -16,7 +16,6 @@ function TracesContent() {
     <>
       <PageHeader title="Traces" />
       <div className='-mx-4 flex-1 overflow-auto px-4 py-1'>
-        {/* Error State */}
         {error && !isLoading && (
           <div className='flex flex-col items-center justify-center py-12 space-y-4'>
             <div className='rounded-lg bg-destructive/10 p-6 text-center max-w-md'>
@@ -32,38 +31,14 @@ function TracesContent() {
           </div>
         )}
 
-        {/* No Project State */}
         {!hasProject && !isLoading && !error && (
           <div className='flex flex-col items-center justify-center py-12 text-center'>
             <p className='text-muted-foreground'>No project selected</p>
           </div>
         )}
 
-        {/* Loading State */}
-        {isLoading && (
-          <div className='flex items-center justify-center py-8'>
-            <div className='flex flex-col items-center space-y-2'>
-              <div className='h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent' />
-              <p className='text-sm text-muted-foreground'>Loading traces...</p>
-            </div>
-          </div>
-        )}
-
-        {/* Empty State */}
-        {!isLoading && !error && hasProject && data.length === 0 && (
-          <div className='flex flex-col items-center justify-center py-12 text-center'>
-            <div className='rounded-lg border border-dashed p-8 max-w-md'>
-              <h3 className='font-semibold mb-2'>No traces found</h3>
-              <p className='text-sm text-muted-foreground'>
-                Start sending telemetry data to this project to see traces here.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Data Table */}
-        {!isLoading && !error && hasProject && data.length > 0 && (
-          <TracesTable data={data} totalCount={totalCount} />
+        {!error && hasProject && (
+          <TracesTable data={data} totalCount={totalCount} isLoading={isLoading} />
         )}
       </div>
     </>
