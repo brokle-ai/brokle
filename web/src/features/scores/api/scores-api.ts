@@ -7,7 +7,7 @@ import type {
 
 const client = new BrokleAPIClient('/api')
 
-export const evaluationApi = {
+export const scoresApi = {
   // Score Configs
   listScoreConfigs: async (projectId: string): Promise<ScoreConfig[]> => {
     return client.get<ScoreConfig[]>(`/v1/projects/${projectId}/score-configs`)

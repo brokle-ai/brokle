@@ -1,7 +1,7 @@
 'use client'
 
 import { ContentSection } from '@/features/settings'
-import { ScoreConfigsSection } from '@/features/evaluations'
+import { ScoreConfigsSection } from '@/features/scores'
 import { useWorkspace } from '@/context/workspace-context'
 
 export default function ScoreConfigsSettingsPage() {

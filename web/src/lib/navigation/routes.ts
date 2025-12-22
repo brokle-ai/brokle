@@ -8,6 +8,7 @@ import {
   Activity,
   FileText,
   FlaskConical,
+  Database,
 } from 'lucide-react'
 
 export const ROUTES: Route[] = [
@@ -94,6 +95,17 @@ export const ROUTES: Route[] = [
     icon: FlaskConical,
     section: RouteSection.Main,
     group: RouteGroup.Observability,
+    rbacScope: 'projects:read',
+    show: ({ currentProjectSlug }) => !!currentProjectSlug,
+  },
+
+  // Evaluations Group (1 route)
+  {
+    title: 'Datasets',
+    pathname: '/projects/[projectSlug]/datasets',
+    icon: Database,
+    section: RouteSection.Main,
+    group: RouteGroup.Evaluations,
     rbacScope: 'projects:read',
     show: ({ currentProjectSlug }) => !!currentProjectSlug,
   },

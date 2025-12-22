@@ -7,7 +7,7 @@ export type {
   UpdateScoreConfigRequest,
 } from './types'
 
-export { evaluationApi } from './api/evaluation-api'
+export { scoresApi } from './api/scores-api'
 
 export {
   useScoreConfigsQuery,
@@ -18,7 +18,7 @@ export {
   scoreConfigQueryKeys,
 } from './hooks/use-score-configs'
 
-export { ScoreBadge } from './components/scores/score-badge'
-export { ScoreList } from './components/scores/score-list'
-export { ScoreConfigForm } from './components/scores/score-config-form'
-export { ScoreConfigsSection } from './components/scores/score-configs-section'
+export { ScoreBadge } from './components/score-badge'
+export { ScoreList } from './components/score-list'
+export { ScoreConfigForm } from './components/score-config-form'
+export { ScoreConfigsSection } from './components/score-configs-section'

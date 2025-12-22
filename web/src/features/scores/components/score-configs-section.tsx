@@ -26,9 +26,9 @@ import {
   useCreateScoreConfigMutation,
   useUpdateScoreConfigMutation,
   useDeleteScoreConfigMutation,
-} from '../../hooks/use-score-configs'
+} from '../hooks/use-score-configs'
 import { ScoreConfigForm } from './score-config-form'
-import type { ScoreConfig, CreateScoreConfigRequest, UpdateScoreConfigRequest } from '../../types'
+import type { ScoreConfig, CreateScoreConfigRequest, UpdateScoreConfigRequest } from '../types'
 
 interface ScoreConfigsSectionProps {
   projectId: string

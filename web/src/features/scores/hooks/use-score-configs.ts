@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { evaluationApi } from '../api/evaluation-api'
+import { scoresApi } from '../api/scores-api'
 import type { CreateScoreConfigRequest, UpdateScoreConfigRequest, ScoreConfig } from '../types'
 
 export const scoreConfigQueryKeys = {
@@ -15,7 +15,7 @@ export const scoreConfigQueryKeys = {
 export function useScoreConfigsQuery(projectId: string | undefined) {
   return useQuery({
     queryKey: scoreConfigQueryKeys.list(projectId ?? ''),
-    queryFn: () => evaluationApi.listScoreConfigs(projectId!),
+    queryFn: () => scoresApi.listScoreConfigs(projectId!),
     enabled: !!projectId,
     staleTime: 30_000,
     gcTime: 5 * 60 * 1000,
@@ -28,7 +28,7 @@ export function useScoreConfigQuery(
 ) {
   return useQuery({
     queryKey: scoreConfigQueryKeys.detail(projectId ?? '', configId ?? ''),
-    queryFn: () => evaluationApi.getScoreConfig(projectId!, configId!),
+    queryFn: () => scoresApi.getScoreConfig(projectId!, configId!),
     enabled: !!projectId && !!configId,
     staleTime: 30_000,
     gcTime: 5 * 60 * 1000,
@@ -40,7 +40,7 @@ export function useCreateScoreConfigMutation(projectId: string) {
 
   return useMutation({
     mutationFn: (data: CreateScoreConfigRequest) =>
-      evaluationApi.createScoreConfig(projectId, data),
+      scoresApi.createScoreConfig(projectId, data),
     onSuccess: (newConfig) => {
       queryClient.invalidateQueries({
         queryKey: scoreConfigQueryKeys.list(projectId),
@@ -63,7 +63,7 @@ export function useUpdateScoreConfigMutation(projectId: string, configId: string
 
   return useMutation({
     mutationFn: (data: UpdateScoreConfigRequest) =>
-      evaluationApi.updateScoreConfig(projectId, configId, data),
+      scoresApi.updateScoreConfig(projectId, configId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: scoreConfigQueryKeys.all,
@@ -86,7 +86,7 @@ export function useDeleteScoreConfigMutation(projectId: string) {
 
   return useMutation({
     mutationFn: async ({ configId, configName }: { configId: string; configName: string }) => {
-      await evaluationApi.deleteScoreConfig(projectId, configId)
+      await scoresApi.deleteScoreConfig(projectId, configId)
       return { configId, configName }
     },
     onMutate: async ({ configId }) => {

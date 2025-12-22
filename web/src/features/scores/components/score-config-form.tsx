@@ -24,7 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import type { ScoreConfig, CreateScoreConfigRequest } from '../../types'
+import type { ScoreConfig, CreateScoreConfigRequest } from '../types'
 
 const scoreConfigSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),

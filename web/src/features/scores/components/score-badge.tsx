@@ -6,7 +6,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import type { Score } from '../../types'
+import type { Score } from '../types'
 
 interface ScoreBadgeProps {
   score: Score
