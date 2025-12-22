@@ -13,7 +13,7 @@ import {
 
 export const ROUTES: Route[] = [
   // ========================================
-  // ROOT CONTEXT (1 route)
+  // ROOT CONTEXT
   // ========================================
   {
     title: 'Dashboard',
@@ -25,7 +25,7 @@ export const ROUTES: Route[] = [
   },
 
   // ========================================
-  // ORGANIZATION CONTEXT (2 routes)
+  // ORGANIZATION CONTEXT
   // ========================================
   {
     title: 'Projects',
@@ -49,10 +49,10 @@ export const ROUTES: Route[] = [
   },
 
   // ========================================
-  // PROJECT CONTEXT (8 routes)
+  // PROJECT CONTEXT
   // ========================================
 
-  // Project Group (2 routes)
+  // Project Group
   {
     title: 'Overview',
     pathname: '/projects/[projectSlug]',
@@ -70,7 +70,7 @@ export const ROUTES: Route[] = [
     show: ({ currentProjectSlug }) => !!currentProjectSlug,
   },
 
-  // Observability Group (3 routes)
+  // Observability Group
   {
     title: 'Traces',
     pathname: '/projects/[projectSlug]/traces',
@@ -99,7 +99,7 @@ export const ROUTES: Route[] = [
     show: ({ currentProjectSlug }) => !!currentProjectSlug,
   },
 
-  // Evaluations Group (1 route)
+  // Evaluations Group
   {
     title: 'Datasets',
     pathname: '/projects/[projectSlug]/datasets',
@@ -109,8 +109,17 @@ export const ROUTES: Route[] = [
     rbacScope: 'projects:read',
     show: ({ currentProjectSlug }) => !!currentProjectSlug,
   },
+  {
+    title: 'Experiments',
+    pathname: '/projects/[projectSlug]/experiments',
+    icon: FlaskConical,
+    section: RouteSection.Main,
+    group: RouteGroup.Evaluations,
+    rbacScope: 'projects:read',
+    show: ({ currentProjectSlug }) => !!currentProjectSlug,
+  },
 
-  // Other Group (1 route)
+  // Other Group
   {
     title: 'Settings',
     pathname: '/projects/[projectSlug]/settings',
@@ -122,7 +131,7 @@ export const ROUTES: Route[] = [
   },
 
   // ========================================
-  // USER SETTINGS CONTEXT (1 route)
+  // USER SETTINGS CONTEXT
   // ========================================
   {
     title: 'Home',
@@ -132,9 +141,3 @@ export const ROUTES: Route[] = [
     show: ({ pathname }) => pathname.startsWith('/settings'),
   },
 ]
-
-// Total: 10 routes
-// - Root: 1 (Dashboard)
-// - Organization: 2 (Projects, Settings)
-// - Project: 6 (2 Project Group + 3 Observability + 1 Other)
-// - User Settings: 1 (Home - back to dashboard)
