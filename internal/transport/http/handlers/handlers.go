@@ -58,11 +58,11 @@ type Handlers struct {
 	Credentials   *credentials.Handler
 	Evaluation    *evaluationHandler.ScoreConfigHandler
 	SDKScore      *evaluationHandler.SDKScoreHandler
-	// Phase 2: Datasets & Experiments
 	Dataset        *evaluationHandler.DatasetHandler
 	DatasetItem    *evaluationHandler.DatasetItemHandler
 	Experiment     *evaluationHandler.ExperimentHandler
 	ExperimentItem *evaluationHandler.ExperimentItemHandler
+	SpanQuery      *observability.SpanQueryHandler
 }
 
 func NewHandlers(
@@ -119,10 +119,10 @@ func NewHandlers(
 		Credentials:   credentials.NewHandler(cfg, logger, credentialsSvc, modelCatalogSvc),
 		Evaluation:    evaluationHandler.NewScoreConfigHandler(logger, scoreConfigService),
 		SDKScore:      evaluationHandler.NewSDKScoreHandler(logger, observabilityServices.ScoreService, scoreConfigService),
-		// Phase 2: Datasets & Experiments
 		Dataset:        evaluationHandler.NewDatasetHandler(logger, datasetService, datasetItemService),
 		DatasetItem:    evaluationHandler.NewDatasetItemHandler(logger, datasetItemService),
 		Experiment:     evaluationHandler.NewExperimentHandler(logger, experimentService, experimentItemService),
 		ExperimentItem: evaluationHandler.NewExperimentItemHandler(logger, experimentItemService),
+		SpanQuery:      observability.NewSpanQueryHandler(observabilityServices.SpanQueryService, logger),
 	}
 }

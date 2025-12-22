@@ -2254,6 +2254,40 @@ definitions:
       trace_state:
         type: string
     type: object
+  observability.SpanQueryHTTPRequest:
+    description: SDK request for querying spans with filter expressions
+    properties:
+      end_time:
+        example: "2024-01-31T23:59:59Z"
+        type: string
+      filter:
+        example: service.name=chatbot AND gen_ai.system=openai
+        maxLength: 2000
+        type: string
+      limit:
+        example: 100
+        type: integer
+      offset:
+        example: 0
+        type: integer
+      start_time:
+        example: "2024-01-01T00:00:00Z"
+        type: string
+    required:
+    - filter
+    type: object
+  observability.SpanQueryHTTPResponse:
+    description: Response containing queried spans with pagination info
+    properties:
+      has_more:
+        type: boolean
+      spans:
+        items:
+          $ref: '#/definitions/observability.Span'
+        type: array
+      total_count:
+        type: integer
+    type: object
   observability.Status:
     properties:
       code:
@@ -2340,6 +2374,16 @@ definitions:
         type: string
       user_id:
         type: string
+    type: object
+  observability.ValidateFilterRequest:
+    description: Request to validate a filter expression
+    properties:
+      filter:
+        example: service.name=chatbot
+        maxLength: 2000
+        type: string
+    required:
+    - filter
     type: object
   organization.BulkSettingsRequest:
     properties:
@@ -9920,6 +9964,115 @@ paths:
       summary: Batch create scores
       tags:
       - SDK - Scores
+  /v1/spans/query:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Query production telemetry data using human-readable filter syntax.
+        Supports operators: =, !=, >, <, >=, <=, CONTAINS, IN, EXISTS
+        Supports logical operators: AND, OR with parentheses grouping
+      parameters:
+      - description: Span query request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/observability.SpanQueryHTTPRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Spans matching filter
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/observability.SpanQueryHTTPResponse'
+              type: object
+        "400":
+          description: Invalid filter syntax
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "401":
+          description: Invalid or missing API key
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Query spans using filter expressions
+      tags:
+      - SDK - Span Query
+  /v1/spans/query/validate:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Validates filter syntax without executing the query. Useful for SDK clients
+        to validate filters before submitting queries.
+      parameters:
+      - description: Filter validation request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/observability.ValidateFilterRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Filter is valid
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  additionalProperties: true
+                  type: object
+              type: object
+        "400":
+          description: Invalid filter syntax
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "401":
+          description: Invalid or missing API key
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Validate a filter expression
+      tags:
+      - SDK - Span Query
   /v1/traces:
     post:
       consumes:

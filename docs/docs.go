@@ -11001,6 +11001,199 @@ const docTemplate = `{
                 }
             }
         },
+        "/v1/spans/query": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Query production telemetry data using human-readable filter syntax.\nSupports operators: =, !=, \u003e, \u003c, \u003e=, \u003c=, CONTAINS, IN, EXISTS\nSupports logical operators: AND, OR with parentheses grouping",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SDK - Span Query"
+                ],
+                "summary": "Query spans using filter expressions",
+                "parameters": [
+                    {
+                        "description": "Span query request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/observability.SpanQueryHTTPRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Spans matching filter",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/observability.SpanQueryHTTPResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid filter syntax",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid or missing API key",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/spans/query/validate": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Validates filter syntax without executing the query. Useful for SDK clients\nto validate filters before submitting queries.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SDK - Span Query"
+                ],
+                "summary": "Validate a filter expression",
+                "parameters": [
+                    {
+                        "description": "Filter validation request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/observability.ValidateFilterRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Filter is valid",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "additionalProperties": true
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid filter syntax",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid or missing API key",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
         "/v1/traces": {
             "post": {
                 "security": [
@@ -14365,6 +14558,54 @@ const docTemplate = `{
                 }
             }
         },
+        "observability.SpanQueryHTTPRequest": {
+            "description": "SDK request for querying spans with filter expressions",
+            "type": "object",
+            "required": [
+                "filter"
+            ],
+            "properties": {
+                "end_time": {
+                    "type": "string",
+                    "example": "2024-01-31T23:59:59Z"
+                },
+                "filter": {
+                    "type": "string",
+                    "maxLength": 2000,
+                    "example": "service.name=chatbot AND gen_ai.system=openai"
+                },
+                "limit": {
+                    "type": "integer",
+                    "example": 100
+                },
+                "offset": {
+                    "type": "integer",
+                    "example": 0
+                },
+                "start_time": {
+                    "type": "string",
+                    "example": "2024-01-01T00:00:00Z"
+                }
+            }
+        },
+        "observability.SpanQueryHTTPResponse": {
+            "description": "Response containing queried spans with pagination info",
+            "type": "object",
+            "properties": {
+                "has_more": {
+                    "type": "boolean"
+                },
+                "spans": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/observability.Span"
+                    }
+                },
+                "total_count": {
+                    "type": "integer"
+                }
+            }
+        },
         "observability.Status": {
             "type": "object",
             "properties": {
@@ -14492,6 +14733,20 @@ const docTemplate = `{
                 },
                 "user_id": {
                     "type": "string"
+                }
+            }
+        },
+        "observability.ValidateFilterRequest": {
+            "description": "Request to validate a filter expression",
+            "type": "object",
+            "required": [
+                "filter"
+            ],
+            "properties": {
+                "filter": {
+                    "type": "string",
+                    "maxLength": 2000,
+                    "example": "service.name=chatbot"
                 }
             }
         },

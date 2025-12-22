@@ -544,6 +544,12 @@ func (s *Server) setupSDKRoutes(router *gin.RouterGroup) {
 		sdkExperiments.PATCH("/:experimentId", s.handlers.Experiment.Update)        // PATCH /v1/experiments/:experimentId - Update experiment
 		sdkExperiments.POST("/:experimentId/items", s.handlers.Experiment.CreateItems) // POST /v1/experiments/:experimentId/items - Batch create items
 	}
+
+	spans := router.Group("/spans")
+	{
+		spans.POST("/query", s.handlers.SpanQuery.HandleQuery)             // POST /v1/spans/query - Query spans with filter expression
+		spans.POST("/query/validate", s.handlers.SpanQuery.HandleValidate) // POST /v1/spans/query/validate - Validate filter expression
+	}
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {

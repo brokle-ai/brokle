@@ -1,0 +1,257 @@
+package observability
+
+import (
+	"errors"
+	"time"
+)
+
+// SpanQueryRequest represents an SDK request for querying spans with filter expressions.
+// This enables users to query production telemetry using human-readable filter syntax.
+type SpanQueryRequest struct {
+	Filter    string     `json:"filter" validate:"required,max=2000"`
+	StartTime *time.Time `json:"start_time,omitempty"`
+	EndTime   *time.Time `json:"end_time,omitempty"`
+	Limit     int        `json:"limit,omitempty"`  // default 100, max 10000
+	Offset    int        `json:"offset,omitempty"` // for pagination
+}
+
+// SpanQueryResponse represents the response containing queried spans.
+type SpanQueryResponse struct {
+	Spans      []*Span `json:"spans"`
+	TotalCount int64   `json:"total_count"`
+	HasMore    bool    `json:"has_more"`
+}
+
+// Query request defaults and limits
+const (
+	SpanQueryDefaultLimit = 100
+	SpanQueryMaxLimit     = 10000
+	SpanQueryMaxClauses   = 20
+	SpanQueryMaxFilterLen = 2000
+)
+
+// SpanSelectFields defines the columns selected when querying spans.
+// Used by both query builder and repository for consistency (single source of truth).
+const SpanSelectFields = `
+	span_id, trace_id, parent_span_id, trace_state, project_id,
+	span_name, span_kind, start_time, end_time, duration_nano, completion_start_time,
+	status_code, status_message, has_error,
+	input, output,
+	resource_attributes, span_attributes, scope_name, scope_version, scope_attributes,
+	resource_schema_url, scope_schema_url,
+	usage_details, cost_details, pricing_snapshot, total_cost,
+	events_timestamp, events_name, events_attributes,
+	links_trace_id, links_span_id, links_trace_state, links_attributes,
+	brokle_version, deleted_at,
+	model_name, provider_name, span_type, span_level,
+	service_name
+`
+
+// FilterNode represents a node in the filter expression AST.
+// This interface enables recursive tree structures for complex expressions.
+type FilterNode interface {
+	isFilterNode() // marker method for type safety
+}
+
+// BinaryNode represents a logical operation (AND/OR) between two expressions.
+// Supports full parentheses grouping: (a=1 AND b=2) OR c=3
+type BinaryNode struct {
+	Left     FilterNode
+	Right    FilterNode
+	Operator LogicOperator
+}
+
+func (b *BinaryNode) isFilterNode() {}
+
+// ConditionNode represents a leaf condition in the filter expression.
+// Examples: service.name=chatbot, gen_ai.usage.total_tokens>1000
+type ConditionNode struct {
+	Field    string         // Attribute path: service.name, gen_ai.system
+	Operator FilterOperator // Comparison operator
+	Value    interface{}    // string, float64, []string (for IN clause)
+	Negated  bool           // For NOT EXISTS
+}
+
+func (c *ConditionNode) isFilterNode() {}
+
+// LogicOperator represents logical operators for combining conditions.
+type LogicOperator string
+
+const (
+	LogicAnd LogicOperator = "AND"
+	LogicOr  LogicOperator = "OR"
+)
+
+// FilterOperator represents comparison operators for filter conditions.
+type FilterOperator string
+
+const (
+	FilterOpEqual          FilterOperator = "="
+	FilterOpNotEqual       FilterOperator = "!="
+	FilterOpGreaterThan    FilterOperator = ">"
+	FilterOpLessThan       FilterOperator = "<"
+	FilterOpGreaterOrEqual FilterOperator = ">="
+	FilterOpLessOrEqual    FilterOperator = "<="
+	FilterOpContains       FilterOperator = "CONTAINS"
+	FilterOpNotContains    FilterOperator = "NOT CONTAINS"
+	FilterOpIn             FilterOperator = "IN"
+	FilterOpNotIn          FilterOperator = "NOT IN"
+	FilterOpExists         FilterOperator = "EXISTS"
+	FilterOpNotExists      FilterOperator = "NOT EXISTS"
+)
+
+// IsComparisonOperator returns true for numeric comparison operators.
+func (op FilterOperator) IsComparisonOperator() bool {
+	switch op {
+	case FilterOpGreaterThan, FilterOpLessThan, FilterOpGreaterOrEqual, FilterOpLessOrEqual:
+		return true
+	}
+	return false
+}
+
+// IsExistenceOperator returns true for EXISTS/NOT EXISTS operators.
+func (op FilterOperator) IsExistenceOperator() bool {
+	return op == FilterOpExists || op == FilterOpNotExists
+}
+
+// RequiresValue returns true if the operator requires a value operand.
+func (op FilterOperator) RequiresValue() bool {
+	return !op.IsExistenceOperator()
+}
+
+// AttributeKeyType indicates where an attribute is stored.
+type AttributeKeyType string
+
+const (
+	AttributeKeyTypeSpan     AttributeKeyType = "span"     // span_attributes map
+	AttributeKeyTypeResource AttributeKeyType = "resource" // resource_attributes map
+	AttributeKeyTypeColumn   AttributeKeyType = "column"   // Materialized column
+)
+
+// MaterializedColumns maps semantic attribute names to ClickHouse column names.
+// These columns are pre-computed for O(1) lookup performance.
+var MaterializedColumns = map[string]string{
+	"service.name":         "service_name",
+	"gen_ai.request.model": "model_name",
+	"gen_ai.system":        "provider_name",
+	"gen_ai.provider.name": "provider_name",
+	"brokle.span.type":     "span_type",
+	"user.id":              "user_id",
+	"session.id":           "session_id",
+	"span.name":            "span_name",
+	"trace.id":             "trace_id",
+	"span.id":              "span_id",
+	"status.code":          "status_code",
+}
+
+// GetMaterializedColumn returns the ClickHouse column name if the attribute is materialized.
+// Returns empty string if not materialized.
+func GetMaterializedColumn(attrPath string) string {
+	return MaterializedColumns[attrPath]
+}
+
+// IsMaterializedColumn returns true if the attribute path maps to a materialized column.
+func IsMaterializedColumn(attrPath string) bool {
+	_, ok := MaterializedColumns[attrPath]
+	return ok
+}
+
+var (
+	// Parser errors
+	ErrInvalidFilterSyntax   = errors.New("invalid filter syntax")
+	ErrUnsupportedOperator   = errors.New("unsupported operator")
+	ErrInvalidAttributePath  = errors.New("invalid attribute path")
+	ErrFilterTooComplex      = errors.New("filter too complex")
+	ErrUnexpectedToken       = errors.New("unexpected token")
+	ErrUnclosedParenthesis   = errors.New("unclosed parenthesis")
+	ErrUnexpectedEndOfInput  = errors.New("unexpected end of input")
+	ErrInvalidValue          = errors.New("invalid value")
+	ErrEmptyFilter           = errors.New("empty filter expression")
+	ErrFilterTooLong         = errors.New("filter expression too long")
+	ErrTooManyClauses        = errors.New("too many filter clauses")
+	ErrInvalidNumericValue   = errors.New("invalid numeric value")
+	ErrInvalidStringValue    = errors.New("invalid string value")
+	ErrMissingOperator       = errors.New("missing operator")
+	ErrMissingValue          = errors.New("missing value")
+	ErrInvalidInClause       = errors.New("invalid IN clause syntax")
+	ErrNestedParensTooDeep   = errors.New("nested parentheses too deep")
+	ErrInvalidFieldName      = errors.New("invalid field name")
+	ErrReservedKeywordAsName = errors.New("reserved keyword used as field name")
+
+	// Query execution errors
+	ErrQueryTimeout       = errors.New("query execution timeout")
+	ErrResultLimitExceeded = errors.New("result limit exceeded")
+)
+
+// Error codes for span query operations
+const (
+	ErrCodeInvalidFilterSyntax  = "INVALID_FILTER_SYNTAX"
+	ErrCodeUnsupportedOperator  = "UNSUPPORTED_OPERATOR"
+	ErrCodeInvalidAttributePath = "INVALID_ATTRIBUTE_PATH"
+	ErrCodeFilterTooComplex     = "FILTER_TOO_COMPLEX"
+	ErrCodeQueryTimeout         = "QUERY_TIMEOUT"
+	ErrCodeResultLimitExceeded  = "RESULT_LIMIT_EXCEEDED"
+)
+
+// NewInvalidFilterSyntaxError creates a detailed filter syntax error.
+func NewInvalidFilterSyntaxError(position int, detail string) *ObservabilityError {
+	return NewObservabilityError(ErrCodeInvalidFilterSyntax, "invalid filter syntax").
+		WithDetail("position", position).
+		WithDetail("detail", detail)
+}
+
+// NewFilterTooComplexError creates a filter complexity error.
+func NewFilterTooComplexError(clauseCount int) *ObservabilityError {
+	return NewObservabilityError(ErrCodeFilterTooComplex, "filter too complex").
+		WithDetail("clause_count", clauseCount).
+		WithDetail("max_clauses", SpanQueryMaxClauses)
+}
+
+// NewUnsupportedOperatorError creates an unsupported operator error.
+func NewUnsupportedOperatorError(operator string) *ObservabilityError {
+	return NewObservabilityError(ErrCodeUnsupportedOperator, "unsupported operator").
+		WithDetail("operator", operator)
+}
+
+// ValidateSpanQueryRequest validates the span query request parameters.
+func ValidateSpanQueryRequest(req *SpanQueryRequest) []ValidationError {
+	var errs []ValidationError
+
+	// Filter validation
+	if req.Filter == "" {
+		errs = append(errs, ValidationError{Field: "filter", Message: "filter is required"})
+	} else if len(req.Filter) > SpanQueryMaxFilterLen {
+		errs = append(errs, ValidationError{Field: "filter", Message: "filter expression too long"})
+	}
+
+	// Limit validation
+	if req.Limit < 0 {
+		errs = append(errs, ValidationError{Field: "limit", Message: "limit must be non-negative"})
+	} else if req.Limit > SpanQueryMaxLimit {
+		errs = append(errs, ValidationError{Field: "limit", Message: "limit exceeds maximum allowed"})
+	}
+
+	// Offset validation
+	if req.Offset < 0 {
+		errs = append(errs, ValidationError{Field: "offset", Message: "offset must be non-negative"})
+	}
+
+	// Time range validation
+	if req.StartTime != nil && req.EndTime != nil {
+		if req.EndTime.Before(*req.StartTime) {
+			errs = append(errs, ValidationError{Field: "end_time", Message: "end_time must be after start_time"})
+		}
+	}
+
+	return errs
+}
+
+// NormalizeSpanQueryRequest applies defaults to the request.
+func NormalizeSpanQueryRequest(req *SpanQueryRequest) {
+	if req.Limit == 0 {
+		req.Limit = SpanQueryDefaultLimit
+	}
+	if req.Limit > SpanQueryMaxLimit {
+		req.Limit = SpanQueryMaxLimit
+	}
+}

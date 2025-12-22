@@ -35,21 +35,6 @@ func marshalJSON(m map[string]interface{}) string {
 	return string(jsonBytes)
 }
 
-const spanSelectFields = `
-	span_id, trace_id, parent_span_id, trace_state, project_id,
-	span_name, span_kind, start_time, end_time, duration_nano, completion_start_time,
-	status_code, status_message, has_error,
-	input, output,
-	resource_attributes, span_attributes, scope_name, scope_version, scope_attributes,
-	resource_schema_url, scope_schema_url,
-	usage_details, cost_details, pricing_snapshot, total_cost,
-	events_timestamp, events_name, events_attributes,
-	links_trace_id, links_span_id, links_trace_state, links_attributes,
-	brokle_version, deleted_at,
-	model_name, provider_name, span_type, span_level,
-	service_name
-`
-
 func convertEventsToArrays(events []observability.SpanEvent) (
 	timestamps []time.Time,
 	names []string,
@@ -436,14 +421,14 @@ func (r *traceRepository) DeleteSpan(ctx context.Context, spanID string) error {
 }
 
 func (r *traceRepository) GetSpan(ctx context.Context, spanID string) (*observability.Span, error) {
-	query := "SELECT " + spanSelectFields + " FROM otel_traces WHERE span_id = ? AND deleted_at IS NULL LIMIT 1"
+	query := "SELECT " + observability.SpanSelectFields + " FROM otel_traces WHERE span_id = ? AND deleted_at IS NULL LIMIT 1"
 
 	row := r.db.QueryRow(ctx, query, spanID)
 	return ScanSpanRow(row)
 }
 
 func (r *traceRepository) GetSpansByTraceID(ctx context.Context, traceID string) ([]*observability.Span, error) {
-	query := "SELECT " + spanSelectFields + " FROM otel_traces WHERE trace_id = ? AND deleted_at IS NULL ORDER BY start_time ASC"
+	query := "SELECT " + observability.SpanSelectFields + " FROM otel_traces WHERE trace_id = ? AND deleted_at IS NULL ORDER BY start_time ASC"
 
 	rows, err := r.db.Query(ctx, query, traceID)
 	if err != nil {
@@ -455,7 +440,7 @@ func (r *traceRepository) GetSpansByTraceID(ctx context.Context, traceID string)
 }
 
 func (r *traceRepository) GetSpanChildren(ctx context.Context, parentSpanID string) ([]*observability.Span, error) {
-	query := "SELECT " + spanSelectFields + " FROM otel_traces WHERE parent_span_id = ? AND deleted_at IS NULL ORDER BY start_time ASC"
+	query := "SELECT " + observability.SpanSelectFields + " FROM otel_traces WHERE parent_span_id = ? AND deleted_at IS NULL ORDER BY start_time ASC"
 	rows, err := r.db.Query(ctx, query, parentSpanID)
 	if err != nil {
 		return nil, fmt.Errorf("query child spans: %w", err)
@@ -471,7 +456,7 @@ func (r *traceRepository) GetSpanTree(ctx context.Context, traceID string) ([]*o
 
 func (r *traceRepository) GetSpansByFilter(ctx context.Context, filter *observability.SpanFilter) ([]*observability.Span, error) {
 	query := `
-		SELECT ` + spanSelectFields + `
+		SELECT ` + observability.SpanSelectFields + `
 		FROM otel_traces
 		WHERE 1=1
 			AND deleted_at IS NULL
@@ -625,7 +610,7 @@ func (r *traceRepository) CountSpansByFilter(ctx context.Context, filter *observ
 
 func (r *traceRepository) GetRootSpan(ctx context.Context, traceID string) (*observability.Span, error) {
 	query := `
-		SELECT ` + spanSelectFields + `
+		SELECT ` + observability.SpanSelectFields + `
 		FROM otel_traces
 		WHERE trace_id = ?
 		  AND parent_span_id IS NULL
@@ -1210,4 +1195,27 @@ func filterEmptyStrings(slice []string) []string {
 		}
 	}
 	return result
+}
+
+// QuerySpansByExpression executes a pre-built parameterized query for spans.
+// The query and args are built by SpanQueryBuilder to ensure safety.
+func (r *traceRepository) QuerySpansByExpression(ctx context.Context, query string, args []interface{}) ([]*observability.Span, error) {
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query spans by expression: %w", err)
+	}
+	defer rows.Close()
+
+	return r.scanSpans(rows)
+}
+
+// CountSpansByExpression executes a pre-built parameterized COUNT query for pagination.
+// The query and args are built by SpanQueryBuilder to ensure safety.
+func (r *traceRepository) CountSpansByExpression(ctx context.Context, query string, args []interface{}) (int64, error) {
+	var count uint64
+	err := r.db.QueryRow(ctx, query, args...).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("count spans by expression: %w", err)
+	}
+	return int64(count), nil
 }

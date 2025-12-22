@@ -38,6 +38,9 @@ type TraceRepository interface {
 	GetTracesByUserID(ctx context.Context, userID string, filter *TraceFilter) ([]*TraceSummary, error)
 	CalculateTotalCost(ctx context.Context, traceID string) (float64, error)
 	CalculateTotalTokens(ctx context.Context, traceID string) (uint64, error)
+
+	QuerySpansByExpression(ctx context.Context, query string, args []interface{}) ([]*Span, error)
+	CountSpansByExpression(ctx context.Context, query string, args []interface{}) (int64, error)
 }
 
 // ScoreRepository defines the interface for score data access (ClickHouse)

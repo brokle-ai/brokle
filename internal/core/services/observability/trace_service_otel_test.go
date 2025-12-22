@@ -151,6 +151,19 @@ func (m *MockTraceRepository) GetFilterOptions(ctx context.Context, projectID st
 	return args.Get(0).(*observability.TraceFilterOptions), args.Error(1)
 }
 
+func (m *MockTraceRepository) QuerySpansByExpression(ctx context.Context, query string, queryArgs []interface{}) ([]*observability.Span, error) {
+	args := m.Called(ctx, query, queryArgs)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*observability.Span), args.Error(1)
+}
+
+func (m *MockTraceRepository) CountSpansByExpression(ctx context.Context, query string, queryArgs []interface{}) (int64, error) {
+	args := m.Called(ctx, query, queryArgs)
+	return args.Get(0).(int64), args.Error(1)
+}
+
 func TestTraceService_GetRootSpan(t *testing.T) {
 	tests := []struct {
 		name        string
