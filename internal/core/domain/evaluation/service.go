@@ -36,6 +36,9 @@ type ExperimentService interface {
 	Delete(ctx context.Context, id ulid.ULID, projectID ulid.ULID) error
 	GetByID(ctx context.Context, id ulid.ULID, projectID ulid.ULID) (*Experiment, error)
 	List(ctx context.Context, projectID ulid.ULID, filter *ExperimentFilter) ([]*Experiment, error)
+
+	// CompareExperiments compares score metrics across multiple experiments
+	CompareExperiments(ctx context.Context, projectID ulid.ULID, experimentIDs []ulid.ULID, baselineID *ulid.ULID) (*CompareExperimentsResponse, error)
 }
 
 type ExperimentItemService interface {

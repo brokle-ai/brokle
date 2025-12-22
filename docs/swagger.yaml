@@ -1099,6 +1099,14 @@ definitions:
     - ExperimentStatusRunning
     - ExperimentStatusCompleted
     - ExperimentStatusFailed
+  evaluation.ExperimentSummaryResponse:
+    description: Experiment summary for comparison
+    properties:
+      name:
+        type: string
+      status:
+        type: string
+    type: object
   evaluation.SDKBatchCreateExperimentItemsResponse:
     description: Batch experiment items creation response
     properties:
@@ -1110,6 +1118,20 @@ definitions:
     properties:
       created:
         type: integer
+    type: object
+  evaluation.ScoreAggregationResponse:
+    description: Score aggregation statistics
+    properties:
+      count:
+        type: integer
+      max:
+        type: number
+      mean:
+        type: number
+      min:
+        type: number
+      std_dev:
+        type: number
     type: object
   evaluation.ScoreConfigResponse:
     properties:
@@ -1137,6 +1159,16 @@ definitions:
       project_id:
         type: string
       updated_at:
+        type: string
+    type: object
+  evaluation.ScoreDiffResponse:
+    description: Score difference from baseline
+    properties:
+      difference:
+        type: number
+      direction:
+        type: string
+      type:
         type: string
     type: object
   evaluation.ScoreResponse:
@@ -1403,6 +1435,40 @@ definitions:
     required:
     - adapter
     - api_key
+    type: object
+  internal_transport_http_handlers_evaluation.CompareExperimentsRequest:
+    description: Request to compare multiple experiments
+    properties:
+      baseline_id:
+        type: string
+      experiment_ids:
+        items:
+          type: string
+        maxItems: 10
+        minItems: 2
+        type: array
+    required:
+    - experiment_ids
+    type: object
+  internal_transport_http_handlers_evaluation.CompareExperimentsResponse:
+    description: Response containing experiment comparison results
+    properties:
+      diffs:
+        additionalProperties:
+          additionalProperties:
+            $ref: '#/definitions/evaluation.ScoreDiffResponse'
+          type: object
+        type: object
+      experiments:
+        additionalProperties:
+          $ref: '#/definitions/evaluation.ExperimentSummaryResponse'
+        type: object
+      scores:
+        additionalProperties:
+          additionalProperties:
+            $ref: '#/definitions/evaluation.ScoreAggregationResponse'
+          type: object
+        type: object
     type: object
   internal_transport_http_handlers_evaluation.DatasetItemResponse:
     description: Dataset item data
@@ -6962,6 +7028,46 @@ paths:
       summary: List experiment items
       tags:
       - Experiment Items
+  /api/v1/projects/{projectId}/experiments/compare:
+    post:
+      consumes:
+      - application/json
+      description: Compares score metrics across multiple experiments. Optionally
+        specify a baseline for diff calculations.
+      parameters:
+      - description: Project ID
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Compare experiments request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_transport_http_handlers_evaluation.CompareExperimentsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_transport_http_handlers_evaluation.CompareExperimentsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Experiment not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Compare experiments
+      tags:
+      - Experiments
   /api/v1/projects/{projectId}/playground/sessions:
     get:
       description: Lists all playground sessions for the sidebar.

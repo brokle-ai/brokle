@@ -4,6 +4,8 @@ import type {
   CreateExperimentRequest,
   UpdateExperimentRequest,
   ExperimentItemListResponse,
+  ExperimentComparisonResponse,
+  CompareExperimentsRequest,
 } from '../types'
 
 const client = new BrokleAPIClient('/api')
@@ -68,6 +70,21 @@ export const experimentsApi = {
   ): Promise<ExperimentItemListResponse> => {
     return client.get<ExperimentItemListResponse>(
       `/v1/projects/${projectId}/experiments/${experimentId}/items?limit=${limit}&offset=${offset}`
+    )
+  },
+
+  compareExperiments: async (
+    projectId: string,
+    experimentIds: string[],
+    baselineId?: string
+  ): Promise<ExperimentComparisonResponse> => {
+    const payload: CompareExperimentsRequest = {
+      experiment_ids: experimentIds,
+      ...(baselineId && { baseline_id: baselineId }),
+    }
+    return client.post<ExperimentComparisonResponse>(
+      `/v1/projects/${projectId}/experiments/compare`,
+      payload
     )
   },
 }

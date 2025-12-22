@@ -5843,6 +5843,65 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/projects/{projectId}/experiments/compare": {
+            "post": {
+                "description": "Compares score metrics across multiple experiments. Optionally specify a baseline for diff calculations.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Experiments"
+                ],
+                "summary": "Compare experiments",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project ID",
+                        "name": "projectId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Compare experiments request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_transport_http_handlers_evaluation.CompareExperimentsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_transport_http_handlers_evaluation.CompareExperimentsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Experiment not found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/projects/{projectId}/experiments/{experimentId}": {
             "get": {
                 "security": [
@@ -12650,6 +12709,18 @@ const docTemplate = `{
                 "ExperimentStatusFailed"
             ]
         },
+        "evaluation.ExperimentSummaryResponse": {
+            "description": "Experiment summary for comparison",
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
         "evaluation.SDKBatchCreateExperimentItemsResponse": {
             "description": "Batch experiment items creation response",
             "type": "object",
@@ -12665,6 +12736,27 @@ const docTemplate = `{
             "properties": {
                 "created": {
                     "type": "integer"
+                }
+            }
+        },
+        "evaluation.ScoreAggregationResponse": {
+            "description": "Score aggregation statistics",
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer"
+                },
+                "max": {
+                    "type": "number"
+                },
+                "mean": {
+                    "type": "number"
+                },
+                "min": {
+                    "type": "number"
+                },
+                "std_dev": {
+                    "type": "number"
                 }
             }
         },
@@ -12706,6 +12798,21 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "evaluation.ScoreDiffResponse": {
+            "description": "Score difference from baseline",
+            "type": "object",
+            "properties": {
+                "difference": {
+                    "type": "number"
+                },
+                "direction": {
+                    "type": "string"
+                },
+                "type": {
                     "type": "string"
                 }
             }
@@ -13079,6 +13186,56 @@ const docTemplate = `{
                     "type": "object",
                     "additionalProperties": {
                         "type": "string"
+                    }
+                }
+            }
+        },
+        "internal_transport_http_handlers_evaluation.CompareExperimentsRequest": {
+            "description": "Request to compare multiple experiments",
+            "type": "object",
+            "required": [
+                "experiment_ids"
+            ],
+            "properties": {
+                "baseline_id": {
+                    "type": "string"
+                },
+                "experiment_ids": {
+                    "type": "array",
+                    "maxItems": 10,
+                    "minItems": 2,
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "internal_transport_http_handlers_evaluation.CompareExperimentsResponse": {
+            "description": "Response containing experiment comparison results",
+            "type": "object",
+            "properties": {
+                "diffs": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "$ref": "#/definitions/evaluation.ScoreDiffResponse"
+                        }
+                    }
+                },
+                "experiments": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/evaluation.ExperimentSummaryResponse"
+                    }
+                },
+                "scores": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "$ref": "#/definitions/evaluation.ScoreAggregationResponse"
+                        }
                     }
                 }
             }

@@ -2,8 +2,9 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { formatDistanceToNow } from 'date-fns'
-import { FlaskConical, MoreVertical, Trash2, Pencil, Loader2 } from 'lucide-react'
+import { FlaskConical, MoreVertical, Trash2, Pencil, Loader2, GitCompare } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
@@ -40,6 +41,7 @@ export function ExperimentCard({
   projectSlug,
   onEdit,
 }: ExperimentCardProps) {
+  const router = useRouter()
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const deleteMutation = useDeleteExperimentMutation(projectId)
 
@@ -70,15 +72,25 @@ export function ExperimentCard({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onClick={() =>
+                  router.push(
+                    `/projects/${projectSlug}/experiments/compare?ids=${experiment.id}`
+                  )
+                }
+              >
+                <GitCompare className="mr-2 h-4 w-4" />
+                Compare
+              </DropdownMenuItem>
               {onEdit && (
                 <>
                   <DropdownMenuItem onClick={() => onEdit(experiment)}>
                     <Pencil className="mr-2 h-4 w-4" />
                     Edit
                   </DropdownMenuItem>
-                  <DropdownMenuSeparator />
                 </>
               )}
+              <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="text-destructive focus:text-destructive"
                 onClick={() => setShowDeleteDialog(true)}

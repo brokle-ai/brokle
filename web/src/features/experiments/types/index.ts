@@ -45,3 +45,45 @@ export interface ExperimentItemListResponse {
   items: ExperimentItem[]
   total: number
 }
+
+export interface ExperimentScoreStats {
+  mean: number
+  std_dev: number
+  min: number
+  max: number
+  count: number
+}
+
+export interface ExperimentScoreDiff {
+  type: 'NUMERIC' | 'CATEGORICAL'
+  difference?: number // Absolute difference for numeric
+  direction?: '+' | '-' // Direction of change
+  isDifferent?: boolean // For categorical comparisons
+}
+
+export interface ExperimentComparisonSummary {
+  name: string
+  status: string
+}
+
+export interface ExperimentComparisonResponse {
+  experiments: Record<string, ExperimentComparisonSummary>
+  scores: Record<string, Record<string, ExperimentScoreStats>>
+  diffs?: Record<string, Record<string, ExperimentScoreDiff>>
+}
+
+export interface CompareExperimentsRequest {
+  experiment_ids: string[]
+  baseline_id?: string
+}
+
+export interface ScoreComparisonRow {
+  scoreName: string
+  experiments: Record<
+    string,
+    {
+      stats: ExperimentScoreStats
+      diff?: ExperimentScoreDiff
+    }
+  >
+}

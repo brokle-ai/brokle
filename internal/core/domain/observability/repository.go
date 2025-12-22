@@ -62,6 +62,19 @@ type ScoreRepository interface {
 	Count(ctx context.Context, filter *ScoreFilter) (int64, error)
 
 	ExistsByConfigName(ctx context.Context, projectID, configName string) (bool, error)
+
+	// Aggregations for experiment comparison
+	// Returns: scoreName -> experimentID -> aggregation
+	GetAggregationsByExperiments(ctx context.Context, projectID string, experimentIDs []string) (map[string]map[string]*ScoreAggregation, error)
+}
+
+// ScoreAggregation holds statistical metrics for score aggregations.
+type ScoreAggregation struct {
+	Mean   float64 `json:"mean"`
+	StdDev float64 `json:"std_dev"`
+	Min    float64 `json:"min"`
+	Max    float64 `json:"max"`
+	Count  int64   `json:"count"`
 }
 
 type TraceFilter struct {

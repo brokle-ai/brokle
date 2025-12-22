@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"brokle/internal/core/domain/evaluation"
+	"brokle/internal/core/domain/observability"
 	appErrors "brokle/pkg/errors"
 	"brokle/pkg/ulid"
 )
@@ -15,17 +16,20 @@ import (
 type experimentService struct {
 	repo        evaluation.ExperimentRepository
 	datasetRepo evaluation.DatasetRepository
+	scoreRepo   observability.ScoreRepository
 	logger      *slog.Logger
 }
 
 func NewExperimentService(
 	repo evaluation.ExperimentRepository,
 	datasetRepo evaluation.DatasetRepository,
+	scoreRepo observability.ScoreRepository,
 	logger *slog.Logger,
 ) evaluation.ExperimentService {
 	return &experimentService{
 		repo:        repo,
 		datasetRepo: datasetRepo,
+		scoreRepo:   scoreRepo,
 		logger:      logger,
 	}
 }
@@ -164,4 +168,105 @@ func (s *experimentService) List(ctx context.Context, projectID ulid.ULID, filte
 		return nil, appErrors.NewInternalError("failed to list experiments", err)
 	}
 	return experiments, nil
+}
+
+// CompareExperiments compares score metrics across multiple experiments
+func (s *experimentService) CompareExperiments(
+	ctx context.Context,
+	projectID ulid.ULID,
+	experimentIDs []ulid.ULID,
+	baselineID *ulid.ULID,
+) (*evaluation.CompareExperimentsResponse, error) {
+	if len(experimentIDs) < 2 {
+		return nil, appErrors.NewValidationError("experiment_ids", "at least 2 experiments required for comparison")
+	}
+
+	// 1. Validate all experiments exist and belong to the project
+	experimentSummaries := make(map[string]*evaluation.ExperimentSummary)
+	experimentIDStrings := make([]string, len(experimentIDs))
+
+	for i, expID := range experimentIDs {
+		exp, err := s.repo.GetByID(ctx, expID, projectID)
+		if err != nil {
+			if errors.Is(err, evaluation.ErrExperimentNotFound) {
+				return nil, appErrors.NewNotFoundError(fmt.Sprintf("experiment %s", expID))
+			}
+			return nil, appErrors.NewInternalError("failed to get experiment", err)
+		}
+
+		experimentSummaries[expID.String()] = &evaluation.ExperimentSummary{
+			Name:   exp.Name,
+			Status: string(exp.Status),
+		}
+		experimentIDStrings[i] = expID.String()
+	}
+
+	// 2. Validate baseline is in the list (if provided)
+	if baselineID != nil {
+		found := false
+		for _, expID := range experimentIDs {
+			if expID == *baselineID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil, appErrors.NewValidationError("baseline_id", "baseline must be one of the compared experiments")
+		}
+	}
+
+	// 3. Get score aggregations from ClickHouse
+	scoreAggregations, err := s.scoreRepo.GetAggregationsByExperiments(ctx, projectID.String(), experimentIDStrings)
+	if err != nil {
+		return nil, appErrors.NewInternalError("failed to get score aggregations", err)
+	}
+
+	// 4. Convert observability.ScoreAggregation to evaluation.ScoreAggregation
+	scores := make(map[string]map[string]*evaluation.ScoreAggregation)
+	for scoreName, expScores := range scoreAggregations {
+		scores[scoreName] = make(map[string]*evaluation.ScoreAggregation)
+		for expID, agg := range expScores {
+			scores[scoreName][expID] = &evaluation.ScoreAggregation{
+				Mean:   agg.Mean,
+				StdDev: agg.StdDev,
+				Min:    agg.Min,
+				Max:    agg.Max,
+				Count:  agg.Count,
+			}
+		}
+	}
+
+	// 5. Calculate diffs if baseline is provided
+	var diffs map[string]map[string]*evaluation.ScoreDiff
+	if baselineID != nil {
+		diffs = make(map[string]map[string]*evaluation.ScoreDiff)
+		baselineIDStr := baselineID.String()
+
+		for scoreName, expScores := range scores {
+			baselineAgg := expScores[baselineIDStr]
+			if baselineAgg == nil {
+				continue
+			}
+
+			diffs[scoreName] = make(map[string]*evaluation.ScoreDiff)
+			for expID, agg := range expScores {
+				if expID == baselineIDStr {
+					continue // Don't diff baseline against itself
+				}
+				diffs[scoreName][expID] = evaluation.CalculateDiff(baselineAgg, agg)
+			}
+		}
+	}
+
+	s.logger.Info("experiments compared",
+		"project_id", projectID,
+		"experiment_count", len(experimentIDs),
+		"score_names", len(scores),
+	)
+
+	return &evaluation.CompareExperimentsResponse{
+		Experiments: experimentSummaries,
+		Scores:      scores,
+		Diffs:       diffs,
+	}, nil
 }

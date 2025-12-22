@@ -384,6 +384,7 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 		{
 			experiments.GET("", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Experiment.List)
 			experiments.POST("", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Experiment.Create)
+			experiments.POST("/compare", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Experiment.CompareExperiments)
 			experiments.GET("/:experimentId", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Experiment.Get)
 			experiments.PUT("/:experimentId", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Experiment.Update)
 			experiments.DELETE("/:experimentId", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Experiment.Delete)

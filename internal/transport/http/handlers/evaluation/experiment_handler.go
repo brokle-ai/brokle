@@ -2,6 +2,7 @@ package evaluation
 
 import (
 	"log/slog"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 
@@ -248,6 +249,101 @@ func (h *ExperimentHandler) Delete(c *gin.Context) {
 	}
 
 	response.NoContent(c)
+}
+
+// @Summary Compare experiments
+// @Description Compares score metrics across multiple experiments. Optionally specify a baseline for diff calculations.
+// @Tags Experiments
+// @Accept json
+// @Produce json
+// @Param projectId path string true "Project ID"
+// @Param request body CompareExperimentsRequest true "Compare experiments request"
+// @Success 200 {object} CompareExperimentsResponse
+// @Failure 400 {object} response.ErrorResponse
+// @Failure 401 {object} response.ErrorResponse
+// @Failure 404 {object} response.ErrorResponse "Experiment not found"
+// @Router /api/v1/projects/{projectId}/experiments/compare [post]
+func (h *ExperimentHandler) CompareExperiments(c *gin.Context) {
+	projectID, err := ulid.Parse(c.Param("projectId"))
+	if err != nil {
+		response.Error(c, appErrors.NewValidationError("projectId", "must be a valid ULID"))
+		return
+	}
+
+	var req CompareExperimentsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ValidationError(c, "Invalid request body", err.Error())
+		return
+	}
+
+	experimentIDs := make([]ulid.ULID, len(req.ExperimentIDs))
+	for i, idStr := range req.ExperimentIDs {
+		id, err := ulid.Parse(idStr)
+		if err != nil {
+			response.Error(c, appErrors.NewValidationError("experiment_ids", "invalid ULID at index "+strconv.Itoa(i)))
+			return
+		}
+		experimentIDs[i] = id
+	}
+
+	var baselineID *ulid.ULID
+	if req.BaselineID != nil {
+		id, err := ulid.Parse(*req.BaselineID)
+		if err != nil {
+			response.Error(c, appErrors.NewValidationError("baseline_id", "must be a valid ULID"))
+			return
+		}
+		baselineID = &id
+	}
+
+	result, err := h.service.CompareExperiments(c.Request.Context(), projectID, experimentIDs, baselineID)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	resp := &CompareExperimentsResponse{
+		Experiments: make(map[string]*ExperimentSummaryResponse),
+		Scores:      make(map[string]map[string]*ScoreAggregationResponse),
+	}
+
+	for id, exp := range result.Experiments {
+		resp.Experiments[id] = &ExperimentSummaryResponse{
+			Name:   exp.Name,
+			Status: exp.Status,
+		}
+	}
+
+	for scoreName, expScores := range result.Scores {
+		resp.Scores[scoreName] = make(map[string]*ScoreAggregationResponse)
+		for expID, agg := range expScores {
+			resp.Scores[scoreName][expID] = &ScoreAggregationResponse{
+				Mean:   agg.Mean,
+				StdDev: agg.StdDev,
+				Min:    agg.Min,
+				Max:    agg.Max,
+				Count:  agg.Count,
+			}
+		}
+	}
+
+	if result.Diffs != nil {
+		resp.Diffs = make(map[string]map[string]*ScoreDiffResponse)
+		for scoreName, expDiffs := range result.Diffs {
+			resp.Diffs[scoreName] = make(map[string]*ScoreDiffResponse)
+			for expID, diff := range expDiffs {
+				if diff != nil {
+					resp.Diffs[scoreName][expID] = &ScoreDiffResponse{
+						Type:       string(diff.Type),
+						Difference: diff.Difference,
+						Direction:  diff.Direction,
+					}
+				}
+			}
+		}
+	}
+
+	response.Success(c, resp)
 }
 
 // @Summary Batch create experiment items via SDK

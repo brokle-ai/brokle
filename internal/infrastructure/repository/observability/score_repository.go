@@ -317,6 +317,85 @@ func (r *scoreRepository) ExistsByConfigName(ctx context.Context, projectID, con
 	return exists, nil
 }
 
+// GetAggregationsByExperiments returns score aggregations grouped by experiment and score name.
+// Returns: scoreName -> experimentID -> aggregation
+func (r *scoreRepository) GetAggregationsByExperiments(
+	ctx context.Context,
+	projectID string,
+	experimentIDs []string,
+) (map[string]map[string]*observability.ScoreAggregation, error) {
+	if len(experimentIDs) == 0 {
+		return make(map[string]map[string]*observability.ScoreAggregation), nil
+	}
+
+	query := `
+		SELECT
+			experiment_id,
+			name,
+			count() as count,
+			avg(value) as avg_value,
+			min(value) as min_value,
+			max(value) as max_value,
+			stddevSamp(value) as stddev_value
+		FROM scores
+		WHERE project_id = ?
+		  AND experiment_id IN (?)
+		  AND data_type = 'NUMERIC'
+		  AND value IS NOT NULL
+		GROUP BY experiment_id, name
+		ORDER BY experiment_id, name
+	`
+
+	// Convert []string to clickhouse.ArraySet for IN clause binding
+	expIDs := make(clickhouse.ArraySet, len(experimentIDs))
+	for i, id := range experimentIDs {
+		expIDs[i] = id
+	}
+
+	rows, err := r.db.Query(ctx, query, projectID, expIDs)
+	if err != nil {
+		return nil, fmt.Errorf("query score aggregations: %w", err)
+	}
+	defer rows.Close()
+
+	// Result: scoreName -> experimentID -> aggregation
+	result := make(map[string]map[string]*observability.ScoreAggregation)
+
+	for rows.Next() {
+		var (
+			experimentID string
+			name         string
+			count        uint64
+			avgValue     float64
+			minValue     float64
+			maxValue     float64
+			stddevValue  float64
+		)
+
+		if err := rows.Scan(&experimentID, &name, &count, &avgValue, &minValue, &maxValue, &stddevValue); err != nil {
+			return nil, fmt.Errorf("scan aggregation row: %w", err)
+		}
+
+		if result[name] == nil {
+			result[name] = make(map[string]*observability.ScoreAggregation)
+		}
+
+		result[name][experimentID] = &observability.ScoreAggregation{
+			Mean:   avgValue,
+			StdDev: stddevValue,
+			Min:    minValue,
+			Max:    maxValue,
+			Count:  int64(count),
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate aggregation rows: %w", err)
+	}
+
+	return result, nil
+}
+
 // Helper function to scan a single score from query row
 func (r *scoreRepository) scanScoreRow(row driver.Row) (*observability.Score, error) {
 	var score observability.Score

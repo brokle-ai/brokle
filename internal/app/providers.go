@@ -1068,6 +1068,7 @@ func ProvideEvaluationServices(
 	experimentSvc := evaluationService.NewExperimentService(
 		evaluationRepos.Experiment,
 		evaluationRepos.Dataset,
+		observabilityRepos.Score,
 		logger,
 	)
 

@@ -471,3 +471,78 @@ func (ei *ExperimentItem) ToResponse() *ExperimentItemResponse {
 		CreatedAt:     ei.CreatedAt,
 	}
 }
+
+// ============================================================================
+// Experiment Comparison Types
+// ============================================================================
+
+// ScoreAggregation holds statistical metrics for a score across experiment items.
+type ScoreAggregation struct {
+	Mean   float64 `json:"mean"`
+	StdDev float64 `json:"std_dev"`
+	Min    float64 `json:"min"`
+	Max    float64 `json:"max"`
+	Count  int64   `json:"count"`
+}
+
+// ScoreDiffType represents the type of score difference.
+type ScoreDiffType string
+
+const (
+	ScoreDiffTypeNumeric     ScoreDiffType = "NUMERIC"
+	ScoreDiffTypeCategorical ScoreDiffType = "CATEGORICAL"
+)
+
+// ScoreDiff represents the difference between a score and its baseline.
+type ScoreDiff struct {
+	Type        ScoreDiffType `json:"type"`
+	Difference  float64       `json:"difference,omitempty"`  // Absolute difference for NUMERIC
+	Direction   string        `json:"direction,omitempty"`   // "+" or "-" for NUMERIC
+	IsDifferent bool          `json:"is_different,omitempty"` // For CATEGORICAL
+}
+
+// ExperimentSummary contains basic info about an experiment for comparison.
+type ExperimentSummary struct {
+	Name      string `json:"name"`
+	Status    string `json:"status"`
+	ItemCount int64  `json:"item_count"`
+}
+
+// CompareExperimentsRequest is the request body for comparing experiments.
+type CompareExperimentsRequest struct {
+	ExperimentIDs []string `json:"experiment_ids" binding:"required,min=2,max=10"`
+	BaselineID    *string  `json:"baseline_id,omitempty"`
+}
+
+// CompareExperimentsResponse contains the comparison results.
+type CompareExperimentsResponse struct {
+	Experiments map[string]*ExperimentSummary              `json:"experiments"`
+	Scores      map[string]map[string]*ScoreAggregation    `json:"scores"`      // scoreName -> experimentID -> aggregation
+	Diffs       map[string]map[string]*ScoreDiff           `json:"diffs,omitempty"` // scoreName -> experimentID -> diff (vs baseline)
+}
+
+// CalculateDiff computes the difference between two score aggregations.
+func CalculateDiff(baseline, current *ScoreAggregation) *ScoreDiff {
+	if baseline == nil || current == nil {
+		return nil
+	}
+
+	difference := current.Mean - baseline.Mean
+	direction := "+"
+	if difference < 0 {
+		direction = "-"
+	}
+
+	return &ScoreDiff{
+		Type:       ScoreDiffTypeNumeric,
+		Difference: abs(difference),
+		Direction:  direction,
+	}
+}
+
+func abs(x float64) float64 {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
