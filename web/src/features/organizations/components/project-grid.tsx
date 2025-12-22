@@ -120,7 +120,7 @@ export function ProjectGrid({ className, showCreateButton = true }: ProjectGridP
   }
 
   return (
-    <div className={cn("space-y-6", className)}>
+    <>
       <PageHeader title="Projects">
         {showCreateButton && currentOrganization?.id && (
           <>
@@ -138,7 +138,8 @@ export function ProjectGrid({ className, showCreateButton = true }: ProjectGridP
         )}
       </PageHeader>
 
-      {/* Filters */}
+      <div className={cn("-mx-4 flex-1 overflow-auto px-4 py-1 space-y-6", className)}>
+        {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
@@ -334,6 +335,7 @@ export function ProjectGrid({ className, showCreateButton = true }: ProjectGridP
           </CardContent>
         </Card>
       )}
-    </div>
+      </div>
+    </>
   )
 }
