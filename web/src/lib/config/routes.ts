@@ -13,7 +13,7 @@ export const ROUTE_CONFIG = {
     },
     project: {
       pattern: '/projects/[projectSlug]',
-      pages: ['tasks', 'traces', 'settings'] as const,
+      pages: ['tasks', 'traces', 'prompts', 'playground', 'settings'] as const,
       nested: {
         settings: ['integrations', 'api-keys', 'security', 'danger']
       } as const,
