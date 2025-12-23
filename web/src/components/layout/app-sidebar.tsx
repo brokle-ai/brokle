@@ -7,7 +7,6 @@ import {
   SidebarFooter,
   SidebarHeader,
   SidebarRail,
-  SidebarSeparator,
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
@@ -48,7 +47,7 @@ export function AppSidebar({
 
   return (
     <Sidebar {...props} collapsible="icon" variant="sidebar">
-      <SidebarHeader>
+      <SidebarHeader className="h-12 border-b">
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
@@ -64,7 +63,6 @@ export function AppSidebar({
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
-        <SidebarSeparator />
       </SidebarHeader>
 
       <SidebarContent>
