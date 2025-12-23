@@ -4,7 +4,6 @@ import {
   Settings,
   FolderOpen,
   Home,
-  ListTodo,
   Activity,
   FileText,
   FlaskConical,
@@ -48,22 +47,14 @@ export const ROUTES: Route[] = [
   },
 
   // ========================================
-  // PROJECT CONTEXT (8 routes)
+  // PROJECT CONTEXT (5 routes)
   // ========================================
 
-  // Project Group (2 routes)
+  // Project Group (1 route)
   {
     title: 'Overview',
     pathname: '/projects/[projectSlug]',
     icon: FolderOpen,
-    section: RouteSection.Main,
-    rbacScope: 'projects:read',
-    show: ({ currentProjectSlug }) => !!currentProjectSlug,
-  },
-  {
-    title: 'Tasks',
-    pathname: '/projects/[projectSlug]/tasks',
-    icon: ListTodo,
     section: RouteSection.Main,
     rbacScope: 'projects:read',
     show: ({ currentProjectSlug }) => !!currentProjectSlug,
@@ -121,8 +112,8 @@ export const ROUTES: Route[] = [
   },
 ]
 
-// Total: 10 routes
+// Total: 9 routes
 // - Root: 1 (Dashboard)
 // - Organization: 2 (Projects, Settings)
-// - Project: 6 (2 Project Group + 3 Observability + 1 Other)
+// - Project: 5 (1 Project Group + 3 Observability + 1 Other)
 // - User Settings: 1 (Home - back to dashboard)
