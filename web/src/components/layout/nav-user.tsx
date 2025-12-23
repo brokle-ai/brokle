@@ -7,10 +7,14 @@ import {
   ChevronsUpDown,
   CreditCard,
   LogOut,
+  Monitor,
+  Moon,
   Sparkles,
+  Sun,
 } from 'lucide-react'
 import { getUserInitials } from '@/lib/utils/user-utils'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,6 +31,7 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar'
 import { useLogoutMutation } from '@/features/authentication'
+import { useTheme } from '@/context/theme-context'
 
 export function NavUser({
   user,
@@ -39,6 +44,7 @@ export function NavUser({
 }) {
   const { isMobile } = useSidebar()
   const { mutate: handleLogout, isPending: isLoggingOut } = useLogoutMutation()
+  const { theme, setTheme } = useTheme()
 
   // Compute user initials from full name
   const initials = getUserInitials({ name: user.name, email: user.email })
@@ -108,6 +114,38 @@ export function NavUser({
                   Notifications
                 </Link>
               </DropdownMenuItem>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className='text-xs text-muted-foreground px-2 py-1.5'>
+                Theme
+              </DropdownMenuLabel>
+              <div className='flex items-center gap-1 px-2 pb-1.5 w-full'>
+                <Button
+                  variant={theme === 'light' ? 'secondary' : 'ghost'}
+                  size='icon'
+                  className='h-8 flex-1'
+                  onClick={() => setTheme('light')}
+                >
+                  <Sun className='h-4 w-4' />
+                </Button>
+                <Button
+                  variant={theme === 'dark' ? 'secondary' : 'ghost'}
+                  size='icon'
+                  className='h-8 flex-1'
+                  onClick={() => setTheme('dark')}
+                >
+                  <Moon className='h-4 w-4' />
+                </Button>
+                <Button
+                  variant={theme === 'system' ? 'secondary' : 'ghost'}
+                  size='icon'
+                  className='h-8 flex-1'
+                  onClick={() => setTheme('system')}
+                >
+                  <Monitor className='h-4 w-4' />
+                </Button>
+              </div>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem
