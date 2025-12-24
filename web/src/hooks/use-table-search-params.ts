@@ -7,6 +7,7 @@ export type TableSearchParams = {
   filter: string
   status: string[]
   priority: string[]
+  type: string[]
   sortBy: string | null
   sortOrder: 'asc' | 'desc' | null
   peek: string | null
@@ -62,6 +63,18 @@ export function parseTableSearchParams(searchParams: SearchParamsInput): TableSe
     }
   }
 
+  // Parse type filter (JSON array) - for prompts
+  let type: string[] = []
+  const typeParam = get('type')
+  if (typeParam) {
+    try {
+      const parsed = JSON.parse(typeParam)
+      type = Array.isArray(parsed) ? parsed : []
+    } catch {
+      type = []
+    }
+  }
+
   // Parse sorting
   const sortBy = get('sortBy')
   const sortOrderParam = get('sortOrder')
@@ -77,6 +90,7 @@ export function parseTableSearchParams(searchParams: SearchParamsInput): TableSe
     filter,
     status,
     priority,
+    type,
     sortBy,
     sortOrder,
     peek,

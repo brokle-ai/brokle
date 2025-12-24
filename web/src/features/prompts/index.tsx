@@ -1,14 +1,16 @@
 'use client'
 
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Plus } from 'lucide-react'
+import { Plus, FileText } from 'lucide-react'
 import { useProjectOnly } from '@/features/projects'
 import { useProjectPrompts } from './hooks/use-project-prompts'
 import { useProtectedLabelsQuery } from './hooks/use-prompts-queries'
+import { useTableSearchParams } from '@/hooks/use-table-search-params'
 import { PromptsTable } from './components/prompt-list/PromptList'
 import { PageHeader } from '@/components/layout/page-header'
 import { Button } from '@/components/ui/button'
-import type { PromptType } from './types'
+import { DataTableEmptyState } from '@/components/data-table'
+import { LoadingSpinner } from '@/components/guards/loading-spinner'
 
 interface PromptsProps {
   projectSlug: string
@@ -19,37 +21,18 @@ export function Prompts({ projectSlug, orgSlug }: PromptsProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { currentProject, hasProject } = useProjectOnly()
-  const { data, totalCount, page, pageSize, totalPages, isLoading, error, refetch } =
-    useProjectPrompts()
+  const { data, totalCount, isLoading, isFetching, error, refetch } = useProjectPrompts()
   const { data: protectedLabels } = useProtectedLabelsQuery(currentProject?.id)
+  const { filter, type: typeFilter } = useTableSearchParams(searchParams)
 
-  const handlePageChange = (newPage: number) => {
-    const params = new URLSearchParams(searchParams.toString())
-    params.set('page', String(newPage))
-    router.push(`?${params.toString()}`)
-  }
+  // Check if there are active filters
+  const hasActiveFilters = !!(filter || typeFilter.length > 0)
 
-  const handleSearch = (query: string) => {
-    const params = new URLSearchParams(searchParams.toString())
-    if (query) {
-      params.set('search', query)
-    } else {
-      params.delete('search')
-    }
-    params.set('page', '1')
-    router.push(`?${params.toString()}`)
-  }
+  // Only show spinner on true initial load (no data at all)
+  const isInitialLoad = isLoading && data.length === 0
 
-  const handleTypeFilter = (type: PromptType | undefined) => {
-    const params = new URLSearchParams(searchParams.toString())
-    if (type) {
-      params.set('type', type)
-    } else {
-      params.delete('type')
-    }
-    params.set('page', '1')
-    router.push(`?${params.toString()}`)
-  }
+  // Determine if project is truly empty (no data ever, not just filtered to zero)
+  const isEmptyProject = !isLoading && totalCount === 0 && !hasActiveFilters
 
   return (
     <>
@@ -59,8 +42,16 @@ export function Prompts({ projectSlug, orgSlug }: PromptsProps) {
           New Prompt
         </Button>
       </PageHeader>
-      <div className="-mx-4 flex-1 overflow-auto px-4 py-1">
-        {error && !isLoading && (
+      <div className="-mx-4 flex flex-1 flex-col overflow-auto px-4 py-1">
+        {/* Initial loading (first load, no cache) */}
+        {isInitialLoad && (
+          <div className="flex flex-1 items-center justify-center py-16">
+            <LoadingSpinner message="Loading prompts..." />
+          </div>
+        )}
+
+        {/* Error state */}
+        {error && !isInitialLoad && (
           <div className="flex flex-col items-center justify-center py-12 space-y-4">
             <div className="rounded-lg bg-destructive/10 p-6 text-center max-w-md">
               <h3 className="font-semibold text-destructive mb-2">Failed to load prompts</h3>
@@ -75,26 +66,31 @@ export function Prompts({ projectSlug, orgSlug }: PromptsProps) {
           </div>
         )}
 
-        {!hasProject && !isLoading && !error && (
+        {/* No project selected */}
+        {!hasProject && !isInitialLoad && !error && (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <p className="text-muted-foreground">No project selected</p>
           </div>
         )}
 
-        {!error && hasProject && (
+        {/* Empty project (never had data) */}
+        {!error && hasProject && !isInitialLoad && isEmptyProject && (
+          <DataTableEmptyState
+            icon={<FileText className="h-full w-full" />}
+            title="No prompts yet"
+            description="Click 'New Prompt' above to create your first prompt."
+          />
+        )}
+
+        {/* Table (has data OR has active filters) */}
+        {!error && hasProject && !isInitialLoad && !isEmptyProject && (
           <PromptsTable
             data={data}
             totalCount={totalCount}
-            page={page}
-            pageSize={pageSize}
-            totalPages={totalPages}
-            isLoading={isLoading}
+            isFetching={isFetching}
             protectedLabels={protectedLabels || []}
             projectSlug={projectSlug}
             orgSlug={orgSlug}
-            onPageChange={handlePageChange}
-            onSearch={handleSearch}
-            onTypeFilter={handleTypeFilter}
           />
         )}
       </div>

@@ -1,9 +1,6 @@
 import { Header } from '@/components/layout/header'
 import { ContextNavbar } from '@/components/layout/context-navbar'
 import { Search } from '@/components/search'
-import { ThemeSwitch } from '@/components/theme-switch'
-import { ProfileDropdown } from '@/components/profile-dropdown'
-import { cn } from '@/lib/utils'
 
 interface DashboardHeaderProps {
   className?: string
@@ -16,13 +13,9 @@ interface DashboardHeaderProps {
  * - ContextNavbar automatically shows:
  *   - Organization selector only (on /organizations/* routes)
  *   - Organization + Project selectors (on /projects/* routes)
- * - Mobile responsive (Theme/Profile hidden on small screens)
  * - Search component (icon on mobile, full bar on desktop)
  *
- * Usage:
- * ```tsx
- * <DashboardHeader />
- * ```
+ * Note: Theme and Profile settings are in the sidebar user dropdown (NavUser)
  */
 export function DashboardHeader({ className }: DashboardHeaderProps) {
   return (
@@ -30,8 +23,6 @@ export function DashboardHeader({ className }: DashboardHeaderProps) {
       <ContextNavbar />
       <div className='ml-auto flex items-center space-x-4'>
         <Search />
-        <ThemeSwitch className="hidden sm:flex" />
-        <ProfileDropdown className="hidden sm:flex" />
       </div>
     </Header>
   )

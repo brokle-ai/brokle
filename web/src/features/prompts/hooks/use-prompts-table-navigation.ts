@@ -5,21 +5,20 @@ import { usePathname, useRouter, type ReadonlyURLSearchParams } from 'next/navig
 import type { ColumnFiltersState, PaginationState, SortingState } from '@tanstack/react-table'
 import { buildTableUrl, debounce } from '@/lib/utils/table-utils'
 
-type UseTableNavigationProps = {
+type UsePromptsTableNavigationProps = {
   searchParams: ReadonlyURLSearchParams
   onSearchChange?: () => void
 }
 
 /**
- * Custom hook for table navigation in Next.js App Router
- * Accepts ReadonlyURLSearchParams directly, memoizes conversion internally
- * All handlers use stable memoized object to prevent recreation loops
+ * Custom hook for prompts table navigation in Next.js App Router
+ * Handles URL-based state for pagination, filtering, and sorting
  */
-export function useTableNavigation({ searchParams, onSearchChange }: UseTableNavigationProps) {
+export function usePromptsTableNavigation({ searchParams, onSearchChange }: UsePromptsTableNavigationProps) {
   const router = useRouter()
   const pathname = usePathname()
 
-  // Memoize searchParams conversion - only recreates when URL actually changes
+  // Memoize searchParams conversion
   const searchParamsObj = useMemo(
     () => Object.fromEntries(searchParams.entries()),
     [searchParams]
@@ -27,15 +26,13 @@ export function useTableNavigation({ searchParams, onSearchChange }: UseTableNav
 
   /**
    * Handle pagination changes
-   * Updates page and pageSize in URL
    */
   const handlePageChange = useCallback(
     (pagination: PaginationState) => {
       const updates: Record<string, string | null> = {
-        page: String(pagination.pageIndex + 1), // Convert to 1-indexed
+        page: String(pagination.pageIndex + 1),
       }
 
-      // Only include pageSize if it's not the default (10)
       if (pagination.pageSize !== 10) {
         updates.pageSize = String(pagination.pageSize)
       } else {
@@ -49,9 +46,7 @@ export function useTableNavigation({ searchParams, onSearchChange }: UseTableNav
   )
 
   /**
-   * Handle search/global filter changes
-   * Uses ref pattern for stable debounce with fresh dependencies
-   * Resets to page 1 on search
+   * Handle search/global filter changes with debounce
    */
   const latestRef = useRef({ searchParamsObj, pathname, router, onSearchChange })
 
@@ -65,7 +60,7 @@ export function useTableNavigation({ searchParams, onSearchChange }: UseTableNav
         const { pathname, searchParamsObj, router, onSearchChange } = latestRef.current
         const updates: Record<string, string | null> = {
           filter: filter || null,
-          page: '1', // Reset to first page on search
+          page: '1',
         }
 
         const url = pathname + buildTableUrl(searchParamsObj, updates)
@@ -75,7 +70,7 @@ export function useTableNavigation({ searchParams, onSearchChange }: UseTableNav
     []
   )
 
-  // Cleanup: cancel pending debounce on unmount
+  // Cleanup debounce on unmount
   useEffect(() => {
     return () => {
       if (handleSearch.cancel) {
@@ -85,32 +80,28 @@ export function useTableNavigation({ searchParams, onSearchChange }: UseTableNav
   }, [handleSearch])
 
   /**
-   * Handle column filter changes (status, priority, etc.)
-   * Resets to page 1 on filter change
+   * Handle column filter changes (type filter for prompts)
    */
   const handleFilter = useCallback(
     (filters: ColumnFiltersState) => {
       const updates: Record<string, string | null> = {
-        page: '1', // Reset to first page on filter change
+        page: '1',
       }
 
-      // Process each filter
+      // Process type filter
       filters.forEach((filter) => {
-        if (filter.id === 'status' || filter.id === 'priority') {
+        if (filter.id === 'type') {
           if (Array.isArray(filter.value) && filter.value.length > 0) {
-            updates[filter.id] = JSON.stringify(filter.value)
+            updates.type = JSON.stringify(filter.value)
           } else {
-            updates[filter.id] = null
+            updates.type = null
           }
         }
       })
 
-      // Clear filters that are not in the new filters array
-      if (!filters.some((f) => f.id === 'status')) {
-        updates.status = null
-      }
-      if (!filters.some((f) => f.id === 'priority')) {
-        updates.priority = null
+      // Clear type filter if not in new filters
+      if (!filters.some((f) => f.id === 'type')) {
+        updates.type = null
       }
 
       const url = pathname + buildTableUrl(searchParamsObj, updates)
@@ -122,18 +113,15 @@ export function useTableNavigation({ searchParams, onSearchChange }: UseTableNav
 
   /**
    * Handle sorting changes
-   * Supports: none → asc → desc → none cycle
    */
   const handleSort = useCallback(
     (sorting: SortingState) => {
       const updates: Record<string, string | null> = {}
 
       if (sorting.length === 0) {
-        // No sorting - clear params
         updates.sortBy = null
         updates.sortOrder = null
       } else {
-        // Apply sorting
         const [sort] = sorting
         updates.sortBy = sort.id
         updates.sortOrder = sort.desc ? 'desc' : 'asc'
@@ -146,8 +134,7 @@ export function useTableNavigation({ searchParams, onSearchChange }: UseTableNav
   )
 
   /**
-   * Reset all filters and return to default state
-   * Navigates to pathname without any query params
+   * Reset all filters
    */
   const handleReset = useCallback(() => {
     router.push(pathname)

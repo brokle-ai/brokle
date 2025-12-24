@@ -1,7 +1,7 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useCallback, useMemo, useState, useTransition } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
   flexRender,
   getCoreRowModel,
@@ -21,58 +21,112 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
-import { Search, X } from 'lucide-react'
-import type { PromptListItem, PromptType } from '../../types'
+import { DataTablePagination } from '@/components/data-table'
+import { useTableSearchParams } from '@/hooks/use-table-search-params'
+import { usePromptsTableNavigation } from '../../hooks/use-prompts-table-navigation'
+import { PromptsToolbar } from './prompts-toolbar'
+import type { PromptListItem } from '../../types'
 import { createPromptsColumns } from './prompts-columns'
 import { PromptsDeleteDialog } from './prompts-delete-dialog'
 
 interface PromptsTableProps {
   data: PromptListItem[]
   totalCount: number
-  page: number
-  pageSize: number
-  totalPages: number
-  isLoading?: boolean
+  isFetching?: boolean
   protectedLabels?: string[]
   projectSlug: string
   orgSlug: string
-  onPageChange?: (page: number) => void
-  onSearch?: (query: string) => void
-  onTypeFilter?: (type: PromptType | undefined) => void
 }
 
 export function PromptsTable({
   data,
   totalCount,
-  page,
-  pageSize,
-  totalPages,
-  isLoading,
+  isFetching,
   protectedLabels = [],
   projectSlug,
   orgSlug,
-  onPageChange,
-  onSearch,
-  onTypeFilter,
 }: PromptsTableProps) {
   const router = useRouter()
-  const [sorting, setSorting] = useState<SortingState>([])
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
+  const searchParams = useSearchParams()
+  const [isPending, startTransition] = useTransition()
+
+  // Parse URL state (single source of truth)
+  const {
+    page,
+    pageSize,
+    filter,
+    type: typeFilter,
+    sortBy,
+    sortOrder,
+  } = useTableSearchParams(searchParams)
+
+  // Local UI-only state (not in URL)
   const [rowSelection, setRowSelection] = useState({})
-  const [searchValue, setSearchValue] = useState('')
-  const [typeFilter, setTypeFilter] = useState<string>('')
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
   const [deletePrompt, setDeletePrompt] = useState<PromptListItem | null>(null)
 
+  // Convert parsed params to React Table format
+  const pagination = { pageIndex: page - 1, pageSize }
+  const columnFilters: ColumnFiltersState = [
+    ...(typeFilter.length > 0 ? [{ id: 'type', value: typeFilter }] : []),
+  ]
+  const sorting: SortingState =
+    sortBy && sortOrder ? [{ id: sortBy, desc: sortOrder === 'desc' }] : []
+  const globalFilter = filter
+
+  // Get navigation handlers
+  const { handlePageChange, handleSearch, handleFilter, handleSort, handleReset } =
+    usePromptsTableNavigation({
+      searchParams,
+      onSearchChange: () => setRowSelection({}),
+    })
+
+  // Wrap navigation handlers with startTransition
+  const onPaginationChange = useCallback(
+    (paginationUpdater: any) => {
+      const newPagination =
+        typeof paginationUpdater === 'function'
+          ? paginationUpdater(pagination)
+          : paginationUpdater
+      startTransition(() => {
+        handlePageChange(newPagination)
+      })
+    },
+    [pagination, handlePageChange]
+  )
+
+  const onGlobalFilterChange = useCallback(
+    (filterValue: string) => {
+      startTransition(() => {
+        handleSearch(filterValue)
+      })
+    },
+    [handleSearch]
+  )
+
+  const onColumnFiltersChange = useCallback(
+    (filterUpdater: any) => {
+      const newFilters =
+        typeof filterUpdater === 'function' ? filterUpdater(columnFilters) : filterUpdater
+      startTransition(() => {
+        handleFilter(newFilters)
+      })
+    },
+    [columnFilters, handleFilter]
+  )
+
+  const onSortingChange = useCallback(
+    (sortingUpdater: any) => {
+      const newSorting =
+        typeof sortingUpdater === 'function' ? sortingUpdater(sorting) : sortingUpdater
+      startTransition(() => {
+        handleSort(newSorting)
+      })
+    },
+    [sorting, handleSort]
+  )
+
+  // Create columns with actions
   const columns = useMemo(
     () =>
       createPromptsColumns({
@@ -93,85 +147,52 @@ export function PromptsTable({
     [projectSlug, protectedLabels, router]
   )
 
+  // Initialize React Table
   const table = useReactTable({
     data,
     columns,
-    pageCount: totalPages,
+    pageCount: totalCount ? Math.ceil(totalCount / pageSize) : -1,
     state: {
       sorting,
       columnVisibility,
       rowSelection,
       columnFilters,
-      pagination: { pageIndex: page - 1, pageSize },
+      globalFilter,
+      pagination,
     },
-    enableRowSelection: true,
     manualPagination: true,
+    manualFiltering: true,
+    manualSorting: true,
+    enableRowSelection: true,
+    getRowId: (row) => row.id,
     onRowSelectionChange: setRowSelection,
-    onSortingChange: setSorting,
-    onColumnFiltersChange: setColumnFilters,
     onColumnVisibilityChange: setColumnVisibility,
+    onPaginationChange,
+    onGlobalFilterChange,
+    onColumnFiltersChange,
+    onSortingChange,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
   })
 
-  const handleSearch = (value: string) => {
-    setSearchValue(value)
-    onSearch?.(value)
-  }
-
-  const handleTypeFilter = (value: string) => {
-    setTypeFilter(value)
-    onTypeFilter?.(value === 'all' ? undefined : (value as PromptType))
-  }
-
-  const handleRowClick = (prompt: PromptListItem, e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest('[role="checkbox"], button')) {
-      return
-    }
-    router.push(`/projects/${projectSlug}/prompts/${prompt.id}`)
-  }
+  // Row click handler
+  const handleRowClick = useCallback(
+    (prompt: PromptListItem, e: React.MouseEvent) => {
+      // Ignore if click target is interactive element
+      if ((e.target as HTMLElement).closest('[role="checkbox"], button, a')) {
+        return
+      }
+      router.push(`/projects/${projectSlug}/prompts/${prompt.id}`)
+    },
+    [router, projectSlug]
+  )
 
   return (
     <div className="space-y-4">
-      {/* Toolbar */}
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex flex-1 items-center gap-2">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search prompts..."
-              value={searchValue}
-              onChange={(e) => handleSearch(e.target.value)}
-              className="pl-9"
-            />
-            {searchValue && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="absolute right-1 top-1/2 h-6 w-6 -translate-y-1/2 p-0"
-                onClick={() => handleSearch('')}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            )}
-          </div>
-          <Select value={typeFilter || 'all'} onValueChange={handleTypeFilter}>
-            <SelectTrigger className="w-[120px]" size="sm">
-              <SelectValue placeholder="Type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All types</SelectItem>
-              <SelectItem value="text">Text</SelectItem>
-              <SelectItem value="chat">Chat</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
-      {/* Table */}
-      <div className="rounded-md border">
+      <PromptsToolbar table={table} isPending={isPending || isFetching} onReset={handleReset} />
+      <div className="overflow-hidden rounded-md border">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
@@ -187,13 +208,7 @@ export function PromptsTable({
             ))}
           </TableHeader>
           <TableBody>
-            {isLoading ? (
-              <TableRow>
-                <TableCell colSpan={columns.length} className="h-24 text-center">
-                  Loading prompts...
-                </TableCell>
-              </TableRow>
-            ) : table.getRowModel().rows?.length ? (
+            {table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => (
                 <TableRow
                   key={row.id}
@@ -218,36 +233,7 @@ export function PromptsTable({
           </TableBody>
         </Table>
       </div>
-
-      {/* Pagination */}
-      <div className="flex items-center justify-between px-2">
-        <div className="flex-1 text-sm text-muted-foreground">
-          {table.getFilteredSelectedRowModel().rows.length} of {totalCount} row(s) selected.
-        </div>
-        <div className="flex items-center space-x-6 lg:space-x-8">
-          <div className="flex items-center space-x-2">
-            <p className="text-sm font-medium">Page {page} of {totalPages}</p>
-          </div>
-          <div className="flex items-center space-x-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onPageChange?.(page - 1)}
-              disabled={page <= 1}
-            >
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onPageChange?.(page + 1)}
-              disabled={page >= totalPages}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
-      </div>
+      <DataTablePagination table={table} isPending={isPending || isFetching} />
 
       {/* Delete Dialog */}
       <PromptsDeleteDialog
