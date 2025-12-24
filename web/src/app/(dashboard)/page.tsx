@@ -101,7 +101,7 @@ export default function RootPage() {
           <div className="mb-6 rounded-full bg-muted p-6">
             <Building2 className="h-16 w-16 text-muted-foreground" />
           </div>
-          <h1 className="text-3xl font-bold mb-3">Welcome to Brokle</h1>
+          <h1 className="text-2xl font-bold mb-3">Welcome to Brokle</h1>
           <p className="text-muted-foreground mb-8">
             Create your first organization to start managing AI projects and
             team members.

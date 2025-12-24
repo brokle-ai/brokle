@@ -1,10 +1,13 @@
 'use client'
 
 import { useRouter, useSearchParams } from 'next/navigation'
+import { Plus } from 'lucide-react'
 import { useProjectOnly } from '@/features/projects'
 import { useProjectPrompts } from './hooks/use-project-prompts'
 import { useProtectedLabelsQuery } from './hooks/use-prompts-queries'
 import { PromptsTable } from './components/prompt-list/PromptList'
+import { PageHeader } from '@/components/layout/page-header'
+import { Button } from '@/components/ui/button'
 import type { PromptType } from './types'
 
 interface PromptsProps {
@@ -50,14 +53,12 @@ export function Prompts({ projectSlug, orgSlug }: PromptsProps) {
 
   return (
     <>
-      <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Prompts</h2>
-          <p className="text-muted-foreground">
-            Manage prompt templates with versioning and labels
-          </p>
-        </div>
-      </div>
+      <PageHeader title="Prompts">
+        <Button onClick={() => router.push(`/projects/${projectSlug}/prompts/new`)}>
+          <Plus className="mr-2 h-4 w-4" />
+          New Prompt
+        </Button>
+      </PageHeader>
       <div className="-mx-4 flex-1 overflow-auto px-4 py-1">
         {error && !isLoading && (
           <div className="flex flex-col items-center justify-center py-12 space-y-4">

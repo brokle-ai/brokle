@@ -30,7 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Plus, Search, X } from 'lucide-react'
+import { Search, X } from 'lucide-react'
 import type { PromptListItem, PromptType } from '../../types'
 import { createPromptsColumns } from './prompts-columns'
 import { PromptsDeleteDialog } from './prompts-delete-dialog'
@@ -158,7 +158,7 @@ export function PromptsTable({
             )}
           </div>
           <Select value={typeFilter || 'all'} onValueChange={handleTypeFilter}>
-            <SelectTrigger className="w-[120px]">
+            <SelectTrigger className="w-[120px]" size="sm">
               <SelectValue placeholder="Type" />
             </SelectTrigger>
             <SelectContent>
@@ -168,10 +168,6 @@ export function PromptsTable({
             </SelectContent>
           </Select>
         </div>
-        <Button onClick={() => router.push(`/projects/${projectSlug}/prompts/new`)}>
-          <Plus className="mr-2 h-4 w-4" />
-          New Prompt
-        </Button>
       </div>
 
       {/* Table */}
