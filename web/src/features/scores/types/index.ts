@@ -1,3 +1,5 @@
+export * from './analytics'
+
 export type ScoreDataType = 'NUMERIC' | 'CATEGORICAL' | 'BOOLEAN'
 export type ScoreSource = 'code' | 'llm' | 'human'
 
@@ -50,4 +52,16 @@ export interface UpdateScoreConfigRequest {
   max_value?: number
   categories?: string[]
   metadata?: Record<string, unknown>
+}
+
+export interface ScoreListParams {
+  trace_id?: string
+  span_id?: string
+  name?: string
+  source?: ScoreSource
+  data_type?: ScoreDataType
+  page?: number
+  limit?: number
+  sort_by?: string
+  sort_dir?: 'asc' | 'desc'
 }

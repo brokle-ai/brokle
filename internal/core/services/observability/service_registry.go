@@ -12,14 +12,15 @@ import (
 )
 
 type ServiceRegistry struct {
-	TraceService       *TraceService
-	ScoreService       *ScoreService
-	MetricsService     *MetricsService
-	LogsService        *LogsService
-	GenAIEventsService *GenAIEventsService
-	BlobStorageService storageDomain.BlobStorageService
-	ArchiveService     *ArchiveService
-	SpanQueryService   *SpanQueryService
+	TraceService          *TraceService
+	ScoreService          *ScoreService
+	ScoreAnalyticsService *ScoreAnalyticsService
+	MetricsService        *MetricsService
+	LogsService           *LogsService
+	GenAIEventsService    *GenAIEventsService
+	BlobStorageService    storageDomain.BlobStorageService
+	ArchiveService        *ArchiveService
+	SpanQueryService      *SpanQueryService
 
 	OTLPConverterService        *OTLPConverterService
 	OTLPMetricsConverterService *OTLPMetricsConverterService
@@ -34,6 +35,7 @@ type ServiceRegistry struct {
 func NewServiceRegistry(
 	traceRepo observability.TraceRepository,
 	scoreRepo observability.ScoreRepository,
+	scoreAnalyticsRepo observability.ScoreAnalyticsRepository,
 	metricsRepo observability.MetricsRepository,
 	logsRepo observability.LogsRepository,
 	genaiEventsRepo observability.GenAIEventsRepository,
@@ -56,6 +58,7 @@ func NewServiceRegistry(
 	otlpEventsConverterService := NewOTLPEventsConverterService(logger)
 	traceService := NewTraceService(traceRepo, logger)
 	scoreService := NewScoreService(scoreRepo, traceRepo)
+	scoreAnalyticsService := NewScoreAnalyticsService(scoreAnalyticsRepo, logger)
 	metricsService := NewMetricsService(metricsRepo, logger)
 	logsService := NewLogsService(logsRepo, logger)
 	genaiEventsService := NewGenAIEventsService(genaiEventsRepo, logger)
@@ -71,6 +74,7 @@ func NewServiceRegistry(
 	return &ServiceRegistry{
 		TraceService:                traceService,
 		ScoreService:                scoreService,
+		ScoreAnalyticsService:       scoreAnalyticsService,
 		MetricsService:              metricsService,
 		LogsService:                 logsService,
 		GenAIEventsService:          genaiEventsService,
@@ -109,4 +113,8 @@ func (r *ServiceRegistry) GetTelemetryService() observability.TelemetryService {
 
 func (r *ServiceRegistry) GetSpanQueryService() *SpanQueryService {
 	return r.SpanQueryService
+}
+
+func (r *ServiceRegistry) GetScoreAnalyticsService() *ScoreAnalyticsService {
+	return r.ScoreAnalyticsService
 }

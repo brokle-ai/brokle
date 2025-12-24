@@ -60,7 +60,6 @@ import (
 	"brokle/pkg/ulid"
 )
 
-// DeploymentMode tracks which mode the app is running in
 type DeploymentMode string
 
 const (
@@ -68,7 +67,6 @@ const (
 	ModeWorker DeploymentMode = "worker"
 )
 
-// CoreContainer holds shared infrastructure (databases, repos, services)
 type CoreContainer struct {
 	Config     *config.Config
 	Logger     *slog.Logger
@@ -79,13 +77,11 @@ type CoreContainer struct {
 	Enterprise *EnterpriseContainer
 }
 
-// ServerContainer holds HTTP and gRPC server components
 type ServerContainer struct {
 	HTTPServer *http.Server
 	GRPCServer *grpcTransport.Server
 }
 
-// ProviderContainer holds all provider instances for dependency injection
 type ProviderContainer struct {
 	Core    *CoreContainer
 	Server  *ServerContainer // nil in worker mode
@@ -93,19 +89,16 @@ type ProviderContainer struct {
 	Mode    DeploymentMode
 }
 
-// DatabaseContainer holds all database connections
 type DatabaseContainer struct {
 	Postgres   *database.PostgresDB
 	Redis      *database.RedisDB
 	ClickHouse *database.ClickHouseDB
 }
 
-// WorkerContainer holds all background worker instances
 type WorkerContainer struct {
 	TelemetryConsumer *workers.TelemetryStreamConsumer
 }
 
-// RepositoryContainer holds all repository instances organized by domain
 type RepositoryContainer struct {
 	User          *UserRepositories
 	Auth          *AuthRepositories
@@ -120,7 +113,6 @@ type RepositoryContainer struct {
 	Evaluation    *EvaluationRepositories
 }
 
-// ServiceContainer holds all service instances organized by domain
 type ServiceContainer struct {
 	User                *UserServices
 	Auth                *AuthServices
@@ -139,7 +131,6 @@ type ServiceContainer struct {
 	Evaluation          *EvaluationServices
 }
 
-// EnterpriseContainer holds all enterprise service instances
 type EnterpriseContainer struct {
 	SSO        sso.SSOProvider
 	RBAC       rbac.RBACManager
@@ -147,14 +138,10 @@ type EnterpriseContainer struct {
 	Analytics  eeAnalytics.EnterpriseAnalytics
 }
 
-// Domain-specific repository containers
-
-// UserRepositories contains all user-related repositories
 type UserRepositories struct {
 	User user.Repository
 }
 
-// AuthRepositories contains all auth-related repositories
 type AuthRepositories struct {
 	UserSession        auth.UserSessionRepository
 	BlacklistedToken   auth.BlacklistedTokenRepository
@@ -167,7 +154,6 @@ type AuthRepositories struct {
 	AuditLog           auth.AuditLogRepository
 }
 
-// OrganizationRepositories contains all organization-related repositories
 type OrganizationRepositories struct {
 	Organization organization.OrganizationRepository
 	Member       organization.MemberRepository
@@ -176,34 +162,30 @@ type OrganizationRepositories struct {
 	Settings     organization.OrganizationSettingsRepository
 }
 
-// ObservabilityRepositories contains all observability-related repositories
 type ObservabilityRepositories struct {
 	Trace                  observability.TraceRepository
 	Score                  observability.ScoreRepository
+	ScoreAnalytics         observability.ScoreAnalyticsRepository
 	Metrics                observability.MetricsRepository
 	Logs                   observability.LogsRepository
 	GenAIEvents            observability.GenAIEventsRepository
 	TelemetryDeduplication observability.TelemetryDeduplicationRepository
 }
 
-// StorageRepositories contains all storage-related repositories
 type StorageRepositories struct {
 	BlobStorage storageDomain.BlobStorageRepository
 }
 
-// BillingRepositories contains all billing-related repositories
 type BillingRepositories struct {
 	Usage         billing.UsageRepository
 	BillingRecord billing.BillingRecordRepository
 	Quota         billing.QuotaRepository
 }
 
-// AnalyticsRepositories contains all analytics-related repositories
 type AnalyticsRepositories struct {
 	ProviderModel analytics.ProviderModelRepository
 }
 
-// PromptRepositories contains all prompt-related repositories
 type PromptRepositories struct {
 	Prompt         promptDomain.PromptRepository
 	Version        promptDomain.VersionRepository
@@ -212,17 +194,14 @@ type PromptRepositories struct {
 	Cache          promptDomain.CacheRepository
 }
 
-// CredentialsRepositories contains all credentials-related repositories
 type CredentialsRepositories struct {
 	ProviderCredential credentialsDomain.ProviderCredentialRepository
 }
 
-// PlaygroundRepositories contains all playground-related repositories
 type PlaygroundRepositories struct {
 	Session playgroundDomain.SessionRepository
 }
 
-// EvaluationRepositories contains all evaluation-related repositories
 type EvaluationRepositories struct {
 	ScoreConfig    evaluationDomain.ScoreConfigRepository
 	Dataset        evaluationDomain.DatasetRepository
@@ -231,15 +210,11 @@ type EvaluationRepositories struct {
 	ExperimentItem evaluationDomain.ExperimentItemRepository
 }
 
-// Domain-specific service containers
-
-// UserServices contains all user-related services
 type UserServices struct {
 	User    user.UserService
 	Profile user.ProfileService
 }
 
-// AuthServices contains all auth-related services
 type AuthServices struct {
 	Auth                auth.AuthService
 	JWT                 auth.JWTService
@@ -253,35 +228,29 @@ type AuthServices struct {
 	OAuthProvider       *authService.OAuthProviderService
 }
 
-// BillingServices contains all billing-related services
 type BillingServices struct {
 	Billing *billingService.BillingService
 }
 
-// AnalyticsServices contains all analytics-related services
 type AnalyticsServices struct {
 	ProviderPricing analytics.ProviderPricingService
 }
 
-// PromptServices contains all prompt-related services
 type PromptServices struct {
 	Prompt    promptDomain.PromptService
 	Compiler  promptDomain.CompilerService
 	Execution promptDomain.ExecutionService
 }
 
-// CredentialsServices contains all credentials-related services
 type CredentialsServices struct {
 	ProviderCredential credentialsDomain.ProviderCredentialService
 	ModelCatalog       credentialsService.ModelCatalogService
 }
 
-// PlaygroundServices contains all playground-related services
 type PlaygroundServices struct {
 	Playground playgroundDomain.PlaygroundService
 }
 
-// EvaluationServices contains all evaluation-related services
 type EvaluationServices struct {
 	ScoreConfig    evaluationDomain.ScoreConfigService
 	Dataset        evaluationDomain.DatasetService
@@ -313,7 +282,6 @@ func ProvideDatabases(cfg *config.Config, logger *slog.Logger) (*DatabaseContain
 	}, nil
 }
 
-// ProvideWorkers creates workers using shared core infrastructure
 func ProvideWorkers(core *CoreContainer) (*WorkerContainer, error) {
 	deduplicationService := observabilityService.NewTelemetryDeduplicationService(
 		core.Repos.Observability.TelemetryDeduplication,
@@ -349,7 +317,6 @@ func ProvideWorkers(core *CoreContainer) (*WorkerContainer, error) {
 	}, nil
 }
 
-// ProvideCore creates shared infrastructure (used by both server and worker)
 func ProvideCore(cfg *config.Config, logger *slog.Logger) (*CoreContainer, error) {
 	databases, err := ProvideDatabases(cfg, logger)
 	if err != nil {
@@ -372,7 +339,6 @@ func ProvideCore(cfg *config.Config, logger *slog.Logger) (*CoreContainer, error
 	}, nil
 }
 
-// ProvideServerServices creates ALL services for server mode
 func ProvideServerServices(core *CoreContainer) *ServiceContainer {
 	cfg := core.Config
 	logger := core.Logger
@@ -442,7 +408,6 @@ func ProvideServerServices(core *CoreContainer) *ServiceContainer {
 	}
 }
 
-// ProvideWorkerServices creates ONLY services worker needs (no auth)
 func ProvideWorkerServices(core *CoreContainer) *ServiceContainer {
 	cfg := core.Config
 	logger := core.Logger
@@ -471,7 +436,6 @@ func ProvideWorkerServices(core *CoreContainer) *ServiceContainer {
 	}
 }
 
-// ProvideServer creates HTTP server using shared core
 func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 	// Get credentials services (may be nil if encryption key not configured)
 	var credentialsSvc credentialsDomain.ProviderCredentialService
@@ -591,14 +555,12 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 	}, nil
 }
 
-// ProvideUserRepositories creates all user-related repositories
 func ProvideUserRepositories(db *gorm.DB) *UserRepositories {
 	return &UserRepositories{
 		User: userRepo.NewUserRepository(db),
 	}
 }
 
-// ProvideAuthRepositories creates all auth-related repositories
 func ProvideAuthRepositories(db *gorm.DB) *AuthRepositories {
 	return &AuthRepositories{
 		UserSession:        authRepo.NewUserSessionRepository(db),
@@ -613,7 +575,6 @@ func ProvideAuthRepositories(db *gorm.DB) *AuthRepositories {
 	}
 }
 
-// ProvideOrganizationRepositories creates all organization-related repositories
 func ProvideOrganizationRepositories(db *gorm.DB) *OrganizationRepositories {
 	return &OrganizationRepositories{
 		Organization: orgRepo.NewOrganizationRepository(db),
@@ -624,11 +585,11 @@ func ProvideOrganizationRepositories(db *gorm.DB) *OrganizationRepositories {
 	}
 }
 
-// ProvideObservabilityRepositories creates all observability-related repositories
 func ProvideObservabilityRepositories(clickhouseDB *database.ClickHouseDB, postgresDB *gorm.DB, redisDB *database.RedisDB) *ObservabilityRepositories {
 	return &ObservabilityRepositories{
 		Trace:                  observabilityRepo.NewTraceRepository(clickhouseDB.Conn),
 		Score:                  observabilityRepo.NewScoreRepository(clickhouseDB.Conn),
+		ScoreAnalytics:         observabilityRepo.NewScoreAnalyticsRepository(clickhouseDB.Conn),
 		Metrics:                observabilityRepo.NewMetricsRepository(clickhouseDB.Conn),
 		Logs:                   observabilityRepo.NewLogsRepository(clickhouseDB.Conn),
 		GenAIEvents:            observabilityRepo.NewGenAIEventsRepository(clickhouseDB.Conn),
@@ -636,14 +597,12 @@ func ProvideObservabilityRepositories(clickhouseDB *database.ClickHouseDB, postg
 	}
 }
 
-// ProvideStorageRepositories creates all storage-related repositories
 func ProvideStorageRepositories(clickhouseDB *database.ClickHouseDB) *StorageRepositories {
 	return &StorageRepositories{
 		BlobStorage: storageRepo.NewBlobStorageRepository(clickhouseDB.Conn),
 	}
 }
 
-// ProvideBillingRepositories creates all billing-related repositories
 func ProvideBillingRepositories(db *gorm.DB, logger *slog.Logger) *BillingRepositories {
 	return &BillingRepositories{
 		Usage:         billingRepo.NewUsageRepository(db, logger),
@@ -652,14 +611,12 @@ func ProvideBillingRepositories(db *gorm.DB, logger *slog.Logger) *BillingReposi
 	}
 }
 
-// ProvideAnalyticsRepositories creates all analytics-related repositories
 func ProvideAnalyticsRepositories(db *gorm.DB) *AnalyticsRepositories {
 	return &AnalyticsRepositories{
 		ProviderModel: analyticsRepo.NewProviderModelRepository(db),
 	}
 }
 
-// ProvidePromptRepositories creates all prompt-related repositories
 func ProvidePromptRepositories(db *gorm.DB, redisDB *database.RedisDB) *PromptRepositories {
 	return &PromptRepositories{
 		Prompt:         promptRepo.NewPromptRepository(db),
@@ -670,21 +627,18 @@ func ProvidePromptRepositories(db *gorm.DB, redisDB *database.RedisDB) *PromptRe
 	}
 }
 
-// ProvideCredentialsRepositories creates credentials repository container
 func ProvideCredentialsRepositories(db *gorm.DB) *CredentialsRepositories {
 	return &CredentialsRepositories{
 		ProviderCredential: credentialsRepo.NewProviderCredentialRepository(db),
 	}
 }
 
-// ProvidePlaygroundRepositories creates playground repository container
 func ProvidePlaygroundRepositories(db *gorm.DB) *PlaygroundRepositories {
 	return &PlaygroundRepositories{
 		Session: playgroundRepo.NewSessionRepository(db),
 	}
 }
 
-// ProvideEvaluationRepositories creates evaluation repository container
 func ProvideEvaluationRepositories(db *gorm.DB) *EvaluationRepositories {
 	return &EvaluationRepositories{
 		ScoreConfig:    evaluationRepo.NewScoreConfigRepository(db),
@@ -695,7 +649,6 @@ func ProvideEvaluationRepositories(db *gorm.DB) *EvaluationRepositories {
 	}
 }
 
-// ProvideRepositories creates all repository containers
 func ProvideRepositories(dbs *DatabaseContainer, logger *slog.Logger) *RepositoryContainer {
 	return &RepositoryContainer{
 		User:          ProvideUserRepositories(dbs.Postgres.DB),
@@ -712,7 +665,6 @@ func ProvideRepositories(dbs *DatabaseContainer, logger *slog.Logger) *Repositor
 	}
 }
 
-// ProvideUserServices creates all user-related services
 func ProvideUserServices(
 	userRepos *UserRepositories,
 	authRepos *AuthRepositories,
@@ -734,7 +686,6 @@ func ProvideUserServices(
 	}
 }
 
-// ProvideAuthServices creates all auth-related services with proper dependencies
 func ProvideAuthServices(
 	cfg *config.Config,
 	userRepos *UserRepositories,
@@ -823,7 +774,6 @@ func ProvideAuthServices(
 	}
 }
 
-// ProvideOrganizationServices creates all organization-related services
 func ProvideOrganizationServices(
 	userRepos *UserRepositories,
 	authRepos *AuthRepositories,
@@ -874,8 +824,7 @@ func ProvideOrganizationServices(
 	return orgSvc, memberSvc, projectSvc, invitationSvc, settingsSvc
 }
 
-// ProvideObservabilityServices creates all observability-related services.
-// TelemetryService is created without analytics worker - inject via SetAnalyticsWorker() after startup.
+// TelemetryService created without analytics worker - inject via SetAnalyticsWorker() after startup.
 func ProvideObservabilityServices(
 	observabilityRepos *ObservabilityRepositories,
 	storageRepos *StorageRepositories,
@@ -911,6 +860,7 @@ func ProvideObservabilityServices(
 	return observabilityService.NewServiceRegistry(
 		observabilityRepos.Trace,
 		observabilityRepos.Score,
+		observabilityRepos.ScoreAnalytics,
 		observabilityRepos.Metrics,
 		observabilityRepos.Logs,
 		observabilityRepos.GenAIEvents,
@@ -926,7 +876,6 @@ func ProvideObservabilityServices(
 	)
 }
 
-// ProvideBillingServices creates all billing-related services
 func ProvideBillingServices(
 	billingRepos *BillingRepositories,
 	logger *slog.Logger,
@@ -946,7 +895,6 @@ func ProvideBillingServices(
 	}
 }
 
-// ProvideAnalyticsServices creates all analytics-related services
 func ProvideAnalyticsServices(
 	analyticsRepos *AnalyticsRepositories,
 ) *AnalyticsServices {
@@ -957,7 +905,6 @@ func ProvideAnalyticsServices(
 	}
 }
 
-// ProvidePromptServices creates all prompt-related services
 func ProvidePromptServices(
 	txManager common.TransactionManager,
 	promptRepos *PromptRepositories,
@@ -989,7 +936,6 @@ func ProvidePromptServices(
 	}
 }
 
-// ProvideCredentialsServices creates all credentials-related services
 func ProvideCredentialsServices(
 	credentialsRepos *CredentialsRepositories,
 	analyticsRepos *AnalyticsRepositories,
@@ -1021,7 +967,6 @@ func ProvideCredentialsServices(
 	}, nil
 }
 
-// ProvidePlaygroundServices creates all playground-related services
 func ProvidePlaygroundServices(
 	playgroundRepos *PlaygroundRepositories,
 	credentialsService credentialsDomain.ProviderCredentialService,
@@ -1042,7 +987,6 @@ func ProvidePlaygroundServices(
 	}
 }
 
-// ProvideEvaluationServices creates all evaluation-related services
 func ProvideEvaluationServices(
 	evaluationRepos *EvaluationRepositories,
 	observabilityRepos *ObservabilityRepositories,
@@ -1109,7 +1053,6 @@ func (s *simpleBillingOrgService) GetPaymentMethod(ctx context.Context, orgID ul
 	return nil, nil
 }
 
-// ProvideEnterpriseServices creates all enterprise services using build tags
 func ProvideEnterpriseServices(cfg *config.Config, logger *slog.Logger) *EnterpriseContainer {
 	return &EnterpriseContainer{
 		SSO:        sso.New(),         // Uses stub or real based on build tags
@@ -1119,7 +1062,6 @@ func ProvideEnterpriseServices(cfg *config.Config, logger *slog.Logger) *Enterpr
 	}
 }
 
-// HealthCheck checks health of all providers (mode-aware)
 func (pc *ProviderContainer) HealthCheck() map[string]string {
 	health := make(map[string]string)
 
@@ -1177,7 +1119,6 @@ func (pc *ProviderContainer) HealthCheck() map[string]string {
 	return health
 }
 
-// Shutdown gracefully shuts down all providers
 func (pc *ProviderContainer) Shutdown() error {
 	var lastErr error
 	logger := pc.Core.Logger

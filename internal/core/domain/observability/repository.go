@@ -11,7 +11,6 @@ import (
 // TraceRepository defines the interface for trace and span operations (ClickHouse).
 // Traces are virtual (derived from root spans where parent_span_id IS NULL).
 type TraceRepository interface {
-	// Span Operations
 	InsertSpan(ctx context.Context, span *Span) error
 	InsertSpanBatch(ctx context.Context, spans []*Span) error
 	DeleteSpan(ctx context.Context, spanID string) error
@@ -22,7 +21,6 @@ type TraceRepository interface {
 	GetSpansByFilter(ctx context.Context, filter *SpanFilter) ([]*Span, error)
 	CountSpansByFilter(ctx context.Context, filter *SpanFilter) (int64, error)
 
-	// Trace Operations
 	GetRootSpan(ctx context.Context, traceID string) (*Span, error)
 	GetTraceSummary(ctx context.Context, traceID string) (*TraceSummary, error)
 	ListTraces(ctx context.Context, filter *TraceFilter) ([]*TraceSummary, error)
@@ -33,7 +31,6 @@ type TraceRepository interface {
 	// GetFilterOptions returns available filter values for populating the traces filter UI
 	GetFilterOptions(ctx context.Context, projectID string) (*TraceFilterOptions, error)
 
-	// Analytics
 	GetTracesBySessionID(ctx context.Context, sessionID string) ([]*TraceSummary, error)
 	GetTracesByUserID(ctx context.Context, userID string, filter *TraceFilter) ([]*TraceSummary, error)
 	CalculateTotalCost(ctx context.Context, traceID string) (float64, error)
@@ -43,41 +40,101 @@ type TraceRepository interface {
 	CountSpansByExpression(ctx context.Context, query string, args []interface{}) (int64, error)
 }
 
-// ScoreRepository defines the interface for score data access (ClickHouse)
+// ScoreRepository uses ReplacingMergeTree pattern for eventual consistency.
 type ScoreRepository interface {
-	// Basic operations (ReplacingMergeTree pattern)
 	Create(ctx context.Context, score *Score) error
 	Update(ctx context.Context, score *Score) error
 	Delete(ctx context.Context, id string) error
 	GetByID(ctx context.Context, id string) (*Score, error)
 
-	// Queries
 	GetByTraceID(ctx context.Context, traceID string) ([]*Score, error)
 	GetBySpanID(ctx context.Context, spanID string) ([]*Score, error)
 
-	// Filters
 	GetByFilter(ctx context.Context, filter *ScoreFilter) ([]*Score, error)
 
-	// Batch operations
 	CreateBatch(ctx context.Context, scores []*Score) error
 
-	// Count
 	Count(ctx context.Context, filter *ScoreFilter) (int64, error)
 
 	ExistsByConfigName(ctx context.Context, projectID, configName string) (bool, error)
 
-	// Aggregations for experiment comparison
 	// Returns: scoreName -> experimentID -> aggregation
 	GetAggregationsByExperiments(ctx context.Context, projectID string, experimentIDs []string) (map[string]map[string]*ScoreAggregation, error)
 }
 
-// ScoreAggregation holds statistical metrics for score aggregations.
 type ScoreAggregation struct {
 	Mean   float64 `json:"mean"`
 	StdDev float64 `json:"std_dev"`
 	Min    float64 `json:"min"`
 	Max    float64 `json:"max"`
 	Count  int64   `json:"count"`
+}
+
+type ScoreAnalyticsFilter struct {
+	ProjectID        string     `json:"project_id"`
+	ScoreName        string     `json:"score_name"`
+	CompareScoreName *string    `json:"compare_score_name,omitempty"`
+	FromTimestamp    *time.Time `json:"from_timestamp,omitempty"`
+	ToTimestamp      *time.Time `json:"to_timestamp,omitempty"`
+	Interval         string     `json:"interval"` // hour, day, week
+}
+
+type ScoreStatistics struct {
+	Count       int64    `json:"count"`
+	Mean        float64  `json:"mean"`
+	StdDev      float64  `json:"std_dev"`
+	Min         float64  `json:"min"`
+	Max         float64  `json:"max"`
+	Median      float64  `json:"median"`
+	Mode        *string  `json:"mode,omitempty"`         // For categorical
+	ModePercent *float64 `json:"mode_percent,omitempty"` // For categorical
+}
+
+type TimeSeriesPoint struct {
+	Timestamp time.Time `json:"timestamp"`
+	AvgValue  float64   `json:"avg_value"`
+	Count     int64     `json:"count"`
+}
+
+type DistributionBin struct {
+	BinStart float64 `json:"bin_start"`
+	BinEnd   float64 `json:"bin_end"`
+	Count    int64   `json:"count"`
+}
+
+type HeatmapCell struct {
+	Row      int     `json:"row"`
+	Col      int     `json:"col"`
+	Value    int64   `json:"value"`
+	RowLabel string  `json:"row_label"`
+	ColLabel string  `json:"col_label"`
+}
+
+type ComparisonMetrics struct {
+	MatchedCount        int64   `json:"matched_count"`
+	PearsonCorrelation  float64 `json:"pearson_correlation"`
+	SpearmanCorrelation float64 `json:"spearman_correlation"`
+	MAE                 float64 `json:"mae"`
+	RMSE                float64 `json:"rmse"`
+	CohensKappa         float64 `json:"cohens_kappa,omitempty"`
+	OverallAgreement    float64 `json:"overall_agreement,omitempty"`
+}
+
+type ScoreAnalyticsResponse struct {
+	Statistics   *ScoreStatistics   `json:"statistics"`
+	TimeSeries   []TimeSeriesPoint  `json:"time_series"`
+	Distribution []DistributionBin  `json:"distribution"`
+	Heatmap      []HeatmapCell      `json:"heatmap,omitempty"`
+	Comparison   *ComparisonMetrics `json:"comparison,omitempty"`
+}
+
+type ScoreAnalyticsRepository interface {
+	GetStatistics(ctx context.Context, filter *ScoreAnalyticsFilter) (*ScoreStatistics, error)
+	GetTimeSeries(ctx context.Context, filter *ScoreAnalyticsFilter) ([]TimeSeriesPoint, error)
+	GetDistribution(ctx context.Context, filter *ScoreAnalyticsFilter, bins int) ([]DistributionBin, error)
+	GetHeatmap(ctx context.Context, filter *ScoreAnalyticsFilter, bins int) ([]HeatmapCell, error)
+	GetComparisonMetrics(ctx context.Context, filter *ScoreAnalyticsFilter) (*ComparisonMetrics, error)
+	GetDistinctScoreNames(ctx context.Context, projectID string) ([]string, error)
 }
 
 type TraceFilter struct {
@@ -107,10 +164,8 @@ type TraceFilter struct {
 }
 
 type SpanFilter struct {
-	// Scope
 	ProjectID string // Required for scoping queries to project
 
-	// Domain filters
 	TraceID      *string
 	ParentID     *string
 	Type         *string
@@ -126,15 +181,12 @@ type SpanFilter struct {
 	Level        *string
 	IsCompleted  *bool
 
-	// Pagination (embedded for DRY)
 	pagination.Params
 }
 
 type ScoreFilter struct {
-	// Scope
 	ProjectID string // Required for scoping queries to project
 
-	// Domain filters
 	TraceID   *string
 	SpanID    *string
 	Name      *string
@@ -145,11 +197,10 @@ type ScoreFilter struct {
 	StartTime *time.Time
 	EndTime   *time.Time
 
-	// Pagination (embedded for DRY)
 	pagination.Params
 }
 
-// TraceFilterOptions represents available filter values for populating filter UI
+// TraceFilterOptions represents available values for filter UI dropdowns.
 type TraceFilterOptions struct {
 	Models        []string `json:"models"`
 	Providers     []string `json:"providers"`
@@ -162,51 +213,40 @@ type TraceFilterOptions struct {
 	DurationRange *Range   `json:"duration_range"`
 }
 
-// Range represents a min/max numeric range for filter options
 type Range struct {
 	Min float64 `json:"min"`
 	Max float64 `json:"max"`
 }
 
-// TelemetryDeduplicationRepository defines methods for telemetry deduplication
 type TelemetryDeduplicationRepository interface {
-	// Atomic claim operations for deduplication
+	// Atomic claim for deduplication - returns which IDs were successfully claimed vs already processed.
 	ClaimEvents(ctx context.Context, projectID ulid.ULID, batchID ulid.ULID, dedupIDs []string, ttl time.Duration) (claimed []string, duplicates []string, err error)
 	ReleaseEvents(ctx context.Context, dedupIDs []string) error
 
-	// Individual operations
 	CheckDuplicate(ctx context.Context, dedupID string) (bool, error)
 	RegisterEvent(ctx context.Context, dedupID string, batchID ulid.ULID, projectID ulid.ULID, ttl time.Duration) error
 	Exists(ctx context.Context, dedupID string) (bool, error)
 	Create(ctx context.Context, dedup *TelemetryEventDeduplication) error
 	Delete(ctx context.Context, dedupID string) error
 
-	// Batch operations
 	CheckBatchDuplicates(ctx context.Context, dedupIDs []string) ([]string, error)
 	CreateBatch(ctx context.Context, dedups []*TelemetryEventDeduplication) error
 
-	// Statistics
 	CountByProjectID(ctx context.Context, projectID ulid.ULID) (int64, error)
 }
 
-// MetricsRepository defines the interface for OTLP metrics data access (ClickHouse)
 type MetricsRepository interface {
-	// Batch operations (primary API for metrics ingestion)
 	CreateMetricSumBatch(ctx context.Context, metricsSums []*MetricSum) error
 	CreateMetricGaugeBatch(ctx context.Context, metricsGauges []*MetricGauge) error
 	CreateMetricHistogramBatch(ctx context.Context, metricsHistograms []*MetricHistogram) error
 	CreateMetricExponentialHistogramBatch(ctx context.Context, metricsExpHistograms []*MetricExponentialHistogram) error
 }
 
-// LogsRepository defines the interface for OTLP logs data access (ClickHouse)
 type LogsRepository interface {
-	// Batch operations (primary API for logs ingestion)
 	CreateLogBatch(ctx context.Context, logs []*Log) error
 }
 
-// GenAIEventsRepository defines the interface for OTLP GenAI events data access (ClickHouse)
 type GenAIEventsRepository interface {
-	// Batch operations (primary API for GenAI events ingestion)
 	CreateGenAIEventBatch(ctx context.Context, events []*GenAIEvent) error
 }
 

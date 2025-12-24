@@ -9,6 +9,7 @@ import {
   FileText,
   FlaskConical,
   Database,
+  BarChart3,
 } from 'lucide-react'
 
 export const ROUTES: Route[] = [
@@ -113,6 +114,15 @@ export const ROUTES: Route[] = [
     title: 'Experiments',
     pathname: '/projects/[projectSlug]/experiments',
     icon: FlaskConical,
+    section: RouteSection.Main,
+    group: RouteGroup.Evaluations,
+    rbacScope: 'projects:read',
+    show: ({ currentProjectSlug }) => !!currentProjectSlug,
+  },
+  {
+    title: 'Scores',
+    pathname: '/projects/[projectSlug]/scores',
+    icon: BarChart3,
     section: RouteSection.Main,
     group: RouteGroup.Evaluations,
     rbacScope: 'projects:read',
