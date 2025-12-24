@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { useParams, usePathname } from 'next/navigation'
-import { Settings, Key, Puzzle, Shield, AlertTriangle, Bot } from 'lucide-react'
+import { Settings, Key, Puzzle, Shield, AlertTriangle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { buttonVariants } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -33,11 +33,6 @@ export function ProjectSettingsNav({ className, ...props }: ProjectSettingsNavPr
       title: 'API Keys',
       href: `/projects/${projectSlug}/settings/api-keys`,
       icon: <Key size={18} />,
-    },
-    {
-      title: 'AI Providers',
-      href: `/projects/${projectSlug}/settings/ai-providers`,
-      icon: <Bot size={18} />,
     },
     {
       title: 'Integrations',

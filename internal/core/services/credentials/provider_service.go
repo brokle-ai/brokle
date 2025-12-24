@@ -51,18 +51,17 @@ func (s *providerCredentialService) Create(ctx context.Context, req *credentials
 		return nil, appErrors.NewValidationError("Name required", "Configuration name is required")
 	}
 
-	// Check name uniqueness within project
-	existing, err := s.repo.GetByProjectAndName(ctx, req.ProjectID, req.Name)
+	existing, err := s.repo.GetByOrgAndName(ctx, req.OrganizationID, req.Name)
 	if err != nil {
 		s.logger.Error("failed to check name uniqueness",
 			"error", err,
-			"project_id", req.ProjectID,
+			"organization_id", req.OrganizationID,
 			"name", req.Name,
 		)
 		return nil, appErrors.NewInternalError("Failed to check name uniqueness", err)
 	}
 	if existing != nil {
-		return nil, appErrors.NewConflictError(fmt.Sprintf("A configuration named '%s' already exists in this project", req.Name))
+		return nil, appErrors.NewConflictError(fmt.Sprintf("A configuration named '%s' already exists in this organization", req.Name))
 	}
 
 	// Custom provider validation
@@ -102,7 +101,7 @@ func (s *providerCredentialService) Create(ctx context.Context, req *credentials
 	if err != nil {
 		s.logger.Error("failed to encrypt API key",
 			"error", err,
-			"project_id", req.ProjectID,
+			"organization_id", req.OrganizationID,
 			"adapter", req.Adapter,
 		)
 		return nil, appErrors.NewInternalError("Failed to secure API key", err)
@@ -123,25 +122,25 @@ func (s *providerCredentialService) Create(ctx context.Context, req *credentials
 	}
 
 	credential := &credentialsDomain.ProviderCredential{
-		ID:           ulid.New(),
-		ProjectID:    req.ProjectID,
-		Name:         req.Name,
-		Adapter:      req.Adapter,
-		EncryptedKey: encryptedKey,
-		KeyPreview:   keyPreview,
-		BaseURL:      req.BaseURL,
-		Config:       req.Config,
-		CustomModels: req.CustomModels,
-		Headers:      encryptedHeaders,
-		CreatedBy:    req.CreatedBy,
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
+		ID:             ulid.New(),
+		OrganizationID: req.OrganizationID,
+		Name:           req.Name,
+		Adapter:        req.Adapter,
+		EncryptedKey:   encryptedKey,
+		KeyPreview:     keyPreview,
+		BaseURL:        req.BaseURL,
+		Config:         req.Config,
+		CustomModels:   req.CustomModels,
+		Headers:        encryptedHeaders,
+		CreatedBy:      req.CreatedBy,
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
 	}
 
 	if err := s.repo.Create(ctx, credential); err != nil {
 		s.logger.Error("failed to create credential",
 			"error", err,
-			"project_id", req.ProjectID,
+			"organization_id", req.OrganizationID,
 			"name", req.Name,
 			"adapter", req.Adapter,
 		)
@@ -152,7 +151,7 @@ func (s *providerCredentialService) Create(ctx context.Context, req *credentials
 	}
 
 	s.logger.Info("provider credential created",
-		"project_id", req.ProjectID,
+		"organization_id", req.OrganizationID,
 		"credential_id", credential.ID,
 		"name", req.Name,
 		"adapter", req.Adapter,
@@ -161,8 +160,8 @@ func (s *providerCredentialService) Create(ctx context.Context, req *credentials
 	return s.toResponseWithHeaders(credential), nil
 }
 
-func (s *providerCredentialService) Update(ctx context.Context, id ulid.ULID, projectID ulid.ULID, req *credentialsDomain.UpdateCredentialRequest) (*credentialsDomain.ProviderCredentialResponse, error) {
-	credential, err := s.repo.GetByID(ctx, id, projectID)
+func (s *providerCredentialService) Update(ctx context.Context, id ulid.ULID, orgID ulid.ULID, req *credentialsDomain.UpdateCredentialRequest) (*credentialsDomain.ProviderCredentialResponse, error) {
+	credential, err := s.repo.GetByID(ctx, id, orgID)
 	if err != nil {
 		if errors.Is(err, credentialsDomain.ErrCredentialNotFound) {
 			return nil, appErrors.NewNotFoundError("Credential not found")
@@ -170,13 +169,12 @@ func (s *providerCredentialService) Update(ctx context.Context, id ulid.ULID, pr
 		return nil, appErrors.NewInternalError("Failed to get credential", err)
 	}
 
-	// Check name uniqueness if being updated
 	if req.Name != nil && *req.Name != credential.Name {
 		trimmedName := strings.TrimSpace(*req.Name)
 		if trimmedName == "" {
 			return nil, appErrors.NewValidationError("Name required", "Configuration name cannot be empty")
 		}
-		existing, err := s.repo.GetByProjectAndName(ctx, credential.ProjectID, trimmedName)
+		existing, err := s.repo.GetByOrgAndName(ctx, credential.OrganizationID, trimmedName)
 		if err != nil {
 			return nil, appErrors.NewInternalError("Failed to check name uniqueness", err)
 		}
@@ -245,7 +243,7 @@ func (s *providerCredentialService) Update(ctx context.Context, id ulid.ULID, pr
 
 	credential.UpdatedAt = time.Now()
 
-	if err := s.repo.Update(ctx, credential, projectID); err != nil {
+	if err := s.repo.Update(ctx, credential, orgID); err != nil {
 		s.logger.Error("failed to update credential",
 			"error", err,
 			"credential_id", id,
@@ -264,8 +262,8 @@ func (s *providerCredentialService) Update(ctx context.Context, id ulid.ULID, pr
 	return s.toResponseWithHeaders(credential), nil
 }
 
-func (s *providerCredentialService) GetByID(ctx context.Context, id ulid.ULID, projectID ulid.ULID) (*credentialsDomain.ProviderCredentialResponse, error) {
-	credential, err := s.repo.GetByID(ctx, id, projectID)
+func (s *providerCredentialService) GetByID(ctx context.Context, id ulid.ULID, orgID ulid.ULID) (*credentialsDomain.ProviderCredentialResponse, error) {
+	credential, err := s.repo.GetByID(ctx, id, orgID)
 	if err != nil {
 		if errors.Is(err, credentialsDomain.ErrCredentialNotFound) {
 			return nil, appErrors.NewNotFoundError("Credential not found")
@@ -275,8 +273,8 @@ func (s *providerCredentialService) GetByID(ctx context.Context, id ulid.ULID, p
 	return s.toResponseWithHeaders(credential), nil
 }
 
-func (s *providerCredentialService) GetByName(ctx context.Context, projectID ulid.ULID, name string) (*credentialsDomain.ProviderCredentialResponse, error) {
-	credential, err := s.repo.GetByProjectAndName(ctx, projectID, name)
+func (s *providerCredentialService) GetByName(ctx context.Context, orgID ulid.ULID, name string) (*credentialsDomain.ProviderCredentialResponse, error) {
+	credential, err := s.repo.GetByOrgAndName(ctx, orgID, name)
 	if err != nil {
 		return nil, appErrors.NewInternalError("Failed to retrieve credential", err)
 	}
@@ -286,22 +284,22 @@ func (s *providerCredentialService) GetByName(ctx context.Context, projectID uli
 	return s.toResponseWithHeaders(credential), nil
 }
 
-func (s *providerCredentialService) List(ctx context.Context, projectID ulid.ULID) ([]*credentialsDomain.ProviderCredentialResponse, error) {
-	credentials, err := s.repo.ListByProject(ctx, projectID)
+func (s *providerCredentialService) List(ctx context.Context, orgID ulid.ULID) ([]*credentialsDomain.ProviderCredentialResponse, error) {
+	credentials, err := s.repo.ListByOrganization(ctx, orgID)
 	if err != nil {
 		return nil, appErrors.NewInternalError("Failed to list credentials", err)
 	}
 
 	responses := make([]*credentialsDomain.ProviderCredentialResponse, len(credentials))
 	for i, cred := range credentials {
-		responses[i] = s.toResponseWithHeaders(cred)
+		responses[i] = cred.ToResponse() // Use safe response without decrypted headers
 	}
 	return responses, nil
 }
 
-func (s *providerCredentialService) Delete(ctx context.Context, id ulid.ULID, projectID ulid.ULID) error {
+func (s *providerCredentialService) Delete(ctx context.Context, id ulid.ULID, orgID ulid.ULID) error {
 	// Get credential first for logging
-	credential, err := s.repo.GetByID(ctx, id, projectID)
+	credential, err := s.repo.GetByID(ctx, id, orgID)
 	if err != nil {
 		if errors.Is(err, credentialsDomain.ErrCredentialNotFound) {
 			return appErrors.NewNotFoundError("Credential not found")
@@ -309,7 +307,7 @@ func (s *providerCredentialService) Delete(ctx context.Context, id ulid.ULID, pr
 		return appErrors.NewInternalError("Failed to get credential", err)
 	}
 
-	if err := s.repo.Delete(ctx, id, projectID); err != nil {
+	if err := s.repo.Delete(ctx, id, orgID); err != nil {
 		if errors.Is(err, credentialsDomain.ErrCredentialNotFound) {
 			return appErrors.NewNotFoundError("Credential not found")
 		}
@@ -324,8 +322,8 @@ func (s *providerCredentialService) Delete(ctx context.Context, id ulid.ULID, pr
 	return nil
 }
 
-func (s *providerCredentialService) GetDecryptedByID(ctx context.Context, credentialID ulid.ULID, projectID ulid.ULID) (*credentialsDomain.DecryptedKeyConfig, error) {
-	credential, err := s.repo.GetByID(ctx, credentialID, projectID)
+func (s *providerCredentialService) GetDecryptedByID(ctx context.Context, credentialID ulid.ULID, orgID ulid.ULID) (*credentialsDomain.DecryptedKeyConfig, error) {
+	credential, err := s.repo.GetByID(ctx, credentialID, orgID)
 	if err != nil {
 		if errors.Is(err, credentialsDomain.ErrCredentialNotFound) {
 			return nil, credentialsDomain.ErrCredentialNotFound
@@ -414,8 +412,8 @@ func (s *providerCredentialService) decryptCredential(credential *credentialsDom
 // Requires credential_id and validates that the credential's adapter matches.
 // Returns ErrAdapterMismatch if the credential's adapter doesn't match the expected adapter.
 // Returns ErrCredentialNotFound if the credential doesn't exist.
-func (s *providerCredentialService) GetExecutionConfig(ctx context.Context, projectID ulid.ULID, credentialID ulid.ULID, adapter credentialsDomain.Provider) (*credentialsDomain.DecryptedKeyConfig, error) {
-	config, err := s.GetDecryptedByID(ctx, credentialID, projectID)
+func (s *providerCredentialService) GetExecutionConfig(ctx context.Context, orgID ulid.ULID, credentialID ulid.ULID, adapter credentialsDomain.Provider) (*credentialsDomain.DecryptedKeyConfig, error) {
+	config, err := s.GetDecryptedByID(ctx, credentialID, orgID)
 	if err != nil {
 		return nil, err // Don't convert - let caller handle
 	}

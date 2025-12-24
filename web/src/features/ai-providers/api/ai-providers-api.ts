@@ -1,6 +1,9 @@
 /**
  * AI Providers API Client
  * CRUD operations and connection testing for AI provider credentials
+ *
+ * Note: AI provider credentials are organization-scoped, not project-scoped.
+ * This allows sharing credentials across all projects in an organization.
  */
 
 import { BrokleAPIClient } from '@/lib/api/core/client'
@@ -17,40 +20,40 @@ import type {
 const client = new BrokleAPIClient('/api')
 
 /**
- * List all AI provider credentials for a project
+ * List all AI provider credentials for an organization
  *
- * @param projectId - Project ULID
+ * @param orgId - Organization ULID
  * @returns List of configured provider credentials
  *
  * @example
  * ```ts
- * const credentials = await listProviderCredentials('proj_123')
+ * const credentials = await listProviderCredentials('org_123')
  * ```
  */
 export async function listProviderCredentials(
-  projectId: string
+  orgId: string
 ): Promise<AIProviderCredential[]> {
-  const endpoint = `/v1/projects/${projectId}/credentials/ai`
+  const endpoint = `/v1/organizations/${orgId}/credentials/ai`
   return client.get<AIProviderCredential[]>(endpoint)
 }
 
 /**
  * Get a specific AI provider credential by ID
  *
- * @param projectId - Project ULID
+ * @param orgId - Organization ULID
  * @param credentialId - Credential ULID
  * @returns Provider credential details
  *
  * @example
  * ```ts
- * const credential = await getProviderCredential('proj_123', 'cred_456')
+ * const credential = await getProviderCredential('org_123', 'cred_456')
  * ```
  */
 export async function getProviderCredential(
-  projectId: string,
+  orgId: string,
   credentialId: string
 ): Promise<AIProviderCredential> {
-  const endpoint = `/v1/projects/${projectId}/credentials/ai/${credentialId}`
+  const endpoint = `/v1/organizations/${orgId}/credentials/ai/${credentialId}`
   return client.get<AIProviderCredential>(endpoint)
 }
 
@@ -60,13 +63,13 @@ export async function getProviderCredential(
  * IMPORTANT: The API key is encrypted at rest. Only the key_preview
  * (masked version) is returned in responses.
  *
- * @param projectId - Project ULID
+ * @param orgId - Organization ULID
  * @param data - Provider credential data including name and adapter type
  * @returns Created credential
  *
  * @example
  * ```ts
- * const credential = await createProviderCredential('proj_123', {
+ * const credential = await createProviderCredential('org_123', {
  *   name: 'OpenAI Production',
  *   adapter: 'openai',
  *   api_key: 'sk-...',
@@ -74,54 +77,54 @@ export async function getProviderCredential(
  * ```
  */
 export async function createProviderCredential(
-  projectId: string,
+  orgId: string,
   data: CreateProviderRequest
 ): Promise<AIProviderCredential> {
-  const endpoint = `/v1/projects/${projectId}/credentials/ai`
+  const endpoint = `/v1/organizations/${orgId}/credentials/ai`
   return client.post<AIProviderCredential, CreateProviderRequest>(endpoint, data)
 }
 
 /**
  * Update an existing AI provider credential
  *
- * @param projectId - Project ULID
+ * @param orgId - Organization ULID
  * @param credentialId - Credential ULID to update
  * @param data - Fields to update
  * @returns Updated credential
  *
  * @example
  * ```ts
- * const credential = await updateProviderCredential('proj_123', 'cred_456', {
+ * const credential = await updateProviderCredential('org_123', 'cred_456', {
  *   name: 'OpenAI Development',
  *   api_key: 'sk-new-key...',
  * })
  * ```
  */
 export async function updateProviderCredential(
-  projectId: string,
+  orgId: string,
   credentialId: string,
   data: UpdateProviderRequest
 ): Promise<AIProviderCredential> {
-  const endpoint = `/v1/projects/${projectId}/credentials/ai/${credentialId}`
+  const endpoint = `/v1/organizations/${orgId}/credentials/ai/${credentialId}`
   return client.patch<AIProviderCredential, UpdateProviderRequest>(endpoint, data)
 }
 
 /**
  * Delete an AI provider credential by ID
  *
- * @param projectId - Project ULID
+ * @param orgId - Organization ULID
  * @param credentialId - Credential ULID to delete
  *
  * @example
  * ```ts
- * await deleteProviderCredential('proj_123', 'cred_456')
+ * await deleteProviderCredential('org_123', 'cred_456')
  * ```
  */
 export async function deleteProviderCredential(
-  projectId: string,
+  orgId: string,
   credentialId: string
 ): Promise<void> {
-  const endpoint = `/v1/projects/${projectId}/credentials/ai/${credentialId}`
+  const endpoint = `/v1/organizations/${orgId}/credentials/ai/${credentialId}`
   await client.delete<void>(endpoint)
 }
 
@@ -130,13 +133,13 @@ export async function deleteProviderCredential(
  *
  * Use this to validate API keys before storing them.
  *
- * @param projectId - Project ULID
+ * @param orgId - Organization ULID
  * @param data - Connection details to test
  * @returns Success status and optional error message
  *
  * @example
  * ```ts
- * const result = await testProviderConnection('proj_123', {
+ * const result = await testProviderConnection('org_123', {
  *   adapter: 'openai',
  *   api_key: 'sk-...',
  * })
@@ -148,10 +151,10 @@ export async function deleteProviderCredential(
  * ```
  */
 export async function testProviderConnection(
-  projectId: string,
+  orgId: string,
   data: TestConnectionRequest
 ): Promise<TestConnectionResponse> {
-  const endpoint = `/v1/projects/${projectId}/credentials/ai/test`
+  const endpoint = `/v1/organizations/${orgId}/credentials/ai/test`
   return client.post<TestConnectionResponse, TestConnectionRequest>(endpoint, data)
 }
 
@@ -175,18 +178,18 @@ export function createKeyPreview(apiKey: string): string {
 }
 
 /**
- * Get available models for a project based on configured providers
+ * Get available models for an organization based on configured providers
  *
  * Returns models from:
  * - Standard providers (openai, anthropic, etc.): default models + custom_models
  * - Custom provider: only custom_models
  *
- * @param projectId - Project ULID
+ * @param orgId - Organization ULID
  * @returns List of available models
  *
  * @example
  * ```ts
- * const models = await getAvailableModels('proj_123')
+ * const models = await getAvailableModels('org_123')
  * // [
  * //   { id: 'gpt-4o', name: 'GPT-4o', provider: 'openai' },
  * //   { id: 'claude-3-5-sonnet', name: 'Claude 3.5 Sonnet', provider: 'anthropic' },
@@ -194,8 +197,8 @@ export function createKeyPreview(apiKey: string): string {
  * ```
  */
 export async function getAvailableModels(
-  projectId: string
+  orgId: string
 ): Promise<AvailableModel[]> {
-  const endpoint = `/v1/projects/${projectId}/credentials/ai/models`
+  const endpoint = `/v1/organizations/${orgId}/credentials/ai/models`
   return client.get<AvailableModel[]>(endpoint)
 }

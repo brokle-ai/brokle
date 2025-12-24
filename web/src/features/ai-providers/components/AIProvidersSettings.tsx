@@ -30,19 +30,19 @@ import { ProviderDialog } from './ProviderDialog'
 import { ProviderIcon } from './ProviderIcon'
 
 interface AIProvidersSettingsProps {
-  projectId: string
+  orgId: string
   addDialogOpen?: boolean
   onAddDialogOpenChange?: (open: boolean) => void
 }
 
 export function AIProvidersSettings({
-  projectId,
+  orgId,
   addDialogOpen,
   onAddDialogOpenChange,
 }: AIProvidersSettingsProps) {
   // React Query hooks
-  const { data: credentials, isLoading, error, refetch } = useAIProvidersQuery(projectId)
-  const deleteMutation = useDeleteProviderMutation(projectId)
+  const { data: credentials, isLoading, error, refetch } = useAIProvidersQuery(orgId)
+  const deleteMutation = useDeleteProviderMutation(orgId)
 
   // Local state - use controlled or uncontrolled mode
   const [internalAddDialogOpen, setInternalAddDialogOpen] = useState(false)
@@ -216,7 +216,7 @@ export function AIProvidersSettings({
 
       {/* Add Provider Dialog */}
       <ProviderDialog
-        projectId={projectId}
+        orgId={orgId}
         open={isAddDialogOpen}
         onOpenChange={setIsAddDialogOpen}
         existingCredentials={credentials || []}
@@ -225,7 +225,7 @@ export function AIProvidersSettings({
       {/* Edit Provider Dialog */}
       {editingCredential && (
         <ProviderDialog
-          projectId={projectId}
+          orgId={orgId}
           open={!!editingCredential}
           onOpenChange={(open) => !open && setEditingCredential(null)}
           existingCredential={editingCredential}

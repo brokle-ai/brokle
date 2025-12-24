@@ -35,12 +35,12 @@ func (r *providerCredentialRepository) Create(ctx context.Context, credential *c
 	return nil
 }
 
-// GetByID retrieves a credential by its ID within a specific project.
-// Returns ErrCredentialNotFound if not found or belongs to different project.
-func (r *providerCredentialRepository) GetByID(ctx context.Context, id ulid.ULID, projectID ulid.ULID) (*credentialsDomain.ProviderCredential, error) {
+// GetByID retrieves a credential by its ID within a specific organization.
+// Returns ErrCredentialNotFound if not found or belongs to different organization.
+func (r *providerCredentialRepository) GetByID(ctx context.Context, id ulid.ULID, orgID ulid.ULID) (*credentialsDomain.ProviderCredential, error) {
 	var credential credentialsDomain.ProviderCredential
 	err := r.db.WithContext(ctx).
-		Where("id = ? AND project_id = ?", id, projectID).
+		Where("id = ? AND organization_id = ?", id, orgID).
 		First(&credential).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -51,12 +51,12 @@ func (r *providerCredentialRepository) GetByID(ctx context.Context, id ulid.ULID
 	return &credential, nil
 }
 
-// GetByProjectAndName retrieves the credential for a specific project and name.
+// GetByOrgAndName retrieves the credential for a specific organization and name.
 // Returns nil if not found.
-func (r *providerCredentialRepository) GetByProjectAndName(ctx context.Context, projectID ulid.ULID, name string) (*credentialsDomain.ProviderCredential, error) {
+func (r *providerCredentialRepository) GetByOrgAndName(ctx context.Context, orgID ulid.ULID, name string) (*credentialsDomain.ProviderCredential, error) {
 	var credential credentialsDomain.ProviderCredential
 	err := r.db.WithContext(ctx).
-		Where("project_id = ? AND name = ?", projectID, name).
+		Where("organization_id = ? AND name = ?", orgID, name).
 		First(&credential).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -67,12 +67,12 @@ func (r *providerCredentialRepository) GetByProjectAndName(ctx context.Context, 
 	return &credential, nil
 }
 
-// GetByProjectAndAdapter retrieves all credentials for a specific project and adapter type.
+// GetByOrgAndAdapter retrieves all credentials for a specific organization and adapter type.
 // Returns empty slice if none found.
-func (r *providerCredentialRepository) GetByProjectAndAdapter(ctx context.Context, projectID ulid.ULID, adapter credentialsDomain.Provider) ([]*credentialsDomain.ProviderCredential, error) {
+func (r *providerCredentialRepository) GetByOrgAndAdapter(ctx context.Context, orgID ulid.ULID, adapter credentialsDomain.Provider) ([]*credentialsDomain.ProviderCredential, error) {
 	var credentials []*credentialsDomain.ProviderCredential
 	err := r.db.WithContext(ctx).
-		Where("project_id = ? AND adapter = ?", projectID, adapter).
+		Where("organization_id = ? AND adapter = ?", orgID, adapter).
 		Order("created_at DESC").
 		Find(&credentials).Error
 	if err != nil {
@@ -81,27 +81,27 @@ func (r *providerCredentialRepository) GetByProjectAndAdapter(ctx context.Contex
 	return credentials, nil
 }
 
-func (r *providerCredentialRepository) ListByProject(ctx context.Context, projectID ulid.ULID) ([]*credentialsDomain.ProviderCredential, error) {
+func (r *providerCredentialRepository) ListByOrganization(ctx context.Context, orgID ulid.ULID) ([]*credentialsDomain.ProviderCredential, error) {
 	var credentials []*credentialsDomain.ProviderCredential
 	err := r.db.WithContext(ctx).
-		Where("project_id = ?", projectID).
+		Where("organization_id = ?", orgID).
 		Order("created_at DESC").
 		Find(&credentials).Error
 	if err != nil {
-		return nil, fmt.Errorf("list credentials for project %s: %w", projectID, err)
+		return nil, fmt.Errorf("list credentials for organization %s: %w", orgID, err)
 	}
 	return credentials, nil
 }
 
-// Update updates an existing credential within a specific project.
-// Returns ErrCredentialNotFound if not found or belongs to different project.
-func (r *providerCredentialRepository) Update(ctx context.Context, credential *credentialsDomain.ProviderCredential, projectID ulid.ULID) error {
+// Update updates an existing credential within a specific organization.
+// Returns ErrCredentialNotFound if not found or belongs to different organization.
+func (r *providerCredentialRepository) Update(ctx context.Context, credential *credentialsDomain.ProviderCredential, orgID ulid.ULID) error {
 	credential.UpdatedAt = time.Now()
 
-	// Use project-scoped update to prevent cross-project modification
+	// Use organization-scoped update to prevent cross-organization modification
 	result := r.db.WithContext(ctx).
 		Model(&credentialsDomain.ProviderCredential{}).
-		Where("id = ? AND project_id = ?", credential.ID, projectID).
+		Where("id = ? AND organization_id = ?", credential.ID, orgID).
 		Updates(map[string]interface{}{
 			"name":          credential.Name,
 			"encrypted_key": credential.EncryptedKey,
@@ -126,11 +126,11 @@ func (r *providerCredentialRepository) Update(ctx context.Context, credential *c
 	return nil
 }
 
-// Delete removes a credential by ID within a specific project.
-// Returns ErrCredentialNotFound if not found or belongs to different project.
-func (r *providerCredentialRepository) Delete(ctx context.Context, id ulid.ULID, projectID ulid.ULID) error {
+// Delete removes a credential by ID within a specific organization.
+// Returns ErrCredentialNotFound if not found or belongs to different organization.
+func (r *providerCredentialRepository) Delete(ctx context.Context, id ulid.ULID, orgID ulid.ULID) error {
 	result := r.db.WithContext(ctx).
-		Where("id = ? AND project_id = ?", id, projectID).
+		Where("id = ? AND organization_id = ?", id, orgID).
 		Delete(&credentialsDomain.ProviderCredential{})
 	if result.Error != nil {
 		return fmt.Errorf("delete credential: %w", result.Error)
@@ -141,11 +141,11 @@ func (r *providerCredentialRepository) Delete(ctx context.Context, id ulid.ULID,
 	return nil
 }
 
-func (r *providerCredentialRepository) ExistsByProjectAndName(ctx context.Context, projectID ulid.ULID, name string) (bool, error) {
+func (r *providerCredentialRepository) ExistsByOrgAndName(ctx context.Context, orgID ulid.ULID, name string) (bool, error) {
 	var count int64
 	err := r.db.WithContext(ctx).
 		Model(&credentialsDomain.ProviderCredential{}).
-		Where("project_id = ? AND name = ?", projectID, name).
+		Where("organization_id = ? AND name = ?", orgID, name).
 		Count(&count).Error
 	if err != nil {
 		return false, fmt.Errorf("check credential exists: %w", err)

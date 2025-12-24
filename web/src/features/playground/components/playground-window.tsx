@@ -52,6 +52,7 @@ const buildWindowsPayload = (windows: PlaygroundWindow[]): WindowState[] => {
 export function PlaygroundWindow({ index, sessionId, onRegisterExecute, onUnregisterExecute }: PlaygroundWindowProps) {
   const { currentProject } = useProjectOnly()
   const projectId = currentProject?.id || ''
+  const orgId = currentProject?.organizationId || ''
 
   // Select window state (object reference will change, but we compute isDirty from content)
   const windowState = usePlaygroundStore((s) => s.windows[index])
@@ -316,7 +317,7 @@ export function PlaygroundWindow({ index, sessionId, onRegisterExecute, onUnregi
             }}
             disabled={isStreaming}
             compact
-            projectId={projectId}
+            orgId={orgId}
           />
           <Popover open={configOpen} onOpenChange={setConfigOpen}>
             <PopoverTrigger asChild>

@@ -7,18 +7,18 @@ import { ContentSection } from '@/features/settings'
 import { AIProvidersSettings } from '@/features/ai-providers'
 import { useWorkspace } from '@/context/workspace-context'
 
-export default function ProjectAIProvidersPage() {
-  const { currentProject } = useWorkspace()
+export default function OrganizationAIProvidersPage() {
+  const { currentOrganization } = useWorkspace()
   const [addDialogOpen, setAddDialogOpen] = useState(false)
 
-  if (!currentProject) {
+  if (!currentOrganization) {
     return null
   }
 
   return (
     <ContentSection
       title="AI Providers"
-      description="Configure API credentials for AI model providers used in the playground."
+      description="Configure API credentials for AI model providers. These credentials are shared across all projects in this organization."
       action={
         <Button onClick={() => setAddDialogOpen(true)}>
           <Plus className="mr-2 h-4 w-4" />
@@ -27,7 +27,7 @@ export default function ProjectAIProvidersPage() {
       }
     >
       <AIProvidersSettings
-        projectId={currentProject.id}
+        orgId={currentOrganization.id}
         addDialogOpen={addDialogOpen}
         onAddDialogOpenChange={setAddDialogOpen}
       />

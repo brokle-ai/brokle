@@ -274,6 +274,21 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 		orgs.GET("/:orgId/roles/:roleId", s.authMiddleware.RequirePermission("roles:read"), s.handlers.RBAC.GetCustomRole)
 		orgs.PUT("/:orgId/roles/:roleId", s.authMiddleware.RequirePermission("roles:write"), s.handlers.RBAC.UpdateCustomRole)
 		orgs.DELETE("/:orgId/roles/:roleId", s.authMiddleware.RequirePermission("roles:delete"), s.handlers.RBAC.DeleteCustomRole)
+
+		// AI Provider Credentials routes (organization-level)
+		orgCredentials := orgs.Group("/:orgId/credentials")
+		{
+			aiCreds := orgCredentials.Group("/ai")
+			{
+				aiCreds.POST("", s.authMiddleware.RequirePermission("credentials:write"), s.handlers.Credentials.Create)
+				aiCreds.POST("/test", s.authMiddleware.RequirePermission("credentials:write"), s.handlers.Credentials.TestConnection)
+				aiCreds.GET("", s.authMiddleware.RequirePermission("credentials:read"), s.handlers.Credentials.List)
+				aiCreds.GET("/models", s.authMiddleware.RequirePermission("credentials:read"), s.handlers.Credentials.GetAvailableModels)
+				aiCreds.GET("/:credentialId", s.authMiddleware.RequirePermission("credentials:read"), s.handlers.Credentials.Get)
+				aiCreds.PATCH("/:credentialId", s.authMiddleware.RequirePermission("credentials:write"), s.handlers.Credentials.Update)
+				aiCreds.DELETE("/:credentialId", s.authMiddleware.RequirePermission("credentials:write"), s.handlers.Credentials.Delete)
+			}
+		}
 	}
 
 	// Project routes (top-level with optional org filtering)
@@ -338,21 +353,6 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 			}
 		}
 
-		// Credentials routes (AI provider API key management)
-		credentials := projects.Group("/:projectId/credentials")
-		{
-			// AI provider credentials - supports multiple configurations per adapter
-			aiCreds := credentials.Group("/ai")
-			{
-				aiCreds.POST("", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Credentials.Create)
-				aiCreds.POST("/test", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Credentials.TestConnection)
-				aiCreds.GET("", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Credentials.List)
-				aiCreds.GET("/models", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Credentials.GetAvailableModels)
-				aiCreds.GET("/:credentialId", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Credentials.Get)
-				aiCreds.PATCH("/:credentialId", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Credentials.Update)
-				aiCreds.DELETE("/:credentialId", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Credentials.Delete)
-			}
-		}
 	}
 
 	// Analytics routes

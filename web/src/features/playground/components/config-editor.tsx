@@ -13,10 +13,10 @@ interface ConfigEditorProps {
   onChange: (config: ModelConfig) => void
   disabled?: boolean
   hideModelSelector?: boolean
-  projectId?: string
+  orgId?: string
 }
 
-export function ConfigEditor({ config, onChange, disabled, hideModelSelector = false, projectId }: ConfigEditorProps) {
+export function ConfigEditor({ config, onChange, disabled, hideModelSelector = false, orgId }: ConfigEditorProps) {
   const currentConfig = config || {}
 
   const handleChange = (field: string, value: number | boolean | string[] | undefined) => {
@@ -55,7 +55,7 @@ export function ConfigEditor({ config, onChange, disabled, hideModelSelector = f
                 onChange({ ...currentConfig, model, provider, credential_id: credentialId })
               }}
               disabled={disabled}
-              projectId={projectId}
+              orgId={orgId}
             />
             <p className="text-xs text-muted-foreground">
               Select the model for execution

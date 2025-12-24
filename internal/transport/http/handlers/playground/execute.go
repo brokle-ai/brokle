@@ -12,12 +12,12 @@ import (
 
 // ExecuteRequest represents a playground execution request.
 type ExecuteRequest struct {
-	Template        interface{}               `json:"template" binding:"required"`
+	Template        interface{}         `json:"template" binding:"required"`
 	PromptType      prompt.PromptType   `json:"prompt_type" binding:"required"`
-	Variables       map[string]string         `json:"variables"`
+	Variables       map[string]string   `json:"variables"`
 	ConfigOverrides *prompt.ModelConfig `json:"config_overrides"`
-	SessionID       *string                   `json:"session_id,omitempty"` // Optional: updates session's last_run
-	ProjectID       *string                   `json:"project_id"`           // Required: for project-scoped credentials
+	SessionID       *string             `json:"session_id,omitempty"` // Optional: updates session's last_run
+	ProjectID       *string             `json:"project_id"`           // Required: for session access validation
 }
 
 // Execute handles POST /api/v1/playground/execute
@@ -55,6 +55,14 @@ func (h *Handler) Execute(c *gin.Context) {
 		return
 	}
 
+	// Derive organization ID from project (don't trust client-provided org ID)
+	project, err := h.projectService.GetProject(c.Request.Context(), projectID)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+	organizationID := project.OrganizationID
+
 	var sessionID *ulid.ULID
 	if req.SessionID != nil {
 		sid, err := ulid.Parse(*req.SessionID)
@@ -67,6 +75,7 @@ func (h *Handler) Execute(c *gin.Context) {
 
 	domainReq := &playgroundDomain.ExecuteRequest{
 		ProjectID:       projectID,
+		OrganizationID:  organizationID,
 		SessionID:       sessionID,
 		Template:        req.Template,
 		PromptType:      req.PromptType,
