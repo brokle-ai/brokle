@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"brokle/internal/core/domain/evaluation"
+	"brokle/internal/core/domain/observability"
 	appErrors "brokle/pkg/errors"
 	"brokle/pkg/ulid"
 
@@ -125,6 +126,68 @@ func (m *MockDatasetItemRepository) CountByDataset(ctx context.Context, datasetI
 	return args.Get(0).(int64), args.Error(1)
 }
 
+// MockScoreService mocks the observability.ScoreService interface
+type MockScoreService struct {
+	mock.Mock
+}
+
+func (m *MockScoreService) CreateScore(ctx context.Context, score *observability.Score) error {
+	args := m.Called(ctx, score)
+	return args.Error(0)
+}
+
+func (m *MockScoreService) CreateScoreBatch(ctx context.Context, scores []*observability.Score) error {
+	args := m.Called(ctx, scores)
+	return args.Error(0)
+}
+
+func (m *MockScoreService) GetScoreByID(ctx context.Context, id string) (*observability.Score, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*observability.Score), args.Error(1)
+}
+
+func (m *MockScoreService) GetScoresByTraceID(ctx context.Context, traceID string) ([]*observability.Score, error) {
+	args := m.Called(ctx, traceID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*observability.Score), args.Error(1)
+}
+
+func (m *MockScoreService) GetScoresBySpanID(ctx context.Context, spanID string) ([]*observability.Score, error) {
+	args := m.Called(ctx, spanID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*observability.Score), args.Error(1)
+}
+
+func (m *MockScoreService) GetScoresByFilter(ctx context.Context, filter *observability.ScoreFilter) ([]*observability.Score, error) {
+	args := m.Called(ctx, filter)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*observability.Score), args.Error(1)
+}
+
+func (m *MockScoreService) UpdateScore(ctx context.Context, score *observability.Score) error {
+	args := m.Called(ctx, score)
+	return args.Error(0)
+}
+
+func (m *MockScoreService) DeleteScore(ctx context.Context, id string) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
+func (m *MockScoreService) CountScores(ctx context.Context, filter *observability.ScoreFilter) (int64, error) {
+	args := m.Called(ctx, filter)
+	return args.Get(0).(int64), args.Error(1)
+}
+
 func TestExperimentItemService_CreateBatch(t *testing.T) {
 	ctx := context.Background()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
@@ -138,8 +201,9 @@ func TestExperimentItemService_CreateBatch(t *testing.T) {
 		experimentRepo := new(MockExperimentRepository)
 		itemRepo := new(MockExperimentItemRepository)
 		datasetItemRepo := new(MockDatasetItemRepository)
+		scoreService := new(MockScoreService)
 
-		service := NewExperimentItemService(itemRepo, experimentRepo, datasetItemRepo, logger)
+		service := NewExperimentItemService(itemRepo, experimentRepo, datasetItemRepo, scoreService, logger)
 
 		experiment := &evaluation.Experiment{
 			ID:        experimentID,
@@ -182,8 +246,9 @@ func TestExperimentItemService_CreateBatch(t *testing.T) {
 		experimentRepo := new(MockExperimentRepository)
 		itemRepo := new(MockExperimentItemRepository)
 		datasetItemRepo := new(MockDatasetItemRepository)
+		scoreService := new(MockScoreService)
 
-		service := NewExperimentItemService(itemRepo, experimentRepo, datasetItemRepo, logger)
+		service := NewExperimentItemService(itemRepo, experimentRepo, datasetItemRepo, scoreService, logger)
 
 		experiment := &evaluation.Experiment{
 			ID:        experimentID,
@@ -225,8 +290,9 @@ func TestExperimentItemService_CreateBatch(t *testing.T) {
 		experimentRepo := new(MockExperimentRepository)
 		itemRepo := new(MockExperimentItemRepository)
 		datasetItemRepo := new(MockDatasetItemRepository)
+		scoreService := new(MockScoreService)
 
-		service := NewExperimentItemService(itemRepo, experimentRepo, datasetItemRepo, logger)
+		service := NewExperimentItemService(itemRepo, experimentRepo, datasetItemRepo, scoreService, logger)
 
 		experiment := &evaluation.Experiment{
 			ID:        experimentID,
@@ -265,8 +331,9 @@ func TestExperimentItemService_CreateBatch(t *testing.T) {
 		experimentRepo := new(MockExperimentRepository)
 		itemRepo := new(MockExperimentItemRepository)
 		datasetItemRepo := new(MockDatasetItemRepository)
+		scoreService := new(MockScoreService)
 
-		service := NewExperimentItemService(itemRepo, experimentRepo, datasetItemRepo, logger)
+		service := NewExperimentItemService(itemRepo, experimentRepo, datasetItemRepo, scoreService, logger)
 
 		experiment := &evaluation.Experiment{
 			ID:        experimentID,
@@ -301,8 +368,9 @@ func TestExperimentItemService_CreateBatch(t *testing.T) {
 		experimentRepo := new(MockExperimentRepository)
 		itemRepo := new(MockExperimentItemRepository)
 		datasetItemRepo := new(MockDatasetItemRepository)
+		scoreService := new(MockScoreService)
 
-		service := NewExperimentItemService(itemRepo, experimentRepo, datasetItemRepo, logger)
+		service := NewExperimentItemService(itemRepo, experimentRepo, datasetItemRepo, scoreService, logger)
 
 		experiment := &evaluation.Experiment{
 			ID:        experimentID,
@@ -337,8 +405,9 @@ func TestExperimentItemService_CreateBatch(t *testing.T) {
 		experimentRepo := new(MockExperimentRepository)
 		itemRepo := new(MockExperimentItemRepository)
 		datasetItemRepo := new(MockDatasetItemRepository)
+		scoreService := new(MockScoreService)
 
-		service := NewExperimentItemService(itemRepo, experimentRepo, datasetItemRepo, logger)
+		service := NewExperimentItemService(itemRepo, experimentRepo, datasetItemRepo, scoreService, logger)
 
 		experiment := &evaluation.Experiment{
 			ID:        experimentID,
@@ -379,8 +448,9 @@ func TestExperimentItemService_CreateBatch(t *testing.T) {
 		experimentRepo := new(MockExperimentRepository)
 		itemRepo := new(MockExperimentItemRepository)
 		datasetItemRepo := new(MockDatasetItemRepository)
+		scoreService := new(MockScoreService)
 
-		service := NewExperimentItemService(itemRepo, experimentRepo, datasetItemRepo, logger)
+		service := NewExperimentItemService(itemRepo, experimentRepo, datasetItemRepo, scoreService, logger)
 
 		experiment := &evaluation.Experiment{
 			ID:        experimentID,
@@ -419,8 +489,9 @@ func TestExperimentItemService_CreateBatch(t *testing.T) {
 		experimentRepo := new(MockExperimentRepository)
 		itemRepo := new(MockExperimentItemRepository)
 		datasetItemRepo := new(MockDatasetItemRepository)
+		scoreService := new(MockScoreService)
 
-		service := NewExperimentItemService(itemRepo, experimentRepo, datasetItemRepo, logger)
+		service := NewExperimentItemService(itemRepo, experimentRepo, datasetItemRepo, scoreService, logger)
 
 		req := &evaluation.CreateExperimentItemsBatchRequest{
 			Items: []evaluation.CreateExperimentItemRequest{
@@ -449,8 +520,9 @@ func TestExperimentItemService_CreateBatch(t *testing.T) {
 		experimentRepo := new(MockExperimentRepository)
 		itemRepo := new(MockExperimentItemRepository)
 		datasetItemRepo := new(MockDatasetItemRepository)
+		scoreService := new(MockScoreService)
 
-		service := NewExperimentItemService(itemRepo, experimentRepo, datasetItemRepo, logger)
+		service := NewExperimentItemService(itemRepo, experimentRepo, datasetItemRepo, scoreService, logger)
 
 		experiment := &evaluation.Experiment{
 			ID:        experimentID,

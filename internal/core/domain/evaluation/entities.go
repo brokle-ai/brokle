@@ -394,6 +394,7 @@ type ExperimentItem struct {
 	Expected      map[string]interface{} `json:"expected,omitempty" gorm:"type:jsonb;serializer:json"`
 	TrialNumber   int                    `json:"trial_number" gorm:"not null;default:1"`
 	Metadata      map[string]interface{} `json:"metadata,omitempty" gorm:"type:jsonb;serializer:json;default:'{}'"`
+	Error         *string                `json:"error,omitempty" gorm:"type:text"`
 	CreatedAt     time.Time              `json:"created_at" gorm:"not null;autoCreateTime"`
 }
 
@@ -425,6 +426,18 @@ func (ei *ExperimentItem) Validate() []ValidationError {
 	return errors
 }
 
+// ExperimentItemScore represents a score submitted with an experiment item from SDK.
+// These scores are computed by SDK evaluators and bundled with experiment items.
+type ExperimentItemScore struct {
+	Name          string                 `json:"name" binding:"required"`
+	Value         *float64               `json:"value,omitempty"`
+	Type          string                 `json:"type,omitempty"` // NUMERIC, CATEGORICAL, BOOLEAN
+	StringValue   *string                `json:"string_value,omitempty"`
+	Reason        *string                `json:"reason,omitempty"`
+	Metadata      map[string]interface{} `json:"metadata,omitempty"`
+	ScoringFailed *bool                  `json:"scoring_failed,omitempty"`
+}
+
 type CreateExperimentItemRequest struct {
 	DatasetItemID *string                `json:"dataset_item_id,omitempty"`
 	TraceID       *string                `json:"trace_id,omitempty"`
@@ -433,6 +446,10 @@ type CreateExperimentItemRequest struct {
 	Expected      map[string]interface{} `json:"expected,omitempty"`
 	TrialNumber   *int                   `json:"trial_number,omitempty"`
 	Metadata      map[string]interface{} `json:"metadata,omitempty"`
+	// Scores computed by SDK evaluators, bundled with the experiment item
+	Scores []ExperimentItemScore `json:"scores,omitempty"`
+	// Error message if task execution failed
+	Error *string `json:"error,omitempty"`
 }
 
 type CreateExperimentItemsBatchRequest struct {
@@ -449,6 +466,7 @@ type ExperimentItemResponse struct {
 	Expected      map[string]interface{} `json:"expected,omitempty"`
 	TrialNumber   int                    `json:"trial_number"`
 	Metadata      map[string]interface{} `json:"metadata,omitempty"`
+	Error         *string                `json:"error,omitempty"`
 	CreatedAt     time.Time              `json:"created_at"`
 }
 
@@ -468,6 +486,7 @@ func (ei *ExperimentItem) ToResponse() *ExperimentItemResponse {
 		Expected:      ei.Expected,
 		TrialNumber:   ei.TrialNumber,
 		Metadata:      ei.Metadata,
+		Error:         ei.Error,
 		CreatedAt:     ei.CreatedAt,
 	}
 }
