@@ -25,7 +25,7 @@ export interface ProviderConfigField {
 
 export interface AIProviderCredential {
   id: string;
-  project_id: string;
+  organization_id: string;
   name: string; // Unique configuration name (e.g., "OpenAI Production")
   adapter: AIProvider; // API protocol type
   key_preview: string;

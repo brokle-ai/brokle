@@ -252,7 +252,7 @@ export interface ExecuteRequest {
   variables: Record<string, string>
   config_overrides?: ModelConfig
   session_id?: string // Optional: updates session's last_run if provided
-  project_id: string // Required: for project-scoped credential resolution
+  project_id: string // Required: for session access validation
 }
 
 // Execution response

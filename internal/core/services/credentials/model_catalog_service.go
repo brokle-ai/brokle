@@ -13,10 +13,10 @@ import (
 // ModelCatalogService provides model selection for the playground.
 // Combines default models from provider_models table with custom user-defined models.
 type ModelCatalogService interface {
-	// GetAvailableModels returns all available models for a project based on configured providers.
+	// GetAvailableModels returns all available models for an organization based on configured providers.
 	// Standard providers (openai, anthropic, etc.): default models from DB + custom_models
 	// Custom provider: only custom_models (no defaults exist)
-	GetAvailableModels(ctx context.Context, projectID ulid.ULID) ([]*analytics.AvailableModel, error)
+	GetAvailableModels(ctx context.Context, orgID ulid.ULID) ([]*analytics.AvailableModel, error)
 }
 
 type modelCatalogServiceImpl struct {
@@ -37,18 +37,18 @@ func NewModelCatalogService(
 	}
 }
 
-// GetAvailableModels returns all available models for a project based on configured providers.
+// GetAvailableModels returns all available models for an organization based on configured providers.
 // For multiple credentials of the same provider, includes credential info to allow selection.
 func (s *modelCatalogServiceImpl) GetAvailableModels(
 	ctx context.Context,
-	projectID ulid.ULID,
+	orgID ulid.ULID,
 ) ([]*analytics.AvailableModel, error) {
-	// 1. Get all credentials for this project
-	credentials, err := s.credentialRepo.ListByProject(ctx, projectID)
+	// 1. Get all credentials for this organization
+	credentials, err := s.credentialRepo.ListByOrganization(ctx, orgID)
 	if err != nil {
 		s.logger.Error("failed to list credentials",
 			"error", err,
-			"project_id", projectID,
+			"organization_id", orgID,
 		)
 		return nil, appErrors.NewInternalError("Failed to list credentials", err)
 	}

@@ -64,22 +64,22 @@ type TestConnectionRequest struct {
 
 // Create creates a new AI provider credential.
 // @Summary Create AI provider credential
-// @Description Creates a new credential configuration. Each configuration has a unique name within the project.
+// @Description Creates a new credential configuration. Each configuration has a unique name within the organization.
 // @Tags Credentials
 // @Accept json
 // @Produce json
-// @Param projectId path string true "Project ID"
+// @Param orgId path string true "Organization ID"
 // @Param request body CreateRequest true "Credential request"
 // @Success 201 {object} credentials.ProviderCredentialResponse
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 401 {object} response.ErrorResponse
 // @Failure 409 {object} response.ErrorResponse "Name already exists"
 // @Failure 422 {object} response.ErrorResponse "API key validation failed"
-// @Router /api/v1/projects/{projectId}/credentials/ai [post]
+// @Router /api/v1/organizations/{orgId}/credentials/ai [post]
 func (h *Handler) Create(c *gin.Context) {
-	projectID, err := ulid.Parse(c.Param("projectId"))
+	orgID, err := ulid.Parse(c.Param("orgId"))
 	if err != nil {
-		response.Error(c, appErrors.NewValidationError("Invalid project ID", "projectId must be a valid ULID"))
+		response.Error(c, appErrors.NewValidationError("Invalid organization ID", "orgId must be a valid ULID"))
 		return
 	}
 
@@ -96,15 +96,15 @@ func (h *Handler) Create(c *gin.Context) {
 	}
 
 	domainReq := &credentialsDomain.CreateCredentialRequest{
-		ProjectID:    projectID,
-		Name:         req.Name,
-		Adapter:      credentialsDomain.Provider(req.Adapter),
-		APIKey:       req.APIKey,
-		BaseURL:      req.BaseURL,
-		Config:       req.Config,
-		CustomModels: req.CustomModels,
-		Headers:      req.Headers,
-		CreatedBy:    userIDPtr,
+		OrganizationID: orgID,
+		Name:           req.Name,
+		Adapter:        credentialsDomain.Provider(req.Adapter),
+		APIKey:         req.APIKey,
+		BaseURL:        req.BaseURL,
+		Config:         req.Config,
+		CustomModels:   req.CustomModels,
+		Headers:        req.Headers,
+		CreatedBy:      userIDPtr,
 	}
 
 	credential, err := h.service.Create(c.Request.Context(), domainReq)
@@ -122,7 +122,7 @@ func (h *Handler) Create(c *gin.Context) {
 // @Tags Credentials
 // @Accept json
 // @Produce json
-// @Param projectId path string true "Project ID"
+// @Param orgId path string true "Organization ID"
 // @Param credentialId path string true "Credential ID"
 // @Param request body UpdateRequest true "Update request"
 // @Success 200 {object} credentials.ProviderCredentialResponse
@@ -131,11 +131,11 @@ func (h *Handler) Create(c *gin.Context) {
 // @Failure 404 {object} response.ErrorResponse
 // @Failure 409 {object} response.ErrorResponse "Name already exists"
 // @Failure 422 {object} response.ErrorResponse "API key validation failed"
-// @Router /api/v1/projects/{projectId}/credentials/ai/{credentialId} [patch]
+// @Router /api/v1/organizations/{orgId}/credentials/ai/{credentialId} [patch]
 func (h *Handler) Update(c *gin.Context) {
-	projectID, err := ulid.Parse(c.Param("projectId"))
+	orgID, err := ulid.Parse(c.Param("orgId"))
 	if err != nil {
-		response.Error(c, appErrors.NewValidationError("Invalid project ID", "projectId must be a valid ULID"))
+		response.Error(c, appErrors.NewValidationError("Invalid organization ID", "orgId must be a valid ULID"))
 		return
 	}
 
@@ -160,7 +160,7 @@ func (h *Handler) Update(c *gin.Context) {
 		Headers:      req.Headers,
 	}
 
-	credential, err := h.service.Update(c.Request.Context(), credentialID, projectID, domainReq)
+	credential, err := h.service.Update(c.Request.Context(), credentialID, orgID, domainReq)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -169,24 +169,24 @@ func (h *Handler) Update(c *gin.Context) {
 	response.Success(c, credential)
 }
 
-// List lists all AI provider credentials for a project.
+// List lists all AI provider credentials for an organization.
 // @Summary List AI provider credentials
-// @Description Returns all configured AI provider credentials for the project (with masked keys).
+// @Description Returns all configured AI provider credentials for the organization (with masked keys).
 // @Tags Credentials
 // @Produce json
-// @Param projectId path string true "Project ID"
+// @Param orgId path string true "Organization ID"
 // @Success 200 {array} credentials.ProviderCredentialResponse
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 401 {object} response.ErrorResponse
-// @Router /api/v1/projects/{projectId}/credentials/ai [get]
+// @Router /api/v1/organizations/{orgId}/credentials/ai [get]
 func (h *Handler) List(c *gin.Context) {
-	projectID, err := ulid.Parse(c.Param("projectId"))
+	orgID, err := ulid.Parse(c.Param("orgId"))
 	if err != nil {
-		response.Error(c, appErrors.NewValidationError("Invalid project ID", "projectId must be a valid ULID"))
+		response.Error(c, appErrors.NewValidationError("Invalid organization ID", "orgId must be a valid ULID"))
 		return
 	}
 
-	credentials, err := h.service.List(c.Request.Context(), projectID)
+	credentials, err := h.service.List(c.Request.Context(), orgID)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -200,17 +200,17 @@ func (h *Handler) List(c *gin.Context) {
 // @Description Returns the credential configuration for a specific credential ID (with masked key).
 // @Tags Credentials
 // @Produce json
-// @Param projectId path string true "Project ID"
+// @Param orgId path string true "Organization ID"
 // @Param credentialId path string true "Credential ID"
 // @Success 200 {object} credentials.ProviderCredentialResponse
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 401 {object} response.ErrorResponse
 // @Failure 404 {object} response.ErrorResponse
-// @Router /api/v1/projects/{projectId}/credentials/ai/{credentialId} [get]
+// @Router /api/v1/organizations/{orgId}/credentials/ai/{credentialId} [get]
 func (h *Handler) Get(c *gin.Context) {
-	projectID, err := ulid.Parse(c.Param("projectId"))
+	orgID, err := ulid.Parse(c.Param("orgId"))
 	if err != nil {
-		response.Error(c, appErrors.NewValidationError("Invalid project ID", "projectId must be a valid ULID"))
+		response.Error(c, appErrors.NewValidationError("Invalid organization ID", "orgId must be a valid ULID"))
 		return
 	}
 
@@ -220,7 +220,7 @@ func (h *Handler) Get(c *gin.Context) {
 		return
 	}
 
-	credential, err := h.service.GetByID(c.Request.Context(), credentialID, projectID)
+	credential, err := h.service.GetByID(c.Request.Context(), credentialID, orgID)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -234,17 +234,17 @@ func (h *Handler) Get(c *gin.Context) {
 // @Description Removes a credential configuration by its ID.
 // @Tags Credentials
 // @Produce json
-// @Param projectId path string true "Project ID"
+// @Param orgId path string true "Organization ID"
 // @Param credentialId path string true "Credential ID"
 // @Success 204 "No Content"
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 401 {object} response.ErrorResponse
 // @Failure 404 {object} response.ErrorResponse
-// @Router /api/v1/projects/{projectId}/credentials/ai/{credentialId} [delete]
+// @Router /api/v1/organizations/{orgId}/credentials/ai/{credentialId} [delete]
 func (h *Handler) Delete(c *gin.Context) {
-	projectID, err := ulid.Parse(c.Param("projectId"))
+	orgID, err := ulid.Parse(c.Param("orgId"))
 	if err != nil {
-		response.Error(c, appErrors.NewValidationError("Invalid project ID", "projectId must be a valid ULID"))
+		response.Error(c, appErrors.NewValidationError("Invalid organization ID", "orgId must be a valid ULID"))
 		return
 	}
 
@@ -254,7 +254,7 @@ func (h *Handler) Delete(c *gin.Context) {
 		return
 	}
 
-	if err := h.service.Delete(c.Request.Context(), credentialID, projectID); err != nil {
+	if err := h.service.Delete(c.Request.Context(), credentialID, orgID); err != nil {
 		response.Error(c, err)
 		return
 	}
@@ -268,17 +268,16 @@ func (h *Handler) Delete(c *gin.Context) {
 // @Tags Credentials
 // @Accept json
 // @Produce json
-// @Param projectId path string true "Project ID"
+// @Param orgId path string true "Organization ID"
 // @Param request body TestConnectionRequest true "Connection test request"
 // @Success 200 {object} credentials.TestConnectionResponse
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 401 {object} response.ErrorResponse
-// @Router /api/v1/projects/{projectId}/credentials/ai/test [post]
+// @Router /api/v1/organizations/{orgId}/credentials/ai/test [post]
 func (h *Handler) TestConnection(c *gin.Context) {
-	// We don't need projectId for testing, but keep it for route consistency
-	_, err := ulid.Parse(c.Param("projectId"))
+	_, err := ulid.Parse(c.Param("orgId"))
 	if err != nil {
-		response.Error(c, appErrors.NewValidationError("Invalid project ID", "projectId must be a valid ULID"))
+		response.Error(c, appErrors.NewValidationError("Invalid organization ID", "orgId must be a valid ULID"))
 		return
 	}
 
@@ -300,24 +299,24 @@ func (h *Handler) TestConnection(c *gin.Context) {
 	response.Success(c, result)
 }
 
-// GetAvailableModels returns all available LLM models for a project.
+// GetAvailableModels returns all available LLM models for an organization.
 // @Summary Get available models
 // @Description Returns LLM models available based on configured AI providers. Standard providers return default models plus any custom models. Custom providers return only user-defined models.
 // @Tags Credentials
 // @Produce json
-// @Param projectId path string true "Project ID"
+// @Param orgId path string true "Organization ID"
 // @Success 200 {array} analytics.AvailableModel
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 401 {object} response.ErrorResponse
-// @Router /api/v1/projects/{projectId}/credentials/ai/models [get]
+// @Router /api/v1/organizations/{orgId}/credentials/ai/models [get]
 func (h *Handler) GetAvailableModels(c *gin.Context) {
-	projectID, err := ulid.Parse(c.Param("projectId"))
+	orgID, err := ulid.Parse(c.Param("orgId"))
 	if err != nil {
-		response.Error(c, appErrors.NewValidationError("Invalid project ID", "projectId must be a valid ULID"))
+		response.Error(c, appErrors.NewValidationError("Invalid organization ID", "orgId must be a valid ULID"))
 		return
 	}
 
-	models, err := h.modelCatalog.GetAvailableModels(c.Request.Context(), projectID)
+	models, err := h.modelCatalog.GetAvailableModels(c.Request.Context(), orgID)
 	if err != nil {
 		response.Error(c, err)
 		return

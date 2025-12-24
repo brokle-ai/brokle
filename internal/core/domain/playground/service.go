@@ -76,6 +76,7 @@ type ListSessionsRequest struct {
 // ExecuteRequest represents a playground execution request.
 type ExecuteRequest struct {
 	ProjectID       ulid.ULID
+	OrganizationID  ulid.ULID // Required for organization-scoped credential resolution
 	SessionID       *ulid.ULID
 	Template        interface{}
 	PromptType      prompt.PromptType
@@ -94,6 +95,7 @@ type ExecuteResponse struct {
 // StreamRequest represents a streaming execution request.
 type StreamRequest struct {
 	ProjectID       ulid.ULID
+	OrganizationID  ulid.ULID // Required for organization-scoped credential resolution
 	SessionID       *ulid.ULID
 	Template        interface{}
 	PromptType      prompt.PromptType
