@@ -112,6 +112,9 @@ dist
 # Gatsby files
 .cache/
 public
+!web/public/
+!web/public/logo/
+!web/public/logo/*
 
 # Storybook build outputs
 .out
@@ -215,3 +218,7 @@ competitors/
 
 # Moat task system
 .moat/
+
+# Test and documentation directories
+/realtests/
+/claudedocs/

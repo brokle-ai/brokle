@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Brokle Official Icon - Stacked Layers (White for dark backgrounds) -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <g fill="#FFFFFF">
+    <path d="M16 2L28 8V10L16 16L4 10V8L16 2Z"/>
+    <path d="M4 14L16 20L28 14V16L16 22L4 16V14Z"/>
+    <path d="M4 20L16 26L28 20V22L16 28L4 22V20Z"/>
+  </g>
+</svg>
