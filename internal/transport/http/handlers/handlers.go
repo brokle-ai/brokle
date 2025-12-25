@@ -55,6 +55,7 @@ type Handlers struct {
 	OTLPLogs      *observability.OTLPLogsHandler
 	Prompt        *prompt.Handler
 	Playground    *playground.Handler
+	SDKPlayground *playground.SDKPlaygroundHandler
 	Credentials   *credentials.Handler
 	Evaluation    *evaluationHandler.ScoreConfigHandler
 	SDKScore      *evaluationHandler.SDKScoreHandler
@@ -118,6 +119,7 @@ func NewHandlers(
 		OTLPLogs:      observability.NewOTLPLogsHandler(observabilityServices.StreamProducer, observabilityServices.OTLPLogsConverterService, observabilityServices.OTLPEventsConverterService, logger),
 		Prompt:        prompt.NewHandler(cfg, logger, promptService, compilerService),
 		Playground:    playground.NewHandler(cfg, logger, playgroundService, projectService),
+		SDKPlayground: playground.NewSDKPlaygroundHandler(logger, playgroundService),
 		Credentials:   credentials.NewHandler(cfg, logger, credentialsSvc, modelCatalogSvc),
 		Evaluation:    evaluationHandler.NewScoreConfigHandler(logger, scoreConfigService),
 		SDKScore:      evaluationHandler.NewSDKScoreHandler(logger, observabilityServices.ScoreService, scoreConfigService),

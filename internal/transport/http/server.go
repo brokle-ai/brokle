@@ -493,6 +493,12 @@ func (s *Server) setupSDKRoutes(router *gin.RouterGroup) {
 		spans.POST("/query", s.handlers.SpanQuery.HandleQuery)
 		spans.POST("/query/validate", s.handlers.SpanQuery.HandleValidate)
 	}
+
+	// Playground execution for SDK (LLMScorer)
+	playground := router.Group("/playground")
+	{
+		playground.POST("/execute", s.handlers.SDKPlayground.Execute)
+	}
 }
 
 func (s *Server) Shutdown(ctx context.Context) error {
