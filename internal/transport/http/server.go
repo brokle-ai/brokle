@@ -353,6 +353,17 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 			experiments.GET("/:experimentId/items", s.authMiddleware.RequirePermission("projects:read"), s.handlers.ExperimentItem.List)
 		}
 
+		evaluationRules := projects.Group("/:projectId/evaluations/rules")
+		{
+			evaluationRules.GET("", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Rule.List)
+			evaluationRules.POST("", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Rule.Create)
+			evaluationRules.GET("/:ruleId", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Rule.Get)
+			evaluationRules.PUT("/:ruleId", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Rule.Update)
+			evaluationRules.DELETE("/:ruleId", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Rule.Delete)
+			evaluationRules.POST("/:ruleId/activate", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Rule.Activate)
+			evaluationRules.POST("/:ruleId/deactivate", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Rule.Deactivate)
+		}
+
 		projectScores := projects.Group("/:projectId/scores")
 		{
 			projectScores.GET("", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Observability.ListProjectScores)

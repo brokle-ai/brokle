@@ -3,6 +3,7 @@ package evaluation
 import (
 	"context"
 
+	"brokle/pkg/pagination"
 	"brokle/pkg/ulid"
 )
 
@@ -44,4 +45,15 @@ type ExperimentService interface {
 type ExperimentItemService interface {
 	CreateBatch(ctx context.Context, experimentID ulid.ULID, projectID ulid.ULID, req *CreateExperimentItemsBatchRequest) (int, error)
 	List(ctx context.Context, experimentID ulid.ULID, projectID ulid.ULID, limit, offset int) ([]*ExperimentItem, int64, error)
+}
+
+type RuleService interface {
+	Create(ctx context.Context, projectID ulid.ULID, userID *ulid.ULID, req *CreateEvaluationRuleRequest) (*EvaluationRule, error)
+	Update(ctx context.Context, id ulid.ULID, projectID ulid.ULID, req *UpdateEvaluationRuleRequest) (*EvaluationRule, error)
+	Delete(ctx context.Context, id ulid.ULID, projectID ulid.ULID) error
+	GetByID(ctx context.Context, id ulid.ULID, projectID ulid.ULID) (*EvaluationRule, error)
+	List(ctx context.Context, projectID ulid.ULID, filter *RuleFilter, params pagination.Params) ([]*EvaluationRule, int64, error)
+	Activate(ctx context.Context, id ulid.ULID, projectID ulid.ULID) error
+	Deactivate(ctx context.Context, id ulid.ULID, projectID ulid.ULID) error
+	GetActiveByProjectID(ctx context.Context, projectID ulid.ULID) ([]*EvaluationRule, error)
 }

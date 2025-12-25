@@ -56,6 +56,7 @@ import (
 	"brokle/internal/transport/http"
 	"brokle/internal/transport/http/handlers"
 	"brokle/internal/workers"
+	evaluationWorker "brokle/internal/workers/evaluation"
 	"brokle/pkg/encryption"
 	"brokle/pkg/ulid"
 )
@@ -96,7 +97,9 @@ type DatabaseContainer struct {
 }
 
 type WorkerContainer struct {
-	TelemetryConsumer *workers.TelemetryStreamConsumer
+	TelemetryConsumer  *workers.TelemetryStreamConsumer
+	RuleWorker         *evaluationWorker.RuleWorker
+	EvaluationWorker   *evaluationWorker.EvaluationWorker
 }
 
 type RepositoryContainer struct {
@@ -208,6 +211,7 @@ type EvaluationRepositories struct {
 	DatasetItem    evaluationDomain.DatasetItemRepository
 	Experiment     evaluationDomain.ExperimentRepository
 	ExperimentItem evaluationDomain.ExperimentItemRepository
+	Rule           evaluationDomain.RuleRepository
 }
 
 type UserServices struct {
@@ -257,6 +261,7 @@ type EvaluationServices struct {
 	DatasetItem    evaluationDomain.DatasetItemService
 	Experiment     evaluationDomain.ExperimentService
 	ExperimentItem evaluationDomain.ExperimentItemService
+	Rule           evaluationDomain.RuleService
 }
 
 func ProvideDatabases(cfg *config.Config, logger *slog.Logger) (*DatabaseContainer, error) {
@@ -312,8 +317,77 @@ func ProvideWorkers(core *CoreContainer) (*WorkerContainer, error) {
 		&core.Config.Archive,                       // Archive config
 	)
 
+	// Create evaluation rule worker using config
+	discoveryInterval, _ := time.ParseDuration(core.Config.Workers.RuleWorker.DiscoveryInterval)
+	if discoveryInterval == 0 {
+		discoveryInterval = 30 * time.Second
+	}
+	ruleCacheTTL, _ := time.ParseDuration(core.Config.Workers.RuleWorker.RuleCacheTTL)
+	if ruleCacheTTL == 0 {
+		ruleCacheTTL = 30 * time.Second
+	}
+
+	ruleWorkerConfig := &evaluationWorker.RuleWorkerConfig{
+		ConsumerGroup:     "evaluation-rule-workers",
+		ConsumerID:        "rule-worker-" + ulid.New().String(),
+		BatchSize:         core.Config.Workers.RuleWorker.BatchSize,
+		BlockDuration:     time.Duration(core.Config.Workers.RuleWorker.BlockDurationMs) * time.Millisecond,
+		MaxRetries:        core.Config.Workers.RuleWorker.MaxRetries,
+		RetryBackoff:      time.Duration(core.Config.Workers.RuleWorker.RetryBackoffMs) * time.Millisecond,
+		DiscoveryInterval: discoveryInterval,
+		MaxStreamsPerRead: core.Config.Workers.RuleWorker.MaxStreamsPerRead,
+		RuleCacheTTL:      ruleCacheTTL,
+	}
+
+	ruleWorker := evaluationWorker.NewRuleWorker(
+		core.Databases.Redis,
+		core.Services.Evaluation.Rule,
+		core.Logger,
+		ruleWorkerConfig,
+	)
+
+	// Create scorers for evaluation worker
+	builtinScorer := evaluationWorker.NewBuiltinScorer(core.Logger)
+	regexScorer := evaluationWorker.NewRegexScorer(core.Logger)
+
+	// LLM scorer requires credentials and execution services
+	var llmScorer evaluationWorker.Scorer
+	if core.Services.Credentials != nil && core.Services.Prompt != nil {
+		llmScorer = evaluationWorker.NewLLMScorer(
+			core.Services.Credentials.ProviderCredential,
+			core.Services.Prompt.Execution,
+			core.Logger,
+		)
+		core.Logger.Info("LLM scorer initialized for evaluation worker")
+	} else {
+		core.Logger.Warn("LLM scorer disabled: credentials or prompt services not available")
+	}
+
+	// Create evaluation worker
+	evalWorkerConfig := &evaluationWorker.EvaluationWorkerConfig{
+		ConsumerGroup:  "evaluation-execution-workers",
+		ConsumerID:     "eval-worker-" + ulid.New().String(),
+		BatchSize:      10,
+		BlockDuration:  time.Second,
+		MaxRetries:     3,
+		RetryBackoff:   500 * time.Millisecond,
+		MaxConcurrency: 5,
+	}
+
+	evalWorker := evaluationWorker.NewEvaluationWorker(
+		core.Databases.Redis,
+		core.Services.Observability.ScoreService,
+		llmScorer,
+		builtinScorer,
+		regexScorer,
+		core.Logger,
+		evalWorkerConfig,
+	)
+
 	return &WorkerContainer{
-		TelemetryConsumer: telemetryConsumer,
+		TelemetryConsumer:  telemetryConsumer,
+		RuleWorker:         ruleWorker,
+		EvaluationWorker:   evalWorker,
 	}, nil
 }
 
@@ -418,8 +492,23 @@ func ProvideWorkerServices(core *CoreContainer) *ServiceContainer {
 	analyticsServices := ProvideAnalyticsServices(repos.Analytics)
 	observabilityServices := ProvideObservabilityServices(repos.Observability, repos.Storage, analyticsServices, databases.Redis, cfg, logger)
 
+	// Prompt services needed for LLM scorer
+	promptServices := ProvidePromptServices(core.TxManager, repos.Prompt, analyticsServices.ProviderPricing, cfg, logger)
+
+	// Credentials services needed for LLM scorer (may fail if encryption key not configured)
+	var credentialsServices *CredentialsServices
+	credSvc, err := ProvideCredentialsServices(repos.Credentials, repos.Analytics, cfg, logger)
+	if err != nil {
+		logger.Warn("failed to initialize credentials services for worker, LLM scorer will be disabled", "error", err)
+	} else {
+		credentialsServices = credSvc
+	}
+
+	// Evaluation services needed for rule worker
+	evaluationServices := ProvideEvaluationServices(repos.Evaluation, repos.Observability, observabilityServices, logger)
+
 	return &ServiceContainer{
-		User:                nil, // Worker doesn't need auth/user/org/prompt/credentials/playground services
+		User:                nil, // Worker doesn't need auth/user/org services
 		Auth:                nil,
 		Registration:        nil,
 		OrganizationService: nil,
@@ -427,12 +516,13 @@ func ProvideWorkerServices(core *CoreContainer) *ServiceContainer {
 		ProjectService:      nil,
 		InvitationService:   nil,
 		SettingsService:     nil,
-		Prompt:              nil,
-		Credentials:         nil,
+		Prompt:              promptServices,    // Needed for LLM scorer
+		Credentials:         credentialsServices, // Needed for LLM scorer
 		Playground:          nil,
 		Observability:       observabilityServices,
 		Billing:             billingServices,
 		Analytics:           analyticsServices,
+		Evaluation:          evaluationServices, // Needed for rule worker
 	}
 }
 
@@ -457,12 +547,14 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 	var datasetItemSvc evaluationDomain.DatasetItemService
 	var experimentSvc evaluationDomain.ExperimentService
 	var experimentItemSvc evaluationDomain.ExperimentItemService
+	var ruleSvc evaluationDomain.RuleService
 	if core.Services.Evaluation != nil {
 		scoreConfigSvc = core.Services.Evaluation.ScoreConfig
 		datasetSvc = core.Services.Evaluation.Dataset
 		datasetItemSvc = core.Services.Evaluation.DatasetItem
 		experimentSvc = core.Services.Evaluation.Experiment
 		experimentItemSvc = core.Services.Evaluation.ExperimentItem
+		ruleSvc = core.Services.Evaluation.Rule
 	}
 
 	httpHandlers := handlers.NewHandlers(
@@ -495,6 +587,7 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 		datasetItemSvc,
 		experimentSvc,
 		experimentItemSvc,
+		ruleSvc,
 	)
 
 	httpServer := http.NewServer(
@@ -646,6 +739,7 @@ func ProvideEvaluationRepositories(db *gorm.DB) *EvaluationRepositories {
 		DatasetItem:    evaluationRepo.NewDatasetItemRepository(db),
 		Experiment:     evaluationRepo.NewExperimentRepository(db),
 		ExperimentItem: evaluationRepo.NewExperimentItemRepository(db),
+		Rule:           evaluationRepo.NewRuleRepository(db),
 	}
 }
 
@@ -1025,12 +1119,18 @@ func ProvideEvaluationServices(
 		logger,
 	)
 
+	ruleSvc := evaluationService.NewRuleService(
+		evaluationRepos.Rule,
+		logger,
+	)
+
 	return &EvaluationServices{
 		ScoreConfig:    scoreConfigSvc,
 		Dataset:        datasetSvc,
 		DatasetItem:    datasetItemSvc,
 		Experiment:     experimentSvc,
 		ExperimentItem: experimentItemSvc,
+		Rule:           ruleSvc,
 	}
 }
 
@@ -1114,6 +1214,38 @@ func (pc *ProviderContainer) HealthCheck() map[string]string {
 		}
 	}
 
+	// Evaluation rule worker health
+	if pc.Workers != nil && pc.Workers.RuleWorker != nil {
+		stats := pc.Workers.RuleWorker.GetStats()
+		spansProcessed := stats["spans_processed"]
+		errorsCount := stats["errors_count"]
+
+		if spansProcessed == 0 && errorsCount == 0 {
+			health["evaluation_rule_worker"] = "healthy (no activity yet)"
+		} else if spansProcessed > 0 {
+			health["evaluation_rule_worker"] = fmt.Sprintf("healthy (spans_processed: %d, jobs_emitted: %d, errors: %d)",
+				spansProcessed, stats["jobs_emitted"], errorsCount)
+		} else {
+			health["evaluation_rule_worker"] = fmt.Sprintf("unhealthy (errors: %d)", errorsCount)
+		}
+	}
+
+	// Evaluation worker health
+	if pc.Workers != nil && pc.Workers.EvaluationWorker != nil {
+		stats := pc.Workers.EvaluationWorker.GetStats()
+		jobsProcessed := stats["jobs_processed"]
+		errorsCount := stats["errors_count"]
+
+		if jobsProcessed == 0 && errorsCount == 0 {
+			health["evaluation_worker"] = "healthy (no activity yet)"
+		} else if jobsProcessed > 0 {
+			health["evaluation_worker"] = fmt.Sprintf("healthy (processed: %d, scores: %d, llm: %d, builtin: %d, regex: %d)",
+				jobsProcessed, stats["scores_created"], stats["llm_calls"], stats["builtin_calls"], stats["regex_calls"])
+		} else {
+			health["evaluation_worker"] = fmt.Sprintf("unhealthy (errors: %d)", errorsCount)
+		}
+	}
+
 	health["mode"] = string(pc.Mode)
 
 	return health
@@ -1123,10 +1255,24 @@ func (pc *ProviderContainer) Shutdown() error {
 	var lastErr error
 	logger := pc.Core.Logger
 
-	if pc.Workers != nil && pc.Workers.TelemetryConsumer != nil {
-		logger.Info("Stopping telemetry stream consumer...")
-		pc.Workers.TelemetryConsumer.Stop()
-		logger.Info("Telemetry stream consumer stopped")
+	if pc.Workers != nil {
+		if pc.Workers.TelemetryConsumer != nil {
+			logger.Info("Stopping telemetry stream consumer...")
+			pc.Workers.TelemetryConsumer.Stop()
+			logger.Info("Telemetry stream consumer stopped")
+		}
+
+		if pc.Workers.RuleWorker != nil {
+			logger.Info("Stopping evaluation rule worker...")
+			pc.Workers.RuleWorker.Stop()
+			logger.Info("Evaluation rule worker stopped")
+		}
+
+		if pc.Workers.EvaluationWorker != nil {
+			logger.Info("Stopping evaluation worker...")
+			pc.Workers.EvaluationWorker.Stop()
+			logger.Info("Evaluation worker stopped")
+		}
 	}
 
 	if pc.Core != nil && pc.Core.Databases != nil {

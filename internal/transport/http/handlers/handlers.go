@@ -62,6 +62,7 @@ type Handlers struct {
 	DatasetItem    *evaluationHandler.DatasetItemHandler
 	Experiment     *evaluationHandler.ExperimentHandler
 	ExperimentItem *evaluationHandler.ExperimentItemHandler
+	Rule           *evaluationHandler.RuleHandler
 	SpanQuery      *observability.SpanQueryHandler
 }
 
@@ -95,6 +96,7 @@ func NewHandlers(
 	datasetItemService evaluationDomain.DatasetItemService,
 	experimentService evaluationDomain.ExperimentService,
 	experimentItemService evaluationDomain.ExperimentItemService,
+	ruleService evaluationDomain.RuleService,
 ) *Handlers {
 	return &Handlers{
 		Health:        health.NewHandler(cfg, logger),
@@ -123,6 +125,7 @@ func NewHandlers(
 		DatasetItem:    evaluationHandler.NewDatasetItemHandler(logger, datasetItemService),
 		Experiment:     evaluationHandler.NewExperimentHandler(logger, experimentService, experimentItemService),
 		ExperimentItem: evaluationHandler.NewExperimentItemHandler(logger, experimentItemService),
+		Rule:           evaluationHandler.NewRuleHandler(ruleService),
 		SpanQuery:      observability.NewSpanQueryHandler(observabilityServices.SpanQueryService, logger),
 	}
 }
