@@ -15,6 +15,7 @@ import (
 	"brokle/internal/core/domain/billing"
 	"brokle/internal/core/domain/common"
 	credentialsDomain "brokle/internal/core/domain/credentials"
+	evaluationDomain "brokle/internal/core/domain/evaluation"
 	"brokle/internal/core/domain/observability"
 	"brokle/internal/core/domain/organization"
 	playgroundDomain "brokle/internal/core/domain/playground"
@@ -25,6 +26,7 @@ import (
 	authService "brokle/internal/core/services/auth"
 	billingService "brokle/internal/core/services/billing"
 	credentialsService "brokle/internal/core/services/credentials"
+	evaluationService "brokle/internal/core/services/evaluation"
 	observabilityService "brokle/internal/core/services/observability"
 	orgService "brokle/internal/core/services/organization"
 	playgroundService "brokle/internal/core/services/playground"
@@ -41,6 +43,7 @@ import (
 	authRepo "brokle/internal/infrastructure/repository/auth"
 	billingRepo "brokle/internal/infrastructure/repository/billing"
 	credentialsRepo "brokle/internal/infrastructure/repository/credentials"
+	evaluationRepo "brokle/internal/infrastructure/repository/evaluation"
 	observabilityRepo "brokle/internal/infrastructure/repository/observability"
 	orgRepo "brokle/internal/infrastructure/repository/organization"
 	playgroundRepo "brokle/internal/infrastructure/repository/playground"
@@ -53,11 +56,11 @@ import (
 	"brokle/internal/transport/http"
 	"brokle/internal/transport/http/handlers"
 	"brokle/internal/workers"
+	evaluationWorker "brokle/internal/workers/evaluation"
 	"brokle/pkg/encryption"
 	"brokle/pkg/ulid"
 )
 
-// DeploymentMode tracks which mode the app is running in
 type DeploymentMode string
 
 const (
@@ -65,7 +68,6 @@ const (
 	ModeWorker DeploymentMode = "worker"
 )
 
-// CoreContainer holds shared infrastructure (databases, repos, services)
 type CoreContainer struct {
 	Config     *config.Config
 	Logger     *slog.Logger
@@ -76,13 +78,11 @@ type CoreContainer struct {
 	Enterprise *EnterpriseContainer
 }
 
-// ServerContainer holds HTTP and gRPC server components
 type ServerContainer struct {
 	HTTPServer *http.Server
 	GRPCServer *grpcTransport.Server
 }
 
-// ProviderContainer holds all provider instances for dependency injection
 type ProviderContainer struct {
 	Core    *CoreContainer
 	Server  *ServerContainer // nil in worker mode
@@ -90,19 +90,18 @@ type ProviderContainer struct {
 	Mode    DeploymentMode
 }
 
-// DatabaseContainer holds all database connections
 type DatabaseContainer struct {
 	Postgres   *database.PostgresDB
 	Redis      *database.RedisDB
 	ClickHouse *database.ClickHouseDB
 }
 
-// WorkerContainer holds all background worker instances
 type WorkerContainer struct {
-	TelemetryConsumer *workers.TelemetryStreamConsumer
+	TelemetryConsumer  *workers.TelemetryStreamConsumer
+	RuleWorker         *evaluationWorker.RuleWorker
+	EvaluationWorker   *evaluationWorker.EvaluationWorker
 }
 
-// RepositoryContainer holds all repository instances organized by domain
 type RepositoryContainer struct {
 	User          *UserRepositories
 	Auth          *AuthRepositories
@@ -114,9 +113,9 @@ type RepositoryContainer struct {
 	Prompt        *PromptRepositories
 	Credentials   *CredentialsRepositories
 	Playground    *PlaygroundRepositories
+	Evaluation    *EvaluationRepositories
 }
 
-// ServiceContainer holds all service instances organized by domain
 type ServiceContainer struct {
 	User                *UserServices
 	Auth                *AuthServices
@@ -132,9 +131,9 @@ type ServiceContainer struct {
 	Prompt              *PromptServices
 	Credentials         *CredentialsServices
 	Playground          *PlaygroundServices
+	Evaluation          *EvaluationServices
 }
 
-// EnterpriseContainer holds all enterprise service instances
 type EnterpriseContainer struct {
 	SSO        sso.SSOProvider
 	RBAC       rbac.RBACManager
@@ -142,14 +141,10 @@ type EnterpriseContainer struct {
 	Analytics  eeAnalytics.EnterpriseAnalytics
 }
 
-// Domain-specific repository containers
-
-// UserRepositories contains all user-related repositories
 type UserRepositories struct {
 	User user.Repository
 }
 
-// AuthRepositories contains all auth-related repositories
 type AuthRepositories struct {
 	UserSession        auth.UserSessionRepository
 	BlacklistedToken   auth.BlacklistedTokenRepository
@@ -162,7 +157,6 @@ type AuthRepositories struct {
 	AuditLog           auth.AuditLogRepository
 }
 
-// OrganizationRepositories contains all organization-related repositories
 type OrganizationRepositories struct {
 	Organization organization.OrganizationRepository
 	Member       organization.MemberRepository
@@ -171,34 +165,30 @@ type OrganizationRepositories struct {
 	Settings     organization.OrganizationSettingsRepository
 }
 
-// ObservabilityRepositories contains all observability-related repositories
 type ObservabilityRepositories struct {
 	Trace                  observability.TraceRepository
 	Score                  observability.ScoreRepository
+	ScoreAnalytics         observability.ScoreAnalyticsRepository
 	Metrics                observability.MetricsRepository
 	Logs                   observability.LogsRepository
 	GenAIEvents            observability.GenAIEventsRepository
 	TelemetryDeduplication observability.TelemetryDeduplicationRepository
 }
 
-// StorageRepositories contains all storage-related repositories
 type StorageRepositories struct {
 	BlobStorage storageDomain.BlobStorageRepository
 }
 
-// BillingRepositories contains all billing-related repositories
 type BillingRepositories struct {
 	Usage         billing.UsageRepository
 	BillingRecord billing.BillingRecordRepository
 	Quota         billing.QuotaRepository
 }
 
-// AnalyticsRepositories contains all analytics-related repositories
 type AnalyticsRepositories struct {
 	ProviderModel analytics.ProviderModelRepository
 }
 
-// PromptRepositories contains all prompt-related repositories
 type PromptRepositories struct {
 	Prompt         promptDomain.PromptRepository
 	Version        promptDomain.VersionRepository
@@ -207,25 +197,28 @@ type PromptRepositories struct {
 	Cache          promptDomain.CacheRepository
 }
 
-// CredentialsRepositories contains all credentials-related repositories
 type CredentialsRepositories struct {
 	ProviderCredential credentialsDomain.ProviderCredentialRepository
 }
 
-// PlaygroundRepositories contains all playground-related repositories
 type PlaygroundRepositories struct {
 	Session playgroundDomain.SessionRepository
 }
 
-// Domain-specific service containers
+type EvaluationRepositories struct {
+	ScoreConfig    evaluationDomain.ScoreConfigRepository
+	Dataset        evaluationDomain.DatasetRepository
+	DatasetItem    evaluationDomain.DatasetItemRepository
+	Experiment     evaluationDomain.ExperimentRepository
+	ExperimentItem evaluationDomain.ExperimentItemRepository
+	Rule           evaluationDomain.RuleRepository
+}
 
-// UserServices contains all user-related services
 type UserServices struct {
 	User    user.UserService
 	Profile user.ProfileService
 }
 
-// AuthServices contains all auth-related services
 type AuthServices struct {
 	Auth                auth.AuthService
 	JWT                 auth.JWTService
@@ -239,32 +232,36 @@ type AuthServices struct {
 	OAuthProvider       *authService.OAuthProviderService
 }
 
-// BillingServices contains all billing-related services
 type BillingServices struct {
 	Billing *billingService.BillingService
 }
 
-// AnalyticsServices contains all analytics-related services
 type AnalyticsServices struct {
 	ProviderPricing analytics.ProviderPricingService
 }
 
-// PromptServices contains all prompt-related services
 type PromptServices struct {
 	Prompt    promptDomain.PromptService
 	Compiler  promptDomain.CompilerService
 	Execution promptDomain.ExecutionService
 }
 
-// CredentialsServices contains all credentials-related services
 type CredentialsServices struct {
 	ProviderCredential credentialsDomain.ProviderCredentialService
 	ModelCatalog       credentialsService.ModelCatalogService
 }
 
-// PlaygroundServices contains all playground-related services
 type PlaygroundServices struct {
 	Playground playgroundDomain.PlaygroundService
+}
+
+type EvaluationServices struct {
+	ScoreConfig    evaluationDomain.ScoreConfigService
+	Dataset        evaluationDomain.DatasetService
+	DatasetItem    evaluationDomain.DatasetItemService
+	Experiment     evaluationDomain.ExperimentService
+	ExperimentItem evaluationDomain.ExperimentItemService
+	Rule           evaluationDomain.RuleService
 }
 
 func ProvideDatabases(cfg *config.Config, logger *slog.Logger) (*DatabaseContainer, error) {
@@ -290,7 +287,6 @@ func ProvideDatabases(cfg *config.Config, logger *slog.Logger) (*DatabaseContain
 	}, nil
 }
 
-// ProvideWorkers creates workers using shared core infrastructure
 func ProvideWorkers(core *CoreContainer) (*WorkerContainer, error) {
 	deduplicationService := observabilityService.NewTelemetryDeduplicationService(
 		core.Repos.Observability.TelemetryDeduplication,
@@ -321,12 +317,80 @@ func ProvideWorkers(core *CoreContainer) (*WorkerContainer, error) {
 		&core.Config.Archive,                       // Archive config
 	)
 
+	// Create evaluation rule worker using config
+	discoveryInterval, _ := time.ParseDuration(core.Config.Workers.RuleWorker.DiscoveryInterval)
+	if discoveryInterval == 0 {
+		discoveryInterval = 30 * time.Second
+	}
+	ruleCacheTTL, _ := time.ParseDuration(core.Config.Workers.RuleWorker.RuleCacheTTL)
+	if ruleCacheTTL == 0 {
+		ruleCacheTTL = 30 * time.Second
+	}
+
+	ruleWorkerConfig := &evaluationWorker.RuleWorkerConfig{
+		ConsumerGroup:     "evaluation-rule-workers",
+		ConsumerID:        "rule-worker-" + ulid.New().String(),
+		BatchSize:         core.Config.Workers.RuleWorker.BatchSize,
+		BlockDuration:     time.Duration(core.Config.Workers.RuleWorker.BlockDurationMs) * time.Millisecond,
+		MaxRetries:        core.Config.Workers.RuleWorker.MaxRetries,
+		RetryBackoff:      time.Duration(core.Config.Workers.RuleWorker.RetryBackoffMs) * time.Millisecond,
+		DiscoveryInterval: discoveryInterval,
+		MaxStreamsPerRead: core.Config.Workers.RuleWorker.MaxStreamsPerRead,
+		RuleCacheTTL:      ruleCacheTTL,
+	}
+
+	ruleWorker := evaluationWorker.NewRuleWorker(
+		core.Databases.Redis,
+		core.Services.Evaluation.Rule,
+		core.Logger,
+		ruleWorkerConfig,
+	)
+
+	// Create scorers for evaluation worker
+	builtinScorer := evaluationWorker.NewBuiltinScorer(core.Logger)
+	regexScorer := evaluationWorker.NewRegexScorer(core.Logger)
+
+	// LLM scorer requires credentials and execution services
+	var llmScorer evaluationWorker.Scorer
+	if core.Services.Credentials != nil && core.Services.Prompt != nil {
+		llmScorer = evaluationWorker.NewLLMScorer(
+			core.Services.Credentials.ProviderCredential,
+			core.Services.Prompt.Execution,
+			core.Logger,
+		)
+		core.Logger.Info("LLM scorer initialized for evaluation worker")
+	} else {
+		core.Logger.Warn("LLM scorer disabled: credentials or prompt services not available")
+	}
+
+	// Create evaluation worker
+	evalWorkerConfig := &evaluationWorker.EvaluationWorkerConfig{
+		ConsumerGroup:  "evaluation-execution-workers",
+		ConsumerID:     "eval-worker-" + ulid.New().String(),
+		BatchSize:      10,
+		BlockDuration:  time.Second,
+		MaxRetries:     3,
+		RetryBackoff:   500 * time.Millisecond,
+		MaxConcurrency: 5,
+	}
+
+	evalWorker := evaluationWorker.NewEvaluationWorker(
+		core.Databases.Redis,
+		core.Services.Observability.ScoreService,
+		llmScorer,
+		builtinScorer,
+		regexScorer,
+		core.Logger,
+		evalWorkerConfig,
+	)
+
 	return &WorkerContainer{
-		TelemetryConsumer: telemetryConsumer,
+		TelemetryConsumer:  telemetryConsumer,
+		RuleWorker:         ruleWorker,
+		EvaluationWorker:   evalWorker,
 	}, nil
 }
 
-// ProvideCore creates shared infrastructure (used by both server and worker)
 func ProvideCore(cfg *config.Config, logger *slog.Logger) (*CoreContainer, error) {
 	databases, err := ProvideDatabases(cfg, logger)
 	if err != nil {
@@ -349,7 +413,6 @@ func ProvideCore(cfg *config.Config, logger *slog.Logger) (*CoreContainer, error
 	}, nil
 }
 
-// ProvideServerServices creates ALL services for server mode
 func ProvideServerServices(core *CoreContainer) *ServiceContainer {
 	cfg := core.Config
 	logger := core.Logger
@@ -389,6 +452,8 @@ func ProvideServerServices(core *CoreContainer) *ServiceContainer {
 		logger,
 	)
 
+	evaluationServices := ProvideEvaluationServices(repos.Evaluation, repos.Observability, observabilityServices, logger)
+
 	return &ServiceContainer{
 		User:                userServices,
 		Auth:                authServices,
@@ -404,10 +469,10 @@ func ProvideServerServices(core *CoreContainer) *ServiceContainer {
 		Prompt:              promptServices,
 		Credentials:         credentialsServices,
 		Playground:          playgroundServices,
+		Evaluation:          evaluationServices,
 	}
 }
 
-// ProvideWorkerServices creates ONLY services worker needs (no auth)
 func ProvideWorkerServices(core *CoreContainer) *ServiceContainer {
 	cfg := core.Config
 	logger := core.Logger
@@ -418,8 +483,22 @@ func ProvideWorkerServices(core *CoreContainer) *ServiceContainer {
 	analyticsServices := ProvideAnalyticsServices(repos.Analytics)
 	observabilityServices := ProvideObservabilityServices(repos.Observability, repos.Storage, analyticsServices, databases.Redis, cfg, logger)
 
+	// Prompt services needed for LLM scorer
+	promptServices := ProvidePromptServices(core.TxManager, repos.Prompt, analyticsServices.ProviderPricing, cfg, logger)
+
+	// Credentials services needed for LLM scorer (optional - only if encryption key configured)
+	var credentialsServices *CredentialsServices
+	if cfg.Encryption.AIKeyEncryptionKey != "" {
+		credentialsServices = ProvideCredentialsServices(repos.Credentials, repos.Analytics, cfg, logger)
+	} else {
+		logger.Warn("AI_KEY_ENCRYPTION_KEY not configured, LLM scorer will be disabled")
+	}
+
+	// Evaluation services needed for rule worker
+	evaluationServices := ProvideEvaluationServices(repos.Evaluation, repos.Observability, observabilityServices, logger)
+
 	return &ServiceContainer{
-		User:                nil, // Worker doesn't need auth/user/org/prompt/credentials/playground services
+		User:                nil, // Worker doesn't need auth/user/org services
 		Auth:                nil,
 		Registration:        nil,
 		OrganizationService: nil,
@@ -427,16 +506,16 @@ func ProvideWorkerServices(core *CoreContainer) *ServiceContainer {
 		ProjectService:      nil,
 		InvitationService:   nil,
 		SettingsService:     nil,
-		Prompt:              nil,
-		Credentials:         nil,
+		Prompt:              promptServices,    // Needed for LLM scorer
+		Credentials:         credentialsServices, // Needed for LLM scorer
 		Playground:          nil,
 		Observability:       observabilityServices,
 		Billing:             billingServices,
 		Analytics:           analyticsServices,
+		Evaluation:          evaluationServices, // Needed for rule worker
 	}
 }
 
-// ProvideServer creates HTTP server using shared core
 func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 	// Get credentials services (may be nil if encryption key not configured)
 	var credentialsSvc credentialsDomain.ProviderCredentialService
@@ -450,6 +529,22 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 	var playgroundSvc playgroundDomain.PlaygroundService
 	if core.Services.Playground != nil {
 		playgroundSvc = core.Services.Playground.Playground
+	}
+
+	// Get evaluation services
+	var scoreConfigSvc evaluationDomain.ScoreConfigService
+	var datasetSvc evaluationDomain.DatasetService
+	var datasetItemSvc evaluationDomain.DatasetItemService
+	var experimentSvc evaluationDomain.ExperimentService
+	var experimentItemSvc evaluationDomain.ExperimentItemService
+	var ruleSvc evaluationDomain.RuleService
+	if core.Services.Evaluation != nil {
+		scoreConfigSvc = core.Services.Evaluation.ScoreConfig
+		datasetSvc = core.Services.Evaluation.Dataset
+		datasetItemSvc = core.Services.Evaluation.DatasetItem
+		experimentSvc = core.Services.Evaluation.Experiment
+		experimentItemSvc = core.Services.Evaluation.ExperimentItem
+		ruleSvc = core.Services.Evaluation.Rule
 	}
 
 	httpHandlers := handlers.NewHandlers(
@@ -477,6 +572,12 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 		credentialsSvc,
 		modelCatalogSvc,
 		playgroundSvc,
+		scoreConfigSvc,
+		datasetSvc,
+		datasetItemSvc,
+		experimentSvc,
+		experimentItemSvc,
+		ruleSvc,
 	)
 
 	httpServer := http.NewServer(
@@ -537,14 +638,12 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 	}, nil
 }
 
-// ProvideUserRepositories creates all user-related repositories
 func ProvideUserRepositories(db *gorm.DB) *UserRepositories {
 	return &UserRepositories{
 		User: userRepo.NewUserRepository(db),
 	}
 }
 
-// ProvideAuthRepositories creates all auth-related repositories
 func ProvideAuthRepositories(db *gorm.DB) *AuthRepositories {
 	return &AuthRepositories{
 		UserSession:        authRepo.NewUserSessionRepository(db),
@@ -559,7 +658,6 @@ func ProvideAuthRepositories(db *gorm.DB) *AuthRepositories {
 	}
 }
 
-// ProvideOrganizationRepositories creates all organization-related repositories
 func ProvideOrganizationRepositories(db *gorm.DB) *OrganizationRepositories {
 	return &OrganizationRepositories{
 		Organization: orgRepo.NewOrganizationRepository(db),
@@ -570,11 +668,11 @@ func ProvideOrganizationRepositories(db *gorm.DB) *OrganizationRepositories {
 	}
 }
 
-// ProvideObservabilityRepositories creates all observability-related repositories
 func ProvideObservabilityRepositories(clickhouseDB *database.ClickHouseDB, postgresDB *gorm.DB, redisDB *database.RedisDB) *ObservabilityRepositories {
 	return &ObservabilityRepositories{
 		Trace:                  observabilityRepo.NewTraceRepository(clickhouseDB.Conn),
 		Score:                  observabilityRepo.NewScoreRepository(clickhouseDB.Conn),
+		ScoreAnalytics:         observabilityRepo.NewScoreAnalyticsRepository(clickhouseDB.Conn),
 		Metrics:                observabilityRepo.NewMetricsRepository(clickhouseDB.Conn),
 		Logs:                   observabilityRepo.NewLogsRepository(clickhouseDB.Conn),
 		GenAIEvents:            observabilityRepo.NewGenAIEventsRepository(clickhouseDB.Conn),
@@ -582,14 +680,12 @@ func ProvideObservabilityRepositories(clickhouseDB *database.ClickHouseDB, postg
 	}
 }
 
-// ProvideStorageRepositories creates all storage-related repositories
 func ProvideStorageRepositories(clickhouseDB *database.ClickHouseDB) *StorageRepositories {
 	return &StorageRepositories{
 		BlobStorage: storageRepo.NewBlobStorageRepository(clickhouseDB.Conn),
 	}
 }
 
-// ProvideBillingRepositories creates all billing-related repositories
 func ProvideBillingRepositories(db *gorm.DB, logger *slog.Logger) *BillingRepositories {
 	return &BillingRepositories{
 		Usage:         billingRepo.NewUsageRepository(db, logger),
@@ -598,14 +694,12 @@ func ProvideBillingRepositories(db *gorm.DB, logger *slog.Logger) *BillingReposi
 	}
 }
 
-// ProvideAnalyticsRepositories creates all analytics-related repositories
 func ProvideAnalyticsRepositories(db *gorm.DB) *AnalyticsRepositories {
 	return &AnalyticsRepositories{
 		ProviderModel: analyticsRepo.NewProviderModelRepository(db),
 	}
 }
 
-// ProvidePromptRepositories creates all prompt-related repositories
 func ProvidePromptRepositories(db *gorm.DB, redisDB *database.RedisDB) *PromptRepositories {
 	return &PromptRepositories{
 		Prompt:         promptRepo.NewPromptRepository(db),
@@ -616,21 +710,29 @@ func ProvidePromptRepositories(db *gorm.DB, redisDB *database.RedisDB) *PromptRe
 	}
 }
 
-// ProvideCredentialsRepositories creates credentials repository container
 func ProvideCredentialsRepositories(db *gorm.DB) *CredentialsRepositories {
 	return &CredentialsRepositories{
 		ProviderCredential: credentialsRepo.NewProviderCredentialRepository(db),
 	}
 }
 
-// ProvidePlaygroundRepositories creates playground repository container
 func ProvidePlaygroundRepositories(db *gorm.DB) *PlaygroundRepositories {
 	return &PlaygroundRepositories{
 		Session: playgroundRepo.NewSessionRepository(db),
 	}
 }
 
-// ProvideRepositories creates all repository containers
+func ProvideEvaluationRepositories(db *gorm.DB) *EvaluationRepositories {
+	return &EvaluationRepositories{
+		ScoreConfig:    evaluationRepo.NewScoreConfigRepository(db),
+		Dataset:        evaluationRepo.NewDatasetRepository(db),
+		DatasetItem:    evaluationRepo.NewDatasetItemRepository(db),
+		Experiment:     evaluationRepo.NewExperimentRepository(db),
+		ExperimentItem: evaluationRepo.NewExperimentItemRepository(db),
+		Rule:           evaluationRepo.NewRuleRepository(db),
+	}
+}
+
 func ProvideRepositories(dbs *DatabaseContainer, logger *slog.Logger) *RepositoryContainer {
 	return &RepositoryContainer{
 		User:          ProvideUserRepositories(dbs.Postgres.DB),
@@ -643,10 +745,10 @@ func ProvideRepositories(dbs *DatabaseContainer, logger *slog.Logger) *Repositor
 		Prompt:        ProvidePromptRepositories(dbs.Postgres.DB, dbs.Redis),
 		Credentials:   ProvideCredentialsRepositories(dbs.Postgres.DB),
 		Playground:    ProvidePlaygroundRepositories(dbs.Postgres.DB),
+		Evaluation:    ProvideEvaluationRepositories(dbs.Postgres.DB),
 	}
 }
 
-// ProvideUserServices creates all user-related services
 func ProvideUserServices(
 	userRepos *UserRepositories,
 	authRepos *AuthRepositories,
@@ -668,7 +770,6 @@ func ProvideUserServices(
 	}
 }
 
-// ProvideAuthServices creates all auth-related services with proper dependencies
 func ProvideAuthServices(
 	cfg *config.Config,
 	userRepos *UserRepositories,
@@ -757,7 +858,6 @@ func ProvideAuthServices(
 	}
 }
 
-// ProvideOrganizationServices creates all organization-related services
 func ProvideOrganizationServices(
 	userRepos *UserRepositories,
 	authRepos *AuthRepositories,
@@ -808,8 +908,7 @@ func ProvideOrganizationServices(
 	return orgSvc, memberSvc, projectSvc, invitationSvc, settingsSvc
 }
 
-// ProvideObservabilityServices creates all observability-related services.
-// TelemetryService is created without analytics worker - inject via SetAnalyticsWorker() after startup.
+// TelemetryService created without analytics worker - inject via SetAnalyticsWorker() after startup.
 func ProvideObservabilityServices(
 	observabilityRepos *ObservabilityRepositories,
 	storageRepos *StorageRepositories,
@@ -845,6 +944,7 @@ func ProvideObservabilityServices(
 	return observabilityService.NewServiceRegistry(
 		observabilityRepos.Trace,
 		observabilityRepos.Score,
+		observabilityRepos.ScoreAnalytics,
 		observabilityRepos.Metrics,
 		observabilityRepos.Logs,
 		observabilityRepos.GenAIEvents,
@@ -860,7 +960,6 @@ func ProvideObservabilityServices(
 	)
 }
 
-// ProvideBillingServices creates all billing-related services
 func ProvideBillingServices(
 	billingRepos *BillingRepositories,
 	logger *slog.Logger,
@@ -880,7 +979,6 @@ func ProvideBillingServices(
 	}
 }
 
-// ProvideAnalyticsServices creates all analytics-related services
 func ProvideAnalyticsServices(
 	analyticsRepos *AnalyticsRepositories,
 ) *AnalyticsServices {
@@ -891,7 +989,6 @@ func ProvideAnalyticsServices(
 	}
 }
 
-// ProvidePromptServices creates all prompt-related services
 func ProvidePromptServices(
 	txManager common.TransactionManager,
 	promptRepos *PromptRepositories,
@@ -923,7 +1020,6 @@ func ProvidePromptServices(
 	}
 }
 
-// ProvideCredentialsServices creates all credentials-related services
 func ProvideCredentialsServices(
 	credentialsRepos *CredentialsRepositories,
 	analyticsRepos *AnalyticsRepositories,
@@ -954,7 +1050,6 @@ func ProvideCredentialsServices(
 	}
 }
 
-// ProvidePlaygroundServices creates all playground-related services
 func ProvidePlaygroundServices(
 	playgroundRepos *PlaygroundRepositories,
 	credentialsService credentialsDomain.ProviderCredentialService,
@@ -972,6 +1067,59 @@ func ProvidePlaygroundServices(
 
 	return &PlaygroundServices{
 		Playground: playgroundSvc,
+	}
+}
+
+func ProvideEvaluationServices(
+	evaluationRepos *EvaluationRepositories,
+	observabilityRepos *ObservabilityRepositories,
+	observabilityServices *observabilityService.ServiceRegistry,
+	logger *slog.Logger,
+) *EvaluationServices {
+	scoreConfigSvc := evaluationService.NewScoreConfigService(
+		evaluationRepos.ScoreConfig,
+		observabilityRepos.Score,
+		logger,
+	)
+
+	datasetSvc := evaluationService.NewDatasetService(
+		evaluationRepos.Dataset,
+		logger,
+	)
+
+	datasetItemSvc := evaluationService.NewDatasetItemService(
+		evaluationRepos.DatasetItem,
+		evaluationRepos.Dataset,
+		logger,
+	)
+
+	experimentSvc := evaluationService.NewExperimentService(
+		evaluationRepos.Experiment,
+		evaluationRepos.Dataset,
+		observabilityRepos.Score,
+		logger,
+	)
+
+	experimentItemSvc := evaluationService.NewExperimentItemService(
+		evaluationRepos.ExperimentItem,
+		evaluationRepos.Experiment,
+		evaluationRepos.DatasetItem,
+		observabilityServices.ScoreService,
+		logger,
+	)
+
+	ruleSvc := evaluationService.NewRuleService(
+		evaluationRepos.Rule,
+		logger,
+	)
+
+	return &EvaluationServices{
+		ScoreConfig:    scoreConfigSvc,
+		Dataset:        datasetSvc,
+		DatasetItem:    datasetItemSvc,
+		Experiment:     experimentSvc,
+		ExperimentItem: experimentItemSvc,
+		Rule:           ruleSvc,
 	}
 }
 
@@ -994,7 +1142,6 @@ func (s *simpleBillingOrgService) GetPaymentMethod(ctx context.Context, orgID ul
 	return nil, nil
 }
 
-// ProvideEnterpriseServices creates all enterprise services using build tags
 func ProvideEnterpriseServices(cfg *config.Config, logger *slog.Logger) *EnterpriseContainer {
 	return &EnterpriseContainer{
 		SSO:        sso.New(),         // Uses stub or real based on build tags
@@ -1004,7 +1151,6 @@ func ProvideEnterpriseServices(cfg *config.Config, logger *slog.Logger) *Enterpr
 	}
 }
 
-// HealthCheck checks health of all providers (mode-aware)
 func (pc *ProviderContainer) HealthCheck() map[string]string {
 	health := make(map[string]string)
 
@@ -1057,20 +1203,65 @@ func (pc *ProviderContainer) HealthCheck() map[string]string {
 		}
 	}
 
+	// Evaluation rule worker health
+	if pc.Workers != nil && pc.Workers.RuleWorker != nil {
+		stats := pc.Workers.RuleWorker.GetStats()
+		spansProcessed := stats["spans_processed"]
+		errorsCount := stats["errors_count"]
+
+		if spansProcessed == 0 && errorsCount == 0 {
+			health["evaluation_rule_worker"] = "healthy (no activity yet)"
+		} else if spansProcessed > 0 {
+			health["evaluation_rule_worker"] = fmt.Sprintf("healthy (spans_processed: %d, jobs_emitted: %d, errors: %d)",
+				spansProcessed, stats["jobs_emitted"], errorsCount)
+		} else {
+			health["evaluation_rule_worker"] = fmt.Sprintf("unhealthy (errors: %d)", errorsCount)
+		}
+	}
+
+	// Evaluation worker health
+	if pc.Workers != nil && pc.Workers.EvaluationWorker != nil {
+		stats := pc.Workers.EvaluationWorker.GetStats()
+		jobsProcessed := stats["jobs_processed"]
+		errorsCount := stats["errors_count"]
+
+		if jobsProcessed == 0 && errorsCount == 0 {
+			health["evaluation_worker"] = "healthy (no activity yet)"
+		} else if jobsProcessed > 0 {
+			health["evaluation_worker"] = fmt.Sprintf("healthy (processed: %d, scores: %d, llm: %d, builtin: %d, regex: %d)",
+				jobsProcessed, stats["scores_created"], stats["llm_calls"], stats["builtin_calls"], stats["regex_calls"])
+		} else {
+			health["evaluation_worker"] = fmt.Sprintf("unhealthy (errors: %d)", errorsCount)
+		}
+	}
+
 	health["mode"] = string(pc.Mode)
 
 	return health
 }
 
-// Shutdown gracefully shuts down all providers
 func (pc *ProviderContainer) Shutdown() error {
 	var lastErr error
 	logger := pc.Core.Logger
 
-	if pc.Workers != nil && pc.Workers.TelemetryConsumer != nil {
-		logger.Info("Stopping telemetry stream consumer...")
-		pc.Workers.TelemetryConsumer.Stop()
-		logger.Info("Telemetry stream consumer stopped")
+	if pc.Workers != nil {
+		if pc.Workers.TelemetryConsumer != nil {
+			logger.Info("Stopping telemetry stream consumer...")
+			pc.Workers.TelemetryConsumer.Stop()
+			logger.Info("Telemetry stream consumer stopped")
+		}
+
+		if pc.Workers.RuleWorker != nil {
+			logger.Info("Stopping evaluation rule worker...")
+			pc.Workers.RuleWorker.Stop()
+			logger.Info("Evaluation rule worker stopped")
+		}
+
+		if pc.Workers.EvaluationWorker != nil {
+			logger.Info("Stopping evaluation worker...")
+			pc.Workers.EvaluationWorker.Stop()
+			logger.Info("Evaluation worker stopped")
+		}
 	}
 
 	if pc.Core != nil && pc.Core.Databases != nil {

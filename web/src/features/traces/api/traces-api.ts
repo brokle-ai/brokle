@@ -243,6 +243,7 @@ export const getTraceWithSpans = getSpansForTrace
  * @param projectId - Project ULID
  * @param traceId - Trace ID
  * @returns Trace with quality scores
+ * @deprecated Use getScoresForTrace instead - this function incorrectly transforms response
  */
 export const getTraceWithScores = async (
   projectId: string,
@@ -252,6 +253,27 @@ export const getTraceWithScores = async (
     project_id: projectId,
   })
   return transformTraceResponse(response)
+}
+
+/**
+ * Get quality scores for a trace
+ *
+ * Backend endpoint: GET /api/v1/traces/:id/scores
+ * Returns all scores for the trace (both trace-level and span-level)
+ *
+ * @param projectId - Project ULID
+ * @param traceId - Trace ID
+ * @returns Array of scores for the trace
+ */
+export const getScoresForTrace = async (
+  projectId: string,
+  traceId: string
+): Promise<Score[]> => {
+  const response = await client.get<Score[]>(`/v1/traces/${traceId}/scores`, {
+    project_id: projectId,
+  })
+  // Backend returns Score[] directly via response.Success(c, scores)
+  return Array.isArray(response) ? response : []
 }
 
 /**

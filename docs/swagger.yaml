@@ -858,6 +858,406 @@ definitions:
         minLength: 1
         type: string
     type: object
+  evaluation.BatchScoreRequest:
+    description: Batch score creation request
+    properties:
+      scores:
+        items:
+          $ref: '#/definitions/evaluation.CreateScoreRequest'
+        type: array
+    required:
+    - scores
+    type: object
+  evaluation.BatchScoreResponse:
+    description: Batch score creation response
+    properties:
+      created:
+        type: integer
+    type: object
+  evaluation.CreateDatasetItemRequest:
+    properties:
+      expected:
+        additionalProperties: true
+        type: object
+      input:
+        additionalProperties: true
+        type: object
+      metadata:
+        additionalProperties: true
+        type: object
+    required:
+    - input
+    type: object
+  evaluation.CreateDatasetItemsBatchRequest:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/evaluation.CreateDatasetItemRequest'
+        type: array
+    required:
+    - items
+    type: object
+  evaluation.CreateDatasetRequest:
+    properties:
+      description:
+        type: string
+      metadata:
+        additionalProperties: true
+        type: object
+      name:
+        maxLength: 255
+        minLength: 1
+        type: string
+    required:
+    - name
+    type: object
+  evaluation.CreateExperimentItemRequest:
+    properties:
+      dataset_item_id:
+        type: string
+      expected:
+        additionalProperties: true
+        type: object
+      input:
+        additionalProperties: true
+        type: object
+      metadata:
+        additionalProperties: true
+        type: object
+      output:
+        additionalProperties: true
+        type: object
+      trace_id:
+        type: string
+      trial_number:
+        type: integer
+    required:
+    - input
+    type: object
+  evaluation.CreateExperimentItemsBatchRequest:
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/evaluation.CreateExperimentItemRequest'
+        type: array
+    required:
+    - items
+    type: object
+  evaluation.CreateExperimentRequest:
+    properties:
+      dataset_id:
+        type: string
+      description:
+        type: string
+      metadata:
+        additionalProperties: true
+        type: object
+      name:
+        maxLength: 255
+        minLength: 1
+        type: string
+    required:
+    - name
+    type: object
+  evaluation.CreateRequest:
+    description: Score config creation request
+    properties:
+      categories:
+        items:
+          type: string
+        type: array
+      data_type:
+        allOf:
+        - $ref: '#/definitions/internal_transport_http_handlers_evaluation.ScoreDataType'
+        enum:
+        - NUMERIC
+        - CATEGORICAL
+        - BOOLEAN
+      description:
+        type: string
+      max_value:
+        type: number
+      metadata:
+        additionalProperties: true
+        type: object
+      min_value:
+        type: number
+      name:
+        maxLength: 100
+        minLength: 1
+        type: string
+    required:
+    - data_type
+    - name
+    type: object
+  evaluation.CreateScoreRequest:
+    description: SDK score creation request
+    properties:
+      data_type:
+        enum:
+        - NUMERIC
+        - CATEGORICAL
+        - BOOLEAN
+        type: string
+      experiment_id:
+        type: string
+      experiment_item_id:
+        type: string
+      metadata:
+        additionalProperties: {}
+        type: object
+      name:
+        type: string
+      reason:
+        type: string
+      span_id:
+        type: string
+      string_value:
+        type: string
+      trace_id:
+        type: string
+      value:
+        type: number
+    required:
+    - data_type
+    - name
+    - trace_id
+    type: object
+  evaluation.DatasetItemListResponse:
+    description: Paginated dataset items response
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/internal_transport_http_handlers_evaluation.DatasetItemResponse'
+        type: array
+      total:
+        type: integer
+    type: object
+  evaluation.DatasetResponse:
+    properties:
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      metadata:
+        additionalProperties: true
+        type: object
+      name:
+        type: string
+      project_id:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  evaluation.ExperimentItemListResponse:
+    description: Paginated experiment items response
+    properties:
+      items:
+        items:
+          $ref: '#/definitions/internal_transport_http_handlers_evaluation.ExperimentItemResponse'
+        type: array
+      total:
+        type: integer
+    type: object
+  evaluation.ExperimentResponse:
+    properties:
+      completed_at:
+        type: string
+      created_at:
+        type: string
+      dataset_id:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      metadata:
+        additionalProperties: true
+        type: object
+      name:
+        type: string
+      project_id:
+        type: string
+      started_at:
+        type: string
+      status:
+        $ref: '#/definitions/evaluation.ExperimentStatus'
+      updated_at:
+        type: string
+    type: object
+  evaluation.ExperimentStatus:
+    enum:
+    - pending
+    - running
+    - completed
+    - failed
+    type: string
+    x-enum-varnames:
+    - ExperimentStatusPending
+    - ExperimentStatusRunning
+    - ExperimentStatusCompleted
+    - ExperimentStatusFailed
+  evaluation.ExperimentSummaryResponse:
+    description: Experiment summary for comparison
+    properties:
+      name:
+        type: string
+      status:
+        type: string
+    type: object
+  evaluation.SDKBatchCreateExperimentItemsResponse:
+    description: Batch experiment items creation response
+    properties:
+      created:
+        type: integer
+    type: object
+  evaluation.SDKBatchCreateItemsResponse:
+    description: Batch creation response with count
+    properties:
+      created:
+        type: integer
+    type: object
+  evaluation.ScoreAggregationResponse:
+    description: Score aggregation statistics
+    properties:
+      count:
+        type: integer
+      max:
+        type: number
+      mean:
+        type: number
+      min:
+        type: number
+      std_dev:
+        type: number
+    type: object
+  evaluation.ScoreConfigResponse:
+    properties:
+      categories:
+        items:
+          type: string
+        type: array
+      created_at:
+        type: string
+      data_type:
+        $ref: '#/definitions/internal_core_domain_evaluation.ScoreDataType'
+      description:
+        type: string
+      id:
+        type: string
+      max_value:
+        type: number
+      metadata:
+        additionalProperties: true
+        type: object
+      min_value:
+        type: number
+      name:
+        type: string
+      project_id:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  evaluation.ScoreDiffResponse:
+    description: Score difference from baseline
+    properties:
+      difference:
+        type: number
+      direction:
+        type: string
+      type:
+        type: string
+    type: object
+  evaluation.ScoreResponse:
+    description: Score data
+    properties:
+      data_type:
+        type: string
+      experiment_id:
+        type: string
+      experiment_item_id:
+        type: string
+      id:
+        type: string
+      metadata:
+        additionalProperties: {}
+        type: object
+      name:
+        type: string
+      project_id:
+        type: string
+      reason:
+        type: string
+      source:
+        type: string
+      span_id:
+        type: string
+      string_value:
+        type: string
+      timestamp:
+        type: string
+      trace_id:
+        type: string
+      value:
+        type: number
+    type: object
+  evaluation.UpdateDatasetRequest:
+    properties:
+      description:
+        type: string
+      metadata:
+        additionalProperties: true
+        type: object
+      name:
+        maxLength: 255
+        minLength: 1
+        type: string
+    type: object
+  evaluation.UpdateExperimentRequest:
+    properties:
+      description:
+        type: string
+      metadata:
+        additionalProperties: true
+        type: object
+      name:
+        maxLength: 255
+        minLength: 1
+        type: string
+      status:
+        $ref: '#/definitions/evaluation.ExperimentStatus'
+    type: object
+  evaluation.UpdateRequest:
+    description: Score config update request
+    properties:
+      categories:
+        items:
+          type: string
+        type: array
+      data_type:
+        allOf:
+        - $ref: '#/definitions/internal_transport_http_handlers_evaluation.ScoreDataType'
+        enum:
+        - NUMERIC
+        - CATEGORICAL
+        - BOOLEAN
+      description:
+        type: string
+      max_value:
+        type: number
+      metadata:
+        additionalProperties: true
+        type: object
+      min_value:
+        type: number
+      name:
+        maxLength: 100
+        minLength: 1
+        type: string
+    type: object
   health.HealthCheck:
     description: Individual component health check result
     properties:
@@ -894,6 +1294,16 @@ definitions:
         example: 1.0.0
         type: string
     type: object
+  internal_core_domain_evaluation.ScoreDataType:
+    enum:
+    - NUMERIC
+    - CATEGORICAL
+    - BOOLEAN
+    type: string
+    x-enum-varnames:
+    - ScoreDataTypeNumeric
+    - ScoreDataTypeCategorical
+    - ScoreDataTypeBoolean
   internal_transport_http_handlers_auth.LoginRequest:
     description: User login credentials
     properties:
@@ -1026,6 +1436,98 @@ definitions:
     - adapter
     - api_key
     type: object
+  internal_transport_http_handlers_evaluation.CompareExperimentsRequest:
+    description: Request to compare multiple experiments
+    properties:
+      baseline_id:
+        type: string
+      experiment_ids:
+        items:
+          type: string
+        maxItems: 10
+        minItems: 2
+        type: array
+    required:
+    - experiment_ids
+    type: object
+  internal_transport_http_handlers_evaluation.CompareExperimentsResponse:
+    description: Response containing experiment comparison results
+    properties:
+      diffs:
+        additionalProperties:
+          additionalProperties:
+            $ref: '#/definitions/evaluation.ScoreDiffResponse'
+          type: object
+        type: object
+      experiments:
+        additionalProperties:
+          $ref: '#/definitions/evaluation.ExperimentSummaryResponse'
+        type: object
+      scores:
+        additionalProperties:
+          additionalProperties:
+            $ref: '#/definitions/evaluation.ScoreAggregationResponse'
+          type: object
+        type: object
+    type: object
+  internal_transport_http_handlers_evaluation.DatasetItemResponse:
+    description: Dataset item data
+    properties:
+      created_at:
+        type: string
+      dataset_id:
+        type: string
+      expected:
+        additionalProperties: true
+        type: object
+      id:
+        type: string
+      input:
+        additionalProperties: true
+        type: object
+      metadata:
+        additionalProperties: true
+        type: object
+    type: object
+  internal_transport_http_handlers_evaluation.ExperimentItemResponse:
+    description: Experiment item data
+    properties:
+      created_at:
+        type: string
+      dataset_item_id:
+        type: string
+      expected:
+        additionalProperties: true
+        type: object
+      experiment_id:
+        type: string
+      id:
+        type: string
+      input:
+        additionalProperties: true
+        type: object
+      metadata:
+        additionalProperties: true
+        type: object
+      output:
+        additionalProperties: true
+        type: object
+      trace_id:
+        type: string
+      trial_number:
+        type: integer
+    type: object
+  internal_transport_http_handlers_evaluation.ScoreDataType:
+    description: Score data type (NUMERIC, CATEGORICAL, BOOLEAN)
+    enum:
+    - NUMERIC
+    - CATEGORICAL
+    - BOOLEAN
+    type: string
+    x-enum-varnames:
+    - ScoreDataTypeNumeric
+    - ScoreDataTypeCategorical
+    - ScoreDataTypeBoolean
   internal_transport_http_handlers_organization.CreateOrganizationRequest:
     properties:
       description:
@@ -1585,25 +2087,25 @@ definitions:
     type: object
   observability.Score:
     properties:
-      author_user_id:
-        type: string
-      comment:
-        type: string
       data_type:
         type: string
-      evaluator_config:
-        additionalProperties:
-          type: string
-        type: object
-      evaluator_name:
+      experiment_id:
+        description: Experiment tracking
         type: string
-      evaluator_version:
+      experiment_item_id:
         type: string
       id:
+        description: Identity
+        type: string
+      metadata:
         type: string
       name:
+        description: Score data
         type: string
       project_id:
+        type: string
+      reason:
+        description: Additional fields
         type: string
       source:
         type: string
@@ -1612,13 +2114,13 @@ definitions:
       string_value:
         type: string
       timestamp:
+        description: Timestamp
         type: string
       trace_id:
+        description: Links
         type: string
       value:
         type: number
-      version:
-        type: string
     type: object
   observability.Span:
     properties:
@@ -1752,6 +2254,40 @@ definitions:
       trace_state:
         type: string
     type: object
+  observability.SpanQueryHTTPRequest:
+    description: SDK request for querying spans with filter expressions
+    properties:
+      end_time:
+        example: "2024-01-31T23:59:59Z"
+        type: string
+      filter:
+        example: service.name=chatbot AND gen_ai.system=openai
+        maxLength: 2000
+        type: string
+      limit:
+        example: 100
+        type: integer
+      offset:
+        example: 0
+        type: integer
+      start_time:
+        example: "2024-01-01T00:00:00Z"
+        type: string
+    required:
+    - filter
+    type: object
+  observability.SpanQueryHTTPResponse:
+    description: Response containing queried spans with pagination info
+    properties:
+      has_more:
+        type: boolean
+      spans:
+        items:
+          $ref: '#/definitions/observability.Span'
+        type: array
+      total_count:
+        type: integer
+    type: object
   observability.Status:
     properties:
       code:
@@ -1838,6 +2374,16 @@ definitions:
         type: string
       user_id:
         type: string
+    type: object
+  observability.ValidateFilterRequest:
+    description: Request to validate a filter expression
+    properties:
+      filter:
+        example: service.name=chatbot
+        maxLength: 2000
+        type: string
+    required:
+    - filter
     type: object
   organization.BulkSettingsRequest:
     properties:
@@ -5970,6 +6516,602 @@ paths:
       summary: Test AI provider connection
       tags:
       - Credentials
+  /api/v1/projects/{projectId}/datasets:
+    get:
+      description: Returns all datasets for the project.
+      parameters:
+      - description: Project ID
+        in: path
+        name: projectId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/evaluation.DatasetResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: List datasets
+      tags:
+      - Datasets
+    post:
+      consumes:
+      - application/json
+      description: Creates a new dataset for the project. Works for both SDK and Dashboard
+        routes.
+      parameters:
+      - description: Project ID (Dashboard routes)
+        in: path
+        name: projectId
+        type: string
+      - description: Dataset request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/evaluation.CreateDatasetRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/evaluation.DatasetResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "409":
+          description: Name already exists
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Create dataset
+      tags:
+      - Datasets
+      - SDK - Datasets
+  /api/v1/projects/{projectId}/datasets/{datasetId}:
+    delete:
+      description: Removes a dataset by its ID. Also deletes all items in the dataset.
+      parameters:
+      - description: Project ID
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Dataset ID
+        in: path
+        name: datasetId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Delete dataset
+      tags:
+      - Datasets
+    get:
+      description: Returns the dataset for a specific ID. Works for both SDK and Dashboard
+        routes.
+      parameters:
+      - description: Project ID (Dashboard routes)
+        in: path
+        name: projectId
+        type: string
+      - description: Dataset ID
+        in: path
+        name: datasetId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/evaluation.DatasetResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get dataset
+      tags:
+      - Datasets
+      - SDK - Datasets
+    put:
+      consumes:
+      - application/json
+      description: Updates an existing dataset by ID.
+      parameters:
+      - description: Project ID
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Dataset ID
+        in: path
+        name: datasetId
+        required: true
+        type: string
+      - description: Update request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/evaluation.UpdateDatasetRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/evaluation.DatasetResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "409":
+          description: Name already exists
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Update dataset
+      tags:
+      - Datasets
+  /api/v1/projects/{projectId}/datasets/{datasetId}/items:
+    get:
+      description: Returns items for a dataset with pagination.
+      parameters:
+      - description: Project ID
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Dataset ID
+        in: path
+        name: datasetId
+        required: true
+        type: string
+      - description: Limit (default 50, max 100)
+        in: query
+        name: limit
+        type: integer
+      - description: Offset (default 0)
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/evaluation.DatasetItemListResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: List dataset items
+      tags:
+      - Dataset Items
+    post:
+      consumes:
+      - application/json
+      description: Creates a new item in the dataset.
+      parameters:
+      - description: Project ID
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Dataset ID
+        in: path
+        name: datasetId
+        required: true
+        type: string
+      - description: Item request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/evaluation.CreateDatasetItemRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/internal_transport_http_handlers_evaluation.DatasetItemResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Create dataset item
+      tags:
+      - Dataset Items
+  /api/v1/projects/{projectId}/datasets/{datasetId}/items/{itemId}:
+    delete:
+      description: Removes an item from the dataset.
+      parameters:
+      - description: Project ID
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Dataset ID
+        in: path
+        name: datasetId
+        required: true
+        type: string
+      - description: Item ID
+        in: path
+        name: itemId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Delete dataset item
+      tags:
+      - Dataset Items
+  /api/v1/projects/{projectId}/experiments:
+    get:
+      description: Returns all experiments for the project.
+      parameters:
+      - description: Project ID
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Filter by dataset ID
+        in: query
+        name: dataset_id
+        type: string
+      - description: Filter by status (pending, running, completed, failed)
+        in: query
+        name: status
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/evaluation.ExperimentResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: List experiments
+      tags:
+      - Experiments
+    post:
+      consumes:
+      - application/json
+      description: Creates a new experiment for the project. Works for both SDK and
+        Dashboard routes.
+      parameters:
+      - description: Project ID (Dashboard routes)
+        in: path
+        name: projectId
+        type: string
+      - description: Experiment request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/evaluation.CreateExperimentRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/evaluation.ExperimentResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Dataset not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Create experiment
+      tags:
+      - Experiments
+      - SDK - Experiments
+  /api/v1/projects/{projectId}/experiments/{experimentId}:
+    delete:
+      description: Removes an experiment by its ID. Also deletes all items in the
+        experiment.
+      parameters:
+      - description: Project ID
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Experiment ID
+        in: path
+        name: experimentId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Delete experiment
+      tags:
+      - Experiments
+    get:
+      description: Returns the experiment for a specific ID. Works for both SDK and
+        Dashboard routes.
+      parameters:
+      - description: Project ID (Dashboard routes)
+        in: path
+        name: projectId
+        type: string
+      - description: Experiment ID
+        in: path
+        name: experimentId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/evaluation.ExperimentResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get experiment
+      tags:
+      - Experiments
+      - SDK - Experiments
+    put:
+      consumes:
+      - application/json
+      description: Updates an existing experiment by ID. Works for both SDK and Dashboard
+        routes.
+      parameters:
+      - description: Project ID (Dashboard routes)
+        in: path
+        name: projectId
+        type: string
+      - description: Experiment ID
+        in: path
+        name: experimentId
+        required: true
+        type: string
+      - description: Update request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/evaluation.UpdateExperimentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/evaluation.ExperimentResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Update experiment
+      tags:
+      - Experiments
+      - SDK - Experiments
+  /api/v1/projects/{projectId}/experiments/{experimentId}/items:
+    get:
+      description: Returns items for an experiment with pagination.
+      parameters:
+      - description: Project ID
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Experiment ID
+        in: path
+        name: experimentId
+        required: true
+        type: string
+      - description: Limit (default 50, max 100)
+        in: query
+        name: limit
+        type: integer
+      - description: Offset (default 0)
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/evaluation.ExperimentItemListResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: List experiment items
+      tags:
+      - Experiment Items
+  /api/v1/projects/{projectId}/experiments/compare:
+    post:
+      consumes:
+      - application/json
+      description: Compares score metrics across multiple experiments. Optionally
+        specify a baseline for diff calculations.
+      parameters:
+      - description: Project ID
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Compare experiments request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_transport_http_handlers_evaluation.CompareExperimentsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_transport_http_handlers_evaluation.CompareExperimentsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Experiment not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Compare experiments
+      tags:
+      - Experiments
   /api/v1/projects/{projectId}/playground/sessions:
     get:
       description: Lists all playground sessions for the sidebar.
@@ -6998,6 +8140,190 @@ paths:
       summary: Set protected labels
       tags:
       - Prompts
+  /api/v1/projects/{projectId}/score-configs:
+    get:
+      description: Returns all score configurations for the project.
+      parameters:
+      - description: Project ID
+        in: path
+        name: projectId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/evaluation.ScoreConfigResponse'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: List score configs
+      tags:
+      - Score Configs
+    post:
+      consumes:
+      - application/json
+      description: Creates a new score configuration for the project. Score configs
+        define validation rules for scores.
+      parameters:
+      - description: Project ID
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Score config request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/evaluation.CreateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/evaluation.ScoreConfigResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "409":
+          description: Name already exists
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Create score config
+      tags:
+      - Score Configs
+  /api/v1/projects/{projectId}/score-configs/{configId}:
+    delete:
+      description: Removes a score configuration by its ID.
+      parameters:
+      - description: Project ID
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Score Config ID
+        in: path
+        name: configId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Delete score config
+      tags:
+      - Score Configs
+    get:
+      description: Returns the score configuration for a specific config ID.
+      parameters:
+      - description: Project ID
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Score Config ID
+        in: path
+        name: configId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/evaluation.ScoreConfigResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Get score config
+      tags:
+      - Score Configs
+    put:
+      consumes:
+      - application/json
+      description: Updates an existing score configuration by ID.
+      parameters:
+      - description: Project ID
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Score Config ID
+        in: path
+        name: configId
+        required: true
+        type: string
+      - description: Update request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/evaluation.UpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/evaluation.ScoreConfigResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "409":
+          description: Name already exists
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      summary: Update score config
+      tags:
+      - Score Configs
   /api/v1/projects/{projectId}/unarchive:
     post:
       consumes:
@@ -7941,6 +9267,316 @@ paths:
       summary: Validate API key
       tags:
       - SDK - Authentication
+  /v1/datasets:
+    post:
+      consumes:
+      - application/json
+      description: Creates a new dataset for the project. Works for both SDK and Dashboard
+        routes.
+      parameters:
+      - description: Dataset request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/evaluation.CreateDatasetRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/evaluation.DatasetResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "409":
+          description: Name already exists
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Create dataset
+      tags:
+      - Datasets
+      - SDK - Datasets
+  /v1/datasets/{datasetId}:
+    get:
+      description: Returns the dataset for a specific ID. Works for both SDK and Dashboard
+        routes.
+      parameters:
+      - description: Dataset ID
+        in: path
+        name: datasetId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/evaluation.DatasetResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get dataset
+      tags:
+      - Datasets
+      - SDK - Datasets
+  /v1/datasets/{datasetId}/items:
+    get:
+      description: Returns items for a dataset with pagination using API key authentication.
+      parameters:
+      - description: Dataset ID
+        in: path
+        name: datasetId
+        required: true
+        type: string
+      - description: Limit (default 50, max 100)
+        in: query
+        name: limit
+        type: integer
+      - description: Offset (default 0)
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/evaluation.DatasetItemListResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: List dataset items via SDK
+      tags:
+      - SDK - Datasets
+    post:
+      consumes:
+      - application/json
+      description: Creates multiple items in a dataset using API key authentication.
+      parameters:
+      - description: Dataset ID
+        in: path
+        name: datasetId
+        required: true
+        type: string
+      - description: Batch items request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/evaluation.CreateDatasetItemsBatchRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/evaluation.SDKBatchCreateItemsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Batch create dataset items via SDK
+      tags:
+      - SDK - Datasets
+  /v1/experiments:
+    post:
+      consumes:
+      - application/json
+      description: Creates a new experiment for the project. Works for both SDK and
+        Dashboard routes.
+      parameters:
+      - description: Experiment request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/evaluation.CreateExperimentRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/evaluation.ExperimentResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Dataset not found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Create experiment
+      tags:
+      - Experiments
+      - SDK - Experiments
+  /v1/experiments/{experimentId}:
+    get:
+      description: Returns the experiment for a specific ID. Works for both SDK and
+        Dashboard routes.
+      parameters:
+      - description: Experiment ID
+        in: path
+        name: experimentId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/evaluation.ExperimentResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get experiment
+      tags:
+      - Experiments
+      - SDK - Experiments
+    patch:
+      consumes:
+      - application/json
+      description: Updates an existing experiment by ID. Works for both SDK and Dashboard
+        routes.
+      parameters:
+      - description: Experiment ID
+        in: path
+        name: experimentId
+        required: true
+        type: string
+      - description: Update request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/evaluation.UpdateExperimentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/evaluation.ExperimentResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Update experiment
+      tags:
+      - Experiments
+      - SDK - Experiments
+  /v1/experiments/{experimentId}/items:
+    post:
+      consumes:
+      - application/json
+      description: Creates multiple items for an experiment using API key authentication.
+      parameters:
+      - description: Experiment ID
+        in: path
+        name: experimentId
+        required: true
+        type: string
+      - description: Batch items request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/evaluation.CreateExperimentItemsBatchRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/evaluation.SDKBatchCreateExperimentItemsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Batch create experiment items via SDK
+      tags:
+      - SDK - Experiments
   /v1/logs:
     post:
       consumes:
@@ -8262,6 +9898,181 @@ paths:
       summary: Get prompt by name
       tags:
       - SDK Prompts
+  /v1/scores:
+    post:
+      consumes:
+      - application/json
+      description: Creates a score for a trace/span. If a ScoreConfig exists for the
+        score name, validates against it.
+      parameters:
+      - description: Score creation request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/evaluation.CreateScoreRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/evaluation.ScoreResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Create score
+      tags:
+      - SDK - Scores
+  /v1/scores/batch:
+    post:
+      consumes:
+      - application/json
+      description: Creates multiple scores in a single request. If ScoreConfigs exist,
+        validates against them.
+      parameters:
+      - description: Batch score creation request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/evaluation.BatchScoreRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/evaluation.BatchScoreResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.ErrorResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Batch create scores
+      tags:
+      - SDK - Scores
+  /v1/spans/query:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Query production telemetry data using human-readable filter syntax.
+        Supports operators: =, !=, >, <, >=, <=, CONTAINS, IN, EXISTS
+        Supports logical operators: AND, OR with parentheses grouping
+      parameters:
+      - description: Span query request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/observability.SpanQueryHTTPRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Spans matching filter
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/observability.SpanQueryHTTPResponse'
+              type: object
+        "400":
+          description: Invalid filter syntax
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "401":
+          description: Invalid or missing API key
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "500":
+          description: Internal server error
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Query spans using filter expressions
+      tags:
+      - SDK - Span Query
+  /v1/spans/query/validate:
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Validates filter syntax without executing the query. Useful for SDK clients
+        to validate filters before submitting queries.
+      parameters:
+      - description: Filter validation request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/observability.ValidateFilterRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Filter is valid
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  additionalProperties: true
+                  type: object
+              type: object
+        "400":
+          description: Invalid filter syntax
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+        "401":
+          description: Invalid or missing API key
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/response.APIError'
+              type: object
+      security:
+      - ApiKeyAuth: []
+      summary: Validate a filter expression
+      tags:
+      - SDK - Span Query
   /v1/traces:
     post:
       consumes:

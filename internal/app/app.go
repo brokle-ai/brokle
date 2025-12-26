@@ -136,6 +136,24 @@ func (a *App) Start() error {
 			return err
 		}
 		a.logger.Info("Telemetry stream consumer started")
+
+		// Start evaluation rule worker
+		if a.providers.Workers.RuleWorker != nil {
+			if err := a.providers.Workers.RuleWorker.Start(context.Background()); err != nil {
+				a.logger.Error("Failed to start evaluation rule worker", "error", err)
+				return err
+			}
+			a.logger.Info("Evaluation rule worker started")
+		}
+
+		// Start evaluation worker
+		if a.providers.Workers.EvaluationWorker != nil {
+			if err := a.providers.Workers.EvaluationWorker.Start(context.Background()); err != nil {
+				a.logger.Error("Failed to start evaluation worker", "error", err)
+				return err
+			}
+			a.logger.Info("Evaluation worker started")
+		}
 	}
 
 	return nil
@@ -183,6 +201,12 @@ func (a *App) doShutdown(ctx context.Context) error {
 			if a.providers.Workers != nil {
 				if a.providers.Workers.TelemetryConsumer != nil {
 					a.providers.Workers.TelemetryConsumer.Stop()
+				}
+				if a.providers.Workers.RuleWorker != nil {
+					a.providers.Workers.RuleWorker.Stop()
+				}
+				if a.providers.Workers.EvaluationWorker != nil {
+					a.providers.Workers.EvaluationWorker.Stop()
 				}
 			}
 		}()

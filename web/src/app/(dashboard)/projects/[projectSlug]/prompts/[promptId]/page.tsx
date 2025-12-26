@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { DashboardHeader } from '@/components/layout/dashboard-header'
 import { Main } from '@/components/layout/main'
+import { PageHeader } from '@/components/layout/page-header'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -13,7 +14,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
-  ArrowLeft,
   Save,
   Loader2,
   History,
@@ -150,78 +150,69 @@ export default function PromptDetailPage() {
     <>
       <DashboardHeader />
       <Main>
-        <div className="mb-6 flex items-start justify-between">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => router.back()}>
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-2xl font-bold tracking-tight">{prompt.name}</h2>
-                <Badge variant={prompt.type === 'chat' ? 'default' : 'secondary'}>
-                  {prompt.type}
-                </Badge>
-              </div>
-              {prompt.description && (
-                <p className="text-muted-foreground">{prompt.description}</p>
-              )}
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              onClick={() =>
-                router.push(`/projects/${params.projectSlug}/prompts/${params.promptId}/versions`)
+        <PageHeader
+          title={prompt.name}
+          backHref={`/projects/${params.projectSlug}/prompts`}
+          description={prompt.description}
+          badges={
+            <Badge variant={prompt.type === 'chat' ? 'default' : 'secondary'}>
+              {prompt.type}
+            </Badge>
+          }
+        >
+          <Button
+            variant="outline"
+            onClick={() =>
+              router.push(`/projects/${params.projectSlug}/prompts/${params.promptId}/versions`)
+            }
+          >
+            <History className="mr-2 h-4 w-4" />
+            History
+          </Button>
+          <Button
+            onClick={() => {
+              let messages: ReturnType<typeof createMessage>[] = []
+
+              if (prompt.type === 'chat') {
+                // Chat template: convert messages array
+                const template = prompt.template as ChatTemplate
+                messages = template.messages?.map((m) =>
+                  createMessage(
+                    (m.role || 'user') as 'system' | 'user' | 'assistant',
+                    m.content || ''
+                  )
+                ) || []
+              } else {
+                // Text template: convert to single user message
+                const template = prompt.template as { content?: string }
+                messages = [
+                  createMessage('user', template.content || ''),
+                ]
               }
-            >
-              <History className="mr-2 h-4 w-4" />
-              History
-            </Button>
-            <Button
-              onClick={() => {
-                let messages: ReturnType<typeof createMessage>[] = []
 
-                if (prompt.type === 'chat') {
-                  // Chat template: convert messages array
-                  const template = prompt.template as ChatTemplate
-                  messages = template.messages?.map((m) =>
-                    createMessage(
-                      (m.role || 'user') as 'system' | 'user' | 'assistant',
-                      m.content || ''
-                    )
-                  ) || []
-                } else {
-                  // Text template: convert to single user message
-                  const template = prompt.template as { content?: string }
-                  messages = [
-                    createMessage('user', template.content || ''),
-                  ]
-                }
+              // Create loadedTemplate for change detection (normalized without IDs)
+              const loadedTemplate = JSON.stringify(
+                messages.map(({ role, content }) => ({ role, content }))
+              )
 
-                // Create loadedTemplate for change detection (normalized without IDs)
-                const loadedTemplate = JSON.stringify(
-                  messages.map(({ role, content }) => ({ role, content }))
-                )
+              // Directly populate the store (no sessionStorage, no race conditions)
+              usePlaygroundStore.getState().loadFromPrompt({
+                messages,
+                loadedFromPromptId: prompt.id,
+                loadedFromPromptName: prompt.name,
+                loadedFromPromptVersionId: prompt.version_id,
+                loadedFromPromptVersionNumber: prompt.version,
+                loadedTemplate,
+              })
 
-                // Directly populate the store (no sessionStorage, no race conditions)
-                usePlaygroundStore.getState().loadFromPrompt({
-                  messages,
-                  loadedFromPromptId: prompt.id,
-                  loadedFromPromptName: prompt.name,
-                  loadedFromPromptVersionId: prompt.version_id,
-                  loadedFromPromptVersionNumber: prompt.version,
-                  loadedTemplate,
-                })
-
-                // Navigate to playground (no session ID in URL)
-                router.push(`/projects/${params.projectSlug}/playground`)
-              }}
-            >
-              <FlaskConical className="mr-2 h-4 w-4" />
-              Try in Playground
-            </Button>
-          </div>
-        </div>
+              // Navigate to playground (no session ID in URL)
+              router.push(`/projects/${params.projectSlug}/playground`)
+            }}
+          >
+            <FlaskConical className="mr-2 h-4 w-4" />
+            Try in Playground
+          </Button>
+        </PageHeader>
 
         <Tabs defaultValue="template" className="space-y-6">
           <TabsList>

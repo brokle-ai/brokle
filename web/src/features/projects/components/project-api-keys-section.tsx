@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Copy, Trash2, Loader2, AlertCircle, AlertTriangle } from 'lucide-react'
+import { Plus, Copy, Trash2, Loader2, AlertCircle, AlertTriangle, Key } from 'lucide-react'
 import { useWorkspace } from '@/context/workspace-context'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -324,7 +324,11 @@ export function ProjectAPIKeysSection({
                 {apiKeys.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                      No API keys yet. Create your first key to get started.
+                      <div className="flex flex-col items-center gap-2">
+                        <Key className="h-8 w-8 text-muted-foreground/50" />
+                        <p>No API keys yet.</p>
+                        <p className="text-xs">Create your first key to get started.</p>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ) : (

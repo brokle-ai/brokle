@@ -77,3 +77,8 @@ func (m *MockScoreRepository) Count(ctx context.Context, filter *observability.S
 	args := m.Called(ctx, filter)
 	return args.Get(0).(int64), args.Error(1)
 }
+
+func (m *MockScoreRepository) ExistsByConfigName(ctx context.Context, projectID, configName string) (bool, error) {
+	args := m.Called(ctx, projectID, configName)
+	return args.Bool(0), args.Error(1)
+}

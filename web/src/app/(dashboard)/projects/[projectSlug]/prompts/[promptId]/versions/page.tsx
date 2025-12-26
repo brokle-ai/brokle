@@ -4,17 +4,17 @@ import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { DashboardHeader } from '@/components/layout/dashboard-header'
 import { Main } from '@/components/layout/main'
+import { PageHeader } from '@/components/layout/page-header'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Separator } from '@/components/ui/separator'
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { ArrowLeft, Play, Settings } from 'lucide-react'
+import { Play, Settings } from 'lucide-react'
 import { useProjectOnly } from '@/features/projects'
 import {
   usePromptQuery,
@@ -110,45 +110,37 @@ export default function PromptVersionsPage() {
     <>
       <DashboardHeader />
       <Main>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => router.back()}>
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <div className="flex items-center gap-2">
-              <h1 className="text-lg font-semibold">
-                Version History: {prompt.name}
-              </h1>
-              <Badge variant={prompt.type === 'chat' ? 'default' : 'secondary'}>
-                {prompt.type}
-              </Badge>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              onClick={() =>
-                router.push(
-                  `/projects/${params.projectSlug}/prompts/${params.promptId}/playground`
-                )
-              }
-            >
-              <Play className="mr-2 h-4 w-4" />
-              Playground
-            </Button>
-            <Button
-              onClick={() =>
-                router.push(
-                  `/projects/${params.projectSlug}/prompts/${params.promptId}`
-                )
-              }
-            >
-              <Settings className="mr-2 h-4 w-4" />
-              Edit Prompt
-            </Button>
-          </div>
-        </div>
-        <Separator className="my-4" />
+        <PageHeader
+          title={`Version History: ${prompt.name}`}
+          backHref={`/projects/${params.projectSlug}/prompts/${params.promptId}`}
+          badges={
+            <Badge variant={prompt.type === 'chat' ? 'default' : 'secondary'}>
+              {prompt.type}
+            </Badge>
+          }
+        >
+          <Button
+            variant="outline"
+            onClick={() =>
+              router.push(
+                `/projects/${params.projectSlug}/prompts/${params.promptId}/playground`
+              )
+            }
+          >
+            <Play className="mr-2 h-4 w-4" />
+            Playground
+          </Button>
+          <Button
+            onClick={() =>
+              router.push(
+                `/projects/${params.projectSlug}/prompts/${params.promptId}`
+              )
+            }
+          >
+            <Settings className="mr-2 h-4 w-4" />
+            Edit Prompt
+          </Button>
+        </PageHeader>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div>

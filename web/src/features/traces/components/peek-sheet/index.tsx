@@ -170,7 +170,7 @@ function PeekSheetContent({
           </div>
         ) : spans.length === 0 ? (
           // No spans - just show detail panel
-          <DetailPanel trace={trace} selectedSpan={null} spans={[]} />
+          <DetailPanel trace={trace} selectedSpan={null} spans={[]} projectId={projectId} />
         ) : (
           // Has spans - show resizable two-panel layout
           <ResizablePanelGroup direction='horizontal' className='h-full'>
@@ -215,6 +215,7 @@ function PeekSheetContent({
                   trace={trace}
                   selectedSpan={selectedSpan}
                   spans={spans}
+                  projectId={projectId}
                   className={cn(isLeftPanelCollapsed && 'pl-12')}
                 />
               </div>

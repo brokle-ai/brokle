@@ -5250,6 +5250,898 @@
                 }
             }
         },
+        "/api/v1/projects/{projectId}/datasets": {
+            "get": {
+                "description": "Returns all datasets for the project.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Datasets"
+                ],
+                "summary": "List datasets",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project ID",
+                        "name": "projectId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/evaluation.DatasetResponse"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Creates a new dataset for the project. Works for both SDK and Dashboard routes.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Datasets",
+                    "SDK - Datasets"
+                ],
+                "summary": "Create dataset",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project ID (Dashboard routes)",
+                        "name": "projectId",
+                        "in": "path"
+                    },
+                    {
+                        "description": "Dataset request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/evaluation.CreateDatasetRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/evaluation.DatasetResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Name already exists",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/projects/{projectId}/datasets/{datasetId}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns the dataset for a specific ID. Works for both SDK and Dashboard routes.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Datasets",
+                    "SDK - Datasets"
+                ],
+                "summary": "Get dataset",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project ID (Dashboard routes)",
+                        "name": "projectId",
+                        "in": "path"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Dataset ID",
+                        "name": "datasetId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/evaluation.DatasetResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "description": "Updates an existing dataset by ID.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Datasets"
+                ],
+                "summary": "Update dataset",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project ID",
+                        "name": "projectId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Dataset ID",
+                        "name": "datasetId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Update request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/evaluation.UpdateDatasetRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/evaluation.DatasetResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Name already exists",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Removes a dataset by its ID. Also deletes all items in the dataset.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Datasets"
+                ],
+                "summary": "Delete dataset",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project ID",
+                        "name": "projectId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Dataset ID",
+                        "name": "datasetId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/projects/{projectId}/datasets/{datasetId}/items": {
+            "get": {
+                "description": "Returns items for a dataset with pagination.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Dataset Items"
+                ],
+                "summary": "List dataset items",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project ID",
+                        "name": "projectId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Dataset ID",
+                        "name": "datasetId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Limit (default 50, max 100)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Offset (default 0)",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/evaluation.DatasetItemListResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Creates a new item in the dataset.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Dataset Items"
+                ],
+                "summary": "Create dataset item",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project ID",
+                        "name": "projectId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Dataset ID",
+                        "name": "datasetId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Item request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/evaluation.CreateDatasetItemRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/internal_transport_http_handlers_evaluation.DatasetItemResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/projects/{projectId}/datasets/{datasetId}/items/{itemId}": {
+            "delete": {
+                "description": "Removes an item from the dataset.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Dataset Items"
+                ],
+                "summary": "Delete dataset item",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project ID",
+                        "name": "projectId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Dataset ID",
+                        "name": "datasetId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Item ID",
+                        "name": "itemId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/projects/{projectId}/experiments": {
+            "get": {
+                "description": "Returns all experiments for the project.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Experiments"
+                ],
+                "summary": "List experiments",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project ID",
+                        "name": "projectId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by dataset ID",
+                        "name": "dataset_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by status (pending, running, completed, failed)",
+                        "name": "status",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/evaluation.ExperimentResponse"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Creates a new experiment for the project. Works for both SDK and Dashboard routes.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Experiments",
+                    "SDK - Experiments"
+                ],
+                "summary": "Create experiment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project ID (Dashboard routes)",
+                        "name": "projectId",
+                        "in": "path"
+                    },
+                    {
+                        "description": "Experiment request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/evaluation.CreateExperimentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/evaluation.ExperimentResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Dataset not found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/projects/{projectId}/experiments/compare": {
+            "post": {
+                "description": "Compares score metrics across multiple experiments. Optionally specify a baseline for diff calculations.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Experiments"
+                ],
+                "summary": "Compare experiments",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project ID",
+                        "name": "projectId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Compare experiments request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_transport_http_handlers_evaluation.CompareExperimentsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_transport_http_handlers_evaluation.CompareExperimentsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Experiment not found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/projects/{projectId}/experiments/{experimentId}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns the experiment for a specific ID. Works for both SDK and Dashboard routes.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Experiments",
+                    "SDK - Experiments"
+                ],
+                "summary": "Get experiment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project ID (Dashboard routes)",
+                        "name": "projectId",
+                        "in": "path"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Experiment ID",
+                        "name": "experimentId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/evaluation.ExperimentResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Updates an existing experiment by ID. Works for both SDK and Dashboard routes.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Experiments",
+                    "SDK - Experiments"
+                ],
+                "summary": "Update experiment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project ID (Dashboard routes)",
+                        "name": "projectId",
+                        "in": "path"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Experiment ID",
+                        "name": "experimentId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Update request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/evaluation.UpdateExperimentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/evaluation.ExperimentResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Removes an experiment by its ID. Also deletes all items in the experiment.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Experiments"
+                ],
+                "summary": "Delete experiment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project ID",
+                        "name": "projectId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Experiment ID",
+                        "name": "experimentId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/projects/{projectId}/experiments/{experimentId}/items": {
+            "get": {
+                "description": "Returns items for an experiment with pagination.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Experiment Items"
+                ],
+                "summary": "List experiment items",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project ID",
+                        "name": "projectId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Experiment ID",
+                        "name": "experimentId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Limit (default 50, max 100)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Offset (default 0)",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/evaluation.ExperimentItemListResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/projects/{projectId}/playground/sessions": {
             "get": {
                 "description": "Lists all playground sessions for the sidebar.",
@@ -7054,6 +7946,280 @@
                 }
             }
         },
+        "/api/v1/projects/{projectId}/score-configs": {
+            "get": {
+                "description": "Returns all score configurations for the project.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Score Configs"
+                ],
+                "summary": "List score configs",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project ID",
+                        "name": "projectId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/evaluation.ScoreConfigResponse"
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Creates a new score configuration for the project. Score configs define validation rules for scores.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Score Configs"
+                ],
+                "summary": "Create score config",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project ID",
+                        "name": "projectId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Score config request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/evaluation.CreateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/evaluation.ScoreConfigResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Name already exists",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/projects/{projectId}/score-configs/{configId}": {
+            "get": {
+                "description": "Returns the score configuration for a specific config ID.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Score Configs"
+                ],
+                "summary": "Get score config",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project ID",
+                        "name": "projectId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Score Config ID",
+                        "name": "configId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/evaluation.ScoreConfigResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "description": "Updates an existing score configuration by ID.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Score Configs"
+                ],
+                "summary": "Update score config",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project ID",
+                        "name": "projectId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Score Config ID",
+                        "name": "configId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Update request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/evaluation.UpdateRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/evaluation.ScoreConfigResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Name already exists",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Removes a score configuration by its ID.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Score Configs"
+                ],
+                "summary": "Delete score config",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Project ID",
+                        "name": "projectId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Score Config ID",
+                        "name": "configId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/projects/{projectId}/unarchive": {
             "post": {
                 "security": [
@@ -8670,6 +9836,481 @@
                 }
             }
         },
+        "/v1/datasets": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Creates a new dataset for the project. Works for both SDK and Dashboard routes.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Datasets",
+                    "SDK - Datasets"
+                ],
+                "summary": "Create dataset",
+                "parameters": [
+                    {
+                        "description": "Dataset request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/evaluation.CreateDatasetRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/evaluation.DatasetResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Name already exists",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/datasets/{datasetId}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns the dataset for a specific ID. Works for both SDK and Dashboard routes.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Datasets",
+                    "SDK - Datasets"
+                ],
+                "summary": "Get dataset",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Dataset ID",
+                        "name": "datasetId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/evaluation.DatasetResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/datasets/{datasetId}/items": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns items for a dataset with pagination using API key authentication.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SDK - Datasets"
+                ],
+                "summary": "List dataset items via SDK",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Dataset ID",
+                        "name": "datasetId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Limit (default 50, max 100)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Offset (default 0)",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/evaluation.DatasetItemListResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Creates multiple items in a dataset using API key authentication.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SDK - Datasets"
+                ],
+                "summary": "Batch create dataset items via SDK",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Dataset ID",
+                        "name": "datasetId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Batch items request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/evaluation.CreateDatasetItemsBatchRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/evaluation.SDKBatchCreateItemsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/experiments": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Creates a new experiment for the project. Works for both SDK and Dashboard routes.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Experiments",
+                    "SDK - Experiments"
+                ],
+                "summary": "Create experiment",
+                "parameters": [
+                    {
+                        "description": "Experiment request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/evaluation.CreateExperimentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/evaluation.ExperimentResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Dataset not found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/experiments/{experimentId}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Returns the experiment for a specific ID. Works for both SDK and Dashboard routes.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Experiments",
+                    "SDK - Experiments"
+                ],
+                "summary": "Get experiment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Experiment ID",
+                        "name": "experimentId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/evaluation.ExperimentResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Updates an existing experiment by ID. Works for both SDK and Dashboard routes.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Experiments",
+                    "SDK - Experiments"
+                ],
+                "summary": "Update experiment",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Experiment ID",
+                        "name": "experimentId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Update request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/evaluation.UpdateExperimentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/evaluation.ExperimentResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/experiments/{experimentId}/items": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Creates multiple items for an experiment using API key authentication.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SDK - Experiments"
+                ],
+                "summary": "Batch create experiment items via SDK",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Experiment ID",
+                        "name": "experimentId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Batch items request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/evaluation.CreateExperimentItemsBatchRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/evaluation.SDKBatchCreateExperimentItemsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/v1/logs": {
             "post": {
                 "security": [
@@ -9236,6 +10877,301 @@
                     },
                     "500": {
                         "description": "Internal server error",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/scores": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Creates a score for a trace/span. If a ScoreConfig exists for the score name, validates against it.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SDK - Scores"
+                ],
+                "summary": "Create score",
+                "parameters": [
+                    {
+                        "description": "Score creation request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/evaluation.CreateScoreRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/evaluation.ScoreResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/scores/batch": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Creates multiple scores in a single request. If ScoreConfigs exist, validates against them.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SDK - Scores"
+                ],
+                "summary": "Batch create scores",
+                "parameters": [
+                    {
+                        "description": "Batch score creation request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/evaluation.BatchScoreRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/evaluation.BatchScoreResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/spans/query": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Query production telemetry data using human-readable filter syntax.\nSupports operators: =, !=, \u003e, \u003c, \u003e=, \u003c=, CONTAINS, IN, EXISTS\nSupports logical operators: AND, OR with parentheses grouping",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SDK - Span Query"
+                ],
+                "summary": "Query spans using filter expressions",
+                "parameters": [
+                    {
+                        "description": "Span query request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/observability.SpanQueryHTTPRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Spans matching filter",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/observability.SpanQueryHTTPResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid filter syntax",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid or missing API key",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/spans/query/validate": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Validates filter syntax without executing the query. Useful for SDK clients\nto validate filters before submitting queries.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "SDK - Span Query"
+                ],
+                "summary": "Validate a filter expression",
+                "parameters": [
+                    {
+                        "description": "Filter validation request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/observability.ValidateFilterRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Filter is valid",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "additionalProperties": true
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid filter syntax",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "error": {
+                                            "$ref": "#/definitions/response.APIError"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Invalid or missing API key",
                         "schema": {
                             "allOf": [
                                 {
@@ -10611,6 +12547,594 @@
                 }
             }
         },
+        "evaluation.BatchScoreRequest": {
+            "description": "Batch score creation request",
+            "type": "object",
+            "required": [
+                "scores"
+            ],
+            "properties": {
+                "scores": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/evaluation.CreateScoreRequest"
+                    }
+                }
+            }
+        },
+        "evaluation.BatchScoreResponse": {
+            "description": "Batch score creation response",
+            "type": "object",
+            "properties": {
+                "created": {
+                    "type": "integer"
+                }
+            }
+        },
+        "evaluation.CreateDatasetItemRequest": {
+            "type": "object",
+            "required": [
+                "input"
+            ],
+            "properties": {
+                "expected": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "input": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                }
+            }
+        },
+        "evaluation.CreateDatasetItemsBatchRequest": {
+            "type": "object",
+            "required": [
+                "items"
+            ],
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/evaluation.CreateDatasetItemRequest"
+                    }
+                }
+            }
+        },
+        "evaluation.CreateDatasetRequest": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 255,
+                    "minLength": 1
+                }
+            }
+        },
+        "evaluation.CreateExperimentItemRequest": {
+            "type": "object",
+            "required": [
+                "input"
+            ],
+            "properties": {
+                "dataset_item_id": {
+                    "type": "string"
+                },
+                "expected": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "input": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "output": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "trace_id": {
+                    "type": "string"
+                },
+                "trial_number": {
+                    "type": "integer"
+                }
+            }
+        },
+        "evaluation.CreateExperimentItemsBatchRequest": {
+            "type": "object",
+            "required": [
+                "items"
+            ],
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/evaluation.CreateExperimentItemRequest"
+                    }
+                }
+            }
+        },
+        "evaluation.CreateExperimentRequest": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "dataset_id": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 255,
+                    "minLength": 1
+                }
+            }
+        },
+        "evaluation.CreateRequest": {
+            "description": "Score config creation request",
+            "type": "object",
+            "required": [
+                "data_type",
+                "name"
+            ],
+            "properties": {
+                "categories": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "data_type": {
+                    "enum": [
+                        "NUMERIC",
+                        "CATEGORICAL",
+                        "BOOLEAN"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/internal_transport_http_handlers_evaluation.ScoreDataType"
+                        }
+                    ]
+                },
+                "description": {
+                    "type": "string"
+                },
+                "max_value": {
+                    "type": "number"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "min_value": {
+                    "type": "number"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 1
+                }
+            }
+        },
+        "evaluation.CreateScoreRequest": {
+            "description": "SDK score creation request",
+            "type": "object",
+            "required": [
+                "data_type",
+                "name",
+                "trace_id"
+            ],
+            "properties": {
+                "data_type": {
+                    "type": "string",
+                    "enum": [
+                        "NUMERIC",
+                        "CATEGORICAL",
+                        "BOOLEAN"
+                    ]
+                },
+                "experiment_id": {
+                    "type": "string"
+                },
+                "experiment_item_id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "name": {
+                    "type": "string"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "span_id": {
+                    "type": "string"
+                },
+                "string_value": {
+                    "type": "string"
+                },
+                "trace_id": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "number"
+                }
+            }
+        },
+        "evaluation.DatasetItemListResponse": {
+            "description": "Paginated dataset items response",
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_transport_http_handlers_evaluation.DatasetItemResponse"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "evaluation.DatasetResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "name": {
+                    "type": "string"
+                },
+                "project_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "evaluation.ExperimentItemListResponse": {
+            "description": "Paginated experiment items response",
+            "type": "object",
+            "properties": {
+                "items": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_transport_http_handlers_evaluation.ExperimentItemResponse"
+                    }
+                },
+                "total": {
+                    "type": "integer"
+                }
+            }
+        },
+        "evaluation.ExperimentResponse": {
+            "type": "object",
+            "properties": {
+                "completed_at": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "dataset_id": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "name": {
+                    "type": "string"
+                },
+                "project_id": {
+                    "type": "string"
+                },
+                "started_at": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/evaluation.ExperimentStatus"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "evaluation.ExperimentStatus": {
+            "type": "string",
+            "enum": [
+                "pending",
+                "running",
+                "completed",
+                "failed"
+            ],
+            "x-enum-varnames": [
+                "ExperimentStatusPending",
+                "ExperimentStatusRunning",
+                "ExperimentStatusCompleted",
+                "ExperimentStatusFailed"
+            ]
+        },
+        "evaluation.ExperimentSummaryResponse": {
+            "description": "Experiment summary for comparison",
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "evaluation.SDKBatchCreateExperimentItemsResponse": {
+            "description": "Batch experiment items creation response",
+            "type": "object",
+            "properties": {
+                "created": {
+                    "type": "integer"
+                }
+            }
+        },
+        "evaluation.SDKBatchCreateItemsResponse": {
+            "description": "Batch creation response with count",
+            "type": "object",
+            "properties": {
+                "created": {
+                    "type": "integer"
+                }
+            }
+        },
+        "evaluation.ScoreAggregationResponse": {
+            "description": "Score aggregation statistics",
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer"
+                },
+                "max": {
+                    "type": "number"
+                },
+                "mean": {
+                    "type": "number"
+                },
+                "min": {
+                    "type": "number"
+                },
+                "std_dev": {
+                    "type": "number"
+                }
+            }
+        },
+        "evaluation.ScoreConfigResponse": {
+            "type": "object",
+            "properties": {
+                "categories": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "data_type": {
+                    "$ref": "#/definitions/internal_core_domain_evaluation.ScoreDataType"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "max_value": {
+                    "type": "number"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "min_value": {
+                    "type": "number"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "project_id": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "evaluation.ScoreDiffResponse": {
+            "description": "Score difference from baseline",
+            "type": "object",
+            "properties": {
+                "difference": {
+                    "type": "number"
+                },
+                "direction": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "evaluation.ScoreResponse": {
+            "description": "Score data",
+            "type": "object",
+            "properties": {
+                "data_type": {
+                    "type": "string"
+                },
+                "experiment_id": {
+                    "type": "string"
+                },
+                "experiment_item_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "name": {
+                    "type": "string"
+                },
+                "project_id": {
+                    "type": "string"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "source": {
+                    "type": "string"
+                },
+                "span_id": {
+                    "type": "string"
+                },
+                "string_value": {
+                    "type": "string"
+                },
+                "timestamp": {
+                    "type": "string"
+                },
+                "trace_id": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "number"
+                }
+            }
+        },
+        "evaluation.UpdateDatasetRequest": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 255,
+                    "minLength": 1
+                }
+            }
+        },
+        "evaluation.UpdateExperimentRequest": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 255,
+                    "minLength": 1
+                },
+                "status": {
+                    "$ref": "#/definitions/evaluation.ExperimentStatus"
+                }
+            }
+        },
+        "evaluation.UpdateRequest": {
+            "description": "Score config update request",
+            "type": "object",
+            "properties": {
+                "categories": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "data_type": {
+                    "enum": [
+                        "NUMERIC",
+                        "CATEGORICAL",
+                        "BOOLEAN"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/internal_transport_http_handlers_evaluation.ScoreDataType"
+                        }
+                    ]
+                },
+                "description": {
+                    "type": "string"
+                },
+                "max_value": {
+                    "type": "number"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "min_value": {
+                    "type": "number"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 1
+                }
+            }
+        },
         "health.HealthCheck": {
             "description": "Individual component health check result",
             "type": "object",
@@ -10660,6 +13184,19 @@
                     "example": "1.0.0"
                 }
             }
+        },
+        "internal_core_domain_evaluation.ScoreDataType": {
+            "type": "string",
+            "enum": [
+                "NUMERIC",
+                "CATEGORICAL",
+                "BOOLEAN"
+            ],
+            "x-enum-varnames": [
+                "ScoreDataTypeNumeric",
+                "ScoreDataTypeCategorical",
+                "ScoreDataTypeBoolean"
+            ]
         },
         "internal_transport_http_handlers_auth.LoginRequest": {
             "description": "User login credentials",
@@ -10842,6 +13379,137 @@
                     }
                 }
             }
+        },
+        "internal_transport_http_handlers_evaluation.CompareExperimentsRequest": {
+            "description": "Request to compare multiple experiments",
+            "type": "object",
+            "required": [
+                "experiment_ids"
+            ],
+            "properties": {
+                "baseline_id": {
+                    "type": "string"
+                },
+                "experiment_ids": {
+                    "type": "array",
+                    "maxItems": 10,
+                    "minItems": 2,
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "internal_transport_http_handlers_evaluation.CompareExperimentsResponse": {
+            "description": "Response containing experiment comparison results",
+            "type": "object",
+            "properties": {
+                "diffs": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "$ref": "#/definitions/evaluation.ScoreDiffResponse"
+                        }
+                    }
+                },
+                "experiments": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "$ref": "#/definitions/evaluation.ExperimentSummaryResponse"
+                    }
+                },
+                "scores": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "$ref": "#/definitions/evaluation.ScoreAggregationResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "internal_transport_http_handlers_evaluation.DatasetItemResponse": {
+            "description": "Dataset item data",
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "dataset_id": {
+                    "type": "string"
+                },
+                "expected": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "id": {
+                    "type": "string"
+                },
+                "input": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                }
+            }
+        },
+        "internal_transport_http_handlers_evaluation.ExperimentItemResponse": {
+            "description": "Experiment item data",
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "dataset_item_id": {
+                    "type": "string"
+                },
+                "expected": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "experiment_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "input": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "output": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "trace_id": {
+                    "type": "string"
+                },
+                "trial_number": {
+                    "type": "integer"
+                }
+            }
+        },
+        "internal_transport_http_handlers_evaluation.ScoreDataType": {
+            "description": "Score data type (NUMERIC, CATEGORICAL, BOOLEAN)",
+            "type": "string",
+            "enum": [
+                "NUMERIC",
+                "CATEGORICAL",
+                "BOOLEAN"
+            ],
+            "x-enum-varnames": [
+                "ScoreDataTypeNumeric",
+                "ScoreDataTypeCategorical",
+                "ScoreDataTypeBoolean"
+            ]
         },
         "internal_transport_http_handlers_organization.CreateOrganizationRequest": {
             "type": "object",
@@ -11640,34 +14308,32 @@
         "observability.Score": {
             "type": "object",
             "properties": {
-                "author_user_id": {
-                    "type": "string"
-                },
-                "comment": {
-                    "type": "string"
-                },
                 "data_type": {
                     "type": "string"
                 },
-                "evaluator_config": {
-                    "type": "object",
-                    "additionalProperties": {
-                        "type": "string"
-                    }
-                },
-                "evaluator_name": {
+                "experiment_id": {
+                    "description": "Experiment tracking",
                     "type": "string"
                 },
-                "evaluator_version": {
+                "experiment_item_id": {
                     "type": "string"
                 },
                 "id": {
+                    "description": "Identity",
+                    "type": "string"
+                },
+                "metadata": {
                     "type": "string"
                 },
                 "name": {
+                    "description": "Score data",
                     "type": "string"
                 },
                 "project_id": {
+                    "type": "string"
+                },
+                "reason": {
+                    "description": "Additional fields",
                     "type": "string"
                 },
                 "source": {
@@ -11680,16 +14346,15 @@
                     "type": "string"
                 },
                 "timestamp": {
+                    "description": "Timestamp",
                     "type": "string"
                 },
                 "trace_id": {
+                    "description": "Links",
                     "type": "string"
                 },
                 "value": {
                     "type": "number"
-                },
-                "version": {
-                    "type": "string"
                 }
             }
         },
@@ -11890,6 +14555,54 @@
                 }
             }
         },
+        "observability.SpanQueryHTTPRequest": {
+            "description": "SDK request for querying spans with filter expressions",
+            "type": "object",
+            "required": [
+                "filter"
+            ],
+            "properties": {
+                "end_time": {
+                    "type": "string",
+                    "example": "2024-01-31T23:59:59Z"
+                },
+                "filter": {
+                    "type": "string",
+                    "maxLength": 2000,
+                    "example": "service.name=chatbot AND gen_ai.system=openai"
+                },
+                "limit": {
+                    "type": "integer",
+                    "example": 100
+                },
+                "offset": {
+                    "type": "integer",
+                    "example": 0
+                },
+                "start_time": {
+                    "type": "string",
+                    "example": "2024-01-01T00:00:00Z"
+                }
+            }
+        },
+        "observability.SpanQueryHTTPResponse": {
+            "description": "Response containing queried spans with pagination info",
+            "type": "object",
+            "properties": {
+                "has_more": {
+                    "type": "boolean"
+                },
+                "spans": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/observability.Span"
+                    }
+                },
+                "total_count": {
+                    "type": "integer"
+                }
+            }
+        },
         "observability.Status": {
             "type": "object",
             "properties": {
@@ -12017,6 +14730,20 @@
                 },
                 "user_id": {
                     "type": "string"
+                }
+            }
+        },
+        "observability.ValidateFilterRequest": {
+            "description": "Request to validate a filter expression",
+            "type": "object",
+            "required": [
+                "filter"
+            ],
+            "properties": {
+                "filter": {
+                    "type": "string",
+                    "maxLength": 2000,
+                    "example": "service.name=chatbot"
                 }
             }
         },

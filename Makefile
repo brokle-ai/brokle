@@ -5,7 +5,7 @@
 
 # Available commands:
 .PHONY: help setup install-deps install-tools setup-databases
-.PHONY: dev dev-server dev-worker dev-frontend
+.PHONY: dev dev-server dev-worker dev-frontend stop-dev
 .PHONY: build build-oss build-enterprise build-server-oss build-worker-oss
 .PHONY: build-server-enterprise build-worker-enterprise build-frontend build-all
 .PHONY: build-dev-server build-dev-worker
@@ -24,6 +24,11 @@ help: ## Show this help message
 	@echo ""
 
 ##@ Development
+
+# Helper to kill processes on specific ports
+define kill-port
+	@-lsof -ti:$(1) | xargs kill 2>/dev/null || true
+endef
 
 setup: ## Setup development environment
 	@echo "🚀 Setting up development environment..."
@@ -56,11 +61,30 @@ dev: ## Start full stack (server + worker)
 
 dev-server: ## Start HTTP server with hot reload
 	@echo "🔥 Starting HTTP server with hot reload..."
+	@echo "   Cleaning up previous instances..."
+	@-pkill -f "air -c .air.toml" 2>/dev/null || true
+	@-pkill -f "./tmp/server" 2>/dev/null || true
+	$(call kill-port,8080)
+	$(call kill-port,4317)
+	@sleep 0.5
 	air -c .air.toml
 
 dev-worker: ## Start workers with hot reload
 	@echo "🔥 Starting workers with hot reload..."
+	@echo "   Cleaning up previous instances..."
+	@-pkill -f "air -c .air.worker.toml" 2>/dev/null || true
+	@-pkill -f "./tmp/worker" 2>/dev/null || true
+	@sleep 0.5
 	air -c .air.worker.toml
+
+stop-dev: ## Stop all development processes
+	@echo "🛑 Stopping all development processes..."
+	@-pkill -f "air -c .air" 2>/dev/null || true
+	@-pkill -f "./tmp/server" 2>/dev/null || true
+	@-pkill -f "./tmp/worker" 2>/dev/null || true
+	$(call kill-port,8080)
+	$(call kill-port,4317)
+	@echo "✅ All development processes stopped"
 
 dev-frontend: ## Start Next.js development server only
 	@echo "⚛️ Starting Next.js development server..."

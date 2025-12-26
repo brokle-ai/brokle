@@ -11,6 +11,7 @@ export enum RouteSection {
 export enum RouteGroup {
   Project = 'Project',
   Observability = 'Observability',
+  Evaluations = 'Evaluations',
   Other = 'Other',
 }
 

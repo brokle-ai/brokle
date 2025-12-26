@@ -6,6 +6,7 @@ import (
 	"brokle/internal/config"
 	"brokle/internal/core/domain/auth"
 	credentialsDomain "brokle/internal/core/domain/credentials"
+	evaluationDomain "brokle/internal/core/domain/evaluation"
 	"brokle/internal/core/domain/organization"
 	playgroundDomain "brokle/internal/core/domain/playground"
 	promptDomain "brokle/internal/core/domain/prompt"
@@ -20,6 +21,7 @@ import (
 	authHandler "brokle/internal/transport/http/handlers/auth"
 	"brokle/internal/transport/http/handlers/billing"
 	"brokle/internal/transport/http/handlers/credentials"
+	evaluationHandler "brokle/internal/transport/http/handlers/evaluation"
 	"brokle/internal/transport/http/handlers/health"
 	"brokle/internal/transport/http/handlers/logs"
 	"brokle/internal/transport/http/handlers/metrics"
@@ -53,7 +55,16 @@ type Handlers struct {
 	OTLPLogs      *observability.OTLPLogsHandler
 	Prompt        *prompt.Handler
 	Playground    *playground.Handler
+	SDKPlayground *playground.SDKPlaygroundHandler
 	Credentials   *credentials.Handler
+	Evaluation    *evaluationHandler.ScoreConfigHandler
+	SDKScore      *evaluationHandler.SDKScoreHandler
+	Dataset        *evaluationHandler.DatasetHandler
+	DatasetItem    *evaluationHandler.DatasetItemHandler
+	Experiment     *evaluationHandler.ExperimentHandler
+	ExperimentItem *evaluationHandler.ExperimentItemHandler
+	Rule           *evaluationHandler.RuleHandler
+	SpanQuery      *observability.SpanQueryHandler
 }
 
 func NewHandlers(
@@ -81,6 +92,12 @@ func NewHandlers(
 	credentialsSvc credentialsDomain.ProviderCredentialService,
 	modelCatalogSvc credentialsService.ModelCatalogService,
 	playgroundService playgroundDomain.PlaygroundService,
+	scoreConfigService evaluationDomain.ScoreConfigService,
+	datasetService evaluationDomain.DatasetService,
+	datasetItemService evaluationDomain.DatasetItemService,
+	experimentService evaluationDomain.ExperimentService,
+	experimentItemService evaluationDomain.ExperimentItemService,
+	ruleService evaluationDomain.RuleService,
 ) *Handlers {
 	return &Handlers{
 		Health:        health.NewHandler(cfg, logger),
@@ -102,6 +119,15 @@ func NewHandlers(
 		OTLPLogs:      observability.NewOTLPLogsHandler(observabilityServices.StreamProducer, observabilityServices.OTLPLogsConverterService, observabilityServices.OTLPEventsConverterService, logger),
 		Prompt:        prompt.NewHandler(cfg, logger, promptService, compilerService),
 		Playground:    playground.NewHandler(cfg, logger, playgroundService, projectService),
+		SDKPlayground: playground.NewSDKPlaygroundHandler(logger, playgroundService),
 		Credentials:   credentials.NewHandler(cfg, logger, credentialsSvc, modelCatalogSvc),
+		Evaluation:    evaluationHandler.NewScoreConfigHandler(logger, scoreConfigService),
+		SDKScore:      evaluationHandler.NewSDKScoreHandler(logger, observabilityServices.ScoreService, scoreConfigService),
+		Dataset:        evaluationHandler.NewDatasetHandler(logger, datasetService, datasetItemService),
+		DatasetItem:    evaluationHandler.NewDatasetItemHandler(logger, datasetItemService),
+		Experiment:     evaluationHandler.NewExperimentHandler(logger, experimentService, experimentItemService),
+		ExperimentItem: evaluationHandler.NewExperimentItemHandler(logger, experimentItemService),
+		Rule:           evaluationHandler.NewRuleHandler(ruleService),
+		SpanQuery:      observability.NewSpanQueryHandler(observabilityServices.SpanQueryService, logger),
 	}
 }

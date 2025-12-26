@@ -97,21 +97,6 @@ func mergeScoreFields(dst *observability.Score, src *observability.Score) {
 	if src.Source != "" {
 		dst.Source = src.Source
 	}
-	if src.Comment != nil {
-		dst.Comment = src.Comment
-	}
-	if src.EvaluatorName != nil {
-		dst.EvaluatorName = src.EvaluatorName
-	}
-	if src.EvaluatorVersion != nil {
-		dst.EvaluatorVersion = src.EvaluatorVersion
-	}
-	if src.EvaluatorConfig != nil {
-		dst.EvaluatorConfig = src.EvaluatorConfig
-	}
-	if src.AuthorUserID != nil && *src.AuthorUserID != "" {
-		dst.AuthorUserID = src.AuthorUserID
-	}
 	if !src.Timestamp.IsZero() {
 		dst.Timestamp = src.Timestamp
 	}

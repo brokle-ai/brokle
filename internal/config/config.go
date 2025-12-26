@@ -221,8 +221,20 @@ type ArchiveConfig struct {
 
 // WorkersConfig contains background worker configuration.
 type WorkersConfig struct {
-	AnalyticsWorkers    int `mapstructure:"analytics_workers"`
-	NotificationWorkers int `mapstructure:"notification_workers"`
+	AnalyticsWorkers    int              `mapstructure:"analytics_workers"`
+	NotificationWorkers int              `mapstructure:"notification_workers"`
+	RuleWorker          RuleWorkerConfig `mapstructure:"rule_worker"`
+}
+
+// RuleWorkerConfig contains evaluation rule worker configuration.
+type RuleWorkerConfig struct {
+	BatchSize         int    `mapstructure:"batch_size"`
+	BlockDurationMs   int    `mapstructure:"block_duration_ms"`
+	MaxRetries        int    `mapstructure:"max_retries"`
+	RetryBackoffMs    int    `mapstructure:"retry_backoff_ms"`
+	DiscoveryInterval string `mapstructure:"discovery_interval"`
+	MaxStreamsPerRead int    `mapstructure:"max_streams_per_read"`
+	RuleCacheTTL      string `mapstructure:"rule_cache_ttl"`
 }
 
 // NotificationsConfig contains notification system configuration.
@@ -934,6 +946,15 @@ func setDefaults() {
 
 	// Encryption defaults (must be set in production via AI_KEY_ENCRYPTION_KEY env var)
 	viper.SetDefault("encryption.ai_key_encryption_key", "")
+
+	// Rule worker defaults
+	viper.SetDefault("workers.rule_worker.batch_size", 50)
+	viper.SetDefault("workers.rule_worker.block_duration_ms", 1000)
+	viper.SetDefault("workers.rule_worker.max_retries", 3)
+	viper.SetDefault("workers.rule_worker.retry_backoff_ms", 500)
+	viper.SetDefault("workers.rule_worker.discovery_interval", "30s")
+	viper.SetDefault("workers.rule_worker.max_streams_per_read", 10)
+	viper.SetDefault("workers.rule_worker.rule_cache_ttl", "30s")
 }
 
 // GetServerAddress returns the server address string.

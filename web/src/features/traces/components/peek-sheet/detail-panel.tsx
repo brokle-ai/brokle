@@ -17,6 +17,7 @@ import {
   Download,
   TreeDeciduous,
   Code,
+  Star,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Trace, Span } from '../../data/schema'
@@ -27,6 +28,7 @@ import { CollapsibleSection } from './collapsible-section'
 import { AttributesTable } from './attributes-table'
 import { EventsList } from './events-list'
 import { LinksList } from './links-list'
+import { ScoresTabContent } from './scores-tab-content'
 import { useLocalStorage } from '@/hooks/use-local-storage'
 import { format } from 'date-fns'
 
@@ -37,6 +39,7 @@ interface DetailPanelProps {
   trace: Trace
   selectedSpan?: Span | null
   spans?: Span[]
+  projectId?: string
   className?: string
 }
 
@@ -641,6 +644,7 @@ export function DetailPanel({
   trace,
   selectedSpan,
   spans = [],
+  projectId,
   className,
 }: DetailPanelProps) {
   // Persist view mode preference across sessions
@@ -682,6 +686,10 @@ export function DetailPanel({
                   )}
                 </TabsTrigger>
               )}
+              <TabsTrigger value='scores' className='h-7 px-3 text-xs'>
+                <Star className='h-3 w-3 mr-1' />
+                Scores
+              </TabsTrigger>
             </TabsList>
 
             {/* Formatted/JSON Toggle */}
@@ -712,6 +720,20 @@ export function DetailPanel({
             <LogViewContent trace={trace} spans={spans} viewMode={viewMode} />
           </TabsContent>
         )}
+
+        <TabsContent value='scores' className='flex-1 min-h-0 overflow-y-auto p-4 mt-0'>
+          {projectId ? (
+            <ScoresTabContent
+              projectId={projectId}
+              traceId={trace.trace_id}
+              spans={spans}
+            />
+          ) : (
+            <div className='text-sm text-muted-foreground text-center py-8'>
+              Project context required to load scores
+            </div>
+          )}
+        </TabsContent>
       </Tabs>
     </div>
   )

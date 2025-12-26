@@ -107,22 +107,31 @@ type Span struct {
 
 // Score represents a quality evaluation score linked to traces and spans
 type Score struct {
-	Timestamp        time.Time         `json:"timestamp" db:"timestamp"`
-	Comment          *string           `json:"comment,omitempty" db:"comment"`
-	Version          *string           `json:"version,omitempty" db:"version"`
-	AuthorUserID     *string           `json:"author_user_id,omitempty" db:"author_user_id"`
-	EvaluatorConfig  map[string]string `json:"evaluator_config" db:"evaluator_config"`
-	Value            *float64          `json:"value,omitempty" db:"value"`
-	StringValue      *string           `json:"string_value,omitempty" db:"string_value"`
-	EvaluatorVersion *string           `json:"evaluator_version,omitempty" db:"evaluator_version"`
-	EvaluatorName    *string           `json:"evaluator_name,omitempty" db:"evaluator_name"`
-	Name             string            `json:"name" db:"name"`
-	Source           string            `json:"source" db:"source"`
-	DataType         string            `json:"data_type" db:"data_type"`
-	ID               string            `json:"id" db:"id"`
-	SpanID           string            `json:"span_id" db:"span_id"`
-	TraceID          string            `json:"trace_id" db:"trace_id"`
-	ProjectID        string            `json:"project_id" db:"project_id"`
+	// Identity
+	ID        string `json:"id" db:"score_id"`
+	ProjectID string `json:"project_id" db:"project_id"`
+
+	// Links
+	TraceID string `json:"trace_id" db:"trace_id"`
+	SpanID  string `json:"span_id" db:"span_id"`
+
+	// Score data
+	Name        string   `json:"name" db:"name"`
+	Value       *float64 `json:"value,omitempty" db:"value"`
+	StringValue *string  `json:"string_value,omitempty" db:"string_value"`
+	DataType    string   `json:"data_type" db:"data_type"`
+	Source      string   `json:"source" db:"source"`
+
+	// Additional fields
+	Reason   *string `json:"reason,omitempty" db:"reason"`
+	Metadata string  `json:"metadata" db:"metadata"`
+
+	// Experiment tracking
+	ExperimentID     *string `json:"experiment_id,omitempty" db:"experiment_id"`
+	ExperimentItemID *string `json:"experiment_item_id,omitempty" db:"experiment_item_id"`
+
+	// Timestamp
+	Timestamp time.Time `json:"timestamp" db:"timestamp"`
 }
 
 // Model represents an LLM/API model with pricing information (PostgreSQL)
@@ -330,11 +339,11 @@ const (
 	ScoreDataTypeBoolean     = "BOOLEAN"
 )
 
-// Score source constants
+// Score source constants (matches ClickHouse Enum8)
 const (
-	ScoreSourceAPI        = "API"
-	ScoreSourceAnnotation = "ANNOTATION"
-	ScoreSourceEval       = "EVAL"
+	ScoreSourceCode  = "code"  // SDK/programmatic scores
+	ScoreSourceLLM   = "llm"   // LLM-based evaluation
+	ScoreSourceHuman = "human" // Human annotations
 )
 
 // UnmarshalJSON handles input/output fields that may be strings, objects, or arrays from SDK

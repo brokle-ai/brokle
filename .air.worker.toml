@@ -4,14 +4,60 @@ tmp_dir = "tmp"
 [build]
   cmd = "go build -o ./tmp/worker cmd/worker/main.go"
   bin = "tmp/worker"
-  full_bin = "APP_ENV=dev ./tmp/worker"
+  full_bin = "APP_ENV=development ./tmp/worker"
   include_ext = ["go", "tpl", "tmpl", "html"]
-  exclude_dir = ["assets", "tmp", "vendor", "web", "node_modules", "cmd/server"]
-  include_dir = ["cmd/worker", "internal"]
+  exclude_dir = [
+    # Large directories (causing inotify exhaustion)
+    "competitors",
+    "sdk",
+    "brokle-website",
+    "realtests",
+    # Build artifacts
+    "bin",
+    "build",
+    "tmp",
+    "vendor",
+    # Frontend
+    "web",
+    "node_modules",
+    # Python/other
+    "venv",
+    ".pytest_cache",
+    # Version control & tooling
+    ".git",
+    ".github",
+    ".claude",
+    ".serena",
+    ".moat",
+    # Documentation
+    "docs",
+    "claudedocs",
+    "internal-docs",
+    # Non-Go directories
+    "assets",
+    "logs",
+    "monitoring",
+    "deployments",
+    "prompts",
+    "examples",
+    "tests",
+    "test",
+    "seeders",
+    "seeds",
+    "migrations",
+    "scripts",
+    "configs",
+    # Other cmd (server has its own air config)
+    "cmd/server",
+    "cmd/migrate"
+  ]
+  include_dir = ["cmd/worker", "internal", "pkg"]
   exclude_file = []
   delay = 1000
   stop_on_error = true
   log = "build-errors.log"
+  send_interrupt = true
+  kill_delay = "3s"
 
 [color]
   main = "blue"

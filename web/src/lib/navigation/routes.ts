@@ -7,11 +7,14 @@ import {
   Activity,
   FileText,
   FlaskConical,
+  Database,
+  BarChart3,
+  Scale,
 } from 'lucide-react'
 
 export const ROUTES: Route[] = [
   // ========================================
-  // ROOT CONTEXT (1 route)
+  // ROOT CONTEXT
   // ========================================
   {
     title: 'Dashboard',
@@ -23,7 +26,7 @@ export const ROUTES: Route[] = [
   },
 
   // ========================================
-  // ORGANIZATION CONTEXT (2 routes)
+  // ORGANIZATION CONTEXT
   // ========================================
   {
     title: 'Projects',
@@ -47,10 +50,10 @@ export const ROUTES: Route[] = [
   },
 
   // ========================================
-  // PROJECT CONTEXT (5 routes)
+  // PROJECT CONTEXT
   // ========================================
 
-  // Project Group (1 route)
+  // Project Group
   {
     title: 'Overview',
     pathname: '/projects/[projectSlug]',
@@ -60,7 +63,7 @@ export const ROUTES: Route[] = [
     show: ({ currentProjectSlug }) => !!currentProjectSlug,
   },
 
-  // Observability Group (3 routes)
+  // Observability Group
   {
     title: 'Traces',
     pathname: '/projects/[projectSlug]/traces',
@@ -89,7 +92,45 @@ export const ROUTES: Route[] = [
     show: ({ currentProjectSlug }) => !!currentProjectSlug,
   },
 
-  // Other Group (1 route)
+  // Evaluations Group
+  {
+    title: 'Datasets',
+    pathname: '/projects/[projectSlug]/datasets',
+    icon: Database,
+    section: RouteSection.Main,
+    group: RouteGroup.Evaluations,
+    rbacScope: 'projects:read',
+    show: ({ currentProjectSlug }) => !!currentProjectSlug,
+  },
+  {
+    title: 'Experiments',
+    pathname: '/projects/[projectSlug]/experiments',
+    icon: FlaskConical,
+    section: RouteSection.Main,
+    group: RouteGroup.Evaluations,
+    rbacScope: 'projects:read',
+    show: ({ currentProjectSlug }) => !!currentProjectSlug,
+  },
+  {
+    title: 'Scores',
+    pathname: '/projects/[projectSlug]/scores',
+    icon: BarChart3,
+    section: RouteSection.Main,
+    group: RouteGroup.Evaluations,
+    rbacScope: 'projects:read',
+    show: ({ currentProjectSlug }) => !!currentProjectSlug,
+  },
+  {
+    title: 'Rules',
+    pathname: '/projects/[projectSlug]/evaluations/rules',
+    icon: Scale,
+    section: RouteSection.Main,
+    group: RouteGroup.Evaluations,
+    rbacScope: 'projects:read',
+    show: ({ currentProjectSlug }) => !!currentProjectSlug,
+  },
+
+  // Other Group
   {
     title: 'Settings',
     pathname: '/projects/[projectSlug]/settings',
@@ -101,7 +142,7 @@ export const ROUTES: Route[] = [
   },
 
   // ========================================
-  // USER SETTINGS CONTEXT (1 route)
+  // USER SETTINGS CONTEXT
   // ========================================
   {
     title: 'Home',
@@ -111,9 +152,3 @@ export const ROUTES: Route[] = [
     show: ({ pathname }) => pathname.startsWith('/settings'),
   },
 ]
-
-// Total: 9 routes
-// - Root: 1 (Dashboard)
-// - Organization: 2 (Projects, Settings)
-// - Project: 5 (1 Project Group + 3 Observability + 1 Other)
-// - User Settings: 1 (Home - back to dashboard)

@@ -15,16 +15,13 @@ import (
 // TraceService defines the interface for trace and span operations.
 // Traces are virtual (derived from root spans where parent_span_id IS NULL).
 type TraceService interface {
-	// Span Ingestion
 	IngestSpan(ctx context.Context, span *Span) error
 	IngestSpanBatch(ctx context.Context, spans []*Span) error
 
-	// Span Queries
 	GetSpan(ctx context.Context, spanID string) (*Span, error)
 	GetSpansByFilter(ctx context.Context, filter *SpanFilter) ([]*Span, error)
 	CountSpans(ctx context.Context, filter *SpanFilter) (int64, error)
 
-	// Trace Queries
 	GetTrace(ctx context.Context, traceID string) (*TraceSummary, error)
 	GetTraceSpans(ctx context.Context, traceID string) ([]*Span, error)
 	GetTraceTree(ctx context.Context, traceID string) ([]*Span, error)
@@ -32,41 +29,32 @@ type TraceService interface {
 	ListTraces(ctx context.Context, filter *TraceFilter) ([]*TraceSummary, error)
 	CountTraces(ctx context.Context, filter *TraceFilter) (int64, error)
 
-	// Analytics
 	GetTracesBySession(ctx context.Context, sessionID string) ([]*TraceSummary, error)
 	GetTracesByUser(ctx context.Context, userID string, filter *TraceFilter) ([]*TraceSummary, error)
 	CalculateTraceCost(ctx context.Context, traceID string) (float64, error)
 	CalculateTraceTokens(ctx context.Context, traceID string) (uint64, error)
 
-	// Deletion
 	DeleteSpan(ctx context.Context, spanID string) error
 	DeleteTrace(ctx context.Context, traceID string) error
 }
 
-// ScoreService defines the comprehensive interface for quality score operations
-// Used by both workers (CreateScore) and handlers (GetScoresByTraceID, etc.)
+// ScoreService used by both workers (CreateScore) and handlers (GetScoresByTraceID, etc.)
 type ScoreService interface {
-	// Create operations
 	CreateScore(ctx context.Context, score *Score) error
 	CreateScoreBatch(ctx context.Context, scores []*Score) error
 
-	// Read operations
 	GetScoreByID(ctx context.Context, id string) (*Score, error)
 	GetScoresByTraceID(ctx context.Context, traceID string) ([]*Score, error)
 	GetScoresBySpanID(ctx context.Context, spanID string) ([]*Score, error)
 	GetScoresByFilter(ctx context.Context, filter *ScoreFilter) ([]*Score, error)
 
-	// Update operations
 	UpdateScore(ctx context.Context, score *Score) error
 
-	// Delete operations
 	DeleteScore(ctx context.Context, id string) error
 
-	// Analytics operations
 	CountScores(ctx context.Context, filter *ScoreFilter) (int64, error)
 }
 
-// MetricsService defines the interface for OTLP metrics operations
 type MetricsService interface {
 	CreateMetricSumBatch(ctx context.Context, metricsSums []*MetricSum) error
 	CreateMetricGaugeBatch(ctx context.Context, metricsGauges []*MetricGauge) error
@@ -74,17 +62,14 @@ type MetricsService interface {
 	CreateMetricExponentialHistogramBatch(ctx context.Context, metricsExpHistograms []*MetricExponentialHistogram) error
 }
 
-// LogsService defines the interface for OTLP logs operations
 type LogsService interface {
 	CreateLogBatch(ctx context.Context, logs []*Log) error
 }
 
-// GenAIEventsService defines the interface for OTLP GenAI events operations
 type GenAIEventsService interface {
 	CreateGenAIEventBatch(ctx context.Context, events []*GenAIEvent) error
 }
 
-// TelemetryDeduplicationService defines the interface for ULID-based deduplication
 type TelemetryDeduplicationService interface {
 	// Atomic deduplication operations (uses composite OTLP IDs: trace_id:span_id)
 	ClaimEvents(ctx context.Context, projectID ulid.ULID, batchID ulid.ULID, dedupIDs []string, ttl time.Duration) (claimedIDs, duplicateIDs []string, err error)
@@ -115,18 +100,14 @@ type TelemetryDeduplicationService interface {
 	GetFallbackRate(ctx context.Context, timeWindow time.Duration) (float64, error)
 }
 
-// TelemetryService aggregates all telemetry-related services for health monitoring
 type TelemetryService interface {
-	// Service access
 	Deduplication() TelemetryDeduplicationService
 
-	// Health and monitoring
 	GetHealth(ctx context.Context) (*TelemetryHealthStatus, error)
 	GetMetrics(ctx context.Context) (*TelemetryMetrics, error)
 	GetPerformanceStats(ctx context.Context, timeWindow time.Duration) (*TelemetryPerformanceStats, error)
 }
 
-// Quality evaluator interface
 type QualityEvaluator interface {
 	Name() string
 	Version() string
@@ -136,9 +117,6 @@ type QualityEvaluator interface {
 	ValidateInput(input *EvaluationInput) error
 }
 
-// Service request and response types
-
-// SpanCompletion represents data for completing a span
 type SpanCompletion struct {
 	EndTime        time.Time        `json:"end_time"`
 	Output         map[string]any   `json:"output,omitempty"`
@@ -149,14 +127,12 @@ type SpanCompletion struct {
 	AdditionalData map[string]any   `json:"additional_data,omitempty"`
 }
 
-// TokenUsage represents token usage information
 type TokenUsage struct {
 	PromptTokens     int `json:"prompt_tokens"`
 	CompletionTokens int `json:"completion_tokens"`
 	TotalTokens      int `json:"total_tokens"`
 }
 
-// CostCalculation represents cost calculation details
 type CostCalculation struct {
 	Currency   string  `json:"currency"`
 	Provider   string  `json:"provider"`
@@ -166,15 +142,13 @@ type CostCalculation struct {
 	TotalCost  float64 `json:"total_cost"`
 }
 
-// BatchIngestRequest represents a batch ingestion request
-// Note: Uses Span as traces are virtual in OTLP (root spans = traces)
+// Uses Span as traces are virtual in OTLP (root spans = traces)
 type BatchIngestRequest struct {
 	Spans     []*Span   `json:"spans"`
 	ProjectID ulid.ULID `json:"project_id"`
 	Async     bool      `json:"async"`
 }
 
-// BatchIngestResult represents the result of a batch ingestion
 type BatchIngestResult struct {
 	JobID          *string               `json:"job_id,omitempty"`
 	Errors         []BatchIngestionError `json:"errors,omitempty"`
@@ -183,9 +157,6 @@ type BatchIngestResult struct {
 	Duration       time.Duration         `json:"duration"`
 }
 
-// Service-specific request and response types for telemetry processing
-
-// TelemetryBatchRequest represents a high-throughput telemetry batch request
 type TelemetryBatchRequest struct {
 	Metadata  map[string]any           `json:"metadata"`
 	Events    []*TelemetryEventRequest `json:"events"`
@@ -193,7 +164,6 @@ type TelemetryBatchRequest struct {
 	Async     bool                     `json:"async"`
 }
 
-// TelemetryEventRequest represents an individual telemetry event in a batch
 type TelemetryEventRequest struct {
 	Payload   map[string]any     `json:"payload"`
 	Timestamp *time.Time         `json:"timestamp,omitempty"`
@@ -203,7 +173,6 @@ type TelemetryEventRequest struct {
 	EventID   ulid.ULID          `json:"event_id"`
 }
 
-// Validate validates the event request
 func (e *TelemetryEventRequest) Validate() error {
 	if e.EventType == TelemetryEventTypeSpan && e.SpanID == "" {
 		return errors.New("span events must have non-empty span_id")
@@ -214,7 +183,6 @@ func (e *TelemetryEventRequest) Validate() error {
 	return nil
 }
 
-// TelemetryBatchResponse represents the response for telemetry batch processing
 type TelemetryBatchResponse struct {
 	JobID             *string               `json:"job_id,omitempty"`
 	Errors            []TelemetryEventError `json:"errors,omitempty"`
@@ -226,7 +194,6 @@ type TelemetryBatchResponse struct {
 	BatchID           ulid.ULID             `json:"batch_id"`
 }
 
-// TelemetryEventError represents an error processing a telemetry event
 type TelemetryEventError struct {
 	EventType    TelemetryEventType `json:"event_type"`
 	ErrorCode    string             `json:"error_code"`
@@ -235,7 +202,6 @@ type TelemetryEventError struct {
 	Retryable    bool               `json:"retryable"`
 }
 
-// BatchProcessingResult represents the result of batch processing operations
 type BatchProcessingResult struct {
 	Errors           []TelemetryEventError `json:"errors,omitempty"`
 	TotalEvents      int                   `json:"total_events"`
@@ -248,7 +214,6 @@ type BatchProcessingResult struct {
 	BatchID          ulid.ULID             `json:"batch_id"`
 }
 
-// EventProcessingResult represents the result of event processing operations
 type EventProcessingResult struct {
 	ProcessedEventIDs []ulid.ULID           `json:"processed_event_ids"`
 	NotProcessedIDs   []ulid.ULID           `json:"not_processed_ids"`
@@ -261,7 +226,6 @@ type EventProcessingResult struct {
 	SuccessRate       float64               `json:"success_rate"`
 }
 
-// RedisHealthStatus represents Redis health status for deduplication
 type RedisHealthStatus struct {
 	LastError   *string       `json:"last_error,omitempty"`
 	LatencyMs   float64       `json:"latency_ms"`
@@ -271,7 +235,6 @@ type RedisHealthStatus struct {
 	Available   bool          `json:"available"`
 }
 
-// DeduplicationStats represents deduplication performance statistics
 type DeduplicationStats struct {
 	ProjectID         ulid.ULID `json:"project_id"`
 	TotalChecks       int64     `json:"total_checks"`
@@ -284,7 +247,6 @@ type DeduplicationStats struct {
 	AverageLatencyMs  float64   `json:"average_latency_ms"`
 }
 
-// TelemetryHealthStatus represents overall telemetry service health
 type TelemetryHealthStatus struct {
 	Database              *DatabaseHealth    `json:"database"`
 	Redis                 *RedisHealthStatus `json:"redis"`
@@ -296,7 +258,6 @@ type TelemetryHealthStatus struct {
 	Healthy               bool               `json:"healthy"`
 }
 
-// DatabaseHealth represents database health status
 type DatabaseHealth struct {
 	Connected         bool    `json:"connected"`
 	LatencyMs         float64 `json:"latency_ms"`
@@ -304,7 +265,6 @@ type DatabaseHealth struct {
 	MaxConnections    int     `json:"max_connections"`
 }
 
-// QueueHealth represents processing queue health
 type QueueHealth struct {
 	Size             int64   `json:"size"`
 	ProcessingRate   float64 `json:"processing_rate"`
@@ -312,7 +272,6 @@ type QueueHealth struct {
 	OldestMessageAge float64 `json:"oldest_message_age_ms"`
 }
 
-// TelemetryMetrics represents comprehensive telemetry service metrics
 type TelemetryMetrics struct {
 	TotalBatches          int64   `json:"total_batches"`
 	CompletedBatches      int64   `json:"completed_batches"`
@@ -328,7 +287,6 @@ type TelemetryMetrics struct {
 	DeduplicationRate     float64 `json:"deduplication_rate"`
 }
 
-// TelemetryPerformanceStats represents performance statistics over a time window
 type TelemetryPerformanceStats struct {
 	TimeWindow           time.Duration `json:"time_window"`
 	TotalRequests        int64         `json:"total_requests"`
@@ -344,28 +302,35 @@ type TelemetryPerformanceStats struct {
 	RetryRate            float64       `json:"retry_rate"`
 }
 
-// SpanBatchRequest represents a batch span ingestion request
 type SpanBatchRequest struct {
 	Spans     []*Span   `json:"spans"`
 	ProjectID ulid.ULID `json:"project_id"`
 	Async     bool      `json:"async"`
 }
 
-// QualityScoreBatchRequest represents a batch quality score ingestion request
 type QualityScoreBatchRequest struct {
 	QualityScores []*Score  `json:"quality_scores"`
 	ProjectID     ulid.ULID `json:"project_id"`
 	Async         bool      `json:"async"`
 }
 
-// BatchIngestionError represents an error during batch ingestion
 type BatchIngestionError struct {
 	Details any    `json:"details,omitempty"`
 	Error   string `json:"error"`
 	Index   int    `json:"index"`
 }
 
-// BulkEvaluationRequest represents a bulk evaluation request
+type AnalyticsFilter struct {
+	ProjectID *string    `json:"project_id,omitempty"`
+	UserID    *string    `json:"user_id,omitempty"`
+	StartTime *time.Time `json:"start_time,omitempty"`
+	EndTime   *time.Time `json:"end_time,omitempty"`
+	Provider  *string    `json:"provider,omitempty"`
+	Model     *string    `json:"model,omitempty"`
+	SpanType  *string    `json:"span_type,omitempty"`
+	Tags      []string   `json:"tags,omitempty"`
+}
+
 type BulkEvaluationRequest struct {
 	Filter         *AnalyticsFilter `json:"filter,omitempty"`
 	TraceIDs       []ulid.ULID      `json:"trace_ids,omitempty"`
@@ -374,7 +339,6 @@ type BulkEvaluationRequest struct {
 	Async          bool             `json:"async"`
 }
 
-// BulkEvaluationResult represents the result of bulk evaluation
 type BulkEvaluationResult struct {
 	JobID          *string               `json:"job_id,omitempty"`
 	Scores         []*Score              `json:"scores,omitempty"`
@@ -383,15 +347,13 @@ type BulkEvaluationResult struct {
 	FailedCount    int                   `json:"failed_count"`
 }
 
-// BulkEvaluationError represents an error during bulk evaluation
 type BulkEvaluationError struct {
 	Details any       `json:"details,omitempty"`
 	Error   string    `json:"error"`
 	ItemID  ulid.ULID `json:"item_id"`
 }
 
-// EvaluationInput represents input for quality evaluation
-// Note: Uses TraceSummary as traces are virtual in OTLP
+// Uses TraceSummary as traces are virtual in OTLP.
 type EvaluationInput struct {
 	TraceID      *ulid.ULID    `json:"trace_id,omitempty"`
 	SpanID       *ulid.ULID    `json:"span_id,omitempty"`
@@ -400,7 +362,6 @@ type EvaluationInput struct {
 	Context      map[string]any `json:"context,omitempty"`
 }
 
-// QualityEvaluatorInfo represents information about a quality evaluator
 type QualityEvaluatorInfo struct {
 	Configuration  map[string]any `json:"configuration,omitempty"`
 	Name           string         `json:"name"`
@@ -410,9 +371,6 @@ type QualityEvaluatorInfo struct {
 	IsBuiltIn      bool           `json:"is_built_in"`
 }
 
-// Dashboard and reporting types
-
-// DashboardOverview represents overview metrics for dashboard
 type DashboardOverview struct {
 	TopProviders   []*ProviderSummary `json:"top_providers"`
 	RecentActivity []*ActivityItem    `json:"recent_activity"`
@@ -425,7 +383,6 @@ type DashboardOverview struct {
 	ErrorRate      float64            `json:"error_rate"`
 }
 
-// ProviderSummary represents summary information for a provider
 type ProviderSummary struct {
 	Provider       string  `json:"provider"`
 	RequestCount   int64   `json:"request_count"`
@@ -434,7 +391,6 @@ type ProviderSummary struct {
 	ErrorRate      float64 `json:"error_rate"`
 }
 
-// ActivityItem represents a recent activity item
 type ActivityItem struct {
 	Timestamp   time.Time      `json:"timestamp"`
 	Metadata    map[string]any `json:"metadata,omitempty"`
@@ -442,13 +398,11 @@ type ActivityItem struct {
 	Description string         `json:"description"`
 }
 
-// TimeRange represents a time range for analytics
 type TimeRange struct {
 	Start time.Time `json:"start"`
 	End   time.Time `json:"end"`
 }
 
-// OptimizationSuggestion represents a cost optimization suggestion
 type OptimizationSuggestion struct {
 	Metadata         map[string]any `json:"metadata,omitempty"`
 	Type             string         `json:"type"`
@@ -459,7 +413,6 @@ type OptimizationSuggestion struct {
 	Confidence       float64        `json:"confidence"`
 }
 
-// LatencyHeatmap represents latency data in heatmap format
 type LatencyHeatmap struct {
 	Data     [][]float64 `json:"data"`
 	XLabels  []string    `json:"x_labels"`
@@ -468,7 +421,6 @@ type LatencyHeatmap struct {
 	MaxValue float64     `json:"max_value"`
 }
 
-// ThroughputMetrics represents throughput metrics
 type ThroughputMetrics struct {
 	TimeSeries        []*TimeSeriesPoint `json:"time_series"`
 	RequestsPerSecond float64            `json:"requests_per_second"`
@@ -477,9 +429,6 @@ type ThroughputMetrics struct {
 	PeakThroughput    float64            `json:"peak_throughput"`
 }
 
-// Queue and ingestion monitoring types
-
-// QueueStatus represents the status of ingestion queues
 type QueueStatus struct {
 	TraceQueue   *QueueInfo `json:"trace_queue"`
 	SpanQueue    *QueueInfo `json:"span_queue"`
@@ -488,7 +437,6 @@ type QueueStatus struct {
 	IsHealthy    bool       `json:"is_healthy"`
 }
 
-// QueueInfo represents information about a specific queue
 type QueueInfo struct {
 	LastUpdated time.Time `json:"last_updated"`
 	Name        string    `json:"name"`
@@ -497,7 +445,6 @@ type QueueInfo struct {
 	Failed      int64     `json:"failed"`
 }
 
-// IngestionHealth represents the health status of ingestion
 type IngestionHealth struct {
 	LastCheck      time.Time      `json:"last_check"`
 	Details        map[string]any `json:"details,omitempty"`
@@ -508,7 +455,6 @@ type IngestionHealth struct {
 	ErrorRate      float64        `json:"error_rate"`
 }
 
-// IngestionMetrics represents metrics for the ingestion system
 type IngestionMetrics struct {
 	Errors         []*IngestionError `json:"recent_errors,omitempty"`
 	TotalIngested  int64             `json:"total_ingested"`
@@ -519,7 +465,6 @@ type IngestionMetrics struct {
 	WorkerCount    int               `json:"worker_count"`
 }
 
-// IngestionError represents an ingestion error
 type IngestionError struct {
 	Timestamp time.Time      `json:"timestamp"`
 	Details   map[string]any `json:"details,omitempty"`
@@ -528,9 +473,6 @@ type IngestionError struct {
 	Count     int64          `json:"count"`
 }
 
-// Export and reporting types
-
-// ExportFormat represents supported export formats
 type ExportFormat string
 
 const (
@@ -539,7 +481,6 @@ const (
 	ExportFormatParquet ExportFormat = "parquet"
 )
 
-// ExportResult represents the result of an export operation
 type ExportResult struct {
 	ExpiresAt   time.Time    `json:"expires_at"`
 	DownloadURL string       `json:"download_url"`
@@ -549,7 +490,6 @@ type ExportResult struct {
 	FileSize    int64        `json:"file_size"`
 }
 
-// ReportType represents different types of reports
 type ReportType string
 
 const (
@@ -559,7 +499,6 @@ const (
 	ReportTypeUsage       ReportType = "usage"
 )
 
-// Report represents a generated report
 type Report struct {
 	GeneratedAt time.Time      `json:"generated_at"`
 	Data        map[string]any `json:"data"`
@@ -571,11 +510,4 @@ type Report struct {
 	ID          ulid.ULID      `json:"id"`
 }
 
-// Placeholder types (will be implemented with analytics features)
-
-type AnalyticsFilter struct{}
-
-type TimeSeriesPoint struct {
-	Timestamp time.Time `json:"timestamp"`
-	Value     float64   `json:"value"`
-}
+// Note: Analytics types (TimeSeriesPoint, ScoreStatistics, etc.) are defined in repository.go

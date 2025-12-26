@@ -164,7 +164,7 @@ export function TraceDetailLayout({
           </div>
         ) : spans.length === 0 ? (
           // No spans - just show detail panel
-          <DetailPanel trace={trace} selectedSpan={null} spans={[]} />
+          <DetailPanel trace={trace} selectedSpan={null} spans={[]} projectId={_projectId} />
         ) : (
           // Has spans - show resizable two-panel layout
           <ResizablePanelGroup direction='horizontal' className='h-full'>
@@ -209,6 +209,7 @@ export function TraceDetailLayout({
                   trace={trace}
                   selectedSpan={selectedSpan}
                   spans={spans}
+                  projectId={_projectId}
                   className={cn(isLeftPanelCollapsed && 'pl-12')}
                 />
               </div>
