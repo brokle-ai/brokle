@@ -254,6 +254,21 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 		orgs.GET("/:orgId/roles/:roleId", s.authMiddleware.RequirePermission("roles:read"), s.handlers.RBAC.GetCustomRole)
 		orgs.PUT("/:orgId/roles/:roleId", s.authMiddleware.RequirePermission("roles:write"), s.handlers.RBAC.UpdateCustomRole)
 		orgs.DELETE("/:orgId/roles/:roleId", s.authMiddleware.RequirePermission("roles:delete"), s.handlers.RBAC.DeleteCustomRole)
+
+		// AI Provider Credentials routes (organization-level)
+		orgCredentials := orgs.Group("/:orgId/credentials")
+		{
+			aiCreds := orgCredentials.Group("/ai")
+			{
+				aiCreds.POST("", s.authMiddleware.RequirePermission("credentials:write"), s.handlers.Credentials.Create)
+				aiCreds.POST("/test", s.authMiddleware.RequirePermission("credentials:write"), s.handlers.Credentials.TestConnection)
+				aiCreds.GET("", s.authMiddleware.RequirePermission("credentials:read"), s.handlers.Credentials.List)
+				aiCreds.GET("/models", s.authMiddleware.RequirePermission("credentials:read"), s.handlers.Credentials.GetAvailableModels)
+				aiCreds.GET("/:credentialId", s.authMiddleware.RequirePermission("credentials:read"), s.handlers.Credentials.Get)
+				aiCreds.PATCH("/:credentialId", s.authMiddleware.RequirePermission("credentials:write"), s.handlers.Credentials.Update)
+				aiCreds.DELETE("/:credentialId", s.authMiddleware.RequirePermission("credentials:write"), s.handlers.Credentials.Delete)
+			}
+		}
 	}
 
 	projects := protected.Group("/projects")
@@ -304,20 +319,6 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 				sessions.PUT("/:sessionId", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Playground.UpdateSession)
 				sessions.POST("/:sessionId/update", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Playground.UpdateSession) // sendBeacon fallback
 				sessions.DELETE("/:sessionId", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Playground.DeleteSession)
-			}
-		}
-
-		credentials := projects.Group("/:projectId/credentials")
-		{
-			aiCreds := credentials.Group("/ai")
-			{
-				aiCreds.POST("", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Credentials.Create)
-				aiCreds.POST("/test", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Credentials.TestConnection)
-				aiCreds.GET("", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Credentials.List)
-				aiCreds.GET("/models", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Credentials.GetAvailableModels)
-				aiCreds.GET("/:credentialId", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Credentials.Get)
-				aiCreds.PATCH("/:credentialId", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Credentials.Update)
-				aiCreds.DELETE("/:credentialId", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Credentials.Delete)
 			}
 		}
 

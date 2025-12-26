@@ -486,13 +486,12 @@ func ProvideWorkerServices(core *CoreContainer) *ServiceContainer {
 	// Prompt services needed for LLM scorer
 	promptServices := ProvidePromptServices(core.TxManager, repos.Prompt, analyticsServices.ProviderPricing, cfg, logger)
 
-	// Credentials services needed for LLM scorer (may fail if encryption key not configured)
+	// Credentials services needed for LLM scorer (optional - only if encryption key configured)
 	var credentialsServices *CredentialsServices
-	credSvc, err := ProvideCredentialsServices(repos.Credentials, repos.Analytics, cfg, logger)
-	if err != nil {
-		logger.Warn("failed to initialize credentials services for worker, LLM scorer will be disabled", "error", err)
+	if cfg.Encryption.AIKeyEncryptionKey != "" {
+		credentialsServices = ProvideCredentialsServices(repos.Credentials, repos.Analytics, cfg, logger)
 	} else {
-		credentialsServices = credSvc
+		logger.Warn("AI_KEY_ENCRYPTION_KEY not configured, LLM scorer will be disabled")
 	}
 
 	// Evaluation services needed for rule worker
