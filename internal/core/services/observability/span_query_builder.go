@@ -2,11 +2,40 @@ package observability
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
 	obsDomain "brokle/internal/core/domain/observability"
 )
+
+// validFieldNamePattern enforces that field names only contain safe characters.
+// This provides defense in depth against SQL injection via field names.
+// Pattern: must start with letter or underscore, followed by letters, digits, underscores, or dots.
+var validFieldNamePattern = regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_.]*$`)
+
+const maxFieldNameLength = 200
+
+// validateFieldName validates a field name to prevent SQL injection.
+// Even though the lexer restricts characters, this provides defense in depth.
+func validateFieldName(field string) error {
+	if field == "" {
+		return obsDomain.ErrInvalidFieldName
+	}
+	if len(field) > maxFieldNameLength {
+		return fmt.Errorf("%w: field name too long (max %d characters)", obsDomain.ErrInvalidFieldName, maxFieldNameLength)
+	}
+	if !validFieldNamePattern.MatchString(field) {
+		return obsDomain.ErrInvalidFieldName
+	}
+	return nil
+}
+
+// escapeAttributeKey escapes single quotes in attribute keys for SQL safety.
+// This provides defense in depth even though validateFieldName should reject such input.
+func escapeAttributeKey(key string) string {
+	return strings.ReplaceAll(key, "'", "''")
+}
 
 // SpanQueryBuilder converts filter AST to ClickHouse SQL with parameterized queries.
 type SpanQueryBuilder struct {
@@ -136,6 +165,11 @@ func (b *SpanQueryBuilder) buildNode(node obsDomain.FilterNode) (string, []inter
 
 // buildBinaryNode handles AND/OR binary expressions.
 func (b *SpanQueryBuilder) buildBinaryNode(node *obsDomain.BinaryNode) (string, []interface{}, error) {
+	// Validate operator to prevent injection via directly created AST nodes
+	if node.Operator != obsDomain.LogicAnd && node.Operator != obsDomain.LogicOr {
+		return "", nil, fmt.Errorf("invalid logic operator: %s", node.Operator)
+	}
+
 	leftSQL, leftArgs, err := b.buildNode(node.Left)
 	if err != nil {
 		return "", nil, err
@@ -154,7 +188,10 @@ func (b *SpanQueryBuilder) buildBinaryNode(node *obsDomain.BinaryNode) (string, 
 
 // buildConditionNode converts a single condition to SQL.
 func (b *SpanQueryBuilder) buildConditionNode(node *obsDomain.ConditionNode) (string, []interface{}, error) {
-	column := b.getColumn(node.Field)
+	column, err := b.getColumn(node.Field)
+	if err != nil {
+		return "", nil, err
+	}
 
 	switch node.Operator {
 	case obsDomain.FilterOpEqual:
@@ -199,16 +236,23 @@ func (b *SpanQueryBuilder) buildConditionNode(node *obsDomain.ConditionNode) (st
 }
 
 // getColumn returns the ClickHouse column for a field path.
-func (b *SpanQueryBuilder) getColumn(field string) string {
-	if col := obsDomain.GetMaterializedColumn(field); col != "" {
-		return col
+// It validates the field name to prevent SQL injection and returns an error if invalid.
+func (b *SpanQueryBuilder) getColumn(field string) (string, error) {
+	if err := validateFieldName(field); err != nil {
+		return "", err
 	}
+
+	if col := obsDomain.GetMaterializedColumn(field); col != "" {
+		return col, nil
+	}
+
+	escapedField := escapeAttributeKey(field)
 
 	if strings.HasPrefix(field, "resource.") || strings.HasPrefix(field, "deployment.") {
-		return fmt.Sprintf("resource_attributes['%s']", field)
+		return fmt.Sprintf("resource_attributes['%s']", escapedField), nil
 	}
 
-	return fmt.Sprintf("span_attributes['%s']", field)
+	return fmt.Sprintf("span_attributes['%s']", escapedField), nil
 }
 
 // buildComparison builds a simple comparison (=, !=).
@@ -272,6 +316,10 @@ func (b *SpanQueryBuilder) buildInClause(column string, value interface{}, negat
 
 // buildExists builds an EXISTS check using mapContains for efficient ClickHouse existence checks.
 func (b *SpanQueryBuilder) buildExists(field string, negated bool) (string, []interface{}, error) {
+	if err := validateFieldName(field); err != nil {
+		return "", nil, err
+	}
+
 	if obsDomain.IsMaterializedColumn(field) {
 		col := obsDomain.GetMaterializedColumn(field)
 		if negated {
@@ -287,8 +335,10 @@ func (b *SpanQueryBuilder) buildExists(field string, negated bool) (string, []in
 		attrKey = field
 	}
 
+	escapedKey := escapeAttributeKey(attrKey)
+
 	if negated {
-		return fmt.Sprintf("NOT mapContains(%s, '%s')", mapName, attrKey), nil, nil
+		return fmt.Sprintf("NOT mapContains(%s, '%s')", mapName, escapedKey), nil, nil
 	}
-	return fmt.Sprintf("mapContains(%s, '%s')", mapName, attrKey), nil, nil
+	return fmt.Sprintf("mapContains(%s, '%s')", mapName, escapedKey), nil, nil
 }

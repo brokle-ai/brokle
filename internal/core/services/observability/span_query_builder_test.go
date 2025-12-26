@@ -515,7 +515,8 @@ func TestSpanQueryBuilder_GetColumn(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.field, func(t *testing.T) {
-			result := builder.getColumn(tt.field)
+			result, err := builder.getColumn(tt.field)
+			require.NoError(t, err)
 			assert.Equal(t, tt.expected, result)
 		})
 	}
@@ -651,4 +652,279 @@ func TestSpanQueryBuilder_ArgumentOrdering(t *testing.T) {
 // Helper function
 func timePtr(t time.Time) *time.Time {
 	return &t
+}
+
+func TestSpanQueryBuilder_FieldNameInjectionPrevention(t *testing.T) {
+	tests := []struct {
+		name       string
+		field      string
+		wantErr    bool
+		errContain string
+	}{
+		{
+			name:    "valid simple field",
+			field:   "service.name",
+			wantErr: false,
+		},
+		{
+			name:    "valid nested field",
+			field:   "custom.nested.field",
+			wantErr: false,
+		},
+		{
+			name:    "valid underscore field",
+			field:   "my_custom_field",
+			wantErr: false,
+		},
+		{
+			name:       "injection attempt with quote",
+			field:      "foo'];DROP TABLE otel_traces--",
+			wantErr:    true,
+			errContain: "invalid field name",
+		},
+		{
+			name:       "injection attempt with semicolon",
+			field:      "foo;DROP",
+			wantErr:    true,
+			errContain: "invalid field name",
+		},
+		{
+			name:       "injection attempt with space",
+			field:      "foo bar",
+			wantErr:    true,
+			errContain: "invalid field name",
+		},
+		{
+			name:       "injection attempt with parentheses",
+			field:      "foo()",
+			wantErr:    true,
+			errContain: "invalid field name",
+		},
+		{
+			name:       "injection attempt with comment",
+			field:      "foo--comment",
+			wantErr:    true,
+			errContain: "invalid field name",
+		},
+		{
+			name:       "injection attempt with equals",
+			field:      "foo=1",
+			wantErr:    true,
+			errContain: "invalid field name",
+		},
+		{
+			name:       "empty field name",
+			field:      "",
+			wantErr:    true,
+			errContain: "invalid field name",
+		},
+		{
+			name:       "field too long",
+			field:      strings.Repeat("a", 201),
+			wantErr:    true,
+			errContain: "too long",
+		},
+		{
+			name:    "field at max length is ok",
+			field:   strings.Repeat("a", 200),
+			wantErr: false,
+		},
+		{
+			name:       "field starting with number",
+			field:      "123field",
+			wantErr:    true,
+			errContain: "invalid field name",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			builder := NewSpanQueryBuilder()
+			node := &obsDomain.ConditionNode{
+				Field:    tt.field,
+				Operator: obsDomain.FilterOpEqual,
+				Value:    "testvalue",
+			}
+
+			result, err := builder.BuildQuery(node, "proj123", nil, nil, 100, 0)
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errContain)
+				assert.Nil(t, result)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, result)
+				// Verify the field doesn't appear unescaped in query
+				assert.NotContains(t, result.Query, "DROP TABLE")
+			}
+		})
+	}
+}
+
+func TestSpanQueryBuilder_OperatorInjectionPrevention(t *testing.T) {
+	tests := []struct {
+		name       string
+		operator   obsDomain.LogicOperator
+		wantErr    bool
+		errContain string
+	}{
+		{
+			name:     "valid AND operator",
+			operator: obsDomain.LogicAnd,
+			wantErr:  false,
+		},
+		{
+			name:     "valid OR operator",
+			operator: obsDomain.LogicOr,
+			wantErr:  false,
+		},
+		{
+			name:       "injection via operator",
+			operator:   obsDomain.LogicOperator("OR 1=1; DROP TABLE otel_traces; --"),
+			wantErr:    true,
+			errContain: "invalid logic operator",
+		},
+		{
+			name:       "empty operator",
+			operator:   obsDomain.LogicOperator(""),
+			wantErr:    true,
+			errContain: "invalid logic operator",
+		},
+		{
+			name:       "unknown operator",
+			operator:   obsDomain.LogicOperator("XOR"),
+			wantErr:    true,
+			errContain: "invalid logic operator",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			builder := NewSpanQueryBuilder()
+			node := &obsDomain.BinaryNode{
+				Left: &obsDomain.ConditionNode{
+					Field:    "service.name",
+					Operator: obsDomain.FilterOpEqual,
+					Value:    "api",
+				},
+				Operator: tt.operator,
+				Right: &obsDomain.ConditionNode{
+					Field:    "gen_ai.system",
+					Operator: obsDomain.FilterOpEqual,
+					Value:    "openai",
+				},
+			}
+
+			result, err := builder.BuildQuery(node, "proj123", nil, nil, 100, 0)
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errContain)
+				assert.Nil(t, result)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, result)
+			}
+		})
+	}
+}
+
+func TestSpanQueryBuilder_ExistsFieldInjectionPrevention(t *testing.T) {
+	tests := []struct {
+		name       string
+		field      string
+		wantErr    bool
+		errContain string
+	}{
+		{
+			name:    "valid resource field",
+			field:   "resource.service.name",
+			wantErr: false,
+		},
+		{
+			name:       "injection in exists check",
+			field:      "foo');DROP TABLE otel_traces--",
+			wantErr:    true,
+			errContain: "invalid field name",
+		},
+		{
+			name:       "injection with single quote",
+			field:      "foo'",
+			wantErr:    true,
+			errContain: "invalid field name",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			builder := NewSpanQueryBuilder()
+			node := &obsDomain.ConditionNode{
+				Field:    tt.field,
+				Operator: obsDomain.FilterOpExists,
+				Value:    nil,
+			}
+
+			result, err := builder.BuildQuery(node, "proj123", nil, nil, 100, 0)
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errContain)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, result)
+				// Verify field appears properly escaped
+				assert.NotContains(t, result.Query, "DROP TABLE")
+			}
+		})
+	}
+}
+
+func TestValidateFieldName(t *testing.T) {
+	tests := []struct {
+		name    string
+		field   string
+		wantErr bool
+	}{
+		{"valid simple", "field", false},
+		{"valid with underscore", "my_field", false},
+		{"valid with dot", "service.name", false},
+		{"valid with number", "field1", false},
+		{"valid starting with underscore", "_private", false},
+		{"invalid empty", "", true},
+		{"invalid with space", "field name", true},
+		{"invalid with quote", "field'", true},
+		{"invalid with semicolon", "field;", true},
+		{"invalid with paren", "field()", true},
+		{"invalid starting with number", "1field", true},
+		{"invalid with dash", "field-name", true},
+		{"too long", strings.Repeat("x", 201), true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateFieldName(tt.field)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestEscapeAttributeKey(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"simple", "simple"},
+		{"with'quote", "with''quote"},
+		{"many'''quotes", "many''''''quotes"},
+		{"", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			result := escapeAttributeKey(tt.input)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
 }
