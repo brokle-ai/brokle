@@ -1,3 +1,7 @@
+export { Scores } from './components/scores-content'
+
+export { ScoresProvider, useScores } from './context/scores-context'
+
 export type {
   ScoreConfig,
   Score,
@@ -60,6 +64,7 @@ export {
   HeatmapCard,
   Heatmap,
 } from './components/analytics'
+
 export {
   interpretCorrelation,
   interpretCohensKappa,

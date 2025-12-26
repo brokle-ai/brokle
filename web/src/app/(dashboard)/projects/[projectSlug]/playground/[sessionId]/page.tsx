@@ -10,6 +10,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { DashboardHeader } from '@/components/layout/dashboard-header'
 import { Main } from '@/components/layout/main'
+import { PageHeader } from '@/components/layout/page-header'
 import { Skeleton } from '@/components/ui/skeleton'
 import { PlaygroundWindow } from '@/features/playground/components/playground-window'
 import { SavedSessionsSidebar } from '@/features/playground/components/saved-sessions-sidebar'
@@ -176,15 +177,11 @@ export default function PlaygroundSessionPage() {
       <DashboardHeader />
       <Main>
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight">
-                {session?.name || 'Playground'}
-              </h1>
-              <p className="text-muted-foreground">
-                {session?.description || 'Saved session'}
-              </p>
-            </div>
+          <PageHeader
+            title={session?.name || 'Playground'}
+            backHref={`/projects/${params.projectSlug}/playground`}
+            description={session?.description || 'Saved session'}
+          >
             <Button
               variant="outline"
               size="sm"
@@ -193,7 +190,7 @@ export default function PlaygroundSessionPage() {
               <FolderOpen className="mr-2 h-4 w-4" />
               Sessions
             </Button>
-          </div>
+          </PageHeader>
 
           <div className="flex items-center justify-between">
             <Button

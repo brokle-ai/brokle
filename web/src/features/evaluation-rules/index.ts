@@ -1,3 +1,12 @@
+export { Rules } from './components/rules-content'
+export { RuleDetail } from './components/rule-detail'
+
+export { RulesProvider, useRules } from './context/rules-context'
+export type { RulesDialogType } from './context/rules-context'
+
+export { RuleDetailProvider, useRuleDetail } from './context/rule-detail-context'
+export type { RuleDetailDialogType } from './context/rule-detail-context'
+
 export type {
   RuleStatus,
   RuleTrigger,
@@ -31,6 +40,8 @@ export {
   useActivateEvaluationRuleMutation,
   useDeactivateEvaluationRuleMutation,
 } from './hooks/use-evaluation-rules'
+export { useProjectRules } from './hooks/use-project-rules'
+export type { UseProjectRulesReturn } from './hooks/use-project-rules'
 
 export {
   RuleStatusBadge,
@@ -40,4 +51,11 @@ export {
   RuleForm,
   CreateRuleDialog,
   EditRuleDialog,
+  RulesDialogs,
+} from './components'
+
+export {
+  RuleDetailDialogs,
+  RuleDetailSkeleton,
+  ScorerConfigDisplay,
 } from './components'

@@ -3,7 +3,7 @@
 import { useParams } from 'next/navigation'
 import { DashboardHeader } from '@/components/layout/dashboard-header'
 import { Main } from '@/components/layout/main'
-import { ScoresPageContent } from '@/features/scores'
+import { Scores } from '@/features/scores'
 
 export default function ScoresPage() {
   const params = useParams<{ projectSlug: string }>()
@@ -12,7 +12,7 @@ export default function ScoresPage() {
     <>
       <DashboardHeader />
       <Main>
-        <ScoresPageContent projectSlug={params.projectSlug} />
+        <Scores projectSlug={params.projectSlug} />
       </Main>
     </>
   )
