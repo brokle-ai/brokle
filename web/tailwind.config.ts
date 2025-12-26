@@ -9,6 +9,15 @@ export default {
   ],
   theme: {
     extend: {
+      fontSize: {
+        xs: ["0.7rem", { lineHeight: "1rem" }],
+        sm: ["0.825rem", { lineHeight: "1.25rem" }],
+        base: ["0.9rem", { lineHeight: "1.5rem" }],
+        lg: ["1.1rem", { lineHeight: "1.75rem" }],
+        xl: ["1.2rem", { lineHeight: "1.75rem" }],
+        "2xl": ["1.3rem", { lineHeight: "2rem" }],
+        "3xl": ["1.5rem", { lineHeight: "2.25rem" }],
+      },
       fontFamily: {
         inter: ["var(--font-inter)", "Inter", "sans-serif"],
         manrope: ["var(--font-manrope)", "Manrope", "sans-serif"],

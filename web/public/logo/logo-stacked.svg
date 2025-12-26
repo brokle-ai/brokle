@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Brokle Official Logo - Stacked Layout (Icon on top, text below) -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 60" width="80" height="60">
+  <!-- Layers Icon (centered) -->
+  <g transform="translate(24, 2)">
+    <g fill="#000000">
+      <path d="M16 2L28 8V10L16 16L4 10V8L16 2Z"/>
+      <path d="M4 14L16 20L28 14V16L16 22L4 16V14Z"/>
+      <path d="M4 20L16 26L28 20V22L16 28L4 22V20Z"/>
+    </g>
+  </g>
+  <!-- Brokle Text (centered below with 10px gap) -->
+  <text x="40" y="52" text-anchor="middle" font-family="Inter, -apple-system, BlinkMacSystemFont, sans-serif" font-size="18" font-weight="600" fill="#000000">Brokle</text>
+</svg>

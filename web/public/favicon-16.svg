@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Brokle Favicon 16x16 -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
+  <g fill="#000000">
+    <path d="M8 1L14 4V5L8 8L2 5V4L8 1Z"/>
+    <path d="M2 7L8 10L14 7V8L8 11L2 8V7Z"/>
+    <path d="M2 10L8 13L14 10V11L8 14L2 11V10Z"/>
+  </g>
+</svg>

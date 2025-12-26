@@ -24,43 +24,45 @@ import type {
 /**
  * Query keys for AI provider credentials
  * Structured factory pattern for cache management
+ *
+ * Note: AI provider credentials are organization-scoped
  */
 export const aiProviderQueryKeys = {
   all: ['ai-providers'] as const,
   lists: () => [...aiProviderQueryKeys.all, 'list'] as const,
-  list: (projectId: string) => [...aiProviderQueryKeys.lists(), projectId] as const,
-  detail: (projectId: string, credentialId: string) =>
-    [...aiProviderQueryKeys.all, 'detail', projectId, credentialId] as const,
+  list: (orgId: string) => [...aiProviderQueryKeys.lists(), orgId] as const,
+  detail: (orgId: string, credentialId: string) =>
+    [...aiProviderQueryKeys.all, 'detail', orgId, credentialId] as const,
   models: () => [...aiProviderQueryKeys.all, 'models'] as const,
-  modelsByProject: (projectId: string) => [...aiProviderQueryKeys.models(), projectId] as const,
+  modelsByOrg: (orgId: string) => [...aiProviderQueryKeys.models(), orgId] as const,
 }
 
 /**
- * Query hook to list all AI provider credentials for a project
+ * Query hook to list all AI provider credentials for an organization
  *
- * @param projectId - Project ULID
+ * @param orgId - Organization ULID
  * @param options - React Query options
  *
  * @example
  * ```tsx
- * const { data, isLoading, error } = useAIProvidersQuery('proj_123')
+ * const { data, isLoading, error } = useAIProvidersQuery('org_123')
  * ```
  */
 export function useAIProvidersQuery(
-  projectId: string | undefined,
+  orgId: string | undefined,
   options: {
     enabled?: boolean
   } = {}
 ) {
   return useQuery({
-    queryKey: aiProviderQueryKeys.list(projectId || ''),
+    queryKey: aiProviderQueryKeys.list(orgId || ''),
     queryFn: () => {
-      if (!projectId) {
-        throw new Error('Project ID is required')
+      if (!orgId) {
+        throw new Error('Organization ID is required')
       }
-      return listProviderCredentials(projectId)
+      return listProviderCredentials(orgId)
     },
-    enabled: !!projectId && (options.enabled ?? true),
+    enabled: !!orgId && (options.enabled ?? true),
     staleTime: 30000, // 30 seconds
     gcTime: 5 * 60 * 1000, // 5 minutes
   })
@@ -71,11 +73,11 @@ export function useAIProvidersQuery(
  *
  * Automatically invalidates the credentials list cache on success.
  *
- * @param projectId - Project ULID
+ * @param orgId - Organization ULID
  *
  * @example
  * ```tsx
- * const mutation = useCreateProviderMutation('proj_123')
+ * const mutation = useCreateProviderMutation('org_123')
  *
  * const handleSave = async () => {
  *   await mutation.mutateAsync({
@@ -86,12 +88,12 @@ export function useAIProvidersQuery(
  * }
  * ```
  */
-export function useCreateProviderMutation(projectId: string) {
+export function useCreateProviderMutation(orgId: string) {
   const queryClient = useQueryClient()
 
   return useMutation({
     mutationFn: async (data: CreateProviderRequest) => {
-      return createProviderCredential(projectId, data)
+      return createProviderCredential(orgId, data)
     },
     onSuccess: (credential: AIProviderCredential) => {
       // Invalidate credentials list
@@ -122,11 +124,11 @@ export function useCreateProviderMutation(projectId: string) {
  *
  * Automatically invalidates the credentials list cache on success.
  *
- * @param projectId - Project ULID
+ * @param orgId - Organization ULID
  *
  * @example
  * ```tsx
- * const mutation = useUpdateProviderMutation('proj_123')
+ * const mutation = useUpdateProviderMutation('org_123')
  *
  * const handleSave = async () => {
  *   await mutation.mutateAsync({
@@ -139,12 +141,12 @@ export function useCreateProviderMutation(projectId: string) {
  * }
  * ```
  */
-export function useUpdateProviderMutation(projectId: string) {
+export function useUpdateProviderMutation(orgId: string) {
   const queryClient = useQueryClient()
 
   return useMutation({
     mutationFn: async ({ credentialId, data }: { credentialId: string; data: UpdateProviderRequest }) => {
-      return updateProviderCredential(projectId, credentialId, data)
+      return updateProviderCredential(orgId, credentialId, data)
     },
     onSuccess: (credential: AIProviderCredential) => {
       // Invalidate credentials list
@@ -175,11 +177,11 @@ export function useUpdateProviderMutation(projectId: string) {
  *
  * Supports optimistic updates. Deletes by credential ID.
  *
- * @param projectId - Project ULID
+ * @param orgId - Organization ULID
  *
  * @example
  * ```tsx
- * const mutation = useDeleteProviderMutation('proj_123')
+ * const mutation = useDeleteProviderMutation('org_123')
  *
  * await mutation.mutateAsync({
  *   credentialId: 'cred_456',
@@ -187,7 +189,7 @@ export function useUpdateProviderMutation(projectId: string) {
  * })
  * ```
  */
-export function useDeleteProviderMutation(projectId: string) {
+export function useDeleteProviderMutation(orgId: string) {
   const queryClient = useQueryClient()
 
   return useMutation({
@@ -197,7 +199,7 @@ export function useDeleteProviderMutation(projectId: string) {
       credentialId: string
       displayName: string // For display in toast
     }) => {
-      return deleteProviderCredential(projectId, credentialId)
+      return deleteProviderCredential(orgId, credentialId)
     },
     onMutate: async ({ credentialId }) => {
       // Cancel outgoing refetches
@@ -257,11 +259,11 @@ export function useDeleteProviderMutation(projectId: string) {
  *
  * Use this before saving credentials to validate the API key.
  *
- * @param projectId - Project ULID
+ * @param orgId - Organization ULID
  *
  * @example
  * ```tsx
- * const mutation = useTestConnectionMutation('proj_123')
+ * const mutation = useTestConnectionMutation('org_123')
  *
  * const handleTest = async () => {
  *   const result = await mutation.mutateAsync({
@@ -274,10 +276,10 @@ export function useDeleteProviderMutation(projectId: string) {
  * }
  * ```
  */
-export function useTestConnectionMutation(projectId: string) {
+export function useTestConnectionMutation(orgId: string) {
   return useMutation({
     mutationFn: async (data: TestConnectionRequest) => {
-      return testProviderConnection(projectId, data)
+      return testProviderConnection(orgId, data)
     },
     onSuccess: (result) => {
       if (result.success) {
@@ -300,35 +302,35 @@ export function useTestConnectionMutation(projectId: string) {
 }
 
 /**
- * Query hook to get available models for a project based on configured providers
+ * Query hook to get available models for an organization based on configured providers
  *
  * Returns models from:
  * - Standard providers (openai, anthropic, etc.): default models + custom_models
  * - Custom provider: only custom_models
  *
- * @param projectId - Project ULID
+ * @param orgId - Organization ULID
  * @param options - React Query options
  *
  * @example
  * ```tsx
- * const { data: models, isLoading } = useAvailableModelsQuery('proj_123')
+ * const { data: models, isLoading } = useAvailableModelsQuery('org_123')
  * ```
  */
 export function useAvailableModelsQuery(
-  projectId: string | undefined,
+  orgId: string | undefined,
   options: {
     enabled?: boolean
   } = {}
 ) {
   return useQuery({
-    queryKey: aiProviderQueryKeys.modelsByProject(projectId || ''),
+    queryKey: aiProviderQueryKeys.modelsByOrg(orgId || ''),
     queryFn: () => {
-      if (!projectId) {
-        throw new Error('Project ID is required')
+      if (!orgId) {
+        throw new Error('Organization ID is required')
       }
-      return getAvailableModels(projectId)
+      return getAvailableModels(orgId)
     },
-    enabled: !!projectId && (options.enabled ?? true),
+    enabled: !!orgId && (options.enabled ?? true),
     staleTime: 5 * 60 * 1000, // 5 minutes - models don't change often
     gcTime: 10 * 60 * 1000, // 10 minutes
   })
@@ -337,17 +339,17 @@ export function useAvailableModelsQuery(
 /**
  * Hook to get available models grouped by provider
  *
- * @param projectId - Project ULID
+ * @param orgId - Organization ULID
  *
  * @example
  * ```tsx
- * const { modelsByProvider, configuredProviders, isLoading } = useModelsByProvider('proj_123')
+ * const { modelsByProvider, configuredProviders, isLoading } = useModelsByProvider('org_123')
  * // modelsByProvider: { openai: [...], anthropic: [...] }
  * // configuredProviders: ['openai', 'anthropic']
  * ```
  */
-export function useModelsByProvider(projectId: string | undefined) {
-  const query = useAvailableModelsQuery(projectId)
+export function useModelsByProvider(orgId: string | undefined) {
+  const query = useAvailableModelsQuery(orgId)
 
   const modelsByProvider = useMemo((): ModelsByProvider => {
     if (!query.data) return {}

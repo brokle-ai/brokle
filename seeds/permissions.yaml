@@ -1,4 +1,4 @@
-# System Permissions (63 total)
+# System Permissions (65 total)
 # Format: resource:action
 
 permissions:
@@ -79,6 +79,12 @@ permissions:
     description: "Update API key settings"
   - name: "api-keys:delete"
     description: "Delete API keys"
+
+  # AI Credentials Management
+  - name: "credentials:read"
+    description: "View AI provider credentials (keys masked)"
+  - name: "credentials:write"
+    description: "Create, update, and delete AI provider credentials"
 
   # Integrations Management
   - name: "integrations:read"

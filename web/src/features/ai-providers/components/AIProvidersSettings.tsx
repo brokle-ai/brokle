@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Trash2, Loader2, AlertCircle, AlertTriangle, Plug, Pencil } from 'lucide-react'
+import { Trash2, Loader2, AlertCircle, AlertTriangle, Plug, Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Table,
@@ -30,16 +30,24 @@ import { ProviderDialog } from './ProviderDialog'
 import { ProviderIcon } from './ProviderIcon'
 
 interface AIProvidersSettingsProps {
-  projectId: string
+  orgId: string
+  addDialogOpen?: boolean
+  onAddDialogOpenChange?: (open: boolean) => void
 }
 
-export function AIProvidersSettings({ projectId }: AIProvidersSettingsProps) {
+export function AIProvidersSettings({
+  orgId,
+  addDialogOpen,
+  onAddDialogOpenChange,
+}: AIProvidersSettingsProps) {
   // React Query hooks
-  const { data: credentials, isLoading, error, refetch } = useAIProvidersQuery(projectId)
-  const deleteMutation = useDeleteProviderMutation(projectId)
+  const { data: credentials, isLoading, error, refetch } = useAIProvidersQuery(orgId)
+  const deleteMutation = useDeleteProviderMutation(orgId)
 
-  // Local state
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
+  // Local state - use controlled or uncontrolled mode
+  const [internalAddDialogOpen, setInternalAddDialogOpen] = useState(false)
+  const isAddDialogOpen = addDialogOpen ?? internalAddDialogOpen
+  const setIsAddDialogOpen = onAddDialogOpenChange ?? setInternalAddDialogOpen
   const [editingCredential, setEditingCredential] = useState<AIProviderCredential | null>(null)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [selectedCredential, setSelectedCredential] = useState<AIProviderCredential | null>(null)
@@ -112,19 +120,6 @@ export function AIProvidersSettings({ projectId }: AIProvidersSettingsProps) {
       {/* Providers List */}
       {!isLoading && !error && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-medium">AI Providers ({credentials?.length || 0})</h3>
-              <p className="text-sm text-muted-foreground">
-                Configure API credentials for AI model providers
-              </p>
-            </div>
-            <Button onClick={() => setIsAddDialogOpen(true)}>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Provider
-            </Button>
-          </div>
-
           <div className="rounded-md border">
             <Table>
               <TableHeader>
@@ -221,7 +216,7 @@ export function AIProvidersSettings({ projectId }: AIProvidersSettingsProps) {
 
       {/* Add Provider Dialog */}
       <ProviderDialog
-        projectId={projectId}
+        orgId={orgId}
         open={isAddDialogOpen}
         onOpenChange={setIsAddDialogOpen}
         existingCredentials={credentials || []}
@@ -230,7 +225,7 @@ export function AIProvidersSettings({ projectId }: AIProvidersSettingsProps) {
       {/* Edit Provider Dialog */}
       {editingCredential && (
         <ProviderDialog
-          projectId={projectId}
+          orgId={orgId}
           open={!!editingCredential}
           onOpenChange={(open) => !open && setEditingCredential(null)}
           existingCredential={editingCredential}

@@ -440,22 +440,13 @@ func ProvideServerServices(core *CoreContainer) *ServiceContainer {
 	)
 
 	promptServices := ProvidePromptServices(core.TxManager, repos.Prompt, analyticsServices.ProviderPricing, cfg, logger)
-	credentialsServices, err := ProvideCredentialsServices(repos.Credentials, repos.Analytics, cfg, logger)
-	if err != nil {
-		logger.Error("failed to initialize credentials services", "error", err)
-		// Playground will fail without credentials - no env fallback
-		credentialsServices = nil
-	}
 
-	// Extract credentials service (may be nil if credentials initialization failed)
-	var credSvc credentialsDomain.ProviderCredentialService
-	if credentialsServices != nil {
-		credSvc = credentialsServices.ProviderCredential
-	}
+	// Config validation ensures AI_KEY_ENCRYPTION_KEY is valid, so credentials service is guaranteed to initialize
+	credentialsServices := ProvideCredentialsServices(repos.Credentials, repos.Analytics, cfg, logger)
 
 	playgroundServices := ProvidePlaygroundServices(
 		repos.Playground,
-		credSvc,
+		credentialsServices.ProviderCredential,
 		promptServices.Compiler,
 		promptServices.Execution,
 		logger,
@@ -1035,11 +1026,10 @@ func ProvideCredentialsServices(
 	analyticsRepos *AnalyticsRepositories,
 	cfg *config.Config,
 	logger *slog.Logger,
-) (*CredentialsServices, error) {
-	// Create encryption service from config
+) *CredentialsServices {
 	encryptor, err := encryption.NewServiceFromBase64(cfg.Encryption.AIKeyEncryptionKey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize encryption service: %w", err)
+		panic(fmt.Sprintf("encryption initialization failed after config validation: %v (this is a bug)", err))
 	}
 
 	providerSvc := credentialsService.NewProviderCredentialService(
@@ -1058,7 +1048,7 @@ func ProvideCredentialsServices(
 	return &CredentialsServices{
 		ProviderCredential: providerSvc,
 		ModelCatalog:       modelCatalogSvc,
-	}, nil
+	}
 }
 
 func ProvidePlaygroundServices(

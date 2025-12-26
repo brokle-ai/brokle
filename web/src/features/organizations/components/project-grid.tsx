@@ -38,6 +38,7 @@ import {
 import { CreateProjectDialog } from '@/features/projects'
 import { buildProjectUrl } from '@/lib/utils/slug-utils'
 import { cn } from '@/lib/utils'
+import { PageHeader } from '@/components/layout/page-header'
 import type { Project, ProjectStatus } from '../types'
 
 interface ProjectGridProps {
@@ -58,7 +59,6 @@ export function ProjectGrid({ className, showCreateButton = true }: ProjectGridP
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
 
   const filteredAndSortedProjects = useMemo(() => {
-    // Ensure projects is always an array
     const safeProjects = projects || []
     const filtered = safeProjects.filter(project => {
       const matchesSearch = project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -68,7 +68,6 @@ export function ProjectGrid({ className, showCreateButton = true }: ProjectGridP
       return matchesSearch && matchesStatus
     })
 
-    // Sort projects
     filtered.sort((a, b) => {
       switch (sortBy) {
         case 'name':
@@ -112,7 +111,6 @@ export function ProjectGrid({ className, showCreateButton = true }: ProjectGridP
   }
 
   const handleProjectAction = (action: string, project: Project) => {
-    // These would typically call API endpoints
     console.log(`Action: ${action} on project:`, project.name)
     // TODO: Implement project actions
   }
@@ -122,35 +120,26 @@ export function ProjectGrid({ className, showCreateButton = true }: ProjectGridP
   }
 
   return (
-    <div className={cn("space-y-6", className)}>
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-foreground">Projects</h2>
-          <p className="text-muted-foreground">
-            Manage and monitor your AI projects in {currentOrganization.name}
-          </p>
-        </div>
+    <>
+      <PageHeader title="Projects">
+        {showCreateButton && currentOrganization?.id && (
+          <>
+            <Button onClick={() => setCreateDialogOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              New Project
+            </Button>
 
-        <div className="flex items-center gap-2">
-          {showCreateButton && currentOrganization?.id && (
-            <>
-              <Button onClick={() => setCreateDialogOpen(true)}>
-                <Plus className="mr-2 h-4 w-4" />
-                New Project
-              </Button>
+            <CreateProjectDialog
+              organizationId={currentOrganization.id}
+              open={createDialogOpen}
+              onOpenChange={setCreateDialogOpen}
+            />
+          </>
+        )}
+      </PageHeader>
 
-              <CreateProjectDialog
-                organizationId={currentOrganization.id}
-                open={createDialogOpen}
-                onOpenChange={setCreateDialogOpen}
-              />
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Filters */}
+      <div className={cn("-mx-4 flex-1 overflow-auto px-4 py-1 space-y-6", className)}>
+        {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
@@ -193,7 +182,7 @@ export function ProjectGrid({ className, showCreateButton = true }: ProjectGridP
           {filteredAndSortedProjects.map((project) => (
             <Card
               key={project.id}
-              className="cursor-pointer hover:shadow-md transition-all duration-200 group"
+              className="cursor-pointer group"
               onClick={() => handleProjectClick(project)}
             >
               <CardHeader className="pb-3">
@@ -346,6 +335,7 @@ export function ProjectGrid({ className, showCreateButton = true }: ProjectGridP
           </CardContent>
         </Card>
       )}
-    </div>
+      </div>
+    </>
   )
 }

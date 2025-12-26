@@ -31,7 +31,7 @@ import { PROVIDER_INFO, AVAILABLE_PROVIDERS } from '../types'
 import { ProviderIcon } from './ProviderIcon'
 
 interface ProviderDialogProps {
-  projectId: string
+  orgId: string
   open: boolean
   onOpenChange: (open: boolean) => void
   existingCredential?: AIProviderCredential
@@ -39,7 +39,7 @@ interface ProviderDialogProps {
 }
 
 export function ProviderDialog({
-  projectId,
+  orgId,
   open,
   onOpenChange,
   existingCredential,
@@ -47,9 +47,9 @@ export function ProviderDialog({
 }: ProviderDialogProps) {
   const isEdit = !!existingCredential
 
-  const createMutation = useCreateProviderMutation(projectId)
-  const updateMutation = useUpdateProviderMutation(projectId)
-  const testMutation = useTestConnectionMutation(projectId)
+  const createMutation = useCreateProviderMutation(orgId)
+  const updateMutation = useUpdateProviderMutation(orgId)
+  const testMutation = useTestConnectionMutation(orgId)
 
   // Form state - using 'adapter' for API protocol type, 'name' for configuration name
   const [adapter, setAdapter] = useState<AIProvider | ''>(existingCredential?.adapter || '')

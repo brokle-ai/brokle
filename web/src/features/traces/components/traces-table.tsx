@@ -24,8 +24,8 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { type Trace } from '../data/schema'
+import { DataTablePagination } from '@/components/data-table'
 import { DataTableBulkActions } from './data-table-bulk-actions'
-import { DataTablePagination } from './data-table-pagination'
 import { DataTableToolbar } from './data-table-toolbar'
 import { tracesColumns as columns } from './traces-columns'
 import { TraceDetailContainer } from './trace-detail-container'
@@ -33,9 +33,10 @@ import { TraceDetailContainer } from './trace-detail-container'
 type DataTableProps = {
   data: Trace[]
   totalCount?: number
+  isFetching?: boolean
 }
 
-export function TracesTable({ data, totalCount }: DataTableProps) {
+export function TracesTable({ data, totalCount, isFetching }: DataTableProps) {
   const searchParams = useSearchParams()
   const [isPending, startTransition] = useTransition()
   const { setCurrentPageTraceIds } = useTraces()
@@ -178,7 +179,7 @@ export function TracesTable({ data, totalCount }: DataTableProps) {
   return (
     <>
     <div className='space-y-4 max-sm:has-[div[role="toolbar"]]:mb-16'>
-      <DataTableToolbar table={table} isPending={isPending} onReset={handleReset} />
+      <DataTableToolbar table={table} isPending={isPending || isFetching} onReset={handleReset} />
       <div className='overflow-hidden rounded-md border'>
         <Table>
           <TableHeader>
@@ -222,7 +223,7 @@ export function TracesTable({ data, totalCount }: DataTableProps) {
           </TableBody>
         </Table>
       </div>
-      <DataTablePagination table={table} isPending={isPending} />
+      <DataTablePagination table={table} isPending={isPending || isFetching} />
       <DataTableBulkActions table={table} />
     </div>
     <TraceDetailContainer />

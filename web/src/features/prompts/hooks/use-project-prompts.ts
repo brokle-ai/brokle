@@ -1,8 +1,9 @@
 'use client'
 
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { useSearchParams } from 'next/navigation'
 import { useProjectOnly } from '@/features/projects'
+import { useTableSearchParams } from '@/hooks/use-table-search-params'
 import { getPrompts } from '../api/prompts-api'
 import { promptQueryKeys } from './use-prompts-queries'
 import type { PromptListItem, PromptType } from '../types'
@@ -26,21 +27,27 @@ export function useProjectPrompts() {
   const searchParams = useSearchParams()
   const { currentProject, hasProject, isLoading: isProjectLoading } = useProjectOnly()
 
-  // Parse search params
-  const page = parseInt(searchParams.get('page') || '1', 10)
-  const limit = parseInt(searchParams.get('limit') || '50', 10)
-  const search = searchParams.get('search') || undefined
-  const type = (searchParams.get('type') as PromptType) || undefined
-  const tagsParam = searchParams.get('tags')
-  const tags = tagsParam ? tagsParam.split(',').filter(Boolean) : undefined
+  // Parse search params using standardized hook
+  const {
+    page,
+    pageSize,
+    filter,
+    type: typeFilter,
+  } = useTableSearchParams(searchParams)
+
+  // Convert standardized params to API format
+  const search = filter || undefined
+  const type = typeFilter.length > 0 ? (typeFilter[0] as PromptType) : undefined
+  const limit = pageSize
 
   const projectId = currentProject?.id
 
-  const filters = { page, limit, search, type, tags }
+  const filters = { page, limit, search, type, tags: undefined }
 
   const {
     data,
     isLoading: isPromptsLoading,
+    isFetching: isPromptsFetching,
     error,
     refetch,
   } = useQuery({
@@ -65,6 +72,9 @@ export function useProjectPrompts() {
     refetchOnReconnect: true,
     retry: 2,
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+
+    // Keep previous data visible while fetching new data (e.g., when filters change)
+    placeholderData: keepPreviousData,
   })
 
   return {
@@ -77,6 +87,7 @@ export function useProjectPrompts() {
 
     // Loading states
     isLoading: isProjectLoading || isPromptsLoading,
+    isFetching: isPromptsFetching,
     isProjectLoading,
     isPromptsLoading,
 
@@ -105,6 +116,7 @@ export interface UseProjectPromptsReturn {
 
   // Loading states
   isLoading: boolean
+  isFetching: boolean
   isProjectLoading: boolean
   isPromptsLoading: boolean
 

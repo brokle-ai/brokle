@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { DashboardHeader } from '@/components/layout/dashboard-header'
 import { Main } from '@/components/layout/main'
+import { PageHeader } from '@/components/layout/page-header'
 import { Skeleton } from '@/components/ui/skeleton'
 import { PlaygroundWindow } from '@/features/playground/components/playground-window'
 import { SaveSessionDialog } from '@/features/playground/components/save-session-dialog'
@@ -104,42 +105,31 @@ export default function PlaygroundPage() {
     <>
       <DashboardHeader />
       <Main>
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight">Playground</h1>
-              <p className="text-muted-foreground">
-                Test prompts and configurations - changes are in-memory until saved
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setSidebarOpen(true)}
-              >
-                <FolderOpen className="mr-2 h-4 w-4" />
-                Sessions
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setSaveDialogOpen(true)}
-              >
-                <Bookmark className="mr-2 h-4 w-4" />
-                Save Session
-              </Button>
-              <Button variant="outline" size="sm" onClick={clearAll}>
-                <RotateCcw className="mr-2 h-4 w-4" />
-                Reset
-              </Button>
-            </div>
-          </div>
+        <PageHeader title="Playground">
+          <Button
+            variant="outline"
+            onClick={() => setSidebarOpen(true)}
+          >
+            <FolderOpen className="mr-2 h-4 w-4" />
+            Sessions
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => setSaveDialogOpen(true)}
+          >
+            <Bookmark className="mr-2 h-4 w-4" />
+            Save Session
+          </Button>
+          <Button variant="outline" onClick={clearAll}>
+            <RotateCcw className="mr-2 h-4 w-4" />
+            Reset
+          </Button>
+        </PageHeader>
 
+        <div className="space-y-6">
           <div className="flex items-center justify-between">
             <Button
               variant="outline"
-              size="sm"
               onClick={addWindow}
               disabled={windows.length >= 20}
             >

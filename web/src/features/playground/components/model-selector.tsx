@@ -26,7 +26,7 @@ interface ModelSelectorProps {
   onChange: (model: string, provider: string, credentialId?: string) => void
   disabled?: boolean
   compact?: boolean
-  projectId?: string
+  orgId?: string // Organization ID for fetching available models
 }
 
 export function ModelSelector({
@@ -35,7 +35,7 @@ export function ModelSelector({
   onChange,
   disabled,
   compact = false,
-  projectId,
+  orgId,
 }: ModelSelectorProps) {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
@@ -46,11 +46,11 @@ export function ModelSelector({
     modelsByProvider,
     configuredProviders,
     isLoading: modelsLoading,
-  } = useModelsByProvider(projectId)
+  } = useModelsByProvider(orgId)
 
-  // Fetch configured providers for the project (for the dialog)
-  const { data: providerCredentials = [] } = useAIProvidersQuery(projectId || '', {
-    enabled: !!projectId,
+  // Fetch configured providers for the organization (for the dialog)
+  const { data: providerCredentials = [] } = useAIProvidersQuery(orgId || '', {
+    enabled: !!orgId,
   })
 
   const modelDisplayNames = useMemo(() => {
@@ -155,7 +155,7 @@ export function ModelSelector({
   }
 
   // No providers configured state
-  if (configuredProviders.length === 0 && projectId) {
+  if (configuredProviders.length === 0 && orgId) {
     return (
       <>
         <Button
@@ -171,7 +171,7 @@ export function ModelSelector({
           <span>Add AI Provider</span>
         </Button>
         <ProviderDialog
-          projectId={projectId}
+          orgId={orgId}
           open={showProviderDialog}
           onOpenChange={setShowProviderDialog}
           existingCredentials={providerCredentials}
@@ -262,7 +262,7 @@ export function ModelSelector({
                 </div>
 
                 {/* Add Provider Link */}
-                {projectId && (
+                {orgId && (
                   <>
                     <Separator className="my-1" />
                     <div className="p-1">
@@ -342,9 +342,9 @@ export function ModelSelector({
       </Popover>
 
       {/* Provider Dialog */}
-      {projectId && (
+      {orgId && (
         <ProviderDialog
-          projectId={projectId}
+          orgId={orgId}
           open={showProviderDialog}
           onOpenChange={setShowProviderDialog}
           existingCredentials={providerCredentials}

@@ -435,7 +435,7 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 		rbac.GET("/permissions/resources/:resource/actions", s.handlers.RBAC.GetActionsForResource)
 		rbac.GET("/users/:userId/organizations/:orgId/role", s.handlers.RBAC.GetUserRole)
 		rbac.POST("/users/:userId/organizations/:orgId/role", s.handlers.RBAC.AssignOrganizationRole)
-		rbac.GET("/users/:userId/organizations/:orgId/permissions", s.handlers.RBAC.GetUserPermissions)        // legacy
+		rbac.GET("/users/:userId/organizations/:orgId/permissions", s.handlers.RBAC.GetUserPermissions)          // legacy
 		rbac.POST("/users/:userId/organizations/:orgId/permissions/check", s.handlers.RBAC.CheckUserPermissions) // legacy
 		rbac.POST("/users/:userId/scopes/check", s.handlers.RBAC.CheckUserScopes)
 		rbac.GET("/users/:userId/scopes", s.handlers.RBAC.GetUserScopes)

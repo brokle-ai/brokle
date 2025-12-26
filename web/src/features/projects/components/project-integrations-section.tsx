@@ -7,7 +7,6 @@ import {
   Database,
   MessageSquare,
   Settings,
-  Plus,
   CheckCircle,
   AlertCircle,
   ExternalLink
@@ -18,7 +17,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { Separator } from '@/components/ui/separator'
@@ -84,10 +83,20 @@ const AVAILABLE_INTEGRATIONS: Integration[] = [
   }
 ]
 
-export function ProjectIntegrationsSection() {
+interface ProjectIntegrationsSectionProps {
+  addDialogOpen?: boolean
+  onAddDialogOpenChange?: (open: boolean) => void
+}
+
+export function ProjectIntegrationsSection({
+  addDialogOpen,
+  onAddDialogOpenChange,
+}: ProjectIntegrationsSectionProps = {}) {
   const { currentProject } = useWorkspace()
   const [integrations, setIntegrations] = useState<Integration[]>(AVAILABLE_INTEGRATIONS)
-  const [isAddOpen, setIsAddOpen] = useState(false)
+  const [internalAddOpen, setInternalAddOpen] = useState(false)
+  const isAddOpen = addDialogOpen ?? internalAddOpen
+  const setIsAddOpen = onAddDialogOpenChange ?? setInternalAddOpen
   const [editingIntegration, setEditingIntegration] = useState<Integration | null>(null)
   const [newIntegrationType, setNewIntegrationType] = useState<string>('')
 
@@ -138,20 +147,9 @@ export function ProjectIntegrationsSection() {
 
   return (
     <div className="space-y-6">
-      {/* Header with Add Button */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-lg font-medium">Active Integrations ({integrations.filter(i => i.enabled).length})</h3>
-        </div>
-        <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Integration
-            </Button>
-          </DialogTrigger>
-
-          <DialogContent>
+      {/* Add Integration Dialog */}
+      <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+        <DialogContent>
             <DialogHeader>
               <DialogTitle>Add New Integration</DialogTitle>
               <DialogDescription>
@@ -185,9 +183,8 @@ export function ProjectIntegrationsSection() {
                 Continue Setup
               </Button>
             </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Integrations List */}
       <div className="space-y-4">

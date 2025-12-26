@@ -268,7 +268,7 @@ func (s *playgroundService) ExecutePrompt(ctx context.Context, req *playgroundDo
 		return nil, appErrors.NewValidationError("Invalid template", err.Error())
 	}
 
-	resolvedConfig, err := s.resolveCredentials(ctx, req.ProjectID, req.ConfigOverrides)
+	resolvedConfig, err := s.resolveCredentials(ctx, req.OrganizationID, req.ConfigOverrides)
 	if err != nil {
 		return nil, err
 	}
@@ -284,6 +284,7 @@ func (s *playgroundService) ExecutePrompt(ctx context.Context, req *playgroundDo
 		s.logger.Error("playground execution failed",
 			"error", err,
 			"project_id", req.ProjectID.String(),
+			"organization_id", req.OrganizationID.String(),
 		)
 		return nil, appErrors.NewInternalError("Execution failed", err)
 	}
@@ -314,7 +315,7 @@ func (s *playgroundService) StreamPrompt(ctx context.Context, req *playgroundDom
 		return nil, appErrors.NewValidationError("Invalid template", err.Error())
 	}
 
-	resolvedConfig, err := s.resolveCredentials(ctx, req.ProjectID, req.ConfigOverrides)
+	resolvedConfig, err := s.resolveCredentials(ctx, req.OrganizationID, req.ConfigOverrides)
 	if err != nil {
 		return nil, err
 	}
@@ -330,6 +331,7 @@ func (s *playgroundService) StreamPrompt(ctx context.Context, req *playgroundDom
 		s.logger.Error("playground stream execution failed",
 			"error", err,
 			"project_id", req.ProjectID.String(),
+			"organization_id", req.OrganizationID.String(),
 		)
 		return nil, appErrors.NewInternalError("Stream execution failed", err)
 	}
@@ -343,9 +345,9 @@ func (s *playgroundService) StreamPrompt(ctx context.Context, req *playgroundDom
 	}, nil
 }
 
-// resolveCredentials resolves project-scoped credentials for execution.
+// resolveCredentials resolves organization-scoped credentials for execution.
 // Requires both provider and credential_id to be specified.
-func (s *playgroundService) resolveCredentials(ctx context.Context, projectID ulid.ULID, overrides *promptDomain.ModelConfig) (*promptDomain.ModelConfig, error) {
+func (s *playgroundService) resolveCredentials(ctx context.Context, orgID ulid.ULID, overrides *promptDomain.ModelConfig) (*promptDomain.ModelConfig, error) {
 	if overrides == nil {
 		overrides = &promptDomain.ModelConfig{}
 	}
@@ -369,7 +371,7 @@ func (s *playgroundService) resolveCredentials(ctx context.Context, projectID ul
 		return nil, appErrors.NewValidationError("Invalid credential ID", "credential_id must be a valid ULID")
 	}
 
-	keyConfig, err := s.credentialsService.GetExecutionConfig(ctx, projectID, credID, credentialsDomain.Provider(overrides.Provider))
+	keyConfig, err := s.credentialsService.GetExecutionConfig(ctx, orgID, credID, credentialsDomain.Provider(overrides.Provider))
 	if err != nil {
 		// Handle specific errors for better UX
 		if errors.Is(err, credentialsDomain.ErrAdapterMismatch) {
@@ -394,7 +396,7 @@ func (s *playgroundService) resolveCredentials(ctx context.Context, projectID ul
 	overrides.CustomHeaders = keyConfig.Headers
 
 	s.logger.Debug("credentials resolved",
-		"project_id", projectID.String(),
+		"organization_id", orgID.String(),
 		"provider", overrides.Provider,
 		"credential_id", overrides.CredentialID,
 	)

@@ -7,14 +7,13 @@ import {
   SidebarFooter,
   SidebarHeader,
   SidebarRail,
-  SidebarSeparator,
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
 } from '@/components/ui/sidebar'
 import { NavMain } from '@/components/layout/nav-main'
 import { NavUser } from '@/components/layout/nav-user'
-import { BrokleLogo } from '@/assets/brokle-logo'
+import { BrokleLogo } from '@/components/ui/brokle-logo'
 import { SidebarSkeleton } from '@/components/layout/sidebar-skeleton'
 import { type ProcessedRoute, type RouteGroup } from '@/lib/navigation/types'
 
@@ -48,7 +47,7 @@ export function AppSidebar({
 
   return (
     <Sidebar {...props} collapsible="icon" variant="sidebar">
-      <SidebarHeader>
+      <SidebarHeader className="h-12 border-b mb-2">
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
@@ -57,14 +56,13 @@ export function AppSidebar({
             >
               <Link href="/" className="flex items-center gap-2 cursor-pointer">
                 <div className="flex aspect-square size-8 items-center justify-center">
-                  <BrokleLogo className="size-6" />
+                  <BrokleLogo variant="icon" size="sm" />
                 </div>
                 <span className="text-lg font-semibold">Brokle</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
-        <SidebarSeparator />
       </SidebarHeader>
 
       <SidebarContent>

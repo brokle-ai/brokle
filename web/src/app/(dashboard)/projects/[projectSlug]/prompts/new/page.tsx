@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { DashboardHeader } from '@/components/layout/dashboard-header'
 import { Main } from '@/components/layout/main'
+import { Separator } from '@/components/ui/separator'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -80,7 +81,7 @@ export default function NewPromptPage() {
     <>
       <DashboardHeader />
       <Main>
-        <div className="mb-6 flex items-center gap-4">
+        <div className="flex items-center gap-4">
           <Button
             variant="ghost"
             size="icon"
@@ -88,11 +89,9 @@ export default function NewPromptPage() {
           >
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          <div>
-            <h2 className="text-2xl font-bold tracking-tight">New Prompt</h2>
-            <p className="text-muted-foreground">Create a new prompt template</p>
-          </div>
+          <h1 className="text-lg font-semibold">New Prompt</h1>
         </div>
+        <Separator className="my-4" />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">

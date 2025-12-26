@@ -183,6 +183,34 @@ HTTP     Business    Data Access
 
 **Full guide**: See `docs/development/ERROR_HANDLING_GUIDE.md`
 
+### Required Configuration Validation
+
+Services use **fail-fast validation** at startup. Missing required config causes immediate startup failure with clear error messages.
+
+**To add a new required configuration:**
+
+1. **Add `Validate()` method** to config struct in `internal/config/config.go`:
+```go
+func (nc *NewConfig) Validate() error {
+    if os.Getenv("APP_MODE") == "worker" {
+        return nil  // Skip for workers if not needed
+    }
+    if nc.RequiredKey == "" {
+        return errors.New("NEW_REQUIRED_KEY is required")
+    }
+    return nil
+}
+```
+
+2. **Call from `Config.Validate()`**:
+```go
+if err := c.NewConfig.Validate(); err != nil {
+    return fmt.Errorf("new config validation failed: %w", err)
+}
+```
+
+**Required configs (server mode):** `JWT_SECRET`, `AI_KEY_ENCRYPTION_KEY`, `DATABASE_URL`, `CLICKHOUSE_URL`, `REDIS_URL`
+
 ### OTEL-Native Observability
 
 - **Single table**: `otel_traces` stores both traces and spans

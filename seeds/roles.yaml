@@ -1,7 +1,7 @@
 # System Role Templates (4 roles)
 
 roles:
-  # Owner: Full access (63 permissions)
+  # Owner: Full access (65 permissions)
   - name: "owner"
     description: "Full access to organization and all its resources"
     scope_type: "organization"
@@ -38,6 +38,8 @@ roles:
       - "api-keys:create"
       - "api-keys:update"
       - "api-keys:delete"
+      - "credentials:read"
+      - "credentials:write"
       - "integrations:read"
       - "integrations:configure"
       - "integrations:delete"
@@ -70,7 +72,7 @@ roles:
       - "prompts:update"
       - "prompts:delete"
 
-  # Admin: All except delete org/projects (61 permissions)
+  # Admin: All except delete org/projects (63 permissions)
   - name: "admin"
     description: "Administrative access to organization resources (no delete org/projects)"
     scope_type: "organization"
@@ -105,6 +107,8 @@ roles:
       - "api-keys:create"
       - "api-keys:update"
       - "api-keys:delete"
+      - "credentials:read"
+      - "credentials:write"
       - "integrations:read"
       - "integrations:configure"
       - "integrations:delete"
@@ -137,7 +141,7 @@ roles:
       - "prompts:update"
       - "prompts:delete"
 
-  # Developer: Dev workflows (30 permissions)
+  # Developer: Dev workflows (32 permissions)
   - name: "developer"
     description: "Development access to projects, analytics, and API keys"
     scope_type: "organization"
@@ -150,6 +154,8 @@ roles:
       - "api-keys:create"
       - "api-keys:update"
       - "api-keys:delete"
+      - "credentials:read"
+      - "credentials:write"
       - "integrations:read"
       - "notifications:read"
       - "traces:read"
@@ -173,7 +179,7 @@ roles:
       - "prompts:update"
       - "prompts:delete"
 
-  # Viewer: Read-only (13 permissions)
+  # Viewer: Read-only (14 permissions)
   - name: "viewer"
     description: "Read-only access to organization resources"
     scope_type: "organization"
@@ -182,6 +188,7 @@ roles:
       - "settings:read"
       - "projects:read"
       - "api-keys:read"
+      - "credentials:read"
       - "integrations:read"
       - "audit-logs:read"
       - "notifications:read"

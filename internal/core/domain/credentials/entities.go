@@ -46,20 +46,17 @@ func (p Provider) String() string {
 	return string(p)
 }
 
-// ProviderCredential represents an encrypted AI provider API key for a project.
+// ProviderCredential represents an encrypted AI provider API key for an organization.
 // The actual API key is stored encrypted with AES-256-GCM and is never
 // returned to the frontend.
 //
 // Multiple configurations per adapter (provider type) are supported.
-// Each configuration has a unique Name within a project.
+// Each configuration has a unique Name within an organization.
 type ProviderCredential struct {
-	// Primary key
-	ID ulid.ULID `json:"id" gorm:"type:char(26);primaryKey"`
+	ID             ulid.ULID `json:"id" gorm:"type:char(26);primaryKey"`
+	OrganizationID ulid.ULID `json:"organization_id" gorm:"type:char(26);not null;index"`
 
-	// Project scope
-	ProjectID ulid.ULID `json:"project_id" gorm:"type:char(26);not null;index"`
-
-	// User-defined name for this configuration (unique per project)
+	// User-defined name for this configuration (unique per organization)
 	// e.g., "OpenAI Production", "Claude Development", "My Custom Provider"
 	Name string `json:"name" gorm:"type:varchar(100);not null"`
 
@@ -105,17 +102,17 @@ func (ProviderCredential) TableName() string {
 // ProviderCredentialResponse is the safe response DTO (no encrypted data).
 // This is what gets returned to the frontend.
 type ProviderCredentialResponse struct {
-	ID           ulid.ULID         `json:"id"`
-	ProjectID    ulid.ULID         `json:"project_id"`
-	Name         string            `json:"name"`                // Unique configuration name
-	Adapter      Provider          `json:"adapter"`             // API protocol/provider type
-	KeyPreview   string            `json:"key_preview"`         // Masked: "sk-***abcd"
-	BaseURL      *string           `json:"base_url,omitempty"`
-	Config       map[string]any    `json:"config,omitempty"`    // Provider-specific config
-	CustomModels []string          `json:"custom_models"`       // User-defined models
-	Headers      map[string]string `json:"headers,omitempty"`   // Custom headers (decrypted for editing)
-	CreatedAt    time.Time         `json:"created_at"`
-	UpdatedAt    time.Time         `json:"updated_at"`
+	ID             ulid.ULID         `json:"id"`
+	OrganizationID ulid.ULID         `json:"organization_id"`
+	Name           string            `json:"name"`
+	Adapter        Provider          `json:"adapter"`
+	KeyPreview     string            `json:"key_preview"` // e.g., "sk-***abcd"
+	BaseURL        *string           `json:"base_url,omitempty"`
+	Config         map[string]any    `json:"config,omitempty"`
+	CustomModels   []string          `json:"custom_models"`
+	Headers        map[string]string `json:"headers,omitempty"` // Decrypted for editing
+	CreatedAt      time.Time         `json:"created_at"`
+	UpdatedAt      time.Time         `json:"updated_at"`
 }
 
 // AzureConfig holds Azure OpenAI specific configuration
@@ -151,16 +148,16 @@ func (c *ProviderCredential) ToResponse() *ProviderCredentialResponse {
 		customModels = c.CustomModels
 	}
 	return &ProviderCredentialResponse{
-		ID:           c.ID,
-		ProjectID:    c.ProjectID,
-		Name:         c.Name,
-		Adapter:      c.Adapter,
-		KeyPreview:   c.KeyPreview,
-		BaseURL:      c.BaseURL,
-		Config:       c.Config,
-		CustomModels: customModels,
-		CreatedAt:    c.CreatedAt,
-		UpdatedAt:    c.UpdatedAt,
+		ID:             c.ID,
+		OrganizationID: c.OrganizationID,
+		Name:           c.Name,
+		Adapter:        c.Adapter,
+		KeyPreview:     c.KeyPreview,
+		BaseURL:        c.BaseURL,
+		Config:         c.Config,
+		CustomModels:   customModels,
+		CreatedAt:      c.CreatedAt,
+		UpdatedAt:      c.UpdatedAt,
 	}
 }
 

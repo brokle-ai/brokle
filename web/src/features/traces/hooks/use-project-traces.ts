@@ -1,6 +1,6 @@
 'use client'
 
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { useSearchParams } from 'next/navigation'
 import { useTableSearchParams } from '@/hooks/use-table-search-params'
 import { useProjectOnly } from '@/features/projects'
@@ -37,6 +37,7 @@ export function useProjectTraces() {
   const {
     data,
     isLoading: isTracesLoading,
+    isFetching: isTracesFetching,
     error,
     refetch,
   } = useQuery({
@@ -72,6 +73,9 @@ export function useProjectTraces() {
     // Retry configuration
     retry: 2, // Retry failed requests twice
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000), // Exponential backoff
+
+    // Keep previous data visible while fetching new data (e.g., when filters change)
+    placeholderData: keepPreviousData,
   })
 
   return {
@@ -84,6 +88,7 @@ export function useProjectTraces() {
 
     // Loading states
     isLoading: isProjectLoading || isTracesLoading,
+    isFetching: isTracesFetching,
     isProjectLoading,
     isTracesLoading,
 
@@ -112,6 +117,7 @@ export interface UseProjectTracesReturn {
 
   // Loading states
   isLoading: boolean
+  isFetching: boolean
   isProjectLoading: boolean
   isTracesLoading: boolean
 
