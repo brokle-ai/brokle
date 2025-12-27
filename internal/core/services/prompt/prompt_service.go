@@ -982,6 +982,9 @@ func (s *promptService) buildPromptResponse(prompt *promptDomain.Prompt, version
 		createdBy = version.CreatedBy.String()
 	}
 
+	// Detect dialect from template content
+	dialect, _ := s.compiler.DetectDialect(template, prompt.Type)
+
 	return &promptDomain.PromptResponse{
 		ID:            prompt.ID.String(),
 		ProjectID:     prompt.ProjectID.String(),
@@ -994,6 +997,7 @@ func (s *promptService) buildPromptResponse(prompt *promptDomain.Prompt, version
 		Labels:        labelNames,
 		Template:      template,
 		Variables:     []string(version.Variables),
+		Dialect:       dialect,
 		CommitMessage: version.CommitMessage,
 		CreatedAt:     version.CreatedAt,
 		UpdatedAt:     prompt.UpdatedAt,
@@ -1018,11 +1022,16 @@ func (s *promptService) buildVersionResponseWithLabels(v *promptDomain.Version, 
 		createdBy = v.CreatedBy.String()
 	}
 
+	// Detect dialect from template content (infer type from template structure)
+	promptType := s.inferPromptType(template)
+	dialect, _ := s.compiler.DetectDialect(template, promptType)
+
 	return &promptDomain.VersionResponse{
 		ID:            v.ID.String(),
 		Version:       v.Version,
 		Template:      template,
 		Variables:     []string(v.Variables),
+		Dialect:       dialect,
 		CommitMessage: v.CommitMessage,
 		Labels:        labels,
 		CreatedAt:     v.CreatedAt,
@@ -1031,6 +1040,9 @@ func (s *promptService) buildVersionResponseWithLabels(v *promptDomain.Version, 
 }
 
 func (s *promptService) cachedPromptToResponse(cached *promptDomain.CachedPrompt) *promptDomain.PromptResponse {
+	// Detect dialect from template content
+	dialect, _ := s.compiler.DetectDialect(cached.Template, cached.Type)
+
 	return &promptDomain.PromptResponse{
 		ID:            cached.PromptID,
 		ProjectID:     cached.ProjectID,
@@ -1043,6 +1055,7 @@ func (s *promptService) cachedPromptToResponse(cached *promptDomain.CachedPrompt
 		Labels:        cached.Labels,
 		Template:      cached.Template,
 		Variables:     cached.Variables,
+		Dialect:       dialect,
 		CommitMessage: cached.CommitMessage,
 		CreatedAt:     cached.CreatedAt,
 		UpdatedAt:     cached.UpdatedAt,

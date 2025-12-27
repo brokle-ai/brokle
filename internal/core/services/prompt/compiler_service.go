@@ -8,21 +8,23 @@ import (
 	"strings"
 
 	promptDomain "brokle/internal/core/domain/prompt"
+	"brokle/internal/core/services/prompt/dialects"
 )
 
 // Variable pattern matches Mustache-style variables: {{variable_name}}
 // Variables must start with a letter and contain only alphanumeric characters and underscores
 var variablePattern = regexp.MustCompile(`\{\{([a-zA-Z][a-zA-Z0-9_]*)\}\}`)
 
-// compilerService implements promptDomain.CompilerService
-type compilerService struct{}
-
-// NewCompilerService creates a new compiler service instance
-func NewCompilerService() promptDomain.CompilerService {
-	return &compilerService{}
+type compilerService struct {
+	registry promptDomain.DialectRegistry
 }
 
-// ExtractVariables extracts variable names from a template
+func NewCompilerService() promptDomain.CompilerService {
+	return &compilerService{
+		registry: dialects.NewRegistry(),
+	}
+}
+
 func (s *compilerService) ExtractVariables(template interface{}, promptType promptDomain.PromptType) ([]string, error) {
 	switch promptType {
 	case promptDomain.PromptTypeText:
@@ -34,7 +36,6 @@ func (s *compilerService) ExtractVariables(template interface{}, promptType prom
 	}
 }
 
-// extractTextVariables extracts variables from a text template
 func (s *compilerService) extractTextVariables(template interface{}) ([]string, error) {
 	if raw, ok := template.(json.RawMessage); ok {
 		var textTemplate promptDomain.TextTemplate
@@ -58,7 +59,6 @@ func (s *compilerService) extractTextVariables(template interface{}) ([]string, 
 	return nil, promptDomain.NewInvalidTemplateError("unsupported template format for text type")
 }
 
-// extractChatVariables extracts variables from a chat template
 func (s *compilerService) extractChatVariables(template interface{}) ([]string, error) {
 	if raw, ok := template.(json.RawMessage); ok {
 		var chatTemplate promptDomain.ChatTemplate
@@ -79,7 +79,6 @@ func (s *compilerService) extractChatVariables(template interface{}) ([]string, 
 	return nil, promptDomain.NewInvalidTemplateError("unsupported template format for chat type")
 }
 
-// parseMessagesFromMap parses chat messages from a map structure
 func (s *compilerService) parseMessagesFromMap(m map[string]interface{}) ([]promptDomain.ChatMessage, error) {
 	messagesRaw, ok := m["messages"]
 	if !ok {
@@ -117,7 +116,6 @@ func (s *compilerService) parseMessagesFromMap(m map[string]interface{}) ([]prom
 	return messages, nil
 }
 
-// extractFromString extracts unique variable names from a string
 func (s *compilerService) extractFromString(content string) []string {
 	matches := variablePattern.FindAllStringSubmatch(content, -1)
 	seen := make(map[string]bool)
@@ -134,7 +132,6 @@ func (s *compilerService) extractFromString(content string) []string {
 	return vars
 }
 
-// extractFromMessages extracts variables from chat messages
 func (s *compilerService) extractFromMessages(messages []promptDomain.ChatMessage) []string {
 	seen := make(map[string]bool)
 	var vars []string
@@ -158,7 +155,6 @@ func (s *compilerService) extractFromMessages(messages []promptDomain.ChatMessag
 	return vars
 }
 
-// Compile compiles a template with variable substitution
 func (s *compilerService) Compile(template interface{}, promptType promptDomain.PromptType, variables map[string]string) (interface{}, error) {
 	switch promptType {
 	case promptDomain.PromptTypeText:
@@ -170,7 +166,6 @@ func (s *compilerService) Compile(template interface{}, promptType promptDomain.
 	}
 }
 
-// compileText compiles a text template
 func (s *compilerService) compileText(template interface{}, variables map[string]string) (string, error) {
 	var content string
 
@@ -195,7 +190,6 @@ func (s *compilerService) compileText(template interface{}, variables map[string
 	return s.CompileText(content, variables)
 }
 
-// CompileText compiles a text string with variable substitution
 func (s *compilerService) CompileText(template string, variables map[string]string) (string, error) {
 	required := s.extractFromString(template)
 
@@ -214,7 +208,6 @@ func (s *compilerService) CompileText(template string, variables map[string]stri
 	return result, nil
 }
 
-// compileChat compiles a chat template
 func (s *compilerService) compileChat(template interface{}, variables map[string]string) ([]promptDomain.ChatMessage, error) {
 	var messages []promptDomain.ChatMessage
 
@@ -237,7 +230,6 @@ func (s *compilerService) compileChat(template interface{}, variables map[string
 	return s.CompileChat(messages, variables)
 }
 
-// CompileChat compiles chat messages with variable substitution
 func (s *compilerService) CompileChat(messages []promptDomain.ChatMessage, variables map[string]string) ([]promptDomain.ChatMessage, error) {
 	required := s.extractFromMessages(messages)
 
@@ -278,7 +270,6 @@ func (s *compilerService) CompileChat(messages []promptDomain.ChatMessage, varia
 	return result, nil
 }
 
-// ValidateTemplate validates a template structure
 func (s *compilerService) ValidateTemplate(template interface{}, promptType promptDomain.PromptType) error {
 	switch promptType {
 	case promptDomain.PromptTypeText:
@@ -290,7 +281,6 @@ func (s *compilerService) ValidateTemplate(template interface{}, promptType prom
 	}
 }
 
-// validateTextTemplate validates a text template
 func (s *compilerService) validateTextTemplate(template interface{}) error {
 	if raw, ok := template.(json.RawMessage); ok {
 		var textTemplate promptDomain.TextTemplate
@@ -324,7 +314,6 @@ func (s *compilerService) validateTextTemplate(template interface{}) error {
 	return promptDomain.NewInvalidTemplateError("unsupported template format")
 }
 
-// validateChatTemplate validates a chat template
 func (s *compilerService) validateChatTemplate(template interface{}) error {
 	if raw, ok := template.(json.RawMessage); ok {
 		var chatTemplate promptDomain.ChatTemplate
@@ -351,7 +340,6 @@ func (s *compilerService) validateChatTemplate(template interface{}) error {
 	return promptDomain.NewInvalidTemplateError("unsupported template format for chat")
 }
 
-// validateMessages validates chat messages
 func (s *compilerService) validateMessages(messages []promptDomain.ChatMessage) error {
 	validRoles := map[string]bool{"system": true, "user": true, "assistant": true}
 	validTypes := map[string]bool{"message": true, "placeholder": true, "": true}
@@ -378,7 +366,6 @@ func (s *compilerService) validateMessages(messages []promptDomain.ChatMessage) 
 	return nil
 }
 
-// ValidateVariables checks that all required variables are provided
 func (s *compilerService) ValidateVariables(required []string, provided map[string]string) error {
 	var missing []string
 	for _, v := range required {
@@ -392,4 +379,375 @@ func (s *compilerService) ValidateVariables(required []string, provided map[stri
 	}
 
 	return nil
+}
+
+func (s *compilerService) GetDialectRegistry() promptDomain.DialectRegistry {
+	return s.registry
+}
+
+func (s *compilerService) DetectDialect(template interface{}, promptType promptDomain.PromptType) (promptDomain.TemplateDialect, error) {
+	content, err := s.extractContentForDetection(template, promptType)
+	if err != nil {
+		return promptDomain.DialectSimple, err
+	}
+	return s.registry.Detect(content), nil
+}
+
+func (s *compilerService) extractContentForDetection(template interface{}, promptType promptDomain.PromptType) (string, error) {
+	switch promptType {
+	case promptDomain.PromptTypeText:
+		return s.extractTextContent(template)
+	case promptDomain.PromptTypeChat:
+		return s.extractChatContent(template)
+	default:
+		return "", promptDomain.ErrInvalidPromptType
+	}
+}
+
+func (s *compilerService) extractTextContent(template interface{}) (string, error) {
+	if raw, ok := template.(json.RawMessage); ok {
+		var textTemplate promptDomain.TextTemplate
+		if err := json.Unmarshal(raw, &textTemplate); err != nil {
+			return "", fmt.Errorf("%w: %v", promptDomain.ErrInvalidTemplateFormat, err)
+		}
+		return textTemplate.Content, nil
+	}
+	if m, ok := template.(map[string]interface{}); ok {
+		if content, ok := m["content"].(string); ok {
+			return content, nil
+		}
+		return "", promptDomain.NewInvalidTemplateError("text template must have 'content' field")
+	}
+	if str, ok := template.(string); ok {
+		return str, nil
+	}
+	return "", promptDomain.NewInvalidTemplateError("unsupported template format")
+}
+
+func (s *compilerService) extractChatContent(template interface{}) (string, error) {
+	var messages []promptDomain.ChatMessage
+
+	if raw, ok := template.(json.RawMessage); ok {
+		var chatTemplate promptDomain.ChatTemplate
+		if err := json.Unmarshal(raw, &chatTemplate); err != nil {
+			return "", fmt.Errorf("%w: %v", promptDomain.ErrInvalidTemplateFormat, err)
+		}
+		messages = chatTemplate.Messages
+	} else if m, ok := template.(map[string]interface{}); ok {
+		var err error
+		messages, err = s.parseMessagesFromMap(m)
+		if err != nil {
+			return "", err
+		}
+	} else {
+		return "", promptDomain.NewInvalidTemplateError("unsupported template format for chat")
+	}
+
+	// Concatenate all message content for dialect detection
+	var builder strings.Builder
+	for _, msg := range messages {
+		builder.WriteString(msg.Content)
+		builder.WriteString("\n")
+	}
+	return builder.String(), nil
+}
+
+func (s *compilerService) ValidateSyntax(template interface{}, promptType promptDomain.PromptType, dialect promptDomain.TemplateDialect) (*promptDomain.ValidationResult, error) {
+	// Handle auto-detection
+	if dialect == promptDomain.DialectAuto || dialect == "" {
+		detected, err := s.DetectDialect(template, promptType)
+		if err != nil {
+			return nil, err
+		}
+		dialect = detected
+	}
+
+	// Get the compiler for this dialect
+	compiler, err := s.registry.Get(dialect)
+	if err != nil {
+		return nil, err
+	}
+
+	// Extract content based on prompt type
+	switch promptType {
+	case promptDomain.PromptTypeText:
+		content, err := s.extractTextContent(template)
+		if err != nil {
+			return nil, err
+		}
+		return compiler.Validate(content)
+
+	case promptDomain.PromptTypeChat:
+		content, err := s.extractChatContent(template)
+		if err != nil {
+			return nil, err
+		}
+		return compiler.Validate(content)
+
+	default:
+		return nil, promptDomain.ErrInvalidPromptType
+	}
+}
+
+func (s *compilerService) ExtractVariablesWithDialect(template interface{}, promptType promptDomain.PromptType, dialect promptDomain.TemplateDialect) ([]string, error) {
+	// Handle auto-detection
+	if dialect == promptDomain.DialectAuto || dialect == "" {
+		detected, err := s.DetectDialect(template, promptType)
+		if err != nil {
+			return nil, err
+		}
+		dialect = detected
+	}
+
+	// Get the compiler for this dialect
+	compiler, err := s.registry.Get(dialect)
+	if err != nil {
+		return nil, err
+	}
+
+	switch promptType {
+	case promptDomain.PromptTypeText:
+		content, err := s.extractTextContent(template)
+		if err != nil {
+			return nil, err
+		}
+		return compiler.ExtractVariables(content)
+
+	case promptDomain.PromptTypeChat:
+		return s.extractChatVariablesWithDialect(template, compiler)
+
+	default:
+		return nil, promptDomain.ErrInvalidPromptType
+	}
+}
+
+func (s *compilerService) extractChatVariablesWithDialect(template interface{}, compiler promptDomain.DialectCompiler) ([]string, error) {
+	var messages []promptDomain.ChatMessage
+
+	if raw, ok := template.(json.RawMessage); ok {
+		var chatTemplate promptDomain.ChatTemplate
+		if err := json.Unmarshal(raw, &chatTemplate); err != nil {
+			return nil, fmt.Errorf("%w: %v", promptDomain.ErrInvalidTemplateFormat, err)
+		}
+		messages = chatTemplate.Messages
+	} else if m, ok := template.(map[string]interface{}); ok {
+		var err error
+		messages, err = s.parseMessagesFromMap(m)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		return nil, promptDomain.NewInvalidTemplateError("unsupported template format for chat")
+	}
+
+	seen := make(map[string]bool)
+	var vars []string
+
+	for _, msg := range messages {
+		// Extract variables from message content
+		extracted, err := compiler.ExtractVariables(msg.Content)
+		if err != nil {
+			return nil, err
+		}
+		for _, v := range extracted {
+			if !seen[v] {
+				seen[v] = true
+				vars = append(vars, v)
+			}
+		}
+
+		// Placeholders are also treated as variables
+		if msg.Type == "placeholder" && msg.Name != "" && !seen[msg.Name] {
+			seen[msg.Name] = true
+			vars = append(vars, msg.Name)
+		}
+	}
+
+	sort.Strings(vars)
+	return vars, nil
+}
+
+func (s *compilerService) CompileWithDialect(template interface{}, promptType promptDomain.PromptType, variables map[string]any, dialect promptDomain.TemplateDialect) (interface{}, error) {
+	// Handle auto-detection
+	if dialect == promptDomain.DialectAuto || dialect == "" {
+		detected, err := s.DetectDialect(template, promptType)
+		if err != nil {
+			return nil, err
+		}
+		dialect = detected
+	}
+
+	// Get the compiler for this dialect
+	compiler, err := s.registry.Get(dialect)
+	if err != nil {
+		return nil, err
+	}
+
+	switch promptType {
+	case promptDomain.PromptTypeText:
+		return s.compileTextWithDialect(template, variables, compiler)
+	case promptDomain.PromptTypeChat:
+		return s.compileChatWithDialect(template, variables, compiler)
+	default:
+		return nil, promptDomain.ErrInvalidPromptType
+	}
+}
+
+func (s *compilerService) compileTextWithDialect(template interface{}, variables map[string]any, compiler promptDomain.DialectCompiler) (string, error) {
+	content, err := s.extractTextContent(template)
+	if err != nil {
+		return "", err
+	}
+	return compiler.Compile(content, variables)
+}
+
+func (s *compilerService) compileChatWithDialect(template interface{}, variables map[string]any, compiler promptDomain.DialectCompiler) ([]promptDomain.ChatMessage, error) {
+	var messages []promptDomain.ChatMessage
+
+	if raw, ok := template.(json.RawMessage); ok {
+		var chatTemplate promptDomain.ChatTemplate
+		if err := json.Unmarshal(raw, &chatTemplate); err != nil {
+			return nil, fmt.Errorf("%w: %v", promptDomain.ErrInvalidTemplateFormat, err)
+		}
+		messages = chatTemplate.Messages
+	} else if m, ok := template.(map[string]interface{}); ok {
+		var err error
+		messages, err = s.parseMessagesFromMap(m)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		return nil, promptDomain.NewInvalidTemplateError("unsupported template format for chat")
+	}
+
+	result := make([]promptDomain.ChatMessage, 0, len(messages))
+	for _, msg := range messages {
+		// Handle placeholders
+		if msg.Type == "placeholder" {
+			if val, ok := variables[msg.Name]; ok {
+				// Handle different value types for placeholders
+				injectedMessages := s.handlePlaceholderValue(val)
+				result = append(result, injectedMessages...)
+			}
+			continue
+		}
+
+		// Compile message content using dialect compiler
+		compiledContent, err := compiler.Compile(msg.Content, variables)
+		if err != nil {
+			return nil, err
+		}
+
+		result = append(result, promptDomain.ChatMessage{
+			Type:    msg.Type,
+			Role:    msg.Role,
+			Content: compiledContent,
+			Name:    msg.Name,
+		})
+	}
+
+	return result, nil
+}
+
+// handlePlaceholderValue converts a placeholder value into one or more ChatMessages.
+// Supports:
+// - string: creates a single user message
+// - []ChatMessage: injects messages directly (for history injection)
+// - []map[string]interface{}: converts to ChatMessages (from JSON)
+// - []interface{}: handles mixed arrays from JSON unmarshaling
+// - other: JSON serializes and creates a single user message
+func (s *compilerService) handlePlaceholderValue(val any) []promptDomain.ChatMessage {
+	switch v := val.(type) {
+	case string:
+		// Simple string value becomes a single user message
+		if v == "" {
+			return nil
+		}
+		return []promptDomain.ChatMessage{{
+			Type:    "message",
+			Role:    "user",
+			Content: v,
+		}}
+
+	case []promptDomain.ChatMessage:
+		// Direct ChatMessage array - inject as-is (for history)
+		return v
+
+	case []map[string]interface{}:
+		// Array of maps from JSON - convert to ChatMessages
+		return s.convertMapsToMessages(v)
+
+	case []interface{}:
+		// Mixed array from JSON unmarshaling - convert each element
+		return s.convertInterfaceArrayToMessages(v)
+
+	default:
+		// Complex type - serialize to JSON
+		data, err := json.Marshal(v)
+		if err != nil || len(data) == 0 || string(data) == "null" {
+			return nil
+		}
+		return []promptDomain.ChatMessage{{
+			Type:    "message",
+			Role:    "user",
+			Content: string(data),
+		}}
+	}
+}
+
+func (s *compilerService) convertMapsToMessages(maps []map[string]interface{}) []promptDomain.ChatMessage {
+	result := make([]promptDomain.ChatMessage, 0, len(maps))
+	for _, m := range maps {
+		msg := s.mapToChatMessage(m)
+		if msg.Content != "" || msg.Type == "placeholder" {
+			result = append(result, msg)
+		}
+	}
+	return result
+}
+
+func (s *compilerService) convertInterfaceArrayToMessages(arr []interface{}) []promptDomain.ChatMessage {
+	result := make([]promptDomain.ChatMessage, 0, len(arr))
+	for _, item := range arr {
+		switch v := item.(type) {
+		case map[string]interface{}:
+			msg := s.mapToChatMessage(v)
+			if msg.Content != "" || msg.Type == "placeholder" {
+				result = append(result, msg)
+			}
+		case promptDomain.ChatMessage:
+			result = append(result, v)
+		case string:
+			// String in array becomes user message
+			if v != "" {
+				result = append(result, promptDomain.ChatMessage{
+					Type:    "message",
+					Role:    "user",
+					Content: v,
+				})
+			}
+		}
+	}
+	return result
+}
+
+func (s *compilerService) mapToChatMessage(m map[string]interface{}) promptDomain.ChatMessage {
+	msg := promptDomain.ChatMessage{
+		Type: "message", // Default type
+	}
+
+	if t, ok := m["type"].(string); ok {
+		msg.Type = t
+	}
+	if role, ok := m["role"].(string); ok {
+		msg.Role = role
+	}
+	if content, ok := m["content"].(string); ok {
+		msg.Content = content
+	}
+	if name, ok := m["name"].(string); ok {
+		msg.Name = name
+	}
+
+	return msg
 }

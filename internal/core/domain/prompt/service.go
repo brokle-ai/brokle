@@ -54,6 +54,15 @@ type CompilerService interface {
 	// Validation
 	ValidateTemplate(template interface{}, promptType PromptType) error
 	ValidateVariables(required []string, provided map[string]string) error
+
+	// Dialect-aware operations (new)
+	DetectDialect(template interface{}, promptType PromptType) (TemplateDialect, error)
+	ValidateSyntax(template interface{}, promptType PromptType, dialect TemplateDialect) (*ValidationResult, error)
+	CompileWithDialect(template interface{}, promptType PromptType, variables map[string]any, dialect TemplateDialect) (interface{}, error)
+	ExtractVariablesWithDialect(template interface{}, promptType PromptType, dialect TemplateDialect) ([]string, error)
+
+	// Registry access
+	GetDialectRegistry() DialectRegistry
 }
 
 // ExecutionService defines the prompt execution service interface.

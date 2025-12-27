@@ -209,22 +209,23 @@ type ProtectedLabelsRequest struct {
 
 // PromptResponse is the response for a prompt with version info.
 type PromptResponse struct {
-	ID            string      `json:"id"`
-	ProjectID     string      `json:"project_id"`
-	Name          string      `json:"name"`
-	Type          PromptType  `json:"type"`
-	Description   string      `json:"description,omitempty"`
-	Tags          []string    `json:"tags"`
-	Version       int         `json:"version"`
-	VersionID     string      `json:"version_id"` // ULID of the specific version (for linking)
-	Labels        []string    `json:"labels"`
-	Template      interface{} `json:"template"`
-	Variables     []string    `json:"variables"`
-	CommitMessage string      `json:"commit_message,omitempty"`
-	CreatedAt     time.Time   `json:"created_at"`
-	UpdatedAt     time.Time   `json:"updated_at"`
-	CreatedBy     string      `json:"created_by,omitempty"`
-	IsFallback    bool        `json:"is_fallback,omitempty"`
+	ID            string          `json:"id"`
+	ProjectID     string          `json:"project_id"`
+	Name          string          `json:"name"`
+	Type          PromptType      `json:"type"`
+	Description   string          `json:"description,omitempty"`
+	Tags          []string        `json:"tags"`
+	Version       int             `json:"version"`
+	VersionID     string          `json:"version_id"` // ULID of the specific version (for linking)
+	Labels        []string        `json:"labels"`
+	Template      interface{}     `json:"template"`
+	Variables     []string        `json:"variables"`
+	Dialect       TemplateDialect `json:"dialect,omitempty"` // Template dialect (simple, mustache, jinja2)
+	CommitMessage string          `json:"commit_message,omitempty"`
+	CreatedAt     time.Time       `json:"created_at"`
+	UpdatedAt     time.Time       `json:"updated_at"`
+	CreatedBy     string          `json:"created_by,omitempty"`
+	IsFallback    bool            `json:"is_fallback,omitempty"`
 }
 
 // PromptListItem is a summary item for prompt listing.
@@ -247,14 +248,15 @@ type PromptListLabelInfo struct {
 }
 
 type VersionResponse struct {
-	ID            string      `json:"id"`
-	Version       int         `json:"version"`
-	Template      interface{} `json:"template"`
-	Variables     []string    `json:"variables"`
-	CommitMessage string      `json:"commit_message,omitempty"`
-	Labels        []string    `json:"labels"`
-	CreatedAt     time.Time   `json:"created_at"`
-	CreatedBy     string      `json:"created_by,omitempty"`
+	ID            string          `json:"id"`
+	Version       int             `json:"version"`
+	Template      interface{}     `json:"template"`
+	Variables     []string        `json:"variables"`
+	Dialect       TemplateDialect `json:"dialect,omitempty"` // Template dialect (simple, mustache, jinja2)
+	CommitMessage string          `json:"commit_message,omitempty"`
+	Labels        []string        `json:"labels"`
+	CreatedAt     time.Time       `json:"created_at"`
+	CreatedBy     string          `json:"created_by,omitempty"`
 }
 
 type VersionDiffResponse struct {

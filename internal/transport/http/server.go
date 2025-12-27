@@ -291,6 +291,11 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 			prompts.GET("/settings/protected-labels", s.authMiddleware.RequirePermission("prompts:read"), s.handlers.Prompt.GetProtectedLabels)
 			prompts.PUT("/settings/protected-labels", s.authMiddleware.RequirePermission("prompts:update"), s.handlers.Prompt.SetProtectedLabels)
 
+			// Template validation and preview endpoints (must come before :promptId)
+			prompts.POST("/validate-template", s.authMiddleware.RequirePermission("prompts:read"), s.handlers.Prompt.ValidateTemplate)
+			prompts.POST("/preview-template", s.authMiddleware.RequirePermission("prompts:read"), s.handlers.Prompt.PreviewTemplate)
+			prompts.POST("/detect-dialect", s.authMiddleware.RequirePermission("prompts:read"), s.handlers.Prompt.DetectDialect)
+
 			prompts.GET("", s.authMiddleware.RequirePermission("prompts:read"), s.handlers.Prompt.ListPrompts)
 			prompts.POST("", s.authMiddleware.RequirePermission("prompts:create"), s.handlers.Prompt.CreatePrompt)
 			prompts.GET("/:promptId", s.authMiddleware.RequirePermission("prompts:read"), s.handlers.Prompt.GetPrompt)

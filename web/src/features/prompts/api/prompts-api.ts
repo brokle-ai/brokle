@@ -9,15 +9,64 @@ import type {
   UpdatePromptRequest,
   CreateVersionRequest,
   GetPromptsParams,
+  PromptType,
+  TemplateDialect,
+  TextTemplate,
+  ChatTemplate,
 } from '../types'
+
+// Template validation types
+export interface SyntaxError {
+  line: number
+  column: number
+  message: string
+  code: string
+}
+
+export interface SyntaxWarning {
+  line: number
+  column: number
+  message: string
+  code: string
+}
+
+export interface ValidateTemplateRequest {
+  template: TextTemplate | ChatTemplate
+  type: PromptType
+  dialect?: TemplateDialect
+}
+
+export interface ValidateTemplateResponse {
+  valid: boolean
+  dialect: TemplateDialect
+  variables: string[]
+  errors: SyntaxError[]
+  warnings: SyntaxWarning[]
+}
+
+export interface PreviewTemplateRequest {
+  template: TextTemplate | ChatTemplate
+  type: PromptType
+  variables: Record<string, unknown>
+  dialect?: TemplateDialect
+}
+
+export interface PreviewTemplateResponse {
+  compiled: TextTemplate | ChatTemplate
+  dialect: TemplateDialect
+}
+
+export interface DetectDialectRequest {
+  template: TextTemplate | ChatTemplate
+  type: PromptType
+}
+
+export interface DetectDialectResponse {
+  dialect: TemplateDialect
+}
 
 const client = new BrokleAPIClient('/api')
 
-/**
- * Get all prompts for a project with filtering and pagination
- *
- * Backend endpoint: GET /api/v1/projects/:projectId/prompts
- */
 export const getPrompts = async (params: GetPromptsParams): Promise<{
   prompts: PromptListItem[]
   totalCount: number
@@ -50,11 +99,6 @@ export const getPrompts = async (params: GetPromptsParams): Promise<{
   }
 }
 
-/**
- * Get a prompt by ID
- *
- * Backend endpoint: GET /api/v1/projects/:projectId/prompts/:promptId
- */
 export const getPromptById = async (
   projectId: string,
   promptId: string
@@ -62,11 +106,6 @@ export const getPromptById = async (
   return client.get<Prompt>(`/v1/projects/${projectId}/prompts/${promptId}`)
 }
 
-/**
- * Create a new prompt
- *
- * Backend endpoint: POST /api/v1/projects/:projectId/prompts
- */
 export const createPrompt = async (
   projectId: string,
   data: CreatePromptRequest
@@ -74,11 +113,6 @@ export const createPrompt = async (
   return client.post<Prompt>(`/v1/projects/${projectId}/prompts`, data)
 }
 
-/**
- * Update a prompt's metadata
- *
- * Backend endpoint: PUT /api/v1/projects/:projectId/prompts/:promptId
- */
 export const updatePrompt = async (
   projectId: string,
   promptId: string,
@@ -87,11 +121,6 @@ export const updatePrompt = async (
   await client.put(`/v1/projects/${projectId}/prompts/${promptId}`, data)
 }
 
-/**
- * Delete a prompt
- *
- * Backend endpoint: DELETE /api/v1/projects/:projectId/prompts/:promptId
- */
 export const deletePrompt = async (
   projectId: string,
   promptId: string
@@ -99,11 +128,6 @@ export const deletePrompt = async (
   await client.delete(`/v1/projects/${projectId}/prompts/${promptId}`)
 }
 
-/**
- * Get all versions of a prompt
- *
- * Backend endpoint: GET /api/v1/projects/:projectId/prompts/:promptId/versions
- */
 export const getVersions = async (
   projectId: string,
   promptId: string
@@ -113,11 +137,6 @@ export const getVersions = async (
   )
 }
 
-/**
- * Create a new version
- *
- * Backend endpoint: POST /api/v1/projects/:projectId/prompts/:promptId/versions
- */
 export const createVersion = async (
   projectId: string,
   promptId: string,
@@ -129,11 +148,6 @@ export const createVersion = async (
   )
 }
 
-/**
- * Get a specific version
- *
- * Backend endpoint: GET /api/v1/projects/:projectId/prompts/:promptId/versions/:versionId
- */
 export const getVersion = async (
   projectId: string,
   promptId: string,
@@ -144,11 +158,6 @@ export const getVersion = async (
   )
 }
 
-/**
- * Set labels on a version
- *
- * Backend endpoint: PATCH /api/v1/projects/:projectId/prompts/:promptId/versions/:versionId/labels
- */
 export const setLabels = async (
   projectId: string,
   promptId: string,
@@ -161,11 +170,6 @@ export const setLabels = async (
   )
 }
 
-/**
- * Compare two versions
- *
- * Backend endpoint: GET /api/v1/projects/:projectId/prompts/:promptId/diff
- */
 export const getVersionDiff = async (
   projectId: string,
   promptId: string,
@@ -178,11 +182,6 @@ export const getVersionDiff = async (
   )
 }
 
-/**
- * Get protected labels for a project
- *
- * Backend endpoint: GET /api/v1/projects/:projectId/prompts/settings/protected-labels
- */
 export const getProtectedLabels = async (
   projectId: string
 ): Promise<string[]> => {
@@ -192,11 +191,6 @@ export const getProtectedLabels = async (
   return response.protected_labels
 }
 
-/**
- * Set protected labels for a project
- *
- * Backend endpoint: PUT /api/v1/projects/:projectId/prompts/settings/protected-labels
- */
 export const setProtectedLabels = async (
   projectId: string,
   labels: string[]
@@ -204,4 +198,34 @@ export const setProtectedLabels = async (
   await client.put(`/v1/projects/${projectId}/prompts/settings/protected-labels`, {
     protected_labels: labels,
   })
+}
+
+export const validateTemplate = async (
+  projectId: string,
+  data: ValidateTemplateRequest
+): Promise<ValidateTemplateResponse> => {
+  return client.post<ValidateTemplateResponse>(
+    `/v1/projects/${projectId}/prompts/validate-template`,
+    data
+  )
+}
+
+export const previewTemplate = async (
+  projectId: string,
+  data: PreviewTemplateRequest
+): Promise<PreviewTemplateResponse> => {
+  return client.post<PreviewTemplateResponse>(
+    `/v1/projects/${projectId}/prompts/preview-template`,
+    data
+  )
+}
+
+export const detectDialect = async (
+  projectId: string,
+  data: DetectDialectRequest
+): Promise<DetectDialectResponse> => {
+  return client.post<DetectDialectResponse>(
+    `/v1/projects/${projectId}/prompts/detect-dialect`,
+    data
+  )
 }
