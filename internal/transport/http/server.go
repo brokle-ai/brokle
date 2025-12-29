@@ -346,6 +346,10 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 			datasets.GET("/:datasetId/items", s.authMiddleware.RequirePermission("projects:read"), s.handlers.DatasetItem.List)
 			datasets.POST("/:datasetId/items", s.authMiddleware.RequirePermission("projects:write"), s.handlers.DatasetItem.Create)
 			datasets.DELETE("/:datasetId/items/:itemId", s.authMiddleware.RequirePermission("projects:write"), s.handlers.DatasetItem.Delete)
+			datasets.POST("/:datasetId/items/import-json", s.authMiddleware.RequirePermission("projects:write"), s.handlers.DatasetItem.ImportFromJSON)
+			datasets.POST("/:datasetId/items/from-traces", s.authMiddleware.RequirePermission("projects:write"), s.handlers.DatasetItem.CreateFromTraces)
+			datasets.POST("/:datasetId/items/from-spans", s.authMiddleware.RequirePermission("projects:write"), s.handlers.DatasetItem.CreateFromSpans)
+			datasets.GET("/:datasetId/items/export", s.authMiddleware.RequirePermission("projects:read"), s.handlers.DatasetItem.Export)
 		}
 
 		experiments := projects.Group("/:projectId/experiments")

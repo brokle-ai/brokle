@@ -1090,6 +1090,7 @@ func ProvideEvaluationServices(
 	datasetItemSvc := evaluationService.NewDatasetItemService(
 		evaluationRepos.DatasetItem,
 		evaluationRepos.Dataset,
+		observabilityRepos.Trace,
 		logger,
 	)
 

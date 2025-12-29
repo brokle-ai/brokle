@@ -33,8 +33,11 @@ type DatasetItemRepository interface {
 	GetByID(ctx context.Context, id ulid.ULID, datasetID ulid.ULID) (*DatasetItem, error)
 	GetByIDForProject(ctx context.Context, id ulid.ULID, projectID ulid.ULID) (*DatasetItem, error)
 	List(ctx context.Context, datasetID ulid.ULID, limit, offset int) ([]*DatasetItem, int64, error)
+	ListAll(ctx context.Context, datasetID ulid.ULID) ([]*DatasetItem, error)
 	Delete(ctx context.Context, id ulid.ULID, datasetID ulid.ULID) error
 	CountByDataset(ctx context.Context, datasetID ulid.ULID) (int64, error)
+	FindByContentHash(ctx context.Context, datasetID ulid.ULID, contentHash string) (*DatasetItem, error)
+	FindByContentHashes(ctx context.Context, datasetID ulid.ULID, contentHashes []string) (map[string]bool, error)
 }
 
 type ExperimentRepository interface {

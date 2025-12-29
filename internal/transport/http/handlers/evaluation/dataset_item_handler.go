@@ -77,12 +77,15 @@ func (h *DatasetItemHandler) List(c *gin.Context) {
 	for i, item := range items {
 		domainResp := item.ToResponse()
 		responses[i] = &DatasetItemResponse{
-			ID:        domainResp.ID,
-			DatasetID: domainResp.DatasetID,
-			Input:     domainResp.Input,
-			Expected:  domainResp.Expected,
-			Metadata:  domainResp.Metadata,
-			CreatedAt: domainResp.CreatedAt,
+			ID:            domainResp.ID,
+			DatasetID:     domainResp.DatasetID,
+			Input:         domainResp.Input,
+			Expected:      domainResp.Expected,
+			Metadata:      domainResp.Metadata,
+			Source:        string(domainResp.Source),
+			SourceTraceID: domainResp.SourceTraceID,
+			SourceSpanID:  domainResp.SourceSpanID,
+			CreatedAt:     domainResp.CreatedAt,
 		}
 	}
 
@@ -132,12 +135,15 @@ func (h *DatasetItemHandler) Create(c *gin.Context) {
 
 	domainResp := item.ToResponse()
 	response.Created(c, &DatasetItemResponse{
-		ID:        domainResp.ID,
-		DatasetID: domainResp.DatasetID,
-		Input:     domainResp.Input,
-		Expected:  domainResp.Expected,
-		Metadata:  domainResp.Metadata,
-		CreatedAt: domainResp.CreatedAt,
+		ID:            domainResp.ID,
+		DatasetID:     domainResp.DatasetID,
+		Input:         domainResp.Input,
+		Expected:      domainResp.Expected,
+		Metadata:      domainResp.Metadata,
+		Source:        string(domainResp.Source),
+		SourceTraceID: domainResp.SourceTraceID,
+		SourceSpanID:  domainResp.SourceSpanID,
+		CreatedAt:     domainResp.CreatedAt,
 	})
 }
 
@@ -178,4 +184,234 @@ func (h *DatasetItemHandler) Delete(c *gin.Context) {
 	}
 
 	response.NoContent(c)
+}
+
+// @Summary Import dataset items from JSON
+// @Description Imports dataset items from a JSON array with optional field mapping and deduplication.
+// @Tags Dataset Items
+// @Accept json
+// @Produce json
+// @Param projectId path string true "Project ID"
+// @Param datasetId path string true "Dataset ID"
+// @Param request body ImportFromJSONRequest true "Import request"
+// @Success 200 {object} BulkImportResponse
+// @Failure 400 {object} response.ErrorResponse
+// @Failure 401 {object} response.ErrorResponse
+// @Failure 404 {object} response.ErrorResponse
+// @Router /api/v1/projects/{projectId}/datasets/{datasetId}/items/import-json [post]
+func (h *DatasetItemHandler) ImportFromJSON(c *gin.Context) {
+	projectID, err := ulid.Parse(c.Param("projectId"))
+	if err != nil {
+		response.Error(c, appErrors.NewValidationError("projectId", "must be a valid ULID"))
+		return
+	}
+
+	datasetID, err := ulid.Parse(c.Param("datasetId"))
+	if err != nil {
+		response.Error(c, appErrors.NewValidationError("datasetId", "must be a valid ULID"))
+		return
+	}
+
+	var req ImportFromJSONRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ValidationError(c, "Invalid request body", err.Error())
+		return
+	}
+
+	// Validate source if provided
+	if req.Source != "" {
+		source := evaluationDomain.DatasetItemSource(req.Source)
+		if !source.IsValid() {
+			response.Error(c, appErrors.NewValidationError("source", "must be one of: manual, trace, span, csv, json, sdk"))
+			return
+		}
+	}
+
+	domainReq := &evaluationDomain.ImportDatasetItemsFromJSONRequest{
+		Items:       req.Items,
+		Deduplicate: req.Deduplicate,
+		Source:      evaluationDomain.DatasetItemSource(req.Source),
+	}
+	if req.KeysMapping != nil {
+		domainReq.KeysMapping = &evaluationDomain.KeysMapping{
+			InputKeys:    req.KeysMapping.InputKeys,
+			ExpectedKeys: req.KeysMapping.ExpectedKeys,
+			MetadataKeys: req.KeysMapping.MetadataKeys,
+		}
+	}
+
+	result, err := h.service.ImportFromJSON(c.Request.Context(), datasetID, projectID, domainReq)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	response.Success(c, &BulkImportResponse{
+		Created: result.Created,
+		Skipped: result.Skipped,
+		Errors:  result.Errors,
+	})
+}
+
+// @Summary Create dataset items from traces
+// @Description Creates dataset items from existing trace data (OTEL-native import).
+// @Tags Dataset Items
+// @Accept json
+// @Produce json
+// @Param projectId path string true "Project ID"
+// @Param datasetId path string true "Dataset ID"
+// @Param request body CreateFromTracesRequest true "Create from traces request"
+// @Success 200 {object} BulkImportResponse
+// @Failure 400 {object} response.ErrorResponse
+// @Failure 401 {object} response.ErrorResponse
+// @Failure 404 {object} response.ErrorResponse
+// @Router /api/v1/projects/{projectId}/datasets/{datasetId}/items/from-traces [post]
+func (h *DatasetItemHandler) CreateFromTraces(c *gin.Context) {
+	projectID, err := ulid.Parse(c.Param("projectId"))
+	if err != nil {
+		response.Error(c, appErrors.NewValidationError("projectId", "must be a valid ULID"))
+		return
+	}
+
+	datasetID, err := ulid.Parse(c.Param("datasetId"))
+	if err != nil {
+		response.Error(c, appErrors.NewValidationError("datasetId", "must be a valid ULID"))
+		return
+	}
+
+	var req CreateFromTracesRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ValidationError(c, "Invalid request body", err.Error())
+		return
+	}
+
+	domainReq := &evaluationDomain.CreateDatasetItemsFromTracesRequest{
+		TraceIDs:    req.TraceIDs,
+		Deduplicate: req.Deduplicate,
+	}
+	if req.KeysMapping != nil {
+		domainReq.KeysMapping = &evaluationDomain.KeysMapping{
+			InputKeys:    req.KeysMapping.InputKeys,
+			ExpectedKeys: req.KeysMapping.ExpectedKeys,
+			MetadataKeys: req.KeysMapping.MetadataKeys,
+		}
+	}
+
+	result, err := h.service.CreateFromTraces(c.Request.Context(), datasetID, projectID, domainReq)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	response.Success(c, &BulkImportResponse{
+		Created: result.Created,
+		Skipped: result.Skipped,
+		Errors:  result.Errors,
+	})
+}
+
+// @Summary Create dataset items from spans
+// @Description Creates dataset items from existing span data.
+// @Tags Dataset Items
+// @Accept json
+// @Produce json
+// @Param projectId path string true "Project ID"
+// @Param datasetId path string true "Dataset ID"
+// @Param request body CreateFromSpansRequest true "Create from spans request"
+// @Success 200 {object} BulkImportResponse
+// @Failure 400 {object} response.ErrorResponse
+// @Failure 401 {object} response.ErrorResponse
+// @Failure 404 {object} response.ErrorResponse
+// @Router /api/v1/projects/{projectId}/datasets/{datasetId}/items/from-spans [post]
+func (h *DatasetItemHandler) CreateFromSpans(c *gin.Context) {
+	projectID, err := ulid.Parse(c.Param("projectId"))
+	if err != nil {
+		response.Error(c, appErrors.NewValidationError("projectId", "must be a valid ULID"))
+		return
+	}
+
+	datasetID, err := ulid.Parse(c.Param("datasetId"))
+	if err != nil {
+		response.Error(c, appErrors.NewValidationError("datasetId", "must be a valid ULID"))
+		return
+	}
+
+	var req CreateFromSpansRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ValidationError(c, "Invalid request body", err.Error())
+		return
+	}
+
+	domainReq := &evaluationDomain.CreateDatasetItemsFromSpansRequest{
+		SpanIDs:     req.SpanIDs,
+		Deduplicate: req.Deduplicate,
+	}
+	if req.KeysMapping != nil {
+		domainReq.KeysMapping = &evaluationDomain.KeysMapping{
+			InputKeys:    req.KeysMapping.InputKeys,
+			ExpectedKeys: req.KeysMapping.ExpectedKeys,
+			MetadataKeys: req.KeysMapping.MetadataKeys,
+		}
+	}
+
+	result, err := h.service.CreateFromSpans(c.Request.Context(), datasetID, projectID, domainReq)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	response.Success(c, &BulkImportResponse{
+		Created: result.Created,
+		Skipped: result.Skipped,
+		Errors:  result.Errors,
+	})
+}
+
+// @Summary Export dataset items
+// @Description Exports all dataset items as JSON.
+// @Tags Dataset Items
+// @Produce json
+// @Param projectId path string true "Project ID"
+// @Param datasetId path string true "Dataset ID"
+// @Success 200 {array} DatasetItemResponse
+// @Failure 400 {object} response.ErrorResponse
+// @Failure 401 {object} response.ErrorResponse
+// @Failure 404 {object} response.ErrorResponse
+// @Router /api/v1/projects/{projectId}/datasets/{datasetId}/items/export [get]
+func (h *DatasetItemHandler) Export(c *gin.Context) {
+	projectID, err := ulid.Parse(c.Param("projectId"))
+	if err != nil {
+		response.Error(c, appErrors.NewValidationError("projectId", "must be a valid ULID"))
+		return
+	}
+
+	datasetID, err := ulid.Parse(c.Param("datasetId"))
+	if err != nil {
+		response.Error(c, appErrors.NewValidationError("datasetId", "must be a valid ULID"))
+		return
+	}
+
+	items, err := h.service.ExportItems(c.Request.Context(), datasetID, projectID)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	responses := make([]*DatasetItemResponse, len(items))
+	for i, item := range items {
+		domainResp := item.ToResponse()
+		responses[i] = &DatasetItemResponse{
+			ID:            domainResp.ID,
+			DatasetID:     domainResp.DatasetID,
+			Input:         domainResp.Input,
+			Expected:      domainResp.Expected,
+			Metadata:      domainResp.Metadata,
+			Source:        string(domainResp.Source),
+			SourceTraceID: domainResp.SourceTraceID,
+			SourceSpanID:  domainResp.SourceSpanID,
+			CreatedAt:     domainResp.CreatedAt,
+		}
+	}
+
+	response.Success(c, responses)
 }

@@ -9,6 +9,10 @@ import type {
   CreateDatasetItemRequest,
   Dataset,
   DatasetItem,
+  BulkImportResult,
+  ImportFromJsonRequest,
+  ImportFromTracesRequest,
+  ImportFromSpansRequest,
 } from '../types'
 
 export const datasetQueryKeys = {
@@ -223,5 +227,90 @@ export function useDeleteDatasetItemMutation(projectId: string, datasetId: strin
         description: apiError?.message || 'Could not delete item. Please try again.',
       })
     },
+  })
+}
+
+// Import Mutations
+export function useImportFromJsonMutation(projectId: string, datasetId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (data: ImportFromJsonRequest) =>
+      datasetsApi.importFromJson(projectId, datasetId, data),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({
+        queryKey: datasetQueryKeys.items(projectId, datasetId),
+      })
+      toast.success('Import Complete', {
+        description: `Created ${result.created} items, skipped ${result.skipped} duplicates.`,
+      })
+    },
+    onError: (error: unknown) => {
+      const apiError = error as { message?: string }
+      toast.error('Import Failed', {
+        description: apiError?.message || 'Could not import items. Please try again.',
+      })
+    },
+  })
+}
+
+export function useImportFromTracesMutation(projectId: string, datasetId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (data: ImportFromTracesRequest) =>
+      datasetsApi.importFromTraces(projectId, datasetId, data),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({
+        queryKey: datasetQueryKeys.items(projectId, datasetId),
+      })
+      toast.success('Import Complete', {
+        description: `Created ${result.created} items from traces, skipped ${result.skipped} duplicates.`,
+      })
+    },
+    onError: (error: unknown) => {
+      const apiError = error as { message?: string }
+      toast.error('Import Failed', {
+        description: apiError?.message || 'Could not import from traces. Please try again.',
+      })
+    },
+  })
+}
+
+export function useImportFromSpansMutation(projectId: string, datasetId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (data: ImportFromSpansRequest) =>
+      datasetsApi.importFromSpans(projectId, datasetId, data),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({
+        queryKey: datasetQueryKeys.items(projectId, datasetId),
+      })
+      toast.success('Import Complete', {
+        description: `Created ${result.created} items from spans, skipped ${result.skipped} duplicates.`,
+      })
+    },
+    onError: (error: unknown) => {
+      const apiError = error as { message?: string }
+      toast.error('Import Failed', {
+        description: apiError?.message || 'Could not import from spans. Please try again.',
+      })
+    },
+  })
+}
+
+// Export Query
+export function useExportDatasetQuery(
+  projectId: string | undefined,
+  datasetId: string | undefined,
+  enabled = false
+) {
+  return useQuery({
+    queryKey: [...datasetQueryKeys.items(projectId ?? '', datasetId ?? ''), 'export'],
+    queryFn: () => datasetsApi.exportDataset(projectId!, datasetId!),
+    enabled: enabled && !!projectId && !!datasetId,
+    staleTime: 0,
+    gcTime: 0,
   })
 }

@@ -112,3 +112,57 @@ func (r *DatasetItemRepository) CountByDataset(ctx context.Context, datasetID ul
 	}
 	return count, nil
 }
+
+// FindByContentHash finds a dataset item by its content hash for deduplication.
+func (r *DatasetItemRepository) FindByContentHash(ctx context.Context, datasetID ulid.ULID, contentHash string) (*evaluation.DatasetItem, error) {
+	var item evaluation.DatasetItem
+	result := r.db.WithContext(ctx).
+		Where("dataset_id = ? AND content_hash = ?", datasetID.String(), contentHash).
+		First(&item)
+
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return nil, nil // Not found is not an error for deduplication
+		}
+		return nil, result.Error
+	}
+	return &item, nil
+}
+
+// FindByContentHashes finds dataset items by their content hashes (batch lookup for deduplication).
+func (r *DatasetItemRepository) FindByContentHashes(ctx context.Context, datasetID ulid.ULID, contentHashes []string) (map[string]bool, error) {
+	if len(contentHashes) == 0 {
+		return make(map[string]bool), nil
+	}
+
+	var hashes []string
+	result := r.db.WithContext(ctx).
+		Model(&evaluation.DatasetItem{}).
+		Where("dataset_id = ? AND content_hash IN ?", datasetID.String(), contentHashes).
+		Pluck("content_hash", &hashes)
+
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	// Convert to map for O(1) lookup
+	existing := make(map[string]bool, len(hashes))
+	for _, h := range hashes {
+		existing[h] = true
+	}
+	return existing, nil
+}
+
+// ListAll returns all dataset items for export (no pagination).
+func (r *DatasetItemRepository) ListAll(ctx context.Context, datasetID ulid.ULID) ([]*evaluation.DatasetItem, error) {
+	var items []*evaluation.DatasetItem
+	result := r.db.WithContext(ctx).
+		Where("dataset_id = ?", datasetID.String()).
+		Order("created_at ASC").
+		Find(&items)
+
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return items, nil
+}

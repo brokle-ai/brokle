@@ -204,14 +204,41 @@ func (d *Dataset) ToResponse() *DatasetResponse {
 	}
 }
 
+// DatasetItemSource represents the origin of a dataset item.
+type DatasetItemSource string
+
+const (
+	DatasetItemSourceManual DatasetItemSource = "manual"
+	DatasetItemSourceTrace  DatasetItemSource = "trace"
+	DatasetItemSourceSpan   DatasetItemSource = "span"
+	DatasetItemSourceCSV    DatasetItemSource = "csv"
+	DatasetItemSourceJSON   DatasetItemSource = "json"
+	DatasetItemSourceSDK    DatasetItemSource = "sdk"
+)
+
+// IsValid checks if the source is a valid DatasetItemSource value.
+func (s DatasetItemSource) IsValid() bool {
+	switch s {
+	case DatasetItemSourceManual, DatasetItemSourceTrace, DatasetItemSourceSpan,
+		DatasetItemSourceCSV, DatasetItemSourceJSON, DatasetItemSourceSDK:
+		return true
+	default:
+		return false
+	}
+}
+
 // DatasetItem represents an individual test case within a dataset.
 type DatasetItem struct {
-	ID        ulid.ULID              `json:"id" gorm:"type:char(26);primaryKey"`
-	DatasetID ulid.ULID              `json:"dataset_id" gorm:"type:char(26);not null;index"`
-	Input     map[string]interface{} `json:"input" gorm:"type:jsonb;serializer:json;not null"`
-	Expected  map[string]interface{} `json:"expected,omitempty" gorm:"type:jsonb;serializer:json"`
-	Metadata  map[string]interface{} `json:"metadata,omitempty" gorm:"type:jsonb;serializer:json;default:'{}'"`
-	CreatedAt time.Time              `json:"created_at" gorm:"not null;autoCreateTime"`
+	ID            ulid.ULID              `json:"id" gorm:"type:char(26);primaryKey"`
+	DatasetID     ulid.ULID              `json:"dataset_id" gorm:"type:char(26);not null;index"`
+	Input         map[string]interface{} `json:"input" gorm:"type:jsonb;serializer:json;not null"`
+	Expected      map[string]interface{} `json:"expected,omitempty" gorm:"type:jsonb;serializer:json"`
+	Metadata      map[string]interface{} `json:"metadata,omitempty" gorm:"type:jsonb;serializer:json;default:'{}'"`
+	Source        DatasetItemSource      `json:"source" gorm:"type:varchar(20);not null;default:'manual'"`
+	SourceTraceID *string                `json:"source_trace_id,omitempty" gorm:"type:varchar(32)"`
+	SourceSpanID  *string                `json:"source_span_id,omitempty" gorm:"type:varchar(16)"`
+	ContentHash   *string                `json:"content_hash,omitempty" gorm:"type:varchar(64)"`
+	CreatedAt     time.Time              `json:"created_at" gorm:"not null;autoCreateTime"`
 }
 
 func (DatasetItem) TableName() string {
@@ -224,6 +251,19 @@ func NewDatasetItem(datasetID ulid.ULID, input map[string]interface{}) *DatasetI
 		DatasetID: datasetID,
 		Input:     input,
 		Metadata:  make(map[string]interface{}),
+		Source:    DatasetItemSourceManual,
+		CreatedAt: time.Now(),
+	}
+}
+
+// NewDatasetItemWithSource creates a new dataset item with explicit source tracking.
+func NewDatasetItemWithSource(datasetID ulid.ULID, input map[string]interface{}, source DatasetItemSource) *DatasetItem {
+	return &DatasetItem{
+		ID:        ulid.New(),
+		DatasetID: datasetID,
+		Input:     input,
+		Metadata:  make(map[string]interface{}),
+		Source:    source,
 		CreatedAt: time.Now(),
 	}
 }
@@ -248,23 +288,82 @@ type CreateDatasetItemsBatchRequest struct {
 	Items []CreateDatasetItemRequest `json:"items" binding:"required,dive"`
 }
 
+// ============================================================================
+// Bulk Import Types for Dataset Items
+// ============================================================================
+
+// KeysMapping defines how to map source fields to dataset item fields.
+type KeysMapping struct {
+	InputKeys    []string `json:"input_keys"`
+	ExpectedKeys []string `json:"expected_keys"`
+	MetadataKeys []string `json:"metadata_keys"`
+}
+
+// BulkImportResult contains the result of a bulk import operation.
+type BulkImportResult struct {
+	Created int      `json:"created"`
+	Skipped int      `json:"skipped"`
+	Errors  []string `json:"errors,omitempty"`
+}
+
+// CreateDatasetItemsFromTracesRequest is the request to create dataset items from production traces.
+type CreateDatasetItemsFromTracesRequest struct {
+	TraceIDs    []string     `json:"trace_ids" binding:"required,min=1"`
+	KeysMapping *KeysMapping `json:"keys_mapping,omitempty"`
+	Deduplicate bool         `json:"deduplicate"`
+}
+
+// CreateDatasetItemsFromSpansRequest is the request to create dataset items from production spans.
+type CreateDatasetItemsFromSpansRequest struct {
+	SpanIDs     []string     `json:"span_ids" binding:"required,min=1"`
+	KeysMapping *KeysMapping `json:"keys_mapping,omitempty"`
+	Deduplicate bool         `json:"deduplicate"`
+}
+
+// ImportDatasetItemsFromJSONRequest is the request to import dataset items from JSON data.
+type ImportDatasetItemsFromJSONRequest struct {
+	Items       []map[string]interface{} `json:"items" binding:"required,min=1"`
+	KeysMapping *KeysMapping             `json:"keys_mapping,omitempty"`
+	Deduplicate bool                     `json:"deduplicate"`
+	Source      DatasetItemSource        `json:"source,omitempty"`
+}
+
+// ExportFormat specifies the format for exporting dataset items.
+type ExportFormat string
+
+const (
+	ExportFormatJSON ExportFormat = "json"
+	ExportFormatCSV  ExportFormat = "csv"
+)
+
+// ExportDatasetItemsRequest is the request to export dataset items.
+type ExportDatasetItemsRequest struct {
+	Format ExportFormat `json:"format" binding:"required,oneof=json csv"`
+}
+
 type DatasetItemResponse struct {
-	ID        string                 `json:"id"`
-	DatasetID string                 `json:"dataset_id"`
-	Input     map[string]interface{} `json:"input"`
-	Expected  map[string]interface{} `json:"expected,omitempty"`
-	Metadata  map[string]interface{} `json:"metadata,omitempty"`
-	CreatedAt time.Time              `json:"created_at"`
+	ID            string                 `json:"id"`
+	DatasetID     string                 `json:"dataset_id"`
+	Input         map[string]interface{} `json:"input"`
+	Expected      map[string]interface{} `json:"expected,omitempty"`
+	Metadata      map[string]interface{} `json:"metadata,omitempty"`
+	Source        DatasetItemSource      `json:"source"`
+	SourceTraceID *string                `json:"source_trace_id,omitempty"`
+	SourceSpanID  *string                `json:"source_span_id,omitempty"`
+	CreatedAt     time.Time              `json:"created_at"`
 }
 
 func (di *DatasetItem) ToResponse() *DatasetItemResponse {
 	return &DatasetItemResponse{
-		ID:        di.ID.String(),
-		DatasetID: di.DatasetID.String(),
-		Input:     di.Input,
-		Expected:  di.Expected,
-		Metadata:  di.Metadata,
-		CreatedAt: di.CreatedAt,
+		ID:            di.ID.String(),
+		DatasetID:     di.DatasetID.String(),
+		Input:         di.Input,
+		Expected:      di.Expected,
+		Metadata:      di.Metadata,
+		Source:        di.Source,
+		SourceTraceID: di.SourceTraceID,
+		SourceSpanID:  di.SourceSpanID,
+		CreatedAt:     di.CreatedAt,
 	}
 }
 

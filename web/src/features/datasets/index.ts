@@ -10,10 +10,16 @@ export type { DatasetDetailDialogType } from './context/dataset-detail-context'
 export type {
   Dataset,
   DatasetItem,
+  DatasetItemSource,
   CreateDatasetRequest,
   UpdateDatasetRequest,
   CreateDatasetItemRequest,
   DatasetItemListResponse,
+  KeysMapping,
+  BulkImportResult,
+  ImportFromJsonRequest,
+  ImportFromTracesRequest,
+  ImportFromSpansRequest,
 } from './types'
 
 export { datasetsApi } from './api/datasets-api'
@@ -27,6 +33,10 @@ export {
   useDeleteDatasetMutation,
   useCreateDatasetItemMutation,
   useDeleteDatasetItemMutation,
+  useImportFromJsonMutation,
+  useImportFromTracesMutation,
+  useImportFromSpansMutation,
+  useExportDatasetQuery,
   datasetQueryKeys,
 } from './hooks/use-datasets'
 export { useProjectDatasets } from './hooks/use-project-datasets'
@@ -42,3 +52,7 @@ export { DatasetsDialogs } from './components/datasets-dialogs'
 
 export { DatasetDetailDialogs } from './components/dataset-detail-dialogs'
 export { DatasetDetailSkeleton } from './components/dataset-detail-skeleton'
+
+// Import Dialogs
+export { ImportJsonDialog } from './components/import-json-dialog'
+export { AddFromTracesDialog, AddTraceToDatasetDialog } from './components/add-from-traces-dialog'

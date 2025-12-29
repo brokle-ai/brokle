@@ -10,6 +10,7 @@ import { DatasetDetailDialogs } from './dataset-detail-dialogs'
 import { DatasetDetailSkeleton } from './dataset-detail-skeleton'
 import { DatasetItemTable } from './dataset-item-table'
 import { AddDatasetItemDialog } from './add-dataset-item-dialog'
+import { ImportJsonDialog } from './import-json-dialog'
 
 interface DatasetDetailProps {
   projectSlug: string
@@ -79,7 +80,10 @@ function DatasetDetailContent() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-medium">Items</h2>
-            <AddDatasetItemDialog projectId={projectId} datasetId={datasetId} />
+            <div className="flex items-center gap-2">
+              <ImportJsonDialog projectId={projectId} datasetId={datasetId} />
+              <AddDatasetItemDialog projectId={projectId} datasetId={datasetId} />
+            </div>
           </div>
           <DatasetItemTable projectId={projectId} datasetId={datasetId} />
         </div>
