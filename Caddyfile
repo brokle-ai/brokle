@@ -47,6 +47,8 @@ app.brokle.com {
 
     # Security headers
     header {
+        # HSTS - enforce HTTPS
+        Strict-Transport-Security "max-age=31536000"
         # Prevent clickjacking
         X-Frame-Options "DENY"
         # XSS protection
