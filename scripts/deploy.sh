@@ -92,25 +92,21 @@ info "✓ jq found: $(jq --version)"
 info "Checking environment configuration..."
 
 if [ ! -f .env ]; then
-    if [ -f .env.production ]; then
-        warn ".env not found. Creating from .env.production template..."
-        cp .env.production .env
-        warn "⚠️  IMPORTANT: Edit .env file and update all CHANGE_ME values!"
-        warn "    Required changes:"
-        warn "    - DOMAIN=your-domain.com"
-        warn "    - POSTGRES_PASSWORD"
-        warn "    - CLICKHOUSE_PASSWORD"
-        warn "    - JWT_SECRET (generate with: openssl rand -base64 64)"
-        warn "    - SESSION_SECRET (generate with: openssl rand -base64 64)"
-        warn "    - MINIO credentials"
-        echo ""
-        read -p "Have you updated all credentials in .env? (yes/no): " confirm
-        if [[ "$confirm" != "yes" ]]; then
-            error "Please update .env file and run this script again."
-        fi
-    else
-        error ".env.production template not found. Cannot create .env file."
-    fi
+    error ".env file not found. Please create it manually:
+
+    1. Copy the example file:
+       cp .env.example .env
+
+    2. Edit .env and configure ALL required values:
+       - DOMAIN=your-domain.com
+       - POSTGRES_PASSWORD (generate secure password)
+       - CLICKHOUSE_PASSWORD (generate secure password)
+       - JWT_SECRET (generate with: openssl rand -base64 64)
+       - SESSION_SECRET (generate with: openssl rand -base64 64)
+       - AI_KEY_ENCRYPTION_KEY (generate with: openssl rand -base64 32)
+       - MINIO credentials
+
+    3. Run this script again after configuring .env"
 else
     info "✓ .env file found"
 fi
@@ -237,14 +233,46 @@ fi
 info "✓ Docker images built successfully"
 
 # =============================================================================
-# 8. Start Services
+# 8. Start Database Services
 # =============================================================================
-info "Starting services..."
+info "Starting database services..."
 
 # Stop any existing services
 docker compose -f docker-compose.prod.yml down 2>/dev/null || true
 
-# Start services
+# Start only databases first
+if ! docker compose -f docker-compose.prod.yml up -d postgres clickhouse redis; then
+    error "Failed to start database services"
+fi
+
+info "Waiting for databases to be ready..."
+sleep 15
+
+info "✓ Database services started"
+
+# =============================================================================
+# 9. Run Database Migrations
+# =============================================================================
+info "Running database migrations..."
+
+# PostgreSQL migrations
+info "Running PostgreSQL migrations..."
+docker compose -f docker-compose.prod.yml run --rm \
+    backend /app/brokle-server migrate -db postgres up || error "PostgreSQL migration failed"
+
+# ClickHouse migrations
+info "Running ClickHouse migrations..."
+docker compose -f docker-compose.prod.yml run --rm \
+    backend /app/brokle-server migrate -db clickhouse up || error "ClickHouse migration failed"
+
+info "✓ Migrations completed"
+
+# =============================================================================
+# 10. Start All Services
+# =============================================================================
+info "Starting all services..."
+
+# Start remaining services
 if ! docker compose -f docker-compose.prod.yml up -d; then
     error "Failed to start services"
 fi
@@ -252,7 +280,7 @@ fi
 info "✓ Services started"
 
 # =============================================================================
-# 9. Wait for Services to be Healthy
+# 11. Wait for Services to be Healthy
 # =============================================================================
 info "Waiting for services to be healthy (this may take 30-60 seconds)..."
 
@@ -278,7 +306,7 @@ if [ $ELAPSED -ge $MAX_WAIT ]; then
 fi
 
 # =============================================================================
-# 10. Verify Deployment
+# 12. Verify Deployment
 # =============================================================================
 info "Verifying deployment..."
 
@@ -306,7 +334,7 @@ fi
 info "✓ Backend health check passed"
 
 # =============================================================================
-# 11. Display Status
+# 13. Display Status
 # =============================================================================
 echo ""
 echo "=============================================="
@@ -348,7 +376,7 @@ echo "=============================================="
 echo ""
 
 # =============================================================================
-# 12. Create Helper Scripts
+# 14. Create Helper Scripts
 # =============================================================================
 info "Creating helper scripts..."
 

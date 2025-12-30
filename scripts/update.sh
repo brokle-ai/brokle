@@ -63,14 +63,87 @@ if [ ! -f "docker-compose.prod.yml" ]; then
     error "docker-compose.prod.yml not found. Are you in the brokle directory?"
 fi
 
+# Check Docker
+if ! command -v docker &> /dev/null; then
+    error "Docker not found. Please install Docker first."
+fi
+
+if ! docker compose version &> /dev/null; then
+    error "Docker Compose not found. Please install Docker Compose v2+"
+fi
+
 # Check if .env exists
 if [ ! -f ".env" ]; then
-    error ".env file not found. Run deploy-gcp.sh first for initial deployment."
+    error ".env file not found. Run deploy.sh first for initial deployment."
+fi
+
+# Load environment variables
+source .env
+
+# Validate critical environment variables
+if [ -z "$DOMAIN" ] || [ "$DOMAIN" == "your-domain.com" ]; then
+    error "DOMAIN not configured in .env file"
+fi
+if [ -z "$JWT_SECRET" ]; then
+    error "JWT_SECRET not configured in .env file"
+fi
+if [ -z "$DATABASE_URL" ]; then
+    error "DATABASE_URL not configured in .env file"
+fi
+info "✓ Environment variables validated"
+
+# Check for CHANGE_ME values
+if grep -q "CHANGE_ME" .env; then
+    error "Found CHANGE_ME values in .env file. Please update all credentials first."
+fi
+
+# Check .env permissions (should be 600)
+ENV_PERMS=$(stat -c %a .env 2>/dev/null || stat -f %Lp .env 2>/dev/null)
+if [ "$ENV_PERMS" != "600" ]; then
+    warn ".env file permissions are $ENV_PERMS (should be 600). Fixing..."
+    chmod 600 .env
+    info "✓ .env permissions fixed"
+fi
+
+# Check Caddyfile exists
+if [ ! -f "Caddyfile" ]; then
+    error "Caddyfile not found. This file is required for the reverse proxy."
+fi
+info "✓ Caddyfile found"
+
+# Check disk space (need at least 5GB for updates)
+AVAILABLE_GB=$(df -BG / | tail -1 | awk '{print $4}' | sed 's/G//')
+if [ "$AVAILABLE_GB" -lt 5 ]; then
+    error "Insufficient disk space. Available: ${AVAILABLE_GB}GB, Required: 5GB minimum for updates"
+fi
+info "✓ Disk space: ${AVAILABLE_GB}GB available"
+
+# Check firewall (warn only, don't block)
+if command -v ufw &> /dev/null; then
+    if sudo ufw status | grep -q "Status: active"; then
+        PORTS_MISSING=false
+        if ! sudo ufw status | grep -q "80/tcp"; then
+            PORTS_MISSING=true
+        fi
+        if ! sudo ufw status | grep -q "443/tcp"; then
+            PORTS_MISSING=true
+        fi
+        if ! sudo ufw status | grep -q "4317/tcp"; then
+            PORTS_MISSING=true
+        fi
+
+        if [ "$PORTS_MISSING" = true ]; then
+            warn "Required ports (80, 443, 4317) may not be open in UFW"
+            warn "If update fails, check: sudo ufw status"
+        else
+            info "✓ Firewall ports open"
+        fi
+    fi
 fi
 
 # Check if services are running
 if ! docker compose -f docker-compose.prod.yml ps | grep -q "Up"; then
-    error "No services are running. Use deploy-gcp.sh for initial deployment."
+    error "No services are running. Use deploy.sh for initial deployment."
 fi
 
 info "✓ Pre-update checks passed"
@@ -247,7 +320,7 @@ echo ""
 echo "Backup location: $BACKUP_DIR"
 echo ""
 echo "Service URLs:"
-echo "  - Application: https://app.brokle.com"
+echo "  - Application: https://${DOMAIN:-your-domain.com}"
 echo "  - Backend Health: http://localhost:8080/health"
 echo ""
 echo "To view logs:"
