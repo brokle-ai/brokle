@@ -13,44 +13,8 @@
 app.brokle.com {
     # Automatic HTTPS via Let's Encrypt
 
-    # CORS for cross-origin requests (marketing site -> app API)
-    @cors_preflight {
-        method OPTIONS
-        header Origin https://brokle.com
-    }
-    @cors_preflight_www {
-        method OPTIONS
-        header Origin https://www.brokle.com
-    }
-
-    # Handle CORS preflight requests
-    handle @cors_preflight {
-        header Access-Control-Allow-Origin "https://brokle.com"
-        header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS, PATCH"
-        header Access-Control-Allow-Headers "Content-Type, Authorization, X-API-Key, X-CSRF-Token"
-        header Access-Control-Allow-Credentials "true"
-        header Access-Control-Max-Age "86400"
-        respond 204
-    }
-    handle @cors_preflight_www {
-        header Access-Control-Allow-Origin "https://www.brokle.com"
-        header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS, PATCH"
-        header Access-Control-Allow-Headers "Content-Type, Authorization, X-API-Key, X-CSRF-Token"
-        header Access-Control-Allow-Credentials "true"
-        header Access-Control-Max-Age "86400"
-        respond 204
-    }
-
     # API Routes (Dashboard API with JWT auth)
     handle /api/* {
-        # Add CORS headers for actual requests from marketing site
-        @from_marketing header Origin https://brokle.com
-        @from_marketing_www header Origin https://www.brokle.com
-        header @from_marketing Access-Control-Allow-Origin "https://brokle.com"
-        header @from_marketing Access-Control-Allow-Credentials "true"
-        header @from_marketing_www Access-Control-Allow-Origin "https://www.brokle.com"
-        header @from_marketing_www Access-Control-Allow-Credentials "true"
-
         reverse_proxy backend:8080 {
             header_up X-Real-IP {remote_host}
             header_up X-Forwarded-For {remote_host}
