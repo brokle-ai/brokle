@@ -165,11 +165,17 @@ secure_env_permissions() {
     ENV_PERMS=$(stat -c %a .env 2>/dev/null || stat -f %Lp .env 2>/dev/null)
     if [ "$ENV_PERMS" != "600" ]; then
         if [ "$DRY_RUN" = true ]; then
-            echo -e "${CYAN}[DRY-RUN]${NC} Would fix .env permissions: chmod 600 .env (current: $ENV_PERMS)"
+            echo -e "${CYAN}[DRY-RUN]${NC} Would prompt to fix .env permissions: chmod 600 .env (current: $ENV_PERMS)"
         else
-            warn ".env file permissions are $ENV_PERMS (should be 600). Fixing..."
-            chmod 600 .env
-            info "Fixed .env permissions"
+            warn ".env file permissions are $ENV_PERMS (should be 600 for security)"
+            read -p "Fix .env permissions to 600? [Y/n]: " -n 1 -r
+            echo
+            if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+                chmod 600 .env
+                info "Fixed .env permissions"
+            else
+                warn "Skipping permission fix (user declined)"
+            fi
         fi
     fi
 }
@@ -286,7 +292,8 @@ run_migrations() {
     if [ "$db" == "all" ] || [ "$db" == "postgres" ]; then
         info "Running PostgreSQL migrations ($direction)..."
         if ! docker_compose run --rm \
-            backend /app/brokle-server migrate -db postgres $direction; then
+            -e DATABASE_MIGRATIONS_PATH=/app/migrations/postgres \
+            backend /app/migrate -db postgres $direction; then
             error "PostgreSQL migration failed. Check database connectivity and migration files."
         fi
     fi
@@ -294,7 +301,8 @@ run_migrations() {
     if [ "$db" == "all" ] || [ "$db" == "clickhouse" ]; then
         info "Running ClickHouse migrations ($direction)..."
         if ! docker_compose run --rm \
-            backend /app/brokle-server migrate -db clickhouse $direction; then
+            -e CLICKHOUSE_MIGRATIONS_PATH=/app/migrations/clickhouse \
+            backend /app/migrate -db clickhouse $direction; then
             error "ClickHouse migration failed. Check database connectivity and migration files."
         fi
     fi
@@ -306,13 +314,15 @@ migration_status() {
     if [ "$db" == "all" ] || [ "$db" == "postgres" ]; then
         info "PostgreSQL migration status:"
         docker_compose run --rm \
-            backend /app/brokle-server migrate -db postgres status || warn "Could not get PostgreSQL status"
+            -e DATABASE_MIGRATIONS_PATH=/app/migrations/postgres \
+            backend /app/migrate -db postgres status || warn "Could not get PostgreSQL status"
     fi
 
     if [ "$db" == "all" ] || [ "$db" == "clickhouse" ]; then
         info "ClickHouse migration status:"
         docker_compose run --rm \
-            backend /app/brokle-server migrate -db clickhouse status || warn "Could not get ClickHouse status"
+            -e CLICKHOUSE_MIGRATIONS_PATH=/app/migrations/clickhouse \
+            backend /app/migrate -db clickhouse status || warn "Could not get ClickHouse status"
     fi
 }
 
@@ -403,6 +413,7 @@ create_backup() {
 
     # Backup .env
     cp .env "$backup_dir/.env.backup"
+    info ".env backed up"
 
     # Final verification
     info "Verifying backup integrity..."
@@ -703,31 +714,21 @@ cmd_deploy() {
 
     # Check git
     if ! command -v git &> /dev/null; then
-        if [ "$DRY_RUN" = true ]; then
-            echo -e "${CYAN}[DRY-RUN]${NC} Would install git: sudo apt update && sudo apt install -y git"
-            echo -e "${CYAN}[DRY-RUN]${NC} git not currently installed"
-        else
-            warn "Git not found. Installing git..."
-            sudo apt update && sudo apt install -y git
-            info "Git found: $(git --version)"
-        fi
-    else
-        info "Git found: $(git --version)"
+        error "Git not found. Please install git first:
+    sudo apt install git     # Ubuntu/Debian
+    sudo yum install git     # CentOS/RHEL
+    brew install git         # macOS"
     fi
+    info "Git found: $(git --version)"
 
     # Check jq
     if ! command -v jq &> /dev/null; then
-        if [ "$DRY_RUN" = true ]; then
-            echo -e "${CYAN}[DRY-RUN]${NC} Would install jq: sudo apt update && sudo apt install -y jq"
-            echo -e "${CYAN}[DRY-RUN]${NC} jq not currently installed"
-        else
-            warn "jq not found. Installing jq..."
-            sudo apt update && sudo apt install -y jq
-            info "jq found: $(jq --version)"
-        fi
-    else
-        info "jq found: $(jq --version)"
+        error "jq not found. Please install jq first:
+    sudo apt install jq      # Ubuntu/Debian
+    sudo yum install jq      # CentOS/RHEL
+    brew install jq          # macOS"
     fi
+    info "jq found: $(jq --version)"
 
     # Environment
     step "Checking environment configuration..."
@@ -782,10 +783,21 @@ cmd_deploy() {
     dry_sleep 15
     info "Database services started"
 
-    # Run migrations
-    step "Running database migrations..."
-    run_migrations "all" "up"
-    info "Migrations completed"
+    # Run migrations (with user confirmation)
+    step "Database migrations"
+    if [ "$DRY_RUN" = true ]; then
+        echo -e "${CYAN}[DRY-RUN]${NC} Would prompt: Run database migrations? [Y/n]"
+        echo -e "${CYAN}[DRY-RUN]${NC} Would run migrations for postgres and clickhouse"
+    else
+        read -p "Run database migrations? [Y/n]: " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+            run_migrations "all" "up"
+            info "Migrations completed"
+        else
+            warn "Skipping migrations (user declined)"
+        fi
+    fi
 
     # Start all services
     step "Starting all services..."
@@ -940,10 +952,20 @@ cmd_update() {
 
     info "Pre-update checks passed"
 
-    # Backup
-    step "Creating backup before update..."
-    local backup_dir=$(create_backup)
-    info "Backup created at: $backup_dir"
+    # Backup (with user confirmation)
+    step "Pre-update backup"
+    if [ "$DRY_RUN" = true ]; then
+        echo -e "${CYAN}[DRY-RUN]${NC} Would prompt: Create backup before update? [Y/n]"
+    else
+        read -p "Create backup before update? [Y/n]: " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+            local backup_dir=$(create_backup)
+            info "Backup created at: $backup_dir"
+        else
+            warn "Skipping backup (user declined) - proceeding without safety net"
+        fi
+    fi
 
     # Pull code
     step "Pulling latest code from git..."
@@ -979,13 +1001,23 @@ cmd_update() {
 
     info "Images rebuilt successfully"
 
-    # Migrations
-    if [ "$skip_migrations" = false ]; then
-        step "Running database migrations..."
-        run_migrations "all" "up"
-        info "Migrations completed"
-    else
+    # Migrations (with user confirmation unless --skip-migrations)
+    if [ "$skip_migrations" = true ]; then
         warn "Skipping migrations (--skip-migrations flag set)"
+    elif [ "$DRY_RUN" = true ]; then
+        step "Database migrations"
+        echo -e "${CYAN}[DRY-RUN]${NC} Would prompt: Run database migrations? [Y/n]"
+        echo -e "${CYAN}[DRY-RUN]${NC} Would run migrations for postgres and clickhouse"
+    else
+        step "Database migrations"
+        read -p "Run database migrations? [Y/n]: " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+            run_migrations "all" "up"
+            info "Migrations completed"
+        else
+            warn "Skipping migrations (user declined)"
+        fi
     fi
 
     # Update services
