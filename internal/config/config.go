@@ -30,15 +30,15 @@ type Config struct {
 	Enterprise    EnterpriseConfig    `mapstructure:"enterprise"`
 	Server        ServerConfig        `mapstructure:"server"`
 	GRPC          GRPCConfig          `mapstructure:"grpc"`
-	BlobStorage     BlobStorageConfig     `mapstructure:"blob_storage"`
-	Monitoring      MonitoringConfig      `mapstructure:"monitoring"`
-	Observability   ObservabilityConfig   `mapstructure:"observability"`
-	Archive         ArchiveConfig         `mapstructure:"archive"`
-	Logging         LoggingConfig         `mapstructure:"logging"`
-	Redis           RedisConfig           `mapstructure:"redis"`
-	Workers         WorkersConfig         `mapstructure:"workers"`
-	Features        FeatureConfig         `mapstructure:"features"`
-	Encryption      EncryptionConfig      `mapstructure:"encryption"`
+	BlobStorage   BlobStorageConfig   `mapstructure:"blob_storage"`
+	Monitoring    MonitoringConfig    `mapstructure:"monitoring"`
+	Observability ObservabilityConfig `mapstructure:"observability"`
+	Archive       ArchiveConfig       `mapstructure:"archive"`
+	Logging       LoggingConfig       `mapstructure:"logging"`
+	Redis         RedisConfig         `mapstructure:"redis"`
+	Workers       WorkersConfig       `mapstructure:"workers"`
+	Features      FeatureConfig       `mapstructure:"features"`
+	Encryption    EncryptionConfig    `mapstructure:"encryption"`
 }
 
 // EncryptionConfig contains encryption settings for sensitive data at rest.
@@ -84,6 +84,7 @@ type ServerConfig struct {
 	TrustedProxies     []string      `mapstructure:"trusted_proxies"`
 	CORSAllowedHeaders []string      `mapstructure:"cors_allowed_headers"`
 	CORSAllowedMethods []string      `mapstructure:"cors_allowed_methods"`
+	CookieDomain       string        `mapstructure:"cookie_domain"`
 	ReadTimeout        time.Duration `mapstructure:"read_timeout"`
 	MaxRequestSize     int64         `mapstructure:"max_request_size"`
 	ShutdownTimeout    time.Duration `mapstructure:"shutdown_timeout"`
@@ -615,6 +616,8 @@ func Load() (*Config, error) {
 	viper.BindEnv("server.cors_allowed_methods", "CORS_ALLOWED_METHODS")
 	//nolint:errcheck
 	viper.BindEnv("server.cors_allowed_headers", "CORS_ALLOWED_HEADERS")
+	//nolint:errcheck
+	viper.BindEnv("server.cookie_domain", "COOKIE_DOMAIN")
 
 	// External API keys (standard names)
 	// Note: AI API keys (OpenAI, Anthropic, Cohere, etc.) are no longer loaded from env.
@@ -806,6 +809,7 @@ func setDefaults() {
 	viper.SetDefault("server.cors_allowed_origins", []string{"http://localhost:3000", "http://localhost:3001"})
 	viper.SetDefault("server.cors_allowed_methods", []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"})
 	viper.SetDefault("server.cors_allowed_headers", []string{"Content-Type", "Authorization", "X-API-Key"})
+	viper.SetDefault("server.cookie_domain", "") // Empty = use request host (single domain). Set to ".example.com" for cross-subdomain
 
 	// gRPC OTLP defaults (industry standard port 4317)
 	viper.SetDefault("grpc.port", 4317) // OTLP gRPC standard port
@@ -1066,4 +1070,3 @@ func (c *Config) CanUseFeature(feature string) bool {
 	// Non-enterprise features are always available
 	return true
 }
-

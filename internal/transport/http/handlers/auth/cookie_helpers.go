@@ -26,17 +26,20 @@ func generateCSRFToken() (string, error) {
 
 // setAuthCookies sets httpOnly authentication cookies with proper security flags
 // Uses http.SetCookie for full control over cookie attributes including SameSite
-func setAuthCookies(w http.ResponseWriter, access, refresh, csrf string) {
+// domain parameter enables cross-subdomain auth (e.g., ".brokle.com")
+func setAuthCookies(w http.ResponseWriter, access, refresh, csrf, domain string) {
 	isSecure := !isDevelopment()
 
 	// Access token cookie (15 minutes)
 	// - HttpOnly: prevents XSS attacks
 	// - Secure: requires HTTPS (disabled in dev)
 	// - SameSite=Lax: allows cross-origin navigation (email links, SSO redirects)
+	// - Domain: enables cross-subdomain sharing when set
 	http.SetCookie(w, &http.Cookie{
 		Name:     "access_token",
 		Value:    access,
 		Path:     "/",
+		Domain:   domain,
 		MaxAge:   900, // 15 minutes
 		HttpOnly: true,
 		Secure:   isSecure,
@@ -51,7 +54,8 @@ func setAuthCookies(w http.ResponseWriter, access, refresh, csrf string) {
 		Name:     "refresh_token",
 		Value:    refresh,
 		Path:     "/api/v1/auth/refresh", // Only sent to refresh endpoint
-		MaxAge:   604800,                 // 7 days
+		Domain:   domain,
+		MaxAge:   604800, // 7 days
 		HttpOnly: true,
 		Secure:   isSecure,
 		SameSite: http.SameSiteStrictMode, // Strict (more secure, path-restricted anyway)
@@ -64,6 +68,7 @@ func setAuthCookies(w http.ResponseWriter, access, refresh, csrf string) {
 		Name:     "csrf_token",
 		Value:    csrf,
 		Path:     "/",
+		Domain:   domain,
 		MaxAge:   900,   // 15 minutes
 		HttpOnly: false, // CRITICAL: Must be readable by JS
 		Secure:   isSecure,
@@ -72,8 +77,8 @@ func setAuthCookies(w http.ResponseWriter, access, refresh, csrf string) {
 }
 
 // clearAuthCookies clears all authentication cookies
-// CRITICAL: Paths must match the original cookie paths exactly for proper clearing
-func clearAuthCookies(w http.ResponseWriter) {
+// CRITICAL: Paths and Domain must match the original cookie attributes exactly for proper clearing
+func clearAuthCookies(w http.ResponseWriter, domain string) {
 	isSecure := !isDevelopment()
 
 	// Clear access token (path: /)
@@ -81,6 +86,7 @@ func clearAuthCookies(w http.ResponseWriter) {
 		Name:     "access_token",
 		Value:    "",
 		Path:     "/",
+		Domain:   domain,
 		MaxAge:   -1,
 		HttpOnly: true,
 		Secure:   isSecure,
@@ -88,11 +94,12 @@ func clearAuthCookies(w http.ResponseWriter) {
 	})
 
 	// Clear refresh token (path: /api/v1/auth/refresh)
-	// MUST match original path and SameSite for proper clearing
+	// MUST match original path, domain, and SameSite for proper clearing
 	http.SetCookie(w, &http.Cookie{
 		Name:     "refresh_token",
 		Value:    "",
 		Path:     "/api/v1/auth/refresh",
+		Domain:   domain,
 		MaxAge:   -1,
 		HttpOnly: true,
 		Secure:   isSecure,
@@ -104,6 +111,7 @@ func clearAuthCookies(w http.ResponseWriter) {
 		Name:     "csrf_token",
 		Value:    "",
 		Path:     "/",
+		Domain:   domain,
 		MaxAge:   -1,
 		HttpOnly: false,
 		Secure:   isSecure,

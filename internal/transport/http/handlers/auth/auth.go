@@ -114,7 +114,7 @@ func (h *Handler) Login(c *gin.Context) {
 	}
 
 	// All data fetched successfully - NOW set httpOnly cookies (atomic)
-	setAuthCookies(c.Writer, loginResp.AccessToken, loginResp.RefreshToken, csrfToken)
+	setAuthCookies(c.Writer, loginResp.AccessToken, loginResp.RefreshToken, csrfToken, h.config.Server.CookieDomain)
 
 	// Calculate expiry times in milliseconds (unified timestamp format)
 	expiresAt := time.Now().Add(time.Duration(loginResp.ExpiresIn) * time.Second)
@@ -223,7 +223,7 @@ func (h *Handler) Signup(c *gin.Context) {
 	}
 
 	// All data fetched successfully - NOW set httpOnly cookies (atomic)
-	setAuthCookies(c.Writer, regResp.LoginTokens.AccessToken, regResp.LoginTokens.RefreshToken, csrfToken)
+	setAuthCookies(c.Writer, regResp.LoginTokens.AccessToken, regResp.LoginTokens.RefreshToken, csrfToken, h.config.Server.CookieDomain)
 
 	// Calculate expiry times in milliseconds (unified timestamp format)
 	expiresAt := time.Now().Add(time.Duration(regResp.LoginTokens.ExpiresIn) * time.Second)
@@ -355,7 +355,7 @@ func (h *Handler) CompleteOAuthSignup(c *gin.Context) {
 	}
 
 	// All data fetched successfully - NOW set httpOnly cookies (atomic)
-	setAuthCookies(c.Writer, regResp.LoginTokens.AccessToken, regResp.LoginTokens.RefreshToken, csrfToken)
+	setAuthCookies(c.Writer, regResp.LoginTokens.AccessToken, regResp.LoginTokens.RefreshToken, csrfToken, h.config.Server.CookieDomain)
 
 	// Calculate expiry times in milliseconds (unified timestamp format)
 	expiresAt := time.Now().Add(time.Duration(regResp.LoginTokens.ExpiresIn) * time.Second)
@@ -452,7 +452,7 @@ func (h *Handler) ExchangeLoginSession(c *gin.Context) {
 	}
 
 	// All data fetched successfully - NOW set httpOnly cookies (atomic)
-	setAuthCookies(c.Writer, accessToken, refreshToken, csrfToken)
+	setAuthCookies(c.Writer, accessToken, refreshToken, csrfToken, h.config.Server.CookieDomain)
 
 	// Calculate expiry times in milliseconds (unified timestamp format)
 	expiresAt := time.Now().Add(time.Duration(expiresIn) * time.Second)
@@ -494,7 +494,7 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 	refreshToken, err := c.Cookie("refresh_token")
 	if err != nil {
 		h.logger.Error("Refresh token cookie not found", "error", err)
-		clearAuthCookies(c.Writer)
+		clearAuthCookies(c.Writer, h.config.Server.CookieDomain)
 		response.ErrorWithStatus(c, http.StatusUnauthorized, "REFRESH_EXPIRED", "Refresh token not found", "")
 		return
 	}
@@ -508,7 +508,7 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 	loginResp, err := h.authService.RefreshToken(c.Request.Context(), authReq)
 	if err != nil {
 		h.logger.Error("Token refresh failed", "error", err)
-		clearAuthCookies(c.Writer)
+		clearAuthCookies(c.Writer, h.config.Server.CookieDomain)
 		response.ErrorWithStatus(c, http.StatusUnauthorized, "REFRESH_EXPIRED", "Refresh token invalid or expired", err.Error())
 		return
 	}
@@ -517,13 +517,13 @@ func (h *Handler) RefreshToken(c *gin.Context) {
 	csrfToken, err := generateCSRFToken()
 	if err != nil {
 		h.logger.Error("Failed to generate CSRF token during refresh", "error", err)
-		clearAuthCookies(c.Writer)
+		clearAuthCookies(c.Writer, h.config.Server.CookieDomain)
 		response.InternalServerError(c, "Token refresh setup failed")
 		return
 	}
 
 	// Set new httpOnly cookies
-	setAuthCookies(c.Writer, loginResp.AccessToken, loginResp.RefreshToken, csrfToken)
+	setAuthCookies(c.Writer, loginResp.AccessToken, loginResp.RefreshToken, csrfToken, h.config.Server.CookieDomain)
 
 	// Get user ID from the refresh token JWT claims to fetch user data
 	// Note: We could extract user ID from the new access token, but for now we'll skip user data
@@ -709,7 +709,7 @@ func (h *Handler) Logout(c *gin.Context) {
 	if !exists {
 		h.logger.Error("Token claims not found in context")
 		// Clear cookies anyway even if no claims
-		clearAuthCookies(c.Writer)
+		clearAuthCookies(c.Writer, h.config.Server.CookieDomain)
 		response.Unauthorized(c, "Authentication required")
 		return
 	}
@@ -717,7 +717,7 @@ func (h *Handler) Logout(c *gin.Context) {
 	claims, ok := claimsValue.(*auth.JWTClaims)
 	if !ok {
 		h.logger.Error("Invalid token claims type in context")
-		clearAuthCookies(c.Writer)
+		clearAuthCookies(c.Writer, h.config.Server.CookieDomain)
 		response.InternalServerError(c, "Internal error")
 		return
 	}
@@ -727,13 +727,13 @@ func (h *Handler) Logout(c *gin.Context) {
 	if err != nil {
 		h.logger.Error("Logout failed", "error", err, "jti", claims.JWTID, "user_id", claims.UserID)
 		// Clear cookies even if logout fails (best effort)
-		clearAuthCookies(c.Writer)
+		clearAuthCookies(c.Writer, h.config.Server.CookieDomain)
 		response.ErrorWithStatus(c, http.StatusInternalServerError, "logout_failed", "Logout failed", err.Error())
 		return
 	}
 
 	// Clear httpOnly cookies
-	clearAuthCookies(c.Writer)
+	clearAuthCookies(c.Writer, h.config.Server.CookieDomain)
 
 	h.logger.Info("User logged out successfully", "jti", claims.JWTID, "user_id", claims.UserID)
 	response.Success(c, gin.H{
