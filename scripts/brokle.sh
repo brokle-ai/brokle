@@ -339,15 +339,17 @@ create_backup() {
 
     # Run pipeline and capture PIPESTATUS for explicit error detection
     # stderr goes to terminal (visible in logs), stdout goes to gzip
-    # Use || true to prevent set -e from exiting before we can check PIPESTATUS
-    docker exec brokle-postgres pg_dump -U ${POSTGRES_USER:-brokle} ${POSTGRES_DB:-brokle_prod} | gzip > "$pg_backup" || true
+    # Temporarily disable set -e to capture PIPESTATUS before exit
+    set +e
+    docker exec brokle-postgres pg_dump -U ${POSTGRES_USER:-brokle} ${POSTGRES_DB:-brokle_prod} | gzip > "$pg_backup"
     local pg_dump_exit=${PIPESTATUS[0]}
     local gzip_exit=${PIPESTATUS[1]}
-    if [ $pg_dump_exit -ne 0 ]; then
+    set -e
+    if [ "$pg_dump_exit" -ne 0 ]; then
         rm -f "$pg_backup"
         error "PostgreSQL backup failed (pg_dump exit code: $pg_dump_exit). Check if container is running: docker ps | grep postgres"
     fi
-    if [ $gzip_exit -ne 0 ]; then
+    if [ "$gzip_exit" -ne 0 ]; then
         rm -f "$pg_backup"
         error "PostgreSQL backup failed (gzip exit code: $gzip_exit). Check disk space."
     fi
@@ -380,10 +382,13 @@ create_backup() {
                 local ch_backup="$backup_dir/clickhouse/${table}.tsv.gz"
                 # Run pipeline and capture PIPESTATUS for explicit error detection
                 # stderr goes to terminal (visible in logs), stdout goes to gzip
-                docker exec brokle-clickhouse clickhouse-client --query "SELECT * FROM $ch_db.$table FORMAT TabSeparated" | gzip > "$ch_backup" || true
+                # Temporarily disable set -e to capture PIPESTATUS before exit
+                set +e
+                docker exec brokle-clickhouse clickhouse-client --query "SELECT * FROM $ch_db.$table FORMAT TabSeparated" | gzip > "$ch_backup"
                 local ch_dump_exit=${PIPESTATUS[0]}
                 local ch_gzip_exit=${PIPESTATUS[1]}
-                if [ $ch_dump_exit -ne 0 ] || [ $ch_gzip_exit -ne 0 ]; then
+                set -e
+                if [ "$ch_dump_exit" -ne 0 ] || [ "$ch_gzip_exit" -ne 0 ]; then
                     rm -f "$ch_backup"
                     failed_tables+=("$table")
                 fi
