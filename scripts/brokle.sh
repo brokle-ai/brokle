@@ -13,6 +13,7 @@
 #   migrate             Database migrations
 #   status              Show service health and status
 #   backup              Create database backups
+#   cleanup             Delete old backups
 #   logs                View service logs
 #   help                Show this help message
 # =============================================================================
@@ -484,6 +485,7 @@ cmd_help() {
     echo "  status              Show service health and status"
     echo "  backup              Create database backups"
     echo "    --cleanup [days]  Also cleanup backups older than N days (default: 7)"
+    echo "  cleanup [days]      Delete backups older than N days (default: 7)"
     echo "  logs [service]      View logs (all services or specific one)"
     echo "    -f, --follow      Follow log output (default)"
     echo "    --tail <n>        Number of lines to show"
@@ -498,6 +500,7 @@ cmd_help() {
     echo "  ./brokle.sh migrate --down --db postgres"
     echo "  ./brokle.sh logs backend"
     echo "  ./brokle.sh backup --cleanup 14"
+    echo "  ./brokle.sh cleanup 14"
     echo ""
 }
 
@@ -641,6 +644,58 @@ cmd_backup() {
     echo "To restore PostgreSQL:"
     echo "  zcat $backup_dir/postgres_backup.sql.gz | docker exec -i brokle-postgres psql -U brokle brokle_prod"
     echo ""
+}
+
+# =============================================================================
+# Command: cleanup
+# =============================================================================
+
+cmd_cleanup() {
+    local days=7
+
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            [0-9]*)
+                days="$1"
+                shift
+                ;;
+            *)
+                error "Unknown option: $1"
+                ;;
+        esac
+    done
+
+    step "Cleaning up old backups"
+
+    if [ ! -d "$BACKUP_BASE_DIR" ]; then
+        info "No backup directory found at $BACKUP_BASE_DIR"
+        return 0
+    fi
+
+    # Show what will be deleted
+    local count=$(find "$BACKUP_BASE_DIR" -maxdepth 1 -type d \( -name "backup-*" -o -name "pre-update-*" \) -mtime +$days 2>/dev/null | wc -l)
+
+    if [ "$count" -eq 0 ]; then
+        info "No backups older than $days days found"
+        return 0
+    fi
+
+    info "Found $count backup(s) older than $days days:"
+    find "$BACKUP_BASE_DIR" -maxdepth 1 -type d \( -name "backup-*" -o -name "pre-update-*" \) -mtime +$days 2>/dev/null
+
+    if [ "$DRY_RUN" = true ]; then
+        echo -e "${CYAN}[DRY-RUN]${NC} Would delete $count backup directories"
+    else
+        echo ""
+        read -p "Delete these backups? [y/N]: " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            cleanup_old_backups $days
+            info "Cleanup completed"
+        else
+            info "Cleanup cancelled"
+        fi
+    fi
 }
 
 # =============================================================================
@@ -1154,6 +1209,10 @@ case "${1:-help}" in
     backup)
         shift
         cmd_backup "$@"
+        ;;
+    cleanup)
+        shift
+        cmd_cleanup "$@"
         ;;
     logs)
         shift
