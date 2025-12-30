@@ -119,6 +119,7 @@ services:
       LOG_LEVEL: info
       AI_KEY_ENCRYPTION_KEY: ${AI_KEY_ENCRYPTION_KEY:-}
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN:-}
     ports:
       - "4317:4317"  # OTLP gRPC (external)
     healthcheck:
