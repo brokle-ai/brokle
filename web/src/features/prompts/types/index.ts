@@ -1,5 +1,7 @@
 export type PromptType = 'text' | 'chat'
 
+export type TemplateDialect = 'simple' | 'mustache' | 'jinja2' | 'auto'
+
 export interface ChatMessage {
   type: string // 'message' | 'placeholder'
   role?: string // 'system' | 'user' | 'assistant'

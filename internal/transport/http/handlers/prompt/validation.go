@@ -1,0 +1,258 @@
+package prompt
+
+import (
+	"github.com/gin-gonic/gin"
+
+	promptDomain "brokle/internal/core/domain/prompt"
+	"brokle/pkg/response"
+	"brokle/pkg/ulid"
+)
+
+// ValidateTemplateRequest represents the request body for template validation.
+type ValidateTemplateRequest struct {
+	Template interface{}                  `json:"template" binding:"required"`
+	Type     promptDomain.PromptType      `json:"type" binding:"required"`
+	Dialect  promptDomain.TemplateDialect `json:"dialect,omitempty"` // Optional: auto-detect if not specified
+}
+
+// ValidateTemplateResponse represents the response for template validation.
+type ValidateTemplateResponse struct {
+	Valid     bool                          `json:"valid"`
+	Dialect   promptDomain.TemplateDialect  `json:"dialect"`
+	Variables []string                      `json:"variables"`
+	Errors    []promptDomain.SyntaxError    `json:"errors,omitempty"`
+	Warnings  []promptDomain.SyntaxWarning  `json:"warnings,omitempty"`
+}
+
+// PreviewTemplateRequest represents the request body for template preview/compilation.
+type PreviewTemplateRequest struct {
+	Template  interface{}                  `json:"template" binding:"required"`
+	Type      promptDomain.PromptType      `json:"type" binding:"required"`
+	Variables map[string]any               `json:"variables" binding:"required"`
+	Dialect   promptDomain.TemplateDialect `json:"dialect,omitempty"` // Optional: auto-detect if not specified
+}
+
+// PreviewTemplateResponse represents the response for template preview.
+type PreviewTemplateResponse struct {
+	Compiled interface{}                  `json:"compiled"`
+	Dialect  promptDomain.TemplateDialect `json:"dialect"`
+}
+
+// ValidateTemplate handles POST /api/v1/projects/:projectId/prompts/validate-template
+// @Summary Validate a template
+// @Description Validate template syntax and extract variables without saving
+// @Tags Prompts
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param projectId path string true "Project ID"
+// @Param request body ValidateTemplateRequest true "Validate template request"
+// @Success 200 {object} response.APIResponse{data=ValidateTemplateResponse} "Validation result"
+// @Failure 400 {object} response.APIResponse{error=response.APIError} "Invalid request"
+// @Failure 401 {object} response.APIResponse{error=response.APIError} "Unauthorized"
+// @Failure 500 {object} response.APIResponse{error=response.APIError} "Internal server error"
+// @Router /api/v1/projects/{projectId}/prompts/validate-template [post]
+func (h *Handler) ValidateTemplate(c *gin.Context) {
+	// Validate project ID exists (for authorization)
+	_, err := ulid.Parse(c.Param("projectId"))
+	if err != nil {
+		response.ValidationError(c, "invalid project_id", "project_id must be a valid ULID")
+		return
+	}
+
+	var req ValidateTemplateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ValidationError(c, "invalid request body", err.Error())
+		return
+	}
+
+	if req.Type != promptDomain.PromptTypeText && req.Type != promptDomain.PromptTypeChat {
+		response.ValidationError(c, "invalid type", "type must be 'text' or 'chat'")
+		return
+	}
+
+	// Auto-detect dialect if not specified
+	dialect := req.Dialect
+	if dialect == "" || dialect == promptDomain.DialectAuto {
+		detectedDialect, err := h.compilerService.DetectDialect(req.Template, req.Type)
+		if err != nil {
+			response.Error(c, err)
+			return
+		}
+		dialect = detectedDialect
+	}
+
+	result, err := h.compilerService.ValidateSyntax(req.Template, req.Type, dialect)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	// Extract variables (gracefully degrade to empty list on failure)
+	variables, err := h.compilerService.ExtractVariablesWithDialect(req.Template, req.Type, dialect)
+	if err != nil {
+		variables = []string{}
+	}
+
+	resp := ValidateTemplateResponse{
+		Valid:     result.Valid,
+		Dialect:   result.Dialect,
+		Variables: variables,
+		Errors:    result.Errors,
+		Warnings:  result.Warnings,
+	}
+
+	// Ensure slices serialize to [] instead of null
+	if resp.Variables == nil {
+		resp.Variables = []string{}
+	}
+	if resp.Errors == nil {
+		resp.Errors = []promptDomain.SyntaxError{}
+	}
+	if resp.Warnings == nil {
+		resp.Warnings = []promptDomain.SyntaxWarning{}
+	}
+
+	response.Success(c, resp)
+}
+
+// PreviewTemplate handles POST /api/v1/projects/:projectId/prompts/preview-template
+// @Summary Preview a compiled template
+// @Description Compile a template with provided variables without saving
+// @Tags Prompts
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param projectId path string true "Project ID"
+// @Param request body PreviewTemplateRequest true "Preview template request"
+// @Success 200 {object} response.APIResponse{data=PreviewTemplateResponse} "Compiled template"
+// @Failure 400 {object} response.APIResponse{error=response.APIError} "Invalid request"
+// @Failure 401 {object} response.APIResponse{error=response.APIError} "Unauthorized"
+// @Failure 422 {object} response.APIResponse{error=response.APIError} "Compilation failed"
+// @Failure 500 {object} response.APIResponse{error=response.APIError} "Internal server error"
+// @Router /api/v1/projects/{projectId}/prompts/preview-template [post]
+func (h *Handler) PreviewTemplate(c *gin.Context) {
+	// Validate project ID exists (for authorization)
+	_, err := ulid.Parse(c.Param("projectId"))
+	if err != nil {
+		response.ValidationError(c, "invalid project_id", "project_id must be a valid ULID")
+		return
+	}
+
+	var req PreviewTemplateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ValidationError(c, "invalid request body", err.Error())
+		return
+	}
+
+	if req.Type != promptDomain.PromptTypeText && req.Type != promptDomain.PromptTypeChat {
+		response.ValidationError(c, "invalid type", "type must be 'text' or 'chat'")
+		return
+	}
+
+	// Auto-detect dialect if not specified
+	dialect := req.Dialect
+	if dialect == "" || dialect == promptDomain.DialectAuto {
+		detectedDialect, err := h.compilerService.DetectDialect(req.Template, req.Type)
+		if err != nil {
+			response.Error(c, err)
+			return
+		}
+		dialect = detectedDialect
+	}
+
+	compiled, err := h.compilerService.CompileWithDialect(req.Template, req.Type, req.Variables, dialect)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	// Wrap compiled output in appropriate template structure to match frontend expectations
+	var wrappedCompiled interface{}
+	switch req.Type {
+	case promptDomain.PromptTypeText:
+		content, ok := compiled.(string)
+		if !ok {
+			response.InternalServerError(c, "unexpected compilation result type for text template")
+			return
+		}
+		wrappedCompiled = promptDomain.TextTemplate{
+			Content: content,
+		}
+	case promptDomain.PromptTypeChat:
+		messages, ok := compiled.([]promptDomain.ChatMessage)
+		if !ok {
+			response.InternalServerError(c, "unexpected compilation result type for chat template")
+			return
+		}
+		wrappedCompiled = promptDomain.ChatTemplate{
+			Messages: messages,
+		}
+	default:
+		wrappedCompiled = compiled
+	}
+
+	resp := PreviewTemplateResponse{
+		Compiled: wrappedCompiled,
+		Dialect:  dialect,
+	}
+
+	response.Success(c, resp)
+}
+
+// DetectDialect handles POST /api/v1/projects/:projectId/prompts/detect-dialect
+// @Summary Detect template dialect
+// @Description Auto-detect the template dialect from content
+// @Tags Prompts
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param projectId path string true "Project ID"
+// @Param request body DetectDialectRequest true "Detect dialect request"
+// @Success 200 {object} response.APIResponse{data=DetectDialectResponse} "Detected dialect"
+// @Failure 400 {object} response.APIResponse{error=response.APIError} "Invalid request"
+// @Failure 401 {object} response.APIResponse{error=response.APIError} "Unauthorized"
+// @Failure 500 {object} response.APIResponse{error=response.APIError} "Internal server error"
+// @Router /api/v1/projects/{projectId}/prompts/detect-dialect [post]
+func (h *Handler) DetectDialect(c *gin.Context) {
+	// Validate project ID exists (for authorization)
+	_, err := ulid.Parse(c.Param("projectId"))
+	if err != nil {
+		response.ValidationError(c, "invalid project_id", "project_id must be a valid ULID")
+		return
+	}
+
+	var req DetectDialectRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ValidationError(c, "invalid request body", err.Error())
+		return
+	}
+
+	if req.Type != promptDomain.PromptTypeText && req.Type != promptDomain.PromptTypeChat {
+		response.ValidationError(c, "invalid type", "type must be 'text' or 'chat'")
+		return
+	}
+
+	dialect, err := h.compilerService.DetectDialect(req.Template, req.Type)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	resp := DetectDialectResponse{
+		Dialect: dialect,
+	}
+
+	response.Success(c, resp)
+}
+
+// DetectDialectRequest represents the request body for dialect detection.
+type DetectDialectRequest struct {
+	Template interface{}             `json:"template" binding:"required"`
+	Type     promptDomain.PromptType `json:"type" binding:"required"`
+}
+
+// DetectDialectResponse represents the response for dialect detection.
+type DetectDialectResponse struct {
+	Dialect promptDomain.TemplateDialect `json:"dialect"`
+}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
@@ -12,7 +12,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
-import { Plus, Trash2, GripVertical } from 'lucide-react'
+import { Plus, Trash2, GripVertical, Code2Icon, AlignLeftIcon } from 'lucide-react'
 import {
   DndContext,
   closestCenter,
@@ -30,7 +30,10 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import type { ChatMessage } from '../../types'
+import { Toggle } from '@/components/ui/toggle'
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip'
+import type { ChatMessage, TemplateDialect } from '../../types'
+import { MonacoTemplateEditor } from './MonacoTemplateEditor'
 
 interface SortableMessageProps {
   message: ChatMessage
@@ -38,6 +41,8 @@ interface SortableMessageProps {
   onUpdate: (index: number, message: ChatMessage) => void
   onDelete: (index: number) => void
   canDelete: boolean
+  dialect?: TemplateDialect
+  useMonaco?: boolean
 }
 
 function SortableMessage({
@@ -46,6 +51,8 @@ function SortableMessage({
   onUpdate,
   onDelete,
   canDelete,
+  dialect = 'simple',
+  useMonaco = false,
 }: SortableMessageProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: `message-${index}`,
@@ -132,6 +139,13 @@ function SortableMessage({
               This placeholder will be replaced with content from the SDK
             </p>
           </div>
+        ) : useMonaco ? (
+          <MonacoTemplateEditor
+            value={message.content || ''}
+            onChange={(content) => onUpdate(index, { ...message, content })}
+            dialect={dialect}
+            height={120}
+          />
         ) : (
           <Textarea
             value={message.content || ''}
@@ -148,9 +162,17 @@ function SortableMessage({
 interface ChatMessageEditorProps {
   messages: ChatMessage[]
   onChange: (messages: ChatMessage[]) => void
+  dialect?: TemplateDialect
+  enableMonaco?: boolean
 }
 
-export function ChatMessageEditor({ messages, onChange }: ChatMessageEditorProps) {
+export function ChatMessageEditor({
+  messages,
+  onChange,
+  dialect = 'simple',
+  enableMonaco = false,
+}: ChatMessageEditorProps) {
+  const [useMonaco, setUseMonaco] = useState(enableMonaco)
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -210,21 +232,47 @@ export function ChatMessageEditor({ messages, onChange }: ChatMessageEditorProps
                 onUpdate={handleMessageUpdate}
                 onDelete={handleDeleteMessage}
                 canDelete={messages.length > 1}
+                dialect={dialect}
+                useMonaco={useMonaco}
               />
             ))}
           </div>
         </SortableContext>
       </DndContext>
 
-      <div className="flex gap-2">
-        <Button variant="outline" size="sm" onClick={() => handleAddMessage('message')}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Message
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => handleAddMessage('placeholder')}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Placeholder
-        </Button>
+      <div className="flex items-center justify-between">
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => handleAddMessage('message')}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Message
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => handleAddMessage('placeholder')}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Placeholder
+          </Button>
+        </div>
+
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Toggle
+                size="sm"
+                pressed={useMonaco}
+                onPressedChange={setUseMonaco}
+                aria-label="Toggle syntax highlighting"
+              >
+                {useMonaco ? (
+                  <Code2Icon className="h-4 w-4" />
+                ) : (
+                  <AlignLeftIcon className="h-4 w-4" />
+                )}
+              </Toggle>
+            </TooltipTrigger>
+            <TooltipContent>
+              {useMonaco ? 'Using syntax highlighting' : 'Enable syntax highlighting'}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
     </div>
   )
