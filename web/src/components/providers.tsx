@@ -11,6 +11,7 @@ import { DirectionProvider } from "@/context/direction-context";
 import { ErrorBoundary } from './error-boundary'
 import { useAuthStore } from '@/features/authentication'
 import { Loader2 } from 'lucide-react'
+import { signinWithStatus } from '@/lib/routes'
 
 interface ClientProvidersProps {
   children: React.ReactNode
@@ -51,7 +52,7 @@ export function ClientProviders({ children }: ClientProvidersProps) {
       setIsLoggingOut(true)
 
       // Hard redirect (toast shows on signin page)
-      window.location.href = '/auth/signin?session=expired'
+      window.location.href = signinWithStatus('expired')
     }
 
     window.addEventListener('auth:session-expired', handleSessionExpired)
@@ -77,7 +78,7 @@ export function ClientProviders({ children }: ClientProvidersProps) {
         queryClient.clear()
 
         // Hard redirect
-        window.location.href = '/auth/signin?session=ended'
+        window.location.href = signinWithStatus('ended')
       }
     }
 

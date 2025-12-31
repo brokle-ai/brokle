@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { ShieldAlert, ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { ROUTES } from '@/lib/routes'
 
 interface UnauthorizedFallbackProps {
   title?: string
@@ -32,7 +33,7 @@ export function UnauthorizedFallback({
         </CardHeader>
         <CardContent className="space-y-4">
           {showLoginButton && (
-            <Link href="/auth/signin" className="w-full">
+            <Link href={ROUTES.SIGNIN} className="w-full">
               <Button className="w-full">
                 Sign In to Continue
               </Button>

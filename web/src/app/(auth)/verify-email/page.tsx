@@ -10,6 +10,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { AuthLayout, OTPForm } from '@/features/authentication'
+import { ROUTES } from '@/lib/routes'
 
 export const metadata: Metadata = {
   title: 'Verify Email',
@@ -45,7 +46,7 @@ export default function VerifyEmailPage() {
           <p className='text-muted-foreground px-8 text-center text-sm'>
             Haven't received it?{' '}
             <Link
-              href='/auth/signin'
+              href={ROUTES.SIGNIN}
               className='hover:text-primary underline underline-offset-4'
             >
               Resend a new code.

@@ -9,6 +9,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { IconFacebook, IconGithub } from '@/assets/brand-icons'
 import { cn } from '@/lib/utils'
+import { ROUTES } from '@/lib/routes'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -153,7 +154,7 @@ export function SignInForm({ className, ...props }: SignInFormProps) {
               </FormControl>
               <FormMessage />
               <Link
-                href='/auth/forgot-password'
+                href={ROUTES.FORGOT_PASSWORD}
                 className='text-muted-foreground absolute end-0 -top-0.5 text-sm font-medium hover:opacity-75'
               >
                 Forgot password?

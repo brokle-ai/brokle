@@ -2,6 +2,7 @@
 
 import { ShieldAlert } from 'lucide-react'
 import { ErrorPage } from '@/components/error-page'
+import { ROUTES } from '@/lib/routes'
 
 /**
  * 401 Unauthorized Error Page
@@ -18,7 +19,7 @@ export default function Unauthorized() {
       showBackButton={false}
       customAction={{
         label: 'Sign In',
-        href: '/auth/signin',
+        href: ROUTES.SIGNIN,
       }}
     />
   )

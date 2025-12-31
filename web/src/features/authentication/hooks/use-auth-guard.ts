@@ -3,6 +3,7 @@
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from './use-auth'
+import { ROUTES } from '@/lib/routes'
 
 interface UseAuthGuardOptions {
   redirectTo?: string
@@ -24,7 +25,7 @@ interface UseAuthGuardReturn {
  */
 export function useAuthGuard(options: UseAuthGuardOptions = {}): UseAuthGuardReturn {
   const {
-    redirectTo = '/auth/signin',
+    redirectTo = ROUTES.SIGNIN,
     requireEmailVerification = false,
     onUnauthorized,
   } = options
@@ -71,7 +72,7 @@ export function useAuthGuard(options: UseAuthGuardOptions = {}): UseAuthGuardRet
     // Handle unverified email
     if (requireEmailVerification && !isEmailVerified) {
       console.log('[AuthGuard] Email verification required, redirecting')
-      router.push('/auth/verify-email')
+      router.push(ROUTES.VERIFY_EMAIL)
       return
     }
   }, [
