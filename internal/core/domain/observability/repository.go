@@ -22,6 +22,12 @@ type TraceRepository interface {
 	CountSpansByFilter(ctx context.Context, filter *SpanFilter) (int64, error)
 
 	GetRootSpan(ctx context.Context, traceID string) (*Span, error)
+	// GetRootSpanByProject retrieves root span with project ownership validation.
+	// Returns error if trace doesn't exist or doesn't belong to the specified project.
+	GetRootSpanByProject(ctx context.Context, traceID string, projectID string) (*Span, error)
+	// GetSpanByProject retrieves span with project ownership validation.
+	// Returns error if span doesn't exist or doesn't belong to the specified project.
+	GetSpanByProject(ctx context.Context, spanID string, projectID string) (*Span, error)
 	GetTraceSummary(ctx context.Context, traceID string) (*TraceSummary, error)
 	ListTraces(ctx context.Context, filter *TraceFilter) ([]*TraceSummary, error)
 	CountTraces(ctx context.Context, filter *TraceFilter) (int64, error)

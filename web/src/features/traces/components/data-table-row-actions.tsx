@@ -1,18 +1,21 @@
 'use client'
 
-import { Eye, Trash } from 'lucide-react'
+import { useState } from 'react'
+import { Eye, Trash, Database } from 'lucide-react'
 import { type Row } from '@tanstack/react-table'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { DotsHorizontalIcon } from '@radix-ui/react-icons'
 import { useRouter, useParams } from 'next/navigation'
 import type { Trace } from '../data/schema'
 import { toast } from 'sonner'
+import { AddTraceToDatasetDialog } from '@/features/datasets'
 
 type DataTableRowActionsProps<TData> = {
   row: Row<TData>
@@ -25,6 +28,7 @@ export function DataTableRowActions<TData>({
   const params = useParams()
   const projectSlug = params?.projectSlug as string
   const trace = row.original as Trace
+  const [addToDatasetOpen, setAddToDatasetOpen] = useState(false)
 
   const handleViewDetail = () => {
     router.push(`/projects/${projectSlug}/traces/${trace.trace_id}`)
@@ -43,26 +47,41 @@ export function DataTableRowActions<TData>({
   }
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant='ghost'
-          className='data-[state=open]:bg-muted flex size-8 p-0'
-        >
-          <DotsHorizontalIcon className='size-4' />
-          <span className='sr-only'>Open menu</span>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align='end' className='w-40'>
-        <DropdownMenuItem onClick={handleViewDetail}>
-          <Eye className='mr-2 size-4' />
-          View Detail
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={handleDelete} className='text-destructive'>
-          <Trash className='mr-2 size-4' />
-          Delete
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant='ghost'
+            className='data-[state=open]:bg-muted flex size-8 p-0'
+          >
+            <DotsHorizontalIcon className='size-4' />
+            <span className='sr-only'>Open menu</span>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align='end' className='w-44'>
+          <DropdownMenuItem onClick={handleViewDetail}>
+            <Eye className='mr-2 size-4' />
+            View Detail
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setAddToDatasetOpen(true)}>
+            <Database className='mr-2 size-4' />
+            Add to Dataset
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={handleDelete} className='text-destructive'>
+            <Trash className='mr-2 size-4' />
+            Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <AddTraceToDatasetDialog
+        projectId={trace.project_id}
+        traceId={trace.trace_id}
+        traceName={trace.name}
+        open={addToDatasetOpen}
+        onOpenChange={setAddToDatasetOpen}
+      />
+    </>
   )
 }

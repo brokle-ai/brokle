@@ -6,6 +6,10 @@ import type {
   DatasetItem,
   CreateDatasetItemRequest,
   DatasetItemListResponse,
+  BulkImportResult,
+  ImportFromJsonRequest,
+  ImportFromTracesRequest,
+  ImportFromSpansRequest,
 } from '../types'
 
 const client = new BrokleAPIClient('/api')
@@ -72,6 +76,50 @@ export const datasetsApi = {
   ): Promise<void> => {
     await client.delete(
       `/v1/projects/${projectId}/datasets/${datasetId}/items/${itemId}`
+    )
+  },
+
+  // Import Methods
+  importFromJson: async (
+    projectId: string,
+    datasetId: string,
+    data: ImportFromJsonRequest
+  ): Promise<BulkImportResult> => {
+    return client.post<BulkImportResult>(
+      `/v1/projects/${projectId}/datasets/${datasetId}/items/import-json`,
+      data
+    )
+  },
+
+  importFromTraces: async (
+    projectId: string,
+    datasetId: string,
+    data: ImportFromTracesRequest
+  ): Promise<BulkImportResult> => {
+    return client.post<BulkImportResult>(
+      `/v1/projects/${projectId}/datasets/${datasetId}/items/from-traces`,
+      data
+    )
+  },
+
+  importFromSpans: async (
+    projectId: string,
+    datasetId: string,
+    data: ImportFromSpansRequest
+  ): Promise<BulkImportResult> => {
+    return client.post<BulkImportResult>(
+      `/v1/projects/${projectId}/datasets/${datasetId}/items/from-spans`,
+      data
+    )
+  },
+
+  // Export Methods
+  exportDataset: async (
+    projectId: string,
+    datasetId: string
+  ): Promise<DatasetItem[]> => {
+    return client.get<DatasetItem[]>(
+      `/v1/projects/${projectId}/datasets/${datasetId}/items/export`
     )
   },
 }

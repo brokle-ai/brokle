@@ -427,6 +427,16 @@ func (r *traceRepository) GetSpan(ctx context.Context, spanID string) (*observab
 	return ScanSpanRow(row)
 }
 
+// GetSpanByProject retrieves a span with project ownership validation.
+// Returns error if span doesn't exist or doesn't belong to the specified project.
+// This prevents cross-project data access when importing spans into datasets.
+func (r *traceRepository) GetSpanByProject(ctx context.Context, spanID string, projectID string) (*observability.Span, error) {
+	query := "SELECT " + observability.SpanSelectFields + " FROM otel_traces WHERE span_id = ? AND project_id = ? AND deleted_at IS NULL LIMIT 1"
+
+	row := r.db.QueryRow(ctx, query, spanID, projectID)
+	return ScanSpanRow(row)
+}
+
 func (r *traceRepository) GetSpansByTraceID(ctx context.Context, traceID string) ([]*observability.Span, error) {
 	query := "SELECT " + observability.SpanSelectFields + " FROM otel_traces WHERE trace_id = ? AND deleted_at IS NULL ORDER BY start_time ASC"
 
@@ -619,6 +629,24 @@ func (r *traceRepository) GetRootSpan(ctx context.Context, traceID string) (*obs
 	`
 
 	row := r.db.QueryRow(ctx, query, traceID)
+	return ScanSpanRow(row)
+}
+
+// GetRootSpanByProject retrieves the root span of a trace with project ownership validation.
+// Returns error if trace doesn't exist or doesn't belong to the specified project.
+// This prevents cross-project data access when importing traces into datasets.
+func (r *traceRepository) GetRootSpanByProject(ctx context.Context, traceID string, projectID string) (*observability.Span, error) {
+	query := `
+		SELECT ` + observability.SpanSelectFields + `
+		FROM otel_traces
+		WHERE trace_id = ?
+		  AND project_id = ?
+		  AND parent_span_id IS NULL
+		  AND deleted_at IS NULL
+		LIMIT 1
+	`
+
+	row := r.db.QueryRow(ctx, query, traceID, projectID)
 	return ScanSpanRow(row)
 }
 

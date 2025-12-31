@@ -86,6 +86,22 @@ func (m *MockTraceRepository) GetRootSpan(ctx context.Context, traceID string) (
 	return args.Get(0).(*observability.Span), args.Error(1)
 }
 
+func (m *MockTraceRepository) GetRootSpanByProject(ctx context.Context, traceID string, projectID string) (*observability.Span, error) {
+	args := m.Called(ctx, traceID, projectID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*observability.Span), args.Error(1)
+}
+
+func (m *MockTraceRepository) GetSpanByProject(ctx context.Context, spanID string, projectID string) (*observability.Span, error) {
+	args := m.Called(ctx, spanID, projectID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*observability.Span), args.Error(1)
+}
+
 func (m *MockTraceRepository) GetTraceSummary(ctx context.Context, traceID string) (*observability.TraceSummary, error) {
 	args := m.Called(ctx, traceID)
 	if args.Get(0) == nil {

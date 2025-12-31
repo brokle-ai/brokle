@@ -29,6 +29,14 @@ type DatasetItemService interface {
 	CreateBatch(ctx context.Context, datasetID ulid.ULID, projectID ulid.ULID, req *CreateDatasetItemsBatchRequest) (int, error)
 	List(ctx context.Context, datasetID ulid.ULID, projectID ulid.ULID, limit, offset int) ([]*DatasetItem, int64, error)
 	Delete(ctx context.Context, id ulid.ULID, datasetID ulid.ULID, projectID ulid.ULID) error
+
+	// Bulk import methods
+	ImportFromJSON(ctx context.Context, datasetID ulid.ULID, projectID ulid.ULID, req *ImportDatasetItemsFromJSONRequest) (*BulkImportResult, error)
+	CreateFromTraces(ctx context.Context, datasetID ulid.ULID, projectID ulid.ULID, req *CreateDatasetItemsFromTracesRequest) (*BulkImportResult, error)
+	CreateFromSpans(ctx context.Context, datasetID ulid.ULID, projectID ulid.ULID, req *CreateDatasetItemsFromSpansRequest) (*BulkImportResult, error)
+
+	// Export method
+	ExportItems(ctx context.Context, datasetID ulid.ULID, projectID ulid.ULID) ([]*DatasetItem, error)
 }
 
 type ExperimentService interface {

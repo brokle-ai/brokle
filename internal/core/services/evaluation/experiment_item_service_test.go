@@ -116,6 +116,14 @@ func (m *MockDatasetItemRepository) List(ctx context.Context, datasetID ulid.ULI
 	return args.Get(0).([]*evaluation.DatasetItem), args.Get(1).(int64), args.Error(2)
 }
 
+func (m *MockDatasetItemRepository) ListAll(ctx context.Context, datasetID ulid.ULID) ([]*evaluation.DatasetItem, error) {
+	args := m.Called(ctx, datasetID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*evaluation.DatasetItem), args.Error(1)
+}
+
 func (m *MockDatasetItemRepository) Delete(ctx context.Context, id ulid.ULID, datasetID ulid.ULID) error {
 	args := m.Called(ctx, id, datasetID)
 	return args.Error(0)
@@ -124,6 +132,22 @@ func (m *MockDatasetItemRepository) Delete(ctx context.Context, id ulid.ULID, da
 func (m *MockDatasetItemRepository) CountByDataset(ctx context.Context, datasetID ulid.ULID) (int64, error) {
 	args := m.Called(ctx, datasetID)
 	return args.Get(0).(int64), args.Error(1)
+}
+
+func (m *MockDatasetItemRepository) FindByContentHash(ctx context.Context, datasetID ulid.ULID, contentHash string) (*evaluation.DatasetItem, error) {
+	args := m.Called(ctx, datasetID, contentHash)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*evaluation.DatasetItem), args.Error(1)
+}
+
+func (m *MockDatasetItemRepository) FindByContentHashes(ctx context.Context, datasetID ulid.ULID, contentHashes []string) (map[string]bool, error) {
+	args := m.Called(ctx, datasetID, contentHashes)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(map[string]bool), args.Error(1)
 }
 
 // MockScoreService mocks the observability.ScoreService interface

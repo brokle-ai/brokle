@@ -222,3 +222,6 @@ competitors/
 # Test and documentation directories
 /realtests/
 /claudedocs/
+
+# Auto Claude data directory
+.auto-claude/

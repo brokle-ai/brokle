@@ -8,12 +8,17 @@ export interface Dataset {
   updated_at: string
 }
 
+export type DatasetItemSource = 'manual' | 'trace' | 'span' | 'csv' | 'json' | 'sdk'
+
 export interface DatasetItem {
   id: string
   dataset_id: string
   input: Record<string, unknown>
   expected?: Record<string, unknown>
   metadata?: Record<string, unknown>
+  source: DatasetItemSource
+  source_trace_id?: string
+  source_span_id?: string
   created_at: string
 }
 
@@ -38,4 +43,35 @@ export interface CreateDatasetItemRequest {
 export interface DatasetItemListResponse {
   items: DatasetItem[]
   total: number
+}
+
+// Import/Export Types
+export interface KeysMapping {
+  input_keys?: string[]
+  expected_keys?: string[]
+  metadata_keys?: string[]
+}
+
+export interface BulkImportResult {
+  created: number
+  skipped: number
+  errors?: string[]
+}
+
+export interface ImportFromJsonRequest {
+  items: Record<string, unknown>[]
+  keys_mapping?: KeysMapping
+  deduplicate?: boolean
+}
+
+export interface ImportFromTracesRequest {
+  trace_ids: string[]
+  keys_mapping?: KeysMapping
+  deduplicate?: boolean
+}
+
+export interface ImportFromSpansRequest {
+  span_ids: string[]
+  keys_mapping?: KeysMapping
+  deduplicate?: boolean
 }

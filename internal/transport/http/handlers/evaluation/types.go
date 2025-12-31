@@ -13,12 +13,51 @@ const (
 
 // @Description Dataset item data
 type DatasetItemResponse struct {
-	ID        string                 `json:"id"`
-	DatasetID string                 `json:"dataset_id"`
-	Input     map[string]interface{} `json:"input"`
-	Expected  map[string]interface{} `json:"expected,omitempty"`
-	Metadata  map[string]interface{} `json:"metadata,omitempty"`
-	CreatedAt time.Time              `json:"created_at"`
+	ID            string                 `json:"id"`
+	DatasetID     string                 `json:"dataset_id"`
+	Input         map[string]interface{} `json:"input"`
+	Expected      map[string]interface{} `json:"expected,omitempty"`
+	Metadata      map[string]interface{} `json:"metadata,omitempty"`
+	Source        string                 `json:"source"`
+	SourceTraceID *string                `json:"source_trace_id,omitempty"`
+	SourceSpanID  *string                `json:"source_span_id,omitempty"`
+	CreatedAt     time.Time              `json:"created_at"`
+}
+
+// @Description Bulk import result
+type BulkImportResponse struct {
+	Created int      `json:"created"`
+	Skipped int      `json:"skipped"`
+	Errors  []string `json:"errors,omitempty"`
+}
+
+// @Description Keys mapping for field extraction
+type KeysMappingRequest struct {
+	InputKeys    []string `json:"input_keys,omitempty"`
+	ExpectedKeys []string `json:"expected_keys,omitempty"`
+	MetadataKeys []string `json:"metadata_keys,omitempty"`
+}
+
+// @Description Import from JSON request
+type ImportFromJSONRequest struct {
+	Items       []map[string]interface{} `json:"items" binding:"required,min=1"`
+	KeysMapping *KeysMappingRequest      `json:"keys_mapping,omitempty"`
+	Deduplicate bool                     `json:"deduplicate"`
+	Source      string                   `json:"source,omitempty"`
+}
+
+// @Description Create from traces request
+type CreateFromTracesRequest struct {
+	TraceIDs    []string            `json:"trace_ids" binding:"required,min=1"`
+	KeysMapping *KeysMappingRequest `json:"keys_mapping,omitempty"`
+	Deduplicate bool                `json:"deduplicate"`
+}
+
+// @Description Create from spans request
+type CreateFromSpansRequest struct {
+	SpanIDs     []string            `json:"span_ids" binding:"required,min=1"`
+	KeysMapping *KeysMappingRequest `json:"keys_mapping,omitempty"`
+	Deduplicate bool                `json:"deduplicate"`
 }
 
 // @Description Paginated dataset items response
