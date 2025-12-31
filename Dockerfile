@@ -14,14 +14,18 @@ RUN go mod download
 # Copy source code
 COPY . .
 
-# Build the server binary
-RUN CGO_ENABLED=0 GOOS=linux go build \
+# Build the server binary (with cache for faster rebuilds)
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux go build \
     -ldflags='-w -s' \
     -o bin/brokle-server \
     ./cmd/server
 
-# Build migration tool
-RUN CGO_ENABLED=0 GOOS=linux go build \
+# Build migration tool (with cache for faster rebuilds)
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=linux go build \
     -ldflags='-w -s' \
     -o bin/migrate \
     ./cmd/migrate
