@@ -7,6 +7,7 @@ import {
   SignInToastHandler,
   AuthFormWrapper
 } from '@/features/authentication'
+import { ROUTES } from '@/lib/routes'
 import {
   Card,
   CardContent,
@@ -44,7 +45,7 @@ export default function SignInPage() {
           <div className="text-center text-sm">
             <span className="text-muted-foreground">Don't have an account? </span>
             <Link
-              href="/auth/signup"
+              href={ROUTES.SIGNUP}
               className="font-medium underline underline-offset-4 hover:text-primary"
             >
               Sign up

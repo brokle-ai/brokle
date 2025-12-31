@@ -18,6 +18,7 @@ import {
   AuthFormWrapper
 } from '@/features/authentication'
 import Link from 'next/link'
+import { ROUTES } from '@/lib/routes'
 
 type SignupStep = 'auth' | 'personalization'
 
@@ -41,7 +42,7 @@ function SignUpContent() {
             <br />
             Already have an account?{' '}
             <Link
-              href='/auth/signin'
+              href={ROUTES.SIGNIN}
               className='hover:text-primary underline underline-offset-4'
             >
               Sign In

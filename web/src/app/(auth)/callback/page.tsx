@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation'
 import { Loader2 } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { exchangeLoginSession } from '@/features/authentication'
+import { ROUTES } from '@/lib/routes'
 
 // OAuth callback page for handling token exchange after OAuth login
 function OAuthCallbackContent() {
@@ -18,7 +19,7 @@ function OAuthCallbackContent() {
 
     if (!session) {
       setError('No session found. Please try again.')
-      setTimeout(() => router.push('/auth/signin'), 2000)
+      setTimeout(() => router.push(ROUTES.SIGNIN), 2000)
       return
     }
 
@@ -69,13 +70,13 @@ function OAuthCallbackContent() {
           window.location.href = '/'
         } else {
           setError('Invalid session data. Please try again.')
-          setTimeout(() => router.push('/auth/signin'), 2000)
+          setTimeout(() => router.push(ROUTES.SIGNIN), 2000)
         }
       })
       .catch((err) => {
         console.error('Failed to exchange tokens:', err)
         setError('Failed to complete authentication. Please try again.')
-        setTimeout(() => router.push('/auth/signin'), 3000)
+        setTimeout(() => router.push(ROUTES.SIGNIN), 3000)
       })
   }, [searchParams, router])
 

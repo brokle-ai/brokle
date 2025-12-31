@@ -9,6 +9,7 @@ import { PageLoader } from '@/components/shared/loading'
 import { buildOrgUrl } from '@/lib/utils/slug-utils'
 import { Button } from '@/components/ui/button'
 import { Plus, Building2 } from 'lucide-react'
+import { ROUTES } from '@/lib/routes'
 
 export default function RootPage() {
   const router = useRouter()
@@ -42,7 +43,7 @@ export default function RootPage() {
     if (authLoading || orgLoading) return
 
     if (!user) {
-      router.push('/auth/signin')
+      router.push(ROUTES.SIGNIN)
       return
     }
 

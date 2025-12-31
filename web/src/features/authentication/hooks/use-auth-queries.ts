@@ -22,6 +22,7 @@ import type {
   AuthResponse
 } from '../types'
 import { toast } from 'sonner'
+import { signinWithStatus } from '@/lib/routes'
 
 // Query keys for consistent caching
 export const authQueryKeys = {
@@ -165,7 +166,7 @@ export function useLogoutMutation() {
 
       // Hard redirect (toast shows on signin page)
       if (typeof window !== 'undefined') {
-        window.location.href = '/auth/signin?logout=success'
+        window.location.href = signinWithStatus('logout_success')
       }
     },
     onError: () => {
@@ -175,7 +176,7 @@ export function useLogoutMutation() {
 
         // Hard redirect with error param
         if (typeof window !== 'undefined') {
-          window.location.href = '/auth/signin?logout=error'
+          window.location.href = signinWithStatus('logout_error')
         }
       } catch (error) {
         console.error('[Logout] Error during logout error handling:', error)

@@ -7,6 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import Link from 'next/link'
 import { ArrowLeft, CheckCircle2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { ROUTES } from '@/lib/routes'
 import { Button } from '@/components/ui/button'
 import {
   Form,
@@ -139,7 +140,7 @@ export function OtpForm({ className, email = 'your email', ...props }: OtpFormPr
         </Button>
       </div>
       <Link
-        href='/auth/signin'
+        href={ROUTES.SIGNIN}
         className='inline-flex items-center justify-center text-sm text-muted-foreground hover:text-foreground'
       >
         <ArrowLeft className='mr-2 h-4 w-4' />

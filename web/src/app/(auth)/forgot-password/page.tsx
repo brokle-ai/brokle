@@ -9,6 +9,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { AuthLayout, ForgotPasswordForm } from '@/features/authentication'
+import { ROUTES } from '@/lib/routes'
 
 export const metadata: Metadata = {
   title: 'Forgot Password',
@@ -35,7 +36,7 @@ export default function ForgotPasswordPage() {
           <p className='text-muted-foreground mx-auto px-8 text-center text-sm text-balance'>
             Don't have an account?{' '}
             <Link
-              href='/auth/signup'
+              href={ROUTES.SIGNUP}
               className='hover:text-primary underline underline-offset-4'
             >
               Sign up
