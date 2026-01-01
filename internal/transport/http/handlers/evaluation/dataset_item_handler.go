@@ -253,6 +253,62 @@ func (h *DatasetItemHandler) ImportFromJSON(c *gin.Context) {
 	})
 }
 
+// @Summary Import dataset items from CSV
+// @Description Imports dataset items from CSV content with column mapping and optional deduplication.
+// @Tags Dataset Items
+// @Accept json
+// @Produce json
+// @Param projectId path string true "Project ID"
+// @Param datasetId path string true "Dataset ID"
+// @Param request body ImportFromCSVRequest true "Import CSV request"
+// @Success 200 {object} BulkImportResponse
+// @Failure 400 {object} response.ErrorResponse
+// @Failure 401 {object} response.ErrorResponse
+// @Failure 404 {object} response.ErrorResponse
+// @Router /api/v1/projects/{projectId}/datasets/{datasetId}/items/import-csv [post]
+func (h *DatasetItemHandler) ImportFromCSV(c *gin.Context) {
+	projectID, err := ulid.Parse(c.Param("projectId"))
+	if err != nil {
+		response.Error(c, appErrors.NewValidationError("projectId", "must be a valid ULID"))
+		return
+	}
+
+	datasetID, err := ulid.Parse(c.Param("datasetId"))
+	if err != nil {
+		response.Error(c, appErrors.NewValidationError("datasetId", "must be a valid ULID"))
+		return
+	}
+
+	var req ImportFromCSVRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ValidationError(c, "Invalid request body", err.Error())
+		return
+	}
+
+	domainReq := &evaluationDomain.ImportDatasetItemsFromCSVRequest{
+		Content:     req.Content,
+		HasHeader:   req.HasHeader,
+		Deduplicate: req.Deduplicate,
+		ColumnMapping: evaluationDomain.CSVColumnMapping{
+			InputColumn:     req.ColumnMapping.InputColumn,
+			ExpectedColumn:  req.ColumnMapping.ExpectedColumn,
+			MetadataColumns: req.ColumnMapping.MetadataColumns,
+		},
+	}
+
+	result, err := h.service.ImportFromCSV(c.Request.Context(), datasetID, projectID, domainReq)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	response.Success(c, &BulkImportResponse{
+		Created: result.Created,
+		Skipped: result.Skipped,
+		Errors:  result.Errors,
+	})
+}
+
 // @Summary Create dataset items from traces
 // @Description Creates dataset items from existing trace data (OTEL-native import).
 // @Tags Dataset Items

@@ -9,6 +9,7 @@ import {
   useDeleteEvaluationRuleMutation,
   useActivateEvaluationRuleMutation,
   useDeactivateEvaluationRuleMutation,
+  useTriggerEvaluationRuleMutation,
 } from '../hooks/use-evaluation-rules'
 import type { EvaluationRule } from '../types'
 
@@ -26,8 +27,10 @@ interface RuleDetailContextType {
   // Mutations
   handleDelete: () => Promise<void>
   handleToggleStatus: () => Promise<void>
+  handleTrigger: () => Promise<void>
   isDeleting: boolean
   isToggling: boolean
+  isTriggering: boolean
   // Navigation
   projectSlug: string
   projectId: string
@@ -63,6 +66,7 @@ export function RuleDetailProvider({
   const deleteMutation = useDeleteEvaluationRuleMutation(projectId)
   const activateMutation = useActivateEvaluationRuleMutation(projectId)
   const deactivateMutation = useDeactivateEvaluationRuleMutation(projectId)
+  const triggerMutation = useTriggerEvaluationRuleMutation(projectId, ruleId)
 
   const isLoading = projectLoading || ruleLoading
 
@@ -91,6 +95,10 @@ export function RuleDetailProvider({
     }
   }, [rule, activateMutation, deactivateMutation])
 
+  const handleTrigger = useCallback(async () => {
+    await triggerMutation.mutateAsync(undefined)
+  }, [triggerMutation])
+
   const contextValue = useMemo(
     () => ({
       rule: rule ?? null,
@@ -101,8 +109,10 @@ export function RuleDetailProvider({
       setOpen,
       handleDelete,
       handleToggleStatus,
+      handleTrigger,
       isDeleting: deleteMutation.isPending,
       isToggling: activateMutation.isPending || deactivateMutation.isPending,
+      isTriggering: triggerMutation.isPending,
       projectSlug,
       projectId,
       ruleId,
@@ -116,9 +126,11 @@ export function RuleDetailProvider({
       setOpen,
       handleDelete,
       handleToggleStatus,
+      handleTrigger,
       deleteMutation.isPending,
       activateMutation.isPending,
       deactivateMutation.isPending,
+      triggerMutation.isPending,
       projectSlug,
       projectId,
       ruleId,

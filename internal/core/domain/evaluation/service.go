@@ -32,6 +32,7 @@ type DatasetItemService interface {
 
 	// Bulk import methods
 	ImportFromJSON(ctx context.Context, datasetID ulid.ULID, projectID ulid.ULID, req *ImportDatasetItemsFromJSONRequest) (*BulkImportResult, error)
+	ImportFromCSV(ctx context.Context, datasetID ulid.ULID, projectID ulid.ULID, req *ImportDatasetItemsFromCSVRequest) (*BulkImportResult, error)
 	CreateFromTraces(ctx context.Context, datasetID ulid.ULID, projectID ulid.ULID, req *CreateDatasetItemsFromTracesRequest) (*BulkImportResult, error)
 	CreateFromSpans(ctx context.Context, datasetID ulid.ULID, projectID ulid.ULID, req *CreateDatasetItemsFromSpansRequest) (*BulkImportResult, error)
 
@@ -64,4 +65,32 @@ type RuleService interface {
 	Activate(ctx context.Context, id ulid.ULID, projectID ulid.ULID) error
 	Deactivate(ctx context.Context, id ulid.ULID, projectID ulid.ULID) error
 	GetActiveByProjectID(ctx context.Context, projectID ulid.ULID) ([]*EvaluationRule, error)
+
+	// TriggerRule starts a manual evaluation of the rule against matching spans
+	TriggerRule(ctx context.Context, ruleID ulid.ULID, projectID ulid.ULID, opts *TriggerOptions) (*TriggerResponse, error)
+}
+
+type RuleExecutionService interface {
+	StartExecution(ctx context.Context, ruleID ulid.ULID, projectID ulid.ULID, triggerType TriggerType) (*RuleExecution, error)
+	CompleteExecution(ctx context.Context, executionID ulid.ULID, projectID ulid.ULID, spansMatched, spansScored, errorsCount int) error
+	FailExecution(ctx context.Context, executionID ulid.ULID, projectID ulid.ULID, errorMessage string) error
+	CancelExecution(ctx context.Context, executionID ulid.ULID, projectID ulid.ULID) error
+	GetByID(ctx context.Context, id ulid.ULID, projectID ulid.ULID) (*RuleExecution, error)
+	ListByRuleID(ctx context.Context, ruleID ulid.ULID, projectID ulid.ULID, filter *ExecutionFilter, params pagination.Params) ([]*RuleExecution, int64, error)
+	GetLatestByRuleID(ctx context.Context, ruleID ulid.ULID, projectID ulid.ULID) (*RuleExecution, error)
+
+	// IncrementCounters atomically increments spans_scored and errors_count for an execution (used by workers)
+	IncrementCounters(ctx context.Context, executionID string, projectID ulid.ULID, spansScored, errorsCount int) error
+
+	// StartExecutionWithCount creates an execution with known spans_matched count upfront.
+	// Used for automatic evaluations where we know the count before emitting jobs.
+	StartExecutionWithCount(ctx context.Context, ruleID ulid.ULID, projectID ulid.ULID, triggerType TriggerType, spansMatched int) (*RuleExecution, error)
+
+	// IncrementAndCheckCompletion atomically increments counters and marks execution as complete
+	// if all spans have been processed. Returns true if execution was marked complete.
+	IncrementAndCheckCompletion(ctx context.Context, executionID ulid.ULID, projectID ulid.ULID, spansScored, errorsCount int) (bool, error)
+
+	// UpdateSpansMatched updates the spans_matched count for an execution.
+	// Used by manual triggers after discovering how many spans will be processed.
+	UpdateSpansMatched(ctx context.Context, executionID ulid.ULID, projectID ulid.ULID, spansMatched int) error
 }

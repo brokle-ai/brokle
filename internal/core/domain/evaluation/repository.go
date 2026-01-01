@@ -64,3 +64,22 @@ type RuleRepository interface {
 	GetActiveByProjectID(ctx context.Context, projectID ulid.ULID) ([]*EvaluationRule, error)
 	ExistsByName(ctx context.Context, projectID ulid.ULID, name string) (bool, error)
 }
+
+type RuleExecutionRepository interface {
+	Create(ctx context.Context, execution *RuleExecution) error
+	Update(ctx context.Context, execution *RuleExecution) error
+	GetByID(ctx context.Context, id ulid.ULID, projectID ulid.ULID) (*RuleExecution, error)
+	GetByRuleID(ctx context.Context, ruleID ulid.ULID, projectID ulid.ULID, filter *ExecutionFilter, params pagination.Params) ([]*RuleExecution, int64, error)
+	GetLatestByRuleID(ctx context.Context, ruleID ulid.ULID, projectID ulid.ULID) (*RuleExecution, error)
+
+	// IncrementCounters atomically increments spans_scored and errors_count counters
+	IncrementCounters(ctx context.Context, id ulid.ULID, projectID ulid.ULID, spansScored, errorsCount int) error
+
+	// IncrementCountersAndComplete atomically increments counters and marks execution as completed
+	// if spans_scored + errors_count >= spans_matched. Returns true if execution was marked complete.
+	IncrementCountersAndComplete(ctx context.Context, id ulid.ULID, projectID ulid.ULID, spansScored, errorsCount int) (bool, error)
+
+	// UpdateSpansMatched updates only the spans_matched field for an execution.
+	// Used by manual triggers after discovering how many spans will be processed.
+	UpdateSpansMatched(ctx context.Context, id ulid.ULID, projectID ulid.ULID, spansMatched int) error
+}

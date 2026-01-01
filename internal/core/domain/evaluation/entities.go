@@ -328,6 +328,21 @@ type ImportDatasetItemsFromJSONRequest struct {
 	Source      DatasetItemSource        `json:"source,omitempty"`
 }
 
+// CSVColumnMapping defines how CSV columns map to dataset item fields.
+type CSVColumnMapping struct {
+	InputColumn     string   `json:"input_column" binding:"required"`
+	ExpectedColumn  string   `json:"expected_column,omitempty"`
+	MetadataColumns []string `json:"metadata_columns,omitempty"`
+}
+
+// ImportDatasetItemsFromCSVRequest is the request to import dataset items from CSV data.
+type ImportDatasetItemsFromCSVRequest struct {
+	Content       string           `json:"content" binding:"required"`
+	ColumnMapping CSVColumnMapping `json:"column_mapping" binding:"required"`
+	HasHeader     bool             `json:"has_header"`
+	Deduplicate   bool             `json:"deduplicate"`
+}
+
 // ExportFormat specifies the format for exporting dataset items.
 type ExportFormat string
 

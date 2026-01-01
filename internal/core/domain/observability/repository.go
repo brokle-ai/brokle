@@ -177,7 +177,8 @@ type SpanFilter struct {
 	Type         *string
 	SpanKind     *string
 	Model        *string
-	ServiceName  *string // OTLP: service.name (materialized column for fast filtering)
+	ServiceName  *string   // OTLP: service.name (materialized column for fast filtering)
+	SpanNames    []string  // Filter by one or more span names (OR logic)
 	StartTime    *time.Time
 	EndTime      *time.Time
 	MinLatencyMs *uint32

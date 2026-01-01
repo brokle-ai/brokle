@@ -2,10 +2,12 @@ package evaluation
 
 import (
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	"brokle/internal/core/domain/evaluation"
 	"brokle/internal/core/domain/observability"
@@ -232,6 +234,190 @@ func (s *datasetItemService) ImportFromJSON(ctx context.Context, datasetID ulid.
 	)
 
 	return result, nil
+}
+
+// ImportFromCSV imports dataset items from CSV content with column mapping.
+func (s *datasetItemService) ImportFromCSV(ctx context.Context, datasetID ulid.ULID, projectID ulid.ULID, req *evaluation.ImportDatasetItemsFromCSVRequest) (*evaluation.BulkImportResult, error) {
+	if _, err := s.datasetRepo.GetByID(ctx, datasetID, projectID); err != nil {
+		if errors.Is(err, evaluation.ErrDatasetNotFound) {
+			return nil, appErrors.NewNotFoundError(fmt.Sprintf("dataset %s", datasetID))
+		}
+		return nil, appErrors.NewInternalError("failed to verify dataset", err)
+	}
+
+	if req.Content == "" {
+		return nil, appErrors.NewValidationError("content", "content cannot be empty")
+	}
+
+	if req.ColumnMapping.InputColumn == "" {
+		return nil, appErrors.NewValidationError("column_mapping.input_column", "input column is required")
+	}
+
+	reader := csv.NewReader(strings.NewReader(req.Content))
+	records, err := reader.ReadAll()
+	if err != nil {
+		return nil, appErrors.NewValidationError("content", fmt.Sprintf("invalid CSV format: %v", err))
+	}
+
+	if len(records) == 0 {
+		return nil, appErrors.NewValidationError("content", "CSV content is empty")
+	}
+
+	var headers []string
+	startRow := 0
+	if req.HasHeader {
+		if len(records) < 2 {
+			return nil, appErrors.NewValidationError("content", "CSV must have at least one data row after header")
+		}
+		headers = records[0]
+		startRow = 1
+	} else {
+		// Generate column names like "col_0", "col_1", etc.
+		if len(records[0]) > 0 {
+			headers = make([]string, len(records[0]))
+			for i := range records[0] {
+				headers[i] = fmt.Sprintf("col_%d", i)
+			}
+		}
+	}
+
+	columnIndex := make(map[string]int)
+	for i, header := range headers {
+		columnIndex[header] = i
+	}
+
+	if _, ok := columnIndex[req.ColumnMapping.InputColumn]; !ok {
+		return nil, appErrors.NewValidationError("column_mapping.input_column", fmt.Sprintf("column '%s' not found in CSV", req.ColumnMapping.InputColumn))
+	}
+	if req.ColumnMapping.ExpectedColumn != "" {
+		if _, ok := columnIndex[req.ColumnMapping.ExpectedColumn]; !ok {
+			return nil, appErrors.NewValidationError("column_mapping.expected_column", fmt.Sprintf("column '%s' not found in CSV", req.ColumnMapping.ExpectedColumn))
+		}
+	}
+	for _, col := range req.ColumnMapping.MetadataColumns {
+		if _, ok := columnIndex[col]; !ok {
+			return nil, appErrors.NewValidationError("column_mapping.metadata_columns", fmt.Sprintf("column '%s' not found in CSV", col))
+		}
+	}
+
+	result := &evaluation.BulkImportResult{}
+	items := make([]*evaluation.DatasetItem, 0, len(records)-startRow)
+	contentHashes := make([]string, 0, len(records)-startRow)
+
+	// First pass: extract data and compute content hashes
+	type csvRowData struct {
+		input    map[string]interface{}
+		expected map[string]interface{}
+		metadata map[string]interface{}
+		hash     string
+	}
+	rowDataList := make([]csvRowData, 0, len(records)-startRow)
+
+	inputIdx := columnIndex[req.ColumnMapping.InputColumn]
+	var expectedIdx *int
+	if req.ColumnMapping.ExpectedColumn != "" {
+		idx := columnIndex[req.ColumnMapping.ExpectedColumn]
+		expectedIdx = &idx
+	}
+
+	for i := startRow; i < len(records); i++ {
+		row := records[i]
+		if len(row) == 0 {
+			continue
+		}
+
+		input := make(map[string]interface{})
+		if inputIdx < len(row) {
+			input["value"] = s.parseCSVValue(row[inputIdx])
+		}
+
+		expected := make(map[string]interface{})
+		if expectedIdx != nil && *expectedIdx < len(row) {
+			expected["value"] = s.parseCSVValue(row[*expectedIdx])
+		}
+
+		metadata := make(map[string]interface{})
+		for _, col := range req.ColumnMapping.MetadataColumns {
+			idx := columnIndex[col]
+			if idx < len(row) {
+				metadata[col] = s.parseCSVValue(row[idx])
+			}
+		}
+
+		hash := s.computeContentHash(input, expected)
+		contentHashes = append(contentHashes, hash)
+
+		rowDataList = append(rowDataList, csvRowData{
+			input:    input,
+			expected: expected,
+			metadata: metadata,
+			hash:     hash,
+		})
+	}
+
+	// Check for existing items if deduplication is enabled
+	var existingHashes map[string]bool
+	if req.Deduplicate && len(contentHashes) > 0 {
+		var err error
+		existingHashes, err = s.itemRepo.FindByContentHashes(ctx, datasetID, contentHashes)
+		if err != nil {
+			return nil, appErrors.NewInternalError("failed to check for duplicates", err)
+		}
+	}
+
+	// Second pass: create items
+	for i, rd := range rowDataList {
+		if req.Deduplicate && existingHashes != nil && existingHashes[rd.hash] {
+			result.Skipped++
+			continue
+		}
+
+		item := evaluation.NewDatasetItemWithSource(datasetID, rd.input, evaluation.DatasetItemSourceCSV)
+		if len(rd.expected) > 0 {
+			item.Expected = rd.expected
+		}
+		if len(rd.metadata) > 0 {
+			item.Metadata = rd.metadata
+		}
+		item.ContentHash = &rd.hash
+
+		if validationErrors := item.Validate(); len(validationErrors) > 0 {
+			result.Errors = append(result.Errors, fmt.Sprintf("row %d: %s", i+startRow+1, validationErrors[0].Message))
+			continue
+		}
+
+		items = append(items, item)
+	}
+
+	if len(items) > 0 {
+		if err := s.itemRepo.CreateBatch(ctx, items); err != nil {
+			return nil, appErrors.NewInternalError("failed to create dataset items", err)
+		}
+	}
+
+	result.Created = len(items)
+
+	s.logger.Info("dataset items imported from CSV",
+		"dataset_id", datasetID,
+		"created", result.Created,
+		"skipped", result.Skipped,
+		"errors", len(result.Errors),
+	)
+
+	return result, nil
+}
+
+// parseCSVValue attempts to parse a CSV cell value into its appropriate type.
+// Tries JSON parsing first (for objects, arrays, booleans, numbers), falls back to string.
+func (s *datasetItemService) parseCSVValue(value string) interface{} {
+	value = strings.TrimSpace(value)
+
+	var parsed interface{}
+	if err := json.Unmarshal([]byte(value), &parsed); err == nil {
+		return parsed
+	}
+
+	return value
 }
 
 // CreateFromTraces creates dataset items from existing trace data (OTEL-native import).

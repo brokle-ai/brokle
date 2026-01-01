@@ -13,6 +13,7 @@ import type {
   ImportFromJsonRequest,
   ImportFromTracesRequest,
   ImportFromSpansRequest,
+  ImportFromCsvRequest,
 } from '../types'
 
 export const datasetQueryKeys = {
@@ -295,6 +296,29 @@ export function useImportFromSpansMutation(projectId: string, datasetId: string)
       const apiError = error as { message?: string }
       toast.error('Import Failed', {
         description: apiError?.message || 'Could not import from spans. Please try again.',
+      })
+    },
+  })
+}
+
+export function useImportFromCsvMutation(projectId: string, datasetId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (data: ImportFromCsvRequest) =>
+      datasetsApi.importFromCsv(projectId, datasetId, data),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({
+        queryKey: datasetQueryKeys.items(projectId, datasetId),
+      })
+      toast.success('CSV Import Complete', {
+        description: `Created ${result.created} items, skipped ${result.skipped} duplicates.`,
+      })
+    },
+    onError: (error: unknown) => {
+      const apiError = error as { message?: string }
+      toast.error('CSV Import Failed', {
+        description: apiError?.message || 'Could not import from CSV. Please try again.',
       })
     },
   })

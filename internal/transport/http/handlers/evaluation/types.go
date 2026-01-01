@@ -60,6 +60,21 @@ type CreateFromSpansRequest struct {
 	Deduplicate bool                `json:"deduplicate"`
 }
 
+// @Description CSV column mapping for field extraction
+type CSVColumnMappingRequest struct {
+	InputColumn     string   `json:"input_column" binding:"required"`
+	ExpectedColumn  string   `json:"expected_column,omitempty"`
+	MetadataColumns []string `json:"metadata_columns,omitempty"`
+}
+
+// @Description Import from CSV request
+type ImportFromCSVRequest struct {
+	Content       string                  `json:"content" binding:"required"`
+	ColumnMapping CSVColumnMappingRequest `json:"column_mapping" binding:"required"`
+	HasHeader     bool                    `json:"has_header"`
+	Deduplicate   bool                    `json:"deduplicate"`
+}
+
 // @Description Paginated dataset items response
 type DatasetItemListResponse struct {
 	Items []*DatasetItemResponse `json:"items"`

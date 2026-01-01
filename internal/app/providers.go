@@ -97,9 +97,10 @@ type DatabaseContainer struct {
 }
 
 type WorkerContainer struct {
-	TelemetryConsumer  *workers.TelemetryStreamConsumer
-	RuleWorker         *evaluationWorker.RuleWorker
-	EvaluationWorker   *evaluationWorker.EvaluationWorker
+	TelemetryConsumer    *workers.TelemetryStreamConsumer
+	RuleWorker           *evaluationWorker.RuleWorker
+	EvaluationWorker     *evaluationWorker.EvaluationWorker
+	ManualTriggerWorker  *evaluationWorker.ManualTriggerWorker
 }
 
 type RepositoryContainer struct {
@@ -212,6 +213,7 @@ type EvaluationRepositories struct {
 	Experiment     evaluationDomain.ExperimentRepository
 	ExperimentItem evaluationDomain.ExperimentItemRepository
 	Rule           evaluationDomain.RuleRepository
+	RuleExecution  evaluationDomain.RuleExecutionRepository
 }
 
 type UserServices struct {
@@ -262,6 +264,7 @@ type EvaluationServices struct {
 	Experiment     evaluationDomain.ExperimentService
 	ExperimentItem evaluationDomain.ExperimentItemService
 	Rule           evaluationDomain.RuleService
+	RuleExecution  evaluationDomain.RuleExecutionService
 }
 
 func ProvideDatabases(cfg *config.Config, logger *slog.Logger) (*DatabaseContainer, error) {
@@ -342,6 +345,7 @@ func ProvideWorkers(core *CoreContainer) (*WorkerContainer, error) {
 	ruleWorker := evaluationWorker.NewRuleWorker(
 		core.Databases.Redis,
 		core.Services.Evaluation.Rule,
+		core.Services.Evaluation.RuleExecution,
 		core.Logger,
 		ruleWorkerConfig,
 	)
@@ -377,6 +381,7 @@ func ProvideWorkers(core *CoreContainer) (*WorkerContainer, error) {
 	evalWorker := evaluationWorker.NewEvaluationWorker(
 		core.Databases.Redis,
 		core.Services.Observability.ScoreService,
+		core.Services.Evaluation.RuleExecution,
 		llmScorer,
 		builtinScorer,
 		regexScorer,
@@ -384,10 +389,28 @@ func ProvideWorkers(core *CoreContainer) (*WorkerContainer, error) {
 		evalWorkerConfig,
 	)
 
+	manualTriggerWorkerConfig := &evaluationWorker.ManualTriggerWorkerConfig{
+		ConsumerGroup:  "manual-trigger-workers",
+		ConsumerID:     "manual-trigger-" + ulid.New().String(),
+		BlockDuration:  time.Second,
+		MaxRetries:     3,
+		RetryBackoff:   500 * time.Millisecond,
+		MaxConcurrency: 3,
+	}
+
+	manualTriggerWorker := evaluationWorker.NewManualTriggerWorker(
+		core.Databases.Redis,
+		core.Services.Observability.TraceService,
+		core.Services.Evaluation.RuleExecution,
+		core.Logger,
+		manualTriggerWorkerConfig,
+	)
+
 	return &WorkerContainer{
-		TelemetryConsumer:  telemetryConsumer,
-		RuleWorker:         ruleWorker,
-		EvaluationWorker:   evalWorker,
+		TelemetryConsumer:   telemetryConsumer,
+		RuleWorker:          ruleWorker,
+		EvaluationWorker:    evalWorker,
+		ManualTriggerWorker: manualTriggerWorker,
 	}, nil
 }
 
@@ -452,7 +475,7 @@ func ProvideServerServices(core *CoreContainer) *ServiceContainer {
 		logger,
 	)
 
-	evaluationServices := ProvideEvaluationServices(repos.Evaluation, repos.Observability, observabilityServices, logger)
+	evaluationServices := ProvideEvaluationServices(repos.Evaluation, repos.Observability, observabilityServices, databases.Redis, logger)
 
 	return &ServiceContainer{
 		User:                userServices,
@@ -495,7 +518,7 @@ func ProvideWorkerServices(core *CoreContainer) *ServiceContainer {
 	}
 
 	// Evaluation services needed for rule worker
-	evaluationServices := ProvideEvaluationServices(repos.Evaluation, repos.Observability, observabilityServices, logger)
+	evaluationServices := ProvideEvaluationServices(repos.Evaluation, repos.Observability, observabilityServices, databases.Redis, logger)
 
 	return &ServiceContainer{
 		User:                nil, // Worker doesn't need auth/user/org services
@@ -538,6 +561,7 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 	var experimentSvc evaluationDomain.ExperimentService
 	var experimentItemSvc evaluationDomain.ExperimentItemService
 	var ruleSvc evaluationDomain.RuleService
+	var ruleExecutionSvc evaluationDomain.RuleExecutionService
 	if core.Services.Evaluation != nil {
 		scoreConfigSvc = core.Services.Evaluation.ScoreConfig
 		datasetSvc = core.Services.Evaluation.Dataset
@@ -545,6 +569,7 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 		experimentSvc = core.Services.Evaluation.Experiment
 		experimentItemSvc = core.Services.Evaluation.ExperimentItem
 		ruleSvc = core.Services.Evaluation.Rule
+		ruleExecutionSvc = core.Services.Evaluation.RuleExecution
 	}
 
 	httpHandlers := handlers.NewHandlers(
@@ -578,6 +603,7 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 		experimentSvc,
 		experimentItemSvc,
 		ruleSvc,
+		ruleExecutionSvc,
 	)
 
 	httpServer := http.NewServer(
@@ -730,6 +756,7 @@ func ProvideEvaluationRepositories(db *gorm.DB) *EvaluationRepositories {
 		Experiment:     evaluationRepo.NewExperimentRepository(db),
 		ExperimentItem: evaluationRepo.NewExperimentItemRepository(db),
 		Rule:           evaluationRepo.NewRuleRepository(db),
+		RuleExecution:  evaluationRepo.NewRuleExecutionRepository(db),
 	}
 }
 
@@ -1074,6 +1101,7 @@ func ProvideEvaluationServices(
 	evaluationRepos *EvaluationRepositories,
 	observabilityRepos *ObservabilityRepositories,
 	observabilityServices *observabilityService.ServiceRegistry,
+	redisDB *database.RedisDB,
 	logger *slog.Logger,
 ) *EvaluationServices {
 	scoreConfigSvc := evaluationService.NewScoreConfigService(
@@ -1109,8 +1137,16 @@ func ProvideEvaluationServices(
 		logger,
 	)
 
+	// RuleExecutionService must be created before RuleService since RuleService depends on it
+	ruleExecutionSvc := evaluationService.NewRuleExecutionService(
+		evaluationRepos.RuleExecution,
+		logger,
+	)
+
 	ruleSvc := evaluationService.NewRuleService(
 		evaluationRepos.Rule,
+		ruleExecutionSvc,
+		redisDB,
 		logger,
 	)
 
@@ -1121,6 +1157,7 @@ func ProvideEvaluationServices(
 		Experiment:     experimentSvc,
 		ExperimentItem: experimentItemSvc,
 		Rule:           ruleSvc,
+		RuleExecution:  ruleExecutionSvc,
 	}
 }
 

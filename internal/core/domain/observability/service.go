@@ -19,6 +19,7 @@ type TraceService interface {
 	IngestSpanBatch(ctx context.Context, spans []*Span) error
 
 	GetSpan(ctx context.Context, spanID string) (*Span, error)
+	GetSpanByProject(ctx context.Context, spanID string, projectID string) (*Span, error)
 	GetSpansByFilter(ctx context.Context, filter *SpanFilter) ([]*Span, error)
 	CountSpans(ctx context.Context, filter *SpanFilter) (int64, error)
 

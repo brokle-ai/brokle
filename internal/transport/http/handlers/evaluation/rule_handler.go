@@ -311,3 +311,49 @@ func (h *RuleHandler) Deactivate(c *gin.Context) {
 
 	response.Success(c, map[string]string{"message": "rule deactivated"})
 }
+
+// @Summary Trigger evaluation rule
+// @Description Manually triggers an evaluation rule against matching spans. Returns 202 Accepted with execution ID for async processing.
+// @Tags Evaluation Rules
+// @Accept json
+// @Produce json
+// @Param projectId path string true "Project ID"
+// @Param ruleId path string true "Rule ID"
+// @Param request body evaluation.TriggerOptions false "Optional trigger options"
+// @Success 202 {object} evaluation.TriggerResponse
+// @Failure 400 {object} response.ErrorResponse
+// @Failure 401 {object} response.ErrorResponse
+// @Failure 404 {object} response.ErrorResponse
+// @Router /api/v1/projects/{projectId}/evaluations/rules/{ruleId}/trigger [post]
+func (h *RuleHandler) Trigger(c *gin.Context) {
+	projectID, err := ulid.Parse(c.Param("projectId"))
+	if err != nil {
+		response.Error(c, appErrors.NewValidationError("projectId", "must be a valid ULID"))
+		return
+	}
+
+	ruleID, err := ulid.Parse(c.Param("ruleId"))
+	if err != nil {
+		response.Error(c, appErrors.NewValidationError("ruleId", "must be a valid ULID"))
+		return
+	}
+
+	var opts *evaluationDomain.TriggerOptions
+	if c.Request.ContentLength > 0 {
+		var reqOpts evaluationDomain.TriggerOptions
+		if err := c.ShouldBindJSON(&reqOpts); err != nil {
+			response.ValidationError(c, "Invalid request body", err.Error())
+			return
+		}
+		opts = &reqOpts
+	}
+
+	result, err := h.service.TriggerRule(c.Request.Context(), ruleID, projectID, opts)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	// Return 202 Accepted for async processing (Opik pattern)
+	response.Accepted(c, result)
+}

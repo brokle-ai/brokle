@@ -10,6 +10,7 @@ import type {
   ImportFromJsonRequest,
   ImportFromTracesRequest,
   ImportFromSpansRequest,
+  ImportFromCsvRequest,
 } from '../types'
 
 const client = new BrokleAPIClient('/api')
@@ -109,6 +110,17 @@ export const datasetsApi = {
   ): Promise<BulkImportResult> => {
     return client.post<BulkImportResult>(
       `/v1/projects/${projectId}/datasets/${datasetId}/items/from-spans`,
+      data
+    )
+  },
+
+  importFromCsv: async (
+    projectId: string,
+    datasetId: string,
+    data: ImportFromCsvRequest
+  ): Promise<BulkImportResult> => {
+    return client.post<BulkImportResult>(
+      `/v1/projects/${projectId}/datasets/${datasetId}/items/import-csv`,
       data
     )
   },

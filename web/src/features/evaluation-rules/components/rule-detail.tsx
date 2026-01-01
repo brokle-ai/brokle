@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Pencil, Trash2, Play, Pause } from 'lucide-react'
+import { Pencil, Trash2, Play, Pause, Zap, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { PageHeader } from '@/components/layout/page-header'
@@ -11,6 +11,7 @@ import { RuleDetailSkeleton } from './rule-detail-skeleton'
 import { ScorerConfigDisplay } from './scorer-config-display'
 import { RuleStatusBadge } from './rule-status-badge'
 import { RuleScorerBadge } from './rule-scorer-badge'
+import { RuleExecutionsTable } from './rule-executions-table'
 
 interface RuleDetailProps {
   projectSlug: string
@@ -26,7 +27,7 @@ export function RuleDetail({ projectSlug, ruleId }: RuleDetailProps) {
 }
 
 function RuleDetailContent() {
-  const { rule, isLoading, projectSlug, projectId, setOpen, handleToggleStatus, isToggling } = useRuleDetail()
+  const { rule, isLoading, projectSlug, projectId, setOpen, handleToggleStatus, handleTrigger, isToggling, isTriggering } = useRuleDetail()
 
   if (isLoading) {
     return <RuleDetailSkeleton />
@@ -210,6 +211,37 @@ function RuleDetailContent() {
             </CardContent>
           </Card>
         </div>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+            <div className="space-y-1">
+              <CardTitle>Execution History</CardTitle>
+              <CardDescription>
+                Recent rule executions and their results
+              </CardDescription>
+            </div>
+            <Button
+              onClick={handleTrigger}
+              disabled={isTriggering}
+              size="sm"
+            >
+              {isTriggering ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Triggering...
+                </>
+              ) : (
+                <>
+                  <Zap className="mr-2 h-4 w-4" />
+                  Trigger Now
+                </>
+              )}
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <RuleExecutionsTable projectId={projectId} ruleId={rule.id} />
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader>

@@ -5,6 +5,11 @@ import type {
   UpdateEvaluationRuleRequest,
   RuleListResponse,
   RuleListParams,
+  RuleExecution,
+  ExecutionListResponse,
+  ExecutionListParams,
+  TriggerOptions,
+  TriggerResponse,
 } from '../types'
 
 const client = new BrokleAPIClient('/api')
@@ -95,6 +100,73 @@ export const evaluationRulesApi = {
     return client.post<{ message: string }>(
       `/v1/projects/${projectId}/evaluations/rules/${ruleId}/deactivate`,
       {}
+    )
+  },
+
+  // ============================================================================
+  // Rule Execution API Methods
+  // ============================================================================
+
+  /**
+   * List execution history for a rule with optional filtering
+   */
+  listExecutions: async (
+    projectId: string,
+    ruleId: string,
+    params?: ExecutionListParams
+  ): Promise<ExecutionListResponse> => {
+    const queryParams = new URLSearchParams()
+    if (params?.page) queryParams.set('page', String(params.page))
+    if (params?.limit) queryParams.set('limit', String(params.limit))
+    if (params?.status) queryParams.set('status', params.status)
+    if (params?.trigger_type) queryParams.set('trigger_type', params.trigger_type)
+
+    const query = queryParams.toString()
+    const url = `/v1/projects/${projectId}/evaluations/rules/${ruleId}/executions${query ? `?${query}` : ''}`
+    return client.get<ExecutionListResponse>(url)
+  },
+
+  /**
+   * Get a specific execution by ID
+   */
+  getExecution: async (
+    projectId: string,
+    ruleId: string,
+    executionId: string
+  ): Promise<RuleExecution> => {
+    return client.get<RuleExecution>(
+      `/v1/projects/${projectId}/evaluations/rules/${ruleId}/executions/${executionId}`
+    )
+  },
+
+  /**
+   * Get the latest execution for a rule
+   */
+  getLatestExecution: async (
+    projectId: string,
+    ruleId: string
+  ): Promise<RuleExecution> => {
+    return client.get<RuleExecution>(
+      `/v1/projects/${projectId}/evaluations/rules/${ruleId}/executions/latest`
+    )
+  },
+
+  // ============================================================================
+  // Manual Trigger API Methods
+  // ============================================================================
+
+  /**
+   * Manually trigger an evaluation rule against matching spans
+   * Returns 202 Accepted with execution ID for async processing
+   */
+  triggerRule: async (
+    projectId: string,
+    ruleId: string,
+    options?: TriggerOptions
+  ): Promise<TriggerResponse> => {
+    return client.post<TriggerResponse>(
+      `/v1/projects/${projectId}/evaluations/rules/${ruleId}/trigger`,
+      options ?? {}
     )
   },
 }

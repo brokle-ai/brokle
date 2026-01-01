@@ -64,6 +64,7 @@ type Handlers struct {
 	Experiment     *evaluationHandler.ExperimentHandler
 	ExperimentItem *evaluationHandler.ExperimentItemHandler
 	Rule           *evaluationHandler.RuleHandler
+	RuleExecution  *evaluationHandler.RuleExecutionHandler
 	SpanQuery      *observability.SpanQueryHandler
 }
 
@@ -98,6 +99,7 @@ func NewHandlers(
 	experimentService evaluationDomain.ExperimentService,
 	experimentItemService evaluationDomain.ExperimentItemService,
 	ruleService evaluationDomain.RuleService,
+	ruleExecutionService evaluationDomain.RuleExecutionService,
 ) *Handlers {
 	return &Handlers{
 		Health:        health.NewHandler(cfg, logger),
@@ -128,6 +130,7 @@ func NewHandlers(
 		Experiment:     evaluationHandler.NewExperimentHandler(logger, experimentService, experimentItemService),
 		ExperimentItem: evaluationHandler.NewExperimentItemHandler(logger, experimentItemService),
 		Rule:           evaluationHandler.NewRuleHandler(ruleService),
+		RuleExecution:  evaluationHandler.NewRuleExecutionHandler(ruleExecutionService),
 		SpanQuery:      observability.NewSpanQueryHandler(observabilityServices.SpanQueryService, logger),
 	}
 }
