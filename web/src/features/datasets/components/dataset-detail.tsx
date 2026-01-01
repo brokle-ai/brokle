@@ -11,6 +11,7 @@ import { DatasetDetailSkeleton } from './dataset-detail-skeleton'
 import { DatasetItemTable } from './dataset-item-table'
 import { AddDatasetItemDialog } from './add-dataset-item-dialog'
 import { ImportJsonDialog } from './import-json-dialog'
+import { ImportCsvDialog } from './import-csv-dialog'
 
 interface DatasetDetailProps {
   projectSlug: string
@@ -82,6 +83,7 @@ function DatasetDetailContent() {
             <h2 className="text-lg font-medium">Items</h2>
             <div className="flex items-center gap-2">
               <ImportJsonDialog projectId={projectId} datasetId={datasetId} />
+              <ImportCsvDialog projectId={projectId} datasetId={datasetId} />
               <AddDatasetItemDialog projectId={projectId} datasetId={datasetId} />
             </div>
           </div>

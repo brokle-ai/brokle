@@ -538,6 +538,14 @@ func (r *traceRepository) GetSpansByFilter(ctx context.Context, filter *observab
 				query += " AND end_time IS NULL"
 			}
 		}
+		if len(filter.SpanNames) > 0 {
+			placeholders := make([]string, len(filter.SpanNames))
+			for i := range filter.SpanNames {
+				placeholders[i] = "?"
+				args = append(args, filter.SpanNames[i])
+			}
+			query += " AND span_name IN (" + strings.Join(placeholders, ",") + ")"
+		}
 
 	}
 

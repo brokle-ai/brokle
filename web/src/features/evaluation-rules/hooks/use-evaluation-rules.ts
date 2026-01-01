@@ -10,7 +10,9 @@ import type {
   EvaluationRule,
   RuleListParams,
   RuleListResponse,
+  TriggerOptions,
 } from '../types'
+import { ruleExecutionsKeys } from './use-rule-executions'
 
 export const evaluationRuleQueryKeys = {
   all: ['evaluation-rules'] as const,
@@ -292,6 +294,39 @@ export function useDeactivateEvaluationRuleMutation(projectId: string) {
         description: extractErrorMessage(
           error,
           'Could not deactivate evaluation rule. Please try again.'
+        ),
+      })
+    },
+  })
+}
+
+/**
+ * Mutation hook for manually triggering an evaluation rule
+ * Starts async evaluation against matching spans
+ */
+export function useTriggerEvaluationRuleMutation(
+  projectId: string,
+  ruleId: string
+) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (options?: TriggerOptions) =>
+      evaluationRulesApi.triggerRule(projectId, ruleId, options),
+    onSuccess: (response) => {
+      // Invalidate executions to show the new pending execution
+      queryClient.invalidateQueries({
+        queryKey: ruleExecutionsKeys.all,
+      })
+      toast.success('Evaluation Triggered', {
+        description: response.message || 'Evaluation has been queued for processing.',
+      })
+    },
+    onError: (error: unknown) => {
+      toast.error('Failed to Trigger Evaluation', {
+        description: extractErrorMessage(
+          error,
+          'Could not trigger evaluation. Please try again.'
         ),
       })
     },

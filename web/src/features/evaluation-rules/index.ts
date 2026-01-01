@@ -26,6 +26,12 @@ export type {
   UpdateEvaluationRuleRequest,
   RuleListResponse,
   RuleListParams,
+  // Execution types
+  ExecutionStatus,
+  TriggerType,
+  RuleExecution,
+  ExecutionListResponse,
+  ExecutionListParams,
 } from './types'
 
 export { evaluationRulesApi } from './api/evaluation-rules-api'
@@ -43,6 +49,15 @@ export {
 export { useProjectRules } from './hooks/use-project-rules'
 export type { UseProjectRulesReturn } from './hooks/use-project-rules'
 
+// Execution hooks
+export {
+  ruleExecutionsKeys,
+  useRuleExecutionsQuery,
+  useRuleExecutionQuery,
+  useLatestRuleExecutionQuery,
+  getRefetchInterval,
+} from './hooks/use-rule-executions'
+
 export {
   RuleStatusBadge,
   RuleScorerBadge,
@@ -58,4 +73,8 @@ export {
   RuleDetailDialogs,
   RuleDetailSkeleton,
   ScorerConfigDisplay,
+  // Execution components
+  ExecutionStatusBadge,
+  isTerminalStatus,
+  RuleExecutionsTable,
 } from './components'

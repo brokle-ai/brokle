@@ -154,6 +154,14 @@ func (a *App) Start() error {
 			}
 			a.logger.Info("Evaluation worker started")
 		}
+
+		if a.providers.Workers.ManualTriggerWorker != nil {
+			if err := a.providers.Workers.ManualTriggerWorker.Start(context.Background()); err != nil {
+				a.logger.Error("Failed to start manual trigger worker", "error", err)
+				return err
+			}
+			a.logger.Info("Manual trigger worker started")
+		}
 	}
 
 	return nil
@@ -207,6 +215,9 @@ func (a *App) doShutdown(ctx context.Context) error {
 				}
 				if a.providers.Workers.EvaluationWorker != nil {
 					a.providers.Workers.EvaluationWorker.Stop()
+				}
+				if a.providers.Workers.ManualTriggerWorker != nil {
+					a.providers.Workers.ManualTriggerWorker.Stop()
 				}
 			}
 		}()

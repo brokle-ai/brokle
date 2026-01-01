@@ -128,6 +128,18 @@ func (s *TraceService) GetSpan(ctx context.Context, spanID string) (*observabili
 	return span, nil
 }
 
+func (s *TraceService) GetSpanByProject(ctx context.Context, spanID string, projectID string) (*observability.Span, error) {
+	span, err := s.traceRepo.GetSpanByProject(ctx, spanID, projectID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, appErrors.NewNotFoundError("span " + spanID)
+		}
+		return nil, appErrors.NewInternalError("failed to get span by project", err)
+	}
+
+	return span, nil
+}
+
 func (s *TraceService) GetSpansByFilter(ctx context.Context, filter *observability.SpanFilter) ([]*observability.Span, error) {
 	spans, err := s.traceRepo.GetSpansByFilter(ctx, filter)
 	if err != nil {

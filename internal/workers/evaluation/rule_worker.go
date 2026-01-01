@@ -29,16 +29,17 @@ const (
 
 // EvaluationJob represents a matched span-rule pair to be processed by EvaluationWorker
 type EvaluationJob struct {
-	JobID       ulid.ULID                `json:"job_id"`
-	RuleID      ulid.ULID                `json:"rule_id"`
-	ProjectID   ulid.ULID                `json:"project_id"`
-	SpanData    map[string]interface{}   `json:"span_data"`
-	TraceID     string                   `json:"trace_id"`
-	SpanID      string                   `json:"span_id"`
-	ScorerType  evaluation.ScorerType    `json:"scorer_type"`
-	ScorerConfig map[string]any          `json:"scorer_config"`
-	Variables   map[string]string        `json:"variables"` // Extracted variables from span
-	CreatedAt   time.Time                `json:"created_at"`
+	JobID        ulid.ULID              `json:"job_id"`
+	RuleID       ulid.ULID              `json:"rule_id"`
+	ProjectID    ulid.ULID              `json:"project_id"`
+	ExecutionID  *ulid.ULID             `json:"execution_id,omitempty"` // Optional: links job to a rule execution (for manual triggers)
+	SpanData     map[string]interface{} `json:"span_data"`
+	TraceID      string                 `json:"trace_id"`
+	SpanID       string                 `json:"span_id"`
+	ScorerType   evaluation.ScorerType  `json:"scorer_type"`
+	ScorerConfig map[string]any         `json:"scorer_config"`
+	Variables    map[string]string      `json:"variables"` // Extracted variables from span
+	CreatedAt    time.Time              `json:"created_at"`
 }
 
 // RuleWorkerConfig holds configuration for the rule worker
@@ -105,10 +106,11 @@ func (c *RuleCache) Invalidate(projectID string) {
 
 // RuleWorker consumes spans from telemetry streams, matches against active rules, and emits evaluation jobs
 type RuleWorker struct {
-	redis             *database.RedisDB
-	ruleService       evaluation.RuleService
-	ruleCache         *RuleCache
-	logger            *slog.Logger
+	redis            *database.RedisDB
+	ruleService      evaluation.RuleService
+	executionService evaluation.RuleExecutionService
+	ruleCache        *RuleCache
+	logger           *slog.Logger
 
 	// Consumer configuration
 	consumerGroup     string
@@ -141,6 +143,7 @@ type RuleWorker struct {
 func NewRuleWorker(
 	redis *database.RedisDB,
 	ruleService evaluation.RuleService,
+	executionService evaluation.RuleExecutionService,
 	logger *slog.Logger,
 	config *RuleWorkerConfig,
 ) *RuleWorker {
@@ -161,6 +164,7 @@ func NewRuleWorker(
 	return &RuleWorker{
 		redis:               redis,
 		ruleService:         ruleService,
+		executionService:    executionService,
 		ruleCache:           NewRuleCache(config.RuleCacheTTL),
 		logger:              logger,
 		consumerGroup:       config.ConsumerGroup,
@@ -387,7 +391,6 @@ func (w *RuleWorker) consumeBatch(ctx context.Context) error {
 		streamKeys = streamKeys[:w.maxStreamsPerRead]
 	}
 
-	// Build XReadGroup arguments
 	streamArgs := make([]string, 0, len(streamKeys)*2)
 	for _, streamKey := range streamKeys {
 		streamArgs = append(streamArgs, streamKey)
@@ -411,7 +414,6 @@ func (w *RuleWorker) consumeBatch(ctx context.Context) error {
 		return err
 	}
 
-	// Process messages from all streams
 	for _, stream := range results {
 		for _, msg := range stream.Messages {
 			if err := w.processMessage(ctx, stream.Stream, msg); err != nil {
@@ -451,11 +453,11 @@ func (w *RuleWorker) processMessage(ctx context.Context, streamKey string, msg r
 	}
 
 	if len(rules) == 0 {
-		// No active rules for this project
 		return nil
 	}
 
-	// Process each span event in the batch
+	jobsByRule := make(map[ulid.ULID][]*EvaluationJob)
+
 	for _, event := range batch.Events {
 		if event.EventType != string(observability.TelemetryEventTypeSpan) {
 			continue
@@ -473,10 +475,9 @@ func (w *RuleWorker) processMessage(ctx context.Context, streamKey string, msg r
 					continue
 				}
 
-				// Extract variables from span
 				variables := w.extractVariables(rule, event)
 
-				// Create evaluation job
+				// Create evaluation job (execution ID will be set after batch collection)
 				job := &EvaluationJob{
 					JobID:        ulid.New(),
 					RuleID:       rule.ID,
@@ -490,25 +491,88 @@ func (w *RuleWorker) processMessage(ctx context.Context, streamKey string, msg r
 					CreatedAt:    time.Now(),
 				}
 
-				if err := w.emitJob(ctx, job); err != nil {
-					w.logger.Error("Failed to emit evaluation job",
-						"error", err,
-						"job_id", job.JobID,
-						"rule_id", rule.ID,
-						"span_id", event.SpanID,
-					)
-					continue
-				}
+				jobsByRule[rule.ID] = append(jobsByRule[rule.ID], job)
+			}
+		}
+	}
 
-				atomic.AddInt64(&w.jobsEmitted, 1)
-				w.logger.Debug("Emitted evaluation job",
+	// Create executions and emit jobs with execution IDs
+	for ruleID, jobs := range jobsByRule {
+		if len(jobs) == 0 {
+			continue
+		}
+
+		// Create execution record BEFORE emitting jobs to avoid race conditions
+		var executionID *ulid.ULID
+		if w.executionService != nil {
+			execution, err := w.executionService.StartExecutionWithCount(
+				ctx,
+				ruleID,
+				batch.ProjectID,
+				evaluation.TriggerTypeAutomatic,
+				len(jobs),
+			)
+			if err != nil {
+				w.logger.Error("failed to create execution for automatic rule",
+					"rule_id", ruleID,
+					"project_id", batch.ProjectID,
+					"error", err,
+				)
+				// Continue without execution tracking rather than failing entirely
+				// Jobs will still be processed, just without execution record
+			} else {
+				executionID = &execution.ID
+			}
+		}
+
+		var enqueueErrors int
+		for _, job := range jobs {
+			job.ExecutionID = executionID
+
+			if err := w.emitJob(ctx, job); err != nil {
+				w.logger.Error("Failed to emit evaluation job",
+					"error", err,
 					"job_id", job.JobID,
-					"rule_id", rule.ID,
-					"rule_name", rule.Name,
-					"span_id", event.SpanID,
-					"scorer_type", rule.ScorerType,
+					"rule_id", ruleID,
+					"span_id", job.SpanID,
+				)
+				enqueueErrors++
+				continue
+			}
+
+			atomic.AddInt64(&w.jobsEmitted, 1)
+			w.logger.Debug("Emitted evaluation job",
+				"job_id", job.JobID,
+				"rule_id", ruleID,
+				"execution_id", executionID,
+				"span_id", job.SpanID,
+				"scorer_type", job.ScorerType,
+			)
+		}
+
+		// If some jobs failed to enqueue, increment errors_count immediately.
+		// This ensures spans_scored + errors_count can still reach spans_matched
+		// for completion, even when the evaluation worker only processes fewer jobs.
+		if enqueueErrors > 0 && executionID != nil && w.executionService != nil {
+			if _, err := w.executionService.IncrementAndCheckCompletion(
+				ctx, *executionID, batch.ProjectID, 0, enqueueErrors,
+			); err != nil {
+				w.logger.Error("Failed to increment errors_count for enqueue failures",
+					"execution_id", executionID,
+					"rule_id", ruleID,
+					"enqueue_errors", enqueueErrors,
+					"error", err,
 				)
 			}
+		}
+
+		if executionID != nil {
+			w.logger.Debug("Created execution for automatic evaluation",
+				"execution_id", executionID,
+				"rule_id", ruleID,
+				"project_id", batch.ProjectID,
+				"jobs_count", len(jobs),
+			)
 		}
 	}
 

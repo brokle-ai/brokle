@@ -125,3 +125,57 @@ export interface RuleListParams {
   scorer_type?: ScorerType
   search?: string
 }
+
+// ============================================================================
+// Rule Execution Types (for execution history tracking)
+// ============================================================================
+
+export type ExecutionStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
+export type TriggerType = 'automatic' | 'manual'
+
+export interface RuleExecution {
+  id: string
+  rule_id: string
+  project_id: string
+  status: ExecutionStatus
+  trigger_type: TriggerType
+  spans_matched: number
+  spans_scored: number
+  errors_count: number
+  error_message?: string
+  started_at?: string
+  completed_at?: string
+  duration_ms?: number
+  metadata?: Record<string, unknown>
+  created_at: string
+}
+
+export interface ExecutionListResponse {
+  executions: RuleExecution[]
+  total: number
+  page: number
+  limit: number
+}
+
+export interface ExecutionListParams {
+  page?: number
+  limit?: number
+  status?: ExecutionStatus
+  trigger_type?: TriggerType
+}
+
+// ============================================================================
+// Manual Trigger Types
+// ============================================================================
+
+export interface TriggerOptions {
+  time_range_start?: string
+  time_range_end?: string
+  span_ids?: string[]
+  sample_limit?: number
+}
+
+export interface TriggerResponse {
+  execution_id: string
+  message: string
+}

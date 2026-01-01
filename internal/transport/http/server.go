@@ -347,6 +347,7 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 			datasets.POST("/:datasetId/items", s.authMiddleware.RequirePermission("projects:write"), s.handlers.DatasetItem.Create)
 			datasets.DELETE("/:datasetId/items/:itemId", s.authMiddleware.RequirePermission("projects:write"), s.handlers.DatasetItem.Delete)
 			datasets.POST("/:datasetId/items/import-json", s.authMiddleware.RequirePermission("projects:write"), s.handlers.DatasetItem.ImportFromJSON)
+			datasets.POST("/:datasetId/items/import-csv", s.authMiddleware.RequirePermission("projects:write"), s.handlers.DatasetItem.ImportFromCSV)
 			datasets.POST("/:datasetId/items/from-traces", s.authMiddleware.RequirePermission("projects:write"), s.handlers.DatasetItem.CreateFromTraces)
 			datasets.POST("/:datasetId/items/from-spans", s.authMiddleware.RequirePermission("projects:write"), s.handlers.DatasetItem.CreateFromSpans)
 			datasets.GET("/:datasetId/items/export", s.authMiddleware.RequirePermission("projects:read"), s.handlers.DatasetItem.Export)
@@ -372,6 +373,12 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 			evaluationRules.DELETE("/:ruleId", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Rule.Delete)
 			evaluationRules.POST("/:ruleId/activate", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Rule.Activate)
 			evaluationRules.POST("/:ruleId/deactivate", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Rule.Deactivate)
+			evaluationRules.POST("/:ruleId/trigger", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Rule.Trigger)
+
+			// Rule execution history
+			evaluationRules.GET("/:ruleId/executions", s.authMiddleware.RequirePermission("projects:read"), s.handlers.RuleExecution.List)
+			evaluationRules.GET("/:ruleId/executions/latest", s.authMiddleware.RequirePermission("projects:read"), s.handlers.RuleExecution.GetLatest)
+			evaluationRules.GET("/:ruleId/executions/:executionId", s.authMiddleware.RequirePermission("projects:read"), s.handlers.RuleExecution.Get)
 		}
 
 		projectScores := projects.Group("/:projectId/scores")

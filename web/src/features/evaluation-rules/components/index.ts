@@ -13,3 +13,7 @@ export { RuleDetail } from './rule-detail'
 export { RuleDetailDialogs } from './rule-detail-dialogs'
 export { RuleDetailSkeleton } from './rule-detail-skeleton'
 export { ScorerConfigDisplay } from './scorer-config-display'
+
+// Execution tracking components
+export { ExecutionStatusBadge, isTerminalStatus } from './execution-status-badge'
+export { RuleExecutionsTable } from './rule-executions-table'

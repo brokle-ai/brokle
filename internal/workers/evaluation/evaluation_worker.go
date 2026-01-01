@@ -53,12 +53,13 @@ type EvaluationWorkerConfig struct {
 
 // EvaluationWorker consumes evaluation jobs and executes scorers
 type EvaluationWorker struct {
-	redis         *database.RedisDB
-	scoreService  observability.ScoreService
-	llmScorer     Scorer
-	builtinScorer Scorer
-	regexScorer   Scorer
-	logger        *slog.Logger
+	redis            *database.RedisDB
+	scoreService     observability.ScoreService
+	executionService evaluation.RuleExecutionService
+	llmScorer        Scorer
+	builtinScorer    Scorer
+	regexScorer      Scorer
+	logger           *slog.Logger
 
 	// Consumer configuration
 	consumerGroup  string
@@ -74,19 +75,33 @@ type EvaluationWorker struct {
 	wg      sync.WaitGroup
 	running int64
 
+	// Execution tracking (for manual triggers)
+	executionStats   map[string]*executionProgress // keyed by execution_id
+	executionStatsMu sync.RWMutex
+
 	// Metrics
-	jobsProcessed  int64
-	scoresCreated  int64
-	errorsCount    int64
-	llmCalls       int64
-	builtinCalls   int64
-	regexCalls     int64
+	jobsProcessed int64
+	scoresCreated int64
+	errorsCount   int64
+	llmCalls      int64
+	builtinCalls  int64
+	regexCalls    int64
+}
+
+// executionProgress tracks progress for a single rule execution
+type executionProgress struct {
+	executionID  string
+	projectID    ulid.ULID
+	spansScored  int64
+	errorsCount  int64
+	lastActivity time.Time
 }
 
 // NewEvaluationWorker creates a new evaluation worker
 func NewEvaluationWorker(
 	redis *database.RedisDB,
 	scoreService observability.ScoreService,
+	executionService evaluation.RuleExecutionService,
 	llmScorer Scorer,
 	builtinScorer Scorer,
 	regexScorer Scorer,
@@ -106,20 +121,22 @@ func NewEvaluationWorker(
 	}
 
 	return &EvaluationWorker{
-		redis:          redis,
-		scoreService:   scoreService,
-		llmScorer:      llmScorer,
-		builtinScorer:  builtinScorer,
-		regexScorer:    regexScorer,
-		logger:         logger,
-		consumerGroup:  config.ConsumerGroup,
-		consumerID:     config.ConsumerID,
-		batchSize:      config.BatchSize,
-		blockDuration:  config.BlockDuration,
-		maxRetries:     config.MaxRetries,
-		retryBackoff:   config.RetryBackoff,
-		maxConcurrency: config.MaxConcurrency,
-		quit:           make(chan struct{}),
+		redis:            redis,
+		scoreService:     scoreService,
+		executionService: executionService,
+		llmScorer:        llmScorer,
+		builtinScorer:    builtinScorer,
+		regexScorer:      regexScorer,
+		logger:           logger,
+		consumerGroup:    config.ConsumerGroup,
+		consumerID:       config.ConsumerID,
+		batchSize:        config.BatchSize,
+		blockDuration:    config.BlockDuration,
+		maxRetries:       config.MaxRetries,
+		retryBackoff:     config.RetryBackoff,
+		maxConcurrency:   config.MaxConcurrency,
+		quit:             make(chan struct{}),
+		executionStats:   make(map[string]*executionProgress),
 	}
 }
 
@@ -136,12 +153,10 @@ func (w *EvaluationWorker) Start(ctx context.Context) error {
 		"max_concurrency", w.maxConcurrency,
 	)
 
-	// Ensure consumer group exists
 	if err := w.ensureConsumerGroup(ctx); err != nil {
 		return fmt.Errorf("failed to ensure consumer group: %w", err)
 	}
 
-	// Start consumption loop
 	w.wg.Add(1)
 	go w.consumeLoop(ctx)
 
@@ -281,10 +296,12 @@ func (w *EvaluationWorker) processJob(ctx context.Context, msg redis.XMessage) e
 		scorer = w.regexScorer
 		atomic.AddInt64(&w.regexCalls, 1)
 	default:
+		w.trackExecutionError(ctx, &job)
 		return fmt.Errorf("unknown scorer type: %s", job.ScorerType)
 	}
 
 	if scorer == nil {
+		w.trackExecutionError(ctx, &job)
 		return fmt.Errorf("scorer not configured for type: %s", job.ScorerType)
 	}
 
@@ -309,6 +326,7 @@ func (w *EvaluationWorker) processJob(ctx context.Context, msg redis.XMessage) e
 	}
 
 	if lastErr != nil {
+		w.trackExecutionError(ctx, &job)
 		return fmt.Errorf("scorer execution failed after retries: %w", lastErr)
 	}
 
@@ -317,34 +335,39 @@ func (w *EvaluationWorker) processJob(ctx context.Context, msg redis.XMessage) e
 			"job_id", job.JobID,
 			"rule_id", job.RuleID,
 		)
+		// Still track as successful scoring (just no output)
+		w.trackExecutionSuccess(ctx, &job)
 		return nil
 	}
 
-	// Create scores in ClickHouse
 	scores := make([]*observability.Score, 0, len(result.Scores))
 	for _, output := range result.Scores {
 		score := &observability.Score{
-			ID:        ulid.New().String(),
-			ProjectID: job.ProjectID.String(),
-			TraceID:   job.TraceID,
-			SpanID:    job.SpanID,
-			Name:      output.Name,
-			Value:     output.Value,
+			ID:          ulid.New().String(),
+			ProjectID:   job.ProjectID.String(),
+			TraceID:     job.TraceID,
+			SpanID:      job.SpanID,
+			Name:        output.Name,
+			Value:       output.Value,
 			StringValue: output.StringValue,
-			DataType:  output.DataType,
-			Source:    "rule:" + job.RuleID.String(),
-			Reason:    output.Reason,
-			Metadata:  w.buildScoreMetadata(job),
-			Timestamp: time.Now(),
+			DataType:    output.DataType,
+			Source:      "rule:" + job.RuleID.String(),
+			Reason:      output.Reason,
+			Metadata:    w.buildScoreMetadata(job),
+			Timestamp:   time.Now(),
 		}
 		scores = append(scores, score)
 	}
 
 	if err := w.scoreService.CreateScoreBatch(ctx, scores); err != nil {
+		w.trackExecutionError(ctx, &job)
 		return fmt.Errorf("failed to create scores: %w", err)
 	}
 
 	atomic.AddInt64(&w.scoresCreated, int64(len(scores)))
+
+	// Track successful scoring for execution
+	w.trackExecutionSuccess(ctx, &job)
 
 	w.logger.Debug("Created scores from evaluation",
 		"job_id", job.JobID,
@@ -354,6 +377,114 @@ func (w *EvaluationWorker) processJob(ctx context.Context, msg redis.XMessage) e
 	)
 
 	return nil
+}
+
+// trackExecutionSuccess atomically increments spans_scored and checks for completion
+func (w *EvaluationWorker) trackExecutionSuccess(ctx context.Context, job *EvaluationJob) {
+	if job.ExecutionID == nil || w.executionService == nil {
+		return
+	}
+
+	completed, err := w.executionService.IncrementAndCheckCompletion(
+		ctx,
+		*job.ExecutionID,
+		job.ProjectID,
+		1, // spansScored
+		0, // errorsCount
+	)
+	if err != nil {
+		w.logger.Error("failed to track execution success",
+			"execution_id", job.ExecutionID,
+			"job_id", job.JobID,
+			"error", err,
+		)
+		return
+	}
+
+	if completed {
+		w.logger.Info("execution auto-completed",
+			"execution_id", job.ExecutionID,
+			"rule_id", job.RuleID,
+			"project_id", job.ProjectID,
+		)
+	}
+}
+
+// trackExecutionError atomically increments errors_count and checks for completion
+func (w *EvaluationWorker) trackExecutionError(ctx context.Context, job *EvaluationJob) {
+	if job.ExecutionID == nil || w.executionService == nil {
+		return
+	}
+
+	completed, err := w.executionService.IncrementAndCheckCompletion(
+		ctx,
+		*job.ExecutionID,
+		job.ProjectID,
+		0, // spansScored
+		1, // errorsCount
+	)
+	if err != nil {
+		w.logger.Error("failed to track execution error",
+			"execution_id", job.ExecutionID,
+			"job_id", job.JobID,
+			"error", err,
+		)
+		return
+	}
+
+	if completed {
+		w.logger.Info("execution auto-completed with errors",
+			"execution_id", job.ExecutionID,
+			"rule_id", job.RuleID,
+			"project_id", job.ProjectID,
+		)
+	}
+}
+
+// FlushExecutionStats persists accumulated execution stats to the database.
+// NOTE: With atomic tracking via IncrementAndCheckCompletion, this is now mostly
+// a no-op for automatic evaluations. Stats are updated atomically per-job.
+// This remains for backward compatibility and cleanup of any orphaned in-memory stats.
+func (w *EvaluationWorker) FlushExecutionStats(ctx context.Context) {
+	if w.executionService == nil {
+		return
+	}
+
+	w.executionStatsMu.Lock()
+	statsToFlush := make(map[string]*executionProgress)
+	for id, progress := range w.executionStats {
+		statsToFlush[id] = progress
+	}
+	w.executionStats = make(map[string]*executionProgress)
+	w.executionStatsMu.Unlock()
+
+	for execID, progress := range statsToFlush {
+		if err := w.executionService.IncrementCounters(
+			ctx,
+			execID,
+			progress.projectID,
+			int(progress.spansScored),
+			int(progress.errorsCount),
+		); err != nil {
+			w.logger.Error("Failed to flush execution stats",
+				"execution_id", execID,
+				"project_id", progress.projectID,
+				"spans_scored", progress.spansScored,
+				"errors_count", progress.errorsCount,
+				"error", err,
+			)
+			// Re-add to stats on failure
+			w.executionStatsMu.Lock()
+			existing, exists := w.executionStats[execID]
+			if exists {
+				existing.spansScored += progress.spansScored
+				existing.errorsCount += progress.errorsCount
+			} else {
+				w.executionStats[execID] = progress
+			}
+			w.executionStatsMu.Unlock()
+		}
+	}
 }
 
 func (w *EvaluationWorker) buildScoreMetadata(job EvaluationJob) string {

@@ -76,7 +76,7 @@ func TestRuleService_Create(t *testing.T) {
 
 	t.Run("success with valid rule", func(t *testing.T) {
 		repo := new(MockRuleRepository)
-		service := NewRuleService(repo, logger)
+		service := NewRuleService(repo, nil, nil, logger)
 
 		req := &evaluation.CreateEvaluationRuleRequest{
 			Name:       "Test Rule",
@@ -100,7 +100,7 @@ func TestRuleService_Create(t *testing.T) {
 
 	t.Run("reject duplicate name", func(t *testing.T) {
 		repo := new(MockRuleRepository)
-		service := NewRuleService(repo, logger)
+		service := NewRuleService(repo, nil, nil, logger)
 
 		req := &evaluation.CreateEvaluationRuleRequest{
 			Name:       "Existing Rule",
@@ -126,7 +126,7 @@ func TestRuleService_Create(t *testing.T) {
 
 	t.Run("reject invalid name (empty)", func(t *testing.T) {
 		repo := new(MockRuleRepository)
-		service := NewRuleService(repo, logger)
+		service := NewRuleService(repo, nil, nil, logger)
 
 		req := &evaluation.CreateEvaluationRuleRequest{
 			Name:       "",
@@ -149,7 +149,7 @@ func TestRuleService_Create(t *testing.T) {
 
 	t.Run("sets created_by when user ID provided", func(t *testing.T) {
 		repo := new(MockRuleRepository)
-		service := NewRuleService(repo, logger)
+		service := NewRuleService(repo, nil, nil, logger)
 
 		userID := ulid.New()
 		req := &evaluation.CreateEvaluationRuleRequest{
@@ -183,7 +183,7 @@ func TestRuleService_Update(t *testing.T) {
 
 	t.Run("success with partial update", func(t *testing.T) {
 		repo := new(MockRuleRepository)
-		service := NewRuleService(repo, logger)
+		service := NewRuleService(repo, nil, nil, logger)
 
 		existingRule := &evaluation.EvaluationRule{
 			ID:          ruleID,
@@ -217,7 +217,7 @@ func TestRuleService_Update(t *testing.T) {
 
 	t.Run("reject name conflict on rename", func(t *testing.T) {
 		repo := new(MockRuleRepository)
-		service := NewRuleService(repo, logger)
+		service := NewRuleService(repo, nil, nil, logger)
 
 		existingRule := &evaluation.EvaluationRule{
 			ID:          ruleID,
@@ -254,7 +254,7 @@ func TestRuleService_Update(t *testing.T) {
 
 	t.Run("not found error", func(t *testing.T) {
 		repo := new(MockRuleRepository)
-		service := NewRuleService(repo, logger)
+		service := NewRuleService(repo, nil, nil, logger)
 
 		newName := "New Name"
 		req := &evaluation.UpdateEvaluationRuleRequest{
@@ -275,7 +275,7 @@ func TestRuleService_Update(t *testing.T) {
 
 	t.Run("allow rename to same name", func(t *testing.T) {
 		repo := new(MockRuleRepository)
-		service := NewRuleService(repo, logger)
+		service := NewRuleService(repo, nil, nil, logger)
 
 		existingRule := &evaluation.EvaluationRule{
 			ID:          ruleID,
@@ -316,7 +316,7 @@ func TestRuleService_Activate(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		repo := new(MockRuleRepository)
-		service := NewRuleService(repo, logger)
+		service := NewRuleService(repo, nil, nil, logger)
 
 		existingRule := &evaluation.EvaluationRule{
 			ID:          ruleID,
@@ -344,7 +344,7 @@ func TestRuleService_Activate(t *testing.T) {
 
 	t.Run("idempotent - already active", func(t *testing.T) {
 		repo := new(MockRuleRepository)
-		service := NewRuleService(repo, logger)
+		service := NewRuleService(repo, nil, nil, logger)
 
 		existingRule := &evaluation.EvaluationRule{
 			ID:          ruleID,
@@ -370,7 +370,7 @@ func TestRuleService_Activate(t *testing.T) {
 
 	t.Run("not found error", func(t *testing.T) {
 		repo := new(MockRuleRepository)
-		service := NewRuleService(repo, logger)
+		service := NewRuleService(repo, nil, nil, logger)
 
 		repo.On("GetByID", ctx, ruleID, projectID).Return(nil, evaluation.ErrRuleNotFound)
 
@@ -392,7 +392,7 @@ func TestRuleService_Deactivate(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		repo := new(MockRuleRepository)
-		service := NewRuleService(repo, logger)
+		service := NewRuleService(repo, nil, nil, logger)
 
 		existingRule := &evaluation.EvaluationRule{
 			ID:          ruleID,
@@ -420,7 +420,7 @@ func TestRuleService_Deactivate(t *testing.T) {
 
 	t.Run("idempotent - already inactive", func(t *testing.T) {
 		repo := new(MockRuleRepository)
-		service := NewRuleService(repo, logger)
+		service := NewRuleService(repo, nil, nil, logger)
 
 		existingRule := &evaluation.EvaluationRule{
 			ID:          ruleID,
@@ -446,7 +446,7 @@ func TestRuleService_Deactivate(t *testing.T) {
 
 	t.Run("not found error", func(t *testing.T) {
 		repo := new(MockRuleRepository)
-		service := NewRuleService(repo, logger)
+		service := NewRuleService(repo, nil, nil, logger)
 
 		repo.On("GetByID", ctx, ruleID, projectID).Return(nil, evaluation.ErrRuleNotFound)
 
@@ -468,7 +468,7 @@ func TestRuleService_Delete(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		repo := new(MockRuleRepository)
-		service := NewRuleService(repo, logger)
+		service := NewRuleService(repo, nil, nil, logger)
 
 		existingRule := &evaluation.EvaluationRule{
 			ID:          ruleID,
@@ -493,7 +493,7 @@ func TestRuleService_Delete(t *testing.T) {
 
 	t.Run("not found error on GetByID", func(t *testing.T) {
 		repo := new(MockRuleRepository)
-		service := NewRuleService(repo, logger)
+		service := NewRuleService(repo, nil, nil, logger)
 
 		repo.On("GetByID", ctx, ruleID, projectID).Return(nil, evaluation.ErrRuleNotFound)
 
@@ -516,7 +516,7 @@ func TestRuleService_GetByID(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		repo := new(MockRuleRepository)
-		service := NewRuleService(repo, logger)
+		service := NewRuleService(repo, nil, nil, logger)
 
 		existingRule := &evaluation.EvaluationRule{
 			ID:          ruleID,
@@ -543,7 +543,7 @@ func TestRuleService_GetByID(t *testing.T) {
 
 	t.Run("not found error", func(t *testing.T) {
 		repo := new(MockRuleRepository)
-		service := NewRuleService(repo, logger)
+		service := NewRuleService(repo, nil, nil, logger)
 
 		repo.On("GetByID", ctx, ruleID, projectID).Return(nil, evaluation.ErrRuleNotFound)
 
@@ -565,7 +565,7 @@ func TestRuleService_List(t *testing.T) {
 
 	t.Run("success with results", func(t *testing.T) {
 		repo := new(MockRuleRepository)
-		service := NewRuleService(repo, logger)
+		service := NewRuleService(repo, nil, nil, logger)
 
 		expectedRules := []*evaluation.EvaluationRule{
 			{
@@ -595,7 +595,7 @@ func TestRuleService_List(t *testing.T) {
 
 	t.Run("success with filter", func(t *testing.T) {
 		repo := new(MockRuleRepository)
-		service := NewRuleService(repo, logger)
+		service := NewRuleService(repo, nil, nil, logger)
 
 		status := evaluation.RuleStatusActive
 		filter := &evaluation.RuleFilter{
@@ -626,7 +626,7 @@ func TestRuleService_List(t *testing.T) {
 
 	t.Run("success with empty results", func(t *testing.T) {
 		repo := new(MockRuleRepository)
-		service := NewRuleService(repo, logger)
+		service := NewRuleService(repo, nil, nil, logger)
 
 		params := pagination.Params{Page: 1, Limit: 10}
 		repo.On("GetByProjectID", ctx, projectID, (*evaluation.RuleFilter)(nil), params).Return([]*evaluation.EvaluationRule{}, int64(0), nil)

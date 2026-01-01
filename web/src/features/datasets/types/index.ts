@@ -75,3 +75,24 @@ export interface ImportFromSpansRequest {
   keys_mapping?: KeysMapping
   deduplicate?: boolean
 }
+
+// CSV Import Types
+export interface CSVColumnMapping {
+  input_column: string
+  expected_column?: string
+  metadata_columns?: string[]
+}
+
+export interface ImportFromCsvRequest {
+  content: string
+  column_mapping: CSVColumnMapping
+  has_header: boolean
+  deduplicate: boolean
+}
+
+// For client-side CSV preview
+export interface CsvPreview {
+  headers: string[]
+  rows: string[][]
+  rowCount: number
+}

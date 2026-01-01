@@ -2,29 +2,43 @@ package evaluation
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"time"
 
+	"github.com/redis/go-redis/v9"
+
 	"brokle/internal/core/domain/evaluation"
+	"brokle/internal/infrastructure/database"
 	appErrors "brokle/pkg/errors"
 	"brokle/pkg/pagination"
 	"brokle/pkg/ulid"
 )
 
+const (
+	manualTriggerStream = "evaluation:manual-triggers"
+)
+
 type ruleService struct {
-	repo   evaluation.RuleRepository
-	logger *slog.Logger
+	repo             evaluation.RuleRepository
+	executionService evaluation.RuleExecutionService
+	redis            *database.RedisDB
+	logger           *slog.Logger
 }
 
 func NewRuleService(
 	repo evaluation.RuleRepository,
+	executionService evaluation.RuleExecutionService,
+	redis *database.RedisDB,
 	logger *slog.Logger,
 ) evaluation.RuleService {
 	return &ruleService{
-		repo:   repo,
-		logger: logger,
+		repo:             repo,
+		executionService: executionService,
+		redis:            redis,
+		logger:           logger,
 	}
 }
 
@@ -273,4 +287,98 @@ func (s *ruleService) GetActiveByProjectID(ctx context.Context, projectID ulid.U
 		return nil, appErrors.NewInternalError("failed to get active evaluation rules", err)
 	}
 	return rules, nil
+}
+
+func (s *ruleService) TriggerRule(ctx context.Context, ruleID ulid.ULID, projectID ulid.ULID, opts *evaluation.TriggerOptions) (*evaluation.TriggerResponse, error) {
+	// Validate rule exists (can trigger inactive rules for testing)
+	rule, err := s.repo.GetByID(ctx, ruleID, projectID)
+	if err != nil {
+		if errors.Is(err, evaluation.ErrRuleNotFound) {
+			return nil, appErrors.NewNotFoundError(fmt.Sprintf("evaluation rule %s", ruleID))
+		}
+		return nil, appErrors.NewInternalError("failed to get evaluation rule", err)
+	}
+
+	execution, err := s.executionService.StartExecution(ctx, ruleID, projectID, evaluation.TriggerTypeManual)
+	if err != nil {
+		return nil, appErrors.NewInternalError("failed to create execution record", err)
+	}
+
+	triggerMsg := ManualTriggerMessage{
+		ExecutionID:    execution.ID,
+		RuleID:         ruleID,
+		ProjectID:      projectID,
+		ScorerType:     rule.ScorerType,
+		ScorerConfig:   rule.ScorerConfig,
+		TargetScope:    rule.TargetScope,
+		Filter:         rule.Filter,
+		SpanNames:      rule.SpanNames,
+		SamplingRate:   rule.SamplingRate,
+		VariableMapping: rule.VariableMapping,
+		CreatedAt:      time.Now(),
+	}
+
+	if opts != nil {
+		triggerMsg.TimeRangeStart = opts.TimeRangeStart
+		triggerMsg.TimeRangeEnd = opts.TimeRangeEnd
+		triggerMsg.SpanIDs = opts.SpanIDs
+		if opts.SampleLimit > 0 {
+			triggerMsg.SampleLimit = opts.SampleLimit
+		} else {
+			triggerMsg.SampleLimit = 1000 // Default limit
+		}
+	} else {
+		triggerMsg.SampleLimit = 1000
+	}
+
+	msgData, err := json.Marshal(triggerMsg)
+	if err != nil {
+		// Fail the execution since we can't publish
+		_ = s.executionService.FailExecution(ctx, execution.ID, projectID, "failed to serialize trigger message")
+		return nil, appErrors.NewInternalError("failed to serialize trigger message", err)
+	}
+
+	_, err = s.redis.Client.XAdd(ctx, &redis.XAddArgs{
+		Stream: manualTriggerStream,
+		Values: map[string]interface{}{
+			"data": string(msgData),
+		},
+	}).Result()
+	if err != nil {
+		// Fail the execution since we can't publish
+		_ = s.executionService.FailExecution(ctx, execution.ID, projectID, "failed to queue trigger job")
+		return nil, appErrors.NewInternalError("failed to queue manual trigger job", err)
+	}
+
+	s.logger.Info("manual evaluation triggered",
+		"rule_id", ruleID,
+		"project_id", projectID,
+		"execution_id", execution.ID,
+		"rule_name", rule.Name,
+	)
+
+	return &evaluation.TriggerResponse{
+		ExecutionID: execution.ID.String(),
+		SpansQueued: 0, // Will be updated by worker when it starts processing
+		Message:     "Manual evaluation queued successfully",
+	}, nil
+}
+
+// ManualTriggerMessage is the message format for the manual trigger stream
+type ManualTriggerMessage struct {
+	ExecutionID     ulid.ULID                 `json:"execution_id"`
+	RuleID          ulid.ULID                 `json:"rule_id"`
+	ProjectID       ulid.ULID                 `json:"project_id"`
+	ScorerType      evaluation.ScorerType     `json:"scorer_type"`
+	ScorerConfig    map[string]any            `json:"scorer_config"`
+	TargetScope     evaluation.TargetScope    `json:"target_scope"`
+	Filter          []evaluation.FilterClause `json:"filter,omitempty"`
+	SpanNames       []string                  `json:"span_names,omitempty"`
+	SamplingRate    float64                   `json:"sampling_rate"`
+	VariableMapping []evaluation.VariableMap  `json:"variable_mapping,omitempty"`
+	TimeRangeStart  *time.Time                `json:"time_range_start,omitempty"`
+	TimeRangeEnd    *time.Time                `json:"time_range_end,omitempty"`
+	SpanIDs         []string                  `json:"span_ids,omitempty"`
+	SampleLimit     int                       `json:"sample_limit"`
+	CreatedAt       time.Time                 `json:"created_at"`
 }
