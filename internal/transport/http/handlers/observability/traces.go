@@ -303,3 +303,60 @@ func (h *Handler) GetTraceFilterOptions(c *gin.Context) {
 
 	response.Success(c, options)
 }
+
+// DiscoverAttributes handles GET /api/v1/traces/attributes
+// @Summary Discover attribute keys from trace data
+// @Description Extract unique attribute keys from span_attributes and resource_attributes for filter autocomplete
+// @Tags Traces
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param project_id query string true "Project ID"
+// @Param prefix query string false "Filter attribute keys by prefix"
+// @Param source query string false "Filter by source (span_attributes, resource_attributes)"
+// @Param limit query int false "Maximum number of attributes to return (default 100, max 500)"
+// @Success 200 {object} response.APIResponse{data=observability.AttributeDiscoveryResponse} "Discovered attributes"
+// @Failure 400 {object} response.APIResponse{error=response.APIError} "Invalid parameters"
+// @Failure 401 {object} response.APIResponse{error=response.APIError} "Unauthorized"
+// @Failure 500 {object} response.APIResponse{error=response.APIError} "Internal server error"
+// @Router /api/v1/traces/attributes [get]
+func (h *Handler) DiscoverAttributes(c *gin.Context) {
+	projectID := c.Query("project_id")
+	if projectID == "" {
+		response.ValidationError(c, "project_id is required", "project_id query parameter is required")
+		return
+	}
+
+	req := &observability.AttributeDiscoveryRequest{
+		ProjectID: projectID,
+		Prefix:    c.Query("prefix"),
+	}
+
+	// Parse limit
+	if limitStr := c.Query("limit"); limitStr != "" {
+		if limit, err := strconv.Atoi(limitStr); err == nil {
+			req.Limit = limit
+		}
+	}
+
+	// Parse source filter
+	if source := c.Query("source"); source != "" {
+		switch source {
+		case "span_attributes":
+			req.Sources = []observability.AttributeSource{observability.AttributeSourceSpan}
+		case "resource_attributes":
+			req.Sources = []observability.AttributeSource{observability.AttributeSourceResource}
+		default:
+			response.ValidationError(c, "invalid source", "source must be 'span_attributes' or 'resource_attributes'")
+			return
+		}
+	}
+
+	attributes, err := h.services.GetTraceService().DiscoverAttributes(c.Request.Context(), req)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	response.Success(c, attributes)
+}

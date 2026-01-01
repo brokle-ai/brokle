@@ -178,6 +178,110 @@ func TestFilterParser_Parse_BasicOperators(t *testing.T) {
 				}
 			},
 		},
+		{
+			name:  "STARTS WITH",
+			input: `span.name STARTS WITH "chat"`,
+			validate: func(t *testing.T, node obsDomain.FilterNode) {
+				cond := node.(*obsDomain.ConditionNode)
+				if cond.Operator != obsDomain.FilterOpStartsWith {
+					t.Errorf("expected operator 'STARTS WITH', got '%s'", cond.Operator)
+				}
+				if cond.Value != "chat" {
+					t.Errorf("expected value 'chat', got '%v'", cond.Value)
+				}
+			},
+		},
+		{
+			name:  "ENDS WITH",
+			input: `service.name ENDS WITH "bot"`,
+			validate: func(t *testing.T, node obsDomain.FilterNode) {
+				cond := node.(*obsDomain.ConditionNode)
+				if cond.Operator != obsDomain.FilterOpEndsWith {
+					t.Errorf("expected operator 'ENDS WITH', got '%s'", cond.Operator)
+				}
+				if cond.Value != "bot" {
+					t.Errorf("expected value 'bot', got '%v'", cond.Value)
+				}
+			},
+		},
+		{
+			name:  "REGEX",
+			input: `span.name REGEX "chat.*bot"`,
+			validate: func(t *testing.T, node obsDomain.FilterNode) {
+				cond := node.(*obsDomain.ConditionNode)
+				if cond.Operator != obsDomain.FilterOpRegex {
+					t.Errorf("expected operator 'REGEX', got '%s'", cond.Operator)
+				}
+				if cond.Value != "chat.*bot" {
+					t.Errorf("expected value 'chat.*bot', got '%v'", cond.Value)
+				}
+			},
+		},
+		{
+			name:  "NOT REGEX",
+			input: `span.name NOT REGEX "test.*"`,
+			validate: func(t *testing.T, node obsDomain.FilterNode) {
+				cond := node.(*obsDomain.ConditionNode)
+				if cond.Operator != obsDomain.FilterOpNotRegex {
+					t.Errorf("expected operator 'NOT REGEX', got '%s'", cond.Operator)
+				}
+				if cond.Value != "test.*" {
+					t.Errorf("expected value 'test.*', got '%v'", cond.Value)
+				}
+			},
+		},
+		{
+			name:  "IS EMPTY",
+			input: `user.id IS EMPTY`,
+			validate: func(t *testing.T, node obsDomain.FilterNode) {
+				cond := node.(*obsDomain.ConditionNode)
+				if cond.Operator != obsDomain.FilterOpIsEmpty {
+					t.Errorf("expected operator 'IS EMPTY', got '%s'", cond.Operator)
+				}
+				if cond.Value != nil {
+					t.Errorf("expected nil value for IS EMPTY, got %v", cond.Value)
+				}
+			},
+		},
+		{
+			name:  "IS NOT EMPTY",
+			input: `session.id IS NOT EMPTY`,
+			validate: func(t *testing.T, node obsDomain.FilterNode) {
+				cond := node.(*obsDomain.ConditionNode)
+				if cond.Operator != obsDomain.FilterOpIsNotEmpty {
+					t.Errorf("expected operator 'IS NOT EMPTY', got '%s'", cond.Operator)
+				}
+				if cond.Value != nil {
+					t.Errorf("expected nil value for IS NOT EMPTY, got %v", cond.Value)
+				}
+			},
+		},
+		{
+			name:  "search operator ~",
+			input: `input ~ "hello world"`,
+			validate: func(t *testing.T, node obsDomain.FilterNode) {
+				cond := node.(*obsDomain.ConditionNode)
+				if cond.Operator != obsDomain.FilterOpSearch {
+					t.Errorf("expected operator '~', got '%s'", cond.Operator)
+				}
+				if cond.Value != "hello world" {
+					t.Errorf("expected value 'hello world', got '%v'", cond.Value)
+				}
+			},
+		},
+		{
+			name:  "search operator with unquoted value",
+			input: `output ~ error`,
+			validate: func(t *testing.T, node obsDomain.FilterNode) {
+				cond := node.(*obsDomain.ConditionNode)
+				if cond.Operator != obsDomain.FilterOpSearch {
+					t.Errorf("expected operator '~', got '%s'", cond.Operator)
+				}
+				if cond.Value != "error" {
+					t.Errorf("expected value 'error', got '%v'", cond.Value)
+				}
+			},
+		},
 	}
 
 	parser := NewFilterParser()
@@ -538,6 +642,34 @@ func TestFilterParser_Parse_RealWorldExamples(t *testing.T) {
 		{
 			name:  "span type filtering",
 			input: `brokle.span.type=generation AND gen_ai.request.model CONTAINS gpt`,
+		},
+		{
+			name:  "find spans starting with prefix",
+			input: `span.name STARTS WITH "llm." AND gen_ai.system EXISTS`,
+		},
+		{
+			name:  "find services ending with suffix",
+			input: `service.name ENDS WITH "-agent" OR service.name ENDS WITH "-bot"`,
+		},
+		{
+			name:  "regex pattern matching",
+			input: `span.name REGEX "chat.*v[0-9]+" AND gen_ai.system=openai`,
+		},
+		{
+			name:  "filter out test patterns",
+			input: `span.name NOT REGEX "^test_.*" AND status.code=0`,
+		},
+		{
+			name:  "empty field check",
+			input: `user.id IS NOT EMPTY AND session.id IS EMPTY`,
+		},
+		{
+			name:  "full-text search in input",
+			input: `input ~ "error" OR output ~ "exception"`,
+		},
+		{
+			name:  "combined new operators",
+			input: `(span.name STARTS WITH "chat" AND user.id IS NOT EMPTY) OR (span.name REGEX "agent.*" AND session.id EXISTS)`,
 		},
 	}
 

@@ -1,29 +1,47 @@
 package observability
 
 import (
-	"log/slog"
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
-
+	"log/slog"
+	"sync"
+	"time"
 
 	"brokle/internal/core/domain/observability"
 	appErrors "brokle/pkg/errors"
+
+	lru "github.com/hashicorp/golang-lru/v2"
 )
 
+// filterOptionsCacheEntry wraps cached filter options with expiration
+type filterOptionsCacheEntry struct {
+	options   *observability.TraceFilterOptions
+	expiresAt time.Time
+}
+
+// filterOptionsCacheTTL defines cache duration for filter options
+const filterOptionsCacheTTL = 5 * time.Minute
+
 type TraceService struct {
-	traceRepo observability.TraceRepository
-	logger    *slog.Logger
+	traceRepo            observability.TraceRepository
+	logger               *slog.Logger
+	filterOptionsCache   *lru.Cache[string, *filterOptionsCacheEntry]
+	filterOptionsCacheMu sync.Mutex // protects filterOptionsCache (LRU Get mutates internal state)
 }
 
 func NewTraceService(
 	traceRepo observability.TraceRepository,
 	logger *slog.Logger,
 ) *TraceService {
+	// Create LRU cache for 500 projects' filter options (with TTL handling)
+	cache, _ := lru.New[string, *filterOptionsCacheEntry](500)
+
 	return &TraceService{
-		traceRepo: traceRepo,
-		logger:    logger,
+		traceRepo:          traceRepo,
+		logger:             logger,
+		filterOptionsCache: cache,
 	}
 }
 
@@ -344,10 +362,26 @@ func (s *TraceService) DeleteTrace(ctx context.Context, traceID string) error {
 	return nil
 }
 
-// GetFilterOptions returns available filter values for the traces filter UI
+// GetFilterOptions returns available filter values for the traces filter UI.
+// Results are cached for 5 minutes to reduce database load.
 func (s *TraceService) GetFilterOptions(ctx context.Context, projectID string) (*observability.TraceFilterOptions, error) {
 	if projectID == "" {
 		return nil, appErrors.NewValidationError("project_id is required", "project_id cannot be empty")
+	}
+
+	cacheKey := "filter_options:" + projectID
+
+	s.filterOptionsCacheMu.Lock()
+	cached, ok := s.filterOptionsCache.Get(cacheKey)
+	s.filterOptionsCacheMu.Unlock()
+
+	if ok {
+		if time.Now().Before(cached.expiresAt) {
+			return cached.options, nil
+		}
+		s.filterOptionsCacheMu.Lock()
+		s.filterOptionsCache.Remove(cacheKey)
+		s.filterOptionsCacheMu.Unlock()
 	}
 
 	options, err := s.traceRepo.GetFilterOptions(ctx, projectID)
@@ -355,5 +389,44 @@ func (s *TraceService) GetFilterOptions(ctx context.Context, projectID string) (
 		return nil, appErrors.NewInternalError("failed to get filter options", err)
 	}
 
+	s.filterOptionsCacheMu.Lock()
+	s.filterOptionsCache.Add(cacheKey, &filterOptionsCacheEntry{
+		options:   options,
+		expiresAt: time.Now().Add(filterOptionsCacheTTL),
+	})
+	s.filterOptionsCacheMu.Unlock()
+
 	return options, nil
+}
+
+// InvalidateFilterOptionsCache removes cached filter options for a project.
+// Call this when traces are added/deleted to ensure fresh data.
+func (s *TraceService) InvalidateFilterOptionsCache(projectID string) {
+	cacheKey := "filter_options:" + projectID
+	s.filterOptionsCacheMu.Lock()
+	s.filterOptionsCache.Remove(cacheKey)
+	s.filterOptionsCacheMu.Unlock()
+}
+
+// DiscoverAttributes extracts unique attribute keys from span_attributes and resource_attributes.
+// This enables dynamic filter UI autocomplete based on actual attribute data.
+func (s *TraceService) DiscoverAttributes(ctx context.Context, req *observability.AttributeDiscoveryRequest) (*observability.AttributeDiscoveryResponse, error) {
+	if req == nil {
+		return nil, appErrors.NewValidationError("request is required", "attribute discovery request cannot be nil")
+	}
+	if req.ProjectID == "" {
+		return nil, appErrors.NewValidationError("project_id is required", "project_id cannot be empty")
+	}
+
+	response, err := s.traceRepo.DiscoverAttributes(ctx, req)
+	if err != nil {
+		s.logger.Error("failed to discover attributes",
+			"error", err,
+			"project_id", req.ProjectID,
+			"prefix", req.Prefix,
+		)
+		return nil, appErrors.NewInternalError("failed to discover attributes", err)
+	}
+
+	return response, nil
 }

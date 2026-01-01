@@ -561,3 +561,205 @@ export const updateScore = async (
   })
   return transformScore(response)
 }
+
+// ============================================================================
+// Filter Presets API
+// ============================================================================
+
+export interface FilterCondition {
+  id: string
+  column: string
+  operator: FilterOperator
+  value: string | number | string[] | null
+}
+
+export type FilterOperator =
+  | '='
+  | '!='
+  | '>'
+  | '<'
+  | '>='
+  | '<='
+  | 'CONTAINS'
+  | 'NOT CONTAINS'
+  | 'IN'
+  | 'NOT IN'
+  | 'EXISTS'
+  | 'NOT EXISTS'
+  | 'STARTS WITH'
+  | 'ENDS WITH'
+  | 'REGEX'
+  | 'IS EMPTY'
+  | 'IS NOT EMPTY'
+  | '~' // full-text search
+
+export interface FilterPreset {
+  id: string
+  project_id: string
+  name: string
+  description?: string
+  table_name: 'traces' | 'spans'
+  filters: FilterCondition[]
+  column_order?: string[]
+  column_visibility?: Record<string, boolean>
+  search_query?: string
+  search_types?: ('id' | 'content' | 'all')[]
+  is_public: boolean
+  created_by?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateFilterPresetRequest {
+  name: string
+  description?: string
+  table_name: 'traces' | 'spans'
+  filters: FilterCondition[]
+  column_order?: string[]
+  column_visibility?: Record<string, boolean>
+  search_query?: string
+  search_types?: string[]
+  is_public?: boolean
+}
+
+export interface UpdateFilterPresetRequest {
+  name?: string
+  description?: string
+  filters?: FilterCondition[]
+  column_order?: string[]
+  column_visibility?: Record<string, boolean>
+  search_query?: string
+  search_types?: string[]
+  is_public?: boolean
+}
+
+/**
+ * Get all filter presets for a project
+ *
+ * Backend endpoint: GET /api/v1/projects/{projectId}/filter-presets
+ *
+ * @param projectId - Project ULID
+ * @param tableName - Filter by table name ('traces' or 'spans')
+ * @param includePublic - Include public presets (default: true)
+ * @returns Array of filter presets
+ */
+export const getFilterPresets = async (
+  projectId: string,
+  tableName?: 'traces' | 'spans',
+  includePublic: boolean = true
+): Promise<FilterPreset[]> => {
+  const queryParams: Record<string, any> = {
+    project_id: projectId,
+    include_public: includePublic,
+  }
+  if (tableName) {
+    queryParams.table_name = tableName
+  }
+
+  return client.get<FilterPreset[]>(
+    `/v1/projects/${projectId}/filter-presets`,
+    queryParams
+  )
+}
+
+/**
+ * Get a single filter preset by ID
+ *
+ * Backend endpoint: GET /api/v1/projects/{projectId}/filter-presets/{id}
+ *
+ * @param projectId - Project ULID
+ * @param presetId - Filter preset ID
+ * @returns Filter preset object
+ */
+export const getFilterPresetById = async (
+  projectId: string,
+  presetId: string
+): Promise<FilterPreset> => {
+  return client.get<FilterPreset>(
+    `/v1/projects/${projectId}/filter-presets/${presetId}`,
+    { project_id: projectId }
+  )
+}
+
+/**
+ * Create a new filter preset
+ *
+ * Backend endpoint: POST /api/v1/projects/{projectId}/filter-presets
+ *
+ * @param projectId - Project ULID
+ * @param data - Filter preset data
+ * @returns Created filter preset
+ */
+export const createFilterPreset = async (
+  projectId: string,
+  data: CreateFilterPresetRequest
+): Promise<FilterPreset> => {
+  return client.post<FilterPreset>(
+    `/v1/projects/${projectId}/filter-presets`,
+    data
+  )
+}
+
+/**
+ * Update an existing filter preset
+ *
+ * Backend endpoint: PATCH /api/v1/projects/{projectId}/filter-presets/{id}
+ *
+ * @param projectId - Project ULID
+ * @param presetId - Filter preset ID
+ * @param data - Updated filter preset data
+ * @returns Updated filter preset
+ */
+export const updateFilterPreset = async (
+  projectId: string,
+  presetId: string,
+  data: UpdateFilterPresetRequest
+): Promise<FilterPreset> => {
+  return client.patch<FilterPreset>(
+    `/v1/projects/${projectId}/filter-presets/${presetId}`,
+    data
+  )
+}
+
+/**
+ * Delete a filter preset
+ *
+ * Backend endpoint: DELETE /api/v1/projects/{projectId}/filter-presets/{id}
+ *
+ * @param projectId - Project ULID
+ * @param presetId - Filter preset ID
+ */
+export const deleteFilterPreset = async (
+  projectId: string,
+  presetId: string
+): Promise<void> => {
+  await client.delete(`/v1/projects/${projectId}/filter-presets/${presetId}`)
+}
+
+/**
+ * Discover available attribute keys from spans
+ *
+ * Backend endpoint: GET /api/v1/traces/attributes
+ *
+ * @param projectId - Project ULID
+ * @returns Array of attribute keys with metadata
+ */
+export interface AttributeKey {
+  key: string
+  source: 'span_attributes' | 'resource_attributes'
+  value_type: 'string' | 'number' | 'boolean' | 'array'
+  count: number
+}
+
+export interface AttributeDiscoveryResponse {
+  attributes: AttributeKey[]
+  total_count: number
+}
+
+export const discoverAttributes = async (
+  projectId: string
+): Promise<AttributeDiscoveryResponse> => {
+  return client.get<AttributeDiscoveryResponse>('/v1/traces/attributes', {
+    project_id: projectId,
+  })
+}

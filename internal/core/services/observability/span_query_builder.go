@@ -38,6 +38,7 @@ func escapeAttributeKey(key string) string {
 }
 
 // SpanQueryBuilder converts filter AST to ClickHouse SQL with parameterized queries.
+// Uses PREWHERE optimization for indexed columns to improve query performance.
 type SpanQueryBuilder struct {
 	paramCount int
 }
@@ -55,6 +56,7 @@ type QueryResult struct {
 }
 
 // BuildQuery generates a parameterized ClickHouse query from a filter AST.
+// Uses PREWHERE for indexed columns (project_id, start_time, deleted_at) to improve performance.
 func (b *SpanQueryBuilder) BuildQuery(
 	node obsDomain.FilterNode,
 	projectID string,
@@ -68,33 +70,47 @@ func (b *SpanQueryBuilder) BuildQuery(
 		return nil, err
 	}
 
-	conditions := []string{"project_id = ?", "deleted_at IS NULL"}
-	baseArgs := []interface{}{projectID}
+	// PREWHERE conditions: indexed columns that benefit from early filtering
+	prewhereConditions := []string{"project_id = ?", "deleted_at IS NULL"}
+	prewhereArgs := []interface{}{projectID}
 
 	if startTime != nil {
-		conditions = append(conditions, "start_time >= ?")
-		baseArgs = append(baseArgs, *startTime)
+		prewhereConditions = append(prewhereConditions, "start_time >= ?")
+		prewhereArgs = append(prewhereArgs, *startTime)
 	}
 	if endTime != nil {
-		conditions = append(conditions, "start_time <= ?")
-		baseArgs = append(baseArgs, *endTime)
+		prewhereConditions = append(prewhereConditions, "start_time <= ?")
+		prewhereArgs = append(prewhereArgs, *endTime)
 	}
 
+	// WHERE conditions: user filter conditions
+	var whereConditions []string
 	if whereClause != "" {
-		conditions = append(conditions, "("+whereClause+")")
+		whereConditions = append(whereConditions, "("+whereClause+")")
 	}
 
-	allArgs := append(baseArgs, args...)
-
-	query := fmt.Sprintf(`
-		SELECT %s
-		FROM otel_traces
-		WHERE %s
-		ORDER BY start_time DESC
-		LIMIT ? OFFSET ?
-	`, obsDomain.SpanSelectFields, strings.Join(conditions, " AND "))
-
+	allArgs := append(prewhereArgs, args...)
 	allArgs = append(allArgs, limit, offset)
+
+	var query string
+	if len(whereConditions) > 0 {
+		query = fmt.Sprintf(`
+			SELECT %s
+			FROM otel_traces
+			PREWHERE %s
+			WHERE %s
+			ORDER BY start_time DESC
+			LIMIT ? OFFSET ?
+		`, obsDomain.SpanSelectFields, strings.Join(prewhereConditions, " AND "), strings.Join(whereConditions, " AND "))
+	} else {
+		query = fmt.Sprintf(`
+			SELECT %s
+			FROM otel_traces
+			PREWHERE %s
+			ORDER BY start_time DESC
+			LIMIT ? OFFSET ?
+		`, obsDomain.SpanSelectFields, strings.Join(prewhereConditions, " AND "))
+	}
 
 	return &QueryResult{
 		Query: query,
@@ -104,6 +120,7 @@ func (b *SpanQueryBuilder) BuildQuery(
 }
 
 // BuildCountQuery generates a COUNT query for pagination.
+// Uses PREWHERE for indexed columns (project_id, start_time, deleted_at) to improve performance.
 func (b *SpanQueryBuilder) BuildCountQuery(
 	node obsDomain.FilterNode,
 	projectID string,
@@ -116,29 +133,42 @@ func (b *SpanQueryBuilder) BuildCountQuery(
 		return nil, err
 	}
 
-	conditions := []string{"project_id = ?", "deleted_at IS NULL"}
-	baseArgs := []interface{}{projectID}
+	// PREWHERE conditions: indexed columns that benefit from early filtering
+	prewhereConditions := []string{"project_id = ?", "deleted_at IS NULL"}
+	prewhereArgs := []interface{}{projectID}
 
 	if startTime != nil {
-		conditions = append(conditions, "start_time >= ?")
-		baseArgs = append(baseArgs, *startTime)
+		prewhereConditions = append(prewhereConditions, "start_time >= ?")
+		prewhereArgs = append(prewhereArgs, *startTime)
 	}
 	if endTime != nil {
-		conditions = append(conditions, "start_time <= ?")
-		baseArgs = append(baseArgs, *endTime)
+		prewhereConditions = append(prewhereConditions, "start_time <= ?")
+		prewhereArgs = append(prewhereArgs, *endTime)
 	}
 
+	// WHERE conditions: user filter conditions
+	var whereConditions []string
 	if whereClause != "" {
-		conditions = append(conditions, "("+whereClause+")")
+		whereConditions = append(whereConditions, "("+whereClause+")")
 	}
 
-	allArgs := append(baseArgs, args...)
+	allArgs := append(prewhereArgs, args...)
 
-	query := fmt.Sprintf(`
-		SELECT count(*) as total
-		FROM otel_traces
-		WHERE %s
-	`, strings.Join(conditions, " AND "))
+	var query string
+	if len(whereConditions) > 0 {
+		query = fmt.Sprintf(`
+			SELECT count(*) as total
+			FROM otel_traces
+			PREWHERE %s
+			WHERE %s
+		`, strings.Join(prewhereConditions, " AND "), strings.Join(whereConditions, " AND "))
+	} else {
+		query = fmt.Sprintf(`
+			SELECT count(*) as total
+			FROM otel_traces
+			PREWHERE %s
+		`, strings.Join(prewhereConditions, " AND "))
+	}
 
 	return &QueryResult{
 		Query: query,
@@ -229,6 +259,27 @@ func (b *SpanQueryBuilder) buildConditionNode(node *obsDomain.ConditionNode) (st
 
 	case obsDomain.FilterOpNotExists:
 		return b.buildExists(node.Field, true)
+
+	case obsDomain.FilterOpStartsWith:
+		return b.buildStartsWith(column, node.Value)
+
+	case obsDomain.FilterOpEndsWith:
+		return b.buildEndsWith(column, node.Value)
+
+	case obsDomain.FilterOpRegex:
+		return b.buildRegex(column, node.Value, false)
+
+	case obsDomain.FilterOpNotRegex:
+		return b.buildRegex(column, node.Value, true)
+
+	case obsDomain.FilterOpIsEmpty:
+		return b.buildIsEmpty(column, false)
+
+	case obsDomain.FilterOpIsNotEmpty:
+		return b.buildIsEmpty(column, true)
+
+	case obsDomain.FilterOpSearch:
+		return b.buildSearch(column, node.Value)
 
 	default:
 		return "", nil, obsDomain.NewUnsupportedOperatorError(string(node.Operator))
@@ -341,4 +392,285 @@ func (b *SpanQueryBuilder) buildExists(field string, negated bool) (string, []in
 		return fmt.Sprintf("NOT mapContains(%s, '%s')", mapName, escapedKey), nil, nil
 	}
 	return fmt.Sprintf("mapContains(%s, '%s')", mapName, escapedKey), nil, nil
+}
+
+// buildStartsWith builds a STARTS WITH condition using ClickHouse's startsWith function.
+func (b *SpanQueryBuilder) buildStartsWith(column string, value interface{}) (string, []interface{}, error) {
+	b.paramCount++
+	return fmt.Sprintf("startsWith(%s, ?)", column), []interface{}{value}, nil
+}
+
+// buildEndsWith builds an ENDS WITH condition using ClickHouse's endsWith function.
+func (b *SpanQueryBuilder) buildEndsWith(column string, value interface{}) (string, []interface{}, error) {
+	b.paramCount++
+	return fmt.Sprintf("endsWith(%s, ?)", column), []interface{}{value}, nil
+}
+
+// buildRegex builds a REGEX condition using ClickHouse's match function.
+// Includes validation to prevent ReDoS attacks.
+func (b *SpanQueryBuilder) buildRegex(column string, value interface{}, negated bool) (string, []interface{}, error) {
+	pattern, ok := value.(string)
+	if !ok {
+		return "", nil, obsDomain.ErrInvalidValue
+	}
+
+	// Validate regex pattern for safety (prevent ReDoS)
+	if err := validateRegexPattern(pattern); err != nil {
+		return "", nil, err
+	}
+
+	b.paramCount++
+
+	if negated {
+		return fmt.Sprintf("NOT match(%s, ?)", column), []interface{}{value}, nil
+	}
+	return fmt.Sprintf("match(%s, ?)", column), []interface{}{value}, nil
+}
+
+// validateRegexPattern validates a regex pattern to prevent ReDoS attacks.
+// ClickHouse uses RE2-compatible regex which is safe against catastrophic backtracking,
+// but we still limit complexity for defense in depth.
+func validateRegexPattern(pattern string) error {
+	// Limit pattern length
+	if len(pattern) > 500 {
+		return fmt.Errorf("regex pattern too long (max 500 characters)")
+	}
+
+	// Reject patterns with excessive quantifiers that could indicate problematic patterns
+	// Note: ClickHouse uses RE2 which is safe, but this provides defense in depth
+	quantifierCount := 0
+	for _, ch := range pattern {
+		if ch == '*' || ch == '+' || ch == '?' {
+			quantifierCount++
+		}
+	}
+	if quantifierCount > 10 {
+		return fmt.Errorf("regex pattern too complex (too many quantifiers)")
+	}
+
+	return nil
+}
+
+// buildIsEmpty builds an IS EMPTY / IS NOT EMPTY condition.
+// Checks for NULL or empty string values.
+func (b *SpanQueryBuilder) buildIsEmpty(column string, notEmpty bool) (string, []interface{}, error) {
+	if notEmpty {
+		return fmt.Sprintf("(%s IS NOT NULL AND %s != '')", column, column), nil, nil
+	}
+	return fmt.Sprintf("(%s IS NULL OR %s = '')", column, column), nil, nil
+}
+
+// buildSearch builds a full-text search condition using case-insensitive substring matching.
+// Uses positionCaseInsensitive for efficient ClickHouse text search.
+func (b *SpanQueryBuilder) buildSearch(column string, value interface{}) (string, []interface{}, error) {
+	b.paramCount++
+	// Use positionCaseInsensitive for case-insensitive substring matching
+	// This is similar to CONTAINS but optimized for search use cases
+	return fmt.Sprintf("positionCaseInsensitive(%s, ?) > 0", column), []interface{}{value}, nil
+}
+
+// BuildTextSearchCondition builds a full-text search condition across multiple columns.
+// Uses hasToken() for tokenized columns (input_preview, output_preview) which leverages bloom filter indexes.
+// Uses positionCaseInsensitive() for ID columns (trace_id, span_id, span_name).
+func (b *SpanQueryBuilder) BuildTextSearchCondition(query string, searchTypes []obsDomain.SearchType) (string, []interface{}, error) {
+	if query == "" {
+		return "", nil, nil
+	}
+
+	types := obsDomain.NormalizeSearchTypes(searchTypes)
+
+	var conditions []string
+	var args []interface{}
+
+	for _, searchType := range types {
+		switch searchType {
+		case obsDomain.SearchTypeID:
+			for _, col := range obsDomain.SearchableColumns[obsDomain.SearchTypeID] {
+				conditions = append(conditions, fmt.Sprintf("positionCaseInsensitive(%s, ?) > 0", col))
+				args = append(args, query)
+				b.paramCount++
+			}
+		case obsDomain.SearchTypeContent:
+			// Search in content columns using hasToken for tokenized indexes
+			// hasToken works with tokenbf_v1 indexes for efficient text search
+			for _, col := range obsDomain.SearchableColumns[obsDomain.SearchTypeContent] {
+				conditions = append(conditions, fmt.Sprintf("hasToken(%s, ?)", col))
+				args = append(args, strings.ToLower(query)) // hasToken is case-sensitive, so lowercase
+				b.paramCount++
+			}
+		case obsDomain.SearchTypeAll:
+			for _, col := range obsDomain.SearchableColumns[obsDomain.SearchTypeID] {
+				conditions = append(conditions, fmt.Sprintf("positionCaseInsensitive(%s, ?) > 0", col))
+				args = append(args, query)
+				b.paramCount++
+			}
+			for _, col := range obsDomain.SearchableColumns[obsDomain.SearchTypeContent] {
+				conditions = append(conditions, fmt.Sprintf("hasToken(%s, ?)", col))
+				args = append(args, strings.ToLower(query))
+				b.paramCount++
+			}
+		}
+	}
+
+	if len(conditions) == 0 {
+		return "", nil, nil
+	}
+
+	return "(" + strings.Join(conditions, " OR ") + ")", args, nil
+}
+
+// BuildQueryWithSearch generates a parameterized ClickHouse query with both filter AST and text search.
+// Uses PREWHERE for indexed columns (project_id, start_time, deleted_at) to improve performance.
+func (b *SpanQueryBuilder) BuildQueryWithSearch(
+	node obsDomain.FilterNode,
+	searchQuery string,
+	searchTypes []obsDomain.SearchType,
+	projectID string,
+	startTime, endTime *time.Time,
+	limit, offset int,
+) (*QueryResult, error) {
+	b.paramCount = 0
+
+	// PREWHERE conditions: indexed columns that benefit from early filtering
+	prewhereConditions := []string{"project_id = ?", "deleted_at IS NULL"}
+	prewhereArgs := []interface{}{projectID}
+
+	// Add time range conditions to PREWHERE (uses partition key)
+	if startTime != nil {
+		prewhereConditions = append(prewhereConditions, "start_time >= ?")
+		prewhereArgs = append(prewhereArgs, *startTime)
+	}
+	if endTime != nil {
+		prewhereConditions = append(prewhereConditions, "start_time <= ?")
+		prewhereArgs = append(prewhereArgs, *endTime)
+	}
+
+	var whereConditions []string
+	var whereArgs []interface{}
+
+	if node != nil {
+		whereClause, filterArgs, err := b.buildNode(node)
+		if err != nil {
+			return nil, err
+		}
+		if whereClause != "" {
+			whereConditions = append(whereConditions, "("+whereClause+")")
+			whereArgs = append(whereArgs, filterArgs...)
+		}
+	}
+
+	if searchQuery != "" {
+		searchClause, searchArgs, err := b.BuildTextSearchCondition(searchQuery, searchTypes)
+		if err != nil {
+			return nil, err
+		}
+		if searchClause != "" {
+			whereConditions = append(whereConditions, searchClause)
+			whereArgs = append(whereArgs, searchArgs...)
+		}
+	}
+
+	allArgs := append(prewhereArgs, whereArgs...)
+	allArgs = append(allArgs, limit, offset)
+
+	var query string
+	if len(whereConditions) > 0 {
+		query = fmt.Sprintf(`
+			SELECT %s
+			FROM otel_traces
+			PREWHERE %s
+			WHERE %s
+			ORDER BY start_time DESC
+			LIMIT ? OFFSET ?
+		`, obsDomain.SpanSelectFields, strings.Join(prewhereConditions, " AND "), strings.Join(whereConditions, " AND "))
+	} else {
+		query = fmt.Sprintf(`
+			SELECT %s
+			FROM otel_traces
+			PREWHERE %s
+			ORDER BY start_time DESC
+			LIMIT ? OFFSET ?
+		`, obsDomain.SpanSelectFields, strings.Join(prewhereConditions, " AND "))
+	}
+
+	return &QueryResult{
+		Query: query,
+		Args:  allArgs,
+		Count: b.paramCount,
+	}, nil
+}
+
+// BuildCountQueryWithSearch generates a COUNT query with both filter AST and text search.
+// Uses PREWHERE for indexed columns (project_id, start_time, deleted_at) to improve performance.
+func (b *SpanQueryBuilder) BuildCountQueryWithSearch(
+	node obsDomain.FilterNode,
+	searchQuery string,
+	searchTypes []obsDomain.SearchType,
+	projectID string,
+	startTime, endTime *time.Time,
+) (*QueryResult, error) {
+	b.paramCount = 0
+
+	// PREWHERE conditions: indexed columns that benefit from early filtering
+	prewhereConditions := []string{"project_id = ?", "deleted_at IS NULL"}
+	prewhereArgs := []interface{}{projectID}
+
+	// Add time range conditions to PREWHERE (uses partition key)
+	if startTime != nil {
+		prewhereConditions = append(prewhereConditions, "start_time >= ?")
+		prewhereArgs = append(prewhereArgs, *startTime)
+	}
+	if endTime != nil {
+		prewhereConditions = append(prewhereConditions, "start_time <= ?")
+		prewhereArgs = append(prewhereArgs, *endTime)
+	}
+
+	var whereConditions []string
+	var whereArgs []interface{}
+
+	if node != nil {
+		whereClause, filterArgs, err := b.buildNode(node)
+		if err != nil {
+			return nil, err
+		}
+		if whereClause != "" {
+			whereConditions = append(whereConditions, "("+whereClause+")")
+			whereArgs = append(whereArgs, filterArgs...)
+		}
+	}
+
+	if searchQuery != "" {
+		searchClause, searchArgs, err := b.BuildTextSearchCondition(searchQuery, searchTypes)
+		if err != nil {
+			return nil, err
+		}
+		if searchClause != "" {
+			whereConditions = append(whereConditions, searchClause)
+			whereArgs = append(whereArgs, searchArgs...)
+		}
+	}
+
+	allArgs := append(prewhereArgs, whereArgs...)
+
+	var query string
+	if len(whereConditions) > 0 {
+		query = fmt.Sprintf(`
+			SELECT count(*) as total
+			FROM otel_traces
+			PREWHERE %s
+			WHERE %s
+		`, strings.Join(prewhereConditions, " AND "), strings.Join(whereConditions, " AND "))
+	} else {
+		query = fmt.Sprintf(`
+			SELECT count(*) as total
+			FROM otel_traces
+			PREWHERE %s
+		`, strings.Join(prewhereConditions, " AND "))
+	}
+
+	return &QueryResult{
+		Query: query,
+		Args:  allArgs,
+		Count: b.paramCount,
+	}, nil
 }

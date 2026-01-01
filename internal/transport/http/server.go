@@ -387,6 +387,15 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 			projectScores.GET("/names", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Observability.GetScoreNames)
 			projectScores.GET("/analytics", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Observability.GetScoreAnalytics)
 		}
+
+		filterPresets := projects.Group("/:projectId/filter-presets")
+		{
+			filterPresets.GET("", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Observability.ListFilterPresets)
+			filterPresets.POST("", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Observability.CreateFilterPreset)
+			filterPresets.GET("/:id", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Observability.GetFilterPreset)
+			filterPresets.PATCH("/:id", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Observability.UpdateFilterPreset)
+			filterPresets.DELETE("/:id", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Observability.DeleteFilterPreset)
+		}
 	}
 
 	analytics := protected.Group("/analytics")
@@ -402,6 +411,7 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 	{
 		traces.GET("", s.handlers.Observability.ListTraces)
 		traces.GET("/filter-options", s.handlers.Observability.GetTraceFilterOptions) // Must be before /:id
+		traces.GET("/attributes", s.handlers.Observability.DiscoverAttributes)        // Must be before /:id
 		traces.GET("/:id", s.handlers.Observability.GetTrace)
 		traces.GET("/:id/spans", s.handlers.Observability.GetTraceWithSpans)
 		traces.GET("/:id/scores", s.handlers.Observability.GetTraceWithScores)

@@ -180,6 +180,14 @@ func (m *MockTraceRepository) CountSpansByExpression(ctx context.Context, query 
 	return args.Get(0).(int64), args.Error(1)
 }
 
+func (m *MockTraceRepository) DiscoverAttributes(ctx context.Context, req *observability.AttributeDiscoveryRequest) (*observability.AttributeDiscoveryResponse, error) {
+	args := m.Called(ctx, req)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*observability.AttributeDiscoveryResponse), args.Error(1)
+}
+
 func TestTraceService_GetRootSpan(t *testing.T) {
 	tests := []struct {
 		name        string

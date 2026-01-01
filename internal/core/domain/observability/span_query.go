@@ -98,6 +98,14 @@ const (
 	FilterOpNotIn          FilterOperator = "NOT IN"
 	FilterOpExists         FilterOperator = "EXISTS"
 	FilterOpNotExists      FilterOperator = "NOT EXISTS"
+	// New operators for enhanced filtering
+	FilterOpStartsWith  FilterOperator = "STARTS WITH"
+	FilterOpEndsWith    FilterOperator = "ENDS WITH"
+	FilterOpRegex       FilterOperator = "REGEX"
+	FilterOpNotRegex    FilterOperator = "NOT REGEX"
+	FilterOpIsEmpty     FilterOperator = "IS EMPTY"
+	FilterOpIsNotEmpty  FilterOperator = "IS NOT EMPTY"
+	FilterOpSearch      FilterOperator = "~" // Full-text search operator
 )
 
 // IsComparisonOperator returns true for numeric comparison operators.
@@ -253,5 +261,119 @@ func NormalizeSpanQueryRequest(req *SpanQueryRequest) {
 	}
 	if req.Limit > SpanQueryMaxLimit {
 		req.Limit = SpanQueryMaxLimit
+	}
+}
+
+// SearchType specifies which fields to search in for full-text search.
+type SearchType string
+
+const (
+	// SearchTypeID searches in trace_id, span_id, and span_name fields.
+	SearchTypeID SearchType = "id"
+	// SearchTypeContent searches in input/output preview fields using tokenized indexes.
+	SearchTypeContent SearchType = "content"
+	// SearchTypeAll searches in all searchable text fields.
+	SearchTypeAll SearchType = "all"
+)
+
+// TextSearchRequest represents a full-text search request.
+type TextSearchRequest struct {
+	Query       string       `json:"query" validate:"required,min=1,max=500"`
+	SearchTypes []SearchType `json:"search_types,omitempty"` // defaults to ["all"]
+}
+
+// ValidSearchTypes returns true if all search types are valid.
+func ValidSearchTypes(types []SearchType) bool {
+	validTypes := map[SearchType]bool{
+		SearchTypeID:      true,
+		SearchTypeContent: true,
+		SearchTypeAll:     true,
+	}
+	for _, t := range types {
+		if !validTypes[t] {
+			return false
+		}
+	}
+	return true
+}
+
+// NormalizeSearchTypes returns a normalized list of search types.
+// If empty, defaults to SearchTypeAll.
+func NormalizeSearchTypes(types []SearchType) []SearchType {
+	if len(types) == 0 {
+		return []SearchType{SearchTypeAll}
+	}
+	return types
+}
+
+// SearchableColumns maps search types to their corresponding column names.
+var SearchableColumns = map[SearchType][]string{
+	SearchTypeID: {
+		"trace_id",
+		"span_id",
+		"span_name",
+	},
+	SearchTypeContent: {
+		"input_preview",
+		"output_preview",
+	},
+}
+
+// AttributeValueType represents the data type of an attribute value.
+type AttributeValueType string
+
+const (
+	AttributeValueTypeString  AttributeValueType = "string"
+	AttributeValueTypeNumber  AttributeValueType = "number"
+	AttributeValueTypeBoolean AttributeValueType = "boolean"
+	AttributeValueTypeArray   AttributeValueType = "array"
+)
+
+// AttributeSource indicates where the attribute comes from.
+type AttributeSource string
+
+const (
+	AttributeSourceSpan     AttributeSource = "span_attributes"
+	AttributeSourceResource AttributeSource = "resource_attributes"
+)
+
+// AttributeKey represents a discovered attribute key with metadata.
+type AttributeKey struct {
+	Key       string             `json:"key"`
+	ValueType AttributeValueType `json:"value_type"`
+	Source    AttributeSource    `json:"source"`
+	Count     int64              `json:"count"`
+}
+
+// AttributeDiscoveryRequest represents a request for discovering attribute keys.
+type AttributeDiscoveryRequest struct {
+	ProjectID   string           `json:"project_id"`
+	Sources     []AttributeSource `json:"sources,omitempty"` // defaults to all sources
+	Prefix      string           `json:"prefix,omitempty"`  // filter by key prefix
+	Limit       int              `json:"limit,omitempty"`   // default 100, max 500
+}
+
+// AttributeDiscoveryResponse represents the response containing discovered attributes.
+type AttributeDiscoveryResponse struct {
+	Attributes []AttributeKey `json:"attributes"`
+	TotalCount int64          `json:"total_count"`
+}
+
+// Attribute discovery limits
+const (
+	AttributeDiscoveryDefaultLimit = 100
+	AttributeDiscoveryMaxLimit     = 500
+)
+
+// NormalizeAttributeDiscoveryRequest applies defaults to the request.
+func NormalizeAttributeDiscoveryRequest(req *AttributeDiscoveryRequest) {
+	if req.Limit <= 0 {
+		req.Limit = AttributeDiscoveryDefaultLimit
+	}
+	if req.Limit > AttributeDiscoveryMaxLimit {
+		req.Limit = AttributeDiscoveryMaxLimit
+	}
+	if len(req.Sources) == 0 {
+		req.Sources = []AttributeSource{AttributeSourceSpan, AttributeSourceResource}
 	}
 }
