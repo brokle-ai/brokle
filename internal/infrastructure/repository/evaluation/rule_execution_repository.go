@@ -207,7 +207,7 @@ func (r *RuleExecutionRepository) IncrementCountersAndComplete(
 		}
 
 		return tx.Model(&evaluation.RuleExecution{}).
-			Where("id = ?", id.String()).
+			Where("id = ? AND project_id = ?", id.String(), projectID.String()).
 			Updates(map[string]interface{}{
 				"spans_scored": exec.SpansScored,
 				"errors_count": exec.ErrorsCount,
