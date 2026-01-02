@@ -1,168 +1,91 @@
 'use client'
 
-import { useCallback, useMemo } from 'react'
+import { useCallback } from 'react'
 import { Cross2Icon } from '@radix-ui/react-icons'
 import { type Table } from '@tanstack/react-table'
 import { Button } from '@/components/ui/button'
-import { DataTableViewOptions, DataTableFacetedFilter } from '@/components/data-table'
-import { statuses } from '../data/constants'
+import { DataTableViewOptions } from '@/components/data-table'
 import {
   FilterBuilder,
   SearchBar,
   FilterPresetsDrawer,
 } from './filter-builder'
-import { useFilterState } from '../hooks/use-filter-state'
-import type { FilterPreset } from '../api/traces-api'
+import type { UseTracesTableStateReturn } from '../hooks/use-traces-table-state'
+import type { FilterPreset, FilterCondition } from '../api/traces-api'
 
 type DataTableToolbarProps<TData> = {
   table: Table<TData>
-  isPending?: boolean
-  onReset?: () => void
+  tableState: UseTracesTableStateReturn
   filterOptions?: {
     models?: string[]
     providers?: string[]
     services?: string[]
     environments?: string[]
   }
-  onFiltersChange?: (params: {
-    filters: string
-    search?: string
-    searchTypes?: string[]
-  }) => void
 }
 
 export function DataTableToolbar<TData>({
   table,
-  isPending = false,
-  onReset,
+  tableState,
   filterOptions,
-  onFiltersChange,
 }: DataTableToolbarProps<TData>) {
-  const {
-    filters,
-    searchQuery,
-    searchTypes,
-    addFilter,
-    updateFilter,
-    removeFilter,
-    clearFilters,
-    setSearchQuery,
-    setSearchTypes,
-    hasFilters,
-    hasSearch,
-    toPresetFormat,
-    loadFromPreset,
-  } = useFilterState({
-    syncWithUrl: false, // We handle URL sync at page level
-  })
+  const handleApplyFilters = useCallback(
+    (filters: FilterCondition[]) => {
+      tableState.setFilters(filters)
+    },
+    [tableState]
+  )
 
-  const isFiltered = useMemo(() => {
-    const hasTableFilters =
-      table.getState().columnFilters.length > 0 ||
-      table.getState().globalFilter
-    return hasTableFilters || hasFilters || hasSearch
-  }, [
-    table.getState().columnFilters.length,
-    table.getState().globalFilter,
-    hasFilters,
-    hasSearch,
-  ])
-
-  const handleReset = useCallback(() => {
-    clearFilters()
-    onReset?.()
-  }, [clearFilters, onReset])
-
-  const handleApplyFilters = useCallback(() => {
-    if (onFiltersChange) {
-      const presetData = toPresetFormat()
-      const filterStrings = presetData.filters.map((f) => {
-        const value = Array.isArray(f.value)
-          ? f.value.join(',')
-          : String(f.value ?? '')
-        return `${f.column} ${f.operator} ${value}`
-      })
-      onFiltersChange({
-        filters: filterStrings.join(' AND '),
-        search: presetData.search_query,
-        searchTypes: presetData.search_types,
-      })
-    }
-  }, [onFiltersChange, toPresetFormat])
+  const handleSearchChange = useCallback(
+    (search: string, searchType?: string) => {
+      tableState.setSearch(search, searchType)
+    },
+    [tableState]
+  )
 
   const handleApplyPreset = useCallback(
     (preset: FilterPreset) => {
-      loadFromPreset({
-        filters: preset.filters,
-        search_query: preset.search_query,
-        search_types: preset.search_types,
-      })
-      if (onFiltersChange) {
-        const filterStrings = (preset.filters || []).map((f) => {
-          const value = Array.isArray(f.value)
-            ? f.value.join(',')
-            : String(f.value ?? '')
-          return `${f.column} ${f.operator} ${value}`
-        })
-        onFiltersChange({
-          filters: filterStrings.join(' AND '),
-          search: preset.search_query,
-          searchTypes: preset.search_types,
-        })
+      tableState.setFilters(preset.filters || [])
+      if (preset.search_query) {
+        // Pass search_types[0] as the URL param accepts a single value
+        tableState.setSearch(preset.search_query, preset.search_types?.[0])
       }
     },
-    [loadFromPreset, onFiltersChange]
+    [tableState]
   )
 
   return (
     <div className="flex items-center justify-between">
       <div className="flex flex-1 flex-col-reverse items-start gap-y-2 sm:flex-row sm:items-center sm:space-x-2">
         <SearchBar
-          value={searchQuery}
-          onChange={setSearchQuery}
-          searchTypes={searchTypes}
-          onSearchTypesChange={setSearchTypes}
+          value={tableState.search || ''}
+          onChange={handleSearchChange}
+          searchType={tableState.searchType}
           placeholder="Search traces..."
-          disabled={isPending}
           className="w-[250px] lg:w-[350px]"
         />
 
         <div className="flex gap-x-2">
-          {/* Status faceted filter (kept for backwards compatibility) */}
-          {table.getColumn('status_code') && (
-            <DataTableFacetedFilter
-              column={table.getColumn('status_code')}
-              title="Status"
-              options={statuses}
-            />
-          )}
-
           <FilterBuilder
-            filters={filters}
-            onAddFilter={addFilter}
-            onUpdateFilter={updateFilter}
-            onRemoveFilter={removeFilter}
-            onClearFilters={clearFilters}
+            filters={tableState.filters}
             onApply={handleApplyFilters}
             filterOptions={filterOptions}
-            disabled={isPending}
           />
 
           <FilterPresetsDrawer
-            currentFilters={filters}
-            currentSearchQuery={searchQuery}
-            currentSearchTypes={searchTypes}
+            currentFilters={tableState.filters}
+            currentSearchQuery={tableState.search}
+            currentSearchType={tableState.searchType}
             onApplyPreset={handleApplyPreset}
             tableName="traces"
           />
         </div>
 
-        {isFiltered && (
+        {tableState.hasActiveFilters && (
           <Button
             variant="ghost"
-            onClick={handleReset}
+            onClick={tableState.resetAll}
             className="h-8 px-2 lg:px-3"
-            disabled={isPending}
           >
             Reset
             <Cross2Icon className="ms-2 h-4 w-4" />

@@ -1,7 +1,8 @@
 'use client'
 
-import { useMemo } from 'react'
-import { Plus, Filter, RotateCcw, Save, Bookmark } from 'lucide-react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { nanoid } from 'nanoid'
+import { Plus, Filter, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -11,16 +12,12 @@ import {
 } from '@/components/ui/popover'
 import { Separator } from '@/components/ui/separator'
 import { FilterRow } from './filter-row'
+import { operatorRequiresValue } from '../../config/filter-columns'
 import type { FilterCondition, FilterOperator } from '../../api/traces-api'
 
 interface FilterBuilderProps {
   filters: FilterCondition[]
-  onAddFilter: (column?: string, operator?: FilterOperator, value?: any) => void
-  onUpdateFilter: (id: string, updates: Partial<FilterCondition>) => void
-  onRemoveFilter: (id: string) => void
-  onClearFilters: () => void
-  onApply?: () => void
-  onSavePreset?: () => void
+  onApply: (filters: FilterCondition[]) => void
   filterOptions?: {
     models?: string[]
     providers?: string[]
@@ -33,28 +30,83 @@ interface FilterBuilderProps {
 
 export function FilterBuilder({
   filters,
-  onAddFilter,
-  onUpdateFilter,
-  onRemoveFilter,
-  onClearFilters,
   onApply,
-  onSavePreset,
   filterOptions = {},
   disabled = false,
   maxFilters = 20,
 }: FilterBuilderProps) {
+  const [isOpen, setIsOpen] = useState(false)
+  const [localFilters, setLocalFilters] = useState<FilterCondition[]>(filters)
+
+  // Sync from URL when it changes externally
+  useEffect(() => {
+    setLocalFilters(filters)
+  }, [filters])
+
   const filterCount = filters.length
-  const canAddMore = filterCount < maxFilters
+  const localFilterCount = localFilters.length
+  const canAddMore = localFilterCount < maxFilters
 
   const badgeVariant = useMemo(() => {
     if (filterCount === 0) return 'outline'
     return 'default'
   }, [filterCount])
 
+  const addFilter = useCallback(() => {
+    setLocalFilters((prev) => [
+      ...prev,
+      {
+        id: nanoid(8),
+        column: '',
+        operator: '=' as FilterOperator,
+        value: null,
+      },
+    ])
+  }, [])
+
+  const updateFilter = useCallback((id: string, updates: Partial<FilterCondition>) => {
+    setLocalFilters((prev) =>
+      prev.map((f) => (f.id === id ? { ...f, ...updates } : f))
+    )
+  }, [])
+
+  const removeFilter = useCallback((id: string) => {
+    setLocalFilters((prev) => prev.filter((f) => f.id !== id))
+  }, [])
+
+  const clearLocalFilters = useCallback(() => {
+    setLocalFilters([])
+  }, [])
+
+  const handleApply = useCallback(() => {
+    // Only keep valid filters
+    const validFilters = localFilters.filter((f) => {
+      // Must have column selected
+      if (!f.column) return false
+      // Operators that don't require value (IS EMPTY, EXISTS, etc.) are always valid
+      if (!operatorRequiresValue(f.operator)) return true
+      // Operators that require value must have non-empty value
+      return f.value !== null && f.value !== ''
+    })
+    onApply(validFilters)
+    setIsOpen(false)
+  }, [localFilters, onApply])
+
+  const handleClear = useCallback(() => {
+    setLocalFilters([])
+    onApply([])
+    setIsOpen(false)
+  }, [onApply])
+
   return (
-    <Popover>
+    <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className="h-8 border-dashed">
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 border-dashed"
+          disabled={disabled}
+        >
           <Filter className="mr-2 h-4 w-4" />
           Filters
           {filterCount > 0 && (
@@ -70,35 +122,23 @@ export function FilterBuilder({
             <div className="flex items-center gap-2">
               <Filter className="h-4 w-4" />
               <h4 className="font-medium">Filter Builder</h4>
-              {filterCount > 0 && (
+              {localFilterCount > 0 && (
                 <Badge variant="secondary" className="text-xs">
-                  {filterCount} {filterCount === 1 ? 'filter' : 'filters'}
+                  {localFilterCount} {localFilterCount === 1 ? 'filter' : 'filters'}
                 </Badge>
               )}
             </div>
             <div className="flex items-center gap-2">
-              {filterCount > 0 && (
+              {localFilterCount > 0 && (
                 <Button
                   variant="ghost"
                   size="sm"
                   className="h-7 px-2 text-xs"
-                  onClick={onClearFilters}
+                  onClick={clearLocalFilters}
                   disabled={disabled}
                 >
                   <RotateCcw className="mr-1 h-3 w-3" />
                   Clear all
-                </Button>
-              )}
-              {onSavePreset && filterCount > 0 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 px-2 text-xs"
-                  onClick={onSavePreset}
-                  disabled={disabled}
-                >
-                  <Bookmark className="mr-1 h-3 w-3" />
-                  Save preset
                 </Button>
               )}
             </div>
@@ -107,19 +147,19 @@ export function FilterBuilder({
           <Separator />
 
           <div className="space-y-2 max-h-[300px] overflow-y-auto">
-            {filters.length === 0 ? (
+            {localFilters.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground">
                 <Filter className="h-8 w-8 mb-2 opacity-50" />
                 <p className="text-sm">No filters applied</p>
                 <p className="text-xs">Add a filter to narrow down results</p>
               </div>
             ) : (
-              filters.map((filter, index) => (
+              localFilters.map((filter, index) => (
                 <FilterRow
                   key={filter.id}
                   filter={filter}
-                  onUpdate={(updates) => onUpdateFilter(filter.id, updates)}
-                  onRemove={() => onRemoveFilter(filter.id)}
+                  onUpdate={(updates) => updateFilter(filter.id, updates)}
+                  onRemove={() => removeFilter(filter.id)}
                   filterOptions={filterOptions}
                   disabled={disabled}
                   isFirst={index === 0}
@@ -135,7 +175,7 @@ export function FilterBuilder({
                 variant="ghost"
                 size="sm"
                 className="w-full h-8 border border-dashed"
-                onClick={() => onAddFilter()}
+                onClick={addFilter}
                 disabled={disabled}
               >
                 <Plus className="mr-2 h-4 w-4" />
@@ -144,21 +184,29 @@ export function FilterBuilder({
             </>
           )}
 
-          {onApply && filterCount > 0 && (
-            <>
-              <Separator />
-              <div className="flex justify-end">
-                <Button
-                  size="sm"
-                  className="h-8"
-                  onClick={onApply}
-                  disabled={disabled}
-                >
-                  Apply filters
-                </Button>
-              </div>
-            </>
-          )}
+          <Separator />
+          <div className="flex justify-between">
+            {filterCount > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8"
+                onClick={handleClear}
+                disabled={disabled}
+              >
+                Clear all filters
+              </Button>
+            )}
+            <div className="flex-1" />
+            <Button
+              size="sm"
+              className="h-8"
+              onClick={handleApply}
+              disabled={disabled}
+            >
+              Apply filters
+            </Button>
+          </div>
 
           {!canAddMore && (
             <p className="text-xs text-muted-foreground text-center">

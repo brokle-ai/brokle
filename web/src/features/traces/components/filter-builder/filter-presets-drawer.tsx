@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { useParams } from 'next/navigation'
+import { useProjectOnly } from '@/features/projects'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Bookmark,
@@ -58,8 +58,8 @@ import {
 
 interface FilterPresetsDrawerProps {
   currentFilters: FilterCondition[]
-  currentSearchQuery?: string
-  currentSearchTypes?: string[]
+  currentSearchQuery?: string | null
+  currentSearchType?: string | null
   onApplyPreset: (preset: FilterPreset) => void
   tableName: 'traces' | 'spans'
 }
@@ -67,12 +67,12 @@ interface FilterPresetsDrawerProps {
 export function FilterPresetsDrawer({
   currentFilters,
   currentSearchQuery,
-  currentSearchTypes,
+  currentSearchType,
   onApplyPreset,
   tableName,
 }: FilterPresetsDrawerProps) {
-  const params = useParams<{ projectId: string }>()
-  const projectId = params.projectId
+  const { currentProject } = useProjectOnly()
+  const projectId = currentProject?.id
   const queryClient = useQueryClient()
 
   const [isOpen, setIsOpen] = useState(false)
@@ -88,13 +88,13 @@ export function FilterPresetsDrawer({
 
   const { data: presets = [], isLoading } = useQuery({
     queryKey: ['filterPresets', projectId, tableName],
-    queryFn: () => getFilterPresets(projectId, tableName),
-    enabled: isOpen,
+    queryFn: () => getFilterPresets(projectId!, tableName),
+    enabled: isOpen && !!projectId,
   })
 
   const createMutation = useMutation({
     mutationFn: (data: CreateFilterPresetRequest) =>
-      createFilterPreset(projectId, data),
+      createFilterPreset(projectId!, data),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ['filterPresets', projectId],
@@ -114,7 +114,7 @@ export function FilterPresetsDrawer({
     }: {
       presetId: string
       data: Partial<CreateFilterPresetRequest>
-    }) => updateFilterPreset(projectId, presetId, data),
+    }) => updateFilterPreset(projectId!, presetId, data),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ['filterPresets', projectId],
@@ -128,7 +128,7 @@ export function FilterPresetsDrawer({
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (presetId: string) => deleteFilterPreset(projectId, presetId),
+    mutationFn: (presetId: string) => deleteFilterPreset(projectId!, presetId),
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ['filterPresets', projectId],
@@ -180,7 +180,7 @@ export function FilterPresetsDrawer({
           is_public: isPublic,
           filters: currentFilters,
           search_query: currentSearchQuery || undefined,
-          search_types: currentSearchTypes,
+          search_types: currentSearchType ? [currentSearchType] : undefined,
         },
       })
     } else {
@@ -190,7 +190,7 @@ export function FilterPresetsDrawer({
         table_name: tableName,
         filters: currentFilters,
         search_query: currentSearchQuery || undefined,
-        search_types: currentSearchTypes,
+        search_types: currentSearchType ? [currentSearchType] : undefined,
         is_public: isPublic,
       })
     }
@@ -201,7 +201,7 @@ export function FilterPresetsDrawer({
     editingPreset,
     currentFilters,
     currentSearchQuery,
-    currentSearchTypes,
+    currentSearchType,
     tableName,
     createMutation,
     updateMutation,

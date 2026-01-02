@@ -98,7 +98,6 @@ const (
 	FilterOpNotIn          FilterOperator = "NOT IN"
 	FilterOpExists         FilterOperator = "EXISTS"
 	FilterOpNotExists      FilterOperator = "NOT EXISTS"
-	// New operators for enhanced filtering
 	FilterOpStartsWith  FilterOperator = "STARTS WITH"
 	FilterOpEndsWith    FilterOperator = "ENDS WITH"
 	FilterOpRegex       FilterOperator = "REGEX"
@@ -162,6 +161,23 @@ func GetMaterializedColumn(attrPath string) string {
 func IsMaterializedColumn(attrPath string) bool {
 	_, ok := MaterializedColumns[attrPath]
 	return ok
+}
+
+// SortFieldAliases maps API sort field names to SQL column aliases.
+// Used for aggregated columns in GROUP BY queries where the SQL alias
+// differs from the API field name (e.g., model_name -> root_model_name).
+var SortFieldAliases = map[string]string{
+	"model_name":   "root_model_name",
+	"service_name": "root_service_name",
+}
+
+// GetSortFieldAlias returns the SQL column alias for a sort field.
+// If no alias exists, returns the original field name unchanged.
+func GetSortFieldAlias(field string) string {
+	if alias, ok := SortFieldAliases[field]; ok {
+		return alias
+	}
+	return field
 }
 
 var (

@@ -99,7 +99,6 @@ func convertArraysToEvents(
 
 	events := make([]observability.SpanEvent, len(timestamps))
 	for i := range timestamps {
-		// Attributes are already map[string]string from ClickHouse
 		var attrs map[string]string
 		if i < len(attributes) && attributes[i] != nil {
 			attrs = attributes[i]
@@ -127,7 +126,6 @@ func convertArraysToLinks(
 
 	links := make([]observability.SpanLink, len(traceIDs))
 	for i := range traceIDs {
-		// Attributes are already map[string]string from ClickHouse
 		var attrs map[string]string
 		if i < len(attributes) && attributes[i] != nil {
 			attrs = attributes[i]
@@ -142,6 +140,93 @@ func convertArraysToLinks(
 		}
 	}
 	return links
+}
+
+// textSearchCondition builds the WHERE clause condition for text search.
+// Returns the condition string and arguments to append.
+func textSearchCondition(filter *observability.TraceFilter) (condition string, args []interface{}) {
+	if filter == nil || filter.Search == nil || *filter.Search == "" {
+		return "", nil
+	}
+
+	searchPattern := "%" + *filter.Search + "%"
+	searchType := "all"
+	if filter.SearchType != nil {
+		searchType = *filter.SearchType
+	}
+
+	switch searchType {
+	case "id":
+		return " AND (trace_id ILIKE ? OR span_id ILIKE ? OR span_name ILIKE ?)",
+			[]interface{}{searchPattern, searchPattern, searchPattern}
+	case "content":
+		return " AND (input ILIKE ? OR output ILIKE ?)",
+			[]interface{}{searchPattern, searchPattern}
+	default: // "all"
+		return " AND (trace_id ILIKE ? OR span_name ILIKE ? OR input ILIKE ? OR output ILIKE ?)",
+			[]interface{}{searchPattern, searchPattern, searchPattern, searchPattern}
+	}
+}
+
+// statusHavingClauses builds HAVING clause conditions for status filtering.
+// Returns clause strings and arguments to append.
+func statusHavingClauses(filter *observability.TraceFilter) (clauses []string, args []interface{}) {
+	if filter == nil {
+		return nil, nil
+	}
+
+	statusToCode := func(s string) int32 {
+		switch s {
+		case "unset":
+			return 0
+		case "ok":
+			return 1
+		case "error":
+			return 2
+		}
+		return -1
+	}
+
+	buildInClause := func(statuses []string, not bool) (string, []interface{}) {
+		var codes []int32
+		for _, s := range statuses {
+			if code := statusToCode(s); code >= 0 {
+				codes = append(codes, code)
+			}
+		}
+		if len(codes) == 0 {
+			return "", nil
+		}
+
+		placeholders := make([]string, len(codes))
+		clauseArgs := make([]interface{}, len(codes))
+		for i, code := range codes {
+			placeholders[i] = "?"
+			clauseArgs[i] = code
+		}
+
+		op := "IN"
+		if not {
+			op = "NOT IN"
+		}
+		return fmt.Sprintf("root_status_code %s (%s)", op, strings.Join(placeholders, ",")), clauseArgs
+	}
+
+	if len(filter.Statuses) > 0 {
+		if clause, clauseArgs := buildInClause(filter.Statuses, false); clause != "" {
+			clauses = append(clauses, clause)
+			args = append(args, clauseArgs...)
+		}
+	}
+
+	if len(filter.StatusesNot) > 0 {
+		if clause, clauseArgs := buildInClause(filter.StatusesNot, true); clause != "" {
+			clauses = append(clauses, clause)
+			args = append(args, clauseArgs...)
+		}
+	}
+
+	return clauses, args
 }
 
 func ScanSpanRow(row driver.Row) (*observability.Span, error) {
@@ -836,6 +921,16 @@ func (r *traceRepository) ListTraces(ctx context.Context, filter *observability.
 			havingClauses = append(havingClauses, "trace_has_error = ?")
 			havingArgs = append(havingArgs, true)
 		}
+
+		if condition, searchArgs := textSearchCondition(filter); condition != "" {
+			query += condition
+			args = append(args, searchArgs...)
+		}
+
+		if statusClauses, statusArgs := statusHavingClauses(filter); len(statusClauses) > 0 {
+			havingClauses = append(havingClauses, statusClauses...)
+			havingArgs = append(havingArgs, statusArgs...)
+		}
 	}
 
 	query += " GROUP BY trace_id"
@@ -867,6 +962,9 @@ func (r *traceRepository) ListTraces(ctx context.Context, filter *observability.
 			sortDir = "ASC"
 		}
 	}
+
+	// Map API sort field names to SQL column aliases for aggregated columns
+	sortField = observability.GetSortFieldAlias(sortField)
 
 	query += fmt.Sprintf(" ORDER BY %s %s, trace_id %s", sortField, sortDir, sortDir)
 
@@ -939,7 +1037,8 @@ func (r *traceRepository) CountTraces(ctx context.Context, filter *observability
 			anyIf(model_name, parent_span_id IS NULL) as root_model_name,
 			anyIf(provider_name, parent_span_id IS NULL) as root_provider_name,
 			anyIf(span_attributes['user.id'], parent_span_id IS NULL) as root_user_id,
-			anyIf(span_attributes['session.id'], parent_span_id IS NULL) as root_session_id
+			anyIf(span_attributes['session.id'], parent_span_id IS NULL) as root_session_id,
+			anyIf(status_code, parent_span_id IS NULL) as root_status_code
 		FROM otel_traces
 		WHERE deleted_at IS NULL
 	`
@@ -1015,6 +1114,16 @@ func (r *traceRepository) CountTraces(ctx context.Context, filter *observability
 		if filter.HasError != nil && *filter.HasError {
 			havingClauses = append(havingClauses, "trace_has_error = ?")
 			havingArgs = append(havingArgs, true)
+		}
+
+		if condition, searchArgs := textSearchCondition(filter); condition != "" {
+			innerQuery += condition
+			args = append(args, searchArgs...)
+		}
+
+		if statusClauses, statusArgs := statusHavingClauses(filter); len(statusClauses) > 0 {
+			havingClauses = append(havingClauses, statusClauses...)
+			havingArgs = append(havingArgs, statusArgs...)
 		}
 	}
 
@@ -1259,7 +1368,6 @@ func (r *traceRepository) GetFilterOptions(ctx context.Context, projectID string
 	return options, nil
 }
 
-// filterEmptyStrings removes empty strings from slice
 func filterEmptyStrings(slice []string) []string {
 	result := make([]string, 0, len(slice))
 	for _, s := range slice {

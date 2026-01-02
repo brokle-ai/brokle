@@ -171,6 +171,12 @@ type TraceFilter struct {
 	pagination.Params
 	ProjectID string
 	Tags      []string
+
+	// Text search
+	Search     *string  // Text search query
+	SearchType *string  // Search type: "id", "content", "all"
+	Statuses   []string // Status filter: "ok", "error", "unset" (inclusion)
+	StatusesNot []string // Status exclusion filter: "ok", "error", "unset"
 }
 
 type SpanFilter struct {

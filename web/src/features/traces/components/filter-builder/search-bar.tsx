@@ -19,9 +19,8 @@ export type SearchType = 'id' | 'content' | 'all'
 
 interface SearchBarProps {
   value: string
-  onChange: (value: string) => void
-  searchTypes: SearchType[]
-  onSearchTypesChange: (types: SearchType[]) => void
+  onChange: (value: string, searchType?: string) => void
+  searchType?: string | null
   placeholder?: string
   disabled?: boolean
   className?: string
@@ -43,77 +42,53 @@ const searchTypeDescriptions: Record<SearchType, string> = {
 export function SearchBar({
   value,
   onChange,
-  searchTypes,
-  onSearchTypesChange,
+  searchType = 'all',
   placeholder = 'Search traces...',
   disabled = false,
   className,
   debounceMs = 300,
 }: SearchBarProps) {
   const [localValue, setLocalValue] = useState(value)
+  const [localSearchType, setLocalSearchType] = useState<SearchType>(
+    (searchType as SearchType) || 'all'
+  )
 
   // Sync local value with prop
   useEffect(() => {
     setLocalValue(value)
   }, [value])
 
+  // Sync search type with prop
+  useEffect(() => {
+    setLocalSearchType((searchType as SearchType) || 'all')
+  }, [searchType])
+
   // Debounced onChange
   useEffect(() => {
     const timer = setTimeout(() => {
       if (localValue !== value) {
-        onChange(localValue)
+        onChange(localValue, localSearchType)
       }
     }, debounceMs)
 
     return () => clearTimeout(timer)
-  }, [localValue, value, onChange, debounceMs])
+  }, [localValue, value, onChange, debounceMs, localSearchType])
 
-  // Handle search type toggle
-  const handleSearchTypeToggle = useCallback(
+  const handleSearchTypeChange = useCallback(
     (type: SearchType) => {
-      // If 'all' is toggled, replace with 'all' or remove it
-      if (type === 'all') {
-        if (searchTypes.includes('all')) {
-          onSearchTypesChange(['id']) // Default fallback
-        } else {
-          onSearchTypesChange(['all'])
-        }
-        return
+      setLocalSearchType(type)
+      // Immediately trigger search with new type if there's a value
+      if (localValue) {
+        onChange(localValue, type)
       }
-
-      // If selecting id or content, remove 'all'
-      let newTypes: SearchType[] = searchTypes.filter((t) => t !== 'all')
-
-      if (newTypes.includes(type)) {
-        newTypes = newTypes.filter((t) => t !== type)
-        // Ensure at least one type is selected
-        if (newTypes.length === 0) {
-          newTypes = ['id']
-        }
-      } else {
-        newTypes = [...newTypes, type]
-      }
-
-      // If both id and content are selected, that's equivalent to 'all'
-      if (newTypes.includes('id') && newTypes.includes('content')) {
-        newTypes = ['all']
-      }
-
-      onSearchTypesChange(newTypes)
     },
-    [searchTypes, onSearchTypesChange]
+    [localValue, onChange]
   )
 
-  // Clear search
   const handleClear = useCallback(() => {
     setLocalValue('')
-    onChange('')
-  }, [onChange])
-
-  // Get display label for current search types
-  const searchTypesLabel = searchTypes.includes('all')
-    ? 'All'
-    : searchTypes.map((t) => searchTypeLabels[t]).join(', ')
+    onChange('', localSearchType)
+  }, [onChange, localSearchType])
 
   return (
     <div className={cn('flex items-center gap-2', className)}>
@@ -150,7 +125,7 @@ export function SearchBar({
             disabled={disabled}
           >
             <Badge variant="secondary" className="text-xs font-normal">
-              {searchTypesLabel}
+              {searchTypeLabels[localSearchType]}
             </Badge>
             <ChevronDown className="h-3.5 w-3.5" />
           </Button>
@@ -161,8 +136,8 @@ export function SearchBar({
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuCheckboxItem
-            checked={searchTypes.includes('id')}
-            onCheckedChange={() => handleSearchTypeToggle('id')}
+            checked={localSearchType === 'id'}
+            onCheckedChange={() => handleSearchTypeChange('id')}
           >
             <div>
               <div className="font-medium">{searchTypeLabels.id}</div>
@@ -172,8 +147,8 @@ export function SearchBar({
             </div>
           </DropdownMenuCheckboxItem>
           <DropdownMenuCheckboxItem
-            checked={searchTypes.includes('content')}
-            onCheckedChange={() => handleSearchTypeToggle('content')}
+            checked={localSearchType === 'content'}
+            onCheckedChange={() => handleSearchTypeChange('content')}
           >
             <div>
               <div className="font-medium">{searchTypeLabels.content}</div>
@@ -184,8 +159,8 @@ export function SearchBar({
           </DropdownMenuCheckboxItem>
           <DropdownMenuSeparator />
           <DropdownMenuCheckboxItem
-            checked={searchTypes.includes('all')}
-            onCheckedChange={() => handleSearchTypeToggle('all')}
+            checked={localSearchType === 'all'}
+            onCheckedChange={() => handleSearchTypeChange('all')}
           >
             <div>
               <div className="font-medium">{searchTypeLabels.all}</div>

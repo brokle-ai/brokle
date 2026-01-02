@@ -6,10 +6,8 @@ import {
   transformTraceResponse,
   transformSpan,
   transformScore,
-  stringToStatusCode,
 } from '../utils/transform'
 
-// Create API client instance
 const client = new BrokleAPIClient('/api')
 
 // ============================================================================
@@ -20,8 +18,10 @@ export interface GetTracesParams {
   projectId: string
   page?: number
   pageSize?: number
-  status?: string[] // ['ok', 'error', 'unset']
+  status?: string[] // ['ok', 'error', 'unset'] (inclusion)
+  statusNot?: string[] // ['ok', 'error', 'unset'] (exclusion)
   search?: string
+  searchType?: string // 'id' | 'content' | 'all'
   sessionId?: string
   userId?: string
   startTime?: Date
@@ -123,7 +123,9 @@ export const getProjectTraces = async (params: GetTracesParams): Promise<{
     page = 1,
     pageSize = 20,
     status,
+    statusNot,
     search,
+    searchType,
     sessionId,
     userId,
     startTime,
@@ -142,15 +144,14 @@ export const getProjectTraces = async (params: GetTracesParams): Promise<{
     hasError,
   } = params
 
-  // Build query parameters
   const queryParams: Record<string, any> = {
     project_id: projectId,
     page,
     limit: pageSize,
   }
 
-  // Add optional filters
   if (search) queryParams.search = search
+  if (searchType) queryParams.search_type = searchType
   if (sessionId) queryParams.session_id = sessionId
   if (userId) queryParams.user_id = userId
   if (startTime) queryParams.start_time = Math.floor(startTime.getTime() / 1000)
@@ -158,10 +159,13 @@ export const getProjectTraces = async (params: GetTracesParams): Promise<{
   if (sortBy) queryParams.sort_by = sortBy
   if (sortOrder) queryParams.sort_dir = sortOrder
 
-  // Convert status strings to codes (e.g., ['ok', 'error'] → '1,2')
+  // Send status strings directly (backend expects 'ok,error,unset')
   if (status && status.length > 0) {
-    const statusCodes = status.map(stringToStatusCode)
-    queryParams.status = statusCodes.join(',')
+    queryParams.status = status.join(',')
+  }
+  // Send status exclusion (backend expects 'ok,error,unset')
+  if (statusNot && statusNot.length > 0) {
+    queryParams.status_not = statusNot.join(',')
   }
 
   if (modelName) queryParams.model_name = modelName
@@ -175,10 +179,8 @@ export const getProjectTraces = async (params: GetTracesParams): Promise<{
   if (maxDuration !== undefined) queryParams.max_duration = maxDuration
   if (hasError !== undefined) queryParams.has_error = hasError
 
-  // Make API request using getPaginated (preserves pagination metadata)
   const response = await client.getPaginated<any>('/v1/traces', queryParams)
 
-  // Transform trace data
   return {
     traces: response.data.map(transformTrace),
     totalCount: response.pagination.total,
@@ -381,7 +383,6 @@ export const getTraceFilterOptions = async (
     project_id: projectId,
   })
 
-  // Transform snake_case to camelCase
   return {
     models: response.models || [],
     providers: response.providers || [],
@@ -439,10 +440,8 @@ export const getSpans = async (params: GetSpansParams): Promise<{
   if (sortBy) queryParams.sort_by = sortBy
   if (sortOrder) queryParams.sort_dir = sortOrder
 
-  // Make API request using getPaginated (preserves pagination metadata)
   const response = await client.getPaginated<any>('/v1/spans', queryParams)
 
-  // Transform span data
   return {
     spans: response.data.map(transformSpan),
     totalCount: response.pagination.total,
