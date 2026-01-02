@@ -99,7 +99,6 @@ func convertArraysToEvents(
 
 	events := make([]observability.SpanEvent, len(timestamps))
 	for i := range timestamps {
-		// Attributes are already map[string]string from ClickHouse
 		var attrs map[string]string
 		if i < len(attributes) && attributes[i] != nil {
 			attrs = attributes[i]
@@ -127,7 +126,6 @@ func convertArraysToLinks(
 
 	links := make([]observability.SpanLink, len(traceIDs))
 	for i := range traceIDs {
-		// Attributes are already map[string]string from ClickHouse
 		var attrs map[string]string
 		if i < len(attributes) && attributes[i] != nil {
 			attrs = attributes[i]
@@ -142,6 +140,93 @@ func convertArraysToLinks(
 		}
 	}
 	return links
+}
+
+// textSearchCondition builds the WHERE clause condition for text search.
+// Returns the condition string and arguments to append.
+func textSearchCondition(filter *observability.TraceFilter) (condition string, args []interface{}) {
+	if filter == nil || filter.Search == nil || *filter.Search == "" {
+		return "", nil
+	}
+
+	searchPattern := "%" + *filter.Search + "%"
+	searchType := "all"
+	if filter.SearchType != nil {
+		searchType = *filter.SearchType
+	}
+
+	switch searchType {
+	case "id":
+		return " AND (trace_id ILIKE ? OR span_id ILIKE ? OR span_name ILIKE ?)",
+			[]interface{}{searchPattern, searchPattern, searchPattern}
+	case "content":
+		return " AND (input ILIKE ? OR output ILIKE ?)",
+			[]interface{}{searchPattern, searchPattern}
+	default: // "all"
+		return " AND (trace_id ILIKE ? OR span_name ILIKE ? OR input ILIKE ? OR output ILIKE ?)",
+			[]interface{}{searchPattern, searchPattern, searchPattern, searchPattern}
+	}
+}
+
+// statusHavingClauses builds HAVING clause conditions for status filtering.
+// Returns clause strings and arguments to append.
+func statusHavingClauses(filter *observability.TraceFilter) (clauses []string, args []interface{}) {
+	if filter == nil {
+		return nil, nil
+	}
+
+	statusToCode := func(s string) int32 {
+		switch s {
+		case "unset":
+			return 0
+		case "ok":
+			return 1
+		case "error":
+			return 2
+		}
+		return -1
+	}
+
+	buildInClause := func(statuses []string, not bool) (string, []interface{}) {
+		var codes []int32
+		for _, s := range statuses {
+			if code := statusToCode(s); code >= 0 {
+				codes = append(codes, code)
+			}
+		}
+		if len(codes) == 0 {
+			return "", nil
+		}
+
+		placeholders := make([]string, len(codes))
+		clauseArgs := make([]interface{}, len(codes))
+		for i, code := range codes {
+			placeholders[i] = "?"
+			clauseArgs[i] = code
+		}
+
+		op := "IN"
+		if not {
+			op = "NOT IN"
+		}
+		return fmt.Sprintf("root_status_code %s (%s)", op, strings.Join(placeholders, ",")), clauseArgs
+	}
+
+	if len(filter.Statuses) > 0 {
+		if clause, clauseArgs := buildInClause(filter.Statuses, false); clause != "" {
+			clauses = append(clauses, clause)
+			args = append(args, clauseArgs...)
+		}
+	}
+
+	if len(filter.StatusesNot) > 0 {
+		if clause, clauseArgs := buildInClause(filter.StatusesNot, true); clause != "" {
+			clauses = append(clauses, clause)
+			args = append(args, clauseArgs...)
+		}
+	}
+
+	return clauses, args
 }
 
 func ScanSpanRow(row driver.Row) (*observability.Span, error) {
@@ -836,6 +921,16 @@ func (r *traceRepository) ListTraces(ctx context.Context, filter *observability.
 			havingClauses = append(havingClauses, "trace_has_error = ?")
 			havingArgs = append(havingArgs, true)
 		}
+
+		if condition, searchArgs := textSearchCondition(filter); condition != "" {
+			query += condition
+			args = append(args, searchArgs...)
+		}
+
+		if statusClauses, statusArgs := statusHavingClauses(filter); len(statusClauses) > 0 {
+			havingClauses = append(havingClauses, statusClauses...)
+			havingArgs = append(havingArgs, statusArgs...)
+		}
 	}
 
 	query += " GROUP BY trace_id"
@@ -867,6 +962,9 @@ func (r *traceRepository) ListTraces(ctx context.Context, filter *observability.
 			sortDir = "ASC"
 		}
 	}
+
+	// Map API sort field names to SQL column aliases for aggregated columns
+	sortField = observability.GetSortFieldAlias(sortField)
 
 	query += fmt.Sprintf(" ORDER BY %s %s, trace_id %s", sortField, sortDir, sortDir)
 
@@ -939,7 +1037,8 @@ func (r *traceRepository) CountTraces(ctx context.Context, filter *observability
 			anyIf(model_name, parent_span_id IS NULL) as root_model_name,
 			anyIf(provider_name, parent_span_id IS NULL) as root_provider_name,
 			anyIf(span_attributes['user.id'], parent_span_id IS NULL) as root_user_id,
-			anyIf(span_attributes['session.id'], parent_span_id IS NULL) as root_session_id
+			anyIf(span_attributes['session.id'], parent_span_id IS NULL) as root_session_id,
+			anyIf(status_code, parent_span_id IS NULL) as root_status_code
 		FROM otel_traces
 		WHERE deleted_at IS NULL
 	`
@@ -1015,6 +1114,16 @@ func (r *traceRepository) CountTraces(ctx context.Context, filter *observability
 		if filter.HasError != nil && *filter.HasError {
 			havingClauses = append(havingClauses, "trace_has_error = ?")
 			havingArgs = append(havingArgs, true)
+		}
+
+		if condition, searchArgs := textSearchCondition(filter); condition != "" {
+			innerQuery += condition
+			args = append(args, searchArgs...)
+		}
+
+		if statusClauses, statusArgs := statusHavingClauses(filter); len(statusClauses) > 0 {
+			havingClauses = append(havingClauses, statusClauses...)
+			havingArgs = append(havingArgs, statusArgs...)
 		}
 	}
 
@@ -1178,6 +1287,32 @@ func (r *traceRepository) GetFilterOptions(ctx context.Context, projectID string
 		return nil, fmt.Errorf("failed to get filter options: %w", err)
 	}
 
+	// Query for span-level distinct values (span_names, span_types, status_codes)
+	spanQuery := `
+		SELECT
+			arrayDistinct(groupArray(span_name)) as span_names,
+			arrayDistinct(groupArray(span_type)) as span_types,
+			arrayDistinct(groupArray(status_code)) as status_codes
+		FROM otel_traces
+		WHERE project_id = ? AND deleted_at IS NULL
+		LIMIT 1000
+	`
+
+	var (
+		spanNames   []string
+		spanTypes   []string
+		statusCodes []int32
+	)
+
+	err = r.db.QueryRow(ctx, spanQuery, projectID).Scan(
+		&spanNames,
+		&spanTypes,
+		&statusCodes,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get span filter options: %w", err)
+	}
+
 	// Filter out empty strings from arrays
 	models = filterEmptyStrings(models)
 	providers = filterEmptyStrings(providers)
@@ -1185,6 +1320,14 @@ func (r *traceRepository) GetFilterOptions(ctx context.Context, projectID string
 	environments = filterEmptyStrings(environments)
 	users = filterEmptyStrings(users)
 	sessions = filterEmptyStrings(sessions)
+	spanNames = filterEmptyStrings(spanNames)
+	spanTypes = filterEmptyStrings(spanTypes)
+
+	// Convert status codes from int32 to int
+	statusCodesInt := make([]int, len(statusCodes))
+	for i, code := range statusCodes {
+		statusCodesInt[i] = int(code)
+	}
 
 	options := &observability.TraceFilterOptions{
 		Models:       models,
@@ -1193,6 +1336,9 @@ func (r *traceRepository) GetFilterOptions(ctx context.Context, projectID string
 		Environments: environments,
 		Users:        users,
 		Sessions:     sessions,
+		SpanNames:    spanNames,
+		SpanTypes:    spanTypes,
+		StatusCodes:  statusCodesInt,
 	}
 
 	// Set cost range if we have data
@@ -1222,7 +1368,6 @@ func (r *traceRepository) GetFilterOptions(ctx context.Context, projectID string
 	return options, nil
 }
 
-// filterEmptyStrings removes empty strings from slice
 func filterEmptyStrings(slice []string) []string {
 	result := make([]string, 0, len(slice))
 	for _, s := range slice {
@@ -1254,4 +1399,212 @@ func (r *traceRepository) CountSpansByExpression(ctx context.Context, query stri
 		return 0, fmt.Errorf("count spans by expression: %w", err)
 	}
 	return int64(count), nil
+}
+
+// DiscoverAttributes extracts unique attribute keys from span_attributes and resource_attributes.
+// Uses ClickHouse mapKeys() and arrayJoin() to efficiently extract keys from Map columns.
+func (r *traceRepository) DiscoverAttributes(ctx context.Context, req *observability.AttributeDiscoveryRequest) (*observability.AttributeDiscoveryResponse, error) {
+	// Normalize request with defaults
+	observability.NormalizeAttributeDiscoveryRequest(req)
+
+	var allAttributes []observability.AttributeKey
+
+	// Query each source separately for cleaner results
+	for _, source := range req.Sources {
+		attrs, err := r.discoverAttributesFromSource(ctx, req.ProjectID, source, req.Prefix, req.Limit)
+		if err != nil {
+			return nil, fmt.Errorf("discover attributes from %s: %w", source, err)
+		}
+		allAttributes = append(allAttributes, attrs...)
+	}
+
+	// Get accurate total count across all sources (separate query without LIMIT)
+	var totalCount int64
+	for _, source := range req.Sources {
+		count, err := r.countAttributeKeysFromSource(ctx, req.ProjectID, source, req.Prefix)
+		if err != nil {
+			return nil, fmt.Errorf("count attributes from %s: %w", source, err)
+		}
+		totalCount += count
+	}
+
+	// Sort by count descending and limit
+	allAttributes = sortAndLimitAttributes(allAttributes, req.Limit)
+
+	return &observability.AttributeDiscoveryResponse{
+		Attributes: allAttributes,
+		TotalCount: totalCount,
+	}, nil
+}
+
+// discoverAttributesFromSource extracts attribute keys from a single source (span_attributes or resource_attributes).
+func (r *traceRepository) discoverAttributesFromSource(ctx context.Context, projectID string, source observability.AttributeSource, prefix string, limit int) ([]observability.AttributeKey, error) {
+	columnName := string(source)
+
+	// Build query using mapKeys() and arrayJoin() for efficient key extraction
+	// Sample values to infer type - use assumeNotNull to handle empty maps
+	query := fmt.Sprintf(`
+		SELECT
+			key,
+			count() as occurrence_count,
+			anyIf(%s[key], %s[key] != '') as sample_value
+		FROM otel_traces
+		ARRAY JOIN mapKeys(%s) AS key
+		WHERE project_id = ?
+			AND deleted_at IS NULL
+	`, columnName, columnName, columnName)
+
+	args := []interface{}{projectID}
+
+	// Add prefix filter if specified
+	if prefix != "" {
+		query += " AND key LIKE ?"
+		args = append(args, prefix+"%")
+	}
+
+	query += fmt.Sprintf(`
+		GROUP BY key
+		ORDER BY occurrence_count DESC
+		LIMIT %d
+	`, limit)
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query attribute keys: %w", err)
+	}
+	defer rows.Close()
+
+	var attributes []observability.AttributeKey
+	for rows.Next() {
+		var key string
+		var count uint64
+		var sampleValue string
+
+		if err := rows.Scan(&key, &count, &sampleValue); err != nil {
+			return nil, fmt.Errorf("scan attribute key: %w", err)
+		}
+
+		// Skip materialized columns (already have direct column access)
+		if _, isMaterialized := observability.MaterializedColumns[key]; isMaterialized {
+			continue
+		}
+
+		attributes = append(attributes, observability.AttributeKey{
+			Key:       key,
+			ValueType: inferValueType(sampleValue),
+			Source:    source,
+			Count:     int64(count),
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate attribute keys: %w", err)
+	}
+
+	return attributes, nil
+}
+
+// countAttributeKeysFromSource counts unique attribute keys from a source without LIMIT.
+// Used to provide accurate TotalCount for pagination.
+// Excludes materialized columns to match the filtering in discoverAttributesFromSource.
+func (r *traceRepository) countAttributeKeysFromSource(ctx context.Context, projectID string, source observability.AttributeSource, prefix string) (int64, error) {
+	columnName := string(source)
+
+	// Build exclusion list for materialized columns
+	excludeKeys := make([]string, 0, len(observability.MaterializedColumns))
+	for key := range observability.MaterializedColumns {
+		excludeKeys = append(excludeKeys, key)
+	}
+
+	query := fmt.Sprintf(`
+		SELECT count(DISTINCT key) as total
+		FROM otel_traces
+		ARRAY JOIN mapKeys(%s) AS key
+		WHERE project_id = ?
+			AND deleted_at IS NULL
+	`, columnName)
+
+	args := []interface{}{projectID}
+
+	// Add NOT IN clause only if there are keys to exclude
+	if len(excludeKeys) > 0 {
+		placeholders := make([]string, len(excludeKeys))
+		for i := range excludeKeys {
+			placeholders[i] = "?"
+		}
+		query += fmt.Sprintf(" AND key NOT IN (%s)", strings.Join(placeholders, ", "))
+		for _, key := range excludeKeys {
+			args = append(args, key)
+		}
+	}
+
+	if prefix != "" {
+		query += " AND key LIKE ?"
+		args = append(args, prefix+"%")
+	}
+
+	var total uint64
+	if err := r.db.QueryRow(ctx, query, args...).Scan(&total); err != nil {
+		return 0, fmt.Errorf("count attribute keys: %w", err)
+	}
+
+	return int64(total), nil
+}
+
+// inferValueType attempts to determine the value type from a sample value.
+func inferValueType(value string) observability.AttributeValueType {
+	if value == "" {
+		return observability.AttributeValueTypeString
+	}
+
+	// Check for boolean
+	if value == "true" || value == "false" {
+		return observability.AttributeValueTypeBoolean
+	}
+
+	// Check for number (integer or float)
+	isNumber := true
+	hasDecimal := false
+	for i, c := range value {
+		if c == '.' && !hasDecimal {
+			hasDecimal = true
+			continue
+		}
+		if c == '-' && i == 0 {
+			continue
+		}
+		if c < '0' || c > '9' {
+			isNumber = false
+			break
+		}
+	}
+	if isNumber && len(value) > 0 {
+		return observability.AttributeValueTypeNumber
+	}
+
+	// Check for array (JSON array syntax)
+	if strings.HasPrefix(value, "[") && strings.HasSuffix(value, "]") {
+		return observability.AttributeValueTypeArray
+	}
+
+	return observability.AttributeValueTypeString
+}
+
+// sortAndLimitAttributes sorts attributes by count descending and limits the result.
+func sortAndLimitAttributes(attrs []observability.AttributeKey, limit int) []observability.AttributeKey {
+	// Sort by count descending
+	for i := 0; i < len(attrs); i++ {
+		for j := i + 1; j < len(attrs); j++ {
+			if attrs[j].Count > attrs[i].Count {
+				attrs[i], attrs[j] = attrs[j], attrs[i]
+			}
+		}
+	}
+
+	// Apply limit
+	if len(attrs) > limit {
+		attrs = attrs[:limit]
+	}
+
+	return attrs
 }

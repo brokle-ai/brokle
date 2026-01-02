@@ -39,7 +39,7 @@ export const tracesColumns: ColumnDef<Trace>[] = [
     enableHiding: false,
   },
   {
-    accessorKey: 'trace_id', // Updated from 'id'
+    accessorKey: 'trace_id',
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title='Trace ID' />
     ),
@@ -67,7 +67,7 @@ export const tracesColumns: ColumnDef<Trace>[] = [
         </div>
       )
     },
-    enableSorting: true,
+    enableSorting: false, // Backend doesn't support trace_id sorting
     enableHiding: false,
   },
   {
@@ -78,7 +78,7 @@ export const tracesColumns: ColumnDef<Trace>[] = [
     cell: ({ row }) => {
       return <div className='font-medium'>{row.getValue('name')}</div>
     },
-    enableSorting: true,
+    enableSorting: false, // Backend doesn't support name sorting
   },
   {
     accessorKey: 'duration',
@@ -92,7 +92,7 @@ export const tracesColumns: ColumnDef<Trace>[] = [
     enableSorting: true,
   },
   {
-    accessorKey: 'status_code', // Updated from 'status'
+    accessorKey: 'status_code',
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title='Status' />
     ),
@@ -157,7 +157,7 @@ export const tracesColumns: ColumnDef<Trace>[] = [
       if (!provider) return false
       return value.includes(provider)
     },
-    enableSorting: true,
+    enableSorting: false, // Backend doesn't support provider_name sorting
   },
   {
     accessorKey: 'cost',

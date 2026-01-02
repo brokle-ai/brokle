@@ -345,6 +345,135 @@ func TestSpanQueryBuilder_BuildQuery(t *testing.T) {
 			offset:    0,
 			wantErr:   true,
 		},
+		{
+			name: "STARTS WITH operator",
+			node: &obsDomain.ConditionNode{
+				Field:    "span.name",
+				Operator: obsDomain.FilterOpStartsWith,
+				Value:    "chat",
+			},
+			projectID:    "proj123",
+			limit:        100,
+			offset:       0,
+			wantContains: []string{"startsWith(span_name, ?)"},
+			wantArgCount: 4, // projectID, filter value, limit, offset
+			wantErr:      false,
+		},
+		{
+			name: "ENDS WITH operator",
+			node: &obsDomain.ConditionNode{
+				Field:    "service.name",
+				Operator: obsDomain.FilterOpEndsWith,
+				Value:    "-bot",
+			},
+			projectID:    "proj123",
+			limit:        100,
+			offset:       0,
+			wantContains: []string{"endsWith(service_name, ?)"},
+			wantArgCount: 4,
+			wantErr:      false,
+		},
+		{
+			name: "REGEX operator",
+			node: &obsDomain.ConditionNode{
+				Field:    "span.name",
+				Operator: obsDomain.FilterOpRegex,
+				Value:    "chat.*bot",
+			},
+			projectID:    "proj123",
+			limit:        100,
+			offset:       0,
+			wantContains: []string{"match(span_name, ?)"},
+			wantArgCount: 4,
+			wantErr:      false,
+		},
+		{
+			name: "NOT REGEX operator",
+			node: &obsDomain.ConditionNode{
+				Field:    "span.name",
+				Operator: obsDomain.FilterOpNotRegex,
+				Value:    "test.*",
+			},
+			projectID:    "proj123",
+			limit:        100,
+			offset:       0,
+			wantContains: []string{"NOT match(span_name, ?)"},
+			wantArgCount: 4,
+			wantErr:      false,
+		},
+		{
+			name: "IS EMPTY operator",
+			node: &obsDomain.ConditionNode{
+				Field:    "user.id",
+				Operator: obsDomain.FilterOpIsEmpty,
+			},
+			projectID:    "proj123",
+			limit:        100,
+			offset:       0,
+			wantContains: []string{"(user_id IS NULL OR user_id = '')"},
+			wantArgCount: 3, // No filter args for IS EMPTY
+			wantErr:      false,
+		},
+		{
+			name: "IS NOT EMPTY operator",
+			node: &obsDomain.ConditionNode{
+				Field:    "session.id",
+				Operator: obsDomain.FilterOpIsNotEmpty,
+			},
+			projectID:    "proj123",
+			limit:        100,
+			offset:       0,
+			wantContains: []string{"(session_id IS NOT NULL AND session_id != '')"},
+			wantArgCount: 3,
+			wantErr:      false,
+		},
+		{
+			name: "Search operator (~)",
+			node: &obsDomain.ConditionNode{
+				Field:    "custom.field",
+				Operator: obsDomain.FilterOpSearch,
+				Value:    "hello world",
+			},
+			projectID:    "proj123",
+			limit:        100,
+			offset:       0,
+			wantContains: []string{"positionCaseInsensitive(span_attributes['custom.field'], ?) > 0"},
+			wantArgCount: 4,
+			wantErr:      false,
+		},
+		{
+			name: "REGEX with invalid value type",
+			node: &obsDomain.ConditionNode{
+				Field:    "span.name",
+				Operator: obsDomain.FilterOpRegex,
+				Value:    12345, // Should be string
+			},
+			projectID: "proj123",
+			limit:     100,
+			offset:    0,
+			wantErr:   true,
+		},
+		{
+			name: "combined extended operators",
+			node: &obsDomain.BinaryNode{
+				Left: &obsDomain.ConditionNode{
+					Field:    "span.name",
+					Operator: obsDomain.FilterOpStartsWith,
+					Value:    "llm",
+				},
+				Operator: obsDomain.LogicAnd,
+				Right: &obsDomain.ConditionNode{
+					Field:    "user.id",
+					Operator: obsDomain.FilterOpIsNotEmpty,
+				},
+			},
+			projectID:    "proj123",
+			limit:        100,
+			offset:       0,
+			wantContains: []string{"(startsWith(span_name, ?) AND (user_id IS NOT NULL AND user_id != ''))"},
+			wantArgCount: 4, // projectID, startsWith value, limit, offset
+			wantErr:      false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -375,7 +504,6 @@ func TestSpanQueryBuilder_BuildQuery(t *testing.T) {
 				}
 			}
 
-			// Verify query structure
 			assert.Contains(t, result.Query, "SELECT")
 			assert.Contains(t, result.Query, "FROM otel_traces")
 			assert.Contains(t, result.Query, "WHERE")
@@ -925,6 +1053,402 @@ func TestEscapeAttributeKey(t *testing.T) {
 		t.Run(tt.input, func(t *testing.T) {
 			result := escapeAttributeKey(tt.input)
 			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestValidateRegexPattern(t *testing.T) {
+	tests := []struct {
+		name       string
+		pattern    string
+		wantErr    bool
+		errContain string
+	}{
+		{
+			name:    "valid simple pattern",
+			pattern: "hello.*world",
+			wantErr: false,
+		},
+		{
+			name:    "valid pattern with character class",
+			pattern: "[a-zA-Z]+",
+			wantErr: false,
+		},
+		{
+			name:    "valid pattern with anchors",
+			pattern: "^start.*end$",
+			wantErr: false,
+		},
+		{
+			name:    "valid pattern with few quantifiers",
+			pattern: "a+b*c?d+e*",
+			wantErr: false,
+		},
+		{
+			name:       "pattern too long",
+			pattern:    strings.Repeat("a", 501),
+			wantErr:    true,
+			errContain: "too long",
+		},
+		{
+			name:    "pattern at max length is ok",
+			pattern: strings.Repeat("a", 500),
+			wantErr: false,
+		},
+		{
+			name:       "too many quantifiers",
+			pattern:    "a*b*c*d*e*f*g*h*i*j*k*",
+			wantErr:    true,
+			errContain: "too complex",
+		},
+		{
+			name:       "excessive plus quantifiers",
+			pattern:    "a+b+c+d+e+f+g+h+i+j+k+",
+			wantErr:    true,
+			errContain: "too complex",
+		},
+		{
+			name:       "mixed quantifiers exceeding limit",
+			pattern:    "a*b+c?d*e+f?g*h+i?j*k+l?",
+			wantErr:    true,
+			errContain: "too complex",
+		},
+		{
+			name:    "exactly 10 quantifiers is ok",
+			pattern: "a*b+c?d*e+f?g*h+i?j*",
+			wantErr: false,
+		},
+		{
+			name:    "empty pattern",
+			pattern: "",
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateRegexPattern(tt.pattern)
+			if tt.wantErr {
+				require.Error(t, err)
+				if tt.errContain != "" {
+					assert.Contains(t, err.Error(), tt.errContain)
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestSpanQueryBuilder_RegexPatternValidation(t *testing.T) {
+	// Test that regex pattern validation is applied during query building
+	tests := []struct {
+		name    string
+		pattern string
+		wantErr bool
+	}{
+		{
+			name:    "valid pattern in query",
+			pattern: "chat.*bot",
+			wantErr: false,
+		},
+		{
+			name:    "pattern too complex in query",
+			pattern: "a*b*c*d*e*f*g*h*i*j*k*l*",
+			wantErr: true,
+		},
+		{
+			name:    "pattern too long in query",
+			pattern: strings.Repeat("x", 501),
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			builder := NewSpanQueryBuilder()
+			node := &obsDomain.ConditionNode{
+				Field:    "span.name",
+				Operator: obsDomain.FilterOpRegex,
+				Value:    tt.pattern,
+			}
+
+			result, err := builder.BuildQuery(node, "proj123", nil, nil, 100, 0)
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Nil(t, result)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, result)
+				assert.Contains(t, result.Query, "match(span_name, ?)")
+			}
+		})
+	}
+}
+
+func TestSpanQueryBuilder_BuildTextSearchCondition(t *testing.T) {
+	tests := []struct {
+		name         string
+		query        string
+		searchTypes  []obsDomain.SearchType
+		wantContains []string
+		wantArgCount int
+	}{
+		{
+			name:         "empty query",
+			query:        "",
+			searchTypes:  nil,
+			wantContains: nil,
+			wantArgCount: 0,
+		},
+		{
+			name:        "search type ID",
+			query:       "abc123",
+			searchTypes: []obsDomain.SearchType{obsDomain.SearchTypeID},
+			wantContains: []string{
+				"positionCaseInsensitive(trace_id, ?)",
+				"positionCaseInsensitive(span_id, ?)",
+				"positionCaseInsensitive(span_name, ?)",
+				" OR ",
+			},
+			wantArgCount: 3,
+		},
+		{
+			name:        "search type content",
+			query:       "hello world",
+			searchTypes: []obsDomain.SearchType{obsDomain.SearchTypeContent},
+			wantContains: []string{
+				"hasToken(input_preview, ?)",
+				"hasToken(output_preview, ?)",
+				" OR ",
+			},
+			wantArgCount: 2,
+		},
+		{
+			name:        "search type all (default)",
+			query:       "error",
+			searchTypes: nil, // defaults to all
+			wantContains: []string{
+				"positionCaseInsensitive(trace_id, ?)",
+				"positionCaseInsensitive(span_id, ?)",
+				"positionCaseInsensitive(span_name, ?)",
+				"hasToken(input_preview, ?)",
+				"hasToken(output_preview, ?)",
+			},
+			wantArgCount: 5,
+		},
+		{
+			name:        "explicit search type all",
+			query:       "exception",
+			searchTypes: []obsDomain.SearchType{obsDomain.SearchTypeAll},
+			wantContains: []string{
+				"positionCaseInsensitive(trace_id, ?)",
+				"hasToken(input_preview, ?)",
+			},
+			wantArgCount: 5,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			builder := NewSpanQueryBuilder()
+			result, args, err := builder.BuildTextSearchCondition(tt.query, tt.searchTypes)
+
+			require.NoError(t, err)
+
+			if tt.query == "" {
+				assert.Empty(t, result)
+				assert.Empty(t, args)
+				return
+			}
+
+			for _, fragment := range tt.wantContains {
+				assert.Contains(t, result, fragment, "Search condition should contain: %s", fragment)
+			}
+
+			assert.Len(t, args, tt.wantArgCount, "Unexpected argument count")
+		})
+	}
+}
+
+func TestSpanQueryBuilder_BuildQueryWithSearch(t *testing.T) {
+	tests := []struct {
+		name          string
+		node          obsDomain.FilterNode
+		searchQuery   string
+		searchTypes   []obsDomain.SearchType
+		projectID     string
+		startTime     *time.Time
+		endTime       *time.Time
+		limit         int
+		offset        int
+		wantContains  []string
+		wantArgCount  int
+		wantErr       bool
+	}{
+		{
+			name:        "search only - no filter",
+			node:        nil,
+			searchQuery: "error",
+			searchTypes: []obsDomain.SearchType{obsDomain.SearchTypeContent},
+			projectID:   "proj123",
+			limit:       100,
+			offset:      0,
+			wantContains: []string{
+				"project_id = ?",
+				"hasToken(input_preview, ?)",
+				"hasToken(output_preview, ?)",
+			},
+			wantArgCount: 5, // projectID, 2 search args, limit, offset
+			wantErr:      false,
+		},
+		{
+			name: "filter with search",
+			node: &obsDomain.ConditionNode{
+				Field:    "service.name",
+				Operator: obsDomain.FilterOpEqual,
+				Value:    "chatbot",
+			},
+			searchQuery: "hello",
+			searchTypes: []obsDomain.SearchType{obsDomain.SearchTypeContent},
+			projectID:   "proj123",
+			limit:       100,
+			offset:      0,
+			wantContains: []string{
+				"service_name = ?",
+				"hasToken(input_preview, ?)",
+			},
+			wantArgCount: 6, // projectID, filter value, 2 search args, limit, offset
+			wantErr:      false,
+		},
+		{
+			name:        "search with time range",
+			node:        nil,
+			searchQuery: "test",
+			searchTypes: []obsDomain.SearchType{obsDomain.SearchTypeID},
+			projectID:   "proj123",
+			startTime:   timePtr(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)),
+			endTime:     timePtr(time.Date(2024, 1, 31, 23, 59, 59, 0, time.UTC)),
+			limit:       50,
+			offset:      10,
+			wantContains: []string{
+				"start_time >= ?",
+				"start_time <= ?",
+				"positionCaseInsensitive(trace_id, ?)",
+				"positionCaseInsensitive(span_id, ?)",
+				"positionCaseInsensitive(span_name, ?)",
+			},
+			wantArgCount: 8, // projectID, startTime, endTime, 3 search args, limit, offset
+			wantErr:      false,
+		},
+		{
+			name:         "no search query",
+			node:         nil,
+			searchQuery:  "",
+			searchTypes:  nil,
+			projectID:    "proj123",
+			limit:        100,
+			offset:       0,
+			wantContains: []string{"project_id = ?", "deleted_at IS NULL"},
+			wantArgCount: 3, // projectID, limit, offset
+			wantErr:      false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			builder := NewSpanQueryBuilder()
+			result, err := builder.BuildQueryWithSearch(
+				tt.node, tt.searchQuery, tt.searchTypes,
+				tt.projectID, tt.startTime, tt.endTime,
+				tt.limit, tt.offset,
+			)
+
+			if tt.wantErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			require.NotNil(t, result)
+
+			for _, fragment := range tt.wantContains {
+				assert.Contains(t, result.Query, fragment, "Query should contain: %s", fragment)
+			}
+
+			assert.Len(t, result.Args, tt.wantArgCount, "Unexpected argument count")
+
+			assert.Contains(t, result.Query, "SELECT")
+			assert.Contains(t, result.Query, "FROM otel_traces")
+			assert.Contains(t, result.Query, "ORDER BY start_time DESC")
+			assert.Contains(t, result.Query, "LIMIT ? OFFSET ?")
+		})
+	}
+}
+
+func TestSpanQueryBuilder_BuildCountQueryWithSearch(t *testing.T) {
+	tests := []struct {
+		name         string
+		node         obsDomain.FilterNode
+		searchQuery  string
+		searchTypes  []obsDomain.SearchType
+		projectID    string
+		wantContains []string
+		wantArgCount int
+	}{
+		{
+			name:        "count with search only",
+			node:        nil,
+			searchQuery: "error",
+			searchTypes: []obsDomain.SearchType{obsDomain.SearchTypeAll},
+			projectID:   "proj123",
+			wantContains: []string{
+				"count(*)",
+				"hasToken(input_preview, ?)",
+				"positionCaseInsensitive(trace_id, ?)",
+			},
+			wantArgCount: 6, // projectID, 5 search args
+		},
+		{
+			name: "count with filter and search",
+			node: &obsDomain.ConditionNode{
+				Field:    "gen_ai.system",
+				Operator: obsDomain.FilterOpEqual,
+				Value:    "openai",
+			},
+			searchQuery: "chat",
+			searchTypes: []obsDomain.SearchType{obsDomain.SearchTypeContent},
+			projectID:   "proj123",
+			wantContains: []string{
+				"count(*)",
+				"provider_name = ?",
+				"hasToken(input_preview, ?)",
+			},
+			wantArgCount: 4, // projectID, filter value, 2 search args
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			builder := NewSpanQueryBuilder()
+			result, err := builder.BuildCountQueryWithSearch(
+				tt.node, tt.searchQuery, tt.searchTypes,
+				tt.projectID, nil, nil,
+			)
+
+			require.NoError(t, err)
+			require.NotNil(t, result)
+
+			for _, fragment := range tt.wantContains {
+				assert.Contains(t, result.Query, fragment, "Query should contain: %s", fragment)
+			}
+
+			assert.Len(t, result.Args, tt.wantArgCount, "Unexpected argument count")
+
+			// Verify count query doesn't have pagination
+			assert.NotContains(t, result.Query, "LIMIT")
+			assert.NotContains(t, result.Query, "OFFSET")
+			assert.NotContains(t, result.Query, "ORDER BY")
 		})
 	}
 }

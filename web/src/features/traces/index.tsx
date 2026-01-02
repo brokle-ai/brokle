@@ -1,11 +1,9 @@
 'use client'
 
-import { useSearchParams } from 'next/navigation'
 import { Activity } from 'lucide-react'
 import { TracesProvider } from './context/traces-context'
 import { TracesTable } from './components/traces-table'
 import { useProjectTraces } from './hooks/use-project-traces'
-import { useTableSearchParams } from '@/hooks/use-table-search-params'
 import { PageHeader } from '@/components/layout/page-header'
 import { DataTableEmptyState } from '@/components/data-table'
 import { LoadingSpinner } from '@/components/guards/loading-spinner'
@@ -15,18 +13,14 @@ interface TracesProps {
 }
 
 function TracesContent() {
-  const searchParams = useSearchParams()
-  const { data, totalCount, isLoading, isFetching, error, hasProject, refetch } = useProjectTraces()
-  const { filter, status } = useTableSearchParams(searchParams)
+  const { data, totalCount, isLoading, isFetching, error, hasProject, refetch, tableState } = useProjectTraces()
 
-  // Check if there are active filters
-  const hasActiveFilters = !!(filter || status.length > 0)
-
-  // Only show spinner on true initial load (no data at all)
-  const isInitialLoad = isLoading && data.length === 0
+  // True initial load: ONLY when first loading with absolutely no data
+  // Once we've shown the table, never go back to full-screen spinner
+  const isInitialLoad = isLoading && data.length === 0 && !tableState.hasActiveFilters
 
   // Determine if project is truly empty (no data ever, not just filtered to zero)
-  const isEmptyProject = !isLoading && totalCount === 0 && !hasActiveFilters
+  const isEmptyProject = !isLoading && totalCount === 0 && !tableState.hasActiveFilters
 
   return (
     <>
@@ -71,7 +65,7 @@ function TracesContent() {
           />
         )}
 
-        {/* Table (has data OR has active filters) */}
+        {/* Table - keep showing data while fetching (no blink) */}
         {!error && hasProject && !isInitialLoad && !isEmptyProject && (
           <TracesTable data={data} totalCount={totalCount} isFetching={isFetching} />
         )}
@@ -99,11 +93,14 @@ export { useProjectTraces, useTraceFilterOptions } from './hooks/use-project-tra
 export { useTraceDetailState } from './hooks/use-trace-detail-state'
 export { usePeekSheetState } from './hooks/use-peek-sheet-state'
 export { usePeekData } from './hooks/use-peek-data'
+export { useTracesTableState } from './hooks/use-traces-table-state'
+export { useColumnVisibility } from './hooks/use-column-visibility'
 
 // Types
 export type { TraceFilterOptions, FilterRange, GetTracesParams } from './api/traces-api'
 export type { UseProjectTracesReturn, UseTraceFilterOptionsReturn } from './hooks/use-project-traces'
 export type { ViewMode } from './hooks/use-trace-detail-state'
+export type { UseTracesTableStateReturn } from './hooks/use-traces-table-state'
 
 // API
 export { getProjectTraces, getTraceFilterOptions, getTraceById, getSpansForTrace } from './api/traces-api'

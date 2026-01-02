@@ -2,6 +2,7 @@ package observability
 
 import (
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -46,6 +47,19 @@ func parseBool(value string) *bool {
 	return &b
 }
 
+// filterEmptyStrings removes empty and whitespace-only strings from a slice.
+// Applies TrimSpace to each element before checking.
+func filterEmptyStrings(slice []string) []string {
+	result := make([]string, 0, len(slice))
+	for _, s := range slice {
+		s = strings.TrimSpace(s)
+		if s != "" {
+			result = append(result, s)
+		}
+	}
+	return result
+}
+
 // ListTraces handles GET /api/v1/traces
 // @Summary List traces for a project
 // @Description Retrieve paginated list of traces with optional filtering
@@ -86,7 +100,6 @@ func (h *Handler) ListTraces(c *gin.Context) {
 		ProjectID: projectID,
 	}
 
-	// Basic filters
 	if sessionID := c.Query("session_id"); sessionID != "" {
 		filter.SessionID = &sessionID
 	}
@@ -97,7 +110,6 @@ func (h *Handler) ListTraces(c *gin.Context) {
 		filter.ServiceName = &serviceName
 	}
 
-	// Advanced filters
 	if modelName := c.Query("model_name"); modelName != "" {
 		filter.ModelName = &modelName
 	}
@@ -112,7 +124,34 @@ func (h *Handler) ListTraces(c *gin.Context) {
 	filter.MaxDuration = parseInt64(c.Query("max_duration"))
 	filter.HasError = parseBool(c.Query("has_error"))
 
-	// Time filters
+	if search := c.Query("search"); search != "" {
+		filter.Search = &search
+	}
+	if searchType := c.Query("search_type"); searchType != "" {
+		filter.SearchType = &searchType
+	}
+
+	// Status filter (comma-separated: "ok,error,unset")
+	if statusStr := c.Query("status"); statusStr != "" {
+		filter.Statuses = filterEmptyStrings(strings.Split(statusStr, ","))
+		for _, s := range filter.Statuses {
+			if s != "ok" && s != "error" && s != "unset" {
+				response.ValidationError(c, "invalid status value", "status must be one of: ok, error, unset (got: "+s+")")
+				return
+			}
+		}
+	}
+	// Status exclusion filter (comma-separated: "ok,error,unset")
+	if statusNotStr := c.Query("status_not"); statusNotStr != "" {
+		filter.StatusesNot = filterEmptyStrings(strings.Split(statusNotStr, ","))
+		for _, s := range filter.StatusesNot {
+			if s != "ok" && s != "error" && s != "unset" {
+				response.ValidationError(c, "invalid status_not value", "status_not must be one of: ok, error, unset (got: "+s+")")
+				return
+			}
+		}
+	}
+
 	if startTimeStr := c.Query("start_time"); startTimeStr != "" {
 		startTimeInt, err := strconv.ParseInt(startTimeStr, 10, 64)
 		if err != nil {
@@ -302,4 +341,59 @@ func (h *Handler) GetTraceFilterOptions(c *gin.Context) {
 	}
 
 	response.Success(c, options)
+}
+
+// DiscoverAttributes handles GET /api/v1/traces/attributes
+// @Summary Discover attribute keys from trace data
+// @Description Extract unique attribute keys from span_attributes and resource_attributes for filter autocomplete
+// @Tags Traces
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param project_id query string true "Project ID"
+// @Param prefix query string false "Filter attribute keys by prefix"
+// @Param source query string false "Filter by source (span_attributes, resource_attributes)"
+// @Param limit query int false "Maximum number of attributes to return (default 100, max 500)"
+// @Success 200 {object} response.APIResponse{data=observability.AttributeDiscoveryResponse} "Discovered attributes"
+// @Failure 400 {object} response.APIResponse{error=response.APIError} "Invalid parameters"
+// @Failure 401 {object} response.APIResponse{error=response.APIError} "Unauthorized"
+// @Failure 500 {object} response.APIResponse{error=response.APIError} "Internal server error"
+// @Router /api/v1/traces/attributes [get]
+func (h *Handler) DiscoverAttributes(c *gin.Context) {
+	projectID := c.Query("project_id")
+	if projectID == "" {
+		response.ValidationError(c, "project_id is required", "project_id query parameter is required")
+		return
+	}
+
+	req := &observability.AttributeDiscoveryRequest{
+		ProjectID: projectID,
+		Prefix:    c.Query("prefix"),
+	}
+
+	if limitStr := c.Query("limit"); limitStr != "" {
+		if limit, err := strconv.Atoi(limitStr); err == nil {
+			req.Limit = limit
+		}
+	}
+
+	if source := c.Query("source"); source != "" {
+		switch source {
+		case "span_attributes":
+			req.Sources = []observability.AttributeSource{observability.AttributeSourceSpan}
+		case "resource_attributes":
+			req.Sources = []observability.AttributeSource{observability.AttributeSourceResource}
+		default:
+			response.ValidationError(c, "invalid source", "source must be 'span_attributes' or 'resource_attributes'")
+			return
+		}
+	}
+
+	attributes, err := h.services.GetTraceService().DiscoverAttributes(c.Request.Context(), req)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	response.Success(c, attributes)
 }

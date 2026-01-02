@@ -44,6 +44,10 @@ type TraceRepository interface {
 
 	QuerySpansByExpression(ctx context.Context, query string, args []interface{}) ([]*Span, error)
 	CountSpansByExpression(ctx context.Context, query string, args []interface{}) (int64, error)
+
+	// DiscoverAttributes extracts unique attribute keys from span_attributes and resource_attributes.
+	// Returns attribute keys with occurrence counts, useful for populating filter UI autocomplete.
+	DiscoverAttributes(ctx context.Context, req *AttributeDiscoveryRequest) (*AttributeDiscoveryResponse, error)
 }
 
 // ScoreRepository uses ReplacingMergeTree pattern for eventual consistency.
@@ -167,6 +171,12 @@ type TraceFilter struct {
 	pagination.Params
 	ProjectID string
 	Tags      []string
+
+	// Text search
+	Search     *string  // Text search query
+	SearchType *string  // Search type: "id", "content", "all"
+	Statuses   []string // Status filter: "ok", "error", "unset" (inclusion)
+	StatusesNot []string // Status exclusion filter: "ok", "error", "unset"
 }
 
 type SpanFilter struct {
@@ -215,6 +225,9 @@ type TraceFilterOptions struct {
 	Environments  []string `json:"environments"`
 	Users         []string `json:"users"`
 	Sessions      []string `json:"sessions"`
+	SpanNames     []string `json:"span_names"`
+	SpanTypes     []string `json:"span_types"`
+	StatusCodes   []int    `json:"status_codes"`
 	CostRange     *Range   `json:"cost_range"`
 	TokenRange    *Range   `json:"token_range"`
 	DurationRange *Range   `json:"duration_range"`

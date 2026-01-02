@@ -6,10 +6,8 @@ import {
   transformTraceResponse,
   transformSpan,
   transformScore,
-  stringToStatusCode,
 } from '../utils/transform'
 
-// Create API client instance
 const client = new BrokleAPIClient('/api')
 
 // ============================================================================
@@ -20,8 +18,10 @@ export interface GetTracesParams {
   projectId: string
   page?: number
   pageSize?: number
-  status?: string[] // ['ok', 'error', 'unset']
+  status?: string[] // ['ok', 'error', 'unset'] (inclusion)
+  statusNot?: string[] // ['ok', 'error', 'unset'] (exclusion)
   search?: string
+  searchType?: string // 'id' | 'content' | 'all'
   sessionId?: string
   userId?: string
   startTime?: Date
@@ -123,7 +123,9 @@ export const getProjectTraces = async (params: GetTracesParams): Promise<{
     page = 1,
     pageSize = 20,
     status,
+    statusNot,
     search,
+    searchType,
     sessionId,
     userId,
     startTime,
@@ -142,15 +144,14 @@ export const getProjectTraces = async (params: GetTracesParams): Promise<{
     hasError,
   } = params
 
-  // Build query parameters
   const queryParams: Record<string, any> = {
     project_id: projectId,
     page,
     limit: pageSize,
   }
 
-  // Add optional filters
   if (search) queryParams.search = search
+  if (searchType) queryParams.search_type = searchType
   if (sessionId) queryParams.session_id = sessionId
   if (userId) queryParams.user_id = userId
   if (startTime) queryParams.start_time = Math.floor(startTime.getTime() / 1000)
@@ -158,10 +159,13 @@ export const getProjectTraces = async (params: GetTracesParams): Promise<{
   if (sortBy) queryParams.sort_by = sortBy
   if (sortOrder) queryParams.sort_dir = sortOrder
 
-  // Convert status strings to codes (e.g., ['ok', 'error'] → '1,2')
+  // Send status strings directly (backend expects 'ok,error,unset')
   if (status && status.length > 0) {
-    const statusCodes = status.map(stringToStatusCode)
-    queryParams.status = statusCodes.join(',')
+    queryParams.status = status.join(',')
+  }
+  // Send status exclusion (backend expects 'ok,error,unset')
+  if (statusNot && statusNot.length > 0) {
+    queryParams.status_not = statusNot.join(',')
   }
 
   if (modelName) queryParams.model_name = modelName
@@ -175,10 +179,8 @@ export const getProjectTraces = async (params: GetTracesParams): Promise<{
   if (maxDuration !== undefined) queryParams.max_duration = maxDuration
   if (hasError !== undefined) queryParams.has_error = hasError
 
-  // Make API request using getPaginated (preserves pagination metadata)
   const response = await client.getPaginated<any>('/v1/traces', queryParams)
 
-  // Transform trace data
   return {
     traces: response.data.map(transformTrace),
     totalCount: response.pagination.total,
@@ -381,7 +383,6 @@ export const getTraceFilterOptions = async (
     project_id: projectId,
   })
 
-  // Transform snake_case to camelCase
   return {
     models: response.models || [],
     providers: response.providers || [],
@@ -439,10 +440,8 @@ export const getSpans = async (params: GetSpansParams): Promise<{
   if (sortBy) queryParams.sort_by = sortBy
   if (sortOrder) queryParams.sort_dir = sortOrder
 
-  // Make API request using getPaginated (preserves pagination metadata)
   const response = await client.getPaginated<any>('/v1/spans', queryParams)
 
-  // Transform span data
   return {
     spans: response.data.map(transformSpan),
     totalCount: response.pagination.total,
@@ -560,4 +559,206 @@ export const updateScore = async (
     ...data,
   })
   return transformScore(response)
+}
+
+// ============================================================================
+// Filter Presets API
+// ============================================================================
+
+export interface FilterCondition {
+  id: string
+  column: string
+  operator: FilterOperator
+  value: string | number | string[] | null
+}
+
+export type FilterOperator =
+  | '='
+  | '!='
+  | '>'
+  | '<'
+  | '>='
+  | '<='
+  | 'CONTAINS'
+  | 'NOT CONTAINS'
+  | 'IN'
+  | 'NOT IN'
+  | 'EXISTS'
+  | 'NOT EXISTS'
+  | 'STARTS WITH'
+  | 'ENDS WITH'
+  | 'REGEX'
+  | 'IS EMPTY'
+  | 'IS NOT EMPTY'
+  | '~' // full-text search
+
+export interface FilterPreset {
+  id: string
+  project_id: string
+  name: string
+  description?: string
+  table_name: 'traces' | 'spans'
+  filters: FilterCondition[]
+  column_order?: string[]
+  column_visibility?: Record<string, boolean>
+  search_query?: string
+  search_types?: ('id' | 'content' | 'all')[]
+  is_public: boolean
+  created_by?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateFilterPresetRequest {
+  name: string
+  description?: string
+  table_name: 'traces' | 'spans'
+  filters: FilterCondition[]
+  column_order?: string[]
+  column_visibility?: Record<string, boolean>
+  search_query?: string
+  search_types?: string[]
+  is_public?: boolean
+}
+
+export interface UpdateFilterPresetRequest {
+  name?: string
+  description?: string
+  filters?: FilterCondition[]
+  column_order?: string[]
+  column_visibility?: Record<string, boolean>
+  search_query?: string
+  search_types?: string[]
+  is_public?: boolean
+}
+
+/**
+ * Get all filter presets for a project
+ *
+ * Backend endpoint: GET /api/v1/projects/{projectId}/filter-presets
+ *
+ * @param projectId - Project ULID
+ * @param tableName - Filter by table name ('traces' or 'spans')
+ * @param includePublic - Include public presets (default: true)
+ * @returns Array of filter presets
+ */
+export const getFilterPresets = async (
+  projectId: string,
+  tableName?: 'traces' | 'spans',
+  includePublic: boolean = true
+): Promise<FilterPreset[]> => {
+  const queryParams: Record<string, any> = {
+    project_id: projectId,
+    include_public: includePublic,
+  }
+  if (tableName) {
+    queryParams.table_name = tableName
+  }
+
+  return client.get<FilterPreset[]>(
+    `/v1/projects/${projectId}/filter-presets`,
+    queryParams
+  )
+}
+
+/**
+ * Get a single filter preset by ID
+ *
+ * Backend endpoint: GET /api/v1/projects/{projectId}/filter-presets/{id}
+ *
+ * @param projectId - Project ULID
+ * @param presetId - Filter preset ID
+ * @returns Filter preset object
+ */
+export const getFilterPresetById = async (
+  projectId: string,
+  presetId: string
+): Promise<FilterPreset> => {
+  return client.get<FilterPreset>(
+    `/v1/projects/${projectId}/filter-presets/${presetId}`,
+    { project_id: projectId }
+  )
+}
+
+/**
+ * Create a new filter preset
+ *
+ * Backend endpoint: POST /api/v1/projects/{projectId}/filter-presets
+ *
+ * @param projectId - Project ULID
+ * @param data - Filter preset data
+ * @returns Created filter preset
+ */
+export const createFilterPreset = async (
+  projectId: string,
+  data: CreateFilterPresetRequest
+): Promise<FilterPreset> => {
+  return client.post<FilterPreset>(
+    `/v1/projects/${projectId}/filter-presets`,
+    data
+  )
+}
+
+/**
+ * Update an existing filter preset
+ *
+ * Backend endpoint: PATCH /api/v1/projects/{projectId}/filter-presets/{id}
+ *
+ * @param projectId - Project ULID
+ * @param presetId - Filter preset ID
+ * @param data - Updated filter preset data
+ * @returns Updated filter preset
+ */
+export const updateFilterPreset = async (
+  projectId: string,
+  presetId: string,
+  data: UpdateFilterPresetRequest
+): Promise<FilterPreset> => {
+  return client.patch<FilterPreset>(
+    `/v1/projects/${projectId}/filter-presets/${presetId}`,
+    data
+  )
+}
+
+/**
+ * Delete a filter preset
+ *
+ * Backend endpoint: DELETE /api/v1/projects/{projectId}/filter-presets/{id}
+ *
+ * @param projectId - Project ULID
+ * @param presetId - Filter preset ID
+ */
+export const deleteFilterPreset = async (
+  projectId: string,
+  presetId: string
+): Promise<void> => {
+  await client.delete(`/v1/projects/${projectId}/filter-presets/${presetId}`)
+}
+
+/**
+ * Discover available attribute keys from spans
+ *
+ * Backend endpoint: GET /api/v1/traces/attributes
+ *
+ * @param projectId - Project ULID
+ * @returns Array of attribute keys with metadata
+ */
+export interface AttributeKey {
+  key: string
+  source: 'span_attributes' | 'resource_attributes'
+  value_type: 'string' | 'number' | 'boolean' | 'array'
+  count: number
+}
+
+export interface AttributeDiscoveryResponse {
+  attributes: AttributeKey[]
+  total_count: number
+}
+
+export const discoverAttributes = async (
+  projectId: string
+): Promise<AttributeDiscoveryResponse> => {
+  return client.get<AttributeDiscoveryResponse>('/v1/traces/attributes', {
+    project_id: projectId,
+  })
 }

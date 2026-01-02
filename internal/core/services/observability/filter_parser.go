@@ -14,9 +14,12 @@ import (
 //   or_expr     = and_expr ("OR" and_expr)*
 //   and_expr    = primary ("AND" primary)*
 //   primary     = "(" expression ")" | condition
-//   condition   = field operator value | field "EXISTS" | field "NOT" "EXISTS"
+//   condition   = field operator value | field existence_op | field empty_op
 //   field       = identifier ("." identifier)*
-//   operator    = "=" | "!=" | ">" | "<" | ">=" | "<=" | "CONTAINS" | "NOT CONTAINS" | "IN" | "NOT IN"
+//   operator    = "=" | "!=" | ">" | "<" | ">=" | "<=" | "CONTAINS" | "NOT CONTAINS"
+//                | "IN" | "NOT IN" | "STARTS WITH" | "ENDS WITH" | "REGEX" | "NOT REGEX" | "~"
+//   existence_op = "EXISTS" | "NOT" "EXISTS"
+//   empty_op   = "IS" "EMPTY" | "IS" "NOT" "EMPTY"
 //   value       = string | number | "(" string_list ")"
 
 // FilterParser parses filter expressions into an AST.
@@ -163,9 +166,75 @@ func (p *FilterParser) parseCondition() (obsDomain.FilterNode, error) {
 		}, nil
 	}
 
+	if p.check(TokenIs) {
+		return p.parseIsCondition(field, negated)
+	}
+
+	if p.check(TokenStarts) {
+		p.advance()
+		if !p.match(TokenWith) {
+			return nil, fmt.Errorf("%w: expected WITH after STARTS", obsDomain.ErrInvalidFilterSyntax)
+		}
+		value, err := p.parseValue(obsDomain.FilterOpStartsWith)
+		if err != nil {
+			return nil, err
+		}
+		p.clauseCount++
+		if err := p.checkComplexity(); err != nil {
+			return nil, err
+		}
+		return &obsDomain.ConditionNode{
+			Field:    field,
+			Operator: obsDomain.FilterOpStartsWith,
+			Value:    value,
+		}, nil
+	}
+
+	if p.check(TokenEnds) {
+		p.advance()
+		if !p.match(TokenWith) {
+			return nil, fmt.Errorf("%w: expected WITH after ENDS", obsDomain.ErrInvalidFilterSyntax)
+		}
+		value, err := p.parseValue(obsDomain.FilterOpEndsWith)
+		if err != nil {
+			return nil, err
+		}
+		p.clauseCount++
+		if err := p.checkComplexity(); err != nil {
+			return nil, err
+		}
+		return &obsDomain.ConditionNode{
+			Field:    field,
+			Operator: obsDomain.FilterOpEndsWith,
+			Value:    value,
+		}, nil
+	}
+
+	if p.check(TokenRegex) {
+		p.advance()
+		op := obsDomain.FilterOpRegex
+		if negated {
+			op = obsDomain.FilterOpNotRegex
+		}
+		value, err := p.parseValue(op)
+		if err != nil {
+			return nil, err
+		}
+		p.clauseCount++
+		if err := p.checkComplexity(); err != nil {
+			return nil, err
+		}
+		return &obsDomain.ConditionNode{
+			Field:    field,
+			Operator: op,
+			Value:    value,
+			Negated:  negated,
+		}, nil
+	}
+
 	if !p.check(TokenOperator) && !p.check(TokenContains) && !p.check(TokenIn) {
 		if negated {
-			return nil, fmt.Errorf("%w: NOT must be followed by EXISTS, CONTAINS, or IN", obsDomain.ErrInvalidFilterSyntax)
+			return nil, fmt.Errorf("%w: NOT must be followed by EXISTS, CONTAINS, IN, or REGEX", obsDomain.ErrInvalidFilterSyntax)
 		}
 		return nil, fmt.Errorf("%w: expected operator at position %d", obsDomain.ErrMissingOperator, p.currentToken().Pos)
 	}
@@ -175,7 +244,11 @@ func (p *FilterParser) parseCondition() (obsDomain.FilterNode, error) {
 
 	switch opToken.Type {
 	case TokenOperator:
-		op = obsDomain.FilterOperator(opToken.Value)
+		if opToken.Value == "~" {
+			op = obsDomain.FilterOpSearch
+		} else {
+			op = obsDomain.FilterOperator(opToken.Value)
+		}
 	case TokenContains:
 		if negated {
 			op = obsDomain.FilterOpNotContains
@@ -204,6 +277,38 @@ func (p *FilterParser) parseCondition() (obsDomain.FilterNode, error) {
 		Field:    field,
 		Operator: op,
 		Value:    value,
+		Negated:  negated,
+	}, nil
+}
+
+// parseIsCondition handles IS EMPTY / IS NOT EMPTY conditions.
+func (p *FilterParser) parseIsCondition(field string, alreadyNegated bool) (obsDomain.FilterNode, error) {
+	p.advance()
+
+	negated := alreadyNegated
+	if p.check(TokenNot) {
+		p.advance()
+		negated = !negated
+	}
+
+	if !p.check(TokenEmpty) {
+		return nil, fmt.Errorf("%w: expected EMPTY after IS/IS NOT", obsDomain.ErrInvalidFilterSyntax)
+	}
+	p.advance()
+
+	op := obsDomain.FilterOpIsEmpty
+	if negated {
+		op = obsDomain.FilterOpIsNotEmpty
+	}
+
+	p.clauseCount++
+	if err := p.checkComplexity(); err != nil {
+		return nil, err
+	}
+
+	return &obsDomain.ConditionNode{
+		Field:    field,
+		Operator: op,
 		Negated:  negated,
 	}, nil
 }
@@ -346,6 +451,14 @@ const (
 	TokenExists
 	TokenContains
 	TokenIn
+	// New token types for extended operators
+	TokenStarts   // "STARTS" keyword
+	TokenEnds     // "ENDS" keyword
+	TokenWith     // "WITH" keyword
+	TokenRegex    // "REGEX" keyword
+	TokenIs       // "IS" keyword
+	TokenEmpty    // "EMPTY" keyword
+	TokenSearch   // "~" operator
 )
 
 // Token represents a lexical token.
@@ -444,6 +557,9 @@ func (l *Lexer) scanOperator() string {
 		op := string(l.input[l.pos])
 		l.pos++
 		return op
+	case '~':
+		l.pos++
+		return "~"
 	}
 
 	return ""
@@ -547,6 +663,19 @@ func (l *Lexer) classifyWord(word string, pos int) Token {
 		return Token{Type: TokenContains, Value: word, Pos: pos}
 	case "IN":
 		return Token{Type: TokenIn, Value: word, Pos: pos}
+	// New keywords for extended operators
+	case "STARTS":
+		return Token{Type: TokenStarts, Value: word, Pos: pos}
+	case "ENDS":
+		return Token{Type: TokenEnds, Value: word, Pos: pos}
+	case "WITH":
+		return Token{Type: TokenWith, Value: word, Pos: pos}
+	case "REGEX":
+		return Token{Type: TokenRegex, Value: word, Pos: pos}
+	case "IS":
+		return Token{Type: TokenIs, Value: word, Pos: pos}
+	case "EMPTY":
+		return Token{Type: TokenEmpty, Value: word, Pos: pos}
 	default:
 		return Token{Type: TokenField, Value: word, Pos: pos}
 	}

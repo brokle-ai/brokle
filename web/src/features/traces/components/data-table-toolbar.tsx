@@ -1,58 +1,94 @@
 'use client'
 
+import { useCallback } from 'react'
 import { Cross2Icon } from '@radix-ui/react-icons'
 import { type Table } from '@tanstack/react-table'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { DataTableViewOptions, DataTableFacetedFilter } from '@/components/data-table'
-import { statuses } from '../data/constants'
+import { DataTableViewOptions } from '@/components/data-table'
+import {
+  FilterBuilder,
+  SearchBar,
+  FilterPresetsDrawer,
+} from './filter-builder'
+import type { UseTracesTableStateReturn } from '../hooks/use-traces-table-state'
+import type { FilterPreset, FilterCondition } from '../api/traces-api'
 
 type DataTableToolbarProps<TData> = {
   table: Table<TData>
-  isPending?: boolean
-  onReset?: () => void
+  tableState: UseTracesTableStateReturn
+  filterOptions?: {
+    models?: string[]
+    providers?: string[]
+    services?: string[]
+    environments?: string[]
+  }
 }
 
 export function DataTableToolbar<TData>({
   table,
-  isPending = false,
-  onReset,
+  tableState,
+  filterOptions,
 }: DataTableToolbarProps<TData>) {
-  const isFiltered =
-    table.getState().columnFilters.length > 0 || table.getState().globalFilter
+  const handleApplyFilters = useCallback(
+    (filters: FilterCondition[]) => {
+      tableState.setFilters(filters)
+    },
+    [tableState]
+  )
 
-  const handleReset = () => {
-    onReset?.()
-  }
+  const handleSearchChange = useCallback(
+    (search: string, searchType?: string) => {
+      tableState.setSearch(search, searchType)
+    },
+    [tableState]
+  )
+
+  const handleApplyPreset = useCallback(
+    (preset: FilterPreset) => {
+      tableState.setFilters(preset.filters || [])
+      if (preset.search_query) {
+        // Pass search_types[0] as the URL param accepts a single value
+        tableState.setSearch(preset.search_query, preset.search_types?.[0])
+      }
+    },
+    [tableState]
+  )
 
   return (
-    <div className='flex items-center justify-between'>
-      <div className='flex flex-1 flex-col-reverse items-start gap-y-2 sm:flex-row sm:items-center sm:space-x-2'>
-        <Input
-          placeholder='Filter by trace ID or name...'
-          value={table.getState().globalFilter ?? ''}
-          onChange={(event) => table.setGlobalFilter(event.target.value)}
-          className='h-8 w-[150px] lg:w-[250px]'
-          disabled={isPending}
+    <div className="flex items-center justify-between">
+      <div className="flex flex-1 flex-col-reverse items-start gap-y-2 sm:flex-row sm:items-center sm:space-x-2">
+        <SearchBar
+          value={tableState.search || ''}
+          onChange={handleSearchChange}
+          searchType={tableState.searchType}
+          placeholder="Search traces..."
+          className="w-[250px] lg:w-[350px]"
         />
-        <div className='flex gap-x-2'>
-          {table.getColumn('status_code') && (
-            <DataTableFacetedFilter
-              column={table.getColumn('status_code')}
-              title='Status'
-              options={statuses}
-            />
-          )}
+
+        <div className="flex gap-x-2">
+          <FilterBuilder
+            filters={tableState.filters}
+            onApply={handleApplyFilters}
+            filterOptions={filterOptions}
+          />
+
+          <FilterPresetsDrawer
+            currentFilters={tableState.filters}
+            currentSearchQuery={tableState.search}
+            currentSearchType={tableState.searchType}
+            onApplyPreset={handleApplyPreset}
+            tableName="traces"
+          />
         </div>
-        {isFiltered && (
+
+        {tableState.hasActiveFilters && (
           <Button
-            variant='ghost'
-            onClick={handleReset}
-            className='h-8 px-2 lg:px-3'
-            disabled={isPending}
+            variant="ghost"
+            onClick={tableState.resetAll}
+            className="h-8 px-2 lg:px-3"
           >
             Reset
-            <Cross2Icon className='ms-2 h-4 w-4' />
+            <Cross2Icon className="ms-2 h-4 w-4" />
           </Button>
         )}
       </div>

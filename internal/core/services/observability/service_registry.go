@@ -21,6 +21,7 @@ type ServiceRegistry struct {
 	BlobStorageService    storageDomain.BlobStorageService
 	ArchiveService        *ArchiveService
 	SpanQueryService      *SpanQueryService
+	FilterPresetService   *FilterPresetService
 
 	OTLPConverterService        *OTLPConverterService
 	OTLPMetricsConverterService *OTLPMetricsConverterService
@@ -39,6 +40,7 @@ func NewServiceRegistry(
 	metricsRepo observability.MetricsRepository,
 	logsRepo observability.LogsRepository,
 	genaiEventsRepo observability.GenAIEventsRepository,
+	filterPresetRepo observability.FilterPresetRepository,
 	blobStorageService storageDomain.BlobStorageService,
 	s3Client *infraStorage.S3Client,
 	archiveConfig *config.ArchiveConfig,
@@ -63,6 +65,7 @@ func NewServiceRegistry(
 	logsService := NewLogsService(logsRepo, logger)
 	genaiEventsService := NewGenAIEventsService(genaiEventsRepo, logger)
 	spanQueryService := NewSpanQueryService(traceRepo, logger)
+	filterPresetService := NewFilterPresetService(filterPresetRepo, logger)
 
 	var archiveService *ArchiveService
 	if archiveConfig != nil && archiveConfig.Enabled && s3Client != nil {
@@ -81,6 +84,7 @@ func NewServiceRegistry(
 		BlobStorageService:          blobStorageService,
 		ArchiveService:              archiveService,
 		SpanQueryService:            spanQueryService,
+		FilterPresetService:         filterPresetService,
 		OTLPConverterService:        otlpConverterService,
 		OTLPMetricsConverterService: otlpMetricsConverterService,
 		OTLPLogsConverterService:    otlpLogsConverterService,

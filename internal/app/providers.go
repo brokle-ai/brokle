@@ -174,6 +174,7 @@ type ObservabilityRepositories struct {
 	Logs                   observability.LogsRepository
 	GenAIEvents            observability.GenAIEventsRepository
 	TelemetryDeduplication observability.TelemetryDeduplicationRepository
+	FilterPreset           observability.FilterPresetRepository
 }
 
 type StorageRepositories struct {
@@ -703,6 +704,7 @@ func ProvideObservabilityRepositories(clickhouseDB *database.ClickHouseDB, postg
 		Logs:                   observabilityRepo.NewLogsRepository(clickhouseDB.Conn),
 		GenAIEvents:            observabilityRepo.NewGenAIEventsRepository(clickhouseDB.Conn),
 		TelemetryDeduplication: observabilityRepo.NewTelemetryDeduplicationRepository(redisDB),
+		FilterPreset:           observabilityRepo.NewFilterPresetRepository(postgresDB),
 	}
 }
 
@@ -975,6 +977,7 @@ func ProvideObservabilityServices(
 		observabilityRepos.Metrics,
 		observabilityRepos.Logs,
 		observabilityRepos.GenAIEvents,
+		observabilityRepos.FilterPreset,
 		blobStorageSvc,
 		s3Client,
 		&cfg.Archive, // Archive config for S3 raw telemetry archival

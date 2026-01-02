@@ -980,14 +980,22 @@ func (c *Config) GetDatabaseURL() string {
 }
 
 // GetClickHouseURL returns the ClickHouse connection URL.
+// The URL includes x-multi-statement=true to allow migrations with multiple SQL statements.
 func (c *Config) GetClickHouseURL() string {
-	// Priority 1: Use URL if provided
 	if c.ClickHouse.URL != "" {
+		// Append x-multi-statement if not already present (required for multi-statement migrations)
+		if !strings.Contains(c.ClickHouse.URL, "x-multi-statement") {
+			separator := "?"
+			if strings.Contains(c.ClickHouse.URL, "?") {
+				separator = "&"
+			}
+			return c.ClickHouse.URL + separator + "x-multi-statement=true"
+		}
 		return c.ClickHouse.URL
 	}
 
-	// Priority 2: Construct from individual fields
-	return fmt.Sprintf("clickhouse://%s:%s@%s:%d/%s",
+	// Priority 2: Construct from individual fields with x-multi-statement=true
+	return fmt.Sprintf("clickhouse://%s:%s@%s:%d/%s?x-multi-statement=true",
 		c.ClickHouse.User, c.ClickHouse.Password, c.ClickHouse.Host,
 		c.ClickHouse.Port, c.ClickHouse.Database)
 }

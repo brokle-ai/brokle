@@ -2,6 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
+import { NuqsAdapter } from 'nuqs/adapters/next/app'
 import { useState, useEffect } from 'react'
 import { NavigationProgress } from "@/components/navigation-progress";
 import { Toaster } from "@/components/ui/sonner";
@@ -71,13 +72,8 @@ export function ClientProviders({ children }: ClientProvidersProps) {
         // Show overlay immediately (prevents flash)
         setIsLoggingOut(true)
 
-        // Clear auth state
         useAuthStore.getState().clearAuth()
-
-        // Clear React Query cache
         queryClient.clear()
-
-        // Hard redirect
         window.location.href = signinWithStatus('ended')
       }
     }
@@ -103,27 +99,29 @@ export function ClientProviders({ children }: ClientProvidersProps) {
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <DirectionProvider>
-          <ThemeProvider>
-            <SearchProvider>
-              <NavigationProgress />
-              <Toaster duration={5000} />
+        <NuqsAdapter>
+          <DirectionProvider>
+            <ThemeProvider>
+              <SearchProvider>
+                <NavigationProgress />
+                <Toaster duration={5000} />
 
-              {/* Logout/Session loading overlay */}
-              {isLoggingOut && (
-                <div className="fixed inset-0 z-[100] bg-background/80 backdrop-blur-sm flex items-center justify-center">
-                  <div className="text-center">
-                    <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
-                    <p className="text-sm text-muted-foreground">Logging out...</p>
+                {/* Logout/Session loading overlay */}
+                {isLoggingOut && (
+                  <div className="fixed inset-0 z-[100] bg-background/80 backdrop-blur-sm flex items-center justify-center">
+                    <div className="text-center">
+                      <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
+                      <p className="text-sm text-muted-foreground">Logging out...</p>
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
 
-              {children}
-              <ReactQueryDevtools initialIsOpen={false} />
-            </SearchProvider>
-          </ThemeProvider>
-        </DirectionProvider>
+                {children}
+                <ReactQueryDevtools initialIsOpen={false} />
+              </SearchProvider>
+            </ThemeProvider>
+          </DirectionProvider>
+        </NuqsAdapter>
       </QueryClientProvider>
     </ErrorBoundary>
   );
