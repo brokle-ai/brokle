@@ -13,10 +13,9 @@ import { LoadingSpinner } from '@/components/guards/loading-spinner'
 
 interface PromptsProps {
   projectSlug: string
-  orgSlug: string
 }
 
-export function Prompts({ projectSlug, orgSlug }: PromptsProps) {
+export function Prompts({ projectSlug }: PromptsProps) {
   const router = useRouter()
   const { currentProject, hasProject } = useProjectOnly()
   const { data, totalCount, isLoading, isFetching, error, refetch, tableState } = useProjectPrompts()
@@ -87,7 +86,6 @@ export function Prompts({ projectSlug, orgSlug }: PromptsProps) {
             isFetching={isFetching}
             protectedLabels={protectedLabels || []}
             projectSlug={projectSlug}
-            orgSlug={orgSlug}
           />
         )}
       </div>

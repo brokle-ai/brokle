@@ -7,7 +7,9 @@ import {
   getCoreRowModel,
   useReactTable,
   type ColumnFiltersState,
+  type PaginationState,
   type SortingState,
+  type Updater,
   type VisibilityState,
 } from '@tanstack/react-table'
 import {
@@ -31,7 +33,6 @@ interface PromptsTableProps {
   isFetching?: boolean
   protectedLabels?: string[]
   projectSlug: string
-  orgSlug: string
 }
 
 export function PromptsTable({
@@ -40,14 +41,13 @@ export function PromptsTable({
   isFetching,
   protectedLabels = [],
   projectSlug,
-  orgSlug,
 }: PromptsTableProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
   // URL state via nuqs (single source of truth)
   const tableState = usePromptsTableState()
-  const { page, pageSize, search, types, sortBy, sortOrder, setSearch, setTypes, setPagination, setSorting, resetAll } = tableState
+  const { page, pageSize, search, types, sortBy, sortOrder, setTypes, setPagination, setSorting, resetAll } = tableState
 
   // Local UI-only state (not in URL)
   const [rowSelection, setRowSelection] = useState({})
@@ -59,18 +59,27 @@ export function PromptsTable({
     setRowSelection({})
   }, [search])
 
-  // Convert URL state to React Table format
-  const pagination = { pageIndex: page - 1, pageSize }
-  const columnFilters: ColumnFiltersState = [
-    ...(types.length > 0 ? [{ id: 'type', value: types }] : []),
-  ]
-  const sorting: SortingState =
-    sortBy && sortOrder ? [{ id: sortBy, desc: sortOrder === 'desc' }] : []
+  // Convert URL state to React Table format (memoized to stabilize references)
+  const pagination = useMemo(
+    (): PaginationState => ({ pageIndex: page - 1, pageSize }),
+    [page, pageSize]
+  )
+  const columnFilters = useMemo(
+    (): ColumnFiltersState => [
+      ...(types.length > 0 ? [{ id: 'type', value: types }] : []),
+    ],
+    [types]
+  )
+  const sorting = useMemo(
+    (): SortingState =>
+      sortBy && sortOrder ? [{ id: sortBy, desc: sortOrder === 'desc' }] : [],
+    [sortBy, sortOrder]
+  )
   const globalFilter = search || ''
 
   // Handlers using nuqs setters (wrapped in startTransition for smooth UX)
   const onPaginationChange = useCallback(
-    (paginationUpdater: any) => {
+    (paginationUpdater: Updater<PaginationState>) => {
       const newPagination =
         typeof paginationUpdater === 'function'
           ? paginationUpdater(pagination)
@@ -84,7 +93,7 @@ export function PromptsTable({
 
 
   const onColumnFiltersChange = useCallback(
-    (filterUpdater: any) => {
+    (filterUpdater: Updater<ColumnFiltersState>) => {
       const newFilters: ColumnFiltersState =
         typeof filterUpdater === 'function' ? filterUpdater(columnFilters) : filterUpdater
       startTransition(() => {
@@ -98,7 +107,7 @@ export function PromptsTable({
   )
 
   const onSortingChange = useCallback(
-    (sortingUpdater: any) => {
+    (sortingUpdater: Updater<SortingState>) => {
       const newSorting: SortingState =
         typeof sortingUpdater === 'function' ? sortingUpdater(sorting) : sortingUpdater
       startTransition(() => {
