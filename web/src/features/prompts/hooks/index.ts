@@ -39,4 +39,4 @@ export {
 
 // Other hooks
 export { useProjectPrompts } from './use-project-prompts'
-export { usePromptsTableNavigation } from './use-prompts-table-navigation'
+export { usePromptsTableState, type UsePromptsTableStateReturn } from './use-prompts-table-state'

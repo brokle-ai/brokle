@@ -1,16 +1,15 @@
 'use client'
 
-import { useCallback, useMemo, useState, useTransition } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useCallback, useEffect, useMemo, useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import {
   flexRender,
   getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
   useReactTable,
   type ColumnFiltersState,
+  type PaginationState,
   type SortingState,
+  type Updater,
   type VisibilityState,
 } from '@tanstack/react-table'
 import {
@@ -22,10 +21,9 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { DataTablePagination } from '@/components/data-table'
-import { useTableSearchParams } from '@/hooks/use-table-search-params'
-import { usePromptsTableNavigation } from '../../hooks/use-prompts-table-navigation'
+import { usePromptsTableState } from '../../hooks/use-prompts-table-state'
 import { PromptsToolbar } from './prompts-toolbar'
-import type { PromptListItem } from '../../types'
+import type { PromptListItem, PromptType } from '../../types'
 import { createPromptsColumns } from './prompts-columns'
 import { PromptsDeleteDialog } from './prompts-delete-dialog'
 
@@ -35,7 +33,6 @@ interface PromptsTableProps {
   isFetching?: boolean
   protectedLabels?: string[]
   projectSlug: string
-  orgSlug: string
 }
 
 export function PromptsTable({
@@ -44,87 +41,93 @@ export function PromptsTable({
   isFetching,
   protectedLabels = [],
   projectSlug,
-  orgSlug,
 }: PromptsTableProps) {
   const router = useRouter()
-  const searchParams = useSearchParams()
   const [isPending, startTransition] = useTransition()
 
-  // Parse URL state (single source of truth)
-  const {
-    page,
-    pageSize,
-    filter,
-    type: typeFilter,
-    sortBy,
-    sortOrder,
-  } = useTableSearchParams(searchParams)
+  // URL state via nuqs (single source of truth)
+  const tableState = usePromptsTableState()
+  const { page, pageSize, search, types, sortBy, sortOrder, setTypes, setPagination, setSorting, resetAll } = tableState
 
   // Local UI-only state (not in URL)
   const [rowSelection, setRowSelection] = useState({})
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
   const [deletePrompt, setDeletePrompt] = useState<PromptListItem | null>(null)
 
-  // Convert parsed params to React Table format
-  const pagination = { pageIndex: page - 1, pageSize }
-  const columnFilters: ColumnFiltersState = [
-    ...(typeFilter.length > 0 ? [{ id: 'type', value: typeFilter }] : []),
-  ]
-  const sorting: SortingState =
-    sortBy && sortOrder ? [{ id: sortBy, desc: sortOrder === 'desc' }] : []
-  const globalFilter = filter
+  // Clear row selection when search changes (prevents stale selections after filtering)
+  useEffect(() => {
+    setRowSelection({})
+  }, [search])
 
-  // Get navigation handlers
-  const { handlePageChange, handleSearch, handleFilter, handleSort, handleReset } =
-    usePromptsTableNavigation({
-      searchParams,
-      onSearchChange: () => setRowSelection({}),
-    })
+  // Convert URL state to React Table format (memoized to stabilize references)
+  const pagination = useMemo(
+    (): PaginationState => ({ pageIndex: page - 1, pageSize }),
+    [page, pageSize]
+  )
+  const columnFilters = useMemo(
+    (): ColumnFiltersState => [
+      ...(types.length > 0 ? [{ id: 'type', value: types }] : []),
+    ],
+    [types]
+  )
+  const sorting = useMemo(
+    (): SortingState =>
+      sortBy && sortOrder ? [{ id: sortBy, desc: sortOrder === 'desc' }] : [],
+    [sortBy, sortOrder]
+  )
+  const globalFilter = search || ''
 
-  // Wrap navigation handlers with startTransition
+  // Handlers using nuqs setters (wrapped in startTransition for smooth UX)
   const onPaginationChange = useCallback(
-    (paginationUpdater: any) => {
+    (paginationUpdater: Updater<PaginationState>) => {
       const newPagination =
         typeof paginationUpdater === 'function'
           ? paginationUpdater(pagination)
           : paginationUpdater
       startTransition(() => {
-        handlePageChange(newPagination)
+        setPagination(newPagination.pageIndex + 1, newPagination.pageSize)
       })
     },
-    [pagination, handlePageChange]
+    [pagination, setPagination]
   )
 
-  const onGlobalFilterChange = useCallback(
-    (filterValue: string) => {
-      startTransition(() => {
-        handleSearch(filterValue)
-      })
-    },
-    [handleSearch]
-  )
 
   const onColumnFiltersChange = useCallback(
-    (filterUpdater: any) => {
-      const newFilters =
+    (filterUpdater: Updater<ColumnFiltersState>) => {
+      const newFilters: ColumnFiltersState =
         typeof filterUpdater === 'function' ? filterUpdater(columnFilters) : filterUpdater
       startTransition(() => {
-        handleFilter(newFilters)
+        // Extract type filter values (multi-select)
+        const typeFilterValue = newFilters.find((f) => f.id === 'type')?.value as PromptType[] | undefined
+        setTypes(typeFilterValue || [])
+        setRowSelection({})
       })
     },
-    [columnFilters, handleFilter]
+    [columnFilters, setTypes]
   )
 
   const onSortingChange = useCallback(
-    (sortingUpdater: any) => {
-      const newSorting =
+    (sortingUpdater: Updater<SortingState>) => {
+      const newSorting: SortingState =
         typeof sortingUpdater === 'function' ? sortingUpdater(sorting) : sortingUpdater
       startTransition(() => {
-        handleSort(newSorting)
+        if (newSorting.length === 0) {
+          setSorting(null, null)
+        } else {
+          const [sort] = newSorting
+          setSorting(sort.id, sort.desc ? 'desc' : 'asc')
+        }
       })
     },
-    [sorting, handleSort]
+    [sorting, setSorting]
   )
+
+  const handleReset = useCallback(() => {
+    startTransition(() => {
+      resetAll()
+      setRowSelection({})
+    })
+  }, [resetAll])
 
   // Create columns with actions
   const columns = useMemo(
@@ -168,13 +171,9 @@ export function PromptsTable({
     onRowSelectionChange: setRowSelection,
     onColumnVisibilityChange: setColumnVisibility,
     onPaginationChange,
-    onGlobalFilterChange,
     onColumnFiltersChange,
     onSortingChange,
     getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
   })
 
   // Row click handler
@@ -191,7 +190,7 @@ export function PromptsTable({
 
   return (
     <div className="space-y-4">
-      <PromptsToolbar table={table} isPending={isPending || isFetching} onReset={handleReset} />
+      <PromptsToolbar table={table} tableState={tableState} onReset={handleReset} />
       <div className="overflow-hidden rounded-md border">
         <Table>
           <TableHeader>
