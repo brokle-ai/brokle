@@ -2,21 +2,22 @@
 
 import { useMemo, useCallback } from 'react'
 import { useQueryStates, parseAsInteger, parseAsString } from 'nuqs'
-import type { FilterCondition } from '../api/traces-api'
+import type { PromptType } from '../types'
 
-export interface UseTracesTableStateReturn {
+const promptTypes = ['text', 'chat'] as const
+
+export interface UsePromptsTableStateReturn {
   // State (read from URL)
   page: number
   pageSize: number
   search: string | null
-  searchType: string | null
-  filters: FilterCondition[]
+  types: PromptType[]
   sortBy: string | null
   sortOrder: 'asc' | 'desc' | null
 
   // Setters (update URL)
-  setFilters: (filters: FilterCondition[]) => void
-  setSearch: (search: string, searchType?: string) => void
+  setSearch: (search: string) => void
+  setTypes: (types: PromptType[]) => void
   setPagination: (page: number, pageSize?: number) => void
   setSorting: (sortBy: string | null, sortOrder: 'asc' | 'desc' | null) => void
   resetAll: () => void
@@ -26,56 +27,56 @@ export interface UseTracesTableStateReturn {
 }
 
 /**
- * Centralized hook that manages ALL table state via URL params.
+ * Centralized hook that manages ALL prompts table state via URL params.
  * Uses nuqs for type-safe URL synchronization with shallow routing.
  *
  * URL Params:
  * - page: Page number (1-indexed)
  * - pageSize: Rows per page
- * - search: Text search query
- * - searchType: Type of search (id, content, all)
- * - filters: JSON-encoded array of FilterCondition
+ * - search: Text search query (filter by name)
+ * - types: JSON-encoded array of prompt types (text, chat)
  * - sortBy: Column to sort by
  * - sortOrder: Sort direction (asc, desc)
  */
-export function useTracesTableState(): UseTracesTableStateReturn {
+export function usePromptsTableState(): UsePromptsTableStateReturn {
   const [query, setQuery] = useQueryStates({
     page: parseAsInteger.withDefault(1),
-    pageSize: parseAsInteger.withDefault(20),
+    pageSize: parseAsInteger.withDefault(10),
     search: parseAsString,
-    searchType: parseAsString,
-    filters: parseAsString, // JSON-encoded array of FilterCondition
+    types: parseAsString, // JSON-encoded array of PromptType
     sortBy: parseAsString,
     sortOrder: parseAsString,
   })
 
-  // Decode filters from URL
-  const filters = useMemo((): FilterCondition[] => {
-    if (!query.filters) return []
+  // Decode types from URL
+  const types = useMemo((): PromptType[] => {
+    if (!query.types) return []
     try {
-      return JSON.parse(query.filters)
+      const parsed = JSON.parse(query.types)
+      return Array.isArray(parsed)
+        ? parsed.filter((t): t is PromptType => promptTypes.includes(t as PromptType))
+        : []
     } catch {
       return []
     }
-  }, [query.filters])
+  }, [query.types])
 
   // Setters that update URL
-  const setFilters = useCallback(
-    (newFilters: FilterCondition[]) => {
+  const setSearch = useCallback(
+    (search: string) => {
       setQuery({
-        filters: newFilters.length > 0 ? JSON.stringify(newFilters) : null,
-        page: 1, // Reset to page 1 when filters change
+        search: search || null,
+        page: 1, // Reset to page 1 when search changes
       })
     },
     [setQuery]
   )
 
-  const setSearch = useCallback(
-    (search: string, searchType?: string) => {
+  const setTypes = useCallback(
+    (newTypes: PromptType[]) => {
       setQuery({
-        search: search || null,
-        searchType: searchType || null,
-        page: 1, // Reset to page 1 when search changes
+        types: newTypes.length > 0 ? JSON.stringify(newTypes) : null,
+        page: 1, // Reset to page 1 when types change
       })
     },
     [setQuery]
@@ -106,8 +107,7 @@ export function useTracesTableState(): UseTracesTableStateReturn {
       page: 1,
       pageSize: null,
       search: null,
-      searchType: null,
-      filters: null,
+      types: null,
       sortBy: null,
       sortOrder: null,
     })
@@ -118,19 +118,18 @@ export function useTracesTableState(): UseTracesTableStateReturn {
     page: Math.max(1, query.page),
     pageSize: Math.max(1, query.pageSize),
     search: query.search,
-    searchType: query.searchType,
-    filters,
+    types,
     sortBy: query.sortBy,
     sortOrder: query.sortOrder as 'asc' | 'desc' | null,
 
     // Setters (update URL)
-    setFilters,
     setSearch,
+    setTypes,
     setPagination,
     setSorting,
     resetAll,
 
     // Computed
-    hasActiveFilters: filters.length > 0 || !!query.search,
+    hasActiveFilters: !!query.search || types.length > 0,
   }
 }

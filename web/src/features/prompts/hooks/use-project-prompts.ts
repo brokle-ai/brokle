@@ -1,12 +1,11 @@
 'use client'
 
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
-import { useSearchParams } from 'next/navigation'
 import { useProjectOnly } from '@/features/projects'
-import { useTableSearchParams } from '@/hooks/use-table-search-params'
 import { getPrompts } from '../api/prompts-api'
 import { promptQueryKeys } from './use-prompts-queries'
-import type { PromptListItem, PromptType } from '../types'
+import { usePromptsTableState } from './use-prompts-table-state'
+import type { PromptListItem } from '../types'
 
 /**
  * Hook to fetch and manage project prompts with filtering and pagination
@@ -19,25 +18,21 @@ import type { PromptListItem, PromptType } from '../types'
  *
  * Requires:
  * - Project context (from workspace context)
- * - Search params for table state (page, filters)
+ * - URL state from nuqs (page, filters)
  *
- * @returns Prompts data, pagination, loading state, and error state
+ * @returns Prompts data, pagination, loading state, error state, and table state
  */
 export function useProjectPrompts() {
-  const searchParams = useSearchParams()
   const { currentProject, hasProject, isLoading: isProjectLoading } = useProjectOnly()
+  const tableState = usePromptsTableState()
 
-  // Parse search params using standardized hook
-  const {
-    page,
-    pageSize,
-    filter,
-    type: typeFilter,
-  } = useTableSearchParams(searchParams)
+  // Extract values from table state
+  const { page, pageSize, search: searchFilter, types } = tableState
 
-  // Convert standardized params to API format
-  const search = filter || undefined
-  const type = typeFilter.length > 0 ? (typeFilter[0] as PromptType) : undefined
+  // Convert to API format
+  const search = searchFilter || undefined
+  // API currently accepts single type, use first selected type
+  const type = types.length > 0 ? types[0] : undefined
   const limit = pageSize
 
   const projectId = currentProject?.id
@@ -100,6 +95,9 @@ export function useProjectPrompts() {
     // Project context
     hasProject,
     currentProject,
+
+    // Table state (for URL-based state management)
+    tableState,
   }
 }
 
@@ -129,4 +127,7 @@ export interface UseProjectPromptsReturn {
   // Project context
   hasProject: boolean
   currentProject: ReturnType<typeof useProjectOnly>['currentProject']
+
+  // Table state (for URL-based state management)
+  tableState: ReturnType<typeof usePromptsTableState>
 }

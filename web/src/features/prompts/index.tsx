@@ -1,11 +1,10 @@
 'use client'
 
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { Plus, FileText } from 'lucide-react'
 import { useProjectOnly } from '@/features/projects'
 import { useProjectPrompts } from './hooks/use-project-prompts'
 import { useProtectedLabelsQuery } from './hooks/use-prompts-queries'
-import { useTableSearchParams } from '@/hooks/use-table-search-params'
 import { PromptsTable } from './components/prompt-list/PromptList'
 import { PageHeader } from '@/components/layout/page-header'
 import { Button } from '@/components/ui/button'
@@ -19,14 +18,12 @@ interface PromptsProps {
 
 export function Prompts({ projectSlug, orgSlug }: PromptsProps) {
   const router = useRouter()
-  const searchParams = useSearchParams()
   const { currentProject, hasProject } = useProjectOnly()
-  const { data, totalCount, isLoading, isFetching, error, refetch } = useProjectPrompts()
+  const { data, totalCount, isLoading, isFetching, error, refetch, tableState } = useProjectPrompts()
   const { data: protectedLabels } = useProtectedLabelsQuery(currentProject?.id)
-  const { filter, type: typeFilter } = useTableSearchParams(searchParams)
 
-  // Check if there are active filters
-  const hasActiveFilters = !!(filter || typeFilter.length > 0)
+  // Check if there are active filters (from nuqs state)
+  const hasActiveFilters = tableState.hasActiveFilters
 
   // Only show spinner on true initial load (no data at all)
   const isInitialLoad = isLoading && data.length === 0
