@@ -15,6 +15,7 @@ import (
 	"brokle/internal/core/domain/billing"
 	"brokle/internal/core/domain/common"
 	credentialsDomain "brokle/internal/core/domain/credentials"
+	dashboardDomain "brokle/internal/core/domain/dashboard"
 	evaluationDomain "brokle/internal/core/domain/evaluation"
 	"brokle/internal/core/domain/observability"
 	"brokle/internal/core/domain/organization"
@@ -26,6 +27,7 @@ import (
 	authService "brokle/internal/core/services/auth"
 	billingService "brokle/internal/core/services/billing"
 	credentialsService "brokle/internal/core/services/credentials"
+	dashboardService "brokle/internal/core/services/dashboard"
 	evaluationService "brokle/internal/core/services/evaluation"
 	observabilityService "brokle/internal/core/services/observability"
 	orgService "brokle/internal/core/services/organization"
@@ -43,6 +45,7 @@ import (
 	authRepo "brokle/internal/infrastructure/repository/auth"
 	billingRepo "brokle/internal/infrastructure/repository/billing"
 	credentialsRepo "brokle/internal/infrastructure/repository/credentials"
+	dashboardRepo "brokle/internal/infrastructure/repository/dashboard"
 	evaluationRepo "brokle/internal/infrastructure/repository/evaluation"
 	observabilityRepo "brokle/internal/infrastructure/repository/observability"
 	orgRepo "brokle/internal/infrastructure/repository/organization"
@@ -115,6 +118,7 @@ type RepositoryContainer struct {
 	Credentials   *CredentialsRepositories
 	Playground    *PlaygroundRepositories
 	Evaluation    *EvaluationRepositories
+	Dashboard     *DashboardRepositories
 }
 
 type ServiceContainer struct {
@@ -133,6 +137,7 @@ type ServiceContainer struct {
 	Credentials         *CredentialsServices
 	Playground          *PlaygroundServices
 	Evaluation          *EvaluationServices
+	Dashboard           *DashboardServices
 }
 
 type EnterpriseContainer struct {
@@ -217,6 +222,12 @@ type EvaluationRepositories struct {
 	RuleExecution  evaluationDomain.RuleExecutionRepository
 }
 
+type DashboardRepositories struct {
+	Dashboard   dashboardDomain.DashboardRepository
+	WidgetQuery dashboardDomain.WidgetQueryRepository
+	Template    dashboardDomain.TemplateRepository
+}
+
 type UserServices struct {
 	User    user.UserService
 	Profile user.ProfileService
@@ -266,6 +277,12 @@ type EvaluationServices struct {
 	ExperimentItem evaluationDomain.ExperimentItemService
 	Rule           evaluationDomain.RuleService
 	RuleExecution  evaluationDomain.RuleExecutionService
+}
+
+type DashboardServices struct {
+	Dashboard   dashboardDomain.DashboardService
+	WidgetQuery dashboardDomain.WidgetQueryService
+	Template    dashboardDomain.TemplateService
 }
 
 func ProvideDatabases(cfg *config.Config, logger *slog.Logger) (*DatabaseContainer, error) {
@@ -478,6 +495,8 @@ func ProvideServerServices(core *CoreContainer) *ServiceContainer {
 
 	evaluationServices := ProvideEvaluationServices(repos.Evaluation, repos.Observability, observabilityServices, databases.Redis, logger)
 
+	dashboardServices := ProvideDashboardServices(repos.Dashboard, logger)
+
 	return &ServiceContainer{
 		User:                userServices,
 		Auth:                authServices,
@@ -494,6 +513,7 @@ func ProvideServerServices(core *CoreContainer) *ServiceContainer {
 		Credentials:         credentialsServices,
 		Playground:          playgroundServices,
 		Evaluation:          evaluationServices,
+		Dashboard:           dashboardServices,
 	}
 }
 
@@ -573,6 +593,16 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 		ruleExecutionSvc = core.Services.Evaluation.RuleExecution
 	}
 
+	// Get dashboard services
+	var dashboardSvc dashboardDomain.DashboardService
+	var widgetQuerySvc dashboardDomain.WidgetQueryService
+	var templateSvc dashboardDomain.TemplateService
+	if core.Services.Dashboard != nil {
+		dashboardSvc = core.Services.Dashboard.Dashboard
+		widgetQuerySvc = core.Services.Dashboard.WidgetQuery
+		templateSvc = core.Services.Dashboard.Template
+	}
+
 	httpHandlers := handlers.NewHandlers(
 		core.Config,
 		core.Logger,
@@ -605,6 +635,9 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 		experimentItemSvc,
 		ruleSvc,
 		ruleExecutionSvc,
+		dashboardSvc,
+		widgetQuerySvc,
+		templateSvc,
 	)
 
 	httpServer := http.NewServer(
@@ -762,6 +795,14 @@ func ProvideEvaluationRepositories(db *gorm.DB) *EvaluationRepositories {
 	}
 }
 
+func ProvideDashboardRepositories(db *gorm.DB, clickhouseDB *database.ClickHouseDB) *DashboardRepositories {
+	return &DashboardRepositories{
+		Dashboard:   dashboardRepo.NewDashboardRepository(db),
+		WidgetQuery: dashboardRepo.NewWidgetQueryRepository(clickhouseDB.Conn),
+		Template:    dashboardRepo.NewTemplateRepository(db),
+	}
+}
+
 func ProvideRepositories(dbs *DatabaseContainer, logger *slog.Logger) *RepositoryContainer {
 	return &RepositoryContainer{
 		User:          ProvideUserRepositories(dbs.Postgres.DB),
@@ -775,6 +816,7 @@ func ProvideRepositories(dbs *DatabaseContainer, logger *slog.Logger) *Repositor
 		Credentials:   ProvideCredentialsRepositories(dbs.Postgres.DB),
 		Playground:    ProvidePlaygroundRepositories(dbs.Postgres.DB),
 		Evaluation:    ProvideEvaluationRepositories(dbs.Postgres.DB),
+		Dashboard:     ProvideDashboardRepositories(dbs.Postgres.DB, dbs.ClickHouse),
 	}
 }
 
@@ -1161,6 +1203,34 @@ func ProvideEvaluationServices(
 		ExperimentItem: experimentItemSvc,
 		Rule:           ruleSvc,
 		RuleExecution:  ruleExecutionSvc,
+	}
+}
+
+func ProvideDashboardServices(
+	dashboardRepos *DashboardRepositories,
+	logger *slog.Logger,
+) *DashboardServices {
+	dashboardSvc := dashboardService.NewDashboardService(
+		dashboardRepos.Dashboard,
+		logger,
+	)
+
+	widgetQuerySvc := dashboardService.NewWidgetQueryService(
+		dashboardRepos.Dashboard,
+		dashboardRepos.WidgetQuery,
+		logger,
+	)
+
+	templateSvc := dashboardService.NewTemplateService(
+		dashboardRepos.Template,
+		dashboardRepos.Dashboard,
+		logger,
+	)
+
+	return &DashboardServices{
+		Dashboard:   dashboardSvc,
+		WidgetQuery: widgetQuerySvc,
+		Template:    templateSvc,
 	}
 }
 

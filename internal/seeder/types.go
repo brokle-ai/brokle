@@ -106,3 +106,66 @@ func InferProvider(modelName string) string {
 		return "unknown"
 	}
 }
+
+// Dashboard Template Seed Types
+
+type TemplatesFile struct {
+	Version   string         `yaml:"version"`
+	Templates []TemplateSeed `yaml:"templates"`
+}
+
+type TemplateSeed struct {
+	Name        string              `yaml:"name"`
+	Description string              `yaml:"description"`
+	Category    string              `yaml:"category"`
+	Config      TemplateConfigSeed  `yaml:"config"`
+	Layout      []TemplateLayoutSeed `yaml:"layout"`
+}
+
+type TemplateConfigSeed struct {
+	RefreshRate int                `yaml:"refresh_rate"`
+	Widgets     []TemplateWidgetSeed `yaml:"widgets"`
+}
+
+type TemplateWidgetSeed struct {
+	ID          string                 `yaml:"id"`
+	Type        string                 `yaml:"type"`
+	Title       string                 `yaml:"title"`
+	Description string                 `yaml:"description"`
+	Query       TemplateQuerySeed      `yaml:"query"`
+	Config      map[string]interface{} `yaml:"config,omitempty"`
+}
+
+type TemplateQuerySeed struct {
+	View       string   `yaml:"view"`
+	Measures   []string `yaml:"measures"`
+	Dimensions []string `yaml:"dimensions"`
+	Filters    []TemplateFilterSeed `yaml:"filters"`
+	Limit      int      `yaml:"limit,omitempty"`
+	OrderBy    string   `yaml:"order_by,omitempty"`
+	OrderDir   string   `yaml:"order_dir,omitempty"`
+}
+
+type TemplateFilterSeed struct {
+	Field    string      `yaml:"field"`
+	Operator string      `yaml:"operator"`
+	Value    interface{} `yaml:"value"`
+}
+
+type TemplateLayoutSeed struct {
+	WidgetID string `yaml:"widget_id"`
+	X        int    `yaml:"x"`
+	Y        int    `yaml:"y"`
+	W        int    `yaml:"w"`
+	H        int    `yaml:"h"`
+}
+
+type TemplateStatistics struct {
+	TotalTemplates       int            `json:"total_templates"`
+	CategoryDistribution map[string]int `json:"category_distribution"`
+}
+
+func (s *TemplateStatistics) String() string {
+	data, _ := json.MarshalIndent(s, "", "  ")
+	return string(data)
+}

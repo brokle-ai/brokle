@@ -396,6 +396,29 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 			filterPresets.PATCH("/:id", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Observability.UpdateFilterPreset)
 			filterPresets.DELETE("/:id", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Observability.DeleteFilterPreset)
 		}
+
+		dashboards := projects.Group("/:projectId/dashboards")
+		{
+			// List and create
+			dashboards.GET("", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Dashboard.ListDashboards)
+			dashboards.POST("", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Dashboard.CreateDashboard)
+
+			// Static routes MUST be registered before dynamic :dashboardId routes
+			dashboards.POST("/from-template", s.authMiddleware.RequirePermission("projects:write"), s.handlers.DashboardTemplate.CreateFromTemplate)
+			dashboards.POST("/import", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Dashboard.ImportDashboard)
+			dashboards.GET("/variable-options", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Dashboard.GetVariableOptions)
+
+			// Dynamic routes with :dashboardId parameter
+			dashboards.GET("/:dashboardId", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Dashboard.GetDashboard)
+			dashboards.PUT("/:dashboardId", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Dashboard.UpdateDashboard)
+			dashboards.DELETE("/:dashboardId", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Dashboard.DeleteDashboard)
+			dashboards.POST("/:dashboardId/duplicate", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Dashboard.DuplicateDashboard)
+			dashboards.POST("/:dashboardId/lock", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Dashboard.LockDashboard)
+			dashboards.POST("/:dashboardId/unlock", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Dashboard.UnlockDashboard)
+			dashboards.GET("/:dashboardId/export", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Dashboard.ExportDashboard)
+			dashboards.POST("/:dashboardId/execute", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Dashboard.ExecuteDashboardQueries)
+			dashboards.POST("/:dashboardId/widgets/:widgetId/execute", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Dashboard.ExecuteWidgetQuery)
+		}
 	}
 
 	analytics := protected.Group("/analytics")
@@ -405,6 +428,16 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 		analytics.GET("/costs", s.handlers.Analytics.Costs)
 		analytics.GET("/providers", s.handlers.Analytics.Providers)
 		analytics.GET("/models", s.handlers.Analytics.Models)
+	}
+
+	// Dashboard query builder view definitions
+	protected.GET("/dashboards/view-definitions", s.handlers.Dashboard.GetViewDefinitions)
+
+	// Dashboard templates (accessible from all projects)
+	dashboardTemplates := protected.Group("/dashboard-templates")
+	{
+		dashboardTemplates.GET("", s.handlers.DashboardTemplate.ListTemplates)
+		dashboardTemplates.GET("/:templateId", s.handlers.DashboardTemplate.GetTemplate)
 	}
 
 	traces := protected.Group("/traces")

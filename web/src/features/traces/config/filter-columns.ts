@@ -1,91 +1,38 @@
 /**
- * Filter column definitions for the advanced filter builder
+ * Filter column definitions for traces
  *
- * Defines filterable columns with their types, operators, and UI configuration
+ * Uses shared filter types and utilities from @/components/shared/filter-builder
+ * Defines trace-specific filterable columns with their types, operators, and UI configuration
  */
 
-import type { FilterOperator } from '../api/traces-api'
+// Re-export shared types and utilities for backwards compatibility
+export type {
+  ColumnType,
+  ColumnDefinition,
+  FilterOperator,
+} from '@/components/shared/filter-builder'
 
-export type ColumnType =
-  | 'string'
-  | 'number'
-  | 'duration'
-  | 'cost'
-  | 'datetime'
-  | 'category'
-  | 'boolean'
-  | 'json'
+export {
+  stringOperators,
+  numberOperators,
+  categoryOperators,
+  booleanOperators,
+  existsOperators,
+  searchOperators,
+  operatorLabels,
+  getOperatorsForType,
+  operatorRequiresValue,
+  operatorAcceptsMultiple,
+} from '@/components/shared/filter-builder'
 
-export interface ColumnDefinition {
-  id: string
-  label: string
-  type: ColumnType
-  filterable: boolean
-  operators: FilterOperator[]
-  description?: string
-  // For category type: predefined options
-  options?: { value: string; label: string }[]
-  // For number/duration/cost: unit information
-  unit?: string
-  // For dynamic columns from attributes
-  dynamic?: boolean
-}
+import type { ColumnDefinition, FilterOperator } from '@/components/shared/filter-builder'
+import { searchOperators, stringOperators, numberOperators, categoryOperators, existsOperators } from '@/components/shared/filter-builder'
 
-// Operators by type
-export const stringOperators: FilterOperator[] = [
-  '=',
-  '!=',
-  'CONTAINS',
-  'NOT CONTAINS',
-  'STARTS WITH',
-  'ENDS WITH',
-  'REGEX',
-  'IS EMPTY',
-  'IS NOT EMPTY',
-  'IN',
-  'NOT IN',
-]
-
-export const numberOperators: FilterOperator[] = [
-  '=',
-  '!=',
-  '>',
-  '<',
-  '>=',
-  '<=',
-  'IS EMPTY',
-  'IS NOT EMPTY',
-]
-
-export const categoryOperators: FilterOperator[] = ['=', '!=', 'IN', 'NOT IN']
-
-export const booleanOperators: FilterOperator[] = ['=', '!=']
-
-export const existsOperators: FilterOperator[] = ['EXISTS', 'NOT EXISTS']
-
-export const searchOperators: FilterOperator[] = ['~', 'CONTAINS', 'REGEX']
-
-// Operator labels for display
-export const operatorLabels: Record<FilterOperator, string> = {
-  '=': 'equals',
-  '!=': 'not equals',
-  '>': 'greater than',
-  '<': 'less than',
-  '>=': 'greater or equal',
-  '<=': 'less or equal',
-  CONTAINS: 'contains',
-  'NOT CONTAINS': 'not contains',
-  IN: 'in',
-  'NOT IN': 'not in',
-  EXISTS: 'exists',
-  'NOT EXISTS': 'not exists',
-  'STARTS WITH': 'starts with',
-  'ENDS WITH': 'ends with',
-  REGEX: 'matches regex',
-  'IS EMPTY': 'is empty',
-  'IS NOT EMPTY': 'is not empty',
-  '~': 'search',
-}
+// String operators WITHOUT IN/NOT IN for columns where backend doesn't support multi-value filtering
+// model_name, provider_name, service_name only support single-value filters on the backend
+const stringOperatorsWithoutMultiValue: FilterOperator[] = stringOperators.filter(
+  op => op !== 'IN' && op !== 'NOT IN'
+)
 
 // Status options for category filter
 const statusOptions = [
@@ -144,12 +91,14 @@ export const traceFilterColumns: ColumnDefinition[] = [
   },
 
   // Provider/Model
+  // Note: These columns use stringOperatorsWithoutMultiValue because the backend
+  // only supports single-value filtering for model_name, provider_name, service_name
   {
     id: 'model_name',
     label: 'Model',
     type: 'string',
     filterable: true,
-    operators: stringOperators,
+    operators: stringOperatorsWithoutMultiValue,
     description: 'AI model name (e.g., gpt-4, claude-3)',
   },
   {
@@ -157,7 +106,7 @@ export const traceFilterColumns: ColumnDefinition[] = [
     label: 'Provider',
     type: 'string',
     filterable: true,
-    operators: stringOperators,
+    operators: stringOperatorsWithoutMultiValue,
     description: 'AI provider (e.g., openai, anthropic)',
   },
   {
@@ -165,7 +114,7 @@ export const traceFilterColumns: ColumnDefinition[] = [
     label: 'Service',
     type: 'string',
     filterable: true,
-    operators: stringOperators,
+    operators: stringOperatorsWithoutMultiValue,
     description: 'Service name from resource attributes',
   },
 
@@ -316,30 +265,6 @@ export const spanFilterColumns: ColumnDefinition[] = traceFilterColumns.filter(
 )
 
 /**
- * Get operators for a column type
- */
-export function getOperatorsForType(type: ColumnType): FilterOperator[] {
-  switch (type) {
-    case 'string':
-      return stringOperators
-    case 'number':
-    case 'duration':
-    case 'cost':
-      return numberOperators
-    case 'datetime':
-      return ['>', '<', '>=', '<=']
-    case 'category':
-      return categoryOperators
-    case 'boolean':
-      return booleanOperators
-    case 'json':
-      return existsOperators
-    default:
-      return stringOperators
-  }
-}
-
-/**
  * Get column definition by ID
  */
 export function getColumnById(
@@ -348,20 +273,4 @@ export function getColumnById(
 ): ColumnDefinition | undefined {
   const columns = table === 'traces' ? traceFilterColumns : spanFilterColumns
   return columns.find((col) => col.id === id)
-}
-
-/**
- * Check if operator requires a value input
- */
-export function operatorRequiresValue(operator: FilterOperator): boolean {
-  return !['IS EMPTY', 'IS NOT EMPTY', 'EXISTS', 'NOT EXISTS'].includes(
-    operator
-  )
-}
-
-/**
- * Check if operator accepts multiple values
- */
-export function operatorAcceptsMultiple(operator: FilterOperator): boolean {
-  return ['IN', 'NOT IN'].includes(operator)
 }
