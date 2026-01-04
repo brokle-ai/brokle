@@ -10,6 +10,7 @@ import {
   Database,
   BarChart3,
   Scale,
+  LayoutDashboard,
 } from 'lucide-react'
 
 export const ROUTES: Route[] = [
@@ -58,6 +59,14 @@ export const ROUTES: Route[] = [
     title: 'Overview',
     pathname: '/projects/[projectSlug]',
     icon: FolderOpen,
+    section: RouteSection.Main,
+    rbacScope: 'projects:read',
+    show: ({ currentProjectSlug }) => !!currentProjectSlug,
+  },
+  {
+    title: 'Dashboards',
+    pathname: '/projects/[projectSlug]/dashboards',
+    icon: LayoutDashboard,
     section: RouteSection.Main,
     rbacScope: 'projects:read',
     show: ({ currentProjectSlug }) => !!currentProjectSlug,

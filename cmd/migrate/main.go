@@ -60,11 +60,9 @@ func parseFlags(args []string) (*MigrateFlags, string, error) {
 		return nil, "", errors.New("no command specified")
 	}
 
-	// Create a new flag set for parsing
 	fs := flag.NewFlagSet("migrate", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 
-	// Define all flags
 	flags := &MigrateFlags{}
 	fs.StringVar(&flags.Database, "db", "all", "Database to migrate: all, postgres, clickhouse")
 	fs.IntVar(&flags.Steps, "steps", 0, "Number of migration steps (0 = all)")
@@ -79,7 +77,6 @@ func parseFlags(args []string) (*MigrateFlags, string, error) {
 		return nil, "", err
 	}
 
-	// The command is the first remaining argument after flag parsing
 	remainingArgs := fs.Args()
 	if len(remainingArgs) == 0 {
 		return nil, "", errors.New("no command specified")
@@ -240,6 +237,12 @@ func main() {
 			log.Fatalf("RBAC seeding failed: %v", err)
 		}
 		fmt.Println("✅ RBAC seeding completed successfully")
+
+	case "seed-templates":
+		if err := runTemplateSeeding(ctx, cfg, flags.Reset, flags.DryRun, flags.Verbose); err != nil {
+			log.Fatalf("Template seeding failed: %v", err)
+		}
+		fmt.Println("✅ Dashboard template seeding completed successfully")
 
 	default:
 		fmt.Printf("❌ Unknown command: %s\n", command)
@@ -498,9 +501,10 @@ func printUsage() {
 	fmt.Println("  steps -steps N        Run N migration steps (negative for rollback)")
 	fmt.Println("  info                  Show detailed migration information")
 	fmt.Println("  create -name NAME     Create new migration files")
-	fmt.Println("  seed                  Seed system data (permissions, roles, pricing)")
+	fmt.Println("  seed                  Seed system data (permissions, roles, pricing, templates)")
 	fmt.Println("  seed-rbac             Seed RBAC data only (permissions and roles)")
 	fmt.Println("  seed-pricing          Seed provider pricing data only")
+	fmt.Println("  seed-templates        Seed dashboard templates only")
 	fmt.Println()
 	fmt.Println("FLAGS:")
 	fmt.Println("  -db string           Database to target: all, postgres, clickhouse (default: all)")
@@ -529,6 +533,8 @@ func printUsage() {
 	fmt.Println("  migrate seed-rbac                       # Seed permissions and roles only")
 	fmt.Println("  migrate seed-pricing                    # Seed provider pricing only")
 	fmt.Println("  migrate seed-pricing -reset             # Reset and reseed pricing")
+	fmt.Println("  migrate seed-templates                  # Seed dashboard templates only")
+	fmt.Println("  migrate seed-templates -reset -verbose  # Reset and reseed templates")
 	fmt.Println()
 	fmt.Println("NOTE:")
 	fmt.Println("  Flags can be placed before or after the command:")
@@ -634,4 +640,31 @@ func runRBACSeeding(ctx context.Context, cfg *config.Config, reset, dryRun, verb
 
 	// Run RBAC seeding
 	return s.SeedRBAC(ctx, options)
+}
+
+// runTemplateSeeding handles dashboard template seeding operations (standalone)
+func runTemplateSeeding(ctx context.Context, cfg *config.Config, reset, dryRun, verbose bool) error {
+	// Initialize seeder
+	s, err := seeder.New(cfg)
+	if err != nil {
+		return fmt.Errorf("failed to initialize seeder: %w", err)
+	}
+	defer s.Close()
+
+	// Configure seeder options
+	options := &seeder.Options{
+		Reset:   reset,
+		DryRun:  dryRun,
+		Verbose: verbose,
+	}
+
+	// Confirm reset operation if requested
+	if reset && !dryRun {
+		if !confirmDestructiveOperation("RESET ALL TEMPLATE DATA and reseed") {
+			return errors.New("template seeding cancelled by user")
+		}
+	}
+
+	// Run template seeding
+	return s.SeedTemplates(ctx, options)
 }

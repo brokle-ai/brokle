@@ -79,13 +79,15 @@ export function MultiSelect({
     onValueChange?.(newValue)
   }
 
-  const handleRemove = (valueToRemove: string, event: React.MouseEvent) => {
+  const handleRemove = (valueToRemove: string, event: React.SyntheticEvent) => {
+    event.preventDefault()
     event.stopPropagation()
     const newValue = value.filter((v) => v !== valueToRemove)
     onValueChange?.(newValue)
   }
 
-  const handleClear = (event: React.MouseEvent) => {
+  const handleClear = (event: React.SyntheticEvent) => {
+    event.preventDefault()
     event.stopPropagation()
     onValueChange?.([])
   }
@@ -119,12 +121,21 @@ export function MultiSelect({
                     className='text-xs h-6'
                   >
                     {option.label}
-                    <button
-                      onClick={(e) => handleRemove(option.value, e)}
-                      className='ml-1 ring-offset-background rounded-full outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2'
+                    <span
+                      role='button'
+                      tabIndex={0}
+                      onPointerDown={(e) => handleRemove(option.value, e)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          onValueChange?.(value.filter((v) => v !== option.value))
+                        }
+                      }}
+                      className='ml-1 ring-offset-background rounded-full outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 cursor-pointer'
                     >
                       <X className='h-3 w-3' />
-                    </button>
+                    </span>
                   </Badge>
                 ))}
                 {remainingCount > 0 && (
@@ -137,12 +148,21 @@ export function MultiSelect({
           </div>
           <div className='flex items-center gap-1 px-2'>
             {selectedOptions.length > 0 && (
-              <button
-                onClick={handleClear}
-                className='text-muted-foreground hover:text-foreground'
+              <span
+                role='button'
+                tabIndex={0}
+                onPointerDown={handleClear}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    onValueChange?.([])
+                  }
+                }}
+                className='text-muted-foreground hover:text-foreground cursor-pointer'
               >
                 <X className='h-4 w-4' />
-              </button>
+              </span>
             )}
             <ChevronDown className='h-4 w-4 opacity-50' />
           </div>

@@ -6,6 +6,7 @@ import (
 	"brokle/internal/config"
 	"brokle/internal/core/domain/auth"
 	credentialsDomain "brokle/internal/core/domain/credentials"
+	dashboardDomain "brokle/internal/core/domain/dashboard"
 	evaluationDomain "brokle/internal/core/domain/evaluation"
 	"brokle/internal/core/domain/organization"
 	playgroundDomain "brokle/internal/core/domain/playground"
@@ -21,6 +22,7 @@ import (
 	authHandler "brokle/internal/transport/http/handlers/auth"
 	"brokle/internal/transport/http/handlers/billing"
 	"brokle/internal/transport/http/handlers/credentials"
+	"brokle/internal/transport/http/handlers/dashboard"
 	evaluationHandler "brokle/internal/transport/http/handlers/evaluation"
 	"brokle/internal/transport/http/handlers/health"
 	"brokle/internal/transport/http/handlers/logs"
@@ -65,7 +67,9 @@ type Handlers struct {
 	ExperimentItem *evaluationHandler.ExperimentItemHandler
 	Rule           *evaluationHandler.RuleHandler
 	RuleExecution  *evaluationHandler.RuleExecutionHandler
-	SpanQuery      *observability.SpanQueryHandler
+	SpanQuery         *observability.SpanQueryHandler
+	Dashboard         *dashboard.Handler
+	DashboardTemplate *dashboard.TemplateHandler
 }
 
 func NewHandlers(
@@ -100,6 +104,9 @@ func NewHandlers(
 	experimentItemService evaluationDomain.ExperimentItemService,
 	ruleService evaluationDomain.RuleService,
 	ruleExecutionService evaluationDomain.RuleExecutionService,
+	dashboardService dashboardDomain.DashboardService,
+	widgetQueryService dashboardDomain.WidgetQueryService,
+	templateService dashboardDomain.TemplateService,
 ) *Handlers {
 	return &Handlers{
 		Health:        health.NewHandler(cfg, logger),
@@ -131,6 +138,8 @@ func NewHandlers(
 		ExperimentItem: evaluationHandler.NewExperimentItemHandler(logger, experimentItemService),
 		Rule:           evaluationHandler.NewRuleHandler(ruleService),
 		RuleExecution:  evaluationHandler.NewRuleExecutionHandler(ruleExecutionService),
-		SpanQuery:      observability.NewSpanQueryHandler(observabilityServices.SpanQueryService, logger),
+		SpanQuery:         observability.NewSpanQueryHandler(observabilityServices.SpanQueryService, logger),
+		Dashboard:         dashboard.NewHandler(cfg, logger, dashboardService, widgetQueryService),
+		DashboardTemplate: dashboard.NewTemplateHandler(cfg, logger, templateService),
 	}
 }

@@ -1,0 +1,458 @@
+# Dashboard Templates - Pre-defined dashboard configurations
+# Version: 1.0.0
+# Last Updated: 2026-01-03
+
+version: "1.0.0"
+
+templates:
+  # LLM Overview Template - General purpose LLM monitoring dashboard
+  - name: "LLM Overview"
+    description: "Comprehensive overview of LLM traces including latency, costs, errors, and model usage"
+    category: "llm-overview"
+    config:
+      refresh_rate: 30
+      widgets:
+        - id: "stat-total-traces"
+          type: "stat"
+          title: "Total Traces"
+          description: "Total number of traces"
+          query:
+            view: "traces"
+            measures: ["count"]
+            dimensions: []
+            filters: []
+
+        - id: "stat-avg-latency"
+          type: "stat"
+          title: "Avg Latency"
+          description: "Average trace latency"
+          query:
+            view: "traces"
+            measures: ["avg_duration"]
+            dimensions: []
+            filters: []
+
+        - id: "stat-total-cost"
+          type: "stat"
+          title: "Total Cost"
+          description: "Total cost of all traces"
+          query:
+            view: "traces"
+            measures: ["total_cost"]
+            dimensions: []
+            filters: []
+
+        - id: "stat-error-rate"
+          type: "stat"
+          title: "Error Rate"
+          description: "Percentage of failed traces"
+          query:
+            view: "traces"
+            measures: ["error_rate"]
+            dimensions: []
+            filters: []
+
+        - id: "chart-traces-over-time"
+          type: "time_series"
+          title: "Traces Over Time"
+          description: "Number of traces over time"
+          query:
+            view: "traces"
+            measures: ["count"]
+            dimensions: ["time"]
+            filters: []
+
+        - id: "chart-latency-distribution"
+          type: "histogram"
+          title: "Latency Distribution"
+          description: "Distribution of trace latencies"
+          query:
+            view: "traces"
+            measures: ["avg_duration"]
+            dimensions: []
+            filters: []
+
+        - id: "chart-model-usage"
+          type: "pie"
+          title: "Model Usage"
+          description: "Trace distribution by model"
+          query:
+            view: "traces"
+            measures: ["count"]
+            dimensions: ["model_name"]
+            filters: []
+
+        - id: "chart-cost-by-model"
+          type: "bar"
+          title: "Cost by Model"
+          description: "Cost breakdown by model"
+          query:
+            view: "traces"
+            measures: ["total_cost"]
+            dimensions: ["model_name"]
+            filters: []
+
+        - id: "list-recent-traces"
+          type: "trace_list"
+          title: "Recent Traces"
+          description: "Latest traces"
+          query:
+            view: "traces"
+            measures: ["count"]
+            dimensions: []
+            filters: []
+            limit: 10
+            order_by: "time"
+            order_dir: "desc"
+
+    layout:
+      # Row 1: Stats (4 widgets across)
+      - widget_id: "stat-total-traces"
+        x: 0
+        y: 0
+        w: 3
+        h: 2
+      - widget_id: "stat-avg-latency"
+        x: 3
+        y: 0
+        w: 3
+        h: 2
+      - widget_id: "stat-total-cost"
+        x: 6
+        y: 0
+        w: 3
+        h: 2
+      - widget_id: "stat-error-rate"
+        x: 9
+        y: 0
+        w: 3
+        h: 2
+      # Row 2: Time series and histogram
+      - widget_id: "chart-traces-over-time"
+        x: 0
+        y: 2
+        w: 6
+        h: 4
+      - widget_id: "chart-latency-distribution"
+        x: 6
+        y: 2
+        w: 6
+        h: 4
+      # Row 3: Charts and trace list
+      - widget_id: "chart-model-usage"
+        x: 0
+        y: 6
+        w: 4
+        h: 4
+      - widget_id: "chart-cost-by-model"
+        x: 4
+        y: 6
+        w: 4
+        h: 4
+      - widget_id: "list-recent-traces"
+        x: 8
+        y: 6
+        w: 4
+        h: 4
+
+  # Cost Analytics Template - Focus on cost monitoring and optimization
+  - name: "Cost Analytics"
+    description: "Deep dive into LLM costs with provider and model breakdowns"
+    category: "cost-analytics"
+    config:
+      refresh_rate: 60
+      widgets:
+        - id: "stat-total-spend"
+          type: "stat"
+          title: "Total Spend"
+          description: "Total cost across all traces"
+          query:
+            view: "traces"
+            measures: ["total_cost"]
+            dimensions: []
+            filters: []
+
+        - id: "stat-avg-cost"
+          type: "stat"
+          title: "Avg Cost/Trace"
+          description: "Average cost per trace"
+          query:
+            view: "traces"
+            measures: ["avg_cost"]
+            dimensions: []
+            filters: []
+
+        - id: "stat-total-tokens"
+          type: "stat"
+          title: "Total Tokens"
+          description: "Total tokens processed"
+          query:
+            view: "traces"
+            measures: ["total_tokens"]
+            dimensions: []
+            filters: []
+
+        - id: "stat-trace-count"
+          type: "stat"
+          title: "Total Traces"
+          description: "Number of traces"
+          query:
+            view: "traces"
+            measures: ["count"]
+            dimensions: []
+            filters: []
+
+        - id: "chart-cost-over-time"
+          type: "time_series"
+          title: "Cost Over Time"
+          description: "Cost trend over time"
+          query:
+            view: "traces"
+            measures: ["total_cost"]
+            dimensions: ["time"]
+            filters: []
+
+        - id: "chart-cost-by-provider"
+          type: "pie"
+          title: "Cost by Provider"
+          description: "Cost distribution by provider"
+          query:
+            view: "traces"
+            measures: ["total_cost"]
+            dimensions: ["provider_name"]
+            filters: []
+
+        - id: "chart-cost-by-model"
+          type: "bar"
+          title: "Cost by Model"
+          description: "Cost breakdown by model"
+          query:
+            view: "traces"
+            measures: ["total_cost"]
+            dimensions: ["model_name"]
+            filters: []
+
+        - id: "chart-token-distribution"
+          type: "histogram"
+          title: "Token Distribution"
+          description: "Distribution of token usage"
+          query:
+            view: "traces"
+            measures: ["total_tokens"]
+            dimensions: []
+            filters: []
+
+        - id: "table-top-expensive"
+          type: "table"
+          title: "Top Expensive Traces"
+          description: "Traces with highest cost"
+          query:
+            view: "traces"
+            measures: ["total_cost"]
+            dimensions: ["trace_id", "model_name", "duration_nano"]
+            filters: []
+            limit: 10
+            order_by: "total_cost"
+            order_dir: "desc"
+
+    layout:
+      # Row 1: Stats
+      - widget_id: "stat-total-spend"
+        x: 0
+        y: 0
+        w: 3
+        h: 2
+      - widget_id: "stat-avg-cost"
+        x: 3
+        y: 0
+        w: 3
+        h: 2
+      - widget_id: "stat-total-tokens"
+        x: 6
+        y: 0
+        w: 3
+        h: 2
+      - widget_id: "stat-trace-count"
+        x: 9
+        y: 0
+        w: 3
+        h: 2
+      # Row 2: Time series
+      - widget_id: "chart-cost-over-time"
+        x: 0
+        y: 2
+        w: 12
+        h: 4
+      # Row 3: Charts
+      - widget_id: "chart-cost-by-provider"
+        x: 0
+        y: 6
+        w: 4
+        h: 4
+      - widget_id: "chart-cost-by-model"
+        x: 4
+        y: 6
+        w: 4
+        h: 4
+      - widget_id: "chart-token-distribution"
+        x: 8
+        y: 6
+        w: 4
+        h: 4
+      # Row 4: Table
+      - widget_id: "table-top-expensive"
+        x: 0
+        y: 10
+        w: 12
+        h: 4
+
+  # Quality Scores Template - Focus on evaluation and quality metrics
+  - name: "Quality Scores"
+    description: "Monitor evaluation scores and quality metrics for LLM outputs"
+    category: "quality-scores"
+    config:
+      refresh_rate: 60
+      widgets:
+        - id: "stat-total-evaluations"
+          type: "stat"
+          title: "Total Evaluations"
+          description: "Number of quality evaluations"
+          query:
+            view: "scores"
+            measures: ["count"]
+            dimensions: []
+            filters: []
+
+        - id: "stat-avg-score"
+          type: "stat"
+          title: "Avg Score"
+          description: "Average quality score"
+          query:
+            view: "scores"
+            measures: ["avg_score"]
+            dimensions: []
+            filters: []
+
+        - id: "stat-passing-rate"
+          type: "stat"
+          title: "Passing Rate"
+          description: "Percentage of passing scores"
+          query:
+            view: "scores"
+            measures: ["passing_rate"]
+            dimensions: []
+            filters: []
+
+        - id: "stat-trace-coverage"
+          type: "stat"
+          title: "Trace Coverage"
+          description: "Traces with evaluations"
+          query:
+            view: "scores"
+            measures: ["unique_traces"]
+            dimensions: []
+            filters: []
+
+        - id: "chart-score-over-time"
+          type: "time_series"
+          title: "Score Over Time"
+          description: "Average score trend"
+          query:
+            view: "scores"
+            measures: ["avg_score"]
+            dimensions: ["time"]
+            filters: []
+
+        - id: "chart-score-distribution"
+          type: "histogram"
+          title: "Score Distribution"
+          description: "Distribution of score values"
+          query:
+            view: "scores"
+            measures: ["avg_score"]
+            dimensions: []
+            filters: []
+
+        - id: "chart-scores-by-name"
+          type: "bar"
+          title: "Scores by Name"
+          description: "Average scores by evaluation name"
+          query:
+            view: "scores"
+            measures: ["avg_score"]
+            dimensions: ["name"]
+            filters: []
+
+        - id: "chart-scores-by-source"
+          type: "pie"
+          title: "Scores by Source"
+          description: "Score distribution by source"
+          query:
+            view: "scores"
+            measures: ["count"]
+            dimensions: ["source"]
+            filters: []
+
+        - id: "table-recent-scores"
+          type: "table"
+          title: "Recent Scores"
+          description: "Latest evaluation scores"
+          query:
+            view: "scores"
+            measures: ["avg_score"]
+            dimensions: ["name", "source", "trace_id", "time"]
+            filters: []
+            limit: 10
+            order_by: "time"
+            order_dir: "desc"
+
+    layout:
+      # Row 1: Stats
+      - widget_id: "stat-total-evaluations"
+        x: 0
+        y: 0
+        w: 3
+        h: 2
+      - widget_id: "stat-avg-score"
+        x: 3
+        y: 0
+        w: 3
+        h: 2
+      - widget_id: "stat-passing-rate"
+        x: 6
+        y: 0
+        w: 3
+        h: 2
+      - widget_id: "stat-trace-coverage"
+        x: 9
+        y: 0
+        w: 3
+        h: 2
+      # Row 2: Time series and distribution
+      - widget_id: "chart-score-over-time"
+        x: 0
+        y: 2
+        w: 6
+        h: 4
+      - widget_id: "chart-score-distribution"
+        x: 6
+        y: 2
+        w: 6
+        h: 4
+      # Row 3: Charts
+      - widget_id: "chart-scores-by-name"
+        x: 0
+        y: 6
+        w: 6
+        h: 4
+      - widget_id: "chart-scores-by-source"
+        x: 6
+        y: 6
+        w: 6
+        h: 4
+      # Row 4: Table
+      - widget_id: "table-recent-scores"
+        x: 0
+        y: 10
+        w: 12
+        h: 4

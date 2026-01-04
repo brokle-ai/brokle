@@ -17,9 +17,11 @@ import (
 	"brokle/internal/config"
 	"brokle/internal/core/domain/analytics"
 	"brokle/internal/core/domain/auth"
+	"brokle/internal/core/domain/dashboard"
 	"brokle/internal/infrastructure/database"
 	analyticsRepo "brokle/internal/infrastructure/repository/analytics"
 	authRepo "brokle/internal/infrastructure/repository/auth"
+	dashboardRepo "brokle/internal/infrastructure/repository/dashboard"
 	"brokle/pkg/logging"
 	"brokle/pkg/ulid"
 )
@@ -34,6 +36,7 @@ type Seeder struct {
 	permissionRepo    auth.PermissionRepository
 	rolePermRepo      auth.RolePermissionRepository
 	providerModelRepo analytics.ProviderModelRepository
+	templateRepo      dashboard.TemplateRepository
 }
 
 func New(cfg *config.Config) (*Seeder, error) {
@@ -57,6 +60,7 @@ func New(cfg *config.Config) (*Seeder, error) {
 	s.permissionRepo = authRepo.NewPermissionRepository(s.db)
 	s.rolePermRepo = authRepo.NewRolePermissionRepository(s.db)
 	s.providerModelRepo = analyticsRepo.NewProviderModelRepository(s.db)
+	s.templateRepo = dashboardRepo.NewTemplateRepository(s.db)
 
 	return s, nil
 }
@@ -112,6 +116,11 @@ func (s *Seeder) SeedAll(ctx context.Context, opts *Options) error {
 	// 3. Seed pricing (independent)
 	if err := s.seedPricingFromFile(ctx, opts.Verbose); err != nil {
 		return fmt.Errorf("failed to seed pricing: %w", err)
+	}
+
+	// 4. Seed dashboard templates (independent)
+	if err := s.seedTemplatesFromFile(ctx, opts.Verbose); err != nil {
+		return fmt.Errorf("failed to seed templates: %w", err)
 	}
 
 	s.logger.Info("PostgreSQL seeding completed successfully")
@@ -209,6 +218,11 @@ func (s *Seeder) Reset(ctx context.Context, verbose bool) error {
 	// Reset pricing data
 	if err := s.resetPricing(ctx, verbose); err != nil {
 		s.logger.Warn(" Could not reset pricing data", "error", err)
+	}
+
+	// Reset template data
+	if err := s.resetTemplates(ctx, verbose); err != nil {
+		s.logger.Warn(" Could not reset template data", "error", err)
 	}
 
 	s.logger.Info("Data reset completed")
@@ -741,6 +755,255 @@ func (s *Seeder) GetPricingStatistics(ctx context.Context) (*PricingStatistics, 
 		if err == nil {
 			stats.TotalPrices += len(prices)
 		}
+	}
+
+	return stats, nil
+}
+
+// SeedTemplates seeds dashboard templates from the YAML file.
+func (s *Seeder) SeedTemplates(ctx context.Context, opts *Options) error {
+	if opts.DryRun {
+		fmt.Println("DRY RUN: Would seed dashboard templates")
+		return nil
+	}
+
+	s.logger.Info("Starting dashboard template seeding...")
+
+	// Reset template data if requested
+	if opts.Reset {
+		s.logger.Info("Resetting existing template data...")
+		if err := s.resetTemplates(ctx, opts.Verbose); err != nil {
+			return fmt.Errorf("failed to reset template data: %w", err)
+		}
+	}
+
+	// Load and seed template data
+	if err := s.seedTemplatesFromFile(ctx, opts.Verbose); err != nil {
+		return fmt.Errorf("failed to seed templates: %w", err)
+	}
+
+	// Print statistics
+	stats, err := s.GetTemplateStatistics(ctx)
+	if err == nil {
+		s.logger.Debug("Template Statistics", "total", stats.TotalTemplates)
+	}
+
+	s.logger.Info("Dashboard template seeding completed successfully")
+	return nil
+}
+
+func (s *Seeder) loadTemplates() (*TemplatesFile, error) {
+	seedFile := findSeedFile("seeds/dashboard_templates.yaml")
+	if seedFile == "" {
+		return nil, errors.New("templates file not found: seeds/dashboard_templates.yaml")
+	}
+
+	data, err := os.ReadFile(seedFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read %s: %w", seedFile, err)
+	}
+
+	var templatesFile TemplatesFile
+	if err := yaml.Unmarshal(data, &templatesFile); err != nil {
+		return nil, fmt.Errorf("failed to parse %s: %w", seedFile, err)
+	}
+
+	// Validate
+	if len(templatesFile.Templates) == 0 {
+		return nil, errors.New("no templates defined")
+	}
+
+	templateNames := make(map[string]bool)
+	for i, tmpl := range templatesFile.Templates {
+		if tmpl.Name == "" {
+			return nil, fmt.Errorf("template %d missing required field: name", i)
+		}
+		if tmpl.Category == "" {
+			return nil, fmt.Errorf("template %s missing required field: category", tmpl.Name)
+		}
+		if templateNames[tmpl.Name] {
+			return nil, fmt.Errorf("duplicate template name: %s", tmpl.Name)
+		}
+		templateNames[tmpl.Name] = true
+
+		if len(tmpl.Config.Widgets) == 0 {
+			return nil, fmt.Errorf("template %s has no widgets defined", tmpl.Name)
+		}
+	}
+
+	return &templatesFile, nil
+}
+
+func (s *Seeder) seedTemplatesFromFile(ctx context.Context, verbose bool) error {
+	templatesData, err := s.loadTemplates()
+	if err != nil {
+		// Template data is optional - log warning but don't fail
+		s.logger.Warn("Could not load template data", "error", err)
+		return nil
+	}
+
+	return s.seedTemplates(ctx, templatesData, verbose)
+}
+
+func (s *Seeder) seedTemplates(ctx context.Context, data *TemplatesFile, verbose bool) error {
+	if verbose {
+		s.logger.Info("Seeding dashboard templates", "count", len(data.Templates))
+	}
+
+	for _, tmplSeed := range data.Templates {
+		if err := s.seedTemplate(ctx, tmplSeed, verbose); err != nil {
+			return fmt.Errorf("failed to seed template %s: %w", tmplSeed.Name, err)
+		}
+	}
+
+	if verbose {
+		s.logger.Info("Dashboard templates seeded successfully", "version", data.Version)
+	}
+	return nil
+}
+
+func (s *Seeder) seedTemplate(ctx context.Context, tmplSeed TemplateSeed, verbose bool) error {
+	// Check if template already exists by name (idempotent seeding)
+	existing, _ := s.templateRepo.GetByName(ctx, tmplSeed.Name)
+	if existing != nil {
+		if verbose {
+			s.logger.Info("Template already exists, updating", "name", tmplSeed.Name, "id", existing.ID.String())
+		}
+		// Update existing template
+		existing.Description = tmplSeed.Description
+		existing.Category = dashboard.TemplateCategory(tmplSeed.Category)
+		existing.Config = s.convertConfig(tmplSeed.Config)
+		existing.Layout = s.convertLayout(tmplSeed.Layout)
+		existing.IsActive = true
+
+		if err := s.templateRepo.Update(ctx, existing); err != nil {
+			return fmt.Errorf("failed to update template: %w", err)
+		}
+		return nil
+	}
+
+	// Create new template
+	template := &dashboard.Template{
+		ID:          ulid.New(),
+		Name:        tmplSeed.Name,
+		Description: tmplSeed.Description,
+		Category:    dashboard.TemplateCategory(tmplSeed.Category),
+		Config:      s.convertConfig(tmplSeed.Config),
+		Layout:      s.convertLayout(tmplSeed.Layout),
+		IsActive:    true,
+	}
+
+	if err := s.templateRepo.Create(ctx, template); err != nil {
+		return fmt.Errorf("failed to create template: %w", err)
+	}
+
+	if verbose {
+		s.logger.Info("Created template", "name", template.Name, "category", template.Category, "id", template.ID.String())
+	}
+
+	return nil
+}
+
+func (s *Seeder) convertConfig(seedConfig TemplateConfigSeed) dashboard.DashboardConfig {
+	config := dashboard.DashboardConfig{
+		RefreshRate: seedConfig.RefreshRate,
+		Widgets:     make([]dashboard.Widget, len(seedConfig.Widgets)),
+	}
+
+	for i, w := range seedConfig.Widgets {
+		config.Widgets[i] = dashboard.Widget{
+			ID:          w.ID,
+			Type:        dashboard.WidgetType(w.Type),
+			Title:       w.Title,
+			Description: w.Description,
+			Query:       s.convertQuery(w.Query),
+			Config:      w.Config,
+		}
+	}
+
+	return config
+}
+
+func (s *Seeder) convertQuery(seedQuery TemplateQuerySeed) dashboard.WidgetQuery {
+	query := dashboard.WidgetQuery{
+		View:       dashboard.ViewType(seedQuery.View),
+		Measures:   seedQuery.Measures,
+		Dimensions: seedQuery.Dimensions,
+		Limit:      seedQuery.Limit,
+		OrderBy:    seedQuery.OrderBy,
+		OrderDir:   seedQuery.OrderDir,
+	}
+
+	if len(seedQuery.Filters) > 0 {
+		query.Filters = make([]dashboard.QueryFilter, len(seedQuery.Filters))
+		for i, f := range seedQuery.Filters {
+			query.Filters[i] = dashboard.QueryFilter{
+				Field:    f.Field,
+				Operator: dashboard.FilterOperator(f.Operator),
+				Value:    f.Value,
+			}
+		}
+	}
+
+	return query
+}
+
+func (s *Seeder) convertLayout(seedLayout []TemplateLayoutSeed) []dashboard.LayoutItem {
+	layout := make([]dashboard.LayoutItem, len(seedLayout))
+	for i, l := range seedLayout {
+		layout[i] = dashboard.LayoutItem{
+			WidgetID: l.WidgetID,
+			X:        l.X,
+			Y:        l.Y,
+			W:        l.W,
+			H:        l.H,
+		}
+	}
+	return layout
+}
+
+func (s *Seeder) resetTemplates(ctx context.Context, verbose bool) error {
+	if verbose {
+		s.logger.Info("Resetting dashboard template data...")
+	}
+
+	// Get all templates and delete them
+	templates, err := s.templateRepo.List(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to list templates for reset: %w", err)
+	}
+
+	deletedCount := 0
+	for _, tmpl := range templates {
+		if err := s.templateRepo.Delete(ctx, tmpl.ID); err != nil {
+			s.logger.Warn("Could not delete template", "name", tmpl.Name, "error", err)
+		} else {
+			deletedCount++
+			if verbose {
+				s.logger.Info("Deleted template", "name", tmpl.Name)
+			}
+		}
+	}
+
+	if verbose {
+		s.logger.Info("Dashboard template reset completed", "templates_deleted", deletedCount)
+	}
+	return nil
+}
+
+func (s *Seeder) GetTemplateStatistics(ctx context.Context) (*TemplateStatistics, error) {
+	templates, err := s.templateRepo.List(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get templates: %w", err)
+	}
+
+	stats := &TemplateStatistics{
+		TotalTemplates:       len(templates),
+		CategoryDistribution: make(map[string]int),
+	}
+
+	for _, tmpl := range templates {
+		stats.CategoryDistribution[string(tmpl.Category)]++
 	}
 
 	return stats, nil
