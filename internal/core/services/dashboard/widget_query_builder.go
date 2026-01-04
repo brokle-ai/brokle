@@ -373,16 +373,23 @@ func (b *WidgetQueryBuilder) BuildTraceListQuery(
 
 	orderBy := "start_time DESC"
 	if query.OrderBy != "" {
-		_, isMeasure := viewDef.Measures[query.OrderBy]
-		_, isDimension := viewDef.Dimensions[query.OrderBy]
-		if !isMeasure && !isDimension {
+		var orderField string
+		if measure, ok := viewDef.Measures[query.OrderBy]; ok {
+			// For trace list queries (non-aggregated), use BaseColumn instead of aggregate SQL
+			if measure.BaseColumn == "" {
+				return nil, fmt.Errorf("cannot order trace list by computed measure: %s", query.OrderBy)
+			}
+			orderField = measure.BaseColumn
+		} else if dim, ok := viewDef.Dimensions[query.OrderBy]; ok {
+			orderField = dim.SQL
+		} else {
 			return nil, fmt.Errorf("invalid order_by field: %s", query.OrderBy)
 		}
 		dir := "DESC"
 		if query.OrderDir == "asc" {
 			dir = "ASC"
 		}
-		orderBy = fmt.Sprintf("%s %s", query.OrderBy, dir)
+		orderBy = fmt.Sprintf("%s %s", orderField, dir)
 	}
 
 	limit := query.Limit
