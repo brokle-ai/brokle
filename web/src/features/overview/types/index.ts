@@ -5,8 +5,11 @@
  * matching the Go backend domain types in internal/core/domain/analytics/overview.go
  */
 
-// Time range options for overview queries
-export type OverviewTimeRange = '24h' | '7d' | '30d'
+// Re-export time range types from shared component
+export type { TimeRange, RelativeTimeRange } from '@/components/shared/time-range-picker'
+
+// Legacy type alias for backward compatibility (deprecated, use TimeRange instead)
+export type OverviewTimeRange = '15m' | '30m' | '1h' | '3h' | '6h' | '12h' | '24h' | '7d' | '14d' | '30d'
 
 // Stats row metrics with trend indicators
 export interface OverviewStats {

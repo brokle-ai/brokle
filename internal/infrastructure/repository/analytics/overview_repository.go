@@ -113,17 +113,19 @@ func (r *overviewRepository) GetStats(ctx context.Context, filter *analytics.Ove
 	}, nil
 }
 
-// GetTraceVolume retrieves hourly trace counts for the time series chart
+// GetTraceVolume retrieves trace counts for the time series chart
 func (r *overviewRepository) GetTraceVolume(ctx context.Context, filter *analytics.OverviewFilter) ([]analytics.TimeSeriesPoint, error) {
-	// Determine bucket size based on time range
+	// Determine bucket size based on time range or actual duration for custom ranges
 	var bucketSeconds int64
-	switch filter.TimeRange {
-	case analytics.TimeRange7Days:
-		bucketSeconds = 6 * 3600 // 6-hour buckets for 7 days
-	case analytics.TimeRange30Days:
-		bucketSeconds = 24 * 3600 // Daily buckets for 30 days
-	default: // 24h
-		bucketSeconds = 3600 // Hourly buckets for 24 hours
+	duration := filter.EndTime.Sub(filter.StartTime)
+
+	switch {
+	case filter.TimeRange == analytics.TimeRange30Days || (filter.TimeRange == "" && duration >= 14*24*time.Hour):
+		bucketSeconds = 24 * 3600 // Daily buckets for 14+ days
+	case filter.TimeRange == analytics.TimeRange7Days || filter.TimeRange == analytics.TimeRange14Days || (filter.TimeRange == "" && duration >= 3*24*time.Hour):
+		bucketSeconds = 6 * 3600 // 6-hour buckets for 3-14 days
+	default:
+		bucketSeconds = 3600 // Hourly buckets for < 3 days
 	}
 
 	query := fmt.Sprintf(`

@@ -38,26 +38,9 @@ export interface QueryFilter {
   value: unknown
 }
 
-// Relative time range options
-export type RelativeTimeRange =
-  | '15m'
-  | '30m'
-  | '1h'
-  | '3h'
-  | '6h'
-  | '12h'
-  | '24h'
-  | '7d'
-  | '14d'
-  | '30d'
-  | 'custom'
-
-// Time range for queries
-export interface TimeRange {
-  from?: string
-  to?: string
-  relative?: RelativeTimeRange
-}
+// Import and re-export time range types from shared component
+import type { TimeRange, RelativeTimeRange } from '@/components/shared/time-range-picker'
+export type { TimeRange, RelativeTimeRange }
 
 // Widget query configuration
 export interface WidgetQuery {

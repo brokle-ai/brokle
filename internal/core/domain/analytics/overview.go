@@ -11,16 +11,37 @@ import (
 type TimeRange string
 
 const (
-	TimeRange24Hours TimeRange = "24h"
-	TimeRange7Days   TimeRange = "7d"
-	TimeRange30Days  TimeRange = "30d"
+	TimeRange15Minutes TimeRange = "15m"
+	TimeRange30Minutes TimeRange = "30m"
+	TimeRange1Hour     TimeRange = "1h"
+	TimeRange3Hours    TimeRange = "3h"
+	TimeRange6Hours    TimeRange = "6h"
+	TimeRange12Hours   TimeRange = "12h"
+	TimeRange24Hours   TimeRange = "24h"
+	TimeRange7Days     TimeRange = "7d"
+	TimeRange14Days    TimeRange = "14d"
+	TimeRange30Days    TimeRange = "30d"
 )
 
 // ParseTimeRange parses a string into a TimeRange, defaulting to 24h
 func ParseTimeRange(s string) TimeRange {
 	switch s {
+	case "15m":
+		return TimeRange15Minutes
+	case "30m":
+		return TimeRange30Minutes
+	case "1h":
+		return TimeRange1Hour
+	case "3h":
+		return TimeRange3Hours
+	case "6h":
+		return TimeRange6Hours
+	case "12h":
+		return TimeRange12Hours
 	case "7d":
 		return TimeRange7Days
+	case "14d":
+		return TimeRange14Days
 	case "30d":
 		return TimeRange30Days
 	default:
@@ -31,8 +52,22 @@ func ParseTimeRange(s string) TimeRange {
 // Duration returns the duration for the time range
 func (tr TimeRange) Duration() time.Duration {
 	switch tr {
+	case TimeRange15Minutes:
+		return 15 * time.Minute
+	case TimeRange30Minutes:
+		return 30 * time.Minute
+	case TimeRange1Hour:
+		return time.Hour
+	case TimeRange3Hours:
+		return 3 * time.Hour
+	case TimeRange6Hours:
+		return 6 * time.Hour
+	case TimeRange12Hours:
+		return 12 * time.Hour
 	case TimeRange7Days:
 		return 7 * 24 * time.Hour
+	case TimeRange14Days:
+		return 14 * 24 * time.Hour
 	case TimeRange30Days:
 		return 30 * 24 * time.Hour
 	default:
@@ -130,7 +165,15 @@ func NewOverviewFilter(projectID ulid.ULID, timeRange TimeRange) *OverviewFilter
 
 // PreviousPeriodStart returns the start time for the comparison period
 func (f *OverviewFilter) PreviousPeriodStart() time.Time {
-	return f.StartTime.Add(-f.TimeRange.Duration())
+	var duration time.Duration
+	if f.TimeRange != "" {
+		// Preset time range - use its duration
+		duration = f.TimeRange.Duration()
+	} else {
+		// Custom range - calculate from actual start/end times
+		duration = f.EndTime.Sub(f.StartTime)
+	}
+	return f.StartTime.Add(-duration)
 }
 
 // OverviewRepository defines the data access interface for overview data
@@ -163,5 +206,6 @@ type OverviewRepository interface {
 // OverviewService defines the business logic interface for overview
 type OverviewService interface {
 	// GetOverview retrieves the complete overview data for a project
-	GetOverview(ctx context.Context, projectID ulid.ULID, timeRange TimeRange) (*OverviewResponse, error)
+	// Filter must contain ProjectID and either TimeRange (for presets) or StartTime/EndTime (for custom ranges)
+	GetOverview(ctx context.Context, filter *OverviewFilter) (*OverviewResponse, error)
 }

@@ -3,17 +3,11 @@
 import * as React from 'react'
 import { RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { PageHeader } from '@/components/layout/page-header'
+import { TimeRangePicker } from '@/components/shared/time-range-picker'
 import { cn } from '@/lib/utils'
 
-import { useProjectOverview } from '../hooks/use-project-overview'
+import { useProjectOverview, useOverviewTimeRange } from '../hooks'
 import { OnboardingChecklist } from './onboarding-checklist'
 import { StatsRow } from './stats-row'
 import { TraceVolumeChart } from './trace-volume-chart'
@@ -21,7 +15,6 @@ import { CostByModelChart } from './cost-by-model-chart'
 import { RecentTracesTable } from './recent-traces-table'
 import { TopErrorsTable } from './top-errors-table'
 import { ScoreOverview } from './score-overview'
-import type { OverviewTimeRange } from '../types'
 
 interface OverviewPageProps {
   projectId: string
@@ -29,29 +22,20 @@ interface OverviewPageProps {
   className?: string
 }
 
-const TIME_RANGE_OPTIONS: { value: OverviewTimeRange; label: string }[] = [
-  { value: '24h', label: 'Last 24 hours' },
-  { value: '7d', label: 'Last 7 days' },
-  { value: '30d', label: 'Last 30 days' },
-]
-
 export function OverviewPage({ projectId, projectSlug, className }: OverviewPageProps) {
+  // URL-persisted time range
+  const { timeRange, setTimeRange } = useOverviewTimeRange()
+
   const {
     data,
     isLoading,
     isRefetching,
     error,
-    timeRange,
-    setTimeRange,
     refetch,
     onboardingProgress,
     isOnboardingDismissed,
     dismissOnboarding,
-  } = useProjectOverview(projectId)
-
-  const handleTimeRangeChange = (value: string) => {
-    setTimeRange(value as OverviewTimeRange)
-  }
+  } = useProjectOverview(projectId, { timeRange })
 
   const handleRefresh = () => {
     refetch()
@@ -63,18 +47,7 @@ export function OverviewPage({ projectId, projectSlug, className }: OverviewPage
     <div className={cn('space-y-6', className)}>
       <PageHeader title="Overview">
         <div className="flex items-center gap-2">
-          <Select value={timeRange} onValueChange={handleTimeRangeChange}>
-            <SelectTrigger className="w-[160px]">
-              <SelectValue placeholder="Select time range" />
-            </SelectTrigger>
-            <SelectContent>
-              {TIME_RANGE_OPTIONS.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <TimeRangePicker value={timeRange} onChange={setTimeRange} />
           <Button
             variant="outline"
             size="icon"

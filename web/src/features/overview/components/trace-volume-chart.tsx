@@ -7,30 +7,38 @@ import { Button } from '@/components/ui/button'
 import { LineChart } from '@/components/shared/charts/line-chart'
 import { ArrowRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import type { TimeSeriesPoint, OverviewTimeRange } from '../types'
+import type { TimeSeriesPoint, TimeRange } from '../types'
 
 interface TraceVolumeChartProps {
   data: TimeSeriesPoint[]
-  timeRange: OverviewTimeRange
+  timeRange: TimeRange
   isLoading?: boolean
   error?: string | null
   className?: string
   projectSlug?: string
 }
 
-function formatTime(timestamp: string, timeRange: OverviewTimeRange): string {
+function formatTime(timestamp: string, timeRange: TimeRange): string {
   const date = new Date(timestamp)
+  const relative = timeRange.relative || '24h'
 
-  switch (timeRange) {
-    case '24h':
-      return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-    case '7d':
-      return date.toLocaleDateString('en-US', { weekday: 'short', hour: '2-digit' })
-    case '30d':
-      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-    default:
-      return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+  // For short durations (< 12h), show time only
+  if (['15m', '30m', '1h', '3h', '6h', '12h'].includes(relative)) {
+    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
   }
+
+  // For 24h, show time
+  if (relative === '24h') {
+    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+  }
+
+  // For 7d/14d, show day and time
+  if (['7d', '14d'].includes(relative)) {
+    return date.toLocaleDateString('en-US', { weekday: 'short', hour: '2-digit' })
+  }
+
+  // For 30d or custom, show date
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
 export function TraceVolumeChart({

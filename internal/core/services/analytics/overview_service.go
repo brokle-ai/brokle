@@ -36,8 +36,8 @@ func NewOverviewService(
 }
 
 // GetOverview retrieves the complete overview data for a project
-func (s *overviewService) GetOverview(ctx context.Context, projectID ulid.ULID, timeRange analytics.TimeRange) (*analytics.OverviewResponse, error) {
-	filter := analytics.NewOverviewFilter(projectID, timeRange)
+func (s *overviewService) GetOverview(ctx context.Context, filter *analytics.OverviewFilter) (*analytics.OverviewResponse, error) {
+	projectID := filter.ProjectID
 
 	// Result holders (protected by errgroup's synchronization)
 	var (

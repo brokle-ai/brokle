@@ -2,15 +2,28 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { getProjectOverview } from '../api/overview-api'
-import type { OverviewTimeRange } from '../types'
+import type { TimeRange } from '@/components/shared/time-range-picker'
+
+// Default time range
+const DEFAULT_TIME_RANGE: TimeRange = { relative: '24h' }
+
+/**
+ * Create a stable query key from TimeRange
+ */
+function createTimeRangeKey(timeRange: TimeRange): string {
+  if (timeRange.relative === 'custom' && timeRange.from && timeRange.to) {
+    return `custom:${timeRange.from}:${timeRange.to}`
+  }
+  return timeRange.relative || '24h'
+}
 
 /**
  * Query keys for overview queries
  */
 export const overviewQueryKeys = {
   all: ['overview'] as const,
-  project: (projectId: string, timeRange: OverviewTimeRange) =>
-    [...overviewQueryKeys.all, projectId, timeRange] as const,
+  project: (projectId: string, timeRange: TimeRange) =>
+    [...overviewQueryKeys.all, projectId, createTimeRangeKey(timeRange)] as const,
 }
 
 /**
@@ -18,7 +31,7 @@ export const overviewQueryKeys = {
  */
 export function useOverviewQuery(
   projectId: string | undefined,
-  timeRange: OverviewTimeRange = '24h',
+  timeRange: TimeRange = DEFAULT_TIME_RANGE,
   options: { enabled?: boolean } = {}
 ) {
   return useQuery({

@@ -1,22 +1,25 @@
 'use client'
 
-import { useState, useMemo, useCallback, useSyncExternalStore } from 'react'
+import { useMemo, useCallback, useSyncExternalStore } from 'react'
 import { useOverviewQuery } from './use-overview-queries'
-import type { OverviewTimeRange, OverviewResponse } from '../types'
+import type { TimeRange } from '@/components/shared/time-range-picker'
+import type { OverviewResponse } from '../types'
 
 const ONBOARDING_DISMISSED_KEY = 'brokle:onboarding-dismissed'
 
+// Default time range
+const DEFAULT_TIME_RANGE: TimeRange = { relative: '24h' }
+
 interface UseProjectOverviewOptions {
-  initialTimeRange?: OverviewTimeRange
+  /** Time range for the overview data query */
+  timeRange?: TimeRange
 }
 
 export function useProjectOverview(
   projectId: string | undefined,
   options: UseProjectOverviewOptions = {}
 ) {
-  const { initialTimeRange = '24h' } = options
-
-  const [timeRange, setTimeRange] = useState<OverviewTimeRange>(initialTimeRange)
+  const { timeRange = DEFAULT_TIME_RANGE } = options
 
   // Derive dismissed state from localStorage using useSyncExternalStore
   const storageKey = projectId ? `${ONBOARDING_DISMISSED_KEY}:${projectId}` : null
@@ -51,10 +54,6 @@ export function useProjectOverview(
     error,
     refetch,
   } = useOverviewQuery(projectId, timeRange)
-
-  const handleTimeRangeChange = useCallback((newTimeRange: OverviewTimeRange) => {
-    setTimeRange(newTimeRange)
-  }, [])
 
   const dismissOnboarding = useCallback(() => {
     if (projectId && typeof window !== 'undefined') {
@@ -109,8 +108,6 @@ export function useProjectOverview(
     isOnboardingComplete,
     isOnboardingDismissed,
     dismissOnboarding,
-    timeRange,
-    setTimeRange: handleTimeRangeChange,
     isLoading,
     isRefetching: isFetching && !isLoading,
     error,
