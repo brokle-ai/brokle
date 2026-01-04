@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useCallback, useEffect } from 'react'
+import { useState, useMemo, useCallback, useSyncExternalStore } from 'react'
 import { useOverviewQuery } from './use-overview-queries'
 import type { OverviewTimeRange, OverviewResponse } from '../types'
 
@@ -17,15 +17,32 @@ export function useProjectOverview(
   const { initialTimeRange = '24h' } = options
 
   const [timeRange, setTimeRange] = useState<OverviewTimeRange>(initialTimeRange)
-  const [isOnboardingDismissed, setIsOnboardingDismissed] = useState(false)
 
-  // Load dismissed state from localStorage
-  useEffect(() => {
-    if (projectId && typeof window !== 'undefined') {
-      const dismissed = localStorage.getItem(`${ONBOARDING_DISMISSED_KEY}:${projectId}`)
-      setIsOnboardingDismissed(dismissed === 'true')
-    }
-  }, [projectId])
+  // Derive dismissed state from localStorage using useSyncExternalStore
+  const storageKey = projectId ? `${ONBOARDING_DISMISSED_KEY}:${projectId}` : null
+
+  const isOnboardingDismissed = useSyncExternalStore(
+    // Subscribe to storage changes
+    useCallback(
+      (callback) => {
+        if (!storageKey || typeof window === 'undefined') return () => {}
+
+        const handler = (e: StorageEvent) => {
+          if (e.key === storageKey) callback()
+        }
+        window.addEventListener('storage', handler)
+        return () => window.removeEventListener('storage', handler)
+      },
+      [storageKey]
+    ),
+    // Get current value (client)
+    useCallback(() => {
+      if (!storageKey || typeof window === 'undefined') return false
+      return localStorage.getItem(storageKey) === 'true'
+    }, [storageKey]),
+    // Server snapshot (SSR)
+    () => false
+  )
 
   const {
     data,
@@ -42,7 +59,13 @@ export function useProjectOverview(
   const dismissOnboarding = useCallback(() => {
     if (projectId && typeof window !== 'undefined') {
       localStorage.setItem(`${ONBOARDING_DISMISSED_KEY}:${projectId}`, 'true')
-      setIsOnboardingDismissed(true)
+      // Trigger re-render via storage event for same-tab updates
+      window.dispatchEvent(
+        new StorageEvent('storage', {
+          key: `${ONBOARDING_DISMISSED_KEY}:${projectId}`,
+          newValue: 'true',
+        })
+      )
     }
   }, [projectId])
 
@@ -68,7 +91,7 @@ export function useProjectOverview(
       total: 4,
       percentage: (completed / 4) * 100,
     }
-  }, [overview?.checklist_status])
+  }, [overview])
 
   // Check if onboarding is complete
   const isOnboardingComplete = onboardingProgress.completed === onboardingProgress.total
