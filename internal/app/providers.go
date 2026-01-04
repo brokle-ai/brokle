@@ -194,6 +194,7 @@ type BillingRepositories struct {
 
 type AnalyticsRepositories struct {
 	ProviderModel analytics.ProviderModelRepository
+	Overview      analytics.OverviewRepository
 }
 
 type PromptRepositories struct {
@@ -252,6 +253,7 @@ type BillingServices struct {
 
 type AnalyticsServices struct {
 	ProviderPricing analytics.ProviderPricingService
+	Overview        analytics.OverviewService
 }
 
 type PromptServices struct {
@@ -497,6 +499,15 @@ func ProvideServerServices(core *CoreContainer) *ServiceContainer {
 
 	dashboardServices := ProvideDashboardServices(repos.Dashboard, logger)
 
+	// Overview service needs projectService and credentials repo (created after other services)
+	overviewSvc := analyticsService.NewOverviewService(
+		repos.Analytics.Overview,
+		projectService,
+		repos.Credentials.ProviderCredential,
+		logger,
+	)
+	analyticsServices.Overview = overviewSvc
+
 	return &ServiceContainer{
 		User:                userServices,
 		Auth:                authServices,
@@ -638,6 +649,7 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 		dashboardSvc,
 		widgetQuerySvc,
 		templateSvc,
+		core.Services.Analytics.Overview,
 	)
 
 	httpServer := http.NewServer(
@@ -755,9 +767,10 @@ func ProvideBillingRepositories(db *gorm.DB, logger *slog.Logger) *BillingReposi
 	}
 }
 
-func ProvideAnalyticsRepositories(db *gorm.DB) *AnalyticsRepositories {
+func ProvideAnalyticsRepositories(db *gorm.DB, clickhouseDB *database.ClickHouseDB) *AnalyticsRepositories {
 	return &AnalyticsRepositories{
 		ProviderModel: analyticsRepo.NewProviderModelRepository(db),
+		Overview:      analyticsRepo.NewOverviewRepository(clickhouseDB.Conn),
 	}
 }
 
@@ -811,7 +824,7 @@ func ProvideRepositories(dbs *DatabaseContainer, logger *slog.Logger) *Repositor
 		Observability: ProvideObservabilityRepositories(dbs.ClickHouse, dbs.Postgres.DB, dbs.Redis),
 		Storage:       ProvideStorageRepositories(dbs.ClickHouse),
 		Billing:       ProvideBillingRepositories(dbs.Postgres.DB, logger),
-		Analytics:     ProvideAnalyticsRepositories(dbs.Postgres.DB),
+		Analytics:     ProvideAnalyticsRepositories(dbs.Postgres.DB, dbs.ClickHouse),
 		Prompt:        ProvidePromptRepositories(dbs.Postgres.DB, dbs.Redis),
 		Credentials:   ProvideCredentialsRepositories(dbs.Postgres.DB),
 		Playground:    ProvidePlaygroundRepositories(dbs.Postgres.DB),

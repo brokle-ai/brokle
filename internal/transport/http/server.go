@@ -281,6 +281,9 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 		projects.POST("/:projectId/unarchive", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Project.Unarchive)
 		projects.DELETE("/:projectId", s.authMiddleware.RequirePermission("projects:delete"), s.handlers.Project.Delete)
 
+		// Project overview
+		projects.GET("/:projectId/overview", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Overview.GetOverview)
+
 		projects.GET("/:projectId/api-keys", s.authMiddleware.RequirePermission("api-keys:read"), s.handlers.APIKey.List)
 		projects.POST("/:projectId/api-keys", s.authMiddleware.RequirePermission("api-keys:create"), s.handlers.APIKey.Create)
 		projects.DELETE("/:projectId/api-keys/:keyId", s.authMiddleware.RequirePermission("api-keys:delete"), s.handlers.APIKey.Delete)

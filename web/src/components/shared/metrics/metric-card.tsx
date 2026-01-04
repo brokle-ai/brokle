@@ -20,6 +20,7 @@ interface MetricCardProps extends React.HTMLAttributes<HTMLDivElement> {
     value: number
     label: string
     direction: 'up' | 'down'
+    isPositiveWhenDown?: boolean  // true for cost, latency, error where down is good
   }
   loading?: boolean
   error?: string
@@ -78,8 +79,11 @@ export function MetricCard({
     return val
   }
 
-  const getTrendColor = (direction: 'up' | 'down') => {
-    return direction === 'up' ? 'text-green-600' : 'text-red-600'
+  const getTrendColor = (direction: 'up' | 'down', isPositiveWhenDown?: boolean) => {
+    const isGood = isPositiveWhenDown
+      ? direction === 'down'  // down is good (cost, latency, errors)
+      : direction === 'up'    // up is good (traces, usage)
+    return isGood ? 'text-green-600' : 'text-red-600'
   }
 
   const getTrendIcon = (direction: 'up' | 'down') => {
@@ -102,7 +106,7 @@ export function MetricCard({
               </p>
             )}
             {trend && (
-              <p className={cn('text-xs flex items-center', getTrendColor(trend.direction))}>
+              <p className={cn('text-xs flex items-center', getTrendColor(trend.direction, trend.isPositiveWhenDown))}>
                 <span className='mr-1'>{getTrendIcon(trend.direction)}</span>
                 {trend.value}% {trend.label}
               </p>
