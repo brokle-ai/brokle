@@ -4,6 +4,7 @@ import (
 	"log/slog"
 
 	"brokle/internal/config"
+	analyticsDomain "brokle/internal/core/domain/analytics"
 	"brokle/internal/core/domain/auth"
 	credentialsDomain "brokle/internal/core/domain/credentials"
 	dashboardDomain "brokle/internal/core/domain/dashboard"
@@ -29,6 +30,7 @@ import (
 	"brokle/internal/transport/http/handlers/metrics"
 	"brokle/internal/transport/http/handlers/observability"
 	organizationHandler "brokle/internal/transport/http/handlers/organization"
+	"brokle/internal/transport/http/handlers/overview"
 	"brokle/internal/transport/http/handlers/playground"
 	"brokle/internal/transport/http/handlers/project"
 	"brokle/internal/transport/http/handlers/prompt"
@@ -70,6 +72,7 @@ type Handlers struct {
 	SpanQuery         *observability.SpanQueryHandler
 	Dashboard         *dashboard.Handler
 	DashboardTemplate *dashboard.TemplateHandler
+	Overview          *overview.Handler
 }
 
 func NewHandlers(
@@ -107,6 +110,7 @@ func NewHandlers(
 	dashboardService dashboardDomain.DashboardService,
 	widgetQueryService dashboardDomain.WidgetQueryService,
 	templateService dashboardDomain.TemplateService,
+	overviewService analyticsDomain.OverviewService,
 ) *Handlers {
 	return &Handlers{
 		Health:        health.NewHandler(cfg, logger),
@@ -141,5 +145,6 @@ func NewHandlers(
 		SpanQuery:         observability.NewSpanQueryHandler(observabilityServices.SpanQueryService, logger),
 		Dashboard:         dashboard.NewHandler(cfg, logger, dashboardService, widgetQueryService),
 		DashboardTemplate: dashboard.NewTemplateHandler(cfg, logger, templateService),
+		Overview:          overview.NewHandler(cfg, logger, overviewService),
 	}
 }

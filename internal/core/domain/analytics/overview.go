@@ -1,0 +1,167 @@
+package analytics
+
+import (
+	"context"
+	"time"
+
+	"brokle/pkg/ulid"
+)
+
+// TimeRange represents the time range for overview queries
+type TimeRange string
+
+const (
+	TimeRange24Hours TimeRange = "24h"
+	TimeRange7Days   TimeRange = "7d"
+	TimeRange30Days  TimeRange = "30d"
+)
+
+// ParseTimeRange parses a string into a TimeRange, defaulting to 24h
+func ParseTimeRange(s string) TimeRange {
+	switch s {
+	case "7d":
+		return TimeRange7Days
+	case "30d":
+		return TimeRange30Days
+	default:
+		return TimeRange24Hours
+	}
+}
+
+// Duration returns the duration for the time range
+func (tr TimeRange) Duration() time.Duration {
+	switch tr {
+	case TimeRange7Days:
+		return 7 * 24 * time.Hour
+	case TimeRange30Days:
+		return 30 * 24 * time.Hour
+	default:
+		return 24 * time.Hour
+	}
+}
+
+// OverviewStats contains the primary metrics for the stats row
+type OverviewStats struct {
+	TracesCount    int64   `json:"traces_count"`
+	TracesTrend    float64 `json:"traces_trend"`     // Percentage change vs previous period
+	TotalCost      float64 `json:"total_cost"`       // In dollars
+	CostTrend      float64 `json:"cost_trend"`       // Percentage change vs previous period
+	AvgLatencyMs   float64 `json:"avg_latency_ms"`   // Average latency in milliseconds
+	LatencyTrend   float64 `json:"latency_trend"`    // Percentage change vs previous period
+	ErrorRate      float64 `json:"error_rate"`       // Percentage of traces with errors
+	ErrorRateTrend float64 `json:"error_rate_trend"` // Percentage change vs previous period
+}
+
+// TimeSeriesPoint represents a single point in a time series
+type TimeSeriesPoint struct {
+	Timestamp time.Time `json:"timestamp"`
+	Value     float64   `json:"value"`
+}
+
+// CostByModel represents cost breakdown by model
+type CostByModel struct {
+	Model string  `json:"model"`
+	Cost  float64 `json:"cost"`
+}
+
+// RecentTrace represents a trace summary for the recent traces table
+type RecentTrace struct {
+	TraceID    string    `json:"trace_id"`
+	Name       string    `json:"name"`
+	LatencyMs  float64   `json:"latency_ms"`
+	Status     string    `json:"status"` // "success", "error"
+	Timestamp  time.Time `json:"timestamp"`
+}
+
+// TopError represents an error summary for the top errors table
+type TopError struct {
+	Message  string    `json:"message"`
+	Count    int64     `json:"count"`
+	LastSeen time.Time `json:"last_seen"`
+}
+
+// ScoreSummary represents a score overview for the conditional score section
+type ScoreSummary struct {
+	Name      string            `json:"name"`
+	AvgValue  float64           `json:"avg_value"`
+	Trend     float64           `json:"trend"` // Percentage change vs previous period
+	Sparkline []TimeSeriesPoint `json:"sparkline"`
+}
+
+// ChecklistStatus represents the onboarding checklist state
+type ChecklistStatus struct {
+	HasProject      bool `json:"has_project"`       // Always true (they're viewing the page)
+	HasTraces       bool `json:"has_traces"`        // Has sent at least one trace
+	HasAIProvider   bool `json:"has_ai_provider"`   // Has configured an AI provider
+	HasEvaluations  bool `json:"has_evaluations"`   // Has set up evaluation scores
+}
+
+// OverviewResponse is the complete response for the overview endpoint
+type OverviewResponse struct {
+	Stats           OverviewStats     `json:"stats"`
+	TraceVolume     []TimeSeriesPoint `json:"trace_volume"`
+	CostByModel     []CostByModel     `json:"cost_by_model"`
+	RecentTraces    []RecentTrace     `json:"recent_traces"`
+	TopErrors       []TopError        `json:"top_errors"`
+	ScoresSummary   []ScoreSummary    `json:"scores_summary,omitempty"` // Only if scores exist
+	ChecklistStatus ChecklistStatus   `json:"checklist_status"`
+}
+
+// OverviewFilter contains the filter parameters for overview queries
+type OverviewFilter struct {
+	ProjectID ulid.ULID
+	TimeRange TimeRange
+	StartTime time.Time
+	EndTime   time.Time
+}
+
+// NewOverviewFilter creates a new OverviewFilter with calculated time boundaries
+func NewOverviewFilter(projectID ulid.ULID, timeRange TimeRange) *OverviewFilter {
+	endTime := time.Now().UTC()
+	startTime := endTime.Add(-timeRange.Duration())
+
+	return &OverviewFilter{
+		ProjectID: projectID,
+		TimeRange: timeRange,
+		StartTime: startTime,
+		EndTime:   endTime,
+	}
+}
+
+// PreviousPeriodStart returns the start time for the comparison period
+func (f *OverviewFilter) PreviousPeriodStart() time.Time {
+	return f.StartTime.Add(-f.TimeRange.Duration())
+}
+
+// OverviewRepository defines the data access interface for overview data
+type OverviewRepository interface {
+	// GetStats retrieves the primary metrics for the stats row
+	GetStats(ctx context.Context, filter *OverviewFilter) (*OverviewStats, error)
+
+	// GetTraceVolume retrieves the time series data for trace volume
+	GetTraceVolume(ctx context.Context, filter *OverviewFilter) ([]TimeSeriesPoint, error)
+
+	// GetCostByModel retrieves the cost breakdown by model (top 5)
+	GetCostByModel(ctx context.Context, filter *OverviewFilter) ([]CostByModel, error)
+
+	// GetRecentTraces retrieves the most recent traces (top 5)
+	GetRecentTraces(ctx context.Context, filter *OverviewFilter, limit int) ([]RecentTrace, error)
+
+	// GetTopErrors retrieves the most frequent errors (top 5)
+	GetTopErrors(ctx context.Context, filter *OverviewFilter, limit int) ([]TopError, error)
+
+	// GetScoresSummary retrieves score overview data (top 3 scores)
+	GetScoresSummary(ctx context.Context, filter *OverviewFilter, limit int) ([]ScoreSummary, error)
+
+	// HasTraces checks if the project has any traces
+	HasTraces(ctx context.Context, projectID ulid.ULID) (bool, error)
+
+	// HasScores checks if the project has any scores
+	HasScores(ctx context.Context, projectID ulid.ULID) (bool, error)
+}
+
+// OverviewService defines the business logic interface for overview
+type OverviewService interface {
+	// GetOverview retrieves the complete overview data for a project
+	GetOverview(ctx context.Context, projectID ulid.ULID, timeRange TimeRange) (*OverviewResponse, error)
+}
