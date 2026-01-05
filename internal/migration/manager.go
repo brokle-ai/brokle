@@ -570,6 +570,52 @@ func (m *Manager) DropPostgres() error {
 	return m.postgresRunner.Drop()
 }
 
+// ResetPostgresComplete performs a complete database reset using DROP SCHEMA CASCADE.
+// This removes ALL objects including tables, custom types/enums, sequences, functions, etc.
+// Use this when the database is in a dirty/inconsistent state that Drop() can't handle.
+func (m *Manager) ResetPostgresComplete(ctx context.Context) error {
+	if m.postgresDB == nil {
+		return errors.New("PostgreSQL not initialized - run with -db postgres or -db all")
+	}
+
+	sqlDB, err := m.postgresDB.DB.DB()
+	if err != nil {
+		return fmt.Errorf("failed to get underlying *sql.DB: %w", err)
+	}
+
+	// Use a transaction to ensure atomicity
+	tx, err := sqlDB.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Drop schema with CASCADE to remove ALL objects including custom types
+	_, err = tx.ExecContext(ctx, "DROP SCHEMA IF EXISTS public CASCADE")
+	if err != nil {
+		return fmt.Errorf("failed to drop schema: %w", err)
+	}
+
+	// Recreate the public schema
+	_, err = tx.ExecContext(ctx, "CREATE SCHEMA public")
+	if err != nil {
+		return fmt.Errorf("failed to create schema: %w", err)
+	}
+
+	// Restore default permissions (required for postgres user access)
+	_, err = tx.ExecContext(ctx, "GRANT ALL ON SCHEMA public TO public")
+	if err != nil {
+		return fmt.Errorf("failed to grant privileges: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	m.logger.Info("PostgreSQL schema reset complete - all objects dropped")
+	return nil
+}
+
 // DropClickHouse drops all ClickHouse tables
 func (m *Manager) DropClickHouse() error {
 	if m.clickhouseRunner == nil {

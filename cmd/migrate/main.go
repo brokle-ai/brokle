@@ -194,6 +194,16 @@ func main() {
 		}
 		fmt.Println("⚠️  Tables dropped successfully")
 
+	case "reset":
+		if !confirmDestructiveOperation("COMPLETE SCHEMA RESET (drops ALL objects including types, sequences, functions)") {
+			fmt.Println("Operation cancelled")
+			return
+		}
+		if err := resetDatabase(ctx, manager, flags.Database); err != nil {
+			log.Fatalf("Failed to reset database: %v", err)
+		}
+		fmt.Println("⚠️  Database schema reset successfully")
+
 	case "steps":
 		if flags.Steps == 0 {
 			log.Fatal("Steps must be specified for steps command (use -steps flag)")
@@ -393,6 +403,23 @@ func dropTables(manager *migration.Manager, database string) error {
 	}
 }
 
+func resetDatabase(ctx context.Context, manager *migration.Manager, database string) error {
+	switch database {
+	case "postgres":
+		return manager.ResetPostgresComplete(ctx)
+	case "clickhouse":
+		// ClickHouse doesn't have custom types, regular drop is sufficient
+		return manager.DropClickHouse()
+	case "all":
+		if err := manager.DropClickHouse(); err != nil {
+			return fmt.Errorf("clickhouse reset failed: %w", err)
+		}
+		return manager.ResetPostgresComplete(ctx)
+	default:
+		return fmt.Errorf("unknown database: %s", database)
+	}
+}
+
 func runSteps(manager *migration.Manager, database string, steps int) error {
 	switch database {
 	case "postgres":
@@ -498,6 +525,7 @@ func printUsage() {
 	fmt.Println("  goto -version N       Migrate to specific version (with confirmation)")
 	fmt.Println("  force -version N      Force version without migration (DANGEROUS)")
 	fmt.Println("  drop                  Drop all tables (DANGEROUS)")
+	fmt.Println("  reset                 Complete schema reset including types (DANGEROUS)")
 	fmt.Println("  steps -steps N        Run N migration steps (negative for rollback)")
 	fmt.Println("  info                  Show detailed migration information")
 	fmt.Println("  create -name NAME     Create new migration files")
