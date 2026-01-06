@@ -269,6 +269,27 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 				aiCreds.DELETE("/:credentialId", s.authMiddleware.RequirePermission("credentials:write"), s.handlers.Credentials.Delete)
 			}
 		}
+
+		// Usage-based billing: Usage routes (Spans + GB + Scores)
+		orgUsage := orgs.Group("/:orgId/usage")
+		{
+			orgUsage.GET("/overview", s.handlers.Usage.GetUsageOverview)
+			orgUsage.GET("/timeseries", s.handlers.Usage.GetUsageTimeSeries)
+			orgUsage.GET("/by-project", s.handlers.Usage.GetUsageByProject)
+			orgUsage.GET("/export", s.handlers.Usage.ExportUsage)
+		}
+
+		// Usage-based billing: Budget management routes
+		orgBudgets := orgs.Group("/:orgId/budgets")
+		{
+			orgBudgets.GET("", s.handlers.Budget.ListBudgets)
+			orgBudgets.POST("", s.handlers.Budget.CreateBudget)
+			orgBudgets.GET("/:budgetId", s.handlers.Budget.GetBudget)
+			orgBudgets.PUT("/:budgetId", s.handlers.Budget.UpdateBudget)
+			orgBudgets.DELETE("/:budgetId", s.handlers.Budget.DeleteBudget)
+			orgBudgets.GET("/alerts", s.handlers.Budget.GetAlerts)
+			orgBudgets.POST("/alerts/:alertId/acknowledge", s.handlers.Budget.AcknowledgeAlert)
+		}
 	}
 
 	projects := protected.Group("/projects")

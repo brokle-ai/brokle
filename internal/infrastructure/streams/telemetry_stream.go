@@ -23,6 +23,7 @@ type TelemetryStreamMessage struct {
 	DuplicateSpanIDs []string               `json:"duplicate_span_ids,omitempty"`
 	BatchID          ulid.ULID              `json:"batch_id"`
 	ProjectID        ulid.ULID              `json:"project_id"`
+	OrganizationID   ulid.ULID              `json:"organization_id"`
 }
 
 // TelemetryEventData represents individual event data in the stream message
@@ -78,11 +79,12 @@ func (p *TelemetryStreamProducer) PublishBatch(ctx context.Context, batch *Telem
 	result, err := p.redis.Client.XAdd(ctx, &redis.XAddArgs{
 		Stream: streamKey,
 		Values: map[string]interface{}{
-			"batch_id":    batch.BatchID.String(),
-			"project_id":  batch.ProjectID.String(),
-			"event_count": len(batch.Events),
-			"data":        string(eventData),
-			"timestamp":   batch.Timestamp.Unix(),
+			"batch_id":        batch.BatchID.String(),
+			"project_id":      batch.ProjectID.String(),
+			"organization_id": batch.OrganizationID.String(),
+			"event_count":     len(batch.Events),
+			"data":            string(eventData),
+			"timestamp":       batch.Timestamp.Unix(),
 		},
 	}).Result()
 

@@ -100,10 +100,11 @@ type DatabaseContainer struct {
 }
 
 type WorkerContainer struct {
-	TelemetryConsumer    *workers.TelemetryStreamConsumer
-	RuleWorker           *evaluationWorker.RuleWorker
-	EvaluationWorker     *evaluationWorker.EvaluationWorker
-	ManualTriggerWorker  *evaluationWorker.ManualTriggerWorker
+	TelemetryConsumer      *workers.TelemetryStreamConsumer
+	RuleWorker             *evaluationWorker.RuleWorker
+	EvaluationWorker       *evaluationWorker.EvaluationWorker
+	ManualTriggerWorker    *evaluationWorker.ManualTriggerWorker
+	UsageAggregationWorker *workers.UsageAggregationWorker
 }
 
 type RepositoryContainer struct {
@@ -190,6 +191,12 @@ type BillingRepositories struct {
 	Usage         billing.UsageRepository
 	BillingRecord billing.BillingRecordRepository
 	Quota         billing.QuotaRepository
+	// Usage-based billing repositories (Spans + GB + Scores)
+	BillableUsage       billing.BillableUsageRepository
+	PricingConfig       billing.PricingConfigRepository
+	OrganizationBilling billing.OrganizationBillingRepository
+	UsageBudget         billing.UsageBudgetRepository
+	UsageAlert          billing.UsageAlertRepository
 }
 
 type AnalyticsRepositories struct {
@@ -249,6 +256,9 @@ type AuthServices struct {
 
 type BillingServices struct {
 	Billing *billingService.BillingService
+	// Usage-based billing services (Spans + GB + Scores)
+	BillableUsage billing.BillableUsageService
+	Budget        billing.BudgetService
 }
 
 type AnalyticsServices struct {
@@ -426,11 +436,25 @@ func ProvideWorkers(core *CoreContainer) (*WorkerContainer, error) {
 		manualTriggerWorkerConfig,
 	)
 
+	// Create usage aggregation worker for billing (syncs ClickHouse → PostgreSQL)
+	usageAggWorker := workers.NewUsageAggregationWorker(
+		core.Config,
+		core.Logger,
+		core.Repos.Billing.BillableUsage,
+		core.Repos.Billing.OrganizationBilling,
+		core.Repos.Billing.PricingConfig,
+		core.Repos.Billing.UsageBudget,
+		core.Repos.Billing.UsageAlert,
+		core.Repos.Organization.Organization,
+		nil, // NotificationWorker - can be wired for email notifications
+	)
+
 	return &WorkerContainer{
-		TelemetryConsumer:   telemetryConsumer,
-		RuleWorker:          ruleWorker,
-		EvaluationWorker:    evalWorker,
-		ManualTriggerWorker: manualTriggerWorker,
+		TelemetryConsumer:      telemetryConsumer,
+		RuleWorker:             ruleWorker,
+		EvaluationWorker:       evalWorker,
+		ManualTriggerWorker:    manualTriggerWorker,
+		UsageAggregationWorker: usageAggWorker,
 	}, nil
 }
 
@@ -465,10 +489,10 @@ func ProvideServerServices(core *CoreContainer) *ServiceContainer {
 	billingServices := ProvideBillingServices(repos.Billing, logger)
 	analyticsServices := ProvideAnalyticsServices(repos.Analytics)
 	observabilityServices := ProvideObservabilityServices(repos.Observability, repos.Storage, analyticsServices, databases.Redis, cfg, logger)
-	authServices := ProvideAuthServices(cfg, repos.User, repos.Auth, databases, logger)
+	authServices := ProvideAuthServices(cfg, repos.User, repos.Auth, repos.Organization, databases, logger)
 	userServices := ProvideUserServices(repos.User, repos.Auth, logger)
 	orgService, memberService, projectService, invitationService, settingsService :=
-		ProvideOrganizationServices(repos.User, repos.Auth, repos.Organization, authServices, logger)
+		ProvideOrganizationServices(repos.User, repos.Auth, repos.Organization, repos.Billing, authServices, logger)
 
 	// Orchestrates user, org, project creation atomically
 	registrationSvc := registrationService.NewRegistrationService(
@@ -650,6 +674,9 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 		widgetQuerySvc,
 		templateSvc,
 		core.Services.Analytics.Overview,
+		// Usage-based billing services
+		core.Services.Billing.BillableUsage,
+		core.Services.Billing.Budget,
 	)
 
 	httpServer := http.NewServer(
@@ -759,11 +786,17 @@ func ProvideStorageRepositories(clickhouseDB *database.ClickHouseDB) *StorageRep
 	}
 }
 
-func ProvideBillingRepositories(db *gorm.DB, logger *slog.Logger) *BillingRepositories {
+func ProvideBillingRepositories(db *gorm.DB, clickhouseDB *database.ClickHouseDB, logger *slog.Logger) *BillingRepositories {
 	return &BillingRepositories{
 		Usage:         billingRepo.NewUsageRepository(db, logger),
 		BillingRecord: billingRepo.NewBillingRecordRepository(db, logger),
 		Quota:         billingRepo.NewQuotaRepository(db, logger),
+		// Usage-based billing repositories
+		BillableUsage:       billingRepo.NewBillableUsageRepository(clickhouseDB.Conn),
+		PricingConfig:       billingRepo.NewPricingConfigRepository(db),
+		OrganizationBilling: billingRepo.NewOrganizationBillingRepository(db),
+		UsageBudget:         billingRepo.NewUsageBudgetRepository(db),
+		UsageAlert:          billingRepo.NewUsageAlertRepository(db),
 	}
 }
 
@@ -823,7 +856,7 @@ func ProvideRepositories(dbs *DatabaseContainer, logger *slog.Logger) *Repositor
 		Organization:  ProvideOrganizationRepositories(dbs.Postgres.DB),
 		Observability: ProvideObservabilityRepositories(dbs.ClickHouse, dbs.Postgres.DB, dbs.Redis),
 		Storage:       ProvideStorageRepositories(dbs.ClickHouse),
-		Billing:       ProvideBillingRepositories(dbs.Postgres.DB, logger),
+		Billing:       ProvideBillingRepositories(dbs.Postgres.DB, dbs.ClickHouse, logger),
 		Analytics:     ProvideAnalyticsRepositories(dbs.Postgres.DB, dbs.ClickHouse),
 		Prompt:        ProvidePromptRepositories(dbs.Postgres.DB, dbs.Redis),
 		Credentials:   ProvideCredentialsRepositories(dbs.Postgres.DB),
@@ -858,6 +891,7 @@ func ProvideAuthServices(
 	cfg *config.Config,
 	userRepos *UserRepositories,
 	authRepos *AuthRepositories,
+	orgRepos *OrganizationRepositories,
 	databases *DatabaseContainer,
 	logger *slog.Logger,
 ) *AuthServices {
@@ -896,6 +930,7 @@ func ProvideAuthServices(
 	apiKeyService := authService.NewAPIKeyService(
 		authRepos.APIKey,
 		authRepos.OrganizationMember,
+		orgRepos.Project,
 	)
 
 	coreAuthSvc := authService.NewAuthService(
@@ -946,6 +981,7 @@ func ProvideOrganizationServices(
 	userRepos *UserRepositories,
 	authRepos *AuthRepositories,
 	orgRepos *OrganizationRepositories,
+	billingRepos *BillingRepositories,
 	authServices *AuthServices,
 	logger *slog.Logger,
 ) (
@@ -982,6 +1018,9 @@ func ProvideOrganizationServices(
 		memberSvc,
 		projectSvc,
 		authServices.Role,
+		billingRepos.OrganizationBilling,
+		billingRepos.PricingConfig,
+		logger,
 	)
 
 	settingsSvc := orgService.NewOrganizationSettingsService(
@@ -1059,8 +1098,24 @@ func ProvideBillingServices(
 		orgService,
 	)
 
+	// Usage-based billing services (Spans + GB + Scores)
+	billableUsageService := billingService.NewBillableUsageService(
+		billingRepos.BillableUsage,
+		billingRepos.OrganizationBilling,
+		billingRepos.PricingConfig,
+		logger,
+	)
+
+	budgetService := billingService.NewBudgetService(
+		billingRepos.UsageBudget,
+		billingRepos.UsageAlert,
+		logger,
+	)
+
 	return &BillingServices{
-		Billing: billingServiceImpl,
+		Billing:       billingServiceImpl,
+		BillableUsage: billableUsageService,
+		Budget:        budgetService,
 	}
 }
 

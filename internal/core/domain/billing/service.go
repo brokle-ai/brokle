@@ -45,3 +45,62 @@ type QuotaStatus struct {
 	TokensOK             bool      `json:"tokens_ok"`
 	CostOK               bool      `json:"cost_ok"`
 }
+
+// ============================================================================
+// Usage-Based Billing Services (Spans + GB + Scores)
+// ============================================================================
+
+// UsageOverview represents the current usage overview for display
+type UsageOverview struct {
+	OrganizationID ulid.ULID `json:"organization_id"`
+	PeriodStart    time.Time `json:"period_start"`
+	PeriodEnd      time.Time `json:"period_end"`
+
+	// Current usage (3 dimensions)
+	Spans  int64 `json:"spans"`
+	Bytes  int64 `json:"bytes"`
+	Scores int64 `json:"scores"`
+
+	// Free tier remaining
+	FreeSpansRemaining  int64 `json:"free_spans_remaining"`
+	FreeBytesRemaining  int64 `json:"free_bytes_remaining"`
+	FreeScoresRemaining int64 `json:"free_scores_remaining"`
+
+	// Free tier totals (for progress display)
+	FreeSpansTotal  int64   `json:"free_spans_total"`
+	FreeBytesTotal  int64   `json:"free_bytes_total"`
+	FreeScoresTotal int64   `json:"free_scores_total"`
+
+	// Calculated cost
+	EstimatedCost float64 `json:"estimated_cost"`
+}
+
+// BillableUsageService handles billable usage queries and cost calculation
+type BillableUsageService interface {
+	// Get current period overview (for dashboard cards)
+	GetUsageOverview(ctx context.Context, orgID ulid.ULID) (*UsageOverview, error)
+
+	// Get usage time series (for charts)
+	GetUsageTimeSeries(ctx context.Context, orgID ulid.ULID, start, end time.Time, granularity string) ([]*BillableUsage, error)
+
+	// Get usage breakdown by project
+	GetUsageByProject(ctx context.Context, orgID ulid.ULID, start, end time.Time) ([]*BillableUsageSummary, error)
+
+	// Calculate cost for usage
+	CalculateCost(ctx context.Context, usage *BillableUsageSummary, config *PricingConfig) float64
+}
+
+// BudgetService handles budget CRUD and monitoring
+type BudgetService interface {
+	// CRUD
+	CreateBudget(ctx context.Context, budget *UsageBudget) error
+	GetBudget(ctx context.Context, id ulid.ULID) (*UsageBudget, error)
+	GetBudgetsByOrg(ctx context.Context, orgID ulid.ULID) ([]*UsageBudget, error)
+	UpdateBudget(ctx context.Context, budget *UsageBudget) error
+	DeleteBudget(ctx context.Context, id ulid.ULID) error
+
+	// Monitoring
+	CheckBudgets(ctx context.Context, orgID ulid.ULID) ([]*UsageAlert, error)
+	GetAlerts(ctx context.Context, orgID ulid.ULID, limit int) ([]*UsageAlert, error)
+	AcknowledgeAlert(ctx context.Context, orgID, alertID ulid.ULID) error
+}

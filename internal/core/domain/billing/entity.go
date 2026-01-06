@@ -3,14 +3,13 @@ package billing
 import (
 	"time"
 
+	"github.com/lib/pq"
+
 	"brokle/pkg/ulid"
 )
 
-// ============================================================================
 // Usage & Billing Entities
-// ============================================================================
 
-// UsageRecord represents a usage tracking record for billing
 // Note: provider_id and model_id are now stored as text (no foreign keys to gateway tables)
 // These values come from ClickHouse spans for cost calculation
 type UsageRecord struct {
@@ -49,7 +48,6 @@ type UsageQuota struct {
 	OrganizationID      ulid.ULID `json:"organization_id"`
 }
 
-// PaymentMethod represents organization payment information
 type PaymentMethod struct {
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
@@ -64,7 +62,6 @@ type PaymentMethod struct {
 	IsDefault      bool      `json:"is_default"`
 }
 
-// Invoice represents a generated invoice
 type Invoice struct {
 	DueDate          time.Time              `json:"due_date"`
 	UpdatedAt        time.Time              `json:"updated_at"`
@@ -91,7 +88,6 @@ type Invoice struct {
 	OrganizationID   ulid.ULID              `json:"organization_id"`
 }
 
-// InvoiceStatus represents the status of an invoice
 type InvoiceStatus string
 
 const (
@@ -103,7 +99,6 @@ const (
 	InvoiceStatusRefunded  InvoiceStatus = "refunded"
 )
 
-// InvoiceLineItem represents a line item on an invoice
 type InvoiceLineItem struct {
 	ProviderID   *ulid.ULID `json:"provider_id,omitempty"`
 	ModelID      *ulid.ULID `json:"model_id,omitempty"`
@@ -119,7 +114,6 @@ type InvoiceLineItem struct {
 	ID           ulid.ULID  `json:"id"`
 }
 
-// BillingAddress represents an organization's billing address
 type BillingAddress struct {
 	Company    string `json:"company"`
 	Address1   string `json:"address_1"`
@@ -131,7 +125,6 @@ type BillingAddress struct {
 	TaxID      string `json:"tax_id,omitempty"`
 }
 
-// TaxConfiguration represents tax configuration for billing
 type TaxConfiguration struct {
 	TaxName     string  `json:"tax_name"`
 	TaxID       string  `json:"tax_id"`
@@ -139,7 +132,6 @@ type TaxConfiguration struct {
 	IsInclusive bool    `json:"is_inclusive"`
 }
 
-// DiscountRule represents a discount rule
 type DiscountRule struct {
 	UpdatedAt       time.Time          `json:"updated_at"`
 	CreatedAt       time.Time          `json:"created_at"`
@@ -160,7 +152,6 @@ type DiscountRule struct {
 	IsActive        bool               `json:"is_active"`
 }
 
-// DiscountType represents the type of discount
 type DiscountType string
 
 const (
@@ -169,7 +160,6 @@ const (
 	DiscountTypeTiered     DiscountType = "tiered"
 )
 
-// DiscountCondition represents conditions for applying discounts
 type DiscountCondition struct {
 	MinUsage          *UsageThreshold `json:"min_usage,omitempty"`
 	TimeOfDay         *TimeRange      `json:"time_of_day,omitempty"`
@@ -182,25 +172,21 @@ type DiscountCondition struct {
 	FirstTimeCustomer bool            `json:"first_time_customer"`
 }
 
-// UsageThreshold represents minimum usage requirements
 type UsageThreshold struct {
 	Requests int64   `json:"requests"`
 	Tokens   int64   `json:"tokens"`
 	Cost     float64 `json:"cost"`
 }
 
-// TimeRange represents a time range for discounts
 type TimeRange struct {
 	Start time.Time `json:"start"`
 	End   time.Time `json:"end"`
 }
 
-// VolumeDiscount represents volume-based discount tiers
 type VolumeDiscount struct {
 	Tiers []VolumeTier `json:"tiers"`
 }
 
-// VolumeTier represents a single volume discount tier
 type VolumeTier struct {
 	MinAmount float64 `json:"min_amount"`
 	Discount  float64 `json:"discount"` // percentage or fixed amount
@@ -261,4 +247,165 @@ type CostMetric struct {
 	ProviderID     ulid.ULID `json:"provider_id"`
 	ProjectID      ulid.ULID `json:"project_id"`
 	OrganizationID ulid.ULID `json:"organization_id"`
+}
+
+// Usage-Based Billing Entities
+
+// Queried from ClickHouse billable_usage_hourly/daily tables
+type BillableUsage struct {
+	OrganizationID ulid.ULID `json:"organization_id"`
+	ProjectID      ulid.ULID `json:"project_id"`
+	BucketTime     time.Time `json:"bucket_time"`
+
+	// Three billable dimensions
+	SpanCount      int64 `json:"span_count"`       // All spans (traces + child spans)
+	BytesProcessed int64 `json:"bytes_processed"`  // Total payload bytes (input + output)
+	ScoreCount     int64 `json:"score_count"`      // Quality scores
+
+	// Informational (not billable by Brokle)
+	AIProviderCost float64 `json:"ai_provider_cost"`
+
+	LastUpdated time.Time `json:"last_updated"`
+}
+
+type BillableUsageSummary struct {
+	OrganizationID ulid.ULID  `json:"organization_id"`
+	ProjectID      *ulid.ULID `json:"project_id,omitempty"` // nil for org-level summary
+	PeriodStart    time.Time  `json:"period_start"`
+	PeriodEnd      time.Time  `json:"period_end"`
+
+	// Totals for period
+	TotalSpans  int64 `json:"total_spans"`
+	TotalBytes  int64 `json:"total_bytes"`
+	TotalScores int64 `json:"total_scores"`
+
+	// Calculated cost
+	TotalCost float64 `json:"total_cost"`
+
+	// Informational
+	TotalAIProviderCost float64 `json:"total_ai_provider_cost"`
+}
+
+type PricingConfig struct {
+	ID        ulid.ULID `json:"id" gorm:"column:id;primaryKey"`
+	Name      string    `json:"name" gorm:"column:name"` // free, pro, enterprise
+	IsActive  bool      `json:"is_active" gorm:"column:is_active"`
+	IsDefault bool      `json:"is_default" gorm:"column:is_default"` // Default plan for new organizations
+	CreatedAt time.Time `json:"created_at" gorm:"column:created_at"`
+	UpdatedAt time.Time `json:"updated_at" gorm:"column:updated_at"`
+
+	// Span pricing (per 100K)
+	FreeSpans         int64    `json:"free_spans" gorm:"column:free_spans"`
+	PricePer100KSpans *float64 `json:"price_per_100k_spans,omitempty" gorm:"column:price_per_100k_spans"` // nil = unlimited in free tier
+
+	// Data volume pricing (per GB)
+	FreeGB     float64  `json:"free_gb" gorm:"column:free_gb"`
+	PricePerGB *float64 `json:"price_per_gb,omitempty" gorm:"column:price_per_gb"` // nil = unlimited in free tier
+
+	// Score pricing (per 1K)
+	FreeScores       int64    `json:"free_scores" gorm:"column:free_scores"`
+	PricePer1KScores *float64 `json:"price_per_1k_scores,omitempty" gorm:"column:price_per_1k_scores"` // nil = unlimited in free tier
+}
+
+type OrganizationBilling struct {
+	OrganizationID        ulid.ULID `json:"organization_id" db:"organization_id" gorm:"type:char(26);primaryKey"`
+	PricingConfigID       ulid.ULID `json:"pricing_config_id" db:"pricing_config_id"`
+	BillingCycleStart     time.Time `json:"billing_cycle_start" db:"billing_cycle_start"`
+	BillingCycleAnchorDay int       `json:"billing_cycle_anchor_day" db:"billing_cycle_anchor_day"` // Day of month (1-28)
+
+	// Current period usage (three dimensions)
+	CurrentPeriodSpans  int64 `json:"current_period_spans" db:"current_period_spans"`
+	CurrentPeriodBytes  int64 `json:"current_period_bytes" db:"current_period_bytes"`
+	CurrentPeriodScores int64 `json:"current_period_scores" db:"current_period_scores"`
+
+	// Calculated cost this period
+	CurrentPeriodCost float64 `json:"current_period_cost" db:"current_period_cost"`
+
+	// Free tier remaining (three dimensions)
+	FreeSpansRemaining  int64 `json:"free_spans_remaining" db:"free_spans_remaining"`
+	FreeBytesRemaining  int64 `json:"free_bytes_remaining" db:"free_bytes_remaining"`
+	FreeScoresRemaining int64 `json:"free_scores_remaining" db:"free_scores_remaining"`
+
+	LastSyncedAt time.Time `json:"last_synced_at" db:"last_synced_at"`
+	CreatedAt    time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`
+}
+
+type BudgetType string
+
+const (
+	BudgetTypeMonthly BudgetType = "monthly"
+	BudgetTypeWeekly  BudgetType = "weekly"
+)
+
+type UsageBudget struct {
+	ID             ulid.ULID  `json:"id" db:"id"`
+	OrganizationID ulid.ULID  `json:"organization_id" db:"organization_id"`
+	ProjectID      *ulid.ULID `json:"project_id,omitempty" db:"project_id"` // nil for org-level budget
+	Name           string     `json:"name" db:"name"`
+	BudgetType     BudgetType `json:"budget_type" db:"budget_type"`
+
+	// Limits (any can be set, nil = no limit)
+	SpanLimit  *int64   `json:"span_limit,omitempty" db:"span_limit"`
+	BytesLimit *int64   `json:"bytes_limit,omitempty" db:"bytes_limit"`
+	ScoreLimit *int64   `json:"score_limit,omitempty" db:"score_limit"`
+	CostLimit  *float64 `json:"cost_limit,omitempty" db:"cost_limit"`
+
+	// Current usage
+	CurrentSpans  int64   `json:"current_spans" db:"current_spans"`
+	CurrentBytes  int64   `json:"current_bytes" db:"current_bytes"`
+	CurrentScores int64   `json:"current_scores" db:"current_scores"`
+	CurrentCost   float64 `json:"current_cost" db:"current_cost"`
+
+	// Alert thresholds (flexible array of percentages, e.g., [50, 80, 100])
+	AlertThresholds pq.Int64Array `json:"alert_thresholds" gorm:"column:alert_thresholds;type:integer[];default:'{50,80,100}'"`
+
+	IsActive  bool      `json:"is_active" db:"is_active"`
+	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+}
+
+type AlertDimension string
+
+const (
+	AlertDimensionSpans  AlertDimension = "spans"
+	AlertDimensionBytes  AlertDimension = "bytes"
+	AlertDimensionScores AlertDimension = "scores"
+	AlertDimensionCost   AlertDimension = "cost"
+)
+
+type AlertSeverity string
+
+const (
+	AlertSeverityInfo     AlertSeverity = "info"
+	AlertSeverityWarning  AlertSeverity = "warning"
+	AlertSeverityCritical AlertSeverity = "critical"
+)
+
+type AlertStatus string
+
+const (
+	AlertStatusTriggered    AlertStatus = "triggered"
+	AlertStatusAcknowledged AlertStatus = "acknowledged"
+	AlertStatusResolved     AlertStatus = "resolved"
+)
+
+type UsageAlert struct {
+	ID             ulid.ULID  `json:"id" db:"id"`
+	BudgetID       *ulid.ULID `json:"budget_id,omitempty" db:"budget_id"`
+	OrganizationID ulid.ULID  `json:"organization_id" db:"organization_id"`
+	ProjectID      *ulid.ULID `json:"project_id,omitempty" db:"project_id"`
+
+	AlertThreshold int64          `json:"alert_threshold" db:"alert_threshold"`
+	Dimension      AlertDimension `json:"dimension" db:"dimension"`
+	Severity       AlertSeverity  `json:"severity" db:"severity"`
+	ThresholdValue int64          `json:"threshold_value" db:"threshold_value"`
+	ActualValue    int64          `json:"actual_value" db:"actual_value"`
+	PercentUsed    float64        `json:"percent_used" db:"percent_used"`
+
+	Status           AlertStatus `json:"status" db:"status"`
+	TriggeredAt      time.Time   `json:"triggered_at" db:"triggered_at"`
+	AcknowledgedAt   *time.Time  `json:"acknowledged_at,omitempty" db:"acknowledged_at"`
+	ResolvedAt       *time.Time  `json:"resolved_at,omitempty" db:"resolved_at"`
+	NotificationSent bool        `json:"notification_sent" db:"notification_sent"`
 }

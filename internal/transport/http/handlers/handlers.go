@@ -6,6 +6,7 @@ import (
 	"brokle/internal/config"
 	analyticsDomain "brokle/internal/core/domain/analytics"
 	"brokle/internal/core/domain/auth"
+	billingDomain "brokle/internal/core/domain/billing"
 	credentialsDomain "brokle/internal/core/domain/credentials"
 	dashboardDomain "brokle/internal/core/domain/dashboard"
 	evaluationDomain "brokle/internal/core/domain/evaluation"
@@ -73,6 +74,9 @@ type Handlers struct {
 	Dashboard         *dashboard.Handler
 	DashboardTemplate *dashboard.TemplateHandler
 	Overview          *overview.Handler
+	// Usage-based billing handlers (Spans + GB + Scores)
+	Usage  *billing.UsageHandler
+	Budget *billing.BudgetHandler
 }
 
 func NewHandlers(
@@ -111,6 +115,9 @@ func NewHandlers(
 	widgetQueryService dashboardDomain.WidgetQueryService,
 	templateService dashboardDomain.TemplateService,
 	overviewService analyticsDomain.OverviewService,
+	// Usage-based billing services
+	usageService billingDomain.BillableUsageService,
+	budgetService billingDomain.BudgetService,
 ) *Handlers {
 	return &Handlers{
 		Health:        health.NewHandler(cfg, logger),
@@ -146,5 +153,8 @@ func NewHandlers(
 		Dashboard:         dashboard.NewHandler(cfg, logger, dashboardService, widgetQueryService),
 		DashboardTemplate: dashboard.NewTemplateHandler(cfg, logger, templateService),
 		Overview:          overview.NewHandler(cfg, logger, overviewService),
+		// Usage-based billing handlers
+		Usage:  billing.NewUsageHandler(cfg, logger, usageService),
+		Budget: billing.NewBudgetHandler(cfg, logger, budgetService),
 	}
 }

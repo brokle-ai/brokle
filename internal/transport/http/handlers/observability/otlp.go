@@ -74,6 +74,14 @@ func (h *OTLPHandler) HandleTraces(c *gin.Context) {
 	}
 	projectID := projectIDPtr.String()
 
+	// Get organization ID from SDK auth middleware (for billing aggregation)
+	organizationIDPtr, exists := middleware.GetOrganizationID(c)
+	if !exists || organizationIDPtr == nil {
+		h.logger.Error("Organization ID not found in context")
+		response.InternalServerError(c, "Failed to determine organization for billing")
+		return
+	}
+
 	// Validate Content-Type header (OTLP specification requires explicit Content-Type)
 	contentType := c.GetHeader("Content-Type")
 	validContentType := strings.Contains(contentType, "application/x-protobuf") ||
@@ -298,6 +306,7 @@ func (h *OTLPHandler) HandleTraces(c *gin.Context) {
 	streamMsg := &streams.TelemetryStreamMessage{
 		BatchID:          batchID,
 		ProjectID:        *projectIDPtr,
+		OrganizationID:   *organizationIDPtr,
 		Events:           claimedEventData,
 		ClaimedSpanIDs:   claimedIDs,
 		DuplicateSpanIDs: duplicateIDs,

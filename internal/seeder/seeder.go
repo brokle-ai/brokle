@@ -17,10 +17,12 @@ import (
 	"brokle/internal/config"
 	"brokle/internal/core/domain/analytics"
 	"brokle/internal/core/domain/auth"
+	"brokle/internal/core/domain/billing"
 	"brokle/internal/core/domain/dashboard"
 	"brokle/internal/infrastructure/database"
 	analyticsRepo "brokle/internal/infrastructure/repository/analytics"
 	authRepo "brokle/internal/infrastructure/repository/auth"
+	billingRepo "brokle/internal/infrastructure/repository/billing"
 	dashboardRepo "brokle/internal/infrastructure/repository/dashboard"
 	"brokle/pkg/logging"
 	"brokle/pkg/ulid"
@@ -37,6 +39,8 @@ type Seeder struct {
 	rolePermRepo      auth.RolePermissionRepository
 	providerModelRepo analytics.ProviderModelRepository
 	templateRepo      dashboard.TemplateRepository
+	pricingConfigRepo billing.PricingConfigRepository
+	orgBillingRepo    billing.OrganizationBillingRepository
 }
 
 func New(cfg *config.Config) (*Seeder, error) {
@@ -61,6 +65,8 @@ func New(cfg *config.Config) (*Seeder, error) {
 	s.rolePermRepo = authRepo.NewRolePermissionRepository(s.db)
 	s.providerModelRepo = analyticsRepo.NewProviderModelRepository(s.db)
 	s.templateRepo = dashboardRepo.NewTemplateRepository(s.db)
+	s.pricingConfigRepo = billingRepo.NewPricingConfigRepository(s.db)
+	s.orgBillingRepo = billingRepo.NewOrganizationBillingRepository(s.db)
 
 	return s, nil
 }
@@ -121,6 +127,16 @@ func (s *Seeder) SeedAll(ctx context.Context, opts *Options) error {
 	// 4. Seed dashboard templates (independent)
 	if err := s.seedTemplatesFromFile(ctx, opts.Verbose); err != nil {
 		return fmt.Errorf("failed to seed templates: %w", err)
+	}
+
+	// 5. Seed billing configs (independent)
+	if err := s.seedBillingConfigsFromFile(ctx, opts.Verbose); err != nil {
+		return fmt.Errorf("failed to seed billing configs: %w", err)
+	}
+
+	// 6. Provision billing for existing organizations without billing records
+	if err := s.SeedOrganizationBillings(ctx, opts); err != nil {
+		return fmt.Errorf("failed to seed organization billings: %w", err)
 	}
 
 	s.logger.Info("PostgreSQL seeding completed successfully")
@@ -223,6 +239,11 @@ func (s *Seeder) Reset(ctx context.Context, verbose bool) error {
 	// Reset template data
 	if err := s.resetTemplates(ctx, verbose); err != nil {
 		s.logger.Warn(" Could not reset template data", "error", err)
+	}
+
+	// Reset billing configs data
+	if err := s.resetBillingConfigs(ctx, verbose); err != nil {
+		s.logger.Warn(" Could not reset billing configs data", "error", err)
 	}
 
 	s.logger.Info("Data reset completed")
@@ -1007,4 +1028,289 @@ func (s *Seeder) GetTemplateStatistics(ctx context.Context) (*TemplateStatistics
 	}
 
 	return stats, nil
+}
+
+// SeedBillingConfigs seeds billing pricing configurations from the YAML file.
+func (s *Seeder) SeedBillingConfigs(ctx context.Context, opts *Options) error {
+	if opts.DryRun {
+		fmt.Println("DRY RUN: Would seed billing pricing configurations")
+		return nil
+	}
+
+	s.logger.Info("Starting billing configs seeding...")
+
+	// Reset billing configs if requested
+	if opts.Reset {
+		s.logger.Info("Resetting existing billing configs data...")
+		if err := s.resetBillingConfigs(ctx, opts.Verbose); err != nil {
+			return fmt.Errorf("failed to reset billing configs data: %w", err)
+		}
+	}
+
+	// Load and seed billing configs
+	if err := s.seedBillingConfigsFromFile(ctx, opts.Verbose); err != nil {
+		return fmt.Errorf("failed to seed billing configs: %w", err)
+	}
+
+	// Print statistics
+	stats, err := s.GetBillingStatistics(ctx)
+	if err == nil {
+		s.logger.Debug("Billing Statistics", "configs", stats.TotalPricingConfigs, "default", stats.DefaultConfigName)
+	}
+
+	s.logger.Info("Billing configs seeding completed successfully")
+	return nil
+}
+
+func (s *Seeder) loadBillingConfigs() (*BillingConfigsFile, error) {
+	seedFile := findSeedFile("seeds/billing_configs.yaml")
+	if seedFile == "" {
+		return nil, errors.New("billing configs file not found: seeds/billing_configs.yaml")
+	}
+
+	data, err := os.ReadFile(seedFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read %s: %w", seedFile, err)
+	}
+
+	var configsFile BillingConfigsFile
+	if err := yaml.Unmarshal(data, &configsFile); err != nil {
+		return nil, fmt.Errorf("failed to parse %s: %w", seedFile, err)
+	}
+
+	// Validate
+	if len(configsFile.PricingConfigs) == 0 {
+		return nil, errors.New("no pricing configs defined")
+	}
+
+	configNames := make(map[string]bool)
+	defaultCount := 0
+	for i, cfg := range configsFile.PricingConfigs {
+		if cfg.Name == "" {
+			return nil, fmt.Errorf("pricing config %d missing required field: name", i)
+		}
+		if configNames[cfg.Name] {
+			return nil, fmt.Errorf("duplicate pricing config name: %s", cfg.Name)
+		}
+		configNames[cfg.Name] = true
+		if cfg.IsDefault {
+			defaultCount++
+		}
+	}
+
+	if defaultCount == 0 {
+		return nil, errors.New("no default pricing config defined (exactly one must have is_default: true)")
+	}
+	if defaultCount > 1 {
+		return nil, fmt.Errorf("multiple default pricing configs defined (%d), exactly one must have is_default: true", defaultCount)
+	}
+
+	return &configsFile, nil
+}
+
+func (s *Seeder) seedBillingConfigsFromFile(ctx context.Context, verbose bool) error {
+	configsData, err := s.loadBillingConfigs()
+	if err != nil {
+		// Billing configs data is optional - log warning but don't fail
+		s.logger.Warn("Could not load billing configs data", "error", err)
+		return nil
+	}
+
+	return s.seedBillingConfigsData(ctx, configsData, verbose)
+}
+
+func (s *Seeder) seedBillingConfigsData(ctx context.Context, data *BillingConfigsFile, verbose bool) error {
+	if verbose {
+		s.logger.Info("Seeding billing pricing configs", "count", len(data.PricingConfigs))
+	}
+
+	now := time.Now()
+
+	for _, cfgSeed := range data.PricingConfigs {
+		// Check if config already exists by name (idempotent seeding)
+		existing, _ := s.pricingConfigRepo.GetByName(ctx, cfgSeed.Name)
+		if existing != nil {
+			if verbose {
+				s.logger.Info("Pricing config already exists, updating", "name", cfgSeed.Name, "id", existing.ID.String())
+			}
+			// Update existing config
+			existing.IsDefault = cfgSeed.IsDefault
+			existing.FreeSpans = cfgSeed.FreeSpans
+			existing.FreeGB = cfgSeed.FreeGB
+			existing.FreeScores = cfgSeed.FreeScores
+			existing.PricePer100KSpans = cfgSeed.PricePer100KSpans
+			existing.PricePerGB = cfgSeed.PricePerGB
+			existing.PricePer1KScores = cfgSeed.PricePer1KScores
+			existing.IsActive = true
+			existing.UpdatedAt = now
+
+			if err := s.pricingConfigRepo.Update(ctx, existing); err != nil {
+				return fmt.Errorf("failed to update pricing config %s: %w", cfgSeed.Name, err)
+			}
+			continue
+		}
+
+		// Create new pricing config with runtime ULID
+		config := &billing.PricingConfig{
+			ID:                ulid.New(),
+			Name:              cfgSeed.Name,
+			IsDefault:         cfgSeed.IsDefault,
+			FreeSpans:         cfgSeed.FreeSpans,
+			FreeGB:            cfgSeed.FreeGB,
+			FreeScores:        cfgSeed.FreeScores,
+			PricePer100KSpans: cfgSeed.PricePer100KSpans,
+			PricePerGB:        cfgSeed.PricePerGB,
+			PricePer1KScores:  cfgSeed.PricePer1KScores,
+			IsActive:          true,
+			CreatedAt:         now,
+			UpdatedAt:         now,
+		}
+
+		if err := s.pricingConfigRepo.Create(ctx, config); err != nil {
+			return fmt.Errorf("failed to create pricing config %s: %w", cfgSeed.Name, err)
+		}
+
+		if verbose {
+			s.logger.Info("Created pricing config", "name", config.Name, "is_default", config.IsDefault, "id", config.ID.String())
+		}
+	}
+
+	if verbose {
+		s.logger.Info("Billing pricing configs seeded successfully", "version", data.Version)
+	}
+	return nil
+}
+
+func (s *Seeder) resetBillingConfigs(ctx context.Context, verbose bool) error {
+	if verbose {
+		s.logger.Info("Resetting billing pricing configs data...")
+	}
+
+	// Get all active configs and deactivate them (soft delete)
+	configs, err := s.pricingConfigRepo.GetActive(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list configs for reset: %w", err)
+	}
+
+	deactivatedCount := 0
+	for _, cfg := range configs {
+		cfg.IsActive = false
+		cfg.UpdatedAt = time.Now()
+		if err := s.pricingConfigRepo.Update(ctx, cfg); err != nil {
+			s.logger.Warn("Could not deactivate pricing config", "name", cfg.Name, "error", err)
+		} else {
+			deactivatedCount++
+			if verbose {
+				s.logger.Info("Deactivated pricing config", "name", cfg.Name)
+			}
+		}
+	}
+
+	if verbose {
+		s.logger.Info("Billing configs reset completed", "configs_deactivated", deactivatedCount)
+	}
+	return nil
+}
+
+func (s *Seeder) GetBillingStatistics(ctx context.Context) (*BillingStatistics, error) {
+	configs, err := s.pricingConfigRepo.GetActive(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get pricing configs: %w", err)
+	}
+
+	stats := &BillingStatistics{
+		TotalPricingConfigs: len(configs),
+	}
+
+	for _, cfg := range configs {
+		if cfg.IsDefault {
+			stats.DefaultConfigName = cfg.Name
+			break
+		}
+	}
+
+	return stats, nil
+}
+
+// SeedOrganizationBillings provisions billing records for existing organizations that don't have one.
+func (s *Seeder) SeedOrganizationBillings(ctx context.Context, opts *Options) error {
+	if opts.DryRun {
+		fmt.Println("DRY RUN: Would seed billing for existing organizations")
+		return nil
+	}
+
+	s.logger.Info("Starting organization billing provisioning...")
+
+	// Get default pricing plan
+	defaultPlan, err := s.pricingConfigRepo.GetDefault(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get default pricing plan: %w", err)
+	}
+
+	// Find organizations without billing records using raw SQL
+	type orgWithoutBilling struct {
+		ID   string `gorm:"column:id"`
+		Name string `gorm:"column:name"`
+	}
+
+	var orgs []orgWithoutBilling
+	err = s.db.WithContext(ctx).Raw(`
+		SELECT o.id, o.name
+		FROM organizations o
+		LEFT JOIN organization_billings ob ON o.id = ob.organization_id
+		WHERE ob.organization_id IS NULL AND o.deleted_at IS NULL
+	`).Scan(&orgs).Error
+	if err != nil {
+		return fmt.Errorf("failed to find organizations without billing: %w", err)
+	}
+
+	if len(orgs) == 0 {
+		s.logger.Info("All organizations already have billing records")
+		return nil
+	}
+
+	s.logger.Info("Found organizations without billing", "count", len(orgs))
+
+	now := time.Now()
+	seededCount := 0
+
+	for _, org := range orgs {
+		// Parse the org ID
+		orgID, err := ulid.Parse(org.ID)
+		if err != nil {
+			s.logger.Warn("Invalid organization ID, skipping", "id", org.ID, "error", err)
+			continue
+		}
+
+		// Create billing record with default plan
+		billingRecord := &billing.OrganizationBilling{
+			OrganizationID:        orgID,
+			PricingConfigID:       defaultPlan.ID,
+			BillingCycleStart:     now,
+			BillingCycleAnchorDay: 1,
+			FreeSpansRemaining:    defaultPlan.FreeSpans,
+			FreeBytesRemaining:    int64(defaultPlan.FreeGB * 1024 * 1024 * 1024),
+			FreeScoresRemaining:   defaultPlan.FreeScores,
+			CurrentPeriodSpans:    0,
+			CurrentPeriodBytes:    0,
+			CurrentPeriodScores:   0,
+			CurrentPeriodCost:     0,
+			LastSyncedAt:          now,
+			CreatedAt:             now,
+			UpdatedAt:             now,
+		}
+
+		if err := s.orgBillingRepo.Create(ctx, billingRecord); err != nil {
+			s.logger.Warn("Failed to create billing for organization", "org_id", org.ID, "org_name", org.Name, "error", err)
+			continue
+		}
+
+		seededCount++
+		if opts.Verbose {
+			s.logger.Info("Provisioned billing for organization", "org_id", org.ID, "org_name", org.Name, "plan", defaultPlan.Name)
+		}
+	}
+
+	s.logger.Info("Organization billing provisioning completed", "seeded", seededCount, "total", len(orgs))
+	return nil
 }

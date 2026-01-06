@@ -24,16 +24,17 @@ func NewScoreRepository(db clickhouse.Conn) observability.ScoreRepository {
 func (r *scoreRepository) Create(ctx context.Context, score *observability.Score) error {
 	query := `
 		INSERT INTO scores (
-			score_id, project_id, trace_id, span_id,
+			score_id, project_id, organization_id, trace_id, span_id,
 			name, value, string_value, data_type, source,
 			reason, metadata, experiment_id, experiment_item_id,
 			timestamp
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	return r.db.Exec(ctx, query,
 		score.ID,
 		score.ProjectID,
+		score.OrganizationID,
 		score.TraceID,
 		score.SpanID,
 		score.Name,
@@ -65,7 +66,7 @@ func (r *scoreRepository) Delete(ctx context.Context, id string) error {
 func (r *scoreRepository) GetByID(ctx context.Context, id string) (*observability.Score, error) {
 	query := `
 		SELECT
-			score_id, project_id, trace_id, span_id,
+			score_id, project_id, organization_id, trace_id, span_id,
 			name, value, string_value, data_type, source,
 			reason, metadata, experiment_id, experiment_item_id,
 			timestamp
@@ -82,7 +83,7 @@ func (r *scoreRepository) GetByID(ctx context.Context, id string) (*observabilit
 func (r *scoreRepository) GetByTraceID(ctx context.Context, traceID string) ([]*observability.Score, error) {
 	query := `
 		SELECT
-			score_id, project_id, trace_id, span_id,
+			score_id, project_id, organization_id, trace_id, span_id,
 			name, value, string_value, data_type, source,
 			reason, metadata, experiment_id, experiment_item_id,
 			timestamp
@@ -104,7 +105,7 @@ func (r *scoreRepository) GetByTraceID(ctx context.Context, traceID string) ([]*
 func (r *scoreRepository) GetBySpanID(ctx context.Context, spanID string) ([]*observability.Score, error) {
 	query := `
 		SELECT
-			score_id, project_id, trace_id, span_id,
+			score_id, project_id, organization_id, trace_id, span_id,
 			name, value, string_value, data_type, source,
 			reason, metadata, experiment_id, experiment_item_id,
 			timestamp
@@ -126,7 +127,7 @@ func (r *scoreRepository) GetBySpanID(ctx context.Context, spanID string) ([]*ob
 func (r *scoreRepository) GetByFilter(ctx context.Context, filter *observability.ScoreFilter) ([]*observability.Score, error) {
 	query := `
 		SELECT
-			score_id, project_id, trace_id, span_id,
+			score_id, project_id, organization_id, trace_id, span_id,
 			name, value, string_value, data_type, source,
 			reason, metadata, experiment_id, experiment_item_id,
 			timestamp
@@ -228,7 +229,7 @@ func (r *scoreRepository) CreateBatch(ctx context.Context, scores []*observabili
 
 	batch, err := r.db.PrepareBatch(ctx, `
 		INSERT INTO scores (
-			score_id, project_id, trace_id, span_id,
+			score_id, project_id, organization_id, trace_id, span_id,
 			name, value, string_value, data_type, source,
 			reason, metadata, experiment_id, experiment_item_id,
 			timestamp
@@ -242,6 +243,7 @@ func (r *scoreRepository) CreateBatch(ctx context.Context, scores []*observabili
 		err = batch.Append(
 			score.ID,
 			score.ProjectID,
+			score.OrganizationID,
 			score.TraceID,
 			score.SpanID,
 			score.Name,
@@ -403,6 +405,7 @@ func (r *scoreRepository) scanScoreRow(row driver.Row) (*observability.Score, er
 	err := row.Scan(
 		&score.ID,
 		&score.ProjectID,
+		&score.OrganizationID,
 		&score.TraceID,
 		&score.SpanID,
 		&score.Name,
@@ -434,6 +437,7 @@ func (r *scoreRepository) scanScores(rows driver.Rows) ([]*observability.Score, 
 		err := rows.Scan(
 			&score.ID,
 			&score.ProjectID,
+			&score.OrganizationID,
 			&score.TraceID,
 			&score.SpanID,
 			&score.Name,

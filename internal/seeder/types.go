@@ -169,3 +169,31 @@ func (s *TemplateStatistics) String() string {
 	data, _ := json.MarshalIndent(s, "", "  ")
 	return string(data)
 }
+
+// Billing Config Seed Types
+
+type BillingConfigsFile struct {
+	Version        string              `yaml:"version"`
+	PricingConfigs []PricingConfigSeed `yaml:"pricing_configs"`
+}
+
+type PricingConfigSeed struct {
+	Name              string   `yaml:"name"`
+	IsDefault         bool     `yaml:"is_default"`
+	FreeSpans         int64    `yaml:"free_spans"`
+	FreeGB            float64  `yaml:"free_gb"`
+	FreeScores        int64    `yaml:"free_scores"`
+	PricePer100KSpans *float64 `yaml:"price_per_100k_spans"`
+	PricePerGB        *float64 `yaml:"price_per_gb"`
+	PricePer1KScores  *float64 `yaml:"price_per_1k_scores"`
+}
+
+type BillingStatistics struct {
+	TotalPricingConfigs int `json:"total_pricing_configs"`
+	DefaultConfigName   string `json:"default_config_name"`
+}
+
+func (s *BillingStatistics) String() string {
+	data, _ := json.MarshalIndent(s, "", "  ")
+	return string(data)
+}
