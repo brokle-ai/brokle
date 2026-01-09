@@ -222,7 +222,7 @@ func (h *BudgetHandler) CreateBudget(c *gin.Context) {
 			"error", err,
 			"organization_id", orgID,
 		)
-		response.Error(c, appErrors.NewInternalError("Failed to create budget", err))
+		response.Error(c, err)
 		return
 	}
 

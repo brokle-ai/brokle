@@ -506,7 +506,7 @@ func ProvideServerServices(core *CoreContainer) *ServiceContainer {
 	repos := core.Repos
 	databases := core.Databases
 
-	billingServices := ProvideBillingServices(core.Transactor, repos.Billing, logger)
+	billingServices := ProvideBillingServices(core.Transactor, repos.Billing, repos.Organization, logger)
 	analyticsServices := ProvideAnalyticsServices(repos.Analytics)
 	observabilityServices := ProvideObservabilityServices(repos.Observability, repos.Storage, analyticsServices, databases.Redis, cfg, logger)
 	authServices := ProvideAuthServices(cfg, repos.User, repos.Auth, repos.Organization, databases, logger)
@@ -579,7 +579,7 @@ func ProvideWorkerServices(core *CoreContainer) *ServiceContainer {
 	repos := core.Repos
 	databases := core.Databases
 
-	billingServices := ProvideBillingServices(core.Transactor, repos.Billing, logger)
+	billingServices := ProvideBillingServices(core.Transactor, repos.Billing, repos.Organization, logger)
 	analyticsServices := ProvideAnalyticsServices(repos.Analytics)
 	observabilityServices := ProvideObservabilityServices(repos.Observability, repos.Storage, analyticsServices, databases.Redis, cfg, logger)
 
@@ -1115,6 +1115,7 @@ func ProvideObservabilityServices(
 func ProvideBillingServices(
 	transactor common.Transactor,
 	billingRepos *BillingRepositories,
+	orgRepos *OrganizationRepositories,
 	logger *slog.Logger,
 ) *BillingServices {
 	orgService := &simpleBillingOrgService{logger: logger}
@@ -1148,6 +1149,7 @@ func ProvideBillingServices(
 	budgetService := billingService.NewBudgetService(
 		billingRepos.UsageBudget,
 		billingRepos.UsageAlert,
+		orgRepos.Project,
 		logger,
 	)
 

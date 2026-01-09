@@ -97,7 +97,12 @@ func (s *contractService) CreateContract(ctx context.Context, contract *billing.
 func (s *contractService) GetContract(ctx context.Context, contractID ulid.ULID) (*billing.Contract, error) {
 	contract, err := s.contractRepo.GetByID(ctx, contractID)
 	if err != nil {
-		return nil, appErrors.NewNotFoundError(fmt.Sprintf("Contract %s not found", contractID))
+		// Check if it's a "not found" error vs database error
+		if strings.Contains(err.Error(), "not found") {
+			return nil, appErrors.NewNotFoundError(fmt.Sprintf("Contract %s not found", contractID))
+		}
+		// Wrap real database errors as internal errors
+		return nil, appErrors.NewInternalError("Failed to get contract", err)
 	}
 	return contract, nil
 }
@@ -109,8 +114,9 @@ func (s *contractService) GetContractsByOrg(ctx context.Context, orgID ulid.ULID
 func (s *contractService) GetActiveContract(ctx context.Context, orgID ulid.ULID) (*billing.Contract, error) {
 	contract, err := s.contractRepo.GetActiveByOrgID(ctx, orgID)
 	if err != nil {
-		return nil, appErrors.NewNotFoundError(fmt.Sprintf("No active contract for organization %s", orgID))
+		return nil, err // Real database error
 	}
+	// contract will be nil if no active contract exists (valid state)
 	return contract, nil
 }
 

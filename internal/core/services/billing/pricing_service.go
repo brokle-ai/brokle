@@ -9,6 +9,8 @@ import (
 	"brokle/pkg/ulid"
 )
 
+const bytesPerGB = 1_073_741_824 // 1 GB in bytes
+
 type pricingService struct {
 	billingRepo  billing.OrganizationBillingRepository
 	planRepo     billing.PlanRepository
@@ -130,9 +132,9 @@ func (s *pricingService) calculateFlat(usage *billing.BillableUsageSummary, pric
 	totalCost += spanCost
 
 	// Bytes
-	freeBytes := int64(pricing.FreeGB * 1073741824)
+	freeBytes := int64(pricing.FreeGB * bytesPerGB)
 	billableBytes := max(0, usage.TotalBytes-freeBytes)
-	billableGB := float64(billableBytes) / 1073741824.0
+	billableGB := float64(billableBytes) / float64(bytesPerGB)
 	dataCost := billableGB * pricing.PricePerGB
 	totalCost += dataCost
 
@@ -151,7 +153,7 @@ func (s *pricingService) calculateWithTiers(usage *billing.BillableUsageSummary,
 	// Calculate each dimension
 	totalCost += s.CalculateDimensionWithTiers(usage.TotalSpans, pricing.FreeSpans, billing.TierDimensionSpans, pricing.VolumeTiers, pricing)
 
-	freeBytes := int64(pricing.FreeGB * 1073741824)
+	freeBytes := int64(pricing.FreeGB * bytesPerGB)
 	totalCost += s.CalculateDimensionWithTiers(usage.TotalBytes, freeBytes, billing.TierDimensionBytes, pricing.VolumeTiers, pricing)
 
 	totalCost += s.CalculateDimensionWithTiers(usage.TotalScores, pricing.FreeScores, billing.TierDimensionScores, pricing.VolumeTiers, pricing)
@@ -168,7 +170,7 @@ func (s *pricingService) calculateFlatNoFreeTier(usage *billing.BillableUsageSum
 	totalCost += spanCost
 
 	// Bytes
-	billableGB := float64(usage.TotalBytes) / 1073741824.0
+	billableGB := float64(usage.TotalBytes) / float64(bytesPerGB)
 	dataCost := billableGB * pricing.PricePerGB
 	totalCost += dataCost
 
@@ -270,7 +272,7 @@ func getDimensionUnitSize(dimension billing.TierDimension) int64 {
 	case billing.TierDimensionSpans:
 		return 100000 // per 100K
 	case billing.TierDimensionBytes:
-		return 1073741824 // per GB
+		return bytesPerGB
 	case billing.TierDimensionScores:
 		return 1000 // per 1K
 	default:

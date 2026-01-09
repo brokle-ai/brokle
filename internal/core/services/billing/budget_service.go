@@ -2,34 +2,71 @@ package billing
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sort"
 	"time"
 
 	"brokle/internal/core/domain/billing"
+	orgDomain "brokle/internal/core/domain/organization"
+	appErrors "brokle/pkg/errors"
 	"brokle/pkg/ulid"
 )
 
 type budgetService struct {
-	budgetRepo billing.UsageBudgetRepository
-	alertRepo  billing.UsageAlertRepository
-	logger     *slog.Logger
+	budgetRepo  billing.UsageBudgetRepository
+	alertRepo   billing.UsageAlertRepository
+	projectRepo orgDomain.ProjectRepository
+	logger      *slog.Logger
 }
 
 func NewBudgetService(
 	budgetRepo billing.UsageBudgetRepository,
 	alertRepo billing.UsageAlertRepository,
+	projectRepo orgDomain.ProjectRepository,
 	logger *slog.Logger,
 ) billing.BudgetService {
 	return &budgetService{
-		budgetRepo: budgetRepo,
-		alertRepo:  alertRepo,
-		logger:     logger,
+		budgetRepo:  budgetRepo,
+		alertRepo:   alertRepo,
+		projectRepo: projectRepo,
+		logger:      logger,
 	}
 }
 
 func (s *budgetService) CreateBudget(ctx context.Context, budget *billing.UsageBudget) error {
+	// Validate project ownership if project_id is provided
+	if budget.ProjectID != nil && !budget.ProjectID.IsZero() {
+		project, err := s.projectRepo.GetByID(ctx, *budget.ProjectID)
+		if err != nil {
+			if errors.Is(err, orgDomain.ErrProjectNotFound) {
+				s.logger.Warn("budget creation failed: project not found",
+					"project_id", budget.ProjectID,
+					"organization_id", budget.OrganizationID,
+				)
+				return appErrors.NewNotFoundError(fmt.Sprintf("project %s", *budget.ProjectID))
+			}
+			// Database/infrastructure error - return 500
+			s.logger.Error("budget creation failed: project lookup error",
+				"project_id", budget.ProjectID,
+				"organization_id", budget.OrganizationID,
+				"error", err,
+			)
+			return appErrors.NewInternalError("failed to validate project", err)
+		}
+
+		// Verify project belongs to the same organization
+		if project.OrganizationID != budget.OrganizationID {
+			s.logger.Warn("budget creation blocked: project belongs to different organization",
+				"project_id", budget.ProjectID,
+				"project_org_id", project.OrganizationID,
+				"budget_org_id", budget.OrganizationID,
+			)
+			return appErrors.NewNotFoundError(fmt.Sprintf("project %s", *budget.ProjectID))
+		}
+	}
+
 	if budget.ID.IsZero() {
 		budget.ID = ulid.New()
 	}

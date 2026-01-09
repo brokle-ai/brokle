@@ -2,10 +2,10 @@ package overview
 
 import (
 	"log/slog"
-	"time"
 
 	"brokle/internal/config"
 	"brokle/internal/core/domain/analytics"
+	"brokle/internal/transport/http/handlers/shared"
 	appErrors "brokle/pkg/errors"
 	"brokle/pkg/response"
 	"brokle/pkg/ulid"
@@ -79,53 +79,22 @@ func (h *Handler) GetOverview(c *gin.Context) {
 		return
 	}
 
-	// Build the filter based on custom date range or preset
-	var filter *analytics.OverviewFilter
-
-	if req.From != "" && req.To != "" {
-		// Custom date range - parse ISO 8601 (RFC3339)
-		fromTime, err := time.Parse(time.RFC3339, req.From)
-		if err != nil {
-			response.Error(c, appErrors.NewValidationError("Invalid 'from' date format", "from must be in ISO 8601 format (e.g., 2024-01-01T00:00:00Z)"))
-			return
-		}
-
-		toTime, err := time.Parse(time.RFC3339, req.To)
-		if err != nil {
-			response.Error(c, appErrors.NewValidationError("Invalid 'to' date format", "to must be in ISO 8601 format (e.g., 2024-01-02T00:00:00Z)"))
-			return
-		}
-
-		// Validate range
-		if toTime.Before(fromTime) {
-			response.Error(c, appErrors.NewValidationError("Invalid date range", "'to' must be after 'from'"))
-			return
-		}
-
-		filter = &analytics.OverviewFilter{
-			ProjectID: projectID,
-			StartTime: fromTime.UTC(),
-			EndTime:   toTime.UTC(),
-		}
-	} else if req.From != "" || req.To != "" {
-		// Partial custom range - error
-		response.Error(c, appErrors.NewValidationError("Incomplete date range", "both 'from' and 'to' are required for custom date range"))
+	// Parse time range from request
+	fromTime, toTime, err := shared.ParseTimeRange(req.From, req.To, req.TimeRange, analytics.TimeRange24Hours)
+	if err != nil {
+		response.Error(c, err)
 		return
-	} else {
-		// Use preset time range (default to 24h)
-		timeRange := analytics.ParseTimeRange(req.TimeRange)
-		filter = analytics.NewOverviewFilter(projectID, timeRange)
+	}
+
+	filter := &analytics.OverviewFilter{
+		ProjectID: projectID,
+		StartTime: fromTime,
+		EndTime:   toTime,
 	}
 
 	// Get overview data from service
 	overview, err := h.overviewService.GetOverview(c.Request.Context(), filter)
 	if err != nil {
-		h.logger.Error("failed to get project overview",
-			"error", err,
-			"project_id", projectID,
-			"start_time", filter.StartTime,
-			"end_time", filter.EndTime,
-		)
 		response.Error(c, appErrors.NewInternalError("Failed to get project overview", err))
 		return
 	}

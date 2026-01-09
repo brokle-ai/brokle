@@ -8,6 +8,7 @@ import (
 	"brokle/internal/config"
 	"brokle/internal/core/domain/analytics"
 	"brokle/internal/core/domain/billing"
+	"brokle/internal/transport/http/handlers/shared"
 	"brokle/internal/transport/http/middleware"
 	appErrors "brokle/pkg/errors"
 	"brokle/pkg/response"
@@ -15,6 +16,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
+
+const bytesPerGB = 1_073_741_824 // 1 GB in bytes
 
 type UsageHandler struct {
 	config       *config.Config
@@ -70,10 +73,6 @@ func (h *UsageHandler) GetUsageOverview(c *gin.Context) {
 
 	overview, err := h.usageService.GetUsageOverview(c.Request.Context(), orgID)
 	if err != nil {
-		h.logger.Error("failed to get usage overview",
-			"error", err,
-			"organization_id", orgID,
-		)
 		response.Error(c, appErrors.NewInternalError("Failed to get usage overview", err))
 		return
 	}
@@ -116,32 +115,10 @@ func (h *UsageHandler) GetUsageTimeSeries(c *gin.Context) {
 		return
 	}
 
-	var from, to time.Time
-	if req.From != "" && req.To != "" {
-		var parseErr error
-		from, parseErr = time.Parse(time.RFC3339, req.From)
-		if parseErr != nil {
-			response.Error(c, appErrors.NewValidationError("Invalid 'from' date format", "from must be in ISO 8601 format"))
-			return
-		}
-		to, parseErr = time.Parse(time.RFC3339, req.To)
-		if parseErr != nil {
-			response.Error(c, appErrors.NewValidationError("Invalid 'to' date format", "to must be in ISO 8601 format"))
-			return
-		}
-	} else if req.From != "" || req.To != "" {
-		// Partial custom range - error
-		response.Error(c, appErrors.NewValidationError("Incomplete date range", "both 'from' and 'to' are required for custom date range"))
+	from, to, err := shared.ParseTimeRange(req.From, req.To, req.TimeRange, analytics.TimeRange30Days)
+	if err != nil {
+		response.Error(c, err)
 		return
-	} else {
-		// Use preset time range (default to 30d for billing)
-		timeRange := analytics.ParseTimeRange(req.TimeRange)
-		// ParseTimeRange defaults to 24h, but we want 30d for billing context
-		if req.TimeRange == "" {
-			timeRange = analytics.TimeRange30Days
-		}
-		to = time.Now().UTC()
-		from = to.Add(-timeRange.Duration())
 	}
 
 	granularity := req.Granularity
@@ -155,10 +132,6 @@ func (h *UsageHandler) GetUsageTimeSeries(c *gin.Context) {
 
 	usage, err := h.usageService.GetUsageTimeSeries(c.Request.Context(), orgID, from, to, granularity)
 	if err != nil {
-		h.logger.Error("failed to get usage time series",
-			"error", err,
-			"organization_id", orgID,
-		)
 		response.Error(c, appErrors.NewInternalError("Failed to get usage time series", err))
 		return
 	}
@@ -200,40 +173,14 @@ func (h *UsageHandler) GetUsageByProject(c *gin.Context) {
 		return
 	}
 
-	var from, to time.Time
-	if req.From != "" && req.To != "" {
-		var parseErr error
-		from, parseErr = time.Parse(time.RFC3339, req.From)
-		if parseErr != nil {
-			response.Error(c, appErrors.NewValidationError("Invalid 'from' date format", "from must be in ISO 8601 format"))
-			return
-		}
-		to, parseErr = time.Parse(time.RFC3339, req.To)
-		if parseErr != nil {
-			response.Error(c, appErrors.NewValidationError("Invalid 'to' date format", "to must be in ISO 8601 format"))
-			return
-		}
-	} else if req.From != "" || req.To != "" {
-		// Partial custom range - error
-		response.Error(c, appErrors.NewValidationError("Incomplete date range", "both 'from' and 'to' are required for custom date range"))
+	from, to, err := shared.ParseTimeRange(req.From, req.To, req.TimeRange, analytics.TimeRange30Days)
+	if err != nil {
+		response.Error(c, err)
 		return
-	} else {
-		// Use preset time range (default to 30d for billing)
-		timeRange := analytics.ParseTimeRange(req.TimeRange)
-		// ParseTimeRange defaults to 24h, but we want 30d for billing context
-		if req.TimeRange == "" {
-			timeRange = analytics.TimeRange30Days
-		}
-		to = time.Now().UTC()
-		from = to.Add(-timeRange.Duration())
 	}
 
 	summaries, err := h.usageService.GetUsageByProject(c.Request.Context(), orgID, from, to)
 	if err != nil {
-		h.logger.Error("failed to get usage by project",
-			"error", err,
-			"organization_id", orgID,
-		)
 		response.Error(c, appErrors.NewInternalError("Failed to get usage by project", err))
 		return
 	}
@@ -286,32 +233,10 @@ func (h *UsageHandler) ExportUsage(c *gin.Context) {
 		return
 	}
 
-	var from, to time.Time
-	if req.From != "" && req.To != "" {
-		var parseErr error
-		from, parseErr = time.Parse(time.RFC3339, req.From)
-		if parseErr != nil {
-			response.Error(c, appErrors.NewValidationError("Invalid 'from' date format", "from must be in ISO 8601 format"))
-			return
-		}
-		to, parseErr = time.Parse(time.RFC3339, req.To)
-		if parseErr != nil {
-			response.Error(c, appErrors.NewValidationError("Invalid 'to' date format", "to must be in ISO 8601 format"))
-			return
-		}
-	} else if req.From != "" || req.To != "" {
-		// Partial custom range - error
-		response.Error(c, appErrors.NewValidationError("Incomplete date range", "both 'from' and 'to' are required for custom date range"))
+	from, to, err := shared.ParseTimeRange(req.From, req.To, req.TimeRange, analytics.TimeRange30Days)
+	if err != nil {
+		response.Error(c, err)
 		return
-	} else {
-		// Use preset time range (default to 30d for billing)
-		timeRange := analytics.ParseTimeRange(req.TimeRange)
-		// ParseTimeRange defaults to 24h, but we want 30d for billing context
-		if req.TimeRange == "" {
-			timeRange = analytics.TimeRange30Days
-		}
-		to = time.Now().UTC()
-		from = to.Add(-timeRange.Duration())
 	}
 
 	format := req.Format
@@ -330,10 +255,6 @@ func (h *UsageHandler) ExportUsage(c *gin.Context) {
 
 	usage, err := h.usageService.GetUsageTimeSeries(c.Request.Context(), orgID, from, to, granularity)
 	if err != nil {
-		h.logger.Error("failed to get usage for export",
-			"error", err,
-			"organization_id", orgID,
-		)
 		response.Error(c, appErrors.NewInternalError("Failed to get usage for export", err))
 		return
 	}
@@ -341,10 +262,6 @@ func (h *UsageHandler) ExportUsage(c *gin.Context) {
 	// Get project breakdown for richer export
 	projectUsage, err := h.usageService.GetUsageByProject(c.Request.Context(), orgID, from, to)
 	if err != nil {
-		h.logger.Error("failed to get project usage for export",
-			"error", err,
-			"organization_id", orgID,
-		)
 		// Continue without project breakdown
 		projectUsage = nil
 	}
@@ -369,7 +286,7 @@ func (h *UsageHandler) exportCSV(c *gin.Context, usage []*billing.BillableUsage,
 			u.ProjectID.String(),
 			formatInt64(u.SpanCount),
 			formatInt64(u.BytesProcessed),
-			formatFloat64(float64(u.BytesProcessed)/1073741824.0, 4),
+			formatFloat64(float64(u.BytesProcessed)/float64(bytesPerGB), 4),
 			formatInt64(u.ScoreCount),
 			formatFloat64(u.AIProviderCost, 2),
 		)
