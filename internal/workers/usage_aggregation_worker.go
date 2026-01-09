@@ -20,10 +20,13 @@ type UsageAggregationWorker struct {
 	logger             *slog.Logger
 	usageRepo          billing.BillableUsageRepository
 	billingRepo        billing.OrganizationBillingRepository
-	pricingRepo        billing.PricingConfigRepository
+	planRepo           billing.PlanRepository
+	contractRepo       billing.ContractRepository
+	tierRepo           billing.VolumeDiscountTierRepository
 	budgetRepo         billing.UsageBudgetRepository
 	alertRepo          billing.UsageAlertRepository
 	orgRepo            organization.OrganizationRepository
+	pricingService     billing.PricingService
 	notificationWorker *NotificationWorker
 	quit               chan bool
 	ticker             *time.Ticker
@@ -35,10 +38,13 @@ func NewUsageAggregationWorker(
 	logger *slog.Logger,
 	usageRepo billing.BillableUsageRepository,
 	billingRepo billing.OrganizationBillingRepository,
-	pricingRepo billing.PricingConfigRepository,
+	planRepo billing.PlanRepository,
+	contractRepo billing.ContractRepository,
+	tierRepo billing.VolumeDiscountTierRepository,
 	budgetRepo billing.UsageBudgetRepository,
 	alertRepo billing.UsageAlertRepository,
 	orgRepo organization.OrganizationRepository,
+	pricingService billing.PricingService,
 	notificationWorker *NotificationWorker,
 ) *UsageAggregationWorker {
 	return &UsageAggregationWorker{
@@ -46,10 +52,13 @@ func NewUsageAggregationWorker(
 		logger:             logger,
 		usageRepo:          usageRepo,
 		billingRepo:        billingRepo,
-		pricingRepo:        pricingRepo,
+		planRepo:           planRepo,
+		contractRepo:       contractRepo,
+		tierRepo:           tierRepo,
 		budgetRepo:         budgetRepo,
 		alertRepo:          alertRepo,
 		orgRepo:            orgRepo,
+		pricingService:     pricingService,
 		notificationWorker: notificationWorker,
 		quit:               make(chan bool),
 	}
@@ -154,8 +163,8 @@ func (w *UsageAggregationWorker) syncOrganizationUsage(ctx context.Context, orgI
 		return nil
 	}
 
-	// Get pricing config
-	pricingConfig, err := w.pricingRepo.GetByID(ctx, orgBilling.PricingConfigID)
+	// Get effective pricing (plan + contract overrides)
+	effectivePricing, err := w.getEffectivePricing(ctx, orgID, orgBilling)
 	if err != nil {
 		return err
 	}
@@ -185,13 +194,13 @@ func (w *UsageAggregationWorker) syncOrganizationUsage(ctx context.Context, orgI
 		return err
 	}
 
-	// Calculate cost
-	cost := w.calculateCost(summary, pricingConfig)
+	// Calculate cost (tier-aware)
+	cost := w.calculateCost(summary, effectivePricing)
 
 	// Calculate free tier remaining
-	freeSpansRemaining := max(0, pricingConfig.FreeSpans-summary.TotalSpans)
-	freeBytesRemaining := max(0, int64(pricingConfig.FreeGB*1073741824)-summary.TotalBytes)
-	freeScoresRemaining := max(0, pricingConfig.FreeScores-summary.TotalScores)
+	freeSpansRemaining := max(0, effectivePricing.FreeSpans-summary.TotalSpans)
+	freeBytesRemaining := max(0, int64(effectivePricing.FreeGB*1073741824)-summary.TotalBytes)
+	freeScoresRemaining := max(0, effectivePricing.FreeScores-summary.TotalScores)
 
 	// Update billing state
 	orgBilling.CurrentPeriodSpans = summary.TotalSpans
@@ -209,7 +218,7 @@ func (w *UsageAggregationWorker) syncOrganizationUsage(ctx context.Context, orgI
 	}
 
 	// Also update budget usage
-	if err := w.syncBudgetUsage(ctx, orgID, summary, cost, pricingConfig); err != nil {
+	if err := w.syncBudgetUsage(ctx, orgID, summary, cost, effectivePricing); err != nil {
 		w.logger.Warn("failed to sync budget usage",
 			"error", err,
 			"organization_id", orgID,
@@ -233,7 +242,7 @@ func (w *UsageAggregationWorker) resetBillingPeriod(ctx context.Context, orgID u
 }
 
 // syncBudgetUsage syncs usage to all budgets for an organization
-func (w *UsageAggregationWorker) syncBudgetUsage(ctx context.Context, orgID ulid.ULID, summary *billing.BillableUsageSummary, cost float64, pricingConfig *billing.PricingConfig) error {
+func (w *UsageAggregationWorker) syncBudgetUsage(ctx context.Context, orgID ulid.ULID, summary *billing.BillableUsageSummary, cost float64, effectivePricing *billing.EffectivePricing) error {
 	budgets, err := w.budgetRepo.GetActive(ctx, orgID)
 	if err != nil {
 		return err
@@ -263,7 +272,7 @@ func (w *UsageAggregationWorker) syncBudgetUsage(ctx context.Context, orgID ulid
 			spans = projectSummary.TotalSpans
 			bytes = projectSummary.TotalBytes
 			scores = projectSummary.TotalScores
-			budgetCost = w.calculateRawCost(projectSummary, pricingConfig)
+			budgetCost = w.calculateRawCost(projectSummary, effectivePricing)
 		} else {
 			// Org-level budget - check if budget period differs from billing cycle
 			budgetStart := w.getBudgetPeriodStart(budget)
@@ -320,9 +329,9 @@ func (w *UsageAggregationWorker) syncBudgetUsage(ctx context.Context, orgID ulid
 							"budget_id", budget.ID,
 						)
 						// Fall back to raw cost if we can't calculate marginal
-						budgetCost = w.calculateRawCost(orgPeriodSummary, pricingConfig)
+						budgetCost = w.calculateRawCost(orgPeriodSummary, effectivePricing)
 					} else {
-						costBeforeBudget := w.calculateCost(preBudgetSummary, pricingConfig)
+						costBeforeBudget := w.calculateCost(preBudgetSummary, effectivePricing)
 						budgetCost = max(0, cost-costBeforeBudget)
 					}
 				}
@@ -344,6 +353,58 @@ func (w *UsageAggregationWorker) syncBudgetUsage(ctx context.Context, orgID ulid
 	}
 
 	return nil
+}
+
+// getEffectivePricing resolves pricing: contract overrides > plan defaults
+func (w *UsageAggregationWorker) getEffectivePricing(ctx context.Context, orgID ulid.ULID, orgBilling *billing.OrganizationBilling) (*billing.EffectivePricing, error) {
+	// 1. Get organization's base plan
+	plan, err := w.planRepo.GetByID(ctx, orgBilling.PlanID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. Check for active contract
+	contract, err := w.contractRepo.GetActiveByOrgID(ctx, orgID)
+	if err != nil && err.Error() != "no active contract found for organization: "+orgID.String() {
+		return nil, err
+	}
+
+	effective := &billing.EffectivePricing{
+		OrganizationID: orgID,
+		BasePlan:       plan,
+		Contract:       contract,
+	}
+
+	// 3. Resolve pricing (contract overrides plan)
+	if contract != nil {
+		effective.FreeSpans = coalesceInt64(contract.CustomFreeSpans, plan.FreeSpans)
+		effective.PricePer100KSpans = coalesceFloat64Ptr(contract.CustomPricePer100KSpans, plan.PricePer100KSpans)
+		effective.FreeGB = coalesceFloat64Ptr(contract.CustomFreeGB, &plan.FreeGB)
+		effective.PricePerGB = coalesceFloat64Ptr(contract.CustomPricePerGB, plan.PricePerGB)
+		effective.FreeScores = coalesceInt64(contract.CustomFreeScores, plan.FreeScores)
+		effective.PricePer1KScores = coalesceFloat64Ptr(contract.CustomPricePer1KScores, plan.PricePer1KScores)
+
+		// Load volume tiers
+		tiers, err := w.tierRepo.GetByContractID(ctx, contract.ID)
+		if err != nil {
+			return nil, err
+		}
+
+		if len(tiers) > 0 {
+			effective.HasVolumeTiers = true
+			effective.VolumeTiers = tiers
+		}
+	} else {
+		// No contract, use plan defaults
+		effective.FreeSpans = plan.FreeSpans
+		effective.PricePer100KSpans = derefFloat64(plan.PricePer100KSpans)
+		effective.FreeGB = plan.FreeGB
+		effective.PricePerGB = derefFloat64(plan.PricePerGB)
+		effective.FreeScores = plan.FreeScores
+		effective.PricePer1KScores = derefFloat64(plan.PricePer1KScores)
+	}
+
+	return effective, nil
 }
 
 // checkBudgets checks all budgets and returns any new alerts
@@ -545,62 +606,99 @@ func (w *UsageAggregationWorker) sendAlertNotification(ctx context.Context, org 
 	}
 }
 
-// calculateCost computes total cost from three billable dimensions
-func (w *UsageAggregationWorker) calculateCost(usage *billing.BillableUsageSummary, config *billing.PricingConfig) float64 {
+// calculateCost computes total cost from three billable dimensions with tier support
+func (w *UsageAggregationWorker) calculateCost(usage *billing.BillableUsageSummary, pricing *billing.EffectivePricing) float64 {
+	if pricing.HasVolumeTiers {
+		return w.calculateWithTiers(usage, pricing)
+	}
+	return w.calculateFlat(usage, pricing)
+}
+
+// calculateFlat uses simple linear pricing
+func (w *UsageAggregationWorker) calculateFlat(usage *billing.BillableUsageSummary, pricing *billing.EffectivePricing) float64 {
 	var totalCost float64
 
-	// 1. Span cost: (spans - free_spans) / 100K * price_per_100k
-	if config.PricePer100KSpans != nil {
-		billableSpans := max(0, usage.TotalSpans-config.FreeSpans)
-		spanCost := float64(billableSpans) / 100000.0 * *config.PricePer100KSpans
-		totalCost += spanCost
-	}
+	// Spans
+	billableSpans := max(0, usage.TotalSpans-pricing.FreeSpans)
+	spanCost := float64(billableSpans) / 100000.0 * pricing.PricePer100KSpans
+	totalCost += spanCost
 
-	// 2. Data cost: (bytes - free_bytes) / GB * price_per_gb
-	if config.PricePerGB != nil {
-		freeBytes := int64(config.FreeGB * 1073741824) // Convert GB to bytes
-		billableBytes := max(0, usage.TotalBytes-freeBytes)
-		billableGB := float64(billableBytes) / 1073741824.0
-		dataCost := billableGB * *config.PricePerGB
-		totalCost += dataCost
-	}
+	// Bytes
+	freeBytes := int64(pricing.FreeGB * 1073741824)
+	billableBytes := max(0, usage.TotalBytes-freeBytes)
+	billableGB := float64(billableBytes) / 1073741824.0
+	dataCost := billableGB * pricing.PricePerGB
+	totalCost += dataCost
 
-	// 3. Score cost: (scores - free_scores) / 1K * price_per_1k
-	if config.PricePer1KScores != nil {
-		billableScores := max(0, usage.TotalScores-config.FreeScores)
-		scoreCost := float64(billableScores) / 1000.0 * *config.PricePer1KScores
-		totalCost += scoreCost
-	}
+	// Scores
+	billableScores := max(0, usage.TotalScores-pricing.FreeScores)
+	scoreCost := float64(billableScores) / 1000.0 * pricing.PricePer1KScores
+	totalCost += scoreCost
+
+	return totalCost
+}
+
+// calculateWithTiers uses progressive tier pricing
+// Delegates to PricingService for correct tier calculation logic
+func (w *UsageAggregationWorker) calculateWithTiers(usage *billing.BillableUsageSummary, pricing *billing.EffectivePricing) float64 {
+	totalCost := 0.0
+
+	// Delegate to PricingService for tier calculations
+	totalCost += w.pricingService.CalculateDimensionWithTiers(usage.TotalSpans, pricing.FreeSpans, billing.TierDimensionSpans, pricing.VolumeTiers, pricing)
+
+	freeBytes := int64(pricing.FreeGB * 1073741824)
+	totalCost += w.pricingService.CalculateDimensionWithTiers(usage.TotalBytes, freeBytes, billing.TierDimensionBytes, pricing.VolumeTiers, pricing)
+
+	totalCost += w.pricingService.CalculateDimensionWithTiers(usage.TotalScores, pricing.FreeScores, billing.TierDimensionScores, pricing.VolumeTiers, pricing)
 
 	return totalCost
 }
 
 // calculateRawCost computes cost for usage without applying free tier deductions.
 // Used for project-level budgets where free tier is already accounted at org level.
-func (w *UsageAggregationWorker) calculateRawCost(usage *billing.BillableUsageSummary, config *billing.PricingConfig) float64 {
+func (w *UsageAggregationWorker) calculateRawCost(usage *billing.BillableUsageSummary, pricing *billing.EffectivePricing) float64 {
+	if pricing.HasVolumeTiers {
+		return w.calculateWithTiersNoFreeTier(usage, pricing)
+	}
+	return w.calculateFlatNoFreeTier(usage, pricing)
+}
+
+// calculateFlatNoFreeTier uses simple linear pricing without free tier deductions
+func (w *UsageAggregationWorker) calculateFlatNoFreeTier(usage *billing.BillableUsageSummary, pricing *billing.EffectivePricing) float64 {
 	var totalCost float64
 
-	// 1. Span cost: spans / 100K * price_per_100k (no free tier)
-	if config.PricePer100KSpans != nil {
-		spanCost := float64(usage.TotalSpans) / 100000.0 * *config.PricePer100KSpans
-		totalCost += spanCost
-	}
+	// Spans
+	spanCost := float64(usage.TotalSpans) / 100000.0 * pricing.PricePer100KSpans
+	totalCost += spanCost
 
-	// 2. Data cost: bytes / GB * price_per_gb (no free tier)
-	if config.PricePerGB != nil {
-		billableGB := float64(usage.TotalBytes) / 1073741824.0
-		dataCost := billableGB * *config.PricePerGB
-		totalCost += dataCost
-	}
+	// Bytes
+	billableGB := float64(usage.TotalBytes) / 1073741824.0
+	dataCost := billableGB * pricing.PricePerGB
+	totalCost += dataCost
 
-	// 3. Score cost: scores / 1K * price_per_1k (no free tier)
-	if config.PricePer1KScores != nil {
-		scoreCost := float64(usage.TotalScores) / 1000.0 * *config.PricePer1KScores
-		totalCost += scoreCost
-	}
+	// Scores
+	scoreCost := float64(usage.TotalScores) / 1000.0 * pricing.PricePer1KScores
+	totalCost += scoreCost
 
 	return totalCost
 }
+
+// calculateWithTiersNoFreeTier uses progressive tier pricing without free tier deductions
+// Delegates to PricingService for correct tier calculation logic
+func (w *UsageAggregationWorker) calculateWithTiersNoFreeTier(usage *billing.BillableUsageSummary, pricing *billing.EffectivePricing) float64 {
+	totalCost := 0.0
+
+	// Delegate to PricingService for tier calculations without free tier
+	totalCost += w.pricingService.CalculateDimensionWithTiers(usage.TotalSpans, 0, billing.TierDimensionSpans, pricing.VolumeTiers, pricing)
+	totalCost += w.pricingService.CalculateDimensionWithTiers(usage.TotalBytes, 0, billing.TierDimensionBytes, pricing.VolumeTiers, pricing)
+	totalCost += w.pricingService.CalculateDimensionWithTiers(usage.TotalScores, 0, billing.TierDimensionScores, pricing.VolumeTiers, pricing)
+
+	return totalCost
+}
+
+// NOTE: Removed duplicate calculateDimensionWithTiers, calculateFlatDimension, and getDimensionUnitSize.
+// Worker now delegates to PricingService.CalculateDimensionWithTiers for all tier calculations.
+// This ensures single source of truth for billing logic and prevents bugs from duplicate code.
 
 // calculatePeriodEnd calculates the end of the current billing period
 func (w *UsageAggregationWorker) calculatePeriodEnd(cycleStart time.Time, anchorDay int) time.Time {
@@ -634,6 +732,31 @@ func (w *UsageAggregationWorker) getBudgetPeriodStart(budget *billing.UsageBudge
 	default:
 		return time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 	}
+}
+
+// Helper functions for pricing resolution
+func coalesceInt64(custom *int64, defaultVal int64) int64 {
+	if custom != nil {
+		return *custom
+	}
+	return defaultVal
+}
+
+func coalesceFloat64Ptr(custom *float64, defaultVal *float64) float64 {
+	if custom != nil {
+		return *custom
+	}
+	if defaultVal != nil {
+		return *defaultVal
+	}
+	return 0
+}
+
+func derefFloat64(ptr *float64) float64 {
+	if ptr != nil {
+		return *ptr
+	}
+	return 0
 }
 
 // Helper formatting functions

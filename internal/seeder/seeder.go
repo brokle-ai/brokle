@@ -39,7 +39,7 @@ type Seeder struct {
 	rolePermRepo      auth.RolePermissionRepository
 	providerModelRepo analytics.ProviderModelRepository
 	templateRepo      dashboard.TemplateRepository
-	pricingConfigRepo billing.PricingConfigRepository
+	planRepo          billing.PlanRepository
 	orgBillingRepo    billing.OrganizationBillingRepository
 }
 
@@ -65,7 +65,7 @@ func New(cfg *config.Config) (*Seeder, error) {
 	s.rolePermRepo = authRepo.NewRolePermissionRepository(s.db)
 	s.providerModelRepo = analyticsRepo.NewProviderModelRepository(s.db)
 	s.templateRepo = dashboardRepo.NewTemplateRepository(s.db)
-	s.pricingConfigRepo = billingRepo.NewPricingConfigRepository(s.db)
+	s.planRepo = billingRepo.NewPlanRepository(s.db)
 	s.orgBillingRepo = billingRepo.NewOrganizationBillingRepository(s.db)
 
 	return s, nil
@@ -1055,7 +1055,7 @@ func (s *Seeder) SeedBillingConfigs(ctx context.Context, opts *Options) error {
 	// Print statistics
 	stats, err := s.GetBillingStatistics(ctx)
 	if err == nil {
-		s.logger.Debug("Billing Statistics", "configs", stats.TotalPricingConfigs, "default", stats.DefaultConfigName)
+		s.logger.Debug("Billing Statistics", "plans", stats.TotalPlans, "default", stats.DefaultConfigName)
 	}
 
 	s.logger.Info("Billing configs seeding completed successfully")
@@ -1079,13 +1079,13 @@ func (s *Seeder) loadBillingConfigs() (*BillingConfigsFile, error) {
 	}
 
 	// Validate
-	if len(configsFile.PricingConfigs) == 0 {
-		return nil, errors.New("no pricing configs defined")
+	if len(configsFile.Plans) == 0 {
+		return nil, errors.New("no plans defined")
 	}
 
 	configNames := make(map[string]bool)
 	defaultCount := 0
-	for i, cfg := range configsFile.PricingConfigs {
+	for i, cfg := range configsFile.Plans {
 		if cfg.Name == "" {
 			return nil, fmt.Errorf("pricing config %d missing required field: name", i)
 		}
@@ -1099,10 +1099,10 @@ func (s *Seeder) loadBillingConfigs() (*BillingConfigsFile, error) {
 	}
 
 	if defaultCount == 0 {
-		return nil, errors.New("no default pricing config defined (exactly one must have is_default: true)")
+		return nil, errors.New("no default plan defined (exactly one must have is_default: true)")
 	}
 	if defaultCount > 1 {
-		return nil, fmt.Errorf("multiple default pricing configs defined (%d), exactly one must have is_default: true", defaultCount)
+		return nil, fmt.Errorf("multiple default plans defined (%d), exactly one must have is_default: true", defaultCount)
 	}
 
 	return &configsFile, nil
@@ -1121,19 +1121,19 @@ func (s *Seeder) seedBillingConfigsFromFile(ctx context.Context, verbose bool) e
 
 func (s *Seeder) seedBillingConfigsData(ctx context.Context, data *BillingConfigsFile, verbose bool) error {
 	if verbose {
-		s.logger.Info("Seeding billing pricing configs", "count", len(data.PricingConfigs))
+		s.logger.Info("Seeding billing plans", "count", len(data.Plans))
 	}
 
 	now := time.Now()
 
-	for _, cfgSeed := range data.PricingConfigs {
-		// Check if config already exists by name (idempotent seeding)
-		existing, _ := s.pricingConfigRepo.GetByName(ctx, cfgSeed.Name)
+	for _, cfgSeed := range data.Plans {
+		// Check if plan already exists by name (idempotent seeding)
+		existing, _ := s.planRepo.GetByName(ctx, cfgSeed.Name)
 		if existing != nil {
 			if verbose {
-				s.logger.Info("Pricing config already exists, updating", "name", cfgSeed.Name, "id", existing.ID.String())
+				s.logger.Info("Plan already exists, updating", "name", cfgSeed.Name, "id", existing.ID.String())
 			}
-			// Update existing config
+			// Update existing plan
 			existing.IsDefault = cfgSeed.IsDefault
 			existing.FreeSpans = cfgSeed.FreeSpans
 			existing.FreeGB = cfgSeed.FreeGB
@@ -1144,14 +1144,14 @@ func (s *Seeder) seedBillingConfigsData(ctx context.Context, data *BillingConfig
 			existing.IsActive = true
 			existing.UpdatedAt = now
 
-			if err := s.pricingConfigRepo.Update(ctx, existing); err != nil {
-				return fmt.Errorf("failed to update pricing config %s: %w", cfgSeed.Name, err)
+			if err := s.planRepo.Update(ctx, existing); err != nil {
+				return fmt.Errorf("failed to update plan %s: %w", cfgSeed.Name, err)
 			}
 			continue
 		}
 
-		// Create new pricing config with runtime ULID
-		config := &billing.PricingConfig{
+		// Create new plan with runtime ULID
+		config := &billing.Plan{
 			ID:                ulid.New(),
 			Name:              cfgSeed.Name,
 			IsDefault:         cfgSeed.IsDefault,
@@ -1166,65 +1166,65 @@ func (s *Seeder) seedBillingConfigsData(ctx context.Context, data *BillingConfig
 			UpdatedAt:         now,
 		}
 
-		if err := s.pricingConfigRepo.Create(ctx, config); err != nil {
-			return fmt.Errorf("failed to create pricing config %s: %w", cfgSeed.Name, err)
+		if err := s.planRepo.Create(ctx, config); err != nil {
+			return fmt.Errorf("failed to create plan %s: %w", cfgSeed.Name, err)
 		}
 
 		if verbose {
-			s.logger.Info("Created pricing config", "name", config.Name, "is_default", config.IsDefault, "id", config.ID.String())
+			s.logger.Info("Created plan", "name", config.Name, "is_default", config.IsDefault, "id", config.ID.String())
 		}
 	}
 
 	if verbose {
-		s.logger.Info("Billing pricing configs seeded successfully", "version", data.Version)
+		s.logger.Info("Billing plans seeded successfully", "version", data.Version)
 	}
 	return nil
 }
 
 func (s *Seeder) resetBillingConfigs(ctx context.Context, verbose bool) error {
 	if verbose {
-		s.logger.Info("Resetting billing pricing configs data...")
+		s.logger.Info("Resetting billing plans data...")
 	}
 
-	// Get all active configs and deactivate them (soft delete)
-	configs, err := s.pricingConfigRepo.GetActive(ctx)
+	// Get all active plans and deactivate them (soft delete)
+	plans, err := s.planRepo.GetActive(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to list configs for reset: %w", err)
+		return fmt.Errorf("failed to list plans for reset: %w", err)
 	}
 
 	deactivatedCount := 0
-	for _, cfg := range configs {
-		cfg.IsActive = false
-		cfg.UpdatedAt = time.Now()
-		if err := s.pricingConfigRepo.Update(ctx, cfg); err != nil {
-			s.logger.Warn("Could not deactivate pricing config", "name", cfg.Name, "error", err)
+	for _, plan := range plans {
+		plan.IsActive = false
+		plan.UpdatedAt = time.Now()
+		if err := s.planRepo.Update(ctx, plan); err != nil {
+			s.logger.Warn("Could not deactivate plan", "name", plan.Name, "error", err)
 		} else {
 			deactivatedCount++
 			if verbose {
-				s.logger.Info("Deactivated pricing config", "name", cfg.Name)
+				s.logger.Info("Deactivated plan", "name", plan.Name)
 			}
 		}
 	}
 
 	if verbose {
-		s.logger.Info("Billing configs reset completed", "configs_deactivated", deactivatedCount)
+		s.logger.Info("Billing plans reset completed", "plans_deactivated", deactivatedCount)
 	}
 	return nil
 }
 
 func (s *Seeder) GetBillingStatistics(ctx context.Context) (*BillingStatistics, error) {
-	configs, err := s.pricingConfigRepo.GetActive(ctx)
+	plans, err := s.planRepo.GetActive(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get pricing configs: %w", err)
+		return nil, fmt.Errorf("failed to get plans: %w", err)
 	}
 
 	stats := &BillingStatistics{
-		TotalPricingConfigs: len(configs),
+		TotalPlans: len(plans),
 	}
 
-	for _, cfg := range configs {
-		if cfg.IsDefault {
-			stats.DefaultConfigName = cfg.Name
+	for _, plan := range plans {
+		if plan.IsDefault {
+			stats.DefaultConfigName = plan.Name
 			break
 		}
 	}
@@ -1241,10 +1241,10 @@ func (s *Seeder) SeedOrganizationBillings(ctx context.Context, opts *Options) er
 
 	s.logger.Info("Starting organization billing provisioning...")
 
-	// Get default pricing plan
-	defaultPlan, err := s.pricingConfigRepo.GetDefault(ctx)
+	// Get default plan
+	defaultPlan, err := s.planRepo.GetDefault(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to get default pricing plan: %w", err)
+		return fmt.Errorf("failed to get default plan: %w", err)
 	}
 
 	// Find organizations without billing records using raw SQL
@@ -1285,7 +1285,7 @@ func (s *Seeder) SeedOrganizationBillings(ctx context.Context, opts *Options) er
 		// Create billing record with default plan
 		billingRecord := &billing.OrganizationBilling{
 			OrganizationID:        orgID,
-			PricingConfigID:       defaultPlan.ID,
+			PlanID:                defaultPlan.ID,
 			BillingCycleStart:     now,
 			BillingCycleAnchorDay: 1,
 			FreeSpansRemaining:    defaultPlan.FreeSpans,

@@ -1,9 +1,9 @@
-# Billing Pricing Configurations
+# Billing Pricing Plans
 # Seeded like roles/permissions with runtime ULID generation
 
 version: "2026.01.05"
 
-pricing_configs:
+plans:
   # Free Plan - Default for new organizations
   - name: "Free"
     is_default: true

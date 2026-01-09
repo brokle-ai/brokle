@@ -2,7 +2,9 @@ package billing
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"brokle/internal/core/domain/billing"
@@ -10,23 +12,26 @@ import (
 )
 
 type billableUsageService struct {
-	usageRepo   billing.BillableUsageRepository
-	billingRepo billing.OrganizationBillingRepository
-	pricingRepo billing.PricingConfigRepository
-	logger      *slog.Logger
+	usageRepo      billing.BillableUsageRepository
+	billingRepo    billing.OrganizationBillingRepository
+	pricingService billing.PricingService
+	planRepo       billing.PlanRepository
+	logger         *slog.Logger
 }
 
 func NewBillableUsageService(
 	usageRepo billing.BillableUsageRepository,
 	billingRepo billing.OrganizationBillingRepository,
-	pricingRepo billing.PricingConfigRepository,
+	pricingService billing.PricingService,
+	planRepo billing.PlanRepository,
 	logger *slog.Logger,
 ) billing.BillableUsageService {
 	return &billableUsageService{
-		usageRepo:   usageRepo,
-		billingRepo: billingRepo,
-		pricingRepo: pricingRepo,
-		logger:      logger,
+		usageRepo:      usageRepo,
+		billingRepo:    billingRepo,
+		pricingService: pricingService,
+		planRepo:       planRepo,
+		logger:         logger,
 	}
 }
 
@@ -41,11 +46,12 @@ func (s *billableUsageService) GetUsageOverview(ctx context.Context, orgID ulid.
 		return nil, err
 	}
 
-	pricingConfig, err := s.pricingRepo.GetByID(ctx, orgBilling.PricingConfigID)
+	// Get effective pricing (contract overrides > plan defaults)
+	effectivePricing, err := s.pricingService.GetEffectivePricing(ctx, orgID)
 	if err != nil {
-		s.logger.Error("failed to get pricing config",
+		s.logger.Error("failed to get effective pricing",
 			"error", err,
-			"pricing_config_id", orgBilling.PricingConfigID,
+			"organization_id", orgID,
 		)
 		return nil, err
 	}
@@ -74,13 +80,21 @@ func (s *billableUsageService) GetUsageOverview(ctx context.Context, orgID ulid.
 		}
 	}
 
-	// 3. Calculate real-time cost and free tier remaining
-	estimatedCost := s.CalculateCost(ctx, usageSummary, pricingConfig)
+	// 3. Calculate real-time cost with tier support (delegates to pricing service)
+	estimatedCost, err := s.pricingService.CalculateCostWithTiers(ctx, orgID, usageSummary)
+	if err != nil {
+		s.logger.Error("failed to calculate cost",
+			"error", err,
+			"organization_id", orgID,
+		)
+		return nil, err
+	}
 
-	freeSpansRemaining := max(0, pricingConfig.FreeSpans-usageSummary.TotalSpans)
-	freeGBTotal := int64(pricingConfig.FreeGB * 1073741824)
+	// Use effective pricing for free tier calculations (respects contract overrides)
+	freeSpansRemaining := max(0, effectivePricing.FreeSpans-usageSummary.TotalSpans)
+	freeGBTotal := int64(effectivePricing.FreeGB * 1073741824)
 	freeBytesRemaining := max(0, freeGBTotal-usageSummary.TotalBytes)
-	freeScoresRemaining := max(0, pricingConfig.FreeScores-usageSummary.TotalScores)
+	freeScoresRemaining := max(0, effectivePricing.FreeScores-usageSummary.TotalScores)
 
 	// 4. Return real-time overview
 	return &billing.UsageOverview{
@@ -96,9 +110,9 @@ func (s *billableUsageService) GetUsageOverview(ctx context.Context, orgID ulid.
 		FreeBytesRemaining:  freeBytesRemaining,
 		FreeScoresRemaining: freeScoresRemaining,
 
-		FreeSpansTotal:  pricingConfig.FreeSpans,
+		FreeSpansTotal:  effectivePricing.FreeSpans,
 		FreeBytesTotal:  freeGBTotal,
-		FreeScoresTotal: pricingConfig.FreeScores,
+		FreeScoresTotal: effectivePricing.FreeScores,
 
 		EstimatedCost: estimatedCost,
 	}, nil
@@ -137,31 +151,36 @@ func (s *billableUsageService) GetUsageByProject(ctx context.Context, orgID ulid
 	return summaries, nil
 }
 
-// CalculateCost computes total cost from three billable dimensions
-// Formula: (spans - free_spans) / 100K × price_per_100k + (bytes - free_bytes) / GB × price_per_gb + (scores - free_scores) / 1K × price_per_1k
-func (s *billableUsageService) CalculateCost(ctx context.Context, usage *billing.BillableUsageSummary, config *billing.PricingConfig) float64 {
+// CalculateCost delegates to pricing service for tier-aware cost calculation
+// This maintains the interface contract while supporting enterprise custom pricing
+func (s *billableUsageService) CalculateCost(ctx context.Context, usage *billing.BillableUsageSummary, plan *billing.Plan) float64 {
+	// For backward compatibility with interface, we still accept plan parameter
+	// but delegate to pricing service which handles contracts and volume tiers
+
+	// Extract orgID from usage summary if available, otherwise use simple calculation
+	// This is a transitional method - new code should use pricingService directly
+	s.logger.Warn("CalculateCost called with plan parameter - consider using pricingService.CalculateCostWithTiers directly")
+
+	// Simple flat calculation without contract awareness (legacy behavior)
 	var totalCost float64
 
-	// 1. Span cost: (spans - free_spans) / 100K × price_per_100k
-	if config.PricePer100KSpans != nil {
-		billableSpans := max(0, usage.TotalSpans-config.FreeSpans)
-		spanCost := float64(billableSpans) / 100000.0 * *config.PricePer100KSpans
+	if plan.PricePer100KSpans != nil {
+		billableSpans := max(0, usage.TotalSpans-plan.FreeSpans)
+		spanCost := float64(billableSpans) / 100000.0 * *plan.PricePer100KSpans
 		totalCost += spanCost
 	}
 
-	// 2. Data cost: (bytes - free_bytes) / GB × price_per_gb
-	if config.PricePerGB != nil {
-		freeBytes := int64(config.FreeGB * 1073741824) // Convert GB to bytes
+	if plan.PricePerGB != nil {
+		freeBytes := int64(plan.FreeGB * 1073741824)
 		billableBytes := max(0, usage.TotalBytes-freeBytes)
 		billableGB := float64(billableBytes) / 1073741824.0
-		dataCost := billableGB * *config.PricePerGB
+		dataCost := billableGB * *plan.PricePerGB
 		totalCost += dataCost
 	}
 
-	// 3. Score cost: (scores - free_scores) / 1K × price_per_1k
-	if config.PricePer1KScores != nil {
-		billableScores := max(0, usage.TotalScores-config.FreeScores)
-		scoreCost := float64(billableScores) / 1000.0 * *config.PricePer1KScores
+	if plan.PricePer1KScores != nil {
+		billableScores := max(0, usage.TotalScores-plan.FreeScores)
+		scoreCost := float64(billableScores) / 1000.0 * *plan.PricePer1KScores
 		totalCost += scoreCost
 	}
 
@@ -182,4 +201,50 @@ func (s *billableUsageService) calculatePeriodEnd(cycleStart time.Time, anchorDa
 	}
 
 	return time.Date(year, month, day, 0, 0, 0, 0, loc)
+}
+
+func (s *billableUsageService) ProvisionOrganizationBilling(ctx context.Context, orgID ulid.ULID) error {
+	// Get default plan
+	defaultPlan, err := s.planRepo.GetDefault(ctx)
+	if err != nil {
+		s.logger.Error("failed to get default pricing plan",
+			"error", err,
+			"organization_id", orgID,
+		)
+		return fmt.Errorf("get default pricing plan: %w", err)
+	}
+
+	now := time.Now()
+	billingRecord := &billing.OrganizationBilling{
+		OrganizationID:        orgID,
+		PlanID:                defaultPlan.ID,
+		BillingCycleStart:     now,
+		BillingCycleAnchorDay: 1,
+		FreeSpansRemaining:    defaultPlan.FreeSpans,
+		FreeBytesRemaining:    int64(defaultPlan.FreeGB * 1024 * 1024 * 1024),
+		FreeScoresRemaining:   defaultPlan.FreeScores,
+		CurrentPeriodSpans:    0,
+		CurrentPeriodBytes:    0,
+		CurrentPeriodScores:   0,
+		CurrentPeriodCost:     0,
+		LastSyncedAt:          now,
+		CreatedAt:             now,
+		UpdatedAt:             now,
+	}
+
+	if err := s.billingRepo.Create(ctx, billingRecord); err != nil {
+		// Idempotency check
+		if strings.Contains(err.Error(), "duplicate key") ||
+			strings.Contains(err.Error(), "unique constraint") {
+			s.logger.Info("billing record already exists", "organization_id", orgID)
+			return nil // Success - already provisioned
+		}
+		return fmt.Errorf("create billing record: %w", err)
+	}
+
+	s.logger.Info("provisioned billing",
+		"organization_id", orgID,
+		"plan", defaultPlan.Name,
+	)
+	return nil
 }

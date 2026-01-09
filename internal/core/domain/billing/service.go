@@ -87,7 +87,12 @@ type BillableUsageService interface {
 	GetUsageByProject(ctx context.Context, orgID ulid.ULID, start, end time.Time) ([]*BillableUsageSummary, error)
 
 	// Calculate cost for usage
-	CalculateCost(ctx context.Context, usage *BillableUsageSummary, config *PricingConfig) float64
+	CalculateCost(ctx context.Context, usage *BillableUsageSummary, plan *Plan) float64
+
+	// ProvisionOrganizationBilling creates initial billing record for new organization
+	// Creates billing record with default plan and free tier counters
+	// Safe to call within a transaction - uses provided context
+	ProvisionOrganizationBilling(ctx context.Context, orgID ulid.ULID) error
 }
 
 // BudgetService handles budget CRUD and monitoring
@@ -103,4 +108,50 @@ type BudgetService interface {
 	CheckBudgets(ctx context.Context, orgID ulid.ULID) ([]*UsageAlert, error)
 	GetAlerts(ctx context.Context, orgID ulid.ULID, limit int) ([]*UsageAlert, error)
 	AcknowledgeAlert(ctx context.Context, orgID, alertID ulid.ULID) error
+}
+
+// ============================================================================
+// Enterprise Custom Pricing Services
+// ============================================================================
+
+// PricingService resolves effective pricing (contract overrides plan)
+type PricingService interface {
+	// Get effective pricing for an organization (contract overrides > plan defaults)
+	GetEffectivePricing(ctx context.Context, orgID ulid.ULID) (*EffectivePricing, error)
+
+	// Calculate cost with tier support
+	CalculateCostWithTiers(ctx context.Context, orgID ulid.ULID, usage *BillableUsageSummary) (float64, error)
+
+	// Calculate cost with tiers but without free tier deductions
+	// Used for project-level budgets where free tier is org-level only
+	CalculateCostWithTiersNoFreeTier(ctx context.Context, orgID ulid.ULID, usage *BillableUsageSummary) (float64, error)
+
+	// Calculate cost for a single dimension with tier support (exported for worker usage)
+	// Uses absolute position mapping with free tier offset for correct tier calculations
+	CalculateDimensionWithTiers(usage, freeTier int64, dimension TierDimension, allTiers []*VolumeDiscountTier, pricing *EffectivePricing) float64
+}
+
+// ContractService handles enterprise contract lifecycle
+type ContractService interface {
+	// CRUD
+	CreateContract(ctx context.Context, contract *Contract) error
+	GetContract(ctx context.Context, contractID ulid.ULID) (*Contract, error)
+	GetContractsByOrg(ctx context.Context, orgID ulid.ULID) ([]*Contract, error)
+	GetActiveContract(ctx context.Context, orgID ulid.ULID) (*Contract, error)
+	UpdateContract(ctx context.Context, contract *Contract) error
+
+	// Lifecycle management
+	ActivateContract(ctx context.Context, contractID ulid.ULID, userID ulid.ULID) error
+	CancelContract(ctx context.Context, contractID ulid.ULID, reason string, userID ulid.ULID) error
+	ExpireContract(ctx context.Context, contractID ulid.ULID) error
+
+	// Volume tiers
+	AddVolumeTiers(ctx context.Context, contractID ulid.ULID, tiers []*VolumeDiscountTier) error
+	UpdateVolumeTiers(ctx context.Context, contractID ulid.ULID, tiers []*VolumeDiscountTier) error
+
+	// Audit trail
+	GetContractHistory(ctx context.Context, contractID ulid.ULID) ([]*ContractHistory, error)
+
+	// Worker support
+	GetExpiringContracts(ctx context.Context, days int) ([]*Contract, error)
 }

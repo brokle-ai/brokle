@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/lib/pq"
+	"gorm.io/datatypes"
 
 	"brokle/pkg/ulid"
 )
@@ -286,7 +287,7 @@ type BillableUsageSummary struct {
 	TotalAIProviderCost float64 `json:"total_ai_provider_cost"`
 }
 
-type PricingConfig struct {
+type Plan struct {
 	ID        ulid.ULID `json:"id" gorm:"column:id;primaryKey"`
 	Name      string    `json:"name" gorm:"column:name"` // free, pro, enterprise
 	IsActive  bool      `json:"is_active" gorm:"column:is_active"`
@@ -307,9 +308,13 @@ type PricingConfig struct {
 	PricePer1KScores *float64 `json:"price_per_1k_scores,omitempty" gorm:"column:price_per_1k_scores"` // nil = unlimited in free tier
 }
 
+func (Plan) TableName() string {
+	return "plans"
+}
+
 type OrganizationBilling struct {
 	OrganizationID        ulid.ULID `json:"organization_id" db:"organization_id" gorm:"type:char(26);primaryKey"`
-	PricingConfigID       ulid.ULID `json:"pricing_config_id" db:"pricing_config_id"`
+	PlanID                ulid.ULID `json:"plan_id" db:"plan_id"`
 	BillingCycleStart     time.Time `json:"billing_cycle_start" db:"billing_cycle_start"`
 	BillingCycleAnchorDay int       `json:"billing_cycle_anchor_day" db:"billing_cycle_anchor_day"` // Day of month (1-28)
 
@@ -408,4 +413,125 @@ type UsageAlert struct {
 	AcknowledgedAt   *time.Time  `json:"acknowledged_at,omitempty" db:"acknowledged_at"`
 	ResolvedAt       *time.Time  `json:"resolved_at,omitempty" db:"resolved_at"`
 	NotificationSent bool        `json:"notification_sent" db:"notification_sent"`
+}
+
+// Enterprise Contracts & Custom Pricing
+
+type ContractStatus string
+
+const (
+	ContractStatusDraft     ContractStatus = "draft"
+	ContractStatusActive    ContractStatus = "active"
+	ContractStatusExpired   ContractStatus = "expired"
+	ContractStatusCancelled ContractStatus = "cancelled"
+)
+
+type Contract struct {
+	ID             ulid.ULID      `json:"id" gorm:"column:id;primaryKey"`
+	OrganizationID ulid.ULID      `json:"organization_id" gorm:"column:organization_id;type:char(26)"`
+	ContractName   string         `json:"contract_name" gorm:"column:contract_name"`
+	ContractNumber string         `json:"contract_number" gorm:"column:contract_number;uniqueIndex"`
+
+	// Timestamps (full precision, no normalization)
+	// Access rule: contract is active when now < EndDate
+	StartDate time.Time  `json:"start_date" gorm:"column:start_date"`   // Contract start timestamp (e.g., 2026-01-08T10:15:00Z)
+	EndDate   *time.Time `json:"end_date,omitempty" gorm:"column:end_date"` // Contract expiry timestamp (null = no expiration)
+
+	// Financial terms
+	MinimumCommitAmount *float64 `json:"minimum_commit_amount,omitempty" gorm:"column:minimum_commit_amount"`
+	Currency            string   `json:"currency" gorm:"column:currency;default:USD"`
+
+	// Account management
+	AccountOwner  string `json:"account_owner,omitempty" gorm:"column:account_owner"`
+	SalesRepEmail string `json:"sales_rep_email,omitempty" gorm:"column:sales_rep_email"`
+
+	// Status
+	Status ContractStatus `json:"status" gorm:"column:status;default:active"`
+
+	// Custom pricing overrides (NULL = use plan default)
+	CustomFreeSpans          *int64   `json:"custom_free_spans,omitempty" gorm:"column:custom_free_spans"`
+	CustomPricePer100KSpans  *float64 `json:"custom_price_per_100k_spans,omitempty" gorm:"column:custom_price_per_100k_spans"`
+	CustomFreeGB             *float64 `json:"custom_free_gb,omitempty" gorm:"column:custom_free_gb"`
+	CustomPricePerGB         *float64 `json:"custom_price_per_gb,omitempty" gorm:"column:custom_price_per_gb"`
+	CustomFreeScores         *int64   `json:"custom_free_scores,omitempty" gorm:"column:custom_free_scores"`
+	CustomPricePer1KScores   *float64 `json:"custom_price_per_1k_scores,omitempty" gorm:"column:custom_price_per_1k_scores"`
+
+	// Audit
+	CreatedBy string    `json:"created_by,omitempty" gorm:"column:created_by"`
+	CreatedAt time.Time `json:"created_at" gorm:"column:created_at"`
+	UpdatedAt time.Time `json:"updated_at" gorm:"column:updated_at"`
+	Notes     string    `json:"notes,omitempty" gorm:"column:notes;type:text"`
+
+	// Relations
+	VolumeTiers []VolumeDiscountTier `json:"volume_tiers,omitempty" gorm:"foreignKey:ContractID"`
+}
+
+func (Contract) TableName() string {
+	return "contracts"
+}
+
+type TierDimension string
+
+const (
+	TierDimensionSpans  TierDimension = "spans"
+	TierDimensionBytes  TierDimension = "bytes"
+	TierDimensionScores TierDimension = "scores"
+)
+
+type VolumeDiscountTier struct {
+	ID           ulid.ULID     `json:"id" gorm:"column:id;primaryKey"`
+	ContractID   ulid.ULID     `json:"contract_id" gorm:"column:contract_id;type:char(26)"`
+	Dimension    TierDimension `json:"dimension" gorm:"column:dimension"`
+	TierMin      int64         `json:"tier_min" gorm:"column:tier_min;default:0"`
+	TierMax      *int64        `json:"tier_max,omitempty" gorm:"column:tier_max"` // NULL = unlimited
+	PricePerUnit float64       `json:"price_per_unit" gorm:"column:price_per_unit"`
+	Priority     int           `json:"priority" gorm:"column:priority;default:0"`
+	CreatedAt    time.Time     `json:"created_at" gorm:"column:created_at"`
+}
+
+func (VolumeDiscountTier) TableName() string {
+	return "volume_discount_tiers"
+}
+
+type ContractAction string
+
+const (
+	ContractActionCreated        ContractAction = "created"
+	ContractActionUpdated        ContractAction = "updated"
+	ContractActionCancelled      ContractAction = "cancelled"
+	ContractActionExpired        ContractAction = "expired"
+	ContractActionPricingChanged ContractAction = "pricing_changed"
+)
+
+type ContractHistory struct {
+	ID             ulid.ULID      `json:"id" gorm:"column:id;primaryKey"`
+	ContractID     ulid.ULID      `json:"contract_id" gorm:"column:contract_id;type:char(26)"`
+	Action         ContractAction `json:"action" gorm:"column:action"`
+	ChangedBy      string         `json:"changed_by,omitempty" gorm:"column:changed_by"`
+	ChangedByEmail string         `json:"changed_by_email,omitempty" gorm:"column:changed_by_email"`
+	ChangedAt      time.Time      `json:"changed_at" gorm:"column:changed_at"`
+	Changes        datatypes.JSON `json:"changes" gorm:"column:changes;type:jsonb"`
+	Reason         string         `json:"reason,omitempty" gorm:"column:reason;type:text"`
+}
+
+func (ContractHistory) TableName() string {
+	return "contract_history"
+}
+
+// EffectivePricing represents resolved pricing (contract overrides plan)
+type EffectivePricing struct {
+	OrganizationID ulid.ULID `json:"organization_id"`
+	BasePlan       *Plan     `json:"base_plan"`
+	Contract       *Contract `json:"contract,omitempty"`
+
+	// Resolved pricing (after contract overrides)
+	FreeSpans         int64   `json:"free_spans"`
+	PricePer100KSpans float64 `json:"price_per_100k_spans"`
+	FreeGB            float64 `json:"free_gb"`
+	PricePerGB        float64 `json:"price_per_gb"`
+	FreeScores        int64   `json:"free_scores"`
+	PricePer1KScores  float64 `json:"price_per_1k_scores"`
+
+	HasVolumeTiers bool                    `json:"has_volume_tiers"`
+	VolumeTiers    []*VolumeDiscountTier   `json:"volume_tiers,omitempty"`
 }

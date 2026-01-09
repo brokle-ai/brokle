@@ -17,13 +17,13 @@ import (
 // organizationService implements the orgDomain.OrganizationService interface
 type organizationService struct {
 	orgRepo           orgDomain.OrganizationRepository
-	userRepo          userDomain.Repository
-	memberSvc         orgDomain.MemberService
-	projectSvc        orgDomain.ProjectService
-	roleService       authDomain.RoleService
-	billingRepo       billingDomain.OrganizationBillingRepository
-	pricingConfigRepo billingDomain.PricingConfigRepository
-	logger            *slog.Logger
+	userRepo    userDomain.Repository
+	memberSvc   orgDomain.MemberService
+	projectSvc  orgDomain.ProjectService
+	roleService authDomain.RoleService
+	billingRepo billingDomain.OrganizationBillingRepository
+	planRepo    billingDomain.PlanRepository
+	logger      *slog.Logger
 }
 
 func NewOrganizationService(
@@ -33,18 +33,18 @@ func NewOrganizationService(
 	projectSvc orgDomain.ProjectService,
 	roleService authDomain.RoleService,
 	billingRepo billingDomain.OrganizationBillingRepository,
-	pricingConfigRepo billingDomain.PricingConfigRepository,
+	planRepo billingDomain.PlanRepository,
 	logger *slog.Logger,
 ) orgDomain.OrganizationService {
 	return &organizationService{
-		orgRepo:           orgRepo,
-		userRepo:          userRepo,
-		memberSvc:         memberSvc,
-		projectSvc:        projectSvc,
-		roleService:       roleService,
-		billingRepo:       billingRepo,
-		pricingConfigRepo: pricingConfigRepo,
-		logger:            logger,
+		orgRepo:     orgRepo,
+		userRepo:    userRepo,
+		memberSvc:   memberSvc,
+		projectSvc:  projectSvc,
+		roleService: roleService,
+		billingRepo: billingRepo,
+		planRepo:    planRepo,
+		logger:      logger,
 	}
 }
 
@@ -98,15 +98,15 @@ func (s *organizationService) CreateOrganization(ctx context.Context, userID uli
 // provisionBilling creates a billing record for a new organization with the default pricing plan
 func (s *organizationService) provisionBilling(ctx context.Context, orgID ulid.ULID) error {
 	// Look up the default pricing plan (dynamically, not hardcoded)
-	defaultPlan, err := s.pricingConfigRepo.GetDefault(ctx)
+	defaultPlan, err := s.planRepo.GetDefault(ctx)
 	if err != nil {
 		return fmt.Errorf("get default pricing plan: %w", err)
 	}
 
 	now := time.Now()
 	billingRecord := &billingDomain.OrganizationBilling{
-		OrganizationID:        orgID,
-		PricingConfigID:       defaultPlan.ID,
+		OrganizationID: orgID,
+		PlanID:         defaultPlan.ID,
 		BillingCycleStart:     now,
 		BillingCycleAnchorDay: 1,
 		// Free tier remaining (from default plan)

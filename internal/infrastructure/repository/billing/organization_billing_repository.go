@@ -9,6 +9,7 @@ import (
 	"gorm.io/gorm"
 
 	"brokle/internal/core/domain/billing"
+	"brokle/internal/infrastructure/shared"
 	"brokle/pkg/ulid"
 )
 
@@ -20,9 +21,14 @@ func NewOrganizationBillingRepository(db *gorm.DB) billing.OrganizationBillingRe
 	return &organizationBillingRepository{db: db}
 }
 
+// getDB extracts transaction from context if available
+func (r *organizationBillingRepository) getDB(ctx context.Context) *gorm.DB {
+	return shared.GetDB(ctx, r.db)
+}
+
 func (r *organizationBillingRepository) GetByOrgID(ctx context.Context, orgID ulid.ULID) (*billing.OrganizationBilling, error) {
 	var orgBilling billing.OrganizationBilling
-	err := r.db.WithContext(ctx).Where("organization_id = ?", orgID).First(&orgBilling).Error
+	err := r.getDB(ctx).WithContext(ctx).Where("organization_id = ?", orgID).First(&orgBilling).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("organization billing not found: %s", orgID)
@@ -33,16 +39,16 @@ func (r *organizationBillingRepository) GetByOrgID(ctx context.Context, orgID ul
 }
 
 func (r *organizationBillingRepository) Create(ctx context.Context, orgBilling *billing.OrganizationBilling) error {
-	return r.db.WithContext(ctx).Create(orgBilling).Error
+	return r.getDB(ctx).WithContext(ctx).Create(orgBilling).Error
 }
 
 func (r *organizationBillingRepository) Update(ctx context.Context, orgBilling *billing.OrganizationBilling) error {
 	orgBilling.UpdatedAt = time.Now()
-	return r.db.WithContext(ctx).Save(orgBilling).Error
+	return r.getDB(ctx).WithContext(ctx).Save(orgBilling).Error
 }
 
 func (r *organizationBillingRepository) UpdateUsage(ctx context.Context, orgID ulid.ULID, spans, bytes, scores int64, cost float64) error {
-	return r.db.WithContext(ctx).
+	return r.getDB(ctx).WithContext(ctx).
 		Model(&billing.OrganizationBilling{}).
 		Where("organization_id = ?", orgID).
 		Updates(map[string]interface{}{
@@ -56,7 +62,7 @@ func (r *organizationBillingRepository) UpdateUsage(ctx context.Context, orgID u
 }
 
 func (r *organizationBillingRepository) ResetPeriod(ctx context.Context, orgID ulid.ULID, newCycleStart time.Time) error {
-	return r.db.WithContext(ctx).
+	return r.getDB(ctx).WithContext(ctx).
 		Model(&billing.OrganizationBilling{}).
 		Where("organization_id = ?", orgID).
 		Updates(map[string]interface{}{
@@ -65,9 +71,9 @@ func (r *organizationBillingRepository) ResetPeriod(ctx context.Context, orgID u
 			"current_period_bytes":   0,
 			"current_period_scores":  0,
 			"current_period_cost":    0,
-			"free_spans_remaining":   gorm.Expr("(SELECT free_spans FROM pricing_config WHERE id = organization_billing.pricing_config_id)"),
-			"free_bytes_remaining":   gorm.Expr("(SELECT CAST(free_gb * 1073741824 AS BIGINT) FROM pricing_config WHERE id = organization_billing.pricing_config_id)"),
-			"free_scores_remaining":  gorm.Expr("(SELECT free_scores FROM pricing_config WHERE id = organization_billing.pricing_config_id)"),
+			"free_spans_remaining":   gorm.Expr("(SELECT free_spans FROM plans WHERE id = organization_billing.plan_id)"),
+			"free_bytes_remaining":   gorm.Expr("(SELECT CAST(free_gb * 1073741824 AS BIGINT) FROM plans WHERE id = organization_billing.plan_id)"),
+			"free_scores_remaining":  gorm.Expr("(SELECT free_scores FROM plans WHERE id = organization_billing.plan_id)"),
 			"last_synced_at":         time.Now(),
 			"updated_at":             time.Now(),
 		}).Error

@@ -75,8 +75,9 @@ type Handlers struct {
 	DashboardTemplate *dashboard.TemplateHandler
 	Overview          *overview.Handler
 	// Usage-based billing handlers (Spans + GB + Scores)
-	Usage  *billing.UsageHandler
-	Budget *billing.BudgetHandler
+	Usage    *billing.UsageHandler
+	Budget   *billing.BudgetHandler
+	Contract *billing.ContractHandler
 }
 
 func NewHandlers(
@@ -118,6 +119,9 @@ func NewHandlers(
 	// Usage-based billing services
 	usageService billingDomain.BillableUsageService,
 	budgetService billingDomain.BudgetService,
+	// Enterprise custom pricing services
+	contractService billingDomain.ContractService,
+	pricingService billingDomain.PricingService,
 ) *Handlers {
 	return &Handlers{
 		Health:        health.NewHandler(cfg, logger),
@@ -154,7 +158,8 @@ func NewHandlers(
 		DashboardTemplate: dashboard.NewTemplateHandler(cfg, logger, templateService),
 		Overview:          overview.NewHandler(cfg, logger, overviewService),
 		// Usage-based billing handlers
-		Usage:  billing.NewUsageHandler(cfg, logger, usageService),
-		Budget: billing.NewBudgetHandler(cfg, logger, budgetService),
+		Usage:    billing.NewUsageHandler(cfg, logger, usageService),
+		Budget:   billing.NewBudgetHandler(cfg, logger, budgetService),
+		Contract: billing.NewContractHandler(cfg, logger, contractService, pricingService),
 	}
 }

@@ -168,6 +168,12 @@ func (a *App) Start() error {
 			a.providers.Workers.UsageAggregationWorker.Start()
 			a.logger.Info("Usage aggregation worker started")
 		}
+
+		// Start contract expiration worker (daily job to expire contracts past end_date)
+		if a.providers.Workers.ContractExpirationWorker != nil {
+			a.providers.Workers.ContractExpirationWorker.Start()
+			a.logger.Info("Contract expiration worker started")
+		}
 	}
 
 	return nil
@@ -227,6 +233,9 @@ func (a *App) doShutdown(ctx context.Context) error {
 				}
 				if a.providers.Workers.UsageAggregationWorker != nil {
 					a.providers.Workers.UsageAggregationWorker.Stop()
+				}
+				if a.providers.Workers.ContractExpirationWorker != nil {
+					a.providers.Workers.ContractExpirationWorker.Stop()
 				}
 			}
 		}()

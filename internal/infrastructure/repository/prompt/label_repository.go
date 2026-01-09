@@ -10,6 +10,7 @@ import (
 
 	promptDomain "brokle/internal/core/domain/prompt"
 	"brokle/pkg/ulid"
+	"brokle/internal/infrastructure/shared"
 )
 
 // labelRepository implements promptDomain.LabelRepository using GORM
@@ -24,15 +25,20 @@ func NewLabelRepository(db *gorm.DB) promptDomain.LabelRepository {
 	}
 }
 
+// getDB returns transaction-aware DB instance
+func (r *labelRepository) getDB(ctx context.Context) *gorm.DB {
+	return shared.GetDB(ctx, r.db)
+}
+
 // Create creates a new label
 func (r *labelRepository) Create(ctx context.Context, label *promptDomain.Label) error {
-	return r.db.WithContext(ctx).Create(label).Error
+	return r.getDB(ctx).WithContext(ctx).Create(label).Error
 }
 
 // GetByID retrieves a label by ID
 func (r *labelRepository) GetByID(ctx context.Context, id ulid.ULID) (*promptDomain.Label, error) {
 	var label promptDomain.Label
-	err := r.db.WithContext(ctx).
+	err := r.getDB(ctx).WithContext(ctx).
 		Where("id = ?", id).
 		First(&label).Error
 	if err != nil {
@@ -47,18 +53,18 @@ func (r *labelRepository) GetByID(ctx context.Context, id ulid.ULID) (*promptDom
 // Update updates a label
 func (r *labelRepository) Update(ctx context.Context, label *promptDomain.Label) error {
 	label.UpdatedAt = time.Now()
-	return r.db.WithContext(ctx).Save(label).Error
+	return r.getDB(ctx).WithContext(ctx).Save(label).Error
 }
 
 // Delete deletes a label
 func (r *labelRepository) Delete(ctx context.Context, id ulid.ULID) error {
-	return r.db.WithContext(ctx).Where("id = ?", id).Delete(&promptDomain.Label{}).Error
+	return r.getDB(ctx).WithContext(ctx).Where("id = ?", id).Delete(&promptDomain.Label{}).Error
 }
 
 // GetByPromptAndName retrieves a label by prompt and name
 func (r *labelRepository) GetByPromptAndName(ctx context.Context, promptID ulid.ULID, name string) (*promptDomain.Label, error) {
 	var label promptDomain.Label
-	err := r.db.WithContext(ctx).
+	err := r.getDB(ctx).WithContext(ctx).
 		Where("prompt_id = ? AND name = ?", promptID, name).
 		First(&label).Error
 	if err != nil {
@@ -73,7 +79,7 @@ func (r *labelRepository) GetByPromptAndName(ctx context.Context, promptID ulid.
 // ListByPrompt retrieves all labels for a prompt
 func (r *labelRepository) ListByPrompt(ctx context.Context, promptID ulid.ULID) ([]*promptDomain.Label, error) {
 	var labels []*promptDomain.Label
-	err := r.db.WithContext(ctx).
+	err := r.getDB(ctx).WithContext(ctx).
 		Where("prompt_id = ?", promptID).
 		Order("name ASC").
 		Find(&labels).Error
@@ -88,7 +94,7 @@ func (r *labelRepository) ListByPrompts(ctx context.Context, promptIDs []ulid.UL
 	}
 
 	var labels []*promptDomain.Label
-	err := r.db.WithContext(ctx).
+	err := r.getDB(ctx).WithContext(ctx).
 		Where("prompt_id IN ?", promptIDs).
 		Order("prompt_id ASC, name ASC").
 		Find(&labels).Error
@@ -99,7 +105,7 @@ func (r *labelRepository) ListByPrompts(ctx context.Context, promptIDs []ulid.UL
 // ListByVersion retrieves all labels pointing to a version
 func (r *labelRepository) ListByVersion(ctx context.Context, versionID ulid.ULID) ([]*promptDomain.Label, error) {
 	var labels []*promptDomain.Label
-	err := r.db.WithContext(ctx).
+	err := r.getDB(ctx).WithContext(ctx).
 		Where("version_id = ?", versionID).
 		Order("name ASC").
 		Find(&labels).Error
@@ -114,7 +120,7 @@ func (r *labelRepository) ListByVersions(ctx context.Context, versionIDs []ulid.
 	}
 
 	var labels []*promptDomain.Label
-	err := r.db.WithContext(ctx).
+	err := r.getDB(ctx).WithContext(ctx).
 		Where("version_id IN ?", versionIDs).
 		Order("version_id ASC, name ASC").
 		Find(&labels).Error
@@ -127,14 +133,14 @@ func (r *labelRepository) SetLabel(ctx context.Context, promptID, versionID ulid
 	now := time.Now()
 
 	var existing promptDomain.Label
-	err := r.db.WithContext(ctx).
+	err := r.getDB(ctx).WithContext(ctx).
 		Where("prompt_id = ? AND name = ?", promptID, name).
 		First(&existing).Error
 
 	if err == nil {
 		existing.VersionID = versionID
 		existing.UpdatedAt = now
-		return r.db.WithContext(ctx).Save(&existing).Error
+		return r.getDB(ctx).WithContext(ctx).Save(&existing).Error
 	}
 
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
@@ -150,12 +156,12 @@ func (r *labelRepository) SetLabel(ctx context.Context, promptID, versionID ulid
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
-	return r.db.WithContext(ctx).Create(label).Error
+	return r.getDB(ctx).WithContext(ctx).Create(label).Error
 }
 
 // RemoveLabel removes a label from a prompt
 func (r *labelRepository) RemoveLabel(ctx context.Context, promptID ulid.ULID, name string) error {
-	result := r.db.WithContext(ctx).
+	result := r.getDB(ctx).WithContext(ctx).
 		Where("prompt_id = ? AND name = ?", promptID, name).
 		Delete(&promptDomain.Label{})
 	if result.Error != nil {
@@ -169,7 +175,7 @@ func (r *labelRepository) RemoveLabel(ctx context.Context, promptID ulid.ULID, n
 
 // DeleteByPrompt deletes all labels for a prompt
 func (r *labelRepository) DeleteByPrompt(ctx context.Context, promptID ulid.ULID) error {
-	return r.db.WithContext(ctx).
+	return r.getDB(ctx).WithContext(ctx).
 		Where("prompt_id = ?", promptID).
 		Delete(&promptDomain.Label{}).Error
 }

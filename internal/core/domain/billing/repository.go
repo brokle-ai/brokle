@@ -63,14 +63,14 @@ type BillableUsageRepository interface {
 	GetUsageByProject(ctx context.Context, orgID ulid.ULID, start, end time.Time) ([]*BillableUsageSummary, error)
 }
 
-// PricingConfigRepository handles pricing configuration (PostgreSQL)
-type PricingConfigRepository interface {
-	GetByID(ctx context.Context, id ulid.ULID) (*PricingConfig, error)
-	GetByName(ctx context.Context, name string) (*PricingConfig, error)
-	GetDefault(ctx context.Context) (*PricingConfig, error)
-	GetActive(ctx context.Context) ([]*PricingConfig, error)
-	Create(ctx context.Context, config *PricingConfig) error
-	Update(ctx context.Context, config *PricingConfig) error
+// PlanRepository handles pricing plans (PostgreSQL)
+type PlanRepository interface {
+	GetByID(ctx context.Context, id ulid.ULID) (*Plan, error)
+	GetByName(ctx context.Context, name string) (*Plan, error)
+	GetDefault(ctx context.Context) (*Plan, error)
+	GetActive(ctx context.Context) ([]*Plan, error)
+	Create(ctx context.Context, plan *Plan) error
+	Update(ctx context.Context, plan *Plan) error
 }
 
 // OrganizationBillingRepository handles org billing state (PostgreSQL)
@@ -104,4 +104,59 @@ type UsageAlertRepository interface {
 	Acknowledge(ctx context.Context, id ulid.ULID) error
 	Resolve(ctx context.Context, id ulid.ULID) error
 	MarkNotificationSent(ctx context.Context, id ulid.ULID) error
+}
+
+// ============================================================================
+// Enterprise Custom Pricing Repositories
+// ============================================================================
+
+// ContractRepository handles enterprise contract CRUD (PostgreSQL)
+//
+// Error Return Patterns:
+//   - Required Records (GetByID): Returns (nil, error) if not found
+//   - Optional Records (GetActiveByOrgID): Returns (nil, nil) if not found
+//   - Collections (GetByOrgID): Returns ([], nil) if empty
+type ContractRepository interface {
+	Create(ctx context.Context, contract *Contract) error
+
+	// GetByID retrieves a contract by its primary key.
+	// Returns (nil, error) if contract does not exist (required record).
+	GetByID(ctx context.Context, id ulid.ULID) (*Contract, error)
+
+	// GetActiveByOrgID retrieves the active contract for an organization.
+	// Returns (nil, nil) if no active contract exists (optional record).
+	// Returns (nil, error) for database errors only.
+	GetActiveByOrgID(ctx context.Context, orgID ulid.ULID) (*Contract, error)
+
+	// GetByOrgID retrieves all contracts for an organization.
+	// Returns ([], nil) if organization has no contracts (empty collection is valid).
+	GetByOrgID(ctx context.Context, orgID ulid.ULID) ([]*Contract, error)
+
+	Update(ctx context.Context, contract *Contract) error
+	Expire(ctx context.Context, contractID ulid.ULID) error
+	Cancel(ctx context.Context, contractID ulid.ULID) error
+
+	// GetExpiring retrieves contracts expiring on or before the target time.
+	// Uses timestamp-based comparison (not date-only).
+	// The days parameter specifies how many days from now:
+	//   - days = 0: contracts with expires_at <= now (expired already)
+	//   - days = 1: contracts with expires_at <= now + 24 hours
+	//   - days = -1: contracts with expires_at <= now - 24 hours
+	// Example: Worker runs Jan 9 00:00, finds contract expiring Jan 8 10:15 (14 hours ago).
+	// Returns ([], nil) if no contracts are expiring (collection).
+	GetExpiring(ctx context.Context, days int) ([]*Contract, error)
+}
+
+// VolumeDiscountTierRepository handles volume pricing tiers (PostgreSQL)
+type VolumeDiscountTierRepository interface {
+	Create(ctx context.Context, tier *VolumeDiscountTier) error
+	CreateBatch(ctx context.Context, tiers []*VolumeDiscountTier) error
+	GetByContractID(ctx context.Context, contractID ulid.ULID) ([]*VolumeDiscountTier, error)
+	DeleteByContractID(ctx context.Context, contractID ulid.ULID) error
+}
+
+// ContractHistoryRepository handles contract audit trail (PostgreSQL)
+type ContractHistoryRepository interface {
+	Log(ctx context.Context, history *ContractHistory) error
+	GetByContractID(ctx context.Context, contractID ulid.ULID) ([]*ContractHistory, error)
 }

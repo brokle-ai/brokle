@@ -2,51 +2,29 @@ package common
 
 import (
 	"context"
-
-	authDomain "brokle/internal/core/domain/auth"
-	orgDomain "brokle/internal/core/domain/organization"
-	promptDomain "brokle/internal/core/domain/prompt"
-	userDomain "brokle/internal/core/domain/user"
 )
 
-// TransactionManager coordinates transactions across multiple repositories.
-// This interface maintains dependency inversion - defined in core, implemented in infrastructure.
+// Transactor provides transaction management without exposing database details.
+// This is the idiomatic Go approach recommended by experts (Three Dots Labs, community consensus).
 //
 // Usage:
 //
-//	err := txManager.WithTransaction(ctx, func(ctx context.Context, factory RepositoryFactory) error {
-//	    userRepo := factory.UserRepository()
-//	    orgRepo := factory.OrganizationRepository()
-//	    // All operations share the same database transaction
-//	    return nil
+//	err := transactor.WithinTransaction(ctx, func(ctx context.Context) error {
+//	    // All repository calls within this function automatically use the transaction
+//	    if err := repo.Create(ctx, entity); err != nil {
+//	        return err // Automatic rollback
+//	    }
+//	    return repo.Update(ctx, other) // Automatic commit on success
 //	})
-type TransactionManager interface {
-	// WithTransaction executes the given function within a database transaction.
-	// If the function returns an error, the transaction is rolled back.
-	// Otherwise, the transaction is committed.
-	WithTransaction(ctx context.Context, fn func(context.Context, RepositoryFactory) error) error
-}
-
-// RepositoryFactory provides access to transaction-scoped repositories.
-// All methods return domain interfaces only - never concrete infrastructure types.
-// This maintains clean architecture by preventing core layer from depending on infrastructure.
-type RepositoryFactory interface {
-	// User domain repositories
-	UserRepository() userDomain.Repository
-
-	// Organization domain repositories
-	OrganizationRepository() orgDomain.OrganizationRepository
-	MemberRepository() orgDomain.MemberRepository
-	ProjectRepository() orgDomain.ProjectRepository
-	InvitationRepository() orgDomain.InvitationRepository
-
-	// Auth domain repositories
-	RoleRepository() authDomain.RoleRepository
-	OrganizationMemberRepository() authDomain.OrganizationMemberRepository
-
-	// Prompt domain repositories
-	PromptRepository() promptDomain.PromptRepository
-	VersionRepository() promptDomain.VersionRepository
-	LabelRepository() promptDomain.LabelRepository
-	ProtectedLabelRepository() promptDomain.ProtectedLabelRepository
+//
+// How it works:
+//   - Transaction is injected into the context
+//   - Repositories extract the transaction using a helper function
+//   - Commits on nil return, rolls back on error or panic
+//   - No factory pattern needed - services use their existing repository fields
+type Transactor interface {
+	// WithinTransaction executes fn within a database transaction.
+	// The transaction is injected into the context and automatically extracted by repositories.
+	// Commits on nil return, rolls back on error or panic.
+	WithinTransaction(ctx context.Context, fn func(ctx context.Context) error) error
 }

@@ -9,6 +9,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	authDomain "brokle/internal/core/domain/auth"
+	billingDomain "brokle/internal/core/domain/billing"
 	"brokle/internal/core/domain/common"
 	orgDomain "brokle/internal/core/domain/organization"
 	userDomain "brokle/internal/core/domain/user"
@@ -65,36 +66,39 @@ type RegistrationResponse struct {
 }
 
 type registrationService struct {
-	txManager         common.TransactionManager
-	userRepo          userDomain.Repository
-	orgService        orgDomain.OrganizationService
-	projectService    orgDomain.ProjectService
-	memberService     orgDomain.MemberService
-	invitationService orgDomain.InvitationService
-	roleService       authDomain.RoleService
-	authService       authDomain.AuthService
+	transactor           common.Transactor
+	userRepo             userDomain.Repository
+	orgRepo              orgDomain.OrganizationRepository
+	memberRepo           orgDomain.MemberRepository
+	projectRepo          orgDomain.ProjectRepository
+	invitationRepo       orgDomain.InvitationRepository
+	roleService          authDomain.RoleService
+	authService          authDomain.AuthService
+	billableUsageService billingDomain.BillableUsageService
 }
 
 // NewRegistrationService creates a new registration service
 func NewRegistrationService(
-	txManager common.TransactionManager,
+	transactor common.Transactor,
 	userRepo userDomain.Repository,
-	orgService orgDomain.OrganizationService,
-	projectService orgDomain.ProjectService,
-	memberService orgDomain.MemberService,
-	invitationService orgDomain.InvitationService,
+	orgRepo orgDomain.OrganizationRepository,
+	memberRepo orgDomain.MemberRepository,
+	projectRepo orgDomain.ProjectRepository,
+	invitationRepo orgDomain.InvitationRepository,
 	roleService authDomain.RoleService,
 	authService authDomain.AuthService,
+	billableUsageService billingDomain.BillableUsageService,
 ) RegistrationService {
 	return &registrationService{
-		txManager:         txManager,
-		userRepo:          userRepo,
-		orgService:        orgService,
-		projectService:    projectService,
-		memberService:     memberService,
-		invitationService: invitationService,
-		roleService:       roleService,
-		authService:       authService,
+		transactor:           transactor,
+		userRepo:             userRepo,
+		orgRepo:              orgRepo,
+		memberRepo:           memberRepo,
+		projectRepo:          projectRepo,
+		invitationRepo:       invitationRepo,
+		roleService:          roleService,
+		authService:          authService,
+		billableUsageService: billableUsageService,
 	}
 }
 
@@ -119,14 +123,8 @@ func (s *registrationService) RegisterWithOrganization(ctx context.Context, req 
 	var org *orgDomain.Organization
 	var project *orgDomain.Project
 
-	// TRANSACTION: Create user, org, project, and membership atomically using TransactionManager
-	err = s.txManager.WithTransaction(ctx, func(ctx context.Context, factory common.RepositoryFactory) error {
-		// Get transaction-scoped repositories from factory
-		txUserRepo := factory.UserRepository()
-		txOrgRepo := factory.OrganizationRepository()
-		txMemberRepo := factory.MemberRepository()
-		txProjectRepo := factory.ProjectRepository()
-
+	// TRANSACTION: Create user, org, project, and membership atomically
+	err = s.transactor.WithinTransaction(ctx, func(ctx context.Context) error {
 		// 1. Create user
 		newUser = userDomain.NewUser(req.Email, req.FirstName, req.LastName, req.Role)
 		newUser.ReferralSource = req.ReferralSource
@@ -148,7 +146,7 @@ func (s *registrationService) RegisterWithOrganization(ctx context.Context, req 
 			newUser.IsEmailVerified = false     // Email/password users need verification
 		}
 
-		if err := txUserRepo.Create(ctx, newUser); err != nil {
+		if err := s.userRepo.Create(ctx, newUser); err != nil {
 			// Check for duplicate email (database unique constraint)
 			if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "unique constraint") || strings.Contains(err.Error(), "UNIQUE constraint failed") {
 				return appErrors.NewConflictError("Email already registered")
@@ -158,18 +156,23 @@ func (s *registrationService) RegisterWithOrganization(ctx context.Context, req 
 
 		// Create user profile
 		profile := userDomain.NewUserProfile(newUser.ID)
-		if err := txUserRepo.CreateProfile(ctx, profile); err != nil {
+		if err := s.userRepo.CreateProfile(ctx, profile); err != nil {
 			return appErrors.NewInternalError("Failed to create user profile", err)
 		}
 
-		// 2. Create organization (direct repository call)
+		// 2. Create organization
 		org = orgDomain.NewOrganization(*req.OrganizationName)
 		org.BillingEmail = req.Email
 		org.Plan = "free"
 		org.SubscriptionStatus = "active"
 
-		if err := txOrgRepo.Create(ctx, org); err != nil {
+		if err := s.orgRepo.Create(ctx, org); err != nil {
 			return appErrors.NewInternalError("Failed to create organization", err)
+		}
+
+		// 2.5. Provision billing for organization
+		if err := s.billableUsageService.ProvisionOrganizationBilling(ctx, org.ID); err != nil {
+			return appErrors.NewInternalError("Failed to provision billing", err)
 		}
 
 		// 3. Add user as organization owner
@@ -179,19 +182,19 @@ func (s *registrationService) RegisterWithOrganization(ctx context.Context, req 
 		}
 
 		member := orgDomain.NewMember(org.ID, newUser.ID, ownerRole.ID)
-		if err := txMemberRepo.Create(ctx, member); err != nil {
+		if err := s.memberRepo.Create(ctx, member); err != nil {
 			return appErrors.NewInternalError("Failed to add user as organization owner", err)
 		}
 
-		// 4. Create default project (direct repository call)
+		// 4. Create default project
 		project = orgDomain.NewProject(org.ID, "Default Project", "Your default project")
-		if err := txProjectRepo.Create(ctx, project); err != nil {
+		if err := s.projectRepo.Create(ctx, project); err != nil {
 			return appErrors.NewInternalError("Failed to create default project", err)
 		}
 
 		// 5. Set user's default organization
 		newUser.DefaultOrganizationID = &org.ID
-		if err := txUserRepo.Update(ctx, newUser); err != nil {
+		if err := s.userRepo.Update(ctx, newUser); err != nil {
 			return appErrors.NewInternalError("Failed to set default organization", err)
 		}
 
@@ -244,7 +247,7 @@ func (s *registrationService) RegisterWithInvitation(ctx context.Context, req *R
 	}
 
 	// Get invitation
-	invitation, err := s.invitationService.GetInvitationByToken(ctx, *req.InvitationToken)
+	invitation, err := s.invitationRepo.GetByToken(ctx, *req.InvitationToken)
 	if err != nil {
 		return nil, appErrors.NewNotFoundError("invalid invitation token")
 	}
@@ -277,14 +280,8 @@ func (s *registrationService) RegisterWithInvitation(ctx context.Context, req *R
 	var newUser *userDomain.User
 	var org *orgDomain.Organization
 
-	// TRANSACTION: Create user and accept invitation using TransactionManager
-	err = s.txManager.WithTransaction(ctx, func(ctx context.Context, factory common.RepositoryFactory) error {
-		// Get transaction-scoped repositories from factory
-		txUserRepo := factory.UserRepository()
-		txInvitationRepo := factory.InvitationRepository()
-		txMemberRepo := factory.MemberRepository()
-		txOrgRepo := factory.OrganizationRepository()
-
+	// TRANSACTION: Create user and accept invitation
+	err = s.transactor.WithinTransaction(ctx, func(ctx context.Context) error {
 		// 1. Create user
 		newUser = userDomain.NewUser(req.Email, req.FirstName, req.LastName, req.Role)
 		newUser.ReferralSource = req.ReferralSource
@@ -309,7 +306,7 @@ func (s *registrationService) RegisterWithInvitation(ctx context.Context, req *R
 		// Set default organization to invited org
 		newUser.DefaultOrganizationID = &invitation.OrganizationID
 
-		if err := txUserRepo.Create(ctx, newUser); err != nil {
+		if err := s.userRepo.Create(ctx, newUser); err != nil {
 			// Check for duplicate email (database unique constraint)
 			if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "unique constraint") || strings.Contains(err.Error(), "UNIQUE constraint failed") {
 				return appErrors.NewConflictError("Email already registered")
@@ -319,26 +316,26 @@ func (s *registrationService) RegisterWithInvitation(ctx context.Context, req *R
 
 		// Create user profile (same as fresh signup)
 		profile := userDomain.NewUserProfile(newUser.ID)
-		if err := txUserRepo.CreateProfile(ctx, profile); err != nil {
+		if err := s.userRepo.CreateProfile(ctx, profile); err != nil {
 			return appErrors.NewInternalError("Failed to create user profile", err)
 		}
 
-		// 2. Update invitation status to accepted (direct repository call)
+		// 2. Update invitation status to accepted
 		invitation.Status = orgDomain.InvitationStatusAccepted
 		acceptedAt := time.Now()
 		invitation.AcceptedAt = &acceptedAt
-		if err := txInvitationRepo.Update(ctx, invitation); err != nil {
+		if err := s.invitationRepo.Update(ctx, invitation); err != nil {
 			return appErrors.NewInternalError("Failed to update invitation", err)
 		}
 
-		// 3. Add user as organization member (direct repository call)
+		// 3. Add user as organization member
 		member := orgDomain.NewMember(invitation.OrganizationID, newUser.ID, invitation.RoleID)
-		if err := txMemberRepo.Create(ctx, member); err != nil {
+		if err := s.memberRepo.Create(ctx, member); err != nil {
 			return appErrors.NewInternalError("Failed to add user to organization", err)
 		}
 
 		// 4. Get organization details
-		org, err = txOrgRepo.GetByID(ctx, invitation.OrganizationID)
+		org, err = s.orgRepo.GetByID(ctx, invitation.OrganizationID)
 		if err != nil {
 			return appErrors.NewInternalError("Failed to get organization", err)
 		}

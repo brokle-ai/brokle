@@ -173,11 +173,11 @@ func (s *TemplateStatistics) String() string {
 // Billing Config Seed Types
 
 type BillingConfigsFile struct {
-	Version        string              `yaml:"version"`
-	PricingConfigs []PricingConfigSeed `yaml:"pricing_configs"`
+	Version string     `yaml:"version"`
+	Plans   []PlanSeed `yaml:"plans"`
 }
 
-type PricingConfigSeed struct {
+type PlanSeed struct {
 	Name              string   `yaml:"name"`
 	IsDefault         bool     `yaml:"is_default"`
 	FreeSpans         int64    `yaml:"free_spans"`
@@ -189,8 +189,8 @@ type PricingConfigSeed struct {
 }
 
 type BillingStatistics struct {
-	TotalPricingConfigs int `json:"total_pricing_configs"`
-	DefaultConfigName   string `json:"default_config_name"`
+	TotalPlans        int    `json:"total_plans"`
+	DefaultConfigName string `json:"default_config_name"`
 }
 
 func (s *BillingStatistics) String() string {
