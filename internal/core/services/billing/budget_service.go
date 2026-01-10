@@ -273,7 +273,7 @@ func (s *budgetService) AcknowledgeAlert(ctx context.Context, orgID, alertID uli
 			"alert_org_id", alert.OrganizationID,
 			"requested_org_id", orgID,
 		)
-		return fmt.Errorf("alert not found: %s", alertID) // Return generic error to avoid info leak
+		return fmt.Errorf("%w: %s", billing.ErrAlertNotFound, alertID) // Return sentinel error to avoid info leak
 	}
 
 	if err := s.alertRepo.Acknowledge(ctx, alertID); err != nil {

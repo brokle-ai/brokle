@@ -4,7 +4,6 @@ import (
 	"log/slog"
 	"sort"
 	"strconv"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/shopspring/decimal"
@@ -476,7 +475,7 @@ func (h *BudgetHandler) AcknowledgeAlert(c *gin.Context) {
 			"alert_id", alertID,
 		)
 		// Check if this is a "not found" error (includes unauthorized access)
-		if strings.Contains(err.Error(), "not found") {
+		if billing.IsNotFoundError(err) {
 			response.Error(c, appErrors.NewNotFoundError("Alert not found"))
 			return
 		}
