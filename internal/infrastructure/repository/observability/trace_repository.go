@@ -376,7 +376,7 @@ func (r *traceRepository) InsertSpan(ctx context.Context, span *observability.Sp
 
 	query := `
 		INSERT INTO otel_traces (
-			span_id, trace_id, parent_span_id, trace_state, project_id,
+			span_id, trace_id, parent_span_id, trace_state, project_id, organization_id,
 			span_name, span_kind, start_time, end_time, duration_nano, completion_start_time,
 			status_code, status_message,
 			input, output,
@@ -386,7 +386,7 @@ func (r *traceRepository) InsertSpan(ctx context.Context, span *observability.Sp
 			events_timestamp, events_name, events_attributes,
 			links_trace_id, links_span_id, links_trace_state, links_attributes,
 			deleted_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	return r.db.Exec(ctx, query,
@@ -395,6 +395,7 @@ func (r *traceRepository) InsertSpan(ctx context.Context, span *observability.Sp
 		span.ParentSpanID,
 		span.TraceState,
 		span.ProjectID,
+		span.OrganizationID,
 		span.SpanName,
 		span.SpanKind,
 		span.StartTime,
@@ -434,7 +435,7 @@ func (r *traceRepository) InsertSpanBatch(ctx context.Context, spans []*observab
 
 	batch, err := r.db.PrepareBatch(ctx, `
 		INSERT INTO otel_traces (
-			span_id, trace_id, parent_span_id, trace_state, project_id,
+			span_id, trace_id, parent_span_id, trace_state, project_id, organization_id,
 			span_name, span_kind, start_time, end_time, duration_nano, completion_start_time,
 			status_code, status_message,
 			input, output,
@@ -462,6 +463,7 @@ func (r *traceRepository) InsertSpanBatch(ctx context.Context, spans []*observab
 			span.ParentSpanID,
 			span.TraceState,
 			span.ProjectID,
+			span.OrganizationID,
 			span.SpanName,
 			span.SpanKind,
 			span.StartTime,

@@ -162,6 +162,18 @@ func (a *App) Start() error {
 			}
 			a.logger.Info("Manual trigger worker started")
 		}
+
+		// Start usage aggregation worker (syncs ClickHouse usage to PostgreSQL billing)
+		if a.providers.Workers.UsageAggregationWorker != nil {
+			a.providers.Workers.UsageAggregationWorker.Start()
+			a.logger.Info("Usage aggregation worker started")
+		}
+
+		// Start contract expiration worker (daily job to expire contracts past end_date)
+		if a.providers.Workers.ContractExpirationWorker != nil {
+			a.providers.Workers.ContractExpirationWorker.Start()
+			a.logger.Info("Contract expiration worker started")
+		}
 	}
 
 	return nil
@@ -218,6 +230,12 @@ func (a *App) doShutdown(ctx context.Context) error {
 				}
 				if a.providers.Workers.ManualTriggerWorker != nil {
 					a.providers.Workers.ManualTriggerWorker.Stop()
+				}
+				if a.providers.Workers.UsageAggregationWorker != nil {
+					a.providers.Workers.UsageAggregationWorker.Stop()
+				}
+				if a.providers.Workers.ContractExpirationWorker != nil {
+					a.providers.Workers.ContractExpirationWorker.Stop()
 				}
 			}
 		}()

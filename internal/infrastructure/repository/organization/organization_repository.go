@@ -11,6 +11,7 @@ import (
 	orgDomain "brokle/internal/core/domain/organization"
 	"brokle/pkg/pagination"
 	"brokle/pkg/ulid"
+	"brokle/internal/infrastructure/shared"
 )
 
 // organizationRepository implements orgDomain.OrganizationRepository using GORM
@@ -25,15 +26,20 @@ func NewOrganizationRepository(db *gorm.DB) orgDomain.OrganizationRepository {
 	}
 }
 
+// getDB returns transaction-aware DB instance
+func (r *organizationRepository) getDB(ctx context.Context) *gorm.DB {
+	return shared.GetDB(ctx, r.db)
+}
+
 // Create creates a new organization
 func (r *organizationRepository) Create(ctx context.Context, org *orgDomain.Organization) error {
-	return r.db.WithContext(ctx).Create(org).Error
+	return r.getDB(ctx).WithContext(ctx).Create(org).Error
 }
 
 // GetByID retrieves an organization by ID
 func (r *organizationRepository) GetByID(ctx context.Context, id ulid.ULID) (*orgDomain.Organization, error) {
 	var org orgDomain.Organization
-	err := r.db.WithContext(ctx).Where("id = ? AND deleted_at IS NULL", id).First(&org).Error
+	err := r.getDB(ctx).WithContext(ctx).Where("id = ? AND deleted_at IS NULL", id).First(&org).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("get organization by ID %s: %w", id, orgDomain.ErrNotFound)
@@ -46,7 +52,7 @@ func (r *organizationRepository) GetByID(ctx context.Context, id ulid.ULID) (*or
 // GetBySlug retrieves an organization by slug
 func (r *organizationRepository) GetBySlug(ctx context.Context, slug string) (*orgDomain.Organization, error) {
 	var org orgDomain.Organization
-	err := r.db.WithContext(ctx).Where("slug = ? AND deleted_at IS NULL", slug).First(&org).Error
+	err := r.getDB(ctx).WithContext(ctx).Where("slug = ? AND deleted_at IS NULL", slug).First(&org).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("get organization by slug %s: %w", slug, orgDomain.ErrNotFound)
@@ -58,19 +64,19 @@ func (r *organizationRepository) GetBySlug(ctx context.Context, slug string) (*o
 
 // Update updates an organization
 func (r *organizationRepository) Update(ctx context.Context, org *orgDomain.Organization) error {
-	return r.db.WithContext(ctx).Save(org).Error
+	return r.getDB(ctx).WithContext(ctx).Save(org).Error
 }
 
 // Delete soft deletes an organization
 func (r *organizationRepository) Delete(ctx context.Context, id ulid.ULID) error {
-	return r.db.WithContext(ctx).Model(&orgDomain.Organization{}).Where("id = ?", id).Update("deleted_at", time.Now()).Error
+	return r.getDB(ctx).WithContext(ctx).Model(&orgDomain.Organization{}).Where("id = ?", id).Update("deleted_at", time.Now()).Error
 }
 
 // List retrieves organizations with cursor pagination
 func (r *organizationRepository) List(ctx context.Context, filters *orgDomain.OrganizationFilters) ([]*orgDomain.Organization, error) {
 	var orgs []*orgDomain.Organization
 
-	query := r.db.WithContext(ctx).Where("deleted_at IS NULL")
+	query := r.getDB(ctx).WithContext(ctx).Where("deleted_at IS NULL")
 
 	// Apply filters
 	if filters != nil {
@@ -127,7 +133,7 @@ func (r *organizationRepository) List(ctx context.Context, filters *orgDomain.Or
 // GetOrganizationsByUserID retrieves organizations for a user
 func (r *organizationRepository) GetOrganizationsByUserID(ctx context.Context, userID ulid.ULID) ([]*orgDomain.Organization, error) {
 	var orgs []*orgDomain.Organization
-	err := r.db.WithContext(ctx).
+	err := r.getDB(ctx).WithContext(ctx).
 		Table("organizations").
 		Select("organizations.*").
 		Joins("JOIN organization_members ON organizations.id = organization_members.organization_id").
@@ -161,7 +167,7 @@ func (r *organizationRepository) GetUserOrganizationsWithProjectsBatch(
 ) ([]*orgDomain.OrganizationWithProjectsAndRole, error) {
 	var rows []orgProjectRow
 
-	err := r.db.WithContext(ctx).
+	err := r.getDB(ctx).WithContext(ctx).
 		Table("organizations").
 		Select(`
 			organizations.id as org_id,

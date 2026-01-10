@@ -30,10 +30,11 @@ func NewSDKAuthMiddleware(
 
 // Context keys for SDK authentication
 const (
-	SDKAuthContextKey = "sdk_auth_context"
-	APIKeyIDKey       = "api_key_id"
-	ProjectIDKey      = "project_id"
-	EnvironmentKey    = "environment"
+	SDKAuthContextKey  = "sdk_auth_context"
+	APIKeyIDKey        = "api_key_id"
+	ProjectIDKey       = "project_id"
+	OrganizationIDKey  = "organization_id"
+	EnvironmentKey     = "environment"
 )
 
 // RequireSDKAuth middleware validates self-contained API keys for SDK routes
@@ -69,12 +70,14 @@ func (m *SDKAuthMiddleware) RequireSDKAuth() gin.HandlerFunc {
 		// Store SDK authentication context in Gin context
 		c.Set(SDKAuthContextKey, validateResp.AuthContext)
 		c.Set(APIKeyIDKey, validateResp.AuthContext.APIKeyID)
-		// Store project ID as pointer to match GetProjectID() expectations
+		// Store project ID and organization ID as pointers to match getter expectations
 		projectID := validateResp.ProjectID
 		c.Set(ProjectIDKey, &projectID)
+		organizationID := validateResp.OrganizationID
+		c.Set(OrganizationIDKey, &organizationID)
 
 		// Log successful SDK authentication
-		m.logger.Debug("SDK authentication successful", "api_key_id", validateResp.AuthContext.APIKeyID, "project_id", validateResp.ProjectID)
+		m.logger.Debug("SDK authentication successful", "api_key_id", validateResp.AuthContext.APIKeyID, "project_id", validateResp.ProjectID, "organization_id", validateResp.OrganizationID)
 
 		c.Next()
 	})
@@ -112,6 +115,17 @@ func GetProjectID(c *gin.Context) (*ulid.ULID, bool) {
 	}
 
 	id, ok := projectID.(*ulid.ULID)
+	return id, ok
+}
+
+// GetOrganizationID retrieves organization ID from Gin context
+func GetOrganizationID(c *gin.Context) (*ulid.ULID, bool) {
+	organizationID, exists := c.Get(OrganizationIDKey)
+	if !exists {
+		return nil, false
+	}
+
+	id, ok := organizationID.(*ulid.ULID)
 	return id, ok
 }
 

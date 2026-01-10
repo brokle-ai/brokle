@@ -10,6 +10,7 @@ import (
 
 	promptDomain "brokle/internal/core/domain/prompt"
 	"brokle/pkg/ulid"
+	"brokle/internal/infrastructure/shared"
 )
 
 // versionRepository implements promptDomain.VersionRepository using GORM
@@ -24,15 +25,20 @@ func NewVersionRepository(db *gorm.DB) promptDomain.VersionRepository {
 	}
 }
 
+// getDB returns transaction-aware DB instance
+func (r *versionRepository) getDB(ctx context.Context) *gorm.DB {
+	return shared.GetDB(ctx, r.db)
+}
+
 // Create creates a new version
 func (r *versionRepository) Create(ctx context.Context, version *promptDomain.Version) error {
-	return r.db.WithContext(ctx).Create(version).Error
+	return r.getDB(ctx).WithContext(ctx).Create(version).Error
 }
 
 // GetByID retrieves a version by ID
 func (r *versionRepository) GetByID(ctx context.Context, id ulid.ULID) (*promptDomain.Version, error) {
 	var version promptDomain.Version
-	err := r.db.WithContext(ctx).
+	err := r.getDB(ctx).WithContext(ctx).
 		Where("id = ?", id).
 		First(&version).Error
 	if err != nil {
@@ -46,13 +52,13 @@ func (r *versionRepository) GetByID(ctx context.Context, id ulid.ULID) (*promptD
 
 // Delete deletes a version (versions should generally not be deleted)
 func (r *versionRepository) Delete(ctx context.Context, id ulid.ULID) error {
-	return r.db.WithContext(ctx).Where("id = ?", id).Delete(&promptDomain.Version{}).Error
+	return r.getDB(ctx).WithContext(ctx).Where("id = ?", id).Delete(&promptDomain.Version{}).Error
 }
 
 // GetByPromptAndVersion retrieves a specific version of a prompt
 func (r *versionRepository) GetByPromptAndVersion(ctx context.Context, promptID ulid.ULID, version int) (*promptDomain.Version, error) {
 	var v promptDomain.Version
-	err := r.db.WithContext(ctx).
+	err := r.getDB(ctx).WithContext(ctx).
 		Where("prompt_id = ? AND version = ?", promptID, version).
 		First(&v).Error
 	if err != nil {
@@ -67,7 +73,7 @@ func (r *versionRepository) GetByPromptAndVersion(ctx context.Context, promptID 
 // GetLatestByPrompt retrieves the latest version of a prompt
 func (r *versionRepository) GetLatestByPrompt(ctx context.Context, promptID ulid.ULID) (*promptDomain.Version, error) {
 	var version promptDomain.Version
-	err := r.db.WithContext(ctx).
+	err := r.getDB(ctx).WithContext(ctx).
 		Where("prompt_id = ?", promptID).
 		Order("version DESC").
 		First(&version).Error
@@ -83,7 +89,7 @@ func (r *versionRepository) GetLatestByPrompt(ctx context.Context, promptID ulid
 // ListByPrompt retrieves all versions of a prompt
 func (r *versionRepository) ListByPrompt(ctx context.Context, promptID ulid.ULID) ([]*promptDomain.Version, error) {
 	var versions []*promptDomain.Version
-	err := r.db.WithContext(ctx).
+	err := r.getDB(ctx).WithContext(ctx).
 		Where("prompt_id = ?", promptID).
 		Order("version DESC").
 		Find(&versions).Error
@@ -95,7 +101,7 @@ func (r *versionRepository) ListByPrompt(ctx context.Context, promptID ulid.ULID
 func (r *versionRepository) GetNextVersionNumber(ctx context.Context, promptID ulid.ULID) (int, error) {
 	var nextVersion int
 	// Subquery pattern: PostgreSQL disallows FOR UPDATE with aggregate functions
-	err := r.db.WithContext(ctx).
+	err := r.getDB(ctx).WithContext(ctx).
 		Raw(`
 			SELECT COALESCE(MAX(version), 0) + 1
 			FROM (
@@ -115,7 +121,7 @@ func (r *versionRepository) GetNextVersionNumber(ctx context.Context, promptID u
 // CountByPrompt counts versions for a prompt
 func (r *versionRepository) CountByPrompt(ctx context.Context, promptID ulid.ULID) (int64, error) {
 	var count int64
-	err := r.db.WithContext(ctx).
+	err := r.getDB(ctx).WithContext(ctx).
 		Model(&promptDomain.Version{}).
 		Where("prompt_id = ?", promptID).
 		Count(&count).Error
@@ -136,7 +142,7 @@ func (r *versionRepository) GetLatestByPrompts(ctx context.Context, promptIDs []
 	}
 
 	var versions []*promptDomain.Version
-	err := r.db.WithContext(ctx).
+	err := r.getDB(ctx).WithContext(ctx).
 		Raw(`
 			SELECT DISTINCT ON (prompt_id) *
 			FROM prompt_versions
@@ -160,7 +166,7 @@ func (r *versionRepository) GetByIDs(ctx context.Context, versionIDs []ulid.ULID
 	}
 
 	var versions []*promptDomain.Version
-	err := r.db.WithContext(ctx).
+	err := r.getDB(ctx).WithContext(ctx).
 		Where("id IN ?", versionIDs).
 		Find(&versions).Error
 

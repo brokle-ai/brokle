@@ -1,13 +1,13 @@
 package workers
 
 import (
-	"log/slog"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
+	"sync"
 	"time"
-
 
 	"brokle/internal/config"
 )
@@ -17,7 +17,8 @@ type NotificationWorker struct {
 	config *config.Config
 	logger *slog.Logger
 	queue  chan NotificationJob
-	quit   chan bool
+	quit   chan struct{}
+	wg     sync.WaitGroup
 }
 
 // NotificationJob represents a notification processing job
@@ -92,7 +93,7 @@ func NewNotificationWorker(
 		config: config,
 		logger: logger,
 		queue:  make(chan NotificationJob, 500), // Buffer for 500 notifications
-		quit:   make(chan bool),
+		quit:   make(chan struct{}),
 	}
 }
 
@@ -107,14 +108,16 @@ func (w *NotificationWorker) Start() {
 	}
 
 	for i := range numWorkers {
+		w.wg.Add(1)
 		go w.worker(i)
 	}
 }
 
-// Stop stops the notification worker
+// Stop stops the notification worker and waits for graceful shutdown
 func (w *NotificationWorker) Stop() {
 	w.logger.Info("Stopping notification worker")
 	close(w.quit)
+	w.wg.Wait()
 }
 
 // QueueJob queues a notification job for processing
@@ -161,6 +164,7 @@ func (w *NotificationWorker) QueuePush(push PushJob) {
 
 // worker processes jobs from the queue
 func (w *NotificationWorker) worker(id int) {
+	defer w.wg.Done()
 	w.logger.Info("Notification worker started", "worker_id", id)
 
 	for {

@@ -1,11 +1,12 @@
 package billing
 
 import (
-	"log/slog"
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
+	"github.com/shopspring/decimal"
 
 	billingDomain "brokle/internal/core/domain/billing"
 	"brokle/pkg/ulid"
@@ -101,8 +102,9 @@ func (c *DiscountCalculator) CalculateDiscounts(
 
 		if discount.Amount > 0 {
 			// Apply maximum discount limit if set
-			if rule.MaximumDiscount > 0 && discount.Amount > rule.MaximumDiscount {
-				discount.Amount = rule.MaximumDiscount
+			maxDiscount := rule.MaximumDiscount.InexactFloat64()
+			if maxDiscount > 0 && discount.Amount > maxDiscount {
+				discount.Amount = maxDiscount
 			}
 
 			calculation.AppliedDiscounts = append(calculation.AppliedDiscounts, *discount)
@@ -161,9 +163,9 @@ func (c *DiscountCalculator) CreateVolumeDiscountRule(
 		Name:            name,
 		Description:     description,
 		Type:            billingDomain.DiscountTypeTiered,
-		Value:           0, // Value is determined by tiers
-		MinimumAmount:   0,
-		MaximumDiscount: 0, // No maximum for volume discounts
+		Value:           decimal.Zero, // Value is determined by tiers
+		MinimumAmount:   decimal.Zero,
+		MaximumDiscount: decimal.Zero, // No maximum for volume discounts
 		Conditions: &billingDomain.DiscountCondition{
 			VolumeThreshold: &billingDomain.VolumeDiscount{
 				Tiers: tiers,
@@ -192,9 +194,9 @@ func (c *DiscountCalculator) CreateFirstTimeCustomerDiscount(
 		Name:            "First Time Customer Discount",
 		Description:     fmt.Sprintf("%.0f%% discount for first-time customers", percentage*100),
 		Type:            billingDomain.DiscountTypePercentage,
-		Value:           percentage,
-		MinimumAmount:   0,
-		MaximumDiscount: maxDiscount,
+		Value:           decimal.NewFromFloat(percentage),
+		MinimumAmount:   decimal.Zero,
+		MaximumDiscount: decimal.NewFromFloat(maxDiscount),
 		Conditions: &billingDomain.DiscountCondition{
 			FirstTimeCustomer: true,
 		},
@@ -293,9 +295,10 @@ func (c *DiscountCalculator) checkDiscountConditions(
 	// Check minimum usage
 	if conditions.MinUsage != nil && context.UsageSummary != nil {
 		usage := context.UsageSummary
+		minCost := conditions.MinUsage.Cost.InexactFloat64()
 		if usage.TotalRequests < conditions.MinUsage.Requests ||
 			usage.TotalTokens < conditions.MinUsage.Tokens ||
-			usage.TotalCost < conditions.MinUsage.Cost {
+			usage.TotalCost < minCost {
 			return false
 		}
 	}
@@ -383,21 +386,23 @@ func (c *DiscountCalculator) calculateSingleDiscount(
 	context *DiscountContext,
 ) (*AppliedDiscount, error) {
 	// Check minimum amount requirement
-	if amount < rule.MinimumAmount {
+	minAmount := rule.MinimumAmount.InexactFloat64()
+	if amount < minAmount {
 		return &AppliedDiscount{Amount: 0}, nil
 	}
 
 	var discountAmount float64
 	var description string
+	ruleValue := rule.Value.InexactFloat64()
 
 	switch rule.Type {
 	case billingDomain.DiscountTypePercentage:
-		discountAmount = amount * rule.Value
-		description = fmt.Sprintf("%.1f%% discount", rule.Value*100)
+		discountAmount = amount * ruleValue
+		description = fmt.Sprintf("%.1f%% discount", ruleValue*100)
 
 	case billingDomain.DiscountTypeFixed:
-		discountAmount = rule.Value
-		description = fmt.Sprintf("$%.2f fixed discount", rule.Value)
+		discountAmount = ruleValue
+		description = fmt.Sprintf("$%.2f fixed discount", ruleValue)
 
 	case billingDomain.DiscountTypeTiered:
 		if rule.Conditions != nil && rule.Conditions.VolumeThreshold != nil {
@@ -418,7 +423,7 @@ func (c *DiscountCalculator) calculateSingleDiscount(
 		RuleID:      rule.ID,
 		RuleName:    rule.Name,
 		Type:        rule.Type,
-		Value:       rule.Value,
+		Value:       ruleValue,
 		Amount:      discountAmount,
 		Description: description,
 	}, nil
@@ -434,7 +439,7 @@ func (c *DiscountCalculator) calculateVolumeDiscount(amount float64, volumeDisco
 
 	for i := range len(tiers) - 1 {
 		for j := i + 1; j < len(tiers); j++ {
-			if tiers[i].MinAmount > tiers[j].MinAmount {
+			if tiers[i].MinAmount.GreaterThan(tiers[j].MinAmount) {
 				tiers[i], tiers[j] = tiers[j], tiers[i]
 			}
 		}
@@ -449,9 +454,10 @@ func (c *DiscountCalculator) calculateVolumeDiscount(amount float64, volumeDisco
 		tierAmount := remainingAmount
 		if i < len(tiers)-1 {
 			// Not the last tier, calculate amount in this tier
-			nextTierMin := tiers[i+1].MinAmount
+			nextTierMin := tiers[i+1].MinAmount.InexactFloat64()
+			tierMin := tier.MinAmount.InexactFloat64()
 			if amount > nextTierMin {
-				tierAmount = nextTierMin - tier.MinAmount
+				tierAmount = nextTierMin - tierMin
 				if tierAmount > remainingAmount {
 					tierAmount = remainingAmount
 				}
@@ -459,7 +465,7 @@ func (c *DiscountCalculator) calculateVolumeDiscount(amount float64, volumeDisco
 		}
 
 		if tierAmount > 0 {
-			totalDiscount += tierAmount * tier.Discount
+			totalDiscount += tierAmount * tier.Discount.InexactFloat64()
 			remainingAmount -= tierAmount
 		}
 	}

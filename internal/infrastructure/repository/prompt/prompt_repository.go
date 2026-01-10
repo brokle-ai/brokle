@@ -10,6 +10,7 @@ import (
 
 	promptDomain "brokle/internal/core/domain/prompt"
 	"brokle/pkg/ulid"
+	"brokle/internal/infrastructure/shared"
 )
 
 // promptRepository implements promptDomain.PromptRepository using GORM
@@ -24,15 +25,20 @@ func NewPromptRepository(db *gorm.DB) promptDomain.PromptRepository {
 	}
 }
 
+// getDB returns transaction-aware DB instance
+func (r *promptRepository) getDB(ctx context.Context) *gorm.DB {
+	return shared.GetDB(ctx, r.db)
+}
+
 // Create creates a new prompt
 func (r *promptRepository) Create(ctx context.Context, prompt *promptDomain.Prompt) error {
-	return r.db.WithContext(ctx).Create(prompt).Error
+	return r.getDB(ctx).WithContext(ctx).Create(prompt).Error
 }
 
 // GetByID retrieves a prompt by ID
 func (r *promptRepository) GetByID(ctx context.Context, id ulid.ULID) (*promptDomain.Prompt, error) {
 	var prompt promptDomain.Prompt
-	err := r.db.WithContext(ctx).
+	err := r.getDB(ctx).WithContext(ctx).
 		Where("id = ? AND deleted_at IS NULL", id).
 		First(&prompt).Error
 	if err != nil {
@@ -47,7 +53,7 @@ func (r *promptRepository) GetByID(ctx context.Context, id ulid.ULID) (*promptDo
 // GetByName retrieves a prompt by project and name
 func (r *promptRepository) GetByName(ctx context.Context, projectID ulid.ULID, name string) (*promptDomain.Prompt, error) {
 	var prompt promptDomain.Prompt
-	err := r.db.WithContext(ctx).
+	err := r.getDB(ctx).WithContext(ctx).
 		Where("project_id = ? AND name = ? AND deleted_at IS NULL", projectID, name).
 		First(&prompt).Error
 	if err != nil {
@@ -62,12 +68,12 @@ func (r *promptRepository) GetByName(ctx context.Context, projectID ulid.ULID, n
 // Update updates a prompt
 func (r *promptRepository) Update(ctx context.Context, prompt *promptDomain.Prompt) error {
 	prompt.UpdatedAt = time.Now()
-	return r.db.WithContext(ctx).Save(prompt).Error
+	return r.getDB(ctx).WithContext(ctx).Save(prompt).Error
 }
 
 // Delete hard deletes a prompt
 func (r *promptRepository) Delete(ctx context.Context, id ulid.ULID) error {
-	return r.db.WithContext(ctx).Where("id = ?", id).Delete(&promptDomain.Prompt{}).Error
+	return r.getDB(ctx).WithContext(ctx).Where("id = ?", id).Delete(&promptDomain.Prompt{}).Error
 }
 
 // ListByProject retrieves all prompts in a project with optional filters
@@ -75,7 +81,7 @@ func (r *promptRepository) ListByProject(ctx context.Context, projectID ulid.ULI
 	var prompts []*promptDomain.Prompt
 	var total int64
 
-	query := r.db.WithContext(ctx).
+	query := r.getDB(ctx).WithContext(ctx).
 		Model(&promptDomain.Prompt{}).
 		Where("project_id = ? AND deleted_at IS NULL", projectID)
 
@@ -116,7 +122,7 @@ func (r *promptRepository) ListByProject(ctx context.Context, projectID ulid.ULI
 // CountByProject counts prompts in a project
 func (r *promptRepository) CountByProject(ctx context.Context, projectID ulid.ULID) (int64, error) {
 	var count int64
-	err := r.db.WithContext(ctx).
+	err := r.getDB(ctx).WithContext(ctx).
 		Model(&promptDomain.Prompt{}).
 		Where("project_id = ? AND deleted_at IS NULL", projectID).
 		Count(&count).Error
@@ -125,7 +131,7 @@ func (r *promptRepository) CountByProject(ctx context.Context, projectID ulid.UL
 
 // SoftDelete soft deletes a prompt
 func (r *promptRepository) SoftDelete(ctx context.Context, id ulid.ULID) error {
-	return r.db.WithContext(ctx).
+	return r.getDB(ctx).WithContext(ctx).
 		Model(&promptDomain.Prompt{}).
 		Where("id = ?", id).
 		Update("deleted_at", time.Now()).Error
@@ -133,7 +139,7 @@ func (r *promptRepository) SoftDelete(ctx context.Context, id ulid.ULID) error {
 
 // Restore restores a soft-deleted prompt
 func (r *promptRepository) Restore(ctx context.Context, id ulid.ULID) error {
-	return r.db.WithContext(ctx).
+	return r.getDB(ctx).WithContext(ctx).
 		Model(&promptDomain.Prompt{}).
 		Where("id = ?", id).
 		Update("deleted_at", nil).Error

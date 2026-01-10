@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -220,7 +221,7 @@ func (s *permissionService) ValidateResourceAction(ctx context.Context, resource
 func (s *permissionService) PermissionExists(ctx context.Context, resource, action string) (bool, error) {
 	_, err := s.permissionRepo.GetByResourceAction(ctx, resource, action)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
+		if errors.Is(err, authDomain.ErrNotFound) {
 			return false, nil
 		}
 		return false, err

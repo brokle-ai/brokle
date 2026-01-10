@@ -597,6 +597,7 @@ func (c *TelemetryStreamConsumer) processBatch(ctx context.Context, batch *strea
 				continue
 			}
 			span.ProjectID = projectID.String()
+			span.OrganizationID = batch.OrganizationID.String()
 			spans = append(spans, &span)
 
 		case observability.TelemetryEventTypeQualityScore:
@@ -608,6 +609,7 @@ func (c *TelemetryStreamConsumer) processBatch(ctx context.Context, batch *strea
 				continue
 			}
 			score.ProjectID = projectID.String()
+			score.OrganizationID = batch.OrganizationID.String()
 			scores = append(scores, &score)
 
 		case observability.TelemetryEventTypeMetricSum:

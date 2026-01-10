@@ -1,12 +1,13 @@
 package billing
 
 import (
-	"log/slog"
 	"context"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
+	"github.com/shopspring/decimal"
 
 	billingDomain "brokle/internal/core/domain/billing"
 	"brokle/pkg/ulid"
@@ -74,9 +75,9 @@ func (t *UsageTracker) UpdateUsage(ctx context.Context, orgID ulid.ULID, record 
 		quota = &billingDomain.UsageQuota{
 			OrganizationID:      orgID,
 			BillingTier:         record.BillingTier,
-			MonthlyRequestLimit: 0, // Unlimited by default
-			MonthlyTokenLimit:   0, // Unlimited by default
-			MonthlyCostLimit:    0, // Unlimited by default
+			MonthlyRequestLimit: 0,            // Unlimited by default
+			MonthlyTokenLimit:   0,            // Unlimited by default
+			MonthlyCostLimit:    decimal.Zero, // Unlimited by default
 			Currency:            record.Currency,
 			ResetDate:           t.getNextResetDate(),
 			LastUpdated:         time.Now(),
@@ -86,7 +87,7 @@ func (t *UsageTracker) UpdateUsage(ctx context.Context, orgID ulid.ULID, record 
 	// Update current usage
 	quota.CurrentRequests++
 	quota.CurrentTokens += int64(record.TotalTokens)
-	quota.CurrentCost += record.NetCost
+	quota.CurrentCost = quota.CurrentCost.Add(record.NetCost)
 	quota.LastUpdated = time.Now()
 
 	// Check if we need to reset monthly counters
@@ -101,11 +102,13 @@ func (t *UsageTracker) UpdateUsage(ctx context.Context, orgID ulid.ULID, record 
 	t.quotaCache[orgID] = quota
 
 	// Persist to database (async to avoid blocking)
+	// Clone quota to avoid data race - the cached pointer may be modified by subsequent calls
+	quotaSnapshot := quota.Clone()
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		if err := t.quotaRepo.UpdateUsageQuota(ctx, orgID, quota); err != nil {
+		if err := t.quotaRepo.UpdateUsageQuota(ctx, orgID, quotaSnapshot); err != nil {
 			t.logger.Error("Failed to persist usage quota", "error", err, "org_id", orgID)
 		}
 	}()
@@ -118,7 +121,12 @@ func (t *UsageTracker) GetUsageQuota(ctx context.Context, orgID ulid.ULID) (*bil
 	t.cacheMutex.RLock()
 	defer t.cacheMutex.RUnlock()
 
-	return t.getQuotaLocked(ctx, orgID)
+	quota, err := t.getQuotaLocked(ctx, orgID)
+	if err != nil {
+		return nil, err
+	}
+	// Return a clone to prevent callers from modifying cached data
+	return quota.Clone(), nil
 }
 
 // SetUsageQuota sets usage quota limits for an organization
@@ -130,9 +138,9 @@ func (t *UsageTracker) SetUsageQuota(ctx context.Context, orgID ulid.ULID, quota
 		return fmt.Errorf("failed to update usage quota: %w", err)
 	}
 
-	// Update cache
+	// Update cache with a clone to prevent external modification
 	t.cacheMutex.Lock()
-	t.quotaCache[orgID] = quota
+	t.quotaCache[orgID] = quota.Clone()
 	t.cacheMutex.Unlock()
 
 	t.logger.Info("Updated usage quota", "org_id", orgID, "request_limit", quota.MonthlyRequestLimit, "token_limit", quota.MonthlyTokenLimit, "cost_limit", quota.MonthlyCostLimit)
@@ -179,9 +187,9 @@ func (t *UsageTracker) CheckQuotaExceeded(ctx context.Context, orgID ulid.ULID) 
 	}
 
 	// Check cost limits
-	if quota.MonthlyCostLimit > 0 {
-		status.CostOK = quota.CurrentCost < quota.MonthlyCostLimit
-		status.CostUsagePercent = quota.CurrentCost / quota.MonthlyCostLimit * 100
+	if !quota.MonthlyCostLimit.IsZero() {
+		status.CostOK = quota.CurrentCost.LessThan(quota.MonthlyCostLimit)
+		status.CostUsagePercent = quota.CurrentCost.Div(quota.MonthlyCostLimit).Mul(decimal.NewFromInt(100)).InexactFloat64()
 	} else {
 		status.CostOK = true
 	}
@@ -219,7 +227,7 @@ func (t *UsageTracker) ResetMonthlyUsage(ctx context.Context, orgID ulid.ULID) e
 	// Reset counters
 	quota.CurrentRequests = 0
 	quota.CurrentTokens = 0
-	quota.CurrentCost = 0
+	quota.CurrentCost = decimal.Zero
 	quota.ResetDate = t.getNextResetDate()
 	quota.LastUpdated = time.Now()
 
@@ -324,7 +332,7 @@ func (t *UsageTracker) syncQuotas() {
 			// Reset monthly counters
 			quota.CurrentRequests = 0
 			quota.CurrentTokens = 0
-			quota.CurrentCost = 0
+			quota.CurrentCost = decimal.Zero
 			quota.ResetDate = t.getNextResetDate()
 			quota.LastUpdated = now
 
@@ -390,8 +398,8 @@ func (t *UsageTracker) GetUsageMetrics(ctx context.Context, orgID ulid.ULID) (ma
 			return 0
 		}(),
 		"cost_usage_percent": func() float64 {
-			if quota.MonthlyCostLimit > 0 {
-				return quota.CurrentCost / quota.MonthlyCostLimit * 100
+			if !quota.MonthlyCostLimit.IsZero() {
+				return quota.CurrentCost.Div(quota.MonthlyCostLimit).Mul(decimal.NewFromInt(100)).InexactFloat64()
 			}
 			return 0
 		}(),

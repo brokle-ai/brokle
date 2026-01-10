@@ -555,10 +555,11 @@ func NewPasswordResetToken(userID ulid.ULID, token string, expiresAt time.Time) 
 
 // ValidateAPIKeyResponse represents the response from API key validation
 type ValidateAPIKeyResponse struct {
-	APIKey      *APIKey      `json:"api_key"`
-	AuthContext *AuthContext `json:"auth_context,omitempty"`
-	ProjectID   ulid.ULID    `json:"project_id"`
-	Valid       bool         `json:"valid"`
+	APIKey         *APIKey      `json:"api_key"`
+	AuthContext    *AuthContext `json:"auth_context,omitempty"`
+	ProjectID      ulid.ULID    `json:"project_id"`
+	OrganizationID ulid.ULID    `json:"organization_id"`
+	Valid          bool         `json:"valid"`
 }
 
 // Utility methods

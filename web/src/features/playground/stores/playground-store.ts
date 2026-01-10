@@ -127,7 +127,7 @@ const createEmptyWindow = (): PlaygroundWindow => ({
 
 /**
  * Creates a JSON snapshot of window's saveable content for dirty comparison.
- * This is the industry standard approach (Braintrust, Notion, Google Docs):
+ * This is the industry standard approach (Notion, Google Docs):
  * isDirty = currentSnapshot !== lastSavedSnapshot
  */
 export const createContentSnapshot = (window: PlaygroundWindow): string => {
