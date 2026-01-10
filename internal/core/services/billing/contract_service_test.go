@@ -273,7 +273,16 @@ func TestContractService_ExpireContract_Success(t *testing.T) {
 	service := NewContractService(transactor, contractRepo, tierRepo, historyRepo, billingRepo, logger)
 
 	contractID := ulid.New()
+	orgID := ulid.New()
 
+	// Setup: Contract must be in active status to be expired
+	activeContract := &billing.Contract{
+		ID:             contractID,
+		OrganizationID: orgID,
+		Status:         billing.ContractStatusActive,
+	}
+
+	contractRepo.On("GetByID", ctx, contractID).Return(activeContract, nil)
 	contractRepo.On("Expire", ctx, contractID).Return(nil)
 	historyRepo.On("Log", ctx, mock.AnythingOfType("*billing.ContractHistory")).Return(nil)
 
@@ -285,6 +294,41 @@ func TestContractService_ExpireContract_Success(t *testing.T) {
 
 	contractRepo.AssertExpectations(t)
 	historyRepo.AssertExpectations(t)
+}
+
+// Test: Expire contract fails when not active
+func TestContractService_ExpireContract_NotActive(t *testing.T) {
+	ctx := context.Background()
+	logger := newTestLogger()
+
+	contractRepo := new(MockContractRepository)
+	tierRepo := new(MockVolumeDiscountTierRepository)
+	historyRepo := new(MockContractHistoryRepository)
+	billingRepo := new(MockOrganizationBillingRepository)
+
+	transactor := NewMockTransactor()
+	service := NewContractService(transactor, contractRepo, tierRepo, historyRepo, billingRepo, logger)
+
+	contractID := ulid.New()
+	orgID := ulid.New()
+
+	// Setup: Contract is in draft status (not active)
+	draftContract := &billing.Contract{
+		ID:             contractID,
+		OrganizationID: orgID,
+		Status:         billing.ContractStatusDraft,
+	}
+
+	contractRepo.On("GetByID", ctx, contractID).Return(draftContract, nil)
+
+	// Execute
+	err := service.ExpireContract(ctx, contractID)
+
+	// Assert
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "Only active contracts can be expired")
+
+	contractRepo.AssertExpectations(t)
 }
 
 // Test: Get expiring contracts

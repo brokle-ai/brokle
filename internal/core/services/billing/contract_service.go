@@ -262,6 +262,23 @@ func (s *contractService) CancelContract(ctx context.Context, contractID ulid.UL
 }
 
 func (s *contractService) ExpireContract(ctx context.Context, contractID ulid.ULID) error {
+	// Fetch contract to validate state
+	contract, err := s.contractRepo.GetByID(ctx, contractID)
+	if err != nil {
+		if billing.IsNotFoundError(err) {
+			return appErrors.NewNotFoundError(fmt.Sprintf("Contract %s not found", contractID))
+		}
+		return appErrors.NewInternalError("Failed to get contract for expiration", err)
+	}
+
+	// Validate state transition: only active contracts can expire
+	if contract.Status != billing.ContractStatusActive {
+		return appErrors.NewValidationError(
+			"Only active contracts can be expired",
+			fmt.Sprintf("Contract status is %s, expected active", contract.Status),
+		)
+	}
+
 	if err := s.contractRepo.Expire(ctx, contractID); err != nil {
 		return appErrors.NewInternalError("Failed to expire contract", err)
 	}

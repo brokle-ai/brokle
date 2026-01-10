@@ -14,6 +14,7 @@ import (
 	"brokle/internal/core/domain/billing"
 	"brokle/internal/core/domain/common"
 	"brokle/internal/core/domain/organization"
+	appErrors "brokle/pkg/errors"
 	"brokle/pkg/pagination"
 	"brokle/pkg/ulid"
 	"brokle/pkg/units"
@@ -344,6 +345,15 @@ func (w *UsageAggregationWorker) checkBudgets(ctx context.Context, orgID ulid.UL
 			}
 
 			if err := w.alertRepo.Create(ctx, alert); err != nil {
+				// Check if this is a duplicate alert (concurrent worker already created it)
+				if appErrors.IsDatabaseUniqueViolation(err) {
+					w.logger.Debug("alert already exists (concurrent creation)",
+						"budget_id", budget.ID,
+						"threshold", alert.AlertThreshold,
+						"dimension", alert.Dimension,
+					)
+					continue
+				}
 				w.logger.Error("failed to create alert",
 					"error", err,
 					"budget_id", budget.ID,
