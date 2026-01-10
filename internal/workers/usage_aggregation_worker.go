@@ -14,6 +14,7 @@ import (
 	"brokle/internal/core/domain/billing"
 	"brokle/internal/core/domain/common"
 	"brokle/internal/core/domain/organization"
+	"brokle/pkg/pagination"
 	"brokle/pkg/ulid"
 	"brokle/pkg/units"
 )
@@ -99,7 +100,7 @@ func (w *UsageAggregationWorker) Stop() {
 	close(w.quit)
 }
 
-// run executes a single aggregation cycle
+// run executes a single aggregation cycle with paginated organization iteration
 func (w *UsageAggregationWorker) run() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
@@ -107,41 +108,64 @@ func (w *UsageAggregationWorker) run() {
 	w.logger.Debug("Starting usage aggregation cycle")
 	startTime := time.Now()
 
-	// Get all organizations
-	orgs, err := w.orgRepo.List(ctx, nil)
-	if err != nil {
-		w.logger.Error("failed to list organizations", "error", err)
-		return
-	}
-
 	var syncedCount, alertCount int
+	page := 1
 
-	for _, org := range orgs {
-		// Sync billing state for each organization
-		if err := w.syncOrganizationUsage(ctx, org.ID); err != nil {
-			w.logger.Error("failed to sync organization usage",
-				"error", err,
-				"organization_id", org.ID,
-			)
-			continue
+	// Iterate through all organizations with pagination
+	// This ensures ALL orgs are synced, not just the first 50
+	for {
+		filters := &organization.OrganizationFilters{
+			Params: pagination.Params{
+				Page:  page,
+				Limit: pagination.MaxPageSize, // 100 orgs per batch
+			},
 		}
-		syncedCount++
 
-		// Check budgets and trigger alerts
-		alerts, err := w.checkBudgets(ctx, org.ID)
+		orgs, err := w.orgRepo.List(ctx, filters)
 		if err != nil {
-			w.logger.Error("failed to check budgets",
-				"error", err,
-				"organization_id", org.ID,
-			)
-			continue
+			w.logger.Error("failed to list organizations", "error", err, "page", page)
+			return
 		}
-		alertCount += len(alerts)
 
-		// Send notifications for new alerts
-		for _, alert := range alerts {
-			w.sendAlertNotification(ctx, org, alert)
+		// No more organizations to process
+		if len(orgs) == 0 {
+			break
 		}
+
+		for _, org := range orgs {
+			// Sync billing state for each organization
+			if err := w.syncOrganizationUsage(ctx, org.ID); err != nil {
+				w.logger.Error("failed to sync organization usage",
+					"error", err,
+					"organization_id", org.ID,
+				)
+				continue
+			}
+			syncedCount++
+
+			// Check budgets and trigger alerts
+			alerts, err := w.checkBudgets(ctx, org.ID)
+			if err != nil {
+				w.logger.Error("failed to check budgets",
+					"error", err,
+					"organization_id", org.ID,
+				)
+				continue
+			}
+			alertCount += len(alerts)
+
+			// Send notifications for new alerts
+			for _, alert := range alerts {
+				w.sendAlertNotification(ctx, org, alert)
+			}
+		}
+
+		// If we got fewer than batch size, we've reached the end
+		if len(orgs) < pagination.MaxPageSize {
+			break
+		}
+
+		page++
 	}
 
 	duration := time.Since(startTime)
@@ -202,22 +226,16 @@ func (w *UsageAggregationWorker) syncOrganizationUsage(ctx context.Context, orgI
 	freeBytesRemaining := max(0, freeBytesTotal-summary.TotalBytes)
 	freeScoresRemaining := max(0, effectivePricing.FreeScores-summary.TotalScores)
 
-	// Update billing state
-	orgBilling.CurrentPeriodSpans = summary.TotalSpans
-	orgBilling.CurrentPeriodBytes = summary.TotalBytes
-	orgBilling.CurrentPeriodScores = summary.TotalScores
-	orgBilling.CurrentPeriodCost = cost
-	orgBilling.FreeSpansRemaining = freeSpansRemaining
-	orgBilling.FreeBytesRemaining = freeBytesRemaining
-	orgBilling.FreeScoresRemaining = freeScoresRemaining
-	orgBilling.LastSyncedAt = time.Now()
-	orgBilling.UpdatedAt = time.Now()
-
 	// Wrap billing and budget updates in a transaction for atomicity
 	// If budget update fails, billing update is rolled back
 	return w.transactor.WithinTransaction(ctx, func(ctx context.Context) error {
-		if err := w.billingRepo.Update(ctx, orgBilling); err != nil {
-			return fmt.Errorf("update billing: %w", err)
+		// Use SetUsage (idempotent) - sets cumulative values instead of adding
+		// Multiple workers processing the same org will set the same values, preventing race conditions
+		if err := w.billingRepo.SetUsage(ctx, orgID,
+			summary.TotalSpans, summary.TotalBytes, summary.TotalScores, cost,
+			freeSpansRemaining, freeBytesRemaining, freeScoresRemaining,
+		); err != nil {
+			return fmt.Errorf("set usage: %w", err)
 		}
 
 		if err := w.syncBudgetUsage(ctx, orgID, summary, cost, effectivePricing); err != nil {

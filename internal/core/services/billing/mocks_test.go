@@ -38,13 +38,8 @@ func (m *MockOrganizationBillingRepository) Update(ctx context.Context, orgBilli
 	return args.Error(0)
 }
 
-func (m *MockOrganizationBillingRepository) UpdateUsage(ctx context.Context, orgID ulid.ULID, spans, bytes, scores int64, cost decimal.Decimal) error {
-	args := m.Called(ctx, orgID, spans, bytes, scores, cost)
-	return args.Error(0)
-}
-
-func (m *MockOrganizationBillingRepository) UpdateUsageAndCost(ctx context.Context, orgID ulid.ULID, totalSpans, totalBytes, totalScores int64, cost float64, freeSpansRemaining, freeBytesRemaining, freeScoresRemaining int64) error {
-	args := m.Called(ctx, orgID, totalSpans, totalBytes, totalScores, cost, freeSpansRemaining, freeBytesRemaining, freeScoresRemaining)
+func (m *MockOrganizationBillingRepository) SetUsage(ctx context.Context, orgID ulid.ULID, spans, bytes, scores int64, cost decimal.Decimal, freeSpansRemaining, freeBytesRemaining, freeScoresRemaining int64) error {
+	args := m.Called(ctx, orgID, spans, bytes, scores, cost, freeSpansRemaining, freeBytesRemaining, freeScoresRemaining)
 	return args.Error(0)
 }
 

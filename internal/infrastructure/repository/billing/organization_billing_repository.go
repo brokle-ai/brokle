@@ -48,15 +48,20 @@ func (r *organizationBillingRepository) Update(ctx context.Context, orgBilling *
 	return r.getDB(ctx).WithContext(ctx).Save(orgBilling).Error
 }
 
-func (r *organizationBillingRepository) UpdateUsage(ctx context.Context, orgID ulid.ULID, spans, bytes, scores int64, cost decimal.Decimal) error {
+// SetUsage sets cumulative usage counters and free tier remaining (idempotent - can be called multiple times safely)
+// This replaces values rather than adding, preventing race condition double-counting
+func (r *organizationBillingRepository) SetUsage(ctx context.Context, orgID ulid.ULID, spans, bytes, scores int64, cost decimal.Decimal, freeSpansRemaining, freeBytesRemaining, freeScoresRemaining int64) error {
 	return r.getDB(ctx).WithContext(ctx).
 		Model(&billing.OrganizationBilling{}).
 		Where("organization_id = ?", orgID).
 		Updates(map[string]interface{}{
-			"current_period_spans":  gorm.Expr("current_period_spans + ?", spans),
-			"current_period_bytes":  gorm.Expr("current_period_bytes + ?", bytes),
-			"current_period_scores": gorm.Expr("current_period_scores + ?", scores),
-			"current_period_cost":   gorm.Expr("current_period_cost + ?", cost),
+			"current_period_spans":  spans,
+			"current_period_bytes":  bytes,
+			"current_period_scores": scores,
+			"current_period_cost":   cost,
+			"free_spans_remaining":  freeSpansRemaining,
+			"free_bytes_remaining":  freeBytesRemaining,
+			"free_scores_remaining": freeScoresRemaining,
 			"last_synced_at":        time.Now(),
 			"updated_at":            time.Now(),
 		}).Error

@@ -80,7 +80,11 @@ type OrganizationBillingRepository interface {
 	GetByOrgID(ctx context.Context, orgID ulid.ULID) (*OrganizationBilling, error)
 	Create(ctx context.Context, billing *OrganizationBilling) error
 	Update(ctx context.Context, billing *OrganizationBilling) error
-	UpdateUsage(ctx context.Context, orgID ulid.ULID, spans, bytes, scores int64, cost decimal.Decimal) error
+
+	// SetUsage sets cumulative usage counters and free tier remaining (idempotent - can be called multiple times safely)
+	// This replaces values rather than adding, preventing race condition double-counting
+	SetUsage(ctx context.Context, orgID ulid.ULID, spans, bytes, scores int64, cost decimal.Decimal, freeSpansRemaining, freeBytesRemaining, freeScoresRemaining int64) error
+
 	ResetPeriod(ctx context.Context, orgID ulid.ULID, newCycleStart time.Time) error
 }
 
