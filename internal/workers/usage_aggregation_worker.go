@@ -300,74 +300,19 @@ func (w *UsageAggregationWorker) syncBudgetUsage(ctx context.Context, orgID ulid
 			scores = projectSummary.TotalScores
 			budgetCost = w.calculateRawCost(projectSummary, effectivePricing)
 		} else {
-			// Org-level budget - check if budget period differs from billing cycle
-			budgetStart := w.getBudgetPeriodStart(budget)
-			if !budgetStart.Equal(summary.PeriodStart) {
-				// Budget period differs from billing cycle (weekly budget, or mid-month billing start)
-				// Use marginal cost: cost(cycle_start→now) - cost(cycle_start→budget_start)
-				// This properly accounts for free tier across the billing cycle
-
-				// Clamp usage window start to billing cycle start
-				// When budget starts before billing cycle, we only count usage within the billing cycle
-				usageWindowStart := budgetStart
-				if budgetStart.Before(summary.PeriodStart) {
-					usageWindowStart = summary.PeriodStart
-				}
-
-				// Query usage for the budget window (usageWindowStart → now)
-				budgetFilter := &billing.BillableUsageFilter{
-					OrganizationID: orgID,
-					Start:          usageWindowStart,
-					End:            time.Now(),
-					Granularity:    "hourly",
-				}
-				orgPeriodSummary, err := w.usageRepo.GetUsageSummary(ctx, budgetFilter)
-				if err != nil {
-					w.logger.Warn("failed to get org period usage for budget",
-						"error", err,
-						"budget_id", budget.ID,
-						"budget_type", budget.BudgetType,
-					)
-					continue
-				}
-				spans = orgPeriodSummary.TotalSpans
-				bytes = orgPeriodSummary.TotalBytes
-				scores = orgPeriodSummary.TotalScores
-
-				// Calculate marginal cost for budget window
-				// Marginal cost = total_cycle_cost - cost_before_budget_window
-				if budgetStart.Before(summary.PeriodStart) || budgetStart.Equal(summary.PeriodStart) {
-					// Budget window starts at or before billing cycle - no pre-budget period
-					// Full billing cycle cost applies to this budget window
-					budgetCost = cost
-				} else {
-					// Query usage from billing cycle start to budget window start
-					preBudgetFilter := &billing.BillableUsageFilter{
-						OrganizationID: orgID,
-						Start:          summary.PeriodStart,
-						End:            budgetStart,
-						Granularity:    "hourly",
-					}
-					preBudgetSummary, err := w.usageRepo.GetUsageSummary(ctx, preBudgetFilter)
-					if err != nil {
-						w.logger.Warn("failed to get pre-budget usage",
-							"error", err,
-							"budget_id", budget.ID,
-						)
-						// Fall back to raw cost if we can't calculate marginal
-						budgetCost = w.calculateRawCost(orgPeriodSummary, effectivePricing)
-					} else {
-						costBeforeBudget := w.calculateCost(preBudgetSummary, effectivePricing)
-						budgetCost = decimal.Max(decimal.Zero, cost.Sub(costBeforeBudget))
-					}
-				}
-			} else {
-				// Budget period matches billing cycle - use pre-calculated values
-				spans = summary.TotalSpans
-				bytes = summary.TotalBytes
-				scores = summary.TotalScores
-				budgetCost = cost
+			// Org-level budget - calculate cost using marginal cost approach
+			result, err := w.calculateBudgetCost(ctx, orgID, budget, summary, cost, effectivePricing)
+			if err != nil {
+				w.logger.Warn("failed to calculate budget cost",
+					"error", err,
+					"budget_id", budget.ID,
+				)
+				continue
 			}
+			spans = result.spans
+			bytes = result.bytes
+			scores = result.scores
+			budgetCost = result.cost
 		}
 
 		if err := w.budgetRepo.UpdateUsage(ctx, budget.ID, spans, bytes, scores, budgetCost); err != nil {
@@ -706,6 +651,118 @@ func (w *UsageAggregationWorker) getBudgetPeriodStart(budget *billing.UsageBudge
 	default:
 		return time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 	}
+}
+
+// budgetCostResult holds the calculated cost and usage for a budget period
+type budgetCostResult struct {
+	spans  int64
+	bytes  int64
+	scores int64
+	cost   decimal.Decimal
+}
+
+// calculateBudgetCost determines the cost attributable to a budget period.
+//
+// This handles the complex case where budget periods differ from billing cycles:
+// - Weekly budgets during monthly billing cycles
+// - Monthly budgets with different anchor days
+//
+// The key insight is "marginal cost": if the budget period starts after the
+// billing cycle, the free tier may already be consumed. We calculate:
+//
+//	budgetCost = totalCycleCost - costBeforeBudgetPeriod
+//
+// This correctly attributes the cost increase to the budget period that caused it.
+func (w *UsageAggregationWorker) calculateBudgetCost(
+	ctx context.Context,
+	orgID ulid.ULID,
+	budget *billing.UsageBudget,
+	summary *billing.BillableUsageSummary,
+	totalCycleCost decimal.Decimal,
+	effectivePricing *billing.EffectivePricing,
+) (*budgetCostResult, error) {
+	budgetPeriodStart := w.getBudgetPeriodStart(budget)
+
+	// Case 1: Budget period aligns with billing cycle - use pre-fetched summary
+	if budgetPeriodStart.Equal(summary.PeriodStart) {
+		return &budgetCostResult{
+			spans:  summary.TotalSpans,
+			bytes:  summary.TotalBytes,
+			scores: summary.TotalScores,
+			cost:   totalCycleCost,
+		}, nil
+	}
+
+	// Case 2: Budget period differs from billing cycle
+	return w.getBudgetUsageMarginal(ctx, orgID, budget, budgetPeriodStart,
+		summary.PeriodStart, totalCycleCost, effectivePricing)
+}
+
+// getBudgetUsageMarginal calculates cost when budget period differs from billing cycle.
+//
+// Uses marginal cost approach:
+// 1. Get usage for just the budget period window
+// 2. Calculate cost consumed before budget period started
+// 3. Budget cost = total cycle cost - pre-budget cost
+//
+// This ensures free tier is properly allocated to earlier periods.
+func (w *UsageAggregationWorker) getBudgetUsageMarginal(
+	ctx context.Context,
+	orgID ulid.ULID,
+	budget *billing.UsageBudget,
+	budgetStart time.Time,
+	cycleStart time.Time,
+	totalCycleCost decimal.Decimal,
+	pricing *billing.EffectivePricing,
+) (*budgetCostResult, error) {
+	// Clamp budget window to not extend before billing cycle
+	usageWindowStart := budgetStart
+	if budgetStart.Before(cycleStart) {
+		usageWindowStart = cycleStart
+	}
+
+	// Query usage for just the budget period
+	budgetUsage, err := w.usageRepo.GetUsageSummary(ctx, &billing.BillableUsageFilter{
+		OrganizationID: orgID,
+		Start:          usageWindowStart,
+		End:            time.Now(),
+		Granularity:    "hourly",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("get budget period usage: %w", err)
+	}
+
+	result := &budgetCostResult{
+		spans:  budgetUsage.TotalSpans,
+		bytes:  budgetUsage.TotalBytes,
+		scores: budgetUsage.TotalScores,
+	}
+
+	// If budget includes cycle start, full cost applies (free tier accounted for)
+	if budgetStart.Before(cycleStart) || budgetStart.Equal(cycleStart) {
+		result.cost = totalCycleCost
+		return result, nil
+	}
+
+	// Calculate marginal cost: total - cost_before_budget
+	preBudgetUsage, err := w.usageRepo.GetUsageSummary(ctx, &billing.BillableUsageFilter{
+		OrganizationID: orgID,
+		Start:          cycleStart,
+		End:            budgetStart,
+		Granularity:    "hourly",
+	})
+	if err != nil {
+		// Fallback: use raw cost (no free tier) on query failure
+		w.logger.Warn("Failed to get pre-budget usage, using raw cost",
+			"error", err, "org_id", orgID, "budget_id", budget.ID)
+		result.cost = w.calculateRawCost(budgetUsage, pricing)
+		return result, nil
+	}
+
+	costBeforeBudget := w.calculateCost(preBudgetUsage, pricing)
+	result.cost = decimal.Max(decimal.Zero, totalCycleCost.Sub(costBeforeBudget))
+
+	return result, nil
 }
 
 // Helper formatting functions
