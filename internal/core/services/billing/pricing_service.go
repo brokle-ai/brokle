@@ -137,7 +137,7 @@ func (s *pricingService) calculateFlat(usage *billing.BillableUsageSummary, pric
 
 	// Spans
 	billableSpans := max(0, usage.TotalSpans-pricing.FreeSpans)
-	spanCost := decimal.NewFromInt(billableSpans).Div(decimal.NewFromInt(100000)).Mul(pricing.PricePer100KSpans)
+	spanCost := decimal.NewFromInt(billableSpans).Div(decimal.NewFromInt(units.SpansPer100K)).Mul(pricing.PricePer100KSpans)
 	totalCost = totalCost.Add(spanCost)
 
 	// Bytes
@@ -149,7 +149,7 @@ func (s *pricingService) calculateFlat(usage *billing.BillableUsageSummary, pric
 
 	// Scores
 	billableScores := max(0, usage.TotalScores-pricing.FreeScores)
-	scoreCost := decimal.NewFromInt(billableScores).Div(decimal.NewFromInt(1000)).Mul(pricing.PricePer1KScores)
+	scoreCost := decimal.NewFromInt(billableScores).Div(decimal.NewFromInt(units.ScoresPer1K)).Mul(pricing.PricePer1KScores)
 	totalCost = totalCost.Add(scoreCost)
 
 	return totalCost
@@ -175,7 +175,7 @@ func (s *pricingService) calculateFlatNoFreeTier(usage *billing.BillableUsageSum
 	totalCost := decimal.Zero
 
 	// Spans
-	spanCost := decimal.NewFromInt(usage.TotalSpans).Div(decimal.NewFromInt(100000)).Mul(pricing.PricePer100KSpans)
+	spanCost := decimal.NewFromInt(usage.TotalSpans).Div(decimal.NewFromInt(units.SpansPer100K)).Mul(pricing.PricePer100KSpans)
 	totalCost = totalCost.Add(spanCost)
 
 	// Bytes
@@ -184,7 +184,7 @@ func (s *pricingService) calculateFlatNoFreeTier(usage *billing.BillableUsageSum
 	totalCost = totalCost.Add(dataCost)
 
 	// Scores
-	scoreCost := decimal.NewFromInt(usage.TotalScores).Div(decimal.NewFromInt(1000)).Mul(pricing.PricePer1KScores)
+	scoreCost := decimal.NewFromInt(usage.TotalScores).Div(decimal.NewFromInt(units.ScoresPer1K)).Mul(pricing.PricePer1KScores)
 	totalCost = totalCost.Add(scoreCost)
 
 	return totalCost
@@ -279,11 +279,11 @@ func (s *pricingService) CalculateDimensionWithTiers(usage, freeTier int64, dime
 func getDimensionUnitSize(dimension billing.TierDimension) int64 {
 	switch dimension {
 	case billing.TierDimensionSpans:
-		return 100000 // per 100K
+		return units.SpansPer100K
 	case billing.TierDimensionBytes:
 		return units.BytesPerGB
 	case billing.TierDimensionScores:
-		return 1000 // per 1K
+		return units.ScoresPer1K
 	default:
 		return 1
 	}

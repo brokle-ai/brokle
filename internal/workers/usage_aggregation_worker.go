@@ -568,7 +568,7 @@ func (w *UsageAggregationWorker) calculateFlat(usage *billing.BillableUsageSumma
 
 	// Spans
 	billableSpans := max(0, usage.TotalSpans-pricing.FreeSpans)
-	spanCost := decimal.NewFromInt(billableSpans).Div(decimal.NewFromInt(100000)).Mul(pricing.PricePer100KSpans)
+	spanCost := decimal.NewFromInt(billableSpans).Div(decimal.NewFromInt(units.SpansPer100K)).Mul(pricing.PricePer100KSpans)
 	totalCost = totalCost.Add(spanCost)
 
 	// Bytes
@@ -580,7 +580,7 @@ func (w *UsageAggregationWorker) calculateFlat(usage *billing.BillableUsageSumma
 
 	// Scores
 	billableScores := max(0, usage.TotalScores-pricing.FreeScores)
-	scoreCost := decimal.NewFromInt(billableScores).Div(decimal.NewFromInt(1000)).Mul(pricing.PricePer1KScores)
+	scoreCost := decimal.NewFromInt(billableScores).Div(decimal.NewFromInt(units.ScoresPer1K)).Mul(pricing.PricePer1KScores)
 	totalCost = totalCost.Add(scoreCost)
 
 	return totalCost
@@ -616,7 +616,7 @@ func (w *UsageAggregationWorker) calculateFlatNoFreeTier(usage *billing.Billable
 	totalCost := decimal.Zero
 
 	// Spans
-	spanCost := decimal.NewFromInt(usage.TotalSpans).Div(decimal.NewFromInt(100000)).Mul(pricing.PricePer100KSpans)
+	spanCost := decimal.NewFromInt(usage.TotalSpans).Div(decimal.NewFromInt(units.SpansPer100K)).Mul(pricing.PricePer100KSpans)
 	totalCost = totalCost.Add(spanCost)
 
 	// Bytes
@@ -625,7 +625,7 @@ func (w *UsageAggregationWorker) calculateFlatNoFreeTier(usage *billing.Billable
 	totalCost = totalCost.Add(dataCost)
 
 	// Scores
-	scoreCost := decimal.NewFromInt(usage.TotalScores).Div(decimal.NewFromInt(1000)).Mul(pricing.PricePer1KScores)
+	scoreCost := decimal.NewFromInt(usage.TotalScores).Div(decimal.NewFromInt(units.ScoresPer1K)).Mul(pricing.PricePer1KScores)
 	totalCost = totalCost.Add(scoreCost)
 
 	return totalCost

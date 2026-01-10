@@ -169,7 +169,7 @@ func (s *billableUsageService) CalculateCost(ctx context.Context, usage *billing
 
 	if plan.PricePer100KSpans != nil {
 		billableSpans := max(0, usage.TotalSpans-plan.FreeSpans)
-		spanCost := decimal.NewFromInt(billableSpans).Div(decimal.NewFromInt(100000)).Mul(*plan.PricePer100KSpans)
+		spanCost := decimal.NewFromInt(billableSpans).Div(decimal.NewFromInt(units.SpansPer100K)).Mul(*plan.PricePer100KSpans)
 		totalCost = totalCost.Add(spanCost)
 	}
 
@@ -183,7 +183,7 @@ func (s *billableUsageService) CalculateCost(ctx context.Context, usage *billing
 
 	if plan.PricePer1KScores != nil {
 		billableScores := max(0, usage.TotalScores-plan.FreeScores)
-		scoreCost := decimal.NewFromInt(billableScores).Div(decimal.NewFromInt(1000)).Mul(*plan.PricePer1KScores)
+		scoreCost := decimal.NewFromInt(billableScores).Div(decimal.NewFromInt(units.ScoresPer1K)).Mul(*plan.PricePer1KScores)
 		totalCost = totalCost.Add(scoreCost)
 	}
 
