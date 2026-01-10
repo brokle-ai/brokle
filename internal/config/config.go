@@ -225,6 +225,7 @@ type WorkersConfig struct {
 	AnalyticsWorkers         int              `mapstructure:"analytics_workers"`
 	NotificationWorkers      int              `mapstructure:"notification_workers"`
 	UsageSyncIntervalMinutes int              `mapstructure:"usage_sync_interval_minutes"` // Billing usage sync interval (default: 5)
+	AlertDeduplicationHours  int              `mapstructure:"alert_deduplication_hours"`   // Alert deduplication window (default: 24)
 	RuleWorker               RuleWorkerConfig `mapstructure:"rule_worker"`
 }
 

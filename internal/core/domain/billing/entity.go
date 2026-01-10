@@ -50,6 +50,26 @@ type UsageQuota struct {
 	OrganizationID      ulid.ULID `json:"organization_id"`
 }
 
+// Clone returns a deep copy of the UsageQuota
+func (q *UsageQuota) Clone() *UsageQuota {
+	if q == nil {
+		return nil
+	}
+	return &UsageQuota{
+		OrganizationID:      q.OrganizationID,
+		BillingTier:         q.BillingTier,
+		Currency:            q.Currency,
+		MonthlyRequestLimit: q.MonthlyRequestLimit,
+		MonthlyTokenLimit:   q.MonthlyTokenLimit,
+		MonthlyCostLimit:    q.MonthlyCostLimit,
+		CurrentRequests:     q.CurrentRequests,
+		CurrentTokens:       q.CurrentTokens,
+		CurrentCost:         q.CurrentCost,
+		ResetDate:           q.ResetDate,
+		LastUpdated:         q.LastUpdated,
+	}
+}
+
 type PaymentMethod struct {
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`

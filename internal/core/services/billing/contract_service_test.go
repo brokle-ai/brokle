@@ -9,6 +9,7 @@ import (
 
 	"brokle/internal/core/domain/billing"
 	appErrors "brokle/pkg/errors"
+	"brokle/pkg/pointers"
 	"brokle/pkg/ulid"
 
 	"github.com/shopspring/decimal"
@@ -16,12 +17,6 @@ import (
 	"github.com/stretchr/testify/mock"
 	"gorm.io/datatypes"
 )
-
-// ptrDecimal creates a pointer to a decimal.Decimal
-func ptrDecimal(f float64) *decimal.Decimal {
-	d := decimal.NewFromFloat(f)
-	return &d
-}
 
 // Tests use shared mocks from mocks_test.go
 
@@ -49,12 +44,12 @@ func TestContractService_CreateContract_Success(t *testing.T) {
 		ContractNumber:          "ENT-2025-001",
 		StartDate:               startDate,
 		EndDate:                 &endDate,
-		MinimumCommitAmount:     ptrDecimal(50000.0),
+		MinimumCommitAmount:     pointers.PtrDecimal(decimal.NewFromFloat(50000.0)),
 		Currency:                "USD",
 		AccountOwner:            "John Smith",
 		SalesRepEmail:           "sales@example.com",
 		CustomFreeSpans:         ptrInt64(50000000),
-		CustomPricePer100KSpans: ptrDecimal(0.25),
+		CustomPricePer100KSpans: pointers.PtrDecimal(decimal.NewFromFloat(0.25)),
 		Notes:                   "Annual enterprise contract",
 		Status:                  "",
 		CreatedBy:               ulid.New().String(),
@@ -201,7 +196,7 @@ func TestContractService_UpdateContract_Success(t *testing.T) {
 		ContractName:        "Old Name",
 		AccountOwner:        "Old Owner",
 		SalesRepEmail:       "old@example.com",
-		MinimumCommitAmount: ptrDecimal(10000.0),
+		MinimumCommitAmount: pointers.PtrDecimal(decimal.NewFromFloat(10000.0)),
 	}
 
 	updatedContract := &billing.Contract{
@@ -210,7 +205,7 @@ func TestContractService_UpdateContract_Success(t *testing.T) {
 		ContractName:        "New Name",
 		AccountOwner:        "New Owner",
 		SalesRepEmail:       "new@example.com",
-		MinimumCommitAmount: ptrDecimal(20000.0),
+		MinimumCommitAmount: pointers.PtrDecimal(decimal.NewFromFloat(20000.0)),
 		Notes:               "Updated terms",
 	}
 

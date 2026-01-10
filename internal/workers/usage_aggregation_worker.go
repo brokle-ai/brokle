@@ -22,18 +22,19 @@ import (
 // UsageAggregationWorker syncs ClickHouse usage data to PostgreSQL billing state
 // and checks budget thresholds to trigger alerts
 type UsageAggregationWorker struct {
-	config             *config.Config
-	logger             *slog.Logger
-	transactor         common.Transactor
-	usageRepo          billing.BillableUsageRepository
-	billingRepo        billing.OrganizationBillingRepository
-	budgetRepo         billing.UsageBudgetRepository
-	alertRepo          billing.UsageAlertRepository
-	orgRepo            organization.OrganizationRepository
-	pricingService     billing.PricingService
-	notificationWorker *NotificationWorker
-	quit               chan bool
-	ticker             *time.Ticker
+	config                   *config.Config
+	logger                   *slog.Logger
+	transactor               common.Transactor
+	usageRepo                billing.BillableUsageRepository
+	billingRepo              billing.OrganizationBillingRepository
+	budgetRepo               billing.UsageBudgetRepository
+	alertRepo                billing.UsageAlertRepository
+	orgRepo                  organization.OrganizationRepository
+	pricingService           billing.PricingService
+	notificationWorker       *NotificationWorker
+	quit                     chan bool
+	ticker                   *time.Ticker
+	alertDeduplicationWindow time.Duration
 }
 
 // NewUsageAggregationWorker creates a new usage aggregation worker
@@ -49,18 +50,25 @@ func NewUsageAggregationWorker(
 	pricingService billing.PricingService,
 	notificationWorker *NotificationWorker,
 ) *UsageAggregationWorker {
+	// Get alert deduplication window from config (default 24 hours)
+	alertDeduplicationHours := config.Workers.AlertDeduplicationHours
+	if alertDeduplicationHours <= 0 {
+		alertDeduplicationHours = 24
+	}
+
 	return &UsageAggregationWorker{
-		config:             config,
-		logger:             logger,
-		transactor:         transactor,
-		usageRepo:          usageRepo,
-		billingRepo:        billingRepo,
-		budgetRepo:         budgetRepo,
-		alertRepo:          alertRepo,
-		orgRepo:            orgRepo,
-		pricingService:     pricingService,
-		notificationWorker: notificationWorker,
-		quit:               make(chan bool),
+		config:                   config,
+		logger:                   logger,
+		transactor:               transactor,
+		usageRepo:                usageRepo,
+		billingRepo:              billingRepo,
+		budgetRepo:               budgetRepo,
+		alertRepo:                alertRepo,
+		orgRepo:                  orgRepo,
+		pricingService:           pricingService,
+		notificationWorker:       notificationWorker,
+		quit:                     make(chan bool),
+		alertDeduplicationWindow: time.Duration(alertDeduplicationHours) * time.Hour,
 	}
 }
 
@@ -503,8 +511,8 @@ func (w *UsageAggregationWorker) hasRecentAlert(ctx context.Context, budgetID ul
 		return false
 	}
 
-	// Check for recent alerts (within last 24 hours) that match
-	cutoff := time.Now().Add(-24 * time.Hour)
+	// Check for recent alerts within the deduplication window
+	cutoff := time.Now().Add(-w.alertDeduplicationWindow)
 	for _, alert := range alerts {
 		if alert.AlertThreshold == alertThreshold &&
 			alert.Dimension == dimension &&

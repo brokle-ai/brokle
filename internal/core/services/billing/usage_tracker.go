@@ -102,11 +102,13 @@ func (t *UsageTracker) UpdateUsage(ctx context.Context, orgID ulid.ULID, record 
 	t.quotaCache[orgID] = quota
 
 	// Persist to database (async to avoid blocking)
+	// Clone quota to avoid data race - the cached pointer may be modified by subsequent calls
+	quotaSnapshot := quota.Clone()
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		if err := t.quotaRepo.UpdateUsageQuota(ctx, orgID, quota); err != nil {
+		if err := t.quotaRepo.UpdateUsageQuota(ctx, orgID, quotaSnapshot); err != nil {
 			t.logger.Error("Failed to persist usage quota", "error", err, "org_id", orgID)
 		}
 	}()
@@ -119,7 +121,12 @@ func (t *UsageTracker) GetUsageQuota(ctx context.Context, orgID ulid.ULID) (*bil
 	t.cacheMutex.RLock()
 	defer t.cacheMutex.RUnlock()
 
-	return t.getQuotaLocked(ctx, orgID)
+	quota, err := t.getQuotaLocked(ctx, orgID)
+	if err != nil {
+		return nil, err
+	}
+	// Return a clone to prevent callers from modifying cached data
+	return quota.Clone(), nil
 }
 
 // SetUsageQuota sets usage quota limits for an organization
@@ -131,9 +138,9 @@ func (t *UsageTracker) SetUsageQuota(ctx context.Context, orgID ulid.ULID, quota
 		return fmt.Errorf("failed to update usage quota: %w", err)
 	}
 
-	// Update cache
+	// Update cache with a clone to prevent external modification
 	t.cacheMutex.Lock()
-	t.quotaCache[orgID] = quota
+	t.quotaCache[orgID] = quota.Clone()
 	t.cacheMutex.Unlock()
 
 	t.logger.Info("Updated usage quota", "org_id", orgID, "request_limit", quota.MonthlyRequestLimit, "token_limit", quota.MonthlyTokenLimit, "cost_limit", quota.MonthlyCostLimit)

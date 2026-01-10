@@ -5,18 +5,13 @@ import (
 	"testing"
 
 	"brokle/internal/core/domain/billing"
+	"brokle/pkg/pointers"
 	"brokle/pkg/ulid"
 
 	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-// ptrDecimalPS creates a pointer to a decimal.Decimal for pricing service tests
-func ptrDecimalPS(f float64) *decimal.Decimal {
-	d := decimal.NewFromFloat(f)
-	return &d
-}
 
 // Tests use shared mocks from mocks_test.go
 
@@ -43,11 +38,11 @@ func TestPricingService_GetEffectivePricing_NoContract(t *testing.T) {
 		ID:                ulid.New(),
 		Name:              "pro",
 		FreeSpans:         1000000,
-		PricePer100KSpans: ptrDecimalPS(0.50),
+		PricePer100KSpans: pointers.PtrDecimal(decimal.NewFromFloat(0.50)),
 		FreeGB:            decimal.NewFromFloat(10.0),
-		PricePerGB:        ptrDecimalPS(2.00),
+		PricePerGB:        pointers.PtrDecimal(decimal.NewFromFloat(2.00)),
 		FreeScores:        100,
-		PricePer1KScores:  ptrDecimalPS(0.10),
+		PricePer1KScores:  pointers.PtrDecimal(decimal.NewFromFloat(0.10)),
 	}
 
 	billingRepo.On("GetByOrgID", ctx, orgID).Return(orgBilling, nil)
@@ -97,11 +92,11 @@ func TestPricingService_GetEffectivePricing_WithContractOverrides(t *testing.T) 
 		ID:                ulid.New(),
 		Name:              "enterprise",
 		FreeSpans:         1000000,
-		PricePer100KSpans: ptrDecimalPS(0.50),
+		PricePer100KSpans: pointers.PtrDecimal(decimal.NewFromFloat(0.50)),
 		FreeGB:            decimal.NewFromFloat(10.0),
-		PricePerGB:        ptrDecimalPS(2.00),
+		PricePerGB:        pointers.PtrDecimal(decimal.NewFromFloat(2.00)),
 		FreeScores:        100,
-		PricePer1KScores:  ptrDecimalPS(0.10),
+		PricePer1KScores:  pointers.PtrDecimal(decimal.NewFromFloat(0.10)),
 	}
 
 	contract := &billing.Contract{
@@ -109,11 +104,11 @@ func TestPricingService_GetEffectivePricing_WithContractOverrides(t *testing.T) 
 		OrganizationID:          orgID,
 		Status:                  billing.ContractStatusActive,
 		CustomFreeSpans:         ptrInt64(50000000),   // Override
-		CustomPricePer100KSpans: ptrDecimalPS(0.25),   // Override
-		CustomFreeGB:            ptrDecimalPS(100.0),  // Override
+		CustomPricePer100KSpans: pointers.PtrDecimal(decimal.NewFromFloat(0.25)),   // Override
+		CustomFreeGB:            pointers.PtrDecimal(decimal.NewFromFloat(100.0)),  // Override
 		CustomPricePerGB:        nil,                  // Use plan default
 		CustomFreeScores:        ptrInt64(1000),       // Override
-		CustomPricePer1KScores:  ptrDecimalPS(0.05),   // Override
+		CustomPricePer1KScores:  pointers.PtrDecimal(decimal.NewFromFloat(0.05)),   // Override
 	}
 
 	billingRepo.On("GetByOrgID", ctx, orgID).Return(orgBilling, nil)
@@ -164,7 +159,7 @@ func TestPricingService_GetEffectivePricing_WithVolumeTiers(t *testing.T) {
 		ID:                ulid.New(),
 		Name:              "enterprise",
 		FreeSpans:         1000000,
-		PricePer100KSpans: ptrDecimalPS(0.50),
+		PricePer100KSpans: pointers.PtrDecimal(decimal.NewFromFloat(0.50)),
 	}
 
 	contract := &billing.Contract{
@@ -236,11 +231,11 @@ func TestPricingService_CalculateCostWithTiers_FlatPricing(t *testing.T) {
 		ID:                ulid.New(),
 		Name:              "pro",
 		FreeSpans:         1000000,
-		PricePer100KSpans: ptrDecimalPS(0.50),
+		PricePer100KSpans: pointers.PtrDecimal(decimal.NewFromFloat(0.50)),
 		FreeGB:            decimal.NewFromFloat(10.0),
-		PricePerGB:        ptrDecimalPS(2.00),
+		PricePerGB:        pointers.PtrDecimal(decimal.NewFromFloat(2.00)),
 		FreeScores:        100,
-		PricePer1KScores:  ptrDecimalPS(0.10),
+		PricePer1KScores:  pointers.PtrDecimal(decimal.NewFromFloat(0.10)),
 	}
 
 	billingRepo.On("GetByOrgID", ctx, orgID).Return(orgBilling, nil)
@@ -293,7 +288,7 @@ func TestPricingService_CalculateCostWithTiers_ProgressiveTiers(t *testing.T) {
 		ID:                ulid.New(),
 		Name:              "enterprise",
 		FreeSpans:         50000000, // 50M free
-		PricePer100KSpans: ptrDecimalPS(0.50),
+		PricePer100KSpans: pointers.PtrDecimal(decimal.NewFromFloat(0.50)),
 	}
 
 	contract := &billing.Contract{
@@ -396,11 +391,11 @@ func TestPricingService_CalculateCostWithTiers_WithinFreeTier(t *testing.T) {
 		ID:                ulid.New(),
 		Name:              "free",
 		FreeSpans:         1000000,
-		PricePer100KSpans: ptrDecimalPS(0.50),
+		PricePer100KSpans: pointers.PtrDecimal(decimal.NewFromFloat(0.50)),
 		FreeGB:            decimal.NewFromFloat(10.0),
-		PricePerGB:        ptrDecimalPS(2.00),
+		PricePerGB:        pointers.PtrDecimal(decimal.NewFromFloat(2.00)),
 		FreeScores:        100,
-		PricePer1KScores:  ptrDecimalPS(0.10),
+		PricePer1KScores:  pointers.PtrDecimal(decimal.NewFromFloat(0.10)),
 	}
 
 	billingRepo.On("GetByOrgID", ctx, orgID).Return(orgBilling, nil)
@@ -447,11 +442,11 @@ func TestPricingService_CalculateCostWithTiers_MixedTiersAndFlat(t *testing.T) {
 		ID:                ulid.New(),
 		Name:              "enterprise",
 		FreeSpans:         1000000,  // 1M free
-		PricePer100KSpans: ptrDecimalPS(0.50),
+		PricePer100KSpans: pointers.PtrDecimal(decimal.NewFromFloat(0.50)),
 		FreeGB:            decimal.NewFromFloat(10.0),
-		PricePerGB:        ptrDecimalPS(2.00),
+		PricePerGB:        pointers.PtrDecimal(decimal.NewFromFloat(2.00)),
 		FreeScores:        100,
-		PricePer1KScores:  ptrDecimalPS(0.10),
+		PricePer1KScores:  pointers.PtrDecimal(decimal.NewFromFloat(0.10)),
 	}
 
 	contract := &billing.Contract{
@@ -560,11 +555,11 @@ func TestPricingService_CalculateCostWithTiers_NoTiersFallbackToFlat(t *testing.
 		ID:                ulid.New(),
 		Name:              "enterprise",
 		FreeSpans:         1000000,
-		PricePer100KSpans: ptrDecimalPS(0.50),
+		PricePer100KSpans: pointers.PtrDecimal(decimal.NewFromFloat(0.50)),
 		FreeGB:            decimal.NewFromFloat(10.0),
-		PricePerGB:        ptrDecimalPS(2.00),
+		PricePerGB:        pointers.PtrDecimal(decimal.NewFromFloat(2.00)),
 		FreeScores:        100,
-		PricePer1KScores:  ptrDecimalPS(0.10),
+		PricePer1KScores:  pointers.PtrDecimal(decimal.NewFromFloat(0.10)),
 	}
 
 	contract := &billing.Contract{
@@ -633,9 +628,9 @@ func TestPricingService_CalculateCostWithTiers_UsageAtBoundary(t *testing.T) {
 		FreeSpans:         0, // No free tier for this test
 		FreeGB:            decimal.Zero,
 		FreeScores:        0,
-		PricePer100KSpans: ptrDecimalPS(0.30), // Default flat pricing
-		PricePerGB:        ptrDecimalPS(2.00),
-		PricePer1KScores:  ptrDecimalPS(0.10),
+		PricePer100KSpans: pointers.PtrDecimal(decimal.NewFromFloat(0.30)), // Default flat pricing
+		PricePerGB:        pointers.PtrDecimal(decimal.NewFromFloat(2.00)),
+		PricePer1KScores:  pointers.PtrDecimal(decimal.NewFromFloat(0.10)),
 	}
 
 	contract := &billing.Contract{
@@ -643,7 +638,7 @@ func TestPricingService_CalculateCostWithTiers_UsageAtBoundary(t *testing.T) {
 		OrganizationID:          orgID,
 		Status:                  billing.ContractStatusActive,
 		CustomFreeSpans:         ptrInt64(0),
-		CustomPricePer100KSpans: ptrDecimalPS(0.30),
+		CustomPricePer100KSpans: pointers.PtrDecimal(decimal.NewFromFloat(0.30)),
 	}
 
 	// Tiers: [0, 100M) @ $0.30
@@ -718,9 +713,9 @@ func TestPricingService_CalculateCostWithTiers_MultiTierOverlap(t *testing.T) {
 		FreeSpans:         0,
 		FreeGB:            decimal.Zero,
 		FreeScores:        0,
-		PricePer100KSpans: ptrDecimalPS(0.30),
-		PricePerGB:        ptrDecimalPS(2.00),
-		PricePer1KScores:  ptrDecimalPS(0.10),
+		PricePer100KSpans: pointers.PtrDecimal(decimal.NewFromFloat(0.30)),
+		PricePerGB:        pointers.PtrDecimal(decimal.NewFromFloat(2.00)),
+		PricePer1KScores:  pointers.PtrDecimal(decimal.NewFromFloat(0.10)),
 	}
 
 	contract := &billing.Contract{
@@ -728,7 +723,7 @@ func TestPricingService_CalculateCostWithTiers_MultiTierOverlap(t *testing.T) {
 		OrganizationID:          orgID,
 		Status:                  billing.ContractStatusActive,
 		CustomFreeSpans:         ptrInt64(0),
-		CustomPricePer100KSpans: ptrDecimalPS(0.30),
+		CustomPricePer100KSpans: pointers.PtrDecimal(decimal.NewFromFloat(0.30)),
 	}
 
 	// Three-tier pricing: verify correct progressive charging
@@ -811,7 +806,7 @@ func TestPricingService_CalculateCostWithTiers_FreeTierOffset(t *testing.T) {
 		ID:                ulid.New(),
 		Name:              "test",
 		FreeSpans:         50_000_000,   // 50M free spans
-		PricePer100KSpans: ptrDecimalPS(1.0),
+		PricePer100KSpans: pointers.PtrDecimal(decimal.NewFromFloat(1.0)),
 	}
 
 	contract := &billing.Contract{
@@ -903,7 +898,7 @@ func TestPricingService_CalculateCostWithTiers_FreeTierExceedsFirstTier(t *testi
 		ID:                ulid.New(),
 		Name:              "test",
 		FreeSpans:         150_000_000,  // 150M free spans
-		PricePer100KSpans: ptrDecimalPS(1.0),
+		PricePer100KSpans: pointers.PtrDecimal(decimal.NewFromFloat(1.0)),
 	}
 
 	contract := &billing.Contract{
@@ -1005,7 +1000,7 @@ func TestPricingService_CalculateCostWithTiers_FreeTierConsumesFirstTier(t *test
 		ID:                ulid.New(),
 		Name:              "test",
 		FreeSpans:         100_000_000,  // 100M free spans
-		PricePer100KSpans: ptrDecimalPS(1.0),
+		PricePer100KSpans: pointers.PtrDecimal(decimal.NewFromFloat(1.0)),
 	}
 
 	contract := &billing.Contract{
@@ -1095,7 +1090,7 @@ func TestPricingService_CalculateCostWithTiers_SmallFreeTier(t *testing.T) {
 		ID:                ulid.New(),
 		Name:              "test",
 		FreeSpans:         10_000_000,   // 10M free (small relative to tiers)
-		PricePer100KSpans: ptrDecimalPS(0.50),
+		PricePer100KSpans: pointers.PtrDecimal(decimal.NewFromFloat(0.50)),
 	}
 
 	contract := &billing.Contract{
