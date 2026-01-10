@@ -2,6 +2,7 @@ package workers
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"sort"
 	"strconv"
@@ -11,6 +12,7 @@ import (
 
 	"brokle/internal/config"
 	"brokle/internal/core/domain/billing"
+	"brokle/internal/core/domain/common"
 	"brokle/internal/core/domain/organization"
 	"brokle/pkg/ulid"
 	"brokle/pkg/units"
@@ -21,6 +23,7 @@ import (
 type UsageAggregationWorker struct {
 	config             *config.Config
 	logger             *slog.Logger
+	transactor         common.Transactor
 	usageRepo          billing.BillableUsageRepository
 	billingRepo        billing.OrganizationBillingRepository
 	budgetRepo         billing.UsageBudgetRepository
@@ -36,6 +39,7 @@ type UsageAggregationWorker struct {
 func NewUsageAggregationWorker(
 	config *config.Config,
 	logger *slog.Logger,
+	transactor common.Transactor,
 	usageRepo billing.BillableUsageRepository,
 	billingRepo billing.OrganizationBillingRepository,
 	budgetRepo billing.UsageBudgetRepository,
@@ -47,6 +51,7 @@ func NewUsageAggregationWorker(
 	return &UsageAggregationWorker{
 		config:             config,
 		logger:             logger,
+		transactor:         transactor,
 		usageRepo:          usageRepo,
 		billingRepo:        billingRepo,
 		budgetRepo:         budgetRepo,
@@ -208,19 +213,19 @@ func (w *UsageAggregationWorker) syncOrganizationUsage(ctx context.Context, orgI
 	orgBilling.LastSyncedAt = time.Now()
 	orgBilling.UpdatedAt = time.Now()
 
-	if err := w.billingRepo.Update(ctx, orgBilling); err != nil {
-		return err
-	}
+	// Wrap billing and budget updates in a transaction for atomicity
+	// If budget update fails, billing update is rolled back
+	return w.transactor.WithinTransaction(ctx, func(ctx context.Context) error {
+		if err := w.billingRepo.Update(ctx, orgBilling); err != nil {
+			return fmt.Errorf("update billing: %w", err)
+		}
 
-	// Also update budget usage
-	if err := w.syncBudgetUsage(ctx, orgID, summary, cost, effectivePricing); err != nil {
-		w.logger.Warn("failed to sync budget usage",
-			"error", err,
-			"organization_id", orgID,
-		)
-	}
+		if err := w.syncBudgetUsage(ctx, orgID, summary, cost, effectivePricing); err != nil {
+			return fmt.Errorf("sync budget usage: %w", err)
+		}
 
-	return nil
+		return nil
+	})
 }
 
 // resetBillingPeriod resets the billing period for an organization
@@ -689,7 +694,7 @@ func formatNumber(n int64) string {
 	if n >= 1000 {
 		return formatFloat(float64(n)/1000) + "K"
 	}
-	return formatInt(n)
+	return strconv.FormatInt(n, 10)
 }
 
 func formatBytes(b int64) string {
@@ -702,7 +707,7 @@ func formatBytes(b int64) string {
 	if b >= 1024 {
 		return formatFloat(float64(b)/1024) + " KB"
 	}
-	return formatInt(b) + " B"
+	return strconv.FormatInt(b, 10) + " B"
 }
 
 func formatCurrency(f float64) string {
@@ -711,19 +716,7 @@ func formatCurrency(f float64) string {
 
 func formatFloat(f float64) string {
 	if f == float64(int64(f)) {
-		return formatInt(int64(f))
+		return strconv.FormatInt(int64(f), 10)
 	}
 	return strconv.FormatFloat(f, 'f', 2, 64)
-}
-
-func formatInt(n int64) string {
-	if n == 0 {
-		return "0"
-	}
-	var result []byte
-	for n > 0 {
-		result = append([]byte{byte('0' + n%10)}, result...)
-		n /= 10
-	}
-	return string(result)
 }

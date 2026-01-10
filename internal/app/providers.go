@@ -448,6 +448,7 @@ func ProvideWorkers(core *CoreContainer) (*WorkerContainer, error) {
 	usageAggWorker := workers.NewUsageAggregationWorker(
 		core.Config,
 		core.Logger,
+		core.Transactor, // Transaction support for atomic billing + budget updates
 		core.Repos.Billing.BillableUsage,
 		core.Repos.Billing.OrganizationBilling,
 		core.Repos.Billing.UsageBudget,
