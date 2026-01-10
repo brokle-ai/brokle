@@ -84,10 +84,10 @@ func (s *BillingService) RecordUsage(ctx context.Context, usage *billingDomain.C
 	discountRate, err := s.orgService.GetDiscountRate(ctx, usage.OrganizationID)
 	if err != nil {
 		s.logger.Error("Failed to get discount rate", "error", err, "org_id", usage.OrganizationID)
-		discountRate = 0.0 // No discount on error
+		discountRate = decimal.Zero // No discount on error
 	}
 
-	discountAmount := usage.TotalCost.Mul(decimal.NewFromFloat(discountRate))
+	discountAmount := usage.TotalCost.Mul(discountRate)
 	netCost := usage.TotalCost.Sub(discountAmount)
 
 	// Create usage record

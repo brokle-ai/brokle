@@ -206,7 +206,7 @@ func (w *UsageAggregationWorker) syncOrganizationUsage(ctx context.Context, orgI
 	orgBilling.CurrentPeriodSpans = summary.TotalSpans
 	orgBilling.CurrentPeriodBytes = summary.TotalBytes
 	orgBilling.CurrentPeriodScores = summary.TotalScores
-	orgBilling.CurrentPeriodCost = decimal.NewFromFloat(cost)
+	orgBilling.CurrentPeriodCost = cost
 	orgBilling.FreeSpansRemaining = freeSpansRemaining
 	orgBilling.FreeBytesRemaining = freeBytesRemaining
 	orgBilling.FreeScoresRemaining = freeScoresRemaining
@@ -242,7 +242,7 @@ func (w *UsageAggregationWorker) resetBillingPeriod(ctx context.Context, orgID u
 }
 
 // syncBudgetUsage syncs usage to all budgets for an organization
-func (w *UsageAggregationWorker) syncBudgetUsage(ctx context.Context, orgID ulid.ULID, summary *billing.BillableUsageSummary, cost float64, effectivePricing *billing.EffectivePricing) error {
+func (w *UsageAggregationWorker) syncBudgetUsage(ctx context.Context, orgID ulid.ULID, summary *billing.BillableUsageSummary, cost decimal.Decimal, effectivePricing *billing.EffectivePricing) error {
 	budgets, err := w.budgetRepo.GetActive(ctx, orgID)
 	if err != nil {
 		return err
@@ -250,7 +250,7 @@ func (w *UsageAggregationWorker) syncBudgetUsage(ctx context.Context, orgID ulid
 
 	for _, budget := range budgets {
 		var spans, bytes, scores int64
-		var budgetCost float64
+		var budgetCost decimal.Decimal
 
 		if budget.ProjectID != nil {
 			// Project-level budget - query project-specific usage
@@ -332,7 +332,7 @@ func (w *UsageAggregationWorker) syncBudgetUsage(ctx context.Context, orgID ulid
 						budgetCost = w.calculateRawCost(orgPeriodSummary, effectivePricing)
 					} else {
 						costBeforeBudget := w.calculateCost(preBudgetSummary, effectivePricing)
-						budgetCost = max(0, cost-costBeforeBudget)
+						budgetCost = decimal.Max(decimal.Zero, cost.Sub(costBeforeBudget))
 					}
 				}
 			} else {
@@ -555,7 +555,7 @@ func (w *UsageAggregationWorker) sendAlertNotification(ctx context.Context, org 
 }
 
 // calculateCost computes total cost from three billable dimensions with tier support
-func (w *UsageAggregationWorker) calculateCost(usage *billing.BillableUsageSummary, pricing *billing.EffectivePricing) float64 {
+func (w *UsageAggregationWorker) calculateCost(usage *billing.BillableUsageSummary, pricing *billing.EffectivePricing) decimal.Decimal {
 	if pricing.HasVolumeTiers {
 		return w.calculateWithTiers(usage, pricing)
 	}
@@ -563,7 +563,7 @@ func (w *UsageAggregationWorker) calculateCost(usage *billing.BillableUsageSumma
 }
 
 // calculateFlat uses simple linear pricing
-func (w *UsageAggregationWorker) calculateFlat(usage *billing.BillableUsageSummary, pricing *billing.EffectivePricing) float64 {
+func (w *UsageAggregationWorker) calculateFlat(usage *billing.BillableUsageSummary, pricing *billing.EffectivePricing) decimal.Decimal {
 	totalCost := decimal.Zero
 
 	// Spans
@@ -583,13 +583,12 @@ func (w *UsageAggregationWorker) calculateFlat(usage *billing.BillableUsageSumma
 	scoreCost := decimal.NewFromInt(billableScores).Div(decimal.NewFromInt(1000)).Mul(pricing.PricePer1KScores)
 	totalCost = totalCost.Add(scoreCost)
 
-	result, _ := totalCost.Float64()
-	return result
+	return totalCost
 }
 
 // calculateWithTiers uses progressive tier pricing
 // Delegates to PricingService for correct tier calculation logic
-func (w *UsageAggregationWorker) calculateWithTiers(usage *billing.BillableUsageSummary, pricing *billing.EffectivePricing) float64 {
+func (w *UsageAggregationWorker) calculateWithTiers(usage *billing.BillableUsageSummary, pricing *billing.EffectivePricing) decimal.Decimal {
 	totalCost := decimal.Zero
 
 	// Delegate to PricingService for tier calculations
@@ -600,13 +599,12 @@ func (w *UsageAggregationWorker) calculateWithTiers(usage *billing.BillableUsage
 
 	totalCost = totalCost.Add(w.pricingService.CalculateDimensionWithTiers(usage.TotalScores, pricing.FreeScores, billing.TierDimensionScores, pricing.VolumeTiers, pricing))
 
-	result, _ := totalCost.Float64()
-	return result
+	return totalCost
 }
 
 // calculateRawCost computes cost for usage without applying free tier deductions.
 // Used for project-level budgets where free tier is already accounted at org level.
-func (w *UsageAggregationWorker) calculateRawCost(usage *billing.BillableUsageSummary, pricing *billing.EffectivePricing) float64 {
+func (w *UsageAggregationWorker) calculateRawCost(usage *billing.BillableUsageSummary, pricing *billing.EffectivePricing) decimal.Decimal {
 	if pricing.HasVolumeTiers {
 		return w.calculateWithTiersNoFreeTier(usage, pricing)
 	}
@@ -614,7 +612,7 @@ func (w *UsageAggregationWorker) calculateRawCost(usage *billing.BillableUsageSu
 }
 
 // calculateFlatNoFreeTier uses simple linear pricing without free tier deductions
-func (w *UsageAggregationWorker) calculateFlatNoFreeTier(usage *billing.BillableUsageSummary, pricing *billing.EffectivePricing) float64 {
+func (w *UsageAggregationWorker) calculateFlatNoFreeTier(usage *billing.BillableUsageSummary, pricing *billing.EffectivePricing) decimal.Decimal {
 	totalCost := decimal.Zero
 
 	// Spans
@@ -630,13 +628,12 @@ func (w *UsageAggregationWorker) calculateFlatNoFreeTier(usage *billing.Billable
 	scoreCost := decimal.NewFromInt(usage.TotalScores).Div(decimal.NewFromInt(1000)).Mul(pricing.PricePer1KScores)
 	totalCost = totalCost.Add(scoreCost)
 
-	result, _ := totalCost.Float64()
-	return result
+	return totalCost
 }
 
 // calculateWithTiersNoFreeTier uses progressive tier pricing without free tier deductions
 // Delegates to PricingService for correct tier calculation logic
-func (w *UsageAggregationWorker) calculateWithTiersNoFreeTier(usage *billing.BillableUsageSummary, pricing *billing.EffectivePricing) float64 {
+func (w *UsageAggregationWorker) calculateWithTiersNoFreeTier(usage *billing.BillableUsageSummary, pricing *billing.EffectivePricing) decimal.Decimal {
 	totalCost := decimal.Zero
 
 	// Delegate to PricingService for tier calculations without free tier
@@ -644,8 +641,7 @@ func (w *UsageAggregationWorker) calculateWithTiersNoFreeTier(usage *billing.Bil
 	totalCost = totalCost.Add(w.pricingService.CalculateDimensionWithTiers(usage.TotalBytes, 0, billing.TierDimensionBytes, pricing.VolumeTiers, pricing))
 	totalCost = totalCost.Add(w.pricingService.CalculateDimensionWithTiers(usage.TotalScores, 0, billing.TierDimensionScores, pricing.VolumeTiers, pricing))
 
-	result, _ := totalCost.Float64()
-	return result
+	return totalCost
 }
 
 // NOTE: Removed duplicate calculateDimensionWithTiers, calculateFlatDimension, and getDimensionUnitSize.

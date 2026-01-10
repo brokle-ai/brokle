@@ -262,8 +262,8 @@ func TestPricingService_CalculateCostWithTiers_FlatPricing(t *testing.T) {
 	// Bytes: (50GB - 10GB) * 2.00 = 40 * 2.00 = $80
 	// Scores: (500 - 100) / 1K * 0.10 = 400 / 1K * 0.10 = 0.4 * 0.10 = $0.04
 	// Total: $100.04
-	expectedCost := 20.0 + 80.0 + 0.04
-	assert.InDelta(t, expectedCost, cost, 0.01)
+	expectedCost := decimal.NewFromFloat(20.0 + 80.0 + 0.04)
+	assert.True(t, cost.Equal(expectedCost), "expected %s, got %s", expectedCost, cost)
 
 	billingRepo.AssertExpectations(t)
 	planRepo.AssertExpectations(t)
@@ -365,8 +365,8 @@ func TestPricingService_CalculateCostWithTiers_ProgressiveTiers(t *testing.T) {
 	//   Cost: 500M / 100K * 0.25 = 5000 * 0.25 = $1,250
 	//
 	// Total: $150 + $1,250 = $1,400
-	expectedCost := 150.0 + 1250.0
-	assert.InDelta(t, expectedCost, cost, 0.01)
+	expectedCost := decimal.NewFromFloat(150.0 + 1250.0)
+	assert.True(t, cost.Equal(expectedCost), "expected %s, got %s", expectedCost, cost)
 
 	billingRepo.AssertExpectations(t)
 	planRepo.AssertExpectations(t)
@@ -417,7 +417,7 @@ func TestPricingService_CalculateCostWithTiers_WithinFreeTier(t *testing.T) {
 	cost, err := service.CalculateCostWithTiers(ctx, orgID, usage)
 
 	require.NoError(t, err)
-	assert.Equal(t, 0.0, cost) // All usage within free tier
+	assert.True(t, cost.IsZero(), "expected zero cost, got %s", cost) // All usage within free tier
 
 	billingRepo.AssertExpectations(t)
 	planRepo.AssertExpectations(t)
@@ -528,8 +528,8 @@ func TestPricingService_CalculateCostWithTiers_MixedTiersAndFlat(t *testing.T) {
 	//   Cost: 400 / 1000 * 0.10 = 0.4 * 0.10 = $0.04
 	//
 	// Total: $422 + $80 + $0.04 = $502.04
-	expectedCost := 422.0 + 80.0 + 0.04
-	assert.InDelta(t, expectedCost, cost, 0.01)
+	expectedCost := decimal.NewFromFloat(422.0 + 80.0 + 0.04)
+	assert.True(t, cost.Equal(expectedCost), "expected %s, got %s", expectedCost, cost)
 
 	billingRepo.AssertExpectations(t)
 	planRepo.AssertExpectations(t)
@@ -597,8 +597,8 @@ func TestPricingService_CalculateCostWithTiers_NoTiersFallbackToFlat(t *testing.
 	// Bytes: (50GB - 10GB) * 2.00 = 40 * 2.00 = $80
 	// Scores: (500 - 100) / 1K * 0.10 = 400 / 1K * 0.10 = 0.4 * 0.10 = $0.04
 	// Total: $100.04
-	expectedCost := 20.0 + 80.0 + 0.04
-	assert.InDelta(t, expectedCost, cost, 0.01)
+	expectedCost := decimal.NewFromFloat(20.0 + 80.0 + 0.04)
+	assert.True(t, cost.Equal(expectedCost), "expected %s, got %s", expectedCost, cost)
 
 	billingRepo.AssertExpectations(t)
 	planRepo.AssertExpectations(t)
@@ -682,8 +682,8 @@ func TestPricingService_CalculateCostWithTiers_UsageAtBoundary(t *testing.T) {
 	// Spans: 100M spans at tier 1 rate
 	// Tier 1: [0, 100M) - entire 100M at $0.30/100K = 1000 * 0.30 = $300
 	// Tier 2: [100M, inf) - no usage (exactly at boundary, not past it)
-	expectedCost := 300.0
-	assert.InDelta(t, expectedCost, cost, 0.01)
+	expectedCost := decimal.NewFromFloat(300.0)
+	assert.True(t, cost.Equal(expectedCost), "expected %s, got %s", expectedCost, cost)
 
 	billingRepo.AssertExpectations(t)
 	planRepo.AssertExpectations(t)
@@ -777,8 +777,8 @@ func TestPricingService_CalculateCostWithTiers_MultiTierOverlap(t *testing.T) {
 	// Tier 2: [100M, 200M) - 100M spans @ $0.25/100K = 1000 * 0.25 = $250
 	// Tier 3: [200M, inf) - 50M spans @ $0.20/100K = 500 * 0.20 = $100
 	// Total: $650
-	expectedCost := 300.0 + 250.0 + 100.0
-	assert.InDelta(t, expectedCost, cost, 0.01)
+	expectedCost := decimal.NewFromFloat(300.0 + 250.0 + 100.0)
+	assert.True(t, cost.Equal(expectedCost), "expected %s, got %s", expectedCost, cost)
 
 	billingRepo.AssertExpectations(t)
 	planRepo.AssertExpectations(t)
@@ -869,8 +869,8 @@ func TestPricingService_CalculateCostWithTiers_FreeTierOffset(t *testing.T) {
 	// Tier 1: 50M / 100K @ $1 = 500 * $1 = $500
 	// Tier 2: 50M / 100K @ $0.50 = 500 * $0.50 = $250
 	// Total: $750
-	expectedCost := 500.0 + 250.0
-	assert.InDelta(t, expectedCost, cost, 0.01)
+	expectedCost := decimal.NewFromFloat(500.0 + 250.0)
+	assert.True(t, cost.Equal(expectedCost), "expected %s, got %s", expectedCost, cost)
 
 	billingRepo.AssertExpectations(t)
 	planRepo.AssertExpectations(t)
@@ -971,8 +971,8 @@ func TestPricingService_CalculateCostWithTiers_FreeTierExceedsFirstTier(t *testi
 	// Tier 2: 50M / 100K @ $0.75 = 500 * $0.75 = $375
 	// Tier 3: 100M / 100K @ $0.50 = 1000 * $0.50 = $500
 	// Total: $875
-	expectedCost := 375.0 + 500.0
-	assert.InDelta(t, expectedCost, cost, 0.01)
+	expectedCost := decimal.NewFromFloat(375.0 + 500.0)
+	assert.True(t, cost.Equal(expectedCost), "expected %s, got %s", expectedCost, cost)
 
 	billingRepo.AssertExpectations(t)
 	planRepo.AssertExpectations(t)
@@ -1061,8 +1061,8 @@ func TestPricingService_CalculateCostWithTiers_FreeTierConsumesFirstTier(t *test
 	require.NoError(t, err)
 
 	// Only tier 2 charges: 50M / 100K @ $0.50 = 500 * $0.50 = $250
-	expectedCost := 250.0
-	assert.InDelta(t, expectedCost, cost, 0.01)
+	expectedCost := decimal.NewFromFloat(250.0)
+	assert.True(t, cost.Equal(expectedCost), "expected %s, got %s", expectedCost, cost)
 
 	billingRepo.AssertExpectations(t)
 	planRepo.AssertExpectations(t)
@@ -1153,8 +1153,8 @@ func TestPricingService_CalculateCostWithTiers_SmallFreeTier(t *testing.T) {
 	// Tier 1: 90M / 100K @ $0.30 = 900 * 0.30 = $270
 	// Tier 2: 50M / 100K @ $0.25 = 500 * 0.25 = $125
 	// Total: $395
-	expectedCost := 270.0 + 125.0
-	assert.InDelta(t, expectedCost, cost, 0.01)
+	expectedCost := decimal.NewFromFloat(270.0 + 125.0)
+	assert.True(t, cost.Equal(expectedCost), "expected %s, got %s", expectedCost, cost)
 
 	billingRepo.AssertExpectations(t)
 	planRepo.AssertExpectations(t)

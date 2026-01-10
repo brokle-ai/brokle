@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"brokle/pkg/ulid"
 )
 
@@ -78,7 +80,7 @@ type OrganizationBillingRepository interface {
 	GetByOrgID(ctx context.Context, orgID ulid.ULID) (*OrganizationBilling, error)
 	Create(ctx context.Context, billing *OrganizationBilling) error
 	Update(ctx context.Context, billing *OrganizationBilling) error
-	UpdateUsage(ctx context.Context, orgID ulid.ULID, spans, bytes, scores int64, cost float64) error
+	UpdateUsage(ctx context.Context, orgID ulid.ULID, spans, bytes, scores int64, cost decimal.Decimal) error
 	ResetPeriod(ctx context.Context, orgID ulid.ULID, newCycleStart time.Time) error
 }
 
@@ -90,7 +92,7 @@ type UsageBudgetRepository interface {
 	GetActive(ctx context.Context, orgID ulid.ULID) ([]*UsageBudget, error)
 	Create(ctx context.Context, budget *UsageBudget) error
 	Update(ctx context.Context, budget *UsageBudget) error
-	UpdateUsage(ctx context.Context, budgetID ulid.ULID, spans, bytes, scores int64, cost float64) error
+	UpdateUsage(ctx context.Context, budgetID ulid.ULID, spans, bytes, scores int64, cost decimal.Decimal) error
 	Delete(ctx context.Context, id ulid.ULID) error
 }
 

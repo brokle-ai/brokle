@@ -32,7 +32,7 @@ type BillingService interface {
 // OrganizationService provides organization-related data for billing context
 type OrganizationService interface {
 	GetBillingTier(ctx context.Context, orgID ulid.ULID) (string, error)
-	GetDiscountRate(ctx context.Context, orgID ulid.ULID) (float64, error)
+	GetDiscountRate(ctx context.Context, orgID ulid.ULID) (decimal.Decimal, error)
 	GetPaymentMethod(ctx context.Context, orgID ulid.ULID) (*PaymentMethod, error)
 }
 
@@ -74,7 +74,7 @@ type UsageOverview struct {
 	FreeScoresTotal int64   `json:"free_scores_total"`
 
 	// Calculated cost
-	EstimatedCost float64 `json:"estimated_cost"`
+	EstimatedCost decimal.Decimal `json:"estimated_cost"`
 }
 
 // BillableUsageService handles billable usage queries and cost calculation
@@ -126,11 +126,11 @@ type PricingService interface {
 	GetEffectivePricingWithBilling(ctx context.Context, orgID ulid.ULID, orgBilling *OrganizationBilling) (*EffectivePricing, error)
 
 	// Calculate cost with tier support
-	CalculateCostWithTiers(ctx context.Context, orgID ulid.ULID, usage *BillableUsageSummary) (float64, error)
+	CalculateCostWithTiers(ctx context.Context, orgID ulid.ULID, usage *BillableUsageSummary) (decimal.Decimal, error)
 
 	// Calculate cost with tiers but without free tier deductions
 	// Used for project-level budgets where free tier is org-level only
-	CalculateCostWithTiersNoFreeTier(ctx context.Context, orgID ulid.ULID, usage *BillableUsageSummary) (float64, error)
+	CalculateCostWithTiersNoFreeTier(ctx context.Context, orgID ulid.ULID, usage *BillableUsageSummary) (decimal.Decimal, error)
 
 	// Calculate cost for a single dimension with tier support (exported for worker usage)
 	// Uses absolute position mapping with free tier offset for correct tier calculations

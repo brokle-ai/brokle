@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
 
 	"brokle/internal/core/domain/billing"
@@ -47,7 +48,7 @@ func (r *organizationBillingRepository) Update(ctx context.Context, orgBilling *
 	return r.getDB(ctx).WithContext(ctx).Save(orgBilling).Error
 }
 
-func (r *organizationBillingRepository) UpdateUsage(ctx context.Context, orgID ulid.ULID, spans, bytes, scores int64, cost float64) error {
+func (r *organizationBillingRepository) UpdateUsage(ctx context.Context, orgID ulid.ULID, spans, bytes, scores int64, cost decimal.Decimal) error {
 	return r.getDB(ctx).WithContext(ctx).
 		Model(&billing.OrganizationBilling{}).
 		Where("organization_id = ?", orgID).

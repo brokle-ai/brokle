@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
 
 	"brokle/internal/core/domain/billing"
@@ -84,7 +85,7 @@ func (r *usageBudgetRepository) Update(ctx context.Context, budget *billing.Usag
 }
 
 // UpdateUsage sets usage counters for a budget (expects cumulative totals, not deltas)
-func (r *usageBudgetRepository) UpdateUsage(ctx context.Context, budgetID ulid.ULID, spans, bytes, scores int64, cost float64) error {
+func (r *usageBudgetRepository) UpdateUsage(ctx context.Context, budgetID ulid.ULID, spans, bytes, scores int64, cost decimal.Decimal) error {
 	return r.getDB(ctx).WithContext(ctx).
 		Model(&billing.UsageBudget{}).
 		Where("id = ?", budgetID).

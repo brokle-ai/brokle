@@ -103,10 +103,10 @@ func (s *pricingService) GetEffectivePricingWithBilling(ctx context.Context, org
 }
 
 // CalculateCostWithTiers calculates cost with volume tier support
-func (s *pricingService) CalculateCostWithTiers(ctx context.Context, orgID ulid.ULID, usage *billing.BillableUsageSummary) (float64, error) {
+func (s *pricingService) CalculateCostWithTiers(ctx context.Context, orgID ulid.ULID, usage *billing.BillableUsageSummary) (decimal.Decimal, error) {
 	effective, err := s.GetEffectivePricing(ctx, orgID)
 	if err != nil {
-		return 0, err
+		return decimal.Zero, err
 	}
 
 	if effective.HasVolumeTiers {
@@ -118,10 +118,10 @@ func (s *pricingService) CalculateCostWithTiers(ctx context.Context, orgID ulid.
 
 // CalculateCostWithTiersNoFreeTier calculates cost with tier support but without free tier deductions
 // Used for project-level budgets where free tier is org-level only
-func (s *pricingService) CalculateCostWithTiersNoFreeTier(ctx context.Context, orgID ulid.ULID, usage *billing.BillableUsageSummary) (float64, error) {
+func (s *pricingService) CalculateCostWithTiersNoFreeTier(ctx context.Context, orgID ulid.ULID, usage *billing.BillableUsageSummary) (decimal.Decimal, error) {
 	effective, err := s.GetEffectivePricing(ctx, orgID)
 	if err != nil {
-		return 0, err
+		return decimal.Zero, err
 	}
 
 	if effective.HasVolumeTiers {
@@ -132,7 +132,7 @@ func (s *pricingService) CalculateCostWithTiersNoFreeTier(ctx context.Context, o
 }
 
 // calculateFlat uses simple linear pricing (current implementation)
-func (s *pricingService) calculateFlat(usage *billing.BillableUsageSummary, pricing *billing.EffectivePricing) float64 {
+func (s *pricingService) calculateFlat(usage *billing.BillableUsageSummary, pricing *billing.EffectivePricing) decimal.Decimal {
 	totalCost := decimal.Zero
 
 	// Spans
@@ -152,12 +152,11 @@ func (s *pricingService) calculateFlat(usage *billing.BillableUsageSummary, pric
 	scoreCost := decimal.NewFromInt(billableScores).Div(decimal.NewFromInt(1000)).Mul(pricing.PricePer1KScores)
 	totalCost = totalCost.Add(scoreCost)
 
-	result, _ := totalCost.Float64()
-	return result
+	return totalCost
 }
 
 // calculateWithTiers uses progressive tier pricing
-func (s *pricingService) calculateWithTiers(usage *billing.BillableUsageSummary, pricing *billing.EffectivePricing) float64 {
+func (s *pricingService) calculateWithTiers(usage *billing.BillableUsageSummary, pricing *billing.EffectivePricing) decimal.Decimal {
 	totalCost := decimal.Zero
 
 	// Calculate each dimension
@@ -168,12 +167,11 @@ func (s *pricingService) calculateWithTiers(usage *billing.BillableUsageSummary,
 
 	totalCost = totalCost.Add(s.CalculateDimensionWithTiers(usage.TotalScores, pricing.FreeScores, billing.TierDimensionScores, pricing.VolumeTiers, pricing))
 
-	result, _ := totalCost.Float64()
-	return result
+	return totalCost
 }
 
 // calculateFlatNoFreeTier uses simple linear pricing without free tier deductions
-func (s *pricingService) calculateFlatNoFreeTier(usage *billing.BillableUsageSummary, pricing *billing.EffectivePricing) float64 {
+func (s *pricingService) calculateFlatNoFreeTier(usage *billing.BillableUsageSummary, pricing *billing.EffectivePricing) decimal.Decimal {
 	totalCost := decimal.Zero
 
 	// Spans
@@ -189,12 +187,11 @@ func (s *pricingService) calculateFlatNoFreeTier(usage *billing.BillableUsageSum
 	scoreCost := decimal.NewFromInt(usage.TotalScores).Div(decimal.NewFromInt(1000)).Mul(pricing.PricePer1KScores)
 	totalCost = totalCost.Add(scoreCost)
 
-	result, _ := totalCost.Float64()
-	return result
+	return totalCost
 }
 
 // calculateWithTiersNoFreeTier uses progressive tier pricing without free tier deductions
-func (s *pricingService) calculateWithTiersNoFreeTier(usage *billing.BillableUsageSummary, pricing *billing.EffectivePricing) float64 {
+func (s *pricingService) calculateWithTiersNoFreeTier(usage *billing.BillableUsageSummary, pricing *billing.EffectivePricing) decimal.Decimal {
 	totalCost := decimal.Zero
 
 	// Calculate each dimension without free tier
@@ -202,8 +199,7 @@ func (s *pricingService) calculateWithTiersNoFreeTier(usage *billing.BillableUsa
 	totalCost = totalCost.Add(s.CalculateDimensionWithTiers(usage.TotalBytes, 0, billing.TierDimensionBytes, pricing.VolumeTiers, pricing))
 	totalCost = totalCost.Add(s.CalculateDimensionWithTiers(usage.TotalScores, 0, billing.TierDimensionScores, pricing.VolumeTiers, pricing))
 
-	result, _ := totalCost.Float64()
-	return result
+	return totalCost
 }
 
 // CalculateDimensionWithTiers applies progressive pricing using absolute position mapping with free tier offset

@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
 
 	"brokle/internal/config"
@@ -1362,9 +1363,9 @@ func (s *simpleBillingOrgService) GetBillingTier(ctx context.Context, orgID ulid
 	return "free", nil
 }
 
-func (s *simpleBillingOrgService) GetDiscountRate(ctx context.Context, orgID ulid.ULID) (float64, error) {
+func (s *simpleBillingOrgService) GetDiscountRate(ctx context.Context, orgID ulid.ULID) (decimal.Decimal, error) {
 	// Default to no discount - in production this would query the org service
-	return 0.0, nil
+	return decimal.Zero, nil
 }
 
 func (s *simpleBillingOrgService) GetPaymentMethod(ctx context.Context, orgID ulid.ULID) (*billing.PaymentMethod, error) {
