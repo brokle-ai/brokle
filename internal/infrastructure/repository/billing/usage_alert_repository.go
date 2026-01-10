@@ -31,7 +31,7 @@ func (r *usageAlertRepository) GetByID(ctx context.Context, id ulid.ULID) (*bill
 	err := r.getDB(ctx).WithContext(ctx).Where("id = ?", id).First(&alert).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, fmt.Errorf("alert not found: %s", id)
+			return nil, billing.NewAlertNotFoundError(id.String())
 		}
 		return nil, fmt.Errorf("get alert: %w", err)
 	}

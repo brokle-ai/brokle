@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"brokle/pkg/ulid"
 )
 
@@ -132,7 +134,7 @@ type PricingService interface {
 
 	// Calculate cost for a single dimension with tier support (exported for worker usage)
 	// Uses absolute position mapping with free tier offset for correct tier calculations
-	CalculateDimensionWithTiers(usage, freeTier int64, dimension TierDimension, allTiers []*VolumeDiscountTier, pricing *EffectivePricing) float64
+	CalculateDimensionWithTiers(usage, freeTier int64, dimension TierDimension, allTiers []*VolumeDiscountTier, pricing *EffectivePricing) decimal.Decimal
 }
 
 // ContractService handles enterprise contract lifecycle

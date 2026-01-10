@@ -1,12 +1,13 @@
 package billing
 
 import (
-	"log/slog"
 	"context"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
+	"github.com/shopspring/decimal"
 
 	billingDomain "brokle/internal/core/domain/billing"
 	"brokle/pkg/ulid"
@@ -74,9 +75,9 @@ func (t *UsageTracker) UpdateUsage(ctx context.Context, orgID ulid.ULID, record 
 		quota = &billingDomain.UsageQuota{
 			OrganizationID:      orgID,
 			BillingTier:         record.BillingTier,
-			MonthlyRequestLimit: 0, // Unlimited by default
-			MonthlyTokenLimit:   0, // Unlimited by default
-			MonthlyCostLimit:    0, // Unlimited by default
+			MonthlyRequestLimit: 0,            // Unlimited by default
+			MonthlyTokenLimit:   0,            // Unlimited by default
+			MonthlyCostLimit:    decimal.Zero, // Unlimited by default
 			Currency:            record.Currency,
 			ResetDate:           t.getNextResetDate(),
 			LastUpdated:         time.Now(),
@@ -86,7 +87,7 @@ func (t *UsageTracker) UpdateUsage(ctx context.Context, orgID ulid.ULID, record 
 	// Update current usage
 	quota.CurrentRequests++
 	quota.CurrentTokens += int64(record.TotalTokens)
-	quota.CurrentCost += record.NetCost
+	quota.CurrentCost = quota.CurrentCost.Add(record.NetCost)
 	quota.LastUpdated = time.Now()
 
 	// Check if we need to reset monthly counters
@@ -179,9 +180,9 @@ func (t *UsageTracker) CheckQuotaExceeded(ctx context.Context, orgID ulid.ULID) 
 	}
 
 	// Check cost limits
-	if quota.MonthlyCostLimit > 0 {
-		status.CostOK = quota.CurrentCost < quota.MonthlyCostLimit
-		status.CostUsagePercent = quota.CurrentCost / quota.MonthlyCostLimit * 100
+	if !quota.MonthlyCostLimit.IsZero() {
+		status.CostOK = quota.CurrentCost.LessThan(quota.MonthlyCostLimit)
+		status.CostUsagePercent = quota.CurrentCost.Div(quota.MonthlyCostLimit).Mul(decimal.NewFromInt(100)).InexactFloat64()
 	} else {
 		status.CostOK = true
 	}
@@ -219,7 +220,7 @@ func (t *UsageTracker) ResetMonthlyUsage(ctx context.Context, orgID ulid.ULID) e
 	// Reset counters
 	quota.CurrentRequests = 0
 	quota.CurrentTokens = 0
-	quota.CurrentCost = 0
+	quota.CurrentCost = decimal.Zero
 	quota.ResetDate = t.getNextResetDate()
 	quota.LastUpdated = time.Now()
 
@@ -324,7 +325,7 @@ func (t *UsageTracker) syncQuotas() {
 			// Reset monthly counters
 			quota.CurrentRequests = 0
 			quota.CurrentTokens = 0
-			quota.CurrentCost = 0
+			quota.CurrentCost = decimal.Zero
 			quota.ResetDate = t.getNextResetDate()
 			quota.LastUpdated = now
 
@@ -390,8 +391,8 @@ func (t *UsageTracker) GetUsageMetrics(ctx context.Context, orgID ulid.ULID) (ma
 			return 0
 		}(),
 		"cost_usage_percent": func() float64 {
-			if quota.MonthlyCostLimit > 0 {
-				return quota.CurrentCost / quota.MonthlyCostLimit * 100
+			if !quota.MonthlyCostLimit.IsZero() {
+				return quota.CurrentCost.Div(quota.MonthlyCostLimit).Mul(decimal.NewFromInt(100)).InexactFloat64()
 			}
 			return 0
 		}(),

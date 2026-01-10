@@ -1136,11 +1136,11 @@ func (s *Seeder) seedBillingConfigsData(ctx context.Context, data *BillingConfig
 			// Update existing plan
 			existing.IsDefault = cfgSeed.IsDefault
 			existing.FreeSpans = cfgSeed.FreeSpans
-			existing.FreeGB = cfgSeed.FreeGB
+			existing.FreeGB = decimal.NewFromFloat(cfgSeed.FreeGB)
 			existing.FreeScores = cfgSeed.FreeScores
-			existing.PricePer100KSpans = cfgSeed.PricePer100KSpans
-			existing.PricePerGB = cfgSeed.PricePerGB
-			existing.PricePer1KScores = cfgSeed.PricePer1KScores
+			existing.PricePer100KSpans = float64PtrToDecimalPtr(cfgSeed.PricePer100KSpans)
+			existing.PricePerGB = float64PtrToDecimalPtr(cfgSeed.PricePerGB)
+			existing.PricePer1KScores = float64PtrToDecimalPtr(cfgSeed.PricePer1KScores)
 			existing.IsActive = true
 			existing.UpdatedAt = now
 
@@ -1156,11 +1156,11 @@ func (s *Seeder) seedBillingConfigsData(ctx context.Context, data *BillingConfig
 			Name:              cfgSeed.Name,
 			IsDefault:         cfgSeed.IsDefault,
 			FreeSpans:         cfgSeed.FreeSpans,
-			FreeGB:            cfgSeed.FreeGB,
+			FreeGB:            decimal.NewFromFloat(cfgSeed.FreeGB),
 			FreeScores:        cfgSeed.FreeScores,
-			PricePer100KSpans: cfgSeed.PricePer100KSpans,
-			PricePerGB:        cfgSeed.PricePerGB,
-			PricePer1KScores:  cfgSeed.PricePer1KScores,
+			PricePer100KSpans: float64PtrToDecimalPtr(cfgSeed.PricePer100KSpans),
+			PricePerGB:        float64PtrToDecimalPtr(cfgSeed.PricePerGB),
+			PricePer1KScores:  float64PtrToDecimalPtr(cfgSeed.PricePer1KScores),
 			IsActive:          true,
 			CreatedAt:         now,
 			UpdatedAt:         now,
@@ -1289,12 +1289,12 @@ func (s *Seeder) SeedOrganizationBillings(ctx context.Context, opts *Options) er
 			BillingCycleStart:     now,
 			BillingCycleAnchorDay: 1,
 			FreeSpansRemaining:    defaultPlan.FreeSpans,
-			FreeBytesRemaining:    int64(defaultPlan.FreeGB * 1024 * 1024 * 1024),
+			FreeBytesRemaining:    defaultPlan.FreeGB.Mul(decimal.NewFromInt(1024 * 1024 * 1024)).IntPart(),
 			FreeScoresRemaining:   defaultPlan.FreeScores,
 			CurrentPeriodSpans:    0,
 			CurrentPeriodBytes:    0,
 			CurrentPeriodScores:   0,
-			CurrentPeriodCost:     0,
+			CurrentPeriodCost:     decimal.Zero,
 			LastSyncedAt:          now,
 			CreatedAt:             now,
 			UpdatedAt:             now,
@@ -1313,4 +1313,13 @@ func (s *Seeder) SeedOrganizationBillings(ctx context.Context, opts *Options) er
 
 	s.logger.Info("Organization billing provisioning completed", "seeded", seededCount, "total", len(orgs))
 	return nil
+}
+
+// float64PtrToDecimalPtr converts a *float64 to *decimal.Decimal
+func float64PtrToDecimalPtr(f *float64) *decimal.Decimal {
+	if f == nil {
+		return nil
+	}
+	d := decimal.NewFromFloat(*f)
+	return &d
 }

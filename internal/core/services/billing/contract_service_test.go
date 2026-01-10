@@ -11,10 +11,17 @@ import (
 	appErrors "brokle/pkg/errors"
 	"brokle/pkg/ulid"
 
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"gorm.io/datatypes"
 )
+
+// ptrDecimal creates a pointer to a decimal.Decimal
+func ptrDecimal(f float64) *decimal.Decimal {
+	d := decimal.NewFromFloat(f)
+	return &d
+}
 
 // Tests use shared mocks from mocks_test.go
 
@@ -42,12 +49,12 @@ func TestContractService_CreateContract_Success(t *testing.T) {
 		ContractNumber:          "ENT-2025-001",
 		StartDate:               startDate,
 		EndDate:                 &endDate,
-		MinimumCommitAmount:     ptrFloat64(50000.0),
+		MinimumCommitAmount:     ptrDecimal(50000.0),
 		Currency:                "USD",
 		AccountOwner:            "John Smith",
 		SalesRepEmail:           "sales@example.com",
 		CustomFreeSpans:         ptrInt64(50000000),
-		CustomPricePer100KSpans: ptrFloat64(0.25),
+		CustomPricePer100KSpans: ptrDecimal(0.25),
 		Notes:                   "Annual enterprise contract",
 		Status:                  "",
 		CreatedBy:               ulid.New().String(),
@@ -194,7 +201,7 @@ func TestContractService_UpdateContract_Success(t *testing.T) {
 		ContractName:        "Old Name",
 		AccountOwner:        "Old Owner",
 		SalesRepEmail:       "old@example.com",
-		MinimumCommitAmount: ptrFloat64(10000.0),
+		MinimumCommitAmount: ptrDecimal(10000.0),
 	}
 
 	updatedContract := &billing.Contract{
@@ -203,7 +210,7 @@ func TestContractService_UpdateContract_Success(t *testing.T) {
 		ContractName:        "New Name",
 		AccountOwner:        "New Owner",
 		SalesRepEmail:       "new@example.com",
-		MinimumCommitAmount: ptrFloat64(20000.0),
+		MinimumCommitAmount: ptrDecimal(20000.0),
 		Notes:               "Updated terms",
 	}
 
@@ -345,13 +352,13 @@ func TestContractService_UpdateVolumeTiers_Success(t *testing.T) {
 			Dimension:    billing.TierDimensionSpans,
 			TierMin:      0,
 			TierMax:      ptrInt64(100000000),
-			PricePerUnit: 0.30,
+			PricePerUnit: decimal.NewFromFloat(0.30),
 		},
 		{
 			Dimension:    billing.TierDimensionSpans,
 			TierMin:      100000000,
 			TierMax:      nil,
-			PricePerUnit: 0.25,
+			PricePerUnit: decimal.NewFromFloat(0.25),
 		},
 	}
 
@@ -725,7 +732,7 @@ func TestContractService_AddVolumeTiers_ValidationFirstTierNotZero(t *testing.T)
 			Dimension:    billing.TierDimensionSpans,
 			TierMin:      100_000_000, // ERROR: Should be 0
 			TierMax:      ptrInt64(200_000_000),
-			PricePerUnit: 0.30,
+			PricePerUnit: decimal.NewFromFloat(0.30),
 		},
 	}
 
@@ -765,13 +772,13 @@ func TestContractService_AddVolumeTiers_ValidationGapDetection(t *testing.T) {
 			Dimension:    billing.TierDimensionSpans,
 			TierMin:      0,
 			TierMax:      ptrInt64(100_000_000),
-			PricePerUnit: 0.30,
+			PricePerUnit: decimal.NewFromFloat(0.30),
 		},
 		{
 			Dimension:    billing.TierDimensionSpans,
 			TierMin:      150_000_000, // ERROR: Gap from 100M to 150M
 			TierMax:      ptrInt64(200_000_000),
-			PricePerUnit: 0.25,
+			PricePerUnit: decimal.NewFromFloat(0.25),
 		},
 	}
 
@@ -811,13 +818,13 @@ func TestContractService_AddVolumeTiers_ValidationUnlimitedNotLast(t *testing.T)
 			Dimension:    billing.TierDimensionSpans,
 			TierMin:      0,
 			TierMax:      nil, // ERROR: Unlimited but not last
-			PricePerUnit: 0.30,
+			PricePerUnit: decimal.NewFromFloat(0.30),
 		},
 		{
 			Dimension:    billing.TierDimensionSpans,
 			TierMin:      100_000_000,
 			TierMax:      ptrInt64(200_000_000),
-			PricePerUnit: 0.25,
+			PricePerUnit: decimal.NewFromFloat(0.25),
 		},
 	}
 
@@ -858,26 +865,26 @@ func TestContractService_AddVolumeTiers_MultiDimensionValidation(t *testing.T) {
 			Dimension:    billing.TierDimensionSpans,
 			TierMin:      0,
 			TierMax:      ptrInt64(100_000_000),
-			PricePerUnit: 0.30,
+			PricePerUnit: decimal.NewFromFloat(0.30),
 		},
 		{
 			Dimension:    billing.TierDimensionSpans,
 			TierMin:      100_000_000,
 			TierMax:      nil,
-			PricePerUnit: 0.25,
+			PricePerUnit: decimal.NewFromFloat(0.25),
 		},
 		// Invalid bytes tiers (gap)
 		{
 			Dimension:    billing.TierDimensionBytes,
 			TierMin:      0,
 			TierMax:      ptrInt64(10_737_418_240), // 10 GB
-			PricePerUnit: 0.50,
+			PricePerUnit: decimal.NewFromFloat(0.50),
 		},
 		{
 			Dimension:    billing.TierDimensionBytes,
 			TierMin:      21_474_836_480, // ERROR: Gap from 10GB to 20GB
 			TierMax:      nil,
-			PricePerUnit: 0.40,
+			PricePerUnit: decimal.NewFromFloat(0.40),
 		},
 	}
 

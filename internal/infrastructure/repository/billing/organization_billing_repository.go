@@ -31,7 +31,7 @@ func (r *organizationBillingRepository) GetByOrgID(ctx context.Context, orgID ul
 	err := r.getDB(ctx).WithContext(ctx).Where("organization_id = ?", orgID).First(&orgBilling).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, fmt.Errorf("organization billing not found: %s", orgID)
+			return nil, billing.NewBillingNotFoundError(orgID.String())
 		}
 		return nil, fmt.Errorf("get organization billing: %w", err)
 	}

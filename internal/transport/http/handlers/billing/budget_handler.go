@@ -6,14 +6,15 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/gin-gonic/gin"
+	"github.com/shopspring/decimal"
+
 	"brokle/internal/config"
 	"brokle/internal/core/domain/billing"
 	"brokle/internal/transport/http/middleware"
 	appErrors "brokle/pkg/errors"
 	"brokle/pkg/response"
 	"brokle/pkg/ulid"
-
-	"github.com/gin-gonic/gin"
 )
 
 type BudgetHandler struct {
@@ -197,6 +198,13 @@ func (h *BudgetHandler) CreateBudget(c *gin.Context) {
 		return alertThresholds[i] < alertThresholds[j]
 	})
 
+	// Convert float64 cost limit to decimal if provided
+	var costLimit *decimal.Decimal
+	if req.CostLimit != nil {
+		d := decimal.NewFromFloat(*req.CostLimit)
+		costLimit = &d
+	}
+
 	budget := &billing.UsageBudget{
 		OrganizationID:  orgID,
 		Name:            req.Name,
@@ -204,7 +212,7 @@ func (h *BudgetHandler) CreateBudget(c *gin.Context) {
 		SpanLimit:       req.SpanLimit,
 		BytesLimit:      req.BytesLimit,
 		ScoreLimit:      req.ScoreLimit,
-		CostLimit:       req.CostLimit,
+		CostLimit:       costLimit,
 		AlertThresholds: alertThresholds,
 	}
 
@@ -293,7 +301,8 @@ func (h *BudgetHandler) UpdateBudget(c *gin.Context) {
 		budget.ScoreLimit = req.ScoreLimit
 	}
 	if req.CostLimit != nil {
-		budget.CostLimit = req.CostLimit
+		d := decimal.NewFromFloat(*req.CostLimit)
+		budget.CostLimit = &d
 	}
 	// AlertThresholds: apply if explicitly provided (including empty [] to disable alerts)
 	if req.AlertThresholds != nil {

@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"sort"
 
+	"github.com/shopspring/decimal"
+
 	"brokle/internal/core/domain/billing"
 	"brokle/pkg/pointers"
 	"brokle/pkg/ulid"
@@ -71,11 +73,11 @@ func (s *pricingService) GetEffectivePricingWithBilling(ctx context.Context, org
 	// 3. Resolve pricing (contract overrides plan)
 	if contract != nil {
 		effective.FreeSpans = pointers.CoalesceInt64(contract.CustomFreeSpans, plan.FreeSpans)
-		effective.PricePer100KSpans = pointers.CoalesceFloat64(contract.CustomPricePer100KSpans, plan.PricePer100KSpans)
-		effective.FreeGB = pointers.CoalesceFloat64(contract.CustomFreeGB, &plan.FreeGB)
-		effective.PricePerGB = pointers.CoalesceFloat64(contract.CustomPricePerGB, plan.PricePerGB)
+		effective.PricePer100KSpans = pointers.CoalesceDecimal(contract.CustomPricePer100KSpans, plan.PricePer100KSpans)
+		effective.FreeGB = pointers.CoalesceDecimal(contract.CustomFreeGB, &plan.FreeGB)
+		effective.PricePerGB = pointers.CoalesceDecimal(contract.CustomPricePerGB, plan.PricePerGB)
 		effective.FreeScores = pointers.CoalesceInt64(contract.CustomFreeScores, plan.FreeScores)
-		effective.PricePer1KScores = pointers.CoalesceFloat64(contract.CustomPricePer1KScores, plan.PricePer1KScores)
+		effective.PricePer1KScores = pointers.CoalesceDecimal(contract.CustomPricePer1KScores, plan.PricePer1KScores)
 
 		// Load volume tiers
 		tiers, err := s.tierRepo.GetByContractID(ctx, contract.ID)
@@ -90,11 +92,11 @@ func (s *pricingService) GetEffectivePricingWithBilling(ctx context.Context, org
 	} else {
 		// No contract, use plan defaults
 		effective.FreeSpans = plan.FreeSpans
-		effective.PricePer100KSpans = pointers.DerefFloat64(plan.PricePer100KSpans)
+		effective.PricePer100KSpans = pointers.DerefDecimal(plan.PricePer100KSpans)
 		effective.FreeGB = plan.FreeGB
-		effective.PricePerGB = pointers.DerefFloat64(plan.PricePerGB)
+		effective.PricePerGB = pointers.DerefDecimal(plan.PricePerGB)
 		effective.FreeScores = plan.FreeScores
-		effective.PricePer1KScores = pointers.DerefFloat64(plan.PricePer1KScores)
+		effective.PricePer1KScores = pointers.DerefDecimal(plan.PricePer1KScores)
 	}
 
 	return effective, nil
@@ -131,83 +133,87 @@ func (s *pricingService) CalculateCostWithTiersNoFreeTier(ctx context.Context, o
 
 // calculateFlat uses simple linear pricing (current implementation)
 func (s *pricingService) calculateFlat(usage *billing.BillableUsageSummary, pricing *billing.EffectivePricing) float64 {
-	var totalCost float64
+	totalCost := decimal.Zero
 
 	// Spans
 	billableSpans := max(0, usage.TotalSpans-pricing.FreeSpans)
-	spanCost := float64(billableSpans) / 100000.0 * pricing.PricePer100KSpans
-	totalCost += spanCost
+	spanCost := decimal.NewFromInt(billableSpans).Div(decimal.NewFromInt(100000)).Mul(pricing.PricePer100KSpans)
+	totalCost = totalCost.Add(spanCost)
 
 	// Bytes
-	freeBytes := int64(pricing.FreeGB * float64(units.BytesPerGB))
+	freeBytes := pricing.FreeGB.Mul(decimal.NewFromInt(units.BytesPerGB)).IntPart()
 	billableBytes := max(0, usage.TotalBytes-freeBytes)
-	billableGB := float64(billableBytes) / float64(units.BytesPerGB)
-	dataCost := billableGB * pricing.PricePerGB
-	totalCost += dataCost
+	billableGB := decimal.NewFromInt(billableBytes).Div(decimal.NewFromInt(units.BytesPerGB))
+	dataCost := billableGB.Mul(pricing.PricePerGB)
+	totalCost = totalCost.Add(dataCost)
 
 	// Scores
 	billableScores := max(0, usage.TotalScores-pricing.FreeScores)
-	scoreCost := float64(billableScores) / 1000.0 * pricing.PricePer1KScores
-	totalCost += scoreCost
+	scoreCost := decimal.NewFromInt(billableScores).Div(decimal.NewFromInt(1000)).Mul(pricing.PricePer1KScores)
+	totalCost = totalCost.Add(scoreCost)
 
-	return totalCost
+	result, _ := totalCost.Float64()
+	return result
 }
 
 // calculateWithTiers uses progressive tier pricing
 func (s *pricingService) calculateWithTiers(usage *billing.BillableUsageSummary, pricing *billing.EffectivePricing) float64 {
-	totalCost := 0.0
+	totalCost := decimal.Zero
 
 	// Calculate each dimension
-	totalCost += s.CalculateDimensionWithTiers(usage.TotalSpans, pricing.FreeSpans, billing.TierDimensionSpans, pricing.VolumeTiers, pricing)
+	totalCost = totalCost.Add(s.CalculateDimensionWithTiers(usage.TotalSpans, pricing.FreeSpans, billing.TierDimensionSpans, pricing.VolumeTiers, pricing))
 
-	freeBytes := int64(pricing.FreeGB * float64(units.BytesPerGB))
-	totalCost += s.CalculateDimensionWithTiers(usage.TotalBytes, freeBytes, billing.TierDimensionBytes, pricing.VolumeTiers, pricing)
+	freeBytes := pricing.FreeGB.Mul(decimal.NewFromInt(units.BytesPerGB)).IntPart()
+	totalCost = totalCost.Add(s.CalculateDimensionWithTiers(usage.TotalBytes, freeBytes, billing.TierDimensionBytes, pricing.VolumeTiers, pricing))
 
-	totalCost += s.CalculateDimensionWithTiers(usage.TotalScores, pricing.FreeScores, billing.TierDimensionScores, pricing.VolumeTiers, pricing)
+	totalCost = totalCost.Add(s.CalculateDimensionWithTiers(usage.TotalScores, pricing.FreeScores, billing.TierDimensionScores, pricing.VolumeTiers, pricing))
 
-	return totalCost
+	result, _ := totalCost.Float64()
+	return result
 }
 
 // calculateFlatNoFreeTier uses simple linear pricing without free tier deductions
 func (s *pricingService) calculateFlatNoFreeTier(usage *billing.BillableUsageSummary, pricing *billing.EffectivePricing) float64 {
-	var totalCost float64
+	totalCost := decimal.Zero
 
 	// Spans
-	spanCost := float64(usage.TotalSpans) / 100000.0 * pricing.PricePer100KSpans
-	totalCost += spanCost
+	spanCost := decimal.NewFromInt(usage.TotalSpans).Div(decimal.NewFromInt(100000)).Mul(pricing.PricePer100KSpans)
+	totalCost = totalCost.Add(spanCost)
 
 	// Bytes
-	billableGB := float64(usage.TotalBytes) / float64(units.BytesPerGB)
-	dataCost := billableGB * pricing.PricePerGB
-	totalCost += dataCost
+	billableGB := decimal.NewFromInt(usage.TotalBytes).Div(decimal.NewFromInt(units.BytesPerGB))
+	dataCost := billableGB.Mul(pricing.PricePerGB)
+	totalCost = totalCost.Add(dataCost)
 
 	// Scores
-	scoreCost := float64(usage.TotalScores) / 1000.0 * pricing.PricePer1KScores
-	totalCost += scoreCost
+	scoreCost := decimal.NewFromInt(usage.TotalScores).Div(decimal.NewFromInt(1000)).Mul(pricing.PricePer1KScores)
+	totalCost = totalCost.Add(scoreCost)
 
-	return totalCost
+	result, _ := totalCost.Float64()
+	return result
 }
 
 // calculateWithTiersNoFreeTier uses progressive tier pricing without free tier deductions
 func (s *pricingService) calculateWithTiersNoFreeTier(usage *billing.BillableUsageSummary, pricing *billing.EffectivePricing) float64 {
-	totalCost := 0.0
+	totalCost := decimal.Zero
 
 	// Calculate each dimension without free tier
-	totalCost += s.CalculateDimensionWithTiers(usage.TotalSpans, 0, billing.TierDimensionSpans, pricing.VolumeTiers, pricing)
-	totalCost += s.CalculateDimensionWithTiers(usage.TotalBytes, 0, billing.TierDimensionBytes, pricing.VolumeTiers, pricing)
-	totalCost += s.CalculateDimensionWithTiers(usage.TotalScores, 0, billing.TierDimensionScores, pricing.VolumeTiers, pricing)
+	totalCost = totalCost.Add(s.CalculateDimensionWithTiers(usage.TotalSpans, 0, billing.TierDimensionSpans, pricing.VolumeTiers, pricing))
+	totalCost = totalCost.Add(s.CalculateDimensionWithTiers(usage.TotalBytes, 0, billing.TierDimensionBytes, pricing.VolumeTiers, pricing))
+	totalCost = totalCost.Add(s.CalculateDimensionWithTiers(usage.TotalScores, 0, billing.TierDimensionScores, pricing.VolumeTiers, pricing))
 
-	return totalCost
+	result, _ := totalCost.Float64()
+	return result
 }
 
 // CalculateDimensionWithTiers applies progressive pricing using absolute position mapping with free tier offset
 // The algorithm works in absolute coordinate space: billable range is [freeTier, usage), not [0, billableUsage)
 // This ensures free tier correctly offsets tier boundaries (e.g., free=500 with tier [0-1k] charges usage 500-1k in that tier)
 // Exported for use by workers that need per-dimension cost calculation
-func (s *pricingService) CalculateDimensionWithTiers(usage, freeTier int64, dimension billing.TierDimension, allTiers []*billing.VolumeDiscountTier, pricing *billing.EffectivePricing) float64 {
+func (s *pricingService) CalculateDimensionWithTiers(usage, freeTier int64, dimension billing.TierDimension, allTiers []*billing.VolumeDiscountTier, pricing *billing.EffectivePricing) decimal.Decimal {
 	// Early exit: all usage covered by free tier
 	if usage <= freeTier {
-		return 0
+		return decimal.Zero
 	}
 
 	// Filter and sort tiers for this dimension
@@ -228,7 +234,7 @@ func (s *pricingService) CalculateDimensionWithTiers(usage, freeTier int64, dime
 		return tiers[i].TierMin < tiers[j].TierMin
 	})
 
-	totalCost := 0.0
+	totalCost := decimal.Zero
 
 	for _, tier := range tiers {
 		// Calculate overlap between billable range [freeTier, usage)
@@ -258,10 +264,10 @@ func (s *pricingService) CalculateDimensionWithTiers(usage, freeTier int64, dime
 
 		// Convert to billable units and apply price
 		unitSize := getDimensionUnitSize(dimension)
-		units := float64(usageInTier) / float64(unitSize)
-		cost := units * tier.PricePerUnit
+		unitsInTier := decimal.NewFromInt(usageInTier).Div(decimal.NewFromInt(unitSize))
+		cost := unitsInTier.Mul(tier.PricePerUnit)
 
-		totalCost += cost
+		totalCost = totalCost.Add(cost)
 
 		// Optimization: stop if usage fully consumed
 		if tier.TierMax == nil || usage <= *tier.TierMax {
@@ -289,23 +295,23 @@ func getDimensionUnitSize(dimension billing.TierDimension) int64 {
 
 // calculateFlatDimension calculates cost for a single dimension using flat pricing
 // Used as fallback when no volume tiers are defined for a dimension
-func (s *pricingService) calculateFlatDimension(billableUsage int64, dimension billing.TierDimension, pricing *billing.EffectivePricing) float64 {
+func (s *pricingService) calculateFlatDimension(billableUsage int64, dimension billing.TierDimension, pricing *billing.EffectivePricing) decimal.Decimal {
 	if billableUsage == 0 {
-		return 0
+		return decimal.Zero
 	}
 
 	unitSize := getDimensionUnitSize(dimension)
-	units := float64(billableUsage) / float64(unitSize)
+	unitsVal := decimal.NewFromInt(billableUsage).Div(decimal.NewFromInt(unitSize))
 
 	switch dimension {
 	case billing.TierDimensionSpans:
-		return units * pricing.PricePer100KSpans
+		return unitsVal.Mul(pricing.PricePer100KSpans)
 	case billing.TierDimensionBytes:
-		return units * pricing.PricePerGB
+		return unitsVal.Mul(pricing.PricePerGB)
 	case billing.TierDimensionScores:
-		return units * pricing.PricePer1KScores
+		return unitsVal.Mul(pricing.PricePer1KScores)
 	default:
-		return 0
+		return decimal.Zero
 	}
 }
 

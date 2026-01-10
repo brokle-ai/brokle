@@ -1,11 +1,12 @@
 package billing
 
 import (
-	"log/slog"
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
+	"github.com/shopspring/decimal"
 
 	billingDomain "brokle/internal/core/domain/billing"
 	"brokle/pkg/ulid"
@@ -86,8 +87,8 @@ func (s *BillingService) RecordUsage(ctx context.Context, usage *billingDomain.C
 		discountRate = 0.0 // No discount on error
 	}
 
-	discountAmount := usage.TotalCost * discountRate
-	netCost := usage.TotalCost - discountAmount
+	discountAmount := usage.TotalCost.Mul(decimal.NewFromFloat(discountRate))
+	netCost := usage.TotalCost.Sub(discountAmount)
 
 	// Create usage record
 	record := &billingDomain.UsageRecord{
@@ -145,9 +146,9 @@ func (s *BillingService) CalculateBill(ctx context.Context, orgID ulid.ULID, per
 			PeriodEnd:      end,
 			TotalRequests:  0,
 			TotalTokens:    0,
-			TotalCost:      0,
+			TotalCost:      decimal.Zero,
 			Currency:       "USD",
-			NetCost:        0,
+			NetCost:        decimal.Zero,
 			Status:         "no_usage",
 			GeneratedAt:    time.Now(),
 		}, nil
@@ -168,29 +169,29 @@ func (s *BillingService) CalculateBill(ctx context.Context, orgID ulid.ULID, per
 
 	var totalRequests int64
 	var totalTokens int64
-	var totalCost float64
-	var totalDiscounts float64
-	var totalNetCost float64
+	totalCost := decimal.Zero
+	totalDiscounts := decimal.Zero
+	totalNetCost := decimal.Zero
 
 	for _, record := range usageRecords {
 		totalRequests++
 		totalTokens += int64(record.TotalTokens)
-		totalCost += record.Cost
-		totalDiscounts += record.Discounts
-		totalNetCost += record.NetCost
+		totalCost = totalCost.Add(record.Cost)
+		totalDiscounts = totalDiscounts.Add(record.Discounts)
+		totalNetCost = totalNetCost.Add(record.NetCost)
 
 		// Provider breakdown
 		providerKey := record.ProviderID.String()
-		if val, ok := summary.ProviderBreakdown[providerKey].(float64); ok {
-			summary.ProviderBreakdown[providerKey] = val + record.NetCost
+		if val, ok := summary.ProviderBreakdown[providerKey].(decimal.Decimal); ok {
+			summary.ProviderBreakdown[providerKey] = val.Add(record.NetCost)
 		} else {
 			summary.ProviderBreakdown[providerKey] = record.NetCost
 		}
 
 		// Model breakdown
 		modelKey := record.ModelID.String()
-		if val, ok := summary.ModelBreakdown[modelKey].(float64); ok {
-			summary.ModelBreakdown[modelKey] = val + record.NetCost
+		if val, ok := summary.ModelBreakdown[modelKey].(decimal.Decimal); ok {
+			summary.ModelBreakdown[modelKey] = val.Add(record.NetCost)
 		} else {
 			summary.ModelBreakdown[modelKey] = record.NetCost
 		}
@@ -203,7 +204,7 @@ func (s *BillingService) CalculateBill(ctx context.Context, orgID ulid.ULID, per
 	summary.NetCost = totalNetCost
 
 	// Determine billing status
-	if totalNetCost > 0 {
+	if totalNetCost.GreaterThan(decimal.Zero) {
 		summary.Status = "pending"
 	} else {
 		summary.Status = "no_charge"
@@ -287,7 +288,7 @@ func (s *BillingService) CheckUsageQuotas(ctx context.Context, orgID ulid.ULID) 
 		OrganizationID: orgID,
 		RequestsOK:     quota.MonthlyRequestLimit == 0 || quota.CurrentRequests < quota.MonthlyRequestLimit,
 		TokensOK:       quota.MonthlyTokenLimit == 0 || quota.CurrentTokens < quota.MonthlyTokenLimit,
-		CostOK:         quota.MonthlyCostLimit == 0 || quota.CurrentCost < quota.MonthlyCostLimit,
+		CostOK:         quota.MonthlyCostLimit.IsZero() || quota.CurrentCost.LessThan(quota.MonthlyCostLimit),
 	}
 
 	if status.RequestsOK && status.TokensOK && status.CostOK {
@@ -296,7 +297,7 @@ func (s *BillingService) CheckUsageQuotas(ctx context.Context, orgID ulid.ULID) 
 		status.Status = "requests_exceeded"
 	} else if quota.CurrentTokens >= quota.MonthlyTokenLimit {
 		status.Status = "tokens_exceeded"
-	} else if quota.CurrentCost >= quota.MonthlyCostLimit {
+	} else if quota.CurrentCost.GreaterThanOrEqual(quota.MonthlyCostLimit) {
 		status.Status = "cost_exceeded"
 	}
 
@@ -307,8 +308,8 @@ func (s *BillingService) CheckUsageQuotas(ctx context.Context, orgID ulid.ULID) 
 	if quota.MonthlyTokenLimit > 0 {
 		status.TokensUsagePercent = float64(quota.CurrentTokens) / float64(quota.MonthlyTokenLimit) * 100
 	}
-	if quota.MonthlyCostLimit > 0 {
-		status.CostUsagePercent = quota.CurrentCost / quota.MonthlyCostLimit * 100
+	if !quota.MonthlyCostLimit.IsZero() {
+		status.CostUsagePercent = quota.CurrentCost.Div(quota.MonthlyCostLimit).Mul(decimal.NewFromInt(100)).InexactFloat64()
 	}
 
 	return status, nil
@@ -318,7 +319,7 @@ func (s *BillingService) CheckUsageQuotas(ctx context.Context, orgID ulid.ULID) 
 
 // CreateBillingRecord creates a new billing record for an organization
 func (s *BillingService) CreateBillingRecord(ctx context.Context, summary *billingDomain.BillingSummary) (*billingDomain.BillingRecord, error) {
-	if summary.NetCost <= 0 {
+	if summary.NetCost.LessThanOrEqual(decimal.Zero) {
 		return nil, fmt.Errorf("no charges to bill for organization %s", summary.OrganizationID)
 	}
 

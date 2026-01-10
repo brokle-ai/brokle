@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	authDomain "brokle/internal/core/domain/auth"
 	billingDomain "brokle/internal/core/domain/billing"
 	orgDomain "brokle/internal/core/domain/organization"
@@ -111,12 +113,12 @@ func (s *organizationService) provisionBilling(ctx context.Context, orgID ulid.U
 		BillingCycleAnchorDay: 1,
 		// Free tier remaining (from default plan)
 		FreeSpansRemaining:  defaultPlan.FreeSpans,
-		FreeBytesRemaining:  int64(defaultPlan.FreeGB * 1024 * 1024 * 1024), // Convert GB to bytes
+		FreeBytesRemaining:  defaultPlan.FreeGB.Mul(decimal.NewFromInt(1024 * 1024 * 1024)).IntPart(), // Convert GB to bytes
 		FreeScoresRemaining: defaultPlan.FreeScores,
 		CurrentPeriodSpans:  0,
 		CurrentPeriodBytes:  0,
 		CurrentPeriodScores: 0,
-		CurrentPeriodCost:   0,
+		CurrentPeriodCost:   decimal.Zero,
 		LastSyncedAt:        now,
 		CreatedAt:           now,
 		UpdatedAt:           now,

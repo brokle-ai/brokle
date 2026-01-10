@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
+	"github.com/shopspring/decimal"
+
 	"brokle/internal/core/domain/billing"
 	"brokle/pkg/ulid"
-
-	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 )
 
 type billableUsageRepository struct {
@@ -84,7 +85,7 @@ func (r *billableUsageRepository) GetUsage(ctx context.Context, filter *billing.
 			SpanCount:      int64(spanCount),
 			BytesProcessed: int64(bytesProcessed),
 			ScoreCount:     int64(scoreCount),
-			AIProviderCost: aiProviderCost,
+			AIProviderCost: decimal.NewFromFloat(aiProviderCost),
 			LastUpdated:    lastUpdated,
 		})
 	}
@@ -140,7 +141,7 @@ func (r *billableUsageRepository) GetUsageSummary(ctx context.Context, filter *b
 		TotalSpans:          int64(totalSpans),
 		TotalBytes:          int64(totalBytes),
 		TotalScores:         int64(totalScores),
-		TotalAIProviderCost: totalAIProviderCost,
+		TotalAIProviderCost: decimal.NewFromFloat(totalAIProviderCost),
 	}, nil
 }
 
@@ -194,7 +195,7 @@ func (r *billableUsageRepository) GetUsageByProject(ctx context.Context, orgID u
 			TotalSpans:          int64(totalSpans),
 			TotalBytes:          int64(totalBytes),
 			TotalScores:         int64(totalScores),
-			TotalAIProviderCost: totalAIProviderCost,
+			TotalAIProviderCost: decimal.NewFromFloat(totalAIProviderCost),
 		})
 	}
 

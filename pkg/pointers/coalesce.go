@@ -1,5 +1,7 @@
 package pointers
 
+import "github.com/shopspring/decimal"
+
 // CoalesceInt64 returns the dereferenced custom value if non-nil, otherwise defaultVal
 func CoalesceInt64(custom *int64, defaultVal int64) int64 {
 	if custom != nil {
@@ -26,4 +28,29 @@ func DerefFloat64(ptr *float64) float64 {
 		return *ptr
 	}
 	return 0
+}
+
+// CoalesceDecimal returns the dereferenced custom value if non-nil,
+// otherwise the dereferenced defaultVal if non-nil, otherwise zero
+func CoalesceDecimal(custom *decimal.Decimal, defaultVal *decimal.Decimal) decimal.Decimal {
+	if custom != nil {
+		return *custom
+	}
+	if defaultVal != nil {
+		return *defaultVal
+	}
+	return decimal.Zero
+}
+
+// DerefDecimal returns the dereferenced value or zero if nil
+func DerefDecimal(ptr *decimal.Decimal) decimal.Decimal {
+	if ptr != nil {
+		return *ptr
+	}
+	return decimal.Zero
+}
+
+// PtrDecimal returns a pointer to the decimal value
+func PtrDecimal(d decimal.Decimal) *decimal.Decimal {
+	return &d
 }

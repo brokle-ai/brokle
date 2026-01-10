@@ -1,13 +1,14 @@
 package billing
 
 import (
-	"log/slog"
 	"bytes"
 	"context"
 	"fmt"
 	"html/template"
+	"log/slog"
 	"time"
 
+	"github.com/shopspring/decimal"
 
 	billingDomain "brokle/internal/core/domain/billing"
 	"brokle/pkg/ulid"
@@ -37,8 +38,8 @@ func (g *InvoiceGenerator) GenerateInvoice(
 	billingAddress *billingDomain.BillingAddress,
 ) (*billingDomain.Invoice, error) {
 
-	if summary.NetCost <= 0 {
-		return nil, fmt.Errorf("cannot generate invoice for zero or negative amount: %f", summary.NetCost)
+	if summary.NetCost.LessThanOrEqual(decimal.Zero) {
+		return nil, fmt.Errorf("cannot generate invoice for zero or negative amount: %s", summary.NetCost)
 	}
 
 	invoice := &billingDomain.Invoice{
@@ -64,9 +65,9 @@ func (g *InvoiceGenerator) GenerateInvoice(
 	invoice.LineItems = lineItems
 
 	// Calculate totals
-	subtotal := 0.0
+	subtotal := decimal.Zero
 	for _, item := range lineItems {
-		subtotal += item.Amount
+		subtotal = subtotal.Add(item.Amount)
 	}
 
 	invoice.Subtotal = subtotal
@@ -75,11 +76,11 @@ func (g *InvoiceGenerator) GenerateInvoice(
 	// Apply tax if configured
 	taxConfig := g.getTaxConfiguration(billingAddress)
 	if taxConfig != nil {
-		taxableAmount := subtotal - invoice.DiscountAmount
-		invoice.TaxAmount = taxableAmount * taxConfig.TaxRate
+		taxableAmount := subtotal.Sub(invoice.DiscountAmount)
+		invoice.TaxAmount = taxableAmount.Mul(taxConfig.TaxRate)
 	}
 
-	invoice.TotalAmount = invoice.Subtotal - invoice.DiscountAmount + invoice.TaxAmount
+	invoice.TotalAmount = invoice.Subtotal.Sub(invoice.DiscountAmount).Add(invoice.TaxAmount)
 
 	// Add metadata
 	invoice.Metadata = map[string]interface{}{
@@ -289,10 +290,10 @@ func (g *InvoiceGenerator) GetInvoiceSummary(ctx context.Context, invoices []*bi
 	summary := &InvoiceSummary{
 		TotalInvoices:     len(invoices),
 		StatusCounts:      make(map[billingDomain.InvoiceStatus]int),
-		TotalAmount:       0,
-		PaidAmount:        0,
-		OutstandingAmount: 0,
-		OverdueAmount:     0,
+		TotalAmount:       decimal.Zero,
+		PaidAmount:        decimal.Zero,
+		OutstandingAmount: decimal.Zero,
+		OverdueAmount:     decimal.Zero,
 	}
 
 	for _, invoice := range invoices {
@@ -300,16 +301,16 @@ func (g *InvoiceGenerator) GetInvoiceSummary(ctx context.Context, invoices []*bi
 		summary.StatusCounts[invoice.Status]++
 
 		// Calculate amounts
-		summary.TotalAmount += invoice.TotalAmount
+		summary.TotalAmount = summary.TotalAmount.Add(invoice.TotalAmount)
 
 		switch invoice.Status {
 		case billingDomain.InvoiceStatusPaid:
-			summary.PaidAmount += invoice.TotalAmount
+			summary.PaidAmount = summary.PaidAmount.Add(invoice.TotalAmount)
 		case billingDomain.InvoiceStatusOverdue:
-			summary.OverdueAmount += invoice.TotalAmount
-			summary.OutstandingAmount += invoice.TotalAmount
+			summary.OverdueAmount = summary.OverdueAmount.Add(invoice.TotalAmount)
+			summary.OutstandingAmount = summary.OutstandingAmount.Add(invoice.TotalAmount)
 		case billingDomain.InvoiceStatusSent, billingDomain.InvoiceStatusDraft:
-			summary.OutstandingAmount += invoice.TotalAmount
+			summary.OutstandingAmount = summary.OutstandingAmount.Add(invoice.TotalAmount)
 		}
 
 		// Track earliest and latest dates
@@ -330,10 +331,10 @@ type InvoiceSummary struct {
 	EarliestDate      *time.Time                          `json:"earliest_date,omitempty"`
 	LatestDate        *time.Time                          `json:"latest_date,omitempty"`
 	TotalInvoices     int                                 `json:"total_invoices"`
-	TotalAmount       float64                             `json:"total_amount"`
-	PaidAmount        float64                             `json:"paid_amount"`
-	OutstandingAmount float64                             `json:"outstanding_amount"`
-	OverdueAmount     float64                             `json:"overdue_amount"`
+	TotalAmount       decimal.Decimal                     `json:"total_amount"`
+	PaidAmount        decimal.Decimal                     `json:"paid_amount"`
+	OutstandingAmount decimal.Decimal                     `json:"outstanding_amount"`
+	OverdueAmount     decimal.Decimal                     `json:"overdue_amount"`
 }
 
 // Internal methods
@@ -354,15 +355,15 @@ func (g *InvoiceGenerator) generateLineItems(summary *billingDomain.BillingSumma
 
 	// Create line items based on provider breakdown
 	for providerKey, amountInterface := range summary.ProviderBreakdown {
-		amount, ok := amountInterface.(float64)
+		amount, ok := amountInterface.(decimal.Decimal)
 		if !ok {
 			continue
 		}
-		if amount > 0 {
+		if amount.GreaterThan(decimal.Zero) {
 			lineItem := billingDomain.InvoiceLineItem{
 				ID:          ulid.New(),
 				Description: "AI API Usage - Provider " + providerKey,
-				Quantity:    1,
+				Quantity:    decimal.NewFromInt(1),
 				UnitPrice:   amount,
 				Amount:      amount,
 			}
@@ -376,11 +377,16 @@ func (g *InvoiceGenerator) generateLineItems(summary *billingDomain.BillingSumma
 
 	// If no provider breakdown, create a single line item
 	if len(lineItems) == 0 {
+		quantity := decimal.NewFromInt(int64(summary.TotalRequests))
+		unitPrice := decimal.Zero
+		if summary.TotalRequests > 0 {
+			unitPrice = summary.TotalCost.Div(quantity)
+		}
 		lineItems = append(lineItems, billingDomain.InvoiceLineItem{
 			ID:          ulid.New(),
 			Description: "AI API Usage - " + summary.Period,
-			Quantity:    float64(summary.TotalRequests),
-			UnitPrice:   summary.TotalCost / float64(summary.TotalRequests),
+			Quantity:    quantity,
+			UnitPrice:   unitPrice,
 			Amount:      summary.TotalCost,
 		})
 	}
@@ -397,17 +403,17 @@ func (g *InvoiceGenerator) getTaxConfiguration(billingAddress *billingDomain.Bil
 	// In a real implementation, this would be more sophisticated
 	taxConfigs := map[string]*billingDomain.TaxConfiguration{
 		"US": {
-			TaxRate:     0.08, // 8% sales tax
+			TaxRate:     decimal.NewFromFloat(0.08), // 8% sales tax
 			TaxName:     "Sales Tax",
 			IsInclusive: false,
 		},
 		"UK": {
-			TaxRate:     0.20, // 20% VAT
+			TaxRate:     decimal.NewFromFloat(0.20), // 20% VAT
 			TaxName:     "VAT",
 			IsInclusive: false,
 		},
 		"CA": {
-			TaxRate:     0.13, // 13% HST (varies by province)
+			TaxRate:     decimal.NewFromFloat(0.13), // 13% HST (varies by province)
 			TaxName:     "HST",
 			IsInclusive: false,
 		},
@@ -439,17 +445,17 @@ func (g *InvoiceGenerator) IsOverdue(invoice *billingDomain.Invoice) bool {
 }
 
 // CalculateLateFee calculates late fee for an overdue invoice
-func (g *InvoiceGenerator) CalculateLateFee(invoice *billingDomain.Invoice, lateFeeRate float64) float64 {
+func (g *InvoiceGenerator) CalculateLateFee(invoice *billingDomain.Invoice, lateFeeRate float64) decimal.Decimal {
 	if !g.IsOverdue(invoice) {
-		return 0
+		return decimal.Zero
 	}
 
 	daysOverdue := int(time.Since(invoice.DueDate).Hours() / 24)
 	if daysOverdue <= 0 {
-		return 0
+		return decimal.Zero
 	}
 
-	return invoice.TotalAmount * lateFeeRate * float64(daysOverdue) / 365.0
+	return invoice.TotalAmount.Mul(decimal.NewFromFloat(lateFeeRate)).Mul(decimal.NewFromInt(int64(daysOverdue))).Div(decimal.NewFromInt(365))
 }
 
 // GeneratePaymentReminder generates text for a payment reminder
@@ -459,11 +465,11 @@ func (g *InvoiceGenerator) GeneratePaymentReminder(invoice *billingDomain.Invoic
 	var message string
 	if daysOverdue <= 0 {
 		daysToDue := int(time.Until(invoice.DueDate).Hours() / 24)
-		message = fmt.Sprintf("Your invoice %s for $%.2f is due in %d days.",
-			invoice.InvoiceNumber, invoice.TotalAmount, daysToDue)
+		message = fmt.Sprintf("Your invoice %s for $%s is due in %d days.",
+			invoice.InvoiceNumber, invoice.TotalAmount.StringFixed(2), daysToDue)
 	} else {
-		message = fmt.Sprintf("Your invoice %s for $%.2f is %d days overdue. Please remit payment immediately.",
-			invoice.InvoiceNumber, invoice.TotalAmount, daysOverdue)
+		message = fmt.Sprintf("Your invoice %s for $%s is %d days overdue. Please remit payment immediately.",
+			invoice.InvoiceNumber, invoice.TotalAmount.StringFixed(2), daysOverdue)
 	}
 
 	return message

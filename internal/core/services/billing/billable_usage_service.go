@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"brokle/internal/core/domain/billing"
+	pkgErrors "brokle/pkg/errors"
 	"brokle/pkg/ulid"
 	"brokle/pkg/units"
 )
@@ -93,7 +95,7 @@ func (s *billableUsageService) GetUsageOverview(ctx context.Context, orgID ulid.
 
 	// Use effective pricing for free tier calculations (respects contract overrides)
 	freeSpansRemaining := max(0, effectivePricing.FreeSpans-usageSummary.TotalSpans)
-	freeGBTotal := int64(effectivePricing.FreeGB * float64(units.BytesPerGB))
+	freeGBTotal := effectivePricing.FreeGB.Mul(decimal.NewFromInt(units.BytesPerGB)).IntPart()
 	freeBytesRemaining := max(0, freeGBTotal-usageSummary.TotalBytes)
 	freeScoresRemaining := max(0, effectivePricing.FreeScores-usageSummary.TotalScores)
 
@@ -163,29 +165,30 @@ func (s *billableUsageService) CalculateCost(ctx context.Context, usage *billing
 	s.logger.Warn("CalculateCost called with plan parameter - consider using pricingService.CalculateCostWithTiers directly")
 
 	// Simple flat calculation without contract awareness (legacy behavior)
-	var totalCost float64
+	totalCost := decimal.Zero
 
 	if plan.PricePer100KSpans != nil {
 		billableSpans := max(0, usage.TotalSpans-plan.FreeSpans)
-		spanCost := float64(billableSpans) / 100000.0 * *plan.PricePer100KSpans
-		totalCost += spanCost
+		spanCost := decimal.NewFromInt(billableSpans).Div(decimal.NewFromInt(100000)).Mul(*plan.PricePer100KSpans)
+		totalCost = totalCost.Add(spanCost)
 	}
 
 	if plan.PricePerGB != nil {
-		freeBytes := int64(plan.FreeGB * float64(units.BytesPerGB))
+		freeBytes := plan.FreeGB.Mul(decimal.NewFromInt(units.BytesPerGB)).IntPart()
 		billableBytes := max(0, usage.TotalBytes-freeBytes)
-		billableGB := float64(billableBytes) / float64(units.BytesPerGB)
-		dataCost := billableGB * *plan.PricePerGB
-		totalCost += dataCost
+		billableGB := decimal.NewFromInt(billableBytes).Div(decimal.NewFromInt(units.BytesPerGB))
+		dataCost := billableGB.Mul(*plan.PricePerGB)
+		totalCost = totalCost.Add(dataCost)
 	}
 
 	if plan.PricePer1KScores != nil {
 		billableScores := max(0, usage.TotalScores-plan.FreeScores)
-		scoreCost := float64(billableScores) / 1000.0 * *plan.PricePer1KScores
-		totalCost += scoreCost
+		scoreCost := decimal.NewFromInt(billableScores).Div(decimal.NewFromInt(1000)).Mul(*plan.PricePer1KScores)
+		totalCost = totalCost.Add(scoreCost)
 	}
 
-	return totalCost
+	result, _ := totalCost.Float64()
+	return result
 }
 
 func (s *billableUsageService) calculatePeriodEnd(cycleStart time.Time, anchorDay int) time.Time {
@@ -222,12 +225,12 @@ func (s *billableUsageService) ProvisionOrganizationBilling(ctx context.Context,
 		BillingCycleStart:     now,
 		BillingCycleAnchorDay: 1,
 		FreeSpansRemaining:    defaultPlan.FreeSpans,
-		FreeBytesRemaining:    int64(defaultPlan.FreeGB * 1024 * 1024 * 1024),
+		FreeBytesRemaining:    defaultPlan.FreeGB.Mul(decimal.NewFromInt(units.BytesPerGB)).IntPart(),
 		FreeScoresRemaining:   defaultPlan.FreeScores,
 		CurrentPeriodSpans:    0,
 		CurrentPeriodBytes:    0,
 		CurrentPeriodScores:   0,
-		CurrentPeriodCost:     0,
+		CurrentPeriodCost:     decimal.Zero,
 		LastSyncedAt:          now,
 		CreatedAt:             now,
 		UpdatedAt:             now,
@@ -235,8 +238,7 @@ func (s *billableUsageService) ProvisionOrganizationBilling(ctx context.Context,
 
 	if err := s.billingRepo.Create(ctx, billingRecord); err != nil {
 		// Idempotency check
-		if strings.Contains(err.Error(), "duplicate key") ||
-			strings.Contains(err.Error(), "unique constraint") {
+		if pkgErrors.IsDatabaseUniqueViolation(err) {
 			s.logger.Info("billing record already exists", "organization_id", orgID)
 			return nil // Success - already provisioned
 		}

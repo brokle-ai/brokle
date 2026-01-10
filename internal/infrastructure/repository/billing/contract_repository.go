@@ -38,7 +38,7 @@ func (r *contractRepository) GetByID(ctx context.Context, id ulid.ULID) (*billin
 		First(&contract).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, fmt.Errorf("contract not found: %s", id)
+			return nil, billing.NewContractNotFoundError(id.String())
 		}
 		return nil, fmt.Errorf("get contract: %w", err)
 	}
@@ -92,7 +92,7 @@ func (r *contractRepository) Expire(ctx context.Context, contractID ulid.ULID) e
 	}
 
 	if result.RowsAffected == 0 {
-		return fmt.Errorf("contract not found: %s", contractID)
+		return billing.NewContractNotFoundError(contractID.String())
 	}
 
 	return nil
@@ -112,7 +112,7 @@ func (r *contractRepository) Cancel(ctx context.Context, contractID ulid.ULID) e
 	}
 
 	if result.RowsAffected == 0 {
-		return fmt.Errorf("contract not found: %s", contractID)
+		return billing.NewContractNotFoundError(contractID.String())
 	}
 
 	return nil

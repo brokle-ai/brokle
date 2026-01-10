@@ -8,6 +8,8 @@ import (
 	"sort"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"brokle/internal/core/domain/billing"
 	orgDomain "brokle/internal/core/domain/organization"
 	appErrors "brokle/pkg/errors"
@@ -177,15 +179,15 @@ func (s *budgetService) evaluateBudget(budget *billing.UsageBudget) []*billing.U
 	})
 
 	dimensions := []struct {
-		dimension    billing.AlertDimension
-		current      int64
-		limit        *int64
-		currentFloat float64
-		limitFloat   *float64
+		dimension      billing.AlertDimension
+		current        int64
+		limit          *int64
+		currentDecimal decimal.Decimal
+		limitDecimal   *decimal.Decimal
 	}{
-		{billing.AlertDimensionSpans, budget.CurrentSpans, budget.SpanLimit, 0, nil},
-		{billing.AlertDimensionBytes, budget.CurrentBytes, budget.BytesLimit, 0, nil},
-		{billing.AlertDimensionScores, budget.CurrentScores, budget.ScoreLimit, 0, nil},
+		{billing.AlertDimensionSpans, budget.CurrentSpans, budget.SpanLimit, decimal.Zero, nil},
+		{billing.AlertDimensionBytes, budget.CurrentBytes, budget.BytesLimit, decimal.Zero, nil},
+		{billing.AlertDimensionScores, budget.CurrentScores, budget.ScoreLimit, decimal.Zero, nil},
 		{billing.AlertDimensionCost, 0, nil, budget.CurrentCost, budget.CostLimit},
 	}
 
@@ -195,12 +197,13 @@ func (s *budgetService) evaluateBudget(budget *billing.UsageBudget) []*billing.U
 		var thresholdValue int64
 
 		if dim.dimension == billing.AlertDimensionCost {
-			if dim.limitFloat == nil || *dim.limitFloat == 0 {
+			if dim.limitDecimal == nil || dim.limitDecimal.IsZero() {
 				continue
 			}
-			percentUsed = (dim.currentFloat / *dim.limitFloat) * 100
-			actualValue = int64(dim.currentFloat * 100) // Store as cents
-			thresholdValue = int64(*dim.limitFloat * 100)
+			// Calculate percent using decimal, then convert to float64 for comparison
+			percentUsed = dim.currentDecimal.Div(*dim.limitDecimal).Mul(decimal.NewFromInt(100)).InexactFloat64()
+			actualValue = dim.currentDecimal.Mul(decimal.NewFromInt(100)).IntPart() // Store as cents
+			thresholdValue = dim.limitDecimal.Mul(decimal.NewFromInt(100)).IntPart()
 		} else {
 			if dim.limit == nil || *dim.limit == 0 {
 				continue
@@ -224,7 +227,7 @@ func (s *budgetService) evaluateBudget(budget *billing.UsageBudget) []*billing.U
 					Severity:       getSeverityForThreshold(threshold),
 					ThresholdValue: thresholdValue,
 					ActualValue:    actualValue,
-					PercentUsed:    percentUsed,
+					PercentUsed:    decimal.NewFromFloat(percentUsed),
 					Status:         billing.AlertStatusTriggered,
 					TriggeredAt:    time.Now(),
 				}

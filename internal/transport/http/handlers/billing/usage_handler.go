@@ -287,7 +287,7 @@ func (h *UsageHandler) exportCSV(c *gin.Context, usage []*billing.BillableUsage,
 			formatInt64(u.BytesProcessed),
 			formatFloat64(float64(u.BytesProcessed)/float64(units.BytesPerGB), 4),
 			formatInt64(u.ScoreCount),
-			formatFloat64(u.AIProviderCost, 2),
+			u.AIProviderCost.StringFixed(2),
 		)
 		buf = append(buf, line...)
 	}

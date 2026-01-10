@@ -4,6 +4,8 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"brokle/internal/config"
 	"brokle/internal/core/domain/billing"
 	"brokle/internal/transport/http/middleware"
@@ -13,6 +15,20 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
+
+// float64ToDecimalPtr converts a *float64 to *decimal.Decimal
+func float64ToDecimalPtr(f *float64) *decimal.Decimal {
+	if f == nil {
+		return nil
+	}
+	d := decimal.NewFromFloat(*f)
+	return &d
+}
+
+// float64ToDecimal converts a float64 to decimal.Decimal
+func float64ToDecimal(f float64) decimal.Decimal {
+	return decimal.NewFromFloat(f)
+}
 
 type ContractHandler struct {
 	config          *config.Config
@@ -132,19 +148,19 @@ func (h *ContractHandler) CreateContract(c *gin.Context) {
 		OrganizationID:          orgID,
 		ContractName:            req.ContractName,
 		ContractNumber:          req.ContractNumber,
-		StartDate:               req.StartsAt,   // API StartsAt → DB StartDate
-		EndDate:                 req.ExpiresAt,  // API ExpiresAt → DB EndDate
-		MinimumCommitAmount:     req.MinimumCommitAmount,
+		StartDate:               req.StartsAt,  // API StartsAt → DB StartDate
+		EndDate:                 req.ExpiresAt, // API ExpiresAt → DB EndDate
+		MinimumCommitAmount:     float64ToDecimalPtr(req.MinimumCommitAmount),
 		Currency:                "USD",
 		AccountOwner:            req.AccountOwner,
 		SalesRepEmail:           req.SalesRepEmail,
 		Status:                  billing.ContractStatusDraft,
 		CustomFreeSpans:         req.CustomFreeSpans,
-		CustomPricePer100KSpans: req.CustomPricePer100KSpans,
-		CustomFreeGB:            req.CustomFreeGB,
-		CustomPricePerGB:        req.CustomPricePerGB,
+		CustomPricePer100KSpans: float64ToDecimalPtr(req.CustomPricePer100KSpans),
+		CustomFreeGB:            float64ToDecimalPtr(req.CustomFreeGB),
+		CustomPricePerGB:        float64ToDecimalPtr(req.CustomPricePerGB),
 		CustomFreeScores:        req.CustomFreeScores,
-		CustomPricePer1KScores:  req.CustomPricePer1KScores,
+		CustomPricePer1KScores:  float64ToDecimalPtr(req.CustomPricePer1KScores),
 		CreatedBy:               userID.String(),
 		CreatedAt:               time.Now(),
 		UpdatedAt:               time.Now(),
@@ -175,7 +191,7 @@ func (h *ContractHandler) CreateContract(c *gin.Context) {
 				Dimension:    billing.TierDimension(tierReq.Dimension),
 				TierMin:      tierReq.TierMin,
 				TierMax:      tierReq.TierMax,
-				PricePerUnit: tierReq.PricePerUnit,
+				PricePerUnit: float64ToDecimal(tierReq.PricePerUnit),
 				Priority:     i,
 				CreatedAt:    time.Now(),
 			}
@@ -325,7 +341,7 @@ func (h *ContractHandler) UpdateContract(c *gin.Context) {
 		contract.EndDate = req.ExpiresAt
 	}
 	if req.MinimumCommitAmount != nil {
-		contract.MinimumCommitAmount = req.MinimumCommitAmount
+		contract.MinimumCommitAmount = float64ToDecimalPtr(req.MinimumCommitAmount)
 	}
 	if req.AccountOwner != nil {
 		contract.AccountOwner = *req.AccountOwner
@@ -337,19 +353,19 @@ func (h *ContractHandler) UpdateContract(c *gin.Context) {
 		contract.CustomFreeSpans = req.CustomFreeSpans
 	}
 	if req.CustomPricePer100KSpans != nil {
-		contract.CustomPricePer100KSpans = req.CustomPricePer100KSpans
+		contract.CustomPricePer100KSpans = float64ToDecimalPtr(req.CustomPricePer100KSpans)
 	}
 	if req.CustomFreeGB != nil {
-		contract.CustomFreeGB = req.CustomFreeGB
+		contract.CustomFreeGB = float64ToDecimalPtr(req.CustomFreeGB)
 	}
 	if req.CustomPricePerGB != nil {
-		contract.CustomPricePerGB = req.CustomPricePerGB
+		contract.CustomPricePerGB = float64ToDecimalPtr(req.CustomPricePerGB)
 	}
 	if req.CustomFreeScores != nil {
 		contract.CustomFreeScores = req.CustomFreeScores
 	}
 	if req.CustomPricePer1KScores != nil {
-		contract.CustomPricePer1KScores = req.CustomPricePer1KScores
+		contract.CustomPricePer1KScores = float64ToDecimalPtr(req.CustomPricePer1KScores)
 	}
 	if req.Notes != nil {
 		contract.Notes = *req.Notes
@@ -530,7 +546,7 @@ func (h *ContractHandler) UpdateVolumeTiers(c *gin.Context) {
 			Dimension:    billing.TierDimension(tierReq.Dimension),
 			TierMin:      tierReq.TierMin,
 			TierMax:      tierReq.TierMax,
-			PricePerUnit: tierReq.PricePerUnit,
+			PricePerUnit: float64ToDecimal(tierReq.PricePerUnit),
 			Priority:     i,
 			CreatedAt:    time.Now(),
 		}

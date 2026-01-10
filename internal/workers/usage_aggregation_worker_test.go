@@ -5,6 +5,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/shopspring/decimal"
 	"github.com/stretchr/testify/assert"
 
 	"brokle/internal/core/domain/billing"
@@ -27,11 +28,11 @@ func TestUsageAggregationWorker_CalculateCost_FlatPricing(t *testing.T) {
 
 	pricing := &billing.EffectivePricing{
 		FreeSpans:         1000000,
-		PricePer100KSpans: 0.50,
-		FreeGB:            10.0,
-		PricePerGB:        2.00,
+		PricePer100KSpans: decimal.NewFromFloat(0.50),
+		FreeGB:            decimal.NewFromFloat(10.0),
+		PricePerGB:        decimal.NewFromFloat(2.00),
 		FreeScores:        100,
-		PricePer1KScores:  0.10,
+		PricePer1KScores:  decimal.NewFromFloat(0.10),
 		HasVolumeTiers:    false,
 	}
 
@@ -59,11 +60,11 @@ func TestUsageAggregationWorker_CalculateRawCost_FlatPricing(t *testing.T) {
 
 	pricing := &billing.EffectivePricing{
 		FreeSpans:         1000000, // Should be ignored
-		PricePer100KSpans: 0.50,
-		FreeGB:            10.0, // Should be ignored
-		PricePerGB:        2.00,
+		PricePer100KSpans: decimal.NewFromFloat(0.50),
+		FreeGB:            decimal.NewFromFloat(10.0), // Should be ignored
+		PricePerGB:        decimal.NewFromFloat(2.00),
 		FreeScores:        100, // Should be ignored
-		PricePer1KScores:  0.10,
+		PricePer1KScores:  decimal.NewFromFloat(0.10),
 		HasVolumeTiers:    false,
 	}
 
@@ -96,7 +97,7 @@ func TestUsageAggregationWorker_CalculateCost_WithProgressiveTiers(t *testing.T)
 			Dimension:    billing.TierDimensionSpans,
 			TierMin:      0,
 			TierMax:      ptrInt64(100000000), // 0-100M
-			PricePerUnit: 0.30,
+			PricePerUnit: decimal.NewFromFloat(0.30),
 			Priority:     0,
 		},
 		{
@@ -104,18 +105,18 @@ func TestUsageAggregationWorker_CalculateCost_WithProgressiveTiers(t *testing.T)
 			Dimension:    billing.TierDimensionSpans,
 			TierMin:      100000000, // 100M+
 			TierMax:      nil,
-			PricePerUnit: 0.25,
+			PricePerUnit: decimal.NewFromFloat(0.25),
 			Priority:     1,
 		},
 	}
 
 	pricing := &billing.EffectivePricing{
 		FreeSpans:         50000000, // 50M free
-		PricePer100KSpans: 0.50,     // Fallback for non-tiered dimensions
-		FreeGB:            10.0,
-		PricePerGB:        2.00,
+		PricePer100KSpans: decimal.NewFromFloat(0.50), // Fallback for non-tiered dimensions
+		FreeGB:            decimal.NewFromFloat(10.0),
+		PricePerGB:        decimal.NewFromFloat(2.00),
 		FreeScores:        100,
-		PricePer1KScores:  0.10,
+		PricePer1KScores:  decimal.NewFromFloat(0.10),
 		HasVolumeTiers:    true,
 		VolumeTiers:       tiers,
 	}
@@ -171,7 +172,7 @@ func TestUsageAggregationWorker_CalculateRawCost_WithProgressiveTiers(t *testing
 			Dimension:    billing.TierDimensionSpans,
 			TierMin:      0,
 			TierMax:      ptrInt64(100000000),
-			PricePerUnit: 0.30,
+			PricePerUnit: decimal.NewFromFloat(0.30),
 			Priority:     0,
 		},
 		{
@@ -179,18 +180,18 @@ func TestUsageAggregationWorker_CalculateRawCost_WithProgressiveTiers(t *testing
 			Dimension:    billing.TierDimensionSpans,
 			TierMin:      100000000,
 			TierMax:      nil,
-			PricePerUnit: 0.25,
+			PricePerUnit: decimal.NewFromFloat(0.25),
 			Priority:     1,
 		},
 	}
 
 	pricing := &billing.EffectivePricing{
 		FreeSpans:         50000000, // Should be ignored
-		PricePer100KSpans: 0.50,
-		FreeGB:            10.0, // Should be ignored
-		PricePerGB:        2.00,
+		PricePer100KSpans: decimal.NewFromFloat(0.50),
+		FreeGB:            decimal.NewFromFloat(10.0), // Should be ignored
+		PricePerGB:        decimal.NewFromFloat(2.00),
 		FreeScores:        100, // Should be ignored
-		PricePer1KScores:  0.10,
+		PricePer1KScores:  decimal.NewFromFloat(0.10),
 		HasVolumeTiers:    true,
 		VolumeTiers:       tiers,
 	}

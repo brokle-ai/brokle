@@ -30,7 +30,7 @@ func (r *planRepository) GetByID(ctx context.Context, id ulid.ULID) (*billing.Pl
 	err := r.getDB(ctx).WithContext(ctx).Where("id = ?", id).First(&plan).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, fmt.Errorf("plan not found: %s", id)
+			return nil, billing.NewPlanNotFoundError(id.String())
 		}
 		return nil, fmt.Errorf("get plan: %w", err)
 	}
@@ -42,7 +42,7 @@ func (r *planRepository) GetByName(ctx context.Context, name string) (*billing.P
 	err := r.getDB(ctx).WithContext(ctx).Where("name = ?", name).First(&plan).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, fmt.Errorf("plan not found: %s", name)
+			return nil, billing.NewPlanNotFoundError(name)
 		}
 		return nil, fmt.Errorf("get plan by name: %w", err)
 	}
@@ -54,7 +54,7 @@ func (r *planRepository) GetDefault(ctx context.Context) (*billing.Plan, error) 
 	err := r.getDB(ctx).WithContext(ctx).Where("is_default = ? AND is_active = ?", true, true).First(&plan).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, fmt.Errorf("no default plan found")
+			return nil, billing.NewPlanNotFoundError("default")
 		}
 		return nil, fmt.Errorf("get default plan: %w", err)
 	}

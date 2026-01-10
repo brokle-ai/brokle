@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"log/slog"
 	"sort"
-	"strings"
 	"time"
 
+	"github.com/shopspring/decimal"
 	"gorm.io/datatypes"
 
 	"brokle/internal/core/domain/billing"
@@ -98,7 +98,7 @@ func (s *contractService) GetContract(ctx context.Context, contractID ulid.ULID)
 	contract, err := s.contractRepo.GetByID(ctx, contractID)
 	if err != nil {
 		// Check if it's a "not found" error vs database error
-		if strings.Contains(err.Error(), "not found") {
+		if billing.IsNotFoundError(err) {
 			return nil, appErrors.NewNotFoundError(fmt.Sprintf("Contract %s not found", contractID))
 		}
 		// Wrap real database errors as internal errors
@@ -211,7 +211,7 @@ func (s *contractService) ActivateContract(ctx context.Context, contractID ulid.
 
 		if err := s.contractRepo.Update(ctx, contract); err != nil {
 			// Check for unique constraint violation (race condition caught by database)
-			if isUniqueConstraintError(err) {
+			if appErrors.IsDatabaseUniqueViolation(err) {
 				return appErrors.NewConflictError("Another contract was activated concurrently for this organization")
 			}
 			return appErrors.NewInternalError("Failed to activate contract", err)
@@ -431,13 +431,13 @@ func (s *contractService) trackChanges(old, new *billing.Contract) map[string]in
 	}
 
 	// Track pricing changes
-	if !equalFloat64Ptr(old.CustomPricePer100KSpans, new.CustomPricePer100KSpans) {
+	if !equalDecimalPtr(old.CustomPricePer100KSpans, new.CustomPricePer100KSpans) {
 		changes["price_per_100k_spans"] = map[string]interface{}{
 			"old": old.CustomPricePer100KSpans,
 			"new": new.CustomPricePer100KSpans,
 		}
 	}
-	if !equalFloat64Ptr(old.CustomPricePerGB, new.CustomPricePerGB) {
+	if !equalDecimalPtr(old.CustomPricePerGB, new.CustomPricePerGB) {
 		changes["price_per_gb"] = map[string]interface{}{
 			"old": old.CustomPricePerGB,
 			"new": new.CustomPricePerGB,
@@ -447,14 +447,14 @@ func (s *contractService) trackChanges(old, new *billing.Contract) map[string]in
 	return changes
 }
 
-func equalFloat64Ptr(a, b *float64) bool {
+func equalDecimalPtr(a, b *decimal.Decimal) bool {
 	if a == nil && b == nil {
 		return true
 	}
 	if a == nil || b == nil {
 		return false
 	}
-	return *a == *b
+	return a.Equal(*b)
 }
 
 func equalTimePtr(a, b *time.Time) bool {
@@ -542,17 +542,6 @@ func validateDimensionTiers(dimension billing.TierDimension, tiers []*billing.Vo
 	return nil
 }
 
-// isUniqueConstraintError checks if error is from unique constraint violation
-func isUniqueConstraintError(err error) bool {
-	if err == nil {
-		return false
-	}
-	errMsg := err.Error()
-	return strings.Contains(errMsg, "duplicate key") ||
-		strings.Contains(errMsg, "UNIQUE constraint") ||
-		strings.Contains(errMsg, "unique constraint") ||
-		strings.Contains(errMsg, "idx_contracts_active_org") // Specific index name
-}
 
 // logContractActionTx logs contract action within a transaction
 func (s *contractService) logContractActionTx(

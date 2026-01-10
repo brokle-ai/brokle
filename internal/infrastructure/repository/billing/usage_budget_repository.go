@@ -31,7 +31,7 @@ func (r *usageBudgetRepository) GetByID(ctx context.Context, id ulid.ULID) (*bil
 	err := r.getDB(ctx).WithContext(ctx).Where("id = ?", id).First(&budget).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, fmt.Errorf("budget not found: %s", id)
+			return nil, billing.NewBudgetNotFoundError(id.String())
 		}
 		return nil, fmt.Errorf("get budget: %w", err)
 	}

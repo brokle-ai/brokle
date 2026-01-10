@@ -3,7 +3,6 @@ package registration
 import (
 	"context"
 	"errors"
-	"strings"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -148,7 +147,7 @@ func (s *registrationService) RegisterWithOrganization(ctx context.Context, req 
 
 		if err := s.userRepo.Create(ctx, newUser); err != nil {
 			// Check for duplicate email (database unique constraint)
-			if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "unique constraint") || strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			if appErrors.IsDatabaseUniqueViolation(err) {
 				return appErrors.NewConflictError("Email already registered")
 			}
 			return appErrors.NewInternalError("Failed to create user", err)
@@ -308,7 +307,7 @@ func (s *registrationService) RegisterWithInvitation(ctx context.Context, req *R
 
 		if err := s.userRepo.Create(ctx, newUser); err != nil {
 			// Check for duplicate email (database unique constraint)
-			if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "unique constraint") || strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			if appErrors.IsDatabaseUniqueViolation(err) {
 				return appErrors.NewConflictError("Email already registered")
 			}
 			return appErrors.NewInternalError("Failed to create user", err)
