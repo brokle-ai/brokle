@@ -450,14 +450,11 @@ func ProvideWorkers(core *CoreContainer) (*WorkerContainer, error) {
 		core.Logger,
 		core.Repos.Billing.BillableUsage,
 		core.Repos.Billing.OrganizationBilling,
-		core.Repos.Billing.Plan,
-		core.Repos.Billing.Contract,
-		core.Repos.Billing.VolumeTier,
 		core.Repos.Billing.UsageBudget,
 		core.Repos.Billing.UsageAlert,
 		core.Repos.Organization.Organization,
-		core.Services.Billing.Pricing, // PricingService for tier calculations
-		nil,                            // NotificationWorker - can be wired for email notifications
+		core.Services.Billing.Pricing, // PricingService for effective pricing and tier calculations
+		nil,                           // NotificationWorker - can be wired for email notifications
 	)
 
 	// Create contract expiration worker (daily job to expire contracts past end_date)

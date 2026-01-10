@@ -119,6 +119,10 @@ type PricingService interface {
 	// Get effective pricing for an organization (contract overrides > plan defaults)
 	GetEffectivePricing(ctx context.Context, orgID ulid.ULID) (*EffectivePricing, error)
 
+	// Get effective pricing using pre-fetched orgBilling to avoid redundant DB query
+	// Use this when orgBilling is already available (e.g., in workers)
+	GetEffectivePricingWithBilling(ctx context.Context, orgID ulid.ULID, orgBilling *OrganizationBilling) (*EffectivePricing, error)
+
 	// Calculate cost with tier support
 	CalculateCostWithTiers(ctx context.Context, orgID ulid.ULID, usage *BillableUsageSummary) (float64, error)
 

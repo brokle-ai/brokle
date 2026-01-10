@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"brokle/internal/core/domain/billing"
+	"brokle/pkg/pointers"
 	"brokle/pkg/ulid"
 	"brokle/pkg/units"
 )
@@ -36,12 +37,19 @@ func NewPricingService(
 
 // GetEffectivePricing resolves pricing: contract overrides > plan defaults
 func (s *pricingService) GetEffectivePricing(ctx context.Context, orgID ulid.ULID) (*billing.EffectivePricing, error) {
-	// 1. Get organization's base plan
+	// Get organization's billing state
 	orgBilling, err := s.billingRepo.GetByOrgID(ctx, orgID)
 	if err != nil {
 		return nil, err
 	}
 
+	return s.GetEffectivePricingWithBilling(ctx, orgID, orgBilling)
+}
+
+// GetEffectivePricingWithBilling resolves pricing using pre-fetched orgBilling
+// Use this when orgBilling is already available to avoid redundant DB query
+func (s *pricingService) GetEffectivePricingWithBilling(ctx context.Context, orgID ulid.ULID, orgBilling *billing.OrganizationBilling) (*billing.EffectivePricing, error) {
+	// 1. Get organization's base plan
 	plan, err := s.planRepo.GetByID(ctx, orgBilling.PlanID)
 	if err != nil {
 		return nil, err
@@ -62,12 +70,12 @@ func (s *pricingService) GetEffectivePricing(ctx context.Context, orgID ulid.ULI
 
 	// 3. Resolve pricing (contract overrides plan)
 	if contract != nil {
-		effective.FreeSpans = coalesceInt64(contract.CustomFreeSpans, plan.FreeSpans)
-		effective.PricePer100KSpans = coalesceFloat64Ptr(contract.CustomPricePer100KSpans, plan.PricePer100KSpans)
-		effective.FreeGB = coalesceFloat64Ptr(contract.CustomFreeGB, &plan.FreeGB)
-		effective.PricePerGB = coalesceFloat64Ptr(contract.CustomPricePerGB, plan.PricePerGB)
-		effective.FreeScores = coalesceInt64(contract.CustomFreeScores, plan.FreeScores)
-		effective.PricePer1KScores = coalesceFloat64Ptr(contract.CustomPricePer1KScores, plan.PricePer1KScores)
+		effective.FreeSpans = pointers.CoalesceInt64(contract.CustomFreeSpans, plan.FreeSpans)
+		effective.PricePer100KSpans = pointers.CoalesceFloat64(contract.CustomPricePer100KSpans, plan.PricePer100KSpans)
+		effective.FreeGB = pointers.CoalesceFloat64(contract.CustomFreeGB, &plan.FreeGB)
+		effective.PricePerGB = pointers.CoalesceFloat64(contract.CustomPricePerGB, plan.PricePerGB)
+		effective.FreeScores = pointers.CoalesceInt64(contract.CustomFreeScores, plan.FreeScores)
+		effective.PricePer1KScores = pointers.CoalesceFloat64(contract.CustomPricePer1KScores, plan.PricePer1KScores)
 
 		// Load volume tiers
 		tiers, err := s.tierRepo.GetByContractID(ctx, contract.ID)
@@ -82,11 +90,11 @@ func (s *pricingService) GetEffectivePricing(ctx context.Context, orgID ulid.ULI
 	} else {
 		// No contract, use plan defaults
 		effective.FreeSpans = plan.FreeSpans
-		effective.PricePer100KSpans = derefFloat64(plan.PricePer100KSpans)
+		effective.PricePer100KSpans = pointers.DerefFloat64(plan.PricePer100KSpans)
 		effective.FreeGB = plan.FreeGB
-		effective.PricePerGB = derefFloat64(plan.PricePerGB)
+		effective.PricePerGB = pointers.DerefFloat64(plan.PricePerGB)
 		effective.FreeScores = plan.FreeScores
-		effective.PricePer1KScores = derefFloat64(plan.PricePer1KScores)
+		effective.PricePer1KScores = pointers.DerefFloat64(plan.PricePer1KScores)
 	}
 
 	return effective, nil
@@ -301,26 +309,3 @@ func (s *pricingService) calculateFlatDimension(billableUsage int64, dimension b
 	}
 }
 
-func coalesceInt64(custom *int64, defaultVal int64) int64 {
-	if custom != nil {
-		return *custom
-	}
-	return defaultVal
-}
-
-func coalesceFloat64Ptr(custom *float64, defaultVal *float64) float64 {
-	if custom != nil {
-		return *custom
-	}
-	if defaultVal != nil {
-		return *defaultVal
-	}
-	return 0
-}
-
-func derefFloat64(ptr *float64) float64 {
-	if ptr != nil {
-		return *ptr
-	}
-	return 0
-}

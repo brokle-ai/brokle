@@ -21,9 +21,6 @@ type UsageAggregationWorker struct {
 	logger             *slog.Logger
 	usageRepo          billing.BillableUsageRepository
 	billingRepo        billing.OrganizationBillingRepository
-	planRepo           billing.PlanRepository
-	contractRepo       billing.ContractRepository
-	tierRepo           billing.VolumeDiscountTierRepository
 	budgetRepo         billing.UsageBudgetRepository
 	alertRepo          billing.UsageAlertRepository
 	orgRepo            organization.OrganizationRepository
@@ -39,9 +36,6 @@ func NewUsageAggregationWorker(
 	logger *slog.Logger,
 	usageRepo billing.BillableUsageRepository,
 	billingRepo billing.OrganizationBillingRepository,
-	planRepo billing.PlanRepository,
-	contractRepo billing.ContractRepository,
-	tierRepo billing.VolumeDiscountTierRepository,
 	budgetRepo billing.UsageBudgetRepository,
 	alertRepo billing.UsageAlertRepository,
 	orgRepo organization.OrganizationRepository,
@@ -53,9 +47,6 @@ func NewUsageAggregationWorker(
 		logger:             logger,
 		usageRepo:          usageRepo,
 		billingRepo:        billingRepo,
-		planRepo:           planRepo,
-		contractRepo:       contractRepo,
-		tierRepo:           tierRepo,
 		budgetRepo:         budgetRepo,
 		alertRepo:          alertRepo,
 		orgRepo:            orgRepo,
@@ -165,7 +156,7 @@ func (w *UsageAggregationWorker) syncOrganizationUsage(ctx context.Context, orgI
 	}
 
 	// Get effective pricing (plan + contract overrides)
-	effectivePricing, err := w.getEffectivePricing(ctx, orgID, orgBilling)
+	effectivePricing, err := w.pricingService.GetEffectivePricingWithBilling(ctx, orgID, orgBilling)
 	if err != nil {
 		return err
 	}
@@ -354,60 +345,6 @@ func (w *UsageAggregationWorker) syncBudgetUsage(ctx context.Context, orgID ulid
 	}
 
 	return nil
-}
-
-// getEffectivePricing resolves pricing: contract overrides > plan defaults
-func (w *UsageAggregationWorker) getEffectivePricing(ctx context.Context, orgID ulid.ULID, orgBilling *billing.OrganizationBilling) (*billing.EffectivePricing, error) {
-	// 1. Get organization's base plan
-	plan, err := w.planRepo.GetByID(ctx, orgBilling.PlanID)
-	if err != nil {
-		return nil, err
-	}
-
-	// 2. Check for active contract
-	// Note: GetActiveByOrgID returns (nil, nil) when no active contract exists - this is valid
-	contract, err := w.contractRepo.GetActiveByOrgID(ctx, orgID)
-	if err != nil {
-		return nil, err // Real database error
-	}
-	// contract may be nil (no active contract) - handled below
-
-	effective := &billing.EffectivePricing{
-		OrganizationID: orgID,
-		BasePlan:       plan,
-		Contract:       contract,
-	}
-
-	// 3. Resolve pricing (contract overrides plan)
-	if contract != nil {
-		effective.FreeSpans = coalesceInt64(contract.CustomFreeSpans, plan.FreeSpans)
-		effective.PricePer100KSpans = coalesceFloat64Ptr(contract.CustomPricePer100KSpans, plan.PricePer100KSpans)
-		effective.FreeGB = coalesceFloat64Ptr(contract.CustomFreeGB, &plan.FreeGB)
-		effective.PricePerGB = coalesceFloat64Ptr(contract.CustomPricePerGB, plan.PricePerGB)
-		effective.FreeScores = coalesceInt64(contract.CustomFreeScores, plan.FreeScores)
-		effective.PricePer1KScores = coalesceFloat64Ptr(contract.CustomPricePer1KScores, plan.PricePer1KScores)
-
-		// Load volume tiers
-		tiers, err := w.tierRepo.GetByContractID(ctx, contract.ID)
-		if err != nil {
-			return nil, err
-		}
-
-		if len(tiers) > 0 {
-			effective.HasVolumeTiers = true
-			effective.VolumeTiers = tiers
-		}
-	} else {
-		// No contract, use plan defaults
-		effective.FreeSpans = plan.FreeSpans
-		effective.PricePer100KSpans = derefFloat64(plan.PricePer100KSpans)
-		effective.FreeGB = plan.FreeGB
-		effective.PricePerGB = derefFloat64(plan.PricePerGB)
-		effective.FreeScores = plan.FreeScores
-		effective.PricePer1KScores = derefFloat64(plan.PricePer1KScores)
-	}
-
-	return effective, nil
 }
 
 // checkBudgets checks all budgets and returns any new alerts
@@ -735,31 +672,6 @@ func (w *UsageAggregationWorker) getBudgetPeriodStart(budget *billing.UsageBudge
 	default:
 		return time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 	}
-}
-
-// Helper functions for pricing resolution
-func coalesceInt64(custom *int64, defaultVal int64) int64 {
-	if custom != nil {
-		return *custom
-	}
-	return defaultVal
-}
-
-func coalesceFloat64Ptr(custom *float64, defaultVal *float64) float64 {
-	if custom != nil {
-		return *custom
-	}
-	if defaultVal != nil {
-		return *defaultVal
-	}
-	return 0
-}
-
-func derefFloat64(ptr *float64) float64 {
-	if ptr != nil {
-		return *ptr
-	}
-	return 0
 }
 
 // Helper formatting functions
