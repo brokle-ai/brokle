@@ -3,6 +3,7 @@ package workers
 import (
 	"context"
 	"log/slog"
+	"sync"
 	"time"
 
 	"brokle/internal/config"
@@ -15,7 +16,8 @@ type ContractExpirationWorker struct {
 	logger          *slog.Logger
 	contractService billing.ContractService
 	billingRepo     billing.OrganizationBillingRepository
-	quit            chan bool
+	quit            chan struct{}
+	wg              sync.WaitGroup
 	ticker          *time.Ticker
 }
 
@@ -31,7 +33,7 @@ func NewContractExpirationWorker(
 		logger:          logger,
 		contractService: contractService,
 		billingRepo:     billingRepo,
-		quit:            make(chan bool),
+		quit:            make(chan struct{}),
 	}
 }
 
@@ -39,47 +41,51 @@ func NewContractExpirationWorker(
 func (w *ContractExpirationWorker) Start() {
 	w.logger.Info("Starting contract expiration worker")
 
-	// Run daily at midnight UTC
-	interval := 24 * time.Hour
+	// Start the main loop goroutine
+	w.wg.Add(1)
+	go w.mainLoop()
+}
+
+// Stop stops the contract expiration worker and waits for graceful shutdown
+func (w *ContractExpirationWorker) Stop() {
+	w.logger.Info("Stopping contract expiration worker")
+	close(w.quit)
+	w.wg.Wait()
+}
+
+// mainLoop handles the worker lifecycle: immediate run, wait until midnight, then daily runs
+func (w *ContractExpirationWorker) mainLoop() {
+	defer w.wg.Done()
+
+	// Run immediately on start
+	w.run()
 
 	// Calculate time until next midnight UTC
 	now := time.Now().UTC()
 	nextMidnight := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, time.UTC)
 	timeUntilMidnight := nextMidnight.Sub(now)
 
-	// Run immediately on start
-	go w.run()
+	// Wait until first midnight with quit check
+	select {
+	case <-time.After(timeUntilMidnight):
+		w.run()
+	case <-w.quit:
+		w.logger.Info("Contract expiration worker stopped during initial wait")
+		return
+	}
 
-	// Wait until midnight, then run daily
-	go func() {
-		// Wait until first midnight with quit check
+	// Then run every 24 hours
+	w.ticker = time.NewTicker(24 * time.Hour)
+	for {
 		select {
-		case <-time.After(timeUntilMidnight):
+		case <-w.ticker.C:
 			w.run()
 		case <-w.quit:
-			w.logger.Info("Contract expiration worker stopped during initial wait")
+			w.ticker.Stop()
+			w.logger.Info("Contract expiration worker stopped")
 			return
 		}
-
-		// Then run every 24 hours
-		w.ticker = time.NewTicker(interval)
-		for {
-			select {
-			case <-w.ticker.C:
-				w.run()
-			case <-w.quit:
-				w.ticker.Stop()
-				w.logger.Info("Contract expiration worker stopped")
-				return
-			}
-		}
-	}()
-}
-
-// Stop stops the contract expiration worker
-func (w *ContractExpirationWorker) Stop() {
-	w.logger.Info("Stopping contract expiration worker")
-	close(w.quit)
+	}
 }
 
 // run executes a single expiration check cycle

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"sort"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/shopspring/decimal"
@@ -33,7 +34,8 @@ type UsageAggregationWorker struct {
 	orgRepo                  organization.OrganizationRepository
 	pricingService           billing.PricingService
 	notificationWorker       *NotificationWorker
-	quit                     chan bool
+	quit                     chan struct{}
+	wg                       sync.WaitGroup
 	ticker                   *time.Ticker
 	alertDeduplicationWindow time.Duration
 }
@@ -68,7 +70,7 @@ func NewUsageAggregationWorker(
 		orgRepo:                  orgRepo,
 		pricingService:           pricingService,
 		notificationWorker:       notificationWorker,
-		quit:                     make(chan bool),
+		quit:                     make(chan struct{}),
 		alertDeduplicationWindow: time.Duration(alertDeduplicationHours) * time.Hour,
 	}
 }
@@ -85,28 +87,36 @@ func (w *UsageAggregationWorker) Start() {
 
 	w.ticker = time.NewTicker(interval)
 
-	// Run immediately on start
-	go w.run()
-
-	// Then run on ticker
-	go func() {
-		for {
-			select {
-			case <-w.ticker.C:
-				w.run()
-			case <-w.quit:
-				w.ticker.Stop()
-				w.logger.Info("Usage aggregation worker stopped")
-				return
-			}
-		}
-	}()
+	// Start the main loop goroutine (handles both immediate and ticker runs)
+	w.wg.Add(1)
+	go w.mainLoop()
 }
 
-// Stop stops the usage aggregation worker
+// Stop stops the usage aggregation worker and waits for graceful shutdown
 func (w *UsageAggregationWorker) Stop() {
 	w.logger.Info("Stopping usage aggregation worker")
 	close(w.quit)
+	w.wg.Wait()
+}
+
+// mainLoop handles the worker lifecycle: immediate run, then ticker-based runs
+func (w *UsageAggregationWorker) mainLoop() {
+	defer w.wg.Done()
+
+	// Run immediately on start
+	w.run()
+
+	// Then run on ticker
+	for {
+		select {
+		case <-w.ticker.C:
+			w.run()
+		case <-w.quit:
+			w.ticker.Stop()
+			w.logger.Info("Usage aggregation worker stopped")
+			return
+		}
+	}
 }
 
 // run executes a single aggregation cycle with paginated organization iteration
