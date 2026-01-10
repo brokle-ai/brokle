@@ -11,6 +11,7 @@ import (
 	"brokle/internal/core/domain/billing"
 	"brokle/internal/core/domain/organization"
 	"brokle/pkg/ulid"
+	"brokle/pkg/units"
 )
 
 // UsageAggregationWorker syncs ClickHouse usage data to PostgreSQL billing state
@@ -199,7 +200,7 @@ func (w *UsageAggregationWorker) syncOrganizationUsage(ctx context.Context, orgI
 
 	// Calculate free tier remaining
 	freeSpansRemaining := max(0, effectivePricing.FreeSpans-summary.TotalSpans)
-	freeBytesRemaining := max(0, int64(effectivePricing.FreeGB*1073741824)-summary.TotalBytes)
+	freeBytesRemaining := max(0, int64(effectivePricing.FreeGB*float64(units.BytesPerGB))-summary.TotalBytes)
 	freeScoresRemaining := max(0, effectivePricing.FreeScores-summary.TotalScores)
 
 	// Update billing state
@@ -364,10 +365,12 @@ func (w *UsageAggregationWorker) getEffectivePricing(ctx context.Context, orgID 
 	}
 
 	// 2. Check for active contract
+	// Note: GetActiveByOrgID returns (nil, nil) when no active contract exists - this is valid
 	contract, err := w.contractRepo.GetActiveByOrgID(ctx, orgID)
-	if err != nil && err.Error() != "no active contract found for organization: "+orgID.String() {
-		return nil, err
+	if err != nil {
+		return nil, err // Real database error
 	}
+	// contract may be nil (no active contract) - handled below
 
 	effective := &billing.EffectivePricing{
 		OrganizationID: orgID,
@@ -624,9 +627,9 @@ func (w *UsageAggregationWorker) calculateFlat(usage *billing.BillableUsageSumma
 	totalCost += spanCost
 
 	// Bytes
-	freeBytes := int64(pricing.FreeGB * 1073741824)
+	freeBytes := int64(pricing.FreeGB * float64(units.BytesPerGB))
 	billableBytes := max(0, usage.TotalBytes-freeBytes)
-	billableGB := float64(billableBytes) / 1073741824.0
+	billableGB := float64(billableBytes) / float64(units.BytesPerGB)
 	dataCost := billableGB * pricing.PricePerGB
 	totalCost += dataCost
 
@@ -646,7 +649,7 @@ func (w *UsageAggregationWorker) calculateWithTiers(usage *billing.BillableUsage
 	// Delegate to PricingService for tier calculations
 	totalCost += w.pricingService.CalculateDimensionWithTiers(usage.TotalSpans, pricing.FreeSpans, billing.TierDimensionSpans, pricing.VolumeTiers, pricing)
 
-	freeBytes := int64(pricing.FreeGB * 1073741824)
+	freeBytes := int64(pricing.FreeGB * float64(units.BytesPerGB))
 	totalCost += w.pricingService.CalculateDimensionWithTiers(usage.TotalBytes, freeBytes, billing.TierDimensionBytes, pricing.VolumeTiers, pricing)
 
 	totalCost += w.pricingService.CalculateDimensionWithTiers(usage.TotalScores, pricing.FreeScores, billing.TierDimensionScores, pricing.VolumeTiers, pricing)
@@ -672,7 +675,7 @@ func (w *UsageAggregationWorker) calculateFlatNoFreeTier(usage *billing.Billable
 	totalCost += spanCost
 
 	// Bytes
-	billableGB := float64(usage.TotalBytes) / 1073741824.0
+	billableGB := float64(usage.TotalBytes) / float64(units.BytesPerGB)
 	dataCost := billableGB * pricing.PricePerGB
 	totalCost += dataCost
 
@@ -771,8 +774,8 @@ func formatNumber(n int64) string {
 }
 
 func formatBytes(b int64) string {
-	if b >= 1073741824 {
-		return formatFloat(float64(b)/1073741824) + " GB"
+	if b >= units.BytesPerGB {
+		return formatFloat(float64(b)/float64(units.BytesPerGB)) + " GB"
 	}
 	if b >= 1048576 {
 		return formatFloat(float64(b)/1048576) + " MB"

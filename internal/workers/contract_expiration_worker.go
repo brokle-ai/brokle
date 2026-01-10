@@ -52,9 +52,14 @@ func (w *ContractExpirationWorker) Start() {
 
 	// Wait until midnight, then run daily
 	go func() {
-		// Wait until first midnight
-		time.Sleep(timeUntilMidnight)
-		w.run()
+		// Wait until first midnight with quit check
+		select {
+		case <-time.After(timeUntilMidnight):
+			w.run()
+		case <-w.quit:
+			w.logger.Info("Contract expiration worker stopped during initial wait")
+			return
+		}
 
 		// Then run every 24 hours
 		w.ticker = time.NewTicker(interval)

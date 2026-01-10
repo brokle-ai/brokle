@@ -9,6 +9,7 @@ import (
 
 	"brokle/internal/core/domain/billing"
 	"brokle/pkg/ulid"
+	"brokle/pkg/units"
 )
 
 type billableUsageService struct {
@@ -92,7 +93,7 @@ func (s *billableUsageService) GetUsageOverview(ctx context.Context, orgID ulid.
 
 	// Use effective pricing for free tier calculations (respects contract overrides)
 	freeSpansRemaining := max(0, effectivePricing.FreeSpans-usageSummary.TotalSpans)
-	freeGBTotal := int64(effectivePricing.FreeGB * 1073741824)
+	freeGBTotal := int64(effectivePricing.FreeGB * float64(units.BytesPerGB))
 	freeBytesRemaining := max(0, freeGBTotal-usageSummary.TotalBytes)
 	freeScoresRemaining := max(0, effectivePricing.FreeScores-usageSummary.TotalScores)
 
@@ -171,9 +172,9 @@ func (s *billableUsageService) CalculateCost(ctx context.Context, usage *billing
 	}
 
 	if plan.PricePerGB != nil {
-		freeBytes := int64(plan.FreeGB * 1073741824)
+		freeBytes := int64(plan.FreeGB * float64(units.BytesPerGB))
 		billableBytes := max(0, usage.TotalBytes-freeBytes)
-		billableGB := float64(billableBytes) / 1073741824.0
+		billableGB := float64(billableBytes) / float64(units.BytesPerGB)
 		dataCost := billableGB * *plan.PricePerGB
 		totalCost += dataCost
 	}

@@ -13,11 +13,10 @@ import (
 	appErrors "brokle/pkg/errors"
 	"brokle/pkg/response"
 	"brokle/pkg/ulid"
+	"brokle/pkg/units"
 
 	"github.com/gin-gonic/gin"
 )
-
-const bytesPerGB = 1_073_741_824 // 1 GB in bytes
 
 type UsageHandler struct {
 	config       *config.Config
@@ -286,7 +285,7 @@ func (h *UsageHandler) exportCSV(c *gin.Context, usage []*billing.BillableUsage,
 			u.ProjectID.String(),
 			formatInt64(u.SpanCount),
 			formatInt64(u.BytesProcessed),
-			formatFloat64(float64(u.BytesProcessed)/float64(bytesPerGB), 4),
+			formatFloat64(float64(u.BytesProcessed)/float64(units.BytesPerGB), 4),
 			formatInt64(u.ScoreCount),
 			formatFloat64(u.AIProviderCost, 2),
 		)
