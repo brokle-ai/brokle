@@ -1,107 +1,172 @@
-# 📊🚀 Brokle – The Open-Source AI Control Plane
+# Brokle – The AI Engineering Platform for AI Teams
+<p align="center">
+  <a href="https://github.com/brokle-ai/brokle/stargazers"><img src="https://img.shields.io/github/stars/brokle-ai/brokle" alt="GitHub Stars"></a>
+  <a href="https://github.com/brokle-ai/brokle/blob/main/LICENSE"><img src="https://img.shields.io/github/license/brokle-ai/brokle" alt="License"></a>
+  <a href="https://discord.gg/brokle"><img src="https://img.shields.io/badge/Discord-Join%20Us-7289da" alt="Discord"></a>
+</p>
 
-**See Everything. Control Everything.**
+<p align="center">
+  <a href="https://docs.brokle.com">Docs</a> •
+  <a href="https://docs.brokle.com/quickstart">Quick Start</a> •
+  <a href="https://discord.gg/brokle">Discord</a> •
+  <a href="https://github.com/brokle-ai/brokle/issues">Issues</a> •
+  <a href="https://brokle.com">Website</a>
+</p>
 
-*Observability, routing, and governance for AI — open source and built for scale.*
+---
 
+Observability, evaluation, and experimentation for teams building AI agents and applications.
 
-## 🌍 Why Brokle?
-
-LLM apps in production often suffer from **blind spots**: no visibility, unpredictable costs, and fragile vendor lock-in.
-**Brokle** solves this as **The Open-Source AI Control Plane** — See Everything. Control Everything.
-
-
-## 🎯 What You Get Today
-
-- **👁️ See Everything** – Track **40+ LLM-specific metrics** (latency, token usage, cost, errors, success rates) with complete observability and tracing.
-- **⚡ Control Everything** – Intelligent routing, failover protection, and governance policies with **smart, OpenAI-compatible multi-provider routing**.
-- **🔒 Stay in Control** – Full ownership of your AI stack — open, transparent, and free from lock-in.  
-
-👉 Built for **production-grade scale**, extensibility, and the transparency only open source can provide.
-
-**Governance means** cost controls, provider policies, and safe-usage guardrails baked right in.
+**Open source. OpenTelemetry-native. Self-host anywhere.**
 
 
-## 🗺️ Where We’re Headed
-
-Brokle starts with **observability + gateway** as the foundation. Next steps include:  
-
-- **🔄 Smarter Caching** – Semantic-aware caching to slash costs and latency.  
-- **🚀 Beyond Text** – Model hosting and observability for multimodal AI (images, speech, agents).  
-- **🌐 Complete Control Plane** – From observability and routing to caching, multimodal, and compliance — Brokle is becoming the single control plane for all AI workloads.  
-
-Step by step, Brokle is evolving into the unified open-source AI control plane — built for the needs of production teams.
-
-
-## 💡 Why Brokle Stands Out
-
-- **Open Source First** – Transparent, extensible, and community-driven.  
-- **Developer-Friendly** – Drop-in integrations with OpenAI APIs, LangChain, LlamaIndex, and more.  
-- **Future-Proof** – From observability to routing to infrastructure, Brokle grows as your AI stack grows.
-
-
-## 🚀 Quick Start
+## Quick Start
 
 ```bash
-# Quick start with Docker
 git clone https://github.com/brokle-ai/brokle.git
 cd brokle
 make setup && make dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) to explore Brokle instantly.
+| Service | URL |
+|---------|-----|
+| Dashboard | http://localhost:3000 |
+| API | http://localhost:8080 |
 
-**Access:**  
-📊 Dashboard: [http://localhost:3000](http://localhost:3000)  
-🔌 API: [http://localhost:8080](http://localhost:8080)  
-📚 Full guide: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)  
+**Prerequisites:** Docker and Docker Compose
 
-
-## 📚 Documentation
-
-- 🚀 [**Getting Started**](docs/DEVELOPMENT.md) — Setup and development guide  
-- 📡 [**API Reference**](docs/API.md) — REST & WebSocket documentation  
-- 🏗️ [**Architecture**](docs/ARCHITECTURE.md) — System design and technical details  
-- 🚢 [**Deployment**](docs/DEPLOYMENT.md) — Production-ready options  
-- 🤝 [**Contributing**](docs/CONTRIBUTING.md) — Standards and workflow  
+📚 **Full setup guide**: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)
 
 
-## 🌟 Key Features
+## SDK Integration
 
-### Advanced Observability
-- **Real-time Metrics** – Track 40+ LLM-specific indicators (latency, token usage, cost, errors) in real time.  
-- **Quality Scoring** – Automated response quality assessment to monitor AI output.  
-- **End-to-End Tracing** – Complete visibility into every request and provider interaction.  
+### Python
 
-### AI Gateway & Routing
-- **Intelligent Provider Selection** – ML-powered routing with automatic failover.  
-- **Multi-Provider Smart Routing** – Seamless switching between AI providers to prevent downtime.  
-- **Drop-in Compatibility** – Works with existing applications, SDKs, and frameworks.  
+```bash
+pip install brokle
+```
 
-### Governance & Control
-- **Built-in Policy Enforcement** – Cost controls, usage limits, and safety guardrails built-in.
-- **Complete Transparency** – Full visibility into AI operations with open source flexibility.
-- **RBAC & Access Control** – Enterprise-grade permissions and multi-tenant isolation.
-- **Real-time Cost Governance** – Live spend tracking with intelligent optimization recommendations.  
+```python
+from brokle import Brokle
+
+client = Brokle(api_key="bk_...")
+
+with client.trace("my-agent") as trace:
+    response = openai.chat.completions.create(...)
+```
+
+### JavaScript/TypeScript
+
+```bash
+npm install brokle
+```
+
+```typescript
+import { Brokle } from 'brokle';
+
+const client = new Brokle({ apiKey: 'bk_...' });
+
+await client.trace('my-agent', async () => {
+  const response = await openai.chat.completions.create(...);
+});
+```
+
+### OpenTelemetry
+
+```bash
+export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:8080
+export OTEL_EXPORTER_OTLP_HEADERS="x-api-key=bk_..."
+```
 
 
-## 🤝 Contributing
+## Integrations
+
+| Framework | Status | Docs |
+|-----------|--------|------|
+| OpenAI | ✅ Native | [Guide](https://docs.brokle.com/integrations/openai) |
+| Anthropic | ✅ Native | [Guide](https://docs.brokle.com/integrations/anthropic) |
+| LangChain | ✅ Supported | [Guide](https://docs.brokle.com/integrations/langchain) |
+| LlamaIndex | ✅ Supported | [Guide](https://docs.brokle.com/integrations/llamaindex) |
+| OpenTelemetry | ✅ Native | [Guide](https://docs.brokle.com/integrations/opentelemetry) |
+
+
+## Features
+
+### 👁️ Observability
+Complete traces of every AI call with latency, token usage, and cost. Debug chains, agents, and complex pipelines step by step.
+
+### 📊 Evaluation
+Automated quality scoring with LLM-as-judge, custom evaluators, and experiments at scale. Define what quality means for your use case.
+
+### 📝 Prompt Management
+Version control for prompts with full history. A/B test variations with real traffic and roll back instantly.
+
+
+## Why Brokle?
+
+- **Open Source** – Transparent, extensible, and community-driven
+- **OpenTelemetry Native** – Built on open standards, no vendor lock-in
+- **Self-Host Anywhere** – Keep your data on your infrastructure
+- **Unified Platform** – Observe, evaluate, and manage in one tool
+
+
+## Documentation
+
+- 🚀 [**Getting Started**](docs/DEVELOPMENT.md) — Setup and development guide
+- 📡 [**API Reference**](docs/API.md) — REST & WebSocket documentation
+- 🏗️ [**Architecture**](docs/ARCHITECTURE.md) — System design and technical details
+- 🚢 [**Deployment**](docs/DEPLOYMENT.md) — Production-ready options
+
+
+## Troubleshooting
+
+<details>
+<summary><b>Port 8080 already in use</b></summary>
+
+```bash
+lsof -ti:8080 | xargs kill -9
+```
+</details>
+
+<details>
+<summary><b>Docker containers not starting</b></summary>
+
+```bash
+docker-compose down -v
+make setup
+```
+</details>
+
+<details>
+<summary><b>Database migration errors</b></summary>
+
+```bash
+make migrate-down
+make migrate-up
+```
+</details>
+
+Need help? Join [Discord](https://discord.gg/brokle) or open a [GitHub Issue](https://github.com/brokle-ai/brokle/issues).
+
+
+## Contributing
 
 We welcome contributions! See our [Contributing Guide](docs/CONTRIBUTING.md) to get started.
 
 
-## 📄 License
+## License
 
-This repository is MIT licensed, except for the `ee/` folders. See [LICENSE](LICENSE) and [docs](https://docs.brokle.com) for more details.
+MIT licensed, except for `ee/` folders. See [LICENSE](LICENSE) for details.
 
 
-## 🔗 Links
+## Community
 
-- **Website**: [https://brokle.com](https://brokle.com)
-- **Documentation**: [https://docs.brokle.com](https://docs.brokle.com)
-- **Community**: [Discord Server](https://discord.gg/brokle)
-- **Twitter**: [@BrokleAI](https://twitter.com/BrokleAI)
+- [Discord](https://discord.gg/brokle) – Chat with the team
+- [Twitter](https://twitter.com/BrokleAI) – Updates and news
+- [GitHub Discussions](https://github.com/brokle-ai/brokle/discussions) – Questions and ideas
 
 ---
 
-**Built with ❤️ by the Brokle team. Making AI infrastructure simple and powerful.**
+<p align="center">
+  <b>If Brokle helps you ship AI, give us a star!</b>
+</p>
