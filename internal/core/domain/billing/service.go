@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"brokle/pkg/ulid"
 )
 
@@ -30,7 +32,7 @@ type BillingService interface {
 // OrganizationService provides organization-related data for billing context
 type OrganizationService interface {
 	GetBillingTier(ctx context.Context, orgID ulid.ULID) (string, error)
-	GetDiscountRate(ctx context.Context, orgID ulid.ULID) (float64, error)
+	GetDiscountRate(ctx context.Context, orgID ulid.ULID) (decimal.Decimal, error)
 	GetPaymentMethod(ctx context.Context, orgID ulid.ULID) (*PaymentMethod, error)
 }
 
@@ -44,4 +46,118 @@ type QuotaStatus struct {
 	RequestsOK           bool      `json:"requests_ok"`
 	TokensOK             bool      `json:"tokens_ok"`
 	CostOK               bool      `json:"cost_ok"`
+}
+
+// ============================================================================
+// Usage-Based Billing Services (Spans + GB + Scores)
+// ============================================================================
+
+// UsageOverview represents the current usage overview for display
+type UsageOverview struct {
+	OrganizationID ulid.ULID `json:"organization_id"`
+	PeriodStart    time.Time `json:"period_start"`
+	PeriodEnd      time.Time `json:"period_end"`
+
+	// Current usage (3 dimensions)
+	Spans  int64 `json:"spans"`
+	Bytes  int64 `json:"bytes"`
+	Scores int64 `json:"scores"`
+
+	// Free tier remaining
+	FreeSpansRemaining  int64 `json:"free_spans_remaining"`
+	FreeBytesRemaining  int64 `json:"free_bytes_remaining"`
+	FreeScoresRemaining int64 `json:"free_scores_remaining"`
+
+	// Free tier totals (for progress display)
+	FreeSpansTotal  int64   `json:"free_spans_total"`
+	FreeBytesTotal  int64   `json:"free_bytes_total"`
+	FreeScoresTotal int64   `json:"free_scores_total"`
+
+	// Calculated cost
+	EstimatedCost decimal.Decimal `json:"estimated_cost"`
+}
+
+// BillableUsageService handles billable usage queries and cost calculation
+type BillableUsageService interface {
+	// Get current period overview (for dashboard cards)
+	GetUsageOverview(ctx context.Context, orgID ulid.ULID) (*UsageOverview, error)
+
+	// Get usage time series (for charts)
+	GetUsageTimeSeries(ctx context.Context, orgID ulid.ULID, start, end time.Time, granularity string) ([]*BillableUsage, error)
+
+	// Get usage breakdown by project
+	GetUsageByProject(ctx context.Context, orgID ulid.ULID, start, end time.Time) ([]*BillableUsageSummary, error)
+
+	// Calculate cost for usage
+	CalculateCost(ctx context.Context, usage *BillableUsageSummary, plan *Plan) float64
+
+	// ProvisionOrganizationBilling creates initial billing record for new organization
+	// Creates billing record with default plan and free tier counters
+	// Safe to call within a transaction - uses provided context
+	ProvisionOrganizationBilling(ctx context.Context, orgID ulid.ULID) error
+}
+
+// BudgetService handles budget CRUD and monitoring
+type BudgetService interface {
+	// CRUD
+	CreateBudget(ctx context.Context, budget *UsageBudget) error
+	GetBudget(ctx context.Context, id ulid.ULID) (*UsageBudget, error)
+	GetBudgetsByOrg(ctx context.Context, orgID ulid.ULID) ([]*UsageBudget, error)
+	UpdateBudget(ctx context.Context, budget *UsageBudget) error
+	DeleteBudget(ctx context.Context, id ulid.ULID) error
+
+	// Monitoring
+	CheckBudgets(ctx context.Context, orgID ulid.ULID) ([]*UsageAlert, error)
+	GetAlerts(ctx context.Context, orgID ulid.ULID, limit int) ([]*UsageAlert, error)
+	AcknowledgeAlert(ctx context.Context, orgID, alertID ulid.ULID) error
+}
+
+// ============================================================================
+// Enterprise Custom Pricing Services
+// ============================================================================
+
+// PricingService resolves effective pricing (contract overrides plan)
+type PricingService interface {
+	// Get effective pricing for an organization (contract overrides > plan defaults)
+	GetEffectivePricing(ctx context.Context, orgID ulid.ULID) (*EffectivePricing, error)
+
+	// Get effective pricing using pre-fetched orgBilling to avoid redundant DB query
+	// Use this when orgBilling is already available (e.g., in workers)
+	GetEffectivePricingWithBilling(ctx context.Context, orgID ulid.ULID, orgBilling *OrganizationBilling) (*EffectivePricing, error)
+
+	// Calculate cost with tier support
+	CalculateCostWithTiers(ctx context.Context, orgID ulid.ULID, usage *BillableUsageSummary) (decimal.Decimal, error)
+
+	// Calculate cost with tiers but without free tier deductions
+	// Used for project-level budgets where free tier is org-level only
+	CalculateCostWithTiersNoFreeTier(ctx context.Context, orgID ulid.ULID, usage *BillableUsageSummary) (decimal.Decimal, error)
+
+	// Calculate cost for a single dimension with tier support (exported for worker usage)
+	// Uses absolute position mapping with free tier offset for correct tier calculations
+	CalculateDimensionWithTiers(usage, freeTier int64, dimension TierDimension, allTiers []*VolumeDiscountTier, pricing *EffectivePricing) decimal.Decimal
+}
+
+// ContractService handles enterprise contract lifecycle
+type ContractService interface {
+	// CRUD
+	CreateContract(ctx context.Context, contract *Contract) error
+	GetContract(ctx context.Context, contractID ulid.ULID) (*Contract, error)
+	GetContractsByOrg(ctx context.Context, orgID ulid.ULID) ([]*Contract, error)
+	GetActiveContract(ctx context.Context, orgID ulid.ULID) (*Contract, error)
+	UpdateContract(ctx context.Context, contract *Contract) error
+
+	// Lifecycle management
+	ActivateContract(ctx context.Context, contractID ulid.ULID, userID ulid.ULID) error
+	CancelContract(ctx context.Context, contractID ulid.ULID, reason string, userID ulid.ULID) error
+	ExpireContract(ctx context.Context, contractID ulid.ULID) error
+
+	// Volume tiers
+	AddVolumeTiers(ctx context.Context, contractID ulid.ULID, tiers []*VolumeDiscountTier) error
+	UpdateVolumeTiers(ctx context.Context, contractID ulid.ULID, tiers []*VolumeDiscountTier) error
+
+	// Audit trail
+	GetContractHistory(ctx context.Context, contractID ulid.ULID) ([]*ContractHistory, error)
+
+	// Worker support
+	GetExpiringContracts(ctx context.Context, days int) ([]*Contract, error)
 }

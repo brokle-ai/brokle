@@ -70,6 +70,7 @@ type Span struct {
 	SpanName   string  `json:"span_name" db:"span_name"`
 	SpanID     string  `json:"span_id" db:"span_id"`
 	ProjectID  string  `json:"project_id" db:"project_id"`
+	OrganizationID string `json:"organization_id" db:"organization_id"`
 
 	Events []SpanEvent `json:"events,omitempty" db:"events"`
 	Links  []SpanLink  `json:"links,omitempty" db:"links"`
@@ -108,8 +109,9 @@ type Span struct {
 // Score represents a quality evaluation score linked to traces and spans
 type Score struct {
 	// Identity
-	ID        string `json:"id" db:"score_id"`
-	ProjectID string `json:"project_id" db:"project_id"`
+	ID             string `json:"id" db:"score_id"`
+	ProjectID      string `json:"project_id" db:"project_id"`
+	OrganizationID string `json:"organization_id" db:"organization_id"`
 
 	// Links
 	TraceID string `json:"trace_id" db:"trace_id"`

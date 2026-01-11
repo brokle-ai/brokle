@@ -8,6 +8,7 @@ import (
 
 	authDomain "brokle/internal/core/domain/auth"
 	"brokle/pkg/ulid"
+	"brokle/internal/infrastructure/shared"
 )
 
 // organizationMemberRepository implements authDomain.OrganizationMemberRepository using GORM
@@ -22,15 +23,20 @@ func NewOrganizationMemberRepository(db *gorm.DB) authDomain.OrganizationMemberR
 	}
 }
 
+// getDB returns transaction-aware DB instance
+func (r *organizationMemberRepository) getDB(ctx context.Context) *gorm.DB {
+	return shared.GetDB(ctx, r.db)
+}
+
 // Core CRUD operations
 
 func (r *organizationMemberRepository) Create(ctx context.Context, member *authDomain.OrganizationMember) error {
-	return r.db.WithContext(ctx).Create(member).Error
+	return r.getDB(ctx).WithContext(ctx).Create(member).Error
 }
 
 func (r *organizationMemberRepository) GetByUserAndOrganization(ctx context.Context, userID, orgID ulid.ULID) (*authDomain.OrganizationMember, error) {
 	var member authDomain.OrganizationMember
-	err := r.db.WithContext(ctx).
+	err := r.getDB(ctx).WithContext(ctx).
 		Where("user_id = ? AND organization_id = ?", userID, orgID).
 		Preload("Role").
 		First(&member).Error
@@ -42,11 +48,11 @@ func (r *organizationMemberRepository) GetByUserAndOrganization(ctx context.Cont
 }
 
 func (r *organizationMemberRepository) Update(ctx context.Context, member *authDomain.OrganizationMember) error {
-	return r.db.WithContext(ctx).Save(member).Error
+	return r.getDB(ctx).WithContext(ctx).Save(member).Error
 }
 
 func (r *organizationMemberRepository) Delete(ctx context.Context, userID, orgID ulid.ULID) error {
-	return r.db.WithContext(ctx).
+	return r.getDB(ctx).WithContext(ctx).
 		Where("user_id = ? AND organization_id = ?", userID, orgID).
 		Delete(&authDomain.OrganizationMember{}).Error
 }
@@ -55,7 +61,7 @@ func (r *organizationMemberRepository) Delete(ctx context.Context, userID, orgID
 
 func (r *organizationMemberRepository) GetByUserID(ctx context.Context, userID ulid.ULID) ([]*authDomain.OrganizationMember, error) {
 	var members []*authDomain.OrganizationMember
-	err := r.db.WithContext(ctx).
+	err := r.getDB(ctx).WithContext(ctx).
 		Where("user_id = ?", userID).
 		Preload("Role").
 		Find(&members).Error
@@ -65,7 +71,7 @@ func (r *organizationMemberRepository) GetByUserID(ctx context.Context, userID u
 
 func (r *organizationMemberRepository) GetByOrganizationID(ctx context.Context, orgID ulid.ULID) ([]*authDomain.OrganizationMember, error) {
 	var members []*authDomain.OrganizationMember
-	err := r.db.WithContext(ctx).
+	err := r.getDB(ctx).WithContext(ctx).
 		Where("organization_id = ?", orgID).
 		Preload("Role").
 		Find(&members).Error
@@ -75,7 +81,7 @@ func (r *organizationMemberRepository) GetByOrganizationID(ctx context.Context, 
 
 func (r *organizationMemberRepository) GetByRole(ctx context.Context, roleID ulid.ULID) ([]*authDomain.OrganizationMember, error) {
 	var members []*authDomain.OrganizationMember
-	err := r.db.WithContext(ctx).
+	err := r.getDB(ctx).WithContext(ctx).
 		Where("role_id = ?", roleID).
 		Preload("Role").
 		Find(&members).Error
@@ -85,7 +91,7 @@ func (r *organizationMemberRepository) GetByRole(ctx context.Context, roleID uli
 
 func (r *organizationMemberRepository) Exists(ctx context.Context, userID, orgID ulid.ULID) (bool, error) {
 	var count int64
-	err := r.db.WithContext(ctx).
+	err := r.getDB(ctx).WithContext(ctx).
 		Model(&authDomain.OrganizationMember{}).
 		Where("user_id = ? AND organization_id = ?", userID, orgID).
 		Count(&count).Error
@@ -98,7 +104,7 @@ func (r *organizationMemberRepository) Exists(ctx context.Context, userID, orgID
 func (r *organizationMemberRepository) GetUserEffectivePermissions(ctx context.Context, userID ulid.ULID) ([]string, error) {
 	var permissions []string
 
-	err := r.db.WithContext(ctx).Raw(`
+	err := r.getDB(ctx).WithContext(ctx).Raw(`
 		SELECT DISTINCT p.name 
 		FROM organization_members om
 		JOIN roles r ON om.role_id = r.id
@@ -113,7 +119,7 @@ func (r *organizationMemberRepository) GetUserEffectivePermissions(ctx context.C
 func (r *organizationMemberRepository) HasUserPermission(ctx context.Context, userID ulid.ULID, permission string) (bool, error) {
 	var count int64
 
-	err := r.db.WithContext(ctx).Raw(`
+	err := r.getDB(ctx).WithContext(ctx).Raw(`
 		SELECT COUNT(1) 
 		FROM organization_members om
 		JOIN roles r ON om.role_id = r.id
@@ -142,7 +148,7 @@ func (r *organizationMemberRepository) CheckUserPermissions(ctx context.Context,
 func (r *organizationMemberRepository) GetUserPermissionsInOrganization(ctx context.Context, userID, orgID ulid.ULID) ([]string, error) {
 	var permissions []string
 
-	err := r.db.WithContext(ctx).Raw(`
+	err := r.getDB(ctx).WithContext(ctx).Raw(`
 		SELECT DISTINCT p.name 
 		FROM organization_members om
 		JOIN roles r ON om.role_id = r.id
@@ -157,14 +163,14 @@ func (r *organizationMemberRepository) GetUserPermissionsInOrganization(ctx cont
 // Status management
 
 func (r *organizationMemberRepository) ActivateMember(ctx context.Context, userID, orgID ulid.ULID) error {
-	return r.db.WithContext(ctx).
+	return r.getDB(ctx).WithContext(ctx).
 		Model(&authDomain.OrganizationMember{}).
 		Where("user_id = ? AND organization_id = ?", userID, orgID).
 		Update("status", authDomain.MemberStatusActive).Error
 }
 
 func (r *organizationMemberRepository) SuspendMember(ctx context.Context, userID, orgID ulid.ULID) error {
-	return r.db.WithContext(ctx).
+	return r.getDB(ctx).WithContext(ctx).
 		Model(&authDomain.OrganizationMember{}).
 		Where("user_id = ? AND organization_id = ?", userID, orgID).
 		Update("status", authDomain.MemberStatusSuspended).Error
@@ -172,7 +178,7 @@ func (r *organizationMemberRepository) SuspendMember(ctx context.Context, userID
 
 func (r *organizationMemberRepository) GetActiveMembers(ctx context.Context, orgID ulid.ULID) ([]*authDomain.OrganizationMember, error) {
 	var members []*authDomain.OrganizationMember
-	err := r.db.WithContext(ctx).
+	err := r.getDB(ctx).WithContext(ctx).
 		Where("organization_id = ? AND status = ?", orgID, authDomain.MemberStatusActive).
 		Preload("Role").
 		Find(&members).Error
@@ -183,7 +189,7 @@ func (r *organizationMemberRepository) GetActiveMembers(ctx context.Context, org
 // Role management
 
 func (r *organizationMemberRepository) UpdateMemberRole(ctx context.Context, userID, orgID, roleID ulid.ULID) error {
-	return r.db.WithContext(ctx).
+	return r.getDB(ctx).WithContext(ctx).
 		Model(&authDomain.OrganizationMember{}).
 		Where("user_id = ? AND organization_id = ?", userID, orgID).
 		Update("role_id", roleID).Error
@@ -192,11 +198,11 @@ func (r *organizationMemberRepository) UpdateMemberRole(ctx context.Context, use
 // Bulk operations
 
 func (r *organizationMemberRepository) BulkCreate(ctx context.Context, members []*authDomain.OrganizationMember) error {
-	return r.db.WithContext(ctx).Create(&members).Error
+	return r.getDB(ctx).WithContext(ctx).Create(&members).Error
 }
 
 func (r *organizationMemberRepository) BulkUpdateRoles(ctx context.Context, updates []authDomain.MemberRoleUpdate) error {
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return r.getDB(ctx).WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for _, update := range updates {
 			if err := tx.Model(&authDomain.OrganizationMember{}).
 				Where("user_id = ? AND organization_id = ?", update.UserID, update.OrganizationID).
@@ -212,7 +218,7 @@ func (r *organizationMemberRepository) BulkUpdateRoles(ctx context.Context, upda
 
 func (r *organizationMemberRepository) GetMemberCount(ctx context.Context, orgID ulid.ULID) (int, error) {
 	var count int64
-	err := r.db.WithContext(ctx).
+	err := r.getDB(ctx).WithContext(ctx).
 		Model(&authDomain.OrganizationMember{}).
 		Where("organization_id = ? AND status = ?", orgID, authDomain.MemberStatusActive).
 		Count(&count).Error
@@ -226,7 +232,7 @@ func (r *organizationMemberRepository) GetMembersByRole(ctx context.Context, org
 		Count    int64
 	}
 
-	err := r.db.WithContext(ctx).
+	err := r.getDB(ctx).WithContext(ctx).
 		Model(&authDomain.OrganizationMember{}).
 		Select("r.name as role_name, COUNT(*) as count").
 		Joins("JOIN roles r ON organization_members.role_id = r.id").

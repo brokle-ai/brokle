@@ -211,7 +211,7 @@ export default function PlaygroundSessionPage() {
             )}
           </div>
 
-          {/* Braintrust-style: Grid for 1-3 windows, horizontal scroll for 4+ */}
+          {/* Adaptive layout: Grid for 1-3 windows, horizontal scroll for 4+ */}
           {windows.length <= 3 ? (
             // 1-3 windows: Equal width grid, fills available space
             <div

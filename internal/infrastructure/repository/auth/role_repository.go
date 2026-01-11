@@ -7,6 +7,7 @@ import (
 
 	authDomain "brokle/internal/core/domain/auth"
 	"brokle/pkg/ulid"
+	"brokle/internal/infrastructure/shared"
 )
 
 // roleRepository implements authDomain.RoleRepository using GORM for normalized template roles
@@ -21,15 +22,20 @@ func NewRoleRepository(db *gorm.DB) authDomain.RoleRepository {
 	}
 }
 
+// getDB returns transaction-aware DB instance
+func (r *roleRepository) getDB(ctx context.Context) *gorm.DB {
+	return shared.GetDB(ctx, r.db)
+}
+
 // Core CRUD operations
 
 func (r *roleRepository) Create(ctx context.Context, role *authDomain.Role) error {
-	return r.db.WithContext(ctx).Create(role).Error
+	return r.getDB(ctx).WithContext(ctx).Create(role).Error
 }
 
 func (r *roleRepository) GetByID(ctx context.Context, id ulid.ULID) (*authDomain.Role, error) {
 	var role authDomain.Role
-	err := r.db.WithContext(ctx).
+	err := r.getDB(ctx).WithContext(ctx).
 		Where("id = ?", id).
 		Preload("Permissions").
 		First(&role).Error
@@ -42,7 +48,7 @@ func (r *roleRepository) GetByID(ctx context.Context, id ulid.ULID) (*authDomain
 
 func (r *roleRepository) GetByNameAndScope(ctx context.Context, name, scopeType string) (*authDomain.Role, error) {
 	var role authDomain.Role
-	err := r.db.WithContext(ctx).
+	err := r.getDB(ctx).WithContext(ctx).
 		Where("name = ? AND scope_type = ? AND scope_id IS NULL", name, scopeType).
 		Preload("Permissions").
 		First(&role).Error
@@ -54,18 +60,18 @@ func (r *roleRepository) GetByNameAndScope(ctx context.Context, name, scopeType 
 }
 
 func (r *roleRepository) Update(ctx context.Context, role *authDomain.Role) error {
-	return r.db.WithContext(ctx).Save(role).Error
+	return r.getDB(ctx).WithContext(ctx).Save(role).Error
 }
 
 func (r *roleRepository) Delete(ctx context.Context, id ulid.ULID) error {
-	return r.db.WithContext(ctx).Delete(&authDomain.Role{}, id).Error
+	return r.getDB(ctx).WithContext(ctx).Delete(&authDomain.Role{}, id).Error
 }
 
 // Template role queries
 
 func (r *roleRepository) GetByScopeType(ctx context.Context, scopeType string) ([]*authDomain.Role, error) {
 	var roles []*authDomain.Role
-	err := r.db.WithContext(ctx).
+	err := r.getDB(ctx).WithContext(ctx).
 		Where("scope_type = ?", scopeType).
 		Preload("Permissions").
 		Find(&roles).Error
@@ -75,7 +81,7 @@ func (r *roleRepository) GetByScopeType(ctx context.Context, scopeType string) (
 
 func (r *roleRepository) GetAllRoles(ctx context.Context) ([]*authDomain.Role, error) {
 	var roles []*authDomain.Role
-	err := r.db.WithContext(ctx).
+	err := r.getDB(ctx).WithContext(ctx).
 		Preload("Permissions").
 		Find(&roles).Error
 
@@ -86,7 +92,7 @@ func (r *roleRepository) GetAllRoles(ctx context.Context) ([]*authDomain.Role, e
 
 func (r *roleRepository) GetRolePermissions(ctx context.Context, roleID ulid.ULID) ([]*authDomain.Permission, error) {
 	var permissions []*authDomain.Permission
-	err := r.db.WithContext(ctx).
+	err := r.getDB(ctx).WithContext(ctx).
 		Joins("JOIN role_permissions ON permissions.id = role_permissions.permission_id").
 		Where("role_permissions.role_id = ?", roleID).
 		Find(&permissions).Error
@@ -103,17 +109,17 @@ func (r *roleRepository) AssignRolePermissions(ctx context.Context, roleID ulid.
 			GrantedBy:    grantedBy,
 		})
 	}
-	return r.db.WithContext(ctx).Create(&rolePermissions).Error
+	return r.getDB(ctx).WithContext(ctx).Create(&rolePermissions).Error
 }
 
 func (r *roleRepository) RevokeRolePermissions(ctx context.Context, roleID ulid.ULID, permissionIDs []ulid.ULID) error {
-	return r.db.WithContext(ctx).
+	return r.getDB(ctx).WithContext(ctx).
 		Where("role_id = ? AND permission_id IN ?", roleID, permissionIDs).
 		Delete(&authDomain.RolePermission{}).Error
 }
 
 func (r *roleRepository) UpdateRolePermissions(ctx context.Context, roleID ulid.ULID, permissionIDs []ulid.ULID, grantedBy *ulid.ULID) error {
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	return r.getDB(ctx).WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// Remove all existing permissions
 		if err := tx.Where("role_id = ?", roleID).Delete(&authDomain.RolePermission{}).Error; err != nil {
 			return err
@@ -143,7 +149,7 @@ func (r *roleRepository) GetRoleStatistics(ctx context.Context) (*authDomain.Rol
 
 	// Get total role count
 	var totalCount int64
-	if err := r.db.WithContext(ctx).Model(&authDomain.Role{}).Count(&totalCount).Error; err != nil {
+	if err := r.getDB(ctx).WithContext(ctx).Model(&authDomain.Role{}).Count(&totalCount).Error; err != nil {
 		return nil, err
 	}
 	stats.TotalRoles = int(totalCount)
@@ -153,7 +159,7 @@ func (r *roleRepository) GetRoleStatistics(ctx context.Context) (*authDomain.Rol
 		ScopeType string
 		Count     int64
 	}
-	if err := r.db.WithContext(ctx).
+	if err := r.getDB(ctx).WithContext(ctx).
 		Model(&authDomain.Role{}).
 		Select("scope_type, COUNT(*) as count").
 		Group("scope_type").
@@ -178,7 +184,7 @@ func (r *roleRepository) GetRoleStatistics(ctx context.Context) (*authDomain.Rol
 		RoleName string
 		Count    int64
 	}
-	if err := r.db.WithContext(ctx).
+	if err := r.getDB(ctx).WithContext(ctx).
 		Model(&authDomain.OrganizationMember{}).
 		Select("r.name as role_name, COUNT(*) as count").
 		Joins("JOIN roles r ON organization_members.role_id = r.id").
@@ -199,7 +205,7 @@ func (r *roleRepository) GetRoleStatistics(ctx context.Context) (*authDomain.Rol
 
 func (r *roleRepository) GetSystemRoles(ctx context.Context) ([]*authDomain.Role, error) {
 	var roles []*authDomain.Role
-	err := r.db.WithContext(ctx).
+	err := r.getDB(ctx).WithContext(ctx).
 		Where("scope_type = ? AND scope_id IS NULL", authDomain.ScopeSystem).
 		Preload("Permissions").
 		Order("name ASC").
@@ -211,7 +217,7 @@ func (r *roleRepository) GetSystemRoles(ctx context.Context) ([]*authDomain.Role
 
 func (r *roleRepository) GetCustomRolesByScopeID(ctx context.Context, scopeType string, scopeID ulid.ULID) ([]*authDomain.Role, error) {
 	var roles []*authDomain.Role
-	err := r.db.WithContext(ctx).
+	err := r.getDB(ctx).WithContext(ctx).
 		Where("scope_type = ? AND scope_id = ?", scopeType, scopeID).
 		Preload("Permissions").
 		Order("name ASC").
@@ -221,7 +227,7 @@ func (r *roleRepository) GetCustomRolesByScopeID(ctx context.Context, scopeType 
 
 func (r *roleRepository) GetByNameScopeAndID(ctx context.Context, name, scopeType string, scopeID *ulid.ULID) (*authDomain.Role, error) {
 	var role authDomain.Role
-	query := r.db.WithContext(ctx).
+	query := r.getDB(ctx).WithContext(ctx).
 		Where("name = ? AND scope_type = ?", name, scopeType)
 
 	if scopeID == nil {
@@ -239,7 +245,7 @@ func (r *roleRepository) GetByNameScopeAndID(ctx context.Context, name, scopeTyp
 
 func (r *roleRepository) GetCustomRolesByOrganization(ctx context.Context, organizationID ulid.ULID) ([]*authDomain.Role, error) {
 	var roles []*authDomain.Role
-	err := r.db.WithContext(ctx).
+	err := r.getDB(ctx).WithContext(ctx).
 		Where("scope_type = ? AND scope_id = ?", authDomain.ScopeOrganization, organizationID).
 		Preload("Permissions").
 		Order("name ASC").
@@ -250,5 +256,5 @@ func (r *roleRepository) GetCustomRolesByOrganization(ctx context.Context, organ
 // Bulk operations
 
 func (r *roleRepository) BulkCreate(ctx context.Context, roles []*authDomain.Role) error {
-	return r.db.WithContext(ctx).Create(&roles).Error
+	return r.getDB(ctx).WithContext(ctx).Create(&roles).Error
 }

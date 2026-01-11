@@ -64,15 +64,15 @@ export function getContextConfig(context: RouteContext): RouteConfig {
 export function getAllPages(context: RouteContext): string[] {
   const config = ROUTE_CONFIG.contexts[context]
   const pages = [...config.pages] as string[]
-  
-  if (config.nested) {
+
+  if ('nested' in config && config.nested) {
     Object.entries(config.nested).forEach(([parentPage, nestedPages]) => {
       (nestedPages as readonly string[]).forEach((nestedPage: string) => {
         pages.push(`${parentPage}/${nestedPage}`)
       })
     })
   }
-  
+
   return pages
 }
 
