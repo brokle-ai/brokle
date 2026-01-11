@@ -2,14 +2,26 @@ package organization
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
+	"strings"
 	"time"
 
 	authDomain "brokle/internal/core/domain/auth"
 	orgDomain "brokle/internal/core/domain/organization"
 	userDomain "brokle/internal/core/domain/user"
+	"brokle/pkg/email"
 	appErrors "brokle/pkg/errors"
+	"brokle/pkg/token"
 	"brokle/pkg/ulid"
+)
+
+const (
+	// InvitationExpiryDays is the default expiration for invitations
+	InvitationExpiryDays = 7
+	// MaxResendAttempts is the maximum number of resends allowed
+	MaxResendAttempts = 5
+	// ResendCooldownHours is the minimum hours between resends
+	ResendCooldownHours = 1
 )
 
 // invitationService implements the orgDomain.InvitationService interface
@@ -19,6 +31,14 @@ type invitationService struct {
 	memberRepo  orgDomain.MemberRepository
 	userRepo    userDomain.Repository
 	roleService authDomain.RoleService
+	emailSender email.EmailSender
+	appURL      string // Base URL for accept links
+	logger      *slog.Logger
+}
+
+// InvitationServiceConfig contains configuration for the invitation service
+type InvitationServiceConfig struct {
+	AppURL string // Base application URL for generating accept links
 }
 
 // NewInvitationService creates a new invitation service instance
@@ -28,6 +48,9 @@ func NewInvitationService(
 	memberRepo orgDomain.MemberRepository,
 	userRepo userDomain.Repository,
 	roleService authDomain.RoleService,
+	emailSender email.EmailSender,
+	cfg InvitationServiceConfig,
+	logger *slog.Logger,
 ) orgDomain.InvitationService {
 	return &invitationService{
 		inviteRepo:  inviteRepo,
@@ -35,57 +58,140 @@ func NewInvitationService(
 		memberRepo:  memberRepo,
 		userRepo:    userRepo,
 		roleService: roleService,
+		emailSender: emailSender,
+		appURL:      cfg.AppURL,
+		logger:      logger,
 	}
 }
 
 // InviteUser creates an invitation for a user to join an organization
 func (s *invitationService) InviteUser(ctx context.Context, orgID ulid.ULID, inviterID ulid.ULID, req *orgDomain.InviteUserRequest) (*orgDomain.Invitation, error) {
+	// Normalize email
+	normalizedEmail := strings.ToLower(strings.TrimSpace(req.Email))
+
 	// Verify organization exists
-	_, err := s.orgRepo.GetByID(ctx, orgID)
+	org, err := s.orgRepo.GetByID(ctx, orgID)
 	if err != nil {
 		return nil, appErrors.NewNotFoundError("Organization not found")
 	}
 
 	// Verify role exists
-	_, err = s.roleService.GetRoleByID(ctx, req.RoleID)
+	targetRole, err := s.roleService.GetRoleByID(ctx, req.RoleID)
 	if err != nil {
 		return nil, appErrors.NewNotFoundError("Role not found")
 	}
 
-	// Check for existing pending invitation
-	if req.Email != "" {
-		existing, _ := s.inviteRepo.GetPendingByEmail(ctx, orgID, req.Email)
-		if existing != nil {
-			return nil, appErrors.NewConflictError("Invitation already exists for this email")
+	// Verify inviter is a member of the organization
+	inviterRoleID, err := s.memberRepo.GetMemberRole(ctx, inviterID, orgID)
+	if err != nil {
+		return nil, appErrors.NewForbiddenError("You must be a member to invite others")
+	}
+
+	// Only owners can assign the owner role
+	if targetRole.Name == "owner" {
+		inviterRoleInfo, err := s.roleService.GetRoleByID(ctx, inviterRoleID)
+		if err != nil {
+			return nil, appErrors.NewInternalError("Failed to get inviter role info", err)
+		}
+		if inviterRoleInfo.Name != "owner" {
+			return nil, appErrors.NewForbiddenError("Only owners can assign the owner role")
 		}
 	}
 
-	// Create invitation
-	token := ulid.New().String()
-	expiresAt := time.Now().Add(7 * 24 * time.Hour) // 7 days
-	invitation := orgDomain.NewInvitation(orgID, req.RoleID, inviterID, req.Email, token, expiresAt)
+	// Check if email is already a member
+	user, _ := s.userRepo.GetByEmail(ctx, normalizedEmail)
+	if user != nil {
+		isMember, _ := s.memberRepo.IsMember(ctx, user.ID, orgID)
+		if isMember {
+			return nil, appErrors.NewConflictError("User is already a member of this organization")
+		}
+	}
+
+	// Check for existing pending invitation
+	existing, _ := s.inviteRepo.GetPendingByEmail(ctx, orgID, normalizedEmail)
+	if existing != nil {
+		return nil, appErrors.NewConflictError("A pending invitation already exists for this email")
+	}
+
+	// Generate secure token
+	tokenData, err := token.GenerateInviteToken()
+	if err != nil {
+		return nil, appErrors.NewInternalError("Failed to generate invitation token", err)
+	}
+
+	// Create invitation with hash (never store plaintext)
+	expiresAt := time.Now().Add(InvitationExpiryDays * 24 * time.Hour)
+	invitation := orgDomain.NewInvitationWithMessage(
+		orgID,
+		req.RoleID,
+		inviterID,
+		normalizedEmail,
+		tokenData.Hash,
+		tokenData.Preview,
+		req.Message,
+		expiresAt,
+	)
+
 	err = s.inviteRepo.Create(ctx, invitation)
 	if err != nil {
 		return nil, appErrors.NewInternalError("Failed to create invitation", err)
 	}
 
+	// Create audit event
+	s.createAuditEvent(ctx, invitation.ID, orgDomain.AuditEventCreated, &inviterID, nil)
+
+	// Send invitation email (async - don't fail if email fails)
+	// Use detached context with timeout since request context will be canceled when handler returns
+	go func() {
+		emailCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		s.sendInvitationEmail(emailCtx, invitation, org, tokenData.Token, inviterID)
+	}()
+
+	s.logger.Info("invitation created",
+		"invitation_id", invitation.ID,
+		"organization_id", orgID,
+		"inviter_id", inviterID,
+		"invitee_email", normalizedEmail,
+		"role_id", req.RoleID,
+	)
+
 	return invitation, nil
 }
 
 // AcceptInvitation accepts an invitation and adds the user to the organization
-func (s *invitationService) AcceptInvitation(ctx context.Context, token string, userID ulid.ULID) error {
-	// Get invitation by token
-	invitation, err := s.inviteRepo.GetByToken(ctx, token)
+func (s *invitationService) AcceptInvitation(ctx context.Context, tokenStr string, userID ulid.ULID) error {
+	// Validate token format
+	if !token.ValidateTokenFormat(tokenStr) {
+		return appErrors.NewValidationError("token", "Invalid invitation token format")
+	}
+
+	// Hash the token and lookup
+	tokenHash := token.HashToken(tokenStr)
+	invitation, err := s.inviteRepo.GetByTokenHash(ctx, tokenHash)
 	if err != nil {
-		return appErrors.NewNotFoundError("Invitation not found")
+		return appErrors.NewNotFoundError("Invitation not found or invalid")
 	}
 
 	if invitation.Status != orgDomain.InvitationStatusPending {
-		return appErrors.NewValidationError("status", "Invitation is not pending")
+		return appErrors.NewValidationError("status", "Invitation is no longer pending")
 	}
 
 	if invitation.ExpiresAt.Before(time.Now()) {
+		// Mark as expired
+		s.inviteRepo.MarkExpired(ctx, invitation.ID)
+		s.createAuditEvent(ctx, invitation.ID, orgDomain.AuditEventExpired, nil, nil)
 		return appErrors.NewValidationError("expiry", "Invitation has expired")
+	}
+
+	// Verify email matches (for security)
+	user, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return appErrors.NewNotFoundError("User not found")
+	}
+
+	if strings.ToLower(user.Email) != strings.ToLower(invitation.Email) {
+		return appErrors.NewForbiddenError("Invitation was sent to a different email address")
 	}
 
 	// Check if user is already a member
@@ -94,42 +200,49 @@ func (s *invitationService) AcceptInvitation(ctx context.Context, token string, 
 		return appErrors.NewInternalError("Failed to check membership", err)
 	}
 	if isMember {
-		return appErrors.NewConflictError("User is already a member of this organization")
+		return appErrors.NewConflictError("You are already a member of this organization")
 	}
 
 	// Add user as member
 	member := orgDomain.NewMember(invitation.OrganizationID, userID, invitation.RoleID)
+	member.InvitedBy = &invitation.InvitedByID
 	err = s.memberRepo.Create(ctx, member)
 	if err != nil {
 		return appErrors.NewInternalError("Failed to add member", err)
 	}
 
 	// Mark invitation as accepted
-	invitation.Status = orgDomain.InvitationStatusAccepted
-	invitation.AcceptedAt = &time.Time{}
-	*invitation.AcceptedAt = time.Now()
-	invitation.UpdatedAt = time.Now()
-	err = s.inviteRepo.Update(ctx, invitation)
+	err = s.inviteRepo.MarkAccepted(ctx, invitation.ID, userID)
 	if err != nil {
 		return appErrors.NewInternalError("Failed to update invitation", err)
 	}
 
+	// Create audit event
+	s.createAuditEvent(ctx, invitation.ID, orgDomain.AuditEventAccepted, &userID, nil)
+
 	// Set as default organization if user doesn't have one
-	user, _ := s.userRepo.GetByID(ctx, userID)
-	if user != nil && user.DefaultOrganizationID == nil {
-		err = s.userRepo.SetDefaultOrganization(ctx, userID, invitation.OrganizationID)
-		if err != nil {
-			fmt.Printf("Failed to set default organization: %v\n", err)
-		}
+	if user.DefaultOrganizationID == nil {
+		s.userRepo.SetDefaultOrganization(ctx, userID, invitation.OrganizationID)
 	}
+
+	s.logger.Info("invitation accepted",
+		"invitation_id", invitation.ID,
+		"organization_id", invitation.OrganizationID,
+		"user_id", userID,
+	)
 
 	return nil
 }
 
 // DeclineInvitation declines an invitation
-func (s *invitationService) DeclineInvitation(ctx context.Context, token string) error {
-	// Get invitation by token
-	invitation, err := s.inviteRepo.GetByToken(ctx, token)
+func (s *invitationService) DeclineInvitation(ctx context.Context, tokenStr string) error {
+	// Validate and hash token
+	if !token.ValidateTokenFormat(tokenStr) {
+		return appErrors.NewValidationError("token", "Invalid invitation token format")
+	}
+
+	tokenHash := token.HashToken(tokenStr)
+	invitation, err := s.inviteRepo.GetByTokenHash(ctx, tokenHash)
 	if err != nil {
 		return appErrors.NewNotFoundError("Invitation not found")
 	}
@@ -138,13 +251,16 @@ func (s *invitationService) DeclineInvitation(ctx context.Context, token string)
 		return appErrors.NewValidationError("status", "Invitation is not pending")
 	}
 
-	// Mark invitation as declined
+	// Mark invitation as declined (using revoked status)
 	invitation.Status = orgDomain.InvitationStatusRevoked
 	invitation.UpdatedAt = time.Now()
 	err = s.inviteRepo.Update(ctx, invitation)
 	if err != nil {
 		return appErrors.NewInternalError("Failed to update invitation", err)
 	}
+
+	// Create audit event
+	s.createAuditEvent(ctx, invitation.ID, orgDomain.AuditEventDeclined, nil, nil)
 
 	return nil
 }
@@ -161,13 +277,25 @@ func (s *invitationService) RevokeInvitation(ctx context.Context, invitationID u
 		return appErrors.NewValidationError("status", "Invitation is not pending")
 	}
 
-	// Mark invitation as revoked
-	invitation.Status = orgDomain.InvitationStatusRevoked
-	invitation.UpdatedAt = time.Now()
-	err = s.inviteRepo.Update(ctx, invitation)
-	if err != nil {
-		return appErrors.NewInternalError("Failed to update invitation", err)
+	// Verify revoker has permission (is member of the org)
+	isMember, err := s.memberRepo.IsMember(ctx, revokedByID, invitation.OrganizationID)
+	if err != nil || !isMember {
+		return appErrors.NewForbiddenError("You are not authorized to revoke this invitation")
 	}
+
+	// Revoke the invitation
+	err = s.inviteRepo.RevokeInvitation(ctx, invitationID, revokedByID)
+	if err != nil {
+		return appErrors.NewInternalError("Failed to revoke invitation", err)
+	}
+
+	// Create audit event
+	s.createAuditEvent(ctx, invitationID, orgDomain.AuditEventRevoked, &revokedByID, nil)
+
+	s.logger.Info("invitation revoked",
+		"invitation_id", invitationID,
+		"revoked_by_id", revokedByID,
+	)
 
 	return nil
 }
@@ -184,13 +312,63 @@ func (s *invitationService) ResendInvitation(ctx context.Context, invitationID u
 		return appErrors.NewValidationError("status", "Invitation is not pending")
 	}
 
-	// Update expiration time
-	invitation.ExpiresAt = time.Now().Add(7 * 24 * time.Hour) // 7 days from now
-	invitation.UpdatedAt = time.Now()
+	// Verify resender has permission (is member of the org)
+	isMember, err := s.memberRepo.IsMember(ctx, resentByID, invitation.OrganizationID)
+	if err != nil || !isMember {
+		return appErrors.NewForbiddenError("You are not authorized to resend this invitation")
+	}
+
+	// Check resend limits
+	if !invitation.CanResend() {
+		if invitation.ResentCount >= MaxResendAttempts {
+			return appErrors.NewValidationError("resend", "Maximum resend attempts reached")
+		}
+		return appErrors.NewValidationError("resend", "Please wait before resending")
+	}
+
+	// Get organization for email
+	org, err := s.orgRepo.GetByID(ctx, invitation.OrganizationID)
+	if err != nil {
+		return appErrors.NewInternalError("Failed to get organization", err)
+	}
+
+	// Generate a new token (invalidates the old one)
+	tokenData, err := token.GenerateInviteToken()
+	if err != nil {
+		return appErrors.NewInternalError("Failed to generate new token", err)
+	}
+
+	// Update invitation with new token hash and expiration
+	newExpiresAt := time.Now().Add(InvitationExpiryDays * 24 * time.Hour)
+	invitation.TokenHash = tokenData.Hash
+	invitation.TokenPreview = tokenData.Preview
 	err = s.inviteRepo.Update(ctx, invitation)
 	if err != nil {
 		return appErrors.NewInternalError("Failed to update invitation", err)
 	}
+
+	// Mark as resent
+	err = s.inviteRepo.MarkResent(ctx, invitationID, newExpiresAt)
+	if err != nil {
+		return appErrors.NewInternalError("Failed to mark invitation as resent", err)
+	}
+
+	// Create audit event
+	s.createAuditEvent(ctx, invitationID, orgDomain.AuditEventResent, &resentByID, nil)
+
+	// Send invitation email with new token
+	// Use detached context with timeout since request context will be canceled when handler returns
+	go func() {
+		emailCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		s.sendInvitationEmail(emailCtx, invitation, org, tokenData.Token, invitation.InvitedByID)
+	}()
+
+	s.logger.Info("invitation resent",
+		"invitation_id", invitationID,
+		"resent_by_id", resentByID,
+		"resent_count", invitation.ResentCount+1,
+	)
 
 	return nil
 }
@@ -200,42 +378,41 @@ func (s *invitationService) GetInvitation(ctx context.Context, invitationID ulid
 	return s.inviteRepo.GetByID(ctx, invitationID)
 }
 
-// GetInvitationByToken retrieves an invitation by token
-func (s *invitationService) GetInvitationByToken(ctx context.Context, token string) (*orgDomain.Invitation, error) {
-	return s.inviteRepo.GetByToken(ctx, token)
+// GetInvitationByToken retrieves an invitation by token (for validation)
+func (s *invitationService) GetInvitationByToken(ctx context.Context, tokenStr string) (*orgDomain.Invitation, error) {
+	if !token.ValidateTokenFormat(tokenStr) {
+		return nil, appErrors.NewValidationError("token", "Invalid invitation token format")
+	}
+
+	tokenHash := token.HashToken(tokenStr)
+	return s.inviteRepo.GetByTokenHash(ctx, tokenHash)
 }
 
 // GetPendingInvitations retrieves all pending invitations for an organization
 func (s *invitationService) GetPendingInvitations(ctx context.Context, orgID ulid.ULID) ([]*orgDomain.Invitation, error) {
-	allInvitations, err := s.inviteRepo.GetByOrganizationID(ctx, orgID)
-	if err != nil {
-		return nil, err
-	}
-
-	var pendingInvitations []*orgDomain.Invitation
-	for _, invitation := range allInvitations {
-		if invitation.Status == orgDomain.InvitationStatusPending {
-			pendingInvitations = append(pendingInvitations, invitation)
-		}
-	}
-
-	return pendingInvitations, nil
+	return s.inviteRepo.GetPendingInvitations(ctx, orgID)
 }
 
 // GetUserInvitations retrieves all invitations for a user by email
 func (s *invitationService) GetUserInvitations(ctx context.Context, email string) ([]*orgDomain.Invitation, error) {
-	return s.inviteRepo.GetByEmail(ctx, email)
+	normalizedEmail := strings.ToLower(strings.TrimSpace(email))
+	return s.inviteRepo.GetByEmail(ctx, normalizedEmail)
 }
 
 // ValidateInvitationToken validates an invitation token and returns the invitation
-func (s *invitationService) ValidateInvitationToken(ctx context.Context, token string) (*orgDomain.Invitation, error) {
-	invitation, err := s.inviteRepo.GetByToken(ctx, token)
+func (s *invitationService) ValidateInvitationToken(ctx context.Context, tokenStr string) (*orgDomain.Invitation, error) {
+	if !token.ValidateTokenFormat(tokenStr) {
+		return nil, appErrors.NewValidationError("token", "Invalid invitation token format")
+	}
+
+	tokenHash := token.HashToken(tokenStr)
+	invitation, err := s.inviteRepo.GetByTokenHash(ctx, tokenHash)
 	if err != nil {
-		return nil, appErrors.NewNotFoundError("Invitation not found")
+		return nil, appErrors.NewNotFoundError("Invitation not found or invalid")
 	}
 
 	if invitation.Status != orgDomain.InvitationStatusPending {
-		return nil, appErrors.NewValidationError("status", "Invitation is not pending")
+		return nil, appErrors.NewValidationError("status", "Invitation is no longer pending")
 	}
 
 	if invitation.ExpiresAt.Before(time.Now()) {
@@ -247,17 +424,119 @@ func (s *invitationService) ValidateInvitationToken(ctx context.Context, token s
 
 // IsEmailAlreadyInvited checks if an email already has a pending invitation for an organization
 func (s *invitationService) IsEmailAlreadyInvited(ctx context.Context, email string, orgID ulid.ULID) (bool, error) {
-	existing, err := s.inviteRepo.GetPendingByEmail(ctx, orgID, email)
-	if err != nil {
-		return false, err
-	}
-	return existing != nil, nil
+	normalizedEmail := strings.ToLower(strings.TrimSpace(email))
+	return s.inviteRepo.IsEmailAlreadyInvited(ctx, normalizedEmail, orgID)
 }
 
 // CleanupExpiredInvitations removes expired invitations
 func (s *invitationService) CleanupExpiredInvitations(ctx context.Context) error {
-	// This would typically be called by a background job
-	// For now, return nil as the repository doesn't have a bulk delete method
-	// This could be implemented by getting all invitations and filtering/deleting expired ones
-	return nil
+	return s.inviteRepo.CleanupExpiredInvitations(ctx)
+}
+
+// createAuditEvent creates an audit event for an invitation action
+func (s *invitationService) createAuditEvent(ctx context.Context, invitationID ulid.ULID, eventType orgDomain.InvitationAuditEventType, actorID *ulid.ULID, metadata map[string]interface{}) {
+	actorType := orgDomain.ActorTypeSystem
+	if actorID != nil {
+		actorType = orgDomain.ActorTypeUser
+	}
+
+	event := orgDomain.NewInvitationAuditEvent(invitationID, eventType, actorID, actorType)
+	if metadata != nil {
+		event.WithMetadata(metadata)
+	}
+
+	if err := s.inviteRepo.CreateAuditEvent(ctx, event); err != nil {
+		s.logger.Error("failed to create audit event",
+			"error", err,
+			"invitation_id", invitationID,
+			"event_type", eventType,
+		)
+	}
+}
+
+// sendInvitationEmail sends an invitation email asynchronously
+func (s *invitationService) sendInvitationEmail(ctx context.Context, invitation *orgDomain.Invitation, org *orgDomain.Organization, plainTextToken string, inviterID ulid.ULID) {
+	if s.emailSender == nil {
+		s.logger.Debug("email sender not configured, skipping invitation email",
+			"invitation_id", invitation.ID,
+		)
+		return
+	}
+
+	// Get inviter info
+	inviter, err := s.userRepo.GetByID(ctx, inviterID)
+	if err != nil {
+		s.logger.Error("failed to get inviter for email",
+			"error", err,
+			"inviter_id", inviterID,
+		)
+		return
+	}
+
+	// Get role name
+	role, err := s.roleService.GetRoleByID(ctx, invitation.RoleID)
+	if err != nil {
+		s.logger.Error("failed to get role for email",
+			"error", err,
+			"role_id", invitation.RoleID,
+		)
+		return
+	}
+
+	// Build accept URL
+	acceptURL := s.appURL + "/accept-invite?token=" + plainTextToken
+
+	// Build email params
+	params := email.InvitationEmailParams{
+		InviteeEmail:     invitation.Email,
+		OrganizationName: org.Name,
+		InviterName:      inviter.GetFullName(),
+		InviterEmail:     inviter.Email,
+		RoleName:         role.Name,
+		AcceptURL:        acceptURL,
+		ExpiresIn:        "7 days",
+		AppName:          "Brokle",
+		AppURL:           s.appURL,
+	}
+
+	if invitation.Message != nil {
+		params.PersonalMessage = *invitation.Message
+	}
+
+	// Generate email content
+	htmlContent, textContent, err := email.BuildInvitationEmail(params)
+	if err != nil {
+		s.logger.Error("failed to build invitation email",
+			"error", err,
+			"invitation_id", invitation.ID,
+		)
+		return
+	}
+
+	// Send email
+	err = s.emailSender.Send(ctx, email.SendEmailParams{
+		To:      []string{invitation.Email},
+		Subject: "You're invited to join " + org.Name + " on Brokle",
+		HTML:    htmlContent,
+		Text:    textContent,
+		Tags: map[string]string{
+			"type":           "invitation",
+			"organization":   org.ID.String(),
+			"invitation_id":  invitation.ID.String(),
+		},
+	})
+
+	if err != nil {
+		s.logger.Error("failed to send invitation email",
+			"error", err,
+			"invitation_id", invitation.ID,
+			"email", invitation.Email,
+		)
+		return
+	}
+
+	s.logger.Info("invitation email sent",
+		"invitation_id", invitation.ID,
+		"email", invitation.Email,
+	)
 }

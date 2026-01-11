@@ -2,6 +2,7 @@ package organization
 
 import (
 	"context"
+	"time"
 
 	"brokle/pkg/pagination"
 	"brokle/pkg/ulid"
@@ -72,7 +73,8 @@ type InvitationRepository interface {
 	// Basic CRUD operations
 	Create(ctx context.Context, invitation *Invitation) error
 	GetByID(ctx context.Context, id ulid.ULID) (*Invitation, error)
-	GetByToken(ctx context.Context, token string) (*Invitation, error)
+	GetByToken(ctx context.Context, token string) (*Invitation, error)         // Deprecated: use GetByTokenHash
+	GetByTokenHash(ctx context.Context, tokenHash string) (*Invitation, error) // Secure token lookup
 	Update(ctx context.Context, invitation *Invitation) error
 	Delete(ctx context.Context, id ulid.ULID) error
 
@@ -83,13 +85,18 @@ type InvitationRepository interface {
 	GetPendingInvitations(ctx context.Context, orgID ulid.ULID) ([]*Invitation, error)
 
 	// Invitation management
-	MarkAccepted(ctx context.Context, id ulid.ULID) error
+	MarkAccepted(ctx context.Context, id ulid.ULID, acceptedByID ulid.ULID) error
 	MarkExpired(ctx context.Context, id ulid.ULID) error
-	RevokeInvitation(ctx context.Context, id ulid.ULID) error
+	RevokeInvitation(ctx context.Context, id ulid.ULID, revokedByID ulid.ULID) error
+	MarkResent(ctx context.Context, id ulid.ULID, newExpiresAt time.Time) error
 	CleanupExpiredInvitations(ctx context.Context) error
 
 	// Validation
 	IsEmailAlreadyInvited(ctx context.Context, email string, orgID ulid.ULID) (bool, error)
+
+	// Audit logging
+	CreateAuditEvent(ctx context.Context, event *InvitationAuditEvent) error
+	GetAuditEventsByInvitationID(ctx context.Context, invitationID ulid.ULID) ([]*InvitationAuditEvent, error)
 }
 
 // OrganizationFilters represents filters for organization queries.

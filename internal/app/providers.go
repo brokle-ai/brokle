@@ -60,6 +60,7 @@ import (
 	"brokle/internal/transport/http/handlers"
 	"brokle/internal/workers"
 	evaluationWorker "brokle/internal/workers/evaluation"
+	"brokle/pkg/email"
 	"brokle/pkg/encryption"
 	"brokle/pkg/ulid"
 )
@@ -468,7 +469,7 @@ func ProvideServerServices(core *CoreContainer) *ServiceContainer {
 	authServices := ProvideAuthServices(cfg, repos.User, repos.Auth, databases, logger)
 	userServices := ProvideUserServices(repos.User, repos.Auth, logger)
 	orgService, memberService, projectService, invitationService, settingsService :=
-		ProvideOrganizationServices(repos.User, repos.Auth, repos.Organization, authServices, logger)
+		ProvideOrganizationServices(repos.User, repos.Auth, repos.Organization, authServices, cfg, logger)
 
 	// Orchestrates user, org, project creation atomically
 	registrationSvc := registrationService.NewRegistrationService(
@@ -947,6 +948,7 @@ func ProvideOrganizationServices(
 	authRepos *AuthRepositories,
 	orgRepos *OrganizationRepositories,
 	authServices *AuthServices,
+	cfg *config.Config,
 	logger *slog.Logger,
 ) (
 	organization.OrganizationService,
@@ -968,12 +970,24 @@ func ProvideOrganizationServices(
 		orgRepos.Member,
 	)
 
+	// Create email sender based on configuration
+	emailSender, err := createEmailSender(&cfg.External.Email, logger)
+	if err != nil {
+		logger.Error("failed to create email sender", "error", err)
+		os.Exit(1)
+	}
+
 	invitationSvc := orgService.NewInvitationService(
 		orgRepos.Invitation,
 		orgRepos.Organization,
 		orgRepos.Member,
 		userRepos.User,
 		authServices.Role,
+		emailSender,
+		orgService.InvitationServiceConfig{
+			AppURL: cfg.Server.AppURL,
+		},
+		logger.With("service", "invitation"),
 	)
 
 	orgSvc := orgService.NewOrganizationService(
@@ -1412,4 +1426,58 @@ func (pc *ProviderContainer) Shutdown() error {
 	}
 
 	return lastErr
+}
+
+// createEmailSender creates an email sender based on the configured provider.
+// Returns NoOpEmailSender if no provider is configured (email disabled).
+func createEmailSender(cfg *config.EmailConfig, logger *slog.Logger) (email.EmailSender, error) {
+	if cfg.Provider == "" {
+		logger.Warn("email sender not configured, invitations will not be sent via email")
+		return &email.NoOpEmailSender{}, nil
+	}
+
+	logger.Info("initializing email sender", "provider", cfg.Provider)
+
+	switch cfg.Provider {
+	case "resend":
+		return email.NewResendClient(email.ResendConfig{
+			APIKey:    cfg.ResendAPIKey,
+			FromEmail: cfg.FromEmail,
+			FromName:  cfg.FromName,
+		}), nil
+
+	case "smtp":
+		return email.NewSMTPClient(email.SMTPConfig{
+			Host:      cfg.SMTPHost,
+			Port:      cfg.SMTPPort,
+			Username:  cfg.SMTPUsername,
+			Password:  cfg.SMTPPassword,
+			FromEmail: cfg.FromEmail,
+			FromName:  cfg.FromName,
+			UseTLS:    cfg.SMTPUseTLS,
+		}), nil
+
+	case "ses":
+		client, err := email.NewSESClient(email.SESConfig{
+			Region:    cfg.SESRegion,
+			AccessKey: cfg.SESAccessKey,
+			SecretKey: cfg.SESSecretKey,
+			FromEmail: cfg.FromEmail,
+			FromName:  cfg.FromName,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to create SES client: %w", err)
+		}
+		return client, nil
+
+	case "sendgrid":
+		return email.NewSendGridClient(email.SendGridConfig{
+			APIKey:    cfg.SendGridAPIKey,
+			FromEmail: cfg.FromEmail,
+			FromName:  cfg.FromName,
+		}), nil
+
+	default:
+		return nil, fmt.Errorf("unknown email provider: %s", cfg.Provider)
+	}
 }

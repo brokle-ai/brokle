@@ -150,14 +150,16 @@ func (r *invitationRepository) GetPendingInvitations(ctx context.Context, orgID 
 }
 
 // MarkAccepted marks an invitation as accepted
-func (r *invitationRepository) MarkAccepted(ctx context.Context, id ulid.ULID) error {
+func (r *invitationRepository) MarkAccepted(ctx context.Context, id ulid.ULID, acceptedByID ulid.ULID) error {
+	now := time.Now()
 	return r.db.WithContext(ctx).
 		Model(&orgDomain.Invitation{}).
 		Where("id = ?", id).
 		Updates(map[string]interface{}{
-			"status":      orgDomain.InvitationStatusAccepted,
-			"accepted_at": time.Now(),
-			"updated_at":  time.Now(),
+			"status":         orgDomain.InvitationStatusAccepted,
+			"accepted_at":    now,
+			"accepted_by_id": acceptedByID,
+			"updated_at":     now,
 		}).Error
 }
 
@@ -190,12 +192,59 @@ func (r *invitationRepository) MarkExpired(ctx context.Context, id ulid.ULID) er
 }
 
 // RevokeInvitation revokes an invitation
-func (r *invitationRepository) RevokeInvitation(ctx context.Context, id ulid.ULID) error {
+func (r *invitationRepository) RevokeInvitation(ctx context.Context, id ulid.ULID, revokedByID ulid.ULID) error {
+	now := time.Now()
 	return r.db.WithContext(ctx).
 		Model(&orgDomain.Invitation{}).
 		Where("id = ?", id).
 		Updates(map[string]interface{}{
-			"status":     orgDomain.InvitationStatusRevoked,
-			"updated_at": time.Now(),
+			"status":        orgDomain.InvitationStatusRevoked,
+			"revoked_at":    now,
+			"revoked_by_id": revokedByID,
+			"updated_at":    now,
 		}).Error
+}
+
+// GetByTokenHash retrieves an invitation by token hash (secure lookup)
+func (r *invitationRepository) GetByTokenHash(ctx context.Context, tokenHash string) (*orgDomain.Invitation, error) {
+	var invitation orgDomain.Invitation
+	err := r.db.WithContext(ctx).
+		Where("token_hash = ? AND deleted_at IS NULL", tokenHash).
+		First(&invitation).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("get invitation by token hash: %w", orgDomain.ErrInvitationNotFound)
+		}
+		return nil, err
+	}
+	return &invitation, nil
+}
+
+// MarkResent updates an invitation after a resend
+func (r *invitationRepository) MarkResent(ctx context.Context, id ulid.ULID, newExpiresAt time.Time) error {
+	now := time.Now()
+	return r.db.WithContext(ctx).
+		Model(&orgDomain.Invitation{}).
+		Where("id = ?", id).
+		Updates(map[string]interface{}{
+			"resent_at":    now,
+			"resent_count": gorm.Expr("resent_count + 1"),
+			"expires_at":   newExpiresAt,
+			"updated_at":   now,
+		}).Error
+}
+
+// CreateAuditEvent creates an audit event for an invitation
+func (r *invitationRepository) CreateAuditEvent(ctx context.Context, event *orgDomain.InvitationAuditEvent) error {
+	return r.db.WithContext(ctx).Create(event).Error
+}
+
+// GetAuditEventsByInvitationID retrieves all audit events for an invitation
+func (r *invitationRepository) GetAuditEventsByInvitationID(ctx context.Context, invitationID ulid.ULID) ([]*orgDomain.InvitationAuditEvent, error) {
+	var events []*orgDomain.InvitationAuditEvent
+	err := r.db.WithContext(ctx).
+		Where("invitation_id = ?", invitationID).
+		Order("created_at ASC").
+		Find(&events).Error
+	return events, err
 }
