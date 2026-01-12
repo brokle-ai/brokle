@@ -2,7 +2,9 @@ package email
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/tls"
+	"encoding/hex"
 	"fmt"
 	"net"
 	"net/smtp"
@@ -10,6 +12,29 @@ import (
 	"strings"
 	"time"
 )
+
+// sanitizeHeaderValue removes CR and LF characters to prevent email header injection attacks.
+// This is critical for security as CRLF sequences can be used to inject arbitrary headers.
+func sanitizeHeaderValue(value string) string {
+	return strings.NewReplacer("\r", "", "\n", "").Replace(value)
+}
+
+// sanitizeEmailAddress sanitizes an email address for use in headers.
+// Wraps sanitizeHeaderValue for semantic clarity.
+func sanitizeEmailAddress(addr string) string {
+	return sanitizeHeaderValue(addr)
+}
+
+// generateBoundary creates a cryptographically random MIME boundary string.
+// Using crypto/rand instead of time-based values prevents boundary prediction attacks.
+func generateBoundary() string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		// Fallback to time-based if crypto/rand fails (should never happen)
+		return fmt.Sprintf("----=_Part_%d", time.Now().UnixNano())
+	}
+	return "----=_Part_" + hex.EncodeToString(b)
+}
 
 // SMTPConfig contains configuration for the SMTP client
 type SMTPConfig struct {
@@ -164,22 +189,34 @@ func (c *SMTPClient) sendMail(addr string, to []string, msg []byte) error {
 func (c *SMTPClient) buildMessage(params SendEmailParams) []byte {
 	var sb strings.Builder
 
+	// Sanitize all header values to prevent injection attacks (RFC 5322 compliance)
+	sanitizedFromName := sanitizeHeaderValue(c.fromName)
+	sanitizedFromEmail := sanitizeEmailAddress(c.fromEmail)
+	sanitizedSubject := sanitizeHeaderValue(params.Subject)
+	sanitizedReplyTo := sanitizeEmailAddress(params.ReplyTo)
+
+	// Sanitize all recipient addresses
+	sanitizedTo := make([]string, len(params.To))
+	for i, addr := range params.To {
+		sanitizedTo[i] = sanitizeEmailAddress(addr)
+	}
+
 	// Build From header
-	if c.fromName != "" {
-		sb.WriteString(fmt.Sprintf("From: %s <%s>\r\n", c.fromName, c.fromEmail))
+	if sanitizedFromName != "" {
+		sb.WriteString(fmt.Sprintf("From: %s <%s>\r\n", sanitizedFromName, sanitizedFromEmail))
 	} else {
-		sb.WriteString(fmt.Sprintf("From: %s\r\n", c.fromEmail))
+		sb.WriteString(fmt.Sprintf("From: %s\r\n", sanitizedFromEmail))
 	}
 
 	// Build To header
-	sb.WriteString(fmt.Sprintf("To: %s\r\n", strings.Join(params.To, ", ")))
+	sb.WriteString(fmt.Sprintf("To: %s\r\n", strings.Join(sanitizedTo, ", ")))
 
 	// Subject
-	sb.WriteString(fmt.Sprintf("Subject: %s\r\n", params.Subject))
+	sb.WriteString(fmt.Sprintf("Subject: %s\r\n", sanitizedSubject))
 
 	// Reply-To
-	if params.ReplyTo != "" {
-		sb.WriteString(fmt.Sprintf("Reply-To: %s\r\n", params.ReplyTo))
+	if sanitizedReplyTo != "" {
+		sb.WriteString(fmt.Sprintf("Reply-To: %s\r\n", sanitizedReplyTo))
 	}
 
 	// MIME headers
@@ -187,7 +224,7 @@ func (c *SMTPClient) buildMessage(params SendEmailParams) []byte {
 
 	if params.HTML != "" && params.Text != "" {
 		// Multipart message with both HTML and plain text
-		boundary := "----=_Part_" + fmt.Sprintf("%d", time.Now().UnixNano())
+		boundary := generateBoundary()
 		sb.WriteString(fmt.Sprintf("Content-Type: multipart/alternative; boundary=\"%s\"\r\n", boundary))
 		sb.WriteString("\r\n")
 
