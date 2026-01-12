@@ -1,0 +1,36 @@
+# Billing Pricing Plans
+# Seeded like roles/permissions with runtime ULID generation
+
+version: "2026.01.05"
+
+plans:
+  # Free Plan - Default for new organizations
+  - name: "Free"
+    is_default: true
+    free_spans: 1000000        # 1M free spans
+    free_gb: 1.0               # 1GB free data
+    free_scores: 10000         # 10K free scores
+    # null prices = no overage (hard limit on free tier)
+    price_per_100k_spans: null
+    price_per_gb: null
+    price_per_1k_scores: null
+
+  # Pro Plan - Pay-as-you-go after free tier
+  - name: "Pro"
+    is_default: false
+    free_spans: 1000000        # 1M free spans
+    free_gb: 1.0               # 1GB free data
+    free_scores: 10000         # 10K free scores
+    price_per_100k_spans: 0.50 # $0.50 per 100K spans after free tier
+    price_per_gb: 3.00         # $3.00 per GB after free tier
+    price_per_1k_scores: 0.20  # $0.20 per 1K scores after free tier
+
+  # Enterprise Plan - Custom pricing
+  - name: "Enterprise"
+    is_default: false
+    free_spans: 10000000       # 10M free spans
+    free_gb: 10.0              # 10GB free data
+    free_scores: 100000        # 100K free scores
+    price_per_100k_spans: 0.30 # Discounted $0.30 per 100K spans
+    price_per_gb: 2.00         # Discounted $2.00 per GB
+    price_per_1k_scores: 0.10  # Discounted $0.10 per 1K scores

@@ -145,7 +145,7 @@ export default function PlaygroundPage() {
             )}
           </div>
 
-          {/* Braintrust-style adaptive layout */}
+          {/* Adaptive layout */}
           {windows.length <= 3 ? (
             // 1-3 windows: Equal width grid, fills available space
             <div

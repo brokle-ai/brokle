@@ -1,14 +1,15 @@
 package billing
 
 import (
-	"log/slog"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
+	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
 
 	billingDomain "brokle/internal/core/domain/billing"
@@ -271,10 +272,10 @@ func (r *BillingRecordRepository) GetBillingSummary(ctx context.Context, orgID u
 		PeriodEnd:      row.PeriodEnd,
 		TotalRequests:  int(row.TotalRequests),
 		TotalTokens:    int(row.TotalTokens),
-		TotalCost:      row.TotalCost,
+		TotalCost:      decimal.NewFromFloat(row.TotalCost),
 		Currency:       row.Currency,
-		Discounts:      row.Discounts,
-		NetCost:        row.NetCost,
+		Discounts:      decimal.NewFromFloat(row.Discounts),
+		NetCost:        decimal.NewFromFloat(row.NetCost),
 		Status:         row.Status,
 		GeneratedAt:    row.GeneratedAt,
 	}
@@ -339,10 +340,10 @@ func (r *BillingRecordRepository) GetBillingSummaryHistory(ctx context.Context, 
 			PeriodEnd:      row.PeriodEnd,
 			TotalRequests:  int(row.TotalRequests),
 			TotalTokens:    int(row.TotalTokens),
-			TotalCost:      row.TotalCost,
+			TotalCost:      decimal.NewFromFloat(row.TotalCost),
 			Currency:       row.Currency,
-			Discounts:      row.Discounts,
-			NetCost:        row.NetCost,
+			Discounts:      decimal.NewFromFloat(row.Discounts),
+			NetCost:        decimal.NewFromFloat(row.NetCost),
 			Status:         row.Status,
 			GeneratedAt:    row.GeneratedAt,
 		}

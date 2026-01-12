@@ -11,6 +11,7 @@ import (
 	userDomain "brokle/internal/core/domain/user"
 	"brokle/pkg/pagination"
 	"brokle/pkg/ulid"
+	"brokle/internal/infrastructure/shared"
 )
 
 // userRepository implements the userDomain.Repository interface using GORM
@@ -25,15 +26,20 @@ func NewUserRepository(db *gorm.DB) userDomain.Repository {
 	}
 }
 
+// getDB returns transaction-aware DB instance
+func (r *userRepository) getDB(ctx context.Context) *gorm.DB {
+	return shared.GetDB(ctx, r.db)
+}
+
 // Create creates a new user
 func (r *userRepository) Create(ctx context.Context, u *userDomain.User) error {
-	return r.db.WithContext(ctx).Create(u).Error
+	return r.getDB(ctx).WithContext(ctx).Create(u).Error
 }
 
 // GetByID retrieves a user by ID
 func (r *userRepository) GetByID(ctx context.Context, id ulid.ULID) (*userDomain.User, error) {
 	var u userDomain.User
-	err := r.db.WithContext(ctx).Where("id = ? AND deleted_at IS NULL", id).First(&u).Error
+	err := r.getDB(ctx).WithContext(ctx).Where("id = ? AND deleted_at IS NULL", id).First(&u).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("get user by ID %s: %w", id, userDomain.ErrNotFound)
@@ -46,7 +52,7 @@ func (r *userRepository) GetByID(ctx context.Context, id ulid.ULID) (*userDomain
 // GetByEmail retrieves a user by email
 func (r *userRepository) GetByEmail(ctx context.Context, email string) (*userDomain.User, error) {
 	var u userDomain.User
-	err := r.db.WithContext(ctx).Where("email = ? AND deleted_at IS NULL", email).First(&u).Error
+	err := r.getDB(ctx).WithContext(ctx).Where("email = ? AND deleted_at IS NULL", email).First(&u).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("get user by email %s: %w", email, userDomain.ErrNotFound)
@@ -59,7 +65,7 @@ func (r *userRepository) GetByEmail(ctx context.Context, email string) (*userDom
 // GetByEmailWithPassword retrieves a user by email with password included
 func (r *userRepository) GetByEmailWithPassword(ctx context.Context, email string) (*userDomain.User, error) {
 	var u userDomain.User
-	err := r.db.WithContext(ctx).Select("*").Where("email = ? AND deleted_at IS NULL", email).First(&u).Error
+	err := r.getDB(ctx).WithContext(ctx).Select("*").Where("email = ? AND deleted_at IS NULL", email).First(&u).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("get user by email with password %s: %w", email, userDomain.ErrNotFound)
@@ -71,12 +77,12 @@ func (r *userRepository) GetByEmailWithPassword(ctx context.Context, email strin
 
 // Update updates a user
 func (r *userRepository) Update(ctx context.Context, u *userDomain.User) error {
-	return r.db.WithContext(ctx).Save(u).Error
+	return r.getDB(ctx).WithContext(ctx).Save(u).Error
 }
 
 // Delete soft deletes a user
 func (r *userRepository) Delete(ctx context.Context, id ulid.ULID) error {
-	return r.db.WithContext(ctx).Model(&userDomain.User{}).Where("id = ?", id).Update("deleted_at", time.Now()).Error
+	return r.getDB(ctx).WithContext(ctx).Model(&userDomain.User{}).Where("id = ?", id).Update("deleted_at", time.Now()).Error
 }
 
 // List retrieves users with filters
@@ -97,13 +103,13 @@ func (r *userRepository) List(ctx context.Context, filters *userDomain.ListFilte
 // Count returns the total number of active users
 func (r *userRepository) Count(ctx context.Context) (int64, error) {
 	var count int64
-	err := r.db.WithContext(ctx).Model(&userDomain.User{}).Where("deleted_at IS NULL").Count(&count).Error
+	err := r.getDB(ctx).WithContext(ctx).Model(&userDomain.User{}).Where("deleted_at IS NULL").Count(&count).Error
 	return count, err
 }
 
 // UpdatePassword updates a user's password
 func (r *userRepository) UpdatePassword(ctx context.Context, userID ulid.ULID, hashedPassword string) error {
-	return r.db.WithContext(ctx).
+	return r.getDB(ctx).WithContext(ctx).
 		Model(&userDomain.User{}).
 		Where("id = ?", userID).
 		Update("password", hashedPassword).Error
@@ -111,7 +117,7 @@ func (r *userRepository) UpdatePassword(ctx context.Context, userID ulid.ULID, h
 
 // UpdateLastLogin updates the user's last login timestamp
 func (r *userRepository) UpdateLastLogin(ctx context.Context, userID ulid.ULID) error {
-	return r.db.WithContext(ctx).
+	return r.getDB(ctx).WithContext(ctx).
 		Model(&userDomain.User{}).
 		Where("id = ?", userID).
 		Update("last_login_at", time.Now()).Error
@@ -119,7 +125,7 @@ func (r *userRepository) UpdateLastLogin(ctx context.Context, userID ulid.ULID) 
 
 // MarkEmailAsVerified marks the user's email as verified
 func (r *userRepository) MarkEmailAsVerified(ctx context.Context, userID ulid.ULID) error {
-	return r.db.WithContext(ctx).
+	return r.getDB(ctx).WithContext(ctx).
 		Model(&userDomain.User{}).
 		Where("id = ?", userID).
 		Updates(map[string]interface{}{
@@ -134,7 +140,7 @@ func (r *userRepository) SetDefaultOrganization(ctx context.Context, userID ulid
 	if orgID != (ulid.ULID{}) { // Check if not zero value
 		orgIDPtr = &orgID
 	}
-	return r.db.WithContext(ctx).
+	return r.getDB(ctx).WithContext(ctx).
 		Model(&userDomain.User{}).
 		Where("id = ?", userID).
 		Update("default_organization_id", orgIDPtr).Error
@@ -146,7 +152,7 @@ func (r *userRepository) GetActiveUsers(ctx context.Context, limit, offset int) 
 	var count int64
 
 	// Get count first
-	err := r.db.WithContext(ctx).
+	err := r.getDB(ctx).WithContext(ctx).
 		Model(&userDomain.User{}).
 		Where("deleted_at IS NULL AND last_login_at IS NOT NULL").
 		Count(&count).Error
@@ -155,7 +161,7 @@ func (r *userRepository) GetActiveUsers(ctx context.Context, limit, offset int) 
 	}
 
 	// Get users
-	err = r.db.WithContext(ctx).
+	err = r.getDB(ctx).WithContext(ctx).
 		Where("deleted_at IS NULL AND last_login_at IS NOT NULL").
 		Limit(limit).
 		Offset(offset).
@@ -167,7 +173,7 @@ func (r *userRepository) GetActiveUsers(ctx context.Context, limit, offset int) 
 // GetUsersByIDs retrieves multiple users by their IDs
 func (r *userRepository) GetUsersByIDs(ctx context.Context, ids []ulid.ULID) ([]*userDomain.User, error) {
 	var users []*userDomain.User
-	err := r.db.WithContext(ctx).
+	err := r.getDB(ctx).WithContext(ctx).
 		Where("id IN ? AND deleted_at IS NULL", ids).
 		Find(&users).Error
 	return users, err
@@ -182,7 +188,7 @@ func (r *userRepository) SearchUsers(ctx context.Context, query string, limit, o
 	whereClause := "deleted_at IS NULL AND (email ILIKE ? OR first_name ILIKE ? OR last_name ILIKE ?)"
 
 	// Get count first
-	err := r.db.WithContext(ctx).
+	err := r.getDB(ctx).WithContext(ctx).
 		Model(&userDomain.User{}).
 		Where(whereClause, searchPattern, searchPattern, searchPattern).
 		Count(&count).Error
@@ -191,7 +197,7 @@ func (r *userRepository) SearchUsers(ctx context.Context, query string, limit, o
 	}
 
 	// Get users
-	err = r.db.WithContext(ctx).
+	err = r.getDB(ctx).WithContext(ctx).
 		Where(whereClause, searchPattern, searchPattern, searchPattern).
 		Limit(limit).
 		Offset(offset).
@@ -205,14 +211,14 @@ func (r *userRepository) GetUserStats(ctx context.Context) (*userDomain.UserStat
 	stats := &userDomain.UserStats{}
 
 	// Total users
-	err := r.db.WithContext(ctx).Model(&userDomain.User{}).Where("deleted_at IS NULL").Count(&stats.TotalUsers).Error
+	err := r.getDB(ctx).WithContext(ctx).Model(&userDomain.User{}).Where("deleted_at IS NULL").Count(&stats.TotalUsers).Error
 	if err != nil {
 		return nil, err
 	}
 
 	// Active users (logged in within last 30 days)
 	thirtyDaysAgo := time.Now().AddDate(0, 0, -30)
-	err = r.db.WithContext(ctx).Model(&userDomain.User{}).
+	err = r.getDB(ctx).WithContext(ctx).Model(&userDomain.User{}).
 		Where("deleted_at IS NULL AND last_login_at > ?", thirtyDaysAgo).
 		Count(&stats.ActiveUsers).Error
 	if err != nil {
@@ -220,7 +226,7 @@ func (r *userRepository) GetUserStats(ctx context.Context) (*userDomain.UserStat
 	}
 
 	// Verified users
-	err = r.db.WithContext(ctx).Model(&userDomain.User{}).
+	err = r.getDB(ctx).WithContext(ctx).Model(&userDomain.User{}).
 		Where("deleted_at IS NULL AND is_email_verified = true").
 		Count(&stats.VerifiedUsers).Error
 	if err != nil {
@@ -229,7 +235,7 @@ func (r *userRepository) GetUserStats(ctx context.Context) (*userDomain.UserStat
 
 	// Users created today
 	today := time.Now().Truncate(24 * time.Hour)
-	err = r.db.WithContext(ctx).Model(&userDomain.User{}).
+	err = r.getDB(ctx).WithContext(ctx).Model(&userDomain.User{}).
 		Where("deleted_at IS NULL AND created_at >= ?", today).
 		Count(&stats.NewUsersToday).Error
 	if err != nil {
@@ -241,7 +247,7 @@ func (r *userRepository) GetUserStats(ctx context.Context) (*userDomain.UserStat
 
 // UpdateUserActivity updates user activity timestamp
 func (r *userRepository) UpdateUserActivity(ctx context.Context, userID ulid.ULID) error {
-	return r.db.WithContext(ctx).
+	return r.getDB(ctx).WithContext(ctx).
 		Model(&userDomain.User{}).
 		Where("id = ?", userID).
 		Update("last_activity_at", time.Now()).Error
@@ -249,7 +255,7 @@ func (r *userRepository) UpdateUserActivity(ctx context.Context, userID ulid.ULI
 
 // Deactivate deactivates a user account
 func (r *userRepository) Deactivate(ctx context.Context, userID ulid.ULID) error {
-	return r.db.WithContext(ctx).
+	return r.getDB(ctx).WithContext(ctx).
 		Model(&userDomain.User{}).
 		Where("id = ?", userID).
 		Update("is_active", false).Error
@@ -257,7 +263,7 @@ func (r *userRepository) Deactivate(ctx context.Context, userID ulid.ULID) error
 
 // Activate activates a user account
 func (r *userRepository) Activate(ctx context.Context, userID ulid.ULID) error {
-	return r.db.WithContext(ctx).
+	return r.getDB(ctx).WithContext(ctx).
 		Model(&userDomain.User{}).
 		Where("id = ?", userID).
 		Update("is_active", true).Error
@@ -266,7 +272,7 @@ func (r *userRepository) Activate(ctx context.Context, userID ulid.ULID) error {
 // GetByFilters retrieves users based on filters
 func (r *userRepository) GetByFilters(ctx context.Context, filters *userDomain.UserFilters) ([]*userDomain.User, error) {
 	var users []*userDomain.User
-	query := r.db.WithContext(ctx).Where("deleted_at IS NULL")
+	query := r.getDB(ctx).WithContext(ctx).Where("deleted_at IS NULL")
 
 	// Apply filters
 	if filters.IsActive != nil {
@@ -323,12 +329,12 @@ func (r *userRepository) GetByFilters(ctx context.Context, filters *userDomain.U
 
 // Profile operations
 func (r *userRepository) CreateProfile(ctx context.Context, profile *userDomain.UserProfile) error {
-	return r.db.WithContext(ctx).Create(profile).Error
+	return r.getDB(ctx).WithContext(ctx).Create(profile).Error
 }
 
 func (r *userRepository) GetProfile(ctx context.Context, userID ulid.ULID) (*userDomain.UserProfile, error) {
 	var profile userDomain.UserProfile
-	err := r.db.WithContext(ctx).Where("user_id = ?", userID).First(&profile).Error
+	err := r.getDB(ctx).WithContext(ctx).Where("user_id = ?", userID).First(&profile).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("get profile for user %s: %w", userID, userDomain.ErrNotFound)
@@ -339,7 +345,7 @@ func (r *userRepository) GetProfile(ctx context.Context, userID ulid.ULID) (*use
 }
 
 func (r *userRepository) UpdateProfile(ctx context.Context, profile *userDomain.UserProfile) error {
-	return r.db.WithContext(ctx).Save(profile).Error
+	return r.getDB(ctx).WithContext(ctx).Save(profile).Error
 }
 
 // Additional missing interface methods
@@ -350,7 +356,7 @@ func (r *userRepository) VerifyEmail(ctx context.Context, userID ulid.ULID, toke
 
 func (r *userRepository) GetDefaultOrganization(ctx context.Context, userID ulid.ULID) (*ulid.ULID, error) {
 	var u userDomain.User
-	err := r.db.WithContext(ctx).Select("default_organization_id").Where("id = ?", userID).First(&u).Error
+	err := r.getDB(ctx).WithContext(ctx).Select("default_organization_id").Where("id = ?", userID).First(&u).Error
 	if err != nil {
 		return nil, err
 	}
@@ -358,16 +364,16 @@ func (r *userRepository) GetDefaultOrganization(ctx context.Context, userID ulid
 }
 
 func (r *userRepository) DeactivateUser(ctx context.Context, userID ulid.ULID) error {
-	return r.db.WithContext(ctx).Model(&userDomain.User{}).Where("id = ?", userID).Update("is_active", false).Error
+	return r.getDB(ctx).WithContext(ctx).Model(&userDomain.User{}).Where("id = ?", userID).Update("is_active", false).Error
 }
 
 func (r *userRepository) ReactivateUser(ctx context.Context, userID ulid.ULID) error {
-	return r.db.WithContext(ctx).Model(&userDomain.User{}).Where("id = ?", userID).Update("is_active", true).Error
+	return r.getDB(ctx).WithContext(ctx).Model(&userDomain.User{}).Where("id = ?", userID).Update("is_active", true).Error
 }
 
 func (r *userRepository) GetNewUsersCount(ctx context.Context, since time.Time) (int64, error) {
 	var count int64
-	err := r.db.WithContext(ctx).Model(&userDomain.User{}).Where("created_at > ? AND deleted_at IS NULL", since).Count(&count).Error
+	err := r.getDB(ctx).WithContext(ctx).Model(&userDomain.User{}).Where("created_at > ? AND deleted_at IS NULL", since).Count(&count).Error
 	return count, err
 }
 
@@ -388,7 +394,7 @@ func (r *userRepository) GetVerifiedUsers(ctx context.Context, limit, offset int
 	whereClause := "deleted_at IS NULL AND is_email_verified = true"
 
 	// Get count first
-	err := r.db.WithContext(ctx).
+	err := r.getDB(ctx).WithContext(ctx).
 		Model(&userDomain.User{}).
 		Where(whereClause).
 		Count(&count).Error
@@ -397,7 +403,7 @@ func (r *userRepository) GetVerifiedUsers(ctx context.Context, limit, offset int
 	}
 
 	// Get users
-	err = r.db.WithContext(ctx).
+	err = r.getDB(ctx).WithContext(ctx).
 		Where(whereClause).
 		Limit(limit).
 		Offset(offset).

@@ -24,7 +24,7 @@ var labelPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9_.-]*$`)
 const defaultCacheTTL = 60 * time.Second
 
 type promptService struct {
-	txManager           common.TransactionManager
+	transactor          common.Transactor
 	promptRepo          promptDomain.PromptRepository
 	versionRepo         promptDomain.VersionRepository
 	labelRepo           promptDomain.LabelRepository
@@ -35,7 +35,7 @@ type promptService struct {
 }
 
 func NewPromptService(
-	txManager common.TransactionManager,
+	transactor common.Transactor,
 	promptRepo promptDomain.PromptRepository,
 	versionRepo promptDomain.VersionRepository,
 	labelRepo promptDomain.LabelRepository,
@@ -45,7 +45,7 @@ func NewPromptService(
 	logger *slog.Logger,
 ) promptDomain.PromptService {
 	return &promptService{
-		txManager:          txManager,
+		transactor:         transactor,
 		promptRepo:         promptRepo,
 		versionRepo:        versionRepo,
 		labelRepo:          labelRepo,
@@ -103,23 +103,19 @@ func (s *promptService) CreatePrompt(ctx context.Context, projectID ulid.ULID, u
 	version := promptDomain.NewVersion(prompt.ID, 1, templateJSON, variables, req.CommitMessage, userID)
 
 	// TRANSACTION: Create prompt, version, and labels atomically
-	err = s.txManager.WithTransaction(ctx, func(txCtx context.Context, factory common.RepositoryFactory) error {
-		txPromptRepo := factory.PromptRepository()
-		txVersionRepo := factory.VersionRepository()
-		txLabelRepo := factory.LabelRepository()
-
-		if err := txPromptRepo.Create(txCtx, prompt); err != nil {
+	err = s.transactor.WithinTransaction(ctx, func(ctx context.Context) error {
+		if err := s.promptRepo.Create(ctx, prompt); err != nil {
 			if isDuplicateKeyError(err) {
 				return appErrors.NewConflictError(fmt.Sprintf("prompt '%s' already exists in this project", req.Name))
 			}
 			return appErrors.NewInternalError("failed to create prompt", err)
 		}
 
-		if err := txVersionRepo.Create(txCtx, version); err != nil {
+		if err := s.versionRepo.Create(ctx, version); err != nil {
 			return appErrors.NewInternalError("failed to create version", err)
 		}
 
-		if err := txLabelRepo.SetLabel(txCtx, prompt.ID, version.ID, promptDomain.LabelLatest, userID); err != nil {
+		if err := s.labelRepo.SetLabel(ctx, prompt.ID, version.ID, promptDomain.LabelLatest, userID); err != nil {
 			return appErrors.NewInternalError("failed to create latest label", err)
 		}
 
@@ -127,7 +123,7 @@ func (s *promptService) CreatePrompt(ctx context.Context, projectID ulid.ULID, u
 			if labelName == promptDomain.LabelLatest {
 				continue
 			}
-			if err := txLabelRepo.SetLabel(txCtx, prompt.ID, version.ID, labelName, userID); err != nil {
+			if err := s.labelRepo.SetLabel(ctx, prompt.ID, version.ID, labelName, userID); err != nil {
 				return appErrors.NewInternalError(fmt.Sprintf("failed to create label '%s'", labelName), err)
 			}
 		}
@@ -521,22 +517,19 @@ func (s *promptService) CreateVersion(ctx context.Context, projectID, promptID u
 	var version *promptDomain.Version
 
 	// TRANSACTION: Get version number + create version + update labels atomically
-	err = s.txManager.WithTransaction(ctx, func(txCtx context.Context, factory common.RepositoryFactory) error {
-		txVersionRepo := factory.VersionRepository()
-		txLabelRepo := factory.LabelRepository()
-
-		versionNum, err := txVersionRepo.GetNextVersionNumber(txCtx, promptID)
+	err = s.transactor.WithinTransaction(ctx, func(ctx context.Context) error {
+		versionNum, err := s.versionRepo.GetNextVersionNumber(ctx, promptID)
 		if err != nil {
 			return appErrors.NewInternalError("failed to get next version number", err)
 		}
 
 		version = promptDomain.NewVersion(promptID, versionNum, templateJSON, variables, req.CommitMessage, userID)
 
-		if err := txVersionRepo.Create(txCtx, version); err != nil {
+		if err := s.versionRepo.Create(ctx, version); err != nil {
 			return appErrors.NewInternalError("failed to create version", err)
 		}
 
-		if err := txLabelRepo.SetLabel(txCtx, promptID, version.ID, promptDomain.LabelLatest, userID); err != nil {
+		if err := s.labelRepo.SetLabel(ctx, promptID, version.ID, promptDomain.LabelLatest, userID); err != nil {
 			return appErrors.NewInternalError("failed to update latest label", err)
 		}
 
@@ -544,7 +537,7 @@ func (s *promptService) CreateVersion(ctx context.Context, projectID, promptID u
 			if labelName == promptDomain.LabelLatest {
 				continue
 			}
-			if err := txLabelRepo.SetLabel(txCtx, promptID, version.ID, labelName, userID); err != nil {
+			if err := s.labelRepo.SetLabel(ctx, promptID, version.ID, labelName, userID); err != nil {
 				return appErrors.NewInternalError(fmt.Sprintf("failed to create label '%s'", labelName), err)
 			}
 		}

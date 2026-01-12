@@ -283,6 +283,36 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 				aiCreds.DELETE("/:credentialId", s.authMiddleware.RequirePermission("credentials:write"), s.handlers.Credentials.Delete)
 			}
 		}
+
+		// Usage-based billing: Usage routes (Spans + GB + Scores)
+		orgUsage := orgs.Group("/:orgId/usage")
+		{
+			orgUsage.GET("/overview", s.handlers.Usage.GetUsageOverview)
+			orgUsage.GET("/timeseries", s.handlers.Usage.GetUsageTimeSeries)
+			orgUsage.GET("/by-project", s.handlers.Usage.GetUsageByProject)
+			orgUsage.GET("/export", s.handlers.Usage.ExportUsage)
+		}
+
+		// Usage-based billing: Budget management routes
+		orgBudgets := orgs.Group("/:orgId/budgets")
+		{
+			orgBudgets.GET("", s.handlers.Budget.ListBudgets)
+			orgBudgets.POST("", s.handlers.Budget.CreateBudget)
+			orgBudgets.GET("/:budgetId", s.handlers.Budget.GetBudget)
+			orgBudgets.PUT("/:budgetId", s.handlers.Budget.UpdateBudget)
+			orgBudgets.DELETE("/:budgetId", s.handlers.Budget.DeleteBudget)
+			orgBudgets.GET("/alerts", s.handlers.Budget.GetAlerts)
+			orgBudgets.POST("/alerts/:alertId/acknowledge", s.handlers.Budget.AcknowledgeAlert)
+		}
+
+		// Enterprise custom pricing: Contract routes
+		orgContracts := orgs.Group("/:orgId/contracts")
+		{
+			orgContracts.GET("", s.handlers.Contract.GetContractsByOrg)
+		}
+
+		// Enterprise custom pricing: Effective pricing
+		orgs.GET("/:orgId/effective-pricing", s.handlers.Contract.GetEffectivePricing)
 	}
 
 	projects := protected.Group("/projects")
@@ -495,6 +525,18 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 		billing.GET("/:orgId/invoices", s.handlers.Billing.ListInvoices)
 		billing.GET("/:orgId/subscription", s.handlers.Billing.GetSubscription)
 		billing.POST("/:orgId/subscription", s.handlers.Billing.UpdateSubscription)
+
+		// Enterprise custom pricing: Contract management
+		contracts := billing.Group("/contracts")
+		{
+			contracts.POST("", s.handlers.Contract.CreateContract)
+			contracts.GET("/:contractId", s.handlers.Contract.GetContract)
+			contracts.PUT("/:contractId", s.handlers.Contract.UpdateContract)
+			contracts.DELETE("/:contractId", s.handlers.Contract.CancelContract)
+			contracts.PUT("/:contractId/activate", s.handlers.Contract.ActivateContract)
+			contracts.PUT("/:contractId/tiers", s.handlers.Contract.UpdateVolumeTiers)
+			contracts.GET("/:contractId/history", s.handlers.Contract.GetContractHistory)
+		}
 	}
 
 	rbac := protected.Group("/rbac")

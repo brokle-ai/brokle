@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
 
 	"brokle/internal/config"
@@ -77,7 +78,7 @@ type CoreContainer struct {
 	Logger     *slog.Logger
 	Databases  *DatabaseContainer
 	Repos      *RepositoryContainer
-	TxManager  common.TransactionManager
+	Transactor common.Transactor
 	Services   *ServiceContainer
 	Enterprise *EnterpriseContainer
 }
@@ -101,10 +102,12 @@ type DatabaseContainer struct {
 }
 
 type WorkerContainer struct {
-	TelemetryConsumer    *workers.TelemetryStreamConsumer
-	RuleWorker           *evaluationWorker.RuleWorker
-	EvaluationWorker     *evaluationWorker.EvaluationWorker
-	ManualTriggerWorker  *evaluationWorker.ManualTriggerWorker
+	TelemetryConsumer        *workers.TelemetryStreamConsumer
+	RuleWorker               *evaluationWorker.RuleWorker
+	EvaluationWorker         *evaluationWorker.EvaluationWorker
+	ManualTriggerWorker      *evaluationWorker.ManualTriggerWorker
+	UsageAggregationWorker   *workers.UsageAggregationWorker
+	ContractExpirationWorker *workers.ContractExpirationWorker
 }
 
 type RepositoryContainer struct {
@@ -191,6 +194,16 @@ type BillingRepositories struct {
 	Usage         billing.UsageRepository
 	BillingRecord billing.BillingRecordRepository
 	Quota         billing.QuotaRepository
+	// Usage-based billing repositories (Spans + GB + Scores)
+	BillableUsage       billing.BillableUsageRepository
+	Plan                billing.PlanRepository
+	OrganizationBilling billing.OrganizationBillingRepository
+	UsageBudget         billing.UsageBudgetRepository
+	UsageAlert          billing.UsageAlertRepository
+	// Enterprise custom pricing repositories
+	Contract        billing.ContractRepository
+	VolumeTier      billing.VolumeDiscountTierRepository
+	ContractHistory billing.ContractHistoryRepository
 }
 
 type AnalyticsRepositories struct {
@@ -250,6 +263,12 @@ type AuthServices struct {
 
 type BillingServices struct {
 	Billing *billingService.BillingService
+	// Usage-based billing services (Spans + GB + Scores)
+	BillableUsage billing.BillableUsageService
+	Budget        billing.BudgetService
+	// Enterprise custom pricing services
+	Pricing  billing.PricingService
+	Contract billing.ContractService
 }
 
 type AnalyticsServices struct {
@@ -427,11 +446,35 @@ func ProvideWorkers(core *CoreContainer) (*WorkerContainer, error) {
 		manualTriggerWorkerConfig,
 	)
 
+	// Create usage aggregation worker for billing (syncs ClickHouse → PostgreSQL)
+	usageAggWorker := workers.NewUsageAggregationWorker(
+		core.Config,
+		core.Logger,
+		core.Transactor, // Transaction support for atomic billing + budget updates
+		core.Repos.Billing.BillableUsage,
+		core.Repos.Billing.OrganizationBilling,
+		core.Repos.Billing.UsageBudget,
+		core.Repos.Billing.UsageAlert,
+		core.Repos.Organization.Organization,
+		core.Services.Billing.Pricing, // PricingService for effective pricing and tier calculations
+		nil,                           // NotificationWorker - can be wired for email notifications
+	)
+
+	// Create contract expiration worker (daily job to expire contracts past end_date)
+	contractExpWorker := workers.NewContractExpirationWorker(
+		core.Config,
+		core.Logger,
+		core.Services.Billing.Contract,
+		core.Repos.Billing.OrganizationBilling,
+	)
+
 	return &WorkerContainer{
-		TelemetryConsumer:   telemetryConsumer,
-		RuleWorker:          ruleWorker,
-		EvaluationWorker:    evalWorker,
-		ManualTriggerWorker: manualTriggerWorker,
+		TelemetryConsumer:        telemetryConsumer,
+		RuleWorker:               ruleWorker,
+		EvaluationWorker:         evalWorker,
+		ManualTriggerWorker:      manualTriggerWorker,
+		UsageAggregationWorker:   usageAggWorker,
+		ContractExpirationWorker: contractExpWorker,
 	}, nil
 }
 
@@ -444,16 +487,16 @@ func ProvideCore(cfg *config.Config, logger *slog.Logger) (*CoreContainer, error
 	repos := ProvideRepositories(databases, logger)
 
 	// Concrete → interface for dependency inversion
-	txManager := database.NewTransactionManager(databases.Postgres.DB)
+	transactor := database.NewTransactor(databases.Postgres.DB)
 
 	return &CoreContainer{
 		Config:     cfg,
 		Logger:     logger,
 		Databases:  databases,
 		Repos:      repos,
-		TxManager:  txManager, // Stored as common.TransactionManager interface
-		Services:   nil,       // Populated by mode-specific provider
-		Enterprise: nil,       // Populated by mode-specific provider
+		Transactor: transactor, // Stored as common.Transactor interface
+		Services:   nil,        // Populated by mode-specific provider
+		Enterprise: nil,        // Populated by mode-specific provider
 	}, nil
 }
 
@@ -463,27 +506,28 @@ func ProvideServerServices(core *CoreContainer) *ServiceContainer {
 	repos := core.Repos
 	databases := core.Databases
 
-	billingServices := ProvideBillingServices(repos.Billing, logger)
+	billingServices := ProvideBillingServices(core.Transactor, repos.Billing, repos.Organization, logger)
 	analyticsServices := ProvideAnalyticsServices(repos.Analytics)
 	observabilityServices := ProvideObservabilityServices(repos.Observability, repos.Storage, analyticsServices, databases.Redis, cfg, logger)
-	authServices := ProvideAuthServices(cfg, repos.User, repos.Auth, databases, logger)
+	authServices := ProvideAuthServices(cfg, repos.User, repos.Auth, repos.Organization, databases, logger)
 	userServices := ProvideUserServices(repos.User, repos.Auth, logger)
 	orgService, memberService, projectService, invitationService, settingsService :=
-		ProvideOrganizationServices(repos.User, repos.Auth, repos.Organization, authServices, cfg, logger)
+		ProvideOrganizationServices(repos.User, repos.Auth, repos.Organization, repos.Billing, authServices, cfg, logger)
 
 	// Orchestrates user, org, project creation atomically
 	registrationSvc := registrationService.NewRegistrationService(
-		core.TxManager,
+		core.Transactor,
 		repos.User.User,
-		orgService,
-		projectService,
-		memberService,
-		invitationService,
+		repos.Organization.Organization,
+		repos.Organization.Member,
+		repos.Organization.Project,
+		repos.Organization.Invitation,
 		authServices.Role,
 		authServices.Auth,
+		billingServices.BillableUsage,
 	)
 
-	promptServices := ProvidePromptServices(core.TxManager, repos.Prompt, analyticsServices.ProviderPricing, cfg, logger)
+	promptServices := ProvidePromptServices(core.Transactor, repos.Prompt, analyticsServices.ProviderPricing, cfg, logger)
 
 	// Config validation ensures AI_KEY_ENCRYPTION_KEY is valid, so credentials service is guaranteed to initialize
 	credentialsServices := ProvideCredentialsServices(repos.Credentials, repos.Analytics, cfg, logger)
@@ -535,12 +579,12 @@ func ProvideWorkerServices(core *CoreContainer) *ServiceContainer {
 	repos := core.Repos
 	databases := core.Databases
 
-	billingServices := ProvideBillingServices(repos.Billing, logger)
+	billingServices := ProvideBillingServices(core.Transactor, repos.Billing, repos.Organization, logger)
 	analyticsServices := ProvideAnalyticsServices(repos.Analytics)
 	observabilityServices := ProvideObservabilityServices(repos.Observability, repos.Storage, analyticsServices, databases.Redis, cfg, logger)
 
 	// Prompt services needed for LLM scorer
-	promptServices := ProvidePromptServices(core.TxManager, repos.Prompt, analyticsServices.ProviderPricing, cfg, logger)
+	promptServices := ProvidePromptServices(core.Transactor, repos.Prompt, analyticsServices.ProviderPricing, cfg, logger)
 
 	// Credentials services needed for LLM scorer (optional - only if encryption key configured)
 	var credentialsServices *CredentialsServices
@@ -562,7 +606,7 @@ func ProvideWorkerServices(core *CoreContainer) *ServiceContainer {
 		ProjectService:      nil,
 		InvitationService:   nil,
 		SettingsService:     nil,
-		Prompt:              promptServices,    // Needed for LLM scorer
+		Prompt:              promptServices,      // Needed for LLM scorer
 		Credentials:         credentialsServices, // Needed for LLM scorer
 		Playground:          nil,
 		Observability:       observabilityServices,
@@ -651,6 +695,12 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 		widgetQuerySvc,
 		templateSvc,
 		core.Services.Analytics.Overview,
+		// Usage-based billing services
+		core.Services.Billing.BillableUsage,
+		core.Services.Billing.Budget,
+		// Enterprise custom pricing services
+		core.Services.Billing.Contract,
+		core.Services.Billing.Pricing,
 	)
 
 	httpServer := http.NewServer(
@@ -760,11 +810,21 @@ func ProvideStorageRepositories(clickhouseDB *database.ClickHouseDB) *StorageRep
 	}
 }
 
-func ProvideBillingRepositories(db *gorm.DB, logger *slog.Logger) *BillingRepositories {
+func ProvideBillingRepositories(db *gorm.DB, clickhouseDB *database.ClickHouseDB, logger *slog.Logger) *BillingRepositories {
 	return &BillingRepositories{
 		Usage:         billingRepo.NewUsageRepository(db, logger),
 		BillingRecord: billingRepo.NewBillingRecordRepository(db, logger),
 		Quota:         billingRepo.NewQuotaRepository(db, logger),
+		// Usage-based billing repositories
+		BillableUsage:       billingRepo.NewBillableUsageRepository(clickhouseDB.Conn),
+		Plan:                billingRepo.NewPlanRepository(db),
+		OrganizationBilling: billingRepo.NewOrganizationBillingRepository(db),
+		UsageBudget:         billingRepo.NewUsageBudgetRepository(db),
+		UsageAlert:          billingRepo.NewUsageAlertRepository(db),
+		// Enterprise custom pricing repositories
+		Contract:        billingRepo.NewContractRepository(db),
+		VolumeTier:      billingRepo.NewVolumeDiscountTierRepository(db),
+		ContractHistory: billingRepo.NewContractHistoryRepository(db),
 	}
 }
 
@@ -824,7 +884,7 @@ func ProvideRepositories(dbs *DatabaseContainer, logger *slog.Logger) *Repositor
 		Organization:  ProvideOrganizationRepositories(dbs.Postgres.DB),
 		Observability: ProvideObservabilityRepositories(dbs.ClickHouse, dbs.Postgres.DB, dbs.Redis),
 		Storage:       ProvideStorageRepositories(dbs.ClickHouse),
-		Billing:       ProvideBillingRepositories(dbs.Postgres.DB, logger),
+		Billing:       ProvideBillingRepositories(dbs.Postgres.DB, dbs.ClickHouse, logger),
 		Analytics:     ProvideAnalyticsRepositories(dbs.Postgres.DB, dbs.ClickHouse),
 		Prompt:        ProvidePromptRepositories(dbs.Postgres.DB, dbs.Redis),
 		Credentials:   ProvideCredentialsRepositories(dbs.Postgres.DB),
@@ -859,6 +919,7 @@ func ProvideAuthServices(
 	cfg *config.Config,
 	userRepos *UserRepositories,
 	authRepos *AuthRepositories,
+	orgRepos *OrganizationRepositories,
 	databases *DatabaseContainer,
 	logger *slog.Logger,
 ) *AuthServices {
@@ -897,6 +958,7 @@ func ProvideAuthServices(
 	apiKeyService := authService.NewAPIKeyService(
 		authRepos.APIKey,
 		authRepos.OrganizationMember,
+		orgRepos.Project,
 	)
 
 	coreAuthSvc := authService.NewAuthService(
@@ -947,6 +1009,7 @@ func ProvideOrganizationServices(
 	userRepos *UserRepositories,
 	authRepos *AuthRepositories,
 	orgRepos *OrganizationRepositories,
+	billingRepos *BillingRepositories,
 	authServices *AuthServices,
 	cfg *config.Config,
 	logger *slog.Logger,
@@ -996,6 +1059,9 @@ func ProvideOrganizationServices(
 		memberSvc,
 		projectSvc,
 		authServices.Role,
+		billingRepos.OrganizationBilling,
+		billingRepos.Plan,
+		logger,
 	)
 
 	settingsSvc := orgService.NewOrganizationSettingsService(
@@ -1060,7 +1126,9 @@ func ProvideObservabilityServices(
 }
 
 func ProvideBillingServices(
+	transactor common.Transactor,
 	billingRepos *BillingRepositories,
+	orgRepos *OrganizationRepositories,
 	logger *slog.Logger,
 ) *BillingServices {
 	orgService := &simpleBillingOrgService{logger: logger}
@@ -1073,8 +1141,47 @@ func ProvideBillingServices(
 		orgService,
 	)
 
+	// Enterprise custom pricing service (contract overrides + volume tiers)
+	pricingService := billingService.NewPricingService(
+		billingRepos.OrganizationBilling,
+		billingRepos.Plan,
+		billingRepos.Contract,
+		billingRepos.VolumeTier,
+		logger,
+	)
+
+	// Usage-based billing services (Spans + GB + Scores)
+	billableUsageService := billingService.NewBillableUsageService(
+		billingRepos.BillableUsage,
+		billingRepos.OrganizationBilling,
+		pricingService,
+		billingRepos.Plan,
+		logger,
+	)
+
+	budgetService := billingService.NewBudgetService(
+		billingRepos.UsageBudget,
+		billingRepos.UsageAlert,
+		orgRepos.Project,
+		logger,
+	)
+
+	// Contract lifecycle service (enterprise custom pricing)
+	contractService := billingService.NewContractService(
+		transactor,
+		billingRepos.Contract,
+		billingRepos.VolumeTier,
+		billingRepos.ContractHistory,
+		billingRepos.OrganizationBilling,
+		logger,
+	)
+
 	return &BillingServices{
-		Billing: billingServiceImpl,
+		Billing:       billingServiceImpl,
+		BillableUsage: billableUsageService,
+		Budget:        budgetService,
+		Pricing:       pricingService,
+		Contract:      contractService,
 	}
 }
 
@@ -1089,7 +1196,7 @@ func ProvideAnalyticsServices(
 }
 
 func ProvidePromptServices(
-	txManager common.TransactionManager,
+	transactor common.Transactor,
 	promptRepos *PromptRepositories,
 	pricingService analytics.ProviderPricingService,
 	cfg *config.Config,
@@ -1102,7 +1209,7 @@ func ProvidePromptServices(
 
 	executionSvc := promptService.NewExecutionService(compilerSvc, pricingService, aiClientConfig)
 	promptSvc := promptService.NewPromptService(
-		txManager,
+		transactor,
 		promptRepos.Prompt,
 		promptRepos.Version,
 		promptRepos.Label,
@@ -1270,9 +1377,9 @@ func (s *simpleBillingOrgService) GetBillingTier(ctx context.Context, orgID ulid
 	return "free", nil
 }
 
-func (s *simpleBillingOrgService) GetDiscountRate(ctx context.Context, orgID ulid.ULID) (float64, error) {
+func (s *simpleBillingOrgService) GetDiscountRate(ctx context.Context, orgID ulid.ULID) (decimal.Decimal, error) {
 	// Default to no discount - in production this would query the org service
-	return 0.0, nil
+	return decimal.Zero, nil
 }
 
 func (s *simpleBillingOrgService) GetPaymentMethod(ctx context.Context, orgID ulid.ULID) (*billing.PaymentMethod, error) {

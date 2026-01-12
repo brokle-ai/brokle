@@ -183,6 +183,49 @@ HTTP     Business    Data Access
 
 **Full guide**: See `docs/development/ERROR_HANDLING_GUIDE.md`
 
+### Transaction Management
+
+**Pattern**: Context-Based Transactions (idiomatic Go)
+
+**Usage in Services:**
+```go
+func (s *service) CreateWithTransaction(ctx context.Context, req *Request) error {
+    return s.transactor.WithinTransaction(ctx, func(ctx context.Context) error {
+        // All repository calls within this function use the transaction
+        if err := s.repo1.Create(ctx, entity); err != nil {
+            return err // Auto-rollback on error
+        }
+        return s.repo2.Update(ctx, other) // Auto-commit on success
+    })
+}
+```
+
+**How It Works:**
+1. `Transactor.WithinTransaction` begins a database transaction
+2. Transaction is injected into the context
+3. Repositories extract the transaction from context using `getDB(ctx)` helper
+4. Automatic commit on `nil` return, rollback on error or panic
+
+**Repository Pattern:**
+```go
+// Each repository has a getDB helper that extracts transaction from context
+func (r *repository) getDB(ctx context.Context) *gorm.DB {
+    return shared.GetDB(ctx, r.db)
+}
+
+// All repository methods use getDB(ctx) instead of r.db
+func (r *repository) Create(ctx context.Context, entity *Entity) error {
+    return r.getDB(ctx).WithContext(ctx).Create(entity).Error
+}
+```
+
+**Testing:**
+```go
+// Simple mock transactor for tests
+transactor := NewMockTransactor()
+service := NewService(transactor, repo1, repo2, logger)
+```
+
 ### Required Configuration Validation
 
 Services use **fail-fast validation** at startup. Missing required config causes immediate startup failure with clear error messages.

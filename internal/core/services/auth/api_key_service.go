@@ -9,6 +9,7 @@ import (
 	"time"
 
 	authDomain "brokle/internal/core/domain/auth"
+	orgDomain "brokle/internal/core/domain/organization"
 	appErrors "brokle/pkg/errors"
 	"brokle/pkg/ulid"
 )
@@ -17,16 +18,19 @@ import (
 type apiKeyService struct {
 	apiKeyRepo             authDomain.APIKeyRepository
 	organizationMemberRepo authDomain.OrganizationMemberRepository
+	projectRepo            orgDomain.ProjectRepository
 }
 
 // NewAPIKeyService creates a new API key service instance
 func NewAPIKeyService(
 	apiKeyRepo authDomain.APIKeyRepository,
 	organizationMemberRepo authDomain.OrganizationMemberRepository,
+	projectRepo orgDomain.ProjectRepository,
 ) authDomain.APIKeyService {
 	return &apiKeyService{
 		apiKeyRepo:             apiKeyRepo,
 		organizationMemberRepo: organizationMemberRepo,
+		projectRepo:            projectRepo,
 	}
 }
 
@@ -178,12 +182,20 @@ func (s *apiKeyService) ValidateAPIKey(ctx context.Context, fullKey string) (*au
 		}
 	}()
 
-	// Return validation response with project_id from database
+	// Look up project to get OrganizationID for billing aggregation
+	project, err := s.projectRepo.GetByID(ctx, apiKey.ProjectID)
+	if err != nil {
+		// Project lookup failure is critical - shouldn't happen for valid API keys
+		return nil, appErrors.NewInternalError("Failed to look up project for API key", err)
+	}
+
+	// Return validation response with project_id and organization_id from database
 	return &authDomain.ValidateAPIKeyResponse{
-		APIKey:      apiKey,
-		ProjectID:   apiKey.ProjectID, // Retrieved from database, not extracted from key
-		Valid:       true,
-		AuthContext: authContext,
+		APIKey:         apiKey,
+		ProjectID:      apiKey.ProjectID,      // Retrieved from database, not extracted from key
+		OrganizationID: project.OrganizationID, // From project lookup for billing aggregation
+		Valid:          true,
+		AuthContext:    authContext,
 	}, nil
 }
 
