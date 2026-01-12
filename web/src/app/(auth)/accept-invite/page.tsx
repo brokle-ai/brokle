@@ -411,6 +411,9 @@ export default function AcceptInvitePage() {
   }
 
   // User is logged in - show accept button
+  // Case-insensitive comparison to match backend normalization
+  const emailMismatch = user.email.toLowerCase() !== details.email.toLowerCase()
+
   return (
     <AuthLayout>
       <Card>
@@ -448,12 +451,13 @@ export default function AcceptInvitePage() {
             </div>
           </div>
 
-          {/* Email mismatch warning */}
-          {user.email !== details.email && (
-            <div className="rounded-lg border border-yellow-200 bg-yellow-50 dark:border-yellow-900/50 dark:bg-yellow-900/10 p-3 text-sm">
-              <p className="text-yellow-800 dark:text-yellow-200">
-                <strong>Note:</strong> This invitation was sent to <strong>{details.email}</strong>,
+          {/* Email mismatch warning - blocks acceptance */}
+          {emailMismatch && (
+            <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-sm">
+              <p className="text-destructive">
+                <strong>Cannot accept:</strong> This invitation was sent to <strong>{details.email}</strong>,
                 but you're signed in as <strong>{user.email}</strong>.
+                Please sign in with the correct account.
               </p>
             </div>
           )}
@@ -462,7 +466,7 @@ export default function AcceptInvitePage() {
           <Button
             onClick={handleAccept}
             className="w-full"
-            disabled={isAccepting || isDeclining}
+            disabled={isAccepting || isDeclining || emailMismatch}
           >
             {isAccepting ? (
               <>

@@ -88,8 +88,14 @@ type InvitationRepository interface {
 	MarkAccepted(ctx context.Context, id ulid.ULID, acceptedByID ulid.ULID) error
 	MarkExpired(ctx context.Context, id ulid.ULID) error
 	RevokeInvitation(ctx context.Context, id ulid.ULID, revokedByID ulid.ULID) error
-	MarkResent(ctx context.Context, id ulid.ULID, newExpiresAt time.Time) error
+	// MarkResent atomically increments resent_count if within limits.
+	// Returns ErrResendLimitReached or ErrResendCooldown if constraints not met.
+	MarkResent(ctx context.Context, id ulid.ULID, newExpiresAt time.Time, maxAttempts int, cooldown time.Duration) error
 	CleanupExpiredInvitations(ctx context.Context) error
+
+	// UpdateTokenHash updates only the token hash and preview fields.
+	// Use this instead of Update when you need to preserve other field changes.
+	UpdateTokenHash(ctx context.Context, id ulid.ULID, tokenHash, tokenPreview string) error
 
 	// Validation
 	IsEmailAlreadyInvited(ctx context.Context, email string, orgID ulid.ULID) (bool, error)

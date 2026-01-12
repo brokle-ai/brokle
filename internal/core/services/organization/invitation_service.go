@@ -2,6 +2,7 @@ package organization
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"strings"
 	"time"
@@ -9,6 +10,7 @@ import (
 	authDomain "brokle/internal/core/domain/auth"
 	orgDomain "brokle/internal/core/domain/organization"
 	userDomain "brokle/internal/core/domain/user"
+	orgRepo "brokle/internal/infrastructure/repository/organization"
 	"brokle/pkg/email"
 	appErrors "brokle/pkg/errors"
 	"brokle/pkg/token"
@@ -159,48 +161,61 @@ func (s *invitationService) InviteUser(ctx context.Context, orgID ulid.ULID, inv
 	return invitation, nil
 }
 
-// AcceptInvitation accepts an invitation and adds the user to the organization
-func (s *invitationService) AcceptInvitation(ctx context.Context, tokenStr string, userID ulid.ULID) error {
+// AcceptInvitation accepts an invitation and adds the user to the organization.
+// Returns AcceptInvitationResult with org details to avoid extra DB query in handler.
+func (s *invitationService) AcceptInvitation(ctx context.Context, tokenStr string, userID ulid.ULID) (*orgDomain.AcceptInvitationResult, error) {
 	// Validate token format
 	if !token.ValidateTokenFormat(tokenStr) {
-		return appErrors.NewValidationError("token", "Invalid invitation token format")
+		return nil, appErrors.NewValidationError("token", "Invalid invitation token format")
 	}
 
 	// Hash the token and lookup
 	tokenHash := token.HashToken(tokenStr)
 	invitation, err := s.inviteRepo.GetByTokenHash(ctx, tokenHash)
 	if err != nil {
-		return appErrors.NewNotFoundError("Invitation not found or invalid")
+		return nil, appErrors.NewNotFoundError("Invitation not found or invalid")
 	}
 
 	if invitation.Status != orgDomain.InvitationStatusPending {
-		return appErrors.NewValidationError("status", "Invitation is no longer pending")
+		return nil, appErrors.NewValidationError("status", "Invitation is no longer pending")
 	}
 
 	if invitation.ExpiresAt.Before(time.Now()) {
 		// Mark as expired
 		s.inviteRepo.MarkExpired(ctx, invitation.ID)
 		s.createAuditEvent(ctx, invitation.ID, orgDomain.AuditEventExpired, nil, nil)
-		return appErrors.NewValidationError("expiry", "Invitation has expired")
+		return nil, appErrors.NewValidationError("expiry", "Invitation has expired")
 	}
 
 	// Verify email matches (for security)
 	user, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
-		return appErrors.NewNotFoundError("User not found")
+		return nil, appErrors.NewNotFoundError("User not found")
 	}
 
 	if strings.ToLower(user.Email) != strings.ToLower(invitation.Email) {
-		return appErrors.NewForbiddenError("Invitation was sent to a different email address")
+		return nil, appErrors.NewForbiddenError("Invitation was sent to a different email address")
 	}
 
 	// Check if user is already a member
 	isMember, err := s.memberRepo.IsMember(ctx, userID, invitation.OrganizationID)
 	if err != nil {
-		return appErrors.NewInternalError("Failed to check membership", err)
+		return nil, appErrors.NewInternalError("Failed to check membership", err)
 	}
 	if isMember {
-		return appErrors.NewConflictError("You are already a member of this organization")
+		return nil, appErrors.NewConflictError("You are already a member of this organization")
+	}
+
+	// Get organization details (we already need this for the result)
+	org, err := s.orgRepo.GetByID(ctx, invitation.OrganizationID)
+	if err != nil {
+		return nil, appErrors.NewInternalError("Failed to get organization", err)
+	}
+
+	// Get role name
+	role, err := s.roleService.GetRoleByID(ctx, invitation.RoleID)
+	if err != nil {
+		return nil, appErrors.NewInternalError("Failed to get role", err)
 	}
 
 	// Add user as member
@@ -208,13 +223,13 @@ func (s *invitationService) AcceptInvitation(ctx context.Context, tokenStr strin
 	member.InvitedBy = &invitation.InvitedByID
 	err = s.memberRepo.Create(ctx, member)
 	if err != nil {
-		return appErrors.NewInternalError("Failed to add member", err)
+		return nil, appErrors.NewInternalError("Failed to add member", err)
 	}
 
 	// Mark invitation as accepted
 	err = s.inviteRepo.MarkAccepted(ctx, invitation.ID, userID)
 	if err != nil {
-		return appErrors.NewInternalError("Failed to update invitation", err)
+		return nil, appErrors.NewInternalError("Failed to update invitation", err)
 	}
 
 	// Create audit event
@@ -231,7 +246,11 @@ func (s *invitationService) AcceptInvitation(ctx context.Context, tokenStr strin
 		"user_id", userID,
 	)
 
-	return nil
+	return &orgDomain.AcceptInvitationResult{
+		OrganizationID:   org.ID,
+		OrganizationName: org.Name,
+		RoleName:         role.Name,
+	}, nil
 }
 
 // DeclineInvitation declines an invitation
@@ -300,77 +319,79 @@ func (s *invitationService) RevokeInvitation(ctx context.Context, invitationID u
 	return nil
 }
 
-// ResendInvitation resends a pending invitation
-func (s *invitationService) ResendInvitation(ctx context.Context, invitationID ulid.ULID, resentByID ulid.ULID) error {
+// ResendInvitation resends a pending invitation and returns the updated invitation
+func (s *invitationService) ResendInvitation(ctx context.Context, invitationID ulid.ULID, resentByID ulid.ULID) (*orgDomain.Invitation, error) {
 	// Get invitation
 	invitation, err := s.inviteRepo.GetByID(ctx, invitationID)
 	if err != nil {
-		return appErrors.NewNotFoundError("Invitation not found")
+		return nil, appErrors.NewNotFoundError("Invitation not found")
 	}
 
 	if invitation.Status != orgDomain.InvitationStatusPending {
-		return appErrors.NewValidationError("status", "Invitation is not pending")
+		return nil, appErrors.NewValidationError("status", "Invitation is not pending")
 	}
 
 	// Verify resender has permission (is member of the org)
 	isMember, err := s.memberRepo.IsMember(ctx, resentByID, invitation.OrganizationID)
 	if err != nil || !isMember {
-		return appErrors.NewForbiddenError("You are not authorized to resend this invitation")
-	}
-
-	// Check resend limits
-	if !invitation.CanResend() {
-		if invitation.ResentCount >= MaxResendAttempts {
-			return appErrors.NewValidationError("Maximum resend attempts reached (5 max)", "resend")
-		}
-		return appErrors.NewValidationError("Please wait 1 hour before resending", "resend")
+		return nil, appErrors.NewForbiddenError("You are not authorized to resend this invitation")
 	}
 
 	// Get organization for email
 	org, err := s.orgRepo.GetByID(ctx, invitation.OrganizationID)
 	if err != nil {
-		return appErrors.NewInternalError("Failed to get organization", err)
+		return nil, appErrors.NewInternalError("Failed to get organization", err)
 	}
 
-	// Generate a new token (invalidates the old one)
+	// Atomically check limits and mark as resent FIRST (race-condition safe)
+	// Must happen before token rotation to avoid breaking invitation if limits exceeded
+	newExpiresAt := time.Now().Add(InvitationExpiryDays * 24 * time.Hour)
+	err = s.inviteRepo.MarkResent(ctx, invitationID, newExpiresAt, MaxResendAttempts, ResendCooldownHours*time.Hour)
+	if err != nil {
+		if errors.Is(err, orgRepo.ErrResendLimitReached) {
+			return nil, appErrors.NewValidationError("resend", "Maximum resend attempts reached (5 max)")
+		}
+		if errors.Is(err, orgRepo.ErrResendCooldown) {
+			return nil, appErrors.NewValidationError("resend", "Please wait 1 hour before resending")
+		}
+		return nil, appErrors.NewInternalError("Failed to mark invitation as resent", err)
+	}
+
+	// Generate a new token only AFTER limits check passes
 	tokenData, err := token.GenerateInviteToken()
 	if err != nil {
-		return appErrors.NewInternalError("Failed to generate new token", err)
+		return nil, appErrors.NewInternalError("Failed to generate new token", err)
 	}
 
-	// Update invitation with new token hash and expiration
-	newExpiresAt := time.Now().Add(InvitationExpiryDays * 24 * time.Hour)
-	invitation.TokenHash = tokenData.Hash
-	invitation.TokenPreview = tokenData.Preview
-	err = s.inviteRepo.Update(ctx, invitation)
+	// Update token hash
+	err = s.inviteRepo.UpdateTokenHash(ctx, invitationID, tokenData.Hash, tokenData.Preview)
 	if err != nil {
-		return appErrors.NewInternalError("Failed to update invitation", err)
-	}
-
-	// Mark as resent
-	err = s.inviteRepo.MarkResent(ctx, invitationID, newExpiresAt)
-	if err != nil {
-		return appErrors.NewInternalError("Failed to mark invitation as resent", err)
+		return nil, appErrors.NewInternalError("Failed to update invitation token", err)
 	}
 
 	// Create audit event
 	s.createAuditEvent(ctx, invitationID, orgDomain.AuditEventResent, &resentByID, nil)
 
-	// Send invitation email with new token
+	// Fetch fresh invitation data after all mutations
+	updatedInvitation, err := s.inviteRepo.GetByID(ctx, invitationID)
+	if err != nil {
+		return nil, appErrors.NewInternalError("Failed to get updated invitation", err)
+	}
+
+	// Send invitation email with new token using updated invitation data
 	// Use detached context with timeout since request context will be canceled when handler returns
 	go func() {
 		emailCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
-		s.sendInvitationEmail(emailCtx, invitation, org, tokenData.Token, invitation.InvitedByID)
+		s.sendInvitationEmail(emailCtx, updatedInvitation, org, tokenData.Token, updatedInvitation.InvitedByID)
 	}()
 
 	s.logger.Info("invitation resent",
 		"invitation_id", invitationID,
 		"resent_by_id", resentByID,
-		"resent_count", invitation.ResentCount+1,
 	)
 
-	return nil
+	return updatedInvitation, nil
 }
 
 // GetInvitation retrieves an invitation by ID

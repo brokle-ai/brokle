@@ -66,14 +66,22 @@ type ProjectService interface {
 	ValidateProjectAccess(ctx context.Context, userID, projectID ulid.ULID) error
 }
 
+// AcceptInvitationResult contains details returned after accepting an invitation.
+// This eliminates the need for an extra DB query to get org details after accept.
+type AcceptInvitationResult struct {
+	OrganizationID   ulid.ULID
+	OrganizationName string
+	RoleName         string
+}
+
 // InvitationService defines the user invitation service interface.
 type InvitationService interface {
 	// Invitation management
 	InviteUser(ctx context.Context, orgID ulid.ULID, inviterID ulid.ULID, req *InviteUserRequest) (*Invitation, error)
-	AcceptInvitation(ctx context.Context, token string, userID ulid.ULID) error
+	AcceptInvitation(ctx context.Context, token string, userID ulid.ULID) (*AcceptInvitationResult, error)
 	DeclineInvitation(ctx context.Context, token string) error
 	RevokeInvitation(ctx context.Context, invitationID ulid.ULID, revokedByID ulid.ULID) error
-	ResendInvitation(ctx context.Context, invitationID ulid.ULID, resentByID ulid.ULID) error
+	ResendInvitation(ctx context.Context, invitationID ulid.ULID, resentByID ulid.ULID) (*Invitation, error)
 
 	// Invitation queries
 	GetInvitation(ctx context.Context, invitationID ulid.ULID) (*Invitation, error)

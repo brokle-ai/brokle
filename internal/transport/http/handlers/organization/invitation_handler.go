@@ -132,7 +132,6 @@ func (h *Handler) CreateInvitation(c *gin.Context) {
 	// Send invitation
 	invitation, err := h.invitationService.InviteUser(c.Request.Context(), orgID, userID, inviteReq)
 	if err != nil {
-		h.logger.Error("Failed to create invitation", "error", err, "org_id", orgID, "email", req.Email)
 		response.Error(c, err)
 		return
 	}
@@ -168,13 +167,6 @@ func (h *Handler) CreateInvitation(c *gin.Context) {
 		UpdatedAt:      invitation.UpdatedAt,
 	}
 
-	h.logger.Info("invitation created",
-		"invitation_id", invitation.ID,
-		"org_id", orgID,
-		"email", req.Email,
-		"inviter_id", userID,
-	)
-
 	c.Status(201)
 	response.Success(c, resp)
 }
@@ -209,7 +201,6 @@ func (h *Handler) GetPendingInvitations(c *gin.Context) {
 	// Verify user is member of organization
 	isMember, err := h.memberService.IsMember(c.Request.Context(), userID, orgID)
 	if err != nil {
-		h.logger.Error("Failed to check membership", "error", err, "user_id", userID, "org_id", orgID)
 		response.InternalServerError(c, "Failed to verify permissions")
 		return
 	}
@@ -221,7 +212,6 @@ func (h *Handler) GetPendingInvitations(c *gin.Context) {
 	// Get pending invitations
 	invitations, err := h.invitationService.GetPendingInvitations(c.Request.Context(), orgID)
 	if err != nil {
-		h.logger.Error("Failed to get pending invitations", "error", err, "org_id", orgID)
 		response.Error(c, err)
 		return
 	}
@@ -300,19 +290,10 @@ func (h *Handler) ResendInvitation(c *gin.Context) {
 		return // Error already handled
 	}
 
-	// Resend invitation
-	err = h.invitationService.ResendInvitation(c.Request.Context(), invitationID, userID)
+	// Resend invitation - returns updated invitation directly
+	invitation, err := h.invitationService.ResendInvitation(c.Request.Context(), invitationID, userID)
 	if err != nil {
-		h.logger.Error("Failed to resend invitation", "error", err, "invitation_id", invitationID)
 		response.Error(c, err)
-		return
-	}
-
-	// Get updated invitation for response
-	invitation, err := h.invitationService.GetInvitation(c.Request.Context(), invitationID)
-	if err != nil {
-		// Resend succeeded but couldn't get updated info - return success anyway
-		response.Success(c, map[string]string{"message": "Invitation resent successfully"})
 		return
 	}
 
@@ -348,8 +329,6 @@ func (h *Handler) ResendInvitation(c *gin.Context) {
 		UpdatedAt:      invitation.UpdatedAt,
 	}
 
-	h.logger.Info("invitation resent", "invitation_id", invitationID, "resent_by", userID)
-
 	response.Success(c, resp)
 }
 
@@ -384,12 +363,9 @@ func (h *Handler) RevokeInvitation(c *gin.Context) {
 	// Revoke invitation
 	err = h.invitationService.RevokeInvitation(c.Request.Context(), invitationID, userID)
 	if err != nil {
-		h.logger.Error("Failed to revoke invitation", "error", err, "invitation_id", invitationID)
 		response.Error(c, err)
 		return
 	}
-
-	h.logger.Info("invitation revoked", "invitation_id", invitationID, "revoked_by", userID)
 
 	c.Status(204)
 }
@@ -424,41 +400,17 @@ func (h *Handler) AcceptInvitation(c *gin.Context) {
 		return // Error already handled
 	}
 
-	// Accept invitation
-	err = h.invitationService.AcceptInvitation(c.Request.Context(), req.Token, userID)
+	// Accept invitation - returns org details directly (no extra DB query needed)
+	result, err := h.invitationService.AcceptInvitation(c.Request.Context(), req.Token, userID)
 	if err != nil {
-		h.logger.Error("Failed to accept invitation", "error", err, "user_id", userID)
 		response.Error(c, err)
 		return
 	}
 
-	// Get the invitation to return org details
-	invitation, err := h.invitationService.GetInvitationByToken(c.Request.Context(), req.Token)
-	if err != nil {
-		// Accept succeeded but couldn't get invitation details - return success anyway
-		response.Success(c, map[string]string{"message": "Invitation accepted successfully"})
-		return
-	}
-
-	// Get organization details
-	org, err := h.organizationService.GetOrganization(c.Request.Context(), invitation.OrganizationID)
-	if err != nil {
-		response.Success(c, map[string]string{"message": "Invitation accepted successfully"})
-		return
-	}
-
-	// Get role name
-	roleName := "Member"
-	if role, err := h.roleService.GetRoleByID(c.Request.Context(), invitation.RoleID); err == nil {
-		roleName = role.Name
-	}
-
-	h.logger.Info("invitation accepted", "user_id", userID, "org_id", org.ID, "role", roleName)
-
 	response.Success(c, AcceptInvitationResponse{
-		OrganizationID:   org.ID.String(),
-		OrganizationName: org.Name,
-		RoleName:         roleName,
+		OrganizationID:   result.OrganizationID.String(),
+		OrganizationName: result.OrganizationName,
+		RoleName:         result.RoleName,
 		Message:          "Successfully joined organization",
 	})
 }
@@ -485,12 +437,9 @@ func (h *Handler) DeclineInvitation(c *gin.Context) {
 
 	err := h.invitationService.DeclineInvitation(c.Request.Context(), req.Token)
 	if err != nil {
-		h.logger.Error("Failed to decline invitation", "error", err)
 		response.Error(c, err)
 		return
 	}
-
-	h.logger.Info("invitation declined")
 
 	response.Success(c, map[string]string{"message": "Invitation declined"})
 }
@@ -515,7 +464,6 @@ func (h *Handler) GetUserInvitations(c *gin.Context) {
 	// Get user email
 	user, err := h.userService.GetUser(c.Request.Context(), userID)
 	if err != nil {
-		h.logger.Error("Failed to get user", "error", err, "user_id", userID)
 		response.Error(c, err)
 		return
 	}
@@ -523,7 +471,6 @@ func (h *Handler) GetUserInvitations(c *gin.Context) {
 	// Get invitations for user's email
 	invitations, err := h.invitationService.GetUserInvitations(c.Request.Context(), user.Email)
 	if err != nil {
-		h.logger.Error("Failed to get user invitations", "error", err, "user_id", userID)
 		response.Error(c, err)
 		return
 	}
@@ -584,14 +531,12 @@ func (h *Handler) GetUserInvitations(c *gin.Context) {
 func (h *Handler) getUserIDFromContext(c *gin.Context) (ulid.ULID, error) {
 	userIDValue, exists := c.Get("user_id")
 	if !exists {
-		h.logger.Error("User ID not found in context")
 		response.Unauthorized(c, "Authentication required")
 		return ulid.ULID{}, errUnauthorized
 	}
 
 	userID, ok := userIDValue.(ulid.ULID)
 	if !ok {
-		h.logger.Error("Invalid user ID type in context")
 		response.InternalServerError(c, "Internal error")
 		return ulid.ULID{}, errInternalServer
 	}
