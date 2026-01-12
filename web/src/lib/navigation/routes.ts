@@ -11,6 +11,7 @@ import {
   BarChart3,
   Scale,
   LayoutDashboard,
+  ClipboardCheck,
 } from 'lucide-react'
 
 export const ROUTES: Route[] = [
@@ -133,6 +134,15 @@ export const ROUTES: Route[] = [
     title: 'Rules',
     pathname: '/projects/[projectSlug]/evaluations/rules',
     icon: Scale,
+    section: RouteSection.Main,
+    group: RouteGroup.Evaluations,
+    rbacScope: 'projects:read',
+    show: ({ currentProjectSlug }) => !!currentProjectSlug,
+  },
+  {
+    title: 'Annotation Queues',
+    pathname: '/projects/[projectSlug]/annotation-queues',
+    icon: ClipboardCheck,
     section: RouteSection.Main,
     group: RouteGroup.Evaluations,
     rbacScope: 'projects:read',

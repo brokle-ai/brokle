@@ -174,6 +174,12 @@ func (a *App) Start() error {
 			a.providers.Workers.ContractExpirationWorker.Start()
 			a.logger.Info("Contract expiration worker started")
 		}
+
+		// Start annotation lock expiry worker (every minute, releases stale locks)
+		if a.providers.Workers.LockExpiryWorker != nil {
+			a.providers.Workers.LockExpiryWorker.Start()
+			a.logger.Info("Annotation lock expiry worker started")
+		}
 	}
 
 	return nil
@@ -236,6 +242,9 @@ func (a *App) doShutdown(ctx context.Context) error {
 				}
 				if a.providers.Workers.ContractExpirationWorker != nil {
 					a.providers.Workers.ContractExpirationWorker.Stop()
+				}
+				if a.providers.Workers.LockExpiryWorker != nil {
+					a.providers.Workers.LockExpiryWorker.Stop()
 				}
 			}
 		}()
