@@ -4,8 +4,54 @@ export interface Dataset {
   name: string
   description?: string
   metadata?: Record<string, unknown>
+  current_version_id?: string
   created_at: string
   updated_at: string
+}
+
+// Dataset Versioning Types
+export interface DatasetVersion {
+  id: string
+  dataset_id: string
+  version: number
+  item_count: number
+  description?: string
+  metadata?: Record<string, unknown>
+  created_by?: string
+  created_at: string
+}
+
+export interface DatasetVersionResponse {
+  id: string
+  dataset_id: string
+  version: number
+  item_count: number
+  description?: string
+  metadata?: Record<string, unknown>
+  created_by?: string
+  created_at: string
+}
+
+export interface DatasetWithVersionInfo {
+  id: string
+  project_id: string
+  name: string
+  description?: string
+  metadata?: Record<string, unknown>
+  current_version_id?: string
+  current_version?: number
+  latest_version?: number
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateDatasetVersionRequest {
+  description?: string
+  metadata?: Record<string, unknown>
+}
+
+export interface PinDatasetVersionRequest {
+  version_id?: string | null
 }
 
 export type DatasetItemSource = 'manual' | 'trace' | 'span' | 'csv' | 'json' | 'sdk'

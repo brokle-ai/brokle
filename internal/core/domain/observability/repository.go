@@ -145,6 +145,42 @@ type ScoreAnalyticsRepository interface {
 	GetHeatmap(ctx context.Context, filter *ScoreAnalyticsFilter, bins int) ([]HeatmapCell, error)
 	GetComparisonMetrics(ctx context.Context, filter *ScoreAnalyticsFilter) (*ComparisonMetrics, error)
 	GetDistinctScoreNames(ctx context.Context, projectID string) ([]string, error)
+
+	// Materialized view-optimized methods for faster analytics
+	GetExperimentScoreSummary(ctx context.Context, projectID string, experimentID string) ([]ExperimentScoreSummary, error)
+	GetSourceDistribution(ctx context.Context, projectID string, fromTimestamp, toTimestamp *time.Time) ([]SourceDistributionPoint, error)
+	GetDailySummary(ctx context.Context, projectID string, scoreName string, fromTimestamp, toTimestamp *time.Time) ([]DailySummaryPoint, error)
+}
+
+// ExperimentScoreSummary represents pre-aggregated score statistics for an experiment
+// Uses the scores_by_experiment materialized view for fast queries
+type ExperimentScoreSummary struct {
+	ExperimentID string  `json:"experiment_id"`
+	ScoreName    string  `json:"score_name"`
+	Count        int64   `json:"count"`
+	SumValue     float64 `json:"sum_value"`
+	MinValue     float64 `json:"min_value"`
+	MaxValue     float64 `json:"max_value"`
+	AvgValue     float64 `json:"avg_value"` // Computed: sum_value / count
+}
+
+// SourceDistributionPoint represents score counts by source type per day
+// Uses the scores_source_distribution materialized view for fast queries
+type SourceDistributionPoint struct {
+	Source string    `json:"source"` // code, llm, human
+	Day    time.Time `json:"day"`
+	Count  int64     `json:"count"`
+}
+
+// DailySummaryPoint represents pre-aggregated daily score metrics
+// Uses the scores_daily_summary materialized view for fast queries
+type DailySummaryPoint struct {
+	Day      time.Time `json:"day"`
+	Count    int64     `json:"count"`
+	SumValue float64   `json:"sum_value"`
+	MinValue float64   `json:"min_value"`
+	MaxValue float64   `json:"max_value"`
+	AvgValue float64   `json:"avg_value"` // Computed: sum_value / count
 }
 
 type TraceFilter struct {

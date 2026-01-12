@@ -15,6 +15,9 @@ var (
 	ErrDatasetNotFound = errors.New("dataset not found")
 	ErrDatasetExists   = errors.New("dataset with this name already exists")
 
+	ErrDatasetVersionNotFound = errors.New("dataset version not found")
+	ErrDatasetVersionExists   = errors.New("dataset version already exists")
+
 	ErrDatasetItemNotFound = errors.New("dataset item not found")
 
 	ErrExperimentNotFound     = errors.New("experiment not found")

@@ -40,6 +40,29 @@ type DatasetItemRepository interface {
 	FindByContentHashes(ctx context.Context, datasetID ulid.ULID, contentHashes []string) (map[string]bool, error)
 }
 
+type DatasetVersionRepository interface {
+	// Create creates a new dataset version
+	Create(ctx context.Context, version *DatasetVersion) error
+	// GetByID gets a version by its ID
+	GetByID(ctx context.Context, id ulid.ULID, datasetID ulid.ULID) (*DatasetVersion, error)
+	// GetByVersionNumber gets a version by dataset ID and version number
+	GetByVersionNumber(ctx context.Context, datasetID ulid.ULID, versionNum int) (*DatasetVersion, error)
+	// GetLatest gets the latest version for a dataset
+	GetLatest(ctx context.Context, datasetID ulid.ULID) (*DatasetVersion, error)
+	// List lists all versions for a dataset
+	List(ctx context.Context, datasetID ulid.ULID) ([]*DatasetVersion, error)
+	// GetNextVersionNumber returns the next version number for a dataset
+	GetNextVersionNumber(ctx context.Context, datasetID ulid.ULID) (int, error)
+
+	// Item-Version associations
+	// AddItems associates items with a version (batch)
+	AddItems(ctx context.Context, versionID ulid.ULID, itemIDs []ulid.ULID) error
+	// GetItemIDs gets all item IDs for a version
+	GetItemIDs(ctx context.Context, versionID ulid.ULID) ([]ulid.ULID, error)
+	// GetItems gets all items for a version with pagination
+	GetItems(ctx context.Context, versionID ulid.ULID, limit, offset int) ([]*DatasetItem, int64, error)
+}
+
 type ExperimentRepository interface {
 	Create(ctx context.Context, experiment *Experiment) error
 	GetByID(ctx context.Context, id ulid.ULID, projectID ulid.ULID) (*Experiment, error)

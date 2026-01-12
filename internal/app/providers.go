@@ -227,13 +227,14 @@ type PlaygroundRepositories struct {
 }
 
 type EvaluationRepositories struct {
-	ScoreConfig    evaluationDomain.ScoreConfigRepository
-	Dataset        evaluationDomain.DatasetRepository
-	DatasetItem    evaluationDomain.DatasetItemRepository
-	Experiment     evaluationDomain.ExperimentRepository
-	ExperimentItem evaluationDomain.ExperimentItemRepository
-	Rule           evaluationDomain.RuleRepository
-	RuleExecution  evaluationDomain.RuleExecutionRepository
+	ScoreConfig         evaluationDomain.ScoreConfigRepository
+	Dataset             evaluationDomain.DatasetRepository
+	DatasetItem         evaluationDomain.DatasetItemRepository
+	DatasetVersion      evaluationDomain.DatasetVersionRepository
+	Experiment          evaluationDomain.ExperimentRepository
+	ExperimentItem      evaluationDomain.ExperimentItemRepository
+	Rule          evaluationDomain.RuleRepository
+	RuleExecution evaluationDomain.RuleExecutionRepository
 }
 
 type DashboardRepositories struct {
@@ -291,13 +292,14 @@ type PlaygroundServices struct {
 }
 
 type EvaluationServices struct {
-	ScoreConfig    evaluationDomain.ScoreConfigService
-	Dataset        evaluationDomain.DatasetService
-	DatasetItem    evaluationDomain.DatasetItemService
-	Experiment     evaluationDomain.ExperimentService
-	ExperimentItem evaluationDomain.ExperimentItemService
-	Rule           evaluationDomain.RuleService
-	RuleExecution  evaluationDomain.RuleExecutionService
+	ScoreConfig         evaluationDomain.ScoreConfigService
+	Dataset             evaluationDomain.DatasetService
+	DatasetItem         evaluationDomain.DatasetItemService
+	DatasetVersion      evaluationDomain.DatasetVersionService
+	Experiment          evaluationDomain.ExperimentService
+	ExperimentItem      evaluationDomain.ExperimentItemService
+	Rule          evaluationDomain.RuleService
+	RuleExecution evaluationDomain.RuleExecutionService
 }
 
 type DashboardServices struct {
@@ -539,7 +541,7 @@ func ProvideServerServices(core *CoreContainer) *ServiceContainer {
 		logger,
 	)
 
-	evaluationServices := ProvideEvaluationServices(repos.Evaluation, repos.Observability, observabilityServices, databases.Redis, logger)
+	evaluationServices := ProvideEvaluationServices(core.Transactor, repos.Evaluation, repos.Observability, observabilityServices, databases.Redis, logger)
 
 	dashboardServices := ProvideDashboardServices(repos.Dashboard, logger)
 
@@ -594,7 +596,7 @@ func ProvideWorkerServices(core *CoreContainer) *ServiceContainer {
 	}
 
 	// Evaluation services needed for rule worker
-	evaluationServices := ProvideEvaluationServices(repos.Evaluation, repos.Observability, observabilityServices, databases.Redis, logger)
+	evaluationServices := ProvideEvaluationServices(core.Transactor, repos.Evaluation, repos.Observability, observabilityServices, databases.Redis, logger)
 
 	return &ServiceContainer{
 		User:                nil, // Worker doesn't need auth/user/org services
@@ -634,6 +636,7 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 	var scoreConfigSvc evaluationDomain.ScoreConfigService
 	var datasetSvc evaluationDomain.DatasetService
 	var datasetItemSvc evaluationDomain.DatasetItemService
+	var datasetVersionSvc evaluationDomain.DatasetVersionService
 	var experimentSvc evaluationDomain.ExperimentService
 	var experimentItemSvc evaluationDomain.ExperimentItemService
 	var ruleSvc evaluationDomain.RuleService
@@ -642,6 +645,7 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 		scoreConfigSvc = core.Services.Evaluation.ScoreConfig
 		datasetSvc = core.Services.Evaluation.Dataset
 		datasetItemSvc = core.Services.Evaluation.DatasetItem
+		datasetVersionSvc = core.Services.Evaluation.DatasetVersion
 		experimentSvc = core.Services.Evaluation.Experiment
 		experimentItemSvc = core.Services.Evaluation.ExperimentItem
 		ruleSvc = core.Services.Evaluation.Rule
@@ -686,6 +690,7 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 		scoreConfigSvc,
 		datasetSvc,
 		datasetItemSvc,
+		datasetVersionSvc,
 		experimentSvc,
 		experimentItemSvc,
 		ruleSvc,
@@ -858,13 +863,14 @@ func ProvidePlaygroundRepositories(db *gorm.DB) *PlaygroundRepositories {
 
 func ProvideEvaluationRepositories(db *gorm.DB) *EvaluationRepositories {
 	return &EvaluationRepositories{
-		ScoreConfig:    evaluationRepo.NewScoreConfigRepository(db),
-		Dataset:        evaluationRepo.NewDatasetRepository(db),
-		DatasetItem:    evaluationRepo.NewDatasetItemRepository(db),
-		Experiment:     evaluationRepo.NewExperimentRepository(db),
-		ExperimentItem: evaluationRepo.NewExperimentItemRepository(db),
-		Rule:           evaluationRepo.NewRuleRepository(db),
-		RuleExecution:  evaluationRepo.NewRuleExecutionRepository(db),
+		ScoreConfig:        evaluationRepo.NewScoreConfigRepository(db),
+		Dataset:            evaluationRepo.NewDatasetRepository(db),
+		DatasetItem:        evaluationRepo.NewDatasetItemRepository(db),
+		DatasetVersion:     evaluationRepo.NewDatasetVersionRepository(db),
+		Experiment:         evaluationRepo.NewExperimentRepository(db),
+		ExperimentItem:     evaluationRepo.NewExperimentItemRepository(db),
+		Rule:          evaluationRepo.NewRuleRepository(db),
+		RuleExecution: evaluationRepo.NewRuleExecutionRepository(db),
 	}
 }
 
@@ -1263,6 +1269,7 @@ func ProvidePlaygroundServices(
 }
 
 func ProvideEvaluationServices(
+	transactor common.Transactor,
 	evaluationRepos *EvaluationRepositories,
 	observabilityRepos *ObservabilityRepositories,
 	observabilityServices *observabilityService.ServiceRegistry,
@@ -1284,6 +1291,14 @@ func ProvideEvaluationServices(
 		evaluationRepos.DatasetItem,
 		evaluationRepos.Dataset,
 		observabilityRepos.Trace,
+		logger,
+	)
+
+	datasetVersionSvc := evaluationService.NewDatasetVersionService(
+		transactor,
+		evaluationRepos.DatasetVersion,
+		evaluationRepos.Dataset,
+		evaluationRepos.DatasetItem,
 		logger,
 	)
 
@@ -1316,13 +1331,14 @@ func ProvideEvaluationServices(
 	)
 
 	return &EvaluationServices{
-		ScoreConfig:    scoreConfigSvc,
-		Dataset:        datasetSvc,
-		DatasetItem:    datasetItemSvc,
-		Experiment:     experimentSvc,
-		ExperimentItem: experimentItemSvc,
-		Rule:           ruleSvc,
-		RuleExecution:  ruleExecutionSvc,
+		ScoreConfig:        scoreConfigSvc,
+		Dataset:            datasetSvc,
+		DatasetItem:        datasetItemSvc,
+		DatasetVersion:     datasetVersionSvc,
+		Experiment:         experimentSvc,
+		ExperimentItem:     experimentItemSvc,
+		Rule:          ruleSvc,
+		RuleExecution: ruleExecutionSvc,
 	}
 }
 

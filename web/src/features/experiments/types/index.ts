@@ -41,6 +41,12 @@ export interface UpdateExperimentRequest {
   metadata?: Record<string, unknown>
 }
 
+export interface RerunExperimentRequest {
+  name?: string
+  description?: string
+  metadata?: Record<string, unknown>
+}
+
 export interface ExperimentItemListResponse {
   items: ExperimentItem[]
   total: number

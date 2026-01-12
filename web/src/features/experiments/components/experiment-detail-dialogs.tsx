@@ -28,8 +28,10 @@ export function ExperimentDetailDialogs() {
     setOpen,
     handleUpdate,
     handleDelete,
+    handleRerun,
     isUpdating,
     isDeleting,
+    isRerunning,
   } = useExperimentDetail()
 
   if (!experiment) return null
@@ -79,6 +81,38 @@ export function ExperimentDetailDialogs() {
                 </>
               ) : (
                 'Delete'
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={open === 'rerun'}
+        onOpenChange={(isOpen) => setOpen(isOpen ? 'rerun' : null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Re-run Experiment</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will create a new experiment &quot;{experiment.name} (Re-run)&quot; using the
+              same dataset. You can then run your evaluation task to populate results with
+              potentially different configurations or model versions.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isRerunning}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => handleRerun()}
+              disabled={isRerunning}
+            >
+              {isRerunning ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                'Create Re-run'
               )}
             </AlertDialogAction>
           </AlertDialogFooter>

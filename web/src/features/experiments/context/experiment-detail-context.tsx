@@ -8,10 +8,11 @@ import {
   useExperimentQuery,
   useUpdateExperimentMutation,
   useDeleteExperimentMutation,
+  useRerunExperimentMutation,
 } from '../hooks/use-experiments'
-import type { Experiment, UpdateExperimentRequest } from '../types'
+import type { Experiment, UpdateExperimentRequest, RerunExperimentRequest } from '../types'
 
-export type ExperimentDetailDialogType = 'edit' | 'delete'
+export type ExperimentDetailDialogType = 'edit' | 'delete' | 'rerun'
 
 interface ExperimentDetailContextType {
   experiment: Experiment | null
@@ -22,8 +23,10 @@ interface ExperimentDetailContextType {
   setOpen: (dialog: ExperimentDetailDialogType | null) => void
   handleUpdate: (data: UpdateExperimentRequest) => Promise<void>
   handleDelete: () => Promise<void>
+  handleRerun: (data?: RerunExperimentRequest) => Promise<void>
   isUpdating: boolean
   isDeleting: boolean
+  isRerunning: boolean
   projectSlug: string
   projectId: string
   experimentId: string
@@ -57,6 +60,7 @@ export function ExperimentDetailProvider({
 
   const updateMutation = useUpdateExperimentMutation(projectId, experimentId)
   const deleteMutation = useDeleteExperimentMutation(projectId)
+  const rerunMutation = useRerunExperimentMutation(projectId)
 
   const isLoading = projectLoading || experimentLoading
 
@@ -78,6 +82,21 @@ export function ExperimentDetailProvider({
     }
   }, [experiment, deleteMutation, router, projectSlug])
 
+  const handleRerun = useCallback(
+    async (data?: RerunExperimentRequest) => {
+      if (experiment) {
+        const newExperiment = await rerunMutation.mutateAsync({
+          experimentId: experiment.id,
+          data,
+        })
+        setOpen(null)
+        // Navigate to the new experiment
+        router.push(`/projects/${projectSlug}/experiments/${newExperiment.id}`)
+      }
+    },
+    [experiment, rerunMutation, setOpen, router, projectSlug]
+  )
+
   const contextValue = useMemo(
     () => ({
       experiment: experiment ?? null,
@@ -88,8 +107,10 @@ export function ExperimentDetailProvider({
       setOpen,
       handleUpdate,
       handleDelete,
+      handleRerun,
       isUpdating: updateMutation.isPending,
       isDeleting: deleteMutation.isPending,
+      isRerunning: rerunMutation.isPending,
       projectSlug,
       projectId,
       experimentId,
@@ -103,8 +124,10 @@ export function ExperimentDetailProvider({
       setOpen,
       handleUpdate,
       handleDelete,
+      handleRerun,
       updateMutation.isPending,
       deleteMutation.isPending,
+      rerunMutation.isPending,
       projectSlug,
       projectId,
       experimentId,

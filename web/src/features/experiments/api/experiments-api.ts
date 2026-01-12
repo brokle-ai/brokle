@@ -3,6 +3,7 @@ import type {
   Experiment,
   CreateExperimentRequest,
   UpdateExperimentRequest,
+  RerunExperimentRequest,
   ExperimentItemListResponse,
   ExperimentComparisonResponse,
   CompareExperimentsRequest,
@@ -85,6 +86,17 @@ export const experimentsApi = {
     return client.post<ExperimentComparisonResponse>(
       `/v1/projects/${projectId}/experiments/compare`,
       payload
+    )
+  },
+
+  rerunExperiment: async (
+    projectId: string,
+    experimentId: string,
+    data?: RerunExperimentRequest
+  ): Promise<Experiment> => {
+    return client.post<Experiment>(
+      `/v1/projects/${projectId}/experiments/${experimentId}/rerun`,
+      data ?? {}
     )
   },
 }

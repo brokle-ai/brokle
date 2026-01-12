@@ -12,6 +12,7 @@ import { DatasetItemTable } from './dataset-item-table'
 import { AddDatasetItemDialog } from './add-dataset-item-dialog'
 import { ImportJsonDialog } from './import-json-dialog'
 import { ImportCsvDialog } from './import-csv-dialog'
+import { DatasetVersionManager } from './dataset-version-manager'
 
 interface DatasetDetailProps {
   projectSlug: string
@@ -64,6 +65,7 @@ function DatasetDetailContent() {
           description={dataset.description}
           metadata={`Created ${formatDistanceToNow(new Date(dataset.created_at), { addSuffix: true })}`}
         >
+          <DatasetVersionManager projectId={projectId} datasetId={datasetId} />
           <Button variant="outline" onClick={() => setOpen('edit')}>
             <Pencil className="mr-2 h-4 w-4" />
             Edit

@@ -384,6 +384,13 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 			datasets.POST("/:datasetId/items/from-traces", s.authMiddleware.RequirePermission("projects:write"), s.handlers.DatasetItem.CreateFromTraces)
 			datasets.POST("/:datasetId/items/from-spans", s.authMiddleware.RequirePermission("projects:write"), s.handlers.DatasetItem.CreateFromSpans)
 			datasets.GET("/:datasetId/items/export", s.authMiddleware.RequirePermission("projects:read"), s.handlers.DatasetItem.Export)
+			// Dataset versioning routes
+			datasets.POST("/:datasetId/versions", s.authMiddleware.RequirePermission("projects:write"), s.handlers.DatasetVersion.CreateVersion)
+			datasets.GET("/:datasetId/versions", s.authMiddleware.RequirePermission("projects:read"), s.handlers.DatasetVersion.ListVersions)
+			datasets.GET("/:datasetId/versions/:versionId", s.authMiddleware.RequirePermission("projects:read"), s.handlers.DatasetVersion.GetVersion)
+			datasets.GET("/:datasetId/versions/:versionId/items", s.authMiddleware.RequirePermission("projects:read"), s.handlers.DatasetVersion.GetVersionItems)
+			datasets.POST("/:datasetId/pin", s.authMiddleware.RequirePermission("projects:write"), s.handlers.DatasetVersion.PinVersion)
+			datasets.GET("/:datasetId/info", s.authMiddleware.RequirePermission("projects:read"), s.handlers.DatasetVersion.GetDatasetWithVersionInfo)
 		}
 
 		experiments := projects.Group("/:projectId/experiments")
@@ -394,6 +401,7 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 			experiments.GET("/:experimentId", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Experiment.Get)
 			experiments.PUT("/:experimentId", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Experiment.Update)
 			experiments.DELETE("/:experimentId", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Experiment.Delete)
+			experiments.POST("/:experimentId/rerun", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Experiment.Rerun)
 			experiments.GET("/:experimentId/items", s.authMiddleware.RequirePermission("projects:read"), s.handlers.ExperimentItem.List)
 		}
 
@@ -583,6 +591,13 @@ func (s *Server) setupSDKRoutes(router *gin.RouterGroup) {
 		sdkDatasets.GET("/:datasetId", s.handlers.Dataset.Get)
 		sdkDatasets.POST("/:datasetId/items", s.handlers.Dataset.CreateItems)
 		sdkDatasets.GET("/:datasetId/items", s.handlers.Dataset.ListItems)
+		// Dataset versioning SDK routes
+		sdkDatasets.POST("/:datasetId/versions", s.handlers.DatasetVersion.CreateVersion)
+		sdkDatasets.GET("/:datasetId/versions", s.handlers.DatasetVersion.ListVersions)
+		sdkDatasets.GET("/:datasetId/versions/:versionId", s.handlers.DatasetVersion.GetVersion)
+		sdkDatasets.GET("/:datasetId/versions/:versionId/items", s.handlers.DatasetVersion.GetVersionItems)
+		sdkDatasets.POST("/:datasetId/pin", s.handlers.DatasetVersion.PinVersion)
+		sdkDatasets.GET("/:datasetId/info", s.handlers.DatasetVersion.GetDatasetWithVersionInfo)
 	}
 
 	sdkExperiments := router.Group("/experiments")
