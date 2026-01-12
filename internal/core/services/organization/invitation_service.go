@@ -321,9 +321,9 @@ func (s *invitationService) ResendInvitation(ctx context.Context, invitationID u
 	// Check resend limits
 	if !invitation.CanResend() {
 		if invitation.ResentCount >= MaxResendAttempts {
-			return appErrors.NewValidationError("resend", "Maximum resend attempts reached")
+			return appErrors.NewValidationError("Maximum resend attempts reached (5 max)", "resend")
 		}
-		return appErrors.NewValidationError("resend", "Please wait before resending")
+		return appErrors.NewValidationError("Please wait 1 hour before resending", "resend")
 	}
 
 	// Get organization for email

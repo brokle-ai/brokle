@@ -204,6 +204,7 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 	}
 
 	router.GET("/invitations/validate/:token", s.handlers.Organization.ValidateInvitationToken)
+	router.POST("/invitations/decline", s.handlers.Organization.DeclineInvitation)
 
 	// Protected routes: JWT → CSRF → rate limit
 	protected := router.Group("")

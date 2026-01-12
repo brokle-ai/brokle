@@ -3,9 +3,9 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Loader2, CheckCircle, XCircle, AlertTriangle, Building2, UserCircle, Shield } from 'lucide-react'
+import { Loader2, CheckCircle, XCircle, AlertTriangle, Building2, UserCircle, Shield, Ban } from 'lucide-react'
 import { AuthLayout, useAuth } from '@/features/authentication'
-import { validateInvitationToken, acceptInvitation } from '@/features/organizations'
+import { validateInvitationToken, acceptInvitation, declineInvitation } from '@/features/organizations'
 import { ROUTES, signinWithRedirect } from '@/lib/routes'
 import {
   Card,
@@ -24,7 +24,9 @@ type InvitationState =
   | { status: 'expired' }
   | { status: 'valid'; details: InvitationDetails }
   | { status: 'accepting'; details: InvitationDetails }
+  | { status: 'declining'; details: InvitationDetails }
   | { status: 'accepted'; orgName: string; orgId: string }
+  | { status: 'declined'; orgName: string }
   | { status: 'error'; message: string }
 
 interface InvitationDetails {
@@ -42,12 +44,14 @@ export default function AcceptInvitePage() {
   const { user, isLoading: authLoading } = useAuth()
   const token = searchParams.get('token')
 
-  const [state, setState] = useState<InvitationState>({ status: 'loading' })
+  // Initialize state based on whether token exists
+  const [state, setState] = useState<InvitationState>(() =>
+    token ? { status: 'loading' } : { status: 'invalid', message: 'No invitation token provided' }
+  )
 
   // Validate token on mount
   useEffect(() => {
     if (!token) {
-      setState({ status: 'invalid', message: 'No invitation token provided' })
       return
     }
 
@@ -136,6 +140,47 @@ export default function AcceptInvitePage() {
     const returnUrl = `/accept-invite?token=${encodeURIComponent(token)}`
     router.push(signinWithRedirect(returnUrl))
   }
+
+  // Handle decline action
+  const handleDecline = async () => {
+    if (!token || (state.status !== 'valid' && state.status !== 'accepting')) return
+
+    const details = state.status === 'valid' || state.status === 'accepting' ? state.details : null
+    if (!details) return
+
+    setState({ status: 'declining', details })
+
+    try {
+      await declineInvitation(token)
+      setState({ status: 'declined', orgName: details.organizationName })
+      toast.success('Invitation declined')
+    } catch (error) {
+      console.error('Failed to decline invitation:', error)
+      toast.error('Failed to decline invitation')
+      setState({ status: 'valid', details })
+    }
+  }
+
+  // Countdown state for accepted redirect
+  const [countdown, setCountdown] = useState(5)
+
+  // Auto-redirect countdown after acceptance
+  useEffect(() => {
+    if (state.status !== 'accepted') {
+      return
+    }
+
+    if (countdown <= 0) {
+      router.push(ROUTES.HOME)
+      return
+    }
+
+    const timer = setTimeout(() => {
+      setCountdown((prev) => prev - 1)
+    }, 1000)
+
+    return () => clearTimeout(timer)
+  }, [state.status, countdown, router])
 
   // Show loading while checking auth or validating
   if (authLoading || state.status === 'loading') {
@@ -228,16 +273,45 @@ export default function AcceptInvitePage() {
       <AuthLayout>
         <Card>
           <CardHeader className="text-center">
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/20">
-              <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-500" />
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/20">
+              <CheckCircle className="h-8 w-8 text-green-600 dark:text-green-500" />
             </div>
-            <CardTitle>Welcome to {state.orgName}!</CardTitle>
+            <CardTitle className="text-xl">Welcome to {state.orgName}!</CardTitle>
             <CardDescription>
               You have successfully joined the organization.
             </CardDescription>
           </CardHeader>
+          <CardContent className="text-center">
+            <p className="text-sm text-muted-foreground">
+              Redirecting to dashboard in <span className="font-semibold text-foreground">{countdown}</span> seconds...
+            </p>
+          </CardContent>
           <CardFooter className="flex justify-center">
-            <Button asChild>
+            <Button onClick={() => router.push(ROUTES.HOME)}>
+              Go to Dashboard Now
+            </Button>
+          </CardFooter>
+        </Card>
+      </AuthLayout>
+    )
+  }
+
+  // Declined state
+  if (state.status === 'declined') {
+    return (
+      <AuthLayout>
+        <Card>
+          <CardHeader className="text-center">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+              <Ban className="h-8 w-8 text-muted-foreground" />
+            </div>
+            <CardTitle className="text-xl">Invitation Declined</CardTitle>
+            <CardDescription>
+              You've declined the invitation to join {state.orgName}.
+            </CardDescription>
+          </CardHeader>
+          <CardFooter className="flex justify-center">
+            <Button variant="outline" asChild>
               <Link href={ROUTES.HOME}>Go to Dashboard</Link>
             </Button>
           </CardFooter>
@@ -246,14 +320,15 @@ export default function AcceptInvitePage() {
     )
   }
 
-  // At this point, state can only be 'valid' or 'accepting' (both have details)
-  if (state.status !== 'valid' && state.status !== 'accepting') {
+  // At this point, state can only be 'valid', 'accepting', or 'declining' (all have details)
+  if (state.status !== 'valid' && state.status !== 'accepting' && state.status !== 'declining') {
     return null // Should not reach here, but satisfy TypeScript
   }
 
-  // Valid invitation - show details and accept button
+  // Valid invitation - show details and accept/decline buttons
   const { details } = state
   const isAccepting = state.status === 'accepting'
+  const isDeclining = state.status === 'declining'
 
   // Not logged in - prompt to sign in
   if (!user) {
@@ -301,14 +376,29 @@ export default function AcceptInvitePage() {
               </p>
             </div>
           </CardContent>
-          <CardFooter className="flex flex-col gap-2">
-            <Button onClick={handleSignIn} className="w-full">
+          <CardFooter className="flex flex-col gap-3">
+            <Button onClick={handleSignIn} className="w-full" disabled={isDeclining}>
               Sign In to Accept
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={handleDecline}
+              disabled={isDeclining}
+            >
+              {isDeclining ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Declining...
+                </>
+              ) : (
+                'Decline Invitation'
+              )}
             </Button>
             <div className="text-center text-sm">
               <span className="text-muted-foreground">Don't have an account? </span>
               <Link
-                href={`${ROUTES.SIGNUP}?email=${encodeURIComponent(details.email)}&redirect=${encodeURIComponent(`/accept-invite?token=${token}`)}`}
+                href={`${ROUTES.SIGNUP}?token=${encodeURIComponent(token || '')}`}
                 className="font-medium underline underline-offset-4 hover:text-primary"
               >
                 Sign up
@@ -372,7 +462,7 @@ export default function AcceptInvitePage() {
           <Button
             onClick={handleAccept}
             className="w-full"
-            disabled={isAccepting}
+            disabled={isAccepting || isDeclining}
           >
             {isAccepting ? (
               <>
@@ -383,8 +473,20 @@ export default function AcceptInvitePage() {
               'Accept Invitation'
             )}
           </Button>
-          <Button variant="outline" asChild className="w-full">
-            <Link href={ROUTES.HOME}>Decline</Link>
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={handleDecline}
+            disabled={isAccepting || isDeclining}
+          >
+            {isDeclining ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Declining...
+              </>
+            ) : (
+              'Decline'
+            )}
           </Button>
         </CardFooter>
       </Card>

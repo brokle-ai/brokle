@@ -13,6 +13,7 @@ export {
   resendInvitation,
   revokeInvitation,
   acceptInvitation,
+  declineInvitation,
   getUserInvitations,
   validateInvitationToken,
   getAvailableRolesForInvitation,

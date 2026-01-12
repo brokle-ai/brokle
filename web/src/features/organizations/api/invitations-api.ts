@@ -208,6 +208,19 @@ export const acceptInvitation = async (
 }
 
 /**
+ * Decline an invitation (public endpoint, no auth required)
+ * @param token - Invitation token from email link
+ */
+export const declineInvitation = async (
+  token: string
+): Promise<void> => {
+  await client.post<{ message: string }>(
+    '/v1/invitations/decline',
+    { token }
+  )
+}
+
+/**
  * Get invitations for the current user
  */
 export const getUserInvitations = async (): Promise<UserInvitation[]> => {

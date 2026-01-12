@@ -463,6 +463,38 @@ func (h *Handler) AcceptInvitation(c *gin.Context) {
 	})
 }
 
+// DeclineInvitation handles POST /invitations/decline
+// @Summary Decline an invitation
+// @Description Decline an invitation to join an organization (no authentication required, uses token)
+// @Tags Invitations
+// @Accept json
+// @Produce json
+// @Param request body AcceptInvitationRequest true "Invitation token"
+// @Success 200 {object} map[string]string "Invitation declined"
+// @Failure 400 {object} response.ErrorResponse "Bad request"
+// @Failure 404 {object} response.ErrorResponse "Invitation not found"
+// @Failure 409 {object} response.ErrorResponse "Invitation not pending"
+// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Router /api/v1/invitations/decline [post]
+func (h *Handler) DeclineInvitation(c *gin.Context) {
+	var req AcceptInvitationRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request payload", err.Error())
+		return
+	}
+
+	err := h.invitationService.DeclineInvitation(c.Request.Context(), req.Token)
+	if err != nil {
+		h.logger.Error("Failed to decline invitation", "error", err)
+		response.Error(c, err)
+		return
+	}
+
+	h.logger.Info("invitation declined")
+
+	response.Success(c, map[string]string{"message": "Invitation declined"})
+}
+
 // GetUserInvitations handles GET /invitations
 // @Summary List user's invitations
 // @Description Get all pending invitations for the authenticated user
