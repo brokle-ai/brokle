@@ -63,15 +63,22 @@ type Invitation struct {
 	UpdatedAt      time.Time        `json:"updated_at"`
 	CreatedAt      time.Time        `json:"created_at"`
 	AcceptedAt     *time.Time       `json:"accepted_at,omitempty"`
+	RevokedAt      *time.Time       `json:"revoked_at,omitempty"`
+	ResentAt       *time.Time       `json:"resent_at,omitempty"`
 	DeletedAt      gorm.DeletedAt   `json:"deleted_at,omitempty" gorm:"index"`
 	Status         InvitationStatus `json:"status" gorm:"size:50;default:'pending'"`
-	Token          string           `json:"token" gorm:"size:255;not null;uniqueIndex"`
+	TokenHash      string           `json:"-" gorm:"size:64;not null"`  // SHA-256 hash for secure storage
+	TokenPreview   string           `json:"token_preview,omitempty" gorm:"size:16"` // First 12 chars for display: "inv_AbCd..."
 	Email          string           `json:"email" gorm:"size:255;not null"`
+	Message        *string          `json:"message,omitempty" gorm:"type:text"` // Personal message from inviter
 	Organization   Organization     `json:"organization,omitempty" gorm:"foreignKey:OrganizationID"`
 	ID             ulid.ULID        `json:"id" gorm:"type:char(26);primaryKey"`
 	InvitedByID    ulid.ULID        `json:"invited_by_id" gorm:"type:char(26);not null"`
 	RoleID         ulid.ULID        `json:"role_id" gorm:"type:char(26);not null"`
 	OrganizationID ulid.ULID        `json:"organization_id" gorm:"type:char(26);not null"`
+	AcceptedByID   *ulid.ULID       `json:"accepted_by_id,omitempty" gorm:"type:char(26)"` // User who accepted (for audit)
+	RevokedByID    *ulid.ULID       `json:"revoked_by_id,omitempty" gorm:"type:char(26)"` // User who revoked (for audit)
+	ResentCount    int              `json:"resent_count" gorm:"default:0"` // Track resend attempts
 }
 
 // Request/Response DTOs
@@ -97,8 +104,9 @@ type UpdateProjectRequest struct {
 }
 
 type InviteUserRequest struct {
-	Email  string    `json:"email" validate:"required,email"`
-	RoleID ulid.ULID `json:"role_id" validate:"required"`
+	Email   string    `json:"email" validate:"required,email"`
+	RoleID  ulid.ULID `json:"role_id" validate:"required"`
+	Message *string   `json:"message,omitempty" validate:"omitempty,max=500"` // Personal message for the invitee
 }
 
 // InvitationStatus represents the status of an organization invitation
@@ -149,19 +157,31 @@ func NewMember(orgID, userID, roleID ulid.ULID) *Member {
 	}
 }
 
-func NewInvitation(orgID, roleID, invitedByID ulid.ULID, email, token string, expiresAt time.Time) *Invitation {
+// NewInvitation creates a new invitation with secure token handling
+// The tokenHash is the SHA-256 hash of the plaintext token
+// The tokenPreview is the first 12 characters of the plaintext token for display
+func NewInvitation(orgID, roleID, invitedByID ulid.ULID, email, tokenHash, tokenPreview string, expiresAt time.Time) *Invitation {
 	return &Invitation{
 		ID:             ulid.New(),
 		OrganizationID: orgID,
 		RoleID:         roleID,
 		InvitedByID:    invitedByID,
 		Email:          email,
-		Token:          token,
+		TokenHash:      tokenHash,
+		TokenPreview:   tokenPreview,
 		Status:         InvitationStatusPending,
 		ExpiresAt:      expiresAt,
 		CreatedAt:      time.Now(),
 		UpdatedAt:      time.Now(),
+		ResentCount:    0,
 	}
+}
+
+// NewInvitationWithMessage creates a new invitation with an optional personal message
+func NewInvitationWithMessage(orgID, roleID, invitedByID ulid.ULID, email, tokenHash, tokenPreview string, message *string, expiresAt time.Time) *Invitation {
+	inv := NewInvitation(orgID, roleID, invitedByID, email, tokenHash, tokenPreview, expiresAt)
+	inv.Message = message
+	return inv
 }
 
 // Utility methods
@@ -173,16 +193,42 @@ func (i *Invitation) IsValid() bool {
 	return i.Status == InvitationStatusPending && !i.IsExpired()
 }
 
-func (i *Invitation) Accept() {
+// Accept marks the invitation as accepted by the given user
+func (i *Invitation) Accept(acceptedByID ulid.ULID) {
 	now := time.Now()
 	i.Status = InvitationStatusAccepted
 	i.AcceptedAt = &now
+	i.AcceptedByID = &acceptedByID
 	i.UpdatedAt = now
 }
 
-func (i *Invitation) Revoke() {
+// Revoke marks the invitation as revoked by the given user
+func (i *Invitation) Revoke(revokedByID ulid.ULID) {
+	now := time.Now()
 	i.Status = InvitationStatusRevoked
-	i.UpdatedAt = time.Now()
+	i.RevokedAt = &now
+	i.RevokedByID = &revokedByID
+	i.UpdatedAt = now
+}
+
+// MarkResent updates the invitation after a resend
+func (i *Invitation) MarkResent(newExpiresAt time.Time) {
+	now := time.Now()
+	i.ResentAt = &now
+	i.ResentCount++
+	i.ExpiresAt = newExpiresAt
+	i.UpdatedAt = now
+}
+
+// CanResend checks if the invitation can be resent (max 5 resends, 1 hour cooldown)
+func (i *Invitation) CanResend() bool {
+	if i.ResentCount >= 5 {
+		return false
+	}
+	if i.ResentAt != nil && time.Since(*i.ResentAt) < time.Hour {
+		return false
+	}
+	return true
 }
 
 // Project utility methods
@@ -270,9 +316,80 @@ type OrganizationWithProjectsAndRole struct {
 	Projects     []*Project
 }
 
+// InvitationAuditEventType represents the type of audit event
+type InvitationAuditEventType string
+
+// Audit event types
+const (
+	AuditEventCreated  InvitationAuditEventType = "created"
+	AuditEventResent   InvitationAuditEventType = "resent"
+	AuditEventAccepted InvitationAuditEventType = "accepted"
+	AuditEventRevoked  InvitationAuditEventType = "revoked"
+	AuditEventExpired  InvitationAuditEventType = "expired"
+	AuditEventDeclined InvitationAuditEventType = "declined"
+)
+
+// InvitationAuditActorType represents who performed the action
+type InvitationAuditActorType string
+
+// Actor types
+const (
+	ActorTypeUser   InvitationAuditActorType = "user"
+	ActorTypeSystem InvitationAuditActorType = "system"
+)
+
+// InvitationAuditEvent represents an audit log entry for invitation lifecycle events
+type InvitationAuditEvent struct {
+	CreatedAt    time.Time                `json:"created_at"`
+	EventType    InvitationAuditEventType `json:"event_type" gorm:"size:50;not null"`
+	ActorType    InvitationAuditActorType `json:"actor_type" gorm:"size:20;not null;default:'user'"`
+	Metadata     *string                  `json:"metadata,omitempty" gorm:"type:jsonb"` // JSON metadata
+	IPAddress    *string                  `json:"ip_address,omitempty" gorm:"type:inet"`
+	UserAgent    *string                  `json:"user_agent,omitempty" gorm:"type:text"`
+	ID           ulid.ULID                `json:"id" gorm:"type:char(26);primaryKey"`
+	InvitationID ulid.ULID                `json:"invitation_id" gorm:"type:char(26);not null"`
+	ActorID      *ulid.ULID               `json:"actor_id,omitempty" gorm:"type:char(26)"` // NULL for system events
+}
+
+// NewInvitationAuditEvent creates a new audit event
+func NewInvitationAuditEvent(invitationID ulid.ULID, eventType InvitationAuditEventType, actorID *ulid.ULID, actorType InvitationAuditActorType) *InvitationAuditEvent {
+	return &InvitationAuditEvent{
+		ID:           ulid.New(),
+		InvitationID: invitationID,
+		EventType:    eventType,
+		ActorID:      actorID,
+		ActorType:    actorType,
+		CreatedAt:    time.Now(),
+	}
+}
+
+// WithMetadata adds metadata to the audit event
+func (e *InvitationAuditEvent) WithMetadata(metadata map[string]interface{}) *InvitationAuditEvent {
+	if metadata != nil {
+		bytes, err := json.Marshal(metadata)
+		if err == nil {
+			str := string(bytes)
+			e.Metadata = &str
+		}
+	}
+	return e
+}
+
+// WithRequestInfo adds IP address and user agent to the audit event
+func (e *InvitationAuditEvent) WithRequestInfo(ipAddress, userAgent string) *InvitationAuditEvent {
+	if ipAddress != "" {
+		e.IPAddress = &ipAddress
+	}
+	if userAgent != "" {
+		e.UserAgent = &userAgent
+	}
+	return e
+}
+
 // Table name methods for GORM
 func (Organization) TableName() string         { return "organizations" }
 func (Member) TableName() string               { return "organization_members" }
 func (Project) TableName() string              { return "projects" }
-func (Invitation) TableName() string           { return "user_invitations" }
-func (OrganizationSettings) TableName() string { return "organization_settings" }
+func (Invitation) TableName() string            { return "user_invitations" }
+func (OrganizationSettings) TableName() string  { return "organization_settings" }
+func (InvitationAuditEvent) TableName() string  { return "invitation_audit_events" }

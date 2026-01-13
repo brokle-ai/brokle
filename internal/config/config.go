@@ -80,6 +80,7 @@ type AppConfig struct {
 type ServerConfig struct {
 	Environment        string        `mapstructure:"environment"`
 	Host               string        `mapstructure:"host"`
+	AppURL             string        `mapstructure:"app_url"` // Base URL for the frontend app (e.g., invitation links)
 	CORSAllowedOrigins []string      `mapstructure:"cors_allowed_origins"`
 	TrustedProxies     []string      `mapstructure:"trusted_proxies"`
 	CORSAllowedHeaders []string      `mapstructure:"cors_allowed_headers"`
@@ -176,15 +177,32 @@ type StripeConfig struct {
 }
 
 // EmailConfig contains email service configuration.
+// Supported providers: resend (default), smtp, ses, sendgrid
 type EmailConfig struct {
-	Provider   string `mapstructure:"provider"`
-	SMTPHost   string `mapstructure:"smtp_host"`
-	Username   string `mapstructure:"username"`
-	Password   string `mapstructure:"password"`
+	Provider string `mapstructure:"provider"` // resend, smtp, ses, sendgrid
+
+	// Common fields (required for all providers)
 	FromEmail  string `mapstructure:"from_email"`
 	FromName   string `mapstructure:"from_name"`
 	ReplyEmail string `mapstructure:"reply_email"`
-	SMTPPort   int    `mapstructure:"smtp_port"`
+
+	// Resend provider
+	ResendAPIKey string `mapstructure:"resend_api_key"`
+
+	// SMTP provider
+	SMTPHost     string `mapstructure:"smtp_host"`
+	SMTPPort     int    `mapstructure:"smtp_port"`
+	SMTPUsername string `mapstructure:"smtp_username"`
+	SMTPPassword string `mapstructure:"smtp_password"`
+	SMTPUseTLS   bool   `mapstructure:"smtp_use_tls"`
+
+	// AWS SES provider (uses default credential chain if keys not provided)
+	SESRegion    string `mapstructure:"ses_region"`
+	SESAccessKey string `mapstructure:"ses_access_key"` // Optional - uses AWS default chain
+	SESSecretKey string `mapstructure:"ses_secret_key"` // Optional - uses AWS default chain
+
+	// SendGrid provider
+	SendGridAPIKey string `mapstructure:"sendgrid_api_key"`
 }
 
 // FeatureConfig contains feature flag configuration.
@@ -510,30 +528,53 @@ func (sc *StripeConfig) Validate() error {
 
 // Validate validates email configuration.
 func (ec *EmailConfig) Validate() error {
-	if ec.Provider != "" {
-		validProviders := []string{"smtp", "sendgrid", "mailgun"}
-		isValid := false
-		for _, provider := range validProviders {
-			if ec.Provider == provider {
-				isValid = true
-				break
-			}
+	// Empty provider means email is disabled - valid configuration
+	if ec.Provider == "" {
+		return nil
+	}
+
+	// Validate provider is supported
+	validProviders := []string{"resend", "smtp", "ses", "sendgrid"}
+	isValid := false
+	for _, provider := range validProviders {
+		if ec.Provider == provider {
+			isValid = true
+			break
 		}
-		if !isValid {
-			return fmt.Errorf("invalid email provider: %s (must be one of %v)", ec.Provider, validProviders)
+	}
+	if !isValid {
+		return fmt.Errorf("invalid email provider: %s (must be one of %v)", ec.Provider, validProviders)
+	}
+
+	// FromEmail is required for all providers
+	if ec.FromEmail == "" {
+		return errors.New("EMAIL_FROM_ADDRESS is required when email provider is set")
+	}
+
+	// Provider-specific validation
+	switch ec.Provider {
+	case "resend":
+		if ec.ResendAPIKey == "" {
+			return errors.New("RESEND_API_KEY is required for Resend provider")
 		}
 
-		if ec.Provider == "smtp" {
-			if ec.SMTPHost == "" {
-				return errors.New("smtp_host is required for SMTP provider")
-			}
-			if ec.SMTPPort <= 0 || ec.SMTPPort > 65535 {
-				return fmt.Errorf("invalid smtp_port: %d", ec.SMTPPort)
-			}
+	case "smtp":
+		if ec.SMTPHost == "" {
+			return errors.New("SMTP_HOST is required for SMTP provider")
+		}
+		if ec.SMTPPort <= 0 || ec.SMTPPort > 65535 {
+			return fmt.Errorf("invalid SMTP_PORT: %d (must be 1-65535)", ec.SMTPPort)
 		}
 
-		if ec.FromEmail == "" {
-			return errors.New("from_email is required")
+	case "ses":
+		if ec.SESRegion == "" {
+			return errors.New("SES_REGION is required for AWS SES provider")
+		}
+		// Note: SESAccessKey and SESSecretKey are optional - uses AWS default credential chain
+
+	case "sendgrid":
+		if ec.SendGridAPIKey == "" {
+			return errors.New("SENDGRID_API_KEY is required for SendGrid provider")
 		}
 	}
 
@@ -606,6 +647,8 @@ func Load() (*Config, error) {
 	//nolint:errcheck
 	viper.BindEnv("server.environment", "ENV")
 	//nolint:errcheck
+	viper.BindEnv("server.app_url", "APP_URL")
+	//nolint:errcheck
 	//nolint:errcheck
 	viper.BindEnv("logging.level", "LOG_LEVEL")
 	//nolint:errcheck
@@ -660,6 +703,42 @@ func Load() (*Config, error) {
 	viper.BindEnv("external.stripe.publishable_key", "STRIPE_PUBLISHABLE_KEY")
 	//nolint:errcheck
 	viper.BindEnv("external.stripe.webhook_secret", "STRIPE_WEBHOOK_SECRET")
+
+	// Email configuration (multi-provider: resend, smtp, ses, sendgrid)
+	//nolint:errcheck
+	viper.BindEnv("external.email.provider", "EMAIL_PROVIDER")
+	//nolint:errcheck
+	viper.BindEnv("external.email.from_email", "EMAIL_FROM_ADDRESS")
+	//nolint:errcheck
+	viper.BindEnv("external.email.from_name", "EMAIL_FROM_NAME")
+
+	// Email - Resend provider
+	//nolint:errcheck
+	viper.BindEnv("external.email.resend_api_key", "RESEND_API_KEY")
+
+	// Email - SMTP provider
+	//nolint:errcheck
+	viper.BindEnv("external.email.smtp_host", "SMTP_HOST")
+	//nolint:errcheck
+	viper.BindEnv("external.email.smtp_port", "SMTP_PORT")
+	//nolint:errcheck
+	viper.BindEnv("external.email.smtp_username", "SMTP_USERNAME")
+	//nolint:errcheck
+	viper.BindEnv("external.email.smtp_password", "SMTP_PASSWORD")
+	//nolint:errcheck
+	viper.BindEnv("external.email.smtp_use_tls", "SMTP_USE_TLS")
+
+	// Email - AWS SES provider (uses default credential chain if keys not set)
+	//nolint:errcheck
+	viper.BindEnv("external.email.ses_region", "SES_REGION")
+	//nolint:errcheck
+	viper.BindEnv("external.email.ses_access_key", "SES_ACCESS_KEY")
+	//nolint:errcheck
+	viper.BindEnv("external.email.ses_secret_key", "SES_SECRET_KEY")
+
+	// Email - SendGrid provider
+	//nolint:errcheck
+	viper.BindEnv("external.email.sendgrid_api_key", "SENDGRID_API_KEY")
 
 	// Auth configuration (flexible JWT configuration - HS256 or RS256)
 	//nolint:errcheck
@@ -806,6 +885,7 @@ func setDefaults() {
 	viper.SetDefault("server.shutdown_timeout", "30s")
 	viper.SetDefault("server.max_request_size", 32<<20) // 32MB
 	viper.SetDefault("server.enable_cors", true)
+	viper.SetDefault("server.app_url", "http://localhost:3000") // Frontend app URL for invitation links
 
 	// CORS defaults (dev-friendly)
 	viper.SetDefault("server.cors_allowed_origins", []string{"http://localhost:3000", "http://localhost:3001"})
@@ -889,6 +969,29 @@ func setDefaults() {
 	// External service defaults
 	// LLM timeout for API calls (per-project credentials are stored in database)
 	viper.SetDefault("external.llm_timeout", 30*time.Second)
+
+	// Email defaults (multi-provider: resend, smtp, ses, sendgrid)
+	viper.SetDefault("external.email.provider", "")        // Empty = disabled; Options: resend, smtp, ses, sendgrid
+	viper.SetDefault("external.email.from_email", "")      // Required: e.g., "noreply@yourdomain.com"
+	viper.SetDefault("external.email.from_name", "Brokle") // Display name in emails
+
+	// Resend defaults
+	viper.SetDefault("external.email.resend_api_key", "")
+
+	// SMTP defaults
+	viper.SetDefault("external.email.smtp_host", "")
+	viper.SetDefault("external.email.smtp_port", 587) // Default TLS port
+	viper.SetDefault("external.email.smtp_username", "")
+	viper.SetDefault("external.email.smtp_password", "")
+	viper.SetDefault("external.email.smtp_use_tls", true)
+
+	// AWS SES defaults
+	viper.SetDefault("external.email.ses_region", "")
+	viper.SetDefault("external.email.ses_access_key", "") // Optional - uses AWS default credential chain
+	viper.SetDefault("external.email.ses_secret_key", "") // Optional - uses AWS default credential chain
+
+	// SendGrid defaults
+	viper.SetDefault("external.email.sendgrid_api_key", "")
 
 	// Feature flags defaults
 	viper.SetDefault("features.real_time_metrics", true)

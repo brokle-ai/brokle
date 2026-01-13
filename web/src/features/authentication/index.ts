@@ -30,6 +30,7 @@ export { AuthStatus } from './components/auth-status'
 export { AuthLayout } from './components/auth-layout'
 export { AuthFormWrapper } from './components/auth-form-wrapper'
 export { SignInToastHandler } from './components/signin-toast-handler'
+export { InvitationBanner } from './components/invitation-banner'
 
 // Store
 export { useAuthStore } from './stores/auth-store'

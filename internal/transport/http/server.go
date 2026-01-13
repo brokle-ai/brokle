@@ -204,12 +204,20 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 	}
 
 	router.GET("/invitations/validate/:token", s.handlers.Organization.ValidateInvitationToken)
+	router.POST("/invitations/decline", s.handlers.Organization.DeclineInvitation)
 
 	// Protected routes: JWT → CSRF → rate limit
 	protected := router.Group("")
 	protected.Use(s.authMiddleware.RequireAuth())
 	protected.Use(s.csrfMiddleware.ValidateCSRF())
 	protected.Use(s.rateLimitMiddleware.RateLimitByUser())
+
+	// User-scoped invitation routes
+	invitations := protected.Group("/invitations")
+	{
+		invitations.GET("", s.handlers.Organization.GetUserInvitations)    // List invitations for current user
+		invitations.POST("/accept", s.handlers.Organization.AcceptInvitation) // Accept an invitation
+	}
 
 	users := protected.Group("/users")
 	{
@@ -238,6 +246,12 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 		orgs.GET("/:orgId/members", s.authMiddleware.RequirePermission("members:read"), s.handlers.Organization.ListMembers)
 		orgs.POST("/:orgId/members", s.authMiddleware.RequirePermission("members:invite"), s.handlers.Organization.InviteMember)
 		orgs.DELETE("/:orgId/members/:userId", s.authMiddleware.RequirePermission("members:remove"), s.handlers.Organization.RemoveMember)
+
+		// Invitation management routes
+		orgs.GET("/:orgId/invitations", s.authMiddleware.RequirePermission("members:read"), s.handlers.Organization.GetPendingInvitations)
+		orgs.POST("/:orgId/invitations", s.authMiddleware.RequirePermission("members:invite"), s.handlers.Organization.CreateInvitation)
+		orgs.POST("/:orgId/invitations/:invitationId/resend", s.authMiddleware.RequirePermission("members:invite"), s.handlers.Organization.ResendInvitation)
+		orgs.DELETE("/:orgId/invitations/:invitationId", s.authMiddleware.RequirePermission("members:invite"), s.handlers.Organization.RevokeInvitation)
 
 		orgs.GET("/:orgId/settings", s.authMiddleware.RequirePermission("settings:read"), s.handlers.Organization.GetSettings)
 		orgs.POST("/:orgId/settings", s.authMiddleware.RequirePermission("settings:write"), s.handlers.Organization.CreateSetting)
