@@ -11,7 +11,6 @@ import { Button } from '@/components/ui/button'
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -20,6 +19,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { PasswordInput } from '@/components/ui/password-input'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
 import {
   Select,
   SelectContent,
@@ -27,15 +27,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Loader2, AlertTriangle } from 'lucide-react'
+import { Loader2, AlertTriangle, Mail, Lock } from 'lucide-react'
 import { useSignupMutation, useCompleteOAuthSignupMutation } from '../hooks/use-auth-queries'
-import { validateInvitation } from '../api/auth-api'
 import type { InvitationDetails } from '../types'
 
 type SignupStep = 'auth' | 'personalization'
 
 interface TwoStepSignUpFormProps extends HTMLAttributes<HTMLDivElement> {
   invitationToken?: string
+  invitationDetails?: InvitationDetails | null
   oauthSessionId?: string
   onStepChange?: (step: SignupStep) => void
 }
@@ -58,6 +58,7 @@ const authStepSchema = z
 export function TwoStepSignUpForm({
   className,
   invitationToken,
+  invitationDetails,
   oauthSessionId,
   onStepChange,
   ...props
@@ -82,37 +83,9 @@ export function TwoStepSignUpForm({
   }, [])
 
   const [authData, setAuthData] = useState<{ email: string; password: string } | null>(null)
-  const [invitationDetails, setInvitationDetails] = useState<InvitationDetails | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isRedirecting, setIsRedirecting] = useState(false)
   const [authError, setAuthError] = useState<string | null>(null)
-  const [isLoadingInvitation, setIsLoadingInvitation] = useState(false)
-
-  // Load invitation details if token provided
-  useEffect(() => {
-    if (invitationToken) {
-      setIsLoadingInvitation(true)
-      validateInvitation(invitationToken)
-        .then((details) => {
-          // Map snake_case API response to camelCase TypeScript type
-          setInvitationDetails({
-            organizationName: details.organization_name,
-            organizationId: details.organization_id,
-            inviterName: details.inviter_name,
-            role: details.role,
-            email: details.email,
-            expiresAt: details.expires_at,
-            isExpired: details.is_expired,
-          })
-          setIsLoadingInvitation(false)
-        })
-        .catch((error: any) => {
-          console.error('Failed to validate invitation:', error)
-          setAuthError('Invalid or expired invitation link')
-          setIsLoadingInvitation(false)
-        })
-    }
-  }, [invitationToken])
 
   // Determine if this is invitation-based signup
   const isInvitationSignup = !!(invitationToken || invitationDetails)
@@ -137,6 +110,13 @@ export function TwoStepSignUpForm({
       confirmPassword: '',
     },
   })
+
+  // Set email value when invitation details are provided
+  useEffect(() => {
+    if (invitationDetails?.email) {
+      authForm.setValue('email', invitationDetails.email)
+    }
+  }, [invitationDetails, authForm])
 
   // Step 2: Personalization Form
   const personalForm = useForm<z.infer<typeof personalizationStepSchema>>({
@@ -230,16 +210,6 @@ export function TwoStepSignUpForm({
     }
   }
 
-  // Loading state for invitation validation
-  if (invitationToken && isLoadingInvitation) {
-    return (
-      <div className="flex flex-col items-center justify-center py-8">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        <p className="mt-4 text-sm text-muted-foreground">Validating invitation...</p>
-      </div>
-    )
-  }
-
   // STEP 1: Authentication
   if (step === 'auth') {
     return (
@@ -275,25 +245,41 @@ export function TwoStepSignUpForm({
         {/* Email/Password Form */}
         <Form {...authForm}>
           <form onSubmit={authForm.handleSubmit(handleAuthSubmit)} className="space-y-4">
-            <FormField
-              control={authForm.control}
-              name="email"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Email</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="email"
-                      placeholder="name@example.com"
-                      disabled={!!invitationDetails}
-                      {...field}
-                      value={invitationDetails?.email || field.value}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {invitationDetails ? (
+              // Locked email display for invitation signup
+              <div className="space-y-2">
+                <FormLabel>Email</FormLabel>
+                <div className="flex items-center gap-2 rounded-md border bg-muted/50 p-3">
+                  <Mail className="h-4 w-4 text-muted-foreground" />
+                  <span className="flex-1 text-sm font-medium">{invitationDetails.email}</span>
+                  <Badge variant="secondary" className="gap-1">
+                    <Lock className="h-3 w-3" />
+                    Locked
+                  </Badge>
+                </div>
+                {/* Hidden input to maintain form state */}
+                <input type="hidden" {...authForm.register('email')} value={invitationDetails.email} />
+              </div>
+            ) : (
+              // Normal email input for fresh signup
+              <FormField
+                control={authForm.control}
+                name="email"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Email</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="email"
+                        placeholder="name@example.com"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
             <FormField
               control={authForm.control}
               name="password"
@@ -344,14 +330,6 @@ export function TwoStepSignUpForm({
     <div className={cn('space-y-6', className)} {...props}>
       <div className="space-y-2">
         <h2 className="text-2xl font-semibold tracking-tight">Tell us about yourself</h2>
-        {invitationDetails && (
-          <Alert className="mt-4">
-            <AlertDescription>
-              You're joining <strong>{invitationDetails.organizationName}</strong> as{' '}
-              <strong>{invitationDetails.role}</strong>
-            </AlertDescription>
-          </Alert>
-        )}
       </div>
 
       <Form {...personalForm}>

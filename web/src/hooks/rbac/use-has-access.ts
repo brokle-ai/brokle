@@ -250,7 +250,10 @@ export interface UseHasAccessParams {
  */
 export function useHasAccess({ scope, projectId }: UseHasAccessParams): boolean {
   const { user } = useAuth()
-  const { currentOrganizationId } = useWorkspace()
+  const { currentOrganization } = useWorkspace()
+
+  // Get organization ID from context
+  const currentOrganizationId = currentOrganization?.id
 
   // Get scope level for validation
   const scopeLevel = SCOPE_LEVELS[scope]
@@ -291,7 +294,7 @@ export function useHasAccess({ scope, projectId }: UseHasAccessParams): boolean 
       }
     },
     enabled: !!user && !!currentOrganizationId, // Only run if authenticated + org selected
-    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    staleTime: 0, // Always refetch to ensure fresh permission data
     gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes
     retry: 1, // Retry once on failure
     initialData: false, // Safe default: no access while loading
@@ -324,7 +327,10 @@ export function useHasMultipleAccess({
   projectId,
 }: UseHasMultipleAccessParams): Record<string, boolean> {
   const { user } = useAuth()
-  const { currentOrganizationId } = useWorkspace()
+  const { currentOrganization } = useWorkspace()
+
+  // Get organization ID from context
+  const currentOrganizationId = currentOrganization?.id
 
   const queryKey = ['scopes-multiple', user?.id, currentOrganizationId, projectId, ...scopes]
 

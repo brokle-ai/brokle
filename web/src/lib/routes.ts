@@ -12,6 +12,7 @@ export const ROUTES = {
   FORGOT_PASSWORD: '/forgot-password',
   VERIFY_EMAIL: '/verify-email',
   CALLBACK: '/callback',
+  ACCEPT_INVITE: '/accept-invite',
 
   // Dashboard routes (protected)
   HOME: '/',

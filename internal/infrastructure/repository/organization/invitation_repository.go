@@ -9,8 +9,8 @@ import (
 	"gorm.io/gorm"
 
 	orgDomain "brokle/internal/core/domain/organization"
-	"brokle/pkg/ulid"
 	"brokle/internal/infrastructure/shared"
+	"brokle/pkg/ulid"
 )
 
 // invitationRepository implements orgDomain.InvitationRepository using GORM
@@ -156,14 +156,16 @@ func (r *invitationRepository) GetPendingInvitations(ctx context.Context, orgID 
 }
 
 // MarkAccepted marks an invitation as accepted
-func (r *invitationRepository) MarkAccepted(ctx context.Context, id ulid.ULID) error {
+func (r *invitationRepository) MarkAccepted(ctx context.Context, id ulid.ULID, acceptedByID ulid.ULID) error {
+	now := time.Now()
 	return r.getDB(ctx).WithContext(ctx).
 		Model(&orgDomain.Invitation{}).
 		Where("id = ?", id).
 		Updates(map[string]interface{}{
-			"status":      orgDomain.InvitationStatusAccepted,
-			"accepted_at": time.Now(),
-			"updated_at":  time.Now(),
+			"status":         orgDomain.InvitationStatusAccepted,
+			"accepted_at":    now,
+			"accepted_by_id": acceptedByID,
+			"updated_at":     now,
 		}).Error
 }
 
@@ -196,12 +198,106 @@ func (r *invitationRepository) MarkExpired(ctx context.Context, id ulid.ULID) er
 }
 
 // RevokeInvitation revokes an invitation
-func (r *invitationRepository) RevokeInvitation(ctx context.Context, id ulid.ULID) error {
+func (r *invitationRepository) RevokeInvitation(ctx context.Context, id ulid.ULID, revokedByID ulid.ULID) error {
+	now := time.Now()
+	return r.db.WithContext(ctx).
+		Model(&orgDomain.Invitation{}).
+		Where("id = ?", id).
+		Updates(map[string]interface{}{
+			"status":        orgDomain.InvitationStatusRevoked,
+			"revoked_at":    now,
+			"revoked_by_id": revokedByID,
+			"updated_at":    now,
+		}).Error
+}
+
+// GetByTokenHash retrieves an invitation by token hash (secure lookup)
+func (r *invitationRepository) GetByTokenHash(ctx context.Context, tokenHash string) (*orgDomain.Invitation, error) {
+	var invitation orgDomain.Invitation
+	err := r.db.WithContext(ctx).
+		Where("token_hash = ? AND deleted_at IS NULL", tokenHash).
+		First(&invitation).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("get invitation by token hash: %w", orgDomain.ErrInvitationNotFound)
+		}
+		return nil, err
+	}
+	return &invitation, nil
+}
+
+
+// CreateAuditEvent creates an audit event for an invitation
+func (r *invitationRepository) CreateAuditEvent(ctx context.Context, event *orgDomain.InvitationAuditEvent) error {
+	return r.db.WithContext(ctx).Create(event).Error
+}
+
+// GetAuditEventsByInvitationID retrieves all audit events for an invitation
+func (r *invitationRepository) GetAuditEventsByInvitationID(ctx context.Context, invitationID ulid.ULID) ([]*orgDomain.InvitationAuditEvent, error) {
+	var events []*orgDomain.InvitationAuditEvent
+	err := r.db.WithContext(ctx).
+		Where("invitation_id = ?", invitationID).
+		Order("created_at ASC").
+		Find(&events).Error
+	return events, err
+}
+
+// MarkResent atomically increments resent_count if within limits.
+// This prevents race conditions where concurrent requests could bypass resend limits.
+// Returns ErrResendLimitReached or ErrResendCooldown if constraints are not met.
+func (r *invitationRepository) MarkResent(
+	ctx context.Context,
+	id ulid.ULID,
+	newExpiresAt time.Time,
+	maxAttempts int,
+	cooldown time.Duration,
+) error {
+	now := time.Now()
+	cooldownThreshold := now.Add(-cooldown)
+
+	// Atomic update with conditions - only succeeds if all constraints are met
+	result := r.getDB(ctx).WithContext(ctx).
+		Model(&orgDomain.Invitation{}).
+		Where("id = ?", id).
+		Where("resent_count < ?", maxAttempts).
+		Where("(resent_at IS NULL OR resent_at < ?)", cooldownThreshold).
+		Updates(map[string]interface{}{
+			"resent_at":    now,
+			"resent_count": gorm.Expr("resent_count + 1"),
+			"expires_at":   newExpiresAt,
+			"updated_at":   now,
+		})
+
+	if result.Error != nil {
+		return result.Error
+	}
+
+	// If no rows affected, determine which constraint failed
+	if result.RowsAffected == 0 {
+		var inv orgDomain.Invitation
+		if err := r.getDB(ctx).WithContext(ctx).
+			Where("id = ?", id).First(&inv).Error; err != nil {
+			return err
+		}
+		if inv.ResentCount >= maxAttempts {
+			return ErrResendLimitReached
+		}
+		return ErrResendCooldown
+	}
+
+	return nil
+}
+
+// UpdateTokenHash updates only the token hash and preview fields.
+// Use this instead of Update when you need to preserve other field changes
+// made by atomic operations (like AtomicMarkResent).
+func (r *invitationRepository) UpdateTokenHash(ctx context.Context, id ulid.ULID, tokenHash, tokenPreview string) error {
 	return r.getDB(ctx).WithContext(ctx).
 		Model(&orgDomain.Invitation{}).
 		Where("id = ?", id).
 		Updates(map[string]interface{}{
-			"status":     orgDomain.InvitationStatusRevoked,
-			"updated_at": time.Now(),
+			"token_hash":    tokenHash,
+			"token_preview": tokenPreview,
+			"updated_at":    time.Now(),
 		}).Error
 }

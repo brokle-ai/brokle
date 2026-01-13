@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Users,
   UserPlus,
@@ -12,11 +13,12 @@ import {
   Mail,
   Calendar,
   Search,
-  Filter
+  Loader2
 } from 'lucide-react'
 import { useWorkspace } from '@/context/workspace-context'
 import { useAuth } from '@/features/authentication'
 import { useHasAccess } from '@/hooks/rbac/use-has-access'
+import { getOrganizationMembers, removeMember, type Member } from '../api/members-api'
 import {
   Table,
   TableBody,
@@ -66,6 +68,7 @@ interface OrganizationMembersSectionProps {
 export function OrganizationMembersSection({ className }: OrganizationMembersSectionProps) {
   const { user } = useAuth()
   const { currentOrganization } = useWorkspace()
+  const queryClient = useQueryClient()
 
   const [searchTerm, setSearchTerm] = useState('')
   const [roleFilter, setRoleFilter] = useState<OrganizationRole | 'all'>('all')
@@ -75,13 +78,37 @@ export function OrganizationMembersSection({ className }: OrganizationMembersSec
   const canUpdateMembers = useHasAccess({ scope: "members:update" })
   const canRemoveMembers = useHasAccess({ scope: "members:remove" })
 
+  // Fetch members from API
+  const { data: membersResponse, isLoading, error } = useQuery({
+    queryKey: ['organization-members', currentOrganization?.id],
+    queryFn: async () => {
+      if (!currentOrganization?.id) throw new Error('No organization selected')
+      return getOrganizationMembers(currentOrganization.id)
+    },
+    enabled: !!currentOrganization?.id,
+    staleTime: 2 * 60 * 1000, // 2 minutes
+  })
+
   if (!currentOrganization || !user) {
     return null
   }
 
-  // TODO: Fetch members from API when members page loads
-  // WorkspaceProvider only returns org + projects, not members
-  const members = [] // Placeholder until members API is integrated
+  // Transform members data for display
+  const members: Array<{
+    id: string
+    name: string
+    email: string
+    role: OrganizationRole
+    joined_at: string
+    avatar?: string
+  }> = (membersResponse?.data || []).map((member: Member) => ({
+    id: member.userId,
+    name: member.name,
+    email: member.email,
+    role: member.role,
+    joined_at: member.joinedAt.toISOString(),
+    avatar: undefined,
+  }))
 
   const filteredMembers = members.filter(member => {
     const matchesSearch = member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -131,21 +158,52 @@ export function OrganizationMembersSection({ className }: OrganizationMembersSec
   }
 
   const handleRoleChange = async (memberId: string, newRole: OrganizationRole) => {
-    // TODO: Implement role change API call
+    // TODO: Implement role change API when backend endpoint supports it
     toast.success(`Member role updated to ${newRole}`)
   }
 
   const handleRemoveMember = async (memberId: string, memberName: string) => {
-    // TODO: Implement remove member API call
-    toast.success(`${memberName} has been removed from the organization`)
+    if (!currentOrganization?.id) return
+
+    try {
+      await removeMember(currentOrganization.id, memberId)
+      // Invalidate members cache to refetch
+      queryClient.invalidateQueries({ queryKey: ['organization-members', currentOrganization.id] })
+      toast.success(`${memberName} has been removed from the organization`)
+    } catch (err) {
+      console.error('Failed to remove member:', err)
+      toast.error('Failed to remove member. Please try again.')
+    }
   }
 
-  const canEditMember = (member: OrganizationMember) => {
+  const canEditMember = (member: { email: string; role: OrganizationRole }) => {
     // Need either update or remove permissions to show actions menu
     if (!canUpdateMembers && !canRemoveMembers) return false
     if (member.email === user.email) return false // Can't edit yourself
     if (member.role === 'owner') return false // Can't edit owner
     return true
+  }
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="text-center py-8">
+        <Users className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+        <h3 className="text-lg font-medium mb-2">Failed to load members</h3>
+        <p className="text-muted-foreground">
+          Please try refreshing the page
+        </p>
+      </div>
+    )
   }
 
   return (
@@ -338,49 +396,6 @@ export function OrganizationMembersSection({ className }: OrganizationMembersSec
         )}
       </div>
 
-      {/* Role Permissions Section */}
-      <div className="space-y-4">
-        <h3 className="text-lg font-medium">Role Permissions</h3>
-        <div className="rounded-lg border p-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Crown className="h-4 w-4 text-yellow-500" />
-                <span className="font-medium">Owner</span>
-              </div>
-              <p className="text-muted-foreground text-xs pl-6">
-                Full control over the organization, billing, and all projects
-              </p>
-
-              <div className="flex items-center gap-2">
-                <Shield className="h-4 w-4 text-blue-500" />
-                <span className="font-medium">Admin</span>
-              </div>
-              <p className="text-muted-foreground text-xs pl-6">
-                Manage members, projects, and organization settings
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <User className="h-4 w-4 text-green-500" />
-                <span className="font-medium">Developer</span>
-              </div>
-              <p className="text-muted-foreground text-xs pl-6">
-                Create and manage projects, view analytics and costs
-              </p>
-
-              <div className="flex items-center gap-2">
-                <Eye className="h-4 w-4 text-gray-500" />
-                <span className="font-medium">Viewer</span>
-              </div>
-              <p className="text-muted-foreground text-xs pl-6">
-                Read-only access to projects and basic analytics
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   )
 }

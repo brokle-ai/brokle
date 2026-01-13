@@ -7,10 +7,31 @@ export { useCreateOrganizationMutation, useUpdateOrganizationMutation } from './
 
 // API Functions
 export { createProject, createOrganization, updateOrganization } from './api/organizations-api'
+export {
+  createInvitation,
+  getPendingInvitations,
+  resendInvitation,
+  revokeInvitation,
+  acceptInvitation,
+  declineInvitation,
+  getUserInvitations,
+  validateInvitationToken,
+  getAvailableRolesForInvitation,
+  type Invitation,
+  type UserInvitation,
+  type Role,
+} from './api/invitations-api'
+export {
+  getOrganizationMembers,
+  removeMember,
+  updateMemberRole,
+  type Member,
+} from './api/members-api'
 
 // Components
 export { CreateOrganizationDialog } from './components/create-organization-dialog'
 export { InviteMemberModal } from './components/invite-member-modal'
+export { PendingInvitations } from './components/pending-invitations'
 export { OrganizationMembersSection } from './components/organization-members-section'
 export { ProjectGrid } from './components/project-grid'
 export { AccessDenied } from './components/access-denied'

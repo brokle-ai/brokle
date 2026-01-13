@@ -1,7 +1,10 @@
 'use client'
 
 import { ContentSection } from '@/features/settings'
-import { OrganizationMembersSection } from '@/features/organizations'
+import {
+  OrganizationMembersSection,
+  PendingInvitations,
+} from '@/features/organizations'
 
 export default function OrganizationMembersPage() {
   return (
@@ -9,7 +12,10 @@ export default function OrganizationMembersPage() {
       title="Members"
       description="Manage team members, roles, and invitations."
     >
-      <OrganizationMembersSection />
+      <div className="space-y-8">
+        <OrganizationMembersSection />
+        <PendingInvitations />
+      </div>
     </ContentSection>
   )
 }
