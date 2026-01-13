@@ -12,6 +12,7 @@ import (
 
 	"brokle/internal/config"
 	"brokle/internal/core/domain/analytics"
+	annotationDomain "brokle/internal/core/domain/annotation"
 	"brokle/internal/core/domain/auth"
 	"brokle/internal/core/domain/billing"
 	"brokle/internal/core/domain/common"
@@ -25,6 +26,7 @@ import (
 	storageDomain "brokle/internal/core/domain/storage"
 	"brokle/internal/core/domain/user"
 	analyticsService "brokle/internal/core/services/analytics"
+	annotationService "brokle/internal/core/services/annotation"
 	authService "brokle/internal/core/services/auth"
 	billingService "brokle/internal/core/services/billing"
 	credentialsService "brokle/internal/core/services/credentials"
@@ -43,6 +45,7 @@ import (
 	"brokle/internal/ee/sso"
 	"brokle/internal/infrastructure/database"
 	analyticsRepo "brokle/internal/infrastructure/repository/analytics"
+	annotationRepo "brokle/internal/infrastructure/repository/annotation"
 	authRepo "brokle/internal/infrastructure/repository/auth"
 	billingRepo "brokle/internal/infrastructure/repository/billing"
 	credentialsRepo "brokle/internal/infrastructure/repository/credentials"
@@ -60,6 +63,7 @@ import (
 	"brokle/internal/transport/http"
 	"brokle/internal/transport/http/handlers"
 	"brokle/internal/workers"
+	annotationWorker "brokle/internal/workers/annotation"
 	evaluationWorker "brokle/internal/workers/evaluation"
 	"brokle/pkg/email"
 	"brokle/pkg/encryption"
@@ -108,6 +112,7 @@ type WorkerContainer struct {
 	ManualTriggerWorker      *evaluationWorker.ManualTriggerWorker
 	UsageAggregationWorker   *workers.UsageAggregationWorker
 	ContractExpirationWorker *workers.ContractExpirationWorker
+	LockExpiryWorker         *annotationWorker.LockExpiryWorker
 }
 
 type RepositoryContainer struct {
@@ -123,6 +128,7 @@ type RepositoryContainer struct {
 	Playground    *PlaygroundRepositories
 	Evaluation    *EvaluationRepositories
 	Dashboard     *DashboardRepositories
+	Annotation    *AnnotationRepositories
 }
 
 type ServiceContainer struct {
@@ -142,6 +148,7 @@ type ServiceContainer struct {
 	Playground          *PlaygroundServices
 	Evaluation          *EvaluationServices
 	Dashboard           *DashboardServices
+	Annotation          *AnnotationServices
 }
 
 type EnterpriseContainer struct {
@@ -244,6 +251,12 @@ type DashboardRepositories struct {
 	Template    dashboardDomain.TemplateRepository
 }
 
+type AnnotationRepositories struct {
+	Queue      annotationDomain.QueueRepository
+	Item       annotationDomain.ItemRepository
+	Assignment annotationDomain.AssignmentRepository
+}
+
 type UserServices struct {
 	User    user.UserService
 	Profile user.ProfileService
@@ -307,6 +320,12 @@ type DashboardServices struct {
 	Dashboard   dashboardDomain.DashboardService
 	WidgetQuery dashboardDomain.WidgetQueryService
 	Template    dashboardDomain.TemplateService
+}
+
+type AnnotationServices struct {
+	Queue      annotationDomain.QueueService
+	Item       annotationDomain.ItemService
+	Assignment annotationDomain.AssignmentService
 }
 
 func ProvideDatabases(cfg *config.Config, logger *slog.Logger) (*DatabaseContainer, error) {
@@ -470,6 +489,13 @@ func ProvideWorkers(core *CoreContainer) (*WorkerContainer, error) {
 		core.Repos.Billing.OrganizationBilling,
 	)
 
+	// Create annotation lock expiry worker (every minute, releases stale locks)
+	lockExpiryWorker := annotationWorker.NewLockExpiryWorker(
+		core.Logger,
+		core.Repos.Annotation.Queue,
+		core.Repos.Annotation.Item,
+	)
+
 	return &WorkerContainer{
 		TelemetryConsumer:        telemetryConsumer,
 		RuleWorker:               ruleWorker,
@@ -477,6 +503,7 @@ func ProvideWorkers(core *CoreContainer) (*WorkerContainer, error) {
 		ManualTriggerWorker:      manualTriggerWorker,
 		UsageAggregationWorker:   usageAggWorker,
 		ContractExpirationWorker: contractExpWorker,
+		LockExpiryWorker:         lockExpiryWorker,
 	}, nil
 }
 
@@ -546,6 +573,8 @@ func ProvideServerServices(core *CoreContainer) *ServiceContainer {
 
 	dashboardServices := ProvideDashboardServices(repos.Dashboard, logger)
 
+	annotationServices := ProvideAnnotationServices(core.Transactor, repos.Annotation, evaluationServices, observabilityServices, repos.Organization, logger)
+
 	// Overview service needs projectService and credentials repo (created after other services)
 	overviewSvc := analyticsService.NewOverviewService(
 		repos.Analytics.Overview,
@@ -572,6 +601,7 @@ func ProvideServerServices(core *CoreContainer) *ServiceContainer {
 		Playground:          playgroundServices,
 		Evaluation:          evaluationServices,
 		Dashboard:           dashboardServices,
+		Annotation:          annotationServices,
 	}
 }
 
@@ -706,6 +736,10 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 		// Enterprise custom pricing services
 		core.Services.Billing.Contract,
 		core.Services.Billing.Pricing,
+		// Annotation queue services (HITL evaluation)
+		core.Services.Annotation.Queue,
+		core.Services.Annotation.Item,
+		core.Services.Annotation.Assignment,
 	)
 
 	httpServer := http.NewServer(
@@ -883,6 +917,14 @@ func ProvideDashboardRepositories(db *gorm.DB, clickhouseDB *database.ClickHouse
 	}
 }
 
+func ProvideAnnotationRepositories(db *gorm.DB) *AnnotationRepositories {
+	return &AnnotationRepositories{
+		Queue:      annotationRepo.NewQueueRepository(db),
+		Item:       annotationRepo.NewItemRepository(db),
+		Assignment: annotationRepo.NewAssignmentRepository(db),
+	}
+}
+
 func ProvideRepositories(dbs *DatabaseContainer, logger *slog.Logger) *RepositoryContainer {
 	return &RepositoryContainer{
 		User:          ProvideUserRepositories(dbs.Postgres.DB),
@@ -897,6 +939,7 @@ func ProvideRepositories(dbs *DatabaseContainer, logger *slog.Logger) *Repositor
 		Playground:    ProvidePlaygroundRepositories(dbs.Postgres.DB),
 		Evaluation:    ProvideEvaluationRepositories(dbs.Postgres.DB),
 		Dashboard:     ProvideDashboardRepositories(dbs.Postgres.DB, dbs.ClickHouse),
+		Annotation:    ProvideAnnotationRepositories(dbs.Postgres.DB),
 	}
 }
 
@@ -1381,6 +1424,45 @@ func ProvideDashboardServices(
 		Dashboard:   dashboardSvc,
 		WidgetQuery: widgetQuerySvc,
 		Template:    templateSvc,
+	}
+}
+
+func ProvideAnnotationServices(
+	transactor common.Transactor,
+	annotationRepos *AnnotationRepositories,
+	evaluationServices *EvaluationServices,
+	observabilityServices *observabilityService.ServiceRegistry,
+	orgRepos *OrganizationRepositories,
+	logger *slog.Logger,
+) *AnnotationServices {
+	queueSvc := annotationService.NewQueueService(
+		annotationRepos.Queue,
+		annotationRepos.Item,
+		annotationRepos.Assignment,
+		logger,
+	)
+
+	itemSvc := annotationService.NewItemService(
+		annotationRepos.Queue,
+		annotationRepos.Item,
+		annotationRepos.Assignment,
+		evaluationServices.ScoreConfig,
+		observabilityServices.ScoreService,
+		orgRepos.Project,
+		transactor,
+		logger,
+	)
+
+	assignmentSvc := annotationService.NewAssignmentService(
+		annotationRepos.Queue,
+		annotationRepos.Assignment,
+		logger,
+	)
+
+	return &AnnotationServices{
+		Queue:      queueSvc,
+		Item:       itemSvc,
+		Assignment: assignmentSvc,
 	}
 }
 

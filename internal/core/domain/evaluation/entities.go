@@ -293,7 +293,8 @@ type CreateDatasetItemRequest struct {
 }
 
 type CreateDatasetItemsBatchRequest struct {
-	Items []CreateDatasetItemRequest `json:"items" binding:"required,dive"`
+	Items       []CreateDatasetItemRequest `json:"items" binding:"required,dive"`
+	Deduplicate bool                       `json:"deduplicate,omitempty"`
 }
 
 // ============================================================================
@@ -520,8 +521,8 @@ type ExperimentItem struct {
 	DatasetItemID *ulid.ULID             `json:"dataset_item_id,omitempty" gorm:"type:char(26)"`
 	TraceID       *string                `json:"trace_id,omitempty" gorm:"type:varchar(32);index"`
 	Input         map[string]interface{} `json:"input" gorm:"type:jsonb;serializer:json;not null"`
-	Output        map[string]interface{} `json:"output,omitempty" gorm:"type:jsonb;serializer:json"`
-	Expected      map[string]interface{} `json:"expected,omitempty" gorm:"type:jsonb;serializer:json"`
+	Output        interface{}            `json:"output,omitempty" gorm:"type:jsonb;serializer:json"`
+	Expected      interface{}            `json:"expected,omitempty" gorm:"type:jsonb;serializer:json"`
 	TrialNumber   int                    `json:"trial_number" gorm:"not null;default:1"`
 	Metadata      map[string]interface{} `json:"metadata,omitempty" gorm:"type:jsonb;serializer:json;default:'{}'"`
 	Error         *string                `json:"error,omitempty" gorm:"type:text"`
@@ -572,8 +573,8 @@ type CreateExperimentItemRequest struct {
 	DatasetItemID *string                `json:"dataset_item_id,omitempty"`
 	TraceID       *string                `json:"trace_id,omitempty"`
 	Input         map[string]interface{} `json:"input" binding:"required"`
-	Output        map[string]interface{} `json:"output,omitempty"`
-	Expected      map[string]interface{} `json:"expected,omitempty"`
+	Output        interface{}            `json:"output,omitempty"`
+	Expected      interface{}            `json:"expected,omitempty"`
 	TrialNumber   *int                   `json:"trial_number,omitempty"`
 	Metadata      map[string]interface{} `json:"metadata,omitempty"`
 	// Scores computed by SDK evaluators, bundled with the experiment item
@@ -592,8 +593,8 @@ type ExperimentItemResponse struct {
 	DatasetItemID *string                `json:"dataset_item_id,omitempty"`
 	TraceID       *string                `json:"trace_id,omitempty"`
 	Input         map[string]interface{} `json:"input"`
-	Output        map[string]interface{} `json:"output,omitempty"`
-	Expected      map[string]interface{} `json:"expected,omitempty"`
+	Output        interface{}            `json:"output,omitempty"`
+	Expected      interface{}            `json:"expected,omitempty"`
 	TrialNumber   int                    `json:"trial_number"`
 	Metadata      map[string]interface{} `json:"metadata,omitempty"`
 	Error         *string                `json:"error,omitempty"`

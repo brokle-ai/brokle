@@ -436,6 +436,30 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 			evaluationRules.GET("/:ruleId/executions/:executionId", s.authMiddleware.RequirePermission("projects:read"), s.handlers.RuleExecution.Get)
 		}
 
+		// Annotation Queues (HITL evaluation)
+		annotationQueues := projects.Group("/:projectId/annotation-queues")
+		{
+			annotationQueues.GET("", s.authMiddleware.RequirePermission("projects:read"), s.handlers.AnnotationQueue.List)
+			annotationQueues.POST("", s.authMiddleware.RequirePermission("projects:write"), s.handlers.AnnotationQueue.Create)
+			annotationQueues.GET("/:queueId", s.authMiddleware.RequirePermission("projects:read"), s.handlers.AnnotationQueue.Get)
+			annotationQueues.GET("/:queueId/stats", s.authMiddleware.RequirePermission("projects:read"), s.handlers.AnnotationQueue.GetWithStats)
+			annotationQueues.PUT("/:queueId", s.authMiddleware.RequirePermission("projects:write"), s.handlers.AnnotationQueue.Update)
+			annotationQueues.DELETE("/:queueId", s.authMiddleware.RequirePermission("projects:write"), s.handlers.AnnotationQueue.Delete)
+
+			// Queue items
+			annotationQueues.GET("/:queueId/items", s.authMiddleware.RequirePermission("projects:read"), s.handlers.AnnotationItem.ListItems)
+			annotationQueues.POST("/:queueId/items", s.authMiddleware.RequirePermission("projects:write"), s.handlers.AnnotationItem.AddItems)
+			annotationQueues.POST("/:queueId/items/claim", s.authMiddleware.RequirePermission("projects:write"), s.handlers.AnnotationItem.ClaimNext)
+			annotationQueues.POST("/:queueId/items/:itemId/complete", s.authMiddleware.RequirePermission("projects:write"), s.handlers.AnnotationItem.Complete)
+			annotationQueues.POST("/:queueId/items/:itemId/skip", s.authMiddleware.RequirePermission("projects:write"), s.handlers.AnnotationItem.Skip)
+			annotationQueues.POST("/:queueId/items/:itemId/release", s.authMiddleware.RequirePermission("projects:write"), s.handlers.AnnotationItem.ReleaseLock)
+
+			// Queue assignments
+			annotationQueues.GET("/:queueId/assignments", s.authMiddleware.RequirePermission("projects:read"), s.handlers.AnnotationAssignment.List)
+			annotationQueues.POST("/:queueId/assignments", s.authMiddleware.RequirePermission("projects:write"), s.handlers.AnnotationAssignment.Assign)
+			annotationQueues.DELETE("/:queueId/assignments/:userId", s.authMiddleware.RequirePermission("projects:write"), s.handlers.AnnotationAssignment.Unassign)
+		}
+
 		projectScores := projects.Group("/:projectId/scores")
 		{
 			projectScores.GET("", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Observability.ListProjectScores)
@@ -570,6 +594,9 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 		rbac.GET("/scopes/categories", s.handlers.RBAC.GetScopeCategories)
 	}
 
+	// User's annotation queue assignments (cross-project view)
+	protected.GET("/annotation-queues/my-assignments", s.handlers.AnnotationAssignment.GetMyAssignments)
+
 	adminRoutes := protected.Group("/admin")
 	adminRoutes.Use(s.authMiddleware.RequirePermission("admin:manage"))
 	{
@@ -601,10 +628,19 @@ func (s *Server) setupSDKRoutes(router *gin.RouterGroup) {
 
 	sdkDatasets := router.Group("/datasets")
 	{
+		sdkDatasets.GET("", s.handlers.Dataset.List)
 		sdkDatasets.POST("", s.handlers.Dataset.Create)
 		sdkDatasets.GET("/:datasetId", s.handlers.Dataset.Get)
+		sdkDatasets.PATCH("/:datasetId", s.handlers.Dataset.Update)
+		sdkDatasets.DELETE("/:datasetId", s.handlers.Dataset.Delete)
 		sdkDatasets.POST("/:datasetId/items", s.handlers.Dataset.CreateItems)
 		sdkDatasets.GET("/:datasetId/items", s.handlers.Dataset.ListItems)
+		sdkDatasets.GET("/:datasetId/items/export", s.handlers.Dataset.ExportItems)
+		// Dataset import SDK routes
+		sdkDatasets.POST("/:datasetId/items/import-json", s.handlers.Dataset.ImportFromJSON)
+		sdkDatasets.POST("/:datasetId/items/import-csv", s.handlers.Dataset.ImportFromCSV)
+		sdkDatasets.POST("/:datasetId/items/from-traces", s.handlers.Dataset.CreateFromTraces)
+		sdkDatasets.POST("/:datasetId/items/from-spans", s.handlers.Dataset.CreateFromSpans)
 		// Dataset versioning SDK routes
 		sdkDatasets.POST("/:datasetId/versions", s.handlers.DatasetVersion.CreateVersion)
 		sdkDatasets.GET("/:datasetId/versions", s.handlers.DatasetVersion.ListVersions)
@@ -616,10 +652,13 @@ func (s *Server) setupSDKRoutes(router *gin.RouterGroup) {
 
 	sdkExperiments := router.Group("/experiments")
 	{
+		sdkExperiments.GET("", s.handlers.Experiment.List)
 		sdkExperiments.POST("", s.handlers.Experiment.Create)
+		sdkExperiments.POST("/compare", s.handlers.Experiment.CompareExperiments)
 		sdkExperiments.GET("/:experimentId", s.handlers.Experiment.Get)
 		sdkExperiments.PATCH("/:experimentId", s.handlers.Experiment.Update)
 		sdkExperiments.POST("/:experimentId/items", s.handlers.Experiment.CreateItems)
+		sdkExperiments.POST("/:experimentId/rerun", s.handlers.Experiment.Rerun)
 	}
 
 	spans := router.Group("/spans")
@@ -632,6 +671,14 @@ func (s *Server) setupSDKRoutes(router *gin.RouterGroup) {
 	playground := router.Group("/playground")
 	{
 		playground.POST("/execute", s.handlers.SDKPlayground.Execute)
+	}
+
+	// Annotation queues SDK routes (programmatic item management)
+	sdkAnnotationQueues := router.Group("/annotation-queues")
+	{
+		sdkAnnotationQueues.GET("/:queueId/items", s.handlers.AnnotationItem.ListItemsSDK)
+		sdkAnnotationQueues.POST("/:queueId/items", s.handlers.AnnotationItem.AddItemsSDK)
+		sdkAnnotationQueues.POST("/:queueId/items/batch", s.handlers.AnnotationItem.AddItemsSDK) // Alias for batch
 	}
 }
 

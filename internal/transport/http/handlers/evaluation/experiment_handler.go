@@ -73,18 +73,20 @@ func (h *ExperimentHandler) Create(c *gin.Context) {
 }
 
 // @Summary List experiments
-// @Description Returns all experiments for the project.
-// @Tags Experiments
+// @Description Returns all experiments for the project. Works for both SDK and Dashboard routes.
+// @Tags Experiments, SDK - Experiments
 // @Produce json
-// @Param projectId path string true "Project ID"
+// @Security ApiKeyAuth
+// @Param projectId path string false "Project ID (Dashboard routes)"
 // @Param dataset_id query string false "Filter by dataset ID"
 // @Param status query string false "Filter by status (pending, running, completed, failed)"
 // @Success 200 {array} evaluation.ExperimentResponse
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 401 {object} response.ErrorResponse
 // @Router /api/v1/projects/{projectId}/experiments [get]
+// @Router /v1/experiments [get]
 func (h *ExperimentHandler) List(c *gin.Context) {
-	projectID, err := ulid.Parse(c.Param("projectId"))
+	projectID, err := extractProjectID(c)
 	if err != nil {
 		response.Error(c, appErrors.NewValidationError("projectId", "must be a valid ULID"))
 		return
@@ -253,18 +255,20 @@ func (h *ExperimentHandler) Delete(c *gin.Context) {
 
 // @Summary Compare experiments
 // @Description Compares score metrics across multiple experiments. Optionally specify a baseline for diff calculations.
-// @Tags Experiments
+// @Tags Experiments, SDK - Experiments
 // @Accept json
 // @Produce json
-// @Param projectId path string true "Project ID"
+// @Security ApiKeyAuth
+// @Param projectId path string false "Project ID (Dashboard routes)"
 // @Param request body CompareExperimentsRequest true "Compare experiments request"
 // @Success 200 {object} CompareExperimentsResponse
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 401 {object} response.ErrorResponse
 // @Failure 404 {object} response.ErrorResponse "Experiment not found"
 // @Router /api/v1/projects/{projectId}/experiments/compare [post]
+// @Router /v1/experiments/compare [post]
 func (h *ExperimentHandler) CompareExperiments(c *gin.Context) {
-	projectID, err := ulid.Parse(c.Param("projectId"))
+	projectID, err := extractProjectID(c)
 	if err != nil {
 		response.Error(c, appErrors.NewValidationError("projectId", "must be a valid ULID"))
 		return
@@ -396,10 +400,11 @@ func (h *ExperimentHandler) CreateItems(c *gin.Context) {
 // @Summary Re-run experiment
 // @Description Creates a new experiment based on an existing one, using the same dataset.
 // @Description The new experiment starts in pending status, ready for the SDK to run with a new task function.
-// @Tags Experiments
+// @Tags Experiments, SDK - Experiments
 // @Accept json
 // @Produce json
-// @Param projectId path string true "Project ID"
+// @Security ApiKeyAuth
+// @Param projectId path string false "Project ID (Dashboard routes)"
 // @Param experimentId path string true "Source Experiment ID"
 // @Param request body evaluation.RerunExperimentRequest false "Optional overrides for name, description, metadata"
 // @Success 201 {object} evaluation.ExperimentResponse
@@ -407,8 +412,9 @@ func (h *ExperimentHandler) CreateItems(c *gin.Context) {
 // @Failure 401 {object} response.ErrorResponse
 // @Failure 404 {object} response.ErrorResponse "Source experiment not found"
 // @Router /api/v1/projects/{projectId}/experiments/{experimentId}/rerun [post]
+// @Router /v1/experiments/{experimentId}/rerun [post]
 func (h *ExperimentHandler) Rerun(c *gin.Context) {
-	projectID, err := ulid.Parse(c.Param("projectId"))
+	projectID, err := extractProjectID(c)
 	if err != nil {
 		response.Error(c, appErrors.NewValidationError("projectId", "must be a valid ULID"))
 		return

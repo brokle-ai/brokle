@@ -178,13 +178,13 @@ func (s *experimentItemService) createExperimentScores(
 			score := &observability.Score{
 				ID:               ulid.New().String(),
 				ProjectID:        projectID.String(),
-				TraceID:          "", // No trace for experiment-only scores
-				SpanID:           "",
+				TraceID:          nil, // No trace for experiment-only scores
+				SpanID:           nil,
 				Name:             sc.Name,
 				Value:            sc.Value,
 				StringValue:      sc.StringValue,
 				DataType:         dataType,
-				Source:           "sdk",
+				Source:           observability.ScoreSourceAPI,
 				Reason:           sc.Reason,
 				Metadata:         metadataJSON,
 				ExperimentID:     &expID,

@@ -88,8 +88,8 @@ type ExperimentItemResponse struct {
 	DatasetItemID *string                `json:"dataset_item_id,omitempty"`
 	TraceID       *string                `json:"trace_id,omitempty"`
 	Input         map[string]interface{} `json:"input"`
-	Output        map[string]interface{} `json:"output,omitempty"`
-	Expected      map[string]interface{} `json:"expected,omitempty"`
+	Output        interface{}            `json:"output,omitempty"`
+	Expected      interface{}            `json:"expected,omitempty"`
 	TrialNumber   int                    `json:"trial_number"`
 	Metadata      map[string]interface{} `json:"metadata,omitempty"`
 	CreatedAt     time.Time              `json:"created_at"`
@@ -135,7 +135,7 @@ type SDKBatchCreateExperimentItemsResponse struct {
 
 // @Description SDK score creation request
 type CreateScoreRequest struct {
-	TraceID          string         `json:"trace_id" binding:"required"`
+	TraceID          *string        `json:"trace_id,omitempty"`  // Optional: required for trace-linked scores, nil for experiment-only scores
 	SpanID           *string        `json:"span_id,omitempty"`
 	Name             string         `json:"name" binding:"required"`
 	Value            *float64       `json:"value,omitempty"`
@@ -156,8 +156,8 @@ type BatchScoreRequest struct {
 type ScoreResponse struct {
 	ID               string         `json:"id"`
 	ProjectID        string         `json:"project_id"`
-	TraceID          string         `json:"trace_id"`
-	SpanID           string         `json:"span_id"`
+	TraceID          *string        `json:"trace_id,omitempty"`  // Nil for experiment-only scores
+	SpanID           *string        `json:"span_id,omitempty"`   // Nil for experiment-only scores
 	Name             string         `json:"name"`
 	Value            *float64       `json:"value,omitempty"`
 	StringValue      *string        `json:"string_value,omitempty"`

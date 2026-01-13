@@ -5,6 +5,7 @@ import (
 
 	"brokle/internal/config"
 	analyticsDomain "brokle/internal/core/domain/analytics"
+	annotationDomain "brokle/internal/core/domain/annotation"
 	"brokle/internal/core/domain/auth"
 	billingDomain "brokle/internal/core/domain/billing"
 	credentialsDomain "brokle/internal/core/domain/credentials"
@@ -20,6 +21,7 @@ import (
 	"brokle/internal/core/services/registration"
 	"brokle/internal/transport/http/handlers/admin"
 	"brokle/internal/transport/http/handlers/analytics"
+	annotationHandler "brokle/internal/transport/http/handlers/annotation"
 	"brokle/internal/transport/http/handlers/apikey"
 	authHandler "brokle/internal/transport/http/handlers/auth"
 	"brokle/internal/transport/http/handlers/billing"
@@ -79,6 +81,10 @@ type Handlers struct {
 	Usage    *billing.UsageHandler
 	Budget   *billing.BudgetHandler
 	Contract *billing.ContractHandler
+	// Annotation queue handlers (HITL evaluation)
+	AnnotationQueue      *annotationHandler.QueueHandler
+	AnnotationItem       *annotationHandler.ItemHandler
+	AnnotationAssignment *annotationHandler.AssignmentHandler
 }
 
 func NewHandlers(
@@ -124,6 +130,10 @@ func NewHandlers(
 	// Enterprise custom pricing services
 	contractService billingDomain.ContractService,
 	pricingService billingDomain.PricingService,
+	// Annotation queue services (HITL evaluation)
+	annotationQueueService annotationDomain.QueueService,
+	annotationItemService annotationDomain.ItemService,
+	annotationAssignmentService annotationDomain.AssignmentService,
 ) *Handlers {
 	return &Handlers{
 		Health:        health.NewHandler(cfg, logger),
@@ -164,5 +174,9 @@ func NewHandlers(
 		Usage:    billing.NewUsageHandler(cfg, logger, usageService),
 		Budget:   billing.NewBudgetHandler(cfg, logger, budgetService),
 		Contract: billing.NewContractHandler(cfg, logger, contractService, pricingService),
+		// Annotation queue handlers
+		AnnotationQueue:      annotationHandler.NewQueueHandler(logger, annotationQueueService),
+		AnnotationItem:       annotationHandler.NewItemHandler(logger, annotationItemService),
+		AnnotationAssignment: annotationHandler.NewAssignmentHandler(logger, annotationAssignmentService),
 	}
 }
