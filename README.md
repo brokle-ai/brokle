@@ -1,9 +1,4 @@
 # Brokle – The AI Engineering Platform for AI Teams
-<p align="center">
-  <a href="https://github.com/brokle-ai/brokle/stargazers"><img src="https://img.shields.io/github/stars/brokle-ai/brokle" alt="GitHub Stars"></a>
-  <a href="https://github.com/brokle-ai/brokle/blob/main/LICENSE"><img src="https://img.shields.io/github/license/brokle-ai/brokle" alt="License"></a>
-  <a href="https://discord.gg/brokle"><img src="https://img.shields.io/badge/Discord-Join%20Us-7289da" alt="Discord"></a>
-</p>
 
 <p align="center">
   <a href="https://docs.brokle.com">Docs</a> •
@@ -13,12 +8,7 @@
   <a href="https://brokle.com">Website</a>
 </p>
 
----
-
 Observability, evaluation, and experimentation for teams building AI agents and applications.
-
-**Open source. OpenTelemetry-native. Self-host anywhere.**
-
 
 ## Quick Start
 
