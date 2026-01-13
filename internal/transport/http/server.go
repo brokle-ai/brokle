@@ -614,10 +614,19 @@ func (s *Server) setupSDKRoutes(router *gin.RouterGroup) {
 
 	sdkDatasets := router.Group("/datasets")
 	{
+		sdkDatasets.GET("", s.handlers.Dataset.List)
 		sdkDatasets.POST("", s.handlers.Dataset.Create)
 		sdkDatasets.GET("/:datasetId", s.handlers.Dataset.Get)
+		sdkDatasets.PATCH("/:datasetId", s.handlers.Dataset.Update)
+		sdkDatasets.DELETE("/:datasetId", s.handlers.Dataset.Delete)
 		sdkDatasets.POST("/:datasetId/items", s.handlers.Dataset.CreateItems)
 		sdkDatasets.GET("/:datasetId/items", s.handlers.Dataset.ListItems)
+		sdkDatasets.GET("/:datasetId/items/export", s.handlers.Dataset.ExportItems)
+		// Dataset import SDK routes
+		sdkDatasets.POST("/:datasetId/items/import-json", s.handlers.Dataset.ImportFromJSON)
+		sdkDatasets.POST("/:datasetId/items/import-csv", s.handlers.Dataset.ImportFromCSV)
+		sdkDatasets.POST("/:datasetId/items/from-traces", s.handlers.Dataset.CreateFromTraces)
+		sdkDatasets.POST("/:datasetId/items/from-spans", s.handlers.Dataset.CreateFromSpans)
 		// Dataset versioning SDK routes
 		sdkDatasets.POST("/:datasetId/versions", s.handlers.DatasetVersion.CreateVersion)
 		sdkDatasets.GET("/:datasetId/versions", s.handlers.DatasetVersion.ListVersions)
@@ -629,10 +638,13 @@ func (s *Server) setupSDKRoutes(router *gin.RouterGroup) {
 
 	sdkExperiments := router.Group("/experiments")
 	{
+		sdkExperiments.GET("", s.handlers.Experiment.List)
 		sdkExperiments.POST("", s.handlers.Experiment.Create)
+		sdkExperiments.POST("/compare", s.handlers.Experiment.CompareExperiments)
 		sdkExperiments.GET("/:experimentId", s.handlers.Experiment.Get)
 		sdkExperiments.PATCH("/:experimentId", s.handlers.Experiment.Update)
 		sdkExperiments.POST("/:experimentId/items", s.handlers.Experiment.CreateItems)
+		sdkExperiments.POST("/:experimentId/rerun", s.handlers.Experiment.Rerun)
 	}
 
 	spans := router.Group("/spans")

@@ -119,11 +119,9 @@ func Accepted(c *gin.Context, data interface{}) {
 }
 
 // NoContent returns a 204 No Content response
+// RFC 7231 Section 6.3.5: 204 responses MUST NOT include a message body
 func NoContent(c *gin.Context) {
-	c.JSON(http.StatusNoContent, APIResponse{
-		Success: true,
-		Meta:    getMeta(c),
-	})
+	c.Status(http.StatusNoContent)
 }
 
 // Error returns an error response based on AppError type

@@ -113,9 +113,9 @@ type Score struct {
 	ProjectID      string `json:"project_id" db:"project_id"`
 	OrganizationID string `json:"organization_id" db:"organization_id"`
 
-	// Links
-	TraceID string `json:"trace_id" db:"trace_id"`
-	SpanID  string `json:"span_id" db:"span_id"`
+	// Links (optional - experiment-only scores may not have trace/span)
+	TraceID *string `json:"trace_id,omitempty" db:"trace_id"`
+	SpanID  *string `json:"span_id,omitempty" db:"span_id"`
 
 	// Score data
 	Name        string   `json:"name" db:"name"`
@@ -343,9 +343,9 @@ const (
 
 // Score source constants (matches ClickHouse Enum8)
 const (
-	ScoreSourceCode  = "code"  // SDK/programmatic scores
-	ScoreSourceLLM   = "llm"   // LLM-based evaluation
-	ScoreSourceHuman = "human" // Human annotations
+	ScoreSourceAPI        = "api"        // SDK/programmatic scores
+	ScoreSourceEval       = "eval"       // Automated evaluations (LLM, code, rules)
+	ScoreSourceAnnotation = "annotation" // Human annotations
 )
 
 // UnmarshalJSON handles input/output fields that may be strings, objects, or arrays from SDK

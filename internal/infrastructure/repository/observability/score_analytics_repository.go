@@ -711,14 +711,14 @@ func (r *scoreAnalyticsRepository) GetSourceDistribution(ctx context.Context, pr
 		if err := rows.Scan(&sourceEnum, &p.Day, &p.Count); err != nil {
 			return nil, fmt.Errorf("scan source distribution point: %w", err)
 		}
-		// Map enum to string
+		// Map enum to string (matches ClickHouse Enum8: api=1, eval=2, annotation=3)
 		switch sourceEnum {
 		case 1:
-			p.Source = "code"
+			p.Source = observability.ScoreSourceAPI
 		case 2:
-			p.Source = "llm"
+			p.Source = observability.ScoreSourceEval
 		case 3:
-			p.Source = "human"
+			p.Source = observability.ScoreSourceAnnotation
 		default:
 			p.Source = "unknown"
 		}

@@ -35,11 +35,16 @@ func (s *ScoreService) CreateScore(ctx context.Context, score *observability.Sco
 		return appErrors.NewValidationError("name is required", "score name cannot be empty")
 	}
 
-	if score.TraceID == "" {
-		return appErrors.NewValidationError("trace_id is required", "score must have a trace_id")
-	}
-	if score.SpanID == "" {
-		return appErrors.NewValidationError("span_id is required", "score must have a span_id")
+	// Scores must have EITHER trace/span linkage OR experiment linkage
+	hasTraceLinkage := score.TraceID != nil && *score.TraceID != "" &&
+		score.SpanID != nil && *score.SpanID != ""
+	hasExperimentLinkage := score.ExperimentID != nil && *score.ExperimentID != ""
+
+	if !hasTraceLinkage && !hasExperimentLinkage {
+		return appErrors.NewValidationError(
+			"score must have either trace_id+span_id or experiment_id",
+			"all scores must be linked to a trace/span or experiment",
+		)
 	}
 	if err := s.validateScoreData(score); err != nil {
 		return err
@@ -181,17 +186,15 @@ func (s *ScoreService) CreateScoreBatch(ctx context.Context, scores []*observabi
 			)
 		}
 
-		// Validate trace and span IDs are set
-		if score.TraceID == "" {
+		// Scores must have EITHER trace/span linkage OR experiment linkage
+		hasTraceLinkage := score.TraceID != nil && *score.TraceID != "" &&
+			score.SpanID != nil && *score.SpanID != ""
+		hasExperimentLinkage := score.ExperimentID != nil && *score.ExperimentID != ""
+
+		if !hasTraceLinkage && !hasExperimentLinkage {
 			return appErrors.NewValidationError(
-				fmt.Sprintf("score[%d]: trace_id is required", i),
-				"all scores must have trace_id",
-			)
-		}
-		if score.SpanID == "" {
-			return appErrors.NewValidationError(
-				fmt.Sprintf("score[%d]: span_id is required", i),
-				"all scores must have span_id",
+				fmt.Sprintf("score[%d]: must have either trace_id+span_id or experiment_id", i),
+				"all scores must be linked to a trace/span or experiment",
 			)
 		}
 
@@ -265,17 +268,17 @@ func (s *ScoreService) validateScoreData(score *observability.Score) error {
 }
 
 func (s *ScoreService) validateScoreTargets(ctx context.Context, score *observability.Score) error {
-	if score.TraceID != "" {
-		_, err := s.traceRepo.GetRootSpan(ctx, score.TraceID)
+	if score.TraceID != nil && *score.TraceID != "" {
+		_, err := s.traceRepo.GetRootSpan(ctx, *score.TraceID)
 		if err != nil {
-			return appErrors.NewNotFoundError("trace " + score.TraceID)
+			return appErrors.NewNotFoundError("trace " + *score.TraceID)
 		}
 	}
 
-	if score.SpanID != "" {
-		_, err := s.traceRepo.GetSpan(ctx, score.SpanID)
+	if score.SpanID != nil && *score.SpanID != "" {
+		_, err := s.traceRepo.GetSpan(ctx, *score.SpanID)
 		if err != nil {
-			return appErrors.NewNotFoundError("span " + score.SpanID)
+			return appErrors.NewNotFoundError("span " + *score.SpanID)
 		}
 	}
 

@@ -81,33 +81,77 @@ func (s *datasetItemService) CreateBatch(ctx context.Context, datasetID ulid.ULI
 		return 0, appErrors.NewValidationError("items", "items array cannot be empty")
 	}
 
-	items := make([]*evaluation.DatasetItem, 0, len(req.Items))
+	// First pass: compute content hashes and validate all items
+	contentHashes := make([]string, len(req.Items))
 	for i, itemReq := range req.Items {
+		contentHashes[i] = s.computeContentHash(itemReq.Input, itemReq.Expected)
+
+		// Validate item structure
 		item := evaluation.NewDatasetItem(datasetID, itemReq.Input)
 		item.Expected = itemReq.Expected
 		if itemReq.Metadata != nil {
 			item.Metadata = itemReq.Metadata
 		}
-
-		hash := s.computeContentHash(itemReq.Input, itemReq.Expected)
-		item.ContentHash = &hash
-
 		if validationErrors := item.Validate(); len(validationErrors) > 0 {
 			return 0, appErrors.NewValidationError(
 				fmt.Sprintf("items[%d].%s", i, validationErrors[0].Field),
 				validationErrors[0].Message,
 			)
 		}
-		items = append(items, item)
 	}
 
-	if err := s.itemRepo.CreateBatch(ctx, items); err != nil {
-		return 0, appErrors.NewInternalError("failed to create dataset items", err)
+	// Check for existing items if deduplication is enabled
+	var existingHashes map[string]bool
+	if req.Deduplicate {
+		var err error
+		existingHashes, err = s.itemRepo.FindByContentHashes(ctx, datasetID, contentHashes)
+		if err != nil {
+			return 0, appErrors.NewInternalError("failed to check for duplicates", err)
+		}
+	}
+
+	// Second pass: create items, skipping duplicates if deduplication is enabled
+	items := make([]*evaluation.DatasetItem, 0, len(req.Items))
+	skipped := 0
+	seenHashes := make(map[string]bool) // Track hashes within this batch to avoid in-batch duplicates
+
+	for i, itemReq := range req.Items {
+		hash := contentHashes[i]
+
+		// Skip if hash exists in database (deduplication enabled)
+		if req.Deduplicate && existingHashes != nil && existingHashes[hash] {
+			skipped++
+			continue
+		}
+
+		// Skip if hash already seen in this batch (deduplication enabled)
+		if req.Deduplicate && seenHashes[hash] {
+			skipped++
+			continue
+		}
+
+		item := evaluation.NewDatasetItem(datasetID, itemReq.Input)
+		item.Expected = itemReq.Expected
+		if itemReq.Metadata != nil {
+			item.Metadata = itemReq.Metadata
+		}
+		item.ContentHash = &hash
+
+		items = append(items, item)
+		seenHashes[hash] = true
+	}
+
+	// Only create if there are items to create
+	if len(items) > 0 {
+		if err := s.itemRepo.CreateBatch(ctx, items); err != nil {
+			return 0, appErrors.NewInternalError("failed to create dataset items", err)
+		}
 	}
 
 	s.logger.Info("dataset items batch created",
 		"dataset_id", datasetID,
-		"count", len(items),
+		"created", len(items),
+		"skipped", skipped,
 	)
 
 	return len(items), nil
@@ -191,10 +235,19 @@ func (s *datasetItemService) ImportFromJSON(ctx context.Context, datasetID ulid.
 	}
 
 	// Second pass: create items
+	seenHashes := make(map[string]bool) // Track within-batch duplicates
+
 	for i, rawItem := range req.Items {
 		hash := contentHashes[i]
 
+		// Skip if already in database
 		if req.Deduplicate && existingHashes != nil && existingHashes[hash] {
+			result.Skipped++
+			continue
+		}
+
+		// Skip if already seen in this batch
+		if req.Deduplicate && seenHashes[hash] {
 			result.Skipped++
 			continue
 		}
@@ -216,6 +269,7 @@ func (s *datasetItemService) ImportFromJSON(ctx context.Context, datasetID ulid.
 		}
 
 		items = append(items, item)
+		seenHashes[hash] = true // Mark as seen in this batch
 	}
 
 	if len(items) > 0 {
@@ -366,8 +420,17 @@ func (s *datasetItemService) ImportFromCSV(ctx context.Context, datasetID ulid.U
 	}
 
 	// Second pass: create items
+	seenHashes := make(map[string]bool) // Track within-batch duplicates
+
 	for i, rd := range rowDataList {
+		// Skip if already in database
 		if req.Deduplicate && existingHashes != nil && existingHashes[rd.hash] {
+			result.Skipped++
+			continue
+		}
+
+		// Skip if already seen in this batch
+		if req.Deduplicate && seenHashes[rd.hash] {
 			result.Skipped++
 			continue
 		}
@@ -387,6 +450,7 @@ func (s *datasetItemService) ImportFromCSV(ctx context.Context, datasetID ulid.U
 		}
 
 		items = append(items, item)
+		seenHashes[rd.hash] = true // Mark as seen in this batch
 	}
 
 	if len(items) > 0 {
@@ -471,13 +535,22 @@ func (s *datasetItemService) CreateFromTraces(ctx context.Context, datasetID uli
 	}
 
 	// Second pass: create items
+	seenHashes := make(map[string]bool) // Track within-batch duplicates
+
 	for _, traceID := range req.TraceIDs {
 		td, ok := traceDataMap[traceID]
 		if !ok {
 			continue
 		}
 
+		// Skip if already in database
 		if req.Deduplicate && existingHashes != nil && existingHashes[td.hash] {
+			result.Skipped++
+			continue
+		}
+
+		// Skip if already seen in this batch
+		if req.Deduplicate && seenHashes[td.hash] {
 			result.Skipped++
 			continue
 		}
@@ -494,6 +567,7 @@ func (s *datasetItemService) CreateFromTraces(ctx context.Context, datasetID uli
 		}
 
 		items = append(items, item)
+		seenHashes[td.hash] = true // Mark as seen in this batch
 	}
 
 	if len(items) > 0 {
@@ -566,13 +640,22 @@ func (s *datasetItemService) CreateFromSpans(ctx context.Context, datasetID ulid
 	}
 
 	// Second pass: create items
+	seenHashes := make(map[string]bool) // Track within-batch duplicates
+
 	for _, spanID := range req.SpanIDs {
 		sd, ok := spanDataMap[spanID]
 		if !ok {
 			continue
 		}
 
+		// Skip if already in database
 		if req.Deduplicate && existingHashes != nil && existingHashes[sd.hash] {
+			result.Skipped++
+			continue
+		}
+
+		// Skip if already seen in this batch
+		if req.Deduplicate && seenHashes[sd.hash] {
 			result.Skipped++
 			continue
 		}
@@ -590,6 +673,7 @@ func (s *datasetItemService) CreateFromSpans(ctx context.Context, datasetID ulid
 		}
 
 		items = append(items, item)
+		seenHashes[sd.hash] = true // Mark as seen in this batch
 	}
 
 	if len(items) > 0 {

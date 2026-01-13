@@ -235,7 +235,7 @@ func (h *SDKScoreHandler) buildScore(projectID string, req *CreateScoreRequest) 
 		DataType:         req.DataType,
 		Value:            req.Value,
 		StringValue:      req.StringValue,
-		Source:           observability.ScoreSourceCode, // SDK scores are programmatic
+		Source:           observability.ScoreSourceAPI, // SDK scores are programmatic
 		Reason:           req.Reason,
 		Metadata:         metadata,
 		ExperimentID:     req.ExperimentID,
@@ -243,11 +243,14 @@ func (h *SDKScoreHandler) buildScore(projectID string, req *CreateScoreRequest) 
 		Timestamp:        time.Now(),
 	}
 
+	// Set SpanID: use provided value, or default to TraceID for trace-linked scores
 	if req.SpanID != nil {
-		score.SpanID = *req.SpanID
-	} else {
+		score.SpanID = req.SpanID
+	} else if req.TraceID != nil {
+		// Default span_id to trace_id for trace-linked scores
 		score.SpanID = req.TraceID
 	}
+	// For experiment-only scores, SpanID remains nil
 
 	return score
 }

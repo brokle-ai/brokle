@@ -272,15 +272,15 @@ func (s *itemService) submitScores(
 			OrganizationID: project.OrganizationID.String(),
 			Name:           scoreConfig.Name,
 			DataType:       string(scoreConfig.DataType),
-			Source:         "ANNOTATION",
+			Source:         observability.ScoreSourceAnnotation,
 			Metadata:       s.buildScoreMetadata(queue, item, userID, sub.Comment),
 		}
 
 		// Set trace or span ID based on object type
 		if item.ObjectType == annotation.ObjectTypeTrace {
-			score.TraceID = item.ObjectID
+			score.TraceID = &item.ObjectID
 		} else {
-			score.SpanID = item.ObjectID
+			score.SpanID = &item.ObjectID
 		}
 
 		// Set value based on data type

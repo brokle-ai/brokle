@@ -50,7 +50,7 @@ func TestUsageAggregationWorker_CalculateCost_FlatPricing(t *testing.T) {
 	// Scores: (500 - 100) / 1K * 0.10 = 400 / 1K * 0.10 = 0.4 * 0.10 = $0.04
 	// Total: $100.04
 	expectedCost := 20.0 + 80.0 + 0.04
-	assert.InDelta(t, expectedCost, cost, 0.01)
+	assert.InDelta(t, expectedCost, cost.InexactFloat64(), 0.01)
 }
 
 func TestUsageAggregationWorker_CalculateRawCost_FlatPricing(t *testing.T) {
@@ -82,7 +82,7 @@ func TestUsageAggregationWorker_CalculateRawCost_FlatPricing(t *testing.T) {
 	// Scores: 500 / 1K * 0.10 = 0.5 * 0.10 = $0.05
 	// Total: $125.05
 	expectedCost := 25.0 + 100.0 + 0.05
-	assert.InDelta(t, expectedCost, cost, 0.01)
+	assert.InDelta(t, expectedCost, cost.InexactFloat64(), 0.01)
 }
 
 func TestUsageAggregationWorker_CalculateCost_WithProgressiveTiers(t *testing.T) {
@@ -157,7 +157,7 @@ func TestUsageAggregationWorker_CalculateCost_WithProgressiveTiers(t *testing.T)
 	//
 	// Total: $1,480.04
 	expectedCost := 1400.0 + 80.0 + 0.04
-	assert.InDelta(t, expectedCost, cost, 0.01)
+	assert.InDelta(t, expectedCost, cost.InexactFloat64(), 0.01)
 }
 
 func TestUsageAggregationWorker_CalculateRawCost_WithProgressiveTiers(t *testing.T) {
@@ -218,7 +218,7 @@ func TestUsageAggregationWorker_CalculateRawCost_WithProgressiveTiers(t *testing
 	//
 	// Total: $525.05
 	expectedCost := 425.0 + 100.0 + 0.05
-	assert.InDelta(t, expectedCost, cost, 0.01)
+	assert.InDelta(t, expectedCost, cost.InexactFloat64(), 0.01)
 }
 
 // NOTE: Removed TestUsageAggregationWorker_CalculateDimensionWithTiers_MixedTiersAndFlat
