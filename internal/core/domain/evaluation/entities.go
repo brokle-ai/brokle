@@ -132,13 +132,14 @@ func (sc *ScoreConfig) ToResponse() *ScoreConfigResponse {
 
 // Dataset represents a collection of test cases for evaluation.
 type Dataset struct {
-	ID          ulid.ULID              `json:"id" gorm:"type:char(26);primaryKey"`
-	ProjectID   ulid.ULID              `json:"project_id" gorm:"type:char(26);not null;index"`
-	Name        string                 `json:"name" gorm:"type:varchar(255);not null"`
-	Description *string                `json:"description,omitempty" gorm:"type:text"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty" gorm:"type:jsonb;serializer:json;default:'{}'"`
-	CreatedAt   time.Time              `json:"created_at" gorm:"not null;autoCreateTime"`
-	UpdatedAt   time.Time              `json:"updated_at" gorm:"not null;autoUpdateTime"`
+	ID               ulid.ULID              `json:"id" gorm:"type:char(26);primaryKey"`
+	ProjectID        ulid.ULID              `json:"project_id" gorm:"type:char(26);not null;index"`
+	Name             string                 `json:"name" gorm:"type:varchar(255);not null"`
+	Description      *string                `json:"description,omitempty" gorm:"type:text"`
+	Metadata         map[string]interface{} `json:"metadata,omitempty" gorm:"type:jsonb;serializer:json;default:'{}'"`
+	CurrentVersionID *ulid.ULID             `json:"current_version_id,omitempty" gorm:"type:char(26);index"` // Pinned version (nil = use latest)
+	CreatedAt        time.Time              `json:"created_at" gorm:"not null;autoCreateTime"`
+	UpdatedAt        time.Time              `json:"updated_at" gorm:"not null;autoUpdateTime"`
 }
 
 func (Dataset) TableName() string {
@@ -183,24 +184,31 @@ type UpdateDatasetRequest struct {
 }
 
 type DatasetResponse struct {
-	ID          string                 `json:"id"`
-	ProjectID   string                 `json:"project_id"`
-	Name        string                 `json:"name"`
-	Description *string                `json:"description,omitempty"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
-	CreatedAt   time.Time              `json:"created_at"`
-	UpdatedAt   time.Time              `json:"updated_at"`
+	ID               string                 `json:"id"`
+	ProjectID        string                 `json:"project_id"`
+	Name             string                 `json:"name"`
+	Description      *string                `json:"description,omitempty"`
+	Metadata         map[string]interface{} `json:"metadata,omitempty"`
+	CurrentVersionID *string                `json:"current_version_id,omitempty"`
+	CreatedAt        time.Time              `json:"created_at"`
+	UpdatedAt        time.Time              `json:"updated_at"`
 }
 
 func (d *Dataset) ToResponse() *DatasetResponse {
+	var currentVersionID *string
+	if d.CurrentVersionID != nil {
+		id := d.CurrentVersionID.String()
+		currentVersionID = &id
+	}
 	return &DatasetResponse{
-		ID:          d.ID.String(),
-		ProjectID:   d.ProjectID.String(),
-		Name:        d.Name,
-		Description: d.Description,
-		Metadata:    d.Metadata,
-		CreatedAt:   d.CreatedAt,
-		UpdatedAt:   d.UpdatedAt,
+		ID:               d.ID.String(),
+		ProjectID:        d.ProjectID.String(),
+		Name:             d.Name,
+		Description:      d.Description,
+		Metadata:         d.Metadata,
+		CurrentVersionID: currentVersionID,
+		CreatedAt:        d.CreatedAt,
+		UpdatedAt:        d.UpdatedAt,
 	}
 }
 
@@ -450,6 +458,14 @@ type CreateExperimentRequest struct {
 	Metadata    map[string]interface{} `json:"metadata,omitempty"`
 }
 
+// RerunExperimentRequest is the request to create a new experiment based on an existing one.
+// The new experiment will have the same dataset but can have a different name and metadata.
+type RerunExperimentRequest struct {
+	Name        *string                `json:"name,omitempty" binding:"omitempty,min=1,max=255"`
+	Description *string                `json:"description,omitempty"`
+	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+}
+
 type UpdateExperimentRequest struct {
 	Name        *string                `json:"name,omitempty" binding:"omitempty,min=1,max=255"`
 	Description *string                `json:"description,omitempty"`
@@ -678,4 +694,120 @@ func abs(x float64) float64 {
 		return -x
 	}
 	return x
+}
+
+// ============================================================================
+// Dataset Versioning Types
+// ============================================================================
+
+// DatasetVersion represents a snapshot of a dataset at a point in time.
+// Versions are created automatically when items are added or removed.
+type DatasetVersion struct {
+	ID          ulid.ULID              `json:"id" gorm:"type:char(26);primaryKey"`
+	DatasetID   ulid.ULID              `json:"dataset_id" gorm:"type:char(26);not null;index"`
+	Version     int                    `json:"version" gorm:"not null"`
+	ItemCount   int                    `json:"item_count" gorm:"not null;default:0"`
+	Description *string                `json:"description,omitempty" gorm:"type:text"`
+	Metadata    map[string]interface{} `json:"metadata,omitempty" gorm:"type:jsonb;serializer:json;default:'{}'"`
+	CreatedBy   *ulid.ULID             `json:"created_by,omitempty" gorm:"type:char(26)"`
+	CreatedAt   time.Time              `json:"created_at" gorm:"not null;autoCreateTime"`
+}
+
+func (DatasetVersion) TableName() string {
+	return "dataset_versions"
+}
+
+// NewDatasetVersion creates a new dataset version.
+func NewDatasetVersion(datasetID ulid.ULID, version int, itemCount int) *DatasetVersion {
+	return &DatasetVersion{
+		ID:        ulid.New(),
+		DatasetID: datasetID,
+		Version:   version,
+		ItemCount: itemCount,
+		Metadata:  make(map[string]interface{}),
+		CreatedAt: time.Now(),
+	}
+}
+
+func (dv *DatasetVersion) Validate() []ValidationError {
+	var errors []ValidationError
+
+	if dv.Version < 1 {
+		errors = append(errors, ValidationError{Field: "version", Message: "version must be at least 1"})
+	}
+	if dv.ItemCount < 0 {
+		errors = append(errors, ValidationError{Field: "item_count", Message: "item_count cannot be negative"})
+	}
+
+	return errors
+}
+
+// DatasetVersionResponse is the API response for a dataset version.
+type DatasetVersionResponse struct {
+	ID          string                 `json:"id"`
+	DatasetID   string                 `json:"dataset_id"`
+	Version     int                    `json:"version"`
+	ItemCount   int                    `json:"item_count"`
+	Description *string                `json:"description,omitempty"`
+	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+	CreatedBy   *string                `json:"created_by,omitempty"`
+	CreatedAt   time.Time              `json:"created_at"`
+}
+
+func (dv *DatasetVersion) ToResponse() *DatasetVersionResponse {
+	var createdBy *string
+	if dv.CreatedBy != nil {
+		id := dv.CreatedBy.String()
+		createdBy = &id
+	}
+	return &DatasetVersionResponse{
+		ID:          dv.ID.String(),
+		DatasetID:   dv.DatasetID.String(),
+		Version:     dv.Version,
+		ItemCount:   dv.ItemCount,
+		Description: dv.Description,
+		Metadata:    dv.Metadata,
+		CreatedBy:   createdBy,
+		CreatedAt:   dv.CreatedAt,
+	}
+}
+
+// DatasetItemVersion is the join table linking items to versions.
+type DatasetItemVersion struct {
+	DatasetVersionID ulid.ULID `json:"dataset_version_id" gorm:"type:char(26);primaryKey"`
+	DatasetItemID    ulid.ULID `json:"dataset_item_id" gorm:"type:char(26);primaryKey"`
+}
+
+func (DatasetItemVersion) TableName() string {
+	return "dataset_item_versions"
+}
+
+// CreateDatasetVersionRequest is the request to create a new version manually.
+type CreateDatasetVersionRequest struct {
+	Description *string                `json:"description,omitempty"`
+	Metadata    map[string]interface{} `json:"metadata,omitempty"`
+}
+
+// PinDatasetVersionRequest is the request to pin a dataset to a specific version.
+type PinDatasetVersionRequest struct {
+	VersionID *string `json:"version_id"` // nil to unpin (use latest)
+}
+
+// DatasetVersionFilter is used for filtering versions.
+type DatasetVersionFilter struct {
+	DatasetID *ulid.ULID
+}
+
+// DatasetWithVersion extends Dataset to include version info in responses.
+type DatasetWithVersionResponse struct {
+	ID               string                 `json:"id"`
+	ProjectID        string                 `json:"project_id"`
+	Name             string                 `json:"name"`
+	Description      *string                `json:"description,omitempty"`
+	Metadata         map[string]interface{} `json:"metadata,omitempty"`
+	CurrentVersionID *string                `json:"current_version_id,omitempty"`
+	CurrentVersion   *int                   `json:"current_version,omitempty"`
+	LatestVersion    *int                   `json:"latest_version,omitempty"`
+	CreatedAt        time.Time              `json:"created_at"`
+	UpdatedAt        time.Time              `json:"updated_at"`
 }

@@ -7,8 +7,12 @@ import type {
   CreateDatasetRequest,
   UpdateDatasetRequest,
   CreateDatasetItemRequest,
+  CreateDatasetVersionRequest,
+  PinDatasetVersionRequest,
   Dataset,
   DatasetItem,
+  DatasetVersion,
+  DatasetWithVersionInfo,
   BulkImportResult,
   ImportFromJsonRequest,
   ImportFromTracesRequest,
@@ -23,6 +27,15 @@ export const datasetQueryKeys = {
     [...datasetQueryKeys.all, 'detail', projectId, datasetId] as const,
   items: (projectId: string, datasetId: string) =>
     [...datasetQueryKeys.all, 'items', projectId, datasetId] as const,
+  // Version-related query keys
+  versionInfo: (projectId: string, datasetId: string) =>
+    [...datasetQueryKeys.all, 'versionInfo', projectId, datasetId] as const,
+  versions: (projectId: string, datasetId: string) =>
+    [...datasetQueryKeys.all, 'versions', projectId, datasetId] as const,
+  versionDetail: (projectId: string, datasetId: string, versionId: string) =>
+    [...datasetQueryKeys.all, 'version', projectId, datasetId, versionId] as const,
+  versionItems: (projectId: string, datasetId: string, versionId: string) =>
+    [...datasetQueryKeys.all, 'versionItems', projectId, datasetId, versionId] as const,
 }
 
 export function useDatasetsQuery(projectId: string | undefined) {
@@ -336,5 +349,152 @@ export function useExportDatasetQuery(
     enabled: enabled && !!projectId && !!datasetId,
     staleTime: 0,
     gcTime: 0,
+  })
+}
+
+// ============================================================================
+// Dataset Versioning Hooks
+// ============================================================================
+
+export function useDatasetWithVersionInfoQuery(
+  projectId: string | undefined,
+  datasetId: string | undefined
+) {
+  return useQuery({
+    queryKey: datasetQueryKeys.versionInfo(projectId ?? '', datasetId ?? ''),
+    queryFn: () => datasetsApi.getDatasetWithVersionInfo(projectId!, datasetId!),
+    enabled: !!projectId && !!datasetId,
+    staleTime: 30_000,
+    gcTime: 5 * 60 * 1000,
+  })
+}
+
+export function useDatasetVersionsQuery(
+  projectId: string | undefined,
+  datasetId: string | undefined
+) {
+  return useQuery({
+    queryKey: datasetQueryKeys.versions(projectId ?? '', datasetId ?? ''),
+    queryFn: () => datasetsApi.listVersions(projectId!, datasetId!),
+    enabled: !!projectId && !!datasetId,
+    staleTime: 30_000,
+    gcTime: 5 * 60 * 1000,
+  })
+}
+
+export function useDatasetVersionQuery(
+  projectId: string | undefined,
+  datasetId: string | undefined,
+  versionId: string | undefined
+) {
+  return useQuery({
+    queryKey: datasetQueryKeys.versionDetail(projectId ?? '', datasetId ?? '', versionId ?? ''),
+    queryFn: () => datasetsApi.getVersion(projectId!, datasetId!, versionId!),
+    enabled: !!projectId && !!datasetId && !!versionId,
+    staleTime: 30_000,
+    gcTime: 5 * 60 * 1000,
+  })
+}
+
+export function useDatasetVersionItemsQuery(
+  projectId: string | undefined,
+  datasetId: string | undefined,
+  versionId: string | undefined,
+  limit = 50,
+  offset = 0
+) {
+  return useQuery({
+    queryKey: [...datasetQueryKeys.versionItems(projectId ?? '', datasetId ?? '', versionId ?? ''), limit, offset],
+    queryFn: () => datasetsApi.getVersionItems(projectId!, datasetId!, versionId!, limit, offset),
+    enabled: !!projectId && !!datasetId && !!versionId,
+    staleTime: 30_000,
+    gcTime: 5 * 60 * 1000,
+  })
+}
+
+export function useCreateDatasetVersionMutation(projectId: string, datasetId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (data?: CreateDatasetVersionRequest) =>
+      datasetsApi.createVersion(projectId, datasetId, data),
+    onSuccess: (newVersion) => {
+      // Invalidate versions list and version info
+      queryClient.invalidateQueries({
+        queryKey: datasetQueryKeys.versions(projectId, datasetId),
+      })
+      queryClient.invalidateQueries({
+        queryKey: datasetQueryKeys.versionInfo(projectId, datasetId),
+      })
+      toast.success('Version Created', {
+        description: `Version ${newVersion.version} has been created with ${newVersion.item_count} items.`,
+      })
+    },
+    onError: (error: unknown) => {
+      const apiError = error as { message?: string }
+      toast.error('Failed to Create Version', {
+        description: apiError?.message || 'Could not create version. Please try again.',
+      })
+    },
+  })
+}
+
+export function usePinDatasetVersionMutation(projectId: string, datasetId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (data: PinDatasetVersionRequest) =>
+      datasetsApi.pinVersion(projectId, datasetId, data),
+    onSuccess: (dataset, variables) => {
+      // Invalidate version info and dataset detail
+      queryClient.invalidateQueries({
+        queryKey: datasetQueryKeys.versionInfo(projectId, datasetId),
+      })
+      queryClient.invalidateQueries({
+        queryKey: datasetQueryKeys.detail(projectId, datasetId),
+      })
+
+      if (variables.version_id) {
+        toast.success('Version Pinned', {
+          description: 'Dataset is now pinned to the selected version.',
+        })
+      } else {
+        toast.success('Version Unpinned', {
+          description: 'Dataset will now use the latest items.',
+        })
+      }
+    },
+    onError: (error: unknown) => {
+      const apiError = error as { message?: string }
+      toast.error('Failed to Update Version Pin', {
+        description: apiError?.message || 'Could not update version pin. Please try again.',
+      })
+    },
+  })
+}
+
+export function useUnpinDatasetVersionMutation(projectId: string, datasetId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: () => datasetsApi.unpinVersion(projectId, datasetId),
+    onSuccess: () => {
+      // Invalidate version info and dataset detail
+      queryClient.invalidateQueries({
+        queryKey: datasetQueryKeys.versionInfo(projectId, datasetId),
+      })
+      queryClient.invalidateQueries({
+        queryKey: datasetQueryKeys.detail(projectId, datasetId),
+      })
+      toast.success('Version Unpinned', {
+        description: 'Dataset will now use the latest items.',
+      })
+    },
+    onError: (error: unknown) => {
+      const apiError = error as { message?: string }
+      toast.error('Failed to Unpin Version', {
+        description: apiError?.message || 'Could not unpin version. Please try again.',
+      })
+    },
   })
 }

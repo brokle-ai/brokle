@@ -392,3 +392,50 @@ func (h *ExperimentHandler) CreateItems(c *gin.Context) {
 
 	response.Created(c, &SDKBatchCreateExperimentItemsResponse{Created: count})
 }
+
+// @Summary Re-run experiment
+// @Description Creates a new experiment based on an existing one, using the same dataset.
+// @Description The new experiment starts in pending status, ready for the SDK to run with a new task function.
+// @Tags Experiments
+// @Accept json
+// @Produce json
+// @Param projectId path string true "Project ID"
+// @Param experimentId path string true "Source Experiment ID"
+// @Param request body evaluation.RerunExperimentRequest false "Optional overrides for name, description, metadata"
+// @Success 201 {object} evaluation.ExperimentResponse
+// @Failure 400 {object} response.ErrorResponse
+// @Failure 401 {object} response.ErrorResponse
+// @Failure 404 {object} response.ErrorResponse "Source experiment not found"
+// @Router /api/v1/projects/{projectId}/experiments/{experimentId}/rerun [post]
+func (h *ExperimentHandler) Rerun(c *gin.Context) {
+	projectID, err := ulid.Parse(c.Param("projectId"))
+	if err != nil {
+		response.Error(c, appErrors.NewValidationError("projectId", "must be a valid ULID"))
+		return
+	}
+
+	experimentID, err := ulid.Parse(c.Param("experimentId"))
+	if err != nil {
+		response.Error(c, appErrors.NewValidationError("experimentId", "must be a valid ULID"))
+		return
+	}
+
+	var req evaluationDomain.RerunExperimentRequest
+	// Allow empty body - all fields are optional
+	_ = c.ShouldBindJSON(&req)
+
+	experiment, err := h.service.Rerun(c.Request.Context(), experimentID, projectID, &req)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	h.logger.Info("experiment rerun created",
+		"experiment_id", experiment.ID,
+		"source_experiment_id", experimentID,
+		"project_id", projectID,
+		"name", experiment.Name,
+	)
+
+	response.Created(c, experiment.ToResponse())
+}

@@ -308,12 +308,15 @@ func (h *DatasetHandler) ListItems(c *gin.Context) {
 	for i, item := range items {
 		domainResp := item.ToResponse()
 		responses[i] = &DatasetItemResponse{
-			ID:        domainResp.ID,
-			DatasetID: domainResp.DatasetID,
-			Input:     domainResp.Input,
-			Expected:  domainResp.Expected,
-			Metadata:  domainResp.Metadata,
-			CreatedAt: domainResp.CreatedAt,
+			ID:            domainResp.ID,
+			DatasetID:     domainResp.DatasetID,
+			Input:         domainResp.Input,
+			Expected:      domainResp.Expected,
+			Metadata:      domainResp.Metadata,
+			Source:        string(domainResp.Source),
+			SourceTraceID: domainResp.SourceTraceID,
+			SourceSpanID:  domainResp.SourceSpanID,
+			CreatedAt:     domainResp.CreatedAt,
 		}
 	}
 

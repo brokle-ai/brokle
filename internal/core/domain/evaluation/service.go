@@ -40,6 +40,23 @@ type DatasetItemService interface {
 	ExportItems(ctx context.Context, datasetID ulid.ULID, projectID ulid.ULID) ([]*DatasetItem, error)
 }
 
+type DatasetVersionService interface {
+	// CreateVersion creates a new version snapshot of the current dataset items
+	CreateVersion(ctx context.Context, datasetID ulid.ULID, projectID ulid.ULID, req *CreateDatasetVersionRequest) (*DatasetVersion, error)
+	// GetVersion gets a specific version by ID
+	GetVersion(ctx context.Context, versionID ulid.ULID, datasetID ulid.ULID, projectID ulid.ULID) (*DatasetVersion, error)
+	// ListVersions lists all versions for a dataset
+	ListVersions(ctx context.Context, datasetID ulid.ULID, projectID ulid.ULID) ([]*DatasetVersion, error)
+	// GetLatestVersion gets the most recent version
+	GetLatestVersion(ctx context.Context, datasetID ulid.ULID, projectID ulid.ULID) (*DatasetVersion, error)
+	// GetVersionItems gets items for a specific version with pagination
+	GetVersionItems(ctx context.Context, versionID ulid.ULID, datasetID ulid.ULID, projectID ulid.ULID, limit, offset int) ([]*DatasetItem, int64, error)
+	// PinVersion pins the dataset to a specific version (nil to unpin)
+	PinVersion(ctx context.Context, datasetID ulid.ULID, projectID ulid.ULID, versionID *ulid.ULID) (*Dataset, error)
+	// GetDatasetWithVersionInfo gets a dataset with its version information
+	GetDatasetWithVersionInfo(ctx context.Context, datasetID ulid.ULID, projectID ulid.ULID) (*DatasetWithVersionResponse, error)
+}
+
 type ExperimentService interface {
 	Create(ctx context.Context, projectID ulid.ULID, req *CreateExperimentRequest) (*Experiment, error)
 	Update(ctx context.Context, id ulid.ULID, projectID ulid.ULID, req *UpdateExperimentRequest) (*Experiment, error)
@@ -49,6 +66,10 @@ type ExperimentService interface {
 
 	// CompareExperiments compares score metrics across multiple experiments
 	CompareExperiments(ctx context.Context, projectID ulid.ULID, experimentIDs []ulid.ULID, baselineID *ulid.ULID) (*CompareExperimentsResponse, error)
+
+	// Rerun creates a new experiment based on an existing one, using the same dataset.
+	// The new experiment starts in pending status ready for SDK to run with a new task function.
+	Rerun(ctx context.Context, sourceID ulid.ULID, projectID ulid.ULID, req *RerunExperimentRequest) (*Experiment, error)
 }
 
 type ExperimentItemService interface {

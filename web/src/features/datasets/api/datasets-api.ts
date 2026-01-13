@@ -11,6 +11,10 @@ import type {
   ImportFromTracesRequest,
   ImportFromSpansRequest,
   ImportFromCsvRequest,
+  DatasetVersion,
+  DatasetWithVersionInfo,
+  CreateDatasetVersionRequest,
+  PinDatasetVersionRequest,
 } from '../types'
 
 const client = new BrokleAPIClient('/api')
@@ -132,6 +136,79 @@ export const datasetsApi = {
   ): Promise<DatasetItem[]> => {
     return client.get<DatasetItem[]>(
       `/v1/projects/${projectId}/datasets/${datasetId}/items/export`
+    )
+  },
+
+  // Dataset Versioning
+  getDatasetWithVersionInfo: async (
+    projectId: string,
+    datasetId: string
+  ): Promise<DatasetWithVersionInfo> => {
+    return client.get<DatasetWithVersionInfo>(
+      `/v1/projects/${projectId}/datasets/${datasetId}/info`
+    )
+  },
+
+  listVersions: async (
+    projectId: string,
+    datasetId: string
+  ): Promise<DatasetVersion[]> => {
+    return client.get<DatasetVersion[]>(
+      `/v1/projects/${projectId}/datasets/${datasetId}/versions`
+    )
+  },
+
+  getVersion: async (
+    projectId: string,
+    datasetId: string,
+    versionId: string
+  ): Promise<DatasetVersion> => {
+    return client.get<DatasetVersion>(
+      `/v1/projects/${projectId}/datasets/${datasetId}/versions/${versionId}`
+    )
+  },
+
+  createVersion: async (
+    projectId: string,
+    datasetId: string,
+    data?: CreateDatasetVersionRequest
+  ): Promise<DatasetVersion> => {
+    return client.post<DatasetVersion>(
+      `/v1/projects/${projectId}/datasets/${datasetId}/versions`,
+      data ?? {}
+    )
+  },
+
+  getVersionItems: async (
+    projectId: string,
+    datasetId: string,
+    versionId: string,
+    limit = 50,
+    offset = 0
+  ): Promise<DatasetItemListResponse> => {
+    return client.get<DatasetItemListResponse>(
+      `/v1/projects/${projectId}/datasets/${datasetId}/versions/${versionId}/items?limit=${limit}&offset=${offset}`
+    )
+  },
+
+  pinVersion: async (
+    projectId: string,
+    datasetId: string,
+    data: PinDatasetVersionRequest
+  ): Promise<Dataset> => {
+    return client.post<Dataset>(
+      `/v1/projects/${projectId}/datasets/${datasetId}/pin`,
+      data
+    )
+  },
+
+  unpinVersion: async (
+    projectId: string,
+    datasetId: string
+  ): Promise<Dataset> => {
+    return client.post<Dataset>(
+      `/v1/projects/${projectId}/datasets/${datasetId}/pin`,
+      { version_id: null }
     )
   },
 }

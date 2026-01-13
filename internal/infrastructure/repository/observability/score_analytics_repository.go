@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"time"
 
 	"brokle/internal/core/domain/observability"
 
@@ -611,4 +612,185 @@ func computeRanks(values []float64) []float64 {
 	}
 
 	return ranks
+}
+
+// ============================================================================
+// Materialized View-Optimized Methods
+// ============================================================================
+// These methods query pre-aggregated materialized views for faster analytics
+// at scale. The views are automatically maintained by ClickHouse.
+
+// GetExperimentScoreSummary returns pre-aggregated score statistics for an experiment
+// Uses the scores_by_experiment materialized view for O(1) lookup instead of scanning scores table
+func (r *scoreAnalyticsRepository) GetExperimentScoreSummary(ctx context.Context, projectID string, experimentID string) ([]observability.ExperimentScoreSummary, error) {
+	query := `
+		SELECT
+			experiment_id,
+			name,
+			countMerge(count_state) as total_count,
+			sumMerge(sum_state) as total_sum,
+			minMerge(min_state) as min_val,
+			maxMerge(max_state) as max_val
+		FROM scores_by_experiment
+		WHERE project_id = ?
+		  AND experiment_id = ?
+		GROUP BY experiment_id, name
+		ORDER BY name ASC
+	`
+
+	rows, err := r.db.Query(ctx, query, projectID, experimentID)
+	if err != nil {
+		return nil, fmt.Errorf("query experiment score summary: %w", err)
+	}
+	defer rows.Close()
+
+	var summaries []observability.ExperimentScoreSummary
+	for rows.Next() {
+		var s observability.ExperimentScoreSummary
+		if err := rows.Scan(&s.ExperimentID, &s.ScoreName, &s.Count, &s.SumValue, &s.MinValue, &s.MaxValue); err != nil {
+			return nil, fmt.Errorf("scan experiment score summary: %w", err)
+		}
+		// Compute average
+		if s.Count > 0 {
+			s.AvgValue = s.SumValue / float64(s.Count)
+		}
+		// Handle NaN
+		if math.IsNaN(s.AvgValue) {
+			s.AvgValue = 0
+		}
+		if math.IsNaN(s.MinValue) {
+			s.MinValue = 0
+		}
+		if math.IsNaN(s.MaxValue) {
+			s.MaxValue = 0
+		}
+		summaries = append(summaries, s)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate experiment score summary rows: %w", err)
+	}
+
+	return summaries, nil
+}
+
+// GetSourceDistribution returns score counts grouped by source type per day
+// Uses the scores_source_distribution materialized view for fast aggregation
+func (r *scoreAnalyticsRepository) GetSourceDistribution(ctx context.Context, projectID string, fromTimestamp, toTimestamp *time.Time) ([]observability.SourceDistributionPoint, error) {
+	query := `
+		SELECT
+			source,
+			day,
+			sum(count) as total_count
+		FROM scores_source_distribution
+		WHERE project_id = ?
+	`
+	args := []interface{}{projectID}
+
+	if fromTimestamp != nil {
+		query += " AND day >= toDate(?)"
+		args = append(args, *fromTimestamp)
+	}
+	if toTimestamp != nil {
+		query += " AND day <= toDate(?)"
+		args = append(args, *toTimestamp)
+	}
+
+	query += " GROUP BY source, day ORDER BY day ASC, source ASC"
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query source distribution: %w", err)
+	}
+	defer rows.Close()
+
+	var points []observability.SourceDistributionPoint
+	for rows.Next() {
+		var p observability.SourceDistributionPoint
+		var sourceEnum uint8
+		if err := rows.Scan(&sourceEnum, &p.Day, &p.Count); err != nil {
+			return nil, fmt.Errorf("scan source distribution point: %w", err)
+		}
+		// Map enum to string
+		switch sourceEnum {
+		case 1:
+			p.Source = "code"
+		case 2:
+			p.Source = "llm"
+		case 3:
+			p.Source = "human"
+		default:
+			p.Source = "unknown"
+		}
+		points = append(points, p)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate source distribution rows: %w", err)
+	}
+
+	return points, nil
+}
+
+// GetDailySummary returns pre-aggregated daily score metrics for a specific score name
+// Uses the scores_daily_summary materialized view for fast time series queries
+func (r *scoreAnalyticsRepository) GetDailySummary(ctx context.Context, projectID string, scoreName string, fromTimestamp, toTimestamp *time.Time) ([]observability.DailySummaryPoint, error) {
+	query := `
+		SELECT
+			day,
+			countMerge(count_state) as total_count,
+			sumMerge(sum_state) as total_sum,
+			minMerge(min_state) as min_val,
+			maxMerge(max_state) as max_val
+		FROM scores_daily_summary
+		WHERE project_id = ?
+		  AND name = ?
+	`
+	args := []interface{}{projectID, scoreName}
+
+	if fromTimestamp != nil {
+		query += " AND day >= toDate(?)"
+		args = append(args, *fromTimestamp)
+	}
+	if toTimestamp != nil {
+		query += " AND day <= toDate(?)"
+		args = append(args, *toTimestamp)
+	}
+
+	query += " GROUP BY day ORDER BY day ASC"
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query daily summary: %w", err)
+	}
+	defer rows.Close()
+
+	var points []observability.DailySummaryPoint
+	for rows.Next() {
+		var p observability.DailySummaryPoint
+		if err := rows.Scan(&p.Day, &p.Count, &p.SumValue, &p.MinValue, &p.MaxValue); err != nil {
+			return nil, fmt.Errorf("scan daily summary point: %w", err)
+		}
+		// Compute average
+		if p.Count > 0 {
+			p.AvgValue = p.SumValue / float64(p.Count)
+		}
+		// Handle NaN
+		if math.IsNaN(p.AvgValue) {
+			p.AvgValue = 0
+		}
+		if math.IsNaN(p.MinValue) {
+			p.MinValue = 0
+		}
+		if math.IsNaN(p.MaxValue) {
+			p.MaxValue = 0
+		}
+		points = append(points, p)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate daily summary rows: %w", err)
+	}
+
+	return points, nil
 }

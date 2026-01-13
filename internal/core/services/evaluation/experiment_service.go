@@ -170,6 +170,63 @@ func (s *experimentService) List(ctx context.Context, projectID ulid.ULID, filte
 	return experiments, nil
 }
 
+// Rerun creates a new experiment based on an existing one, using the same dataset.
+func (s *experimentService) Rerun(ctx context.Context, sourceID ulid.ULID, projectID ulid.ULID, req *evaluation.RerunExperimentRequest) (*evaluation.Experiment, error) {
+	// Get the source experiment
+	sourceExp, err := s.repo.GetByID(ctx, sourceID, projectID)
+	if err != nil {
+		if errors.Is(err, evaluation.ErrExperimentNotFound) {
+			return nil, appErrors.NewNotFoundError(fmt.Sprintf("experiment %s", sourceID))
+		}
+		return nil, appErrors.NewInternalError("failed to get source experiment", err)
+	}
+
+	// Generate default name if not provided: "Original Name (Re-run)"
+	name := fmt.Sprintf("%s (Re-run)", sourceExp.Name)
+	if req.Name != nil && *req.Name != "" {
+		name = *req.Name
+	}
+
+	// Create the new experiment
+	newExp := evaluation.NewExperiment(projectID, name)
+	newExp.DatasetID = sourceExp.DatasetID
+	newExp.Description = req.Description
+	if newExp.Description == nil {
+		newExp.Description = sourceExp.Description
+	}
+	if req.Metadata != nil {
+		newExp.Metadata = req.Metadata
+	} else if sourceExp.Metadata != nil {
+		// Copy source metadata and add rerun reference
+		newExp.Metadata = make(map[string]interface{})
+		for k, v := range sourceExp.Metadata {
+			newExp.Metadata[k] = v
+		}
+	}
+	// Add reference to source experiment (ensure map is initialized)
+	if newExp.Metadata == nil {
+		newExp.Metadata = make(map[string]interface{})
+	}
+	newExp.Metadata["source_experiment_id"] = sourceID.String()
+
+	if validationErrors := newExp.Validate(); len(validationErrors) > 0 {
+		return nil, appErrors.NewValidationError(validationErrors[0].Field, validationErrors[0].Message)
+	}
+
+	if err := s.repo.Create(ctx, newExp); err != nil {
+		return nil, appErrors.NewInternalError("failed to create experiment", err)
+	}
+
+	s.logger.Info("experiment rerun created",
+		"experiment_id", newExp.ID,
+		"source_experiment_id", sourceID,
+		"project_id", projectID,
+		"name", newExp.Name,
+	)
+
+	return newExp, nil
+}
+
 // CompareExperiments compares score metrics across multiple experiments
 func (s *experimentService) CompareExperiments(
 	ctx context.Context,

@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"brokle/internal/core/domain/evaluation"
+	"brokle/internal/infrastructure/shared"
 	"brokle/pkg/ulid"
 
 	"gorm.io/gorm"
@@ -18,20 +19,25 @@ func NewDatasetItemRepository(db *gorm.DB) *DatasetItemRepository {
 	return &DatasetItemRepository{db: db}
 }
 
+// getDB returns transaction-aware DB instance
+func (r *DatasetItemRepository) getDB(ctx context.Context) *gorm.DB {
+	return shared.GetDB(ctx, r.db)
+}
+
 func (r *DatasetItemRepository) Create(ctx context.Context, item *evaluation.DatasetItem) error {
-	return r.db.WithContext(ctx).Create(item).Error
+	return r.getDB(ctx).WithContext(ctx).Create(item).Error
 }
 
 func (r *DatasetItemRepository) CreateBatch(ctx context.Context, items []*evaluation.DatasetItem) error {
 	if len(items) == 0 {
 		return nil
 	}
-	return r.db.WithContext(ctx).CreateInBatches(items, 100).Error
+	return r.getDB(ctx).WithContext(ctx).CreateInBatches(items, 100).Error
 }
 
 func (r *DatasetItemRepository) GetByID(ctx context.Context, id ulid.ULID, datasetID ulid.ULID) (*evaluation.DatasetItem, error) {
 	var item evaluation.DatasetItem
-	result := r.db.WithContext(ctx).
+	result := r.getDB(ctx).WithContext(ctx).
 		Where("id = ? AND dataset_id = ?", id.String(), datasetID.String()).
 		First(&item)
 
@@ -46,7 +52,7 @@ func (r *DatasetItemRepository) GetByID(ctx context.Context, id ulid.ULID, datas
 
 func (r *DatasetItemRepository) GetByIDForProject(ctx context.Context, id ulid.ULID, projectID ulid.ULID) (*evaluation.DatasetItem, error) {
 	var item evaluation.DatasetItem
-	result := r.db.WithContext(ctx).
+	result := r.getDB(ctx).WithContext(ctx).
 		Joins("JOIN datasets ON datasets.id = dataset_items.dataset_id").
 		Where("dataset_items.id = ? AND datasets.project_id = ?", id.String(), projectID.String()).
 		First(&item)
@@ -64,7 +70,7 @@ func (r *DatasetItemRepository) List(ctx context.Context, datasetID ulid.ULID, l
 	var items []*evaluation.DatasetItem
 	var total int64
 
-	baseQuery := r.db.WithContext(ctx).
+	baseQuery := r.getDB(ctx).WithContext(ctx).
 		Model(&evaluation.DatasetItem{}).
 		Where("dataset_id = ?", datasetID.String())
 
@@ -72,7 +78,7 @@ func (r *DatasetItemRepository) List(ctx context.Context, datasetID ulid.ULID, l
 		return nil, 0, err
 	}
 
-	result := r.db.WithContext(ctx).
+	result := r.getDB(ctx).WithContext(ctx).
 		Where("dataset_id = ?", datasetID.String()).
 		Order("created_at DESC").
 		Limit(limit).
@@ -86,7 +92,7 @@ func (r *DatasetItemRepository) List(ctx context.Context, datasetID ulid.ULID, l
 }
 
 func (r *DatasetItemRepository) Delete(ctx context.Context, id ulid.ULID, datasetID ulid.ULID) error {
-	result := r.db.WithContext(ctx).
+	result := r.getDB(ctx).WithContext(ctx).
 		Where("id = ? AND dataset_id = ?", id.String(), datasetID.String()).
 		Delete(&evaluation.DatasetItem{})
 
@@ -102,7 +108,7 @@ func (r *DatasetItemRepository) Delete(ctx context.Context, id ulid.ULID, datase
 
 func (r *DatasetItemRepository) CountByDataset(ctx context.Context, datasetID ulid.ULID) (int64, error) {
 	var count int64
-	result := r.db.WithContext(ctx).
+	result := r.getDB(ctx).WithContext(ctx).
 		Model(&evaluation.DatasetItem{}).
 		Where("dataset_id = ?", datasetID.String()).
 		Count(&count)
@@ -116,7 +122,7 @@ func (r *DatasetItemRepository) CountByDataset(ctx context.Context, datasetID ul
 // FindByContentHash finds a dataset item by its content hash for deduplication.
 func (r *DatasetItemRepository) FindByContentHash(ctx context.Context, datasetID ulid.ULID, contentHash string) (*evaluation.DatasetItem, error) {
 	var item evaluation.DatasetItem
-	result := r.db.WithContext(ctx).
+	result := r.getDB(ctx).WithContext(ctx).
 		Where("dataset_id = ? AND content_hash = ?", datasetID.String(), contentHash).
 		First(&item)
 
@@ -136,7 +142,7 @@ func (r *DatasetItemRepository) FindByContentHashes(ctx context.Context, dataset
 	}
 
 	var hashes []string
-	result := r.db.WithContext(ctx).
+	result := r.getDB(ctx).WithContext(ctx).
 		Model(&evaluation.DatasetItem{}).
 		Where("dataset_id = ? AND content_hash IN ?", datasetID.String(), contentHashes).
 		Pluck("content_hash", &hashes)
@@ -156,7 +162,7 @@ func (r *DatasetItemRepository) FindByContentHashes(ctx context.Context, dataset
 // ListAll returns all dataset items for export (no pagination).
 func (r *DatasetItemRepository) ListAll(ctx context.Context, datasetID ulid.ULID) ([]*evaluation.DatasetItem, error) {
 	var items []*evaluation.DatasetItem
-	result := r.db.WithContext(ctx).
+	result := r.getDB(ctx).WithContext(ctx).
 		Where("dataset_id = ?", datasetID.String()).
 		Order("created_at ASC").
 		Find(&items)

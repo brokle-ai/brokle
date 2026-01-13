@@ -20,6 +20,12 @@ export type {
   ImportFromJsonRequest,
   ImportFromTracesRequest,
   ImportFromSpansRequest,
+  // Version types
+  DatasetVersion,
+  DatasetVersionResponse,
+  DatasetWithVersionInfo,
+  CreateDatasetVersionRequest,
+  PinDatasetVersionRequest,
 } from './types'
 
 export { datasetsApi } from './api/datasets-api'
@@ -38,6 +44,14 @@ export {
   useImportFromSpansMutation,
   useExportDatasetQuery,
   datasetQueryKeys,
+  // Version hooks
+  useDatasetWithVersionInfoQuery,
+  useDatasetVersionsQuery,
+  useDatasetVersionQuery,
+  useDatasetVersionItemsQuery,
+  useCreateDatasetVersionMutation,
+  usePinDatasetVersionMutation,
+  useUnpinDatasetVersionMutation,
 } from './hooks/use-datasets'
 export { useProjectDatasets } from './hooks/use-project-datasets'
 export type { UseProjectDatasetsReturn } from './hooks/use-project-datasets'
@@ -56,3 +70,7 @@ export { DatasetDetailSkeleton } from './components/dataset-detail-skeleton'
 // Import Dialogs
 export { ImportJsonDialog } from './components/import-json-dialog'
 export { AddFromTracesDialog, AddTraceToDatasetDialog } from './components/add-from-traces-dialog'
+
+// Version components
+export { DatasetVersionBadge } from './components/dataset-version-badge'
+export { DatasetVersionManager } from './components/dataset-version-manager'

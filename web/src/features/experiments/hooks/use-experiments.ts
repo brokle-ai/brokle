@@ -6,6 +6,7 @@ import { experimentsApi } from '../api/experiments-api'
 import type {
   CreateExperimentRequest,
   UpdateExperimentRequest,
+  RerunExperimentRequest,
   Experiment,
 } from '../types'
 
@@ -166,6 +167,35 @@ export function useDeleteExperimentMutation(projectId: string) {
       toast.error('Failed to Delete Experiment', {
         description:
           apiError?.message || 'Could not delete experiment. Please try again.',
+      })
+    },
+  })
+}
+
+export function useRerunExperimentMutation(projectId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({
+      experimentId,
+      data,
+    }: {
+      experimentId: string
+      data?: RerunExperimentRequest
+    }) => experimentsApi.rerunExperiment(projectId, experimentId, data),
+    onSuccess: (newExperiment) => {
+      queryClient.invalidateQueries({
+        queryKey: experimentQueryKeys.all,
+      })
+      toast.success('Experiment Re-run Created', {
+        description: `"${newExperiment.name}" has been created. Run your evaluation task to populate results.`,
+      })
+    },
+    onError: (error: unknown) => {
+      const apiError = error as { message?: string }
+      toast.error('Failed to Re-run Experiment', {
+        description:
+          apiError?.message || 'Could not create re-run. Please try again.',
       })
     },
   })

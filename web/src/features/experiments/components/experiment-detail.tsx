@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { formatDistanceToNow } from 'date-fns'
-import { Pencil, Trash2 } from 'lucide-react'
+import { Pencil, RefreshCw, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/layout/page-header'
 import { ExperimentDetailProvider, useExperimentDetail } from '../context/experiment-detail-context'
@@ -77,6 +77,10 @@ function ExperimentDetailContent() {
           <Button variant="outline" onClick={() => setOpen('edit')}>
             <Pencil className="mr-2 h-4 w-4" />
             Edit
+          </Button>
+          <Button variant="outline" onClick={() => setOpen('rerun')}>
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Re-run
           </Button>
           <Button
             variant="outline"

@@ -66,11 +66,12 @@ type Handlers struct {
 	SDKScore      *evaluationHandler.SDKScoreHandler
 	Dataset        *evaluationHandler.DatasetHandler
 	DatasetItem    *evaluationHandler.DatasetItemHandler
+	DatasetVersion *evaluationHandler.DatasetVersionHandler
 	Experiment     *evaluationHandler.ExperimentHandler
 	ExperimentItem *evaluationHandler.ExperimentItemHandler
-	Rule           *evaluationHandler.RuleHandler
-	RuleExecution  *evaluationHandler.RuleExecutionHandler
-	SpanQuery         *observability.SpanQueryHandler
+	Rule          *evaluationHandler.RuleHandler
+	RuleExecution *evaluationHandler.RuleExecutionHandler
+	SpanQuery     *observability.SpanQueryHandler
 	Dashboard         *dashboard.Handler
 	DashboardTemplate *dashboard.TemplateHandler
 	Overview          *overview.Handler
@@ -108,6 +109,7 @@ func NewHandlers(
 	scoreConfigService evaluationDomain.ScoreConfigService,
 	datasetService evaluationDomain.DatasetService,
 	datasetItemService evaluationDomain.DatasetItemService,
+	datasetVersionService evaluationDomain.DatasetVersionService,
 	experimentService evaluationDomain.ExperimentService,
 	experimentItemService evaluationDomain.ExperimentItemService,
 	ruleService evaluationDomain.RuleService,
@@ -149,11 +151,12 @@ func NewHandlers(
 		SDKScore:      evaluationHandler.NewSDKScoreHandler(logger, observabilityServices.ScoreService, scoreConfigService),
 		Dataset:        evaluationHandler.NewDatasetHandler(logger, datasetService, datasetItemService),
 		DatasetItem:    evaluationHandler.NewDatasetItemHandler(logger, datasetItemService),
+		DatasetVersion: evaluationHandler.NewDatasetVersionHandler(logger, datasetVersionService),
 		Experiment:     evaluationHandler.NewExperimentHandler(logger, experimentService, experimentItemService),
 		ExperimentItem: evaluationHandler.NewExperimentItemHandler(logger, experimentItemService),
-		Rule:           evaluationHandler.NewRuleHandler(ruleService),
-		RuleExecution:  evaluationHandler.NewRuleExecutionHandler(ruleExecutionService),
-		SpanQuery:         observability.NewSpanQueryHandler(observabilityServices.SpanQueryService, logger),
+		Rule:          evaluationHandler.NewRuleHandler(ruleService),
+		RuleExecution: evaluationHandler.NewRuleExecutionHandler(ruleExecutionService),
+		SpanQuery:     observability.NewSpanQueryHandler(observabilityServices.SpanQueryService, logger),
 		Dashboard:         dashboard.NewHandler(cfg, logger, dashboardService, widgetQueryService),
 		DashboardTemplate: dashboard.NewTemplateHandler(cfg, logger, templateService),
 		Overview:          overview.NewHandler(cfg, logger, overviewService),
