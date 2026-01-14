@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Loader2, CheckCircle, XCircle, AlertTriangle, Building2, UserCircle, Shield, Ban } from 'lucide-react'
@@ -38,7 +38,7 @@ interface InvitationDetails {
   expiresAt: Date
 }
 
-export default function AcceptInvitePage() {
+function AcceptInviteContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const { user, isLoading: authLoading } = useAuth()
@@ -495,5 +495,24 @@ export default function AcceptInvitePage() {
         </CardFooter>
       </Card>
     </AuthLayout>
+  )
+}
+
+export default function AcceptInvitePage() {
+  return (
+    <Suspense
+      fallback={
+        <AuthLayout>
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mb-4" />
+              <p className="text-muted-foreground">Validating invitation...</p>
+            </CardContent>
+          </Card>
+        </AuthLayout>
+      }
+    >
+      <AcceptInviteContent />
+    </Suspense>
   )
 }
