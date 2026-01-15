@@ -32,7 +32,7 @@ func NewScoreConfigService(
 }
 
 func (s *scoreConfigService) Create(ctx context.Context, projectID ulid.ULID, req *evaluation.CreateScoreConfigRequest) (*evaluation.ScoreConfig, error) {
-	config := evaluation.NewScoreConfig(projectID, req.Name, req.DataType)
+	config := evaluation.NewScoreConfig(projectID, req.Name, req.Type)
 	config.Description = req.Description
 	config.MinValue = req.MinValue
 	config.MaxValue = req.MaxValue
@@ -64,7 +64,7 @@ func (s *scoreConfigService) Create(ctx context.Context, projectID ulid.ULID, re
 		"score_config_id", config.ID,
 		"project_id", projectID,
 		"name", config.Name,
-		"data_type", config.DataType,
+		"type", config.Type,
 	)
 
 	return config, nil
@@ -93,16 +93,16 @@ func (s *scoreConfigService) Update(ctx context.Context, id ulid.ULID, projectID
 		config.Name = *req.Name
 	}
 
-	if req.DataType != nil && *req.DataType != config.DataType {
+	if req.Type != nil && *req.Type != config.Type {
 		// Check if scores exist for this config (use original name, not potentially renamed one)
 		exists, err := s.scoreRepo.ExistsByConfigName(ctx, projectID.String(), originalName)
 		if err != nil {
 			return nil, appErrors.NewInternalError("failed to check score existence", err)
 		}
 		if exists {
-			return nil, appErrors.NewConflictError("cannot change data type: scores already exist for this config")
+			return nil, appErrors.NewConflictError("cannot change type: scores already exist for this config")
 		}
-		config.DataType = *req.DataType
+		config.Type = *req.Type
 	}
 
 	if req.Description != nil {

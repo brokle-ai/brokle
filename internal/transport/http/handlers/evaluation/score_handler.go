@@ -65,7 +65,7 @@ func (h *SDKScoreHandler) Create(c *gin.Context) {
 	}
 
 	// Validate against ScoreConfig if one exists
-	if err := h.validateAgainstConfig(ctx, projectID, req.Name, req.DataType, req.Value, req.StringValue); err != nil {
+	if err := h.validateAgainstConfig(ctx, projectID, req.Name, req.Type, req.Value, req.StringValue); err != nil {
 		response.Error(c, err)
 		return
 	}
@@ -127,7 +127,7 @@ func (h *SDKScoreHandler) CreateBatch(c *gin.Context) {
 	scores := make([]*observability.Score, 0, len(req.Scores))
 	for i, scoreReq := range req.Scores {
 		// Validate against ScoreConfig if one exists
-		if err := h.validateAgainstConfig(ctx, projectID, scoreReq.Name, scoreReq.DataType, scoreReq.Value, scoreReq.StringValue); err != nil {
+		if err := h.validateAgainstConfig(ctx, projectID, scoreReq.Name, scoreReq.Type, scoreReq.Value, scoreReq.StringValue); err != nil {
 			// Include index in error for debugging
 			h.logger.Warn("score validation failed",
 				"index", i,
@@ -163,7 +163,7 @@ func (h *SDKScoreHandler) validateAgainstConfig(
 	ctx context.Context,
 	projectID ulid.ULID,
 	name string,
-	dataType string,
+	scoreType string,
 	value *float64,
 	stringValue *string,
 ) error {
@@ -178,15 +178,15 @@ func (h *SDKScoreHandler) validateAgainstConfig(
 		return err
 	}
 
-	// Validate data type matches
-	if string(config.DataType) != dataType {
-		return appErrors.NewValidationError("data_type",
-			"must match score config (expected: "+string(config.DataType)+")")
+	// Validate type matches
+	if string(config.Type) != scoreType {
+		return appErrors.NewValidationError("type",
+			"must match score config (expected: "+string(config.Type)+")")
 	}
 
-	// Validate based on data type
-	switch config.DataType {
-	case evaluationDomain.ScoreDataTypeNumeric:
+	// Validate based on type
+	switch config.Type {
+	case evaluationDomain.ScoreTypeNumeric:
 		if value == nil {
 			return appErrors.NewValidationError("value", "required for NUMERIC type")
 		}
@@ -197,7 +197,7 @@ func (h *SDKScoreHandler) validateAgainstConfig(
 			return appErrors.NewValidationError("value", "above maximum configured value")
 		}
 
-	case evaluationDomain.ScoreDataTypeCategorical:
+	case evaluationDomain.ScoreTypeCategorical:
 		if stringValue == nil {
 			return appErrors.NewValidationError("string_value", "required for CATEGORICAL type")
 		}
@@ -206,7 +206,7 @@ func (h *SDKScoreHandler) validateAgainstConfig(
 			return appErrors.NewValidationError("string_value", "not in allowed categories")
 		}
 
-	case evaluationDomain.ScoreDataTypeBoolean:
+	case evaluationDomain.ScoreTypeBoolean:
 		// For boolean, we expect a numeric value of 0 or 1, or a string value of "true"/"false"
 		if value == nil && stringValue == nil {
 			return appErrors.NewValidationError("value", "required for BOOLEAN type (0 or 1)")
@@ -232,7 +232,7 @@ func (h *SDKScoreHandler) buildScore(projectID string, req *CreateScoreRequest) 
 		ProjectID:        projectID,
 		TraceID:          req.TraceID,
 		Name:             req.Name,
-		DataType:         req.DataType,
+		Type:             req.Type,
 		Value:            req.Value,
 		StringValue:      req.StringValue,
 		Source:           observability.ScoreSourceAPI, // SDK scores are programmatic
@@ -269,7 +269,7 @@ func (h *SDKScoreHandler) toResponse(score *observability.Score) *ScoreResponse 
 		Name:             score.Name,
 		Value:            score.Value,
 		StringValue:      score.StringValue,
-		DataType:         score.DataType,
+		Type:             score.Type,
 		Source:           score.Source,
 		Reason:           score.Reason,
 		Metadata:         metadata,

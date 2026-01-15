@@ -23,7 +23,7 @@ function buildScoreListQueryParams(params?: ScoreListParams): QueryParams | unde
   if (params.span_id) queryParams.span_id = params.span_id
   if (params.name) queryParams.name = params.name
   if (params.source) queryParams.source = params.source
-  if (params.data_type) queryParams.data_type = params.data_type
+  if (params.type) queryParams.type = params.type
   if (params.page) queryParams.page = params.page
   if (params.limit) queryParams.limit = params.limit
   if (params.sort_by) queryParams.sort_by = params.sort_by

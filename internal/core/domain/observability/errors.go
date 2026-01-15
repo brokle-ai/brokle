@@ -25,7 +25,7 @@ var (
 	ErrQualityScoreNotFound  = errors.New("quality score not found")
 	ErrInvalidQualityScoreID = errors.New("invalid quality score ID")
 	ErrInvalidScoreValue     = errors.New("invalid score value")
-	ErrInvalidScoreDataType  = errors.New("invalid score data type")
+	ErrInvalidScoreType = errors.New("invalid score type")
 	ErrEvaluatorNotFound     = errors.New("evaluator not found")
 	ErrDuplicateQualityScore = errors.New("duplicate quality score for the same trace/span and score name")
 
@@ -123,7 +123,7 @@ const (
 	ErrCodeQualityScoreNotFound  = "QUALITY_SCORE_NOT_FOUND"
 	ErrCodeInvalidQualityScoreID = "INVALID_QUALITY_SCORE_ID"
 	ErrCodeInvalidScoreValue     = "INVALID_SCORE_VALUE"
-	ErrCodeInvalidScoreDataType  = "INVALID_SCORE_DATA_TYPE"
+	ErrCodeInvalidScoreType = "INVALID_SCORE_TYPE"
 	ErrCodeEvaluatorNotFound     = "EVALUATOR_NOT_FOUND"
 	ErrCodeDuplicateQualityScore = "DUPLICATE_QUALITY_SCORE"
 
@@ -234,7 +234,7 @@ func IsValidationError(err error) bool {
 			obsErr.Code == ErrCodeInvalidQualityScoreID ||
 			obsErr.Code == ErrCodeInvalidSpanType ||
 			obsErr.Code == ErrCodeInvalidScoreValue ||
-			obsErr.Code == ErrCodeInvalidScoreDataType
+			obsErr.Code == ErrCodeInvalidScoreType
 	}
 	return false
 }
