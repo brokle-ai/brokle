@@ -5,6 +5,7 @@
 package prompt
 
 import (
+	"database/sql/driver"
 	"encoding/json"
 	"time"
 
@@ -42,6 +43,7 @@ type Prompt struct {
 type Version struct {
 	CreatedAt     time.Time      `json:"created_at"`
 	Template      JSON           `json:"template" gorm:"type:jsonb;not null"`
+	Config        *ModelConfig   `json:"config,omitempty" gorm:"type:jsonb"`
 	Variables     pq.StringArray `json:"variables" gorm:"type:text[];default:'{}'"`
 	CommitMessage string         `json:"commit_message,omitempty" gorm:"type:text"`
 	Labels        []Label        `json:"labels,omitempty" gorm:"foreignKey:VersionID"`
@@ -109,6 +111,25 @@ type ModelConfig struct {
 	CustomHeaders map[string]string `json:"-"`
 }
 
+// Value implements driver.Valuer for GORM JSONB storage
+func (mc ModelConfig) Value() (driver.Value, error) {
+	return json.Marshal(mc)
+}
+
+// Scan implements sql.Scanner for GORM JSONB retrieval
+func (mc *ModelConfig) Scan(value interface{}) error {
+	if value == nil {
+		return nil
+	}
+	switch v := value.(type) {
+	case []byte:
+		return json.Unmarshal(v, mc)
+	case string:
+		return json.Unmarshal([]byte(v), mc)
+	}
+	return nil
+}
+
 // TextTemplate represents the template structure for text prompts.
 type TextTemplate struct {
 	Content string `json:"content"`
@@ -122,7 +143,7 @@ type ChatTemplate struct {
 // JSON is a custom type for JSONB columns
 type JSON json.RawMessage
 
-func (j JSON) Value() (interface{}, error) {
+func (j JSON) Value() (driver.Value, error) {
 	if len(j) == 0 {
 		return nil, nil
 	}
@@ -160,13 +181,14 @@ func (j *JSON) UnmarshalJSON(data []byte) error {
 
 // CreatePromptRequest is the request for creating a new prompt with initial version.
 type CreatePromptRequest struct {
-	Name          string      `json:"name" validate:"required,min=1,max=100"`
-	Type          PromptType  `json:"type,omitempty"`
-	Description   string      `json:"description,omitempty"`
-	Tags          []string    `json:"tags,omitempty"`
-	Template      interface{} `json:"template" validate:"required"`
-	Labels        []string    `json:"labels,omitempty"`
-	CommitMessage string      `json:"commit_message,omitempty"`
+	Name          string       `json:"name" validate:"required,min=1,max=100"`
+	Type          PromptType   `json:"type,omitempty"`
+	Description   string       `json:"description,omitempty"`
+	Tags          []string     `json:"tags,omitempty"`
+	Template      interface{}  `json:"template" validate:"required"`
+	Config        *ModelConfig `json:"config,omitempty"`
+	Labels        []string     `json:"labels,omitempty"`
+	CommitMessage string       `json:"commit_message,omitempty"`
 }
 
 type UpdatePromptRequest struct {
@@ -176,20 +198,22 @@ type UpdatePromptRequest struct {
 }
 
 type CreateVersionRequest struct {
-	Template      interface{} `json:"template" validate:"required"`
-	Labels        []string    `json:"labels,omitempty"`
-	CommitMessage string      `json:"commit_message,omitempty"`
+	Template      interface{}  `json:"template" validate:"required"`
+	Config        *ModelConfig `json:"config,omitempty"`
+	Labels        []string     `json:"labels,omitempty"`
+	CommitMessage string       `json:"commit_message,omitempty"`
 }
 
 // UpsertPromptRequest is the SDK request for creating or updating a prompt.
 type UpsertPromptRequest struct {
-	Name          string      `json:"name" validate:"required,min=1,max=100"`
-	Type          PromptType  `json:"type,omitempty"`
-	Description   string      `json:"description,omitempty"`
-	Tags          []string    `json:"tags,omitempty"`
-	Template      interface{} `json:"template" validate:"required"`
-	Labels        []string    `json:"labels,omitempty"`
-	CommitMessage string      `json:"commit_message,omitempty"`
+	Name          string       `json:"name" validate:"required,min=1,max=100"`
+	Type          PromptType   `json:"type,omitempty"`
+	Description   string       `json:"description,omitempty"`
+	Tags          []string     `json:"tags,omitempty"`
+	Template      interface{}  `json:"template" validate:"required"`
+	Config        *ModelConfig `json:"config,omitempty"`
+	Labels        []string     `json:"labels,omitempty"`
+	CommitMessage string       `json:"commit_message,omitempty"`
 }
 
 type SetLabelsRequest struct {
@@ -219,6 +243,7 @@ type PromptResponse struct {
 	VersionID     string          `json:"version_id"` // ULID of the specific version (for linking)
 	Labels        []string        `json:"labels"`
 	Template      interface{}     `json:"template"`
+	Config        *ModelConfig    `json:"config,omitempty"`
 	Variables     []string        `json:"variables"`
 	Dialect       TemplateDialect `json:"dialect,omitempty"` // Template dialect (simple, mustache, jinja2)
 	CommitMessage string          `json:"commit_message,omitempty"`
@@ -251,6 +276,7 @@ type VersionResponse struct {
 	ID            string          `json:"id"`
 	Version       int             `json:"version"`
 	Template      interface{}     `json:"template"`
+	Config        *ModelConfig    `json:"config,omitempty"`
 	Variables     []string        `json:"variables"`
 	Dialect       TemplateDialect `json:"dialect,omitempty"` // Template dialect (simple, mustache, jinja2)
 	CommitMessage string          `json:"commit_message,omitempty"`
@@ -340,12 +366,13 @@ func NewPrompt(projectID ulid.ULID, name string, promptType PromptType, descript
 	}
 }
 
-func NewVersion(promptID ulid.ULID, version int, template JSON, variables []string, commitMessage string, createdBy *ulid.ULID) *Version {
+func NewVersion(promptID ulid.ULID, version int, template JSON, config *ModelConfig, variables []string, commitMessage string, createdBy *ulid.ULID) *Version {
 	return &Version{
 		ID:            ulid.New(),
 		PromptID:      promptID,
 		Version:       version,
 		Template:      template,
+		Config:        config,
 		Variables:     pq.StringArray(variables),
 		CommitMessage: commitMessage,
 		CreatedBy:     createdBy,

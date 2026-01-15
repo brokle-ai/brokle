@@ -40,7 +40,7 @@ CREATE TABLE annotation_queue_items (
     id                  CHAR(26) PRIMARY KEY,           -- ULID
     queue_id            CHAR(26) NOT NULL REFERENCES annotation_queues(id) ON DELETE CASCADE,
     object_id           VARCHAR(32) NOT NULL,           -- trace_id or span_id
-    object_type         VARCHAR(20) NOT NULL CHECK (object_type IN ('TRACE', 'SPAN')),
+    object_type         VARCHAR(20) NOT NULL CHECK (object_type IN ('trace', 'span')),
     status              VARCHAR(20) NOT NULL DEFAULT 'pending'
                         CHECK (status IN ('pending', 'completed', 'skipped')),
     priority            INTEGER NOT NULL DEFAULT 0,     -- Higher = more urgent

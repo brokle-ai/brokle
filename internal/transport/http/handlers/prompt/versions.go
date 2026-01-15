@@ -232,6 +232,7 @@ func buildVersionResponse(version *promptDomain.Version, labels []string) *promp
 		ID:            version.ID.String(),
 		Version:       version.Version,
 		Template:      version.Template,
+		Config:        version.Config,
 		Variables:     []string(version.Variables),
 		CommitMessage: version.CommitMessage,
 		Labels:        labels,

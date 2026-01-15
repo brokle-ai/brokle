@@ -39,6 +39,7 @@ export interface Prompt {
   version_id: string
   labels: string[]
   template: TextTemplate | ChatTemplate
+  config?: ModelConfig | null
   variables: string[]
   commit_message?: string
   created_at: string
@@ -67,6 +68,7 @@ export interface PromptVersion {
   id: string
   version: number
   template: TextTemplate | ChatTemplate
+  config?: ModelConfig | null
   variables: string[]
   commit_message?: string
   labels: string[]
@@ -99,6 +101,7 @@ export interface CreatePromptRequest {
   description?: string
   tags?: string[]
   template: TextTemplate | ChatTemplate
+  config?: ModelConfig
   labels?: string[]
   commit_message?: string
 }
@@ -111,6 +114,7 @@ export interface UpdatePromptRequest {
 
 export interface CreateVersionRequest {
   template: TextTemplate | ChatTemplate
+  config?: ModelConfig
   labels?: string[]
   commit_message?: string
 }

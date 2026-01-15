@@ -20,7 +20,7 @@ export interface ScoreConfig {
 export interface Score {
   id: string
   project_id: string
-  trace_id: string
+  trace_id?: string
   span_id?: string
   name: string
   value?: number

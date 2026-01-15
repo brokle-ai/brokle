@@ -436,6 +436,7 @@ func buildPromptResponse(prompt *promptDomain.Prompt, version *promptDomain.Vers
 		VersionID:     version.ID.String(),
 		Labels:        labels,
 		Template:      version.Template,
+		Config:        version.Config,
 		Variables:     []string(version.Variables),
 		CommitMessage: version.CommitMessage,
 		CreatedAt:     version.CreatedAt,

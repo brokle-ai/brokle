@@ -64,7 +64,7 @@ function getObjectTypeBadge(type: ObjectType) {
 }
 
 function getObjectLink(objectId: string, objectType: ObjectType, projectSlug: string) {
-  if (objectType === 'TRACE') {
+  if (objectType === 'trace') {
     return `/projects/${projectSlug}/traces/${objectId}`
   }
   // For SPAN, we would need the trace ID - for now link to traces with filter

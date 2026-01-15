@@ -71,7 +71,7 @@ type StatsResponse struct {
 // @Description Add item to queue request
 type AddItemRequest struct {
 	ObjectID   string                 `json:"object_id" binding:"required"`
-	ObjectType string                 `json:"object_type" binding:"required,oneof=TRACE SPAN"`
+	ObjectType string                 `json:"object_type" binding:"required,oneof=trace span"`
 	Priority   int                    `json:"priority,omitempty"`
 	Metadata   map[string]interface{} `json:"metadata,omitempty"`
 }

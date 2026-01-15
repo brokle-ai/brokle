@@ -78,15 +78,19 @@ const columns: ColumnDef<Score>[] = [
     accessorKey: 'trace_id',
     header: 'Trace',
     cell: ({ row, table }) => {
+      const traceId = row.original.trace_id
+      if (!traceId) {
+        return <span className="text-muted-foreground">-</span>
+      }
       const { projectSlug } = table.options.meta as { projectSlug: string }
       return (
         <Link
-          href={`/projects/${projectSlug}/traces/${row.original.trace_id}`}
+          href={`/projects/${projectSlug}/traces/${traceId}`}
           className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 hover:underline"
           onClick={(e) => e.stopPropagation()}
         >
           <span className="font-mono truncate max-w-[120px]">
-            {row.original.trace_id.slice(0, 8)}...
+            {traceId.slice(0, 8)}...
           </span>
           <ExternalLink className="h-3 w-3" />
         </Link>

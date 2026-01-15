@@ -28,7 +28,7 @@ import type { AddItemsBatchRequest, ObjectType } from '../types'
 
 const addItemsSchema = z.object({
   objectIds: z.string().min(1, 'At least one ID is required'),
-  objectType: z.enum(['TRACE', 'SPAN']),
+  objectType: z.enum(['trace', 'span']),
   priority: z.number().min(0).max(100).optional(),
 })
 
@@ -51,7 +51,7 @@ export function AddItemsForm({
     resolver: zodResolver(addItemsSchema),
     defaultValues: {
       objectIds: '',
-      objectType: 'TRACE',
+      objectType: 'trace',
       priority: 0,
     },
   })
@@ -93,8 +93,8 @@ export function AddItemsForm({
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  <SelectItem value="TRACE">Traces</SelectItem>
-                  <SelectItem value="SPAN">Spans</SelectItem>
+                  <SelectItem value="trace">Traces</SelectItem>
+                  <SelectItem value="span">Spans</SelectItem>
                 </SelectContent>
               </Select>
               <FormDescription>
@@ -118,12 +118,12 @@ export function AddItemsForm({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>
-                    {form.watch('objectType') === 'TRACE' ? 'Trace ID' : 'Span ID'}
+                    {form.watch('objectType') === 'trace' ? 'Trace ID' : 'Span ID'}
                   </FormLabel>
                   <FormControl>
                     <Input
                       placeholder={
-                        form.watch('objectType') === 'TRACE'
+                        form.watch('objectType') === 'trace'
                           ? 'e.g., abc123def456...'
                           : 'e.g., span789xyz...'
                       }
@@ -143,7 +143,7 @@ export function AddItemsForm({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>
-                    {form.watch('objectType') === 'TRACE' ? 'Trace IDs' : 'Span IDs'}
+                    {form.watch('objectType') === 'trace' ? 'Trace IDs' : 'Span IDs'}
                   </FormLabel>
                   <FormControl>
                     <Textarea

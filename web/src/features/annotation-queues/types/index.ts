@@ -3,7 +3,7 @@
 // Enums
 export type QueueStatus = 'active' | 'paused' | 'archived'
 export type ItemStatus = 'pending' | 'completed' | 'skipped'
-export type ObjectType = 'TRACE' | 'SPAN'
+export type ObjectType = 'trace' | 'span'
 export type AssignmentRole = 'annotator' | 'reviewer' | 'admin'
 
 // Queue Settings

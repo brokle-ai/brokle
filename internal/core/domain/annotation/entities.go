@@ -56,8 +56,8 @@ func (s ItemStatus) IsValid() bool {
 type ObjectType string
 
 const (
-	ObjectTypeTrace ObjectType = "TRACE"
-	ObjectTypeSpan  ObjectType = "SPAN"
+	ObjectTypeTrace ObjectType = "trace"
+	ObjectTypeSpan  ObjectType = "span"
 )
 
 // IsValid checks if the type is a valid ObjectType value.
@@ -247,7 +247,7 @@ func (i *QueueItem) Validate() []ValidationError {
 	}
 
 	if !i.ObjectType.IsValid() {
-		errors = append(errors, ValidationError{Field: "object_type", Message: "invalid object_type, must be TRACE or SPAN"})
+		errors = append(errors, ValidationError{Field: "object_type", Message: "invalid object_type, must be trace or span"})
 	}
 
 	if !i.Status.IsValid() {
@@ -470,7 +470,7 @@ func (q *AnnotationQueue) ToResponse() *QueueResponse {
 // AddItemRequest is the request to add an item to a queue.
 type AddItemRequest struct {
 	ObjectID   string                 `json:"object_id" binding:"required,max=32"`
-	ObjectType ObjectType             `json:"object_type" binding:"required,oneof=TRACE SPAN"`
+	ObjectType ObjectType             `json:"object_type" binding:"required,oneof=trace span"`
 	Priority   int                    `json:"priority,omitempty"`
 	Metadata   map[string]interface{} `json:"metadata,omitempty"`
 }

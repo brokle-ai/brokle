@@ -100,7 +100,7 @@ func (s *promptService) CreatePrompt(ctx context.Context, projectID ulid.ULID, u
 	}
 
 	prompt := promptDomain.NewPrompt(projectID, req.Name, promptType, req.Description, req.Tags)
-	version := promptDomain.NewVersion(prompt.ID, 1, templateJSON, variables, req.CommitMessage, userID)
+	version := promptDomain.NewVersion(prompt.ID, 1, templateJSON, req.Config, variables, req.CommitMessage, userID)
 
 	// TRANSACTION: Create prompt, version, and labels atomically
 	err = s.transactor.WithinTransaction(ctx, func(ctx context.Context) error {
@@ -425,6 +425,7 @@ func (s *promptService) UpsertPrompt(ctx context.Context, projectID ulid.ULID, u
 			Description:   req.Description,
 			Tags:          req.Tags,
 			Template:      req.Template,
+			Config:        req.Config,
 			Labels:        req.Labels,
 			CommitMessage: req.CommitMessage,
 		}
@@ -447,6 +448,7 @@ func (s *promptService) UpsertPrompt(ctx context.Context, projectID ulid.ULID, u
 
 	versionReq := &promptDomain.CreateVersionRequest{
 		Template:      req.Template,
+		Config:        req.Config,
 		Labels:        req.Labels,
 		CommitMessage: req.CommitMessage,
 	}
@@ -523,7 +525,7 @@ func (s *promptService) CreateVersion(ctx context.Context, projectID, promptID u
 			return appErrors.NewInternalError("failed to get next version number", err)
 		}
 
-		version = promptDomain.NewVersion(promptID, versionNum, templateJSON, variables, req.CommitMessage, userID)
+		version = promptDomain.NewVersion(promptID, versionNum, templateJSON, req.Config, variables, req.CommitMessage, userID)
 
 		if err := s.versionRepo.Create(ctx, version); err != nil {
 			return appErrors.NewInternalError("failed to create version", err)
@@ -989,6 +991,7 @@ func (s *promptService) buildPromptResponse(prompt *promptDomain.Prompt, version
 		VersionID:     version.ID.String(),
 		Labels:        labelNames,
 		Template:      template,
+		Config:        version.Config,
 		Variables:     []string(version.Variables),
 		Dialect:       dialect,
 		CommitMessage: version.CommitMessage,
@@ -1023,6 +1026,7 @@ func (s *promptService) buildVersionResponseWithLabels(v *promptDomain.Version, 
 		ID:            v.ID.String(),
 		Version:       v.Version,
 		Template:      template,
+		Config:        v.Config,
 		Variables:     []string(v.Variables),
 		Dialect:       dialect,
 		CommitMessage: v.CommitMessage,
@@ -1047,6 +1051,7 @@ func (s *promptService) cachedPromptToResponse(cached *promptDomain.CachedPrompt
 		VersionID:     cached.VersionID,
 		Labels:        cached.Labels,
 		Template:      cached.Template,
+		Config:        cached.Config,
 		Variables:     cached.Variables,
 		Dialect:       dialect,
 		CommitMessage: cached.CommitMessage,
@@ -1068,6 +1073,7 @@ func (s *promptService) responseToCachedPrompt(resp *promptDomain.PromptResponse
 		VersionID:     resp.VersionID,
 		Labels:        resp.Labels,
 		Template:      resp.Template,
+		Config:        resp.Config,
 		Variables:     resp.Variables,
 		CommitMessage: resp.CommitMessage,
 		CreatedAt:     resp.CreatedAt,
