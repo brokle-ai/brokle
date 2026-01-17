@@ -477,6 +477,13 @@ type UpdateExperimentRequest struct {
 type ExperimentFilter struct {
 	DatasetID *ulid.ULID
 	Status    *ExperimentStatus
+	Search    *string
+	IDs       []ulid.ULID // Filter by specific experiment IDs
+}
+
+// DatasetFilter defines filter criteria for listing datasets.
+type DatasetFilter struct {
+	Search *string
 }
 
 type ExperimentResponse struct {

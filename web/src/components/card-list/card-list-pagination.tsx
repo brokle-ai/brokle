@@ -32,7 +32,7 @@ export function CardListPagination({
   onPageChange,
   onPageSizeChange,
   isPending = false,
-  pageSizeOptions = [12, 24, 36, 48],
+  pageSizeOptions = [10, 25, 50, 100],
 }: CardListPaginationProps) {
   const totalPages = Math.ceil(totalCount / pageSize)
   const canPreviousPage = page > 1

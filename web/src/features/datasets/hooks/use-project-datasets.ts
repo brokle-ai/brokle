@@ -7,9 +7,13 @@ import { useProjectOnly } from '@/features/projects'
 import { datasetsApi } from '../api/datasets-api'
 import { datasetQueryKeys } from './use-datasets'
 
+import type { Dataset } from '../types'
+
 export interface UseProjectDatasetsReturn {
-  data: Awaited<ReturnType<typeof datasetsApi.listDatasets>>
+  data: Dataset[]
   totalCount: number
+  page: number
+  pageSize: number
   isLoading: boolean
   isFetching: boolean
   error: string | null
@@ -22,7 +26,7 @@ export function useProjectDatasets(): UseProjectDatasetsReturn {
   const searchParams = useSearchParams()
   const { currentProject, hasProject, isLoading: isProjectLoading } = useProjectOnly()
 
-  const { filter } = useTableSearchParams(searchParams)
+  const { filter, page, pageSize } = useTableSearchParams(searchParams)
   const projectId = currentProject?.id
 
   const {
@@ -32,10 +36,14 @@ export function useProjectDatasets(): UseProjectDatasetsReturn {
     error,
     refetch,
   } = useQuery({
-    queryKey: [...datasetQueryKeys.list(projectId ?? ''), filter],
+    queryKey: [...datasetQueryKeys.list(projectId ?? ''), filter, page, pageSize],
     queryFn: async () => {
       if (!projectId) throw new Error('No project selected')
-      return datasetsApi.listDatasets(projectId)
+      return datasetsApi.listDatasets(projectId, {
+        page,
+        limit: pageSize,
+        search: filter || undefined,
+      })
     },
     enabled: !!projectId && hasProject,
     staleTime: 30_000,
@@ -45,19 +53,11 @@ export function useProjectDatasets(): UseProjectDatasetsReturn {
     placeholderData: keepPreviousData,
   })
 
-  // Client-side filtering based on search term
-  const filteredData = data?.filter((dataset) => {
-    if (!filter) return true
-    const searchLower = filter.toLowerCase()
-    return (
-      dataset.name.toLowerCase().includes(searchLower) ||
-      dataset.description?.toLowerCase().includes(searchLower)
-    )
-  }) ?? []
-
   return {
-    data: filteredData,
-    totalCount: filteredData.length,
+    data: data?.data ?? [],
+    totalCount: data?.pagination?.total ?? 0,
+    page,
+    pageSize,
     isLoading: isProjectLoading || isDatasetsLoading,
     isFetching,
     error: error instanceof Error ? error.message : error ? String(error) : null,

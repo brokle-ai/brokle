@@ -3,7 +3,13 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { scoresApi } from '../api/scores-api'
-import type { CreateScoreConfigRequest, UpdateScoreConfigRequest, ScoreConfig } from '../types'
+import type { PaginatedResponse } from '@/lib/api/core/types'
+import type {
+  CreateScoreConfigRequest,
+  UpdateScoreConfigRequest,
+  ScoreConfig,
+  ScoreConfigListParams,
+} from '../types'
 
 export const scoreConfigQueryKeys = {
   all: ['score-configs'] as const,
@@ -12,10 +18,17 @@ export const scoreConfigQueryKeys = {
     [...scoreConfigQueryKeys.all, 'detail', projectId, configId] as const,
 }
 
-export function useScoreConfigsQuery(projectId: string | undefined) {
+export function useScoreConfigsQuery(
+  projectId: string | undefined,
+  params?: ScoreConfigListParams
+) {
   return useQuery({
-    queryKey: scoreConfigQueryKeys.list(projectId ?? ''),
-    queryFn: () => scoresApi.listScoreConfigs(projectId!),
+    queryKey: [
+      ...scoreConfigQueryKeys.list(projectId ?? ''),
+      params?.page,
+      params?.limit,
+    ],
+    queryFn: () => scoresApi.listScoreConfigs(projectId!, params),
     enabled: !!projectId,
     staleTime: 30_000,
     gcTime: 5 * 60 * 1000,
@@ -94,17 +107,24 @@ export function useDeleteScoreConfigMutation(projectId: string) {
         queryKey: scoreConfigQueryKeys.list(projectId),
       })
 
-      const previousConfigs = queryClient.getQueryData<ScoreConfig[]>(
-        scoreConfigQueryKeys.list(projectId)
+      // Get ALL matching queries (prefix match for paginated queries)
+      const previousQueries = queryClient.getQueriesData<PaginatedResponse<ScoreConfig>>({
+        queryKey: scoreConfigQueryKeys.list(projectId),
+      })
+
+      // Optimistic update - update ALL matching queries
+      queryClient.setQueriesData<PaginatedResponse<ScoreConfig>>(
+        { queryKey: scoreConfigQueryKeys.list(projectId) },
+        (old) => old ? {
+          data: old.data.filter((c) => c.id !== configId),
+          pagination: {
+            ...old.pagination,
+            total: old.pagination.total - 1,
+          },
+        } : old
       )
 
-      // Optimistic update
-      queryClient.setQueryData<ScoreConfig[]>(
-        scoreConfigQueryKeys.list(projectId),
-        (old) => old?.filter((c) => c.id !== configId) ?? []
-      )
-
-      return { previousConfigs }
+      return { previousQueries }
     },
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
@@ -115,12 +135,10 @@ export function useDeleteScoreConfigMutation(projectId: string) {
       })
     },
     onError: (error: unknown, _variables, context) => {
-      if (context?.previousConfigs) {
-        queryClient.setQueryData(
-          scoreConfigQueryKeys.list(projectId),
-          context.previousConfigs
-        )
-      }
+      // Rollback ALL affected queries
+      context?.previousQueries?.forEach(([queryKey, data]) => {
+        queryClient.setQueryData(queryKey, data)
+      })
       const apiError = error as { message?: string }
       toast.error('Failed to Delete Score Config', {
         description: apiError?.message || 'Could not delete score config. Please try again.',

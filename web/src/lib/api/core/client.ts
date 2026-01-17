@@ -368,11 +368,11 @@ export class BrokleAPIClient {
   private convertPagination(backendPagination: BackendPagination): Pagination {
     return {
       page: backendPagination.page,
-      limit: backendPagination.page_size,        // snake_case to camelCase
+      limit: backendPagination.limit,
       total: backendPagination.total,
-      totalPages: backendPagination.total_page,  // snake_case to camelCase
-      hasNext: backendPagination.has_next,       // snake_case to camelCase
-      hasPrev: backendPagination.has_prev        // snake_case to camelCase
+      totalPages: backendPagination.total_pages,  // snake_case to camelCase
+      hasNext: backendPagination.has_next,        // snake_case to camelCase
+      hasPrev: backendPagination.has_prev         // snake_case to camelCase
     }
   }
 

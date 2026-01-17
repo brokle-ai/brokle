@@ -89,20 +89,22 @@ func (s *queueService) GetByID(ctx context.Context, id, projectID ulid.ULID) (*a
 	return queue, nil
 }
 
-// List retrieves all annotation queues for a project with optional filtering.
-func (s *queueService) List(ctx context.Context, projectID ulid.ULID, filter *annotation.QueueFilter) ([]*annotation.AnnotationQueue, error) {
-	queues, err := s.queueRepo.List(ctx, projectID, filter)
+// List retrieves all annotation queues for a project with optional filtering and pagination.
+func (s *queueService) List(ctx context.Context, projectID ulid.ULID, filter *annotation.QueueFilter, page, limit int) ([]*annotation.AnnotationQueue, int64, error) {
+	offset := (page - 1) * limit
+	queues, total, err := s.queueRepo.List(ctx, projectID, filter, offset, limit)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to list annotation queues", err)
+		return nil, 0, appErrors.NewInternalError("failed to list annotation queues", err)
 	}
-	return queues, nil
+	return queues, total, nil
 }
 
-// ListWithStats retrieves all annotation queues for a project with their statistics.
-func (s *queueService) ListWithStats(ctx context.Context, projectID ulid.ULID, filter *annotation.QueueFilter) ([]*annotation.AnnotationQueue, []*annotation.QueueStats, error) {
-	queues, err := s.queueRepo.List(ctx, projectID, filter)
+// ListWithStats retrieves all annotation queues for a project with their statistics and pagination.
+func (s *queueService) ListWithStats(ctx context.Context, projectID ulid.ULID, filter *annotation.QueueFilter, page, limit int) ([]*annotation.AnnotationQueue, []*annotation.QueueStats, int64, error) {
+	offset := (page - 1) * limit
+	queues, total, err := s.queueRepo.List(ctx, projectID, filter, offset, limit)
 	if err != nil {
-		return nil, nil, appErrors.NewInternalError("failed to list annotation queues", err)
+		return nil, nil, 0, appErrors.NewInternalError("failed to list annotation queues", err)
 	}
 
 	stats := make([]*annotation.QueueStats, len(queues))
@@ -119,7 +121,7 @@ func (s *queueService) ListWithStats(ctx context.Context, projectID ulid.ULID, f
 		stats[i] = queueStats
 	}
 
-	return queues, stats, nil
+	return queues, stats, total, nil
 }
 
 // Update updates an existing annotation queue.

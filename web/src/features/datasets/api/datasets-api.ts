@@ -1,11 +1,13 @@
 import { BrokleAPIClient } from '@/lib/api/core/client'
+import type { PaginatedResponse } from '@/lib/api/core/types'
 import type {
   Dataset,
   CreateDatasetRequest,
   UpdateDatasetRequest,
   DatasetItem,
   CreateDatasetItemRequest,
-  DatasetItemListResponse,
+  DatasetListParams,
+  DatasetItemListParams,
   BulkImportResult,
   ImportFromJsonRequest,
   ImportFromTracesRequest,
@@ -21,8 +23,19 @@ const client = new BrokleAPIClient('/api')
 
 export const datasetsApi = {
   // Datasets
-  listDatasets: async (projectId: string): Promise<Dataset[]> => {
-    return client.get<Dataset[]>(`/v1/projects/${projectId}/datasets`)
+  listDatasets: async (
+    projectId: string,
+    params?: DatasetListParams
+  ): Promise<PaginatedResponse<Dataset>> => {
+    const queryParams: Record<string, string | number> = {}
+    if (params?.page) queryParams.page = params.page
+    if (params?.limit) queryParams.limit = params.limit
+    if (params?.search) queryParams.search = params.search
+
+    return client.getPaginated<Dataset>(
+      `/v1/projects/${projectId}/datasets`,
+      queryParams
+    )
   },
 
   getDataset: async (projectId: string, datasetId: string): Promise<Dataset> => {
@@ -55,11 +68,15 @@ export const datasetsApi = {
   listDatasetItems: async (
     projectId: string,
     datasetId: string,
-    limit = 50,
-    offset = 0
-  ): Promise<DatasetItemListResponse> => {
-    return client.get<DatasetItemListResponse>(
-      `/v1/projects/${projectId}/datasets/${datasetId}/items?limit=${limit}&offset=${offset}`
+    params?: DatasetItemListParams
+  ): Promise<PaginatedResponse<DatasetItem>> => {
+    const queryParams: Record<string, string | number> = {}
+    if (params?.page) queryParams.page = params.page
+    if (params?.limit) queryParams.limit = params.limit
+
+    return client.getPaginated<DatasetItem>(
+      `/v1/projects/${projectId}/datasets/${datasetId}/items`,
+      queryParams
     )
   },
 
@@ -183,11 +200,15 @@ export const datasetsApi = {
     projectId: string,
     datasetId: string,
     versionId: string,
-    limit = 50,
-    offset = 0
-  ): Promise<DatasetItemListResponse> => {
-    return client.get<DatasetItemListResponse>(
-      `/v1/projects/${projectId}/datasets/${datasetId}/versions/${versionId}/items?limit=${limit}&offset=${offset}`
+    params?: DatasetItemListParams
+  ): Promise<PaginatedResponse<DatasetItem>> => {
+    const queryParams: Record<string, string | number> = {}
+    if (params?.page) queryParams.page = params.page
+    if (params?.limit) queryParams.limit = params.limit
+
+    return client.getPaginated<DatasetItem>(
+      `/v1/projects/${projectId}/datasets/${datasetId}/versions/${versionId}/items`,
+      queryParams
     )
   },
 

@@ -192,10 +192,11 @@ func (s *scoreConfigService) GetByName(ctx context.Context, projectID ulid.ULID,
 	return config, nil
 }
 
-func (s *scoreConfigService) List(ctx context.Context, projectID ulid.ULID) ([]*evaluation.ScoreConfig, error) {
-	configs, err := s.repo.List(ctx, projectID)
+func (s *scoreConfigService) List(ctx context.Context, projectID ulid.ULID, page, limit int) ([]*evaluation.ScoreConfig, int64, error) {
+	offset := (page - 1) * limit
+	configs, total, err := s.repo.List(ctx, projectID, offset, limit)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to list score configs", err)
+		return nil, 0, appErrors.NewInternalError("failed to list score configs", err)
 	}
-	return configs, nil
+	return configs, total, nil
 }

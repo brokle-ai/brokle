@@ -10,7 +10,7 @@ import { useProjectDatasets } from '../hooks/use-project-datasets'
 import { useTableSearchParams } from '@/hooks/use-table-search-params'
 import { useCardListNavigation } from '@/hooks/use-card-list-navigation'
 import { PageHeader } from '@/components/layout/page-header'
-import { CardListToolbar } from '@/components/card-list'
+import { CardListToolbar, CardListPagination } from '@/components/card-list'
 import { DataTableEmptyState } from '@/components/data-table'
 import { LoadingSpinner } from '@/components/guards/loading-spinner'
 
@@ -20,10 +20,10 @@ interface DatasetsProps {
 
 function DatasetsContent() {
   const searchParams = useSearchParams()
-  const { data, totalCount, isLoading, isFetching, error, hasProject, refetch, currentProject } =
+  const { data, totalCount, page, pageSize, isLoading, isFetching, error, hasProject, refetch, currentProject } =
     useProjectDatasets()
   const { filter } = useTableSearchParams(searchParams)
-  const { handleSearch, handleReset } = useCardListNavigation({ searchParams })
+  const { handleSearch, handleReset, handlePageChange, handlePageSizeChange } = useCardListNavigation({ searchParams })
 
   // Check if there are active filters
   const hasActiveFilters = !!filter
@@ -86,6 +86,14 @@ function DatasetsContent() {
               isFiltered={hasActiveFilters}
             />
             <DatasetList data={data} />
+            <CardListPagination
+              page={page}
+              pageSize={pageSize}
+              totalCount={totalCount}
+              onPageChange={handlePageChange}
+              onPageSizeChange={handlePageSizeChange}
+              isPending={isFetching}
+            />
           </>
         )}
       </div>

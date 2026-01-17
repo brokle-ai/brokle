@@ -75,12 +75,6 @@ type ImportFromCSVRequest struct {
 	Deduplicate   bool                    `json:"deduplicate"`
 }
 
-// @Description Paginated dataset items response
-type DatasetItemListResponse struct {
-	Items []*DatasetItemResponse `json:"items"`
-	Total int64                  `json:"total"`
-}
-
 // @Description Experiment item data
 type ExperimentItemResponse struct {
 	ID            string                 `json:"id"`
