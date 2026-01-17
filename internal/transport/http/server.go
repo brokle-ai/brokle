@@ -522,6 +522,8 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 		traces.GET("/:id", s.handlers.Observability.GetTrace)
 		traces.GET("/:id/spans", s.handlers.Observability.GetTraceWithSpans)
 		traces.GET("/:id/scores", s.handlers.Observability.GetTraceWithScores)
+		traces.POST("/:id/scores", s.handlers.Observability.CreateTraceScore)
+		traces.DELETE("/:id/scores/:score_id", s.handlers.Observability.DeleteTraceScore)
 		traces.DELETE("/:id", s.handlers.Observability.DeleteTrace)
 		traces.PUT("/:id/tags", s.handlers.Observability.UpdateTraceTags)
 		traces.PUT("/:id/bookmark", s.handlers.Observability.UpdateTraceBookmark)

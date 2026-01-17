@@ -188,3 +188,28 @@ type SortInfo struct {
 	SortBy    string `json:"sort_by"`
 	SortOrder string `json:"sort_order"`
 }
+
+// CreateAnnotationRequest represents a request to create a human annotation score on a trace
+type CreateAnnotationRequest struct {
+	Name        string   `json:"name" binding:"required"`
+	Value       *float64 `json:"value,omitempty"`
+	StringValue *string  `json:"string_value,omitempty"`
+	DataType    string   `json:"data_type" binding:"required,oneof=NUMERIC CATEGORICAL BOOLEAN"`
+	Reason      *string  `json:"reason,omitempty"`
+}
+
+// AnnotationResponse represents a score returned from the annotation API
+type AnnotationResponse struct {
+	ID          string   `json:"id"`
+	ProjectID   string   `json:"project_id"`
+	TraceID     *string  `json:"trace_id,omitempty"`
+	SpanID      *string  `json:"span_id,omitempty"`
+	Name        string   `json:"name"`
+	Value       *float64 `json:"value,omitempty"`
+	StringValue *string  `json:"string_value,omitempty"`
+	DataType    string   `json:"data_type"`
+	Source      string   `json:"source"`
+	Reason      *string  `json:"reason,omitempty"`
+	CreatedBy   *string  `json:"created_by,omitempty"`
+	Timestamp   string   `json:"timestamp"`
+}

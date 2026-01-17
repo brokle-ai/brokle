@@ -135,6 +135,9 @@ type Score struct {
 	ExperimentID     *string `json:"experiment_id,omitempty" db:"experiment_id"`
 	ExperimentItemID *string `json:"experiment_item_id,omitempty" db:"experiment_item_id"`
 
+	// Audit trail (for human annotations)
+	CreatedBy *string `json:"created_by,omitempty" db:"created_by"`
+
 	// Timestamp
 	Timestamp time.Time `json:"timestamp" db:"timestamp"`
 }
