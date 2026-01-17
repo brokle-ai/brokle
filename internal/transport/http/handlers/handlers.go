@@ -8,6 +8,7 @@ import (
 	annotationDomain "brokle/internal/core/domain/annotation"
 	"brokle/internal/core/domain/auth"
 	billingDomain "brokle/internal/core/domain/billing"
+	commentDomain "brokle/internal/core/domain/comment"
 	credentialsDomain "brokle/internal/core/domain/credentials"
 	dashboardDomain "brokle/internal/core/domain/dashboard"
 	evaluationDomain "brokle/internal/core/domain/evaluation"
@@ -25,6 +26,7 @@ import (
 	"brokle/internal/transport/http/handlers/apikey"
 	authHandler "brokle/internal/transport/http/handlers/auth"
 	"brokle/internal/transport/http/handlers/billing"
+	commentHandler "brokle/internal/transport/http/handlers/comment"
 	"brokle/internal/transport/http/handlers/credentials"
 	"brokle/internal/transport/http/handlers/dashboard"
 	evaluationHandler "brokle/internal/transport/http/handlers/evaluation"
@@ -85,6 +87,8 @@ type Handlers struct {
 	AnnotationQueue      *annotationHandler.QueueHandler
 	AnnotationItem       *annotationHandler.ItemHandler
 	AnnotationAssignment *annotationHandler.AssignmentHandler
+	// Comment handlers
+	Comment *commentHandler.Handler
 }
 
 func NewHandlers(
@@ -134,6 +138,8 @@ func NewHandlers(
 	annotationQueueService annotationDomain.QueueService,
 	annotationItemService annotationDomain.ItemService,
 	annotationAssignmentService annotationDomain.AssignmentService,
+	// Comment service
+	commentService commentDomain.Service,
 ) *Handlers {
 	return &Handlers{
 		Health:        health.NewHandler(cfg, logger),
@@ -178,5 +184,7 @@ func NewHandlers(
 		AnnotationQueue:      annotationHandler.NewQueueHandler(logger, annotationQueueService),
 		AnnotationItem:       annotationHandler.NewItemHandler(logger, annotationItemService),
 		AnnotationAssignment: annotationHandler.NewAssignmentHandler(logger, annotationAssignmentService),
+		// Comment handler
+		Comment: commentHandler.NewHandler(commentService),
 	}
 }

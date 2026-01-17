@@ -14,6 +14,7 @@ import (
 	"brokle/internal/core/domain/analytics"
 	annotationDomain "brokle/internal/core/domain/annotation"
 	"brokle/internal/core/domain/auth"
+	commentDomain "brokle/internal/core/domain/comment"
 	"brokle/internal/core/domain/billing"
 	"brokle/internal/core/domain/common"
 	credentialsDomain "brokle/internal/core/domain/credentials"
@@ -28,6 +29,7 @@ import (
 	analyticsService "brokle/internal/core/services/analytics"
 	annotationService "brokle/internal/core/services/annotation"
 	authService "brokle/internal/core/services/auth"
+	commentService "brokle/internal/core/services/comment"
 	billingService "brokle/internal/core/services/billing"
 	credentialsService "brokle/internal/core/services/credentials"
 	dashboardService "brokle/internal/core/services/dashboard"
@@ -47,6 +49,7 @@ import (
 	analyticsRepo "brokle/internal/infrastructure/repository/analytics"
 	annotationRepo "brokle/internal/infrastructure/repository/annotation"
 	authRepo "brokle/internal/infrastructure/repository/auth"
+	commentRepo "brokle/internal/infrastructure/repository/comment"
 	billingRepo "brokle/internal/infrastructure/repository/billing"
 	credentialsRepo "brokle/internal/infrastructure/repository/credentials"
 	dashboardRepo "brokle/internal/infrastructure/repository/dashboard"
@@ -149,6 +152,7 @@ type ServiceContainer struct {
 	Evaluation          *EvaluationServices
 	Dashboard           *DashboardServices
 	Annotation          *AnnotationServices
+	Comment             commentDomain.Service
 }
 
 type EnterpriseContainer struct {
@@ -575,6 +579,14 @@ func ProvideServerServices(core *CoreContainer) *ServiceContainer {
 
 	annotationServices := ProvideAnnotationServices(core.Transactor, repos.Annotation, evaluationServices, observabilityServices, repos.Organization, logger)
 
+	// Comment service for trace/span comments (with reactions support)
+	commentSvc := commentService.NewCommentService(
+		commentRepo.NewCommentRepository(databases.Postgres.DB),
+		commentRepo.NewReactionRepository(databases.Postgres.DB),
+		repos.Observability.Trace,
+		logger,
+	)
+
 	// Overview service needs projectService and credentials repo (created after other services)
 	overviewSvc := analyticsService.NewOverviewService(
 		repos.Analytics.Overview,
@@ -602,6 +614,7 @@ func ProvideServerServices(core *CoreContainer) *ServiceContainer {
 		Evaluation:          evaluationServices,
 		Dashboard:           dashboardServices,
 		Annotation:          annotationServices,
+		Comment:             commentSvc,
 	}
 }
 
@@ -740,6 +753,8 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 		core.Services.Annotation.Queue,
 		core.Services.Annotation.Item,
 		core.Services.Annotation.Assignment,
+		// Comment service
+		core.Services.Comment,
 	)
 
 	httpServer := http.NewServer(
