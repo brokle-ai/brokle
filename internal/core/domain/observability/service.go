@@ -8,12 +8,6 @@ import (
 	"brokle/pkg/ulid"
 )
 
-// NOTE: Service interfaces are defined here to avoid circular imports between
-// internal/workers and internal/services/observability packages.
-// Concrete implementations are in internal/services/observability/.
-
-// TraceService defines the interface for trace and span operations.
-// Traces are virtual (derived from root spans where parent_span_id IS NULL).
 type TraceService interface {
 	IngestSpan(ctx context.Context, span *Span) error
 	IngestSpanBatch(ctx context.Context, spans []*Span) error
@@ -37,6 +31,8 @@ type TraceService interface {
 
 	DeleteSpan(ctx context.Context, spanID string) error
 	DeleteTrace(ctx context.Context, traceID string) error
+	UpdateTraceTags(ctx context.Context, projectID, traceID string, tags []string) error
+	UpdateTraceBookmark(ctx context.Context, projectID, traceID string, bookmarked bool) error
 }
 
 // ScoreService used by both workers (CreateScore) and handlers (GetScoresByTraceID, etc.)
@@ -72,11 +68,10 @@ type GenAIEventsService interface {
 }
 
 type TelemetryDeduplicationService interface {
-	// Atomic deduplication operations (uses composite OTLP IDs: trace_id:span_id)
 	ClaimEvents(ctx context.Context, projectID ulid.ULID, batchID ulid.ULID, dedupIDs []string, ttl time.Duration) (claimedIDs, duplicateIDs []string, err error)
 	ReleaseEvents(ctx context.Context, dedupIDs []string) error
 
-	// Legacy deduplication operations (deprecated - use ClaimEvents instead)
+	// Deprecated: Use ClaimEvents instead.
 	CheckDuplicate(ctx context.Context, dedupID string) (bool, error)
 	CheckBatchDuplicates(ctx context.Context, dedupIDs []string) ([]string, error)
 	RegisterEvent(ctx context.Context, dedupID string, batchID ulid.ULID, projectID ulid.ULID, ttl time.Duration) error

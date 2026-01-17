@@ -77,7 +77,6 @@ func (m *MockTraceRepository) DeleteSpan(ctx context.Context, spanID string) err
 	return args.Error(0)
 }
 
-// Trace methods (virtual - derived from root spans)
 func (m *MockTraceRepository) GetRootSpan(ctx context.Context, traceID string) (*observability.Span, error) {
 	args := m.Called(ctx, traceID)
 	if args.Get(0) == nil {
@@ -156,6 +155,16 @@ func (m *MockTraceRepository) CountSpansInTrace(ctx context.Context, traceID str
 
 func (m *MockTraceRepository) DeleteTrace(ctx context.Context, traceID string) error {
 	args := m.Called(ctx, traceID)
+	return args.Error(0)
+}
+
+func (m *MockTraceRepository) UpdateTraceTags(ctx context.Context, projectID, traceID string, tags []string) error {
+	args := m.Called(ctx, projectID, traceID, tags)
+	return args.Error(0)
+}
+
+func (m *MockTraceRepository) UpdateTraceBookmark(ctx context.Context, projectID, traceID string, bookmarked bool) error {
+	args := m.Called(ctx, projectID, traceID, bookmarked)
 	return args.Error(0)
 }
 

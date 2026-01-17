@@ -4,6 +4,7 @@ import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useProjectOnly } from '@/features/projects'
 import { useTracesTableState } from './use-traces-table-state'
+import { traceQueryKeys } from './trace-query-keys'
 import { getProjectTraces, getTraceFilterOptions } from '../api/traces-api'
 import type { Trace } from '../data/schema'
 import type { TraceFilterOptions, GetTracesParams } from '../api/traces-api'
@@ -189,6 +190,13 @@ export function useProjectTraces() {
     return params
   }, [projectId, tableState.page, tableState.pageSize, tableState.search, tableState.searchType, tableState.sortBy, tableState.sortOrder, tableState.filters])
 
+  // Extract params without projectId for query key
+  const queryParams = useMemo(() => {
+    if (!apiParams) return undefined
+    const { projectId: _, ...rest } = apiParams
+    return rest
+  }, [apiParams])
+
   const {
     data,
     isLoading: isTracesLoading,
@@ -196,7 +204,7 @@ export function useProjectTraces() {
     error,
     refetch,
   } = useQuery({
-    queryKey: ['traces', apiParams],
+    queryKey: traceQueryKeys.list(projectId!, queryParams),
 
     queryFn: () => {
       if (!apiParams) {
@@ -304,7 +312,7 @@ export function useTraceFilterOptions() {
     error,
     refetch,
   } = useQuery({
-    queryKey: ['traceFilterOptions', projectId],
+    queryKey: traceQueryKeys.filterOptions(projectId!),
 
     queryFn: async () => {
       if (!projectId) {

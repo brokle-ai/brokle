@@ -21,21 +21,19 @@ type filterOptionsCacheEntry struct {
 	expiresAt time.Time
 }
 
-// filterOptionsCacheTTL defines cache duration for filter options
 const filterOptionsCacheTTL = 5 * time.Minute
 
 type TraceService struct {
 	traceRepo            observability.TraceRepository
 	logger               *slog.Logger
 	filterOptionsCache   *lru.Cache[string, *filterOptionsCacheEntry]
-	filterOptionsCacheMu sync.Mutex // protects filterOptionsCache (LRU Get mutates internal state)
+	filterOptionsCacheMu sync.Mutex
 }
 
 func NewTraceService(
 	traceRepo observability.TraceRepository,
 	logger *slog.Logger,
 ) *TraceService {
-	// Create LRU cache for 500 projects' filter options (with TTL handling)
 	cache, _ := lru.New[string, *filterOptionsCacheEntry](500)
 
 	return &TraceService{
@@ -62,7 +60,6 @@ func (s *TraceService) IngestSpan(ctx context.Context, span *observability.Span)
 		return appErrors.NewValidationError("invalid span_id", "OTEL span_id must be 16 hex characters")
 	}
 
-	// Set defaults
 	if span.StatusCode == 0 {
 		span.StatusCode = observability.StatusCodeUnset
 	}
@@ -359,6 +356,72 @@ func (s *TraceService) DeleteTrace(ctx context.Context, traceID string) error {
 		return appErrors.NewInternalError("failed to delete trace", err)
 	}
 
+	return nil
+}
+
+// UpdateTraceTags updates the tags for a trace.
+// Validates that the trace exists and belongs to the specified project before updating.
+func (s *TraceService) UpdateTraceTags(ctx context.Context, projectID, traceID string, tags []string) error {
+	if projectID == "" {
+		return appErrors.NewValidationError("project_id is required", "project_id cannot be empty")
+	}
+	if len(traceID) != 32 {
+		return appErrors.NewValidationError("invalid trace_id", "OTEL trace_id must be 32 hex characters")
+	}
+
+	if len(tags) > observability.MaxTagsPerTrace {
+		return appErrors.NewValidationError("too many tags", fmt.Sprintf("maximum %d tags allowed", observability.MaxTagsPerTrace))
+	}
+
+	// Verify trace exists and belongs to project
+	rootSpan, err := s.traceRepo.GetRootSpanByProject(ctx, traceID, projectID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return appErrors.NewNotFoundError("trace " + traceID)
+		}
+		return appErrors.NewInternalError("failed to verify trace ownership", err)
+	}
+	if rootSpan == nil || rootSpan.ProjectID != projectID {
+		return appErrors.NewNotFoundError("trace " + traceID)
+	}
+
+	if err := s.traceRepo.UpdateTraceTags(ctx, projectID, traceID, tags); err != nil {
+		s.logger.Error("failed to update trace tags", "trace_id", traceID, "error", err)
+		return appErrors.NewInternalError("failed to update tags", err)
+	}
+
+	s.logger.Info("trace tags updated", "trace_id", traceID, "project_id", projectID, "tag_count", len(tags))
+	return nil
+}
+
+// UpdateTraceBookmark updates the bookmark status for a trace.
+// Validates that the trace exists and belongs to the specified project before updating.
+func (s *TraceService) UpdateTraceBookmark(ctx context.Context, projectID, traceID string, bookmarked bool) error {
+	if projectID == "" {
+		return appErrors.NewValidationError("project_id is required", "project_id cannot be empty")
+	}
+	if len(traceID) != 32 {
+		return appErrors.NewValidationError("invalid trace_id", "OTEL trace_id must be 32 hex characters")
+	}
+
+	// Verify trace exists and belongs to project
+	rootSpan, err := s.traceRepo.GetRootSpanByProject(ctx, traceID, projectID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return appErrors.NewNotFoundError("trace " + traceID)
+		}
+		return appErrors.NewInternalError("failed to verify trace ownership", err)
+	}
+	if rootSpan == nil || rootSpan.ProjectID != projectID {
+		return appErrors.NewNotFoundError("trace " + traceID)
+	}
+
+	if err := s.traceRepo.UpdateTraceBookmark(ctx, projectID, traceID, bookmarked); err != nil {
+		s.logger.Error("failed to update trace bookmark", "trace_id", traceID, "error", err)
+		return appErrors.NewInternalError("failed to update bookmark", err)
+	}
+
+	s.logger.Info("trace bookmark updated", "trace_id", traceID, "project_id", projectID, "bookmarked", bookmarked)
 	return nil
 }
 

@@ -11,7 +11,9 @@ import { IOPreview } from '@/components/traces/IOPreview'
 import type { Trace, Span } from '../data/schema'
 import { statuses, statusCodeToString } from '../data/constants'
 import { safeFormat, formatDuration, formatCost } from '../utils/format-helpers'
-import { getSpansForTrace, getTraceWithScores } from '../api/traces-api'
+import { traceQueryKeys } from '../hooks/trace-query-keys'
+import { useTraceScoresQuery } from '../hooks/use-trace-scores'
+import { getSpansForTrace } from '../api/traces-api'
 import { SpanTree } from './span-tree'
 import { SpanTimeline } from './span-timeline'
 import { SpanDetailPanel } from './span-detail-panel'
@@ -209,7 +211,7 @@ function SpansTabContent({ projectId, traceId, spanCount }: SpansTabContentProps
     isLoading,
     error,
   } = useQuery({
-    queryKey: ['traceSpans', projectId, traceId],
+    queryKey: traceQueryKeys.spans(projectId, traceId),
     queryFn: () => getSpansForTrace(projectId, traceId),
     enabled: !!projectId && !!traceId,
     staleTime: 30_000,
@@ -321,15 +323,7 @@ function ScoresTabContent({ projectId, traceId }: ScoresTabContentProps) {
     data: scores,
     isLoading,
     error,
-  } = useQuery({
-    queryKey: ['traceScores', projectId, traceId],
-    queryFn: async () => {
-      const response = await getTraceWithScores(projectId, traceId)
-      return response.scores || []
-    },
-    enabled: !!projectId && !!traceId,
-    staleTime: 30_000,
-  })
+  } = useTraceScoresQuery(projectId, traceId)
 
   if (isLoading) {
     return (

@@ -142,6 +142,9 @@ export function TraceDetailLayout({
       {/* Header */}
       <TraceDetailHeader
         trace={trace}
+        spans={spans}
+        projectId={_projectId}
+        selectedSpanId={selectedSpanId || undefined}
         context={context}
         onPrevious={isPeek ? hookState.goToPrev : undefined}
         onNext={isPeek ? hookState.goToNext : undefined}

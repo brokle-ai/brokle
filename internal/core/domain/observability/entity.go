@@ -53,6 +53,8 @@ type TraceSummary struct {
 	ProviderName   *string         `json:"provider_name,omitempty" db:"provider_name"`
 	UserID         *string         `json:"user_id,omitempty" db:"user_id"`
 	SessionID      *string         `json:"session_id,omitempty" db:"session_id"`
+	Tags           []string        `json:"tags,omitempty" db:"tags"`       // User-managed tags for organization
+	Bookmarked     bool            `json:"bookmarked" db:"bookmarked"`     // User-managed bookmark status
 }
 
 // Span represents an OTEL span with Gen AI semantic conventions and Brokle extensions
@@ -90,7 +92,6 @@ type Span struct {
 	Version             *string    `json:"version,omitempty" db:"version"`
 	CompletionStartTime *time.Time `json:"completion_start_time,omitempty" db:"completion_start_time"`
 
-	// Materialized columns (db:"-" = computed by ClickHouse, not stored)
 	ModelName    *string `json:"model_name,omitempty" db:"-"`
 	ProviderName *string `json:"provider_name,omitempty" db:"-"`
 	SpanType     *string `json:"span_type,omitempty" db:"-"`
@@ -101,9 +102,11 @@ type Span struct {
 
 	Scores     []*Score `json:"scores,omitempty" db:"-"`
 	ChildSpans []*Span  `json:"child_spans,omitempty" db:"-"`
-	StatusCode uint8    `json:"status_code" db:"status_code"` // OTLP: 0=UNSET, 1=OK, 2=ERROR
-	HasError   bool     `json:"has_error" db:"has_error"`     // Semantic flag (true when status_code=2)
+	StatusCode uint8    `json:"status_code" db:"status_code"`
+	HasError   bool     `json:"has_error" db:"has_error"`
 	SpanKind   uint8    `json:"span_kind" db:"span_kind"`
+	Tags       []string `json:"tags,omitempty" db:"tags"`
+	Bookmarked bool     `json:"bookmarked,omitempty" db:"bookmarked"`
 }
 
 // Score represents a quality evaluation score linked to traces and spans
@@ -277,6 +280,77 @@ type CostBreakdown struct {
 	OutputTokens int32    `json:"output_tokens"`
 	CacheHit     bool     `json:"cache_hit"`
 	BatchMode    bool     `json:"batch_mode"`
+}
+
+// Tag constraints for user-managed trace tags
+const (
+	MaxTagsPerTrace = 50  // Maximum number of tags allowed per trace
+	MaxTagLength    = 100 // Maximum character length per tag
+)
+
+// UpdateTraceTagsRequest represents a request to update trace tags
+type UpdateTraceTagsRequest struct {
+	Tags []string `json:"tags" binding:"required"`
+}
+
+// Validate validates the UpdateTraceTagsRequest
+func (r *UpdateTraceTagsRequest) Validate() []ValidationError {
+	var errors []ValidationError
+
+	if len(r.Tags) > MaxTagsPerTrace {
+		errors = append(errors, ValidationError{
+			Field:   "tags",
+			Message: fmt.Sprintf("maximum %d tags allowed, got %d", MaxTagsPerTrace, len(r.Tags)),
+		})
+	}
+
+	for i, tag := range r.Tags {
+		trimmed := strings.TrimSpace(tag)
+		if len(trimmed) == 0 {
+			errors = append(errors, ValidationError{
+				Field:   fmt.Sprintf("tags[%d]", i),
+				Message: "empty tags not allowed",
+			})
+			continue
+		}
+		if len(tag) > MaxTagLength {
+			errors = append(errors, ValidationError{
+				Field:   fmt.Sprintf("tags[%d]", i),
+				Message: fmt.Sprintf("tag exceeds max length of %d characters", MaxTagLength),
+			})
+		}
+	}
+
+	return errors
+}
+
+// NormalizeTags normalizes tags by lowercasing, trimming, removing duplicates, and sorting
+func NormalizeTags(tags []string) []string {
+	if len(tags) == 0 {
+		return []string{}
+	}
+
+	seen := make(map[string]bool)
+	normalized := make([]string, 0, len(tags))
+
+	for _, tag := range tags {
+		t := strings.ToLower(strings.TrimSpace(tag))
+		if t != "" && !seen[t] {
+			seen[t] = true
+			normalized = append(normalized, t)
+		}
+	}
+
+	// Sort for consistent ordering
+	for i := 0; i < len(normalized)-1; i++ {
+		for j := i + 1; j < len(normalized); j++ {
+			if normalized[i] > normalized[j] {
+				normalized[i], normalized[j] = normalized[j], normalized[i]
+			}
+		}
+	}
+
+	return normalized
 }
 
 // OTEL SpanKind enum values (UInt8 in ClickHouse)
