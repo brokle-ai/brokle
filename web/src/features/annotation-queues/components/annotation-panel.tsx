@@ -471,6 +471,7 @@ export function AnnotationPanel({
 
           {/* Score Input Form */}
           <ScoreInputForm
+            projectId={projectId}
             queueId={queue.id}
             scoreConfigIds={queue.score_config_ids}
             scores={scores}

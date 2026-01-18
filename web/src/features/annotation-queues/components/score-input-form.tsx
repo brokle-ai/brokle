@@ -2,7 +2,6 @@
 
 import { useEffect } from 'react'
 import { Label } from '@/components/ui/label'
-import { Input } from '@/components/ui/input'
 import { Slider } from '@/components/ui/slider'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
@@ -13,21 +12,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Skeleton } from '@/components/ui/skeleton'
+import { useScoreConfigsByIdsQuery, type ScoreConfig } from '@/features/scores'
 import type { ScoreSubmission } from '../types'
 
-// TODO: This should come from the evaluation feature's score configs API
-// For now, we'll use a simple placeholder
-interface ScoreConfig {
-  id: string
-  name: string
-  description?: string
-  data_type: 'NUMERIC' | 'CATEGORICAL' | 'BOOLEAN'
-  min_value?: number
-  max_value?: number
-  categories?: string[]
-}
-
 interface ScoreInputFormProps {
+  projectId: string
   queueId: string
   scoreConfigIds: string[]
   scores: ScoreSubmission[]
@@ -35,21 +25,17 @@ interface ScoreInputFormProps {
 }
 
 export function ScoreInputForm({
+  projectId,
   queueId,
   scoreConfigIds,
   scores,
   onScoresChange,
 }: ScoreInputFormProps) {
-  // TODO: Fetch actual score configs based on scoreConfigIds
-  // For now, we'll create placeholder configs for demonstration
-  const scoreConfigs: ScoreConfig[] = scoreConfigIds.map((id, index) => ({
-    id,
-    name: `Score ${index + 1}`,
-    description: 'Rate this item',
-    data_type: 'NUMERIC',
-    min_value: 0,
-    max_value: 10,
-  }))
+  // Fetch actual score configs based on scoreConfigIds
+  const { data: scoreConfigs = [], isLoading } = useScoreConfigsByIdsQuery(
+    projectId,
+    scoreConfigIds
+  )
 
   // Initialize scores if empty
   useEffect(() => {
@@ -80,6 +66,20 @@ export function ScoreInputForm({
 
   const getScoreComment = (configId: string): string | undefined => {
     return scores.find((s) => s.score_config_id === configId)?.comment ?? undefined
+  }
+
+  // Show loading state while fetching configs
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <h4 className="font-medium text-sm">Scores</h4>
+        <div className="space-y-3 rounded-lg border p-4">
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-6 w-full" />
+          <Skeleton className="h-16 w-full" />
+        </div>
+      </div>
+    )
   }
 
   if (scoreConfigs.length === 0) {

@@ -81,6 +81,27 @@ export function useUpdateScoreConfigMutation(projectId: string, configId: string
   })
 }
 
+/**
+ * Fetch multiple score configs by their IDs.
+ * Used by annotation queues to load configs for scoring forms.
+ */
+export function useScoreConfigsByIdsQuery(
+  projectId: string | undefined,
+  configIds: string[]
+) {
+  return useQuery({
+    queryKey: [...scoreConfigQueryKeys.list(projectId ?? ''), 'byIds', configIds],
+    queryFn: async () => {
+      if (!projectId || configIds.length === 0) return []
+      const allConfigs = await scoresApi.listScoreConfigs(projectId)
+      return allConfigs.filter((c) => configIds.includes(c.id))
+    },
+    enabled: !!projectId && configIds.length > 0,
+    staleTime: 30_000,
+    gcTime: 5 * 60 * 1000,
+  })
+}
+
 export function useDeleteScoreConfigMutation(projectId: string) {
   const queryClient = useQueryClient()
 

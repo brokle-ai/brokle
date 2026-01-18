@@ -182,7 +182,7 @@ func NewHandlers(
 		Contract: billing.NewContractHandler(cfg, logger, contractService, pricingService),
 		// Annotation queue handlers
 		AnnotationQueue:      annotationHandler.NewQueueHandler(logger, annotationQueueService),
-		AnnotationItem:       annotationHandler.NewItemHandler(logger, annotationItemService),
+		AnnotationItem:       annotationHandler.NewItemHandler(logger, annotationItemService, annotationAssignmentService),
 		AnnotationAssignment: annotationHandler.NewAssignmentHandler(logger, annotationAssignmentService),
 		// Comment handler
 		Comment: commentHandler.NewHandler(commentService),
