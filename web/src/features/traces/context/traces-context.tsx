@@ -14,6 +14,9 @@ type TracesContextType = {
   projectSlug?: string
   currentPageTraceIds: string[]
   setCurrentPageTraceIds: React.Dispatch<React.SetStateAction<string[]>>
+  /** Current page trace objects for session grouping */
+  currentPageTraces: Trace[]
+  setCurrentPageTraces: React.Dispatch<React.SetStateAction<Trace[]>>
 }
 
 const TracesContext = React.createContext<TracesContextType | null>(null)
@@ -27,6 +30,7 @@ export function TracesProvider({ children, projectSlug }: TracesProviderProps) {
   const [open, setOpen] = useDialogState<TracesDialogType>(null)
   const [currentRow, setCurrentRow] = useState<Trace | null>(null)
   const [currentPageTraceIds, setCurrentPageTraceIds] = useState<string[]>([])
+  const [currentPageTraces, setCurrentPageTraces] = useState<Trace[]>([])
 
   const contextValue = useMemo(
     () => ({
@@ -37,8 +41,10 @@ export function TracesProvider({ children, projectSlug }: TracesProviderProps) {
       projectSlug,
       currentPageTraceIds,
       setCurrentPageTraceIds,
+      currentPageTraces,
+      setCurrentPageTraces,
     }),
-    [open, currentRow, projectSlug, currentPageTraceIds]
+    [open, currentRow, projectSlug, currentPageTraceIds, currentPageTraces]
   )
 
   return (
