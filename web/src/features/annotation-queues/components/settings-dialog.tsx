@@ -30,6 +30,7 @@ export function SettingsDialog({ projectId, queue, trigger }: SettingsDialogProp
       name: data.name,
       description: data.description,
       instructions: data.instructions,
+      score_config_ids: data.score_config_ids,
       settings: data.settings,
     })
     setOpen(false)
@@ -53,6 +54,7 @@ export function SettingsDialog({ projectId, queue, trigger }: SettingsDialogProp
           </DialogDescription>
         </DialogHeader>
         <QueueForm
+          projectId={projectId}
           queue={queue}
           onSubmit={handleSubmit}
           onCancel={() => setOpen(false)}

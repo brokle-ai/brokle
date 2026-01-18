@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
-import { Users, Plus, Trash2, Loader2, UserPlus } from 'lucide-react'
+import { useState, useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { Users, Plus, Trash2, Loader2, UserPlus, Check, ChevronsUpDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -19,8 +20,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Input } from '@/components/ui/input'
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
 import { Label } from '@/components/ui/label'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
   Table,
   TableBody,
@@ -29,11 +43,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { useWorkspace } from '@/context/workspace-context'
+import { getOrganizationMembers } from '@/features/organizations/api/members-api'
 import {
   useQueueAssignmentsQuery,
   useAssignUserMutation,
   useUnassignUserMutation,
 } from '../hooks/use-annotation-queues'
+import { cn } from '@/lib/utils'
 import type { AssignmentRole, QueueAssignment } from '../types'
 
 interface AssignmentDialogProps {
@@ -61,21 +78,54 @@ export function AssignmentDialog({
   trigger,
 }: AssignmentDialogProps) {
   const [open, setOpen] = useState(false)
-  const [newUserId, setNewUserId] = useState('')
+  const [userSelectOpen, setUserSelectOpen] = useState(false)
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
   const [newRole, setNewRole] = useState<AssignmentRole>('annotator')
+
+  const { currentOrganization } = useWorkspace()
+
+  // Fetch organization members
+  const { data: membersResponse, isLoading: isMembersLoading } = useQuery({
+    queryKey: ['organization-members', currentOrganization?.id],
+    queryFn: async () => {
+      if (!currentOrganization?.id) throw new Error('No organization selected')
+      return getOrganizationMembers(currentOrganization.id)
+    },
+    enabled: !!currentOrganization?.id && open,
+    staleTime: 2 * 60 * 1000,
+  })
+
+  const members = membersResponse?.data ?? []
 
   const { data: assignments, isLoading } = useQueueAssignmentsQuery(projectId, queueId)
   const assignMutation = useAssignUserMutation(projectId, queueId)
   const unassignMutation = useUnassignUserMutation(projectId, queueId)
 
+  // Filter out already assigned members
+  const availableMembers = useMemo(() => {
+    const assignedUserIds = new Set(assignments?.map((a) => a.user_id) ?? [])
+    return members.filter((m) => !assignedUserIds.has(m.userId))
+  }, [members, assignments])
+
+  const selectedMember = members.find((m) => m.userId === selectedUserId)
+
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map((word) => word[0])
+      .join('')
+      .substring(0, 2)
+      .toUpperCase()
+  }
+
   const handleAssign = async () => {
-    if (!newUserId.trim()) return
+    if (!selectedUserId) return
 
     await assignMutation.mutateAsync({
-      user_id: newUserId.trim(),
+      user_id: selectedUserId,
       role: newRole,
     })
-    setNewUserId('')
+    setSelectedUserId(null)
     setNewRole('annotator')
   }
 
@@ -110,13 +160,80 @@ export function AssignmentDialog({
             </div>
             <div className="grid gap-4 sm:grid-cols-[1fr_150px_auto]">
               <div className="space-y-2">
-                <Label htmlFor="user-id">User ID</Label>
-                <Input
-                  id="user-id"
-                  placeholder="Enter user ID"
-                  value={newUserId}
-                  onChange={(e) => setNewUserId(e.target.value)}
-                />
+                <Label>User</Label>
+                {isMembersLoading ? (
+                  <div className="flex items-center gap-2 h-10 px-3 py-2 text-sm text-muted-foreground border rounded-md">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Loading members...
+                  </div>
+                ) : availableMembers.length === 0 ? (
+                  <div className="h-10 px-3 py-2 text-sm text-muted-foreground border rounded-md flex items-center">
+                    {members.length === 0 ? 'No members found' : 'All members assigned'}
+                  </div>
+                ) : (
+                  <Popover open={userSelectOpen} onOpenChange={setUserSelectOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={userSelectOpen}
+                        className="w-full justify-between"
+                      >
+                        {selectedMember ? (
+                          <div className="flex items-center gap-2">
+                            <Avatar className="h-5 w-5">
+                              <AvatarFallback className="text-xs">
+                                {getInitials(selectedMember.name)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span className="truncate">{selectedMember.name}</span>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">Select a user...</span>
+                        )}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[300px] p-0" align="start">
+                      <Command>
+                        <CommandInput placeholder="Search users..." />
+                        <CommandList>
+                          <CommandEmpty>No users found.</CommandEmpty>
+                          <CommandGroup>
+                            {availableMembers.map((member) => (
+                              <CommandItem
+                                key={member.userId}
+                                value={member.name}
+                                onSelect={() => {
+                                  setSelectedUserId(member.userId)
+                                  setUserSelectOpen(false)
+                                }}
+                              >
+                                <Check
+                                  className={cn(
+                                    'mr-2 h-4 w-4',
+                                    selectedUserId === member.userId ? 'opacity-100' : 'opacity-0'
+                                  )}
+                                />
+                                <Avatar className="h-6 w-6 mr-2">
+                                  <AvatarFallback className="text-xs">
+                                    {getInitials(member.name)}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div className="flex flex-col">
+                                  <span>{member.name}</span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {member.email}
+                                  </span>
+                                </div>
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="role">Role</Label>
@@ -137,7 +254,7 @@ export function AssignmentDialog({
               <div className="flex items-end">
                 <Button
                   onClick={handleAssign}
-                  disabled={!newUserId.trim() || assignMutation.isPending}
+                  disabled={!selectedUserId || assignMutation.isPending}
                 >
                   {assignMutation.isPending ? (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -175,37 +292,54 @@ export function AssignmentDialog({
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>User ID</TableHead>
+                      <TableHead>User</TableHead>
                       <TableHead>Role</TableHead>
                       <TableHead className="w-[100px]">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {assignments.map((assignment: QueueAssignment) => (
-                      <TableRow key={assignment.id}>
-                        <TableCell className="font-mono text-sm">
-                          {assignment.user_id.substring(0, 16)}...
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={getRoleBadgeVariant(assignment.role)}
-                            className="capitalize"
-                          >
-                            {assignment.role}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleUnassign(assignment.user_id)}
-                            disabled={unassignMutation.isPending}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {assignments.map((assignment: QueueAssignment) => {
+                      const member = members.find((m) => m.userId === assignment.user_id)
+                      return (
+                        <TableRow key={assignment.id}>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              <Avatar className="h-7 w-7">
+                                <AvatarFallback className="text-xs">
+                                  {member ? getInitials(member.name) : '?'}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div>
+                                <div className="font-medium">
+                                  {member?.name ?? 'Unknown User'}
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  {member?.email ?? assignment.user_id.substring(0, 16) + '...'}
+                                </div>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={getRoleBadgeVariant(assignment.role)}
+                              className="capitalize"
+                            >
+                              {assignment.role}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleUnassign(assignment.user_id)}
+                              disabled={unassignMutation.isPending}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
                   </TableBody>
                 </Table>
               </div>

@@ -3,10 +3,13 @@
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
+import { Check, ChevronsUpDown, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
+import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Form,
   FormControl,
@@ -23,6 +26,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command'
+import { useScoreConfigsQuery } from '@/features/scores/hooks/use-score-configs'
+import { cn } from '@/lib/utils'
 import type { AnnotationQueue, CreateQueueRequest, QueueStatus } from '../types'
 
 const queueSchema = z.object({
@@ -32,11 +50,13 @@ const queueSchema = z.object({
   status: z.enum(['active', 'paused', 'archived']).optional(),
   lock_timeout_seconds: z.number().min(60).max(3600).optional(),
   auto_assignment: z.boolean().optional(),
+  score_config_ids: z.array(z.string()).optional(),
 })
 
 type QueueFormData = z.infer<typeof queueSchema>
 
 interface QueueFormProps {
+  projectId: string
   queue?: AnnotationQueue
   onSubmit: (data: CreateQueueRequest) => void
   onCancel: () => void
@@ -44,11 +64,15 @@ interface QueueFormProps {
 }
 
 export function QueueForm({
+  projectId,
   queue,
   onSubmit,
   onCancel,
   isLoading,
 }: QueueFormProps) {
+  // Fetch score configs for the project
+  const { data: scoreConfigs, isLoading: isLoadingConfigs } = useScoreConfigsQuery(projectId)
+
   const form = useForm<QueueFormData>({
     resolver: zodResolver(queueSchema),
     defaultValues: {
@@ -58,20 +82,31 @@ export function QueueForm({
       status: queue?.status ?? 'active',
       lock_timeout_seconds: queue?.settings?.lock_timeout_seconds ?? 300,
       auto_assignment: queue?.settings?.auto_assignment ?? false,
+      score_config_ids: queue?.score_config_ids ?? [],
     },
   })
 
   const handleSubmit = (data: QueueFormData) => {
+    const isEditing = !!queue
+
     onSubmit({
       name: data.name,
       description: data.description || undefined,
       instructions: data.instructions || undefined,
+      // On update: send empty array to clear; on create: omit if empty
+      score_config_ids: isEditing
+        ? (data.score_config_ids ?? [])
+        : (data.score_config_ids && data.score_config_ids.length > 0
+            ? data.score_config_ids
+            : undefined),
       settings: {
         lock_timeout_seconds: data.lock_timeout_seconds,
         auto_assignment: data.auto_assignment,
       },
     })
   }
+
+  const selectedScoreConfigIds = form.watch('score_config_ids') ?? []
 
   const isEditing = !!queue
 
@@ -125,6 +160,113 @@ export function QueueForm({
               <FormDescription>
                 These instructions will be shown to annotators when reviewing items.
               </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        {/* Score Configs Multi-Select */}
+        <FormField
+          control={form.control}
+          name="score_config_ids"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Score Configurations</FormLabel>
+              <FormDescription>
+                Select which scores annotators will provide when reviewing items.
+              </FormDescription>
+              {isLoadingConfigs ? (
+                <div className="flex items-center gap-2 py-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading score configs...
+                </div>
+              ) : !scoreConfigs || scoreConfigs.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-2">
+                  No score configurations found. Create score configs in the Scores section first.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <FormControl>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className={cn(
+                            'w-full justify-between',
+                            selectedScoreConfigIds.length === 0 && 'text-muted-foreground'
+                          )}
+                        >
+                          {selectedScoreConfigIds.length > 0
+                            ? `${selectedScoreConfigIds.length} score config(s) selected`
+                            : 'Select score configs...'}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </FormControl>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[400px] p-0" align="start">
+                      <Command>
+                        <CommandInput placeholder="Search score configs..." />
+                        <CommandList>
+                          <CommandEmpty>No score configs found.</CommandEmpty>
+                          <CommandGroup>
+                            {scoreConfigs.map((config) => {
+                              const isSelected = selectedScoreConfigIds.includes(config.id)
+                              return (
+                                <CommandItem
+                                  key={config.id}
+                                  value={config.name}
+                                  onSelect={() => {
+                                    const newIds = isSelected
+                                      ? selectedScoreConfigIds.filter((id) => id !== config.id)
+                                      : [...selectedScoreConfigIds, config.id]
+                                    field.onChange(newIds)
+                                  }}
+                                >
+                                  <Checkbox
+                                    checked={isSelected}
+                                    className="mr-2"
+                                  />
+                                  <div className="flex flex-col">
+                                    <span>{config.name}</span>
+                                    <span className="text-xs text-muted-foreground">
+                                      {config.data_type} {config.description && `• ${config.description}`}
+                                    </span>
+                                  </div>
+                                </CommandItem>
+                              )
+                            })}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+
+                  {/* Show selected configs as badges */}
+                  {selectedScoreConfigIds.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {selectedScoreConfigIds.map((id) => {
+                        const config = scoreConfigs.find((c) => c.id === id)
+                        if (!config) return null
+                        return (
+                          <Badge key={id} variant="secondary" className="gap-1">
+                            {config.name}
+                            <button
+                              type="button"
+                              className="ml-1 rounded-full outline-none hover:bg-secondary-foreground/20"
+                              onClick={() => {
+                                field.onChange(selectedScoreConfigIds.filter((i) => i !== id))
+                              }}
+                            >
+                              ×
+                            </button>
+                          </Badge>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
               <FormMessage />
             </FormItem>
           )}

@@ -151,6 +151,7 @@ function PeekSheetContent({
       {/* Header */}
       <PeekSheetHeader
         trace={trace}
+        projectId={projectId}
         onPrevious={onPrevious}
         onNext={onNext}
         onExpand={onExpand}

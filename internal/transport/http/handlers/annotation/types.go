@@ -20,7 +20,7 @@ type UpdateQueueRequest struct {
 	Name           *string         `json:"name,omitempty" binding:"omitempty,min=1,max=255"`
 	Description    *string         `json:"description,omitempty"`
 	Instructions   *string         `json:"instructions,omitempty"`
-	ScoreConfigIDs []string        `json:"score_config_ids,omitempty"`
+	ScoreConfigIDs *[]string       `json:"score_config_ids,omitempty"` // Pointer to distinguish nil (no change) from empty (clear all)
 	Status         *string         `json:"status,omitempty" binding:"omitempty,oneof=active paused archived"`
 	Settings       *QueueSettings  `json:"settings,omitempty"`
 }

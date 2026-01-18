@@ -150,7 +150,7 @@ func (s *queueService) Update(ctx context.Context, id, projectID ulid.ULID, req 
 		queue.Instructions = req.Instructions
 	}
 	if req.ScoreConfigIDs != nil {
-		queue.ScoreConfigIDs = req.ScoreConfigIDs
+		queue.ScoreConfigIDs = *req.ScoreConfigIDs // Dereference: empty slice clears, populated slice sets values
 	}
 	if req.Status != nil {
 		queue.Status = *req.Status

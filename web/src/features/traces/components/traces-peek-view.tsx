@@ -191,6 +191,7 @@ export function TracesPeekView() {
             {/* Header with badges and navigation */}
             <PeekSheetHeader
               trace={trace}
+              projectId={projectId!}
               onPrevious={handlePrev}
               onNext={handleNext}
               onExpand={() => expandPeek(false)}
@@ -211,7 +212,7 @@ export function TracesPeekView() {
                 </div>
               ) : spans.length === 0 ? (
                 // No spans - just show detail panel
-                <DetailPanel trace={trace} selectedSpan={null} spans={[]} projectId={projectId} />
+                <DetailPanel trace={trace} selectedSpan={null} spans={[]} projectId={projectId ?? undefined} />
               ) : (
                 // Has spans - show resizable two-panel layout
                 <ResizablePanelGroup direction='horizontal' className='h-full'>
@@ -256,7 +257,7 @@ export function TracesPeekView() {
                         trace={trace}
                         selectedSpan={selectedSpan}
                         spans={spans}
-                        projectId={projectId}
+                        projectId={projectId ?? undefined}
                         className={cn(isLeftPanelCollapsed && 'pl-12')}
                       />
                     </div>

@@ -47,16 +47,16 @@ function formatTokens(
   outputTokens?: number,
   totalTokens?: number
 ): string | null {
-  if (inputTokens && outputTokens) {
+  if (inputTokens != null && outputTokens != null) {
     return `${inputTokens.toLocaleString()}→${outputTokens.toLocaleString()}`
   }
-  if (totalTokens) {
+  if (totalTokens != null) {
     return totalTokens.toLocaleString()
   }
-  if (inputTokens) {
+  if (inputTokens != null) {
     return `${inputTokens.toLocaleString()}→?`
   }
-  if (outputTokens) {
+  if (outputTokens != null) {
     return `?→${outputTokens.toLocaleString()}`
   }
   return null
@@ -95,7 +95,7 @@ export function MetadataBadgeRow({
   level,
   className,
 }: MetadataBadgeRowProps) {
-  const formattedDuration = duration ? formatDuration(duration) : null
+  const formattedDuration = duration != null ? formatDuration(duration) : null
   const formattedCost = formatCost(cost)
   const formattedTokens = formatTokens(inputTokens, outputTokens, totalTokens)
 

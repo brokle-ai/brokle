@@ -75,6 +75,7 @@ function EditQueueDialog({ open, onOpenChange, projectId }: EditQueueDialogProps
       name: data.name,
       description: data.description,
       instructions: data.instructions,
+      score_config_ids: data.score_config_ids,
       settings: data.settings,
     })
     onOpenChange(false)
@@ -92,6 +93,7 @@ function EditQueueDialog({ open, onOpenChange, projectId }: EditQueueDialogProps
           </DialogDescription>
         </DialogHeader>
         <QueueForm
+          projectId={projectId}
           queue={currentRow}
           onSubmit={handleSubmit}
           onCancel={() => onOpenChange(false)}
