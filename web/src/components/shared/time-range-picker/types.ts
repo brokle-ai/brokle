@@ -17,6 +17,7 @@ export type RelativeTimeRange =
   | '7d'
   | '14d'
   | '30d'
+  | 'all'
   | 'custom'
 
 // Time range for queries - supports both relative presets and custom absolute ranges
@@ -52,4 +53,5 @@ export const RELATIVE_OPTIONS: RelativeOption[] = [
   { value: '7d', label: 'Last 7 days', duration: 1000 * 60 * 60 * 24 * 7 },
   { value: '14d', label: 'Last 14 days', duration: 1000 * 60 * 60 * 24 * 14 },
   { value: '30d', label: 'Last 30 days', duration: 1000 * 60 * 60 * 24 * 30 },
+  { value: 'all', label: 'All time', duration: 1000 * 60 * 60 * 24 * 365 }, // Capped at 365 days on backend
 ]

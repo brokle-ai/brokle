@@ -472,6 +472,9 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 			filterPresets.DELETE("/:id", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Observability.DeleteFilterPreset)
 		}
 
+		// Observability sessions (aggregated from traces by session_id)
+		projects.GET("/:projectId/sessions", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Observability.ListSessions)
+
 		dashboards := projects.Group("/:projectId/dashboards")
 		{
 			// List and create

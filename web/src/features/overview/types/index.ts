@@ -17,6 +17,8 @@ export interface OverviewStats {
   traces_trend: number
   total_cost: number
   cost_trend: number
+  total_tokens: number
+  tokens_trend: number
   avg_latency_ms: number
   latency_trend: number
   error_rate: number
@@ -33,6 +35,8 @@ export interface TimeSeriesPoint {
 export interface CostByModel {
   model: string
   cost: number
+  tokens: number
+  count: number
 }
 
 // Recent trace summary
@@ -71,6 +75,9 @@ export interface ChecklistStatus {
 export interface OverviewResponse {
   stats: OverviewStats
   trace_volume: TimeSeriesPoint[]
+  cost_time_series: TimeSeriesPoint[]
+  token_time_series: TimeSeriesPoint[]
+  error_time_series: TimeSeriesPoint[]
   cost_by_model: CostByModel[]
   recent_traces: RecentTrace[]
   top_errors: TopError[]

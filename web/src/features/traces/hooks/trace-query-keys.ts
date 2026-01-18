@@ -1,4 +1,4 @@
-import type { GetTracesParams } from '../api/traces-api'
+import type { GetTracesParams, GetSpansParams } from '../api/traces-api'
 
 /**
  * Query key factory for trace-related queries
@@ -12,6 +12,9 @@ import type { GetTracesParams } from '../api/traces-api'
  * - ['traces', 'detail', projectId, traceId] - detail queries
  * - ['traces', 'detail', projectId, traceId, 'spans'] - spans for a trace
  * - ['traces', 'filterOptions', projectId] - filter options
+ * - ['spans', 'list', projectId, params?] - flat spans list queries
+ * - ['sessions', 'list', projectId, params?] - sessions list queries
+ * - ['metrics', projectId] - trace metrics queries
  *
  * This enables:
  * - Invalidating all lists: queryClient.invalidateQueries({ queryKey: traceQueryKeys.list(projectId) })
@@ -34,9 +37,32 @@ export const traceQueryKeys = {
   detail: (projectId: string, traceId: string) =>
     [...traceQueryKeys.details(), projectId, traceId] as const,
 
-  // Spans - ['traces', 'detail', projectId, traceId, 'spans']
-  spans: (projectId: string, traceId: string) =>
+  // Spans for a trace - ['traces', 'detail', projectId, traceId, 'spans']
+  traceSpans: (projectId: string, traceId: string) =>
     [...traceQueryKeys.detail(projectId, traceId), 'spans'] as const,
+
+  // Flat spans list - ['spans', 'list', projectId, params?]
+  spansBase: () => ['spans'] as const,
+  spansList: () => [...traceQueryKeys.spansBase(), 'list'] as const,
+  spans: (projectId: string, params?: Omit<GetSpansParams, 'projectId'>) =>
+    params
+      ? ([...traceQueryKeys.spansList(), projectId, params] as const)
+      : ([...traceQueryKeys.spansList(), projectId] as const),
+
+  // Sessions list - ['sessions', 'list', projectId, params?]
+  sessionsBase: () => ['sessions'] as const,
+  sessionsList: () => [...traceQueryKeys.sessionsBase(), 'list'] as const,
+  sessions: (projectId: string, params?: Record<string, any>) =>
+    params
+      ? ([...traceQueryKeys.sessionsList(), projectId, params] as const)
+      : ([...traceQueryKeys.sessionsList(), projectId] as const),
+
+  // Trace metrics - ['traces', 'metrics', projectId, params?]
+  metricsBase: () => [...traceQueryKeys.all, 'metrics'] as const,
+  metrics: (projectId: string, params?: Record<string, any>) =>
+    params
+      ? ([...traceQueryKeys.metricsBase(), projectId, params] as const)
+      : ([...traceQueryKeys.metricsBase(), projectId] as const),
 
   // Filter options - ['traces', 'filterOptions', projectId]
   filterOptions: (projectId: string) =>

@@ -1628,3 +1628,175 @@ func sortAndLimitAttributes(attrs []observability.AttributeKey, limit int) []obs
 
 	return attrs
 }
+
+// ListSessions returns paginated sessions aggregated from traces.
+// Uses ClickHouse GROUP BY for server-side aggregation of traces by session_id.
+func (r *traceRepository) ListSessions(ctx context.Context, filter *observability.SessionFilter) ([]*observability.SessionSummary, error) {
+	if filter == nil {
+		return nil, fmt.Errorf("filter is required")
+	}
+	if filter.ProjectID == "" {
+		return nil, fmt.Errorf("project_id is required")
+	}
+
+	filter.SetDefaults("last_trace")
+
+	query := `
+		SELECT
+			session_id,
+			toInt64(count(DISTINCT trace_id)) as trace_count,
+			min(start_time) as first_trace,
+			max(start_time) as last_trace,
+			sum(duration_nano) as total_duration,
+			sum(usage_details['total']) as total_tokens,
+			toFloat64(sum(total_cost)) as total_cost,
+			toInt64(countIf(has_error = true)) as error_count,
+			arrayDistinct(groupArray(span_attributes['user.id'])) as user_ids
+		FROM otel_traces
+		WHERE project_id = ?
+			AND parent_span_id IS NULL
+			AND deleted_at IS NULL
+			AND session_id != ''
+	`
+
+	args := []interface{}{filter.ProjectID}
+
+	if filter.StartTime != nil {
+		query += " AND start_time >= ?"
+		args = append(args, *filter.StartTime)
+	}
+	if filter.EndTime != nil {
+		query += " AND start_time <= ?"
+		args = append(args, *filter.EndTime)
+	}
+	if filter.Search != nil && *filter.Search != "" {
+		query += " AND session_id ILIKE ?"
+		args = append(args, "%"+*filter.Search+"%")
+	}
+	if filter.UserID != nil && *filter.UserID != "" {
+		query += " AND span_attributes['user.id'] = ?"
+		args = append(args, *filter.UserID)
+	}
+
+	query += " GROUP BY session_id"
+
+	// Sorting
+	allowedSortFields := []string{"last_trace", "first_trace", "trace_count", "total_tokens", "total_cost", "total_duration", "error_count"}
+	sortField := "last_trace"
+	sortDir := "DESC"
+
+	if filter.SortBy != "" {
+		validated, err := pagination.ValidateSortField(filter.SortBy, allowedSortFields)
+		if err != nil {
+			return nil, fmt.Errorf("invalid sort field: %w", err)
+		}
+		if validated != "" {
+			sortField = validated
+		}
+	}
+	if filter.SortDir == "asc" {
+		sortDir = "ASC"
+	}
+
+	query += fmt.Sprintf(" ORDER BY %s %s, session_id %s", sortField, sortDir, sortDir)
+
+	// Pagination
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 20
+	}
+	offset := filter.GetOffset()
+
+	query += " LIMIT ? OFFSET ?"
+	args = append(args, limit, offset)
+
+	rows, err := r.db.Query(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list sessions: %w", err)
+	}
+	defer rows.Close()
+
+	var sessions []*observability.SessionSummary
+	for rows.Next() {
+		var session observability.SessionSummary
+		var totalCostFloat float64
+
+		err := rows.Scan(
+			&session.SessionID,
+			&session.TraceCount,
+			&session.FirstTrace,
+			&session.LastTrace,
+			&session.TotalDuration,
+			&session.TotalTokens,
+			&totalCostFloat,
+			&session.ErrorCount,
+			&session.UserIDs,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan session: %w", err)
+		}
+
+		session.TotalCost = decimal.NewFromFloat(totalCostFloat)
+
+		// Filter empty user IDs
+		session.UserIDs = filterEmptyStrings(session.UserIDs)
+
+		sessions = append(sessions, &session)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate sessions: %w", err)
+	}
+
+	return sessions, nil
+}
+
+// CountSessions returns the total number of sessions matching the filter.
+func (r *traceRepository) CountSessions(ctx context.Context, filter *observability.SessionFilter) (int64, error) {
+	if filter == nil {
+		return 0, fmt.Errorf("filter is required")
+	}
+	if filter.ProjectID == "" {
+		return 0, fmt.Errorf("project_id is required")
+	}
+
+	innerQuery := `
+		SELECT session_id
+		FROM otel_traces
+		WHERE project_id = ?
+			AND parent_span_id IS NULL
+			AND deleted_at IS NULL
+			AND session_id != ''
+	`
+
+	args := []interface{}{filter.ProjectID}
+
+	if filter.StartTime != nil {
+		innerQuery += " AND start_time >= ?"
+		args = append(args, *filter.StartTime)
+	}
+	if filter.EndTime != nil {
+		innerQuery += " AND start_time <= ?"
+		args = append(args, *filter.EndTime)
+	}
+	if filter.Search != nil && *filter.Search != "" {
+		innerQuery += " AND session_id ILIKE ?"
+		args = append(args, "%"+*filter.Search+"%")
+	}
+	if filter.UserID != nil && *filter.UserID != "" {
+		innerQuery += " AND span_attributes['user.id'] = ?"
+		args = append(args, *filter.UserID)
+	}
+
+	innerQuery += " GROUP BY session_id"
+
+	query := "SELECT toInt64(count()) FROM (" + innerQuery + ")"
+
+	var count int64
+	err := r.db.QueryRow(ctx, query, args...).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count sessions: %w", err)
+	}
+
+	return count, nil
+}

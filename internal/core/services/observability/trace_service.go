@@ -493,3 +493,48 @@ func (s *TraceService) DiscoverAttributes(ctx context.Context, req *observabilit
 
 	return response, nil
 }
+
+// ListSessions returns paginated sessions aggregated from traces.
+// Sessions are identified by session_id attribute on root spans.
+func (s *TraceService) ListSessions(ctx context.Context, filter *observability.SessionFilter) ([]*observability.SessionSummary, error) {
+	if filter == nil {
+		return nil, appErrors.NewValidationError("filter is required", "session filter cannot be nil")
+	}
+	if filter.ProjectID == "" {
+		return nil, appErrors.NewValidationError("project_id is required", "filter must include project_id for scoping")
+	}
+
+	filter.SetDefaults("last_trace")
+
+	sessions, err := s.traceRepo.ListSessions(ctx, filter)
+	if err != nil {
+		s.logger.Error("failed to list sessions",
+			"error", err,
+			"project_id", filter.ProjectID,
+		)
+		return nil, appErrors.NewInternalError("failed to list sessions", err)
+	}
+
+	return sessions, nil
+}
+
+// CountSessions returns the total number of sessions matching the filter.
+func (s *TraceService) CountSessions(ctx context.Context, filter *observability.SessionFilter) (int64, error) {
+	if filter == nil {
+		return 0, appErrors.NewValidationError("filter is required", "session filter cannot be nil")
+	}
+	if filter.ProjectID == "" {
+		return 0, appErrors.NewValidationError("project_id is required", "filter must include project_id for scoping")
+	}
+
+	count, err := s.traceRepo.CountSessions(ctx, filter)
+	if err != nil {
+		s.logger.Error("failed to count sessions",
+			"error", err,
+			"project_id", filter.ProjectID,
+		)
+		return 0, appErrors.NewInternalError("failed to count sessions", err)
+	}
+
+	return count, nil
+}
