@@ -4,7 +4,7 @@ import { useCallback, useMemo } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useTraces } from '../context/traces-context'
 
-export type ViewMode = 'tree' | 'timeline'
+export type ViewMode = 'tree' | 'timeline' | 'graph'
 
 /**
  * Unified hook for managing trace detail state via URL parameters
@@ -12,7 +12,7 @@ export type ViewMode = 'tree' | 'timeline'
  * URL parameters (peek mode only):
  * - peek: trace ID to display in sheet sidebar
  * - span: selected span ID within the trace
- * - view: span visualization mode ('tree' | 'timeline')
+ * - view: span visualization mode ('tree' | 'timeline' | 'graph')
  *
  * For full-page mode, navigate to /traces/[traceId] route instead
  */
