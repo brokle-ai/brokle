@@ -40,6 +40,23 @@ export interface RunMetrics {
   model?: string
 }
 
+/**
+ * Run history entry for in-memory per-window history (Opik pattern).
+ * Stores last 10 runs with stale marking when prompt changes.
+ */
+export interface RunHistoryEntry {
+  id: string
+  content: string
+  metrics: RunMetrics | null
+  timestamp: string // ISO string
+  error?: string
+  isStale: boolean // Opik pattern: true when prompt has changed since this run
+  // Snapshot of inputs for restore
+  messages: ChatMessage[]
+  variables: Record<string, string>
+  config: ModelConfig | null
+}
+
 export interface WindowState {
   template: ChatTemplate | TextTemplate
   variables?: Record<string, string>

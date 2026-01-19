@@ -1,12 +1,22 @@
 import { useState, useCallback, useRef } from 'react'
 import { config } from '@/lib/config'
 import { getCookie } from '@/lib/utils/cookies'
-import type { StreamChunk, StreamMetrics, ExecuteRequest } from '../types'
+import type { StreamChunk, StreamMetrics, ExecuteRequest, ChatMessage, ModelConfig } from '../types'
+
+/**
+ * Captured inputs at the start of execution.
+ * Used to create accurate history entries even if user edits during streaming.
+ */
+export interface CapturedInputs {
+  messages: ChatMessage[]
+  variables: Record<string, string>
+  config: ModelConfig | null
+}
 
 interface UseStreamingOptions {
   onStart?: () => void
   onContent?: (content: string) => void
-  onEnd?: (content: string, metrics: StreamMetrics) => void
+  onEnd?: (content: string, metrics: StreamMetrics, capturedInputs: CapturedInputs | null) => void
   onError?: (error: string) => void
 }
 
@@ -15,10 +25,29 @@ export const useStreaming = (options?: UseStreamingOptions) => {
   const [content, setContent] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [metrics, setMetrics] = useState<StreamMetrics>({})
+  const [capturedInputs, setCapturedInputs] = useState<CapturedInputs | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
 
   const stream = useCallback(
-    async (request: ExecuteRequest) => {
+    async (request: ExecuteRequest, fullConfig?: ModelConfig | null) => {
+      // CRITICAL: Capture inputs BEFORE any async operations
+      // This ensures history entries reflect inputs at execution time, not when streaming ends
+      //
+      // NOTE: We capture fullConfig (from windowState.config) for history, NOT request.config_overrides.
+      // - config_overrides is filtered by getEnabledModelConfig() for the API (only enabled params)
+      // - fullConfig contains the complete UI state including _enabled flags and disabled param values
+      // This allows history restore to fully recreate the config panel state.
+      const inputSnapshot: CapturedInputs = {
+        messages: 'messages' in request.template
+          ? request.template.messages.map(m => ({ ...m }))
+          : [],
+        variables: { ...request.variables },
+        config: fullConfig !== undefined
+          ? (fullConfig ? { ...fullConfig } : null)
+          : (request.config_overrides ? { ...request.config_overrides } : null),
+      }
+      setCapturedInputs(inputSnapshot)
+
       setIsStreaming(true)
       setContent('')
       setError(null)
@@ -93,7 +122,7 @@ export const useStreaming = (options?: UseStreamingOptions) => {
                 case 'metrics':
                   if (chunk.metrics) {
                     setMetrics(chunk.metrics)
-                    options?.onEnd?.(accumulatedContent, chunk.metrics)
+                    options?.onEnd?.(accumulatedContent, chunk.metrics, inputSnapshot)
                   }
                   break
 
@@ -133,6 +162,7 @@ export const useStreaming = (options?: UseStreamingOptions) => {
     setContent('')
     setError(null)
     setMetrics({})
+    setCapturedInputs(null)
   }, [])
 
   return {
@@ -143,5 +173,6 @@ export const useStreaming = (options?: UseStreamingOptions) => {
     content,
     error,
     metrics,
+    capturedInputs,
   }
 }

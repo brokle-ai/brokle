@@ -1,6 +1,30 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { usePlaygroundStore, createContentSnapshot, isWindowDirty } from '../stores/playground-store'
-import { createMessage } from '../types'
+import { createMessage, type ChatMessage, type ModelConfig } from '../types'
+
+/**
+ * Type for captured inputs passed to setWindowOutput
+ */
+interface CapturedInputs {
+  messages: ChatMessage[]
+  variables: Record<string, string>
+  config: ModelConfig | null
+}
+
+/**
+ * Helper to create mock CapturedInputs for history tests
+ */
+const createMockCapturedInputs = (overrides?: Partial<CapturedInputs>): CapturedInputs => ({
+  messages: [{ id: crypto.randomUUID(), role: 'user', content: 'Test message' }],
+  variables: {},
+  config: {
+    model: 'gpt-4',
+    provider: 'openai',
+    temperature: 0.7,
+    temperature_enabled: true,
+  },
+  ...overrides,
+})
 
 /**
  * Playground Store Tests
@@ -318,6 +342,501 @@ describe('PlaygroundStore', () => {
       expect(state.sharedVariables).toEqual({})
       expect(state.useSharedVariables).toBe(false)
       expect(state.isExecutingAll).toBe(false)
+    })
+  })
+
+  // ============================================================================
+  // HIGH-VALUE TESTS: Business Logic - Run History
+  // ============================================================================
+
+  describe('run history', () => {
+    describe('setWindowOutput - creates history entries', () => {
+      it('should store full config with _enabled flags in history entry', () => {
+        const store = usePlaygroundStore.getState()
+
+        // Full config with enabled/disabled params
+        const fullConfig: ModelConfig = {
+          model: 'gpt-4',
+          provider: 'openai',
+          temperature: 0.7,
+          temperature_enabled: true,
+          max_tokens: 1000,
+          max_tokens_enabled: false, // Disabled but has value
+          top_p: 0.9,
+          top_p_enabled: true,
+          frequency_penalty: 0.5,
+          frequency_penalty_enabled: false,
+          presence_penalty: 0.3,
+          presence_penalty_enabled: true,
+        }
+
+        // Captured inputs (what streaming hook passes)
+        const capturedInputs: CapturedInputs = {
+          messages: [{ id: '1', role: 'user', content: 'Hello' }],
+          variables: { name: 'test' },
+          config: fullConfig,
+        }
+
+        store.setWindowOutput(0, 'Response', { model: 'gpt-4' }, capturedInputs)
+
+        const historyEntry = usePlaygroundStore.getState().windows[0].runHistory[0]
+
+        // Verify ALL config fields preserved including _enabled flags
+        expect(historyEntry.config).toEqual(fullConfig)
+        expect(historyEntry.config?.temperature_enabled).toBe(true)
+        expect(historyEntry.config?.max_tokens_enabled).toBe(false)
+        expect(historyEntry.config?.max_tokens).toBe(1000) // Value preserved even when disabled
+        expect(historyEntry.config?.top_p_enabled).toBe(true)
+        expect(historyEntry.config?.frequency_penalty_enabled).toBe(false)
+        expect(historyEntry.config?.presence_penalty_enabled).toBe(true)
+      })
+
+      it('should create history entry with correct structure', () => {
+        const store = usePlaygroundStore.getState()
+
+        const capturedInputs = createMockCapturedInputs({
+          messages: [{ id: 'm1', role: 'user', content: 'Test prompt' }],
+          variables: { key: 'value' },
+        })
+
+        const metrics = {
+          model: 'gpt-4',
+          prompt_tokens: 10,
+          completion_tokens: 20,
+          total_tokens: 30,
+          cost: 0.001,
+          ttft_ms: 100,
+          total_duration_ms: 500,
+        }
+
+        store.setWindowOutput(0, 'Generated response', metrics, capturedInputs)
+
+        const historyEntry = usePlaygroundStore.getState().windows[0].runHistory[0]
+
+        // Verify complete structure
+        expect(historyEntry.id).toBeDefined()
+        expect(historyEntry.id.length).toBeGreaterThan(0)
+        expect(historyEntry.content).toBe('Generated response')
+        expect(historyEntry.timestamp).toBeDefined()
+        expect(new Date(historyEntry.timestamp).getTime()).not.toBeNaN()
+        expect(historyEntry.isStale).toBe(false)
+        expect(historyEntry.messages).toHaveLength(1)
+        expect(historyEntry.messages[0].content).toBe('Test prompt')
+        expect(historyEntry.variables).toEqual({ key: 'value' })
+        expect(historyEntry.config).toEqual(capturedInputs.config)
+
+        // Verify metrics mapping
+        expect(historyEntry.metrics?.model).toBe('gpt-4')
+        expect(historyEntry.metrics?.prompt_tokens).toBe(10)
+        expect(historyEntry.metrics?.completion_tokens).toBe(20)
+        expect(historyEntry.metrics?.total_tokens).toBe(30)
+        expect(historyEntry.metrics?.cost).toBe(0.001)
+        expect(historyEntry.metrics?.ttft_ms).toBe(100)
+        expect(historyEntry.metrics?.latency_ms).toBe(500)
+      })
+
+      it('should enforce max 10 history entries (newest first)', () => {
+        const store = usePlaygroundStore.getState()
+
+        // Add 12 entries
+        for (let i = 1; i <= 12; i++) {
+          store.setWindowOutput(
+            0,
+            `Response ${i}`,
+            { model: 'gpt-4' },
+            createMockCapturedInputs({
+              messages: [{ id: `m${i}`, role: 'user', content: `Message ${i}` }],
+            })
+          )
+        }
+
+        const history = usePlaygroundStore.getState().windows[0].runHistory
+
+        // Verify only 10 entries remain
+        expect(history).toHaveLength(10)
+
+        // Verify newest first (entry 12 should be first)
+        expect(history[0].content).toBe('Response 12')
+        expect(history[9].content).toBe('Response 3') // Entry 1 and 2 were evicted
+      })
+
+      it('should capture messages from inputSnapshot not current window state', () => {
+        const store = usePlaygroundStore.getState()
+
+        // Create captured inputs at execution start
+        const capturedInputs = createMockCapturedInputs({
+          messages: [{ id: 'm1', role: 'user', content: 'Original message at execution start' }],
+        })
+
+        // Modify window messages AFTER creating capturedInputs (simulating user typing during execution)
+        store.updateWindow(0, {
+          messages: [createMessage('user', 'Modified message during execution')],
+        })
+
+        // Set output with original capturedInputs
+        store.setWindowOutput(0, 'Response', { model: 'gpt-4' }, capturedInputs)
+
+        const historyEntry = usePlaygroundStore.getState().windows[0].runHistory[0]
+
+        // History should use capturedInputs.messages, not current window state
+        expect(historyEntry.messages[0].content).toBe('Original message at execution start')
+      })
+
+      it('should fall back to current window state when inputSnapshot not provided', () => {
+        const store = usePlaygroundStore.getState()
+
+        // Set up window with specific messages
+        store.updateWindow(0, {
+          messages: [createMessage('user', 'Current window message')],
+          variables: { key: 'window-value' },
+          config: { model: 'gpt-3.5' },
+        })
+
+        // Set output without inputSnapshot
+        store.setWindowOutput(0, 'Response', { model: 'gpt-3.5' })
+
+        const historyEntry = usePlaygroundStore.getState().windows[0].runHistory[0]
+
+        // Should use current window state as fallback
+        expect(historyEntry.messages[0].content).toBe('Current window message')
+        expect(historyEntry.variables).toEqual({ key: 'window-value' })
+        expect(historyEntry.config?.model).toBe('gpt-3.5')
+      })
+
+      it('should handle null metrics gracefully', () => {
+        const store = usePlaygroundStore.getState()
+
+        store.setWindowOutput(0, 'Response', null, createMockCapturedInputs())
+
+        const historyEntry = usePlaygroundStore.getState().windows[0].runHistory[0]
+        expect(historyEntry.metrics).toBeNull()
+      })
+    })
+
+    describe('restoreFromHistory - restores full state', () => {
+      it('should restore full config with _enabled flags from history', () => {
+        const store = usePlaygroundStore.getState()
+
+        const originalConfig: ModelConfig = {
+          model: 'gpt-4',
+          provider: 'openai',
+          temperature: 0.7,
+          temperature_enabled: true,
+          max_tokens: 1000,
+          max_tokens_enabled: false,
+          top_p: 0.9,
+          top_p_enabled: false,
+          frequency_penalty: 0.5,
+          frequency_penalty_enabled: true,
+          presence_penalty: 0.3,
+          presence_penalty_enabled: false,
+        }
+
+        // Create history entry with full config
+        store.setWindowOutput(
+          0,
+          'Original response',
+          { model: 'gpt-4' },
+          {
+            messages: [{ id: '1', role: 'user', content: 'Test' }],
+            variables: { key: 'value' },
+            config: originalConfig,
+          }
+        )
+
+        const historyId = usePlaygroundStore.getState().windows[0].runHistory[0].id
+
+        // Modify current window config completely
+        store.updateWindow(0, {
+          config: {
+            model: 'gpt-3.5',
+            temperature: 0.5,
+            temperature_enabled: false,
+            max_tokens: 500,
+            max_tokens_enabled: true,
+          },
+        })
+
+        // Restore from history
+        store.restoreFromHistory(0, historyId)
+
+        // Verify FULL config restored including _enabled flags
+        const restoredConfig = usePlaygroundStore.getState().windows[0].config
+        expect(restoredConfig?.model).toBe('gpt-4')
+        expect(restoredConfig?.provider).toBe('openai')
+        expect(restoredConfig?.temperature).toBe(0.7)
+        expect(restoredConfig?.temperature_enabled).toBe(true)
+        expect(restoredConfig?.max_tokens).toBe(1000)
+        expect(restoredConfig?.max_tokens_enabled).toBe(false) // Critical: disabled state preserved
+        expect(restoredConfig?.top_p).toBe(0.9)
+        expect(restoredConfig?.top_p_enabled).toBe(false)
+        expect(restoredConfig?.frequency_penalty).toBe(0.5)
+        expect(restoredConfig?.frequency_penalty_enabled).toBe(true)
+        expect(restoredConfig?.presence_penalty).toBe(0.3)
+        expect(restoredConfig?.presence_penalty_enabled).toBe(false)
+      })
+
+      it('should generate new message IDs on restore (for drag-drop)', () => {
+        const store = usePlaygroundStore.getState()
+
+        const originalMessageId = 'original-msg-id'
+        store.setWindowOutput(
+          0,
+          'Response',
+          { model: 'gpt-4' },
+          {
+            messages: [{ id: originalMessageId, role: 'user', content: 'Test' }],
+            variables: {},
+            config: null,
+          }
+        )
+
+        const historyId = usePlaygroundStore.getState().windows[0].runHistory[0].id
+
+        // Clear window and restore
+        store.updateWindow(0, { messages: [] })
+        store.restoreFromHistory(0, historyId)
+
+        const restoredMessages = usePlaygroundStore.getState().windows[0].messages
+
+        // Messages should have NEW IDs (for drag-drop), not original IDs
+        expect(restoredMessages).toHaveLength(1)
+        expect(restoredMessages[0].id).not.toBe(originalMessageId)
+        expect(restoredMessages[0].content).toBe('Test')
+        expect(restoredMessages[0].role).toBe('user')
+      })
+
+      it('should restore messages, variables, output, and metrics', () => {
+        const store = usePlaygroundStore.getState()
+
+        const capturedInputs: CapturedInputs = {
+          messages: [
+            { id: 'm1', role: 'system', content: 'System prompt' },
+            { id: 'm2', role: 'user', content: 'User message' },
+          ],
+          variables: { var1: 'val1', var2: 'val2' },
+          config: { model: 'gpt-4' },
+        }
+
+        const metrics = {
+          model: 'gpt-4',
+          prompt_tokens: 50,
+          completion_tokens: 100,
+          total_tokens: 150,
+          cost: 0.01,
+          ttft_ms: 200,
+          total_duration_ms: 1000,
+        }
+
+        store.setWindowOutput(0, 'Historical response', metrics, capturedInputs)
+        const historyId = usePlaygroundStore.getState().windows[0].runHistory[0].id
+
+        // Clear current state
+        store.updateWindow(0, {
+          messages: [],
+          variables: {},
+          config: null,
+          lastOutput: null,
+          lastMetrics: null,
+        })
+
+        // Restore from history
+        store.restoreFromHistory(0, historyId)
+
+        const window = usePlaygroundStore.getState().windows[0]
+
+        // Verify comprehensive restoration
+        expect(window.messages).toHaveLength(2)
+        expect(window.messages[0].role).toBe('system')
+        expect(window.messages[0].content).toBe('System prompt')
+        expect(window.messages[1].role).toBe('user')
+        expect(window.messages[1].content).toBe('User message')
+        expect(window.variables).toEqual({ var1: 'val1', var2: 'val2' })
+        expect(window.config?.model).toBe('gpt-4')
+        expect(window.lastOutput).toBe('Historical response')
+        expect(window.lastMetrics?.model).toBe('gpt-4')
+        expect(window.lastMetrics?.prompt_tokens).toBe(50)
+        expect(window.lastMetrics?.total_duration_ms).toBe(1000)
+      })
+
+      it('should be no-op for non-existent history entry', () => {
+        const store = usePlaygroundStore.getState()
+
+        // Set up window with specific state
+        store.updateWindow(0, {
+          messages: [createMessage('user', 'Current message')],
+          variables: { key: 'current-value' },
+        })
+
+        const originalState = usePlaygroundStore.getState().windows[0]
+
+        // Attempt to restore from non-existent history ID
+        store.restoreFromHistory(0, 'non-existent-id')
+
+        const afterState = usePlaygroundStore.getState().windows[0]
+
+        // State should be unchanged
+        expect(afterState.messages[0].content).toBe(originalState.messages[0].content)
+        expect(afterState.variables).toEqual(originalState.variables)
+      })
+
+      it('should be no-op for non-existent window index', () => {
+        const store = usePlaygroundStore.getState()
+
+        // Add history to window 0
+        store.setWindowOutput(0, 'Response', null, createMockCapturedInputs())
+        const historyId = usePlaygroundStore.getState().windows[0].runHistory[0].id
+
+        // Attempt to restore to non-existent window
+        store.restoreFromHistory(99, historyId)
+
+        // No error should occur, state unchanged
+        expect(usePlaygroundStore.getState().windows).toHaveLength(1)
+      })
+
+      it('should handle null config in history entry', () => {
+        const store = usePlaygroundStore.getState()
+
+        store.setWindowOutput(
+          0,
+          'Response',
+          null,
+          {
+            messages: [{ id: 'm1', role: 'user', content: 'Test' }],
+            variables: {},
+            config: null,
+          }
+        )
+
+        const historyId = usePlaygroundStore.getState().windows[0].runHistory[0].id
+
+        // Set current config to something
+        store.updateWindow(0, { config: { model: 'gpt-4' } })
+
+        // Restore from history with null config
+        store.restoreFromHistory(0, historyId)
+
+        expect(usePlaygroundStore.getState().windows[0].config).toBeNull()
+      })
+    })
+
+    describe('markHistoryAsStale', () => {
+      it('should mark all history entries as stale', () => {
+        const store = usePlaygroundStore.getState()
+
+        // Add multiple history entries
+        store.setWindowOutput(0, 'R1', null, createMockCapturedInputs())
+        store.setWindowOutput(0, 'R2', null, createMockCapturedInputs())
+        store.setWindowOutput(0, 'R3', null, createMockCapturedInputs())
+
+        // Verify initially not stale
+        let history = usePlaygroundStore.getState().windows[0].runHistory
+        expect(history).toHaveLength(3)
+        expect(history[0].isStale).toBe(false)
+        expect(history[1].isStale).toBe(false)
+        expect(history[2].isStale).toBe(false)
+
+        // Mark as stale
+        store.markHistoryAsStale(0)
+
+        // Verify all entries marked stale
+        history = usePlaygroundStore.getState().windows[0].runHistory
+        expect(history[0].isStale).toBe(true)
+        expect(history[1].isStale).toBe(true)
+        expect(history[2].isStale).toBe(true)
+      })
+
+      it('should be no-op when window has no history', () => {
+        const store = usePlaygroundStore.getState()
+
+        // Window starts with empty history
+        expect(usePlaygroundStore.getState().windows[0].runHistory).toHaveLength(0)
+
+        // Should not throw error
+        store.markHistoryAsStale(0)
+
+        // Still empty
+        expect(usePlaygroundStore.getState().windows[0].runHistory).toHaveLength(0)
+      })
+
+      it('should be no-op when window does not exist', () => {
+        const store = usePlaygroundStore.getState()
+
+        // Should not throw error for invalid index
+        store.markHistoryAsStale(99)
+
+        // Original state unchanged
+        expect(usePlaygroundStore.getState().windows).toHaveLength(1)
+      })
+
+      it('should not affect new runs added after marking stale', () => {
+        const store = usePlaygroundStore.getState()
+
+        // Add initial history and mark stale
+        store.setWindowOutput(0, 'Old run', null, createMockCapturedInputs())
+        store.markHistoryAsStale(0)
+
+        // Add new run after marking stale
+        store.setWindowOutput(0, 'New run', null, createMockCapturedInputs())
+
+        const history = usePlaygroundStore.getState().windows[0].runHistory
+
+        // New run should NOT be stale
+        expect(history[0].content).toBe('New run')
+        expect(history[0].isStale).toBe(false)
+
+        // Old run should still be stale
+        expect(history[1].content).toBe('Old run')
+        expect(history[1].isStale).toBe(true)
+      })
+    })
+
+    describe('clearWindowHistory', () => {
+      it('should clear all history entries for window', () => {
+        const store = usePlaygroundStore.getState()
+
+        // Add entries
+        store.setWindowOutput(0, 'R1', null, createMockCapturedInputs())
+        store.setWindowOutput(0, 'R2', null, createMockCapturedInputs())
+        expect(usePlaygroundStore.getState().windows[0].runHistory).toHaveLength(2)
+
+        // Clear history
+        store.clearWindowHistory(0)
+
+        // Verify empty
+        expect(usePlaygroundStore.getState().windows[0].runHistory).toHaveLength(0)
+      })
+
+      it('should not affect other window state', () => {
+        const store = usePlaygroundStore.getState()
+
+        // Set up window with state and history
+        store.updateWindow(0, {
+          messages: [createMessage('user', 'Keep this message')],
+          variables: { key: 'keep-this-value' },
+          config: { model: 'gpt-4' },
+        })
+        store.setWindowOutput(0, 'Response', null, createMockCapturedInputs())
+
+        // Clear history
+        store.clearWindowHistory(0)
+
+        // Verify other state unchanged
+        const window = usePlaygroundStore.getState().windows[0]
+        expect(window.runHistory).toHaveLength(0)
+        expect(window.messages[0].content).toBe('Keep this message')
+        expect(window.variables).toEqual({ key: 'keep-this-value' })
+        expect(window.config?.model).toBe('gpt-4')
+      })
+
+      it('should be no-op for non-existent window', () => {
+        const store = usePlaygroundStore.getState()
+
+        // Should not throw error
+        store.clearWindowHistory(99)
+
+        expect(usePlaygroundStore.getState().windows).toHaveLength(1)
+      })
     })
   })
 })
