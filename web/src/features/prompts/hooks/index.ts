@@ -40,3 +40,12 @@ export {
 // Other hooks
 export { useProjectPrompts } from './use-project-prompts'
 export { usePromptsTableState, type UsePromptsTableStateReturn } from './use-prompts-table-state'
+export {
+  usePromptDetailState,
+  type UsePromptDetailStateReturn,
+  type PromptDetailTab,
+} from './use-prompt-detail-state'
+export {
+  usePromptEditState,
+  type UsePromptEditStateReturn,
+} from './use-prompt-edit-state'
