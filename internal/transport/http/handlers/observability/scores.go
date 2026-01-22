@@ -6,7 +6,10 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"brokle/internal/core/domain/observability"
+	"brokle/internal/transport/http/middleware"
+	appErrors "brokle/pkg/errors"
 	"brokle/pkg/response"
+	"brokle/pkg/ulid"
 )
 
 // Quality Score Handlers for Dashboard (JWT-authenticated, read + update operations)
@@ -308,4 +311,260 @@ func (h *Handler) GetScoreNames(c *gin.Context) {
 	}
 
 	response.Success(c, names)
+}
+
+// CreateTraceScore handles POST /api/v1/traces/:id/scores
+// @Summary Create annotation score for a trace
+// @Description Creates a human annotation score for a trace (JWT-authenticated dashboard endpoint)
+// @Tags Scores
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Trace ID"
+// @Param project_id query string true "Project ID"
+// @Param request body CreateAnnotationRequest true "Annotation data"
+// @Success 201 {object} response.APIResponse{data=AnnotationResponse} "Created annotation"
+// @Failure 400 {object} response.APIResponse{error=response.APIError} "Invalid parameters"
+// @Failure 401 {object} response.APIResponse{error=response.APIError} "Authentication required"
+// @Failure 404 {object} response.APIResponse{error=response.APIError} "Trace not found"
+// @Failure 500 {object} response.APIResponse{error=response.APIError} "Internal server error"
+// @Router /api/v1/traces/{id}/scores [post]
+func (h *Handler) CreateTraceScore(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	// Get trace ID from path
+	traceID := c.Param("id")
+	if traceID == "" {
+		response.Error(c, appErrors.NewValidationError("id", "is required"))
+		return
+	}
+
+	// Get project ID from query
+	projectIDStr := c.Query("project_id")
+	if projectIDStr == "" {
+		response.Error(c, appErrors.NewValidationError("project_id", "is required"))
+		return
+	}
+
+	// Get user ID from JWT (for audit trail)
+	userID, exists := middleware.GetUserIDULID(c)
+	if !exists {
+		response.Error(c, appErrors.NewUnauthorizedError("authentication required"))
+		return
+	}
+
+	// Parse request body
+	var req CreateAnnotationRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ValidationError(c, "Invalid request body", err.Error())
+		return
+	}
+
+	// Get root span to retrieve organization ID
+	rootSpan, err := h.services.GetTraceService().GetRootSpan(ctx, traceID)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	// Validate that the trace belongs to the requested project
+	if rootSpan.ProjectID != projectIDStr {
+		response.Error(c, appErrors.NewValidationError("project_id", "does not match trace's project"))
+		return
+	}
+
+	// Build the score entity
+	userIDStr := userID.String()
+	score := &observability.Score{
+		ID:             ulid.New().String(),
+		ProjectID:      projectIDStr,
+		OrganizationID: rootSpan.OrganizationID,
+		TraceID:        &traceID,
+		SpanID:         &rootSpan.SpanID, // Use the actual root span's ID
+		Name:           req.Name,
+		Value:          req.Value,
+		StringValue:    req.StringValue,
+		DataType:       req.DataType,
+		Source:         observability.ScoreSourceAnnotation,
+		Reason:         req.Reason,
+		Metadata:       "{}",
+		CreatedBy:      &userIDStr,
+		Timestamp:      time.Now(),
+	}
+
+	// Create the score
+	if err := h.services.GetScoreService().CreateScore(ctx, score); err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	h.logger.Info("annotation created",
+		"score_id", score.ID,
+		"project_id", projectIDStr,
+		"trace_id", traceID,
+		"user_id", userID,
+		"name", req.Name,
+	)
+
+	// Return response
+	response.Created(c, &AnnotationResponse{
+		ID:          score.ID,
+		ProjectID:   score.ProjectID,
+		TraceID:     score.TraceID,
+		SpanID:      score.SpanID,
+		Name:        score.Name,
+		Value:       score.Value,
+		StringValue: score.StringValue,
+		DataType:    score.DataType,
+		Source:      score.Source,
+		Reason:      score.Reason,
+		CreatedBy:   score.CreatedBy,
+		Timestamp:   score.Timestamp.Format(time.RFC3339),
+	})
+}
+
+// GetTraceScores handles GET /api/v1/traces/:id/scores
+// @Summary List scores for a trace
+// @Description Retrieve all scores (annotations and automated) for a specific trace
+// @Tags Scores
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Trace ID"
+// @Param project_id query string true "Project ID"
+// @Success 200 {object} response.APIResponse{data=[]AnnotationResponse} "List of scores"
+// @Failure 400 {object} response.APIResponse{error=response.APIError} "Invalid parameters"
+// @Failure 500 {object} response.APIResponse{error=response.APIError} "Internal server error"
+// @Router /api/v1/traces/{id}/scores [get]
+func (h *Handler) GetTraceScores(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	// Get trace ID from path
+	traceID := c.Param("id")
+	if traceID == "" {
+		response.Error(c, appErrors.NewValidationError("id", "is required"))
+		return
+	}
+
+	// Get project ID from query (for authorization)
+	projectIDStr := c.Query("project_id")
+	if projectIDStr == "" {
+		response.Error(c, appErrors.NewValidationError("project_id", "is required"))
+		return
+	}
+
+	// Get scores for the trace
+	scores, err := h.services.GetScoreService().GetScoresByTraceID(ctx, traceID)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	// Convert to response format
+	responses := make([]*AnnotationResponse, 0, len(scores))
+	for _, score := range scores {
+		responses = append(responses, &AnnotationResponse{
+			ID:          score.ID,
+			ProjectID:   score.ProjectID,
+			TraceID:     score.TraceID,
+			SpanID:      score.SpanID,
+			Name:        score.Name,
+			Value:       score.Value,
+			StringValue: score.StringValue,
+			DataType:    score.DataType,
+			Source:      score.Source,
+			Reason:      score.Reason,
+			CreatedBy:   score.CreatedBy,
+			Timestamp:   score.Timestamp.Format(time.RFC3339),
+		})
+	}
+
+	response.Success(c, responses)
+}
+
+// DeleteTraceScore handles DELETE /api/v1/traces/:id/scores/:score_id
+// @Summary Delete annotation score
+// @Description Deletes a human annotation score. Only the creator can delete their annotation.
+// @Tags Scores
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Trace ID"
+// @Param score_id path string true "Score ID"
+// @Param project_id query string true "Project ID"
+// @Success 204 "No Content"
+// @Failure 400 {object} response.APIResponse{error=response.APIError} "Invalid parameters"
+// @Failure 401 {object} response.APIResponse{error=response.APIError} "Authentication required"
+// @Failure 403 {object} response.APIResponse{error=response.APIError} "Not the annotation owner"
+// @Failure 404 {object} response.APIResponse{error=response.APIError} "Score not found"
+// @Failure 500 {object} response.APIResponse{error=response.APIError} "Internal server error"
+// @Router /api/v1/traces/{id}/scores/{score_id} [delete]
+func (h *Handler) DeleteTraceScore(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	// Get trace ID from path
+	traceID := c.Param("id")
+	if traceID == "" {
+		response.Error(c, appErrors.NewValidationError("id", "is required"))
+		return
+	}
+
+	// Get score ID from path
+	scoreID := c.Param("score_id")
+	if scoreID == "" {
+		response.Error(c, appErrors.NewValidationError("score_id", "is required"))
+		return
+	}
+
+	// Get project ID from query
+	projectIDStr := c.Query("project_id")
+	if projectIDStr == "" {
+		response.Error(c, appErrors.NewValidationError("project_id", "is required"))
+		return
+	}
+
+	// Get user ID from JWT
+	userID, exists := middleware.GetUserIDULID(c)
+	if !exists {
+		response.Error(c, appErrors.NewUnauthorizedError("authentication required"))
+		return
+	}
+
+	// Get the score to verify ownership
+	score, err := h.services.GetScoreService().GetScoreByID(ctx, scoreID)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	// Verify the score belongs to the trace
+	if score.TraceID == nil || *score.TraceID != traceID {
+		response.Error(c, appErrors.NewNotFoundError("score"))
+		return
+	}
+
+	// Only allow deletion of annotation scores by their creator
+	if score.Source != observability.ScoreSourceAnnotation {
+		response.Error(c, appErrors.NewForbiddenError("only annotation scores can be deleted"))
+		return
+	}
+
+	if score.CreatedBy == nil || *score.CreatedBy != userID.String() {
+		response.Error(c, appErrors.NewForbiddenError("only the creator can delete this annotation"))
+		return
+	}
+
+	// Delete the score
+	if err := h.services.GetScoreService().DeleteScore(ctx, scoreID); err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	h.logger.Info("annotation deleted",
+		"score_id", scoreID,
+		"project_id", projectIDStr,
+		"trace_id", traceID,
+		"user_id", userID,
+	)
+
+	response.NoContent(c)
 }

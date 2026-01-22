@@ -27,8 +27,8 @@ func (r *scoreRepository) Create(ctx context.Context, score *observability.Score
 			score_id, project_id, organization_id, trace_id, span_id,
 			name, value, string_value, type, source,
 			reason, metadata, experiment_id, experiment_item_id,
-			timestamp
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			created_by, timestamp
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 
 	return r.db.Exec(ctx, query,
@@ -46,6 +46,7 @@ func (r *scoreRepository) Create(ctx context.Context, score *observability.Score
 		score.Metadata,
 		score.ExperimentID,
 		score.ExperimentItemID,
+		score.CreatedBy,
 		score.Timestamp,
 	)
 }
@@ -69,7 +70,7 @@ func (r *scoreRepository) GetByID(ctx context.Context, id string) (*observabilit
 			score_id, project_id, organization_id, trace_id, span_id,
 			name, value, string_value, type, source,
 			reason, metadata, experiment_id, experiment_item_id,
-			timestamp
+			created_by, timestamp
 		FROM scores
 		WHERE score_id = ?
 		LIMIT 1
@@ -86,7 +87,7 @@ func (r *scoreRepository) GetByTraceID(ctx context.Context, traceID string) ([]*
 			score_id, project_id, organization_id, trace_id, span_id,
 			name, value, string_value, type, source,
 			reason, metadata, experiment_id, experiment_item_id,
-			timestamp
+			created_by, timestamp
 		FROM scores
 		WHERE trace_id = ?
 		ORDER BY timestamp DESC
@@ -108,7 +109,7 @@ func (r *scoreRepository) GetBySpanID(ctx context.Context, spanID string) ([]*ob
 			score_id, project_id, organization_id, trace_id, span_id,
 			name, value, string_value, type, source,
 			reason, metadata, experiment_id, experiment_item_id,
-			timestamp
+			created_by, timestamp
 		FROM scores
 		WHERE span_id = ?
 		ORDER BY timestamp DESC
@@ -130,7 +131,7 @@ func (r *scoreRepository) GetByFilter(ctx context.Context, filter *observability
 			score_id, project_id, organization_id, trace_id, span_id,
 			name, value, string_value, type, source,
 			reason, metadata, experiment_id, experiment_item_id,
-			timestamp
+			created_by, timestamp
 		FROM scores
 		WHERE 1=1
 	`
@@ -232,7 +233,7 @@ func (r *scoreRepository) CreateBatch(ctx context.Context, scores []*observabili
 			score_id, project_id, organization_id, trace_id, span_id,
 			name, value, string_value, type, source,
 			reason, metadata, experiment_id, experiment_item_id,
-			timestamp
+			created_by, timestamp
 		)
 	`)
 	if err != nil {
@@ -255,6 +256,7 @@ func (r *scoreRepository) CreateBatch(ctx context.Context, scores []*observabili
 			score.Metadata,
 			score.ExperimentID,
 			score.ExperimentItemID,
+			score.CreatedBy,
 			score.Timestamp,
 		)
 		if err != nil {
@@ -417,6 +419,7 @@ func (r *scoreRepository) scanScoreRow(row driver.Row) (*observability.Score, er
 		&score.Metadata,
 		&score.ExperimentID,
 		&score.ExperimentItemID,
+		&score.CreatedBy,
 		&score.Timestamp,
 	)
 
@@ -449,6 +452,7 @@ func (r *scoreRepository) scanScores(rows driver.Rows) ([]*observability.Score, 
 			&score.Metadata,
 			&score.ExperimentID,
 			&score.ExperimentItemID,
+			&score.CreatedBy,
 			&score.Timestamp,
 		)
 
