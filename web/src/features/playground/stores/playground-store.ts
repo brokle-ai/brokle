@@ -15,6 +15,11 @@ export interface PlaygroundWindow {
   loadedFromPromptVersionNumber: number | null // Version number (e.g., 5) for display
   loadedTemplate: string | null            // Original template JSON for change detection
 
+  // Span linking (for "Open in Playground" from traces)
+  loadedFromSpanId: string | null          // Span ID that was loaded
+  loadedFromSpanName: string | null        // Span name for display
+  loadedFromTraceId: string | null         // Parent trace ID for reference
+
   // Shared
   variables: Record<string, string>
   config: ModelConfig | null
@@ -103,6 +108,18 @@ interface PlaygroundState {
     loadedFromPromptVersionNumber?: number
     loadedTemplate?: string
   }) => void
+
+  // Load span directly into store (for "Open in Playground" from traces)
+  loadFromSpan: (spanData: {
+    messages: ChatMessage[]
+    config?: ModelConfig | null
+    loadedFromSpanId: string
+    loadedFromSpanName: string
+    loadedFromTraceId: string
+  }) => void
+
+  // Span Linking - unlink a span from a window
+  unlinkSpan: (windowIndex: number) => void
 }
 
 const createEmptyWindow = (): PlaygroundWindow => ({
@@ -116,6 +133,9 @@ const createEmptyWindow = (): PlaygroundWindow => ({
   loadedFromPromptVersionId: null,
   loadedFromPromptVersionNumber: null,
   loadedTemplate: null,
+  loadedFromSpanId: null,
+  loadedFromSpanName: null,
+  loadedFromTraceId: null,
   variables: {},
   config: null,
   createTrace: false, // Default OFF for playground (ephemeral)
@@ -327,5 +347,46 @@ export const usePlaygroundStore = create<PlaygroundState>()((set, get) => ({
       currentSessionId: null, // Clear any existing session ID
       windows: [window],
     })
+  },
+
+  // Load span directly into store (for "Open in Playground" from traces)
+  loadFromSpan: (spanData) => {
+    // Ensure messages have IDs
+    const messagesWithIds = spanData.messages.map(msg =>
+      msg.id ? msg : { ...msg, id: crypto.randomUUID() }
+    )
+
+    const window: PlaygroundWindow = {
+      ...createEmptyWindow(),
+      messages: messagesWithIds,
+      loadedFromSpanId: spanData.loadedFromSpanId,
+      loadedFromSpanName: spanData.loadedFromSpanName,
+      loadedFromTraceId: spanData.loadedFromTraceId,
+      config: spanData.config || null,
+    }
+
+    // Set snapshot for dirty detection
+    window.lastSavedSnapshot = createContentSnapshot(window)
+
+    // Replace all windows with this single window containing the span data
+    set({
+      currentSessionId: null, // Clear any existing session ID
+      windows: [window],
+    })
+  },
+
+  // Unlink a span from a window (keeps content, removes link)
+  unlinkSpan: (windowIndex) => {
+    const { windows } = get()
+    const newWindows = [...windows]
+    if (newWindows[windowIndex]) {
+      newWindows[windowIndex] = {
+        ...newWindows[windowIndex],
+        loadedFromSpanId: null,
+        loadedFromSpanName: null,
+        loadedFromTraceId: null,
+      }
+    }
+    set({ windows: newWindows })
   },
 }))

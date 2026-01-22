@@ -23,6 +23,7 @@ import { cn } from '@/lib/utils'
 import type { Trace, Span } from '../../data/schema'
 import { InputOutputSection } from './input-output-section'
 import { MetadataBadgeRow } from './metadata-badge-row'
+import { OpenInPlaygroundButton } from './open-in-playground-button'
 import { PathValueTree } from './path-value-tree'
 import { CollapsibleSection } from './collapsible-section'
 import { AttributesTable } from './attributes-table'
@@ -555,6 +556,9 @@ function DetailPanelHeader({ trace, selectedSpan }: { trace: Trace; selectedSpan
         </span>
         <CopyButton value={id} />
         <span className='text-xs text-muted-foreground'>ID</span>
+        {selectedSpan && (
+          <OpenInPlaygroundButton span={selectedSpan} traceId={trace.trace_id} />
+        )}
         {selectedSpan?.span_type && (
           <Badge variant='outline' className='text-xs font-normal'>
             {selectedSpan.span_type}

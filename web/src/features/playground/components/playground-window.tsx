@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { Play, X, Copy, Loader2, CloudOff, Cloud, Settings2 } from 'lucide-react'
+import { Play, X, Copy, Loader2, CloudOff, Cloud, Settings2, FlaskConical } from 'lucide-react'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import {
   Popover,
   PopoverContent,
@@ -64,6 +65,7 @@ export function PlaygroundWindow({ index, sessionId, onRegisterExecute, onUnregi
   const setWindowOutput = usePlaygroundStore((s) => s.setWindowOutput)
   const setLastSavedSnapshot = usePlaygroundStore((s) => s.setLastSavedSnapshot)
   const unlinkPrompt = usePlaygroundStore((s) => s.unlinkPrompt)
+  const unlinkSpan = usePlaygroundStore((s) => s.unlinkSpan)
   const windows = usePlaygroundStore((s) => s.windows)
 
   // CRITICAL FIX: Compute isDirty from content snapshot comparison
@@ -371,6 +373,23 @@ export function PlaygroundWindow({ index, sessionId, onRegisterExecute, onUnregi
                 </>
               )}
             </span>
+          )}
+          {windowState?.loadedFromSpanId && (
+            <Badge variant="secondary" className="text-xs gap-1 pl-2">
+              <FlaskConical className="h-3 w-3" />
+              <span className="max-w-[120px] truncate" title={windowState.loadedFromSpanName || undefined}>
+                {windowState.loadedFromSpanName || 'Span'}
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-4 w-4 ml-1 hover:bg-muted-foreground/20"
+                onClick={() => unlinkSpan(index)}
+                title="Unlink from span"
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            </Badge>
           )}
         </div>
         <div className="flex items-center gap-2">
