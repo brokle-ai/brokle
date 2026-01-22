@@ -142,8 +142,6 @@ func convertArraysToLinks(
 	return links
 }
 
-// textSearchCondition builds the WHERE clause condition for text search.
-// Returns the condition string and arguments to append.
 func textSearchCondition(filter *observability.TraceFilter) (condition string, args []interface{}) {
 	if filter == nil || filter.Search == nil || *filter.Search == "" {
 		return "", nil
@@ -168,8 +166,6 @@ func textSearchCondition(filter *observability.TraceFilter) (condition string, a
 	}
 }
 
-// statusHavingClauses builds HAVING clause conditions for status filtering.
-// Returns clause strings and arguments to append.
 func statusHavingClauses(filter *observability.TraceFilter) (clauses []string, args []interface{}) {
 	if filter == nil {
 		return nil, nil
@@ -773,7 +769,9 @@ func (r *traceRepository) GetTraceSummary(ctx context.Context, traceID string) (
 			anyIf(model_name, parent_span_id IS NULL) as root_model_name,
 			anyIf(provider_name, parent_span_id IS NULL) as root_provider_name,
 			anyIf(span_attributes['user.id'], parent_span_id IS NULL) as root_user_id,
-			anyIf(span_attributes['session.id'], parent_span_id IS NULL) as root_session_id
+			anyIf(span_attributes['session.id'], parent_span_id IS NULL) as root_session_id,
+			anyIf(tags, parent_span_id IS NULL) as tags,
+			anyIf(bookmarked, parent_span_id IS NULL) as bookmarked
 		FROM otel_traces
 		WHERE trace_id = ?
 		  AND deleted_at IS NULL
@@ -806,6 +804,8 @@ func (r *traceRepository) GetTraceSummary(ctx context.Context, traceID string) (
 		&summary.ProviderName,
 		&summary.UserID,
 		&summary.SessionID,
+		&summary.Tags,
+		&summary.Bookmarked,
 	)
 
 	if err != nil {
@@ -846,7 +846,9 @@ func (r *traceRepository) ListTraces(ctx context.Context, filter *observability.
 			anyIf(model_name, parent_span_id IS NULL) as root_model_name,
 			anyIf(provider_name, parent_span_id IS NULL) as root_provider_name,
 			anyIf(span_attributes['user.id'], parent_span_id IS NULL) as root_user_id,
-			anyIf(span_attributes['session.id'], parent_span_id IS NULL) as root_session_id
+			anyIf(span_attributes['session.id'], parent_span_id IS NULL) as root_session_id,
+			anyIf(tags, parent_span_id IS NULL) as tags,
+			anyIf(bookmarked, parent_span_id IS NULL) as bookmarked
 		FROM otel_traces
 		WHERE deleted_at IS NULL
 	`
@@ -1015,6 +1017,8 @@ func (r *traceRepository) ListTraces(ctx context.Context, filter *observability.
 			&trace.ProviderName,
 			&trace.UserID,
 			&trace.SessionID,
+			&trace.Tags,
+			&trace.Bookmarked,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan trace: %w", err)
@@ -1169,6 +1173,36 @@ func (r *traceRepository) DeleteTrace(ctx context.Context, traceID string) error
 	return r.db.Exec(ctx, query, traceID)
 }
 
+// UpdateTraceTags updates the tags for a trace (all spans in the trace).
+// Uses ALTER TABLE UPDATE which is ClickHouse's mutation mechanism for updates.
+// Tags are normalized (lowercase, trimmed, unique, sorted) before storage.
+func (r *traceRepository) UpdateTraceTags(ctx context.Context, projectID, traceID string, tags []string) error {
+	// Normalize tags before storage
+	normalized := observability.NormalizeTags(tags)
+
+	query := `
+		ALTER TABLE otel_traces
+		UPDATE tags = ?
+		WHERE project_id = ?
+		  AND trace_id = ?
+		  AND deleted_at IS NULL
+	`
+	return r.db.Exec(ctx, query, normalized, projectID, traceID)
+}
+
+// UpdateTraceBookmark updates the bookmark status for a trace.
+// Uses ALTER TABLE UPDATE which is ClickHouse's mutation mechanism for updates.
+func (r *traceRepository) UpdateTraceBookmark(ctx context.Context, projectID, traceID string, bookmarked bool) error {
+	query := `
+		ALTER TABLE otel_traces
+		UPDATE bookmarked = ?
+		WHERE project_id = ?
+		  AND trace_id = ?
+		  AND deleted_at IS NULL
+	`
+	return r.db.Exec(ctx, query, bookmarked, projectID, traceID)
+}
+
 func (r *traceRepository) GetTracesBySessionID(ctx context.Context, sessionID string) ([]*observability.TraceSummary, error) {
 	filter := &observability.TraceFilter{
 		SessionID: &sessionID,
@@ -1219,11 +1253,7 @@ func (r *traceRepository) CalculateTotalTokens(ctx context.Context, traceID stri
 	return total, nil
 }
 
-// GetFilterOptions returns available filter values for the traces filter UI
-// This queries distinct values from actual trace data for dropdowns and range sliders
 func (r *traceRepository) GetFilterOptions(ctx context.Context, projectID string) (*observability.TraceFilterOptions, error) {
-	// Query to get distinct values and ranges from trace data
-	// We aggregate at trace level (GROUP BY trace_id) to get trace-level values
 	query := `
 		SELECT
 			arrayDistinct(groupArray(root_model_name)) as models,
@@ -1289,7 +1319,6 @@ func (r *traceRepository) GetFilterOptions(ctx context.Context, projectID string
 		return nil, fmt.Errorf("failed to get filter options: %w", err)
 	}
 
-	// Query for span-level distinct values (span_names, span_types, status_codes)
 	spanQuery := `
 		SELECT
 			arrayDistinct(groupArray(span_name)) as span_names,
@@ -1315,7 +1344,6 @@ func (r *traceRepository) GetFilterOptions(ctx context.Context, projectID string
 		return nil, fmt.Errorf("failed to get span filter options: %w", err)
 	}
 
-	// Filter out empty strings from arrays
 	models = filterEmptyStrings(models)
 	providers = filterEmptyStrings(providers)
 	services = filterEmptyStrings(services)
@@ -1325,7 +1353,6 @@ func (r *traceRepository) GetFilterOptions(ctx context.Context, projectID string
 	spanNames = filterEmptyStrings(spanNames)
 	spanTypes = filterEmptyStrings(spanTypes)
 
-	// Convert status codes from int32 to int
 	statusCodesInt := make([]int, len(statusCodes))
 	for i, code := range statusCodes {
 		statusCodesInt[i] = int(code)
@@ -1343,7 +1370,6 @@ func (r *traceRepository) GetFilterOptions(ctx context.Context, projectID string
 		StatusCodes:  statusCodesInt,
 	}
 
-	// Set cost range if we have data
 	if minCost != nil && maxCost != nil {
 		options.CostRange = &observability.Range{
 			Min: *minCost,
@@ -1351,7 +1377,6 @@ func (r *traceRepository) GetFilterOptions(ctx context.Context, projectID string
 		}
 	}
 
-	// Set token range if we have data
 	if minTokens != nil && maxTokens != nil {
 		options.TokenRange = &observability.Range{
 			Min: float64(*minTokens),
@@ -1359,7 +1384,6 @@ func (r *traceRepository) GetFilterOptions(ctx context.Context, projectID string
 		}
 	}
 
-	// Set duration range if we have data
 	if minDuration != nil && maxDuration != nil {
 		options.DurationRange = &observability.Range{
 			Min: float64(*minDuration),
@@ -1380,8 +1404,6 @@ func filterEmptyStrings(slice []string) []string {
 	return result
 }
 
-// QuerySpansByExpression executes a pre-built parameterized query for spans.
-// The query and args are built by SpanQueryBuilder to ensure safety.
 func (r *traceRepository) QuerySpansByExpression(ctx context.Context, query string, args []interface{}) ([]*observability.Span, error) {
 	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
@@ -1392,8 +1414,6 @@ func (r *traceRepository) QuerySpansByExpression(ctx context.Context, query stri
 	return r.scanSpans(rows)
 }
 
-// CountSpansByExpression executes a pre-built parameterized COUNT query for pagination.
-// The query and args are built by SpanQueryBuilder to ensure safety.
 func (r *traceRepository) CountSpansByExpression(ctx context.Context, query string, args []interface{}) (int64, error) {
 	var count uint64
 	err := r.db.QueryRow(ctx, query, args...).Scan(&count)
@@ -1403,8 +1423,6 @@ func (r *traceRepository) CountSpansByExpression(ctx context.Context, query stri
 	return int64(count), nil
 }
 
-// DiscoverAttributes extracts unique attribute keys from span_attributes and resource_attributes.
-// Uses ClickHouse mapKeys() and arrayJoin() to efficiently extract keys from Map columns.
 func (r *traceRepository) DiscoverAttributes(ctx context.Context, req *observability.AttributeDiscoveryRequest) (*observability.AttributeDiscoveryResponse, error) {
 	// Normalize request with defaults
 	observability.NormalizeAttributeDiscoveryRequest(req)

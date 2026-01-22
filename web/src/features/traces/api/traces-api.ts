@@ -159,11 +159,9 @@ export const getProjectTraces = async (params: GetTracesParams): Promise<{
   if (sortBy) queryParams.sort_by = sortBy
   if (sortOrder) queryParams.sort_dir = sortOrder
 
-  // Send status strings directly (backend expects 'ok,error,unset')
   if (status && status.length > 0) {
     queryParams.status = status.join(',')
   }
-  // Send status exclusion (backend expects 'ok,error,unset')
   if (statusNot && statusNot.length > 0) {
     queryParams.status_not = statusNot.join(',')
   }
@@ -301,20 +299,64 @@ export const updateTrace = async (
 }
 
 /**
- * Delete a trace (NOT IMPLEMENTED IN BACKEND)
+ * Delete a trace
  *
- * @deprecated Backend endpoint not yet implemented
- * @throws Error indicating feature is not available
+ * Backend endpoint: DELETE /api/v1/traces/:id
+ *
+ * @param projectId - Project ULID
+ * @param traceId - Trace ID (32 hex characters)
  */
 export const deleteTrace = async (
   projectId: string,
   traceId: string
 ): Promise<void> => {
-  throw new Error('Delete functionality is not yet implemented on the backend')
-  // Future implementation:
-  // await client.delete(`/v1/traces/${traceId}`, {
-  //   project_id: projectId,
-  // })
+  await client.delete(`/v1/traces/${traceId}`, {
+    params: { project_id: projectId },
+  })
+}
+
+/**
+ * Update trace tags
+ *
+ * Backend endpoint: PUT /api/v1/traces/:id/tags
+ *
+ * @param projectId - Project ULID
+ * @param traceId - Trace ID (32 hex characters)
+ * @param tags - Array of tag strings
+ * @returns Updated tags array (normalized: lowercase, unique, sorted)
+ */
+export const updateTraceTags = async (
+  projectId: string,
+  traceId: string,
+  tags: string[]
+): Promise<{ message: string; tags: string[] }> => {
+  return client.put<{ message: string; tags: string[] }>(
+    `/v1/traces/${traceId}/tags`,
+    { tags },
+    { params: { project_id: projectId } }
+  )
+}
+
+/**
+ * Update trace bookmark status
+ *
+ * Backend endpoint: PUT /api/v1/traces/:id/bookmark
+ *
+ * @param projectId - Project ULID
+ * @param traceId - Trace ID (32 hex characters)
+ * @param bookmarked - Bookmark status
+ * @returns Updated bookmark status
+ */
+export const updateTraceBookmark = async (
+  projectId: string,
+  traceId: string,
+  bookmarked: boolean
+): Promise<{ message: string; bookmarked: boolean }> => {
+  return client.put<{ message: string; bookmarked: boolean }>(
+    `/v1/traces/${traceId}/bookmark`,
+    { bookmarked },
+    { params: { project_id: projectId } }
+  )
 }
 
 /**

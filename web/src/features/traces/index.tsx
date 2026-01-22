@@ -95,6 +95,7 @@ export { usePeekSheetState } from './hooks/use-peek-sheet-state'
 export { usePeekData } from './hooks/use-peek-data'
 export { useTracesTableState } from './hooks/use-traces-table-state'
 export { useColumnVisibility } from './hooks/use-column-visibility'
+export { traceQueryKeys } from './hooks/trace-query-keys'
 
 // Types
 export type { TraceFilterOptions, FilterRange, GetTracesParams } from './api/traces-api'

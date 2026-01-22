@@ -3,6 +3,7 @@
 import { useSearchParams } from 'next/navigation'
 import { useQuery } from '@tanstack/react-query'
 import { useProjectOnly } from '@/features/projects'
+import { traceQueryKeys } from './trace-query-keys'
 import { getTraceById } from '../api/traces-api'
 import type { Trace } from '../data/schema'
 
@@ -31,7 +32,7 @@ export function usePeekData() {
     error,
   } = useQuery({
     // Query key matches detail page for cache sharing
-    queryKey: ['trace', projectId, peekId],
+    queryKey: traceQueryKeys.detail(projectId!, peekId!),
 
     // Query function: fetch trace from backend
     queryFn: async () => {

@@ -8,8 +8,6 @@ import (
 	"brokle/pkg/ulid"
 )
 
-// TraceRepository defines the interface for trace and span operations (ClickHouse).
-// Traces are virtual (derived from root spans where parent_span_id IS NULL).
 type TraceRepository interface {
 	InsertSpan(ctx context.Context, span *Span) error
 	InsertSpanBatch(ctx context.Context, spans []*Span) error
@@ -33,6 +31,10 @@ type TraceRepository interface {
 	CountTraces(ctx context.Context, filter *TraceFilter) (int64, error)
 	CountSpansInTrace(ctx context.Context, traceID string) (int64, error)
 	DeleteTrace(ctx context.Context, traceID string) error
+	// UpdateTraceTags updates the tags for a trace (updates root span in ClickHouse)
+	UpdateTraceTags(ctx context.Context, projectID, traceID string, tags []string) error
+	// UpdateTraceBookmark updates the bookmark status for a trace
+	UpdateTraceBookmark(ctx context.Context, projectID, traceID string, bookmarked bool) error
 
 	// GetFilterOptions returns available filter values for populating the traces filter UI
 	GetFilterOptions(ctx context.Context, projectID string) (*TraceFilterOptions, error)

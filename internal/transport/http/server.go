@@ -156,7 +156,7 @@ func (s *Server) setupRoutes() {
 	s.engine.Use(middleware.Metrics())
 
 	s.engine.GET("/health", s.handlers.Health.Check)
-	s.engine.HEAD("/health", s.handlers.Health.Check) // Docker health checks use HEAD
+	s.engine.HEAD("/health", s.handlers.Health.Check)
 	s.engine.GET("/health/ready", s.handlers.Health.Ready)
 	s.engine.HEAD("/health/ready", s.handlers.Health.Ready)
 	s.engine.GET("/health/live", s.handlers.Health.Live)
@@ -168,7 +168,6 @@ func (s *Server) setupRoutes() {
 		s.engine.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
 	}
 
-	// SDK routes - API Key auth
 	sdk := s.engine.Group("/v1")
 	sdkAuth := sdk.Group("/auth")
 	{
@@ -178,7 +177,6 @@ func (s *Server) setupRoutes() {
 	sdk.Use(s.rateLimitMiddleware.RateLimitByAPIKey())
 	s.setupSDKRoutes(sdk)
 
-	// Dashboard routes - JWT auth
 	dashboard := s.engine.Group("/api/v1")
 	s.setupDashboardRoutes(dashboard)
 
@@ -334,11 +332,9 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 
 		prompts := projects.Group("/:projectId/prompts")
 		{
-			// Must come before :promptId routes
 			prompts.GET("/settings/protected-labels", s.authMiddleware.RequirePermission("prompts:read"), s.handlers.Prompt.GetProtectedLabels)
 			prompts.PUT("/settings/protected-labels", s.authMiddleware.RequirePermission("prompts:update"), s.handlers.Prompt.SetProtectedLabels)
 
-			// Template validation and preview endpoints (must come before :promptId)
 			prompts.POST("/validate-template", s.authMiddleware.RequirePermission("prompts:read"), s.handlers.Prompt.ValidateTemplate)
 			prompts.POST("/preview-template", s.authMiddleware.RequirePermission("prompts:read"), s.handlers.Prompt.PreviewTemplate)
 			prompts.POST("/detect-dialect", s.authMiddleware.RequirePermission("prompts:read"), s.handlers.Prompt.DetectDialect)
@@ -482,7 +478,6 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 			dashboards.GET("", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Dashboard.ListDashboards)
 			dashboards.POST("", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Dashboard.CreateDashboard)
 
-			// Static routes MUST be registered before dynamic :dashboardId routes
 			dashboards.POST("/from-template", s.authMiddleware.RequirePermission("projects:write"), s.handlers.DashboardTemplate.CreateFromTemplate)
 			dashboards.POST("/import", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Dashboard.ImportDashboard)
 			dashboards.GET("/variable-options", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Dashboard.GetVariableOptions)
@@ -528,6 +523,8 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 		traces.GET("/:id/spans", s.handlers.Observability.GetTraceWithSpans)
 		traces.GET("/:id/scores", s.handlers.Observability.GetTraceWithScores)
 		traces.DELETE("/:id", s.handlers.Observability.DeleteTrace)
+		traces.PUT("/:id/tags", s.handlers.Observability.UpdateTraceTags)
+		traces.PUT("/:id/bookmark", s.handlers.Observability.UpdateTraceBookmark)
 	}
 
 	spans := protected.Group("/spans")

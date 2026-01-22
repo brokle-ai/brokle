@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils'
 import { usePeekNavigation } from '../hooks/use-peek-navigation'
 import { useDetailNavigation } from '../hooks/use-detail-navigation'
 import { usePeekData } from '../hooks/use-peek-data'
+import { traceQueryKeys } from '../hooks/trace-query-keys'
 import { getSpansForTrace } from '../api/traces-api'
 import type { Span } from '../data/schema'
 
@@ -100,7 +101,7 @@ export function TracesPeekView() {
     data: spans = [],
     isLoading: spansLoading,
   } = useQuery({
-    queryKey: ['traceSpans', projectId, peekId],
+    queryKey: traceQueryKeys.spans(projectId!, peekId!),
     queryFn: () => getSpansForTrace(projectId!, peekId!),
     enabled: !!projectId && !!peekId && !!trace,
     staleTime: 30_000,

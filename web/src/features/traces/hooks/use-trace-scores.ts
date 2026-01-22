@@ -2,16 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { getScoresForTrace } from '../api/traces-api'
-import type { Score } from '../data/schema'
-
-/**
- * Query keys for trace scores
- */
-export const traceScoresQueryKeys = {
-  all: ['trace-scores'] as const,
-  forTrace: (projectId: string, traceId: string) =>
-    [...traceScoresQueryKeys.all, projectId, traceId] as const,
-}
+import { traceQueryKeys } from './trace-query-keys'
 
 /**
  * Hook to fetch scores for a trace
@@ -31,7 +22,7 @@ export function useTraceScoresQuery(
   traceId: string | undefined
 ) {
   return useQuery({
-    queryKey: traceScoresQueryKeys.forTrace(projectId ?? '', traceId ?? ''),
+    queryKey: traceQueryKeys.scores(projectId ?? '', traceId ?? ''),
     queryFn: () => getScoresForTrace(projectId!, traceId!),
     enabled: !!projectId && !!traceId,
     staleTime: 30_000, // 30 seconds - scores don't change frequently

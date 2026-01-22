@@ -15,6 +15,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { AlertCircle } from 'lucide-react'
 
 import type { Trace, Span } from '../../data/schema'
+import { traceQueryKeys } from '../../hooks/trace-query-keys'
 import { getSpansForTrace } from '../../api/traces-api'
 import { usePeekNavigation } from '../../hooks/use-peek-navigation'
 import { useDetailNavigation } from '../../hooks/use-detail-navigation'
@@ -117,7 +118,7 @@ function PeekSheetContent({
     data: spans = [],
     isLoading: spansLoading,
   } = useQuery({
-    queryKey: ['traceSpans', projectId, trace.trace_id],
+    queryKey: traceQueryKeys.spans(projectId, trace.trace_id),
     queryFn: () => getSpansForTrace(projectId, trace.trace_id),
     enabled: !!projectId && !!trace.trace_id,
     staleTime: 30_000,

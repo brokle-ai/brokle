@@ -8,6 +8,7 @@ import { AlertCircle } from 'lucide-react'
 
 import { useProjectOnly } from '@/features/projects'
 import { useTraceDetailState } from '../hooks/use-trace-detail-state'
+import { traceQueryKeys } from '../hooks/trace-query-keys'
 import { getTraceById, getSpansForTrace } from '../api/traces-api'
 import { TraceDetailLayout } from './trace-detail-layout'
 
@@ -83,7 +84,7 @@ export function TraceDetailContainer() {
     isLoading: traceLoading,
     error: traceError,
   } = useQuery({
-    queryKey: ['trace', projectId, traceId],
+    queryKey: traceQueryKeys.detail(projectId!, traceId!),
     queryFn: async () => {
       if (!projectId || !traceId) {
         throw new Error('Missing project or trace ID')
@@ -102,7 +103,7 @@ export function TraceDetailContainer() {
     data: spans = [],
     isLoading: spansLoading,
   } = useQuery({
-    queryKey: ['traceSpans', projectId, traceId],
+    queryKey: traceQueryKeys.spans(projectId!, traceId!),
     queryFn: () => getSpansForTrace(projectId!, traceId!),
     enabled: !!projectId && !!traceId && !!trace,
     staleTime: 30_000,

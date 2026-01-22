@@ -11,7 +11,6 @@ import (
 	"brokle/pkg/response"
 )
 
-// parseFloat64 parses a query param to float64, returns nil if empty
 func parseFloat64(value string) *float64 {
 	if value == "" {
 		return nil
@@ -23,7 +22,6 @@ func parseFloat64(value string) *float64 {
 	return &f
 }
 
-// parseInt64 parses a query param to int64, returns nil if empty
 func parseInt64(value string) *int64 {
 	if value == "" {
 		return nil
@@ -35,7 +33,6 @@ func parseInt64(value string) *int64 {
 	return &i
 }
 
-// parseBool parses a query param to bool, returns nil if empty
 func parseBool(value string) *bool {
 	if value == "" {
 		return nil
@@ -47,8 +44,6 @@ func parseBool(value string) *bool {
 	return &b
 }
 
-// filterEmptyStrings removes empty and whitespace-only strings from a slice.
-// Applies TrimSpace to each element before checking.
 func filterEmptyStrings(slice []string) []string {
 	result := make([]string, 0, len(slice))
 	for _, s := range slice {
@@ -312,6 +307,103 @@ func (h *Handler) DeleteTrace(c *gin.Context) {
 	}
 
 	response.Success(c, gin.H{"message": "trace deleted successfully"})
+}
+
+// UpdateTraceTags handles PUT /api/v1/traces/:id/tags
+// @Summary Update trace tags
+// @Description Update user-managed tags for a trace (replaces existing tags)
+// @Tags Traces
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Trace ID"
+// @Param project_id query string true "Project ID"
+// @Param body body observability.UpdateTraceTagsRequest true "Tags to set"
+// @Success 200 {object} response.APIResponse{data=map[string]interface{}} "Tags updated"
+// @Failure 400 {object} response.APIResponse{error=response.APIError} "Invalid request"
+// @Failure 404 {object} response.APIResponse{error=response.APIError} "Trace not found"
+// @Failure 500 {object} response.APIResponse{error=response.APIError} "Internal server error"
+// @Router /api/v1/traces/{id}/tags [put]
+func (h *Handler) UpdateTraceTags(c *gin.Context) {
+	traceID := c.Param("id")
+	projectID := c.Query("project_id")
+
+	if traceID == "" {
+		response.ValidationError(c, "invalid trace_id", "trace_id is required")
+		return
+	}
+	if projectID == "" {
+		response.ValidationError(c, "project_id is required", "project_id query parameter is required")
+		return
+	}
+
+	var req observability.UpdateTraceTagsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ValidationError(c, "invalid request body", err.Error())
+		return
+	}
+
+	// Validate tags
+	if validationErrors := req.Validate(); len(validationErrors) > 0 {
+		response.ValidationError(c, "validation failed", validationErrors[0].Message)
+		return
+	}
+
+	if err := h.services.GetTraceService().UpdateTraceTags(c.Request.Context(), projectID, traceID, req.Tags); err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	// Normalize tags for response (to show what was actually stored)
+	normalizedTags := observability.NormalizeTags(req.Tags)
+	response.Success(c, gin.H{"message": "tags updated", "tags": normalizedTags})
+}
+
+// UpdateTraceBookmarkRequest represents the request to update trace bookmark
+type UpdateTraceBookmarkRequest struct {
+	Bookmarked bool `json:"bookmarked"`
+}
+
+// UpdateTraceBookmark handles PUT /api/v1/traces/:id/bookmark
+// @Summary Update trace bookmark status
+// @Description Update the bookmark status for a trace
+// @Tags Traces
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Trace ID"
+// @Param project_id query string true "Project ID"
+// @Param body body UpdateTraceBookmarkRequest true "Bookmark status"
+// @Success 200 {object} response.APIResponse{data=map[string]interface{}} "Bookmark updated"
+// @Failure 400 {object} response.APIResponse{error=response.APIError} "Invalid request"
+// @Failure 404 {object} response.APIResponse{error=response.APIError} "Trace not found"
+// @Failure 500 {object} response.APIResponse{error=response.APIError} "Internal server error"
+// @Router /api/v1/traces/{id}/bookmark [put]
+func (h *Handler) UpdateTraceBookmark(c *gin.Context) {
+	traceID := c.Param("id")
+	projectID := c.Query("project_id")
+
+	if traceID == "" {
+		response.ValidationError(c, "invalid trace_id", "trace_id is required")
+		return
+	}
+	if projectID == "" {
+		response.ValidationError(c, "project_id is required", "project_id query parameter is required")
+		return
+	}
+
+	var req UpdateTraceBookmarkRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ValidationError(c, "invalid request body", err.Error())
+		return
+	}
+
+	if err := h.services.GetTraceService().UpdateTraceBookmark(c.Request.Context(), projectID, traceID, req.Bookmarked); err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	response.Success(c, gin.H{"message": "bookmark updated", "bookmarked": req.Bookmarked})
 }
 
 // GetTraceFilterOptions handles GET /api/v1/traces/filter-options
