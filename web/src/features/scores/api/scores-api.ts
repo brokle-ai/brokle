@@ -4,6 +4,7 @@ import type {
   Score,
   ScoreConfig,
   ScoreListParams,
+  ScoreConfigListParams,
   CreateScoreConfigRequest,
   UpdateScoreConfigRequest,
   ScoreAnalyticsParams,
@@ -73,8 +74,18 @@ export const scoresApi = {
   },
 
   // Score Configs
-  listScoreConfigs: async (projectId: string): Promise<ScoreConfig[]> => {
-    return client.get<ScoreConfig[]>(`/v1/projects/${projectId}/score-configs`)
+  listScoreConfigs: async (
+    projectId: string,
+    params?: ScoreConfigListParams
+  ): Promise<PaginatedResponse<ScoreConfig>> => {
+    const queryParams: QueryParams = {}
+    if (params?.page) queryParams.page = params.page
+    if (params?.limit) queryParams.limit = params.limit
+
+    return client.getPaginated<ScoreConfig>(
+      `/v1/projects/${projectId}/score-configs`,
+      queryParams
+    )
   },
 
   getScoreConfig: async (

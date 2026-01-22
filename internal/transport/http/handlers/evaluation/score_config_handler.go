@@ -73,11 +73,13 @@ func (h *ScoreConfigHandler) Create(c *gin.Context) {
 }
 
 // @Summary List score configs
-// @Description Returns all score configurations for the project.
+// @Description Returns all score configurations for the project with pagination.
 // @Tags Score Configs
 // @Produce json
 // @Param projectId path string true "Project ID"
-// @Success 200 {array} evaluation.ScoreConfigResponse
+// @Param page query int false "Page number (default 1)"
+// @Param limit query int false "Items per page (10, 25, 50, 100; default 50)"
+// @Success 200 {object} response.ListResponse{data=[]evaluation.ScoreConfigResponse}
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 401 {object} response.ErrorResponse
 // @Router /api/v1/projects/{projectId}/score-configs [get]
@@ -88,7 +90,9 @@ func (h *ScoreConfigHandler) List(c *gin.Context) {
 		return
 	}
 
-	configs, err := h.service.List(c.Request.Context(), projectID)
+	params := response.ParsePaginationParams(c.Query("page"), c.Query("limit"), "", "")
+
+	configs, total, err := h.service.List(c.Request.Context(), projectID, params.Page, params.Limit)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -99,7 +103,8 @@ func (h *ScoreConfigHandler) List(c *gin.Context) {
 		responses[i] = config.ToResponse()
 	}
 
-	response.Success(c, responses)
+	pag := response.NewPagination(params.Page, params.Limit, total)
+	response.SuccessWithPagination(c, responses, pag)
 }
 
 // @Summary Get score config

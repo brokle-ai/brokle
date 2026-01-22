@@ -65,3 +65,8 @@ export interface ScoreListParams {
   sort_by?: string
   sort_dir?: 'asc' | 'desc'
 }
+
+export interface ScoreConfigListParams {
+  page?: number
+  limit?: number
+}

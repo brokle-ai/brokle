@@ -2,7 +2,6 @@ package evaluation
 
 import (
 	"log/slog"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 
@@ -33,9 +32,9 @@ func NewDatasetItemHandler(
 // @Produce json
 // @Param projectId path string true "Project ID"
 // @Param datasetId path string true "Dataset ID"
-// @Param limit query int false "Limit (default 50, max 100)"
-// @Param offset query int false "Offset (default 0)"
-// @Success 200 {object} DatasetItemListResponse
+// @Param page query int false "Page number (default 1)"
+// @Param limit query int false "Items per page" Enums(10,25,50,100) default(50)
+// @Success 200 {object} response.APIResponse{data=[]DatasetItemResponse,meta=response.Meta{pagination=response.Pagination}}
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 401 {object} response.ErrorResponse
 // @Failure 404 {object} response.ErrorResponse
@@ -53,21 +52,13 @@ func (h *DatasetItemHandler) List(c *gin.Context) {
 		return
 	}
 
-	limit := 50
-	offset := 0
+	// Parse pagination params using standard helper
+	params := response.ParsePaginationParams(c.Query("page"), c.Query("limit"), "", "")
 
-	if l := c.Query("limit"); l != "" {
-		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= 100 {
-			limit = parsed
-		}
-	}
-	if o := c.Query("offset"); o != "" {
-		if parsed, err := strconv.Atoi(o); err == nil && parsed >= 0 {
-			offset = parsed
-		}
-	}
+	// Convert page to offset for repository
+	offset := (params.Page - 1) * params.Limit
 
-	items, total, err := h.service.List(c.Request.Context(), datasetID, projectID, limit, offset)
+	items, total, err := h.service.List(c.Request.Context(), datasetID, projectID, params.Limit, offset)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -89,10 +80,8 @@ func (h *DatasetItemHandler) List(c *gin.Context) {
 		}
 	}
 
-	response.Success(c, &DatasetItemListResponse{
-		Items: responses,
-		Total: total,
-	})
+	pag := response.NewPagination(params.Page, params.Limit, total)
+	response.SuccessWithPagination(c, responses, pag)
 }
 
 // @Summary Create dataset item

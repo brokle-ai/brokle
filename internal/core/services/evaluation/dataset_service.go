@@ -149,10 +149,11 @@ func (s *datasetService) GetByID(ctx context.Context, id ulid.ULID, projectID ul
 	return dataset, nil
 }
 
-func (s *datasetService) List(ctx context.Context, projectID ulid.ULID) ([]*evaluation.Dataset, error) {
-	datasets, err := s.repo.List(ctx, projectID)
+func (s *datasetService) List(ctx context.Context, projectID ulid.ULID, filter *evaluation.DatasetFilter, page, limit int) ([]*evaluation.Dataset, int64, error) {
+	offset := (page - 1) * limit
+	datasets, total, err := s.repo.List(ctx, projectID, filter, offset, limit)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to list datasets", err)
+		return nil, 0, appErrors.NewInternalError("failed to list datasets", err)
 	}
-	return datasets, nil
+	return datasets, total, nil
 }

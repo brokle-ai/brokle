@@ -126,13 +126,6 @@ type ItemResponse struct {
 	UpdatedAt       time.Time              `json:"updated_at"`
 }
 
-// ItemListResponse represents a paginated list of queue items.
-// @Description Paginated queue items response
-type ItemListResponse struct {
-	Items []*ItemResponse `json:"items"`
-	Total int64           `json:"total"`
-}
-
 // BatchAddItemsResponse represents the response for batch item creation.
 // @Description Batch add items response
 type BatchAddItemsResponse struct {

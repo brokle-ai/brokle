@@ -427,6 +427,7 @@ type UpdateQueueRequest struct {
 // QueueFilter defines filter criteria for listing queues.
 type QueueFilter struct {
 	Status *QueueStatus
+	Search *string
 }
 
 // QueueResponse is the API response for an annotation queue.

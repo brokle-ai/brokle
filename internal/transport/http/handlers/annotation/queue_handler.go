@@ -57,7 +57,6 @@ func (h *QueueHandler) Create(c *gin.Context) {
 		userIDPtr = &userID
 	}
 
-	// Convert to domain request
 	domainReq := &annotationDomain.CreateQueueRequest{
 		Name:           req.Name,
 		Description:    req.Description,
@@ -91,8 +90,11 @@ func (h *QueueHandler) Create(c *gin.Context) {
 // @Tags Annotation Queues
 // @Produce json
 // @Param projectId path string true "Project ID"
+// @Param page query int false "Page number (default 1)"
+// @Param limit query int false "Items per page (10, 25, 50, 100; default 50)"
 // @Param status query string false "Filter by status (active, paused, archived)"
-// @Success 200 {array} QueueWithStatsResponse
+// @Param search query string false "Search by name or description"
+// @Success 200 {object} response.ListResponse{data=[]QueueWithStatsResponse}
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 401 {object} response.ErrorResponse
 // @Router /api/v1/projects/{projectId}/annotation-queues [get]
@@ -103,6 +105,8 @@ func (h *QueueHandler) List(c *gin.Context) {
 		return
 	}
 
+	params := response.ParsePaginationParams(c.Query("page"), c.Query("limit"), "", "")
+
 	filter := &annotationDomain.QueueFilter{}
 	if status := c.Query("status"); status != "" {
 		queueStatus := annotationDomain.QueueStatus(status)
@@ -111,7 +115,11 @@ func (h *QueueHandler) List(c *gin.Context) {
 		}
 	}
 
-	queues, stats, err := h.service.ListWithStats(c.Request.Context(), projectID, filter)
+	if search := c.Query("search"); search != "" {
+		filter.Search = &search
+	}
+
+	queues, stats, total, err := h.service.ListWithStats(c.Request.Context(), projectID, filter, params.Page, params.Limit)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -125,7 +133,8 @@ func (h *QueueHandler) List(c *gin.Context) {
 		}
 	}
 
-	response.Success(c, responses)
+	pag := response.NewPagination(params.Page, params.Limit, total)
+	response.SuccessWithPagination(c, responses, pag)
 }
 
 // @Summary Get annotation queue
@@ -230,7 +239,6 @@ func (h *QueueHandler) Update(c *gin.Context) {
 		return
 	}
 
-	// Convert to domain request
 	domainReq := &annotationDomain.UpdateQueueRequest{
 		Name:           req.Name,
 		Description:    req.Description,

@@ -2,7 +2,6 @@ package annotation
 
 import (
 	"log/slog"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 
@@ -59,7 +58,6 @@ func (h *ItemHandler) AddItems(c *gin.Context) {
 		return
 	}
 
-	// Convert to domain request
 	domainReq := &annotationDomain.AddItemsBatchRequest{
 		Items: make([]annotationDomain.AddItemRequest, len(req.Items)),
 	}
@@ -93,10 +91,10 @@ func (h *ItemHandler) AddItems(c *gin.Context) {
 // @Produce json
 // @Param projectId path string true "Project ID"
 // @Param queueId path string true "Queue ID"
+// @Param page query int false "Page number (default 1)"
+// @Param limit query int false "Items per page (10, 25, 50, 100; default 50)"
 // @Param status query string false "Filter by status (pending, completed, skipped)"
-// @Param limit query int false "Limit (default 50, max 100)"
-// @Param offset query int false "Offset (default 0)"
-// @Success 200 {object} ItemListResponse
+// @Success 200 {object} response.ListResponse{data=[]ItemResponse}
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 401 {object} response.ErrorResponse
 // @Failure 404 {object} response.ErrorResponse
@@ -114,26 +112,16 @@ func (h *ItemHandler) ListItems(c *gin.Context) {
 		return
 	}
 
-	// Parse filter parameters
+	params := response.ParsePaginationParams(c.Query("page"), c.Query("limit"), "", "")
+
 	filter := &annotationDomain.ItemFilter{
-		Limit:  50,
-		Offset: 0,
+		Limit:  params.Limit,
+		Offset: (params.Page - 1) * params.Limit,
 	}
 
 	if status := c.Query("status"); status != "" {
 		itemStatus := annotationDomain.ItemStatus(status)
 		filter.Status = &itemStatus
-	}
-
-	if l := c.Query("limit"); l != "" {
-		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= 100 {
-			filter.Limit = parsed
-		}
-	}
-	if o := c.Query("offset"); o != "" {
-		if parsed, err := strconv.Atoi(o); err == nil && parsed >= 0 {
-			filter.Offset = parsed
-		}
 	}
 
 	items, total, err := h.service.ListItems(c.Request.Context(), queueID, projectID, filter)
@@ -147,10 +135,8 @@ func (h *ItemHandler) ListItems(c *gin.Context) {
 		responses[i] = toItemResponse(item)
 	}
 
-	response.Success(c, &ItemListResponse{
-		Items: responses,
-		Total: total,
-	})
+	pag := response.NewPagination(params.Page, params.Limit, total)
+	response.SuccessWithPagination(c, responses, pag)
 }
 
 // @Summary Claim next annotation item
@@ -185,11 +171,9 @@ func (h *ItemHandler) ClaimNext(c *gin.Context) {
 		return
 	}
 
-	// Parse optional request body
 	var req ClaimNextRequest
 	_ = c.ShouldBindJSON(&req) // Ignore errors - body is optional
 
-	// Convert seen IDs to ULIDs
 	var seenItemIDs []ulid.ULID
 	if len(req.SeenItemIDs) > 0 {
 		seenItemIDs = make([]ulid.ULID, 0, len(req.SeenItemIDs))
@@ -249,11 +233,9 @@ func (h *ItemHandler) Complete(c *gin.Context) {
 		return
 	}
 
-	// Parse optional request body
 	var req CompleteItemRequest
 	_ = c.ShouldBindJSON(&req) // Ignore errors - body is optional
 
-	// Convert to domain request
 	domainReq := &annotationDomain.CompleteItemRequest{
 		Scores: make([]annotationDomain.ScoreSubmission, len(req.Scores)),
 	}
@@ -313,7 +295,6 @@ func (h *ItemHandler) Skip(c *gin.Context) {
 		return
 	}
 
-	// Parse optional request body
 	var req SkipItemRequest
 	_ = c.ShouldBindJSON(&req) // Ignore errors - body is optional
 
@@ -484,7 +465,6 @@ func (h *ItemHandler) AddItemsSDK(c *gin.Context) {
 		return
 	}
 
-	// Convert to domain request
 	domainReq := &annotationDomain.AddItemsBatchRequest{
 		Items: make([]annotationDomain.AddItemRequest, len(req.Items)),
 	}
@@ -517,11 +497,11 @@ func (h *ItemHandler) AddItemsSDK(c *gin.Context) {
 // @Tags SDK - Annotation Queues
 // @Produce json
 // @Param queueId path string true "Queue ID"
+// @Param page query int false "Page number (default 1)"
+// @Param limit query int false "Items per page (10, 25, 50, 100; default 50)"
 // @Param status query string false "Filter by status (pending, completed, skipped)"
-// @Param limit query int false "Limit (default 50, max 100)"
-// @Param offset query int false "Offset (default 0)"
 // @Security ApiKeyAuth
-// @Success 200 {object} ItemListResponse
+// @Success 200 {object} response.ListResponse{data=[]ItemResponse}
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 401 {object} response.ErrorResponse
 // @Failure 404 {object} response.ErrorResponse
@@ -540,26 +520,16 @@ func (h *ItemHandler) ListItemsSDK(c *gin.Context) {
 		return
 	}
 
-	// Parse filter parameters
+	params := response.ParsePaginationParams(c.Query("page"), c.Query("limit"), "", "")
+
 	filter := &annotationDomain.ItemFilter{
-		Limit:  50,
-		Offset: 0,
+		Limit:  params.Limit,
+		Offset: (params.Page - 1) * params.Limit,
 	}
 
 	if status := c.Query("status"); status != "" {
 		itemStatus := annotationDomain.ItemStatus(status)
 		filter.Status = &itemStatus
-	}
-
-	if l := c.Query("limit"); l != "" {
-		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 && parsed <= 100 {
-			filter.Limit = parsed
-		}
-	}
-	if o := c.Query("offset"); o != "" {
-		if parsed, err := strconv.Atoi(o); err == nil && parsed >= 0 {
-			filter.Offset = parsed
-		}
 	}
 
 	items, total, err := h.service.ListItems(c.Request.Context(), queueID, projectID, filter)
@@ -573,10 +543,8 @@ func (h *ItemHandler) ListItemsSDK(c *gin.Context) {
 		responses[i] = toItemResponse(item)
 	}
 
-	response.Success(c, &ItemListResponse{
-		Items: responses,
-		Total: total,
-	})
+	pag := response.NewPagination(params.Page, params.Limit, total)
+	response.SuccessWithPagination(c, responses, pag)
 }
 
 // Helper function to convert domain item to response
