@@ -525,6 +525,18 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 		traces.DELETE("/:id", s.handlers.Observability.DeleteTrace)
 		traces.PUT("/:id/tags", s.handlers.Observability.UpdateTraceTags)
 		traces.PUT("/:id/bookmark", s.handlers.Observability.UpdateTraceBookmark)
+
+		// Trace comments
+		traceComments := traces.Group("/:id/comments")
+		{
+			traceComments.POST("", s.handlers.Comment.CreateComment)
+			traceComments.GET("", s.handlers.Comment.ListComments)
+			traceComments.GET("/count", s.handlers.Comment.GetCommentCount)
+			traceComments.PUT("/:comment_id", s.handlers.Comment.UpdateComment)
+			traceComments.DELETE("/:comment_id", s.handlers.Comment.DeleteComment)
+			traceComments.POST("/:comment_id/reactions", s.handlers.Comment.ToggleReaction)
+			traceComments.POST("/:comment_id/replies", s.handlers.Comment.CreateReply)
+		}
 	}
 
 	spans := protected.Group("/spans")

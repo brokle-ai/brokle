@@ -35,6 +35,7 @@ import { ExportTraceButton } from './export-trace-button'
 import { AddTraceToDatasetDialog } from '@/features/datasets/components/add-from-traces-dialog'
 import { useDeleteTrace } from '../hooks/use-delete-trace'
 import { useUpdateTraceBookmark } from '../hooks/use-update-trace-bookmark'
+import { CommentsDrawer } from './comments-drawer'
 
 interface TraceDetailHeaderProps {
   trace: Trace
@@ -196,6 +197,9 @@ export function TraceDetailHeader({
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
+
+          {/* Comments drawer */}
+          <CommentsDrawer projectId={projectId} traceId={trace.trace_id} />
 
           {/* Export dropdown */}
           <ExportTraceButton trace={trace} spans={spans} />

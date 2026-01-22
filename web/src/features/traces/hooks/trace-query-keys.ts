@@ -45,4 +45,12 @@ export const traceQueryKeys = {
   // Scores - ['traces', 'detail', projectId, traceId, 'scores']
   scores: (projectId: string, traceId: string) =>
     [...traceQueryKeys.detail(projectId, traceId), 'scores'] as const,
+
+  // Comments - ['traces', 'detail', projectId, traceId, 'comments']
+  comments: (projectId: string, traceId: string) =>
+    [...traceQueryKeys.detail(projectId, traceId), 'comments'] as const,
+
+  // Comment count - ['traces', 'detail', projectId, traceId, 'comments', 'count']
+  commentCount: (projectId: string, traceId: string) =>
+    [...traceQueryKeys.comments(projectId, traceId), 'count'] as const,
 }
