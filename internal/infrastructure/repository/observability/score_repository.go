@@ -25,7 +25,7 @@ func (r *scoreRepository) Create(ctx context.Context, score *observability.Score
 	query := `
 		INSERT INTO scores (
 			score_id, project_id, organization_id, trace_id, span_id,
-			name, value, string_value, data_type, source,
+			name, value, string_value, type, source,
 			reason, metadata, experiment_id, experiment_item_id,
 			timestamp
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -40,7 +40,7 @@ func (r *scoreRepository) Create(ctx context.Context, score *observability.Score
 		score.Name,
 		score.Value,
 		score.StringValue,
-		score.DataType,
+		score.Type,
 		score.Source,
 		score.Reason,
 		score.Metadata,
@@ -67,7 +67,7 @@ func (r *scoreRepository) GetByID(ctx context.Context, id string) (*observabilit
 	query := `
 		SELECT
 			score_id, project_id, organization_id, trace_id, span_id,
-			name, value, string_value, data_type, source,
+			name, value, string_value, type, source,
 			reason, metadata, experiment_id, experiment_item_id,
 			timestamp
 		FROM scores
@@ -84,7 +84,7 @@ func (r *scoreRepository) GetByTraceID(ctx context.Context, traceID string) ([]*
 	query := `
 		SELECT
 			score_id, project_id, organization_id, trace_id, span_id,
-			name, value, string_value, data_type, source,
+			name, value, string_value, type, source,
 			reason, metadata, experiment_id, experiment_item_id,
 			timestamp
 		FROM scores
@@ -106,7 +106,7 @@ func (r *scoreRepository) GetBySpanID(ctx context.Context, spanID string) ([]*ob
 	query := `
 		SELECT
 			score_id, project_id, organization_id, trace_id, span_id,
-			name, value, string_value, data_type, source,
+			name, value, string_value, type, source,
 			reason, metadata, experiment_id, experiment_item_id,
 			timestamp
 		FROM scores
@@ -128,7 +128,7 @@ func (r *scoreRepository) GetByFilter(ctx context.Context, filter *observability
 	query := `
 		SELECT
 			score_id, project_id, organization_id, trace_id, span_id,
-			name, value, string_value, data_type, source,
+			name, value, string_value, type, source,
 			reason, metadata, experiment_id, experiment_item_id,
 			timestamp
 		FROM scores
@@ -154,9 +154,9 @@ func (r *scoreRepository) GetByFilter(ctx context.Context, filter *observability
 			query += " AND source = ?"
 			args = append(args, *filter.Source)
 		}
-		if filter.DataType != nil {
-			query += " AND data_type = ?"
-			args = append(args, *filter.DataType)
+		if filter.Type != nil {
+			query += " AND type = ?"
+			args = append(args, *filter.Type)
 		}
 		if filter.MinValue != nil {
 			query += " AND value >= ?"
@@ -178,7 +178,7 @@ func (r *scoreRepository) GetByFilter(ctx context.Context, filter *observability
 	}
 
 	// Determine sort field and direction with SQL injection protection
-	allowedSortFields := []string{"timestamp", "value", "dimension", "data_type", "timestamp", "updated_at", "score_id"}
+	allowedSortFields := []string{"timestamp", "value", "dimension", "type", "timestamp", "updated_at", "score_id"}
 	sortField := "timestamp" // default
 	sortDir := "DESC"
 
@@ -230,7 +230,7 @@ func (r *scoreRepository) CreateBatch(ctx context.Context, scores []*observabili
 	batch, err := r.db.PrepareBatch(ctx, `
 		INSERT INTO scores (
 			score_id, project_id, organization_id, trace_id, span_id,
-			name, value, string_value, data_type, source,
+			name, value, string_value, type, source,
 			reason, metadata, experiment_id, experiment_item_id,
 			timestamp
 		)
@@ -249,7 +249,7 @@ func (r *scoreRepository) CreateBatch(ctx context.Context, scores []*observabili
 			score.Name,
 			score.Value,
 			score.StringValue,
-			score.DataType,
+			score.Type,
 			score.Source,
 			score.Reason,
 			score.Metadata,
@@ -287,9 +287,9 @@ func (r *scoreRepository) Count(ctx context.Context, filter *observability.Score
 			query += " AND source = ?"
 			args = append(args, *filter.Source)
 		}
-		if filter.DataType != nil {
-			query += " AND data_type = ?"
-			args = append(args, *filter.DataType)
+		if filter.Type != nil {
+			query += " AND type = ?"
+			args = append(args, *filter.Type)
 		}
 		if filter.StartTime != nil {
 			query += " AND timestamp >= ?"
@@ -342,7 +342,7 @@ func (r *scoreRepository) GetAggregationsByExperiments(
 		FROM scores
 		WHERE project_id = ?
 		  AND experiment_id IN (?)
-		  AND data_type = 'NUMERIC'
+		  AND type = 'NUMERIC'
 		  AND value IS NOT NULL
 		GROUP BY experiment_id, name
 		ORDER BY experiment_id, name
@@ -411,7 +411,7 @@ func (r *scoreRepository) scanScoreRow(row driver.Row) (*observability.Score, er
 		&score.Name,
 		&score.Value,
 		&score.StringValue,
-		&score.DataType,
+		&score.Type,
 		&score.Source,
 		&score.Reason,
 		&score.Metadata,
@@ -443,7 +443,7 @@ func (r *scoreRepository) scanScores(rows driver.Rows) ([]*observability.Score, 
 			&score.Name,
 			&score.Value,
 			&score.StringValue,
-			&score.DataType,
+			&score.Type,
 			&score.Source,
 			&score.Reason,
 			&score.Metadata,

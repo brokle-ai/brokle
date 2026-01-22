@@ -52,11 +52,11 @@ interface GroupedScores {
 function getScoreBadgeVariant(
   score: Score
 ): 'default' | 'secondary' | 'destructive' | 'outline' {
-  if (score.data_type === 'BOOLEAN') {
+  if (score.type === 'BOOLEAN') {
     return score.value === 1 ? 'default' : 'destructive'
   }
 
-  if (score.data_type === 'NUMERIC' && score.value !== undefined) {
+  if (score.type === 'NUMERIC' && score.value !== undefined) {
     if (score.value >= 0.8) return 'default'
     if (score.value >= 0.5) return 'secondary'
     return 'destructive'
@@ -69,11 +69,11 @@ function getScoreBadgeVariant(
  * Get display value for score based on type
  */
 function getScoreDisplayValue(score: Score): string {
-  if (score.data_type === 'BOOLEAN') {
+  if (score.type === 'BOOLEAN') {
     return score.value === 1 ? 'Yes' : 'No'
   }
 
-  if (score.data_type === 'CATEGORICAL') {
+  if (score.type === 'CATEGORICAL') {
     return score.string_value || '-'
   }
 
@@ -85,7 +85,7 @@ function getScoreDisplayValue(score: Score): string {
  * Get background class for boolean scores
  */
 function getBooleanBgClass(score: Score): string {
-  if (score.data_type !== 'BOOLEAN') return ''
+  if (score.type !== 'BOOLEAN') return ''
   return score.value === 1
     ? 'bg-green-50 dark:bg-green-950/30'
     : 'bg-red-50 dark:bg-red-950/30'
@@ -177,7 +177,7 @@ function ScoreItem({ score }: ScoreItemProps) {
           <div className="space-y-1">
             <h4 className="text-sm font-semibold">{score.name}</h4>
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span>Type: {score.data_type}</span>
+              <span>Type: {score.type}</span>
               <span>•</span>
               <span>Source: {formatSource(score.source)}</span>
             </div>

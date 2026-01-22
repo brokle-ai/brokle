@@ -56,7 +56,7 @@ func (h *ScoreConfigHandler) Create(c *gin.Context) {
 	domainReq := &evaluationDomain.CreateScoreConfigRequest{
 		Name:        req.Name,
 		Description: req.Description,
-		DataType:    evaluationDomain.ScoreDataType(req.DataType),
+		Type:        evaluationDomain.ScoreType(req.Type),
 		MinValue:    req.MinValue,
 		MaxValue:    req.MaxValue,
 		Categories:  req.Categories,
@@ -168,16 +168,16 @@ func (h *ScoreConfigHandler) Update(c *gin.Context) {
 		return
 	}
 
-	var dataType *evaluationDomain.ScoreDataType
-	if req.DataType != nil {
-		dt := evaluationDomain.ScoreDataType(*req.DataType)
-		dataType = &dt
+	var scoreType *evaluationDomain.ScoreType
+	if req.Type != nil {
+		st := evaluationDomain.ScoreType(*req.Type)
+		scoreType = &st
 	}
 
 	domainReq := &evaluationDomain.UpdateScoreConfigRequest{
 		Name:        req.Name,
 		Description: req.Description,
-		DataType:    dataType,
+		Type:        scoreType,
 		MinValue:    req.MinValue,
 		MaxValue:    req.MaxValue,
 		Categories:  req.Categories,

@@ -372,7 +372,7 @@ function ScoresTabContent({ projectId, traceId }: ScoresTabContentProps) {
               <div>
                 <div className='font-medium'>{score.name}</div>
                 <div className='text-xs text-muted-foreground'>
-                  {score.source} • {score.data_type}
+                  {score.source} • {score.type}
                 </div>
               </div>
               <div className='text-right'>

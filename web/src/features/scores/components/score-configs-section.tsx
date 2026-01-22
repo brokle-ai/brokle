@@ -82,16 +82,16 @@ export function ScoreConfigsSection({ projectId }: ScoreConfigsSectionProps) {
   }
 
   const getConstraintDisplay = (config: ScoreConfig) => {
-    if (config.data_type === 'NUMERIC') {
+    if (config.type === 'NUMERIC') {
       if (config.min_value !== undefined || config.max_value !== undefined) {
         return `${config.min_value ?? '−∞'} to ${config.max_value ?? '∞'}`
       }
       return 'Any number'
     }
-    if (config.data_type === 'CATEGORICAL' && config.categories?.length) {
+    if (config.type === 'CATEGORICAL' && config.categories?.length) {
       return config.categories.join(', ')
     }
-    if (config.data_type === 'BOOLEAN') {
+    if (config.type === 'BOOLEAN') {
       return 'true / false'
     }
     return '—'
@@ -176,7 +176,7 @@ export function ScoreConfigsSection({ projectId }: ScoreConfigsSectionProps) {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline">{config.data_type}</Badge>
+                    <Badge variant="outline">{config.type}</Badge>
                   </TableCell>
                   <TableCell>
                     <code className="text-xs bg-muted px-2 py-1 rounded font-mono">
@@ -260,7 +260,7 @@ export function ScoreConfigsSection({ projectId }: ScoreConfigsSectionProps) {
                 </div>
                 <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
                   <Badge variant="outline" className="text-xs">
-                    {deletingConfig.data_type}
+                    {deletingConfig.type}
                   </Badge>
                   {deletingConfig.description && (
                     <>

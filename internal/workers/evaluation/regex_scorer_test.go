@@ -528,7 +528,7 @@ func TestRegexScorer_ReasonField(t *testing.T) {
 	}
 }
 
-func TestRegexScorer_DataType(t *testing.T) {
+func TestRegexScorer_Type(t *testing.T) {
 	ctx := context.Background()
 	scorer := NewRegexScorer(newTestLogger())
 
@@ -540,5 +540,5 @@ func TestRegexScorer_DataType(t *testing.T) {
 	result, err := scorer.Execute(ctx, job)
 	require.NoError(t, err)
 	require.Len(t, result.Scores, 1)
-	assert.Equal(t, "numeric", result.Scores[0].DataType)
+	assert.Equal(t, "NUMERIC", result.Scores[0].Type)
 }

@@ -21,7 +21,7 @@ interface ScoreConfig {
   id: string
   name: string
   description?: string
-  data_type: 'NUMERIC' | 'CATEGORICAL' | 'BOOLEAN'
+  type: 'NUMERIC' | 'CATEGORICAL' | 'BOOLEAN'
   min_value?: number
   max_value?: number
   categories?: string[]
@@ -46,7 +46,7 @@ export function ScoreInputForm({
     id,
     name: `Score ${index + 1}`,
     description: 'Rate this item',
-    data_type: 'NUMERIC',
+    type: 'NUMERIC',
     min_value: 0,
     max_value: 10,
   }))
@@ -114,7 +114,7 @@ interface ScoreInputProps {
 }
 
 function ScoreInput({ config, value, comment, onChange }: ScoreInputProps) {
-  switch (config.data_type) {
+  switch (config.type) {
     case 'NUMERIC':
       return (
         <NumericScoreInput
@@ -282,7 +282,7 @@ function BooleanScoreInput({
 }
 
 function getDefaultValue(config: ScoreConfig): number | string | boolean {
-  switch (config.data_type) {
+  switch (config.type) {
     case 'NUMERIC':
       return config.min_value ?? 0
     case 'CATEGORICAL':

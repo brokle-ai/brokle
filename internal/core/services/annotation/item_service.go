@@ -271,7 +271,7 @@ func (s *itemService) submitScores(
 			ProjectID:      projectID.String(),
 			OrganizationID: project.OrganizationID.String(),
 			Name:           scoreConfig.Name,
-			DataType:       string(scoreConfig.DataType),
+			Type:           string(scoreConfig.Type),
 			Source:         observability.ScoreSourceAnnotation,
 			Metadata:       s.buildScoreMetadata(queue, item, userID, sub.Comment),
 		}
@@ -283,20 +283,20 @@ func (s *itemService) submitScores(
 			score.SpanID = &item.ObjectID
 		}
 
-		// Set value based on data type
-		switch scoreConfig.DataType {
-		case evaluation.ScoreDataTypeNumeric:
+		// Set value based on type
+		switch scoreConfig.Type {
+		case evaluation.ScoreTypeNumeric:
 			if numVal, ok := sub.Value.(float64); ok {
 				score.Value = &numVal
 			} else if intVal, ok := sub.Value.(int); ok {
 				floatVal := float64(intVal)
 				score.Value = &floatVal
 			}
-		case evaluation.ScoreDataTypeCategorical:
+		case evaluation.ScoreTypeCategorical:
 			if strVal, ok := sub.Value.(string); ok {
 				score.StringValue = &strVal
 			}
-		case evaluation.ScoreDataTypeBoolean:
+		case evaluation.ScoreTypeBoolean:
 			// Convert boolean to numeric (1.0 for true, 0.0 for false)
 			if boolVal, ok := sub.Value.(bool); ok {
 				var numVal float64
@@ -316,7 +316,7 @@ func (s *itemService) submitScores(
 		if score.Value == nil && score.StringValue == nil {
 			s.logger.Warn("score has no value, skipping",
 				"score_config_id", sub.ScoreConfigID,
-				"data_type", scoreConfig.DataType,
+				"type", scoreConfig.Type,
 			)
 			continue
 		}
