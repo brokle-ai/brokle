@@ -812,3 +812,52 @@ type DatasetWithVersionResponse struct {
 	CreatedAt        time.Time              `json:"created_at"`
 	UpdatedAt        time.Time              `json:"updated_at"`
 }
+
+// ============================================================================
+// Dataset Filter and Pagination Types
+// ============================================================================
+
+// DatasetFilter represents filters for dataset queries.
+type DatasetFilter struct {
+	// Search filters by name (case-insensitive partial match)
+	Search *string
+}
+
+// DatasetWithItemCount extends Dataset to include item count in list responses.
+type DatasetWithItemCount struct {
+	Dataset
+	ItemCount int64 `json:"item_count"`
+}
+
+// DatasetWithItemCountResponse is the API response for a dataset with item count.
+type DatasetWithItemCountResponse struct {
+	ID               string                 `json:"id"`
+	ProjectID        string                 `json:"project_id"`
+	Name             string                 `json:"name"`
+	Description      *string                `json:"description,omitempty"`
+	Metadata         map[string]interface{} `json:"metadata,omitempty"`
+	CurrentVersionID *string                `json:"current_version_id,omitempty"`
+	ItemCount        int64                  `json:"item_count"`
+	CreatedAt        time.Time              `json:"created_at"`
+	UpdatedAt        time.Time              `json:"updated_at"`
+}
+
+// ToResponse converts DatasetWithItemCount to its API response format.
+func (d *DatasetWithItemCount) ToResponse() *DatasetWithItemCountResponse {
+	var currentVersionID *string
+	if d.CurrentVersionID != nil {
+		id := d.CurrentVersionID.String()
+		currentVersionID = &id
+	}
+	return &DatasetWithItemCountResponse{
+		ID:               d.ID.String(),
+		ProjectID:        d.ProjectID.String(),
+		Name:             d.Name,
+		Description:      d.Description,
+		Metadata:         d.Metadata,
+		CurrentVersionID: currentVersionID,
+		ItemCount:        d.ItemCount,
+		CreatedAt:        d.CreatedAt,
+		UpdatedAt:        d.UpdatedAt,
+	}
+}

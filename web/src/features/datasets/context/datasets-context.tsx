@@ -3,15 +3,15 @@
 import React, { useMemo, useState } from 'react'
 import useDialogState from '@/hooks/use-dialog-state'
 import { useProjectOnly } from '@/features/projects'
-import type { Dataset } from '../types'
+import type { Dataset, DatasetWithItemCount } from '../types'
 
 export type DatasetsDialogType = 'create' | 'edit' | 'delete'
 
 type DatasetsContextType = {
   open: DatasetsDialogType | null
   setOpen: (str: DatasetsDialogType | null) => void
-  currentRow: Dataset | null
-  setCurrentRow: React.Dispatch<React.SetStateAction<Dataset | null>>
+  currentRow: Dataset | DatasetWithItemCount | null
+  setCurrentRow: React.Dispatch<React.SetStateAction<Dataset | DatasetWithItemCount | null>>
   projectId: string | undefined
   projectSlug?: string
 }
@@ -25,7 +25,7 @@ interface DatasetsProviderProps {
 
 export function DatasetsProvider({ children, projectSlug }: DatasetsProviderProps) {
   const [open, setOpen] = useDialogState<DatasetsDialogType>(null)
-  const [currentRow, setCurrentRow] = useState<Dataset | null>(null)
+  const [currentRow, setCurrentRow] = useState<Dataset | DatasetWithItemCount | null>(null)
   const { currentProject } = useProjectOnly()
 
   const contextValue = useMemo(

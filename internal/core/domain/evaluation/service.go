@@ -22,6 +22,7 @@ type DatasetService interface {
 	Delete(ctx context.Context, id ulid.ULID, projectID ulid.ULID) error
 	GetByID(ctx context.Context, id ulid.ULID, projectID ulid.ULID) (*Dataset, error)
 	List(ctx context.Context, projectID ulid.ULID) ([]*Dataset, error)
+	ListWithFilters(ctx context.Context, projectID ulid.ULID, filter *DatasetFilter, params pagination.Params) ([]*DatasetWithItemCount, int64, error)
 }
 
 type DatasetItemService interface {

@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { formatDistanceToNow } from 'date-fns'
-import { Trash2, Loader2 } from 'lucide-react'
+import { Trash2, Loader2, Eye } from 'lucide-react'
 import {
   useReactTable,
   getCoreRowModel,
@@ -29,8 +29,13 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Skeleton } from '@/components/ui/skeleton'
+import { cn } from '@/lib/utils'
 import { useDatasetItemsQuery, useDeleteDatasetItemMutation } from '../hooks/use-datasets'
+import { useRowHeight } from '../hooks/use-row-height'
+import { AutodetectCell, RowHeightSelector, ROW_HEIGHT_VALUES } from './cells'
+import { ItemPreviewSidebar } from './dataset-items/item-preview-sidebar'
 import type { DatasetItem } from '../types'
+import type { RowHeight } from './cells/types'
 
 interface DatasetItemTableProps {
   projectId: string
@@ -39,39 +44,36 @@ interface DatasetItemTableProps {
 
 const columnHelper = createColumnHelper<DatasetItem>()
 
-function JsonCell({ value }: { value: Record<string, unknown> | undefined }) {
-  if (!value) return <span className="text-muted-foreground">-</span>
-  const str = JSON.stringify(value)
-  const truncated = str.length > 100 ? str.slice(0, 100) + '...' : str
-  return (
-    <code className="text-xs bg-muted px-2 py-1 rounded font-mono">
-      {truncated}
-    </code>
-  )
-}
-
 export function DatasetItemTable({ projectId, datasetId }: DatasetItemTableProps) {
   const [deleteItem, setDeleteItem] = useState<DatasetItem | null>(null)
+  const [previewItem, setPreviewItem] = useState<DatasetItem | null>(null)
+  const { rowHeight, setRowHeight, isLoaded } = useRowHeight()
   const { data, isLoading } = useDatasetItemsQuery(projectId, datasetId)
   const deleteMutation = useDeleteDatasetItemMutation(projectId, datasetId)
 
-  const columns = [
+  const columns = useMemo(() => [
     columnHelper.accessor('input', {
       header: 'Input',
-      cell: (info) => <JsonCell value={info.getValue()} />,
+      cell: (info) => (
+        <AutodetectCell value={info.getValue()} rowHeight={rowHeight} />
+      ),
     }),
     columnHelper.accessor('expected', {
-      header: 'Expected',
-      cell: (info) => <JsonCell value={info.getValue()} />,
+      header: 'Expected Output',
+      cell: (info) => (
+        <AutodetectCell value={info.getValue()} rowHeight={rowHeight} />
+      ),
     }),
     columnHelper.accessor('metadata', {
       header: 'Metadata',
-      cell: (info) => <JsonCell value={info.getValue()} />,
+      cell: (info) => (
+        <AutodetectCell value={info.getValue()} rowHeight={rowHeight} />
+      ),
     }),
     columnHelper.accessor('created_at', {
       header: 'Created',
       cell: (info) => (
-        <span className="text-sm text-muted-foreground">
+        <span className="text-sm text-muted-foreground whitespace-nowrap">
           {formatDistanceToNow(new Date(info.getValue()), { addSuffix: true })}
         </span>
       ),
@@ -80,11 +82,25 @@ export function DatasetItemTable({ projectId, datasetId }: DatasetItemTableProps
       id: 'actions',
       header: () => <span className="sr-only">Actions</span>,
       cell: (info) => (
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-1">
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setDeleteItem(info.row.original)}
+            onClick={(e) => {
+              e.stopPropagation()
+              setPreviewItem(info.row.original)
+            }}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <Eye className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation()
+              setDeleteItem(info.row.original)
+            }}
             className="text-destructive hover:text-destructive hover:bg-destructive/10"
           >
             <Trash2 className="h-4 w-4" />
@@ -92,7 +108,7 @@ export function DatasetItemTable({ projectId, datasetId }: DatasetItemTableProps
         </div>
       ),
     }),
-  ]
+  ], [rowHeight])
 
   const table = useReactTable({
     data: data?.items ?? [],
@@ -107,7 +123,14 @@ export function DatasetItemTable({ projectId, datasetId }: DatasetItemTableProps
     }
   }
 
-  if (isLoading) {
+  const getRowStyle = (height: RowHeight) => {
+    const minHeight = ROW_HEIGHT_VALUES[height]
+    return {
+      minHeight: `${minHeight}px`,
+    }
+  }
+
+  if (isLoading || !isLoaded) {
     return (
       <div className="space-y-2">
         {Array.from({ length: 5 }).map((_, i) => (
@@ -130,6 +153,15 @@ export function DatasetItemTable({ projectId, datasetId }: DatasetItemTableProps
 
   return (
     <>
+      {/* Toolbar */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="text-sm text-muted-foreground">
+          {data.total} {data.total === 1 ? 'item' : 'items'}
+        </div>
+        <RowHeightSelector value={rowHeight} onChange={setRowHeight} />
+      </div>
+
+      {/* Table */}
       <div className="rounded-md border">
         <Table>
           <TableHeader>
@@ -150,9 +182,23 @@ export function DatasetItemTable({ projectId, datasetId }: DatasetItemTableProps
           </TableHeader>
           <TableBody>
             {table.getRowModel().rows.map((row) => (
-              <TableRow key={row.id}>
+              <TableRow
+                key={row.id}
+                className={cn(
+                  'cursor-pointer hover:bg-muted/50',
+                  rowHeight === 'large' && 'align-top'
+                )}
+                style={getRowStyle(rowHeight)}
+                onClick={() => setPreviewItem(row.original)}
+              >
                 {row.getVisibleCells().map((cell) => (
-                  <TableCell key={cell.id}>
+                  <TableCell
+                    key={cell.id}
+                    className={cn(
+                      'max-w-[300px]',
+                      rowHeight === 'large' && 'align-top py-4'
+                    )}
+                  >
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                   </TableCell>
                 ))}
@@ -168,6 +214,14 @@ export function DatasetItemTable({ projectId, datasetId }: DatasetItemTableProps
         </p>
       )}
 
+      {/* Preview Sidebar */}
+      <ItemPreviewSidebar
+        item={previewItem}
+        open={!!previewItem}
+        onOpenChange={(open) => !open && setPreviewItem(null)}
+      />
+
+      {/* Delete Confirmation */}
       <AlertDialog open={!!deleteItem} onOpenChange={(open) => !open && setDeleteItem(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>

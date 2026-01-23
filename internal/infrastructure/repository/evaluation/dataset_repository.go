@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"brokle/internal/core/domain/evaluation"
+	"brokle/pkg/pagination"
 	"brokle/pkg/ulid"
 
 	"gorm.io/gorm"
@@ -117,6 +118,96 @@ func (r *DatasetRepository) ExistsByName(ctx context.Context, projectID ulid.ULI
 		return false, result.Error
 	}
 	return count > 0, nil
+}
+
+// ListWithFilters returns datasets with filtering, sorting, and pagination, including item counts.
+// Allowed sort fields: name, created_at, updated_at, item_count
+func (r *DatasetRepository) ListWithFilters(
+	ctx context.Context,
+	projectID ulid.ULID,
+	filter *evaluation.DatasetFilter,
+	params pagination.Params,
+) ([]*evaluation.DatasetWithItemCount, int64, error) {
+	// Allowed sort fields for SQL injection prevention
+	allowedSortFields := []string{"name", "created_at", "updated_at", "item_count"}
+
+	// Validate and set defaults for pagination params
+	params.SetDefaults("updated_at")
+	if _, err := pagination.ValidateSortField(params.SortBy, allowedSortFields); err != nil {
+		params.SortBy = "updated_at"
+	}
+
+	// Build base query for counting (without sorting and pagination)
+	baseQuery := r.db.WithContext(ctx).
+		Model(&evaluation.Dataset{}).
+		Where("project_id = ?", projectID.String())
+
+	// Apply search filter if provided
+	if filter != nil && filter.Search != nil && *filter.Search != "" {
+		searchPattern := "%" + strings.ToLower(*filter.Search) + "%"
+		baseQuery = baseQuery.Where("LOWER(name) LIKE ?", searchPattern)
+	}
+
+	// Count total matching records
+	var total int64
+	if err := baseQuery.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	if total == 0 {
+		return []*evaluation.DatasetWithItemCount{}, 0, nil
+	}
+
+	// Build the query with item counts using a subquery
+	// This uses LEFT JOIN with a subquery to count items for each dataset
+	selectQuery := r.db.WithContext(ctx).
+		Table("datasets d").
+		Select("d.*, COALESCE(item_counts.count, 0) as item_count").
+		Joins("LEFT JOIN (SELECT dataset_id, COUNT(*) as count FROM dataset_items GROUP BY dataset_id) item_counts ON item_counts.dataset_id = d.id").
+		Where("d.project_id = ?", projectID.String())
+
+	// Apply search filter
+	if filter != nil && filter.Search != nil && *filter.Search != "" {
+		searchPattern := "%" + strings.ToLower(*filter.Search) + "%"
+		selectQuery = selectQuery.Where("LOWER(d.name) LIKE ?", searchPattern)
+	}
+
+	// Apply sorting with defensive validation of sort direction
+	sortDir := strings.ToUpper(params.SortDir)
+	if sortDir != "ASC" && sortDir != "DESC" {
+		sortDir = "DESC"
+	}
+
+	sortOrder := params.GetSortOrder(params.SortBy, "d.id")
+	// Prefix non-item_count columns with "d."
+	if params.SortBy != "item_count" {
+		sortOrder = "d." + params.SortBy + " " + sortDir + ", d.id " + sortDir
+	}
+	selectQuery = selectQuery.Order(sortOrder)
+
+	// Apply pagination
+	selectQuery = selectQuery.Offset(params.GetOffset()).Limit(params.Limit)
+
+	// Execute query
+	type datasetWithCount struct {
+		evaluation.Dataset
+		ItemCount int64 `gorm:"column:item_count"`
+	}
+	var results []datasetWithCount
+	if err := selectQuery.Find(&results).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// Convert to domain type
+	datasets := make([]*evaluation.DatasetWithItemCount, len(results))
+	for i, r := range results {
+		datasets[i] = &evaluation.DatasetWithItemCount{
+			Dataset:   r.Dataset,
+			ItemCount: r.ItemCount,
+		}
+	}
+
+	return datasets, total, nil
 }
 
 func isDatasetUniqueViolation(err error) bool {
