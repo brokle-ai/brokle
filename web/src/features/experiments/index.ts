@@ -26,6 +26,8 @@ export {
 export { useExperimentComparisonQuery } from './hooks/use-experiment-comparison'
 export { useProjectExperiments } from './hooks/use-project-experiments'
 export type { UseProjectExperimentsReturn } from './hooks/use-project-experiments'
+export { useExperimentsTableState } from './hooks/use-experiments-table-state'
+export type { UseExperimentsTableStateReturn, SortField as ExperimentsSortField } from './hooks/use-experiments-table-state'
 
 export { getDiffDisplay, formatScoreStats } from './lib/calculate-diff'
 export type { DiffDisplayConfig, DiffStyle } from './lib/calculate-diff'
@@ -41,6 +43,7 @@ export { DiffLabel } from './components/diff-label'
 export { ExperimentSelector } from './components/experiment-selector'
 export { ScoreComparisonCard } from './components/score-comparison-card'
 export { ExperimentsDialogs } from './components/experiments-dialogs'
+export { ExperimentsTable, ExperimentsToolbar, createExperimentsColumns } from './components/experiment-table'
 
 export { ExperimentDetailDialogs } from './components/experiment-detail-dialogs'
 export { ExperimentDetailSkeleton } from './components/experiment-detail-skeleton'
