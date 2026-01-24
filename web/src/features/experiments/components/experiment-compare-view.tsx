@@ -7,6 +7,12 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { ExperimentSelector } from './experiment-selector'
 import { ScoreComparisonCard } from './score-comparison-card'
+import {
+  ComparisonViewToggle,
+  ComparisonSummary,
+  ComparisonTable,
+  type ComparisonViewMode,
+} from './comparison'
 import { useExperimentComparisonQuery } from '../hooks/use-experiment-comparison'
 
 interface ExperimentCompareViewProps {
@@ -24,12 +30,14 @@ export function ExperimentCompareView({ projectId }: ExperimentCompareViewProps)
   }, [searchParams])
 
   const baselineId = searchParams.get('baseline') ?? undefined
+  const viewMode = (searchParams.get('view') as ComparisonViewMode) ?? 'card'
 
   const updateURL = useCallback(
-    (ids: string[], baseline?: string) => {
+    (ids: string[], baseline?: string, view?: ComparisonViewMode) => {
       const params = new URLSearchParams()
       if (ids.length > 0) params.set('ids', ids.join(','))
       if (baseline) params.set('baseline', baseline)
+      if (view && view !== 'card') params.set('view', view)
       router.replace(`${pathname}?${params.toString()}`)
     },
     [router, pathname]
@@ -40,16 +48,23 @@ export function ExperimentCompareView({ projectId }: ExperimentCompareViewProps)
       // If baseline is removed from selection, clear it
       const newBaseline =
         baselineId && ids.includes(baselineId) ? baselineId : ids[0]
-      updateURL(ids, newBaseline)
+      updateURL(ids, newBaseline, viewMode)
     },
-    [baselineId, updateURL]
+    [baselineId, viewMode, updateURL]
   )
 
   const handleBaselineChange = useCallback(
     (id: string) => {
-      updateURL(experimentIds, id)
+      updateURL(experimentIds, id, viewMode)
     },
-    [experimentIds, updateURL]
+    [experimentIds, viewMode, updateURL]
+  )
+
+  const handleViewModeChange = useCallback(
+    (mode: ComparisonViewMode) => {
+      updateURL(experimentIds, baselineId, mode)
+    },
+    [experimentIds, baselineId, updateURL]
   )
 
   const handleShare = useCallback(() => {
@@ -96,10 +111,13 @@ export function ExperimentCompareView({ projectId }: ExperimentCompareViewProps)
             </p>
           </div>
         </div>
-        <Button variant="outline" size="sm" onClick={handleShare}>
-          <Share2 className="h-4 w-4 mr-2" />
-          Share
-        </Button>
+        <div className="flex items-center gap-2">
+          <ComparisonViewToggle value={viewMode} onChange={handleViewModeChange} />
+          <Button variant="outline" size="sm" onClick={handleShare}>
+            <Share2 className="h-4 w-4 mr-2" />
+            Share
+          </Button>
+        </div>
       </div>
 
       <ExperimentSelector
@@ -108,6 +126,11 @@ export function ExperimentCompareView({ projectId }: ExperimentCompareViewProps)
         onSelectionChange={handleSelectionChange}
         className="max-w-md"
       />
+
+      {/* Summary counters - only show when we have data and baseline */}
+      {!isLoading && !error && scoreRows.length > 0 && baselineId && (
+        <ComparisonSummary scoreRows={scoreRows} baselineId={baselineId} />
+      )}
 
       {isLoading && (
         <div className="flex items-center justify-center py-12">
@@ -122,18 +145,28 @@ export function ExperimentCompareView({ projectId }: ExperimentCompareViewProps)
       )}
 
       {!isLoading && !error && scoreRows.length > 0 && (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {scoreRows.map((row) => (
-            <ScoreComparisonCard
-              key={row.scoreName}
-              row={row}
-              experiments={experiments}
-              experimentIds={experimentIds}
-              baselineId={baselineId}
-              onBaselineChange={handleBaselineChange}
-            />
-          ))}
-        </div>
+        viewMode === 'table' ? (
+          <ComparisonTable
+            scoreRows={scoreRows}
+            experiments={experiments}
+            experimentIds={experimentIds}
+            baselineId={baselineId}
+            onBaselineChange={handleBaselineChange}
+          />
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {scoreRows.map((row) => (
+              <ScoreComparisonCard
+                key={row.scoreName}
+                row={row}
+                experiments={experiments}
+                experimentIds={experimentIds}
+                baselineId={baselineId}
+                onBaselineChange={handleBaselineChange}
+              />
+            ))}
+          </div>
+        )
       )}
 
       {!isLoading && !error && scoreRows.length === 0 && (
