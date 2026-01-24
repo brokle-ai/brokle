@@ -417,6 +417,7 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 			experiments.GET("/:experimentId/items", s.authMiddleware.RequirePermission("projects:read"), s.handlers.ExperimentItem.List)
 			experiments.GET("/:experimentId/config", s.authMiddleware.RequirePermission("projects:read"), s.handlers.ExperimentWizard.GetExperimentConfig)
 			experiments.GET("/:experimentId/progress", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Experiment.GetProgress)
+			experiments.GET("/:experimentId/metrics", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Experiment.GetMetrics)
 
 			// Experiment wizard routes
 			experiments.POST("/wizard", s.authMiddleware.RequirePermission("projects:write"), s.handlers.ExperimentWizard.CreateFromWizard)

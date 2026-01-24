@@ -591,17 +591,32 @@ func (e *Experiment) ToProgressResponse() *ExperimentProgressResponse {
 		resp.ProgressPct = float64(e.CompletedItems+e.FailedItems) / float64(e.TotalItems) * 100
 	}
 
-	// Calculate elapsed and ETA for running experiments
-	if e.StartedAt != nil && e.Status == ExperimentStatusRunning {
-		elapsed := time.Since(*e.StartedAt).Seconds()
-		resp.ElapsedSeconds = &elapsed
+	// Calculate elapsed time
+	if e.StartedAt != nil {
+		var elapsed float64
 
-		processed := e.CompletedItems + e.FailedItems
-		if processed > 0 && e.TotalItems > processed {
-			rate := elapsed / float64(processed)
-			remaining := float64(e.TotalItems - processed)
-			eta := rate * remaining
-			resp.ETASeconds = &eta
+		if e.CompletedAt != nil {
+			// Finished experiment: use fixed duration from start to completion
+			elapsed = e.CompletedAt.Sub(*e.StartedAt).Seconds()
+		} else if e.Status == ExperimentStatusRunning {
+			// Running experiment: use live elapsed time
+			elapsed = time.Since(*e.StartedAt).Seconds()
+		}
+
+		// Only set elapsed if we calculated it (skip pending experiments without completion)
+		if e.CompletedAt != nil || e.Status == ExperimentStatusRunning {
+			resp.ElapsedSeconds = &elapsed
+		}
+
+		// Calculate ETA only for running experiments
+		if e.Status == ExperimentStatusRunning {
+			processed := e.CompletedItems + e.FailedItems
+			if processed > 0 && e.TotalItems > processed {
+				rate := elapsed / float64(processed)
+				remaining := float64(e.TotalItems - processed)
+				eta := rate * remaining
+				resp.ETASeconds = &eta
+			}
 		}
 	}
 
@@ -915,6 +930,48 @@ type DatasetWithVersionResponse struct {
 type DatasetFilter struct {
 	// Search filters by name (case-insensitive partial match)
 	Search *string
+}
+
+// ============================================================================
+// Experiment Metrics Types
+// ============================================================================
+
+// ExperimentMetricsResponse is the response for GET /experiments/{id}/metrics.
+// It provides comprehensive metrics including progress, performance, and scores.
+type ExperimentMetricsResponse struct {
+	ExperimentID string                       `json:"experiment_id"`
+	Status       ExperimentStatus             `json:"status"`
+	Progress     ExperimentProgressMetrics    `json:"progress"`
+	Performance  ExperimentPerformanceMetrics `json:"performance"`
+	Scores       map[string]*ScoreMetrics     `json:"scores,omitempty"`
+}
+
+// ExperimentProgressMetrics contains progress and success/error rate metrics.
+type ExperimentProgressMetrics struct {
+	TotalItems     int     `json:"total_items"`
+	CompletedItems int     `json:"completed_items"`
+	FailedItems    int     `json:"failed_items"`
+	PendingItems   int     `json:"pending_items"`
+	ProgressPct    float64 `json:"progress_pct"`
+	SuccessRate    float64 `json:"success_rate"` // completed / (completed + failed) * 100
+	ErrorRate      float64 `json:"error_rate"`   // failed / (completed + failed) * 100
+}
+
+// ExperimentPerformanceMetrics contains timing and ETA metrics.
+type ExperimentPerformanceMetrics struct {
+	StartedAt      *time.Time `json:"started_at,omitempty"`
+	CompletedAt    *time.Time `json:"completed_at,omitempty"`
+	ElapsedSeconds *float64   `json:"elapsed_seconds,omitempty"`
+	ETASeconds     *float64   `json:"eta_seconds,omitempty"`
+}
+
+// ScoreMetrics contains statistical metrics for a score type.
+type ScoreMetrics struct {
+	Mean   float64 `json:"mean"`
+	StdDev float64 `json:"std_dev"`
+	Min    float64 `json:"min"`
+	Max    float64 `json:"max"`
+	Count  int64   `json:"count"`
 }
 
 // DatasetWithItemCount extends Dataset to include item count in list responses.

@@ -98,7 +98,11 @@ func (s *experimentService) Update(ctx context.Context, id ulid.ULID, projectID 
 		if oldStatus == evaluation.ExperimentStatusPending && *req.Status == evaluation.ExperimentStatusRunning {
 			experiment.StartedAt = &now
 		}
-		if (*req.Status == evaluation.ExperimentStatusCompleted || *req.Status == evaluation.ExperimentStatusFailed) &&
+		// Set CompletedAt when transitioning to any terminal status
+		if (*req.Status == evaluation.ExperimentStatusCompleted ||
+			*req.Status == evaluation.ExperimentStatusFailed ||
+			*req.Status == evaluation.ExperimentStatusPartial ||
+			*req.Status == evaluation.ExperimentStatusCancelled) &&
 			experiment.CompletedAt == nil {
 			experiment.CompletedAt = &now
 		}
@@ -387,4 +391,119 @@ func (s *experimentService) IncrementAndCheckCompletion(ctx context.Context, id 
 	}
 
 	return isComplete, nil
+}
+
+// GetMetrics returns comprehensive metrics for an experiment including progress,
+// performance, and score aggregations from ClickHouse.
+func (s *experimentService) GetMetrics(ctx context.Context, projectID, experimentID ulid.ULID) (*evaluation.ExperimentMetricsResponse, error) {
+	// 1. Get experiment (validates existence and project ownership)
+	exp, err := s.repo.GetByID(ctx, experimentID, projectID)
+	if err != nil {
+		if errors.Is(err, evaluation.ErrExperimentNotFound) {
+			return nil, appErrors.NewNotFoundError(fmt.Sprintf("experiment %s", experimentID))
+		}
+		return nil, appErrors.NewInternalError("failed to get experiment", err)
+	}
+
+	// 2. Get score aggregations from ClickHouse (non-fatal if fails - graceful degradation)
+	var scoreAggs map[string]map[string]*observability.ScoreAggregation
+	scoreAggs, err = s.scoreRepo.GetAggregationsByExperiments(ctx, projectID.String(), []string{experimentID.String()})
+	if err != nil {
+		s.logger.Warn("failed to get score aggregations",
+			"error", err,
+			"experiment_id", experimentID,
+			"project_id", projectID,
+		)
+		// Continue without scores - graceful degradation
+	}
+
+	// 3. Build response
+	return s.buildMetricsResponse(exp, scoreAggs), nil
+}
+
+// buildMetricsResponse constructs the metrics response from experiment and score data.
+func (s *experimentService) buildMetricsResponse(
+	exp *evaluation.Experiment,
+	scoreAggs map[string]map[string]*observability.ScoreAggregation,
+) *evaluation.ExperimentMetricsResponse {
+	// Progress metrics
+	pendingItems := exp.TotalItems - exp.CompletedItems - exp.FailedItems
+	var progressPct, successRate, errorRate float64
+
+	if exp.TotalItems > 0 {
+		processed := exp.CompletedItems + exp.FailedItems
+		progressPct = float64(processed) / float64(exp.TotalItems) * 100
+	}
+
+	processed := exp.CompletedItems + exp.FailedItems
+	if processed > 0 {
+		successRate = float64(exp.CompletedItems) / float64(processed) * 100
+		errorRate = float64(exp.FailedItems) / float64(processed) * 100
+	}
+
+	// Performance metrics
+	var elapsedSeconds, etaSeconds *float64
+	if exp.StartedAt != nil {
+		var elapsed float64
+
+		if exp.CompletedAt != nil {
+			// Finished experiment: use fixed duration from start to completion
+			elapsed = exp.CompletedAt.Sub(*exp.StartedAt).Seconds()
+		} else if exp.Status == evaluation.ExperimentStatusRunning {
+			// Running experiment: use live elapsed time
+			elapsed = time.Since(*exp.StartedAt).Seconds()
+		}
+
+		// Only set elapsed if we calculated it (skip non-running experiments without completion)
+		if exp.CompletedAt != nil || exp.Status == evaluation.ExperimentStatusRunning {
+			elapsedSeconds = &elapsed
+		}
+
+		// Calculate ETA only for running experiments
+		if exp.Status == evaluation.ExperimentStatusRunning && processed > 0 {
+			avgTimePerItem := elapsed / float64(processed)
+			remainingItems := exp.TotalItems - processed
+			eta := avgTimePerItem * float64(remainingItems)
+			etaSeconds = &eta
+		}
+	}
+
+	// Score metrics from ClickHouse
+	var scores map[string]*evaluation.ScoreMetrics
+	expIDStr := exp.ID.String()
+	if scoreAggs != nil {
+		scores = make(map[string]*evaluation.ScoreMetrics)
+		for scoreName, expScores := range scoreAggs {
+			if agg, ok := expScores[expIDStr]; ok {
+				scores[scoreName] = &evaluation.ScoreMetrics{
+					Mean:   agg.Mean,
+					StdDev: agg.StdDev,
+					Min:    agg.Min,
+					Max:    agg.Max,
+					Count:  agg.Count,
+				}
+			}
+		}
+	}
+
+	return &evaluation.ExperimentMetricsResponse{
+		ExperimentID: exp.ID.String(),
+		Status:       exp.Status,
+		Progress: evaluation.ExperimentProgressMetrics{
+			TotalItems:     exp.TotalItems,
+			CompletedItems: exp.CompletedItems,
+			FailedItems:    exp.FailedItems,
+			PendingItems:   pendingItems,
+			ProgressPct:    progressPct,
+			SuccessRate:    successRate,
+			ErrorRate:      errorRate,
+		},
+		Performance: evaluation.ExperimentPerformanceMetrics{
+			StartedAt:      exp.StartedAt,
+			CompletedAt:    exp.CompletedAt,
+			ElapsedSeconds: elapsedSeconds,
+			ETASeconds:     etaSeconds,
+		},
+		Scores: scores,
+	}
 }

@@ -82,6 +82,10 @@ type ExperimentService interface {
 	// IncrementAndCheckCompletion atomically increments counters and checks if experiment is complete.
 	// Returns true if the experiment was marked as complete.
 	IncrementAndCheckCompletion(ctx context.Context, id ulid.ULID, projectID ulid.ULID, completed, failed int) (bool, error)
+
+	// GetMetrics returns comprehensive metrics for an experiment including progress,
+	// performance, and score aggregations from ClickHouse.
+	GetMetrics(ctx context.Context, projectID, experimentID ulid.ULID) (*ExperimentMetricsResponse, error)
 }
 
 type ExperimentItemService interface {

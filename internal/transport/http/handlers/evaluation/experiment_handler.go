@@ -480,3 +480,36 @@ func (h *ExperimentHandler) GetProgress(c *gin.Context) {
 
 	response.Success(c, progress)
 }
+
+// @Summary Get experiment metrics
+// @Description Returns comprehensive metrics for an experiment including progress, performance, and score aggregations.
+// @Tags Experiments
+// @Produce json
+// @Param projectId path string true "Project ID"
+// @Param experimentId path string true "Experiment ID"
+// @Success 200 {object} evaluation.ExperimentMetricsResponse
+// @Failure 400 {object} response.ErrorResponse
+// @Failure 401 {object} response.ErrorResponse
+// @Failure 404 {object} response.ErrorResponse
+// @Router /api/v1/projects/{projectId}/experiments/{experimentId}/metrics [get]
+func (h *ExperimentHandler) GetMetrics(c *gin.Context) {
+	projectID, err := ulid.Parse(c.Param("projectId"))
+	if err != nil {
+		response.Error(c, appErrors.NewValidationError("projectId", "must be a valid ULID"))
+		return
+	}
+
+	experimentID, err := ulid.Parse(c.Param("experimentId"))
+	if err != nil {
+		response.Error(c, appErrors.NewValidationError("experimentId", "must be a valid ULID"))
+		return
+	}
+
+	metrics, err := h.service.GetMetrics(c.Request.Context(), projectID, experimentID)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	response.Success(c, metrics)
+}
