@@ -401,6 +401,8 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 			datasets.GET("/:datasetId/versions/:versionId/items", s.authMiddleware.RequirePermission("projects:read"), s.handlers.DatasetVersion.GetVersionItems)
 			datasets.POST("/:datasetId/pin", s.authMiddleware.RequirePermission("projects:write"), s.handlers.DatasetVersion.PinVersion)
 			datasets.GET("/:datasetId/info", s.authMiddleware.RequirePermission("projects:read"), s.handlers.DatasetVersion.GetDatasetWithVersionInfo)
+			// Dataset fields (for experiment wizard variable mapping)
+			datasets.GET("/:datasetId/fields", s.authMiddleware.RequirePermission("projects:read"), s.handlers.ExperimentWizard.GetDatasetFields)
 		}
 
 		experiments := projects.Group("/:projectId/experiments")
@@ -413,6 +415,13 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 			experiments.DELETE("/:experimentId", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Experiment.Delete)
 			experiments.POST("/:experimentId/rerun", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Experiment.Rerun)
 			experiments.GET("/:experimentId/items", s.authMiddleware.RequirePermission("projects:read"), s.handlers.ExperimentItem.List)
+			experiments.GET("/:experimentId/config", s.authMiddleware.RequirePermission("projects:read"), s.handlers.ExperimentWizard.GetExperimentConfig)
+			experiments.GET("/:experimentId/progress", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Experiment.GetProgress)
+
+			// Experiment wizard routes
+			experiments.POST("/wizard", s.authMiddleware.RequirePermission("projects:write"), s.handlers.ExperimentWizard.CreateFromWizard)
+			experiments.POST("/wizard/validate", s.authMiddleware.RequirePermission("projects:write"), s.handlers.ExperimentWizard.ValidateStep)
+			experiments.POST("/wizard/estimate", s.authMiddleware.RequirePermission("projects:read"), s.handlers.ExperimentWizard.EstimateCost)
 		}
 
 		evaluationRules := projects.Group("/:projectId/evaluations/rules")

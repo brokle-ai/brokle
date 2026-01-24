@@ -71,8 +71,9 @@ type Handlers struct {
 	Dataset        *evaluationHandler.DatasetHandler
 	DatasetItem    *evaluationHandler.DatasetItemHandler
 	DatasetVersion *evaluationHandler.DatasetVersionHandler
-	Experiment     *evaluationHandler.ExperimentHandler
-	ExperimentItem *evaluationHandler.ExperimentItemHandler
+	Experiment       *evaluationHandler.ExperimentHandler
+	ExperimentItem   *evaluationHandler.ExperimentItemHandler
+	ExperimentWizard *evaluationHandler.ExperimentWizardHandler
 	Rule          *evaluationHandler.RuleHandler
 	RuleExecution *evaluationHandler.RuleExecutionHandler
 	SpanQuery     *observability.SpanQueryHandler
@@ -122,6 +123,7 @@ func NewHandlers(
 	datasetVersionService evaluationDomain.DatasetVersionService,
 	experimentService evaluationDomain.ExperimentService,
 	experimentItemService evaluationDomain.ExperimentItemService,
+	experimentWizardService evaluationDomain.ExperimentWizardService,
 	ruleService evaluationDomain.RuleService,
 	ruleExecutionService evaluationDomain.RuleExecutionService,
 	dashboardService dashboardDomain.DashboardService,
@@ -168,8 +170,9 @@ func NewHandlers(
 		Dataset:        evaluationHandler.NewDatasetHandler(logger, datasetService, datasetItemService),
 		DatasetItem:    evaluationHandler.NewDatasetItemHandler(logger, datasetItemService),
 		DatasetVersion: evaluationHandler.NewDatasetVersionHandler(logger, datasetVersionService),
-		Experiment:     evaluationHandler.NewExperimentHandler(logger, experimentService, experimentItemService),
-		ExperimentItem: evaluationHandler.NewExperimentItemHandler(logger, experimentItemService),
+		Experiment:       evaluationHandler.NewExperimentHandler(logger, experimentService, experimentItemService),
+		ExperimentItem:   evaluationHandler.NewExperimentItemHandler(logger, experimentItemService),
+		ExperimentWizard: evaluationHandler.NewExperimentWizardHandler(logger, experimentWizardService),
 		Rule:          evaluationHandler.NewRuleHandler(ruleService),
 		RuleExecution: evaluationHandler.NewRuleExecutionHandler(ruleExecutionService),
 		SpanQuery:     observability.NewSpanQueryHandler(observabilityServices.SpanQueryService, logger),

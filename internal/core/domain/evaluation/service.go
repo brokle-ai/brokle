@@ -71,11 +71,41 @@ type ExperimentService interface {
 	// Rerun creates a new experiment based on an existing one, using the same dataset.
 	// The new experiment starts in pending status ready for SDK to run with a new task function.
 	Rerun(ctx context.Context, sourceID ulid.ULID, projectID ulid.ULID, req *RerunExperimentRequest) (*Experiment, error)
+
+	// Progress tracking methods
+	// GetProgress returns the current progress for an experiment
+	GetProgress(ctx context.Context, id ulid.ULID, projectID ulid.ULID) (*ExperimentProgressResponse, error)
+	// SetTotalItems sets the total number of items for an experiment
+	SetTotalItems(ctx context.Context, id ulid.ULID, projectID ulid.ULID, total int) error
+	// IncrementProgress atomically increments completed and/or failed counters
+	IncrementProgress(ctx context.Context, id ulid.ULID, projectID ulid.ULID, completed, failed int) error
+	// IncrementAndCheckCompletion atomically increments counters and checks if experiment is complete.
+	// Returns true if the experiment was marked as complete.
+	IncrementAndCheckCompletion(ctx context.Context, id ulid.ULID, projectID ulid.ULID, completed, failed int) (bool, error)
 }
 
 type ExperimentItemService interface {
 	CreateBatch(ctx context.Context, experimentID ulid.ULID, projectID ulid.ULID, req *CreateExperimentItemsBatchRequest) (int, error)
 	List(ctx context.Context, experimentID ulid.ULID, projectID ulid.ULID, limit, offset int) ([]*ExperimentItem, int64, error)
+}
+
+// ExperimentWizardService handles the creation and configuration of experiments via the dashboard wizard.
+type ExperimentWizardService interface {
+	// CreateFromWizard creates a new experiment from the wizard configuration.
+	// It creates both the experiment and its associated config, and optionally runs it immediately.
+	CreateFromWizard(ctx context.Context, projectID ulid.ULID, userID *ulid.ULID, req *CreateExperimentFromWizardRequest) (*Experiment, error)
+
+	// ValidateStep validates a specific step of the wizard.
+	ValidateStep(ctx context.Context, projectID ulid.ULID, req *ValidateStepRequest) (*ValidateStepResponse, error)
+
+	// EstimateCost estimates the cost of running an experiment with the given configuration.
+	EstimateCost(ctx context.Context, projectID ulid.ULID, req *EstimateCostRequest) (*EstimateCostResponse, error)
+
+	// GetDatasetFields returns the schema of dataset fields for variable mapping.
+	GetDatasetFields(ctx context.Context, projectID ulid.ULID, datasetID ulid.ULID) (*DatasetFieldsResponse, error)
+
+	// GetExperimentConfig returns the config for a specific experiment.
+	GetExperimentConfig(ctx context.Context, experimentID ulid.ULID, projectID ulid.ULID) (*ExperimentConfig, error)
 }
 
 type RuleService interface {

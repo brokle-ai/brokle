@@ -112,13 +112,15 @@ func (h *ExperimentHandler) List(c *gin.Context) {
 		case evaluationDomain.ExperimentStatusPending,
 			evaluationDomain.ExperimentStatusRunning,
 			evaluationDomain.ExperimentStatusCompleted,
-			evaluationDomain.ExperimentStatusFailed:
+			evaluationDomain.ExperimentStatusFailed,
+			evaluationDomain.ExperimentStatusPartial,
+			evaluationDomain.ExperimentStatusCancelled:
 			if filter == nil {
 				filter = &evaluationDomain.ExperimentFilter{}
 			}
 			filter.Status = &status
 		default:
-			response.Error(c, appErrors.NewValidationError("status", "must be pending, running, completed, or failed"))
+			response.Error(c, appErrors.NewValidationError("status", "must be pending, running, completed, failed, partial, or cancelled"))
 			return
 		}
 	}
@@ -444,4 +446,37 @@ func (h *ExperimentHandler) Rerun(c *gin.Context) {
 	)
 
 	response.Created(c, experiment.ToResponse())
+}
+
+// @Summary Get experiment progress
+// @Description Returns current progress for an experiment including item counts and ETA.
+// @Tags Experiments
+// @Produce json
+// @Param projectId path string true "Project ID"
+// @Param experimentId path string true "Experiment ID"
+// @Success 200 {object} evaluation.ExperimentProgressResponse
+// @Failure 400 {object} response.ErrorResponse
+// @Failure 401 {object} response.ErrorResponse
+// @Failure 404 {object} response.ErrorResponse
+// @Router /api/v1/projects/{projectId}/experiments/{experimentId}/progress [get]
+func (h *ExperimentHandler) GetProgress(c *gin.Context) {
+	projectID, err := ulid.Parse(c.Param("projectId"))
+	if err != nil {
+		response.Error(c, appErrors.NewValidationError("projectId", "must be a valid ULID"))
+		return
+	}
+
+	experimentID, err := ulid.Parse(c.Param("experimentId"))
+	if err != nil {
+		response.Error(c, appErrors.NewValidationError("experimentId", "must be a valid ULID"))
+		return
+	}
+
+	progress, err := h.service.GetProgress(c.Request.Context(), experimentID, projectID)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	response.Success(c, progress)
 }

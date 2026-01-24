@@ -327,3 +327,64 @@ func (s *experimentService) CompareExperiments(
 		Diffs:       diffs,
 	}, nil
 }
+
+// GetProgress returns the current progress for an experiment.
+func (s *experimentService) GetProgress(ctx context.Context, id ulid.ULID, projectID ulid.ULID) (*evaluation.ExperimentProgressResponse, error) {
+	exp, err := s.repo.GetProgress(ctx, id, projectID)
+	if err != nil {
+		if errors.Is(err, evaluation.ErrExperimentNotFound) {
+			return nil, appErrors.NewNotFoundError(fmt.Sprintf("experiment %s", id))
+		}
+		return nil, appErrors.NewInternalError("failed to get experiment progress", err)
+	}
+
+	return exp.ToProgressResponse(), nil
+}
+
+// SetTotalItems sets the total number of items for an experiment.
+func (s *experimentService) SetTotalItems(ctx context.Context, id ulid.ULID, projectID ulid.ULID, total int) error {
+	if total < 0 {
+		return appErrors.NewValidationError("total_items", "must be non-negative")
+	}
+
+	if err := s.repo.SetTotalItems(ctx, id, projectID, total); err != nil {
+		if errors.Is(err, evaluation.ErrExperimentNotFound) {
+			return appErrors.NewNotFoundError(fmt.Sprintf("experiment %s", id))
+		}
+		return appErrors.NewInternalError("failed to set total items", err)
+	}
+
+	return nil
+}
+
+// IncrementProgress atomically increments completed and/or failed counters.
+func (s *experimentService) IncrementProgress(ctx context.Context, id ulid.ULID, projectID ulid.ULID, completed, failed int) error {
+	if err := s.repo.IncrementCounters(ctx, id, projectID, completed, failed); err != nil {
+		if errors.Is(err, evaluation.ErrExperimentNotFound) {
+			return appErrors.NewNotFoundError(fmt.Sprintf("experiment %s", id))
+		}
+		return appErrors.NewInternalError("failed to increment progress", err)
+	}
+
+	return nil
+}
+
+// IncrementAndCheckCompletion atomically increments counters and checks if experiment is complete.
+func (s *experimentService) IncrementAndCheckCompletion(ctx context.Context, id ulid.ULID, projectID ulid.ULID, completed, failed int) (bool, error) {
+	isComplete, err := s.repo.IncrementCountersAndUpdateStatus(ctx, id, projectID, completed, failed)
+	if err != nil {
+		if errors.Is(err, evaluation.ErrExperimentNotFound) {
+			return false, appErrors.NewNotFoundError(fmt.Sprintf("experiment %s", id))
+		}
+		return false, appErrors.NewInternalError("failed to increment and check completion", err)
+	}
+
+	if isComplete {
+		s.logger.Info("experiment completed",
+			"experiment_id", id,
+			"project_id", projectID,
+		)
+	}
+
+	return isComplete, nil
+}

@@ -20,8 +20,9 @@ var (
 
 	ErrDatasetItemNotFound = errors.New("dataset item not found")
 
-	ErrExperimentNotFound     = errors.New("experiment not found")
-	ErrExperimentItemNotFound = errors.New("experiment item not found")
+	ErrExperimentNotFound       = errors.New("experiment not found")
+	ErrExperimentItemNotFound   = errors.New("experiment item not found")
+	ErrExperimentConfigNotFound = errors.New("experiment config not found")
 
 	ErrRuleNotFound        = errors.New("evaluation rule not found")
 	ErrRuleExists          = errors.New("evaluation rule with this name already exists")

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"brokle/internal/core/domain/evaluation"
+	"brokle/internal/infrastructure/shared"
 	"brokle/pkg/pagination"
 	"brokle/pkg/ulid"
 
@@ -20,8 +21,13 @@ func NewDatasetRepository(db *gorm.DB) *DatasetRepository {
 	return &DatasetRepository{db: db}
 }
 
+// getDB returns transaction-aware DB instance
+func (r *DatasetRepository) getDB(ctx context.Context) *gorm.DB {
+	return shared.GetDB(ctx, r.db)
+}
+
 func (r *DatasetRepository) Create(ctx context.Context, dataset *evaluation.Dataset) error {
-	result := r.db.WithContext(ctx).Create(dataset)
+	result := r.getDB(ctx).WithContext(ctx).Create(dataset)
 	if result.Error != nil {
 		if isUniqueViolation(result.Error) {
 			return evaluation.ErrDatasetExists
@@ -33,7 +39,7 @@ func (r *DatasetRepository) Create(ctx context.Context, dataset *evaluation.Data
 
 func (r *DatasetRepository) GetByID(ctx context.Context, id ulid.ULID, projectID ulid.ULID) (*evaluation.Dataset, error) {
 	var dataset evaluation.Dataset
-	result := r.db.WithContext(ctx).
+	result := r.getDB(ctx).WithContext(ctx).
 		Where("id = ? AND project_id = ?", id.String(), projectID.String()).
 		First(&dataset)
 
@@ -48,7 +54,7 @@ func (r *DatasetRepository) GetByID(ctx context.Context, id ulid.ULID, projectID
 
 func (r *DatasetRepository) GetByName(ctx context.Context, projectID ulid.ULID, name string) (*evaluation.Dataset, error) {
 	var dataset evaluation.Dataset
-	result := r.db.WithContext(ctx).
+	result := r.getDB(ctx).WithContext(ctx).
 		Where("project_id = ? AND name = ?", projectID.String(), name).
 		First(&dataset)
 
@@ -63,7 +69,7 @@ func (r *DatasetRepository) GetByName(ctx context.Context, projectID ulid.ULID, 
 
 func (r *DatasetRepository) List(ctx context.Context, projectID ulid.ULID) ([]*evaluation.Dataset, error) {
 	var datasets []*evaluation.Dataset
-	result := r.db.WithContext(ctx).
+	result := r.getDB(ctx).WithContext(ctx).
 		Where("project_id = ?", projectID.String()).
 		Order("created_at DESC").
 		Find(&datasets)
@@ -75,7 +81,7 @@ func (r *DatasetRepository) List(ctx context.Context, projectID ulid.ULID) ([]*e
 }
 
 func (r *DatasetRepository) Update(ctx context.Context, dataset *evaluation.Dataset, projectID ulid.ULID) error {
-	result := r.db.WithContext(ctx).
+	result := r.getDB(ctx).WithContext(ctx).
 		Where("id = ? AND project_id = ?", dataset.ID.String(), projectID.String()).
 		Save(dataset)
 
@@ -93,7 +99,7 @@ func (r *DatasetRepository) Update(ctx context.Context, dataset *evaluation.Data
 }
 
 func (r *DatasetRepository) Delete(ctx context.Context, id ulid.ULID, projectID ulid.ULID) error {
-	result := r.db.WithContext(ctx).
+	result := r.getDB(ctx).WithContext(ctx).
 		Where("id = ? AND project_id = ?", id.String(), projectID.String()).
 		Delete(&evaluation.Dataset{})
 
@@ -109,7 +115,7 @@ func (r *DatasetRepository) Delete(ctx context.Context, id ulid.ULID, projectID 
 
 func (r *DatasetRepository) ExistsByName(ctx context.Context, projectID ulid.ULID, name string) (bool, error) {
 	var count int64
-	result := r.db.WithContext(ctx).
+	result := r.getDB(ctx).WithContext(ctx).
 		Model(&evaluation.Dataset{}).
 		Where("project_id = ? AND name = ?", projectID.String(), name).
 		Count(&count)
@@ -138,7 +144,7 @@ func (r *DatasetRepository) ListWithFilters(
 	}
 
 	// Build base query for counting (without sorting and pagination)
-	baseQuery := r.db.WithContext(ctx).
+	baseQuery := r.getDB(ctx).WithContext(ctx).
 		Model(&evaluation.Dataset{}).
 		Where("project_id = ?", projectID.String())
 
@@ -160,7 +166,7 @@ func (r *DatasetRepository) ListWithFilters(
 
 	// Build the query with item counts using a subquery
 	// This uses LEFT JOIN with a subquery to count items for each dataset
-	selectQuery := r.db.WithContext(ctx).
+	selectQuery := r.getDB(ctx).WithContext(ctx).
 		Table("datasets d").
 		Select("d.*, COALESCE(item_counts.count, 0) as item_count").
 		Joins("LEFT JOIN (SELECT dataset_id, COUNT(*) as count FROM dataset_items GROUP BY dataset_id) item_counts ON item_counts.dataset_id = d.id").

@@ -1,4 +1,12 @@
-export type ExperimentStatus = 'pending' | 'running' | 'completed' | 'failed'
+export type ExperimentStatus =
+  | 'pending'
+  | 'running'
+  | 'completed'
+  | 'failed'
+  | 'partial'
+  | 'cancelled'
+
+export type ExperimentSource = 'sdk' | 'dashboard'
 
 export interface Experiment {
   id: string
@@ -7,11 +15,30 @@ export interface Experiment {
   name: string
   description: string | null
   status: ExperimentStatus
+  source: ExperimentSource
+  config_id: string | null
   metadata: Record<string, unknown>
+  total_items: number
+  completed_items: number
+  failed_items: number
   started_at: string | null
   completed_at: string | null
   created_at: string
   updated_at: string
+}
+
+export interface ExperimentProgress {
+  id: string
+  status: ExperimentStatus
+  total_items: number
+  completed_items: number
+  failed_items: number
+  pending_items: number
+  progress_pct: number
+  started_at?: string
+  completed_at?: string
+  elapsed_seconds?: number
+  eta_seconds?: number
 }
 
 export interface ExperimentItem {
@@ -93,3 +120,6 @@ export interface ScoreComparisonRow {
     }
   >
 }
+
+// Re-export wizard types
+export * from './wizard'

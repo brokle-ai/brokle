@@ -1,15 +1,18 @@
 'use client'
 
-import { FlaskConical } from 'lucide-react'
+import { useState } from 'react'
+import { FlaskConical, Wand2 } from 'lucide-react'
 import { ExperimentsProvider, useExperiments } from '../context/experiments-context'
 import { ExperimentsTable } from './experiment-table'
 import { ExperimentsDialogs } from './experiments-dialogs'
 import { CreateExperimentDialog } from './create-experiment-dialog'
+import { ExperimentWizardDialog } from './wizard'
 import { useProjectExperiments } from '../hooks/use-project-experiments'
 import { useExperimentsTableState } from '../hooks/use-experiments-table-state'
 import { PageHeader } from '@/components/layout/page-header'
 import { DataTableEmptyState } from '@/components/data-table'
 import { LoadingSpinner } from '@/components/guards/loading-spinner'
+import { Button } from '@/components/ui/button'
 
 interface ExperimentsProps {
   projectSlug: string
@@ -20,6 +23,7 @@ function ExperimentsContent() {
   const { data, totalCount, isLoading, isFetching, error, refetch } =
     useProjectExperiments()
   const tableState = useExperimentsTableState()
+  const [wizardOpen, setWizardOpen] = useState(false)
 
   // Check if there are active filters
   const hasActiveFilters = tableState.hasActiveFilters
@@ -33,7 +37,15 @@ function ExperimentsContent() {
   return (
     <>
       <PageHeader title="Experiments">
-        {projectId && <CreateExperimentDialog projectId={projectId} />}
+        <div className="flex items-center gap-2">
+          {projectId && (
+            <Button variant="outline" onClick={() => setWizardOpen(true)}>
+              <Wand2 className="mr-2 h-4 w-4" />
+              Create with Wizard
+            </Button>
+          )}
+          {projectId && <CreateExperimentDialog projectId={projectId} />}
+        </div>
       </PageHeader>
       <div className="-mx-4 flex flex-1 flex-col overflow-auto px-4 py-1">
         {isInitialLoad && (
@@ -84,6 +96,11 @@ function ExperimentsContent() {
         )}
       </div>
       <ExperimentsDialogs />
+      <ExperimentWizardDialog
+        open={wizardOpen}
+        onOpenChange={setWizardOpen}
+        onSuccess={() => refetch()}
+      />
     </>
   )
 }

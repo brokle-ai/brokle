@@ -70,6 +70,17 @@ type ExperimentRepository interface {
 	List(ctx context.Context, projectID ulid.ULID, filter *ExperimentFilter) ([]*Experiment, error)
 	Update(ctx context.Context, experiment *Experiment, projectID ulid.ULID) error
 	Delete(ctx context.Context, id ulid.ULID, projectID ulid.ULID) error
+
+	// Progress tracking methods
+	// SetTotalItems sets the total number of items for an experiment
+	SetTotalItems(ctx context.Context, id, projectID ulid.ULID, total int) error
+	// IncrementCounters atomically increments completed and/or failed counters
+	IncrementCounters(ctx context.Context, id, projectID ulid.ULID, completed, failed int) error
+	// IncrementCountersAndUpdateStatus atomically increments counters and updates status if complete.
+	// Returns true if the experiment was marked as complete (completed, failed, or partial).
+	IncrementCountersAndUpdateStatus(ctx context.Context, id, projectID ulid.ULID, completed, failed int) (bool, error)
+	// GetProgress gets minimal experiment data for progress polling
+	GetProgress(ctx context.Context, id, projectID ulid.ULID) (*Experiment, error)
 }
 
 type ExperimentItemRepository interface {
@@ -77,6 +88,20 @@ type ExperimentItemRepository interface {
 	CreateBatch(ctx context.Context, items []*ExperimentItem) error
 	List(ctx context.Context, experimentID ulid.ULID, limit, offset int) ([]*ExperimentItem, int64, error)
 	CountByExperiment(ctx context.Context, experimentID ulid.ULID) (int64, error)
+}
+
+// ExperimentConfigRepository handles persistence for experiment configurations created via the wizard.
+type ExperimentConfigRepository interface {
+	// Create creates a new experiment config
+	Create(ctx context.Context, config *ExperimentConfig) error
+	// GetByID gets an experiment config by its ID
+	GetByID(ctx context.Context, id ulid.ULID) (*ExperimentConfig, error)
+	// GetByExperimentID gets the config for a specific experiment
+	GetByExperimentID(ctx context.Context, experimentID ulid.ULID) (*ExperimentConfig, error)
+	// Update updates an existing experiment config
+	Update(ctx context.Context, config *ExperimentConfig) error
+	// Delete deletes an experiment config
+	Delete(ctx context.Context, id ulid.ULID) error
 }
 
 type RuleRepository interface {

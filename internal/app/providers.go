@@ -245,6 +245,7 @@ type EvaluationRepositories struct {
 	DatasetVersion      evaluationDomain.DatasetVersionRepository
 	Experiment          evaluationDomain.ExperimentRepository
 	ExperimentItem      evaluationDomain.ExperimentItemRepository
+	ExperimentConfig    evaluationDomain.ExperimentConfigRepository
 	Rule          evaluationDomain.RuleRepository
 	RuleExecution evaluationDomain.RuleExecutionRepository
 }
@@ -316,6 +317,7 @@ type EvaluationServices struct {
 	DatasetVersion      evaluationDomain.DatasetVersionService
 	Experiment          evaluationDomain.ExperimentService
 	ExperimentItem      evaluationDomain.ExperimentItemService
+	ExperimentWizard    evaluationDomain.ExperimentWizardService
 	Rule          evaluationDomain.RuleService
 	RuleExecution evaluationDomain.RuleExecutionService
 }
@@ -573,7 +575,7 @@ func ProvideServerServices(core *CoreContainer) *ServiceContainer {
 		logger,
 	)
 
-	evaluationServices := ProvideEvaluationServices(core.Transactor, repos.Evaluation, repos.Observability, observabilityServices, databases.Redis, logger)
+	evaluationServices := ProvideEvaluationServices(core.Transactor, repos.Evaluation, repos.Observability, observabilityServices, repos.Prompt, databases.Redis, logger)
 
 	dashboardServices := ProvideDashboardServices(repos.Dashboard, logger)
 
@@ -640,7 +642,7 @@ func ProvideWorkerServices(core *CoreContainer) *ServiceContainer {
 	}
 
 	// Evaluation services needed for rule worker
-	evaluationServices := ProvideEvaluationServices(core.Transactor, repos.Evaluation, repos.Observability, observabilityServices, databases.Redis, logger)
+	evaluationServices := ProvideEvaluationServices(core.Transactor, repos.Evaluation, repos.Observability, observabilityServices, repos.Prompt, databases.Redis, logger)
 
 	return &ServiceContainer{
 		User:                nil, // Worker doesn't need auth/user/org services
@@ -683,6 +685,7 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 	var datasetVersionSvc evaluationDomain.DatasetVersionService
 	var experimentSvc evaluationDomain.ExperimentService
 	var experimentItemSvc evaluationDomain.ExperimentItemService
+	var experimentWizardSvc evaluationDomain.ExperimentWizardService
 	var ruleSvc evaluationDomain.RuleService
 	var ruleExecutionSvc evaluationDomain.RuleExecutionService
 	if core.Services.Evaluation != nil {
@@ -692,6 +695,7 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 		datasetVersionSvc = core.Services.Evaluation.DatasetVersion
 		experimentSvc = core.Services.Evaluation.Experiment
 		experimentItemSvc = core.Services.Evaluation.ExperimentItem
+		experimentWizardSvc = core.Services.Evaluation.ExperimentWizard
 		ruleSvc = core.Services.Evaluation.Rule
 		ruleExecutionSvc = core.Services.Evaluation.RuleExecution
 	}
@@ -737,6 +741,7 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 		datasetVersionSvc,
 		experimentSvc,
 		experimentItemSvc,
+		experimentWizardSvc,
 		ruleSvc,
 		ruleExecutionSvc,
 		dashboardSvc,
@@ -919,6 +924,7 @@ func ProvideEvaluationRepositories(db *gorm.DB) *EvaluationRepositories {
 		DatasetVersion:     evaluationRepo.NewDatasetVersionRepository(db),
 		Experiment:         evaluationRepo.NewExperimentRepository(db),
 		ExperimentItem:     evaluationRepo.NewExperimentItemRepository(db),
+		ExperimentConfig:   evaluationRepo.NewExperimentConfigRepository(db),
 		Rule:          evaluationRepo.NewRuleRepository(db),
 		RuleExecution: evaluationRepo.NewRuleExecutionRepository(db),
 	}
@@ -1345,6 +1351,7 @@ func ProvideEvaluationServices(
 	evaluationRepos *EvaluationRepositories,
 	observabilityRepos *ObservabilityRepositories,
 	observabilityServices *observabilityService.ServiceRegistry,
+	promptRepos *PromptRepositories,
 	redisDB *database.RedisDB,
 	logger *slog.Logger,
 ) *EvaluationServices {
@@ -1389,6 +1396,18 @@ func ProvideEvaluationServices(
 		logger,
 	)
 
+	experimentWizardSvc := evaluationService.NewExperimentWizardService(
+		transactor,
+		evaluationRepos.Experiment,
+		evaluationRepos.ExperimentConfig,
+		evaluationRepos.Dataset,
+		evaluationRepos.DatasetItem,
+		evaluationRepos.DatasetVersion,
+		promptRepos.Prompt,
+		promptRepos.Version,
+		logger,
+	)
+
 	// RuleExecutionService must be created before RuleService since RuleService depends on it
 	ruleExecutionSvc := evaluationService.NewRuleExecutionService(
 		evaluationRepos.RuleExecution,
@@ -1409,6 +1428,7 @@ func ProvideEvaluationServices(
 		DatasetVersion:     datasetVersionSvc,
 		Experiment:         experimentSvc,
 		ExperimentItem:     experimentItemSvc,
+		ExperimentWizard:   experimentWizardSvc,
 		Rule:          ruleSvc,
 		RuleExecution: ruleExecutionSvc,
 	}
