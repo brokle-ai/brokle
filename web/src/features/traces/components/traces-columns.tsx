@@ -9,9 +9,51 @@ import { statuses, statusCodeToString } from '../data/constants'
 import type { Trace } from '../data/schema'
 import { formatDuration, formatCost } from '../utils/format-helpers'
 import { formatDistanceToNow } from 'date-fns'
-import { Copy } from 'lucide-react'
+import { Copy, Star } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from '@/components/ui/hover-card'
+import { ScoreTagList, type Score as ScoresFeatureScore } from '@/features/scores'
+import type { Score } from '../data/schema'
+
+// Convert traces Score to scores feature Score for ScoreTagList
+function toScoresFeatureScore(score: Score): ScoresFeatureScore {
+  return {
+    id: score.id,
+    project_id: score.project_id,
+    trace_id: score.trace_id,
+    span_id: score.span_id,
+    name: score.name,
+    value: score.value,
+    string_value: score.string_value,
+    data_type: score.data_type as ScoresFeatureScore['data_type'],
+    source: mapSource(score.source),
+    reason: score.comment,
+    metadata: score.evaluator_config as Record<string, unknown>,
+    timestamp: score.timestamp instanceof Date
+      ? score.timestamp.toISOString()
+      : String(score.timestamp),
+  }
+}
+
+function mapSource(source: string): ScoresFeatureScore['source'] {
+  const sourceMap: Record<string, ScoresFeatureScore['source']> = {
+    API: 'code',
+    api: 'code',
+    code: 'code',
+    EVAL: 'llm',
+    eval: 'llm',
+    llm: 'llm',
+    ANNOTATION: 'human',
+    annotation: 'human',
+    human: 'human',
+  }
+  return sourceMap[source] || 'code'
+}
 
 export const tracesColumns: ColumnDef<Trace>[] = [
   {
@@ -200,6 +242,45 @@ export const tracesColumns: ColumnDef<Trace>[] = [
       )
     },
     enableSorting: true,
+  },
+  {
+    accessorKey: 'scores',
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title='Scores' />
+    ),
+    cell: ({ row }) => {
+      const scores = row.original.scores
+      const count = scores?.length ?? 0
+
+      if (count === 0) {
+        return <span className='text-muted-foreground text-sm'>—</span>
+      }
+
+      const convertedScores = scores!.map(toScoresFeatureScore)
+
+      return (
+        <HoverCard openDelay={300}>
+          <HoverCardTrigger asChild>
+            <Badge
+              variant='secondary'
+              className='font-mono cursor-pointer hover:bg-secondary/80 gap-1'
+            >
+              <Star className='h-3 w-3' />
+              {count}
+            </Badge>
+          </HoverCardTrigger>
+          <HoverCardContent className='w-auto max-w-xs' align='start'>
+            <div className='space-y-2'>
+              <div className='text-xs font-medium text-muted-foreground'>
+                Scores ({count})
+              </div>
+              <ScoreTagList scores={convertedScores} maxVisible={5} />
+            </div>
+          </HoverCardContent>
+        </HoverCard>
+      )
+    },
+    enableSorting: false,
   },
   {
     accessorKey: 'start_time',

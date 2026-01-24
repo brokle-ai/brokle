@@ -6,9 +6,11 @@ import { traceQueryKeys } from './trace-query-keys'
 import {
   getTraceScores,
   createAnnotation,
+  updateAnnotation,
   deleteAnnotation,
   type Annotation,
   type CreateAnnotationRequest,
+  type UpdateAnnotationRequest,
 } from '../api/scores-api'
 
 /**
@@ -77,6 +79,28 @@ export function useCreateAnnotation(projectId: string, traceId: string) {
     },
     onError: (error: Error) => {
       toast.error(error.message || 'Failed to add annotation')
+    },
+  })
+}
+
+/**
+ * Hook for updating an annotation
+ */
+export function useUpdateAnnotation(projectId: string, traceId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ scoreId, data }: { scoreId: string; data: UpdateAnnotationRequest }) =>
+      updateAnnotation(projectId, traceId, scoreId, data),
+    onSuccess: () => {
+      // Invalidate scores list
+      queryClient.invalidateQueries({
+        queryKey: traceQueryKeys.scores(projectId, traceId),
+      })
+      toast.success('Annotation updated')
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to update annotation')
     },
   })
 }
