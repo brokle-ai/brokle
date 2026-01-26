@@ -1,14 +1,15 @@
 'use client'
 
-import { ClipboardList, Search, Loader2 } from 'lucide-react'
-import { Input } from '@/components/ui/input'
-import { useState, useMemo } from 'react'
-import { QueueList } from './queue-list'
+import { useMemo } from 'react'
+import { ClipboardList } from 'lucide-react'
+import { QueuesTable } from './queues-table'
 import { QueueDialogs } from './queue-dialogs'
 import { CreateQueueDialog } from './create-queue-dialog'
-import { AnnotationQueuesProvider } from '../context/annotation-queues-context'
+import { AnnotationQueuesProvider, useAnnotationQueues } from '../context/annotation-queues-context'
 import { useAnnotationQueuesQuery } from '../hooks/use-annotation-queues'
+import { useQueuesTableState } from '../hooks/use-queues-table-state'
 import { useProjectOnly } from '@/features/projects'
+import type { QueueWithStats, AnnotationQueue } from '../types'
 
 interface QueuesContentProps {
   projectSlug: string
@@ -17,27 +18,91 @@ interface QueuesContentProps {
 export function QueuesContent({ projectSlug }: QueuesContentProps) {
   return (
     <AnnotationQueuesProvider projectSlug={projectSlug}>
-      <QueuesContentInner />
+      <QueuesContentInner projectSlug={projectSlug} />
     </AnnotationQueuesProvider>
   )
 }
 
-function QueuesContentInner() {
+function QueuesContentInner({ projectSlug }: { projectSlug: string }) {
   const { currentProject } = useProjectOnly()
+  const { setOpen, setCurrentRow } = useAnnotationQueues()
   const projectId = currentProject?.id
   const { data: queues, isLoading, error } = useAnnotationQueuesQuery(projectId)
-  const [searchTerm, setSearchTerm] = useState('')
 
-  const filteredQueues = useMemo(() => {
+  // URL state management
+  const {
+    search,
+    status,
+    sortBy,
+    sortOrder,
+    setSearch,
+    setStatus,
+    setSorting,
+    resetAll,
+    hasActiveFilters,
+  } = useQueuesTableState()
+
+  // Filter and sort data locally (server-side pagination can be added later)
+  const filteredAndSortedQueues = useMemo(() => {
     if (!queues) return []
-    if (!searchTerm) return queues
-    const lowerSearch = searchTerm.toLowerCase()
-    return queues.filter(
-      (q) =>
-        q.queue.name.toLowerCase().includes(lowerSearch) ||
-        q.queue.description?.toLowerCase().includes(lowerSearch)
-    )
-  }, [queues, searchTerm])
+
+    let result = [...queues]
+
+    // Apply search filter
+    if (search) {
+      const lowerSearch = search.toLowerCase()
+      result = result.filter(
+        (q) =>
+          q.queue.name.toLowerCase().includes(lowerSearch) ||
+          q.queue.description?.toLowerCase().includes(lowerSearch)
+      )
+    }
+
+    // Apply status filter
+    if (status) {
+      result = result.filter((q) => q.queue.status === status)
+    }
+
+    // Apply sorting
+    result.sort((a, b) => {
+      let comparison = 0
+      switch (sortBy) {
+        case 'name':
+          comparison = a.queue.name.localeCompare(b.queue.name)
+          break
+        case 'status':
+          comparison = a.queue.status.localeCompare(b.queue.status)
+          break
+        case 'created_at':
+          comparison = new Date(a.queue.created_at).getTime() - new Date(b.queue.created_at).getTime()
+          break
+        case 'updated_at':
+          comparison = new Date(a.queue.updated_at).getTime() - new Date(b.queue.updated_at).getTime()
+          break
+        default:
+          comparison = 0
+      }
+      return sortOrder === 'desc' ? -comparison : comparison
+    })
+
+    return result
+  }, [queues, search, status, sortBy, sortOrder])
+
+  // Action handlers
+  const handleEdit = (queue: AnnotationQueue) => {
+    setCurrentRow(queue)
+    setOpen('edit')
+  }
+
+  const handleAddItems = (queue: AnnotationQueue) => {
+    setCurrentRow(queue)
+    setOpen('add-items')
+  }
+
+  const handleDelete = (queue: AnnotationQueue) => {
+    setCurrentRow(queue)
+    setOpen('delete')
+  }
 
   return (
     <div className="space-y-6">
@@ -52,33 +117,46 @@ function QueuesContentInner() {
         {projectId && <CreateQueueDialog projectId={projectId} />}
       </div>
 
-      {/* Search */}
-      <div className="flex items-center gap-4">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search queues..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-      </div>
-
       {/* Content */}
       {isLoading ? (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
+        <QueuesTable
+          data={[]}
+          projectSlug={projectSlug}
+          loading={true}
+          search={search}
+          status={status}
+          sortBy={sortBy}
+          sortOrder={sortOrder}
+          onSearchChange={setSearch}
+          onStatusChange={setStatus}
+          onSortChange={setSorting}
+          onReset={resetAll}
+          hasActiveFilters={hasActiveFilters}
+        />
       ) : error ? (
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <p className="text-muted-foreground mb-2">Failed to load annotation queues</p>
           <p className="text-sm text-destructive">{(error as Error).message}</p>
         </div>
-      ) : filteredQueues.length === 0 ? (
-        <EmptyState hasSearch={!!searchTerm} />
+      ) : filteredAndSortedQueues.length === 0 && !hasActiveFilters ? (
+        <EmptyState />
       ) : (
-        <QueueList data={filteredQueues} />
+        <QueuesTable
+          data={filteredAndSortedQueues}
+          projectSlug={projectSlug}
+          search={search}
+          status={status}
+          sortBy={sortBy}
+          sortOrder={sortOrder}
+          onSearchChange={setSearch}
+          onStatusChange={setStatus}
+          onSortChange={setSorting}
+          onReset={resetAll}
+          hasActiveFilters={hasActiveFilters}
+          onEdit={handleEdit}
+          onAddItems={handleAddItems}
+          onDelete={handleDelete}
+        />
       )}
 
       {/* Dialogs */}
@@ -87,27 +165,16 @@ function QueuesContentInner() {
   )
 }
 
-function EmptyState({ hasSearch }: { hasSearch: boolean }) {
+function EmptyState() {
   return (
     <div className="flex flex-col items-center justify-center py-12 text-center">
       <div className="rounded-full bg-muted p-4 mb-4">
         <ClipboardList className="h-8 w-8 text-muted-foreground" />
       </div>
-      {hasSearch ? (
-        <>
-          <h3 className="font-semibold mb-1">No queues found</h3>
-          <p className="text-sm text-muted-foreground">
-            Try adjusting your search term.
-          </p>
-        </>
-      ) : (
-        <>
-          <h3 className="font-semibold mb-1">No annotation queues yet</h3>
-          <p className="text-sm text-muted-foreground mb-4">
-            Create a queue to start collecting human feedback on your AI outputs.
-          </p>
-        </>
-      )}
+      <h3 className="font-semibold mb-1">No annotation queues yet</h3>
+      <p className="text-sm text-muted-foreground mb-4">
+        Create a queue to start collecting human feedback on your AI outputs.
+      </p>
     </div>
   )
 }

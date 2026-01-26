@@ -3,8 +3,8 @@
 import { useEffect } from 'react'
 import { Label } from '@/components/ui/label'
 import { Slider } from '@/components/ui/slider'
-import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import {
   Select,
   SelectContent,
@@ -194,6 +194,26 @@ function NumericScoreInput({
   )
 }
 
+/**
+ * Smart input selection logic (Opik + Langfuse combined pattern)
+ *
+ * Uses ToggleGroup for ≤4 categories with short names (≤10 chars each)
+ * Uses Select dropdown for many categories or long names
+ */
+function shouldUseToggleGroup(categories: string[]): boolean {
+  const MAX_TOGGLE_CATEGORIES = 4
+  const MAX_LABEL_LENGTH = 10 // Opik uses 10 chars
+
+  // Too many categories → use Select
+  if (categories.length > MAX_TOGGLE_CATEGORIES) return false
+
+  // Any long category name → use Select (prevents overflow)
+  const hasLongNames = categories.some((cat) => cat.length > MAX_LABEL_LENGTH)
+  if (hasLongNames) return false
+
+  return true
+}
+
 function CategoricalScoreInput({
   config,
   value,
@@ -206,6 +226,7 @@ function CategoricalScoreInput({
   onChange: (value: string, comment?: string) => void
 }) {
   const categories = config.categories ?? ['Good', 'Bad']
+  const useToggle = shouldUseToggleGroup(categories)
 
   return (
     <div className="space-y-3 rounded-lg border p-4">
@@ -215,18 +236,43 @@ function CategoricalScoreInput({
           <p className="text-xs text-muted-foreground mt-0.5">{config.description}</p>
         )}
       </div>
-      <Select value={value} onValueChange={(val) => onChange(val, comment)}>
-        <SelectTrigger>
-          <SelectValue placeholder="Select a value" />
-        </SelectTrigger>
-        <SelectContent>
-          {categories.map((category) => (
-            <SelectItem key={category} value={category}>
-              {category}
-            </SelectItem>
+
+      {/* Smart input: ToggleGroup for ≤4 short categories, Select otherwise */}
+      {useToggle ? (
+        <ToggleGroup
+          type="single"
+          value={value ?? ''}
+          onValueChange={(val) => {
+            if (val) onChange(val, comment)
+          }}
+          className="justify-start flex-wrap"
+        >
+          {categories.map((cat) => (
+            <ToggleGroupItem
+              key={cat}
+              value={cat}
+              aria-label={cat}
+              className="px-3 py-1.5 text-sm"
+            >
+              {cat}
+            </ToggleGroupItem>
           ))}
-        </SelectContent>
-      </Select>
+        </ToggleGroup>
+      ) : (
+        <Select value={value} onValueChange={(val) => onChange(val, comment)}>
+          <SelectTrigger>
+            <SelectValue placeholder="Select a value" />
+          </SelectTrigger>
+          <SelectContent>
+            {categories.map((category) => (
+              <SelectItem key={category} value={category}>
+                {category}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
+
       <Textarea
         placeholder="Optional comment..."
         value={comment ?? ''}
@@ -249,31 +295,48 @@ function BooleanScoreInput({
   comment?: string
   onChange: (value: boolean, comment?: string) => void
 }) {
-  const currentValue = value ?? false
+  // Convert boolean to string for ToggleGroup
+  const stringValue = value === true ? 'true' : value === false ? 'false' : ''
 
   return (
     <div className="space-y-3 rounded-lg border p-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <Label className="font-medium">{config.name}</Label>
-          {config.description && (
-            <p className="text-xs text-muted-foreground mt-0.5">{config.description}</p>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">
-            {currentValue ? 'Yes' : 'No'}
-          </span>
-          <Switch
-            checked={currentValue}
-            onCheckedChange={(val) => onChange(val, comment)}
-          />
-        </div>
+      <div>
+        <Label className="font-medium">{config.name}</Label>
+        {config.description && (
+          <p className="text-xs text-muted-foreground mt-0.5">{config.description}</p>
+        )}
       </div>
+
+      {/* Two-button toggle for boolean values (clearer than Switch) */}
+      <ToggleGroup
+        type="single"
+        value={stringValue}
+        onValueChange={(val) => {
+          if (val === 'true') onChange(true, comment)
+          else if (val === 'false') onChange(false, comment)
+        }}
+        className="justify-start"
+      >
+        <ToggleGroupItem
+          value="true"
+          aria-label="Yes"
+          className="px-4 py-1.5 text-sm data-[state=on]:bg-green-100 data-[state=on]:text-green-700 dark:data-[state=on]:bg-green-900 dark:data-[state=on]:text-green-300"
+        >
+          Yes
+        </ToggleGroupItem>
+        <ToggleGroupItem
+          value="false"
+          aria-label="No"
+          className="px-4 py-1.5 text-sm data-[state=on]:bg-red-100 data-[state=on]:text-red-700 dark:data-[state=on]:bg-red-900 dark:data-[state=on]:text-red-300"
+        >
+          No
+        </ToggleGroupItem>
+      </ToggleGroup>
+
       <Textarea
         placeholder="Optional comment..."
         value={comment ?? ''}
-        onChange={(e) => onChange(currentValue, e.target.value || undefined)}
+        onChange={(e) => onChange(value ?? false, e.target.value || undefined)}
         rows={2}
         className="text-sm"
       />

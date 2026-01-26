@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -8,6 +8,11 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from '@/components/ui/resizable'
 import {
   Collapsible,
   CollapsibleContent,
@@ -24,13 +29,19 @@ import {
   Clock,
   Coins,
   Cpu,
+  Unlock,
 } from 'lucide-react'
 import { ScoreInputForm } from './score-input-form'
+import { SkipReasonDialog } from './skip-reason-dialog'
+import { ProgressIndicator } from './progress-indicator'
+import { KeyboardShortcutHint } from './keyboard-shortcut-hint'
+import { useAnnotationKeyboard } from '../hooks/use-annotation-keyboard'
 import {
   useClaimNextItemMutation,
   useCompleteItemMutation,
   useSkipItemMutation,
   useReleaseItemMutation,
+  useQueueStatsQuery,
 } from '../hooks/use-annotation-queues'
 import { getTraceById, getSpansForTrace, getSpanById } from '@/features/traces/api/traces-api'
 import { traceQueryKeys } from '@/features/traces/hooks/trace-query-keys'
@@ -242,6 +253,40 @@ function TraceViewer({ trace, spans, objectType, objectId, isLoading }: TraceVie
 }
 
 // ============================================================================
+// Instructions Panel
+// ============================================================================
+
+interface InstructionsPanelProps {
+  instructions: string | undefined
+  compact?: boolean
+}
+
+function InstructionsPanel({ instructions, compact = false }: InstructionsPanelProps) {
+  const [isOpen, setIsOpen] = useState(!compact)
+
+  if (!instructions) return null
+
+  return (
+    <Collapsible open={isOpen} onOpenChange={setIsOpen} className="mb-4">
+      <CollapsibleTrigger className="flex items-center gap-2 w-full py-2 hover:bg-muted/50 rounded-md px-2 -mx-2 text-sm">
+        {isOpen ? (
+          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+        ) : (
+          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+        )}
+        <Info className="h-4 w-4 text-blue-500" />
+        <span className="font-medium">Instructions</span>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900 rounded-md">
+          <p className="text-sm whitespace-pre-wrap">{instructions}</p>
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  )
+}
+
+// ============================================================================
 // Main Component
 // ============================================================================
 
@@ -264,11 +309,16 @@ export function AnnotationPanel({
 }: AnnotationPanelProps) {
   const [seenItemIds, setSeenItemIds] = useState<string[]>([])
   const [scores, setScores] = useState<ScoreSubmission[]>([])
+  const [showSkipDialog, setShowSkipDialog] = useState(false)
+  const commentRef = useRef<HTMLTextAreaElement>(null)
 
   const claimMutation = useClaimNextItemMutation(projectId, queue.id)
   const completeMutation = useCompleteItemMutation(projectId, queue.id)
   const skipMutation = useSkipItemMutation(projectId, queue.id)
   const releaseMutation = useReleaseItemMutation(projectId, queue.id)
+
+  // Fetch queue stats for progress indicator
+  const { data: stats } = useQueueStatsQuery(projectId, queue.id)
 
   // Fetch trace data when item is claimed
   const { data: trace, isLoading: isTraceLoading } = useQuery<Trace | null, Error>({
@@ -288,7 +338,7 @@ export function AnnotationPanel({
 
   // Fetch spans for the trace
   const { data: spans = [], isLoading: isSpansLoading } = useQuery<Span[], Error>({
-    queryKey: traceQueryKeys.spans(projectId, trace?.trace_id || ''),
+    queryKey: traceQueryKeys.spans(projectId, { traceId: trace?.trace_id }),
     queryFn: (): Promise<Span[]> => getSpansForTrace(projectId, trace!.trace_id),
     enabled: !!trace?.trace_id,
     staleTime: 30_000,
@@ -322,14 +372,15 @@ export function AnnotationPanel({
     }
   }, [currentItem, completeMutation, scores, onItemCompleted, handleClaimNext])
 
-  const handleSkip = useCallback(async () => {
+  const handleSkipConfirm = useCallback(async (reason: string) => {
     if (!currentItem) return
     try {
       await skipMutation.mutateAsync({
         itemId: currentItem.id,
-        data: { reason: 'Skipped by annotator' },
+        data: { reason },
       })
       setSeenItemIds((prev) => [...prev, currentItem.id])
+      setShowSkipDialog(false)
       onItemSkipped()
       // Automatically claim next
       handleClaimNext()
@@ -348,6 +399,23 @@ export function AnnotationPanel({
     }
   }, [currentItem, releaseMutation, onItemSkipped])
 
+  const handleFocusComment = useCallback(() => {
+    // Focus the first comment textarea in the score form
+    const textarea = document.querySelector<HTMLTextAreaElement>(
+      '[placeholder="Optional comment..."]'
+    )
+    textarea?.focus()
+  }, [])
+
+  // Keyboard shortcuts - disabled when skip dialog is open to prevent conflicts
+  useAnnotationKeyboard({
+    onSubmit: handleComplete,
+    onSkip: () => setShowSkipDialog(true),
+    onRelease: handleRelease,
+    onFocusComment: handleFocusComment,
+    enabled: !!currentItem && !showSkipDialog,
+  })
+
   const isLoading =
     claimMutation.isPending ||
     completeMutation.isPending ||
@@ -357,7 +425,7 @@ export function AnnotationPanel({
   // No current item - show claim button
   if (!currentItem) {
     return (
-      <Card>
+      <Card className="h-full">
         <CardHeader>
           <CardTitle>Start Annotating</CardTitle>
           <CardDescription>
@@ -365,6 +433,11 @@ export function AnnotationPanel({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Progress Indicator */}
+          {stats && (
+            <ProgressIndicator stats={stats} className="mb-4" />
+          )}
+
           {/* Instructions */}
           {queue.instructions && (
             <Alert>
@@ -409,106 +482,134 @@ export function AnnotationPanel({
     )
   }
 
-  // Show current item with scoring form
+  // Show current item with resizable split panel layout
   return (
-    <div className="space-y-4">
-      {/* Instructions (collapsed) */}
-      {queue.instructions && (
-        <Alert>
-          <Info className="h-4 w-4" />
-          <AlertTitle>Instructions</AlertTitle>
-          <AlertDescription className="whitespace-pre-wrap line-clamp-2">
-            {queue.instructions}
-          </AlertDescription>
-        </Alert>
-      )}
+    <>
+      <Card className="h-full overflow-hidden">
+        <ResizablePanelGroup direction="horizontal" className="h-full min-h-[500px]">
+          {/* Left Panel: Trace Content (65%) */}
+          <ResizablePanel defaultSize={65} minSize={40} className="min-w-0">
+            <div className="h-full overflow-auto p-4">
+              {/* Item Header */}
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="font-semibold text-lg">Current Item</h3>
+                  <p className="text-sm text-muted-foreground">
+                    {currentItem.object_type}: <code className="font-mono text-xs">{currentItem.object_id.slice(0, 12)}...</code>
+                  </p>
+                </div>
+                {stats && (
+                  <Badge variant="secondary" className="text-xs">
+                    {stats.completed_items + stats.skipped_items}/{stats.total_items}
+                  </Badge>
+                )}
+              </div>
 
-      {/* Current Item Info */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="text-lg">Current Item</CardTitle>
-              <CardDescription>
-                {currentItem.object_type}: {currentItem.object_id}
-              </CardDescription>
+              {/* Trace/Span Viewer */}
+              {trace ? (
+                <TraceViewer
+                  trace={trace}
+                  spans={spans}
+                  objectType={currentItem.object_type as 'trace' | 'span'}
+                  objectId={currentItem.object_id}
+                  isLoading={isTraceDataLoading}
+                />
+              ) : isTraceDataLoading ? (
+                <div className="space-y-3">
+                  <Skeleton className="h-6 w-48" />
+                  <Skeleton className="h-24 w-full" />
+                  <Skeleton className="h-24 w-full" />
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <AlertCircle className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">Unable to load trace data</p>
+                  <p className="text-xs mt-1">Object ID: <code className="font-mono">{currentItem.object_id}</code></p>
+                </div>
+              )}
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleRelease}
-              disabled={isLoading}
-            >
-              Release Lock
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {/* Trace/Span Viewer */}
-          <div className="mb-4">
-            {trace ? (
-              <TraceViewer
-                trace={trace}
-                spans={spans}
-                objectType={currentItem.object_type as 'trace' | 'span'}
-                objectId={currentItem.object_id}
-                isLoading={isTraceDataLoading}
-              />
-            ) : isTraceDataLoading ? (
-              <div className="space-y-3">
-                <Skeleton className="h-6 w-48" />
-                <Skeleton className="h-24 w-full" />
-                <Skeleton className="h-24 w-full" />
-              </div>
-            ) : (
-              <div className="text-center py-8 text-muted-foreground">
-                <AlertCircle className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">Unable to load trace data</p>
-                <p className="text-xs mt-1">Object ID: <code className="font-mono">{currentItem.object_id}</code></p>
-              </div>
-            )}
-          </div>
+          </ResizablePanel>
 
-          {/* Score Input Form */}
-          <ScoreInputForm
-            projectId={projectId}
-            queueId={queue.id}
-            scoreConfigIds={queue.score_config_ids}
-            scores={scores}
-            onScoresChange={setScores}
-          />
-        </CardContent>
+          <ResizableHandle withHandle />
+
+          {/* Right Panel: Score Form (35%) */}
+          <ResizablePanel defaultSize={35} minSize={25} maxSize={50} className="min-w-0">
+            <div className="h-full overflow-auto p-4 bg-muted/30">
+              {/* Instructions (collapsible) */}
+              <InstructionsPanel instructions={queue.instructions} compact />
+
+              {/* Progress Indicator (compact) */}
+              {stats && (
+                <ProgressIndicator stats={stats} compact showBreakdown={false} className="mb-4" />
+              )}
+
+              {/* Score Input Form */}
+              <ScoreInputForm
+                projectId={projectId}
+                queueId={queue.id}
+                scoreConfigIds={queue.score_config_ids}
+                scores={scores}
+                onScoresChange={setScores}
+              />
+
+              {/* Action Buttons */}
+              <div className="flex gap-2 mt-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowSkipDialog(true)}
+                  disabled={isLoading}
+                  className="flex-1"
+                >
+                  {skipMutation.isPending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <SkipForward className="mr-2 h-4 w-4" />
+                  )}
+                  Skip
+                </Button>
+                <Button
+                  onClick={handleComplete}
+                  disabled={isLoading}
+                  size="sm"
+                  className="flex-1"
+                >
+                  {completeMutation.isPending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <CheckCircle className="mr-2 h-4 w-4" />
+                  )}
+                  Submit
+                </Button>
+              </div>
+
+              {/* Release button (secondary) */}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleRelease}
+                disabled={isLoading}
+                className="w-full mt-2 text-muted-foreground"
+              >
+                <Unlock className="mr-2 h-3 w-3" />
+                Release Lock
+              </Button>
+
+              {/* Keyboard Shortcuts Hint */}
+              <KeyboardShortcutHint className="mt-4" />
+            </div>
+          </ResizablePanel>
+        </ResizablePanelGroup>
       </Card>
 
-      {/* Action Buttons */}
-      <div className="flex gap-3">
-        <Button
-          variant="outline"
-          onClick={handleSkip}
-          disabled={isLoading}
-          className="flex-1"
-        >
-          {skipMutation.isPending ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <SkipForward className="mr-2 h-4 w-4" />
-          )}
-          Skip
-        </Button>
-        <Button
-          onClick={handleComplete}
-          disabled={isLoading}
-          className="flex-1"
-        >
-          {completeMutation.isPending ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <CheckCircle className="mr-2 h-4 w-4" />
-          )}
-          Submit & Next
-        </Button>
-      </div>
-    </div>
+      {/* Skip Reason Dialog */}
+      <SkipReasonDialog
+        open={showSkipDialog}
+        onOpenChange={setShowSkipDialog}
+        onConfirm={handleSkipConfirm}
+        isLoading={skipMutation.isPending}
+      />
+    </>
   )
 }
 
