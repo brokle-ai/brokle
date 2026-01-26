@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"brokle/internal/core/domain/evaluation"
+	"brokle/internal/core/domain/observability"
 	appErrors "brokle/pkg/errors"
 	"brokle/pkg/pagination"
 	"brokle/pkg/ulid"
@@ -65,6 +66,99 @@ func (m *MockRuleRepository) ExistsByName(ctx context.Context, projectID ulid.UL
 	return args.Bool(0), args.Error(1)
 }
 
+// MockTraceRepository implements a minimal TraceRepository for testing
+type MockTraceRepository struct {
+	mock.Mock
+}
+
+func (m *MockTraceRepository) InsertSpan(ctx context.Context, span *observability.Span) error {
+	return nil
+}
+func (m *MockTraceRepository) InsertSpanBatch(ctx context.Context, spans []*observability.Span) error {
+	return nil
+}
+func (m *MockTraceRepository) DeleteSpan(ctx context.Context, spanID string) error {
+	return nil
+}
+func (m *MockTraceRepository) GetSpan(ctx context.Context, spanID string) (*observability.Span, error) {
+	return nil, nil
+}
+func (m *MockTraceRepository) GetSpansByTraceID(ctx context.Context, traceID string) ([]*observability.Span, error) {
+	return nil, nil
+}
+func (m *MockTraceRepository) GetSpanChildren(ctx context.Context, parentSpanID string) ([]*observability.Span, error) {
+	return nil, nil
+}
+func (m *MockTraceRepository) GetSpanTree(ctx context.Context, traceID string) ([]*observability.Span, error) {
+	return nil, nil
+}
+func (m *MockTraceRepository) GetSpansByFilter(ctx context.Context, filter *observability.SpanFilter) ([]*observability.Span, error) {
+	return nil, nil
+}
+func (m *MockTraceRepository) CountSpansByFilter(ctx context.Context, filter *observability.SpanFilter) (int64, error) {
+	return 0, nil
+}
+func (m *MockTraceRepository) GetRootSpan(ctx context.Context, traceID string) (*observability.Span, error) {
+	return nil, nil
+}
+func (m *MockTraceRepository) GetRootSpanByProject(ctx context.Context, traceID string, projectID string) (*observability.Span, error) {
+	return nil, nil
+}
+func (m *MockTraceRepository) GetSpanByProject(ctx context.Context, spanID string, projectID string) (*observability.Span, error) {
+	return nil, nil
+}
+func (m *MockTraceRepository) GetTraceSummary(ctx context.Context, traceID string) (*observability.TraceSummary, error) {
+	return nil, nil
+}
+func (m *MockTraceRepository) ListTraces(ctx context.Context, filter *observability.TraceFilter) ([]*observability.TraceSummary, error) {
+	return nil, nil
+}
+func (m *MockTraceRepository) CountTraces(ctx context.Context, filter *observability.TraceFilter) (int64, error) {
+	return 0, nil
+}
+func (m *MockTraceRepository) CountSpansInTrace(ctx context.Context, traceID string) (int64, error) {
+	return 0, nil
+}
+func (m *MockTraceRepository) DeleteTrace(ctx context.Context, traceID string) error {
+	return nil
+}
+func (m *MockTraceRepository) UpdateTraceTags(ctx context.Context, projectID, traceID string, tags []string) error {
+	return nil
+}
+func (m *MockTraceRepository) UpdateTraceBookmark(ctx context.Context, projectID, traceID string, bookmarked bool) error {
+	return nil
+}
+func (m *MockTraceRepository) GetFilterOptions(ctx context.Context, projectID string) (*observability.TraceFilterOptions, error) {
+	return nil, nil
+}
+func (m *MockTraceRepository) GetTracesBySessionID(ctx context.Context, sessionID string) ([]*observability.TraceSummary, error) {
+	return nil, nil
+}
+func (m *MockTraceRepository) GetTracesByUserID(ctx context.Context, userID string, filter *observability.TraceFilter) ([]*observability.TraceSummary, error) {
+	return nil, nil
+}
+func (m *MockTraceRepository) CalculateTotalCost(ctx context.Context, traceID string) (float64, error) {
+	return 0, nil
+}
+func (m *MockTraceRepository) CalculateTotalTokens(ctx context.Context, traceID string) (uint64, error) {
+	return 0, nil
+}
+func (m *MockTraceRepository) QuerySpansByExpression(ctx context.Context, query string, args []interface{}) ([]*observability.Span, error) {
+	return nil, nil
+}
+func (m *MockTraceRepository) CountSpansByExpression(ctx context.Context, query string, args []interface{}) (int64, error) {
+	return 0, nil
+}
+func (m *MockTraceRepository) DiscoverAttributes(ctx context.Context, req *observability.AttributeDiscoveryRequest) (*observability.AttributeDiscoveryResponse, error) {
+	return nil, nil
+}
+func (m *MockTraceRepository) ListSessions(ctx context.Context, filter *observability.SessionFilter) ([]*observability.SessionSummary, error) {
+	return nil, nil
+}
+func (m *MockTraceRepository) CountSessions(ctx context.Context, filter *observability.SessionFilter) (int64, error) {
+	return 0, nil
+}
+
 func newTestLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
 }
@@ -76,7 +170,7 @@ func TestRuleService_Create(t *testing.T) {
 
 	t.Run("success with valid rule", func(t *testing.T) {
 		repo := new(MockRuleRepository)
-		service := NewRuleService(repo, nil, nil, logger)
+		service := NewRuleService(repo, nil, new(MockTraceRepository), nil, logger)
 
 		req := &evaluation.CreateEvaluationRuleRequest{
 			Name:       "Test Rule",
@@ -100,7 +194,7 @@ func TestRuleService_Create(t *testing.T) {
 
 	t.Run("reject duplicate name", func(t *testing.T) {
 		repo := new(MockRuleRepository)
-		service := NewRuleService(repo, nil, nil, logger)
+		service := NewRuleService(repo, nil, new(MockTraceRepository), nil, logger)
 
 		req := &evaluation.CreateEvaluationRuleRequest{
 			Name:       "Existing Rule",
@@ -126,7 +220,7 @@ func TestRuleService_Create(t *testing.T) {
 
 	t.Run("reject invalid name (empty)", func(t *testing.T) {
 		repo := new(MockRuleRepository)
-		service := NewRuleService(repo, nil, nil, logger)
+		service := NewRuleService(repo, nil, new(MockTraceRepository), nil, logger)
 
 		req := &evaluation.CreateEvaluationRuleRequest{
 			Name:       "",
@@ -149,7 +243,7 @@ func TestRuleService_Create(t *testing.T) {
 
 	t.Run("sets created_by when user ID provided", func(t *testing.T) {
 		repo := new(MockRuleRepository)
-		service := NewRuleService(repo, nil, nil, logger)
+		service := NewRuleService(repo, nil, new(MockTraceRepository), nil, logger)
 
 		userID := ulid.New()
 		req := &evaluation.CreateEvaluationRuleRequest{
@@ -183,7 +277,7 @@ func TestRuleService_Update(t *testing.T) {
 
 	t.Run("success with partial update", func(t *testing.T) {
 		repo := new(MockRuleRepository)
-		service := NewRuleService(repo, nil, nil, logger)
+		service := NewRuleService(repo, nil, new(MockTraceRepository), nil, logger)
 
 		existingRule := &evaluation.EvaluationRule{
 			ID:          ruleID,
@@ -217,7 +311,7 @@ func TestRuleService_Update(t *testing.T) {
 
 	t.Run("reject name conflict on rename", func(t *testing.T) {
 		repo := new(MockRuleRepository)
-		service := NewRuleService(repo, nil, nil, logger)
+		service := NewRuleService(repo, nil, new(MockTraceRepository), nil, logger)
 
 		existingRule := &evaluation.EvaluationRule{
 			ID:          ruleID,
@@ -254,7 +348,7 @@ func TestRuleService_Update(t *testing.T) {
 
 	t.Run("not found error", func(t *testing.T) {
 		repo := new(MockRuleRepository)
-		service := NewRuleService(repo, nil, nil, logger)
+		service := NewRuleService(repo, nil, new(MockTraceRepository), nil, logger)
 
 		newName := "New Name"
 		req := &evaluation.UpdateEvaluationRuleRequest{
@@ -275,7 +369,7 @@ func TestRuleService_Update(t *testing.T) {
 
 	t.Run("allow rename to same name", func(t *testing.T) {
 		repo := new(MockRuleRepository)
-		service := NewRuleService(repo, nil, nil, logger)
+		service := NewRuleService(repo, nil, new(MockTraceRepository), nil, logger)
 
 		existingRule := &evaluation.EvaluationRule{
 			ID:          ruleID,
@@ -316,7 +410,7 @@ func TestRuleService_Activate(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		repo := new(MockRuleRepository)
-		service := NewRuleService(repo, nil, nil, logger)
+		service := NewRuleService(repo, nil, new(MockTraceRepository), nil, logger)
 
 		existingRule := &evaluation.EvaluationRule{
 			ID:          ruleID,
@@ -344,7 +438,7 @@ func TestRuleService_Activate(t *testing.T) {
 
 	t.Run("idempotent - already active", func(t *testing.T) {
 		repo := new(MockRuleRepository)
-		service := NewRuleService(repo, nil, nil, logger)
+		service := NewRuleService(repo, nil, new(MockTraceRepository), nil, logger)
 
 		existingRule := &evaluation.EvaluationRule{
 			ID:          ruleID,
@@ -370,7 +464,7 @@ func TestRuleService_Activate(t *testing.T) {
 
 	t.Run("not found error", func(t *testing.T) {
 		repo := new(MockRuleRepository)
-		service := NewRuleService(repo, nil, nil, logger)
+		service := NewRuleService(repo, nil, new(MockTraceRepository), nil, logger)
 
 		repo.On("GetByID", ctx, ruleID, projectID).Return(nil, evaluation.ErrRuleNotFound)
 
@@ -392,7 +486,7 @@ func TestRuleService_Deactivate(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		repo := new(MockRuleRepository)
-		service := NewRuleService(repo, nil, nil, logger)
+		service := NewRuleService(repo, nil, new(MockTraceRepository), nil, logger)
 
 		existingRule := &evaluation.EvaluationRule{
 			ID:          ruleID,
@@ -420,7 +514,7 @@ func TestRuleService_Deactivate(t *testing.T) {
 
 	t.Run("idempotent - already inactive", func(t *testing.T) {
 		repo := new(MockRuleRepository)
-		service := NewRuleService(repo, nil, nil, logger)
+		service := NewRuleService(repo, nil, new(MockTraceRepository), nil, logger)
 
 		existingRule := &evaluation.EvaluationRule{
 			ID:          ruleID,
@@ -446,7 +540,7 @@ func TestRuleService_Deactivate(t *testing.T) {
 
 	t.Run("not found error", func(t *testing.T) {
 		repo := new(MockRuleRepository)
-		service := NewRuleService(repo, nil, nil, logger)
+		service := NewRuleService(repo, nil, new(MockTraceRepository), nil, logger)
 
 		repo.On("GetByID", ctx, ruleID, projectID).Return(nil, evaluation.ErrRuleNotFound)
 
@@ -468,7 +562,7 @@ func TestRuleService_Delete(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		repo := new(MockRuleRepository)
-		service := NewRuleService(repo, nil, nil, logger)
+		service := NewRuleService(repo, nil, new(MockTraceRepository), nil, logger)
 
 		existingRule := &evaluation.EvaluationRule{
 			ID:          ruleID,
@@ -493,7 +587,7 @@ func TestRuleService_Delete(t *testing.T) {
 
 	t.Run("not found error on GetByID", func(t *testing.T) {
 		repo := new(MockRuleRepository)
-		service := NewRuleService(repo, nil, nil, logger)
+		service := NewRuleService(repo, nil, new(MockTraceRepository), nil, logger)
 
 		repo.On("GetByID", ctx, ruleID, projectID).Return(nil, evaluation.ErrRuleNotFound)
 
@@ -516,7 +610,7 @@ func TestRuleService_GetByID(t *testing.T) {
 
 	t.Run("success", func(t *testing.T) {
 		repo := new(MockRuleRepository)
-		service := NewRuleService(repo, nil, nil, logger)
+		service := NewRuleService(repo, nil, new(MockTraceRepository), nil, logger)
 
 		existingRule := &evaluation.EvaluationRule{
 			ID:          ruleID,
@@ -543,7 +637,7 @@ func TestRuleService_GetByID(t *testing.T) {
 
 	t.Run("not found error", func(t *testing.T) {
 		repo := new(MockRuleRepository)
-		service := NewRuleService(repo, nil, nil, logger)
+		service := NewRuleService(repo, nil, new(MockTraceRepository), nil, logger)
 
 		repo.On("GetByID", ctx, ruleID, projectID).Return(nil, evaluation.ErrRuleNotFound)
 
@@ -565,7 +659,7 @@ func TestRuleService_List(t *testing.T) {
 
 	t.Run("success with results", func(t *testing.T) {
 		repo := new(MockRuleRepository)
-		service := NewRuleService(repo, nil, nil, logger)
+		service := NewRuleService(repo, nil, new(MockTraceRepository), nil, logger)
 
 		expectedRules := []*evaluation.EvaluationRule{
 			{
@@ -595,7 +689,7 @@ func TestRuleService_List(t *testing.T) {
 
 	t.Run("success with filter", func(t *testing.T) {
 		repo := new(MockRuleRepository)
-		service := NewRuleService(repo, nil, nil, logger)
+		service := NewRuleService(repo, nil, new(MockTraceRepository), nil, logger)
 
 		status := evaluation.RuleStatusActive
 		filter := &evaluation.RuleFilter{
@@ -626,7 +720,7 @@ func TestRuleService_List(t *testing.T) {
 
 	t.Run("success with empty results", func(t *testing.T) {
 		repo := new(MockRuleRepository)
-		service := NewRuleService(repo, nil, nil, logger)
+		service := NewRuleService(repo, nil, new(MockTraceRepository), nil, logger)
 
 		params := pagination.Params{Page: 1, Limit: 10}
 		repo.On("GetByProjectID", ctx, projectID, (*evaluation.RuleFilter)(nil), params).Return([]*evaluation.EvaluationRule{}, int64(0), nil)

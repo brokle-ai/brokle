@@ -13,6 +13,7 @@ type RulesContextType = {
   currentRow: EvaluationRule | null
   setCurrentRow: React.Dispatch<React.SetStateAction<EvaluationRule | null>>
   projectId: string | undefined
+  orgId: string | undefined
   projectSlug?: string
 }
 
@@ -35,9 +36,10 @@ export function RulesProvider({ children, projectSlug }: RulesProviderProps) {
       currentRow,
       setCurrentRow,
       projectId: currentProject?.id,
+      orgId: currentProject?.organizationId,
       projectSlug,
     }),
-    [open, setOpen, currentRow, currentProject?.id, projectSlug]
+    [open, setOpen, currentRow, currentProject?.id, currentProject?.organizationId, projectSlug]
   )
 
   return (

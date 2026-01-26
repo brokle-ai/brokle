@@ -72,7 +72,7 @@ func (r *RuleRepository) GetByProjectID(ctx context.Context, projectID ulid.ULID
 
 	offset := (params.Page - 1) * params.Limit
 	result := query.
-		Order("created_at DESC").
+		Order(params.GetSortOrder(params.SortBy, "id")).
 		Limit(params.Limit).
 		Offset(offset).
 		Find(&rules)

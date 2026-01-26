@@ -13,12 +13,13 @@ import type { EvaluationRule, UpdateEvaluationRuleRequest } from '../types'
 
 interface EditRuleDialogProps {
   projectId: string
+  orgId?: string
   rule: EvaluationRule | null
   open: boolean
   onOpenChange: (open: boolean) => void
 }
 
-export function EditRuleDialog({ projectId, rule, open, onOpenChange }: EditRuleDialogProps) {
+export function EditRuleDialog({ projectId, orgId, rule, open, onOpenChange }: EditRuleDialogProps) {
   const updateMutation = useUpdateEvaluationRuleMutation(projectId, rule?.id ?? '')
 
   const handleSubmit = async (data: UpdateEvaluationRuleRequest) => {
@@ -42,6 +43,7 @@ export function EditRuleDialog({ projectId, rule, open, onOpenChange }: EditRule
           onSubmit={handleSubmit}
           onCancel={() => onOpenChange(false)}
           isLoading={updateMutation.isPending}
+          orgId={orgId}
         />
       </DialogContent>
     </Dialog>

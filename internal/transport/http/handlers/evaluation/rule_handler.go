@@ -5,7 +5,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"brokle/internal/core/domain/analytics"
 	evaluationDomain "brokle/internal/core/domain/evaluation"
+	"brokle/internal/transport/http/handlers/shared"
 	"brokle/internal/transport/http/middleware"
 	appErrors "brokle/pkg/errors"
 	"brokle/pkg/pagination"
@@ -106,6 +108,25 @@ func (h *RuleHandler) List(c *gin.Context) {
 			params.Limit = parsed
 		}
 	}
+
+	// Parse and validate sort params
+	allowedSortFields := []string{"name", "status", "sampling_rate", "created_at", "updated_at"}
+	if sortBy := c.Query("sort_by"); sortBy != "" {
+		validatedField, err := pagination.ValidateSortField(sortBy, allowedSortFields)
+		if err != nil {
+			response.Error(c, appErrors.NewValidationError("sort_by", err.Error()))
+			return
+		}
+		params.SortBy = validatedField
+	}
+	if sortDir := c.Query("sort_dir"); sortDir != "" {
+		if sortDir != "asc" && sortDir != "desc" {
+			response.Error(c, appErrors.NewValidationError("sort_dir", "must be 'asc' or 'desc'"))
+			return
+		}
+		params.SortDir = sortDir
+	}
+
 	params.SetDefaults("created_at")
 
 	// Parse filter params
@@ -356,4 +377,109 @@ func (h *RuleHandler) Trigger(c *gin.Context) {
 
 	// Return 202 Accepted for async processing (Opik pattern)
 	response.Accepted(c, result)
+}
+
+// @Summary Test evaluation rule
+// @Description Tests a rule against sample spans without persisting scores. Useful for validating rule configuration before activation.
+// @Tags Evaluation Rules
+// @Accept json
+// @Produce json
+// @Param projectId path string true "Project ID"
+// @Param ruleId path string true "Rule ID"
+// @Param request body evaluation.TestRuleRequest false "Optional test parameters"
+// @Success 200 {object} evaluation.TestRuleResponse
+// @Failure 400 {object} response.ErrorResponse
+// @Failure 401 {object} response.ErrorResponse
+// @Failure 404 {object} response.ErrorResponse
+// @Router /api/v1/projects/{projectId}/evaluations/rules/{ruleId}/test [post]
+func (h *RuleHandler) Test(c *gin.Context) {
+	projectID, err := ulid.Parse(c.Param("projectId"))
+	if err != nil {
+		response.Error(c, appErrors.NewValidationError("projectId", "must be a valid ULID"))
+		return
+	}
+
+	ruleID, err := ulid.Parse(c.Param("ruleId"))
+	if err != nil {
+		response.Error(c, appErrors.NewValidationError("ruleId", "must be a valid ULID"))
+		return
+	}
+
+	var req *evaluationDomain.TestRuleRequest
+	if c.Request.ContentLength > 0 {
+		var reqBody evaluationDomain.TestRuleRequest
+		if err := c.ShouldBindJSON(&reqBody); err != nil {
+			response.ValidationError(c, "Invalid request body", err.Error())
+			return
+		}
+		req = &reqBody
+	}
+
+	result, err := h.service.TestRule(c.Request.Context(), ruleID, projectID, req)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	response.Success(c, result)
+}
+
+// @Summary Get rule analytics
+// @Description Returns performance analytics for an evaluation rule over a specified time period.
+// @Tags Evaluation Rules
+// @Produce json
+// @Param projectId path string true "Project ID"
+// @Param ruleId path string true "Rule ID"
+// @Param period query string false "Time period: 24h, 7d, 30d (default: 7d)"
+// @Param from_timestamp query string false "Custom start time (RFC3339 format)"
+// @Param to_timestamp query string false "Custom end time (RFC3339 format)"
+// @Success 200 {object} evaluation.RuleAnalyticsResponse
+// @Failure 400 {object} response.ErrorResponse
+// @Failure 401 {object} response.ErrorResponse
+// @Failure 404 {object} response.ErrorResponse
+// @Router /api/v1/projects/{projectId}/evaluations/rules/{ruleId}/analytics [get]
+func (h *RuleHandler) GetAnalytics(c *gin.Context) {
+	projectID, err := ulid.Parse(c.Param("projectId"))
+	if err != nil {
+		response.Error(c, appErrors.NewValidationError("projectId", "must be a valid ULID"))
+		return
+	}
+
+	ruleID, err := ulid.Parse(c.Param("ruleId"))
+	if err != nil {
+		response.Error(c, appErrors.NewValidationError("ruleId", "must be a valid ULID"))
+		return
+	}
+
+	// Parse time range using shared utility
+	fromTimestamp := c.Query("from_timestamp")
+	toTimestamp := c.Query("to_timestamp")
+	period := c.DefaultQuery("period", "7d")
+
+	fromTime, toTime, err := shared.ParseTimeRange(
+		fromTimestamp,
+		toTimestamp,
+		period,
+		analytics.TimeRange7Days,
+	)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	params := &evaluationDomain.RuleAnalyticsParams{
+		ProjectID: projectID,
+		RuleID:    ruleID,
+		Period:    period,
+		From:      &fromTime,
+		To:        &toTime,
+	}
+
+	result, err := h.service.GetAnalytics(c.Request.Context(), ruleID, projectID, params)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	response.Success(c, result)
 }

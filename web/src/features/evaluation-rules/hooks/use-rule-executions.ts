@@ -74,6 +74,25 @@ export function useRuleExecutionQuery(
 }
 
 /**
+ * Hook to fetch detailed execution info including span-level debugging data
+ */
+export function useRuleExecutionDetailQuery(
+  projectId: string,
+  ruleId: string,
+  executionId: string,
+  options: { enabled?: boolean } = {}
+) {
+  const { enabled = true } = options
+
+  return useQuery({
+    queryKey: [...ruleExecutionsKeys.detail(projectId, ruleId, executionId), 'full'] as const,
+    queryFn: () => evaluationRulesApi.getExecutionDetail(projectId, ruleId, executionId),
+    enabled: enabled && !!projectId && !!ruleId && !!executionId,
+    staleTime: 60_000, // 1 minute - detailed data doesn't change
+  })
+}
+
+/**
  * Hook to fetch the latest execution for a rule
  */
 export function useLatestRuleExecutionQuery(

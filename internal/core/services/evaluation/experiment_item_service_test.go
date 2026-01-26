@@ -51,6 +51,29 @@ func (m *MockExperimentRepository) Delete(ctx context.Context, id ulid.ULID, pro
 	return args.Error(0)
 }
 
+func (m *MockExperimentRepository) SetTotalItems(ctx context.Context, id, projectID ulid.ULID, total int) error {
+	args := m.Called(ctx, id, projectID, total)
+	return args.Error(0)
+}
+
+func (m *MockExperimentRepository) IncrementCounters(ctx context.Context, id, projectID ulid.ULID, completed, failed int) error {
+	args := m.Called(ctx, id, projectID, completed, failed)
+	return args.Error(0)
+}
+
+func (m *MockExperimentRepository) IncrementCountersAndUpdateStatus(ctx context.Context, id, projectID ulid.ULID, completed, failed int) (bool, error) {
+	args := m.Called(ctx, id, projectID, completed, failed)
+	return args.Bool(0), args.Error(1)
+}
+
+func (m *MockExperimentRepository) GetProgress(ctx context.Context, id, projectID ulid.ULID) (*evaluation.Experiment, error) {
+	args := m.Called(ctx, id, projectID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*evaluation.Experiment), args.Error(1)
+}
+
 type MockExperimentItemRepository struct {
 	mock.Mock
 }

@@ -293,3 +293,41 @@ func (s *ruleExecutionService) UpdateSpansMatched(
 	}
 	return nil
 }
+
+func (s *ruleExecutionService) GetExecutionDetail(
+	ctx context.Context,
+	executionID ulid.ULID,
+	projectID ulid.ULID,
+	ruleID ulid.ULID,
+) (*evaluation.ExecutionDetailResponse, error) {
+	// Get the execution record
+	execution, err := s.repo.GetByID(ctx, executionID, projectID)
+	if err != nil {
+		if errors.Is(err, evaluation.ErrExecutionNotFound) {
+			return nil, appErrors.NewNotFoundError(fmt.Sprintf("rule execution %s", executionID))
+		}
+		return nil, appErrors.NewInternalError("failed to get rule execution", err)
+	}
+
+	// Validate execution belongs to the specified rule
+	if execution.RuleID != ruleID {
+		return nil, appErrors.NewNotFoundError(fmt.Sprintf("execution %s not found for rule %s", executionID, ruleID))
+	}
+
+	// For now, return the execution with empty span details.
+	// Full implementation would query ClickHouse for span-level execution data.
+	// This provides the foundation to be enhanced with detailed span results.
+	response := &evaluation.ExecutionDetailResponse{
+		Execution: execution.ToResponse(),
+		Spans:     []evaluation.SpanExecutionDetail{},
+		// RuleSnapshot would be populated if we stored rule config at execution time
+	}
+
+	s.logger.Info("execution detail retrieved",
+		"execution_id", executionID,
+		"project_id", projectID,
+		"rule_id", execution.RuleID,
+	)
+
+	return response, nil
+}

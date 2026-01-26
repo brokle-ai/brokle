@@ -31,9 +31,11 @@ import {
   Zap,
   Clock,
   Filter,
+  Eye,
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { ExecutionStatusBadge, isTerminalStatus } from './execution-status-badge'
+import { ExecutionDetailDialog } from './execution-detail-dialog'
 import {
   useRuleExecutionsQuery,
   getRefetchInterval,
@@ -42,6 +44,7 @@ import type { RuleExecution, TriggerType } from '../types'
 
 interface RuleExecutionsTableProps {
   projectId: string
+  projectSlug: string
   ruleId: string
   limit?: number
 }
@@ -71,11 +74,19 @@ function TriggerTypeBadge({ type }: { type: TriggerType }) {
   )
 }
 
-function ExecutionRow({ execution }: { execution: RuleExecution }) {
+interface ExecutionRowProps {
+  execution: RuleExecution
+  onViewDetail: (executionId: string) => void
+}
+
+function ExecutionRow({ execution, onViewDetail }: ExecutionRowProps) {
   const hasError = execution.status === 'failed' && execution.error_message
 
   return (
-    <TableRow>
+    <TableRow
+      className="cursor-pointer hover:bg-muted/50"
+      onClick={() => onViewDetail(execution.id)}
+    >
       <TableCell>
         <ExecutionStatusBadge
           status={execution.status}
@@ -127,6 +138,19 @@ function ExecutionRow({ execution }: { execution: RuleExecution }) {
           </TooltipContent>
         </Tooltip>
       </TableCell>
+      <TableCell className="text-right">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={(e) => {
+            e.stopPropagation()
+            onViewDetail(execution.id)
+          }}
+        >
+          <Eye className="h-4 w-4" />
+          <span className="sr-only">View details</span>
+        </Button>
+      </TableCell>
     </TableRow>
   )
 }
@@ -157,6 +181,9 @@ function TableSkeleton() {
           <TableCell>
             <Skeleton className="h-4 w-24 ml-auto" />
           </TableCell>
+          <TableCell>
+            <Skeleton className="h-8 w-8 ml-auto" />
+          </TableCell>
         </TableRow>
       ))}
     </>
@@ -167,11 +194,19 @@ type TriggerTypeFilter = TriggerType | 'all'
 
 export function RuleExecutionsTable({
   projectId,
+  projectSlug,
   ruleId,
   limit = 10,
 }: RuleExecutionsTableProps) {
   const [page, setPage] = useState(1)
   const [triggerFilter, setTriggerFilter] = useState<TriggerTypeFilter>('all')
+  const [selectedExecutionId, setSelectedExecutionId] = useState<string | null>(null)
+  const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false)
+
+  const handleViewDetail = (executionId: string) => {
+    setSelectedExecutionId(executionId)
+    setIsDetailDialogOpen(true)
+  }
 
   // Reset page when filter changes
   const handleFilterChange = (value: TriggerTypeFilter) => {
@@ -259,6 +294,9 @@ export function RuleExecutionsTable({
               <TableHead className="text-right">Errors</TableHead>
               <TableHead className="text-right">Duration</TableHead>
               <TableHead className="text-right">Time</TableHead>
+              <TableHead className="text-right w-[60px]">
+                <span className="sr-only">Actions</span>
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -266,7 +304,11 @@ export function RuleExecutionsTable({
               <TableSkeleton />
             ) : (
               executions.map((execution) => (
-                <ExecutionRow key={execution.id} execution={execution} />
+                <ExecutionRow
+                  key={execution.id}
+                  execution={execution}
+                  onViewDetail={handleViewDetail}
+                />
               ))
             )}
           </TableBody>
@@ -302,6 +344,16 @@ export function RuleExecutionsTable({
           </div>
         </div>
       )}
+
+      {/* Execution Detail Dialog */}
+      <ExecutionDetailDialog
+        projectId={projectId}
+        projectSlug={projectSlug}
+        ruleId={ruleId}
+        executionId={selectedExecutionId}
+        open={isDetailDialogOpen}
+        onOpenChange={setIsDetailDialogOpen}
+      />
     </div>
   )
 }

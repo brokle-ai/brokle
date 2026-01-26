@@ -179,3 +179,44 @@ func (h *RuleExecutionHandler) GetLatest(c *gin.Context) {
 
 	response.Success(c, execution.ToResponse())
 }
+
+// @Summary Get execution detail
+// @Description Returns detailed execution information including span-level results for debugging.
+// @Tags Evaluation Rule Executions
+// @Produce json
+// @Param projectId path string true "Project ID"
+// @Param ruleId path string true "Rule ID"
+// @Param executionId path string true "Execution ID"
+// @Success 200 {object} evaluation.RuleExecutionDetailFlat
+// @Failure 400 {object} response.ErrorResponse
+// @Failure 401 {object} response.ErrorResponse
+// @Failure 404 {object} response.ErrorResponse
+// @Router /api/v1/projects/{projectId}/evaluations/rules/{ruleId}/executions/{executionId}/detail [get]
+func (h *RuleExecutionHandler) GetDetail(c *gin.Context) {
+	projectID, err := ulid.Parse(c.Param("projectId"))
+	if err != nil {
+		response.Error(c, appErrors.NewValidationError("projectId", "must be a valid ULID"))
+		return
+	}
+
+	ruleID, err := ulid.Parse(c.Param("ruleId"))
+	if err != nil {
+		response.Error(c, appErrors.NewValidationError("ruleId", "must be a valid ULID"))
+		return
+	}
+
+	executionID, err := ulid.Parse(c.Param("executionId"))
+	if err != nil {
+		response.Error(c, appErrors.NewValidationError("executionId", "must be a valid ULID"))
+		return
+	}
+
+	detail, err := h.service.GetExecutionDetail(c.Request.Context(), executionID, projectID, ruleID)
+	if err != nil {
+		response.Error(c, err)
+		return
+	}
+
+	// Flatten the response for frontend compatibility
+	response.Success(c, detail.ToFlat())
+}

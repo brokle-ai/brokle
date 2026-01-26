@@ -1417,6 +1417,7 @@ func ProvideEvaluationServices(
 	ruleSvc := evaluationService.NewRuleService(
 		evaluationRepos.Rule,
 		ruleExecutionSvc,
+		observabilityRepos.Trace,
 		redisDB,
 		logger,
 	)
