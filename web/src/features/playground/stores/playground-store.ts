@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { ChatMessage, ModelConfig, RunHistoryEntry } from '../types'
+import type { ChatMessage, ModelConfig, RunHistoryEntry, ToolCall } from '../types'
 import { createMessage } from '../types'
 
 export interface PlaygroundWindow {
@@ -37,6 +37,7 @@ export interface PlaygroundWindow {
     ttft_ms?: number
     total_duration_ms?: number
   } | null
+  lastToolCalls: ToolCall[] | null // Tool calls from last execution (if any)
 
   // Run history (in-memory, max 10 entries per window)
   // Opik pattern: entries marked stale when prompt changes
@@ -92,7 +93,8 @@ interface PlaygroundState {
     index: number,
     output: string,
     metrics: PlaygroundWindow['lastMetrics'],
-    inputSnapshot?: { messages: ChatMessage[]; variables: Record<string, string>; config: ModelConfig | null }
+    inputSnapshot?: { messages: ChatMessage[]; variables: Record<string, string>; config: ModelConfig | null },
+    toolCalls?: ToolCall[] | null
   ) => void
   setExecutingAll: (isExecuting: boolean) => void
 
@@ -159,6 +161,7 @@ const createEmptyWindow = (index?: number): PlaygroundWindow => ({
   createTrace: false, // Default OFF for playground (ephemeral)
   lastOutput: null,
   lastMetrics: null,
+  lastToolCalls: null, // Tool calls from last execution
   runHistory: [], // In-memory run history (max 10)
   isExecuting: false,
   lastSavedSnapshot: null, // null = never saved, isDirty computed from comparison
@@ -284,7 +287,7 @@ export const usePlaygroundStore = create<PlaygroundState>()((set, get) => ({
     set({ windows: newWindows })
   },
 
-  setWindowOutput: (index, output, metrics, inputSnapshot) => {
+  setWindowOutput: (index, output, metrics, inputSnapshot, toolCalls) => {
     const { windows } = get()
     const window = windows[index]
     if (!window) return
@@ -323,6 +326,7 @@ export const usePlaygroundStore = create<PlaygroundState>()((set, get) => ({
       ...window,
       lastOutput: output,
       lastMetrics: metrics,
+      lastToolCalls: toolCalls || null,
       runHistory: newHistory,
       isExecuting: false,
     }

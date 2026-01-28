@@ -93,6 +93,19 @@ type ModelConfig struct {
 	PresencePenalty  *float64 `json:"presence_penalty,omitempty"`
 	Stop             []string `json:"stop,omitempty"`
 
+	// Tools defines function calling tools for the LLM (OpenAI format).
+	// Each tool is stored as raw JSON to preserve provider-specific fields.
+	Tools []json.RawMessage `json:"tools,omitempty"`
+
+	// ToolChoice controls how the model uses tools ("auto", "none", "required", or specific function).
+	// Can be a string or an object like {"type": "function", "function": {"name": "..."}}
+	ToolChoice json.RawMessage `json:"tool_choice,omitempty"`
+
+	// ResponseFormat specifies output format for structured outputs.
+	// Examples: {"type": "text"}, {"type": "json_object"}, {"type": "json_schema", "json_schema": {...}}
+	// Note: Anthropic doesn't support response_format natively.
+	ResponseFormat json.RawMessage `json:"response_format,omitempty"`
+
 	// APIKey is the resolved API key for execution (not persisted).
 	// Set by handler after credential resolution. Excluded from JSON serialization.
 	APIKey string `json:"-"`
@@ -302,10 +315,12 @@ type ExecutePromptResponse struct {
 }
 
 type LLMResponse struct {
-	Content string    `json:"content"`
-	Model   string    `json:"model"`
-	Usage   *LLMUsage `json:"usage,omitempty"`
-	Cost    *float64  `json:"cost,omitempty"`
+	Content      string            `json:"content"`
+	Model        string            `json:"model"`
+	Usage        *LLMUsage         `json:"usage,omitempty"`
+	Cost         *float64          `json:"cost,omitempty"`
+	FinishReason string            `json:"finish_reason,omitempty"`
+	ToolCalls    []json.RawMessage `json:"tool_calls,omitempty"`
 }
 
 type LLMUsage struct {
@@ -332,13 +347,14 @@ type StreamEvent struct {
 
 // StreamResult contains the final metrics after streaming completes.
 type StreamResult struct {
-	Content       string    `json:"content"`                    // Full accumulated content
-	Model         string    `json:"model"`                      // Model used
-	Usage         *LLMUsage `json:"usage,omitempty"`            // Token usage
-	Cost          *float64  `json:"cost,omitempty"`             // Calculated cost
-	FinishReason  string    `json:"finish_reason,omitempty"`    // Completion reason
-	TTFTMs        *float64  `json:"ttft_ms,omitempty"`          // Time to first token (ms)
-	TotalDuration int64     `json:"total_duration_ms,omitempty"` // Total execution time (ms)
+	Content       string            `json:"content"`                     // Full accumulated content
+	Model         string            `json:"model"`                       // Model used
+	Usage         *LLMUsage         `json:"usage,omitempty"`             // Token usage
+	Cost          *float64          `json:"cost,omitempty"`              // Calculated cost
+	FinishReason  string            `json:"finish_reason,omitempty"`     // Completion reason
+	TTFTMs        *float64          `json:"ttft_ms,omitempty"`           // Time to first token (ms)
+	TotalDuration int64             `json:"total_duration_ms,omitempty"` // Total execution time (ms)
+	ToolCalls     []json.RawMessage `json:"tool_calls,omitempty"`        // Tool calls if finish_reason is "tool_calls"
 }
 
 // UpsertResponse is the response for the SDK upsert endpoint.

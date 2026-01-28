@@ -17,8 +17,10 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { PlaygroundWindow } from '@/features/playground/components/playground-window'
 import { SaveSessionDialog } from '@/features/playground/components/save-session-dialog'
 import { SavedSessionsSidebar } from '@/features/playground/components/saved-sessions-sidebar'
+import { SharedVariablesPanel } from '@/features/playground/components/shared-variables-panel'
 import { usePlaygroundStore } from '@/features/playground/stores/playground-store'
 import { useProjectOnly } from '@/features/projects/hooks/use-project-only'
+import { usePlaygroundKeyboard } from '@/features/playground/hooks/use-playground-keyboard'
 
 /**
  * Main Playground Page - In-Memory Only
@@ -56,7 +58,8 @@ export default function PlaygroundPage() {
     windowExecuteRefs.current.delete(index)
   }, [])
 
-  const handleExecuteAll = async () => {
+  // Handle execute all (also called by keyboard shortcut)
+  const handleExecuteAll = useCallback(async () => {
     setExecutingAll(true)
 
     try {
@@ -72,11 +75,18 @@ export default function PlaygroundPage() {
     } finally {
       setExecutingAll(false)
     }
-  }
+  }, [setExecutingAll])
 
-  const handleNewSession = () => {
+  const handleNewSession = useCallback(() => {
     clearAll()
-  }
+  }, [clearAll])
+
+  // Keyboard shortcuts
+  usePlaygroundKeyboard({
+    onExecuteAll: windows.length > 1 ? handleExecuteAll : undefined,
+    onNewWindow: addWindow,
+    enabled: !projectLoading,
+  })
 
   if (projectLoading) {
     return (
@@ -127,6 +137,9 @@ export default function PlaygroundPage() {
         </PageHeader>
 
         <div className="space-y-6">
+          {/* Shared Variables Panel */}
+          <SharedVariablesPanel />
+
           <div className="flex items-center justify-between">
             <Button
               variant="outline"

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -187,6 +188,9 @@ func (s *executionService) mergeConfig(base, overrides *promptDomain.ModelConfig
 		FrequencyPenalty: base.FrequencyPenalty,
 		PresencePenalty:  base.PresencePenalty,
 		Stop:             base.Stop,
+		Tools:            base.Tools,
+		ToolChoice:       base.ToolChoice,
+		ResponseFormat:   base.ResponseFormat,
 		// Preserve credentials from overrides (set by handler after credential resolution)
 		APIKey:          overrides.APIKey,
 		ResolvedBaseURL: overrides.ResolvedBaseURL,
@@ -218,20 +222,32 @@ func (s *executionService) mergeConfig(base, overrides *promptDomain.ModelConfig
 	if len(overrides.Stop) > 0 {
 		result.Stop = overrides.Stop
 	}
+	if len(overrides.Tools) > 0 {
+		result.Tools = overrides.Tools
+	}
+	if len(overrides.ToolChoice) > 0 {
+		result.ToolChoice = overrides.ToolChoice
+	}
+	if len(overrides.ResponseFormat) > 0 {
+		result.ResponseFormat = overrides.ResponseFormat
+	}
 
 	return result
 }
 
 type openAIRequest struct {
-	Model            string           `json:"model"`
-	Messages         []openAIMessage  `json:"messages,omitempty"`
-	Prompt           string           `json:"prompt,omitempty"`
-	Temperature      *float64         `json:"temperature,omitempty"`
-	MaxTokens        *int             `json:"max_tokens,omitempty"`
-	TopP             *float64         `json:"top_p,omitempty"`
-	FrequencyPenalty *float64         `json:"frequency_penalty,omitempty"`
-	PresencePenalty  *float64         `json:"presence_penalty,omitempty"`
-	Stop             []string         `json:"stop,omitempty"`
+	Model            string            `json:"model"`
+	Messages         []openAIMessage   `json:"messages,omitempty"`
+	Prompt           string            `json:"prompt,omitempty"`
+	Temperature      *float64          `json:"temperature,omitempty"`
+	MaxTokens        *int              `json:"max_tokens,omitempty"`
+	TopP             *float64          `json:"top_p,omitempty"`
+	FrequencyPenalty *float64          `json:"frequency_penalty,omitempty"`
+	PresencePenalty  *float64          `json:"presence_penalty,omitempty"`
+	Stop             []string          `json:"stop,omitempty"`
+	Tools            []json.RawMessage `json:"tools,omitempty"`
+	ToolChoice       json.RawMessage   `json:"tool_choice,omitempty"`
+	ResponseFormat   json.RawMessage   `json:"response_format,omitempty"`
 }
 
 type openAIMessage struct {
@@ -246,8 +262,9 @@ type openAIResponse struct {
 	Choices []struct {
 		Index   int `json:"index"`
 		Message struct {
-			Role    string `json:"role"`
-			Content string `json:"content"`
+			Role      string            `json:"role"`
+			Content   *string           `json:"content"` // Pointer to accept null when tool_calls are returned
+			ToolCalls []json.RawMessage `json:"tool_calls,omitempty"`
 		} `json:"message"`
 		Text         string `json:"text,omitempty"`
 		FinishReason string `json:"finish_reason"`
@@ -336,6 +353,9 @@ func (s *executionService) executeOpenAICompatible(ctx context.Context, promptTy
 		FrequencyPenalty: config.FrequencyPenalty,
 		PresencePenalty:  config.PresencePenalty,
 		Stop:             config.Stop,
+		Tools:            config.Tools,
+		ToolChoice:       config.ToolChoice,
+		ResponseFormat:   config.ResponseFormat,
 	}
 
 	var endpoint string
@@ -423,9 +443,9 @@ func (s *executionService) executeOpenAICompatible(ctx context.Context, promptTy
 	}
 
 	var content string
-	if openAIResp.Choices[0].Message.Content != "" {
-		content = openAIResp.Choices[0].Message.Content
-	} else {
+	if openAIResp.Choices[0].Message.Content != nil && *openAIResp.Choices[0].Message.Content != "" {
+		content = *openAIResp.Choices[0].Message.Content
+	} else if openAIResp.Choices[0].Text != "" {
 		content = openAIResp.Choices[0].Text
 	}
 
@@ -439,18 +459,23 @@ func (s *executionService) executeOpenAICompatible(ctx context.Context, promptTy
 			CompletionTokens: openAIResp.Usage.CompletionTokens,
 			TotalTokens:      openAIResp.Usage.TotalTokens,
 		},
-		Cost: &cost,
+		Cost:         &cost,
+		FinishReason: openAIResp.Choices[0].FinishReason,
+		ToolCalls:    openAIResp.Choices[0].Message.ToolCalls,
 	}, nil
 }
 
 type anthropicRequest struct {
-	Model       string              `json:"model"`
-	Messages    []anthropicMessage  `json:"messages"`
-	System      string              `json:"system,omitempty"`
-	MaxTokens   int                 `json:"max_tokens"`
-	Temperature *float64            `json:"temperature,omitempty"`
-	TopP        *float64            `json:"top_p,omitempty"`
-	StopSeq     []string            `json:"stop_sequences,omitempty"`
+	Model       string             `json:"model"`
+	Messages    []anthropicMessage `json:"messages"`
+	System      string             `json:"system,omitempty"`
+	MaxTokens   int                `json:"max_tokens"`
+	Temperature *float64           `json:"temperature,omitempty"`
+	TopP        *float64           `json:"top_p,omitempty"`
+	StopSeq     []string           `json:"stop_sequences,omitempty"`
+	// Tools for function calling (Anthropic format)
+	Tools      []json.RawMessage `json:"tools,omitempty"`
+	ToolChoice json.RawMessage   `json:"tool_choice,omitempty"`
 }
 
 type anthropicMessage struct {
@@ -900,27 +925,80 @@ func (s *executionService) executeGemini(ctx context.Context, promptType promptD
 	}, nil
 }
 
+// toolCallAccumulator accumulates streaming tool call deltas by index
+type toolCallAccumulator struct {
+	ID   string
+	Type string
+	Name string
+	Args strings.Builder // Accumulate arguments across deltas
+}
+
 type streamAccumulator struct {
 	content      strings.Builder
 	model        string
 	finishReason string
 	usage        *promptDomain.LLMUsage
+	toolCalls    map[int]*toolCallAccumulator // Map by index for merging deltas
+}
+
+// getToolCalls converts accumulated tool calls to json.RawMessage format for StreamResult
+func (acc *streamAccumulator) getToolCalls() []json.RawMessage {
+	if len(acc.toolCalls) == 0 {
+		return nil
+	}
+
+	// Sort by index to maintain order
+	indices := make([]int, 0, len(acc.toolCalls))
+	for idx := range acc.toolCalls {
+		indices = append(indices, idx)
+	}
+	sort.Ints(indices)
+
+	result := make([]json.RawMessage, 0, len(indices))
+	for _, idx := range indices {
+		tc := acc.toolCalls[idx]
+		toolCall := map[string]interface{}{
+			"id":   tc.ID,
+			"type": tc.Type,
+			"function": map[string]string{
+				"name":      tc.Name,
+				"arguments": tc.Args.String(),
+			},
+		}
+		data, _ := json.Marshal(toolCall)
+		result = append(result, data)
+	}
+	return result
 }
 
 type openAIStreamRequest struct {
-	Model            string          `json:"model"`
-	Messages         []openAIMessage `json:"messages,omitempty"`
-	Prompt           string          `json:"prompt,omitempty"`
-	Temperature      *float64        `json:"temperature,omitempty"`
-	MaxTokens        *int            `json:"max_tokens,omitempty"`
-	TopP             *float64        `json:"top_p,omitempty"`
-	FrequencyPenalty *float64        `json:"frequency_penalty,omitempty"`
-	PresencePenalty  *float64        `json:"presence_penalty,omitempty"`
-	Stop             []string        `json:"stop,omitempty"`
-	Stream           bool            `json:"stream"`
+	Model            string            `json:"model"`
+	Messages         []openAIMessage   `json:"messages,omitempty"`
+	Prompt           string            `json:"prompt,omitempty"`
+	Temperature      *float64          `json:"temperature,omitempty"`
+	MaxTokens        *int              `json:"max_tokens,omitempty"`
+	TopP             *float64          `json:"top_p,omitempty"`
+	FrequencyPenalty *float64          `json:"frequency_penalty,omitempty"`
+	PresencePenalty  *float64          `json:"presence_penalty,omitempty"`
+	Stop             []string          `json:"stop,omitempty"`
+	Tools            []json.RawMessage `json:"tools,omitempty"`
+	ToolChoice       json.RawMessage   `json:"tool_choice,omitempty"`
+	ResponseFormat   json.RawMessage   `json:"response_format,omitempty"`
+	Stream           bool              `json:"stream"`
 	StreamOptions    *struct {
 		IncludeUsage bool `json:"include_usage"`
 	} `json:"stream_options,omitempty"`
+}
+
+// openAIStreamToolCallDelta represents a tool call delta in streaming
+type openAIStreamToolCallDelta struct {
+	Index    int    `json:"index"`
+	ID       string `json:"id,omitempty"`
+	Type     string `json:"type,omitempty"`
+	Function struct {
+		Name      string `json:"name,omitempty"`
+		Arguments string `json:"arguments,omitempty"`
+	} `json:"function,omitempty"`
 }
 
 type openAIStreamChunk struct {
@@ -930,8 +1008,9 @@ type openAIStreamChunk struct {
 	Choices []struct {
 		Index int `json:"index"`
 		Delta struct {
-			Role    string `json:"role,omitempty"`
-			Content string `json:"content,omitempty"`
+			Role      string                      `json:"role,omitempty"`
+			Content   string                      `json:"content,omitempty"`
+			ToolCalls []openAIStreamToolCallDelta `json:"tool_calls,omitempty"`
 		} `json:"delta"`
 		FinishReason *string `json:"finish_reason"`
 	} `json:"choices"`
@@ -950,6 +1029,8 @@ type anthropicStreamRequest struct {
 	Temperature *float64           `json:"temperature,omitempty"`
 	TopP        *float64           `json:"top_p,omitempty"`
 	StopSeq     []string           `json:"stop_sequences,omitempty"`
+	Tools       []json.RawMessage  `json:"tools,omitempty"`
+	ToolChoice  json.RawMessage    `json:"tool_choice,omitempty"`
 	Stream      bool               `json:"stream"`
 }
 
@@ -969,9 +1050,22 @@ type anthropicContentBlockDelta struct {
 	Type  string `json:"type"`
 	Index int    `json:"index"`
 	Delta struct {
-		Type string `json:"type"`
-		Text string `json:"text"`
+		Type        string `json:"type"`
+		Text        string `json:"text,omitempty"`
+		PartialJSON string `json:"partial_json,omitempty"` // For tool_use input_json_delta
 	} `json:"delta"`
+}
+
+// anthropicContentBlockStart represents a content_block_start event
+type anthropicContentBlockStart struct {
+	Type         string `json:"type"`
+	Index        int    `json:"index"`
+	ContentBlock struct {
+		Type  string `json:"type"`            // "text" or "tool_use"
+		ID    string `json:"id,omitempty"`    // Tool use ID
+		Name  string `json:"name,omitempty"`  // Function name for tool_use
+		Input any    `json:"input,omitempty"` // Empty object for tool_use start
+	} `json:"content_block"`
 }
 
 type anthropicMessageDelta struct {
@@ -1017,6 +1111,9 @@ func (s *executionService) streamOpenAICompatible(
 		FrequencyPenalty: config.FrequencyPenalty,
 		PresencePenalty:  config.PresencePenalty,
 		Stop:             config.Stop,
+		Tools:            config.Tools,
+		ToolChoice:       config.ToolChoice,
+		ResponseFormat:   config.ResponseFormat,
 		Stream:           true,
 		StreamOptions: &struct {
 			IncludeUsage bool `json:"include_usage"`
@@ -1098,7 +1195,9 @@ func (s *executionService) streamOpenAICompatible(
 
 	eventChan <- promptDomain.StreamEvent{Type: promptDomain.StreamEventStart}
 
-	var acc streamAccumulator
+	acc := streamAccumulator{
+		toolCalls: make(map[int]*toolCallAccumulator),
+	}
 	reader := bufio.NewReader(resp.Body)
 	var firstTokenTime *time.Time
 
@@ -1149,6 +1248,26 @@ func (s *executionService) streamOpenAICompatible(
 				}
 			}
 
+			// Process tool call deltas
+			for _, tc := range delta.ToolCalls {
+				if _, exists := acc.toolCalls[tc.Index]; !exists {
+					acc.toolCalls[tc.Index] = &toolCallAccumulator{}
+				}
+				// Update fields when non-empty (providers may send id/name in later chunks)
+				if tc.ID != "" {
+					acc.toolCalls[tc.Index].ID = tc.ID
+				}
+				if tc.Type != "" {
+					acc.toolCalls[tc.Index].Type = tc.Type
+				}
+				if tc.Function.Name != "" {
+					acc.toolCalls[tc.Index].Name = tc.Function.Name
+				}
+				if tc.Function.Arguments != "" {
+					acc.toolCalls[tc.Index].Args.WriteString(tc.Function.Arguments)
+				}
+			}
+
 			if chunk.Choices[0].FinishReason != nil {
 				acc.finishReason = *chunk.Choices[0].FinishReason
 			}
@@ -1193,6 +1312,7 @@ func (s *executionService) streamOpenAICompatible(
 		FinishReason:  acc.finishReason,
 		TTFTMs:        ttftMs,
 		TotalDuration: totalDuration,
+		ToolCalls:     acc.getToolCalls(),
 	}
 }
 
@@ -1230,6 +1350,8 @@ func (s *executionService) streamAnthropic(
 		Temperature: config.Temperature,
 		TopP:        config.TopP,
 		StopSeq:     config.Stop,
+		Tools:       config.Tools,
+		ToolChoice:  config.ToolChoice,
 		Stream:      true,
 	}
 
@@ -1306,7 +1428,9 @@ func (s *executionService) streamAnthropic(
 
 	eventChan <- promptDomain.StreamEvent{Type: promptDomain.StreamEventStart}
 
-	var acc streamAccumulator
+	acc := streamAccumulator{
+		toolCalls: make(map[int]*toolCallAccumulator),
+	}
 	var inputTokens int
 	reader := bufio.NewReader(resp.Body)
 	var firstTokenTime *time.Time
@@ -1350,6 +1474,19 @@ func (s *executionService) streamAnthropic(
 					inputTokens = msg.Message.Usage.InputTokens
 				}
 
+			case "content_block_start":
+				// Handle tool_use block start
+				var block anthropicContentBlockStart
+				if err := json.Unmarshal([]byte(data), &block); err == nil {
+					if block.ContentBlock.Type == "tool_use" {
+						acc.toolCalls[block.Index] = &toolCallAccumulator{
+							ID:   block.ContentBlock.ID,
+							Type: "function",
+							Name: block.ContentBlock.Name,
+						}
+					}
+				}
+
 			case "content_block_delta":
 				var delta anthropicContentBlockDelta
 				if err := json.Unmarshal([]byte(data), &delta); err == nil {
@@ -1362,6 +1499,11 @@ func (s *executionService) streamAnthropic(
 						eventChan <- promptDomain.StreamEvent{
 							Type:    promptDomain.StreamEventContent,
 							Content: delta.Delta.Text,
+						}
+					} else if delta.Delta.Type == "input_json_delta" && delta.Delta.PartialJSON != "" {
+						// Tool use argument streaming
+						if tc, exists := acc.toolCalls[delta.Index]; exists {
+							tc.Args.WriteString(delta.Delta.PartialJSON)
 						}
 					}
 				}
@@ -1408,6 +1550,7 @@ func (s *executionService) streamAnthropic(
 		FinishReason:  acc.finishReason,
 		TTFTMs:        ttftMs,
 		TotalDuration: totalDuration,
+		ToolCalls:     acc.getToolCalls(),
 	}
 }
 
