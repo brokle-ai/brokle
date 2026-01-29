@@ -137,13 +137,13 @@ func (a *App) Start() error {
 		}
 		a.logger.Info("Telemetry stream consumer started")
 
-		// Start evaluation rule worker
-		if a.providers.Workers.RuleWorker != nil {
-			if err := a.providers.Workers.RuleWorker.Start(context.Background()); err != nil {
-				a.logger.Error("Failed to start evaluation rule worker", "error", err)
+		// Start evaluator worker
+		if a.providers.Workers.EvaluatorWorker != nil {
+			if err := a.providers.Workers.EvaluatorWorker.Start(context.Background()); err != nil {
+				a.logger.Error("Failed to start evaluator worker", "error", err)
 				return err
 			}
-			a.logger.Info("Evaluation rule worker started")
+			a.logger.Info("Evaluator worker started")
 		}
 
 		// Start evaluation worker
@@ -228,8 +228,8 @@ func (a *App) doShutdown(ctx context.Context) error {
 				if a.providers.Workers.TelemetryConsumer != nil {
 					a.providers.Workers.TelemetryConsumer.Stop()
 				}
-				if a.providers.Workers.RuleWorker != nil {
-					a.providers.Workers.RuleWorker.Stop()
+				if a.providers.Workers.EvaluatorWorker != nil {
+					a.providers.Workers.EvaluatorWorker.Stop()
 				}
 				if a.providers.Workers.EvaluationWorker != nil {
 					a.providers.Workers.EvaluationWorker.Stop()

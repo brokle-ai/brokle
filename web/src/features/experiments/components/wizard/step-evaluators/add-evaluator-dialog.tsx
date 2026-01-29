@@ -24,7 +24,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Calculator, Bot, Regex } from 'lucide-react'
 import { useExperimentWizard } from '../../../context/experiment-wizard-context'
 import { BUILTIN_SCORERS, type EvaluatorCategory } from '../../../types'
-import type { ScorerType, BuiltinScorerConfig, RegexScorerConfig, LLMScorerConfig } from '@/features/evaluation-rules/types'
+import type { ScorerType, BuiltinScorerConfig, RegexScorerConfig, LLMScorerConfig } from '@/features/evaluators/types'
 
 interface AddEvaluatorDialogProps {
   open: boolean

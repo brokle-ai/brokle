@@ -104,22 +104,22 @@ type ExperimentConfigRepository interface {
 	Delete(ctx context.Context, id ulid.ULID) error
 }
 
-type RuleRepository interface {
-	Create(ctx context.Context, rule *EvaluationRule) error
-	Update(ctx context.Context, rule *EvaluationRule) error
+type EvaluatorRepository interface {
+	Create(ctx context.Context, evaluator *Evaluator) error
+	Update(ctx context.Context, evaluator *Evaluator) error
 	Delete(ctx context.Context, id ulid.ULID, projectID ulid.ULID) error
-	GetByID(ctx context.Context, id ulid.ULID, projectID ulid.ULID) (*EvaluationRule, error)
-	GetByProjectID(ctx context.Context, projectID ulid.ULID, filter *RuleFilter, params pagination.Params) ([]*EvaluationRule, int64, error)
-	GetActiveByProjectID(ctx context.Context, projectID ulid.ULID) ([]*EvaluationRule, error)
+	GetByID(ctx context.Context, id ulid.ULID, projectID ulid.ULID) (*Evaluator, error)
+	GetByProjectID(ctx context.Context, projectID ulid.ULID, filter *EvaluatorFilter, params pagination.Params) ([]*Evaluator, int64, error)
+	GetActiveByProjectID(ctx context.Context, projectID ulid.ULID) ([]*Evaluator, error)
 	ExistsByName(ctx context.Context, projectID ulid.ULID, name string) (bool, error)
 }
 
-type RuleExecutionRepository interface {
-	Create(ctx context.Context, execution *RuleExecution) error
-	Update(ctx context.Context, execution *RuleExecution) error
-	GetByID(ctx context.Context, id ulid.ULID, projectID ulid.ULID) (*RuleExecution, error)
-	GetByRuleID(ctx context.Context, ruleID ulid.ULID, projectID ulid.ULID, filter *ExecutionFilter, params pagination.Params) ([]*RuleExecution, int64, error)
-	GetLatestByRuleID(ctx context.Context, ruleID ulid.ULID, projectID ulid.ULID) (*RuleExecution, error)
+type EvaluatorExecutionRepository interface {
+	Create(ctx context.Context, execution *EvaluatorExecution) error
+	Update(ctx context.Context, execution *EvaluatorExecution) error
+	GetByID(ctx context.Context, id ulid.ULID, projectID ulid.ULID) (*EvaluatorExecution, error)
+	GetByEvaluatorID(ctx context.Context, evaluatorID ulid.ULID, projectID ulid.ULID, filter *ExecutionFilter, params pagination.Params) ([]*EvaluatorExecution, int64, error)
+	GetLatestByEvaluatorID(ctx context.Context, evaluatorID ulid.ULID, projectID ulid.ULID) (*EvaluatorExecution, error)
 
 	// IncrementCounters atomically increments spans_scored and errors_count counters
 	IncrementCounters(ctx context.Context, id ulid.ULID, projectID ulid.ULID, spansScored, errorsCount int) error

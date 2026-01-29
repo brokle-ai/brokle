@@ -131,8 +131,8 @@ export const ROUTES: Route[] = [
     show: ({ currentProjectSlug }) => !!currentProjectSlug,
   },
   {
-    title: 'Rules',
-    pathname: '/projects/[projectSlug]/evaluations/rules',
+    title: 'Evaluators',
+    pathname: '/projects/[projectSlug]/evaluators',
     icon: Scale,
     section: RouteSection.Main,
     group: RouteGroup.Evaluations,

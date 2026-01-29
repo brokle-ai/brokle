@@ -55,7 +55,7 @@ type EvaluationWorkerConfig struct {
 type EvaluationWorker struct {
 	redis            *database.RedisDB
 	scoreService     observability.ScoreService
-	executionService evaluation.RuleExecutionService
+	executionService evaluation.EvaluatorExecutionService
 	llmScorer        Scorer
 	builtinScorer    Scorer
 	regexScorer      Scorer
@@ -88,7 +88,7 @@ type EvaluationWorker struct {
 	regexCalls    int64
 }
 
-// executionProgress tracks progress for a single rule execution
+// executionProgress tracks progress for a single evaluator execution
 type executionProgress struct {
 	executionID  string
 	projectID    ulid.ULID
@@ -101,7 +101,7 @@ type executionProgress struct {
 func NewEvaluationWorker(
 	redis *database.RedisDB,
 	scoreService observability.ScoreService,
-	executionService evaluation.RuleExecutionService,
+	executionService evaluation.EvaluatorExecutionService,
 	llmScorer Scorer,
 	builtinScorer Scorer,
 	regexScorer Scorer,
@@ -333,7 +333,7 @@ func (w *EvaluationWorker) processJob(ctx context.Context, msg redis.XMessage) e
 	if result == nil || len(result.Scores) == 0 {
 		w.logger.Debug("Scorer returned no scores",
 			"job_id", job.JobID,
-			"rule_id", job.RuleID,
+			"evaluator_id", job.EvaluatorID,
 		)
 		// Still track as successful scoring (just no output)
 		w.trackExecutionSuccess(ctx, &job)
@@ -371,7 +371,7 @@ func (w *EvaluationWorker) processJob(ctx context.Context, msg redis.XMessage) e
 
 	w.logger.Debug("Created scores from evaluation",
 		"job_id", job.JobID,
-		"rule_id", job.RuleID,
+		"evaluator_id", job.EvaluatorID,
 		"score_count", len(scores),
 		"scorer_type", job.ScorerType,
 	)
@@ -404,7 +404,7 @@ func (w *EvaluationWorker) trackExecutionSuccess(ctx context.Context, job *Evalu
 	if completed {
 		w.logger.Info("execution auto-completed",
 			"execution_id", job.ExecutionID,
-			"rule_id", job.RuleID,
+			"evaluator_id", job.EvaluatorID,
 			"project_id", job.ProjectID,
 		)
 	}
@@ -435,7 +435,7 @@ func (w *EvaluationWorker) trackExecutionError(ctx context.Context, job *Evaluat
 	if completed {
 		w.logger.Info("execution auto-completed with errors",
 			"execution_id", job.ExecutionID,
-			"rule_id", job.RuleID,
+			"evaluator_id", job.EvaluatorID,
 			"project_id", job.ProjectID,
 		)
 	}
@@ -489,9 +489,9 @@ func (w *EvaluationWorker) FlushExecutionStats(ctx context.Context) {
 
 func (w *EvaluationWorker) buildScoreMetadata(job EvaluationJob) string {
 	metadata := map[string]interface{}{
-		"rule_id":     job.RuleID.String(),
-		"scorer_type": string(job.ScorerType),
-		"job_id":      job.JobID.String(),
+		"evaluator_id": job.EvaluatorID.String(),
+		"scorer_type":  string(job.ScorerType),
+		"job_id":       job.JobID.String(),
 	}
 	data, _ := json.Marshal(metadata)
 	return string(data)

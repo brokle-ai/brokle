@@ -110,7 +110,7 @@ type DatabaseContainer struct {
 
 type WorkerContainer struct {
 	TelemetryConsumer        *workers.TelemetryStreamConsumer
-	RuleWorker               *evaluationWorker.RuleWorker
+	EvaluatorWorker          *evaluationWorker.EvaluatorWorker
 	EvaluationWorker         *evaluationWorker.EvaluationWorker
 	ManualTriggerWorker      *evaluationWorker.ManualTriggerWorker
 	UsageAggregationWorker   *workers.UsageAggregationWorker
@@ -246,8 +246,8 @@ type EvaluationRepositories struct {
 	Experiment          evaluationDomain.ExperimentRepository
 	ExperimentItem      evaluationDomain.ExperimentItemRepository
 	ExperimentConfig    evaluationDomain.ExperimentConfigRepository
-	Rule          evaluationDomain.RuleRepository
-	RuleExecution evaluationDomain.RuleExecutionRepository
+	Evaluator          evaluationDomain.EvaluatorRepository
+	EvaluatorExecution evaluationDomain.EvaluatorExecutionRepository
 }
 
 type DashboardRepositories struct {
@@ -318,8 +318,8 @@ type EvaluationServices struct {
 	Experiment          evaluationDomain.ExperimentService
 	ExperimentItem      evaluationDomain.ExperimentItemService
 	ExperimentWizard    evaluationDomain.ExperimentWizardService
-	Rule          evaluationDomain.RuleService
-	RuleExecution evaluationDomain.RuleExecutionService
+	Evaluator          evaluationDomain.EvaluatorService
+	EvaluatorExecution evaluationDomain.EvaluatorExecutionService
 }
 
 type DashboardServices struct {
@@ -387,34 +387,34 @@ func ProvideWorkers(core *CoreContainer) (*WorkerContainer, error) {
 		&core.Config.Archive,                       // Archive config
 	)
 
-	// Create evaluation rule worker using config
-	discoveryInterval, _ := time.ParseDuration(core.Config.Workers.RuleWorker.DiscoveryInterval)
+	// Create evaluator worker using config
+	discoveryInterval, _ := time.ParseDuration(core.Config.Workers.EvaluatorWorker.DiscoveryInterval)
 	if discoveryInterval == 0 {
 		discoveryInterval = 30 * time.Second
 	}
-	ruleCacheTTL, _ := time.ParseDuration(core.Config.Workers.RuleWorker.RuleCacheTTL)
-	if ruleCacheTTL == 0 {
-		ruleCacheTTL = 30 * time.Second
+	evaluatorCacheTTL, _ := time.ParseDuration(core.Config.Workers.EvaluatorWorker.EvaluatorCacheTTL)
+	if evaluatorCacheTTL == 0 {
+		evaluatorCacheTTL = 30 * time.Second
 	}
 
-	ruleWorkerConfig := &evaluationWorker.RuleWorkerConfig{
-		ConsumerGroup:     "evaluation-rule-workers",
-		ConsumerID:        "rule-worker-" + ulid.New().String(),
-		BatchSize:         core.Config.Workers.RuleWorker.BatchSize,
-		BlockDuration:     time.Duration(core.Config.Workers.RuleWorker.BlockDurationMs) * time.Millisecond,
-		MaxRetries:        core.Config.Workers.RuleWorker.MaxRetries,
-		RetryBackoff:      time.Duration(core.Config.Workers.RuleWorker.RetryBackoffMs) * time.Millisecond,
+	evaluatorWorkerConfig := &evaluationWorker.EvaluatorWorkerConfig{
+		ConsumerGroup:     "evaluator-workers",
+		ConsumerID:        "evaluator-worker-" + ulid.New().String(),
+		BatchSize:         core.Config.Workers.EvaluatorWorker.BatchSize,
+		BlockDuration:     time.Duration(core.Config.Workers.EvaluatorWorker.BlockDurationMs) * time.Millisecond,
+		MaxRetries:        core.Config.Workers.EvaluatorWorker.MaxRetries,
+		RetryBackoff:      time.Duration(core.Config.Workers.EvaluatorWorker.RetryBackoffMs) * time.Millisecond,
 		DiscoveryInterval: discoveryInterval,
-		MaxStreamsPerRead: core.Config.Workers.RuleWorker.MaxStreamsPerRead,
-		RuleCacheTTL:      ruleCacheTTL,
+		MaxStreamsPerRead: core.Config.Workers.EvaluatorWorker.MaxStreamsPerRead,
+		EvaluatorCacheTTL: evaluatorCacheTTL,
 	}
 
-	ruleWorker := evaluationWorker.NewRuleWorker(
+	evaluatorWorker := evaluationWorker.NewEvaluatorWorker(
 		core.Databases.Redis,
-		core.Services.Evaluation.Rule,
-		core.Services.Evaluation.RuleExecution,
+		core.Services.Evaluation.Evaluator,
+		core.Services.Evaluation.EvaluatorExecution,
 		core.Logger,
-		ruleWorkerConfig,
+		evaluatorWorkerConfig,
 	)
 
 	// Create scorers for evaluation worker
@@ -448,7 +448,7 @@ func ProvideWorkers(core *CoreContainer) (*WorkerContainer, error) {
 	evalWorker := evaluationWorker.NewEvaluationWorker(
 		core.Databases.Redis,
 		core.Services.Observability.ScoreService,
-		core.Services.Evaluation.RuleExecution,
+		core.Services.Evaluation.EvaluatorExecution,
 		llmScorer,
 		builtinScorer,
 		regexScorer,
@@ -468,7 +468,7 @@ func ProvideWorkers(core *CoreContainer) (*WorkerContainer, error) {
 	manualTriggerWorker := evaluationWorker.NewManualTriggerWorker(
 		core.Databases.Redis,
 		core.Services.Observability.TraceService,
-		core.Services.Evaluation.RuleExecution,
+		core.Services.Evaluation.EvaluatorExecution,
 		core.Logger,
 		manualTriggerWorkerConfig,
 	)
@@ -504,7 +504,7 @@ func ProvideWorkers(core *CoreContainer) (*WorkerContainer, error) {
 
 	return &WorkerContainer{
 		TelemetryConsumer:        telemetryConsumer,
-		RuleWorker:               ruleWorker,
+		EvaluatorWorker:          evaluatorWorker,
 		EvaluationWorker:         evalWorker,
 		ManualTriggerWorker:      manualTriggerWorker,
 		UsageAggregationWorker:   usageAggWorker,
@@ -641,7 +641,7 @@ func ProvideWorkerServices(core *CoreContainer) *ServiceContainer {
 		logger.Warn("AI_KEY_ENCRYPTION_KEY not configured, LLM scorer will be disabled")
 	}
 
-	// Evaluation services needed for rule worker
+	// Evaluation services needed for evaluator worker
 	evaluationServices := ProvideEvaluationServices(core.Transactor, repos.Evaluation, repos.Observability, observabilityServices, repos.Prompt, databases.Redis, logger)
 
 	return &ServiceContainer{
@@ -659,7 +659,7 @@ func ProvideWorkerServices(core *CoreContainer) *ServiceContainer {
 		Observability:       observabilityServices,
 		Billing:             billingServices,
 		Analytics:           analyticsServices,
-		Evaluation:          evaluationServices, // Needed for rule worker
+		Evaluation:          evaluationServices, // Needed for evaluator worker
 	}
 }
 
@@ -686,8 +686,8 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 	var experimentSvc evaluationDomain.ExperimentService
 	var experimentItemSvc evaluationDomain.ExperimentItemService
 	var experimentWizardSvc evaluationDomain.ExperimentWizardService
-	var ruleSvc evaluationDomain.RuleService
-	var ruleExecutionSvc evaluationDomain.RuleExecutionService
+	var evaluatorSvc evaluationDomain.EvaluatorService
+	var evaluatorExecutionSvc evaluationDomain.EvaluatorExecutionService
 	if core.Services.Evaluation != nil {
 		scoreConfigSvc = core.Services.Evaluation.ScoreConfig
 		datasetSvc = core.Services.Evaluation.Dataset
@@ -696,8 +696,8 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 		experimentSvc = core.Services.Evaluation.Experiment
 		experimentItemSvc = core.Services.Evaluation.ExperimentItem
 		experimentWizardSvc = core.Services.Evaluation.ExperimentWizard
-		ruleSvc = core.Services.Evaluation.Rule
-		ruleExecutionSvc = core.Services.Evaluation.RuleExecution
+		evaluatorSvc = core.Services.Evaluation.Evaluator
+		evaluatorExecutionSvc = core.Services.Evaluation.EvaluatorExecution
 	}
 
 	// Get dashboard services
@@ -742,8 +742,8 @@ func ProvideServer(core *CoreContainer) (*ServerContainer, error) {
 		experimentSvc,
 		experimentItemSvc,
 		experimentWizardSvc,
-		ruleSvc,
-		ruleExecutionSvc,
+		evaluatorSvc,
+		evaluatorExecutionSvc,
 		dashboardSvc,
 		widgetQuerySvc,
 		templateSvc,
@@ -925,8 +925,8 @@ func ProvideEvaluationRepositories(db *gorm.DB) *EvaluationRepositories {
 		Experiment:         evaluationRepo.NewExperimentRepository(db),
 		ExperimentItem:     evaluationRepo.NewExperimentItemRepository(db),
 		ExperimentConfig:   evaluationRepo.NewExperimentConfigRepository(db),
-		Rule:          evaluationRepo.NewRuleRepository(db),
-		RuleExecution: evaluationRepo.NewRuleExecutionRepository(db),
+		Evaluator:          evaluationRepo.NewEvaluatorRepository(db),
+		EvaluatorExecution: evaluationRepo.NewEvaluatorExecutionRepository(db),
 	}
 }
 
@@ -1408,15 +1408,15 @@ func ProvideEvaluationServices(
 		logger,
 	)
 
-	// RuleExecutionService must be created before RuleService since RuleService depends on it
-	ruleExecutionSvc := evaluationService.NewRuleExecutionService(
-		evaluationRepos.RuleExecution,
+	// EvaluatorExecutionService must be created before EvaluatorService since EvaluatorService depends on it
+	evaluatorExecutionSvc := evaluationService.NewEvaluatorExecutionService(
+		evaluationRepos.EvaluatorExecution,
 		logger,
 	)
 
-	ruleSvc := evaluationService.NewRuleService(
-		evaluationRepos.Rule,
-		ruleExecutionSvc,
+	evaluatorSvc := evaluationService.NewEvaluatorService(
+		evaluationRepos.Evaluator,
+		evaluatorExecutionSvc,
 		observabilityRepos.Trace,
 		redisDB,
 		logger,
@@ -1430,8 +1430,8 @@ func ProvideEvaluationServices(
 		Experiment:         experimentSvc,
 		ExperimentItem:     experimentItemSvc,
 		ExperimentWizard:   experimentWizardSvc,
-		Rule:          ruleSvc,
-		RuleExecution: ruleExecutionSvc,
+		Evaluator:          evaluatorSvc,
+		EvaluatorExecution: evaluatorExecutionSvc,
 	}
 }
 
@@ -1582,19 +1582,19 @@ func (pc *ProviderContainer) HealthCheck() map[string]string {
 		}
 	}
 
-	// Evaluation rule worker health
-	if pc.Workers != nil && pc.Workers.RuleWorker != nil {
-		stats := pc.Workers.RuleWorker.GetStats()
+	// Evaluator worker health
+	if pc.Workers != nil && pc.Workers.EvaluatorWorker != nil {
+		stats := pc.Workers.EvaluatorWorker.GetStats()
 		spansProcessed := stats["spans_processed"]
 		errorsCount := stats["errors_count"]
 
 		if spansProcessed == 0 && errorsCount == 0 {
-			health["evaluation_rule_worker"] = "healthy (no activity yet)"
+			health["evaluator_worker"] = "healthy (no activity yet)"
 		} else if spansProcessed > 0 {
-			health["evaluation_rule_worker"] = fmt.Sprintf("healthy (spans_processed: %d, jobs_emitted: %d, errors: %d)",
+			health["evaluator_worker"] = fmt.Sprintf("healthy (spans_processed: %d, jobs_emitted: %d, errors: %d)",
 				spansProcessed, stats["jobs_emitted"], errorsCount)
 		} else {
-			health["evaluation_rule_worker"] = fmt.Sprintf("unhealthy (errors: %d)", errorsCount)
+			health["evaluator_worker"] = fmt.Sprintf("unhealthy (errors: %d)", errorsCount)
 		}
 	}
 
@@ -1630,10 +1630,10 @@ func (pc *ProviderContainer) Shutdown() error {
 			logger.Info("Telemetry stream consumer stopped")
 		}
 
-		if pc.Workers.RuleWorker != nil {
-			logger.Info("Stopping evaluation rule worker...")
-			pc.Workers.RuleWorker.Stop()
-			logger.Info("Evaluation rule worker stopped")
+		if pc.Workers.EvaluatorWorker != nil {
+			logger.Info("Stopping evaluator worker...")
+			pc.Workers.EvaluatorWorker.Stop()
+			logger.Info("Evaluator worker stopped")
 		}
 
 		if pc.Workers.EvaluationWorker != nil {

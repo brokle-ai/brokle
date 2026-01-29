@@ -1,4 +1,4 @@
-import type { ScorerType, ScorerConfig, VariableMap } from '@/features/evaluation-rules/types'
+import type { ScorerType, ScorerConfig, VariableMap } from '@/features/evaluators/types'
 import type { ModelConfig, PromptListItem, PromptVersion } from '@/features/prompts/types'
 
 // Note: ExperimentSource is defined in ./index.ts and re-exported via barrel export

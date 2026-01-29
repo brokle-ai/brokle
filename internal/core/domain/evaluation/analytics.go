@@ -6,18 +6,18 @@ import (
 	"brokle/pkg/ulid"
 )
 
-// RuleAnalyticsParams defines the parameters for fetching rule analytics.
-type RuleAnalyticsParams struct {
-	ProjectID ulid.ULID
-	RuleID    ulid.ULID
-	Period    string     // "24h", "7d", "30d" (default: "7d")
-	From      *time.Time // Optional custom start time
-	To        *time.Time // Optional custom end time
+// EvaluatorAnalyticsParams defines the parameters for fetching evaluator analytics.
+type EvaluatorAnalyticsParams struct {
+	ProjectID   ulid.ULID
+	EvaluatorID ulid.ULID
+	Period      string     // "24h", "7d", "30d" (default: "7d")
+	From        *time.Time // Optional custom start time
+	To          *time.Time // Optional custom end time
 }
 
-// RuleAnalyticsResponse contains comprehensive analytics for a rule.
-type RuleAnalyticsResponse struct {
-	RuleID             string               `json:"rule_id"`
+// EvaluatorAnalyticsResponse contains comprehensive analytics for an evaluator.
+type EvaluatorAnalyticsResponse struct {
+	EvaluatorID        string               `json:"evaluator_id"`
 	Period             string               `json:"period"`
 	TotalExecutions    int64                `json:"total_executions"`
 	TotalSpansScored   int64                `json:"total_spans_scored"`
@@ -28,7 +28,7 @@ type RuleAnalyticsResponse struct {
 	ScoreTrend         []TimeSeriesPoint    `json:"score_trend"`         // Average score over time
 	LatencyPercentiles LatencyStats         `json:"latency_percentiles"` // P50, P90, P99 latencies
 	TopErrors          []ErrorSummary       `json:"top_errors"`          // Most common error types
-	CostEstimate       *CostEstimate        `json:"cost_estimate,omitempty"` // Estimated cost for LLM rules
+	CostEstimate       *CostEstimate        `json:"cost_estimate,omitempty"` // Estimated cost for LLM evaluators
 }
 
 // DistributionBucket represents a bucket in a histogram.
@@ -40,7 +40,7 @@ type DistributionBucket struct {
 }
 
 // TimeSeriesPoint represents a single data point in a time series.
-// Used for execution trends and score trends in rule analytics.
+// Used for execution trends and score trends in evaluator analytics.
 type TimeSeriesPoint struct {
 	Timestamp   time.Time `json:"timestamp"`
 	Count       int64     `json:"count"`
@@ -66,7 +66,7 @@ type ErrorSummary struct {
 	LastOccurred time.Time `json:"last_occurred"`
 }
 
-// CostEstimate provides cost breakdown for LLM-based rules.
+// CostEstimate provides cost breakdown for LLM-based evaluators.
 type CostEstimate struct {
 	TotalCost        float64 `json:"total_cost"`
 	InputTokens      int64   `json:"input_tokens"`
@@ -74,56 +74,56 @@ type CostEstimate struct {
 	EstimatedMonthly float64 `json:"estimated_monthly"`
 }
 
-// RuleAnalyticsRepository defines the interface for fetching rule analytics.
-type RuleAnalyticsRepository interface {
-	// GetAnalytics retrieves comprehensive analytics for a rule.
-	GetAnalytics(params *RuleAnalyticsParams) (*RuleAnalyticsResponse, error)
+// EvaluatorAnalyticsRepository defines the interface for fetching evaluator analytics.
+type EvaluatorAnalyticsRepository interface {
+	// GetAnalytics retrieves comprehensive analytics for an evaluator.
+	GetAnalytics(params *EvaluatorAnalyticsParams) (*EvaluatorAnalyticsResponse, error)
 
 	// GetScoreDistribution returns the histogram of score values.
-	GetScoreDistribution(projectID, ruleID ulid.ULID, from, to time.Time, buckets int) ([]DistributionBucket, error)
+	GetScoreDistribution(projectID, evaluatorID ulid.ULID, from, to time.Time, buckets int) ([]DistributionBucket, error)
 
 	// GetExecutionTrend returns executions over time.
-	GetExecutionTrend(projectID, ruleID ulid.ULID, from, to time.Time, interval string) ([]TimeSeriesPoint, error)
+	GetExecutionTrend(projectID, evaluatorID ulid.ULID, from, to time.Time, interval string) ([]TimeSeriesPoint, error)
 
 	// GetScoreTrend returns average scores over time.
-	GetScoreTrend(projectID, ruleID ulid.ULID, from, to time.Time, interval string) ([]TimeSeriesPoint, error)
+	GetScoreTrend(projectID, evaluatorID ulid.ULID, from, to time.Time, interval string) ([]TimeSeriesPoint, error)
 
 	// GetLatencyStats returns latency percentile statistics.
-	GetLatencyStats(projectID, ruleID ulid.ULID, from, to time.Time) (*LatencyStats, error)
+	GetLatencyStats(projectID, evaluatorID ulid.ULID, from, to time.Time) (*LatencyStats, error)
 
 	// GetTopErrors returns the most common errors.
-	GetTopErrors(projectID, ruleID ulid.ULID, from, to time.Time, limit int) ([]ErrorSummary, error)
+	GetTopErrors(projectID, evaluatorID ulid.ULID, from, to time.Time, limit int) ([]ErrorSummary, error)
 }
 
 // ExecutionDetailRequest defines the parameters for fetching execution details.
 type ExecutionDetailRequest struct {
 	ProjectID   ulid.ULID
-	RuleID      ulid.ULID
+	EvaluatorID ulid.ULID
 	ExecutionID ulid.ULID
 }
 
 // ExecutionDetailResponse contains detailed information about a specific execution.
 type ExecutionDetailResponse struct {
-	Execution    *RuleExecutionResponse `json:"execution"`
-	Spans        []SpanExecutionDetail  `json:"spans"`
-	RuleSnapshot *RuleSnapshot          `json:"rule_snapshot,omitempty"`
+	Execution         *EvaluatorExecutionResponse `json:"execution"`
+	Spans             []SpanExecutionDetail       `json:"spans"`
+	EvaluatorSnapshot *EvaluatorSnapshot          `json:"evaluator_snapshot,omitempty"`
 }
 
 // SpanExecutionDetail contains detailed execution info for a single span.
 type SpanExecutionDetail struct {
-	SpanID            string              `json:"span_id"`
-	TraceID           string              `json:"trace_id"`
-	SpanName          string              `json:"span_name"`
-	Status            string              `json:"status"` // success, failed, skipped
+	SpanID            string                 `json:"span_id"`
+	TraceID           string                 `json:"trace_id"`
+	SpanName          string                 `json:"span_name"`
+	Status            string                 `json:"status"` // success, failed, skipped
 	ScoreResults      []ExecutionScoreResult `json:"score_results"`
-	PromptSent        []LLMMessage        `json:"prompt_sent,omitempty"`
-	LLMResponseRaw    string              `json:"llm_response_raw,omitempty"`
-	LLMResponseParsed map[string]any      `json:"llm_response_parsed,omitempty"`
-	VariablesResolved []ResolvedVariable  `json:"variables_resolved"`
-	ErrorMessage      string              `json:"error_message,omitempty"`
-	ErrorStack        string              `json:"error_stack,omitempty"`
-	LatencyMs         int64               `json:"latency_ms,omitempty"`
-	CreatedAt         time.Time           `json:"created_at"`
+	PromptSent        []LLMMessage           `json:"prompt_sent,omitempty"`
+	LLMResponseRaw    string                 `json:"llm_response_raw,omitempty"`
+	LLMResponseParsed map[string]any         `json:"llm_response_parsed,omitempty"`
+	VariablesResolved []ResolvedVariable     `json:"variables_resolved"`
+	ErrorMessage      string                 `json:"error_message,omitempty"`
+	ErrorStack        string                 `json:"error_stack,omitempty"`
+	LatencyMs         int64                  `json:"latency_ms,omitempty"`
+	CreatedAt         time.Time              `json:"created_at"`
 }
 
 // ExecutionScoreResult represents a score written during execution.
@@ -135,8 +135,8 @@ type ExecutionScoreResult struct {
 	RawOutput  any     `json:"raw_output,omitempty"`
 }
 
-// RuleSnapshot captures the rule configuration at execution time.
-type RuleSnapshot struct {
+// EvaluatorSnapshot captures the evaluator configuration at execution time.
+type EvaluatorSnapshot struct {
 	Name            string         `json:"name"`
 	ScorerType      ScorerType     `json:"scorer_type"`
 	ScorerConfig    map[string]any `json:"scorer_config"`
@@ -144,12 +144,12 @@ type RuleSnapshot struct {
 	Filter          []FilterClause `json:"filter"`
 }
 
-// RuleExecutionDetailFlat is the API response for execution detail endpoint.
+// EvaluatorExecutionDetailFlat is the API response for execution detail endpoint.
 // Uses flattened structure for frontend compatibility (execution fields at root level).
-type RuleExecutionDetailFlat struct {
-	// Embedded execution fields (flattened from RuleExecutionResponse)
+type EvaluatorExecutionDetailFlat struct {
+	// Embedded execution fields (flattened from EvaluatorExecutionResponse)
 	ID           string          `json:"id"`
-	RuleID       string          `json:"rule_id"`
+	EvaluatorID  string          `json:"evaluator_id"`
 	ProjectID    string          `json:"project_id"`
 	Status       ExecutionStatus `json:"status"`
 	TriggerType  TriggerType     `json:"trigger_type"`
@@ -164,31 +164,31 @@ type RuleExecutionDetailFlat struct {
 	CreatedAt    time.Time       `json:"created_at"`
 
 	// Detail-specific fields
-	Spans        []SpanExecutionDetail `json:"spans"`
-	RuleSnapshot *RuleSnapshot         `json:"rule_snapshot,omitempty"`
+	Spans             []SpanExecutionDetail `json:"spans"`
+	EvaluatorSnapshot *EvaluatorSnapshot    `json:"evaluator_snapshot,omitempty"`
 }
 
 // ToFlat converts ExecutionDetailResponse to flattened API response.
-func (r *ExecutionDetailResponse) ToFlat() *RuleExecutionDetailFlat {
+func (r *ExecutionDetailResponse) ToFlat() *EvaluatorExecutionDetailFlat {
 	if r == nil || r.Execution == nil {
 		return nil
 	}
-	return &RuleExecutionDetailFlat{
-		ID:           r.Execution.ID,
-		RuleID:       r.Execution.RuleID,
-		ProjectID:    r.Execution.ProjectID,
-		Status:       r.Execution.Status,
-		TriggerType:  r.Execution.TriggerType,
-		SpansMatched: r.Execution.SpansMatched,
-		SpansScored:  r.Execution.SpansScored,
-		ErrorsCount:  r.Execution.ErrorsCount,
-		ErrorMessage: r.Execution.ErrorMessage,
-		StartedAt:    r.Execution.StartedAt,
-		CompletedAt:  r.Execution.CompletedAt,
-		DurationMs:   r.Execution.DurationMs,
-		Metadata:     r.Execution.Metadata,
-		CreatedAt:    r.Execution.CreatedAt,
-		Spans:        r.Spans,
-		RuleSnapshot: r.RuleSnapshot,
+	return &EvaluatorExecutionDetailFlat{
+		ID:                r.Execution.ID,
+		EvaluatorID:       r.Execution.EvaluatorID,
+		ProjectID:         r.Execution.ProjectID,
+		Status:            r.Execution.Status,
+		TriggerType:       r.Execution.TriggerType,
+		SpansMatched:      r.Execution.SpansMatched,
+		SpansScored:       r.Execution.SpansScored,
+		ErrorsCount:       r.Execution.ErrorsCount,
+		ErrorMessage:      r.Execution.ErrorMessage,
+		StartedAt:         r.Execution.StartedAt,
+		CompletedAt:       r.Execution.CompletedAt,
+		DurationMs:        r.Execution.DurationMs,
+		Metadata:          r.Execution.Metadata,
+		CreatedAt:         r.Execution.CreatedAt,
+		Spans:             r.Spans,
+		EvaluatorSnapshot: r.EvaluatorSnapshot,
 	}
 }

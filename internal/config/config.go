@@ -244,18 +244,18 @@ type WorkersConfig struct {
 	NotificationWorkers      int              `mapstructure:"notification_workers"`
 	UsageSyncIntervalMinutes int              `mapstructure:"usage_sync_interval_minutes"` // Billing usage sync interval (default: 5)
 	AlertDeduplicationHours  int              `mapstructure:"alert_deduplication_hours"`   // Alert deduplication window (default: 24)
-	RuleWorker               RuleWorkerConfig `mapstructure:"rule_worker"`
+	EvaluatorWorker          EvaluatorWorkerConfig `mapstructure:"evaluator_worker"`
 }
 
-// RuleWorkerConfig contains evaluation rule worker configuration.
-type RuleWorkerConfig struct {
-	BatchSize         int    `mapstructure:"batch_size"`
-	BlockDurationMs   int    `mapstructure:"block_duration_ms"`
-	MaxRetries        int    `mapstructure:"max_retries"`
-	RetryBackoffMs    int    `mapstructure:"retry_backoff_ms"`
-	DiscoveryInterval string `mapstructure:"discovery_interval"`
-	MaxStreamsPerRead int    `mapstructure:"max_streams_per_read"`
-	RuleCacheTTL      string `mapstructure:"rule_cache_ttl"`
+// EvaluatorWorkerConfig contains evaluator worker configuration.
+type EvaluatorWorkerConfig struct {
+	BatchSize          int    `mapstructure:"batch_size"`
+	BlockDurationMs    int    `mapstructure:"block_duration_ms"`
+	MaxRetries         int    `mapstructure:"max_retries"`
+	RetryBackoffMs     int    `mapstructure:"retry_backoff_ms"`
+	DiscoveryInterval  string `mapstructure:"discovery_interval"`
+	MaxStreamsPerRead  int    `mapstructure:"max_streams_per_read"`
+	EvaluatorCacheTTL  string `mapstructure:"evaluator_cache_ttl"`
 }
 
 // NotificationsConfig contains notification system configuration.
@@ -1056,14 +1056,14 @@ func setDefaults() {
 	// Encryption defaults (must be set in production via AI_KEY_ENCRYPTION_KEY env var)
 	viper.SetDefault("encryption.ai_key_encryption_key", "")
 
-	// Rule worker defaults
-	viper.SetDefault("workers.rule_worker.batch_size", 50)
-	viper.SetDefault("workers.rule_worker.block_duration_ms", 1000)
-	viper.SetDefault("workers.rule_worker.max_retries", 3)
-	viper.SetDefault("workers.rule_worker.retry_backoff_ms", 500)
-	viper.SetDefault("workers.rule_worker.discovery_interval", "30s")
-	viper.SetDefault("workers.rule_worker.max_streams_per_read", 10)
-	viper.SetDefault("workers.rule_worker.rule_cache_ttl", "30s")
+	// Evaluator worker defaults
+	viper.SetDefault("workers.evaluator_worker.batch_size", 50)
+	viper.SetDefault("workers.evaluator_worker.block_duration_ms", 1000)
+	viper.SetDefault("workers.evaluator_worker.max_retries", 3)
+	viper.SetDefault("workers.evaluator_worker.retry_backoff_ms", 500)
+	viper.SetDefault("workers.evaluator_worker.discovery_interval", "30s")
+	viper.SetDefault("workers.evaluator_worker.max_streams_per_read", 10)
+	viper.SetDefault("workers.evaluator_worker.evaluator_cache_ttl", "30s")
 }
 
 // GetServerAddress returns the server address string.
