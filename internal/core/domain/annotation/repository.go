@@ -17,8 +17,8 @@ type QueueRepository interface {
 	// GetByName retrieves an annotation queue by name within a project.
 	GetByName(ctx context.Context, name string, projectID ulid.ULID) (*AnnotationQueue, error)
 
-	// List retrieves all annotation queues for a project with optional filtering.
-	List(ctx context.Context, projectID ulid.ULID, filter *QueueFilter) ([]*AnnotationQueue, error)
+	// List retrieves all annotation queues for a project with optional filtering and pagination.
+	List(ctx context.Context, projectID ulid.ULID, filter *QueueFilter, offset, limit int) ([]*AnnotationQueue, int64, error)
 
 	// Update updates an existing annotation queue.
 	Update(ctx context.Context, queue *AnnotationQueue) error

@@ -1,9 +1,16 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Pencil, Trash2, Target, AlertCircle, Loader2, AlertTriangle } from 'lucide-react'
+import { Plus, Pencil, Trash2, Target, AlertCircle, Loader2, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   Table,
   TableBody,
@@ -39,8 +46,13 @@ export function ScoreConfigsSection({ projectId }: ScoreConfigsSectionProps) {
   const [editingConfig, setEditingConfig] = useState<ScoreConfig | null>(null)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [deletingConfig, setDeletingConfig] = useState<ScoreConfig | null>(null)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
 
-  const { data: configs, isLoading, error, refetch } = useScoreConfigsQuery(projectId)
+  const { data: configsResponse, isLoading, isFetching, error, refetch } = useScoreConfigsQuery(projectId, { page, limit: pageSize })
+  const configs = configsResponse?.data
+  const totalCount = configsResponse?.pagination?.total ?? 0
+  const totalPages = Math.ceil(totalCount / pageSize)
   const createMutation = useCreateScoreConfigMutation(projectId)
   const updateMutation = useUpdateScoreConfigMutation(projectId, editingConfig?.id ?? '')
   const deleteMutation = useDeleteScoreConfigMutation(projectId)
@@ -82,16 +94,16 @@ export function ScoreConfigsSection({ projectId }: ScoreConfigsSectionProps) {
   }
 
   const getConstraintDisplay = (config: ScoreConfig) => {
-    if (config.data_type === 'NUMERIC') {
+    if (config.type === 'NUMERIC') {
       if (config.min_value !== undefined || config.max_value !== undefined) {
         return `${config.min_value ?? '−∞'} to ${config.max_value ?? '∞'}`
       }
       return 'Any number'
     }
-    if (config.data_type === 'CATEGORICAL' && config.categories?.length) {
+    if (config.type === 'CATEGORICAL' && config.categories?.length) {
       return config.categories.join(', ')
     }
-    if (config.data_type === 'BOOLEAN') {
+    if (config.type === 'BOOLEAN') {
       return 'true / false'
     }
     return '—'
@@ -176,7 +188,7 @@ export function ScoreConfigsSection({ projectId }: ScoreConfigsSectionProps) {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline">{config.data_type}</Badge>
+                    <Badge variant="outline">{config.type}</Badge>
                   </TableCell>
                   <TableCell>
                     <code className="text-xs bg-muted px-2 py-1 rounded font-mono">
@@ -218,6 +230,56 @@ export function ScoreConfigsSection({ projectId }: ScoreConfigsSectionProps) {
           </TableBody>
         </Table>
           </div>
+
+          {/* Pagination */}
+          {totalCount > 0 && (
+            <div className="flex items-center justify-end space-x-6 py-4">
+              <div className="flex items-center space-x-2">
+                <p className="text-sm font-medium">Rows per page</p>
+                <Select
+                  value={`${pageSize}`}
+                  onValueChange={(value) => {
+                    setPageSize(Number(value))
+                    setPage(1)
+                  }}
+                >
+                  <SelectTrigger className="h-8 w-[70px]">
+                    <SelectValue placeholder={pageSize} />
+                  </SelectTrigger>
+                  <SelectContent side="top">
+                    {[10, 25, 50, 100].map((size) => (
+                      <SelectItem key={size} value={`${size}`}>
+                        {size}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex w-[100px] items-center justify-center text-sm font-medium">
+                Page {page} of {totalPages}
+              </div>
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  className="h-8 w-8 p-0"
+                  onClick={() => setPage(page - 1)}
+                  disabled={page <= 1 || isFetching}
+                >
+                  <span className="sr-only">Go to previous page</span>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  className="h-8 w-8 p-0"
+                  onClick={() => setPage(page + 1)}
+                  disabled={page >= totalPages || isFetching}
+                >
+                  <span className="sr-only">Go to next page</span>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -260,7 +322,7 @@ export function ScoreConfigsSection({ projectId }: ScoreConfigsSectionProps) {
                 </div>
                 <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
                   <Badge variant="outline" className="text-xs">
-                    {deletingConfig.data_type}
+                    {deletingConfig.type}
                   </Badge>
                   {deletingConfig.description && (
                     <>

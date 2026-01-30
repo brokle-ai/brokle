@@ -32,7 +32,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
 } from '@radix-ui/react-icons'
-import type { Score, ScoreDataType, ScoreSource } from '../types'
+import type { Score, ScoreType, ScoreSource } from '../types'
 import type { Pagination } from '@/lib/api/core/types'
 import { ScoreValueCell } from './score-value-cell'
 import { formatDistanceToNow } from 'date-fns'
@@ -59,17 +59,17 @@ const columns: ColumnDef<Score>[] = [
     cell: ({ row }) => <ScoreValueCell score={row.original} />,
   },
   {
-    accessorKey: 'data_type',
+    accessorKey: 'type',
     header: 'Type',
     cell: ({ row }) => {
-      const typeLabels: Record<ScoreDataType, string> = {
+      const typeLabels: Record<ScoreType, string> = {
         NUMERIC: 'Numeric',
         BOOLEAN: 'Boolean',
         CATEGORICAL: 'Categorical',
       }
       return (
         <span className="text-muted-foreground text-sm">
-          {typeLabels[row.original.data_type] || row.original.data_type}
+          {typeLabels[row.original.type] || row.original.type}
         </span>
       )
     },
@@ -133,7 +133,7 @@ export function ScoresTable({
   const [isPending, startTransition] = useTransition()
   const [nameFilter, setNameFilter] = useState(searchParams.get('name') || '')
   const [sourceFilter, setSourceFilter] = useState(searchParams.get('source') || '')
-  const [dataTypeFilter, setDataTypeFilter] = useState(searchParams.get('data_type') || '')
+  const [dataTypeFilter, setDataTypeFilter] = useState(searchParams.get('type') || '')
 
   const createQueryString = useCallback(
     (params: Record<string, string | number | undefined>) => {
@@ -175,7 +175,7 @@ export function ScoresTable({
   const handleDataTypeChange = useCallback(
     (value: string) => {
       setDataTypeFilter(value)
-      navigate({ data_type: value === 'all' ? undefined : value, page: 1 })
+      navigate({ type: value === 'all' ? undefined : value, page: 1 })
     },
     [navigate]
   )

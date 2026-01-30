@@ -7,12 +7,12 @@ import (
 	"brokle/pkg/ulid"
 )
 
-type ScoreDataType string
+type ScoreType string
 
 const (
-	ScoreDataTypeNumeric     ScoreDataType = "NUMERIC"
-	ScoreDataTypeCategorical ScoreDataType = "CATEGORICAL"
-	ScoreDataTypeBoolean     ScoreDataType = "BOOLEAN"
+	ScoreTypeNumeric     ScoreType = "NUMERIC"
+	ScoreTypeCategorical ScoreType = "CATEGORICAL"
+	ScoreTypeBoolean     ScoreType = "BOOLEAN"
 )
 
 // ScoreConfig defines metadata and validation rules for a score type.
@@ -22,7 +22,7 @@ type ScoreConfig struct {
 	ProjectID   ulid.ULID              `json:"project_id" gorm:"type:char(26);not null;index"`
 	Name        string                 `json:"name" gorm:"type:varchar(100);not null"`
 	Description *string                `json:"description,omitempty" gorm:"type:text"`
-	DataType    ScoreDataType          `json:"data_type" gorm:"column:data_type;type:varchar(20);not null;default:'NUMERIC'"`
+	Type        ScoreType              `json:"type" gorm:"column:type;type:varchar(20);not null;default:'NUMERIC'"`
 	MinValue    *float64               `json:"min_value,omitempty" gorm:"type:decimal(10,4)"`
 	MaxValue    *float64               `json:"max_value,omitempty" gorm:"type:decimal(10,4)"`
 	Categories  []string               `json:"categories,omitempty" gorm:"type:jsonb;serializer:json"`
@@ -35,13 +35,13 @@ func (ScoreConfig) TableName() string {
 	return "score_configs"
 }
 
-func NewScoreConfig(projectID ulid.ULID, name string, dataType ScoreDataType) *ScoreConfig {
+func NewScoreConfig(projectID ulid.ULID, name string, scoreType ScoreType) *ScoreConfig {
 	now := time.Now()
 	return &ScoreConfig{
 		ID:        ulid.New(),
 		ProjectID: projectID,
 		Name:      name,
-		DataType:  dataType,
+		Type:      scoreType,
 		Metadata:  make(map[string]interface{}),
 		CreatedAt: now,
 		UpdatedAt: now,
@@ -63,18 +63,18 @@ func (sc *ScoreConfig) Validate() []ValidationError {
 		errors = append(errors, ValidationError{Field: "name", Message: "name must be 100 characters or less"})
 	}
 
-	switch sc.DataType {
-	case ScoreDataTypeNumeric:
+	switch sc.Type {
+	case ScoreTypeNumeric:
 		if sc.MinValue != nil && sc.MaxValue != nil && *sc.MinValue > *sc.MaxValue {
 			errors = append(errors, ValidationError{Field: "max_value", Message: "max_value must be greater than or equal to min_value"})
 		}
-	case ScoreDataTypeCategorical:
+	case ScoreTypeCategorical:
 		if len(sc.Categories) == 0 {
 			errors = append(errors, ValidationError{Field: "categories", Message: "categories are required for CATEGORICAL type"})
 		}
-	case ScoreDataTypeBoolean:
+	case ScoreTypeBoolean:
 	default:
-		errors = append(errors, ValidationError{Field: "data_type", Message: "invalid data type, must be NUMERIC, CATEGORICAL, or BOOLEAN"})
+		errors = append(errors, ValidationError{Field: "type", Message: "invalid type, must be NUMERIC, CATEGORICAL, or BOOLEAN"})
 	}
 
 	return errors
@@ -83,7 +83,7 @@ func (sc *ScoreConfig) Validate() []ValidationError {
 type CreateScoreConfigRequest struct {
 	Name        string                 `json:"name" binding:"required,min=1,max=100"`
 	Description *string                `json:"description,omitempty"`
-	DataType    ScoreDataType          `json:"data_type" binding:"required,oneof=NUMERIC CATEGORICAL BOOLEAN"`
+	Type        ScoreType              `json:"type" binding:"required,oneof=NUMERIC CATEGORICAL BOOLEAN"`
 	MinValue    *float64               `json:"min_value,omitempty"`
 	MaxValue    *float64               `json:"max_value,omitempty"`
 	Categories  []string               `json:"categories,omitempty"`
@@ -93,7 +93,7 @@ type CreateScoreConfigRequest struct {
 type UpdateScoreConfigRequest struct {
 	Name        *string                `json:"name,omitempty" binding:"omitempty,min=1,max=100"`
 	Description *string                `json:"description,omitempty"`
-	DataType    *ScoreDataType         `json:"data_type,omitempty" binding:"omitempty,oneof=NUMERIC CATEGORICAL BOOLEAN"`
+	Type        *ScoreType             `json:"type,omitempty" binding:"omitempty,oneof=NUMERIC CATEGORICAL BOOLEAN"`
 	MinValue    *float64               `json:"min_value,omitempty"`
 	MaxValue    *float64               `json:"max_value,omitempty"`
 	Categories  []string               `json:"categories,omitempty"`
@@ -105,7 +105,7 @@ type ScoreConfigResponse struct {
 	ProjectID   string                 `json:"project_id"`
 	Name        string                 `json:"name"`
 	Description *string                `json:"description,omitempty"`
-	DataType    ScoreDataType          `json:"data_type"`
+	Type        ScoreType              `json:"type"`
 	MinValue    *float64               `json:"min_value,omitempty"`
 	MaxValue    *float64               `json:"max_value,omitempty"`
 	Categories  []string               `json:"categories,omitempty"`
@@ -120,7 +120,7 @@ func (sc *ScoreConfig) ToResponse() *ScoreConfigResponse {
 		ProjectID:   sc.ProjectID.String(),
 		Name:        sc.Name,
 		Description: sc.Description,
-		DataType:    sc.DataType,
+		Type:        sc.Type,
 		MinValue:    sc.MinValue,
 		MaxValue:    sc.MaxValue,
 		Categories:  sc.Categories,
@@ -504,6 +504,13 @@ type UpdateExperimentRequest struct {
 type ExperimentFilter struct {
 	DatasetID *ulid.ULID
 	Status    *ExperimentStatus
+	Search    *string
+	IDs       []ulid.ULID // Filter by specific experiment IDs
+}
+
+// DatasetFilter defines filter criteria for listing datasets.
+type DatasetFilter struct {
+	Search *string
 }
 
 type ExperimentResponse struct {

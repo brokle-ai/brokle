@@ -61,17 +61,28 @@ func (r *ScoreConfigRepository) GetByName(ctx context.Context, projectID ulid.UL
 	return &config, nil
 }
 
-func (r *ScoreConfigRepository) List(ctx context.Context, projectID ulid.ULID) ([]*evaluation.ScoreConfig, error) {
+func (r *ScoreConfigRepository) List(ctx context.Context, projectID ulid.ULID, offset, limit int) ([]*evaluation.ScoreConfig, int64, error) {
 	var configs []*evaluation.ScoreConfig
+	var total int64
+
+	if err := r.db.WithContext(ctx).
+		Model(&evaluation.ScoreConfig{}).
+		Where("project_id = ?", projectID.String()).
+		Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
 	result := r.db.WithContext(ctx).
 		Where("project_id = ?", projectID.String()).
 		Order("created_at DESC").
+		Offset(offset).
+		Limit(limit).
 		Find(&configs)
 
 	if result.Error != nil {
-		return nil, result.Error
+		return nil, 0, result.Error
 	}
-	return configs, nil
+	return configs, total, nil
 }
 
 func (r *ScoreConfigRepository) Update(ctx context.Context, config *evaluation.ScoreConfig, projectID ulid.ULID) error {

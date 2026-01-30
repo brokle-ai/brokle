@@ -3,19 +3,21 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { experimentsApi } from '../api/experiments-api'
+import type { PaginatedResponse } from '@/lib/api/core/types'
 import type {
   CreateExperimentRequest,
   UpdateExperimentRequest,
   RerunExperimentRequest,
   Experiment,
+  ExperimentListParams,
   ExperimentProgress,
   ExperimentStatus,
 } from '../types'
 
 export const experimentQueryKeys = {
   all: ['experiments'] as const,
-  list: (projectId: string, filters?: { dataset_id?: string; status?: string }) =>
-    [...experimentQueryKeys.all, 'list', projectId, filters] as const,
+  list: (projectId: string) =>
+    [...experimentQueryKeys.all, 'list', projectId] as const,
   detail: (projectId: string, experimentId: string) =>
     [...experimentQueryKeys.all, 'detail', projectId, experimentId] as const,
   items: (projectId: string, experimentId: string) =>
@@ -31,14 +33,39 @@ export function isTerminalStatus(status: ExperimentStatus): boolean {
 
 export function useExperimentsQuery(
   projectId: string | undefined,
-  filters?: { dataset_id?: string; status?: string }
+  params?: ExperimentListParams
 ) {
   return useQuery({
-    queryKey: experimentQueryKeys.list(projectId ?? '', filters),
-    queryFn: () => experimentsApi.listExperiments(projectId!, filters),
+    queryKey: [
+      ...experimentQueryKeys.list(projectId ?? ''),
+      params?.search,
+      params?.page,
+      params?.limit,
+      params?.dataset_id,
+      params?.status,
+      params?.ids,
+    ],
+    queryFn: () => experimentsApi.listExperiments(projectId!, params),
     enabled: !!projectId,
     staleTime: 30_000,
     gcTime: 5 * 60 * 1000,
+  })
+}
+
+export function useExperimentsByIdsQuery(
+  projectId: string | undefined,
+  ids: string[]
+) {
+  return useQuery({
+    queryKey: ['experiments', 'byIds', projectId, ids.sort().join(',')],
+    queryFn: () =>
+      experimentsApi.listExperiments(projectId!, {
+        ids: ids.join(','),
+        limit: ids.length,
+      }),
+    enabled: !!projectId && ids.length > 0,
+    staleTime: 5 * 60 * 1000, // 5 minutes - these are specific fetches
+    gcTime: 10 * 60 * 1000,
   })
 }
 
@@ -171,36 +198,41 @@ export function useDeleteExperimentMutation(projectId: string) {
     },
     onMutate: async ({ experimentId }) => {
       await queryClient.cancelQueries({
-        queryKey: experimentQueryKeys.all,
+        queryKey: experimentQueryKeys.list(projectId),
       })
 
-      const previousExperiments = queryClient.getQueryData<Experiment[]>(
-        experimentQueryKeys.list(projectId)
+      // Get ALL matching queries (prefix match for paginated queries)
+      const previousQueries = queryClient.getQueriesData<PaginatedResponse<Experiment>>({
+        queryKey: experimentQueryKeys.list(projectId),
+      })
+
+      // Optimistic update - update ALL matching queries
+      queryClient.setQueriesData<PaginatedResponse<Experiment>>(
+        { queryKey: experimentQueryKeys.list(projectId) },
+        (old) => old ? {
+          data: old.data.filter((e) => e.id !== experimentId),
+          pagination: {
+            ...old.pagination,
+            total: old.pagination.total - 1,
+          },
+        } : old
       )
 
-      // Optimistic update
-      queryClient.setQueryData<Experiment[]>(
-        experimentQueryKeys.list(projectId),
-        (old) => old?.filter((e) => e.id !== experimentId) ?? []
-      )
-
-      return { previousExperiments }
+      return { previousQueries }
     },
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
-        queryKey: experimentQueryKeys.all,
+        queryKey: experimentQueryKeys.list(projectId),
       })
       toast.success('Experiment Deleted', {
         description: `"${variables.experimentName}" has been deleted.`,
       })
     },
     onError: (error: unknown, _variables, context) => {
-      if (context?.previousExperiments) {
-        queryClient.setQueryData(
-          experimentQueryKeys.list(projectId),
-          context.previousExperiments
-        )
-      }
+      // Rollback ALL affected queries
+      context?.previousQueries?.forEach(([queryKey, data]) => {
+        queryClient.setQueryData(queryKey, data)
+      })
       const apiError = error as { message?: string }
       toast.error('Failed to Delete Experiment', {
         description:

@@ -26,7 +26,7 @@ import (
 // @Param span_id query string false "Filter by span ID"
 // @Param name query string false "Filter by score name"
 // @Param source query string false "Filter by source (API, AUTO, HUMAN, EVAL)"
-// @Param data_type query string false "Filter by data type (NUMERIC, CATEGORICAL, BOOLEAN)"
+// @Param type query string false "Filter by type (NUMERIC, CATEGORICAL, BOOLEAN)"
 // @Param page query int false "Page number (default 1)"
 // @Param limit query int false "Page size (default 50, max 1000)"
 // @Success 200 {object} response.APIResponse{data=[]observability.Score} "List of scores"
@@ -56,8 +56,8 @@ func (h *Handler) ListProjectScores(c *gin.Context) {
 	if source := c.Query("source"); source != "" {
 		filter.Source = &source
 	}
-	if dataType := c.Query("data_type"); dataType != "" {
-		filter.DataType = &dataType
+	if scoreType := c.Query("type"); scoreType != "" {
+		filter.Type = &scoreType
 	}
 
 	params := response.ParsePaginationParams(
@@ -96,7 +96,7 @@ func (h *Handler) ListProjectScores(c *gin.Context) {
 // @Param session_id query string false "Filter by session ID"
 // @Param name query string false "Filter by score name"
 // @Param source query string false "Filter by source (API, AUTO, HUMAN, EVAL)"
-// @Param data_type query string false "Filter by data type (NUMERIC, CATEGORICAL, BOOLEAN)"
+// @Param type query string false "Filter by type (NUMERIC, CATEGORICAL, BOOLEAN)"
 // @Param limit query int false "Limit (default 50, max 1000)"
 // @Param offset query int false "Offset (default 0)"
 // @Success 200 {object} response.APIResponse{data=[]observability.Score} "List of scores"
@@ -118,8 +118,8 @@ func (h *Handler) ListScores(c *gin.Context) {
 	if source := c.Query("source"); source != "" {
 		filter.Source = &source
 	}
-	if dataType := c.Query("data_type"); dataType != "" {
-		filter.DataType = &dataType
+	if scoreType := c.Query("type"); scoreType != "" {
+		filter.Type = &scoreType
 	}
 
 	params := response.ParsePaginationParams(

@@ -124,7 +124,7 @@ type Score struct {
 	Name        string   `json:"name" db:"name"`
 	Value       *float64 `json:"value,omitempty" db:"value"`
 	StringValue *string  `json:"string_value,omitempty" db:"string_value"`
-	DataType    string   `json:"data_type" db:"data_type"`
+	Type        string   `json:"type" db:"type"`
 	Source      string   `json:"source" db:"source"`
 
 	// Additional fields
@@ -411,11 +411,11 @@ const (
 	SpanLevelDefault = "DEFAULT"
 )
 
-// Score data type constants
+// Score type constants
 const (
-	ScoreDataTypeNumeric     = "NUMERIC"
-	ScoreDataTypeCategorical = "CATEGORICAL"
-	ScoreDataTypeBoolean     = "BOOLEAN"
+	ScoreTypeNumeric     = "NUMERIC"
+	ScoreTypeCategorical = "CATEGORICAL"
+	ScoreTypeBoolean     = "BOOLEAN"
 )
 
 // Score source constants (matches ClickHouse Enum8)
@@ -500,8 +500,8 @@ func (s *Span) GetTotalTokens() uint64 {
 }
 
 func (s *Score) GetScoreLevel() string {
-	switch s.DataType {
-	case ScoreDataTypeNumeric, ScoreDataTypeBoolean:
+	switch s.Type {
+	case ScoreTypeNumeric, ScoreTypeBoolean:
 		if s.Value != nil {
 			if *s.Value >= 0.8 {
 				return "excellent"
@@ -512,7 +512,7 @@ func (s *Score) GetScoreLevel() string {
 			}
 			return "poor"
 		}
-	case ScoreDataTypeCategorical:
+	case ScoreTypeCategorical:
 		if s.StringValue != nil {
 			return *s.StringValue
 		}
@@ -520,9 +520,9 @@ func (s *Score) GetScoreLevel() string {
 	return "unknown"
 }
 
-func (s *Score) IsNumeric() bool     { return s.DataType == ScoreDataTypeNumeric }
-func (s *Score) IsCategorical() bool { return s.DataType == ScoreDataTypeCategorical }
-func (s *Score) IsBoolean() bool     { return s.DataType == ScoreDataTypeBoolean }
+func (s *Score) IsNumeric() bool     { return s.Type == ScoreTypeNumeric }
+func (s *Score) IsCategorical() bool { return s.Type == ScoreTypeCategorical }
+func (s *Score) IsBoolean() bool     { return s.Type == ScoreTypeBoolean }
 
 func ConvertStatusCodeToEnum(statusStr string) uint8 {
 	switch statusStr {

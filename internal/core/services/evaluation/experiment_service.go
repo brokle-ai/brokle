@@ -166,12 +166,13 @@ func (s *experimentService) GetByID(ctx context.Context, id ulid.ULID, projectID
 	return experiment, nil
 }
 
-func (s *experimentService) List(ctx context.Context, projectID ulid.ULID, filter *evaluation.ExperimentFilter) ([]*evaluation.Experiment, error) {
-	experiments, err := s.repo.List(ctx, projectID, filter)
+func (s *experimentService) List(ctx context.Context, projectID ulid.ULID, filter *evaluation.ExperimentFilter, page, limit int) ([]*evaluation.Experiment, int64, error) {
+	offset := (page - 1) * limit
+	experiments, total, err := s.repo.List(ctx, projectID, filter, offset, limit)
 	if err != nil {
-		return nil, appErrors.NewInternalError("failed to list experiments", err)
+		return nil, 0, appErrors.NewInternalError("failed to list experiments", err)
 	}
-	return experiments, nil
+	return experiments, total, nil
 }
 
 // Rerun creates a new experiment based on an existing one, using the same dataset.

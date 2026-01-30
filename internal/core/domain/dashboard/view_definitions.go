@@ -560,11 +560,11 @@ func ScoresViewDefinition() *ViewDefinition {
 				SQL:         "source",
 				ColumnType:  "string",
 			},
-			"data_type": {
-				ID:          "data_type",
-				Label:       "Data Type",
-				Description: "Score data type",
-				SQL:         "data_type",
+			"type": {
+				ID:          "type",
+				Label:       "Type",
+				Description: "Score type",
+				SQL:         "type",
 				ColumnType:  "string",
 			},
 			"trace_id": {
