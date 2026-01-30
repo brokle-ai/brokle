@@ -1,33 +1,32 @@
 'use client'
 
-import { useSearchParams } from 'next/navigation'
-import { FlaskConical } from 'lucide-react'
+import { useState } from 'react'
+import { FlaskConical, Wand2 } from 'lucide-react'
 import { ExperimentsProvider, useExperiments } from '../context/experiments-context'
-import { ExperimentList } from './experiment-list'
+import { ExperimentsTable } from './experiment-table'
 import { ExperimentsDialogs } from './experiments-dialogs'
 import { CreateExperimentDialog } from './create-experiment-dialog'
+import { ExperimentWizardDialog } from './wizard'
 import { useProjectExperiments } from '../hooks/use-project-experiments'
-import { useTableSearchParams } from '@/hooks/use-table-search-params'
-import { useCardListNavigation } from '@/hooks/use-card-list-navigation'
+import { useExperimentsTableState } from '../hooks/use-experiments-table-state'
 import { PageHeader } from '@/components/layout/page-header'
-import { CardListToolbar, CardListPagination } from '@/components/card-list'
 import { DataTableEmptyState } from '@/components/data-table'
 import { LoadingSpinner } from '@/components/guards/loading-spinner'
+import { Button } from '@/components/ui/button'
 
 interface ExperimentsProps {
   projectSlug: string
 }
 
 function ExperimentsContent() {
-  const searchParams = useSearchParams()
-  const { projectId } = useExperiments()
-  const { data, totalCount, page, pageSize, isLoading, isFetching, error, hasProject, refetch } =
+  const { projectId, projectSlug } = useExperiments()
+  const { data, totalCount, isLoading, isFetching, error, refetch } =
     useProjectExperiments()
-  const { filter } = useTableSearchParams(searchParams)
-  const { handleSearch, handleReset, handlePageChange, handlePageSizeChange } = useCardListNavigation({ searchParams })
+  const tableState = useExperimentsTableState()
+  const [wizardOpen, setWizardOpen] = useState(false)
 
   // Check if there are active filters
-  const hasActiveFilters = !!filter
+  const hasActiveFilters = tableState.hasActiveFilters
 
   // Only show spinner on true initial load (no data at all)
   const isInitialLoad = isLoading && data.length === 0
@@ -38,7 +37,15 @@ function ExperimentsContent() {
   return (
     <>
       <PageHeader title="Experiments">
-        {projectId && <CreateExperimentDialog projectId={projectId} />}
+        <div className="flex items-center gap-2">
+          {projectId && (
+            <Button variant="outline" onClick={() => setWizardOpen(true)}>
+              <Wand2 className="mr-2 h-4 w-4" />
+              Create with Wizard
+            </Button>
+          )}
+          {projectId && <CreateExperimentDialog projectId={projectId} />}
+        </div>
       </PageHeader>
       <div className="-mx-4 flex flex-1 flex-col overflow-auto px-4 py-1">
         {isInitialLoad && (
@@ -64,13 +71,13 @@ function ExperimentsContent() {
           </div>
         )}
 
-        {!hasProject && !isInitialLoad && !error && (
+        {!projectSlug && !isInitialLoad && !error && (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <p className="text-muted-foreground">No project selected</p>
           </div>
         )}
 
-        {!error && hasProject && !isInitialLoad && isEmptyProject && (
+        {!error && projectSlug && !isInitialLoad && isEmptyProject && (
           <DataTableEmptyState
             icon={<FlaskConical className="h-full w-full" />}
             title="No experiments yet"
@@ -78,29 +85,22 @@ function ExperimentsContent() {
           />
         )}
 
-        {!error && hasProject && !isInitialLoad && !isEmptyProject && (
-          <>
-            <CardListToolbar
-              searchPlaceholder="Filter experiments..."
-              searchValue={filter}
-              onSearchChange={handleSearch}
-              isPending={isFetching}
-              onReset={handleReset}
-              isFiltered={hasActiveFilters}
-            />
-            <ExperimentList data={data} />
-            <CardListPagination
-              page={page}
-              pageSize={pageSize}
-              totalCount={totalCount}
-              onPageChange={handlePageChange}
-              onPageSizeChange={handlePageSizeChange}
-              isPending={isFetching}
-            />
-          </>
+        {!error && projectSlug && !isInitialLoad && !isEmptyProject && (
+          <ExperimentsTable
+            data={data}
+            totalCount={totalCount}
+            isLoading={isLoading}
+            isFetching={isFetching}
+            projectSlug={projectSlug}
+          />
         )}
       </div>
       <ExperimentsDialogs />
+      <ExperimentWizardDialog
+        open={wizardOpen}
+        onOpenChange={setWizardOpen}
+        onSuccess={() => refetch()}
+      />
     </>
   )
 }

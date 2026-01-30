@@ -10,6 +10,8 @@ import type {
   RerunExperimentRequest,
   Experiment,
   ExperimentListParams,
+  ExperimentProgress,
+  ExperimentStatus,
 } from '../types'
 
 export const experimentQueryKeys = {
@@ -20,6 +22,13 @@ export const experimentQueryKeys = {
     [...experimentQueryKeys.all, 'detail', projectId, experimentId] as const,
   items: (projectId: string, experimentId: string) =>
     [...experimentQueryKeys.all, 'items', projectId, experimentId] as const,
+  progress: (projectId: string, experimentId: string) =>
+    [...experimentQueryKeys.all, 'progress', projectId, experimentId] as const,
+}
+
+// Helper to check if status is terminal (no more updates expected)
+export function isTerminalStatus(status: ExperimentStatus): boolean {
+  return ['completed', 'failed', 'partial', 'cancelled'].includes(status)
 }
 
 export function useExperimentsQuery(
@@ -70,6 +79,35 @@ export function useExperimentQuery(
     enabled: !!projectId && !!experimentId,
     staleTime: 30_000,
     gcTime: 5 * 60 * 1000,
+  })
+}
+
+interface UseExperimentProgressOptions {
+  enabled?: boolean
+  pollingEnabled?: boolean
+}
+
+export function useExperimentProgressQuery(
+  projectId: string | undefined,
+  experimentId: string | undefined,
+  options: UseExperimentProgressOptions = {}
+) {
+  const { enabled = true, pollingEnabled = true } = options
+
+  return useQuery({
+    queryKey: experimentQueryKeys.progress(projectId ?? '', experimentId ?? ''),
+    queryFn: () => experimentsApi.getExperimentProgress(projectId!, experimentId!),
+    enabled: enabled && !!projectId && !!experimentId,
+    staleTime: 2_000, // Lower stale time for progress updates
+    gcTime: 30_000,
+    // Poll every 3 seconds while not terminal (pending or running), stop when terminal
+    refetchInterval: (query) => {
+      if (!pollingEnabled) return false
+      const data = query.state.data as ExperimentProgress | undefined
+      // Continue polling for pending and running statuses
+      const shouldPoll = data && !isTerminalStatus(data.status)
+      return shouldPoll ? 3000 : false
+    },
   })
 }
 

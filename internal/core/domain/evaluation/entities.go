@@ -399,6 +399,8 @@ const (
 	ExperimentStatusRunning   ExperimentStatus = "running"
 	ExperimentStatusCompleted ExperimentStatus = "completed"
 	ExperimentStatusFailed    ExperimentStatus = "failed"
+	ExperimentStatusPartial   ExperimentStatus = "partial"    // Some items completed, some failed
+	ExperimentStatusCancelled ExperimentStatus = "cancelled"  // User cancelled the experiment
 )
 
 // Experiment represents a batch evaluation run.
@@ -409,11 +411,20 @@ type Experiment struct {
 	Name        string                 `json:"name" gorm:"type:varchar(255);not null"`
 	Description *string                `json:"description,omitempty" gorm:"type:text"`
 	Status      ExperimentStatus       `json:"status" gorm:"type:varchar(20);not null;default:'pending'"`
+	Source      ExperimentSource       `json:"source" gorm:"type:varchar(20);not null;default:'sdk'"`
+	ConfigID    *ulid.ULID             `json:"config_id,omitempty" gorm:"type:char(26)"`
 	Metadata    map[string]interface{} `json:"metadata,omitempty" gorm:"type:jsonb;serializer:json;default:'{}'"`
-	StartedAt   *time.Time             `json:"started_at,omitempty"`
-	CompletedAt *time.Time             `json:"completed_at,omitempty"`
-	CreatedAt   time.Time              `json:"created_at" gorm:"not null;autoCreateTime"`
-	UpdatedAt   time.Time              `json:"updated_at" gorm:"not null;autoUpdateTime"`
+	// Progress tracking fields
+	TotalItems     int `json:"total_items" gorm:"not null;default:0"`
+	CompletedItems int `json:"completed_items" gorm:"not null;default:0"`
+	FailedItems    int `json:"failed_items" gorm:"not null;default:0"`
+	StartedAt      *time.Time             `json:"started_at,omitempty"`
+	CompletedAt    *time.Time             `json:"completed_at,omitempty"`
+	CreatedAt      time.Time              `json:"created_at" gorm:"not null;autoCreateTime"`
+	UpdatedAt      time.Time              `json:"updated_at" gorm:"not null;autoUpdateTime"`
+
+	// Relationships (optional, loaded when needed)
+	Config *ExperimentConfig `json:"config,omitempty" gorm:"foreignKey:ConfigID"`
 }
 
 func (Experiment) TableName() string {
@@ -427,6 +438,22 @@ func NewExperiment(projectID ulid.ULID, name string) *Experiment {
 		ProjectID: projectID,
 		Name:      name,
 		Status:    ExperimentStatusPending,
+		Source:    ExperimentSourceSDK, // Default to SDK for backwards compatibility
+		Metadata:  make(map[string]interface{}),
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+}
+
+// NewExperimentFromDashboard creates a new experiment from the dashboard wizard.
+func NewExperimentFromDashboard(projectID ulid.ULID, name string) *Experiment {
+	now := time.Now()
+	return &Experiment{
+		ID:        ulid.New(),
+		ProjectID: projectID,
+		Name:      name,
+		Status:    ExperimentStatusPending,
+		Source:    ExperimentSourceDashboard,
 		Metadata:  make(map[string]interface{}),
 		CreatedAt: now,
 		UpdatedAt: now,
@@ -444,7 +471,7 @@ func (e *Experiment) Validate() []ValidationError {
 	}
 
 	switch e.Status {
-	case ExperimentStatusPending, ExperimentStatusRunning, ExperimentStatusCompleted, ExperimentStatusFailed:
+	case ExperimentStatusPending, ExperimentStatusRunning, ExperimentStatusCompleted, ExperimentStatusFailed, ExperimentStatusPartial, ExperimentStatusCancelled:
 	default:
 		errors = append(errors, ValidationError{Field: "status", Message: "invalid status"})
 	}
@@ -487,17 +514,22 @@ type DatasetFilter struct {
 }
 
 type ExperimentResponse struct {
-	ID          string                 `json:"id"`
-	ProjectID   string                 `json:"project_id"`
-	DatasetID   *string                `json:"dataset_id,omitempty"`
-	Name        string                 `json:"name"`
-	Description *string                `json:"description,omitempty"`
-	Status      ExperimentStatus       `json:"status"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
-	StartedAt   *time.Time             `json:"started_at,omitempty"`
-	CompletedAt *time.Time             `json:"completed_at,omitempty"`
-	CreatedAt   time.Time              `json:"created_at"`
-	UpdatedAt   time.Time              `json:"updated_at"`
+	ID             string                 `json:"id"`
+	ProjectID      string                 `json:"project_id"`
+	DatasetID      *string                `json:"dataset_id,omitempty"`
+	Name           string                 `json:"name"`
+	Description    *string                `json:"description,omitempty"`
+	Status         ExperimentStatus       `json:"status"`
+	Source         ExperimentSource       `json:"source"`
+	ConfigID       *string                `json:"config_id,omitempty"`
+	Metadata       map[string]interface{} `json:"metadata,omitempty"`
+	TotalItems     int                    `json:"total_items"`
+	CompletedItems int                    `json:"completed_items"`
+	FailedItems    int                    `json:"failed_items"`
+	StartedAt      *time.Time             `json:"started_at,omitempty"`
+	CompletedAt    *time.Time             `json:"completed_at,omitempty"`
+	CreatedAt      time.Time              `json:"created_at"`
+	UpdatedAt      time.Time              `json:"updated_at"`
 }
 
 func (e *Experiment) ToResponse() *ExperimentResponse {
@@ -506,19 +538,96 @@ func (e *Experiment) ToResponse() *ExperimentResponse {
 		id := e.DatasetID.String()
 		datasetID = &id
 	}
-	return &ExperimentResponse{
-		ID:          e.ID.String(),
-		ProjectID:   e.ProjectID.String(),
-		DatasetID:   datasetID,
-		Name:        e.Name,
-		Description: e.Description,
-		Status:      e.Status,
-		Metadata:    e.Metadata,
-		StartedAt:   e.StartedAt,
-		CompletedAt: e.CompletedAt,
-		CreatedAt:   e.CreatedAt,
-		UpdatedAt:   e.UpdatedAt,
+
+	var configID *string
+	if e.ConfigID != nil {
+		id := e.ConfigID.String()
+		configID = &id
 	}
+
+	return &ExperimentResponse{
+		ID:             e.ID.String(),
+		ProjectID:      e.ProjectID.String(),
+		DatasetID:      datasetID,
+		Name:           e.Name,
+		Description:    e.Description,
+		Status:         e.Status,
+		Source:         e.Source,
+		ConfigID:       configID,
+		Metadata:       e.Metadata,
+		TotalItems:     e.TotalItems,
+		CompletedItems: e.CompletedItems,
+		FailedItems:    e.FailedItems,
+		StartedAt:      e.StartedAt,
+		CompletedAt:    e.CompletedAt,
+		CreatedAt:      e.CreatedAt,
+		UpdatedAt:      e.UpdatedAt,
+	}
+}
+
+// ExperimentProgressResponse is a lightweight response for progress polling.
+type ExperimentProgressResponse struct {
+	ID             string           `json:"id"`
+	Status         ExperimentStatus `json:"status"`
+	TotalItems     int              `json:"total_items"`
+	CompletedItems int              `json:"completed_items"`
+	FailedItems    int              `json:"failed_items"`
+	PendingItems   int              `json:"pending_items"`
+	ProgressPct    float64          `json:"progress_pct"`
+	StartedAt      *time.Time       `json:"started_at,omitempty"`
+	CompletedAt    *time.Time       `json:"completed_at,omitempty"`
+	ElapsedSeconds *float64         `json:"elapsed_seconds,omitempty"`
+	ETASeconds     *float64         `json:"eta_seconds,omitempty"`
+}
+
+// ToProgressResponse creates a progress response with derived fields.
+func (e *Experiment) ToProgressResponse() *ExperimentProgressResponse {
+	resp := &ExperimentProgressResponse{
+		ID:             e.ID.String(),
+		Status:         e.Status,
+		TotalItems:     e.TotalItems,
+		CompletedItems: e.CompletedItems,
+		FailedItems:    e.FailedItems,
+		PendingItems:   e.TotalItems - e.CompletedItems - e.FailedItems,
+		StartedAt:      e.StartedAt,
+		CompletedAt:    e.CompletedAt,
+	}
+
+	// Calculate progress percentage
+	if e.TotalItems > 0 {
+		resp.ProgressPct = float64(e.CompletedItems+e.FailedItems) / float64(e.TotalItems) * 100
+	}
+
+	// Calculate elapsed time
+	if e.StartedAt != nil {
+		var elapsed float64
+
+		if e.CompletedAt != nil {
+			// Finished experiment: use fixed duration from start to completion
+			elapsed = e.CompletedAt.Sub(*e.StartedAt).Seconds()
+		} else if e.Status == ExperimentStatusRunning {
+			// Running experiment: use live elapsed time
+			elapsed = time.Since(*e.StartedAt).Seconds()
+		}
+
+		// Only set elapsed if we calculated it (skip pending experiments without completion)
+		if e.CompletedAt != nil || e.Status == ExperimentStatusRunning {
+			resp.ElapsedSeconds = &elapsed
+		}
+
+		// Calculate ETA only for running experiments
+		if e.Status == ExperimentStatusRunning {
+			processed := e.CompletedItems + e.FailedItems
+			if processed > 0 && e.TotalItems > processed {
+				rate := elapsed / float64(processed)
+				remaining := float64(e.TotalItems - processed)
+				eta := rate * remaining
+				resp.ETASeconds = &eta
+			}
+		}
+	}
+
+	return resp
 }
 
 // ExperimentItem represents an individual result from an experiment run.
@@ -828,6 +937,48 @@ type DatasetWithVersionResponse struct {
 type DatasetFilter struct {
 	// Search filters by name (case-insensitive partial match)
 	Search *string
+}
+
+// ============================================================================
+// Experiment Metrics Types
+// ============================================================================
+
+// ExperimentMetricsResponse is the response for GET /experiments/{id}/metrics.
+// It provides comprehensive metrics including progress, performance, and scores.
+type ExperimentMetricsResponse struct {
+	ExperimentID string                       `json:"experiment_id"`
+	Status       ExperimentStatus             `json:"status"`
+	Progress     ExperimentProgressMetrics    `json:"progress"`
+	Performance  ExperimentPerformanceMetrics `json:"performance"`
+	Scores       map[string]*ScoreMetrics     `json:"scores,omitempty"`
+}
+
+// ExperimentProgressMetrics contains progress and success/error rate metrics.
+type ExperimentProgressMetrics struct {
+	TotalItems     int     `json:"total_items"`
+	CompletedItems int     `json:"completed_items"`
+	FailedItems    int     `json:"failed_items"`
+	PendingItems   int     `json:"pending_items"`
+	ProgressPct    float64 `json:"progress_pct"`
+	SuccessRate    float64 `json:"success_rate"` // completed / (completed + failed) * 100
+	ErrorRate      float64 `json:"error_rate"`   // failed / (completed + failed) * 100
+}
+
+// ExperimentPerformanceMetrics contains timing and ETA metrics.
+type ExperimentPerformanceMetrics struct {
+	StartedAt      *time.Time `json:"started_at,omitempty"`
+	CompletedAt    *time.Time `json:"completed_at,omitempty"`
+	ElapsedSeconds *float64   `json:"elapsed_seconds,omitempty"`
+	ETASeconds     *float64   `json:"eta_seconds,omitempty"`
+}
+
+// ScoreMetrics contains statistical metrics for a score type.
+type ScoreMetrics struct {
+	Mean   float64 `json:"mean"`
+	StdDev float64 `json:"std_dev"`
+	Min    float64 `json:"min"`
+	Max    float64 `json:"max"`
+	Count  int64   `json:"count"`
 }
 
 // DatasetWithItemCount extends Dataset to include item count in list responses.

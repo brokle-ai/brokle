@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"brokle/internal/core/domain/evaluation"
+	"brokle/internal/infrastructure/shared"
 	"brokle/pkg/ulid"
 
 	"gorm.io/gorm"
@@ -17,22 +18,27 @@ func NewExperimentItemRepository(db *gorm.DB) *ExperimentItemRepository {
 	return &ExperimentItemRepository{db: db}
 }
 
+// getDB returns transaction-aware DB instance
+func (r *ExperimentItemRepository) getDB(ctx context.Context) *gorm.DB {
+	return shared.GetDB(ctx, r.db)
+}
+
 func (r *ExperimentItemRepository) Create(ctx context.Context, item *evaluation.ExperimentItem) error {
-	return r.db.WithContext(ctx).Create(item).Error
+	return r.getDB(ctx).WithContext(ctx).Create(item).Error
 }
 
 func (r *ExperimentItemRepository) CreateBatch(ctx context.Context, items []*evaluation.ExperimentItem) error {
 	if len(items) == 0 {
 		return nil
 	}
-	return r.db.WithContext(ctx).CreateInBatches(items, 100).Error
+	return r.getDB(ctx).WithContext(ctx).CreateInBatches(items, 100).Error
 }
 
 func (r *ExperimentItemRepository) List(ctx context.Context, experimentID ulid.ULID, limit, offset int) ([]*evaluation.ExperimentItem, int64, error) {
 	var items []*evaluation.ExperimentItem
 	var total int64
 
-	baseQuery := r.db.WithContext(ctx).
+	baseQuery := r.getDB(ctx).WithContext(ctx).
 		Model(&evaluation.ExperimentItem{}).
 		Where("experiment_id = ?", experimentID.String())
 
@@ -40,7 +46,7 @@ func (r *ExperimentItemRepository) List(ctx context.Context, experimentID ulid.U
 		return nil, 0, err
 	}
 
-	result := r.db.WithContext(ctx).
+	result := r.getDB(ctx).WithContext(ctx).
 		Where("experiment_id = ?", experimentID.String()).
 		Order("created_at DESC").
 		Limit(limit).
@@ -55,7 +61,7 @@ func (r *ExperimentItemRepository) List(ctx context.Context, experimentID ulid.U
 
 func (r *ExperimentItemRepository) CountByExperiment(ctx context.Context, experimentID ulid.ULID) (int64, error) {
 	var count int64
-	result := r.db.WithContext(ctx).
+	result := r.getDB(ctx).WithContext(ctx).
 		Model(&evaluation.ExperimentItem{}).
 		Where("experiment_id = ?", experimentID.String()).
 		Count(&count)

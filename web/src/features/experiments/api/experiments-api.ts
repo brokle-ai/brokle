@@ -2,6 +2,7 @@ import { BrokleAPIClient } from '@/lib/api/core/client'
 import type { PaginatedResponse } from '@/lib/api/core/types'
 import type {
   Experiment,
+  ExperimentProgress,
   CreateExperimentRequest,
   UpdateExperimentRequest,
   RerunExperimentRequest,
@@ -9,6 +10,13 @@ import type {
   ExperimentItemListResponse,
   ExperimentComparisonResponse,
   CompareExperimentsRequest,
+  CreateExperimentFromWizardRequest,
+  ValidateStepRequest,
+  ValidateStepResponse,
+  EstimateCostRequest,
+  EstimateCostResponse,
+  DatasetFieldsResponse,
+  ExperimentConfig,
 } from '../types'
 
 const client = new BrokleAPIClient('/api')
@@ -39,6 +47,15 @@ export const experimentsApi = {
   ): Promise<Experiment> => {
     return client.get<Experiment>(
       `/v1/projects/${projectId}/experiments/${experimentId}`
+    )
+  },
+
+  getExperimentProgress: async (
+    projectId: string,
+    experimentId: string
+  ): Promise<ExperimentProgress> => {
+    return client.get<ExperimentProgress>(
+      `/v1/projects/${projectId}/experiments/${experimentId}/progress`
     )
   },
 
@@ -105,6 +122,58 @@ export const experimentsApi = {
     return client.post<Experiment>(
       `/v1/projects/${projectId}/experiments/${experimentId}/rerun`,
       data ?? {}
+    )
+  },
+
+  // ============================================================================
+  // Experiment Wizard (Dashboard-only)
+  // ============================================================================
+
+  createFromWizard: async (
+    projectId: string,
+    data: CreateExperimentFromWizardRequest
+  ): Promise<Experiment> => {
+    return client.post<Experiment>(
+      `/v1/projects/${projectId}/experiments/wizard`,
+      data
+    )
+  },
+
+  validateWizardStep: async (
+    projectId: string,
+    data: ValidateStepRequest
+  ): Promise<ValidateStepResponse> => {
+    return client.post<ValidateStepResponse>(
+      `/v1/projects/${projectId}/experiments/wizard/validate`,
+      data
+    )
+  },
+
+  estimateCost: async (
+    projectId: string,
+    data: EstimateCostRequest
+  ): Promise<EstimateCostResponse> => {
+    return client.post<EstimateCostResponse>(
+      `/v1/projects/${projectId}/experiments/wizard/estimate`,
+      data
+    )
+  },
+
+  getDatasetFields: async (
+    projectId: string,
+    datasetId: string
+  ): Promise<DatasetFieldsResponse> => {
+    return client.get<DatasetFieldsResponse>(
+      `/v1/projects/${projectId}/datasets/${datasetId}/fields`
+    )
+  },
+
+  getExperimentConfig: async (
+    projectId: string,
+    experimentId: string
+  ): Promise<ExperimentConfig> => {
+    return client.get<ExperimentConfig>(
+      `/v1/projects/${projectId}/experiments/${experimentId}/config`
     )
   },
 }

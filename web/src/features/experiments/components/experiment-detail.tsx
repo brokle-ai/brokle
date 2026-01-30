@@ -10,6 +10,7 @@ import { ExperimentDetailDialogs } from './experiment-detail-dialogs'
 import { ExperimentDetailSkeleton } from './experiment-detail-skeleton'
 import { ExperimentItemTable } from './experiment-item-table'
 import { ExperimentStatusBadge } from './experiment-status-badge'
+import { ExperimentProgress } from './experiment-progress'
 
 interface ExperimentDetailProps {
   projectSlug: string
@@ -91,6 +92,11 @@ function ExperimentDetailContent() {
             Delete
           </Button>
         </PageHeader>
+
+        {/* Show progress card for experiments with items */}
+        {experiment.total_items > 0 && (
+          <ExperimentProgress projectId={projectId} experimentId={experimentId} />
+        )}
 
         <div className="space-y-4">
           <div className="flex items-center justify-between">
