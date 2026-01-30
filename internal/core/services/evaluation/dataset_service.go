@@ -9,6 +9,7 @@ import (
 
 	"brokle/internal/core/domain/evaluation"
 	appErrors "brokle/pkg/errors"
+	"brokle/pkg/pagination"
 	"brokle/pkg/ulid"
 )
 
@@ -152,6 +153,19 @@ func (s *datasetService) GetByID(ctx context.Context, id ulid.ULID, projectID ul
 func (s *datasetService) List(ctx context.Context, projectID ulid.ULID, filter *evaluation.DatasetFilter, page, limit int) ([]*evaluation.Dataset, int64, error) {
 	offset := (page - 1) * limit
 	datasets, total, err := s.repo.List(ctx, projectID, filter, offset, limit)
+	if err != nil {
+		return nil, 0, appErrors.NewInternalError("failed to list datasets", err)
+	}
+	return datasets, total, nil
+}
+
+func (s *datasetService) ListWithFilters(
+	ctx context.Context,
+	projectID ulid.ULID,
+	filter *evaluation.DatasetFilter,
+	params pagination.Params,
+) ([]*evaluation.DatasetWithItemCount, int64, error) {
+	datasets, total, err := s.repo.ListWithFilters(ctx, projectID, filter, params)
 	if err != nil {
 		return nil, 0, appErrors.NewInternalError("failed to list datasets", err)
 	}

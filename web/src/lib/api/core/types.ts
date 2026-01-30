@@ -139,12 +139,12 @@ export class BrokleAPIError extends Error {
   }
 }
 
-// Backend pagination format (matches pkg/response/response.go)
+// Backend pagination format (matches pkg/response/response.go Pagination struct)
 export interface BackendPagination {
   page: number
-  limit: number         // Backend sends "limit", not "page_size"
+  limit: number
   total: number
-  total_pages: number   // Backend sends "total_pages", not "total_page"
+  total_pages: number
   has_next: boolean
   has_prev: boolean
 }
@@ -152,11 +152,11 @@ export interface BackendPagination {
 // Frontend pagination format (normalized for UI)
 export interface Pagination {
   page: number
-  limit: number        // same as backend limit
+  limit: number
   total: number
-  totalPages: number   // normalized from total_pages
-  hasNext: boolean     // normalized from has_next
-  hasPrev: boolean     // normalized from has_prev
+  totalPages: number
+  hasNext: boolean
+  hasPrev: boolean
 }
 
 // Paginated response interface

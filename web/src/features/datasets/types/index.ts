@@ -150,3 +150,34 @@ export interface CsvPreview {
   rows: string[][]
   rowCount: number
 }
+
+// Dataset with item count (for list responses)
+export interface DatasetWithItemCount {
+  id: string
+  project_id: string
+  name: string
+  description?: string
+  metadata?: Record<string, unknown>
+  current_version_id?: string
+  item_count: number
+  created_at: string
+  updated_at: string
+}
+
+// Dataset list params (for filtering/pagination)
+export interface DatasetListParams {
+  search?: string
+  page?: number
+  limit?: number
+  sortBy?: 'name' | 'created_at' | 'updated_at' | 'item_count'
+  sortDir?: 'asc' | 'desc'
+}
+
+// Dataset list response with pagination
+export interface DatasetListResponse {
+  datasets: DatasetWithItemCount[]
+  totalCount: number
+  page: number
+  pageSize: number
+  totalPages: number
+}

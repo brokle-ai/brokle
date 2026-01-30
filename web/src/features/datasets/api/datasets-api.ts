@@ -17,6 +17,9 @@ import type {
   DatasetWithVersionInfo,
   CreateDatasetVersionRequest,
   PinDatasetVersionRequest,
+  DatasetWithItemCount,
+  DatasetListParams,
+  DatasetListResponse,
 } from '../types'
 
 const client = new BrokleAPIClient('/api')
@@ -36,6 +39,37 @@ export const datasetsApi = {
       `/v1/projects/${projectId}/datasets`,
       queryParams
     )
+  },
+
+  listDatasetsWithPagination: async (
+    projectId: string,
+    params: DatasetListParams = {}
+  ): Promise<DatasetListResponse> => {
+    const { search, page = 1, limit = 50, sortBy = 'updated_at', sortDir = 'desc' } = params
+
+    const queryParams: Record<string, string | number> = {
+      page,
+      limit,
+      sort_by: sortBy,
+      sort_dir: sortDir,
+    }
+
+    if (search) {
+      queryParams.search = search
+    }
+
+    const response = await client.getPaginated<DatasetWithItemCount>(
+      `/v1/projects/${projectId}/datasets`,
+      queryParams
+    )
+
+    return {
+      datasets: response.data,
+      totalCount: response.pagination.total,
+      page: response.pagination.page,
+      pageSize: response.pagination.limit,
+      totalPages: response.pagination.totalPages,
+    }
   },
 
   getDataset: async (projectId: string, datasetId: string): Promise<Dataset> => {

@@ -21,7 +21,8 @@ type DatasetRepository interface {
 	Create(ctx context.Context, dataset *Dataset) error
 	GetByID(ctx context.Context, id ulid.ULID, projectID ulid.ULID) (*Dataset, error)
 	GetByName(ctx context.Context, projectID ulid.ULID, name string) (*Dataset, error)
-	List(ctx context.Context, projectID ulid.ULID, filter *DatasetFilter, offset, limit int) ([]*Dataset, int64, error)
+List(ctx context.Context, projectID ulid.ULID, filter *DatasetFilter, offset, limit int) ([]*Dataset, int64, error)
+	ListWithFilters(ctx context.Context, projectID ulid.ULID, filter *DatasetFilter, params pagination.Params) ([]*DatasetWithItemCount, int64, error)
 	Update(ctx context.Context, dataset *Dataset, projectID ulid.ULID) error
 	Delete(ctx context.Context, id ulid.ULID, projectID ulid.ULID) error
 	ExistsByName(ctx context.Context, projectID ulid.ULID, name string) (bool, error)

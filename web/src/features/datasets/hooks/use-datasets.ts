@@ -12,9 +12,6 @@ import type {
   PinDatasetVersionRequest,
   Dataset,
   DatasetItem,
-  DatasetVersion,
-  DatasetWithVersionInfo,
-  BulkImportResult,
   ImportFromJsonRequest,
   ImportFromTracesRequest,
   ImportFromSpansRequest,
@@ -25,9 +22,13 @@ import type {
 
 export const datasetQueryKeys = {
   all: ['datasets'] as const,
-  list: (projectId: string) => [...datasetQueryKeys.all, 'list', projectId] as const,
+  lists: () => [...datasetQueryKeys.all, 'list'] as const,
+  list: (projectId: string) => [...datasetQueryKeys.lists(), projectId] as const,
+  listFiltered: (projectId: string, filters?: DatasetListParams) =>
+    [...datasetQueryKeys.list(projectId), filters] as const,
+  details: () => [...datasetQueryKeys.all, 'detail'] as const,
   detail: (projectId: string, datasetId: string) =>
-    [...datasetQueryKeys.all, 'detail', projectId, datasetId] as const,
+    [...datasetQueryKeys.details(), projectId, datasetId] as const,
   items: (projectId: string, datasetId: string) =>
     [...datasetQueryKeys.all, 'items', projectId, datasetId] as const,
   // Version-related query keys
@@ -49,6 +50,28 @@ export function useDatasetsQuery(
     queryKey: [...datasetQueryKeys.list(projectId ?? ''), params?.search, params?.page, params?.limit],
     queryFn: () => datasetsApi.listDatasets(projectId!, params),
     enabled: !!projectId,
+    staleTime: 30_000,
+    gcTime: 5 * 60 * 1000,
+  })
+}
+
+/**
+ * Query hook to list datasets with pagination, search, and sorting
+ */
+export function useDatasetsWithPaginationQuery(
+  projectId: string | undefined,
+  params?: DatasetListParams,
+  options: { enabled?: boolean } = {}
+) {
+  return useQuery({
+    queryKey: datasetQueryKeys.listFiltered(projectId ?? '', params),
+    queryFn: async () => {
+      if (!projectId) {
+        throw new Error('Project ID is required')
+      }
+      return datasetsApi.listDatasetsWithPagination(projectId, params)
+    },
+    enabled: !!projectId && (options.enabled ?? true),
     staleTime: 30_000,
     gcTime: 5 * 60 * 1000,
   })

@@ -72,15 +72,17 @@ func (h *DatasetHandler) Create(c *gin.Context) {
 }
 
 // @Summary List datasets
-// @Description Returns all datasets for the project with pagination. Works for both SDK and Dashboard routes.
+// @Description Returns all datasets for the project with pagination, search, and sorting. Works for both SDK and Dashboard routes.
 // @Tags Datasets, SDK - Datasets
 // @Produce json
 // @Security ApiKeyAuth
 // @Param projectId path string false "Project ID (Dashboard routes)"
-// @Param page query int false "Page number (default 1)"
-// @Param limit query int false "Items per page (10, 25, 50, 100; default 50)"
-// @Param search query string false "Search by name or description"
-// @Success 200 {object} response.ListResponse{data=[]evaluation.DatasetResponse}
+// @Param search query string false "Search by name (case-insensitive partial match)"
+// @Param sort_by query string false "Sort field (name, created_at, updated_at, item_count)" default(updated_at)
+// @Param sort_dir query string false "Sort direction (asc, desc)" default(desc)
+// @Param page query int false "Page number" default(1)
+// @Param limit query int false "Items per page (10, 25, 50, 100)" default(50)
+// @Success 200 {object} response.APIResponse{data=[]evaluation.DatasetWithItemCountResponse,meta=response.Meta}
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 401 {object} response.ErrorResponse
 // @Router /api/v1/projects/{projectId}/datasets [get]
@@ -92,27 +94,39 @@ func (h *DatasetHandler) List(c *gin.Context) {
 		return
 	}
 
-	params := response.ParsePaginationParams(c.Query("page"), c.Query("limit"), "", "")
-
-	// Build filter from query params
-	var filter *evaluationDomain.DatasetFilter
+	// Parse filters
+	filter := &evaluationDomain.DatasetFilter{}
 	if search := c.Query("search"); search != "" {
-		filter = &evaluationDomain.DatasetFilter{Search: &search}
+		filter.Search = &search
 	}
 
-	datasets, total, err := h.service.List(c.Request.Context(), projectID, filter, params.Page, params.Limit)
+	// Parse pagination params
+	params := response.ParsePaginationParams(
+		c.Query("page"),
+		c.Query("limit"),
+		c.Query("sort_by"),
+		c.Query("sort_dir"),
+	)
+
+	// Validate pagination parameters to prevent SQL injection
+	if err := params.Validate(); err != nil {
+		response.ValidationError(c, "Invalid pagination parameters", err.Error())
+		return
+	}
+
+	datasets, total, err := h.service.ListWithFilters(c.Request.Context(), projectID, filter, params)
 	if err != nil {
 		response.Error(c, err)
 		return
 	}
 
-	responses := make([]*evaluationDomain.DatasetResponse, len(datasets))
+	responses := make([]*evaluationDomain.DatasetWithItemCountResponse, len(datasets))
 	for i, dataset := range datasets {
 		responses[i] = dataset.ToResponse()
 	}
 
-	pag := response.NewPagination(params.Page, params.Limit, total)
-	response.SuccessWithPagination(c, responses, pag)
+	paginationMeta := response.NewPagination(params.Page, params.Limit, total)
+	response.SuccessWithPagination(c, responses, paginationMeta)
 }
 
 // @Summary Get dataset

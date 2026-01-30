@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useCallback, useMemo } from 'react'
-import { Upload, FileSpreadsheet, ChevronLeft, ChevronRight, Check } from 'lucide-react'
+import { useState, useCallback, useMemo, useEffect } from 'react'
+import { Upload, FileSpreadsheet, ChevronLeft, ChevronRight, Check, AlertCircle, Info } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -23,8 +23,22 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { useImportFromCsvMutation } from '../hooks/use-datasets'
-import type { CsvPreview, CSVColumnMapping } from '../types'
+import { Progress } from '@/components/ui/progress'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
+import { useChunkedCsvImport } from '../hooks/use-csv-import'
+import {
+  parseCSV,
+  autoDetectColumnMapping,
+  getColumnTypeLabel,
+  getColumnTypeColor,
+  type CsvParseResult,
+} from '../utils/csv-parser'
+import type { CSVColumnMapping } from '../types'
 
 interface ImportCsvDialogProps {
   projectId: string
@@ -35,137 +49,79 @@ interface ImportCsvDialogProps {
 type Step = 'upload' | 'mapping' | 'confirm'
 
 const PREVIEW_ROWS = 5
-
-function parseCSV(content: string, hasHeader: boolean): CsvPreview | null {
-  const lines = content.split('\n').filter((line) => line.trim())
-  if (lines.length === 0) return null
-
-  const rows: string[][] = []
-  let currentRow: string[] = []
-  let inQuotes = false
-  let currentField = ''
-
-  for (const line of lines) {
-    for (let i = 0; i < line.length; i++) {
-      const char = line[i]
-      const nextChar = line[i + 1]
-
-      if (char === '"' && !inQuotes) {
-        inQuotes = true
-      } else if (char === '"' && inQuotes) {
-        if (nextChar === '"') {
-          currentField += '"'
-          i++
-        } else {
-          inQuotes = false
-        }
-      } else if (char === ',' && !inQuotes) {
-        currentRow.push(currentField.trim())
-        currentField = ''
-      } else {
-        currentField += char
-      }
-    }
-
-    if (!inQuotes) {
-      currentRow.push(currentField.trim())
-      rows.push(currentRow)
-      currentRow = []
-      currentField = ''
-    } else {
-      currentField += '\n'
-    }
-  }
-
-  if (currentRow.length > 0 || currentField) {
-    currentRow.push(currentField.trim())
-    rows.push(currentRow)
-  }
-
-  if (rows.length === 0) return null
-
-  let headers: string[]
-  let dataRows: string[][]
-
-  if (hasHeader && rows.length > 0) {
-    headers = rows[0]
-    dataRows = rows.slice(1)
-  } else {
-    const numCols = rows[0]?.length || 0
-    headers = Array.from({ length: numCols }, (_, i) => `col_${i}`)
-    dataRows = rows
-  }
-
-  return {
-    headers,
-    rows: dataRows,
-    rowCount: dataRows.length,
-  }
-}
+const LARGE_FILE_THRESHOLD = 500 * 1024 // 500KB
 
 export function ImportCsvDialog({ projectId, datasetId, trigger }: ImportCsvDialogProps) {
   const [open, setOpen] = useState(false)
   const [step, setStep] = useState<Step>('upload')
   const [csvContent, setCsvContent] = useState('')
+  const [fileName, setFileName] = useState<string | null>(null)
   const [hasHeader, setHasHeader] = useState(true)
   const [deduplicate, setDeduplicate] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [preview, setPreview] = useState<CsvPreview | null>(null)
+  const [parseResult, setParseResult] = useState<CsvParseResult | null>(null)
   const [columnMapping, setColumnMapping] = useState<CSVColumnMapping>({
     input_column: '',
     expected_column: '',
     metadata_columns: [],
   })
 
-  const importMutation = useImportFromCsvMutation(projectId, datasetId)
+  const { importCsv, progress, isImporting, reset: resetImport } = useChunkedCsvImport(
+    projectId,
+    datasetId
+  )
+
+  const isLargeFile = parseResult && parseResult.estimatedSize > LARGE_FILE_THRESHOLD
 
   const resetForm = useCallback(() => {
     setStep('upload')
     setCsvContent('')
+    setFileName(null)
     setHasHeader(true)
     setDeduplicate(true)
     setError(null)
-    setPreview(null)
+    setParseResult(null)
     setColumnMapping({
       input_column: '',
       expected_column: '',
       metadata_columns: [],
     })
-  }, [])
+    resetImport()
+  }, [resetImport])
 
   const parseAndValidate = useCallback((content: string, header: boolean) => {
     if (!content.trim()) {
       setError('Please provide CSV content')
-      setPreview(null)
+      setParseResult(null)
       return false
     }
 
     const parsed = parseCSV(content, header)
     if (!parsed || parsed.rowCount === 0) {
       setError('Could not parse CSV content or no data rows found')
-      setPreview(null)
+      setParseResult(null)
       return false
     }
 
     if (parsed.headers.length === 0) {
       setError('CSV must have at least one column')
-      setPreview(null)
+      setParseResult(null)
       return false
     }
 
     setError(null)
-    setPreview(parsed)
+    setParseResult(parsed)
 
-    // Auto-select first column as input if not set
-    if (!columnMapping.input_column && parsed.headers.length > 0) {
-      setColumnMapping((prev) => ({
-        ...prev,
-        input_column: parsed.headers[0],
-      }))
-    }
+    // Auto-detect column mappings if not already set
+    const autoMapping = autoDetectColumnMapping(parsed.columns)
+    setColumnMapping({
+      input_column: autoMapping.inputColumn || parsed.headers[0],
+      expected_column: autoMapping.expectedColumn || '',
+      metadata_columns: autoMapping.metadataColumns,
+    })
 
     return true
-  }, [columnMapping.input_column])
+  }, [])
 
   const handleFileUpload = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
@@ -175,6 +131,8 @@ export function ImportCsvDialog({ projectId, datasetId, trigger }: ImportCsvDial
       setError('Please upload a CSV file')
       return
     }
+
+    setFileName(file.name)
 
     const reader = new FileReader()
     reader.onload = (e) => {
@@ -201,6 +159,10 @@ export function ImportCsvDialog({ projectId, datasetId, trigger }: ImportCsvDial
     setColumnMapping((prev) => ({
       ...prev,
       input_column: value,
+      // Clear expected if it was the same
+      expected_column: prev.expected_column === value ? '' : prev.expected_column,
+      // Remove from metadata if present
+      metadata_columns: prev.metadata_columns?.filter(c => c !== value) || [],
     }))
   }, [])
 
@@ -208,6 +170,8 @@ export function ImportCsvDialog({ projectId, datasetId, trigger }: ImportCsvDial
     setColumnMapping((prev) => ({
       ...prev,
       expected_column: value === 'none' ? '' : value,
+      // Remove from metadata if present
+      metadata_columns: prev.metadata_columns?.filter(c => c !== value) || [],
     }))
   }, [])
 
@@ -225,20 +189,20 @@ export function ImportCsvDialog({ projectId, datasetId, trigger }: ImportCsvDial
   }, [])
 
   const availableForExpected = useMemo(() => {
-    if (!preview) return []
-    return preview.headers.filter(
+    if (!parseResult) return []
+    return parseResult.headers.filter(
       (h) => h !== columnMapping.input_column && !columnMapping.metadata_columns?.includes(h)
     )
-  }, [preview, columnMapping.input_column, columnMapping.metadata_columns])
+  }, [parseResult, columnMapping.input_column, columnMapping.metadata_columns])
 
   const availableForMetadata = useMemo(() => {
-    if (!preview) return []
-    return preview.headers.filter(
+    if (!parseResult) return []
+    return parseResult.headers.filter(
       (h) => h !== columnMapping.input_column && h !== columnMapping.expected_column
     )
-  }, [preview, columnMapping.input_column, columnMapping.expected_column])
+  }, [parseResult, columnMapping.input_column, columnMapping.expected_column])
 
-  const canProceedToMapping = preview && preview.rowCount > 0
+  const canProceedToMapping = parseResult && parseResult.rowCount > 0
   const canProceedToConfirm = columnMapping.input_column !== ''
   const canImport = canProceedToConfirm
 
@@ -259,26 +223,26 @@ export function ImportCsvDialog({ projectId, datasetId, trigger }: ImportCsvDial
   }
 
   const handleSubmit = async () => {
-    if (!preview || !canImport) return
+    if (!parseResult || !canImport) return
 
     try {
-      await importMutation.mutateAsync({
+      await importCsv({
         content: csvContent,
-        column_mapping: {
-          input_column: columnMapping.input_column,
-          expected_column: columnMapping.expected_column || undefined,
-          metadata_columns: columnMapping.metadata_columns?.length
-            ? columnMapping.metadata_columns
-            : undefined,
-        },
-        has_header: hasHeader,
+        columnMapping,
+        hasHeader,
         deduplicate,
       })
       resetForm()
       setOpen(false)
     } catch {
-      // Mutation's onError handles toast notification
+      // Error handled by hook
     }
+  }
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
   }
 
   const renderStepIndicator = () => (
@@ -347,16 +311,57 @@ export function ImportCsvDialog({ projectId, datasetId, trigger }: ImportCsvDial
         />
       </div>
 
-      {preview && (
+      {parseResult && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <Label>Preview ({preview.rowCount} rows, {preview.headers.length} columns)</Label>
+            <Label>
+              Preview ({parseResult.rowCount.toLocaleString()} rows, {parseResult.headers.length} columns)
+            </Label>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              {fileName && <span>{fileName}</span>}
+              <span>({formatFileSize(parseResult.estimatedSize)})</span>
+              {isLargeFile && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger>
+                      <Info className="h-4 w-4 text-blue-500" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Large file will be uploaded in chunks</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+            </div>
           </div>
+
+          {/* Column type badges */}
+          <div className="flex flex-wrap gap-1.5 pb-2">
+            {parseResult.columns.map((col) => (
+              <TooltipProvider key={col.name}>
+                <Tooltip>
+                  <TooltipTrigger>
+                    <Badge variant="secondary" className={getColumnTypeColor(col.type)}>
+                      {col.name}
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="font-medium">{getColumnTypeLabel(col.type)}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {col.uniqueCount} unique values
+                      {col.nullCount > 0 && `, ${col.nullCount} empty`}
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            ))}
+          </div>
+
           <div className="rounded-md border overflow-auto max-h-48">
             <table className="w-full text-sm">
               <thead className="bg-muted/50">
                 <tr>
-                  {preview.headers.map((header, i) => (
+                  {parseResult.headers.map((header, i) => (
                     <th key={i} className="px-3 py-2 text-left font-medium">
                       {header}
                     </th>
@@ -364,7 +369,7 @@ export function ImportCsvDialog({ projectId, datasetId, trigger }: ImportCsvDial
                 </tr>
               </thead>
               <tbody>
-                {preview.rows.slice(0, PREVIEW_ROWS).map((row, i) => (
+                {parseResult.rows.slice(0, PREVIEW_ROWS).map((row, i) => (
                   <tr key={i} className="border-t">
                     {row.map((cell, j) => (
                       <td key={j} className="px-3 py-2 font-mono text-xs truncate max-w-[200px]">
@@ -376,9 +381,9 @@ export function ImportCsvDialog({ projectId, datasetId, trigger }: ImportCsvDial
               </tbody>
             </table>
           </div>
-          {preview.rowCount > PREVIEW_ROWS && (
+          {parseResult.rowCount > PREVIEW_ROWS && (
             <p className="text-xs text-muted-foreground text-center">
-              Showing first {PREVIEW_ROWS} of {preview.rowCount} rows
+              Showing first {PREVIEW_ROWS} of {parseResult.rowCount.toLocaleString()} rows
             </p>
           )}
         </div>
@@ -396,9 +401,14 @@ export function ImportCsvDialog({ projectId, datasetId, trigger }: ImportCsvDial
               <SelectValue placeholder="Select input column" />
             </SelectTrigger>
             <SelectContent>
-              {preview?.headers.map((header) => (
-                <SelectItem key={header} value={header}>
-                  {header}
+              {parseResult?.columns.map((col) => (
+                <SelectItem key={col.name} value={col.name}>
+                  <div className="flex items-center gap-2">
+                    <span>{col.name}</span>
+                    <Badge variant="outline" className="text-xs">
+                      {getColumnTypeLabel(col.type)}
+                    </Badge>
+                  </div>
                 </SelectItem>
               ))}
             </SelectContent>
@@ -419,11 +429,21 @@ export function ImportCsvDialog({ projectId, datasetId, trigger }: ImportCsvDial
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="none">None</SelectItem>
-              {availableForExpected.map((header) => (
-                <SelectItem key={header} value={header}>
-                  {header}
-                </SelectItem>
-              ))}
+              {availableForExpected.map((header) => {
+                const col = parseResult?.columns.find(c => c.name === header)
+                return (
+                  <SelectItem key={header} value={header}>
+                    <div className="flex items-center gap-2">
+                      <span>{header}</span>
+                      {col && (
+                        <Badge variant="outline" className="text-xs">
+                          {getColumnTypeLabel(col.type)}
+                        </Badge>
+                      )}
+                    </div>
+                  </SelectItem>
+                )
+              })}
             </SelectContent>
           </Select>
           <p className="text-xs text-muted-foreground">
@@ -437,16 +457,27 @@ export function ImportCsvDialog({ projectId, datasetId, trigger }: ImportCsvDial
             {availableForMetadata.length > 0 ? (
               availableForMetadata.map((header) => {
                 const isSelected = columnMapping.metadata_columns?.includes(header)
+                const col = parseResult?.columns.find(c => c.name === header)
                 return (
-                  <Badge
-                    key={header}
-                    variant={isSelected ? 'default' : 'outline'}
-                    className="cursor-pointer"
-                    onClick={() => handleMetadataColumnToggle(header)}
-                  >
-                    {header}
-                    {isSelected && <Check className="ml-1 h-3 w-3" />}
-                  </Badge>
+                  <TooltipProvider key={header}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Badge
+                          variant={isSelected ? 'default' : 'outline'}
+                          className="cursor-pointer"
+                          onClick={() => handleMetadataColumnToggle(header)}
+                        >
+                          {header}
+                          {isSelected && <Check className="ml-1 h-3 w-3" />}
+                        </Badge>
+                      </TooltipTrigger>
+                      {col && (
+                        <TooltipContent>
+                          <p>{getColumnTypeLabel(col.type)}</p>
+                        </TooltipContent>
+                      )}
+                    </Tooltip>
+                  </TooltipProvider>
                 )
               })
             ) : (
@@ -461,16 +492,16 @@ export function ImportCsvDialog({ projectId, datasetId, trigger }: ImportCsvDial
         </div>
       </div>
 
-      {preview && columnMapping.input_column && (
+      {parseResult && columnMapping.input_column && (
         <div className="space-y-2">
           <Label>Mapped Data Preview</Label>
           <div className="rounded-md border bg-muted/50 p-3 max-h-32 overflow-auto">
             <pre className="text-xs font-mono">
               {JSON.stringify(
-                preview.rows.slice(0, 2).map((row) => {
-                  const inputIdx = preview.headers.indexOf(columnMapping.input_column)
+                parseResult.rows.slice(0, 2).map((row) => {
+                  const inputIdx = parseResult.headers.indexOf(columnMapping.input_column)
                   const expectedIdx = columnMapping.expected_column
-                    ? preview.headers.indexOf(columnMapping.expected_column)
+                    ? parseResult.headers.indexOf(columnMapping.expected_column)
                     : -1
 
                   const item: Record<string, unknown> = {
@@ -484,7 +515,7 @@ export function ImportCsvDialog({ projectId, datasetId, trigger }: ImportCsvDial
                   if (columnMapping.metadata_columns?.length) {
                     const metadata: Record<string, string> = {}
                     for (const col of columnMapping.metadata_columns) {
-                      const idx = preview.headers.indexOf(col)
+                      const idx = parseResult.headers.indexOf(col)
                       if (idx >= 0) {
                         metadata[col] = row[idx] || ''
                       }
@@ -508,52 +539,88 @@ export function ImportCsvDialog({ projectId, datasetId, trigger }: ImportCsvDial
 
   const renderConfirmStep = () => (
     <div className="space-y-4">
-      <Alert>
-        <AlertDescription>
-          Ready to import <strong>{preview?.rowCount}</strong> items into this dataset.
-        </AlertDescription>
-      </Alert>
+      {isLargeFile && (
+        <Alert>
+          <Info className="h-4 w-4" />
+          <AlertDescription>
+            This is a large file ({formatFileSize(parseResult?.estimatedSize || 0)}).
+            It will be uploaded in multiple chunks to ensure reliability.
+          </AlertDescription>
+        </Alert>
+      )}
 
-      <div className="space-y-3 text-sm">
-        <div className="flex justify-between py-2 border-b">
-          <span className="text-muted-foreground">Total Rows</span>
-          <span className="font-medium">{preview?.rowCount}</span>
-        </div>
-        <div className="flex justify-between py-2 border-b">
-          <span className="text-muted-foreground">Input Column</span>
-          <Badge variant="outline">{columnMapping.input_column}</Badge>
-        </div>
-        {columnMapping.expected_column && (
-          <div className="flex justify-between py-2 border-b">
-            <span className="text-muted-foreground">Expected Column</span>
-            <Badge variant="outline">{columnMapping.expected_column}</Badge>
+      {progress && (
+        <div className="space-y-2">
+          <div className="flex justify-between text-sm">
+            <span>Uploading...</span>
+            <span>
+              Chunk {progress.currentChunk} of {progress.totalChunks}
+            </span>
           </div>
-        )}
-        {columnMapping.metadata_columns && columnMapping.metadata_columns.length > 0 && (
-          <div className="flex justify-between py-2 border-b">
-            <span className="text-muted-foreground">Metadata Columns</span>
-            <div className="flex gap-1 flex-wrap justify-end">
-              {columnMapping.metadata_columns.map((col) => (
-                <Badge key={col} variant="outline">{col}</Badge>
-              ))}
+          <Progress value={(progress.currentChunk / progress.totalChunks) * 100} />
+          <div className="flex justify-between text-xs text-muted-foreground">
+            <span>{progress.itemsCreated.toLocaleString()} items created</span>
+            {progress.itemsSkipped > 0 && (
+              <span>{progress.itemsSkipped.toLocaleString()} skipped</span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {!progress && (
+        <>
+          <Alert>
+            <AlertDescription>
+              Ready to import <strong>{parseResult?.rowCount.toLocaleString()}</strong> items into this dataset.
+            </AlertDescription>
+          </Alert>
+
+          <div className="space-y-3 text-sm">
+            <div className="flex justify-between py-2 border-b">
+              <span className="text-muted-foreground">Total Rows</span>
+              <span className="font-medium">{parseResult?.rowCount.toLocaleString()}</span>
             </div>
+            <div className="flex justify-between py-2 border-b">
+              <span className="text-muted-foreground">File Size</span>
+              <span className="font-medium">{formatFileSize(parseResult?.estimatedSize || 0)}</span>
+            </div>
+            <div className="flex justify-between py-2 border-b">
+              <span className="text-muted-foreground">Input Column</span>
+              <Badge variant="outline">{columnMapping.input_column}</Badge>
+            </div>
+            {columnMapping.expected_column && (
+              <div className="flex justify-between py-2 border-b">
+                <span className="text-muted-foreground">Expected Column</span>
+                <Badge variant="outline">{columnMapping.expected_column}</Badge>
+              </div>
+            )}
+            {columnMapping.metadata_columns && columnMapping.metadata_columns.length > 0 && (
+              <div className="flex justify-between py-2 border-b">
+                <span className="text-muted-foreground">Metadata Columns</span>
+                <div className="flex gap-1 flex-wrap justify-end">
+                  {columnMapping.metadata_columns.map((col) => (
+                    <Badge key={col} variant="outline">{col}</Badge>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-        )}
-      </div>
 
-      <div className="flex items-center justify-between rounded-lg border p-3">
-        <div className="space-y-0.5">
-          <Label htmlFor="deduplicate-confirm">Skip duplicates</Label>
-          <p className="text-xs text-muted-foreground">
-            Skip items with identical content to existing items
-          </p>
-        </div>
-        <Switch
-          id="deduplicate-confirm"
-          checked={deduplicate}
-          onCheckedChange={setDeduplicate}
-        />
-      </div>
+          <div className="flex items-center justify-between rounded-lg border p-3">
+            <div className="space-y-0.5">
+              <Label htmlFor="deduplicate-confirm">Skip duplicates</Label>
+              <p className="text-xs text-muted-foreground">
+                Skip items with identical content to existing items
+              </p>
+            </div>
+            <Switch
+              id="deduplicate-confirm"
+              checked={deduplicate}
+              onCheckedChange={setDeduplicate}
+            />
+          </div>
+        </>
+      )}
     </div>
   )
 
@@ -584,6 +651,7 @@ export function ImportCsvDialog({ projectId, datasetId, trigger }: ImportCsvDial
 
         {error && (
           <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
@@ -596,8 +664,8 @@ export function ImportCsvDialog({ projectId, datasetId, trigger }: ImportCsvDial
 
         <DialogFooter className="flex justify-between">
           <div>
-            {step !== 'upload' && (
-              <Button variant="ghost" onClick={handleBack} disabled={importMutation.isPending}>
+            {step !== 'upload' && !isImporting && (
+              <Button variant="ghost" onClick={handleBack}>
                 <ChevronLeft className="mr-1 h-4 w-4" />
                 Back
               </Button>
@@ -607,7 +675,7 @@ export function ImportCsvDialog({ projectId, datasetId, trigger }: ImportCsvDial
             <Button
               variant="outline"
               onClick={() => setOpen(false)}
-              disabled={importMutation.isPending}
+              disabled={isImporting}
             >
               Cancel
             </Button>
@@ -623,8 +691,8 @@ export function ImportCsvDialog({ projectId, datasetId, trigger }: ImportCsvDial
                 <ChevronRight className="ml-1 h-4 w-4" />
               </Button>
             ) : (
-              <Button onClick={handleSubmit} disabled={importMutation.isPending || !canImport}>
-                {importMutation.isPending ? 'Importing...' : 'Import Items'}
+              <Button onClick={handleSubmit} disabled={isImporting || !canImport}>
+                {isImporting ? 'Importing...' : 'Import Items'}
               </Button>
             )}
           </div>
