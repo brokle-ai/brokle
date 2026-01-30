@@ -131,8 +131,39 @@ export { ProtectedLabelsConfig } from './components/label-management/ProtectedLa
 // Version Management components (nested directory)
 export { VersionHistory } from './components/version-management/VersionHistory'
 export { VersionDiff } from './components/version-management/VersionDiff'
-export { VersionCompare } from './components/version-management/VersionCompare'
+export { DiffViewer } from './components/version-management/DiffViewer'
+export { VersionDiffDialog } from './components/version-management/VersionDiffDialog'
 export { VersionDetails } from './components/version-management/VersionDetails'
+
+// Prompt Detail components (nested directory) - Read-only view
+export {
+  PromptDetailLayout,
+  VersionSidebar,
+  VersionSidebarItem,
+  PromptViewerPanel,
+  JsonConfigViewer,
+} from './components/prompt-detail'
+
+// Prompt Edit components (nested directory) - Editing/versioning
+export {
+  PromptEditLayout,
+  PromptEditPanel,
+  SaveVersionDialog,
+  JsonConfigEditor,
+} from './components/prompt-edit'
+
+// Prompt Detail state hook
+export {
+  usePromptDetailState,
+  type UsePromptDetailStateReturn,
+  type PromptDetailTab,
+} from './hooks/use-prompt-detail-state'
+
+// Prompt Edit state hook
+export {
+  usePromptEditState,
+  type UsePromptEditStateReturn,
+} from './hooks/use-prompt-edit-state'
 
 // Utilities
 export { extractVariables } from './utils/variable-extraction'
