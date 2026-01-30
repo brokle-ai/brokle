@@ -104,7 +104,39 @@ export interface ModelConfig {
   top_p_enabled?: boolean
   frequency_penalty_enabled?: boolean
   presence_penalty_enabled?: boolean
+  // Tools/Function Calling
+  tools?: Tool[]
+  tool_choice?: ToolChoice
+  // Structured Output
+  response_format?: ResponseFormat
 }
+
+/**
+ * API-safe model config without UI-only fields.
+ * Used when sending config to the backend API.
+ * Tools are in API format (without UI-only 'id' field).
+ */
+export interface APIModelConfig {
+  model?: string
+  provider?: string
+  credential_id?: string
+  temperature?: number
+  max_tokens?: number
+  top_p?: number
+  frequency_penalty?: number
+  presence_penalty?: number
+  stop?: string[]
+  tools?: object[] // API format without UI 'id' field
+  tool_choice?: ToolChoice
+  response_format?: ResponseFormat
+}
+
+// Re-export tool types for convenience
+export type { Tool, ToolFunction, ToolCall, ToolChoice, SpecificToolChoice, ResponseFormat, JsonSchemaResponseFormat } from './tools'
+export { createEmptyTool, createToolFromJSON, validateTool, toolsToAPIFormat, parseToolCalls, formatToolCallArguments } from './tools'
+
+import type { Tool, ToolChoice, ResponseFormat } from './tools'
+import { toolsToAPIFormat } from './tools'
 
 export type ParameterKey = 'temperature' | 'max_tokens' | 'top_p' | 'frequency_penalty' | 'presence_penalty'
 
@@ -188,11 +220,16 @@ export const PROVIDER_PARAMETER_SUPPORT: Record<string, ParameterKey[]> = {
   custom: ['temperature', 'max_tokens', 'top_p', 'frequency_penalty', 'presence_penalty'],
 }
 
-// Helper to filter ModelConfig to only include enabled parameters
-export function getEnabledModelConfig(config: ModelConfig | undefined): ModelConfig | undefined {
+/**
+ * Converts a UI ModelConfig to an API-safe config by:
+ * - Filtering to only include enabled parameters
+ * - Removing UI-only fields (like tool ids)
+ * Returns APIModelConfig suitable for sending to the backend.
+ */
+export function getEnabledModelConfig(config: ModelConfig | undefined): APIModelConfig | undefined {
   if (!config) return undefined
 
-  const result: ModelConfig = {
+  const result: APIModelConfig = {
     model: config.model,
     provider: config.provider,
     credential_id: config.credential_id,
@@ -214,6 +251,20 @@ export function getEnabledModelConfig(config: ModelConfig | undefined): ModelCon
   }
   if (config.presence_penalty_enabled && config.presence_penalty !== undefined) {
     result.presence_penalty = config.presence_penalty
+  }
+
+  // Include tools/function calling if present (strip UI-only id field)
+  if (config.tools && config.tools.length > 0) {
+    // toolsToAPIFormat removes the UI-only 'id' field that would cause provider errors
+    result.tools = toolsToAPIFormat(config.tools)
+  }
+  if (config.tool_choice) {
+    result.tool_choice = config.tool_choice
+  }
+
+  // Include response format for structured output if present
+  if (config.response_format) {
+    result.response_format = config.response_format
   }
 
   return result
@@ -267,7 +318,7 @@ export interface ExecuteRequest {
   template: ChatTemplate | TextTemplate
   prompt_type: 'text' | 'chat'
   variables: Record<string, string>
-  config_overrides?: ModelConfig
+  config_overrides?: APIModelConfig // API-safe config (tools without UI id field)
   session_id?: string // Optional: updates session's last_run if provided
   project_id: string // Required: for session access validation
 }

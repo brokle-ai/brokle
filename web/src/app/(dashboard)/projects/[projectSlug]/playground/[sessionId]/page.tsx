@@ -6,6 +6,7 @@ import {
   Plus,
   PlayCircle,
   FolderOpen,
+  Download,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DashboardHeader } from '@/components/layout/dashboard-header'
@@ -14,10 +15,13 @@ import { PageHeader } from '@/components/layout/page-header'
 import { Skeleton } from '@/components/ui/skeleton'
 import { PlaygroundWindow } from '@/features/playground/components/playground-window'
 import { SavedSessionsSidebar } from '@/features/playground/components/saved-sessions-sidebar'
+import { SharedVariablesPanel } from '@/features/playground/components/shared-variables-panel'
 import { useSessionQuery } from '@/features/playground/hooks/use-playground-queries'
 import { usePlaygroundStore } from '@/features/playground/stores/playground-store'
 import { useProjectOnly } from '@/features/projects/hooks/use-project-only'
-import type { ModelConfig, ChatTemplate, ChatMessage } from '@/features/playground/types'
+import { usePlaygroundKeyboard } from '@/features/playground/hooks/use-playground-keyboard'
+import { exportSessionToJSON } from '@/features/playground/utils/export-session'
+import type { ModelConfig, ChatTemplate, ChatMessage, PlaygroundSession } from '@/features/playground/types'
 import { createMessage } from '@/features/playground/types'
 
 /**
@@ -126,7 +130,7 @@ export default function PlaygroundSessionPage() {
     }
   }, [params.sessionId, setCurrentSessionId])
 
-  const handleExecuteAll = async () => {
+  const handleExecuteAll = useCallback(async () => {
     setExecutingAll(true)
 
     try {
@@ -142,12 +146,27 @@ export default function PlaygroundSessionPage() {
     } finally {
       setExecutingAll(false)
     }
-  }
+  }, [setExecutingAll])
 
-  const handleNewSession = () => {
+  const handleNewSession = useCallback(() => {
     clearAll()
     router.push(`/projects/${params.projectSlug}/playground`)
-  }
+  }, [clearAll, router, params.projectSlug])
+
+  const sharedVariables = usePlaygroundStore((s) => s.sharedVariables)
+
+  // Export session
+  const handleExport = useCallback(() => {
+    if (!session) return
+    exportSessionToJSON(session as PlaygroundSession, windows, sharedVariables)
+  }, [session, windows, sharedVariables])
+
+  // Keyboard shortcuts
+  usePlaygroundKeyboard({
+    onExecuteAll: windows.length > 1 ? handleExecuteAll : undefined,
+    onNewWindow: addWindow,
+    enabled: !projectLoading && !sessionLoading,
+  })
 
   if (projectLoading || sessionLoading) {
     return (
@@ -185,12 +204,23 @@ export default function PlaygroundSessionPage() {
             <Button
               variant="outline"
               size="sm"
+              onClick={handleExport}
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Export
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => setSidebarOpen(true)}
             >
               <FolderOpen className="mr-2 h-4 w-4" />
               Sessions
             </Button>
           </PageHeader>
+
+          {/* Shared Variables Panel */}
+          <SharedVariablesPanel />
 
           <div className="flex items-center justify-between">
             <Button
