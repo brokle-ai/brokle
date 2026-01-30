@@ -86,9 +86,17 @@ export interface CreateDatasetItemRequest {
   metadata?: Record<string, unknown>
 }
 
-export interface DatasetItemListResponse {
-  items: DatasetItem[]
-  total: number
+// Pagination params for dataset items
+export interface DatasetItemListParams {
+  page?: number
+  limit?: number
+}
+
+// Pagination params for datasets list
+export interface DatasetListParams {
+  page?: number
+  limit?: number
+  search?: string
 }
 
 // Import/Export Types

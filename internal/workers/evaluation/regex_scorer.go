@@ -88,7 +88,7 @@ func (s *RegexScorer) Execute(ctx context.Context, job *EvaluationJob) (*ScorerR
 				Name:        config.ScoreName,
 				Value:       &value,
 				StringValue: stringValue,
-				DataType:    "numeric",
+				Type:        "NUMERIC",
 				Reason:      &reason,
 			},
 		},

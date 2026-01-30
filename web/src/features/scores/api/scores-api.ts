@@ -4,6 +4,7 @@ import type {
   Score,
   ScoreConfig,
   ScoreListParams,
+  ScoreConfigListParams,
   CreateScoreConfigRequest,
   UpdateScoreConfigRequest,
   ScoreAnalyticsParams,
@@ -23,7 +24,7 @@ function buildScoreListQueryParams(params?: ScoreListParams): QueryParams | unde
   if (params.span_id) queryParams.span_id = params.span_id
   if (params.name) queryParams.name = params.name
   if (params.source) queryParams.source = params.source
-  if (params.data_type) queryParams.data_type = params.data_type
+  if (params.type) queryParams.type = params.type
   if (params.page) queryParams.page = params.page
   if (params.limit) queryParams.limit = params.limit
   if (params.sort_by) queryParams.sort_by = params.sort_by
@@ -73,8 +74,18 @@ export const scoresApi = {
   },
 
   // Score Configs
-  listScoreConfigs: async (projectId: string): Promise<ScoreConfig[]> => {
-    return client.get<ScoreConfig[]>(`/v1/projects/${projectId}/score-configs`)
+  listScoreConfigs: async (
+    projectId: string,
+    params?: ScoreConfigListParams
+  ): Promise<PaginatedResponse<ScoreConfig>> => {
+    const queryParams: QueryParams = {}
+    if (params?.page) queryParams.page = params.page
+    if (params?.limit) queryParams.limit = params.limit
+
+    return client.getPaginated<ScoreConfig>(
+      `/v1/projects/${projectId}/score-configs`,
+      queryParams
+    )
   },
 
   getScoreConfig: async (

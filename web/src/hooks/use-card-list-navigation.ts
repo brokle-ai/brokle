@@ -81,7 +81,7 @@ export function useCardListNavigation({
   const handlePageSizeChange = useCallback(
     (pageSize: number) => {
       const updates: Record<string, string | null> = {
-        pageSize: pageSize !== 12 ? String(pageSize) : null,
+        pageSize: pageSize !== 50 ? String(pageSize) : null,
         page: null, // Reset to first page
       }
       const url = pathname + buildCardListUrl(searchParamsObj, updates)

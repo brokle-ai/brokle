@@ -466,7 +466,7 @@ export function transformScore(raw: any): Score {
     name: raw.name || '',
     value: raw.value ?? undefined,
     string_value: raw.string_value || raw.stringValue || undefined,
-    data_type: raw.data_type || raw.dataType || 'NUMERIC',
+    type: raw.type || raw.data_type || raw.dataType || 'NUMERIC',
 
     // Metadata
     source: raw.source || 'API',

@@ -14,11 +14,11 @@ type QueueService interface {
 	// GetByID retrieves an annotation queue by its ID.
 	GetByID(ctx context.Context, id, projectID ulid.ULID) (*AnnotationQueue, error)
 
-	// List retrieves all annotation queues for a project with optional filtering.
-	List(ctx context.Context, projectID ulid.ULID, filter *QueueFilter) ([]*AnnotationQueue, error)
+	// List retrieves all annotation queues for a project with optional filtering and pagination.
+	List(ctx context.Context, projectID ulid.ULID, filter *QueueFilter, page, limit int) ([]*AnnotationQueue, int64, error)
 
-	// ListWithStats retrieves all annotation queues with their statistics.
-	ListWithStats(ctx context.Context, projectID ulid.ULID, filter *QueueFilter) ([]*AnnotationQueue, []*QueueStats, error)
+	// ListWithStats retrieves all annotation queues with their statistics and pagination.
+	ListWithStats(ctx context.Context, projectID ulid.ULID, filter *QueueFilter, page, limit int) ([]*AnnotationQueue, []*QueueStats, int64, error)
 
 	// Update updates an existing annotation queue.
 	Update(ctx context.Context, id, projectID ulid.ULID, req *UpdateQueueRequest) (*AnnotationQueue, error)

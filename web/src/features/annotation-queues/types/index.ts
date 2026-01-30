@@ -124,11 +124,6 @@ export interface AssignUserRequest {
 
 // Response Types
 
-export interface ItemListResponse {
-  items: QueueItem[]
-  total: number
-}
-
 export interface BatchAddItemsResponse {
   created: number
 }
@@ -137,10 +132,13 @@ export interface BatchAddItemsResponse {
 
 export interface QueueListFilter {
   status?: QueueStatus
+  page?: number
+  limit?: number
+  search?: string
 }
 
 export interface ItemListFilter {
   status?: ItemStatus
+  page?: number
   limit?: number
-  offset?: number
 }

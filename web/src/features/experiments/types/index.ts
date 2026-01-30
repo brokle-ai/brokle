@@ -74,6 +74,16 @@ export interface RerunExperimentRequest {
   metadata?: Record<string, unknown>
 }
 
+// Pagination params for experiments list
+export interface ExperimentListParams {
+  page?: number
+  limit?: number
+  dataset_id?: string
+  status?: string
+  search?: string
+  ids?: string // Comma-separated experiment IDs
+}
+
 export interface ExperimentItemListResponse {
   items: ExperimentItem[]
   total: number

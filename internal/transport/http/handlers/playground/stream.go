@@ -56,7 +56,7 @@ type StreamMetrics struct {
 func (h *Handler) Stream(c *gin.Context) {
 	var req StreamRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+		response.ValidationError(c, "Invalid request", err.Error())
 		return
 	}
 

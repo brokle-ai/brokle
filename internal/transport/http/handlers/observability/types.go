@@ -76,7 +76,7 @@ type CreateQualityScoreRequest struct {
 	ScoreName        string   `json:"score_name" binding:"required"`
 	ScoreValue       *float64 `json:"score_value,omitempty"`
 	StringValue      *string  `json:"string_value,omitempty"`
-	DataType         string   `json:"data_type" binding:"required"`
+	Type             string   `json:"type" binding:"required"`
 	Source           string   `json:"source,omitempty"`
 	EvaluatorName    string   `json:"evaluator_name,omitempty"`
 	EvaluatorVersion string   `json:"evaluator_version,omitempty"`
@@ -97,7 +97,7 @@ type QualityScoreResponse struct {
 	CreatedAt        time.Time `json:"created_at"`
 	ScoreValue       *float64  `json:"score_value,omitempty"`
 	StringValue      *string   `json:"string_value,omitempty"`
-	DataType         string    `json:"data_type"`
+	Type             string    `json:"type"`
 	ScoreName        string    `json:"score_name"`
 	ID               string    `json:"id"`
 	Source           string    `json:"source"`

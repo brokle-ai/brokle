@@ -96,8 +96,8 @@ func mergeScoreFields(dst *observability.Score, src *observability.Score) {
 	if src.StringValue != nil {
 		dst.StringValue = src.StringValue
 	}
-	if src.DataType != "" {
-		dst.DataType = src.DataType
+	if src.Type != "" {
+		dst.Type = src.Type
 	}
 	if src.Source != "" {
 		dst.Source = src.Source
@@ -232,36 +232,36 @@ func (s *ScoreService) CountScores(ctx context.Context, filter *observability.Sc
 }
 
 func (s *ScoreService) validateScoreData(score *observability.Score) error {
-	switch score.DataType {
-	case observability.ScoreDataTypeNumeric:
+	switch score.Type {
+	case observability.ScoreTypeNumeric:
 		if score.Value == nil {
-			return appErrors.NewValidationError("numeric score must have value", "value is required for NUMERIC data type")
+			return appErrors.NewValidationError("numeric score must have value", "value is required for NUMERIC type")
 		}
 		if score.StringValue != nil {
-			return appErrors.NewValidationError("numeric score cannot have string_value", "string_value not allowed for NUMERIC data type")
+			return appErrors.NewValidationError("numeric score cannot have string_value", "string_value not allowed for NUMERIC type")
 		}
 
-	case observability.ScoreDataTypeCategorical:
+	case observability.ScoreTypeCategorical:
 		if score.StringValue == nil {
-			return appErrors.NewValidationError("categorical score must have string_value", "string_value is required for CATEGORICAL data type")
+			return appErrors.NewValidationError("categorical score must have string_value", "string_value is required for CATEGORICAL type")
 		}
 		if score.Value != nil {
-			return appErrors.NewValidationError("categorical score cannot have numeric value", "value not allowed for CATEGORICAL data type")
+			return appErrors.NewValidationError("categorical score cannot have numeric value", "value not allowed for CATEGORICAL type")
 		}
 
-	case observability.ScoreDataTypeBoolean:
+	case observability.ScoreTypeBoolean:
 		if score.Value == nil {
-			return appErrors.NewValidationError("boolean score must have value", "value is required for BOOLEAN data type")
+			return appErrors.NewValidationError("boolean score must have value", "value is required for BOOLEAN type")
 		}
 		if *score.Value != 0 && *score.Value != 1 {
 			return appErrors.NewValidationError("boolean score value must be 0 or 1", "value must be 0 (false) or 1 (true)")
 		}
 		if score.StringValue != nil {
-			return appErrors.NewValidationError("boolean score cannot have string_value", "string_value not allowed for BOOLEAN data type")
+			return appErrors.NewValidationError("boolean score cannot have string_value", "string_value not allowed for BOOLEAN type")
 		}
 
 	default:
-		return appErrors.NewValidationError("invalid data type", "data_type must be NUMERIC, CATEGORICAL, or BOOLEAN")
+		return appErrors.NewValidationError("invalid type", "type must be NUMERIC, CATEGORICAL, or BOOLEAN")
 	}
 
 	return nil

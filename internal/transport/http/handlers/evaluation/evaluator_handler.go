@@ -27,14 +27,6 @@ func NewEvaluatorHandler(
 	}
 }
 
-// EvaluatorListResponse wraps the list response with pagination metadata.
-type EvaluatorListResponse struct {
-	Evaluators []*evaluationDomain.EvaluatorResponse `json:"evaluators"`
-	Total      int64                                 `json:"total"`
-	Page       int                                   `json:"page"`
-	Limit      int                                   `json:"limit"`
-}
-
 // @Summary Create evaluator
 // @Description Creates a new evaluator for automated span scoring.
 // @Tags Evaluators
@@ -85,7 +77,7 @@ func (h *EvaluatorHandler) Create(c *gin.Context) {
 // @Param status query string false "Filter by status (active, inactive, paused)"
 // @Param scorer_type query string false "Filter by scorer type (llm, builtin, regex)"
 // @Param search query string false "Search by name"
-// @Success 200 {object} EvaluatorListResponse
+// @Success 200 {object} response.ListResponse{data=[]evaluation.EvaluatorResponse}
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 401 {object} response.ErrorResponse
 // @Router /api/v1/projects/{projectId}/evaluators [get]
@@ -154,12 +146,8 @@ func (h *EvaluatorHandler) List(c *gin.Context) {
 		responses[i] = evaluator.ToResponse()
 	}
 
-	response.Success(c, &EvaluatorListResponse{
-		Evaluators: responses,
-		Total:      total,
-		Page:       params.Page,
-		Limit:      params.Limit,
-	})
+	pag := response.NewPagination(params.Page, params.Limit, total)
+	response.SuccessWithPagination(c, responses, pag)
 }
 
 // @Summary Get evaluator

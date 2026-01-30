@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { Check, ChevronsUpDown, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -18,7 +18,11 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
-import { useExperimentsQuery } from '../hooks/use-experiments'
+import {
+  useExperimentsQuery,
+  useExperimentsByIdsQuery,
+} from '../hooks/use-experiments'
+import type { Experiment } from '../types'
 
 interface ExperimentSelectorProps {
   projectId: string
@@ -38,12 +42,75 @@ export function ExperimentSelector({
   className,
 }: ExperimentSelectorProps) {
   const [open, setOpen] = useState(false)
-  const { data: experiments, isLoading } = useExperimentsQuery(projectId)
+  const [searchInput, setSearchInput] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
 
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchInput)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [searchInput])
+
+  // Fetch paginated/searched experiments for dropdown
+  const {
+    data: experimentsResponse,
+    isLoading,
+    isFetching,
+  } = useExperimentsQuery(projectId, {
+    limit: 100,
+    search: debouncedSearch || undefined,
+  })
+
+  // Determine which selected IDs are missing from the list response
+  const missingIds = useMemo(() => {
+    const listIds = new Set(experimentsResponse?.data?.map((e) => e.id) ?? [])
+    return selectedIds.filter((id) => !listIds.has(id))
+  }, [experimentsResponse?.data, selectedIds])
+
+  // Fetch missing selected experiments by IDs
+  const { data: missingExperimentsResponse } = useExperimentsByIdsQuery(
+    projectId,
+    missingIds
+  )
+
+  // Build a map of all known experiments (from both queries)
+  const experimentsMap = useMemo(() => {
+    const map = new Map<string, Experiment>()
+
+    // Add experiments from list response
+    for (const exp of experimentsResponse?.data ?? []) {
+      map.set(exp.id, exp)
+    }
+
+    // Add experiments from IDs fetch (may overlap, that's fine)
+    for (const exp of missingExperimentsResponse?.data ?? []) {
+      map.set(exp.id, exp)
+    }
+
+    return map
+  }, [experimentsResponse?.data, missingExperimentsResponse?.data])
+
+  // Get selected experiments from the map
   const selectedExperiments = useMemo(() => {
-    if (!experiments) return []
-    return experiments.filter((exp) => selectedIds.includes(exp.id))
-  }, [experiments, selectedIds])
+    return selectedIds
+      .map((id) => experimentsMap.get(id))
+      .filter((exp): exp is Experiment => exp !== undefined)
+  }, [selectedIds, experimentsMap])
+
+  // Build dropdown list: selected-not-in-results first, then list results
+  const experiments = useMemo(() => {
+    const listItems = experimentsResponse?.data ?? []
+    const listIds = new Set(listItems.map((item) => item.id))
+
+    // Get selected experiments that aren't in current list results
+    const selectedNotInList = selectedExperiments.filter(
+      (exp) => !listIds.has(exp.id)
+    )
+
+    return [...selectedNotInList, ...listItems]
+  }, [experimentsResponse?.data, selectedExperiments])
 
   const toggleExperiment = (id: string) => {
     if (selectedIds.includes(id)) {
@@ -64,7 +131,13 @@ export function ExperimentSelector({
 
   return (
     <div className={cn('space-y-2', className)}>
-      <Popover open={open} onOpenChange={setOpen}>
+      <Popover
+        open={open}
+        onOpenChange={(isOpen) => {
+          setOpen(isOpen)
+          if (!isOpen) setSearchInput('')
+        }}
+      >
         <PopoverTrigger asChild>
           <Button
             variant="outline"
@@ -82,10 +155,18 @@ export function ExperimentSelector({
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-[400px] p-0" align="start">
-          <Command>
-            <CommandInput placeholder="Search experiments..." />
+          <Command shouldFilter={false}>
+            <CommandInput
+              placeholder="Search experiments..."
+              value={searchInput}
+              onValueChange={setSearchInput}
+            />
             <CommandList>
-              <CommandEmpty>No experiments found.</CommandEmpty>
+              <CommandEmpty>
+                {isLoading || isFetching
+                  ? 'Searching...'
+                  : 'No experiments found.'}
+              </CommandEmpty>
               <CommandGroup>
                 {experiments?.map((experiment) => {
                   const isSelected = selectedIds.includes(experiment.id)

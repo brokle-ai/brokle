@@ -33,12 +33,12 @@ func (m *MockExperimentRepository) GetByID(ctx context.Context, id ulid.ULID, pr
 	return args.Get(0).(*evaluation.Experiment), args.Error(1)
 }
 
-func (m *MockExperimentRepository) List(ctx context.Context, projectID ulid.ULID, filter *evaluation.ExperimentFilter) ([]*evaluation.Experiment, error) {
-	args := m.Called(ctx, projectID, filter)
+func (m *MockExperimentRepository) List(ctx context.Context, projectID ulid.ULID, filter *evaluation.ExperimentFilter, offset, limit int) ([]*evaluation.Experiment, int64, error) {
+	args := m.Called(ctx, projectID, filter, offset, limit)
 	if args.Get(0) == nil {
-		return nil, args.Error(1)
+		return nil, 0, args.Error(2)
 	}
-	return args.Get(0).([]*evaluation.Experiment), args.Error(1)
+	return args.Get(0).([]*evaluation.Experiment), args.Get(1).(int64), args.Error(2)
 }
 
 func (m *MockExperimentRepository) Update(ctx context.Context, experiment *evaluation.Experiment, projectID ulid.ULID) error {

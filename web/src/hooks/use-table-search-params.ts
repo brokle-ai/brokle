@@ -34,7 +34,7 @@ export function parseTableSearchParams(searchParams: SearchParamsInput): TableSe
 
   // Parse pagination
   const page = Math.max(1, parseInt(get('page') ?? '1', 10))
-  const pageSize = Math.max(1, parseInt(get('pageSize') ?? '10', 10))
+  const pageSize = Math.max(1, parseInt(get('pageSize') ?? '50', 10))
 
   // Parse global filter
   const filter = get('filter') ?? ''

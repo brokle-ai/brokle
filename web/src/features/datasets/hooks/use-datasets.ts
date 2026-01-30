@@ -3,6 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { datasetsApi } from '../api/datasets-api'
+import type { PaginatedResponse } from '@/lib/api/core/types'
 import type {
   CreateDatasetRequest,
   UpdateDatasetRequest,
@@ -16,6 +17,7 @@ import type {
   ImportFromSpansRequest,
   ImportFromCsvRequest,
   DatasetListParams,
+  DatasetItemListParams,
 } from '../types'
 
 export const datasetQueryKeys = {
@@ -40,10 +42,13 @@ export const datasetQueryKeys = {
     [...datasetQueryKeys.all, 'versionItems', projectId, datasetId, versionId] as const,
 }
 
-export function useDatasetsQuery(projectId: string | undefined) {
+export function useDatasetsQuery(
+  projectId: string | undefined,
+  params?: DatasetListParams
+) {
   return useQuery({
-    queryKey: datasetQueryKeys.list(projectId ?? ''),
-    queryFn: () => datasetsApi.listDatasets(projectId!),
+    queryKey: [...datasetQueryKeys.list(projectId ?? ''), params?.search, params?.page, params?.limit],
+    queryFn: () => datasetsApi.listDatasets(projectId!, params),
     enabled: !!projectId,
     staleTime: 30_000,
     gcTime: 5 * 60 * 1000,
@@ -88,12 +93,15 @@ export function useDatasetQuery(
 export function useDatasetItemsQuery(
   projectId: string | undefined,
   datasetId: string | undefined,
-  limit = 50,
-  offset = 0
+  params?: DatasetItemListParams
 ) {
   return useQuery({
-    queryKey: [...datasetQueryKeys.items(projectId ?? '', datasetId ?? ''), limit, offset],
-    queryFn: () => datasetsApi.listDatasetItems(projectId!, datasetId!, limit, offset),
+    queryKey: [
+      ...datasetQueryKeys.items(projectId ?? '', datasetId ?? ''),
+      params?.page,
+      params?.limit,
+    ],
+    queryFn: () => datasetsApi.listDatasetItems(projectId!, datasetId!, params),
     enabled: !!projectId && !!datasetId,
     staleTime: 30_000,
     gcTime: 5 * 60 * 1000,
@@ -159,17 +167,24 @@ export function useDeleteDatasetMutation(projectId: string) {
         queryKey: datasetQueryKeys.list(projectId),
       })
 
-      const previousDatasets = queryClient.getQueryData<Dataset[]>(
-        datasetQueryKeys.list(projectId)
+      // Get ALL matching queries (prefix match for paginated queries)
+      const previousQueries = queryClient.getQueriesData<PaginatedResponse<Dataset>>({
+        queryKey: datasetQueryKeys.list(projectId),
+      })
+
+      // Optimistic update - update ALL matching queries
+      queryClient.setQueriesData<PaginatedResponse<Dataset>>(
+        { queryKey: datasetQueryKeys.list(projectId) },
+        (old) => old ? {
+          data: old.data.filter((d) => d.id !== datasetId),
+          pagination: {
+            ...old.pagination,
+            total: old.pagination.total - 1,
+          },
+        } : old
       )
 
-      // Optimistic update
-      queryClient.setQueryData<Dataset[]>(
-        datasetQueryKeys.list(projectId),
-        (old) => old?.filter((d) => d.id !== datasetId) ?? []
-      )
-
-      return { previousDatasets }
+      return { previousQueries }
     },
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
@@ -180,12 +195,10 @@ export function useDeleteDatasetMutation(projectId: string) {
       })
     },
     onError: (error: unknown, _variables, context) => {
-      if (context?.previousDatasets) {
-        queryClient.setQueryData(
-          datasetQueryKeys.list(projectId),
-          context.previousDatasets
-        )
-      }
+      // Rollback ALL affected queries
+      context?.previousQueries?.forEach(([queryKey, data]) => {
+        queryClient.setQueryData(queryKey, data)
+      })
       const apiError = error as { message?: string }
       toast.error('Failed to Delete Dataset', {
         description: apiError?.message || 'Could not delete dataset. Please try again.',
@@ -230,20 +243,24 @@ export function useDeleteDatasetItemMutation(projectId: string, datasetId: strin
         queryKey: datasetQueryKeys.items(projectId, datasetId),
       })
 
-      const previousItems = queryClient.getQueryData<{ items: DatasetItem[]; total: number }>(
-        datasetQueryKeys.items(projectId, datasetId)
-      )
+      // Get ALL matching queries (prefix match for paginated queries)
+      const previousQueries = queryClient.getQueriesData<PaginatedResponse<DatasetItem>>({
+        queryKey: datasetQueryKeys.items(projectId, datasetId),
+      })
 
-      // Optimistic update
-      queryClient.setQueryData<{ items: DatasetItem[]; total: number }>(
-        datasetQueryKeys.items(projectId, datasetId),
+      // Optimistic update - update ALL matching queries
+      queryClient.setQueriesData<PaginatedResponse<DatasetItem>>(
+        { queryKey: datasetQueryKeys.items(projectId, datasetId) },
         (old) => old ? {
-          items: old.items.filter((i) => i.id !== itemId),
-          total: old.total - 1,
-        } : { items: [], total: 0 }
+          data: old.data.filter((i) => i.id !== itemId),
+          pagination: {
+            ...old.pagination,
+            total: old.pagination.total - 1,
+          },
+        } : old
       )
 
-      return { previousItems }
+      return { previousQueries }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
@@ -254,12 +271,10 @@ export function useDeleteDatasetItemMutation(projectId: string, datasetId: strin
       })
     },
     onError: (error: unknown, _itemId, context) => {
-      if (context?.previousItems) {
-        queryClient.setQueryData(
-          datasetQueryKeys.items(projectId, datasetId),
-          context.previousItems
-        )
-      }
+      // Rollback ALL affected queries
+      context?.previousQueries?.forEach(([queryKey, data]) => {
+        queryClient.setQueryData(queryKey, data)
+      })
       const apiError = error as { message?: string }
       toast.error('Failed to Delete Item', {
         description: apiError?.message || 'Could not delete item. Please try again.',
@@ -424,12 +439,15 @@ export function useDatasetVersionItemsQuery(
   projectId: string | undefined,
   datasetId: string | undefined,
   versionId: string | undefined,
-  limit = 50,
-  offset = 0
+  params?: DatasetItemListParams
 ) {
   return useQuery({
-    queryKey: [...datasetQueryKeys.versionItems(projectId ?? '', datasetId ?? '', versionId ?? ''), limit, offset],
-    queryFn: () => datasetsApi.getVersionItems(projectId!, datasetId!, versionId!, limit, offset),
+    queryKey: [
+      ...datasetQueryKeys.versionItems(projectId ?? '', datasetId ?? '', versionId ?? ''),
+      params?.page,
+      params?.limit,
+    ],
+    queryFn: () => datasetsApi.getVersionItems(projectId!, datasetId!, versionId!, params),
     enabled: !!projectId && !!datasetId && !!versionId,
     staleTime: 30_000,
     gcTime: 5 * 60 * 1000,
