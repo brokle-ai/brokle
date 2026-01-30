@@ -29,13 +29,13 @@ import type { ScoreConfig, CreateScoreConfigRequest } from '../types'
 const scoreConfigSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
   description: z.string().optional(),
-  data_type: z.enum(['NUMERIC', 'CATEGORICAL', 'BOOLEAN']),
+  type: z.enum(['NUMERIC', 'CATEGORICAL', 'BOOLEAN']),
   min_value: z.number().optional(),
   max_value: z.number().optional(),
   categories: z.array(z.string()).optional(),
 }).superRefine((data, ctx) => {
   // Require at least one category for CATEGORICAL type
-  if (data.data_type === 'CATEGORICAL') {
+  if (data.type === 'CATEGORICAL') {
     if (!data.categories || data.categories.length === 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -68,14 +68,14 @@ export function ScoreConfigForm({
     defaultValues: {
       name: config?.name ?? '',
       description: config?.description ?? '',
-      data_type: config?.data_type ?? 'NUMERIC',
+      type: config?.type ?? 'NUMERIC',
       min_value: config?.min_value,
       max_value: config?.max_value,
       categories: config?.categories ?? [],
     },
   })
 
-  const dataType = form.watch('data_type')
+  const dataType = form.watch('type')
   const categories = form.watch('categories') || []
   const [categoryInput, setCategoryInput] = useState('')
 
@@ -109,10 +109,10 @@ export function ScoreConfigForm({
     onSubmit({
       name: data.name,
       description: data.description || undefined,
-      data_type: data.data_type,
-      min_value: data.data_type === 'NUMERIC' ? data.min_value : undefined,
-      max_value: data.data_type === 'NUMERIC' ? data.max_value : undefined,
-      categories: data.data_type === 'CATEGORICAL' ? data.categories : undefined,
+      type: data.type,
+      min_value: data.type === 'NUMERIC' ? data.min_value : undefined,
+      max_value: data.type === 'NUMERIC' ? data.max_value : undefined,
+      categories: data.type === 'CATEGORICAL' ? data.categories : undefined,
     })
   }
 
@@ -152,7 +152,7 @@ export function ScoreConfigForm({
 
         <FormField
           control={form.control}
-          name="data_type"
+          name="type"
           render={({ field }) => (
             <FormItem>
               <FormLabel>Data Type</FormLabel>

@@ -25,7 +25,7 @@ export type Score = {
   name: string
   value?: number
   string_value?: string
-  data_type: string // NUMERIC, CATEGORICAL, BOOLEAN
+  type: string // NUMERIC, CATEGORICAL, BOOLEAN
 
   // Metadata
   source: string // API, ANNOTATION, EVAL
@@ -197,7 +197,7 @@ export const scoreSchema: z.ZodType<Score> = z.object({
   name: z.string(),
   value: z.number().optional(),
   string_value: z.string().optional(),
-  data_type: z.string(), // NUMERIC, CATEGORICAL, BOOLEAN
+  type: z.string(), // NUMERIC, CATEGORICAL, BOOLEAN
 
   // Metadata
   source: z.string(), // API, ANNOTATION, EVAL

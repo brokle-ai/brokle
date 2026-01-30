@@ -1,14 +1,16 @@
 'use client'
 
-import { ClipboardList, Search, Loader2 } from 'lucide-react'
-import { Input } from '@/components/ui/input'
-import { useState, useMemo } from 'react'
+import { ClipboardList, Loader2 } from 'lucide-react'
+import { useSearchParams } from 'next/navigation'
 import { QueueList } from './queue-list'
 import { QueueDialogs } from './queue-dialogs'
 import { CreateQueueDialog } from './create-queue-dialog'
 import { AnnotationQueuesProvider } from '../context/annotation-queues-context'
 import { useAnnotationQueuesQuery } from '../hooks/use-annotation-queues'
 import { useProjectOnly } from '@/features/projects'
+import { useTableSearchParams } from '@/hooks/use-table-search-params'
+import { useCardListNavigation } from '@/hooks/use-card-list-navigation'
+import { CardListToolbar, CardListPagination } from '@/components/card-list'
 
 interface QueuesContentProps {
   projectSlug: string
@@ -23,21 +25,21 @@ export function QueuesContent({ projectSlug }: QueuesContentProps) {
 }
 
 function QueuesContentInner() {
+  const searchParams = useSearchParams()
   const { currentProject } = useProjectOnly()
   const projectId = currentProject?.id
-  const { data: queues, isLoading, error } = useAnnotationQueuesQuery(projectId)
-  const [searchTerm, setSearchTerm] = useState('')
+  const { filter, page, pageSize } = useTableSearchParams(searchParams)
+  const { handleSearch, handleReset, handlePageChange, handlePageSizeChange } = useCardListNavigation({ searchParams })
 
-  const filteredQueues = useMemo(() => {
-    if (!queues) return []
-    if (!searchTerm) return queues
-    const lowerSearch = searchTerm.toLowerCase()
-    return queues.filter(
-      (q) =>
-        q.queue.name.toLowerCase().includes(lowerSearch) ||
-        q.queue.description?.toLowerCase().includes(lowerSearch)
-    )
-  }, [queues, searchTerm])
+  const { data: queuesResponse, isLoading, isFetching, error } = useAnnotationQueuesQuery(projectId, {
+    page,
+    limit: pageSize,
+    search: filter || undefined,
+  })
+  const queues = queuesResponse?.data ?? []
+
+  const totalCount = queuesResponse?.pagination?.total ?? 0
+  const hasActiveFilters = !!filter
 
   return (
     <div className="space-y-6">
@@ -53,17 +55,14 @@ function QueuesContentInner() {
       </div>
 
       {/* Search */}
-      <div className="flex items-center gap-4">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search queues..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-      </div>
+      <CardListToolbar
+        searchPlaceholder="Filter queues..."
+        searchValue={filter}
+        onSearchChange={handleSearch}
+        isPending={isFetching}
+        onReset={handleReset}
+        isFiltered={hasActiveFilters}
+      />
 
       {/* Content */}
       {isLoading ? (
@@ -75,10 +74,20 @@ function QueuesContentInner() {
           <p className="text-muted-foreground mb-2">Failed to load annotation queues</p>
           <p className="text-sm text-destructive">{(error as Error).message}</p>
         </div>
-      ) : filteredQueues.length === 0 ? (
-        <EmptyState hasSearch={!!searchTerm} />
+      ) : queues.length === 0 ? (
+        <EmptyState hasSearch={hasActiveFilters} />
       ) : (
-        <QueueList data={filteredQueues} />
+        <>
+          <QueueList data={queues} />
+          <CardListPagination
+            page={page}
+            pageSize={pageSize}
+            totalCount={totalCount}
+            onPageChange={handlePageChange}
+            onPageSizeChange={handlePageSizeChange}
+            isPending={isFetching}
+          />
+        </>
       )}
 
       {/* Dialogs */}

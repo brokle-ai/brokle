@@ -10,7 +10,7 @@ import { useProjectExperiments } from '../hooks/use-project-experiments'
 import { useTableSearchParams } from '@/hooks/use-table-search-params'
 import { useCardListNavigation } from '@/hooks/use-card-list-navigation'
 import { PageHeader } from '@/components/layout/page-header'
-import { CardListToolbar } from '@/components/card-list'
+import { CardListToolbar, CardListPagination } from '@/components/card-list'
 import { DataTableEmptyState } from '@/components/data-table'
 import { LoadingSpinner } from '@/components/guards/loading-spinner'
 
@@ -21,10 +21,10 @@ interface ExperimentsProps {
 function ExperimentsContent() {
   const searchParams = useSearchParams()
   const { projectId } = useExperiments()
-  const { data, totalCount, isLoading, isFetching, error, hasProject, refetch } =
+  const { data, totalCount, page, pageSize, isLoading, isFetching, error, hasProject, refetch } =
     useProjectExperiments()
   const { filter } = useTableSearchParams(searchParams)
-  const { handleSearch, handleReset } = useCardListNavigation({ searchParams })
+  const { handleSearch, handleReset, handlePageChange, handlePageSizeChange } = useCardListNavigation({ searchParams })
 
   // Check if there are active filters
   const hasActiveFilters = !!filter
@@ -89,6 +89,14 @@ function ExperimentsContent() {
               isFiltered={hasActiveFilters}
             />
             <ExperimentList data={data} />
+            <CardListPagination
+              page={page}
+              pageSize={pageSize}
+              totalCount={totalCount}
+              onPageChange={handlePageChange}
+              onPageSizeChange={handlePageSizeChange}
+              isPending={isFetching}
+            />
           </>
         )}
       </div>

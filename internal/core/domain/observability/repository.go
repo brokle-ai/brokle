@@ -246,7 +246,7 @@ type ScoreFilter struct {
 	SpanID    *string
 	Name      *string
 	Source    *string
-	DataType  *string
+	Type      *string
 	MinValue  *float64
 	MaxValue  *float64
 	StartTime *time.Time

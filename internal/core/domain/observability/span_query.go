@@ -11,8 +11,8 @@ type SpanQueryRequest struct {
 	Filter    string     `json:"filter" validate:"required,max=2000"`
 	StartTime *time.Time `json:"start_time,omitempty"`
 	EndTime   *time.Time `json:"end_time,omitempty"`
-	Limit     int        `json:"limit,omitempty"`  // default 100, max 10000
-	Offset    int        `json:"offset,omitempty"` // for pagination
+	Limit int `json:"limit,omitempty"` // default 100, max 10000
+	Page  int `json:"page,omitempty"`  // 1-indexed page number
 }
 
 // SpanQueryResponse represents the response containing queried spans.
@@ -255,9 +255,9 @@ func ValidateSpanQueryRequest(req *SpanQueryRequest) []ValidationError {
 		errs = append(errs, ValidationError{Field: "limit", Message: "limit exceeds maximum allowed"})
 	}
 
-	// Offset validation
-	if req.Offset < 0 {
-		errs = append(errs, ValidationError{Field: "offset", Message: "offset must be non-negative"})
+	// Page validation
+	if req.Page < 1 {
+		errs = append(errs, ValidationError{Field: "page", Message: "page must be >= 1"})
 	}
 
 	// Time range validation

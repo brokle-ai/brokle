@@ -131,7 +131,7 @@ func (s *BuiltinScorer) executeContains(text string, config map[string]any) (*Sc
 			{
 				Name:     scoreName,
 				Value:    &value,
-				DataType: "boolean",
+				Type: "BOOLEAN",
 				Reason:   &reason,
 			},
 		},
@@ -179,7 +179,7 @@ func (s *BuiltinScorer) executeJSONValid(text string) (*ScorerResult, error) {
 			{
 				Name:     "json_valid",
 				Value:    &value,
-				DataType: "boolean",
+				Type: "BOOLEAN",
 				Reason:   &reason,
 			},
 		},
@@ -219,7 +219,7 @@ func (s *BuiltinScorer) executeLengthCheck(text string, config map[string]any) (
 			{
 				Name:     scoreName,
 				Value:    &value,
-				DataType: "boolean",
+				Type: "BOOLEAN",
 				Reason:   &reason,
 			},
 		},
@@ -254,7 +254,7 @@ func (s *BuiltinScorer) executeStartsWith(text string, config map[string]any) (*
 			{
 				Name:     scoreName,
 				Value:    &value,
-				DataType: "boolean",
+				Type: "BOOLEAN",
 				Reason:   &reason,
 			},
 		},
@@ -289,7 +289,7 @@ func (s *BuiltinScorer) executeEndsWith(text string, config map[string]any) (*Sc
 			{
 				Name:     scoreName,
 				Value:    &value,
-				DataType: "boolean",
+				Type: "BOOLEAN",
 				Reason:   &reason,
 			},
 		},
@@ -333,7 +333,7 @@ func (s *BuiltinScorer) executeEquals(text string, config map[string]any) (*Scor
 			{
 				Name:     scoreName,
 				Value:    &value,
-				DataType: "boolean",
+				Type: "BOOLEAN",
 				Reason:   &reason,
 			},
 		},
@@ -357,7 +357,7 @@ func (s *BuiltinScorer) executeNotEmpty(text string) (*ScorerResult, error) {
 			{
 				Name:     "not_empty",
 				Value:    &value,
-				DataType: "boolean",
+				Type: "BOOLEAN",
 				Reason:   &reason,
 			},
 		},

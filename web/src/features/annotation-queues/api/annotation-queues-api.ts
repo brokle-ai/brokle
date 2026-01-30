@@ -1,4 +1,5 @@
 import { BrokleAPIClient } from '@/lib/api/core/client'
+import type { PaginatedResponse } from '@/lib/api/core/types'
 import type {
   AnnotationQueue,
   QueueWithStats,
@@ -12,8 +13,8 @@ import type {
   CompleteItemRequest,
   SkipItemRequest,
   AssignUserRequest,
-  ItemListResponse,
   BatchAddItemsResponse,
+  QueueListFilter,
   ItemListFilter,
 } from '../types'
 
@@ -22,9 +23,19 @@ const client = new BrokleAPIClient('/api')
 export const annotationQueuesApi = {
   // Queues
 
-  listQueues: async (projectId: string): Promise<QueueWithStats[]> => {
-    return client.get<QueueWithStats[]>(
-      `/v1/projects/${projectId}/annotation-queues`
+  listQueues: async (
+    projectId: string,
+    params?: QueueListFilter
+  ): Promise<PaginatedResponse<QueueWithStats>> => {
+    const queryParams: Record<string, string | number> = {}
+    if (params?.status) queryParams.status = params.status
+    if (params?.page) queryParams.page = params.page
+    if (params?.limit) queryParams.limit = params.limit
+    if (params?.search) queryParams.search = params.search
+
+    return client.getPaginated<QueueWithStats>(
+      `/v1/projects/${projectId}/annotation-queues`,
+      queryParams
     )
   },
 
@@ -79,16 +90,16 @@ export const annotationQueuesApi = {
     projectId: string,
     queueId: string,
     filter?: ItemListFilter
-  ): Promise<ItemListResponse> => {
-    const params = new URLSearchParams()
-    if (filter?.status) params.append('status', filter.status)
-    if (filter?.limit) params.append('limit', String(filter.limit))
-    if (filter?.offset) params.append('offset', String(filter.offset))
+  ): Promise<PaginatedResponse<QueueItem>> => {
+    const params: Record<string, string | number> = {}
+    if (filter?.status) params.status = filter.status
+    if (filter?.page) params.page = filter.page
+    if (filter?.limit) params.limit = filter.limit
 
-    const queryString = params.toString()
-    const url = `/v1/projects/${projectId}/annotation-queues/${queueId}/items${queryString ? `?${queryString}` : ''}`
-
-    return client.get<ItemListResponse>(url)
+    return client.getPaginated<QueueItem>(
+      `/v1/projects/${projectId}/annotation-queues/${queueId}/items`,
+      params
+    )
   },
 
   addItems: async (

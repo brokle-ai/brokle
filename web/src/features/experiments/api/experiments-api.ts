@@ -1,9 +1,11 @@
 import { BrokleAPIClient } from '@/lib/api/core/client'
+import type { PaginatedResponse } from '@/lib/api/core/types'
 import type {
   Experiment,
   CreateExperimentRequest,
   UpdateExperimentRequest,
   RerunExperimentRequest,
+  ExperimentListParams,
   ExperimentItemListResponse,
   ExperimentComparisonResponse,
   CompareExperimentsRequest,
@@ -15,14 +17,20 @@ export const experimentsApi = {
   // Experiments
   listExperiments: async (
     projectId: string,
-    params?: { dataset_id?: string; status?: string }
-  ): Promise<Experiment[]> => {
-    const queryParams = new URLSearchParams()
-    if (params?.dataset_id) queryParams.set('dataset_id', params.dataset_id)
-    if (params?.status) queryParams.set('status', params.status)
-    const query = queryParams.toString()
-    const url = `/v1/projects/${projectId}/experiments${query ? `?${query}` : ''}`
-    return client.get<Experiment[]>(url)
+    params?: ExperimentListParams
+  ): Promise<PaginatedResponse<Experiment>> => {
+    const queryParams: Record<string, string | number> = {}
+    if (params?.page) queryParams.page = params.page
+    if (params?.limit) queryParams.limit = params.limit
+    if (params?.dataset_id) queryParams.dataset_id = params.dataset_id
+    if (params?.status) queryParams.status = params.status
+    if (params?.search) queryParams.search = params.search
+    if (params?.ids) queryParams.ids = params.ids
+
+    return client.getPaginated<Experiment>(
+      `/v1/projects/${projectId}/experiments`,
+      queryParams
+    )
   },
 
   getExperiment: async (

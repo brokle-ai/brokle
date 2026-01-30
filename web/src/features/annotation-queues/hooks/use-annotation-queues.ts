@@ -3,6 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { annotationQueuesApi } from '../api/annotation-queues-api'
+import type { PaginatedResponse } from '@/lib/api/core/types'
 import type {
   CreateQueueRequest,
   UpdateQueueRequest,
@@ -14,6 +15,7 @@ import type {
   AssignUserRequest,
   QueueWithStats,
   QueueItem,
+  QueueListFilter,
   ItemListFilter,
 } from '../types'
 
@@ -36,10 +38,19 @@ export const annotationQueueQueryKeys = {
 // Queue Queries
 // ============================================================================
 
-export function useAnnotationQueuesQuery(projectId: string | undefined) {
+export function useAnnotationQueuesQuery(
+  projectId: string | undefined,
+  params?: QueueListFilter
+) {
   return useQuery({
-    queryKey: annotationQueueQueryKeys.list(projectId ?? ''),
-    queryFn: () => annotationQueuesApi.listQueues(projectId!),
+    queryKey: [
+      ...annotationQueueQueryKeys.list(projectId ?? ''),
+      params?.search,
+      params?.status,
+      params?.page,
+      params?.limit,
+    ],
+    queryFn: () => annotationQueuesApi.listQueues(projectId!, params),
     enabled: !!projectId,
     staleTime: 30_000,
     gcTime: 5 * 60 * 1000,
@@ -135,17 +146,24 @@ export function useDeleteQueueMutation(projectId: string) {
         queryKey: annotationQueueQueryKeys.list(projectId),
       })
 
-      const previousQueues = queryClient.getQueryData<QueueWithStats[]>(
-        annotationQueueQueryKeys.list(projectId)
+      // Get ALL matching queries (prefix match for paginated queries)
+      const previousQueries = queryClient.getQueriesData<PaginatedResponse<QueueWithStats>>({
+        queryKey: annotationQueueQueryKeys.list(projectId),
+      })
+
+      // Optimistic update - update ALL matching queries
+      queryClient.setQueriesData<PaginatedResponse<QueueWithStats>>(
+        { queryKey: annotationQueueQueryKeys.list(projectId) },
+        (old) => old ? {
+          data: old.data.filter((q) => q.queue.id !== queueId),
+          pagination: {
+            ...old.pagination,
+            total: old.pagination.total - 1,
+          },
+        } : old
       )
 
-      // Optimistic update
-      queryClient.setQueryData<QueueWithStats[]>(
-        annotationQueueQueryKeys.list(projectId),
-        (old) => old?.filter((q) => q.queue.id !== queueId) ?? []
-      )
-
-      return { previousQueues }
+      return { previousQueries }
     },
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
@@ -156,12 +174,10 @@ export function useDeleteQueueMutation(projectId: string) {
       })
     },
     onError: (error: unknown, _variables, context) => {
-      if (context?.previousQueues) {
-        queryClient.setQueryData(
-          annotationQueueQueryKeys.list(projectId),
-          context.previousQueues
-        )
-      }
+      // Rollback ALL affected queries
+      context?.previousQueries?.forEach(([queryKey, data]) => {
+        queryClient.setQueryData(queryKey, data)
+      })
       const apiError = error as { message?: string }
       toast.error('Failed to Delete Queue', {
         description: apiError?.message || 'Could not delete annotation queue. Please try again.',
@@ -183,8 +199,8 @@ export function useQueueItemsQuery(
     queryKey: [
       ...annotationQueueQueryKeys.items(projectId ?? '', queueId ?? ''),
       filter?.status,
+      filter?.page,
       filter?.limit,
-      filter?.offset,
     ],
     queryFn: () => annotationQueuesApi.listItems(projectId!, queueId!, filter),
     enabled: !!projectId && !!queueId,

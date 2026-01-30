@@ -3,6 +3,7 @@ package evaluation
 import (
 	"log/slog"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -73,14 +74,18 @@ func (h *ExperimentHandler) Create(c *gin.Context) {
 }
 
 // @Summary List experiments
-// @Description Returns all experiments for the project. Works for both SDK and Dashboard routes.
+// @Description Returns all experiments for the project with pagination. Works for both SDK and Dashboard routes.
 // @Tags Experiments, SDK - Experiments
 // @Produce json
 // @Security ApiKeyAuth
 // @Param projectId path string false "Project ID (Dashboard routes)"
+// @Param page query int false "Page number (default 1)"
+// @Param limit query int false "Items per page (10, 25, 50, 100; default 50)"
 // @Param dataset_id query string false "Filter by dataset ID"
 // @Param status query string false "Filter by status (pending, running, completed, failed)"
-// @Success 200 {array} evaluation.ExperimentResponse
+// @Param search query string false "Search by name or description"
+// @Param ids query string false "Filter by specific experiment IDs (comma-separated ULIDs)"
+// @Success 200 {object} response.ListResponse{data=[]evaluation.ExperimentResponse}
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 401 {object} response.ErrorResponse
 // @Router /api/v1/projects/{projectId}/experiments [get]
@@ -91,6 +96,8 @@ func (h *ExperimentHandler) List(c *gin.Context) {
 		response.Error(c, appErrors.NewValidationError("projectId", "must be a valid ULID"))
 		return
 	}
+
+	params := response.ParsePaginationParams(c.Query("page"), c.Query("limit"), "", "")
 
 	var filter *evaluationDomain.ExperimentFilter
 
@@ -123,7 +130,38 @@ func (h *ExperimentHandler) List(c *gin.Context) {
 		}
 	}
 
-	experiments, err := h.service.List(c.Request.Context(), projectID, filter)
+	if search := c.Query("search"); search != "" {
+		if filter == nil {
+			filter = &evaluationDomain.ExperimentFilter{}
+		}
+		filter.Search = &search
+	}
+
+	// Parse ids filter (comma-separated)
+	if idsStr := c.Query("ids"); idsStr != "" {
+		var ids []ulid.ULID
+		idParts := strings.Split(idsStr, ",")
+		for _, idStr := range idParts {
+			idStr = strings.TrimSpace(idStr)
+			if idStr == "" {
+				continue
+			}
+			id, err := ulid.Parse(idStr)
+			if err != nil {
+				response.Error(c, appErrors.NewValidationError("ids", "invalid ULID: "+idStr))
+				return
+			}
+			ids = append(ids, id)
+		}
+		if len(ids) > 0 {
+			if filter == nil {
+				filter = &evaluationDomain.ExperimentFilter{}
+			}
+			filter.IDs = ids
+		}
+	}
+
+	experiments, total, err := h.service.List(c.Request.Context(), projectID, filter, params.Page, params.Limit)
 	if err != nil {
 		response.Error(c, err)
 		return
@@ -134,7 +172,8 @@ func (h *ExperimentHandler) List(c *gin.Context) {
 		responses[i] = exp.ToResponse()
 	}
 
-	response.Success(c, responses)
+	pag := response.NewPagination(params.Page, params.Limit, total)
+	response.SuccessWithPagination(c, responses, pag)
 }
 
 // @Summary Get experiment

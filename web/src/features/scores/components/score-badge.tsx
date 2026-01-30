@@ -15,7 +15,7 @@ interface ScoreBadgeProps {
 
 export function ScoreBadge({ score, showReason = false }: ScoreBadgeProps) {
   const getVariant = () => {
-    if (score.data_type === 'BOOLEAN') {
+    if (score.type === 'BOOLEAN') {
       return score.value === 1 ? 'default' : 'destructive'
     }
     if (score.value !== undefined) {
@@ -27,10 +27,10 @@ export function ScoreBadge({ score, showReason = false }: ScoreBadgeProps) {
   }
 
   const displayValue = () => {
-    if (score.data_type === 'BOOLEAN') {
+    if (score.type === 'BOOLEAN') {
       return score.value === 1 ? 'Yes' : 'No'
     }
-    if (score.data_type === 'CATEGORICAL') {
+    if (score.type === 'CATEGORICAL') {
       return score.string_value
     }
     return score.value?.toFixed(2)

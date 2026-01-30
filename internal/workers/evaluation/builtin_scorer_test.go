@@ -200,7 +200,7 @@ func TestBuiltinScorer_Contains(t *testing.T) {
 			require.NoError(t, err)
 			require.Len(t, result.Scores, 1)
 			assert.Equal(t, tt.wantScore, *result.Scores[0].Value)
-			assert.Equal(t, "boolean", result.Scores[0].DataType)
+			assert.Equal(t, "BOOLEAN", result.Scores[0].Type)
 		})
 	}
 }
@@ -274,7 +274,7 @@ func TestBuiltinScorer_JSONValid(t *testing.T) {
 			wantScore: 1.0,
 		},
 		{
-			name:      "valid boolean",
+			name:      "valid BOOLEAN",
 			text:      `true`,
 			wantScore: 1.0,
 		},
@@ -317,7 +317,7 @@ func TestBuiltinScorer_JSONValid(t *testing.T) {
 			require.Len(t, result.Scores, 1)
 			assert.Equal(t, tt.wantScore, *result.Scores[0].Value)
 			assert.Equal(t, "json_valid", result.Scores[0].Name)
-			assert.Equal(t, "boolean", result.Scores[0].DataType)
+			assert.Equal(t, "BOOLEAN", result.Scores[0].Type)
 		})
 	}
 }
@@ -387,7 +387,7 @@ func TestBuiltinScorer_LengthCheck(t *testing.T) {
 			require.NoError(t, err)
 			require.Len(t, result.Scores, 1)
 			assert.Equal(t, tt.wantScore, *result.Scores[0].Value)
-			assert.Equal(t, "boolean", result.Scores[0].DataType)
+			assert.Equal(t, "BOOLEAN", result.Scores[0].Type)
 		})
 	}
 }
