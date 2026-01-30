@@ -1,10 +1,12 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { Play, X, Copy, Loader2, CloudOff, Cloud, Settings2, FlaskConical } from 'lucide-react'
+import { Play, X, Copy, Loader2, CloudOff, Cloud, Settings2, FlaskConical, Pencil, Check } from 'lucide-react'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import {
   Popover,
   PopoverContent,
@@ -24,6 +26,7 @@ import { ToolbarRow } from './toolbar-row'
 import { SaveAsPromptDialog, type PromptSavedData } from './save-as-prompt-dialog'
 import { StreamingOutput } from './streaming-output'
 import { ParameterControl } from './parameter-control'
+import { RunHistoryPanel } from './run-history-panel'
 import type { ExecuteRequest } from '../types'
 
 interface PlaygroundWindowProps {
@@ -62,10 +65,14 @@ export function PlaygroundWindow({ index, sessionId, onRegisterExecute, onUnregi
   const updateWindow = usePlaygroundStore((s) => s.updateWindow)
   const removeWindow = usePlaygroundStore((s) => s.removeWindow)
   const duplicateWindow = usePlaygroundStore((s) => s.duplicateWindow)
+  const renameWindow = usePlaygroundStore((s) => s.renameWindow)
   const setWindowOutput = usePlaygroundStore((s) => s.setWindowOutput)
   const setLastSavedSnapshot = usePlaygroundStore((s) => s.setLastSavedSnapshot)
   const unlinkPrompt = usePlaygroundStore((s) => s.unlinkPrompt)
   const unlinkSpan = usePlaygroundStore((s) => s.unlinkSpan)
+  const restoreFromHistory = usePlaygroundStore((s) => s.restoreFromHistory)
+  const clearWindowHistory = usePlaygroundStore((s) => s.clearWindowHistory)
+  const markHistoryAsStale = usePlaygroundStore((s) => s.markHistoryAsStale)
   const windows = usePlaygroundStore((s) => s.windows)
 
   // CRITICAL FIX: Compute isDirty from content snapshot comparison
@@ -185,13 +192,63 @@ export function PlaygroundWindow({ index, sessionId, onRegisterExecute, onUnregi
   }, [])
 
   const { stream, abort, isStreaming, content, error, metrics } = useStreaming({
-    onEnd: (finalContent, finalMetrics) => {
-      setWindowOutput(index, finalContent, finalMetrics)
+    onEnd: (finalContent, finalMetrics, capturedInputs) => {
+      // Pass captured inputs to store for accurate history entries
+      setWindowOutput(index, finalContent, finalMetrics, capturedInputs ?? undefined)
     },
   })
 
   const [configOpen, setConfigOpen] = useState(false)
   const currentConfig = windowState?.config || {}
+
+  // Editable window name state
+  const [isEditingName, setIsEditingName] = useState(false)
+  const [editedName, setEditedName] = useState(windowState?.name || '')
+  const nameInputRef = useRef<HTMLInputElement>(null)
+
+  // Track previous inputs for stale history detection (Opik pattern)
+  // Includes messages, variables, AND config since all affect execution
+  const prevInputsSnapshotRef = useRef<string>('')
+
+  // Mark history as stale when ANY input changes (messages, variables, or config)
+  useEffect(() => {
+    const currentSnapshot = JSON.stringify({
+      messages: windowState?.messages?.map(({ role, content }) => ({ role, content })) ?? [],
+      variables: windowState?.variables ?? {},
+      config: windowState?.config ?? null,
+    })
+    if (prevInputsSnapshotRef.current && prevInputsSnapshotRef.current !== currentSnapshot) {
+      markHistoryAsStale(index)
+    }
+    prevInputsSnapshotRef.current = currentSnapshot
+  }, [windowState?.messages, windowState?.variables, windowState?.config, markHistoryAsStale, index])
+
+  // Focus input when entering edit mode
+  useEffect(() => {
+    if (isEditingName && nameInputRef.current) {
+      nameInputRef.current.focus()
+      nameInputRef.current.select()
+    }
+  }, [isEditingName])
+
+  const handleNameSave = useCallback(() => {
+    const trimmedName = editedName.trim()
+    if (trimmedName && trimmedName !== windowState?.name) {
+      renameWindow(index, trimmedName)
+    } else {
+      setEditedName(windowState?.name || '')
+    }
+    setIsEditingName(false)
+  }, [editedName, windowState?.name, renameWindow, index])
+
+  const handleNameKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleNameSave()
+    } else if (e.key === 'Escape') {
+      setEditedName(windowState?.name || '')
+      setIsEditingName(false)
+    }
+  }, [handleNameSave, windowState?.name])
 
   const handleConfigChange = (field: string, value: number | boolean | undefined) => {
     const newConfig: ModelConfig = { ...currentConfig, [field]: value }
@@ -246,7 +303,9 @@ export function PlaygroundWindow({ index, sessionId, onRegisterExecute, onUnregi
       project_id: projectId,
     }
 
-    await stream(request)
+    // Pass full windowState.config for history capture (includes _enabled flags and disabled param values)
+    // The request.config_overrides is filtered for the API, but history needs the complete UI state
+    await stream(request, windowState.config ?? null)
   }, [windowState, sessionId, projectId, stream])
 
   // Register execute function for Execute All feature
@@ -273,9 +332,80 @@ export function PlaygroundWindow({ index, sessionId, onRegisterExecute, onUnregi
   const saveStatus = getSaveStatus()
 
   return (
+    <TooltipProvider>
     <Card className="flex flex-col h-full">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <div className="flex items-center gap-2">
+      <CardHeader className="flex flex-col gap-2 space-y-0 pb-2">
+        {/* Window Name Row */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            {isEditingName ? (
+              <div className="flex items-center gap-1">
+                <Input
+                  ref={nameInputRef}
+                  value={editedName}
+                  onChange={(e) => setEditedName(e.target.value)}
+                  onBlur={handleNameSave}
+                  onKeyDown={handleNameKeyDown}
+                  className="h-7 w-40 text-sm font-medium"
+                  maxLength={50}
+                />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6"
+                  onClick={handleNameSave}
+                >
+                  <Check className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ) : (
+              <button
+                onClick={() => {
+                  setEditedName(windowState?.name || '')
+                  setIsEditingName(true)
+                }}
+                className="flex items-center gap-1.5 text-sm font-medium hover:text-primary transition-colors group"
+                title="Click to rename"
+              >
+                <span className="max-w-[200px] truncate">{windowState?.name || 'Window'}</span>
+                <Pencil className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <RunHistoryPanel
+              history={windowState?.runHistory ?? []}
+              onRestore={(id) => restoreFromHistory(index, id)}
+              onClear={() => clearWindowHistory(index)}
+              disabled={isStreaming}
+            />
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => duplicateWindow(index)}
+              disabled={windows.length >= 20}
+              title="Duplicate window"
+              aria-label="Duplicate window"
+              className="h-8 w-8"
+            >
+              <Copy className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => removeWindow(index)}
+              disabled={windows.length <= 1}
+              title="Close window"
+              aria-label="Close window"
+              className="h-8 w-8"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+
+        {/* Controls Row */}
+        <div className="flex items-center gap-2 flex-wrap">
           <LoadPromptDropdown
             projectId={projectId}
             selectedPromptName={windowState?.loadedFromPromptName}
@@ -392,28 +522,6 @@ export function PlaygroundWindow({ index, sessionId, onRegisterExecute, onUnregi
             </Badge>
           )}
         </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => duplicateWindow(index)}
-            disabled={windows.length >= 20}
-            title="Duplicate window"
-            aria-label="Duplicate window"
-          >
-            <Copy className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => removeWindow(index)}
-            disabled={windows.length <= 1}
-            title="Close window"
-            aria-label="Close window"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
       </CardHeader>
 
       <CardContent className="flex-1 flex flex-col gap-4 overflow-auto">
@@ -472,5 +580,6 @@ export function PlaygroundWindow({ index, sessionId, onRegisterExecute, onUnregi
         </div>
       </CardContent>
     </Card>
+    </TooltipProvider>
   )
 }
