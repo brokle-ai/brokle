@@ -26,6 +26,7 @@ export {
   useQueueItemsQuery,
   // Item Mutations
   useAddItemsMutation,
+  useAddItemsToQueueMutation,
   useClaimNextItemMutation,
   useCompleteItemMutation,
   useSkipItemMutation,
@@ -61,3 +62,4 @@ export { AssignmentDialog } from './components/assignment-dialog'
 export { SettingsDialog } from './components/settings-dialog'
 export { AddItemsDialogStandalone } from './components/add-items-dialog-standalone'
 export { StatsCard, QueueStatsCards } from './components/stats-card'
+export { AddToQueueButton } from './components/add-to-queue-button'

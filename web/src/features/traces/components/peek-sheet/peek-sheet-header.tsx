@@ -15,9 +15,11 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Trace } from '../../data/schema'
+import { AddToQueueButton } from '@/features/annotation-queues'
 
 interface PeekSheetHeaderProps {
   trace: Trace
+  projectId: string
   onPrevious?: () => void
   onNext?: () => void
   onExpand: () => void
@@ -62,6 +64,7 @@ function CopyButton({ value, className }: { value: string; className?: string })
  */
 export function PeekSheetHeader({
   trace,
+  projectId,
   onPrevious,
   onNext,
   onExpand,
@@ -124,6 +127,15 @@ export function PeekSheetHeader({
               <TooltipContent>Next trace (→)</TooltipContent>
             </Tooltip>
           </TooltipProvider>
+
+          <div className='w-px h-6 bg-border mx-1' />
+
+          {/* Add to Queue */}
+          <AddToQueueButton
+            projectId={projectId}
+            objectId={trace.trace_id}
+            objectType="trace"
+          />
 
           <div className='w-px h-6 bg-border mx-1' />
 

@@ -44,6 +44,7 @@ export function CreateQueueDialog({ projectId }: CreateQueueDialogProps) {
           </DialogDescription>
         </DialogHeader>
         <QueueForm
+          projectId={projectId}
           onSubmit={handleSubmit}
           onCancel={() => setOpen(false)}
           isLoading={createMutation.isPending}

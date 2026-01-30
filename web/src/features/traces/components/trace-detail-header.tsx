@@ -37,6 +37,7 @@ import { useDeleteTrace } from '../hooks/use-delete-trace'
 import { useUpdateTraceBookmark } from '../hooks/use-update-trace-bookmark'
 import { CommentsDrawer } from './comments-drawer'
 import { AnnotationsDrawer } from './annotations-drawer'
+import { AddToQueueButton } from '@/features/annotation-queues'
 
 interface TraceDetailHeaderProps {
   trace: Trace
@@ -173,6 +174,13 @@ export function TraceDetailHeader({
               <TooltipContent>Add to Dataset</TooltipContent>
             </Tooltip>
           </TooltipProvider>
+
+          {/* Add to Annotation Queue */}
+          <AddToQueueButton
+            projectId={projectId}
+            objectId={trace.trace_id}
+            objectType="trace"
+          />
 
           {/* Bookmark toggle */}
           <TooltipProvider>

@@ -210,7 +210,7 @@ export function SpanDetailPanel({ span, onClose }: SpanDetailPanelProps) {
               <div className='text-sm font-medium'>{formatDuration(span.duration)}</div>
             </div>
 
-            {span.total_cost && span.total_cost > 0 && (
+            {span.total_cost != null && (
               <div className='space-y-1'>
                 <div className='flex items-center gap-1 text-xs text-muted-foreground'>
                   <DollarSign className='h-3 w-3' />
@@ -248,13 +248,13 @@ export function SpanDetailPanel({ span, onClose }: SpanDetailPanelProps) {
                     <Badge variant='secondary' className='text-xs'>{span.model_name}</Badge>
                   </div>
                 )}
-                {span.gen_ai_usage_input_tokens && (
+                {span.gen_ai_usage_input_tokens != null && (
                   <div className='flex items-center justify-between'>
                     <span className='text-xs text-muted-foreground'>Input Tokens</span>
                     <span className='text-xs'>{span.gen_ai_usage_input_tokens.toLocaleString()}</span>
                   </div>
                 )}
-                {span.gen_ai_usage_output_tokens && (
+                {span.gen_ai_usage_output_tokens != null && (
                   <div className='flex items-center justify-between'>
                     <span className='text-xs text-muted-foreground'>Output Tokens</span>
                     <span className='text-xs'>{span.gen_ai_usage_output_tokens.toLocaleString()}</span>

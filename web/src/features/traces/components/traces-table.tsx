@@ -32,7 +32,7 @@ type DataTableProps = {
 }
 
 export function TracesTable({ data, totalCount, isFetching }: DataTableProps) {
-  const { setCurrentPageTraceIds } = useTraces()
+  const { setCurrentPageTraceIds, setCurrentPageTraces } = useTraces()
   const { openTrace } = useTraceDetailState()
 
   // Centralized URL state management
@@ -93,10 +93,11 @@ export function TracesTable({ data, totalCount, isFetching }: DataTableProps) {
     [data]
   )
 
-  // Sync current page trace IDs to context
+  // Sync current page traces and IDs to context
   useEffect(() => {
     setCurrentPageTraceIds(rowIds)
-  }, [rowIds, setCurrentPageTraceIds])
+    setCurrentPageTraces(data)
+  }, [rowIds, data, setCurrentPageTraceIds, setCurrentPageTraces])
 
   // Row click handler for peek
   const handleRowClick = useCallback(

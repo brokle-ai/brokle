@@ -20,11 +20,14 @@ import { useDetailNavigation } from '../hooks/use-detail-navigation'
 import { usePeekData } from '../hooks/use-peek-data'
 import { traceQueryKeys } from '../hooks/trace-query-keys'
 import { getSpansForTrace } from '../api/traces-api'
+import { useTraces } from '../context/traces-context'
+import { useSessionGrouping } from '../hooks/use-session-grouping'
 import type { Span } from '../data/schema'
 
 import { PeekSheetHeader } from './peek-sheet/peek-sheet-header'
 import { SpanNavigationPanel, type ViewMode } from './peek-sheet/span-navigation-panel'
 import { DetailPanel } from './peek-sheet/detail-panel'
+import { SessionTimeline } from './span-graph/session-timeline'
 
 // ============================================================================
 // Loading State
@@ -86,9 +89,13 @@ function PeekSheetError({ message }: { message: string }) {
 export function TracesPeekView() {
   const searchParams = useSearchParams()
   const peekId = searchParams.get('peek')
-  const { closePeek, expandPeek } = usePeekNavigation()
+  const { openPeek, closePeek, expandPeek } = usePeekNavigation()
   const { handlePrev, handleNext, canGoPrev, canGoNext } = useDetailNavigation()
   const { trace, isLoading, error, projectId } = usePeekData()
+  const { currentPageTraces } = useTraces()
+
+  // Session grouping for multi-turn navigation
+  const { currentSession } = useSessionGrouping(currentPageTraces, peekId || undefined)
 
   // Local state for span selection and view mode
   // Store user's manual selection (null = use auto-selected root span)
@@ -165,6 +172,11 @@ export function TracesPeekView() {
     setManuallySelectedSpanId(span.span_id)
   }, [])
 
+  // Handle session trace navigation (for multi-turn conversations)
+  const handleSessionTraceSelect = React.useCallback((traceId: string) => {
+    openPeek(traceId)
+  }, [openPeek])
+
   if (!peekId) return null
 
   return (
@@ -191,6 +203,7 @@ export function TracesPeekView() {
             {/* Header with badges and navigation */}
             <PeekSheetHeader
               trace={trace}
+              projectId={projectId!}
               onPrevious={handlePrev}
               onNext={handleNext}
               onExpand={() => expandPeek(false)}
@@ -211,7 +224,7 @@ export function TracesPeekView() {
                 </div>
               ) : spans.length === 0 ? (
                 // No spans - just show detail panel
-                <DetailPanel trace={trace} selectedSpan={null} spans={[]} projectId={projectId} />
+                <DetailPanel trace={trace} selectedSpan={null} spans={[]} projectId={projectId ?? undefined} />
               ) : (
                 // Has spans - show resizable two-panel layout
                 <ResizablePanelGroup direction='horizontal' className='h-full'>
@@ -224,14 +237,25 @@ export function TracesPeekView() {
                         maxSize={50}
                         className='min-w-0'
                       >
-                        <SpanNavigationPanel
-                          spans={spans}
-                          selectedSpanId={selectedSpanId || undefined}
-                          onSpanSelect={handleSpanSelect}
-                          viewMode={viewMode}
-                          onViewModeChange={setViewMode}
-                          onCollapse={() => setIsLeftPanelCollapsed(true)}
-                        />
+                        <div className='flex flex-col h-full'>
+                          {/* Session Timeline for multi-turn conversations */}
+                          {currentSession && currentSession.turns > 1 && (
+                            <SessionTimeline
+                              session={currentSession}
+                              currentTraceId={peekId || undefined}
+                              onTraceSelect={handleSessionTraceSelect}
+                            />
+                          )}
+                          <SpanNavigationPanel
+                            spans={spans}
+                            selectedSpanId={selectedSpanId || undefined}
+                            onSpanSelect={handleSpanSelect}
+                            viewMode={viewMode}
+                            onViewModeChange={setViewMode}
+                            onCollapse={() => setIsLeftPanelCollapsed(true)}
+                            className='flex-1 min-h-0'
+                          />
+                        </div>
                       </ResizablePanel>
                       <ResizableHandle withHandle />
                     </>
@@ -256,7 +280,7 @@ export function TracesPeekView() {
                         trace={trace}
                         selectedSpan={selectedSpan}
                         spans={spans}
-                        projectId={projectId}
+                        projectId={projectId ?? undefined}
                         className={cn(isLeftPanelCollapsed && 'pl-12')}
                       />
                     </div>

@@ -25,6 +25,7 @@ export { scoresApi } from './api/scores-api'
 export {
   useScoreConfigsQuery,
   useScoreConfigQuery,
+  useScoreConfigsByIdsQuery,
   useCreateScoreConfigMutation,
   useUpdateScoreConfigMutation,
   useDeleteScoreConfigMutation,

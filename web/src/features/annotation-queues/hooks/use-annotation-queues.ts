@@ -8,6 +8,7 @@ import type {
   CreateQueueRequest,
   UpdateQueueRequest,
   AddItemsBatchRequest,
+  AddItemRequest,
   ClaimNextRequest,
   CompleteItemRequest,
   SkipItemRequest,
@@ -241,10 +242,37 @@ export function useAddItemsMutation(projectId: string, queueId: string) {
   })
 }
 
-export function useClaimNextItemMutation(projectId: string, queueId: string) {
+/**
+ * Hook for adding items to any queue within a project.
+ * Unlike useAddItemsMutation, this takes queueId as part of the mutation variables,
+ * allowing dynamic queue selection (e.g., from a dropdown).
+ */
+export function useAddItemsToQueueMutation(projectId: string) {
   const queryClient = useQueryClient()
 
   return useMutation({
+    mutationFn: ({ queueId, items }: { queueId: string; items: AddItemRequest[] }) =>
+      annotationQueuesApi.addItems(projectId, queueId, { items }),
+    onSuccess: (_result, variables) => {
+      // Invalidate the specific queue's items and stats
+      queryClient.invalidateQueries({
+        queryKey: annotationQueueQueryKeys.items(projectId, variables.queueId),
+      })
+      queryClient.invalidateQueries({
+        queryKey: annotationQueueQueryKeys.stats(projectId, variables.queueId),
+      })
+      // Also refresh the queue list to update pending counts
+      queryClient.invalidateQueries({
+        queryKey: annotationQueueQueryKeys.list(projectId),
+      })
+    },
+  })
+}
+
+export function useClaimNextItemMutation(projectId: string, queueId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation<QueueItem, Error, ClaimNextRequest | undefined>({
     mutationFn: (data?: ClaimNextRequest) =>
       annotationQueuesApi.claimNext(projectId, queueId, data),
     onSuccess: () => {
@@ -255,12 +283,11 @@ export function useClaimNextItemMutation(projectId: string, queueId: string) {
         queryKey: annotationQueueQueryKeys.stats(projectId, queueId),
       })
     },
-    onError: (error: unknown) => {
-      const apiError = error as { message?: string }
+    onError: (error: Error) => {
       // Don't show toast for "no items available" - this is expected behavior
-      if (!apiError?.message?.toLowerCase().includes('no items available')) {
+      if (!error.message?.toLowerCase().includes('no items available')) {
         toast.error('Failed to Claim Item', {
-          description: apiError?.message || 'Could not claim next item. Please try again.',
+          description: error.message || 'Could not claim next item. Please try again.',
         })
       }
     },
@@ -270,7 +297,7 @@ export function useClaimNextItemMutation(projectId: string, queueId: string) {
 export function useCompleteItemMutation(projectId: string, queueId: string) {
   const queryClient = useQueryClient()
 
-  return useMutation({
+  return useMutation<QueueItem, Error, { itemId: string; data?: CompleteItemRequest }>({
     mutationFn: ({ itemId, data }: { itemId: string; data?: CompleteItemRequest }) =>
       annotationQueuesApi.completeItem(projectId, queueId, itemId, data),
     onSuccess: () => {
@@ -287,10 +314,9 @@ export function useCompleteItemMutation(projectId: string, queueId: string) {
         description: 'Annotation has been submitted.',
       })
     },
-    onError: (error: unknown) => {
-      const apiError = error as { message?: string }
+    onError: (error: Error) => {
       toast.error('Failed to Complete Item', {
-        description: apiError?.message || 'Could not complete item. Please try again.',
+        description: error.message || 'Could not complete item. Please try again.',
       })
     },
   })
@@ -299,7 +325,7 @@ export function useCompleteItemMutation(projectId: string, queueId: string) {
 export function useSkipItemMutation(projectId: string, queueId: string) {
   const queryClient = useQueryClient()
 
-  return useMutation({
+  return useMutation<QueueItem, Error, { itemId: string; data?: SkipItemRequest }>({
     mutationFn: ({ itemId, data }: { itemId: string; data?: SkipItemRequest }) =>
       annotationQueuesApi.skipItem(projectId, queueId, itemId, data),
     onSuccess: () => {
@@ -316,10 +342,9 @@ export function useSkipItemMutation(projectId: string, queueId: string) {
         description: 'Moving to next item.',
       })
     },
-    onError: (error: unknown) => {
-      const apiError = error as { message?: string }
+    onError: (error: Error) => {
       toast.error('Failed to Skip Item', {
-        description: apiError?.message || 'Could not skip item. Please try again.',
+        description: error.message || 'Could not skip item. Please try again.',
       })
     },
   })
@@ -328,7 +353,7 @@ export function useSkipItemMutation(projectId: string, queueId: string) {
 export function useReleaseItemMutation(projectId: string, queueId: string) {
   const queryClient = useQueryClient()
 
-  return useMutation({
+  return useMutation<void, Error, string>({
     mutationFn: (itemId: string) =>
       annotationQueuesApi.releaseItem(projectId, queueId, itemId),
     onSuccess: () => {
@@ -342,10 +367,9 @@ export function useReleaseItemMutation(projectId: string, queueId: string) {
         description: 'Item lock has been released.',
       })
     },
-    onError: (error: unknown) => {
-      const apiError = error as { message?: string }
+    onError: (error: Error) => {
       toast.error('Failed to Release Item', {
-        description: apiError?.message || 'Could not release item. Please try again.',
+        description: error.message || 'Could not release item. Please try again.',
       })
     },
   })

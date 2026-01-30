@@ -14,15 +14,21 @@ import (
 
 // ItemHandler handles annotation queue item HTTP endpoints.
 type ItemHandler struct {
-	logger  *slog.Logger
-	service annotationDomain.ItemService
+	logger            *slog.Logger
+	service           annotationDomain.ItemService
+	assignmentService annotationDomain.AssignmentService
 }
 
 // NewItemHandler creates a new ItemHandler.
-func NewItemHandler(logger *slog.Logger, service annotationDomain.ItemService) *ItemHandler {
+func NewItemHandler(
+	logger *slog.Logger,
+	service annotationDomain.ItemService,
+	assignmentService annotationDomain.AssignmentService,
+) *ItemHandler {
 	return &ItemHandler{
-		logger:  logger,
-		service: service,
+		logger:            logger,
+		service:           service,
+		assignmentService: assignmentService,
 	}
 }
 
@@ -171,6 +177,17 @@ func (h *ItemHandler) ClaimNext(c *gin.Context) {
 		return
 	}
 
+	// Check user has at least annotator role on this queue
+	if err := h.assignmentService.CheckAccess(
+		c.Request.Context(),
+		queueID,
+		userID,
+		annotationDomain.RoleAnnotator,
+	); err != nil {
+		response.Error(c, err)
+		return
+	}
+
 	var req ClaimNextRequest
 	_ = c.ShouldBindJSON(&req) // Ignore errors - body is optional
 
@@ -230,6 +247,17 @@ func (h *ItemHandler) Complete(c *gin.Context) {
 	userID, exists := middleware.GetUserIDULID(c)
 	if !exists {
 		response.Unauthorized(c, "User authentication required")
+		return
+	}
+
+	// Check user has at least annotator role on this queue
+	if err := h.assignmentService.CheckAccess(
+		c.Request.Context(),
+		queueID,
+		userID,
+		annotationDomain.RoleAnnotator,
+	); err != nil {
+		response.Error(c, err)
 		return
 	}
 
@@ -295,6 +323,17 @@ func (h *ItemHandler) Skip(c *gin.Context) {
 		return
 	}
 
+	// Check user has at least annotator role on this queue
+	if err := h.assignmentService.CheckAccess(
+		c.Request.Context(),
+		queueID,
+		userID,
+		annotationDomain.RoleAnnotator,
+	); err != nil {
+		response.Error(c, err)
+		return
+	}
+
 	var req SkipItemRequest
 	_ = c.ShouldBindJSON(&req) // Ignore errors - body is optional
 
@@ -345,6 +384,17 @@ func (h *ItemHandler) ReleaseLock(c *gin.Context) {
 	userID, exists := middleware.GetUserIDULID(c)
 	if !exists {
 		response.Unauthorized(c, "User authentication required")
+		return
+	}
+
+	// Check user has at least annotator role on this queue
+	if err := h.assignmentService.CheckAccess(
+		c.Request.Context(),
+		queueID,
+		userID,
+		annotationDomain.RoleAnnotator,
+	); err != nil {
+		response.Error(c, err)
 		return
 	}
 

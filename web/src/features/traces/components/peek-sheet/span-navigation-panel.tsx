@@ -11,18 +11,22 @@ import {
   PanelLeftClose,
   ChevronsUpDown,
   ChevronsDownUp,
+  Network,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Span } from '../../data/schema'
 import { SpanTree, getParentSpanIds } from '../span-tree'
 import { SpanTimeline } from '../span-timeline'
+import { SpanGraph } from '../span-graph'
 import {
   TraceSettingsDropdown,
   useTraceDisplaySettings,
   type TraceDisplaySettings,
 } from './trace-settings-dropdown'
+import { useAgentDetection } from '../../hooks/use-agent-detection'
+import type { ViewMode } from '../../hooks/use-trace-detail-state'
 
-export type ViewMode = 'tree' | 'timeline'
+export type { ViewMode }
 
 interface SpanNavigationPanelProps {
   spans: Span[]
@@ -58,6 +62,9 @@ export function SpanNavigationPanel({
   const [searchQuery, setSearchQuery] = React.useState('')
   const [displaySettings, setDisplaySettings] = useTraceDisplaySettings()
   const [collapsedNodes, setCollapsedNodes] = React.useState<Set<string>>(new Set())
+
+  // Detect agent workflow for Graph tab visibility
+  const { hasAgentWorkflow } = useAgentDetection(spans)
 
   // Get parent span IDs for expand/collapse all
   const parentSpanIds = React.useMemo(() => getParentSpanIds(spans), [spans])
@@ -121,6 +128,12 @@ export function SpanNavigationPanel({
                 <GanttChart className='h-3.5 w-3.5' />
                 Timeline
               </TabsTrigger>
+              {hasAgentWorkflow && (
+                <TabsTrigger value='graph' className='h-7 px-3 text-xs gap-1.5'>
+                  <Network className='h-3.5 w-3.5' />
+                  Graph
+                </TabsTrigger>
+              )}
             </TabsList>
           </Tabs>
 
@@ -208,6 +221,13 @@ export function SpanNavigationPanel({
           <div className='flex items-center justify-center h-full text-sm text-muted-foreground'>
             {spans.length === 0 ? 'No spans found' : 'No matching spans'}
           </div>
+        ) : viewMode === 'graph' ? (
+          <SpanGraph
+            spans={filteredSpans}
+            selectedSpanId={selectedSpanId}
+            onSpanSelect={onSpanSelect}
+            className='h-full'
+          />
         ) : viewMode === 'tree' ? (
           <SpanTree
             spans={filteredSpans}

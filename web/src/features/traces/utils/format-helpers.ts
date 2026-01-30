@@ -60,7 +60,7 @@ export function safeFormatDuration(
  * @returns Formatted duration string (e.g., '500ns', '250µs', '45.3ms', '2.50s')
  */
 export function formatDuration(nanos: number | undefined | null): string {
-  if (!nanos) return '-'
+  if (nanos == null) return '-'
 
   const ms = nanos / 1_000_000
   const us = nanos / 1_000
@@ -83,7 +83,7 @@ export function formatDuration(nanos: number | undefined | null): string {
 export function formatCost(cost: number | string | undefined | null): string {
   if (cost === undefined || cost === null || cost === '') return '-'
   const numCost = typeof cost === 'string' ? parseFloat(cost) : cost
-  if (isNaN(numCost) || numCost === 0) return '-'
+  if (isNaN(numCost)) return '-'
   return `$${numCost.toFixed(4)}`
 }
 
@@ -97,6 +97,6 @@ export function formatCost(cost: number | string | undefined | null): string {
 export function formatCostDetailed(cost: number | string | undefined | null): string {
   if (cost === undefined || cost === null || cost === '') return '-'
   const numCost = typeof cost === 'string' ? parseFloat(cost) : cost
-  if (isNaN(numCost) || numCost === 0) return '-'
+  if (isNaN(numCost)) return '-'
   return `$${numCost.toFixed(6)}`
 }
