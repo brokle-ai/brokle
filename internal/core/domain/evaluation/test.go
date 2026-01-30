@@ -1,27 +1,27 @@
 package evaluation
 
-// TestRuleRequest defines the request for testing a rule against sample spans.
-type TestRuleRequest struct {
-	TraceID     *string   `json:"trace_id,omitempty"`     // Optional: test against specific trace
-	SpanID      *string   `json:"span_id,omitempty"`      // Optional: test against specific span
-	SpanIDs     []string  `json:"span_ids,omitempty"`     // Optional: test against specific spans
-	Limit       int       `json:"limit,omitempty"`        // Max spans to evaluate (default: 5)
-	TimeRange   string    `json:"time_range,omitempty"`   // Time range: "1h", "24h", "7d" (default: "24h")
+// TestEvaluatorRequest defines the request for testing an evaluator against sample spans.
+type TestEvaluatorRequest struct {
+	TraceID     *string          `json:"trace_id,omitempty"`     // Optional: test against specific trace
+	SpanID      *string          `json:"span_id,omitempty"`      // Optional: test against specific span
+	SpanIDs     []string         `json:"span_ids,omitempty"`     // Optional: test against specific spans
+	Limit       int              `json:"limit,omitempty"`        // Max spans to evaluate (default: 5)
+	TimeRange   string           `json:"time_range,omitempty"`   // Time range: "1h", "24h", "7d" (default: "24h")
 	SampleInput *TestSampleInput `json:"sample_input,omitempty"` // Optional: manual sample input for dry-run
 }
 
 // TestSampleInput allows manual input for dry-run testing without actual spans.
 type TestSampleInput struct {
-	Input    string `json:"input"`
-	Output   string `json:"output"`
+	Input    string         `json:"input"`
+	Output   string         `json:"output"`
 	Metadata map[string]any `json:"metadata,omitempty"`
 }
 
-// TestRuleResponse is the response from testing a rule.
-type TestRuleResponse struct {
-	Summary     TestSummary       `json:"summary"`
-	Executions  []TestExecution   `json:"executions"`
-	RulePreview RulePreview       `json:"rule_preview"`
+// TestEvaluatorResponse is the response from testing an evaluator.
+type TestEvaluatorResponse struct {
+	Summary          TestSummary       `json:"summary"`
+	Executions       []TestExecution   `json:"executions"`
+	EvaluatorPreview EvaluatorPreview  `json:"evaluator_preview"`
 }
 
 // TestSummary provides aggregated statistics from test execution.
@@ -68,8 +68,8 @@ type ResolvedVariable struct {
 	ResolvedValue any    `json:"resolved_value"`
 }
 
-// RulePreview shows the rule configuration that was tested.
-type RulePreview struct {
+// EvaluatorPreview shows the evaluator configuration that was tested.
+type EvaluatorPreview struct {
 	Name              string   `json:"name"`
 	ScorerType        string   `json:"scorer_type"`
 	FilterDescription string   `json:"filter_description"`

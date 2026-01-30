@@ -74,8 +74,8 @@ type Handlers struct {
 	Experiment       *evaluationHandler.ExperimentHandler
 	ExperimentItem   *evaluationHandler.ExperimentItemHandler
 	ExperimentWizard *evaluationHandler.ExperimentWizardHandler
-	Rule          *evaluationHandler.RuleHandler
-	RuleExecution *evaluationHandler.RuleExecutionHandler
+	Evaluator          *evaluationHandler.EvaluatorHandler
+	EvaluatorExecution *evaluationHandler.EvaluatorExecutionHandler
 	SpanQuery     *observability.SpanQueryHandler
 	Dashboard         *dashboard.Handler
 	DashboardTemplate *dashboard.TemplateHandler
@@ -124,8 +124,8 @@ func NewHandlers(
 	experimentService evaluationDomain.ExperimentService,
 	experimentItemService evaluationDomain.ExperimentItemService,
 	experimentWizardService evaluationDomain.ExperimentWizardService,
-	ruleService evaluationDomain.RuleService,
-	ruleExecutionService evaluationDomain.RuleExecutionService,
+	evaluatorService evaluationDomain.EvaluatorService,
+	evaluatorExecutionService evaluationDomain.EvaluatorExecutionService,
 	dashboardService dashboardDomain.DashboardService,
 	widgetQueryService dashboardDomain.WidgetQueryService,
 	templateService dashboardDomain.TemplateService,
@@ -173,8 +173,8 @@ func NewHandlers(
 		Experiment:       evaluationHandler.NewExperimentHandler(logger, experimentService, experimentItemService),
 		ExperimentItem:   evaluationHandler.NewExperimentItemHandler(logger, experimentItemService),
 		ExperimentWizard: evaluationHandler.NewExperimentWizardHandler(logger, experimentWizardService),
-		Rule:          evaluationHandler.NewRuleHandler(ruleService),
-		RuleExecution: evaluationHandler.NewRuleExecutionHandler(ruleExecutionService),
+		Evaluator:          evaluationHandler.NewEvaluatorHandler(evaluatorService),
+		EvaluatorExecution: evaluationHandler.NewEvaluatorExecutionHandler(evaluatorExecutionService),
 		SpanQuery:     observability.NewSpanQueryHandler(observabilityServices.SpanQueryService, logger),
 		Dashboard:         dashboard.NewHandler(cfg, logger, dashboardService, widgetQueryService),
 		DashboardTemplate: dashboard.NewTemplateHandler(cfg, logger, templateService),

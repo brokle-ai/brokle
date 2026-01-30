@@ -112,42 +112,42 @@ type ExperimentWizardService interface {
 	GetExperimentConfig(ctx context.Context, experimentID ulid.ULID, projectID ulid.ULID) (*ExperimentConfig, error)
 }
 
-type RuleService interface {
-	Create(ctx context.Context, projectID ulid.ULID, userID *ulid.ULID, req *CreateEvaluationRuleRequest) (*EvaluationRule, error)
-	Update(ctx context.Context, id ulid.ULID, projectID ulid.ULID, req *UpdateEvaluationRuleRequest) (*EvaluationRule, error)
+type EvaluatorService interface {
+	Create(ctx context.Context, projectID ulid.ULID, userID *ulid.ULID, req *CreateEvaluatorRequest) (*Evaluator, error)
+	Update(ctx context.Context, id ulid.ULID, projectID ulid.ULID, req *UpdateEvaluatorRequest) (*Evaluator, error)
 	Delete(ctx context.Context, id ulid.ULID, projectID ulid.ULID) error
-	GetByID(ctx context.Context, id ulid.ULID, projectID ulid.ULID) (*EvaluationRule, error)
-	List(ctx context.Context, projectID ulid.ULID, filter *RuleFilter, params pagination.Params) ([]*EvaluationRule, int64, error)
+	GetByID(ctx context.Context, id ulid.ULID, projectID ulid.ULID) (*Evaluator, error)
+	List(ctx context.Context, projectID ulid.ULID, filter *EvaluatorFilter, params pagination.Params) ([]*Evaluator, int64, error)
 	Activate(ctx context.Context, id ulid.ULID, projectID ulid.ULID) error
 	Deactivate(ctx context.Context, id ulid.ULID, projectID ulid.ULID) error
-	GetActiveByProjectID(ctx context.Context, projectID ulid.ULID) ([]*EvaluationRule, error)
+	GetActiveByProjectID(ctx context.Context, projectID ulid.ULID) ([]*Evaluator, error)
 
-	// TriggerRule starts a manual evaluation of the rule against matching spans
-	TriggerRule(ctx context.Context, ruleID ulid.ULID, projectID ulid.ULID, opts *TriggerOptions) (*TriggerResponse, error)
+	// TriggerEvaluator starts a manual evaluation of the evaluator against matching spans
+	TriggerEvaluator(ctx context.Context, evaluatorID ulid.ULID, projectID ulid.ULID, opts *TriggerOptions) (*TriggerResponse, error)
 
-	// TestRule executes a rule against sample spans for testing/preview without persisting scores.
-	// This allows users to validate rule configuration before activation.
-	TestRule(ctx context.Context, ruleID ulid.ULID, projectID ulid.ULID, req *TestRuleRequest) (*TestRuleResponse, error)
+	// TestEvaluator executes an evaluator against sample spans for testing/preview without persisting scores.
+	// This allows users to validate evaluator configuration before activation.
+	TestEvaluator(ctx context.Context, evaluatorID ulid.ULID, projectID ulid.ULID, req *TestEvaluatorRequest) (*TestEvaluatorResponse, error)
 
-	// GetAnalytics returns performance analytics for a rule over the specified time period.
-	GetAnalytics(ctx context.Context, ruleID ulid.ULID, projectID ulid.ULID, params *RuleAnalyticsParams) (*RuleAnalyticsResponse, error)
+	// GetAnalytics returns performance analytics for an evaluator over the specified time period.
+	GetAnalytics(ctx context.Context, evaluatorID ulid.ULID, projectID ulid.ULID, params *EvaluatorAnalyticsParams) (*EvaluatorAnalyticsResponse, error)
 }
 
-type RuleExecutionService interface {
-	StartExecution(ctx context.Context, ruleID ulid.ULID, projectID ulid.ULID, triggerType TriggerType) (*RuleExecution, error)
+type EvaluatorExecutionService interface {
+	StartExecution(ctx context.Context, evaluatorID ulid.ULID, projectID ulid.ULID, triggerType TriggerType) (*EvaluatorExecution, error)
 	CompleteExecution(ctx context.Context, executionID ulid.ULID, projectID ulid.ULID, spansMatched, spansScored, errorsCount int) error
 	FailExecution(ctx context.Context, executionID ulid.ULID, projectID ulid.ULID, errorMessage string) error
 	CancelExecution(ctx context.Context, executionID ulid.ULID, projectID ulid.ULID) error
-	GetByID(ctx context.Context, id ulid.ULID, projectID ulid.ULID) (*RuleExecution, error)
-	ListByRuleID(ctx context.Context, ruleID ulid.ULID, projectID ulid.ULID, filter *ExecutionFilter, params pagination.Params) ([]*RuleExecution, int64, error)
-	GetLatestByRuleID(ctx context.Context, ruleID ulid.ULID, projectID ulid.ULID) (*RuleExecution, error)
+	GetByID(ctx context.Context, id ulid.ULID, projectID ulid.ULID) (*EvaluatorExecution, error)
+	ListByEvaluatorID(ctx context.Context, evaluatorID ulid.ULID, projectID ulid.ULID, filter *ExecutionFilter, params pagination.Params) ([]*EvaluatorExecution, int64, error)
+	GetLatestByEvaluatorID(ctx context.Context, evaluatorID ulid.ULID, projectID ulid.ULID) (*EvaluatorExecution, error)
 
 	// IncrementCounters atomically increments spans_scored and errors_count for an execution (used by workers)
 	IncrementCounters(ctx context.Context, executionID string, projectID ulid.ULID, spansScored, errorsCount int) error
 
 	// StartExecutionWithCount creates an execution with known spans_matched count upfront.
 	// Used for automatic evaluations where we know the count before emitting jobs.
-	StartExecutionWithCount(ctx context.Context, ruleID ulid.ULID, projectID ulid.ULID, triggerType TriggerType, spansMatched int) (*RuleExecution, error)
+	StartExecutionWithCount(ctx context.Context, evaluatorID ulid.ULID, projectID ulid.ULID, triggerType TriggerType, spansMatched int) (*EvaluatorExecution, error)
 
 	// IncrementAndCheckCompletion atomically increments counters and marks execution as complete
 	// if all spans have been processed. Returns true if execution was marked complete.
@@ -158,6 +158,6 @@ type RuleExecutionService interface {
 	UpdateSpansMatched(ctx context.Context, executionID ulid.ULID, projectID ulid.ULID, spansMatched int) error
 
 	// GetExecutionDetail returns detailed execution information including span-level results.
-	// The ruleID parameter ensures the execution belongs to the specified rule.
-	GetExecutionDetail(ctx context.Context, executionID ulid.ULID, projectID ulid.ULID, ruleID ulid.ULID) (*ExecutionDetailResponse, error)
+	// The evaluatorID parameter ensures the execution belongs to the specified evaluator.
+	GetExecutionDetail(ctx context.Context, executionID ulid.ULID, projectID ulid.ULID, evaluatorID ulid.ULID) (*ExecutionDetailResponse, error)
 }

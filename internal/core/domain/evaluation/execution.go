@@ -6,7 +6,7 @@ import (
 	"brokle/pkg/ulid"
 )
 
-// ExecutionStatus represents the current state of a rule execution.
+// ExecutionStatus represents the current state of an evaluator execution.
 type ExecutionStatus string
 
 const (
@@ -25,11 +25,11 @@ const (
 	TriggerTypeManual    TriggerType = "manual"
 )
 
-// RuleExecution tracks the execution history of an evaluation rule.
+// EvaluatorExecution tracks the execution history of an evaluator.
 // Inspired by Langfuse's JobExecution and Opik's automation rule logs.
-type RuleExecution struct {
+type EvaluatorExecution struct {
 	ID           ulid.ULID       `json:"id" gorm:"type:char(26);primaryKey"`
-	RuleID       ulid.ULID       `json:"rule_id" gorm:"type:char(26);not null;index"`
+	EvaluatorID  ulid.ULID       `json:"evaluator_id" gorm:"type:char(26);not null;index"`
 	ProjectID    ulid.ULID       `json:"project_id" gorm:"type:char(26);not null;index"`
 	Status       ExecutionStatus `json:"status" gorm:"type:varchar(20);not null"`
 	TriggerType  TriggerType     `json:"trigger_type" gorm:"type:varchar(20);not null;default:'automatic'"`
@@ -44,16 +44,16 @@ type RuleExecution struct {
 	CreatedAt    time.Time       `json:"created_at" gorm:"not null;autoCreateTime"`
 }
 
-func (RuleExecution) TableName() string {
-	return "evaluation_rule_executions"
+func (EvaluatorExecution) TableName() string {
+	return "evaluator_executions"
 }
 
-// NewRuleExecution creates a new rule execution record.
-func NewRuleExecution(ruleID, projectID ulid.ULID, triggerType TriggerType) *RuleExecution {
+// NewEvaluatorExecution creates a new evaluator execution record.
+func NewEvaluatorExecution(evaluatorID, projectID ulid.ULID, triggerType TriggerType) *EvaluatorExecution {
 	now := time.Now()
-	return &RuleExecution{
+	return &EvaluatorExecution{
 		ID:           ulid.New(),
-		RuleID:       ruleID,
+		EvaluatorID:  evaluatorID,
 		ProjectID:    projectID,
 		Status:       ExecutionStatusPending,
 		TriggerType:  triggerType,
@@ -66,14 +66,14 @@ func NewRuleExecution(ruleID, projectID ulid.ULID, triggerType TriggerType) *Rul
 }
 
 // Start marks the execution as running.
-func (e *RuleExecution) Start() {
+func (e *EvaluatorExecution) Start() {
 	now := time.Now()
 	e.Status = ExecutionStatusRunning
 	e.StartedAt = &now
 }
 
 // Complete marks the execution as successfully completed with counts.
-func (e *RuleExecution) Complete(spansMatched, spansScored, errorsCount int) {
+func (e *EvaluatorExecution) Complete(spansMatched, spansScored, errorsCount int) {
 	now := time.Now()
 	e.Status = ExecutionStatusCompleted
 	e.SpansMatched = spansMatched
@@ -88,7 +88,7 @@ func (e *RuleExecution) Complete(spansMatched, spansScored, errorsCount int) {
 }
 
 // Fail marks the execution as failed with an error message.
-func (e *RuleExecution) Fail(errorMessage string) {
+func (e *EvaluatorExecution) Fail(errorMessage string) {
 	now := time.Now()
 	e.Status = ExecutionStatusFailed
 	e.ErrorMessage = &errorMessage
@@ -101,7 +101,7 @@ func (e *RuleExecution) Fail(errorMessage string) {
 }
 
 // Cancel marks the execution as cancelled.
-func (e *RuleExecution) Cancel() {
+func (e *EvaluatorExecution) Cancel() {
 	now := time.Now()
 	e.Status = ExecutionStatusCancelled
 	e.CompletedAt = &now
@@ -113,7 +113,7 @@ func (e *RuleExecution) Cancel() {
 }
 
 // SetMetadata adds contextual metadata to the execution.
-func (e *RuleExecution) SetMetadata(key string, value any) {
+func (e *EvaluatorExecution) SetMetadata(key string, value any) {
 	if e.Metadata == nil {
 		e.Metadata = make(map[string]any)
 	}
@@ -121,7 +121,7 @@ func (e *RuleExecution) SetMetadata(key string, value any) {
 }
 
 // IsTerminal returns true if the execution is in a final state.
-func (e *RuleExecution) IsTerminal() bool {
+func (e *EvaluatorExecution) IsTerminal() bool {
 	switch e.Status {
 	case ExecutionStatusCompleted, ExecutionStatusFailed, ExecutionStatusCancelled:
 		return true
@@ -132,9 +132,9 @@ func (e *RuleExecution) IsTerminal() bool {
 
 // Response types
 
-type RuleExecutionResponse struct {
+type EvaluatorExecutionResponse struct {
 	ID           string          `json:"id"`
-	RuleID       string          `json:"rule_id"`
+	EvaluatorID  string          `json:"evaluator_id"`
 	ProjectID    string          `json:"project_id"`
 	Status       ExecutionStatus `json:"status"`
 	TriggerType  TriggerType     `json:"trigger_type"`
@@ -149,15 +149,15 @@ type RuleExecutionResponse struct {
 	CreatedAt    time.Time       `json:"created_at"`
 }
 
-func (e *RuleExecution) ToResponse() *RuleExecutionResponse {
+func (e *EvaluatorExecution) ToResponse() *EvaluatorExecutionResponse {
 	metadata := e.Metadata
 	if metadata == nil {
 		metadata = make(map[string]any)
 	}
 
-	return &RuleExecutionResponse{
+	return &EvaluatorExecutionResponse{
 		ID:           e.ID.String(),
-		RuleID:       e.RuleID.String(),
+		EvaluatorID:  e.EvaluatorID.String(),
 		ProjectID:    e.ProjectID.String(),
 		Status:       e.Status,
 		TriggerType:  e.TriggerType,
@@ -173,11 +173,11 @@ func (e *RuleExecution) ToResponse() *RuleExecutionResponse {
 	}
 }
 
-type RuleExecutionListResponse struct {
-	Executions []*RuleExecutionResponse `json:"executions"`
-	Total      int64                    `json:"total"`
-	Page       int                      `json:"page"`
-	Limit      int                      `json:"limit"`
+type EvaluatorExecutionListResponse struct {
+	Executions []*EvaluatorExecutionResponse `json:"executions"`
+	Total      int64                         `json:"total"`
+	Page       int                           `json:"page"`
+	Limit      int                           `json:"limit"`
 }
 
 // Filter for listing executions

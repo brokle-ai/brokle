@@ -24,12 +24,12 @@ var (
 	ErrExperimentItemNotFound   = errors.New("experiment item not found")
 	ErrExperimentConfigNotFound = errors.New("experiment config not found")
 
-	ErrRuleNotFound        = errors.New("evaluation rule not found")
-	ErrRuleExists          = errors.New("evaluation rule with this name already exists")
-	ErrInvalidRuleID       = errors.New("invalid rule ID")
-	ErrRuleValidation      = errors.New("evaluation rule validation failed")
-	ErrInvalidScorerConfig = errors.New("invalid scorer configuration")
+	ErrEvaluatorNotFound    = errors.New("evaluator not found")
+	ErrEvaluatorExists      = errors.New("evaluator with this name already exists")
+	ErrInvalidEvaluatorID   = errors.New("invalid evaluator ID")
+	ErrEvaluatorValidation  = errors.New("evaluator validation failed")
+	ErrInvalidScorerConfig  = errors.New("invalid scorer configuration")
 
-	ErrExecutionNotFound = errors.New("rule execution not found")
+	ErrExecutionNotFound = errors.New("evaluator execution not found")
 	ErrExecutionTerminal = errors.New("execution is already in a terminal state")
 )

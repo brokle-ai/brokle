@@ -42,7 +42,7 @@ type ManualTriggerWorkerConfig struct {
 type ManualTriggerWorker struct {
 	redis            *database.RedisDB
 	traceService     observability.TraceService
-	executionService evaluation.RuleExecutionService
+	executionService evaluation.EvaluatorExecutionService
 	logger           *slog.Logger
 
 	// Consumer configuration
@@ -69,7 +69,7 @@ type ManualTriggerWorker struct {
 func NewManualTriggerWorker(
 	redisDB *database.RedisDB,
 	traceService observability.TraceService,
-	executionService evaluation.RuleExecutionService,
+	executionService evaluation.EvaluatorExecutionService,
 	logger *slog.Logger,
 	config *ManualTriggerWorkerConfig,
 ) *ManualTriggerWorker {
@@ -213,7 +213,7 @@ func (w *ManualTriggerWorker) processMessage(ctx context.Context, message redis.
 
 	w.logger.Info("Processing manual trigger",
 		"execution_id", trigger.ExecutionID,
-		"rule_id", trigger.RuleID,
+		"evaluator_id", trigger.EvaluatorID,
 		"project_id", trigger.ProjectID,
 		"sample_limit", trigger.SampleLimit,
 	)
@@ -238,7 +238,7 @@ func (w *ManualTriggerWorker) processMessage(ctx context.Context, message redis.
 		}
 		w.logger.Info("Manual trigger completed with no matching spans",
 			"execution_id", trigger.ExecutionID,
-			"rule_id", trigger.RuleID,
+			"evaluator_id", trigger.EvaluatorID,
 		)
 		atomic.AddInt64(&w.triggersProcessed, 1)
 		return nil
@@ -256,7 +256,7 @@ func (w *ManualTriggerWorker) processMessage(ctx context.Context, message redis.
 		}
 		w.logger.Info("Manual trigger completed with zero jobs after sampling",
 			"execution_id", trigger.ExecutionID,
-			"rule_id", trigger.RuleID,
+			"evaluator_id", trigger.EvaluatorID,
 			"pre_sampling_matches", spansMatched,
 		)
 		atomic.AddInt64(&w.triggersProcessed, 1)
@@ -282,7 +282,7 @@ func (w *ManualTriggerWorker) processMessage(ctx context.Context, message redis.
 
 	w.logger.Info("Manual trigger jobs enqueued, awaiting processing",
 		"execution_id", trigger.ExecutionID,
-		"rule_id", trigger.RuleID,
+		"evaluator_id", trigger.EvaluatorID,
 		"spans_matched", spansMatched,
 		"jobs_enqueued", jobsEnqueued,
 		"enqueue_errors", enqueueErrors,
@@ -320,7 +320,7 @@ func (w *ManualTriggerWorker) processTrigger(ctx context.Context, trigger *Manua
 	if spansMatched == 0 {
 		w.logger.Info("No spans matched for manual trigger",
 			"execution_id", trigger.ExecutionID,
-			"rule_id", trigger.RuleID,
+			"evaluator_id", trigger.EvaluatorID,
 		)
 		return 0, 0, 0, nil
 	}
@@ -511,7 +511,7 @@ func (w *ManualTriggerWorker) buildSpanFilterForPage(trigger *ManualTriggerMessa
 	return filter
 }
 
-// filterSpans applies rule filters and specific span IDs to candidate spans.
+// filterSpans applies evaluator filters and specific span IDs to candidate spans.
 // Note: SpanNames are now handled at database level, not here.
 // Filtering order is optimized for performance: SpanIDs (hash lookup) → FilterClauses (most expensive).
 func (w *ManualTriggerWorker) filterSpans(
@@ -782,7 +782,7 @@ func (w *ManualTriggerWorker) createEvaluationJob(trigger *ManualTriggerMessageD
 
 	return &EvaluationJob{
 		JobID:        ulid.New(),
-		RuleID:       trigger.RuleID,
+		EvaluatorID:  trigger.EvaluatorID,
 		ProjectID:    trigger.ProjectID,
 		ExecutionID:  &trigger.ExecutionID,
 		SpanData:     spanData,
@@ -804,12 +804,12 @@ func (w *ManualTriggerWorker) emitJob(ctx context.Context, job *EvaluationJob) e
 	_, err = w.redis.Client.XAdd(ctx, &redis.XAddArgs{
 		Stream: evaluationJobsStream,
 		Values: map[string]interface{}{
-			"job_id":     job.JobID.String(),
-			"rule_id":    job.RuleID.String(),
-			"project_id": job.ProjectID.String(),
-			"span_id":    job.SpanID,
-			"data":       string(jobData),
-			"timestamp":  job.CreatedAt.Unix(),
+			"job_id":       job.JobID.String(),
+			"evaluator_id": job.EvaluatorID.String(),
+			"project_id":   job.ProjectID.String(),
+			"span_id":      job.SpanID,
+			"data":         string(jobData),
+			"timestamp":    job.CreatedAt.Unix(),
 		},
 	}).Result()
 
@@ -829,7 +829,7 @@ func (w *ManualTriggerWorker) GetStats() map[string]int64 {
 // ManualTriggerMessageData is the internal struct for parsing trigger messages
 type ManualTriggerMessageData struct {
 	ExecutionID     ulid.ULID                 `json:"execution_id"`
-	RuleID          ulid.ULID                 `json:"rule_id"`
+	EvaluatorID     ulid.ULID                 `json:"evaluator_id"`
 	ProjectID       ulid.ULID                 `json:"project_id"`
 	ScorerType      evaluation.ScorerType     `json:"scorer_type"`
 	ScorerConfig    map[string]any            `json:"scorer_config"`

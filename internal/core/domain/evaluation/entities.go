@@ -933,12 +933,6 @@ type DatasetWithVersionResponse struct {
 // Dataset Filter and Pagination Types
 // ============================================================================
 
-// DatasetFilter represents filters for dataset queries.
-type DatasetFilter struct {
-	// Search filters by name (case-insensitive partial match)
-	Search *string
-}
-
 // ============================================================================
 // Experiment Metrics Types
 // ============================================================================

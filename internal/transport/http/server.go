@@ -425,24 +425,24 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 			experiments.POST("/wizard/estimate", s.authMiddleware.RequirePermission("projects:read"), s.handlers.ExperimentWizard.EstimateCost)
 		}
 
-		evaluationRules := projects.Group("/:projectId/evaluations/rules")
+		evaluators := projects.Group("/:projectId/evaluators")
 		{
-			evaluationRules.GET("", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Rule.List)
-			evaluationRules.POST("", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Rule.Create)
-			evaluationRules.GET("/:ruleId", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Rule.Get)
-			evaluationRules.PUT("/:ruleId", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Rule.Update)
-			evaluationRules.DELETE("/:ruleId", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Rule.Delete)
-			evaluationRules.POST("/:ruleId/activate", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Rule.Activate)
-			evaluationRules.POST("/:ruleId/deactivate", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Rule.Deactivate)
-			evaluationRules.POST("/:ruleId/trigger", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Rule.Trigger)
-			evaluationRules.POST("/:ruleId/test", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Rule.Test)
-			evaluationRules.GET("/:ruleId/analytics", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Rule.GetAnalytics)
+			evaluators.GET("", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Evaluator.List)
+			evaluators.POST("", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Evaluator.Create)
+			evaluators.GET("/:evaluatorId", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Evaluator.Get)
+			evaluators.PUT("/:evaluatorId", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Evaluator.Update)
+			evaluators.DELETE("/:evaluatorId", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Evaluator.Delete)
+			evaluators.POST("/:evaluatorId/activate", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Evaluator.Activate)
+			evaluators.POST("/:evaluatorId/deactivate", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Evaluator.Deactivate)
+			evaluators.POST("/:evaluatorId/trigger", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Evaluator.Trigger)
+			evaluators.POST("/:evaluatorId/test", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Evaluator.Test)
+			evaluators.GET("/:evaluatorId/analytics", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Evaluator.GetAnalytics)
 
-			// Rule execution history
-			evaluationRules.GET("/:ruleId/executions", s.authMiddleware.RequirePermission("projects:read"), s.handlers.RuleExecution.List)
-			evaluationRules.GET("/:ruleId/executions/latest", s.authMiddleware.RequirePermission("projects:read"), s.handlers.RuleExecution.GetLatest)
-			evaluationRules.GET("/:ruleId/executions/:executionId", s.authMiddleware.RequirePermission("projects:read"), s.handlers.RuleExecution.Get)
-			evaluationRules.GET("/:ruleId/executions/:executionId/detail", s.authMiddleware.RequirePermission("projects:read"), s.handlers.RuleExecution.GetDetail)
+			// Evaluator execution history
+			evaluators.GET("/:evaluatorId/executions", s.authMiddleware.RequirePermission("projects:read"), s.handlers.EvaluatorExecution.List)
+			evaluators.GET("/:evaluatorId/executions/latest", s.authMiddleware.RequirePermission("projects:read"), s.handlers.EvaluatorExecution.GetLatest)
+			evaluators.GET("/:evaluatorId/executions/:executionId", s.authMiddleware.RequirePermission("projects:read"), s.handlers.EvaluatorExecution.Get)
+			evaluators.GET("/:evaluatorId/executions/:executionId/detail", s.authMiddleware.RequirePermission("projects:read"), s.handlers.EvaluatorExecution.GetDetail)
 		}
 
 		// Annotation Queues (HITL evaluation)
