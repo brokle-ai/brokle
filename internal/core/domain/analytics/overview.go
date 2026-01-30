@@ -21,6 +21,7 @@ const (
 	TimeRange7Days     TimeRange = "7d"
 	TimeRange14Days    TimeRange = "14d"
 	TimeRange30Days    TimeRange = "30d"
+	TimeRange90Days    TimeRange = "90d"
 	TimeRangeAll       TimeRange = "all" // All available data (capped at 365 days for safety)
 )
 
@@ -45,6 +46,8 @@ func ParseTimeRange(s string) TimeRange {
 		return TimeRange14Days
 	case "30d":
 		return TimeRange30Days
+	case "90d":
+		return TimeRange90Days
 	case "all":
 		return TimeRangeAll
 	default:
@@ -73,6 +76,8 @@ func (tr TimeRange) Duration() time.Duration {
 		return 14 * 24 * time.Hour
 	case TimeRange30Days:
 		return 30 * 24 * time.Hour
+	case TimeRange90Days:
+		return 90 * 24 * time.Hour
 	case TimeRangeAll:
 		return 365 * 24 * time.Hour // Capped at 365 days for safety
 	default:

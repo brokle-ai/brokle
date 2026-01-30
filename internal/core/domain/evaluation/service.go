@@ -124,6 +124,13 @@ type RuleService interface {
 
 	// TriggerRule starts a manual evaluation of the rule against matching spans
 	TriggerRule(ctx context.Context, ruleID ulid.ULID, projectID ulid.ULID, opts *TriggerOptions) (*TriggerResponse, error)
+
+	// TestRule executes a rule against sample spans for testing/preview without persisting scores.
+	// This allows users to validate rule configuration before activation.
+	TestRule(ctx context.Context, ruleID ulid.ULID, projectID ulid.ULID, req *TestRuleRequest) (*TestRuleResponse, error)
+
+	// GetAnalytics returns performance analytics for a rule over the specified time period.
+	GetAnalytics(ctx context.Context, ruleID ulid.ULID, projectID ulid.ULID, params *RuleAnalyticsParams) (*RuleAnalyticsResponse, error)
 }
 
 type RuleExecutionService interface {
@@ -149,4 +156,8 @@ type RuleExecutionService interface {
 	// UpdateSpansMatched updates the spans_matched count for an execution.
 	// Used by manual triggers after discovering how many spans will be processed.
 	UpdateSpansMatched(ctx context.Context, executionID ulid.ULID, projectID ulid.ULID, spansMatched int) error
+
+	// GetExecutionDetail returns detailed execution information including span-level results.
+	// The ruleID parameter ensures the execution belongs to the specified rule.
+	GetExecutionDetail(ctx context.Context, executionID ulid.ULID, projectID ulid.ULID, ruleID ulid.ULID) (*ExecutionDetailResponse, error)
 }

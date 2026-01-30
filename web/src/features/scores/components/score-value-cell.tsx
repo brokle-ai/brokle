@@ -26,6 +26,7 @@ interface ScoreValueCellProps {
 function formatValue(score: Score): string {
   switch (score.type) {
     case 'BOOLEAN':
+      if (score.value === undefined || score.value === null) return '-'
       return score.value === 1 ? 'True' : 'False'
     case 'CATEGORICAL':
       return score.string_value ?? '-'
@@ -42,17 +43,18 @@ function formatValue(score: Score): string {
  * - Categorical: neutral outline
  */
 function getValueVariant(
-  dataType: ScoreType,
-  value: number | undefined
+  dataType: ScoreDataType,
+  value: number | undefined | null
 ): 'default' | 'secondary' | 'destructive' | 'outline' {
   if (dataType === 'BOOLEAN') {
+    if (value === undefined || value === null) return 'outline' // Neutral for missing
     return value === 1 ? 'default' : 'destructive'
   }
   if (dataType === 'CATEGORICAL') {
     return 'outline'
   }
   // Numeric: gradient based on 0-1 range
-  if (value !== undefined) {
+  if (value !== undefined && value !== null) {
     if (value >= 0.8) return 'default'
     if (value >= 0.5) return 'secondary'
     return 'destructive'

@@ -41,8 +41,19 @@ export type { UseProjectExperimentsReturn } from './hooks/use-project-experiment
 export { useExperimentsTableState } from './hooks/use-experiments-table-state'
 export type { UseExperimentsTableStateReturn, SortField as ExperimentsSortField } from './hooks/use-experiments-table-state'
 
-export { getDiffDisplay, formatScoreStats } from './lib/calculate-diff'
-export type { DiffDisplayConfig, DiffStyle } from './lib/calculate-diff'
+export {
+  getDiffDisplay,
+  formatScoreStats,
+  calculateDiffPercentage,
+  calculateScorePercentile,
+  classifyDiffs,
+} from './lib/calculate-diff'
+export type {
+  DiffDisplayConfig,
+  DiffStyle,
+  DiffPercentageResult,
+  DiffClassification,
+} from './lib/calculate-diff'
 
 export { ExperimentList } from './components/experiment-list'
 export { ExperimentCard } from './components/experiment-card'
@@ -55,6 +66,14 @@ export { ExperimentCompareView } from './components/experiment-compare-view'
 export { DiffLabel } from './components/diff-label'
 export { ExperimentSelector } from './components/experiment-selector'
 export { ScoreComparisonCard } from './components/score-comparison-card'
+export {
+  ComparisonViewToggle,
+  ComparisonTable,
+  ComparisonSummary,
+  ScoreProgressBar,
+  DeltaPercentage,
+} from './components/comparison'
+export type { ComparisonViewMode } from './components/comparison'
 export { ExperimentsDialogs } from './components/experiments-dialogs'
 export { ExperimentsTable, ExperimentsToolbar, createExperimentsColumns } from './components/experiment-table'
 

@@ -17,9 +17,10 @@ import type { CreateEvaluationRuleRequest } from '../types'
 
 interface CreateRuleDialogProps {
   projectId: string
+  orgId?: string
 }
 
-export function CreateRuleDialog({ projectId }: CreateRuleDialogProps) {
+export function CreateRuleDialog({ projectId, orgId }: CreateRuleDialogProps) {
   const [open, setOpen] = useState(false)
   const createMutation = useCreateEvaluationRuleMutation(projectId)
 
@@ -48,6 +49,7 @@ export function CreateRuleDialog({ projectId }: CreateRuleDialogProps) {
           onSubmit={handleSubmit}
           onCancel={() => setOpen(false)}
           isLoading={createMutation.isPending}
+          orgId={orgId}
         />
       </DialogContent>
     </Dialog>

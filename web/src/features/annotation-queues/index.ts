@@ -38,6 +38,16 @@ export {
   useUnassignUserMutation,
 } from './hooks/use-annotation-queues'
 
+export { useQueuesTableState } from './hooks/use-queues-table-state'
+export type { QueueSortField, UseQueuesTableStateReturn } from './hooks/use-queues-table-state'
+
+export {
+  useAnnotationKeyboard,
+  ANNOTATION_HOTKEYS,
+  getSubmitShortcutDisplay,
+  isMacPlatform,
+} from './hooks/use-annotation-keyboard'
+
 // Context
 export {
   AnnotationQueuesProvider,
@@ -46,6 +56,8 @@ export {
 export type { AnnotationQueuesDialogType } from './context/annotation-queues-context'
 
 // Components
+export { QueuesTable } from './components/queues-table'
+export { QueuesToolbar } from './components/queues-toolbar'
 export { QueueCard } from './components/queue-card'
 export { QueueList } from './components/queue-list'
 export { QueueForm } from './components/queue-form'
@@ -63,3 +75,6 @@ export { SettingsDialog } from './components/settings-dialog'
 export { AddItemsDialogStandalone } from './components/add-items-dialog-standalone'
 export { StatsCard, QueueStatsCards } from './components/stats-card'
 export { AddToQueueButton } from './components/add-to-queue-button'
+export { SkipReasonDialog } from './components/skip-reason-dialog'
+export { ProgressIndicator, ProgressBadge } from './components/progress-indicator'
+export { KeyboardShortcutHint, Kbd } from './components/keyboard-shortcut-hint'

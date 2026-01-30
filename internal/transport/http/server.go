@@ -435,11 +435,14 @@ func (s *Server) setupDashboardRoutes(router *gin.RouterGroup) {
 			evaluationRules.POST("/:ruleId/activate", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Rule.Activate)
 			evaluationRules.POST("/:ruleId/deactivate", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Rule.Deactivate)
 			evaluationRules.POST("/:ruleId/trigger", s.authMiddleware.RequirePermission("projects:write"), s.handlers.Rule.Trigger)
+			evaluationRules.POST("/:ruleId/test", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Rule.Test)
+			evaluationRules.GET("/:ruleId/analytics", s.authMiddleware.RequirePermission("projects:read"), s.handlers.Rule.GetAnalytics)
 
 			// Rule execution history
 			evaluationRules.GET("/:ruleId/executions", s.authMiddleware.RequirePermission("projects:read"), s.handlers.RuleExecution.List)
 			evaluationRules.GET("/:ruleId/executions/latest", s.authMiddleware.RequirePermission("projects:read"), s.handlers.RuleExecution.GetLatest)
 			evaluationRules.GET("/:ruleId/executions/:executionId", s.authMiddleware.RequirePermission("projects:read"), s.handlers.RuleExecution.Get)
+			evaluationRules.GET("/:ruleId/executions/:executionId/detail", s.authMiddleware.RequirePermission("projects:read"), s.handlers.RuleExecution.GetDetail)
 		}
 
 		// Annotation Queues (HITL evaluation)

@@ -32,6 +32,12 @@ export interface CreateAnnotationRequest {
   reason?: string | null
 }
 
+export interface UpdateAnnotationRequest {
+  value?: number | null
+  string_value?: string | null
+  reason?: string | null
+}
+
 // ============================================================================
 // Annotations API
 // ============================================================================
@@ -73,6 +79,30 @@ export const createAnnotation = async (
 ): Promise<Annotation> => {
   return client.post<Annotation>(
     `/v1/traces/${traceId}/scores`,
+    data,
+    { params: { project_id: projectId } }
+  )
+}
+
+/**
+ * Update an annotation score
+ *
+ * Backend endpoint: PUT /api/v1/traces/:trace_id/scores/:score_id
+ *
+ * @param projectId - Project ULID
+ * @param traceId - Trace ID
+ * @param scoreId - Score ID
+ * @param data - Update data
+ * @returns Updated annotation
+ */
+export const updateAnnotation = async (
+  projectId: string,
+  traceId: string,
+  scoreId: string,
+  data: UpdateAnnotationRequest
+): Promise<Annotation> => {
+  return client.put<Annotation>(
+    `/v1/traces/${traceId}/scores/${scoreId}`,
     data,
     { params: { project_id: projectId } }
   )

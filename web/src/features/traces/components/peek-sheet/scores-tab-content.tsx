@@ -1,23 +1,22 @@
 'use client'
 
 import * as React from 'react'
-import { Badge } from '@/components/ui/badge'
+import { Star, AlertCircle, Pencil } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import {
-  HoverCard,
-  HoverCardContent,
-  HoverCardTrigger,
-} from '@/components/ui/hover-card'
-import { Star, AlertCircle, MessageSquare, Braces } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { CollapsibleSection } from './collapsible-section'
 import { useTraceScoresQuery } from '../../hooks/use-trace-scores'
+import { useUpdateAnnotation, useDeleteAnnotation } from '../../hooks/use-annotations'
+import { useScoreConfigsQuery } from '@/features/scores'
 import type { Score, Span } from '../../data/schema'
-import { format, formatDistanceToNow } from 'date-fns'
+import type { Score as ScoresFeatureScore, ScoreConfig } from '@/features/scores/types'
+import { ScoreTag } from '@/features/scores/components/score-tag'
+import { AnnotationFormDialog } from '@/features/scores/components/annotation/annotation-form-dialog'
 
 // ============================================================================
 // Types
@@ -39,196 +38,56 @@ interface GroupedScores {
 }
 
 // ============================================================================
-// Score Display Helpers
+// Type Conversion Helpers
 // ============================================================================
 
 /**
- * Get badge variant based on score value and type
- * Following patterns:
- * - BOOLEAN: Green for true, red for false
- * - NUMERIC: Green ≥0.8, yellow ≥0.5, red <0.5
- * - CATEGORICAL: Neutral outline
+ * Convert traces/data/schema Score to scores/types Score
+ * The traces schema uses different field names
  */
-function getScoreBadgeVariant(
-  score: Score
-): 'default' | 'secondary' | 'destructive' | 'outline' {
-  if (score.type === 'BOOLEAN') {
-    return score.value === 1 ? 'default' : 'destructive'
+function toScoresFeatureScore(score: Score): ScoresFeatureScore {
+  return {
+    id: score.id,
+    project_id: score.project_id,
+    trace_id: score.trace_id,
+    span_id: score.span_id,
+    name: score.name,
+    value: score.value,
+    string_value: score.string_value,
+    data_type: score.data_type as ScoresFeatureScore['data_type'],
+    source: mapSource(score.source),
+    reason: score.comment, // traces schema uses 'comment', scores uses 'reason'
+    metadata: score.evaluator_config as Record<string, unknown>,
+    timestamp: score.timestamp instanceof Date
+      ? score.timestamp.toISOString()
+      : String(score.timestamp),
   }
-
-  if (score.type === 'NUMERIC' && score.value !== undefined) {
-    if (score.value >= 0.8) return 'default'
-    if (score.value >= 0.5) return 'secondary'
-    return 'destructive'
-  }
-
-  return 'outline'
 }
 
 /**
- * Get display value for score based on type
+ * Map source values between schemas
  */
-function getScoreDisplayValue(score: Score): string {
-  if (score.type === 'BOOLEAN') {
-    return score.value === 1 ? 'Yes' : 'No'
+function mapSource(source: string): ScoresFeatureScore['source'] {
+  const sourceMap: Record<string, ScoresFeatureScore['source']> = {
+    API: 'code',
+    api: 'code',
+    code: 'code',
+    EVAL: 'llm',
+    eval: 'llm',
+    llm: 'llm',
+    ANNOTATION: 'human',
+    annotation: 'human',
+    human: 'human',
   }
-
-  if (score.type === 'CATEGORICAL') {
-    return score.string_value || '-'
-  }
-
-  // NUMERIC
-  return score.value !== undefined ? score.value.toFixed(2) : '-'
+  return sourceMap[source] || 'code'
 }
 
 /**
- * Get background class for boolean scores
+ * Check if a score is editable (human annotation)
  */
-function getBooleanBgClass(score: Score): string {
-  if (score.type !== 'BOOLEAN') return ''
-  return score.value === 1
-    ? 'bg-green-50 dark:bg-green-950/30'
-    : 'bg-red-50 dark:bg-red-950/30'
-}
-
-/**
- * Format source for display
- */
-function formatSource(source: string): string {
-  const sourceMap: Record<string, string> = {
-    code: 'Code',
-    llm: 'LLM',
-    human: 'Human',
-    API: 'API',
-    ANNOTATION: 'Annotation',
-    EVAL: 'Evaluation',
-  }
-  return sourceMap[source] || source
-}
-
-// ============================================================================
-// ScoreItem Component - Single score display with hover card
-// ============================================================================
-
-interface ScoreItemProps {
-  score: Score
-}
-
-function ScoreItem({ score }: ScoreItemProps) {
-  const variant = getScoreBadgeVariant(score)
-  const displayValue = getScoreDisplayValue(score)
-  const booleanBg = getBooleanBgClass(score)
-  const hasComment = !!score.comment
-  const hasMetadata =
-    score.evaluator_config && Object.keys(score.evaluator_config).length > 0
-
-  return (
-    <HoverCard openDelay={200}>
-      <HoverCardTrigger asChild>
-        <div
-          className={cn(
-            'flex items-center justify-between py-2 px-3 rounded-md cursor-pointer transition-colors',
-            'hover:bg-muted/50',
-            booleanBg
-          )}
-        >
-          <div className="flex items-center gap-2 min-w-0">
-            {/* Score badge */}
-            <Badge variant={variant} className="shrink-0">
-              {score.name}: {displayValue}
-            </Badge>
-
-            {/* Source indicator */}
-            <span className="text-xs text-muted-foreground capitalize shrink-0">
-              {formatSource(score.source)}
-            </span>
-
-            {/* Indicators for comment/metadata */}
-            <div className="flex items-center gap-1">
-              {hasComment && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <MessageSquare className="h-3 w-3 text-muted-foreground" />
-                  </TooltipTrigger>
-                  <TooltipContent>Has comment</TooltipContent>
-                </Tooltip>
-              )}
-              {hasMetadata && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Braces className="h-3 w-3 text-muted-foreground" />
-                  </TooltipTrigger>
-                  <TooltipContent>Has metadata</TooltipContent>
-                </Tooltip>
-              )}
-            </div>
-          </div>
-
-          {/* Timestamp */}
-          <span className="text-xs text-muted-foreground shrink-0 ml-2">
-            {formatDistanceToNow(new Date(score.timestamp), { addSuffix: true })}
-          </span>
-        </div>
-      </HoverCardTrigger>
-
-      <HoverCardContent className="w-80" align="start">
-        <div className="space-y-3">
-          {/* Header */}
-          <div className="space-y-1">
-            <h4 className="text-sm font-semibold">{score.name}</h4>
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <span>Type: {score.type}</span>
-              <span>•</span>
-              <span>Source: {formatSource(score.source)}</span>
-            </div>
-          </div>
-
-          {/* Value */}
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">Value:</span>
-            <Badge variant={variant}>{displayValue}</Badge>
-          </div>
-
-          {/* Comment */}
-          {hasComment && (
-            <div className="space-y-1">
-              <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                <MessageSquare className="h-3 w-3" />
-                <span>Comment</span>
-              </div>
-              <p className="text-sm line-clamp-3">{score.comment}</p>
-            </div>
-          )}
-
-          {/* Evaluator info */}
-          {score.evaluator_name && (
-            <div className="text-xs text-muted-foreground">
-              Evaluator: {score.evaluator_name}
-              {score.evaluator_version && ` v${score.evaluator_version}`}
-            </div>
-          )}
-
-          {/* Metadata */}
-          {hasMetadata && (
-            <div className="space-y-1">
-              <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                <Braces className="h-3 w-3" />
-                <span>Metadata</span>
-              </div>
-              <pre className="text-xs bg-muted p-2 rounded overflow-x-auto max-h-24">
-                {JSON.stringify(score.evaluator_config, null, 2)}
-              </pre>
-            </div>
-          )}
-
-          {/* Timestamp */}
-          <div className="text-xs text-muted-foreground border-t pt-2">
-            {format(new Date(score.timestamp), 'PPpp')}
-          </div>
-        </div>
-      </HoverCardContent>
-    </HoverCard>
-  )
+function isEditableScore(score: Score): boolean {
+  const source = score.source.toLowerCase()
+  return source === 'annotation' || source === 'human'
 }
 
 // ============================================================================
@@ -279,6 +138,48 @@ function groupScoresBySpan(
 }
 
 // ============================================================================
+// ScoreItem Component - Single score with edit capability
+// ============================================================================
+
+interface ScoreItemProps {
+  score: Score
+  config?: ScoreConfig
+  isEditable: boolean
+  onEdit: (score: Score) => void
+  onDelete: (scoreId: string) => void
+}
+
+function ScoreItem({ score, config, isEditable, onEdit, onDelete }: ScoreItemProps) {
+  const convertedScore = toScoresFeatureScore(score)
+
+  return (
+    <div className="group flex items-center gap-2 py-1">
+      <ScoreTag
+        score={convertedScore}
+        onDelete={isEditable ? () => onDelete(score.id) : undefined}
+      />
+
+      {isEditable && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+              onClick={() => onEdit(score)}
+            >
+              <Pencil className="h-3 w-3" />
+              <span className="sr-only">Edit</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Edit annotation</TooltipContent>
+        </Tooltip>
+      )}
+    </div>
+  )
+}
+
+// ============================================================================
 // Main Component
 // ============================================================================
 
@@ -288,6 +189,43 @@ export function ScoresTabContent({
   spans,
 }: ScoresTabContentProps) {
   const { data: scores, isLoading, error } = useTraceScoresQuery(projectId, traceId)
+  const { data: scoreConfigs } = useScoreConfigsQuery(projectId)
+
+  // Edit dialog state
+  const [editingScore, setEditingScore] = React.useState<Score | null>(null)
+
+  // Mutations
+  const updateMutation = useUpdateAnnotation(projectId, traceId)
+  const deleteMutation = useDeleteAnnotation(projectId, traceId)
+
+  // Find config for a score by name
+  const getConfigForScore = React.useCallback((scoreName: string): ScoreConfig | undefined => {
+    return scoreConfigs?.find(config => config.name === scoreName)
+  }, [scoreConfigs])
+
+  // Handle save from edit dialog
+  const handleSave = React.useCallback((data: { value?: number | null; string_value?: string | null; reason?: string | null }) => {
+    if (!editingScore) return
+
+    updateMutation.mutate(
+      { scoreId: editingScore.id, data },
+      { onSuccess: () => setEditingScore(null) }
+    )
+  }, [editingScore, updateMutation])
+
+  // Handle delete
+  const handleDelete = React.useCallback(() => {
+    if (!editingScore) return
+
+    deleteMutation.mutate(editingScore.id, {
+      onSuccess: () => setEditingScore(null)
+    })
+  }, [editingScore, deleteMutation])
+
+  // Handle delete from tag (without opening dialog)
+  const handleDeleteDirect = React.useCallback((scoreId: string) => {
+    deleteMutation.mutate(scoreId)
+  }, [deleteMutation])
 
   // Loading state
   if (isLoading) {
@@ -334,45 +272,75 @@ export function ScoresTabContent({
   const { traceScores, spanScores } = groupScoresBySpan(scores, traceId, spans)
 
   return (
-    <div className="space-y-1">
-      {/* Trace-level scores */}
-      {traceScores.length > 0 && (
-        <CollapsibleSection
-          title="Trace Scores"
-          icon={<Star className="h-4 w-4 text-muted-foreground" />}
-          count={traceScores.length}
-          defaultExpanded={true}
-        >
-          <div className="space-y-1">
-            {traceScores.map((score) => (
-              <ScoreItem key={score.id} score={score} />
-            ))}
-          </div>
-        </CollapsibleSection>
-      )}
+    <>
+      <div className="space-y-1">
+        {/* Trace-level scores */}
+        {traceScores.length > 0 && (
+          <CollapsibleSection
+            title="Trace Scores"
+            icon={<Star className="h-4 w-4 text-muted-foreground" />}
+            count={traceScores.length}
+            defaultExpanded={true}
+          >
+            <div className="space-y-1">
+              {traceScores.map((score) => (
+                <ScoreItem
+                  key={score.id}
+                  score={score}
+                  config={getConfigForScore(score.name)}
+                  isEditable={isEditableScore(score)}
+                  onEdit={setEditingScore}
+                  onDelete={handleDeleteDirect}
+                />
+              ))}
+            </div>
+          </CollapsibleSection>
+        )}
 
-      {/* Per-span scores */}
-      {spanScores.map(({ spanId, spanName, scores: spanScoreList }) => (
-        <CollapsibleSection
-          key={spanId}
-          title={spanName}
-          count={spanScoreList.length}
-          defaultExpanded={false}
-        >
-          <div className="space-y-1">
-            {spanScoreList.map((score) => (
-              <ScoreItem key={score.id} score={score} />
-            ))}
-          </div>
-        </CollapsibleSection>
-      ))}
+        {/* Per-span scores */}
+        {spanScores.map(({ spanId, spanName, scores: spanScoreList }) => (
+          <CollapsibleSection
+            key={spanId}
+            title={spanName}
+            count={spanScoreList.length}
+            defaultExpanded={false}
+          >
+            <div className="space-y-1">
+              {spanScoreList.map((score) => (
+                <ScoreItem
+                  key={score.id}
+                  score={score}
+                  config={getConfigForScore(score.name)}
+                  isEditable={isEditableScore(score)}
+                  onEdit={setEditingScore}
+                  onDelete={handleDeleteDirect}
+                />
+              ))}
+            </div>
+          </CollapsibleSection>
+        ))}
 
-      {/* Edge case: All scores are span-level but no trace scores */}
-      {traceScores.length === 0 && spanScores.length > 0 && (
-        <p className="text-xs text-muted-foreground px-1 py-2">
-          All {scores.length} scores are attached to specific spans
-        </p>
+        {/* Edge case: All scores are span-level but no trace scores */}
+        {traceScores.length === 0 && spanScores.length > 0 && (
+          <p className="text-xs text-muted-foreground px-1 py-2">
+            All {scores.length} scores are attached to specific spans
+          </p>
+        )}
+      </div>
+
+      {/* Edit dialog */}
+      {editingScore && (
+        <AnnotationFormDialog
+          score={toScoresFeatureScore(editingScore)}
+          config={getConfigForScore(editingScore.name)}
+          open={!!editingScore}
+          onOpenChange={(open) => !open && setEditingScore(null)}
+          onSave={handleSave}
+          onDelete={handleDelete}
+          isSaving={updateMutation.isPending}
+          isDeleting={deleteMutation.isPending}
+        />
       )}
-    </div>
+    </>
   )
 }

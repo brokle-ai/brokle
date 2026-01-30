@@ -702,6 +702,14 @@ func (r *traceRepository) CountSpansByFilter(ctx context.Context, filter *observ
 			query += " AND start_time <= ?"
 			args = append(args, *filter.EndTime)
 		}
+		if len(filter.SpanNames) > 0 {
+			placeholders := make([]string, len(filter.SpanNames))
+			for i := range filter.SpanNames {
+				placeholders[i] = "?"
+				args = append(args, filter.SpanNames[i])
+			}
+			query += " AND span_name IN (" + strings.Join(placeholders, ",") + ")"
+		}
 	}
 
 	var count uint64

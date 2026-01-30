@@ -9,6 +9,7 @@ import { ScoresProvider } from '../context/scores-context'
 import { ScoresTable } from './scores-table'
 import { ScoreAnalyticsDashboard } from './analytics'
 import { useScoresQuery } from '../hooks/use-scores'
+import { useScoresTableState } from '../hooks/use-scores-table-state'
 
 interface ScoresProps {
   projectSlug: string
@@ -19,31 +20,46 @@ function ScoresContent({ projectSlug }: ScoresProps) {
   const router = useRouter()
   const { currentProject, hasProject, isLoading: projectLoading } = useProjectOnly()
 
-  const currentTab = searchParams.get('tab') || 'list'
-  const page = Number(searchParams.get('page')) || 1
-  const limit = Number(searchParams.get('limit')) || 50
-  const name = searchParams.get('name') || undefined
-  const source = searchParams.get('source') || undefined
-  const dataType = searchParams.get('type') || undefined
+  // Use the centralized URL state hook
+  const {
+    page,
+    pageSize,
+    search,
+    dataType,
+    source,
+    sortBy,
+    sortOrder,
+    setSearch,
+    setDataType,
+    setSource,
+    setPagination,
+    setSorting,
+    resetAll,
+    hasActiveFilters,
+    toApiParams,
+  } = useScoresTableState()
 
+  const currentTab = searchParams.get('tab') || 'list'
+
+  // Query scores with params from URL state
   const {
     data: scoresResponse,
     isLoading: scoresLoading,
     error: scoresError,
-  } = useScoresQuery(currentProject?.id, {
-    page,
-    limit,
-    name,
-    source: source as 'code' | 'llm' | 'human' | undefined,
-    type: dataType as 'NUMERIC' | 'BOOLEAN' | 'CATEGORICAL' | undefined,
-  })
+  } = useScoresQuery(currentProject?.id, toApiParams())
 
   const handleTabChange = (value: string) => {
     const newParams = new URLSearchParams(searchParams.toString())
     newParams.set('tab', value)
     if (value !== 'list') {
+      // Clear table-specific params when switching away from list
       newParams.delete('page')
-      newParams.delete('limit')
+      newParams.delete('pageSize')
+      newParams.delete('search')
+      newParams.delete('dataType')
+      newParams.delete('source')
+      newParams.delete('sortBy')
+      newParams.delete('sortOrder')
     }
     router.push(`?${newParams.toString()}`)
   }
@@ -98,6 +114,20 @@ function ScoresContent({ projectSlug }: ScoresProps) {
               projectSlug={projectSlug}
               loading={scoresLoading}
               error={scoresError?.message}
+              // URL state
+              search={search}
+              dataType={dataType}
+              source={source}
+              sortBy={sortBy}
+              sortOrder={sortOrder}
+              // State setters
+              onSearchChange={setSearch}
+              onDataTypeChange={setDataType}
+              onSourceChange={setSource}
+              onPageChange={setPagination}
+              onSortChange={setSorting}
+              onReset={resetAll}
+              hasActiveFilters={hasActiveFilters}
             />
           </TabsContent>
 

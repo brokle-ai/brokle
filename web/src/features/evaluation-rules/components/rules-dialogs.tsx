@@ -16,7 +16,7 @@ import { useDeleteEvaluationRuleMutation } from '../hooks/use-evaluation-rules'
 import { EditRuleDialog } from './edit-rule-dialog'
 
 export function RulesDialogs() {
-  const { open, setOpen, currentRow, projectId } = useRules()
+  const { open, setOpen, currentRow, projectId, orgId } = useRules()
   const deleteMutation = useDeleteEvaluationRuleMutation(projectId ?? '')
 
   const handleDelete = async () => {
@@ -32,6 +32,7 @@ export function RulesDialogs() {
     <>
       <EditRuleDialog
         projectId={projectId ?? ''}
+        orgId={orgId}
         rule={currentRow}
         open={open === 'edit'}
         onOpenChange={(isOpen) => setOpen(isOpen ? 'edit' : null)}
