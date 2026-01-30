@@ -51,13 +51,19 @@ func (s *SpanQueryService) QuerySpans(
 		return nil, appErrors.NewValidationError("invalid filter expression", err.Error())
 	}
 
+	// Calculate offset from page (page is 1-indexed)
+	offset := (req.Page - 1) * req.Limit
+	if offset < 0 {
+		offset = 0
+	}
+
 	queryResult, err := queryBuilder.BuildQuery(
 		filterNode,
 		projectID,
 		req.StartTime,
 		req.EndTime,
 		req.Limit,
-		req.Offset,
+		offset,
 	)
 	if err != nil {
 		s.logger.Error("query build error",
@@ -111,7 +117,7 @@ func (s *SpanQueryService) QuerySpans(
 	return &obsDomain.SpanQueryResponse{
 		Spans:      spans,
 		TotalCount: totalCount,
-		HasMore:    int64(req.Offset+len(spans)) < totalCount,
+		HasMore:    int64(offset+len(spans)) < totalCount,
 	}, nil
 }
 

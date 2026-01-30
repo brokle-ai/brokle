@@ -27,13 +27,6 @@ func NewRuleHandler(
 	}
 }
 
-// RuleListResponse wraps the list response with pagination metadata.
-type RuleListResponse struct {
-	Rules []*evaluationDomain.EvaluationRuleResponse `json:"rules"`
-	Total int64                                      `json:"total"`
-	Page  int                                        `json:"page"`
-	Limit int                                        `json:"limit"`
-}
 
 // @Summary Create evaluation rule
 // @Description Creates a new evaluation rule for automated span scoring.
@@ -85,7 +78,7 @@ func (h *RuleHandler) Create(c *gin.Context) {
 // @Param status query string false "Filter by status (active, inactive, paused)"
 // @Param scorer_type query string false "Filter by scorer type (llm, builtin, regex)"
 // @Param search query string false "Search by name"
-// @Success 200 {object} RuleListResponse
+// @Success 200 {object} response.ListResponse{data=[]evaluation.EvaluationRuleResponse}
 // @Failure 400 {object} response.ErrorResponse
 // @Failure 401 {object} response.ErrorResponse
 // @Router /api/v1/projects/{projectId}/evaluations/rules [get]
@@ -154,12 +147,8 @@ func (h *RuleHandler) List(c *gin.Context) {
 		responses[i] = rule.ToResponse()
 	}
 
-	response.Success(c, &RuleListResponse{
-		Rules: responses,
-		Total: total,
-		Page:  params.Page,
-		Limit: params.Limit,
-	})
+	pag := response.NewPagination(params.Page, params.Limit, total)
+	response.SuccessWithPagination(c, responses, pag)
 }
 
 // @Summary Get evaluation rule

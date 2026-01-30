@@ -561,7 +561,7 @@ export const getScores = async (params: GetScoresParams): Promise<{
   if (sessionId) queryParams.session_id = sessionId
   if (name) queryParams.name = name
   if (source) queryParams.source = source
-  if (dataType) queryParams.data_type = dataType
+  if (dataType) queryParams.type = dataType
 
   const response = await client.getPaginated<Score>('/v1/scores', queryParams)
 

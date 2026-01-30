@@ -71,22 +71,33 @@ func (r *QueueRepository) GetByName(ctx context.Context, name string, projectID 
 	return &queue, nil
 }
 
-// List retrieves all annotation queues for a project with optional filtering.
-func (r *QueueRepository) List(ctx context.Context, projectID ulid.ULID, filter *annotation.QueueFilter) ([]*annotation.AnnotationQueue, error) {
+// List retrieves all annotation queues for a project with optional filtering and pagination.
+func (r *QueueRepository) List(ctx context.Context, projectID ulid.ULID, filter *annotation.QueueFilter, offset, limit int) ([]*annotation.AnnotationQueue, int64, error) {
 	var queues []*annotation.AnnotationQueue
+	var total int64
 
 	query := r.getDB(ctx).WithContext(ctx).
 		Where("project_id = ?", projectID.String())
 
-	if filter != nil && filter.Status != nil {
-		query = query.Where("status = ?", string(*filter.Status))
+	if filter != nil {
+		if filter.Status != nil {
+			query = query.Where("status = ?", string(*filter.Status))
+		}
+		if filter.Search != nil && *filter.Search != "" {
+			search := "%" + strings.ToLower(*filter.Search) + "%"
+			query = query.Where("LOWER(name) LIKE ? OR LOWER(description) LIKE ?", search, search)
+		}
 	}
 
-	result := query.Order("created_at DESC").Find(&queues)
-	if result.Error != nil {
-		return nil, result.Error
+	if err := query.Model(&annotation.AnnotationQueue{}).Count(&total).Error; err != nil {
+		return nil, 0, err
 	}
-	return queues, nil
+
+	result := query.Order("created_at DESC").Offset(offset).Limit(limit).Find(&queues)
+	if result.Error != nil {
+		return nil, 0, result.Error
+	}
+	return queues, total, nil
 }
 
 // Update updates an existing annotation queue.

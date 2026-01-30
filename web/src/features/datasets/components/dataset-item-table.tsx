@@ -111,7 +111,7 @@ export function DatasetItemTable({ projectId, datasetId }: DatasetItemTableProps
   ], [rowHeight])
 
   const table = useReactTable({
-    data: data?.items ?? [],
+    data: data?.data ?? [],
     columns,
     getCoreRowModel: getCoreRowModel(),
   })
@@ -140,7 +140,7 @@ export function DatasetItemTable({ projectId, datasetId }: DatasetItemTableProps
     )
   }
 
-  if (!data?.items.length) {
+  if (!data?.data.length) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center border rounded-md">
         <p className="text-lg font-medium">No items yet</p>
@@ -208,9 +208,9 @@ export function DatasetItemTable({ projectId, datasetId }: DatasetItemTableProps
         </Table>
       </div>
 
-      {data && data.total > data.items.length && (
+      {data && data.pagination.total > data.data.length && (
         <p className="text-sm text-muted-foreground text-center mt-4">
-          Showing {data.items.length} of {data.total} items
+          Showing {data.data.length} of {data.pagination.total} items
         </p>
       )}
 

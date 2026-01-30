@@ -9,6 +9,8 @@ import type { Experiment } from '../types'
 export interface UseProjectExperimentsReturn {
   data: Experiment[]
   totalCount: number
+  page: number
+  pageSize: number
   isLoading: boolean
   isFetching: boolean
   error: string | null

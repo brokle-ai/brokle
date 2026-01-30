@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/tooltip'
 import { MessageSquare } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import type { Score, ScoreDataType, ScoreSource } from '../types'
+import type { Score, ScoreType, ScoreSource } from '../types'
 
 interface ScoreValueCellProps {
   score: Score
@@ -24,7 +24,7 @@ interface ScoreValueCellProps {
  * - Categorical: String value as-is
  */
 function formatValue(score: Score): string {
-  switch (score.data_type) {
+  switch (score.type) {
     case 'BOOLEAN':
       if (score.value === undefined || score.value === null) return '-'
       return score.value === 1 ? 'True' : 'False'
@@ -95,7 +95,7 @@ function getSourceLabel(source: ScoreSource): string {
 }
 
 export function ScoreValueCell({ score, showName = false, className }: ScoreValueCellProps) {
-  const valueVariant = getValueVariant(score.data_type, score.value)
+  const valueVariant = getValueVariant(score.type, score.value)
   const sourceStyles = getSourceStyles(score.source)
   const formattedValue = formatValue(score)
 

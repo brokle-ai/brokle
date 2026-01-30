@@ -67,17 +67,32 @@ func (r *DatasetRepository) GetByName(ctx context.Context, projectID ulid.ULID, 
 	return &dataset, nil
 }
 
-func (r *DatasetRepository) List(ctx context.Context, projectID ulid.ULID) ([]*evaluation.Dataset, error) {
+func (r *DatasetRepository) List(ctx context.Context, projectID ulid.ULID, filter *evaluation.DatasetFilter, offset, limit int) ([]*evaluation.Dataset, int64, error) {
 	var datasets []*evaluation.Dataset
-	result := r.getDB(ctx).WithContext(ctx).
-		Where("project_id = ?", projectID.String()).
-		Order("created_at DESC").
+	var total int64
+
+	query := r.getDB(ctx).WithContext(ctx).
+		Where("project_id = ?", projectID.String())
+
+	// Apply search filter
+	if filter != nil && filter.Search != nil && *filter.Search != "" {
+		search := "%" + strings.ToLower(*filter.Search) + "%"
+		query = query.Where("LOWER(name) LIKE ? OR LOWER(description) LIKE ?", search, search)
+	}
+
+	if err := query.Model(&evaluation.Dataset{}).Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	result := query.Order("created_at DESC").
+		Offset(offset).
+		Limit(limit).
 		Find(&datasets)
 
 	if result.Error != nil {
-		return nil, result.Error
+		return nil, 0, result.Error
 	}
-	return datasets, nil
+	return datasets, total, nil
 }
 
 func (r *DatasetRepository) Update(ctx context.Context, dataset *evaluation.Dataset, projectID ulid.ULID) error {

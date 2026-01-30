@@ -67,16 +67,8 @@ interface ScoresTableProps {
   onDeleteScore?: (scoreId: string) => void
 }
 
-/**
- * Scores Table Component
- *
- * Features:
- * - Integrated toolbar with search and filters
- * - Sortable columns with URL state
- * - Score tags with deterministic colors
- * - Pagination controls
- * - Loading and error states
- */
+import { cn } from '@/lib/utils'
+import type { Score, ScoreDataType, ScoreSource } from '../types'
 export function ScoresTable({
   data,
   pagination,
@@ -97,122 +89,8 @@ export function ScoresTable({
   hasActiveFilters,
   onDeleteScore,
 }: ScoresTableProps) {
-  // Create columns with sorting support
-  const columns = useMemo<ColumnDef<Score>[]>(
-    () => [
-      {
-        accessorKey: 'name',
-        header: ({ column }) => (
-          <SortableHeader
-            label="Score"
-            field="name"
-            currentSort={sortBy}
-            currentOrder={sortOrder}
-            onSort={onSortChange}
-          />
-        ),
-        cell: ({ row }) => (
-          <ScoreTag
-            score={row.original}
-            onDelete={onDeleteScore}
-            compact={false}
-          />
-        ),
-      },
-      {
-        accessorKey: 'data_type',
-        header: ({ column }) => (
-          <SortableHeader
-            label="Type"
-            field="data_type"
-            currentSort={sortBy}
-            currentOrder={sortOrder}
-            onSort={onSortChange}
-          />
-        ),
-        cell: ({ row }) => {
-          const { symbol, label } = getDataTypeIndicator(row.original.data_type)
-          return (
-            <div className="flex items-center gap-1.5">
-              <span className="text-muted-foreground font-mono">{symbol}</span>
-              <span className="text-sm text-muted-foreground">{label}</span>
-            </div>
-          )
-        },
-      },
-      {
-        accessorKey: 'source',
-        header: ({ column }) => (
-          <SortableHeader
-            label="Source"
-            field="source"
-            currentSort={sortBy}
-            currentOrder={sortOrder}
-            onSort={onSortChange}
-          />
-        ),
-        cell: ({ row }) => {
-          const { label, className } = getSourceIndicator(row.original.source)
-          return (
-            <Badge variant="outline" className={cn('text-xs', className)}>
-              {label}
-            </Badge>
-          )
-        },
-      },
-      {
-        accessorKey: 'trace_id',
-        header: 'Trace',
-        cell: ({ row }) => {
-          const traceId = row.original.trace_id
-          if (!traceId) {
-            return <span className="text-muted-foreground">-</span>
-          }
-          return (
-            <Link
-              href={`/projects/${projectSlug}/traces/${traceId}`}
-              className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 hover:underline dark:text-blue-400"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <span className="font-mono truncate max-w-[100px]">
-                {traceId.slice(0, 8)}...
-              </span>
-              <ExternalLink className="h-3 w-3 flex-shrink-0" />
-            </Link>
-          )
-        },
-      },
-      {
-        accessorKey: 'span_id',
-        header: 'Span',
-        cell: ({ row }) =>
-          row.original.span_id ? (
-            <span className="font-mono text-sm text-muted-foreground truncate max-w-[80px]">
-              {row.original.span_id.slice(0, 8)}...
-            </span>
-          ) : (
-            <span className="text-muted-foreground">-</span>
-          ),
-      },
-      {
-        accessorKey: 'timestamp',
-        header: ({ column }) => (
-          <SortableHeader
-            label="Created"
-            field="timestamp"
-            currentSort={sortBy}
-            currentOrder={sortOrder}
-            onSort={onSortChange}
-          />
-        ),
-        cell: ({ row }) => (
-          <span className="text-sm text-muted-foreground whitespace-nowrap">
-            {formatDistanceToNow(new Date(row.original.timestamp), { addSuffix: true })}
-          </span>
-        ),
-      },
-    ],
-    [projectSlug, sortBy, sortOrder, onSortChange, onDeleteScore]
+import { cn } from '@/lib/utils'
+import type { Score, ScoreDataType, ScoreSource } from '../types'
   )
 
   const table = useReactTable({

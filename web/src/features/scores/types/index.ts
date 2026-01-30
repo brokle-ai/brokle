@@ -1,6 +1,6 @@
 export * from './analytics'
 
-export type ScoreDataType = 'NUMERIC' | 'CATEGORICAL' | 'BOOLEAN'
+export type ScoreType = 'NUMERIC' | 'CATEGORICAL' | 'BOOLEAN'
 export type ScoreSource = 'code' | 'llm' | 'human'
 
 export interface ScoreConfig {
@@ -8,7 +8,7 @@ export interface ScoreConfig {
   project_id: string
   name: string
   description?: string
-  data_type: ScoreDataType
+  type: ScoreType
   min_value?: number
   max_value?: number
   categories?: string[]
@@ -25,7 +25,7 @@ export interface Score {
   name: string
   value?: number
   string_value?: string
-  data_type: ScoreDataType
+  type: ScoreType
   source: ScoreSource
   reason?: string
   metadata?: Record<string, unknown>
@@ -37,7 +37,7 @@ export interface Score {
 export interface CreateScoreConfigRequest {
   name: string
   description?: string
-  data_type: ScoreDataType
+  type: ScoreType
   min_value?: number
   max_value?: number
   categories?: string[]
@@ -47,7 +47,7 @@ export interface CreateScoreConfigRequest {
 export interface UpdateScoreConfigRequest {
   name?: string
   description?: string
-  data_type?: ScoreDataType
+  type?: ScoreType
   min_value?: number
   max_value?: number
   categories?: string[]
@@ -59,9 +59,14 @@ export interface ScoreListParams {
   span_id?: string
   name?: string
   source?: ScoreSource
-  data_type?: ScoreDataType
+  type?: ScoreType
   page?: number
   limit?: number
   sort_by?: string
   sort_dir?: 'asc' | 'desc'
+}
+
+export interface ScoreConfigListParams {
+  page?: number
+  limit?: number
 }

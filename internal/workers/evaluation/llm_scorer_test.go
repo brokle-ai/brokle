@@ -309,14 +309,14 @@ func TestLLMScorer_ParseResponse(t *testing.T) {
 		validate   func(t *testing.T, scores []ScoreOutput)
 	}{
 		{
-			name:       "simple numeric json without schema",
+			name:       "simple NUMERIC json without schema",
 			content:    `{"score": 8.5}`,
 			schema:     nil,
 			wantScores: 1,
 			validate: func(t *testing.T, scores []ScoreOutput) {
 				assert.Equal(t, "score", scores[0].Name)
 				assert.Equal(t, 8.5, *scores[0].Value)
-				assert.Equal(t, "numeric", scores[0].DataType)
+				assert.Equal(t, "NUMERIC", scores[0].Type)
 			},
 		},
 		{
@@ -364,7 +364,7 @@ func TestLLMScorer_ParseResponse(t *testing.T) {
 			},
 		},
 		{
-			name:    "boolean value with schema",
+			name:    "BOOLEAN value with schema",
 			content: `{"is_valid": true}`,
 			schema: []evaluation.OutputField{
 				{Name: "is_valid", Type: "boolean"},
@@ -372,11 +372,11 @@ func TestLLMScorer_ParseResponse(t *testing.T) {
 			wantScores: 1,
 			validate: func(t *testing.T, scores []ScoreOutput) {
 				assert.Equal(t, 1.0, *scores[0].Value)
-				assert.Equal(t, "boolean", scores[0].DataType)
+				assert.Equal(t, "BOOLEAN", scores[0].Type)
 			},
 		},
 		{
-			name:    "boolean false value",
+			name:    "BOOLEAN false value",
 			content: `{"is_valid": false}`,
 			schema: []evaluation.OutputField{
 				{Name: "is_valid", Type: "boolean"},
@@ -387,7 +387,7 @@ func TestLLMScorer_ParseResponse(t *testing.T) {
 			},
 		},
 		{
-			name:    "categorical value",
+			name:    "CATEGORICAL value",
 			content: `{"quality": "good"}`,
 			schema: []evaluation.OutputField{
 				{Name: "quality", Type: "categorical"},
@@ -395,7 +395,7 @@ func TestLLMScorer_ParseResponse(t *testing.T) {
 			wantScores: 1,
 			validate: func(t *testing.T, scores []ScoreOutput) {
 				assert.Equal(t, "good", *scores[0].StringValue)
-				assert.Equal(t, "categorical", scores[0].DataType)
+				assert.Equal(t, "CATEGORICAL", scores[0].Type)
 			},
 		},
 		{
@@ -437,17 +437,17 @@ func TestLLMScorer_ParseResponse(t *testing.T) {
 			wantScores: 1,
 			validate: func(t *testing.T, scores []ScoreOutput) {
 				assert.Equal(t, "excellent", *scores[0].StringValue)
-				assert.Equal(t, "text", scores[0].DataType)
+				assert.Equal(t, "CATEGORICAL", scores[0].Type)
 			},
 		},
 		{
-			name:       "boolean without schema",
+			name:       "BOOLEAN without schema",
 			content:    `{"passed": true}`,
 			schema:     nil,
 			wantScores: 1,
 			validate: func(t *testing.T, scores []ScoreOutput) {
 				assert.Equal(t, 1.0, *scores[0].Value)
-				assert.Equal(t, "boolean", scores[0].DataType)
+				assert.Equal(t, "BOOLEAN", scores[0].Type)
 			},
 		},
 		{
