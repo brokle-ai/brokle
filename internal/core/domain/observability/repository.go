@@ -50,6 +50,13 @@ type TraceRepository interface {
 	// DiscoverAttributes extracts unique attribute keys from span_attributes and resource_attributes.
 	// Returns attribute keys with occurrence counts, useful for populating filter UI autocomplete.
 	DiscoverAttributes(ctx context.Context, req *AttributeDiscoveryRequest) (*AttributeDiscoveryResponse, error)
+
+	// ListSessions returns paginated sessions aggregated from traces.
+	// Sessions are identified by session_id attribute on root spans (parent_span_id IS NULL).
+	ListSessions(ctx context.Context, filter *SessionFilter) ([]*SessionSummary, error)
+
+	// CountSessions returns the total number of sessions matching the filter.
+	CountSessions(ctx context.Context, filter *SessionFilter) (int64, error)
 }
 
 // ScoreRepository uses ReplacingMergeTree pattern for eventual consistency.

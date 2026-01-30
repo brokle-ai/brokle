@@ -197,6 +197,19 @@ func (m *MockTraceRepository) DiscoverAttributes(ctx context.Context, req *obser
 	return args.Get(0).(*observability.AttributeDiscoveryResponse), args.Error(1)
 }
 
+func (m *MockTraceRepository) ListSessions(ctx context.Context, filter *observability.SessionFilter) ([]*observability.SessionSummary, error) {
+	args := m.Called(ctx, filter)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*observability.SessionSummary), args.Error(1)
+}
+
+func (m *MockTraceRepository) CountSessions(ctx context.Context, filter *observability.SessionFilter) (int64, error) {
+	args := m.Called(ctx, filter)
+	return args.Get(0).(int64), args.Error(1)
+}
+
 func TestTraceService_GetRootSpan(t *testing.T) {
 	tests := []struct {
 		name        string

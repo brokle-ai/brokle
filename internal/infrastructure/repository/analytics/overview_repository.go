@@ -21,13 +21,30 @@ func NewOverviewRepository(db driver.Conn) analytics.OverviewRepository {
 	return &overviewRepository{db: db}
 }
 
+// getBucketSeconds determines the appropriate bucket size for time series based on duration
+func getBucketSeconds(filter *analytics.OverviewFilter) int64 {
+	duration := filter.EndTime.Sub(filter.StartTime)
+
+	switch {
+	case filter.TimeRange == analytics.TimeRangeAll || duration >= 90*24*time.Hour:
+		return 7 * 24 * 3600 // Weekly buckets for 90+ days
+	case filter.TimeRange == analytics.TimeRange30Days || duration >= 14*24*time.Hour:
+		return 24 * 3600 // Daily buckets for 14+ days
+	case filter.TimeRange == analytics.TimeRange7Days || filter.TimeRange == analytics.TimeRange14Days || duration >= 3*24*time.Hour:
+		return 6 * 3600 // 6-hour buckets for 3-14 days
+	default:
+		return 3600 // Hourly buckets for < 3 days
+	}
+}
+
 // GetStats retrieves the primary metrics for the stats row with trend calculation
 func (r *overviewRepository) GetStats(ctx context.Context, filter *analytics.OverviewFilter) (*analytics.OverviewStats, error) {
-	// Query for current period
+	// Query for current period - includes total_tokens
 	currentQuery := `
 		SELECT
 			count(DISTINCT trace_id) as trace_count,
 			toFloat64(sum(total_cost)) as total_cost,
+			sum(usage_details['total']) as total_tokens,
 			avg(duration_nano) / 1000000.0 as avg_latency_ms,
 			countIf(status_code = 2) as error_count
 		FROM otel_traces
@@ -40,6 +57,7 @@ func (r *overviewRepository) GetStats(ctx context.Context, filter *analytics.Ove
 
 	var currentTraceCount uint64
 	var currentTotalCost float64
+	var currentTotalTokens uint64
 	var currentAvgLatencyMs float64
 	var currentErrorCount uint64
 
@@ -48,7 +66,7 @@ func (r *overviewRepository) GetStats(ctx context.Context, filter *analytics.Ove
 		filter.StartTime,
 		filter.EndTime,
 	)
-	if err := row.Scan(&currentTraceCount, &currentTotalCost, &currentAvgLatencyMs, &currentErrorCount); err != nil {
+	if err := row.Scan(&currentTraceCount, &currentTotalCost, &currentTotalTokens, &currentAvgLatencyMs, &currentErrorCount); err != nil {
 		return nil, fmt.Errorf("query current stats: %w", err)
 	}
 
@@ -57,6 +75,7 @@ func (r *overviewRepository) GetStats(ctx context.Context, filter *analytics.Ove
 		SELECT
 			count(DISTINCT trace_id) as trace_count,
 			toFloat64(sum(total_cost)) as total_cost,
+			sum(usage_details['total']) as total_tokens,
 			avg(duration_nano) / 1000000.0 as avg_latency_ms,
 			countIf(status_code = 2) as error_count
 		FROM otel_traces
@@ -69,6 +88,7 @@ func (r *overviewRepository) GetStats(ctx context.Context, filter *analytics.Ove
 
 	var prevTraceCount uint64
 	var prevTotalCost float64
+	var prevTotalTokens uint64
 	var prevAvgLatencyMs float64
 	var prevErrorCount uint64
 
@@ -77,7 +97,7 @@ func (r *overviewRepository) GetStats(ctx context.Context, filter *analytics.Ove
 		filter.PreviousPeriodStart(),
 		filter.StartTime,
 	)
-	if err := prevRow.Scan(&prevTraceCount, &prevTotalCost, &prevAvgLatencyMs, &prevErrorCount); err != nil {
+	if err := prevRow.Scan(&prevTraceCount, &prevTotalCost, &prevTotalTokens, &prevAvgLatencyMs, &prevErrorCount); err != nil {
 		return nil, fmt.Errorf("query previous stats: %w", err)
 	}
 
@@ -106,6 +126,8 @@ func (r *overviewRepository) GetStats(ctx context.Context, filter *analytics.Ove
 		TracesTrend:    calcTrend(float64(currentTraceCount), float64(prevTraceCount)),
 		TotalCost:      currentTotalCost,
 		CostTrend:      calcTrend(currentTotalCost, prevTotalCost),
+		TotalTokens:    int64(currentTotalTokens),
+		TokensTrend:    calcTrend(float64(currentTotalTokens), float64(prevTotalTokens)),
 		AvgLatencyMs:   currentAvgLatencyMs,
 		LatencyTrend:   calcTrend(currentAvgLatencyMs, prevAvgLatencyMs),
 		ErrorRate:      currentErrorRate,
@@ -115,18 +137,7 @@ func (r *overviewRepository) GetStats(ctx context.Context, filter *analytics.Ove
 
 // GetTraceVolume retrieves trace counts for the time series chart
 func (r *overviewRepository) GetTraceVolume(ctx context.Context, filter *analytics.OverviewFilter) ([]analytics.TimeSeriesPoint, error) {
-	// Determine bucket size based on time range or actual duration for custom ranges
-	var bucketSeconds int64
-	duration := filter.EndTime.Sub(filter.StartTime)
-
-	switch {
-	case filter.TimeRange == analytics.TimeRange30Days || (filter.TimeRange == "" && duration >= 14*24*time.Hour):
-		bucketSeconds = 24 * 3600 // Daily buckets for 14+ days
-	case filter.TimeRange == analytics.TimeRange7Days || filter.TimeRange == analytics.TimeRange14Days || (filter.TimeRange == "" && duration >= 3*24*time.Hour):
-		bucketSeconds = 6 * 3600 // 6-hour buckets for 3-14 days
-	default:
-		bucketSeconds = 3600 // Hourly buckets for < 3 days
-	}
+	bucketSeconds := getBucketSeconds(filter)
 
 	query := fmt.Sprintf(`
 		SELECT
@@ -168,17 +179,152 @@ func (r *overviewRepository) GetTraceVolume(ctx context.Context, filter *analyti
 	return result, nil
 }
 
-// GetCostByModel retrieves cost breakdown by model (top 5)
-func (r *overviewRepository) GetCostByModel(ctx context.Context, filter *analytics.OverviewFilter) ([]analytics.CostByModel, error) {
-	query := `
+// GetCostTimeSeries retrieves cost over time for the time series chart
+func (r *overviewRepository) GetCostTimeSeries(ctx context.Context, filter *analytics.OverviewFilter) ([]analytics.TimeSeriesPoint, error) {
+	bucketSeconds := getBucketSeconds(filter)
+
+	query := fmt.Sprintf(`
 		SELECT
-			if(model_name = '', 'unknown', model_name) as model,
-			toFloat64(sum(total_cost)) as cost
+			toStartOfInterval(start_time, INTERVAL %d SECOND) as bucket,
+			toFloat64(sum(total_cost)) as total_cost
 		FROM otel_traces
 		WHERE project_id = ?
 			AND start_time >= ?
 			AND start_time < ?
-			AND total_cost > 0
+			AND parent_span_id IS NULL
+			AND deleted_at IS NULL
+		GROUP BY bucket
+		ORDER BY bucket ASC
+	`, bucketSeconds)
+
+	rows, err := r.db.Query(ctx, query,
+		filter.ProjectID.String(),
+		filter.StartTime,
+		filter.EndTime,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query cost time series: %w", err)
+	}
+	defer rows.Close()
+
+	var result []analytics.TimeSeriesPoint
+	for rows.Next() {
+		var ts time.Time
+		var cost float64
+		if err := rows.Scan(&ts, &cost); err != nil {
+			return nil, fmt.Errorf("scan cost time series row: %w", err)
+		}
+		result = append(result, analytics.TimeSeriesPoint{
+			Timestamp: ts,
+			Value:     cost,
+		})
+	}
+
+	return result, nil
+}
+
+// GetTokenTimeSeries retrieves token usage over time for the time series chart
+func (r *overviewRepository) GetTokenTimeSeries(ctx context.Context, filter *analytics.OverviewFilter) ([]analytics.TimeSeriesPoint, error) {
+	bucketSeconds := getBucketSeconds(filter)
+
+	query := fmt.Sprintf(`
+		SELECT
+			toStartOfInterval(start_time, INTERVAL %d SECOND) as bucket,
+			sum(usage_details['total']) as total_tokens
+		FROM otel_traces
+		WHERE project_id = ?
+			AND start_time >= ?
+			AND start_time < ?
+			AND parent_span_id IS NULL
+			AND deleted_at IS NULL
+		GROUP BY bucket
+		ORDER BY bucket ASC
+	`, bucketSeconds)
+
+	rows, err := r.db.Query(ctx, query,
+		filter.ProjectID.String(),
+		filter.StartTime,
+		filter.EndTime,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query token time series: %w", err)
+	}
+	defer rows.Close()
+
+	var result []analytics.TimeSeriesPoint
+	for rows.Next() {
+		var ts time.Time
+		var tokens uint64
+		if err := rows.Scan(&ts, &tokens); err != nil {
+			return nil, fmt.Errorf("scan token time series row: %w", err)
+		}
+		result = append(result, analytics.TimeSeriesPoint{
+			Timestamp: ts,
+			Value:     float64(tokens),
+		})
+	}
+
+	return result, nil
+}
+
+// GetErrorTimeSeries retrieves error count over time for the time series chart
+func (r *overviewRepository) GetErrorTimeSeries(ctx context.Context, filter *analytics.OverviewFilter) ([]analytics.TimeSeriesPoint, error) {
+	bucketSeconds := getBucketSeconds(filter)
+
+	query := fmt.Sprintf(`
+		SELECT
+			toStartOfInterval(start_time, INTERVAL %d SECOND) as bucket,
+			countIf(status_code = 2) as error_count
+		FROM otel_traces
+		WHERE project_id = ?
+			AND start_time >= ?
+			AND start_time < ?
+			AND parent_span_id IS NULL
+			AND deleted_at IS NULL
+		GROUP BY bucket
+		ORDER BY bucket ASC
+	`, bucketSeconds)
+
+	rows, err := r.db.Query(ctx, query,
+		filter.ProjectID.String(),
+		filter.StartTime,
+		filter.EndTime,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query error time series: %w", err)
+	}
+	defer rows.Close()
+
+	var result []analytics.TimeSeriesPoint
+	for rows.Next() {
+		var ts time.Time
+		var errCount uint64
+		if err := rows.Scan(&ts, &errCount); err != nil {
+			return nil, fmt.Errorf("scan error time series row: %w", err)
+		}
+		result = append(result, analytics.TimeSeriesPoint{
+			Timestamp: ts,
+			Value:     float64(errCount),
+		})
+	}
+
+	return result, nil
+}
+
+// GetCostByModel retrieves cost breakdown by model (top 5) including token counts
+func (r *overviewRepository) GetCostByModel(ctx context.Context, filter *analytics.OverviewFilter) ([]analytics.CostByModel, error) {
+	query := `
+		SELECT
+			if(model_name = '', 'unknown', model_name) as model,
+			toFloat64(sum(total_cost)) as cost,
+			sum(usage_details['total']) as tokens,
+			count(*) as span_count
+		FROM otel_traces
+		WHERE project_id = ?
+			AND start_time >= ?
+			AND start_time < ?
+			AND parent_span_id IS NULL
+			AND (total_cost > 0 OR usage_details['total'] > 0)
 			AND deleted_at IS NULL
 		GROUP BY model
 		ORDER BY cost DESC
@@ -199,12 +345,16 @@ func (r *overviewRepository) GetCostByModel(ctx context.Context, filter *analyti
 	for rows.Next() {
 		var model string
 		var cost float64
-		if err := rows.Scan(&model, &cost); err != nil {
+		var tokens uint64
+		var count uint64
+		if err := rows.Scan(&model, &cost, &tokens, &count); err != nil {
 			return nil, fmt.Errorf("scan cost by model row: %w", err)
 		}
 		result = append(result, analytics.CostByModel{
-			Model: model,
-			Cost:  cost,
+			Model:  model,
+			Cost:   cost,
+			Tokens: int64(tokens),
+			Count:  int64(count),
 		})
 	}
 

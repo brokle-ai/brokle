@@ -41,13 +41,16 @@ func (s *overviewService) GetOverview(ctx context.Context, filter *analytics.Ove
 
 	// Result holders (protected by errgroup's synchronization)
 	var (
-		stats         *analytics.OverviewStats
-		traceVolume   []analytics.TimeSeriesPoint
-		costByModel   []analytics.CostByModel
-		recentTraces  []analytics.RecentTrace
-		topErrors     []analytics.TopError
-		scoresSummary []analytics.ScoreSummary
-		checklist     analytics.ChecklistStatus
+		stats           *analytics.OverviewStats
+		traceVolume     []analytics.TimeSeriesPoint
+		costTimeSeries  []analytics.TimeSeriesPoint
+		tokenTimeSeries []analytics.TimeSeriesPoint
+		errorTimeSeries []analytics.TimeSeriesPoint
+		costByModel     []analytics.CostByModel
+		recentTraces    []analytics.RecentTrace
+		topErrors       []analytics.TopError
+		scoresSummary   []analytics.ScoreSummary
+		checklist       analytics.ChecklistStatus
 	)
 
 	// errgroup with context cancellation - cancels all goroutines on first error
@@ -70,6 +73,36 @@ func (s *overviewService) GetOverview(ctx context.Context, filter *analytics.Ove
 		if err != nil {
 			s.logger.Error("failed to get trace volume", "error", err, "project_id", projectID)
 			return fmt.Errorf("get trace volume: %w", err)
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		var err error
+		costTimeSeries, err = s.overviewRepo.GetCostTimeSeries(ctx, filter)
+		if err != nil {
+			s.logger.Error("failed to get cost time series", "error", err, "project_id", projectID)
+			return fmt.Errorf("get cost time series: %w", err)
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		var err error
+		tokenTimeSeries, err = s.overviewRepo.GetTokenTimeSeries(ctx, filter)
+		if err != nil {
+			s.logger.Error("failed to get token time series", "error", err, "project_id", projectID)
+			return fmt.Errorf("get token time series: %w", err)
+		}
+		return nil
+	})
+
+	g.Go(func() error {
+		var err error
+		errorTimeSeries, err = s.overviewRepo.GetErrorTimeSeries(ctx, filter)
+		if err != nil {
+			s.logger.Error("failed to get error time series", "error", err, "project_id", projectID)
+			return fmt.Errorf("get error time series: %w", err)
 		}
 		return nil
 	})
@@ -138,6 +171,9 @@ func (s *overviewService) GetOverview(ctx context.Context, filter *analytics.Ove
 	response := &analytics.OverviewResponse{
 		Stats:           *stats,
 		TraceVolume:     traceVolume,
+		CostTimeSeries:  costTimeSeries,
+		TokenTimeSeries: tokenTimeSeries,
+		ErrorTimeSeries: errorTimeSeries,
 		CostByModel:     costByModel,
 		RecentTraces:    recentTraces,
 		TopErrors:       topErrors,

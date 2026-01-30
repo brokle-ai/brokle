@@ -35,7 +35,7 @@ func NewHandler(
 
 // OverviewRequest represents the query parameters for the overview endpoint
 type OverviewRequest struct {
-	TimeRange string `form:"time_range" binding:"omitempty,oneof=15m 30m 1h 3h 6h 12h 24h 7d 14d 30d"`
+	TimeRange string `form:"time_range" binding:"omitempty,oneof=15m 30m 1h 3h 6h 12h 24h 7d 14d 30d all"`
 	From      string `form:"from" binding:"omitempty"` // ISO 8601 (RFC3339) for custom range start
 	To        string `form:"to" binding:"omitempty"`   // ISO 8601 (RFC3339) for custom range end
 }

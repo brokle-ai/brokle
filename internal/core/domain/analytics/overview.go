@@ -21,6 +21,7 @@ const (
 	TimeRange7Days     TimeRange = "7d"
 	TimeRange14Days    TimeRange = "14d"
 	TimeRange30Days    TimeRange = "30d"
+	TimeRangeAll       TimeRange = "all" // All available data (capped at 365 days for safety)
 )
 
 // ParseTimeRange parses a string into a TimeRange, defaulting to 24h
@@ -44,6 +45,8 @@ func ParseTimeRange(s string) TimeRange {
 		return TimeRange14Days
 	case "30d":
 		return TimeRange30Days
+	case "all":
+		return TimeRangeAll
 	default:
 		return TimeRange24Hours
 	}
@@ -70,6 +73,8 @@ func (tr TimeRange) Duration() time.Duration {
 		return 14 * 24 * time.Hour
 	case TimeRange30Days:
 		return 30 * 24 * time.Hour
+	case TimeRangeAll:
+		return 365 * 24 * time.Hour // Capped at 365 days for safety
 	default:
 		return 24 * time.Hour
 	}
@@ -81,6 +86,8 @@ type OverviewStats struct {
 	TracesTrend    float64 `json:"traces_trend"`     // Percentage change vs previous period
 	TotalCost      float64 `json:"total_cost"`       // In dollars
 	CostTrend      float64 `json:"cost_trend"`       // Percentage change vs previous period
+	TotalTokens    int64   `json:"total_tokens"`     // Total tokens (input + output)
+	TokensTrend    float64 `json:"tokens_trend"`     // Percentage change vs previous period
 	AvgLatencyMs   float64 `json:"avg_latency_ms"`   // Average latency in milliseconds
 	LatencyTrend   float64 `json:"latency_trend"`    // Percentage change vs previous period
 	ErrorRate      float64 `json:"error_rate"`       // Percentage of traces with errors
@@ -95,8 +102,10 @@ type TimeSeriesPoint struct {
 
 // CostByModel represents cost breakdown by model
 type CostByModel struct {
-	Model string  `json:"model"`
-	Cost  float64 `json:"cost"`
+	Model  string  `json:"model"`
+	Cost   float64 `json:"cost"`
+	Tokens int64   `json:"tokens"` // Total tokens for this model
+	Count  int64   `json:"count"`  // Number of spans using this model
 }
 
 // RecentTrace represents a trace summary for the recent traces table
@@ -135,6 +144,9 @@ type ChecklistStatus struct {
 type OverviewResponse struct {
 	Stats           OverviewStats     `json:"stats"`
 	TraceVolume     []TimeSeriesPoint `json:"trace_volume"`
+	CostTimeSeries  []TimeSeriesPoint `json:"cost_time_series"`  // Cost over time
+	TokenTimeSeries []TimeSeriesPoint `json:"token_time_series"` // Tokens over time
+	ErrorTimeSeries []TimeSeriesPoint `json:"error_time_series"` // Error count over time
 	CostByModel     []CostByModel     `json:"cost_by_model"`
 	RecentTraces    []RecentTrace     `json:"recent_traces"`
 	TopErrors       []TopError        `json:"top_errors"`
@@ -183,6 +195,15 @@ type OverviewRepository interface {
 
 	// GetTraceVolume retrieves the time series data for trace volume
 	GetTraceVolume(ctx context.Context, filter *OverviewFilter) ([]TimeSeriesPoint, error)
+
+	// GetCostTimeSeries retrieves the time series data for cost
+	GetCostTimeSeries(ctx context.Context, filter *OverviewFilter) ([]TimeSeriesPoint, error)
+
+	// GetTokenTimeSeries retrieves the time series data for tokens
+	GetTokenTimeSeries(ctx context.Context, filter *OverviewFilter) ([]TimeSeriesPoint, error)
+
+	// GetErrorTimeSeries retrieves the time series data for error count
+	GetErrorTimeSeries(ctx context.Context, filter *OverviewFilter) ([]TimeSeriesPoint, error)
 
 	// GetCostByModel retrieves the cost breakdown by model (top 5)
 	GetCostByModel(ctx context.Context, filter *OverviewFilter) ([]CostByModel, error)
