@@ -117,7 +117,7 @@ func (s *LLMScorer) Execute(ctx context.Context, job *EvaluationJob) (*ScorerRes
 				{
 					Name:        "llm_response",
 					StringValue: &execResp.Response.Content,
-					DataType:    "text",
+					Type:    "CATEGORICAL",
 					Reason:      &reason,
 				},
 			},
@@ -257,8 +257,8 @@ func (s *LLMScorer) parseResponse(content string, schema []evaluation.OutputFiel
 			}
 
 			output := ScoreOutput{
-				Name:     field.Name,
-				DataType: field.Type,
+				Name: field.Name,
+				Type: s.mapFieldTypeToScoreType(field.Type),
 			}
 
 			switch field.Type {
@@ -304,22 +304,22 @@ func (s *LLMScorer) parseResponse(content string, schema []evaluation.OutputFiel
 			}
 
 			output := ScoreOutput{
-				Name:     key,
-				DataType: "numeric",
+				Name: key,
+				Type: "NUMERIC",
 			}
 
 			if v, ok := toFloat(value); ok {
 				output.Value = &v
 			} else if v, ok := value.(string); ok {
 				output.StringValue = &v
-				output.DataType = "text"
+				output.Type = "CATEGORICAL"
 			} else if v, ok := value.(bool); ok {
 				boolVal := 0.0
 				if v {
 					boolVal = 1.0
 				}
 				output.Value = &boolVal
-				output.DataType = "boolean"
+				output.Type = "BOOLEAN"
 			} else {
 				continue
 			}
@@ -335,6 +335,20 @@ func (s *LLMScorer) parseResponse(content string, schema []evaluation.OutputFiel
 	}
 
 	return scores, nil
+}
+
+// mapFieldTypeToScoreType maps LLM output schema field types to standardized score types
+func (s *LLMScorer) mapFieldTypeToScoreType(fieldType string) string {
+	switch strings.ToLower(fieldType) {
+	case "numeric":
+		return "NUMERIC"
+	case "categorical", "text":
+		return "CATEGORICAL"
+	case "boolean":
+		return "BOOLEAN"
+	default:
+		return "NUMERIC" // Default to numeric
+	}
 }
 
 // Helper functions

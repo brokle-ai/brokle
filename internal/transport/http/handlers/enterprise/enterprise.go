@@ -14,6 +14,7 @@ import (
 	"brokle/internal/ee/rbac"
 	"brokle/internal/ee/sso"
 	"brokle/internal/middleware"
+	"brokle/pkg/response"
 )
 
 // Handler handles enterprise-specific endpoints
@@ -113,11 +114,11 @@ func (h *Handler) GetLicenseStatus(c *gin.Context) {
 	status, err := h.licenseService.ValidateLicense(c.Request.Context())
 	if err != nil {
 		h.logger.Error("Failed to validate license", "error", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to validate license"})
+		response.InternalServerError(c, "Failed to validate license")
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	response.Success(c, gin.H{
 		"license": status,
 		"tier":    h.config.GetLicenseTier(),
 	})
@@ -171,7 +172,7 @@ func (h *Handler) GetAvailableFeatures(c *gin.Context) {
 		},
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	response.Success(c, gin.H{
 		"current_tier": tier,
 		"features":     allFeatures,
 		"upgrade_url":  "https://brokle.com/pricing",
@@ -183,14 +184,11 @@ func (h *Handler) GetAvailableFeatures(c *gin.Context) {
 func (h *Handler) GetSSOProviders(c *gin.Context) {
 	providers, err := h.ssoService.GetSupportedProviders(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusPaymentRequired, gin.H{
-			"error":       err.Error(),
-			"upgrade_url": "https://brokle.com/pricing",
-		})
+		response.PaymentRequired(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"providers": providers})
+	response.Success(c, gin.H{"providers": providers})
 }
 
 func (h *Handler) ConfigureSSO(c *gin.Context) {
@@ -200,64 +198,55 @@ func (h *Handler) ConfigureSSO(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		response.ValidationError(c, "Invalid request", err.Error())
 		return
 	}
 
 	err := h.ssoService.ConfigureProvider(c.Request.Context(), req.Provider, req.Config)
 	if err != nil {
 		if strings.Contains(err.Error(), "Enterprise license") {
-			c.JSON(http.StatusPaymentRequired, gin.H{
-				"error":       err.Error(),
-				"upgrade_url": "https://brokle.com/pricing",
-			})
+			response.PaymentRequired(c, err.Error())
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		response.InternalServerError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "SSO provider configured successfully"})
+	response.Success(c, gin.H{"message": "SSO provider configured successfully"})
 }
 
 func (h *Handler) GetSSOLoginURL(c *gin.Context) {
 	url, err := h.ssoService.GetLoginURL(c.Request.Context())
 	if err != nil {
 		if strings.Contains(err.Error(), "Enterprise license") {
-			c.JSON(http.StatusPaymentRequired, gin.H{
-				"error":       err.Error(),
-				"upgrade_url": "https://brokle.com/pricing",
-			})
+			response.PaymentRequired(c, err.Error())
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		response.InternalServerError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"login_url": url})
+	response.Success(c, gin.H{"login_url": url})
 }
 
 func (h *Handler) HandleSSOCallback(c *gin.Context) {
 	assertion := c.PostForm("SAMLResponse")
 	if assertion == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing SAML assertion"})
+		response.ValidationError(c, "Missing SAML assertion", "")
 		return
 	}
 
 	user, err := h.ssoService.ValidateAssertion(c.Request.Context(), assertion)
 	if err != nil {
 		if strings.Contains(err.Error(), "Enterprise license") {
-			c.JSON(http.StatusPaymentRequired, gin.H{
-				"error":       err.Error(),
-				"upgrade_url": "https://brokle.com/pricing",
-			})
+			response.PaymentRequired(c, err.Error())
 			return
 		}
-		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		response.Unauthorized(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	response.Success(c, gin.H{
 		"message": "SSO authentication successful",
 		"user":    user,
 	})
@@ -268,34 +257,31 @@ func (h *Handler) HandleSSOCallback(c *gin.Context) {
 func (h *Handler) ListRoles(c *gin.Context) {
 	roles, err := h.rbacService.ListRoles(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		response.InternalServerError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"roles": roles})
+	response.Success(c, gin.H{"roles": roles})
 }
 
 func (h *Handler) CreateRole(c *gin.Context) {
 	var role rbac.Role
 	if err := c.ShouldBindJSON(&role); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		response.ValidationError(c, "Invalid request", err.Error())
 		return
 	}
 
 	err := h.rbacService.CreateRole(c.Request.Context(), &role)
 	if err != nil {
 		if strings.Contains(err.Error(), "Enterprise license") {
-			c.JSON(http.StatusPaymentRequired, gin.H{
-				"error":       err.Error(),
-				"upgrade_url": "https://brokle.com/pricing",
-			})
+			response.PaymentRequired(c, err.Error())
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		response.InternalServerError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"message": "Role created successfully", "role": role})
+	response.Created(c, gin.H{"message": "Role created successfully", "role": role})
 }
 
 func (h *Handler) UpdateRole(c *gin.Context) {
@@ -303,24 +289,21 @@ func (h *Handler) UpdateRole(c *gin.Context) {
 
 	var role rbac.Role
 	if err := c.ShouldBindJSON(&role); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		response.ValidationError(c, "Invalid request", err.Error())
 		return
 	}
 
 	err := h.rbacService.UpdateRole(c.Request.Context(), roleID, &role)
 	if err != nil {
 		if strings.Contains(err.Error(), "Enterprise license") {
-			c.JSON(http.StatusPaymentRequired, gin.H{
-				"error":       err.Error(),
-				"upgrade_url": "https://brokle.com/pricing",
-			})
+			response.PaymentRequired(c, err.Error())
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		response.InternalServerError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Role updated successfully"})
+	response.Success(c, gin.H{"message": "Role updated successfully"})
 }
 
 func (h *Handler) DeleteRole(c *gin.Context) {
@@ -329,17 +312,14 @@ func (h *Handler) DeleteRole(c *gin.Context) {
 	err := h.rbacService.DeleteRole(c.Request.Context(), roleID)
 	if err != nil {
 		if strings.Contains(err.Error(), "Enterprise license") {
-			c.JSON(http.StatusPaymentRequired, gin.H{
-				"error":       err.Error(),
-				"upgrade_url": "https://brokle.com/pricing",
-			})
+			response.PaymentRequired(c, err.Error())
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		response.InternalServerError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Role deleted successfully"})
+	response.Success(c, gin.H{"message": "Role deleted successfully"})
 }
 
 func (h *Handler) AssignRole(c *gin.Context) {
@@ -349,17 +329,14 @@ func (h *Handler) AssignRole(c *gin.Context) {
 	err := h.rbacService.AssignRoleToUser(c.Request.Context(), userID, roleID)
 	if err != nil {
 		if strings.Contains(err.Error(), "Enterprise license") {
-			c.JSON(http.StatusPaymentRequired, gin.H{
-				"error":       err.Error(),
-				"upgrade_url": "https://brokle.com/pricing",
-			})
+			response.PaymentRequired(c, err.Error())
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		response.InternalServerError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Role assigned successfully"})
+	response.Success(c, gin.H{"message": "Role assigned successfully"})
 }
 
 func (h *Handler) UnassignRole(c *gin.Context) {
@@ -368,11 +345,11 @@ func (h *Handler) UnassignRole(c *gin.Context) {
 
 	err := h.rbacService.RemoveRoleFromUser(c.Request.Context(), userID, roleID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		response.InternalServerError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Role unassigned successfully"})
+	response.Success(c, gin.H{"message": "Role unassigned successfully"})
 }
 
 func (h *Handler) GetUserPermissions(c *gin.Context) {
@@ -380,11 +357,11 @@ func (h *Handler) GetUserPermissions(c *gin.Context) {
 
 	permissions, err := h.rbacService.GetUserPermissions(c.Request.Context(), userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		response.InternalServerError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"permissions": permissions})
+	response.Success(c, gin.H{"permissions": permissions})
 }
 
 // Compliance Handlers
@@ -392,23 +369,23 @@ func (h *Handler) GetUserPermissions(c *gin.Context) {
 func (h *Handler) ValidateCompliance(c *gin.Context) {
 	var data interface{}
 	if err := c.ShouldBindJSON(&data); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		response.ValidationError(c, "Invalid request", err.Error())
 		return
 	}
 
 	err := h.complianceService.ValidateCompliance(c.Request.Context(), data)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		response.ValidationError(c, "Compliance validation failed", err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Compliance validation passed"})
+	response.Success(c, gin.H{"message": "Compliance validation passed"})
 }
 
 func (h *Handler) GenerateAuditReport(c *gin.Context) {
 	report, err := h.complianceService.GenerateAuditReport(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		response.InternalServerError(c, err.Error())
 		return
 	}
 
@@ -420,27 +397,27 @@ func (h *Handler) GenerateAuditReport(c *gin.Context) {
 func (h *Handler) AnonymizePII(c *gin.Context) {
 	var data interface{}
 	if err := c.ShouldBindJSON(&data); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		response.ValidationError(c, "Invalid request", err.Error())
 		return
 	}
 
 	anonymized, err := h.complianceService.AnonymizePII(c.Request.Context(), data)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		response.InternalServerError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"anonymized_data": anonymized})
+	response.Success(c, gin.H{"anonymized_data": anonymized})
 }
 
 func (h *Handler) CheckSOC2Compliance(c *gin.Context) {
 	compliant, err := h.complianceService.CheckSOC2Compliance(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		response.InternalServerError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	response.Success(c, gin.H{
 		"soc2_compliant": compliant,
 		"status": map[string]interface{}{
 			"compliant":    compliant,
@@ -453,11 +430,11 @@ func (h *Handler) CheckSOC2Compliance(c *gin.Context) {
 func (h *Handler) CheckHIPAACompliance(c *gin.Context) {
 	compliant, err := h.complianceService.CheckHIPAACompliance(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		response.InternalServerError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	response.Success(c, gin.H{
 		"hipaa_compliant": compliant,
 		"status": map[string]interface{}{
 			"compliant":    compliant,
@@ -470,11 +447,11 @@ func (h *Handler) CheckHIPAACompliance(c *gin.Context) {
 func (h *Handler) CheckGDPRCompliance(c *gin.Context) {
 	compliant, err := h.complianceService.CheckGDPRCompliance(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		response.InternalServerError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	response.Success(c, gin.H{
 		"gdpr_compliant": compliant,
 		"status": map[string]interface{}{
 			"compliant":    compliant,
@@ -492,57 +469,48 @@ func (h *Handler) GetPredictiveInsights(c *gin.Context) {
 	insights, err := h.enterpriseAnalytics.GeneratePredictiveInsights(c.Request.Context(), timeRange)
 	if err != nil {
 		if strings.Contains(err.Error(), "Enterprise license") {
-			c.JSON(http.StatusPaymentRequired, gin.H{
-				"error":       err.Error(),
-				"upgrade_url": "https://brokle.com/pricing",
-			})
+			response.PaymentRequired(c, err.Error())
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		response.InternalServerError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"insights": insights})
+	response.Success(c, gin.H{"insights": insights})
 }
 
 func (h *Handler) ListCustomDashboards(c *gin.Context) {
 	dashboards, err := h.enterpriseAnalytics.ListCustomDashboards(c.Request.Context())
 	if err != nil {
 		if strings.Contains(err.Error(), "Enterprise license") {
-			c.JSON(http.StatusPaymentRequired, gin.H{
-				"error":       err.Error(),
-				"upgrade_url": "https://brokle.com/pricing",
-			})
+			response.PaymentRequired(c, err.Error())
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		response.InternalServerError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"dashboards": dashboards})
+	response.Success(c, gin.H{"dashboards": dashboards})
 }
 
 func (h *Handler) CreateCustomDashboard(c *gin.Context) {
 	var dashboard analytics.Dashboard
 	if err := c.ShouldBindJSON(&dashboard); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		response.ValidationError(c, "Invalid request", err.Error())
 		return
 	}
 
 	err := h.enterpriseAnalytics.CreateCustomDashboard(c.Request.Context(), &dashboard)
 	if err != nil {
 		if strings.Contains(err.Error(), "Enterprise license") {
-			c.JSON(http.StatusPaymentRequired, gin.H{
-				"error":       err.Error(),
-				"upgrade_url": "https://brokle.com/pricing",
-			})
+			response.PaymentRequired(c, err.Error())
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		response.InternalServerError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{"message": "Dashboard created successfully", "dashboard": dashboard})
+	response.Created(c, gin.H{"message": "Dashboard created successfully", "dashboard": dashboard})
 }
 
 func (h *Handler) UpdateCustomDashboard(c *gin.Context) {
@@ -550,24 +518,21 @@ func (h *Handler) UpdateCustomDashboard(c *gin.Context) {
 
 	var dashboard analytics.Dashboard
 	if err := c.ShouldBindJSON(&dashboard); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		response.ValidationError(c, "Invalid request", err.Error())
 		return
 	}
 
 	err := h.enterpriseAnalytics.UpdateCustomDashboard(c.Request.Context(), dashboardID, &dashboard)
 	if err != nil {
 		if strings.Contains(err.Error(), "Enterprise license") {
-			c.JSON(http.StatusPaymentRequired, gin.H{
-				"error":       err.Error(),
-				"upgrade_url": "https://brokle.com/pricing",
-			})
+			response.PaymentRequired(c, err.Error())
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		response.InternalServerError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Dashboard updated successfully"})
+	response.Success(c, gin.H{"message": "Dashboard updated successfully"})
 }
 
 func (h *Handler) DeleteCustomDashboard(c *gin.Context) {
@@ -576,40 +541,34 @@ func (h *Handler) DeleteCustomDashboard(c *gin.Context) {
 	err := h.enterpriseAnalytics.DeleteCustomDashboard(c.Request.Context(), dashboardID)
 	if err != nil {
 		if strings.Contains(err.Error(), "Enterprise license") {
-			c.JSON(http.StatusPaymentRequired, gin.H{
-				"error":       err.Error(),
-				"upgrade_url": "https://brokle.com/pricing",
-			})
+			response.PaymentRequired(c, err.Error())
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		response.InternalServerError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Dashboard deleted successfully"})
+	response.Success(c, gin.H{"message": "Dashboard deleted successfully"})
 }
 
 func (h *Handler) GenerateAdvancedReport(c *gin.Context) {
 	var req analytics.ReportRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		response.ValidationError(c, "Invalid request", err.Error())
 		return
 	}
 
 	report, err := h.enterpriseAnalytics.GenerateAdvancedReport(c.Request.Context(), &req)
 	if err != nil {
 		if strings.Contains(err.Error(), "Enterprise license") {
-			c.JSON(http.StatusPaymentRequired, gin.H{
-				"error":       err.Error(),
-				"upgrade_url": "https://brokle.com/pricing",
-			})
+			response.PaymentRequired(c, err.Error())
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		response.InternalServerError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"report": report})
+	response.Success(c, gin.H{"report": report})
 }
 
 func (h *Handler) ExportData(c *gin.Context) {
@@ -617,20 +576,17 @@ func (h *Handler) ExportData(c *gin.Context) {
 
 	var query analytics.ExportQuery
 	if err := c.ShouldBindJSON(&query); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		response.ValidationError(c, "Invalid request", err.Error())
 		return
 	}
 
 	data, err := h.enterpriseAnalytics.ExportData(c.Request.Context(), format, &query)
 	if err != nil {
 		if strings.Contains(err.Error(), "Enterprise license") {
-			c.JSON(http.StatusPaymentRequired, gin.H{
-				"error":       err.Error(),
-				"upgrade_url": "https://brokle.com/pricing",
-			})
+			response.PaymentRequired(c, err.Error())
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		response.InternalServerError(c, err.Error())
 		return
 	}
 
@@ -647,30 +603,27 @@ func (h *Handler) ExportData(c *gin.Context) {
 func (h *Handler) RunMLModel(c *gin.Context) {
 	modelName := c.Query("model")
 	if modelName == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Model name is required"})
+		response.ValidationError(c, "Model name is required", "")
 		return
 	}
 
 	var data interface{}
 	if err := c.ShouldBindJSON(&data); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		response.ValidationError(c, "Invalid request", err.Error())
 		return
 	}
 
 	result, err := h.enterpriseAnalytics.RunMLModel(c.Request.Context(), modelName, data)
 	if err != nil {
 		if strings.Contains(err.Error(), "Enterprise license") {
-			c.JSON(http.StatusPaymentRequired, gin.H{
-				"error":       err.Error(),
-				"upgrade_url": "https://brokle.com/pricing",
-			})
+			response.PaymentRequired(c, err.Error())
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		response.InternalServerError(c, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	response.Success(c, gin.H{
 		"model":  modelName,
 		"result": result,
 	})

@@ -24,7 +24,7 @@ function ScoresContent({ projectSlug }: ScoresProps) {
   const limit = Number(searchParams.get('limit')) || 50
   const name = searchParams.get('name') || undefined
   const source = searchParams.get('source') || undefined
-  const dataType = searchParams.get('data_type') || undefined
+  const dataType = searchParams.get('type') || undefined
 
   const {
     data: scoresResponse,
@@ -35,7 +35,7 @@ function ScoresContent({ projectSlug }: ScoresProps) {
     limit,
     name,
     source: source as 'code' | 'llm' | 'human' | undefined,
-    data_type: dataType as 'NUMERIC' | 'BOOLEAN' | 'CATEGORICAL' | undefined,
+    type: dataType as 'NUMERIC' | 'BOOLEAN' | 'CATEGORICAL' | undefined,
   })
 
   const handleTabChange = (value: string) => {

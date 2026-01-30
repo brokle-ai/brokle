@@ -30,7 +30,7 @@ type ScoreOutput struct {
 	Name        string   `json:"name"`
 	Value       *float64 `json:"value,omitempty"`
 	StringValue *string  `json:"string_value,omitempty"`
-	DataType    string   `json:"data_type"` // numeric, categorical, boolean
+	Type        string   `json:"type"` // NUMERIC, CATEGORICAL, BOOLEAN
 	Reason      *string  `json:"reason,omitempty"`
 }
 
@@ -350,7 +350,7 @@ func (w *EvaluationWorker) processJob(ctx context.Context, msg redis.XMessage) e
 			Name:        output.Name,
 			Value:       output.Value,
 			StringValue: output.StringValue,
-			DataType:    output.DataType,
+			Type:        output.Type,
 			Source:      observability.ScoreSourceEval,
 			Reason:      output.Reason,
 			Metadata:    w.buildScoreMetadata(job),

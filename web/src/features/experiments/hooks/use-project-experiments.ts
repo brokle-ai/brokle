@@ -1,6 +1,5 @@
 'use client'
 
-import { useMemo } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useProjectOnly } from '@/features/projects'
 import { useTableSearchParams } from '@/hooks/use-table-search-params'
@@ -10,6 +9,8 @@ import type { Experiment } from '../types'
 export interface UseProjectExperimentsReturn {
   data: Experiment[]
   totalCount: number
+  page: number
+  pageSize: number
   isLoading: boolean
   isFetching: boolean
   error: string | null
@@ -20,7 +21,7 @@ export interface UseProjectExperimentsReturn {
 export function useProjectExperiments(): UseProjectExperimentsReturn {
   const searchParams = useSearchParams()
   const { currentProject, hasProject, isLoading: isProjectLoading } = useProjectOnly()
-  const { filter: searchFilter } = useTableSearchParams(searchParams)
+  const { filter: searchFilter, page, pageSize } = useTableSearchParams(searchParams)
 
   const projectId = currentProject?.id
 
@@ -30,24 +31,17 @@ export function useProjectExperiments(): UseProjectExperimentsReturn {
     isFetching,
     error,
     refetch,
-  } = useExperimentsQuery(projectId)
-
-  // Client-side filtering since the API doesn't support filter param
-  const filteredData = useMemo(() => {
-    if (!experiments) return []
-    if (!searchFilter) return experiments
-
-    const lowerFilter = searchFilter.toLowerCase()
-    return experiments.filter(
-      (experiment) =>
-        experiment.name.toLowerCase().includes(lowerFilter) ||
-        experiment.description?.toLowerCase().includes(lowerFilter)
-    )
-  }, [experiments, searchFilter])
+  } = useExperimentsQuery(projectId, {
+    page,
+    limit: pageSize,
+    search: searchFilter || undefined,
+  })
 
   return {
-    data: filteredData,
-    totalCount: filteredData.length,
+    data: experiments?.data ?? [],
+    totalCount: experiments?.pagination?.total ?? 0,
+    page,
+    pageSize,
     isLoading: isProjectLoading || isQueryLoading,
     isFetching,
     error: error?.message ?? null,

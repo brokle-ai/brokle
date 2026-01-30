@@ -114,7 +114,7 @@ interface ScoreInputProps {
 }
 
 function ScoreInput({ config, value, comment, onChange }: ScoreInputProps) {
-  switch (config.data_type) {
+  switch (config.type) {
     case 'NUMERIC':
       return (
         <NumericScoreInput
@@ -282,7 +282,7 @@ function BooleanScoreInput({
 }
 
 function getDefaultValue(config: ScoreConfig): number | string | boolean {
-  switch (config.data_type) {
+  switch (config.type) {
     case 'NUMERIC':
       return config.min_value ?? 0
     case 'CATEGORICAL':

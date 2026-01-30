@@ -183,7 +183,7 @@ func (s *experimentItemService) createExperimentScores(
 				Name:             sc.Name,
 				Value:            sc.Value,
 				StringValue:      sc.StringValue,
-				DataType:         dataType,
+				Type:             dataType,
 				Source:           observability.ScoreSourceAPI,
 				Reason:           sc.Reason,
 				Metadata:         metadataJSON,

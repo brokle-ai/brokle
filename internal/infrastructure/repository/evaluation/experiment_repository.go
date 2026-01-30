@@ -3,6 +3,7 @@ package evaluation
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"brokle/internal/core/domain/evaluation"
 	"brokle/pkg/ulid"
@@ -37,8 +38,9 @@ func (r *ExperimentRepository) GetByID(ctx context.Context, id ulid.ULID, projec
 	return &experiment, nil
 }
 
-func (r *ExperimentRepository) List(ctx context.Context, projectID ulid.ULID, filter *evaluation.ExperimentFilter) ([]*evaluation.Experiment, error) {
+func (r *ExperimentRepository) List(ctx context.Context, projectID ulid.ULID, filter *evaluation.ExperimentFilter, offset, limit int) ([]*evaluation.Experiment, int64, error) {
 	var experiments []*evaluation.Experiment
+	var total int64
 
 	query := r.db.WithContext(ctx).
 		Where("project_id = ?", projectID.String())
@@ -50,13 +52,32 @@ func (r *ExperimentRepository) List(ctx context.Context, projectID ulid.ULID, fi
 		if filter.Status != nil {
 			query = query.Where("status = ?", string(*filter.Status))
 		}
+		if filter.Search != nil && *filter.Search != "" {
+			search := "%" + strings.ToLower(*filter.Search) + "%"
+			query = query.Where("LOWER(name) LIKE ? OR LOWER(description) LIKE ?", search, search)
+		}
+		if len(filter.IDs) > 0 {
+			idStrings := make([]string, len(filter.IDs))
+			for i, id := range filter.IDs {
+				idStrings[i] = id.String()
+			}
+			query = query.Where("id IN ?", idStrings)
+		}
 	}
 
-	result := query.Order("created_at DESC").Find(&experiments)
-	if result.Error != nil {
-		return nil, result.Error
+	if err := query.Model(&evaluation.Experiment{}).Count(&total).Error; err != nil {
+		return nil, 0, err
 	}
-	return experiments, nil
+
+	result := query.Order("created_at DESC").
+		Offset(offset).
+		Limit(limit).
+		Find(&experiments)
+
+	if result.Error != nil {
+		return nil, 0, result.Error
+	}
+	return experiments, total, nil
 }
 
 func (r *ExperimentRepository) Update(ctx context.Context, experiment *evaluation.Experiment, projectID ulid.ULID) error {

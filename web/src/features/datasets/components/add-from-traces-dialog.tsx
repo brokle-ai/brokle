@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { Database, X, Check, ChevronsUpDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -51,14 +51,62 @@ export function AddFromTracesDialog({
   const [deduplicate, setDeduplicate] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [datasetPopoverOpen, setDatasetPopoverOpen] = useState(false)
+  const [searchInput, setSearchInput] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
 
-  const { data: datasets, isLoading: datasetsLoading } = useDatasetsQuery(projectId)
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchInput)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [searchInput])
+
+  const { data: datasetsResponse, isLoading: datasetsLoading, isFetching: datasetsFetching } = useDatasetsQuery(projectId, {
+    limit: 100,
+    search: debouncedSearch || undefined,
+  })
+
+  // Cache of selected dataset object (persists across search changes)
+  const [selectedDatasetCache, setSelectedDatasetCache] = useState<Dataset | null>(null)
+
+  // Populate cache when selected dataset appears in API response
+  useEffect(() => {
+    const items = datasetsResponse?.data ?? []
+
+    if (selectedDatasetId) {
+      // Try to find selected dataset in current results
+      const found = items.find((d: Dataset) => d.id === selectedDatasetId)
+      if (found && (!selectedDatasetCache || selectedDatasetCache.id !== found.id)) {
+        setSelectedDatasetCache(found)
+      }
+    } else {
+      // Clear cache when nothing is selected
+      setSelectedDatasetCache(null)
+    }
+  }, [datasetsResponse?.data, selectedDatasetId, selectedDatasetCache])
+
+  // Get selected dataset from cache (always available regardless of search)
+  const selectedDataset = selectedDatasetCache
+
+  // Merge API results with cached selection if not in current results
+  const datasets = useMemo(() => {
+    const items = datasetsResponse?.data ?? []
+    if (selectedDatasetCache) {
+      const selectedInResults = items.find((d: Dataset) => d.id === selectedDatasetCache.id)
+      if (!selectedInResults) {
+        // Prepend cached selection to results
+        return [selectedDatasetCache, ...items]
+      }
+    }
+    return items
+  }, [datasetsResponse?.data, selectedDatasetCache])
+
   const importMutation = useImportFromTracesMutation(projectId, selectedDatasetId ?? '')
-
-  const selectedDataset = datasets?.find((d: Dataset) => d.id === selectedDatasetId)
 
   const resetForm = useCallback(() => {
     setSelectedDatasetId(null)
+    setSelectedDatasetCache(null)
     setDeduplicate(true)
     setError(null)
   }, [])
@@ -127,7 +175,13 @@ export function AddFromTracesDialog({
 
           <div className="space-y-2">
             <Label>Target Dataset</Label>
-            <Popover open={datasetPopoverOpen} onOpenChange={setDatasetPopoverOpen}>
+            <Popover
+              open={datasetPopoverOpen}
+              onOpenChange={(isOpen) => {
+                setDatasetPopoverOpen(isOpen)
+                if (!isOpen) setSearchInput('')
+              }}
+            >
               <PopoverTrigger asChild>
                 <Button
                   variant="outline"
@@ -141,11 +195,15 @@ export function AddFromTracesDialog({
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-[400px] p-0" align="start">
-                <Command>
-                  <CommandInput placeholder="Search datasets..." />
+                <Command shouldFilter={false}>
+                  <CommandInput
+                    placeholder="Search datasets..."
+                    value={searchInput}
+                    onValueChange={setSearchInput}
+                  />
                   <CommandList>
                     <CommandEmpty>
-                      {datasetsLoading ? 'Loading...' : 'No datasets found.'}
+                      {datasetsLoading || datasetsFetching ? 'Searching...' : 'No datasets found.'}
                     </CommandEmpty>
                     <CommandGroup>
                       {datasets?.map((dataset: Dataset) => (

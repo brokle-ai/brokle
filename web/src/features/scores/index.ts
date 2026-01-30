@@ -5,7 +5,7 @@ export { ScoresProvider, useScores } from './context/scores-context'
 export type {
   ScoreConfig,
   Score,
-  ScoreDataType,
+  ScoreType,
   ScoreSource,
   ScoreListParams,
   CreateScoreConfigRequest,
