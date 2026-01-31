@@ -139,6 +139,11 @@ func (r *scoreRepository) GetByFilter(ctx context.Context, filter *observability
 	args := []interface{}{}
 
 	if filter != nil {
+		// Project ID filter (required for project-scoped queries)
+		if filter.ProjectID != "" {
+			query += " AND project_id = ?"
+			args = append(args, filter.ProjectID)
+		}
 		if filter.TraceID != nil {
 			query += " AND trace_id = ?"
 			args = append(args, *filter.TraceID)
@@ -269,10 +274,15 @@ func (r *scoreRepository) CreateBatch(ctx context.Context, scores []*observabili
 
 // Count returns the count of scores matching the filter
 func (r *scoreRepository) Count(ctx context.Context, filter *observability.ScoreFilter) (int64, error) {
-	query := "SELECT count() FROM scores"
+	query := "SELECT count() FROM scores WHERE 1=1"
 	args := []interface{}{}
 
 	if filter != nil {
+		// Project ID filter (required for project-scoped queries)
+		if filter.ProjectID != "" {
+			query += " AND project_id = ?"
+			args = append(args, filter.ProjectID)
+		}
 		if filter.TraceID != nil {
 			query += " AND trace_id = ?"
 			args = append(args, *filter.TraceID)
