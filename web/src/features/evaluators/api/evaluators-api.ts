@@ -3,11 +3,9 @@ import type {
   Evaluator,
   CreateEvaluatorRequest,
   UpdateEvaluatorRequest,
-  EvaluatorListResponse,
   EvaluatorListParams,
   EvaluatorExecution,
   EvaluatorExecutionDetail,
-  ExecutionListResponse,
   ExecutionListParams,
   TriggerOptions,
   TriggerResponse,
@@ -19,6 +17,32 @@ import type {
 
 const client = new BrokleAPIClient('/api')
 
+/**
+ * Response type for evaluators list
+ */
+export interface EvaluatorsResponse {
+  evaluators: Evaluator[]
+  totalCount: number
+  page: number
+  pageSize: number
+  totalPages: number
+  hasNext: boolean
+  hasPrev: boolean
+}
+
+/**
+ * Response type for evaluator executions list
+ */
+export interface ExecutionsResponse {
+  executions: EvaluatorExecution[]
+  totalCount: number
+  page: number
+  pageSize: number
+  totalPages: number
+  hasNext: boolean
+  hasPrev: boolean
+}
+
 export const evaluatorsApi = {
   /**
    * List all evaluators for a project with optional filtering
@@ -26,19 +50,30 @@ export const evaluatorsApi = {
   listEvaluators: async (
     projectId: string,
     params?: EvaluatorListParams
-  ): Promise<EvaluatorListResponse> => {
-    const queryParams = new URLSearchParams()
-    if (params?.page) queryParams.set('page', String(params.page))
-    if (params?.limit) queryParams.set('limit', String(params.limit))
-    if (params?.status) queryParams.set('status', params.status)
-    if (params?.scorer_type) queryParams.set('scorer_type', params.scorer_type)
-    if (params?.search) queryParams.set('search', params.search)
-    if (params?.sort_by) queryParams.set('sort_by', params.sort_by)
-    if (params?.sort_dir) queryParams.set('sort_dir', params.sort_dir)
+  ): Promise<EvaluatorsResponse> => {
+    const queryParams: Record<string, string> = {}
+    if (params?.page) queryParams.page = String(params.page)
+    if (params?.limit) queryParams.limit = String(params.limit)
+    if (params?.status) queryParams.status = params.status
+    if (params?.scorer_type) queryParams.scorer_type = params.scorer_type
+    if (params?.search) queryParams.search = params.search
+    if (params?.sort_by) queryParams.sort_by = params.sort_by
+    if (params?.sort_dir) queryParams.sort_dir = params.sort_dir
 
-    const query = queryParams.toString()
-    const url = `/v1/projects/${projectId}/evaluators${query ? `?${query}` : ''}`
-    return client.get<EvaluatorListResponse>(url)
+    const response = await client.getPaginated<Evaluator>(
+      `/v1/projects/${projectId}/evaluators`,
+      queryParams
+    )
+
+    return {
+      evaluators: response.data,
+      totalCount: response.pagination.total,
+      page: response.pagination.page,
+      pageSize: response.pagination.limit,
+      totalPages: response.pagination.totalPages,
+      hasNext: response.pagination.hasNext,
+      hasPrev: response.pagination.hasPrev,
+    }
   },
 
   /**
@@ -140,16 +175,27 @@ export const evaluatorsApi = {
     projectId: string,
     evaluatorId: string,
     params?: ExecutionListParams
-  ): Promise<ExecutionListResponse> => {
-    const queryParams = new URLSearchParams()
-    if (params?.page) queryParams.set('page', String(params.page))
-    if (params?.limit) queryParams.set('limit', String(params.limit))
-    if (params?.status) queryParams.set('status', params.status)
-    if (params?.trigger_type) queryParams.set('trigger_type', params.trigger_type)
+  ): Promise<ExecutionsResponse> => {
+    const queryParams: Record<string, string> = {}
+    if (params?.page) queryParams.page = String(params.page)
+    if (params?.limit) queryParams.limit = String(params.limit)
+    if (params?.status) queryParams.status = params.status
+    if (params?.trigger_type) queryParams.trigger_type = params.trigger_type
 
-    const query = queryParams.toString()
-    const url = `/v1/projects/${projectId}/evaluators/${evaluatorId}/executions${query ? `?${query}` : ''}`
-    return client.get<ExecutionListResponse>(url)
+    const response = await client.getPaginated<EvaluatorExecution>(
+      `/v1/projects/${projectId}/evaluators/${evaluatorId}/executions`,
+      queryParams
+    )
+
+    return {
+      executions: response.data,
+      totalCount: response.pagination.total,
+      page: response.pagination.page,
+      pageSize: response.pagination.limit,
+      totalPages: response.pagination.totalPages,
+      hasNext: response.pagination.hasNext,
+      hasPrev: response.pagination.hasPrev,
+    }
   },
 
   /**

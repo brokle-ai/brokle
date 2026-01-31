@@ -111,12 +111,7 @@ export interface UpdateEvaluatorRequest {
   variable_mapping?: VariableMap[]
 }
 
-export interface EvaluatorListResponse {
-  evaluators: Evaluator[]
-  total: number
-  page: number
-  limit: number
-}
+// Note: EvaluatorListResponse removed - use PaginatedResponse<Evaluator> from @/lib/api/core/types
 
 export interface EvaluatorListParams {
   page?: number
@@ -152,12 +147,7 @@ export interface EvaluatorExecution {
   created_at: string
 }
 
-export interface ExecutionListResponse {
-  executions: EvaluatorExecution[]
-  total: number
-  page: number
-  limit: number
-}
+// Note: ExecutionListResponse removed - use PaginatedResponse<EvaluatorExecution> from @/lib/api/core/types
 
 export interface ExecutionListParams {
   page?: number

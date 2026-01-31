@@ -226,7 +226,7 @@ export function EvaluatorExecutionsTable({
   )
 
   const hasRunningExecutions = useMemo(() => {
-    return data?.executions.some((e) => !isTerminalStatus(e.status)) ?? false
+    return data?.executions?.some((e) => !isTerminalStatus(e.status)) ?? false
   }, [data?.executions])
 
   // Re-query with refetch interval if there are running executions
@@ -239,7 +239,7 @@ export function EvaluatorExecutionsTable({
   })
 
   const executions = refreshedData?.executions ?? data?.executions ?? []
-  const total = refreshedData?.total ?? data?.total ?? 0
+  const total = refreshedData?.totalCount ?? data?.totalCount ?? 0
   const totalPages = Math.ceil(total / limit)
 
   if (isError) {
