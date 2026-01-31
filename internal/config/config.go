@@ -890,7 +890,14 @@ func setDefaults() {
 	// CORS defaults (dev-friendly)
 	viper.SetDefault("server.cors_allowed_origins", []string{"http://localhost:3000", "http://localhost:3001"})
 	viper.SetDefault("server.cors_allowed_methods", []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"})
-	viper.SetDefault("server.cors_allowed_headers", []string{"Content-Type", "Authorization", "X-API-Key"})
+	viper.SetDefault("server.cors_allowed_headers", []string{
+		"Content-Type",
+		"Authorization",
+		"X-API-Key",
+		"X-Org-ID",
+		"X-Project-ID",
+		"X-Environment-ID",
+	})
 	viper.SetDefault("server.cookie_domain", "") // Empty = use request host (single domain). Set to ".example.com" for cross-subdomain
 
 	// gRPC OTLP defaults (industry standard port 4317)

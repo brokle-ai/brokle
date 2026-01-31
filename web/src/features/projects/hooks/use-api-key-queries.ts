@@ -149,14 +149,14 @@ export function useDeleteAPIKeyMutation(projectId: string) {
       })
 
       // Optimistically remove from cache
-      queryClient.setQueriesData<{ data: APIKey[] }>(
+      queryClient.setQueriesData<{ keys: APIKey[] }>(
         { queryKey: apiKeyQueryKeys.lists() },
         (old) => {
           if (!old) return old
 
           return {
             ...old,
-            data: old.data.filter((key) => key.id !== keyId),
+            keys: old.keys.filter((key) => key.id !== keyId),
           }
         }
       )

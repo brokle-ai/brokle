@@ -4,7 +4,6 @@
 import { BrokleAPIClient } from '@/lib/api/core/client'
 import type { RequestOptions } from '@/lib/api/core/types'
 import type { Organization, Project, OrganizationMember, ProjectStatus } from '../types'
-import type { PaginatedResponse } from '@/lib/api/core/types'
 
 // API response types matching backend
 interface OrganizationAPIResponse {
@@ -64,15 +63,44 @@ interface OrganizationMemberAPIResponse {
 // Flexible base client - versions specified per endpoint
 const client = new BrokleAPIClient('/api')
 
+// ============================================================================
+// API Response Types
+// ============================================================================
+
+export interface OrganizationsResponse {
+  organizations: Organization[]
+  totalCount: number
+  page: number
+  pageSize: number
+  totalPages: number
+  hasNext: boolean
+  hasPrev: boolean
+}
+
+export interface MembersResponse {
+  members: OrganizationMember[]
+  totalCount: number
+  page: number
+  pageSize: number
+  totalPages: number
+  hasNext: boolean
+  hasPrev: boolean
+}
+
 // Direct organization functions - latest & optimal endpoints
-export const getUserOrganizations = async (page = 1, limit = 20): Promise<PaginatedResponse<Organization>> => {
+export const getUserOrganizations = async (page = 1, limit = 20): Promise<OrganizationsResponse> => {
     const response = await client.getPaginated<OrganizationAPIResponse>('/v1/organizations', {
       page,
       limit
     })
     return {
-      data: response.data.map(mapOrganizationFromAPI),
-      pagination: response.pagination
+      organizations: response.data.map(mapOrganizationFromAPI),
+      totalCount: response.pagination.total,
+      page: response.pagination.page,
+      pageSize: response.pagination.limit,
+      totalPages: response.pagination.totalPages,
+      hasNext: response.pagination.hasNext,
+      hasPrev: response.pagination.hasPrev,
     }
   }
 
@@ -86,22 +114,27 @@ export const getOrganizationById = async (organizationId: string): Promise<Organ
   }
 
 
-export const getOrganizationMembers = async (organizationId: string, page = 1, limit = 20): Promise<PaginatedResponse<OrganizationMember>> => {
+export const getOrganizationMembers = async (organizationId: string, page = 1, limit = 20): Promise<MembersResponse> => {
     const response = await client.getPaginated<OrganizationMemberAPIResponse>(
       `/organizations/${organizationId}/members`,
       {
         page,
         limit
       },
-      { 
+      {
         includeOrgContext: true,
         customOrgId: organizationId
       }
     )
 
     return {
-      data: response.data.map(mapOrganizationMemberFromAPI),
-      pagination: response.pagination
+      members: response.data.map(mapOrganizationMemberFromAPI),
+      totalCount: response.pagination.total,
+      page: response.pagination.page,
+      pageSize: response.pagination.limit,
+      totalPages: response.pagination.totalPages,
+      hasNext: response.pagination.hasNext,
+      hasPrev: response.pagination.hasPrev,
     }
   }
 

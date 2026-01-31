@@ -5,7 +5,7 @@ import { DatasetsProvider, useDatasets } from '../context/datasets-context'
 import { DatasetsDialogs } from './datasets-dialogs'
 import { CreateDatasetDialog } from './create-dataset-dialog'
 import { DatasetsTable } from './dataset-list/datasets-table'
-import { useDatasetsWithPaginationQuery } from '../hooks/use-datasets'
+import { useDatasetsQuery } from '../hooks/use-datasets'
 import { useDatasetsTableState } from '../hooks/use-datasets-table-state'
 import { useProjectOnly } from '@/features/projects'
 import { PageHeader } from '@/components/layout/page-header'
@@ -28,7 +28,7 @@ function DatasetsContent() {
     isFetching,
     error,
     refetch,
-  } = useDatasetsWithPaginationQuery(currentProject?.id, tableState.toApiParams())
+  } = useDatasetsQuery(currentProject?.id, tableState.toApiParams())
 
   // Extract data from response
   const data = response?.datasets ?? []

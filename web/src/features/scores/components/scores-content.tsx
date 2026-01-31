@@ -100,9 +100,16 @@ function ScoresContent({ projectSlug }: ScoresProps) {
 
           <TabsContent value="list" className="mt-6">
             <ScoresTable
-              data={scoresResponse?.data ?? []}
+              data={scoresResponse?.scores ?? []}
               pagination={
-                scoresResponse?.pagination ?? {
+                scoresResponse ? {
+                  page: scoresResponse.page,
+                  limit: scoresResponse.pageSize,
+                  total: scoresResponse.totalCount,
+                  totalPages: scoresResponse.totalPages,
+                  hasNext: scoresResponse.hasNext,
+                  hasPrev: scoresResponse.hasPrev,
+                } : {
                   page: 1,
                   limit: 50,
                   total: 0,

@@ -1,5 +1,4 @@
 import { BrokleAPIClient } from '@/lib/api/core/client'
-import type { PaginatedResponse } from '@/lib/api/core/types'
 import type { Trace, Span, Score } from '../data/schema'
 import {
   transformTrace,
@@ -9,6 +8,40 @@ import {
 } from '../utils/transform'
 
 const client = new BrokleAPIClient('/api')
+
+// ============================================================================
+// API Response Types
+// ============================================================================
+
+export interface TracesResponse {
+  traces: Trace[]
+  totalCount: number
+  page: number
+  pageSize: number
+  totalPages: number
+  hasNext: boolean
+  hasPrev: boolean
+}
+
+export interface SpansResponse {
+  spans: Span[]
+  totalCount: number
+  page: number
+  pageSize: number
+  totalPages: number
+  hasNext: boolean
+  hasPrev: boolean
+}
+
+export interface ScoresResponse {
+  scores: Score[]
+  totalCount: number
+  page: number
+  pageSize: number
+  totalPages: number
+  hasNext: boolean
+  hasPrev: boolean
+}
 
 // ============================================================================
 // API Parameter Types
@@ -111,13 +144,7 @@ export interface UpdateScoreData {
  * @param params - Filter and pagination parameters
  * @returns Traces array with pagination metadata
  */
-export const getProjectTraces = async (params: GetTracesParams): Promise<{
-  traces: Trace[]
-  totalCount: number
-  page: number
-  pageSize: number
-  totalPages: number
-}> => {
+export const getProjectTraces = async (params: GetTracesParams): Promise<TracesResponse> => {
   const {
     projectId,
     page = 1,
@@ -185,6 +212,8 @@ export const getProjectTraces = async (params: GetTracesParams): Promise<{
     page: response.pagination.page,
     pageSize: response.pagination.limit,
     totalPages: response.pagination.totalPages,
+    hasNext: response.pagination.hasNext,
+    hasPrev: response.pagination.hasPrev,
   }
 }
 
@@ -450,13 +479,7 @@ export const getTraceFilterOptions = async (
  * @param params - Filter and pagination parameters
  * @returns Spans array with pagination
  */
-export const getSpans = async (params: GetSpansParams): Promise<{
-  spans: Span[]
-  totalCount: number
-  page: number
-  pageSize: number
-  totalPages: number
-}> => {
+export const getSpans = async (params: GetSpansParams): Promise<SpansResponse> => {
   const {
     projectId,
     traceId,
@@ -490,6 +513,8 @@ export const getSpans = async (params: GetSpansParams): Promise<{
     page: response.pagination.page,
     pageSize: response.pagination.limit,
     totalPages: response.pagination.totalPages,
+    hasNext: response.pagination.hasNext,
+    hasPrev: response.pagination.hasPrev,
   }
 }
 
@@ -534,10 +559,7 @@ export const updateSpan = async (
  *
  * Backend endpoint: GET /api/v1/scores
  */
-export const getScores = async (params: GetScoresParams): Promise<{
-  scores: Score[]
-  totalCount: number
-}> => {
+export const getScores = async (params: GetScoresParams): Promise<ScoresResponse> => {
   const {
     projectId,
     traceId,
@@ -568,6 +590,11 @@ export const getScores = async (params: GetScoresParams): Promise<{
   return {
     scores: response.data.map(transformScore),
     totalCount: response.pagination.total,
+    page: response.pagination.page,
+    pageSize: response.pagination.limit,
+    totalPages: response.pagination.totalPages,
+    hasNext: response.pagination.hasNext,
+    hasPrev: response.pagination.hasPrev,
   }
 }
 

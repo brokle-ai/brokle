@@ -2,8 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { datasetsApi } from '../api/datasets-api'
-import type { PaginatedResponse } from '@/lib/api/core/types'
+import { datasetsApi, type DatasetsResponse, type DatasetItemsResponse } from '../api/datasets-api'
 import type {
   CreateDatasetRequest,
   UpdateDatasetRequest,
@@ -47,31 +46,9 @@ export function useDatasetsQuery(
   params?: DatasetListParams
 ) {
   return useQuery({
-    queryKey: [...datasetQueryKeys.list(projectId ?? ''), params?.search, params?.page, params?.limit],
+    queryKey: datasetQueryKeys.listFiltered(projectId ?? '', params),
     queryFn: () => datasetsApi.listDatasets(projectId!, params),
     enabled: !!projectId,
-    staleTime: 30_000,
-    gcTime: 5 * 60 * 1000,
-  })
-}
-
-/**
- * Query hook to list datasets with pagination, search, and sorting
- */
-export function useDatasetsWithPaginationQuery(
-  projectId: string | undefined,
-  params?: DatasetListParams,
-  options: { enabled?: boolean } = {}
-) {
-  return useQuery({
-    queryKey: datasetQueryKeys.listFiltered(projectId ?? '', params),
-    queryFn: async () => {
-      if (!projectId) {
-        throw new Error('Project ID is required')
-      }
-      return datasetsApi.listDatasetsWithPagination(projectId, params)
-    },
-    enabled: !!projectId && (options.enabled ?? true),
     staleTime: 30_000,
     gcTime: 5 * 60 * 1000,
   })
@@ -168,19 +145,21 @@ export function useDeleteDatasetMutation(projectId: string) {
       })
 
       // Get ALL matching queries (prefix match for paginated queries)
-      const previousQueries = queryClient.getQueriesData<PaginatedResponse<Dataset>>({
+      const previousQueries = queryClient.getQueriesData<DatasetsResponse>({
         queryKey: datasetQueryKeys.list(projectId),
       })
 
       // Optimistic update - update ALL matching queries
-      queryClient.setQueriesData<PaginatedResponse<Dataset>>(
+      queryClient.setQueriesData<DatasetsResponse>(
         { queryKey: datasetQueryKeys.list(projectId) },
         (old) => old ? {
-          data: old.data.filter((d) => d.id !== datasetId),
-          pagination: {
-            ...old.pagination,
-            total: old.pagination.total - 1,
-          },
+          datasets: old.datasets.filter((d) => d.id !== datasetId),
+          totalCount: old.totalCount - 1,
+          page: old.page,
+          pageSize: old.pageSize,
+          totalPages: Math.ceil((old.totalCount - 1) / old.pageSize),
+          hasNext: old.hasNext,
+          hasPrev: old.hasPrev,
         } : old
       )
 
@@ -244,19 +223,21 @@ export function useDeleteDatasetItemMutation(projectId: string, datasetId: strin
       })
 
       // Get ALL matching queries (prefix match for paginated queries)
-      const previousQueries = queryClient.getQueriesData<PaginatedResponse<DatasetItem>>({
+      const previousQueries = queryClient.getQueriesData<DatasetItemsResponse>({
         queryKey: datasetQueryKeys.items(projectId, datasetId),
       })
 
       // Optimistic update - update ALL matching queries
-      queryClient.setQueriesData<PaginatedResponse<DatasetItem>>(
+      queryClient.setQueriesData<DatasetItemsResponse>(
         { queryKey: datasetQueryKeys.items(projectId, datasetId) },
         (old) => old ? {
-          data: old.data.filter((i) => i.id !== itemId),
-          pagination: {
-            ...old.pagination,
-            total: old.pagination.total - 1,
-          },
+          items: old.items.filter((i) => i.id !== itemId),
+          totalCount: old.totalCount - 1,
+          page: old.page,
+          pageSize: old.pageSize,
+          totalPages: Math.ceil((old.totalCount - 1) / old.pageSize),
+          hasNext: old.hasNext,
+          hasPrev: old.hasPrev,
         } : old
       )
 

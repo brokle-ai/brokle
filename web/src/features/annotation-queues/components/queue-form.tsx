@@ -180,7 +180,7 @@ export function QueueForm({
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Loading score configs...
                 </div>
-              ) : !scoreConfigs || scoreConfigs.length === 0 ? (
+              ) : !scoreConfigs || !scoreConfigs.configs || scoreConfigs.configs.length === 0 ? (
                 <p className="text-sm text-muted-foreground py-2">
                   No score configurations found. Create score configs in the Scores section first.
                 </p>
@@ -210,7 +210,7 @@ export function QueueForm({
                         <CommandList>
                           <CommandEmpty>No score configs found.</CommandEmpty>
                           <CommandGroup>
-                            {scoreConfigs.map((config) => {
+                            {scoreConfigs.configs.map((config) => {
                               const isSelected = selectedScoreConfigIds.includes(config.id)
                               return (
                                 <CommandItem
@@ -246,7 +246,7 @@ export function QueueForm({
                   {selectedScoreConfigIds.length > 0 && (
                     <div className="flex flex-wrap gap-1">
                       {selectedScoreConfigIds.map((id) => {
-                        const config = scoreConfigs.find((c) => c.id === id)
+                        const config = scoreConfigs.configs.find((c) => c.id === id)
                         if (!config) return null
                         return (
                           <Badge key={id} variant="secondary" className="gap-1">

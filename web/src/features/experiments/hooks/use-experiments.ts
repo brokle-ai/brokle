@@ -2,8 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { experimentsApi } from '../api/experiments-api'
-import type { PaginatedResponse } from '@/lib/api/core/types'
+import { experimentsApi, type ExperimentsResponse } from '../api/experiments-api'
 import type {
   CreateExperimentRequest,
   UpdateExperimentRequest,
@@ -202,19 +201,21 @@ export function useDeleteExperimentMutation(projectId: string) {
       })
 
       // Get ALL matching queries (prefix match for paginated queries)
-      const previousQueries = queryClient.getQueriesData<PaginatedResponse<Experiment>>({
+      const previousQueries = queryClient.getQueriesData<ExperimentsResponse>({
         queryKey: experimentQueryKeys.list(projectId),
       })
 
       // Optimistic update - update ALL matching queries
-      queryClient.setQueriesData<PaginatedResponse<Experiment>>(
+      queryClient.setQueriesData<ExperimentsResponse>(
         { queryKey: experimentQueryKeys.list(projectId) },
         (old) => old ? {
-          data: old.data.filter((e) => e.id !== experimentId),
-          pagination: {
-            ...old.pagination,
-            total: old.pagination.total - 1,
-          },
+          experiments: old.experiments.filter((e) => e.id !== experimentId),
+          totalCount: old.totalCount - 1,
+          page: old.page,
+          pageSize: old.pageSize,
+          totalPages: Math.ceil((old.totalCount - 1) / old.pageSize),
+          hasNext: old.hasNext,
+          hasPrev: old.hasPrev,
         } : old
       )
 

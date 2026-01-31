@@ -10,10 +10,23 @@ import type {
   APIKeyFilters,
   BackendAPIKey,
 } from '../types/api-keys'
-import type { PaginatedResponse } from '@/lib/api/core/types'
 
 // Initialize API client with /api base path (Dashboard routes)
 const client = new BrokleAPIClient('/api')
+
+// ============================================================================
+// API Response Types
+// ============================================================================
+
+export interface APIKeysResponse {
+  keys: APIKey[]
+  totalCount: number
+  page: number
+  pageSize: number
+  totalPages: number
+  hasNext: boolean
+  hasPrev: boolean
+}
 
 /**
  * Map backend API key format (snake_case) to frontend format (camelCase)
@@ -54,7 +67,7 @@ function mapAPIKeyToFrontend(backendKey: BackendAPIKey): APIKey {
 export async function listAPIKeys(
   projectId: string,
   filters?: APIKeyFilters
-): Promise<PaginatedResponse<APIKey>> {
+): Promise<APIKeysResponse> {
   const endpoint = `/v1/projects/${projectId}/api-keys`
 
   // Build query params
@@ -76,8 +89,13 @@ export async function listAPIKeys(
   const response = await client.getPaginated<APIKey>(endpoint, params)
 
   return {
-    data: response.data.map(mapAPIKeyToFrontend),
-    pagination: response.pagination,
+    keys: response.data.map(mapAPIKeyToFrontend),
+    totalCount: response.pagination.total,
+    page: response.pagination.page,
+    pageSize: response.pagination.limit,
+    totalPages: response.pagination.totalPages,
+    hasNext: response.pagination.hasNext,
+    hasPrev: response.pagination.hasPrev,
   }
 }
 

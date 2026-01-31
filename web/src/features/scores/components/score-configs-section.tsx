@@ -50,8 +50,8 @@ export function ScoreConfigsSection({ projectId }: ScoreConfigsSectionProps) {
   const [pageSize, setPageSize] = useState(10)
 
   const { data: configsResponse, isLoading, isFetching, error, refetch } = useScoreConfigsQuery(projectId, { page, limit: pageSize })
-  const configs = configsResponse?.data
-  const totalCount = configsResponse?.pagination?.total ?? 0
+  const configs = configsResponse?.configs
+  const totalCount = configsResponse?.totalCount ?? 0
   const totalPages = Math.ceil(totalCount / pageSize)
   const createMutation = useCreateScoreConfigMutation(projectId)
   const updateMutation = useUpdateScoreConfigMutation(projectId, editingConfig?.id ?? '')

@@ -1,5 +1,4 @@
 import { BrokleAPIClient } from '@/lib/api/core/client'
-import type { PaginatedResponse } from '@/lib/api/core/types'
 
 const client = new BrokleAPIClient('/api')
 
@@ -58,14 +57,16 @@ export interface Session {
 }
 
 /**
- * Session list response from the backend
+ * Transformed session list response for frontend consumption
  */
-export interface SessionListResponse {
-  sessions: SessionSummary[]
-  total_count: number
+export interface SessionsResponse {
+  sessions: Session[]
+  totalCount: number
   page: number
-  page_size: number
-  total_pages: number
+  pageSize: number
+  totalPages: number
+  hasNext: boolean
+  hasPrev: boolean
 }
 
 // ============================================================================
@@ -114,7 +115,7 @@ function transformSession(raw: SessionSummary): Session {
  */
 export async function getProjectSessions(
   params: GetSessionsParams
-): Promise<PaginatedResponse<Session>> {
+): Promise<SessionsResponse> {
   const {
     projectId,
     page = 1,
@@ -141,18 +142,18 @@ export async function getProjectSessions(
   }
   if (sortOrder) searchParams.sort_dir = sortOrder
 
-  const response = await client.get<SessionListResponse>(
+  const response = await client.getPaginated<SessionSummary>(
     `/v1/projects/${projectId}/sessions`,
     searchParams
   )
 
   return {
-    data: (response.sessions ?? []).map(transformSession),
-    pagination: {
-      page: response.page,
-      pageSize: response.page_size,
-      totalCount: response.total_count,
-      totalPages: response.total_pages,
-    },
+    sessions: response.data.map(transformSession),
+    totalCount: response.pagination.total,
+    page: response.pagination.page,
+    pageSize: response.pagination.limit,
+    totalPages: response.pagination.totalPages,
+    hasNext: response.pagination.hasNext,
+    hasPrev: response.pagination.hasPrev,
   }
 }

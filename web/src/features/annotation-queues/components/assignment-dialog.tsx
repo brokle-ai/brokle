@@ -95,7 +95,7 @@ export function AssignmentDialog({
     staleTime: 2 * 60 * 1000,
   })
 
-  const members = membersResponse?.data ?? []
+  const members = membersResponse?.members ?? []
 
   const { data: assignments, isLoading } = useQueueAssignmentsQuery(projectId, queueId)
   const assignMutation = useAssignUserMutation(projectId, queueId)

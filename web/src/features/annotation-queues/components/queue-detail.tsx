@@ -224,7 +224,7 @@ export function QueueDetail({ projectSlug, queueId }: QueueDetailProps) {
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
           ) : (
-            <QueueItemTable items={itemsData?.data ?? []} />
+            <QueueItemTable items={itemsData?.items ?? []} />
           )}
         </TabsContent>
       </Tabs>

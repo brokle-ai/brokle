@@ -27,7 +27,8 @@ export function DatasetSelector() {
   const { projectId, state, selectDataset } = useExperimentWizard()
   const { datasetState } = state
 
-  const { data: datasets, isLoading } = useDatasetsQuery(projectId)
+  const { data: datasetsResponse, isLoading } = useDatasetsQuery(projectId)
+  const datasets = datasetsResponse?.datasets ?? []
 
   const selectedDataset = datasetState.selectedDataset
 

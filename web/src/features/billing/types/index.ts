@@ -84,13 +84,13 @@ export interface UsageBudget {
   span_limit?: number
   bytes_limit?: number
   score_limit?: number
-  cost_limit?: number
+  cost_limit?: string // decimal.Decimal serializes as string for precision
 
   // Current usage
   current_spans: number
   current_bytes: number
   current_scores: number
-  current_cost: number
+  current_cost: string
 
   // Alert thresholds (flexible array of percentages, e.g., [50, 80, 100])
   alert_thresholds: number[]
@@ -133,7 +133,7 @@ export interface UsageAlert {
   severity: AlertSeverity
   threshold_value: number
   actual_value: number
-  percent_used: number
+  percent_used: string
   status: AlertStatus
   triggered_at: string
   acknowledged_at?: string

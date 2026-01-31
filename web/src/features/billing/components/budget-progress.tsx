@@ -86,11 +86,14 @@ function DimensionProgress({
   )
 }
 
-function formatCurrency(value: number): string {
-  if (value < 0.01) return '$0.00'
-  if (value < 100) return `$${value.toFixed(2)}`
-  if (value < 1000) return `$${value.toFixed(1)}`
-  return `$${(value / 1000).toFixed(1)}k`
+function formatCurrency(value: number | string): string {
+  // Convert string to number (decimal fields come as strings from backend)
+  const numValue = typeof value === 'string' ? parseFloat(value) : value
+
+  if (numValue < 0.01) return '$0.00'
+  if (numValue < 100) return `$${numValue.toFixed(2)}`
+  if (numValue < 1000) return `$${numValue.toFixed(1)}`
+  return `$${(numValue / 1000).toFixed(1)}k`
 }
 
 export function BudgetProgress({ budget, className, compact }: BudgetProgressProps) {
@@ -119,8 +122,8 @@ export function BudgetProgress({ budget, className, compact }: BudgetProgressPro
     {
       label: 'Cost',
       dimension: 'cost' as AlertDimension,
-      current: budget.current_cost,
-      limit: budget.cost_limit,
+      current: parseFloat(budget.current_cost),
+      limit: budget.cost_limit ? parseFloat(budget.cost_limit) : undefined,
       formatValue: formatCurrency,
     },
   ].filter((d) => d.limit !== undefined && d.limit !== null)

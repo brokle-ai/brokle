@@ -2,8 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { scoresApi } from '../api/scores-api'
-import type { PaginatedResponse } from '@/lib/api/core/types'
+import { scoresApi, type ScoreConfigsResponse } from '../api/scores-api'
 import type {
   CreateScoreConfigRequest,
   UpdateScoreConfigRequest,
@@ -106,8 +105,8 @@ export function useScoreConfigsByIdsQuery(
     queryKey: [...scoreConfigQueryKeys.list(projectId ?? ''), 'byIds', configIds],
     queryFn: async () => {
       if (!projectId || configIds.length === 0) return []
-      const allConfigs = await scoresApi.listScoreConfigs(projectId)
-      return allConfigs.filter((c) => configIds.includes(c.id))
+      const response = await scoresApi.listScoreConfigs(projectId)
+      return response.configs.filter((c) => configIds.includes(c.id))
     },
     enabled: !!projectId && configIds.length > 0,
     staleTime: 30_000,
@@ -129,19 +128,17 @@ export function useDeleteScoreConfigMutation(projectId: string) {
       })
 
       // Get ALL matching queries (prefix match for paginated queries)
-      const previousQueries = queryClient.getQueriesData<PaginatedResponse<ScoreConfig>>({
+      const previousQueries = queryClient.getQueriesData<ScoreConfigsResponse>({
         queryKey: scoreConfigQueryKeys.list(projectId),
       })
 
       // Optimistic update - update ALL matching queries
-      queryClient.setQueriesData<PaginatedResponse<ScoreConfig>>(
+      queryClient.setQueriesData<ScoreConfigsResponse>(
         { queryKey: scoreConfigQueryKeys.list(projectId) },
         (old) => old ? {
-          data: old.data.filter((c) => c.id !== configId),
-          pagination: {
-            ...old.pagination,
-            total: old.pagination.total - 1,
-          },
+          ...old,
+          configs: old.configs.filter((c) => c.id !== configId),
+          totalCount: old.totalCount - 1,
         } : old
       )
 

@@ -44,9 +44,9 @@ function QueuesContentInner({ projectSlug }: { projectSlug: string }) {
 
   // Filter and sort data locally (server-side pagination can be added later)
   const filteredAndSortedQueues = useMemo(() => {
-    if (!queues) return []
+    if (!queues?.queues) return []
 
-    let result = [...queues]
+    let result = [...queues.queues]
 
     // Apply search filter
     if (search) {
