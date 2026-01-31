@@ -6,15 +6,46 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 | Command | Description |
 |---------|-------------|
-| `make setup` | First time setup (deps, DBs, migrations, seeds) |
+| `make setup` | First time setup (deps, DBs, migrations, seeds, codegen) |
+| `make install-tools` | Install dev tools (swag, air, golangci-lint) |
+| `make generate` | Run go generate (swagger docs, etc.) |
 | `make dev` | Start full stack (server + worker with hot reload) |
 | `make dev-server` | HTTP server only |
 | `make dev-worker` | Workers only |
 | `make dev-frontend` | Next.js frontend only |
-| `make test` | Run all tests |
+| `make test` | Run all tests (business logic) |
+| `make test-all` | Run all tests including cmd/ (requires docs) |
 | `make lint` | Lint all code |
 | `make migrate-up` | Run database migrations |
 | `make seed` | Seed system data |
+
+## Development Tools
+
+**Automated Installation:**
+- `make install-tools` installs all required development tools
+- Called automatically by `make setup`
+- Tools are version-pinned via go.mod (swag) or latest (air)
+
+**Code Generation (go generate):**
+- Run `make generate` or `go generate ./...` after changing API annotations
+- Swagger docs use `//go:generate` directive in `cmd/server/main.go`
+- First-time setup runs this automatically via `make setup`
+
+**Manual Installation (if needed):**
+```bash
+go install github.com/swaggo/swag/cmd/swag@v1.16.6  # API documentation
+go install github.com/air-verse/air@latest           # Hot reload (dev only)
+```
+
+**Tool Versions:**
+- **swag**: v1.16.6 (tracked in go.mod via tools.go)
+- **air**: latest (optional, dev-only hot reload)
+- **golangci-lint**: v2.6.2 (Go 1.25 compatible)
+
+**Troubleshooting:**
+- `swag: command not found` → Should auto-install, or run `make install-tools`
+- `air: command not found` → Run `make install-tools`
+- Ensure `$GOPATH/bin` is in your `$PATH` (usually `~/go/bin`)
 
 ## IMPORTANT: Development Rules
 
@@ -29,6 +60,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Create documentation files unless explicitly requested
 - Add tests for simple CRUD, validation, or constructors
 - Log sensitive data (passwords, tokens, API keys, PII)
+- Edit generated Swagger files in `docs/` (edit Go annotations in `cmd/server/main.go` and handlers instead)
 
 ---
 
@@ -94,12 +126,14 @@ make build-worker-enterprise  # Enterprise worker
 ### Testing
 
 ```bash
-make test                # All tests
+make test                # All tests (requires docs: run make generate first)
 make test-unit           # Unit tests only
 make test-integration    # Integration tests
 make test-coverage       # With coverage report
 go test ./internal/core/services/observability -v  # Specific package
 ```
+
+**Note**: Tests run on all packages (`./...`). Since `cmd/server` imports `brokle/docs`, run `make generate` after setup or API changes. If you see "cannot find package brokle/docs", run `make generate`.
 
 ### Database Operations
 
@@ -314,6 +348,47 @@ s.logger.Info("created")  // Created what?
 ```
 
 **Never log:** passwords, tokens, API keys, full request bodies, PII without masking.
+
+### Swagger/OpenAPI Documentation
+
+**Generated at Build Time**: Swagger docs (`docs/docs.go`, `docs/swagger.json`, `docs/swagger.yaml`) are **NOT tracked in Git**. They are auto-generated during development and build processes.
+
+**How it works:**
+- **Development**: `make dev-server` auto-generates docs before starting server
+- **Production**: Dockerfile generates docs during Docker build
+- **CI/CD**: GitHub Actions generates docs before running tests and builds
+- **Manual**: Run `make docs-generate` to regenerate
+
+**Why build-time generation?**
+- Clean diffs (no 83K line generated file changes in PRs)
+- No merge conflicts from generated code
+- Always up-to-date docs (can't forget to regenerate)
+- Follows OSS best practices (similar to Grafana's approach)
+
+**To update API documentation:**
+1. Edit Go annotations in `cmd/server/main.go` (API metadata)
+2. Edit handler function comments with `@Summary`, `@Description`, `@Param`, etc.
+3. Run `make docs-generate` or let build process handle it
+4. Access Swagger UI at `http://localhost:8080/swagger/index.html`
+
+**Example handler annotation:**
+```go
+// CreateProject creates a new project
+// @Summary Create new project
+// @Description Create a new project within an organization
+// @Tags projects
+// @Accept json
+// @Produce json
+// @Param request body CreateProjectRequest true "Project details"
+// @Success 201 {object} ProjectResponse
+// @Failure 400 {object} response.ErrorResponse
+// @Failure 401 {object} response.ErrorResponse
+// @Router /api/v1/projects [post]
+// @Security CookieAuth
+func (h *Handler) CreateProject(ctx *gin.Context) { ... }
+```
+
+**IMPORTANT**: Never manually edit files in `docs/` directory - they are generated and gitignored.
 
 ## Testing Strategy
 

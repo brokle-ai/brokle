@@ -14,6 +14,12 @@ RUN go mod download
 # Copy source code
 COPY . .
 
+# Install swag for generating API docs (pinned version for reproducibility)
+RUN go install github.com/swaggo/swag/cmd/swag@v1.16.6
+
+# Generate Swagger documentation (required for server build)
+RUN swag init -g cmd/server/main.go --output docs
+
 # Build the server binary (with cache for faster rebuilds)
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \

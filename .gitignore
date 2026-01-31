@@ -165,6 +165,13 @@ redis_data/
 *.pb.go
 proto-gen/
 
+# Swagger/OpenAPI generated documentation
+# Generated at build time via 'make docs-generate' or 'swag init'
+# DO NOT edit these files manually - edit Go annotations in cmd/server/main.go and handlers
+docs/docs.go
+docs/swagger.json
+docs/swagger.yaml
+
 # Testing
 testdata/
 test-results/

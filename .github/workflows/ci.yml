@@ -29,6 +29,12 @@ jobs:
       - name: Install dependencies
         run: go mod download
 
+      - name: Install swag for API docs
+        run: go install github.com/swaggo/swag/cmd/swag@v1.16.6
+
+      - name: Generate Swagger documentation
+        run: make generate
+
       - name: Run Go tests
         run: make test
 
@@ -88,6 +94,9 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
+      # Note: Swagger docs are generated inside Dockerfile via 'swag init'
+      # See Dockerfile line: RUN swag init -g cmd/server/main.go --output docs
 
       - name: Build server image (test)
         uses: docker/build-push-action@v5
