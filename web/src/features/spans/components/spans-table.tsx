@@ -231,11 +231,11 @@ export function SpansTable({ data, totalCount, isFetching }: SpansTableProps) {
         return
       }
       // Navigate to trace detail page
-      if (currentProject?.slug) {
-        router.push(`/projects/${currentProject.slug}/traces/${span.trace_id}`)
+      if (currentProject?.compositeSlug) {
+        router.push(`/projects/${currentProject.compositeSlug}/traces/${span.trace_id}`)
       }
     },
-    [router, currentProject?.slug]
+    [router, currentProject?.compositeSlug]
   )
 
   return (

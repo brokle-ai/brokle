@@ -89,7 +89,7 @@ function DatasetsContent() {
             totalCount={totalCount}
             isLoading={isLoading}
             isFetching={isFetching}
-            projectSlug={currentProject.slug}
+            projectSlug={currentProject.compositeSlug}
             onDelete={handleDelete}
           />
         )}
